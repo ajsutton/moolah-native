@@ -22,7 +22,7 @@ jobs:
         run: |
           xcodebuild test \
             -scheme Moolah \
-            -destination "platform=iOS Simulator,name=iPhone 16 Pro" \
+            -destination "platform=iOS Simulator,name=iPhone 17 Pro" \
             -IDEPackageSupportDisableManifestSandbox=1 \
             -IDEPackageSupportDisablePackageSandbox=1 \
             'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox' \

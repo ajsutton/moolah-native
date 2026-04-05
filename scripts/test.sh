@@ -18,7 +18,7 @@ XCODE_ARGS=(
     CODE_SIGNING_ALLOWED=NO
 )
 
-IOS_DEST="platform=iOS Simulator,name=iPhone 16 Pro"
+IOS_DEST="platform=iOS Simulator,name=iPhone 17 Pro"
 MACOS_DEST="platform=macOS"
 
 echo "==> Testing iOS Simulator…"
