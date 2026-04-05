@@ -11,7 +11,7 @@ XCODE_ARGS=(
     -scheme Moolah
     -IDEPackageSupportDisableManifestSandbox=1
     -IDEPackageSupportDisablePackageSandbox=1
-    "OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox"
+    'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox'
     # Skip code signing — not needed for tests
     CODE_SIGN_IDENTITY=""
     CODE_SIGNING_REQUIRED=NO
