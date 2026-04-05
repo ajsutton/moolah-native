@@ -37,8 +37,8 @@ xcodebuild test "${COMMON_ARGS[@]}" \
 # ---------------------------------------------------------------------------
 echo "==> Testing macOS…"
 
-if [[ -n "${SV_SESSION_ID:-}" ]]; then
-    echo "    (sandvault detected — using xcrun xctest workaround)"
+if [[ -n "${SV_SESSION_ID:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
+    echo "    (sandvault/CI detected — using xcrun xctest workaround)"
 
     xcodebuild build-for-testing "${COMMON_ARGS[@]}" \
         -destination "platform=macOS"
