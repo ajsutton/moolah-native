@@ -12,35 +12,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode
+      - name: Select Xcode 26
         run: sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
 
-      - name: Test (iOS Simulator)
-        env:
-          SWIFTPM_DISABLE_SANDBOX: 1
-          SWIFT_BUILD_USE_SANDBOX: 0
-        run: |
-          xcodebuild test \
-            -scheme Moolah \
-            -destination "platform=iOS Simulator,name=iPhone 17 Pro" \
-            -IDEPackageSupportDisableManifestSandbox=1 \
-            -IDEPackageSupportDisablePackageSandbox=1 \
-            'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox' \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+      - name: Install XcodeGen
+        run: brew install xcodegen
 
-      - name: Test (macOS)
-        env:
-          SWIFTPM_DISABLE_SANDBOX: 1
-          SWIFT_BUILD_USE_SANDBOX: 0
-        run: |
-          xcodebuild test \
-            -scheme Moolah \
-            -destination "platform=macOS" \
-            -IDEPackageSupportDisableManifestSandbox=1 \
-            -IDEPackageSupportDisablePackageSandbox=1 \
-            'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox' \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Test
+        run: bash scripts/test.sh
