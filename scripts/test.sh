@@ -43,7 +43,7 @@ if [[ -n "${SV_SESSION_ID:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
     xcodebuild build-for-testing "${COMMON_ARGS[@]}" \
         -destination "platform=macOS"
 
-    PRODUCTS="$REPO_ROOT/.DerivedData/Moolah/Build/Products"
+    PRODUCTS="$REPO_ROOT/.DerivedData/Build/Products"
     APP_BUNDLE="$PRODUCTS/Debug/Moolah_macOS.app"
     TEST_BUNDLE="$APP_BUNDLE/Contents/PlugIns/MoolahTests_macOS.xctest"
 
