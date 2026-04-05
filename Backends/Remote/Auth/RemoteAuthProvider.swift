@@ -16,18 +16,24 @@ import Foundation
 ///    (shared with Safari / ASWebAuthenticationSession when not using ephemeral sessions).
 /// 5. All subsequent URLSession.shared requests include the session cookie.
 ///
-/// Fallback (server not yet updated):
-/// The server redirects to `/` instead of `moolah://`, so the user sees the
-/// moolah.rocks web app and must tap Cancel. We catch the canceledLogin error
-/// and still check currentUser() — the cookie is already set, so sign-in succeeds.
-///
-/// See prompts/moolah-server-native-auth.md for the required server-side change.
+/// Fallback (canceledLogin):
+/// If the user manually dismisses the browser before sign-in completes, or if
+/// ASWebAuthenticationSession closes for any other reason, we catch canceledLogin
+/// and still check currentUser() — if the OAuth round-trip completed the cookie
+/// is already set and sign-in succeeds; otherwise we surface an unauthenticated error.
 @MainActor
 final class RemoteAuthProvider: NSObject, AuthProvider, ASWebAuthenticationPresentationContextProviding {
     nonisolated let requiresExplicitSignIn = true
 
     private let client: APIClient
     private var activeSession: ASWebAuthenticationSession?
+    // Cached before the session starts so presentationAnchor can return it even
+    // after the key window changes during teardown (NSWindow() with no arguments
+    // is not a valid AppKit object and crashes on macOS).
+    // nonisolated(unsafe) is safe here: written once on MainActor before the
+    // session starts and only read by presentationAnchor, which Apple documents
+    // as being called on the main thread.
+    nonisolated(unsafe) private var anchorWindow: AnyObject?
 
     init(client: APIClient) {
         self.client = client
@@ -56,6 +62,17 @@ final class RemoteAuthProvider: NSObject, AuthProvider, ASWebAuthenticationPrese
         components.queryItems = [URLQueryItem(name: "_native", value: "1")]
         let authURL = components.url!
 
+        // Cache the presentation window now, on the main actor, so presentationAnchor
+        // can return it safely even after the ASWebAuthenticationSession closes and
+        // NSApp.keyWindow becomes nil.
+        #if os(macOS)
+        anchorWindow = NSApp.keyWindow ?? NSApp.windows.first
+        #elseif os(iOS)
+        anchorWindow = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.keyWindow
+        #endif
+
         do {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 let session = ASWebAuthenticationSession(
@@ -80,8 +97,8 @@ final class RemoteAuthProvider: NSObject, AuthProvider, ASWebAuthenticationPrese
             }
         } catch let error as ASWebAuthenticationSessionError
                 where error.code == .canceledLogin {
-            // Fallback: user dismissed the browser after signing in (server not yet updated
-            // to redirect to moolah://). The cookie is already set — check currentUser().
+            // User manually dismissed the browser. The server cookie is already set
+            // if the OAuth round-trip completed, so currentUser() below will succeed.
         }
 
         guard let user = try await currentUser() else {
@@ -95,15 +112,12 @@ final class RemoteAuthProvider: NSObject, AuthProvider, ASWebAuthenticationPrese
     }
 
     nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        MainActor.assumeIsolated {
-            #if os(iOS)
-            UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .first?.keyWindow ?? UIWindow()
-            #elseif os(macOS)
-            NSApp.keyWindow ?? NSWindow()
-            #endif
-        }
+        #if os(iOS)
+        // anchorWindow was set on MainActor before the session started.
+        return (anchorWindow as? UIWindow) ?? UIWindow()
+        #elseif os(macOS)
+        return (anchorWindow as? NSWindow) ?? NSApplication.shared.windows.first!
+        #endif
     }
 }
 
