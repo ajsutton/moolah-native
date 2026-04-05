@@ -82,6 +82,11 @@ targets:
         CODE_SIGNING_REQUIRED: YES
         CODE_SIGNING_ALLOWED: YES
         ENABLE_HARDENED_RUNTIME: NO
+        # Moolah_macOS uses PRODUCT_NAME=Moolah so it builds as Moolah.app,
+        # not Moolah_macOS.app. XcodeGen derives TEST_HOST from the target
+        # name, so we override it here to match the actual product name.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Moolah.app/Contents/MacOS/Moolah"
+        BUNDLE_LOADER: "$(TEST_HOST)"
     dependencies:
       - target: Moolah_macOS
 
@@ -91,7 +96,19 @@ schemes:
       targets:
         Moolah_iOS: all
         Moolah_macOS: all
+
+  Moolah-iOS:
+    build:
+      targets:
+        Moolah_iOS: all
     test:
       targets:
         - MoolahTests_iOS
+
+  Moolah-macOS:
+    build:
+      targets:
+        Moolah_macOS: all
+    test:
+      targets:
         - MoolahTests_macOS

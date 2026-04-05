@@ -10,7 +10,6 @@ export SWIFT_BUILD_USE_SANDBOX=0
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 COMMON_ARGS=(
-    -scheme Moolah
     -derivedDataPath "$REPO_ROOT/.DerivedData"
     -IDEPackageSupportDisableManifestSandbox=1
     -IDEPackageSupportDisablePackageSandbox=1
@@ -22,6 +21,7 @@ COMMON_ARGS=(
 # ---------------------------------------------------------------------------
 echo "==> Testing iOS Simulator…"
 xcodebuild test "${COMMON_ARGS[@]}" \
+    -scheme Moolah-iOS \
     -destination "platform=iOS Simulator,name=iPhone 17 Pro"
 
 # ---------------------------------------------------------------------------
@@ -41,6 +41,7 @@ if [[ -n "${SV_SESSION_ID:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
     echo "    (sandvault/CI detected — using xcrun xctest workaround)"
 
     xcodebuild build-for-testing "${COMMON_ARGS[@]}" \
+        -scheme Moolah-macOS \
         -destination "platform=macOS"
 
     PRODUCTS="$REPO_ROOT/.DerivedData/Build/Products"
@@ -60,6 +61,7 @@ if [[ -n "${SV_SESSION_ID:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
     xcrun xctest "$TEST_BUNDLE"
 else
     xcodebuild test "${COMMON_ARGS[@]}" \
+        -scheme Moolah-macOS \
         -destination "platform=macOS"
 fi
 

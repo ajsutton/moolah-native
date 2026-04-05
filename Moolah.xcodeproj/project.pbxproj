@@ -67,7 +67,6 @@
 /* Begin PBXFileReference section */
 		0AE5A7458FFA37A4C6DC6BF1 /* UserMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserMenuView.swift; sourceTree = "<group>"; };
 		17A51A52AB99705A4984A754 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		1B7ED24F3709897699EAB8FB /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		21076A3E98D0A26C91D53619 /* InMemoryBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryBackend.swift; sourceTree = "<group>"; };
 		22398332D8AEF0450E12B382 /* MoolahTests_iOS.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MoolahTests_iOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		22495C74E2B63C2956AE9437 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -77,14 +76,12 @@
 		3E37BF3BEA54A6FC23CC7FE3 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		3FF82ABEAD4CD6082C14CC50 /* AuthContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthContractTests.swift; sourceTree = "<group>"; };
 		44F485E6BD2F32A1579E64C8 /* AuthStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStoreTests.swift; sourceTree = "<group>"; };
-		4693DE38015762056D70B648 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		4CA48181968E160CE8E9302B /* Moolah_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Moolah_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		55CFB29D6757420CB3C9C8C8 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
 		689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendProvider.swift; sourceTree = "<group>"; };
 		6B6CD88ED67E56DC24998EF5 /* RemoteBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBackend.swift; sourceTree = "<group>"; };
 		7744C6DBEE0256E2BBD1513A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9B1537B5ED73BDFE589AFBDF /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
-		B12DB012354485E82073F1C2 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		B49F4CED68007895BCFE0658 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		B66104D9C8D82B1A0427CE79 /* AuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthProvider.swift; sourceTree = "<group>"; };
 		BE221BC137F6FA398968FDFF /* Moolah_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Moolah_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -160,7 +157,6 @@
 		52E521D2D8A8957D9486389D /* Features */ = {
 			isa = PBXGroup;
 			children = (
-				B12DB012354485E82073F1C2 /* .gitkeep */,
 				9EB76ED522EB8ACA5326F0CD /* Auth */,
 			);
 			path = Features;
@@ -169,7 +165,6 @@
 		583D638B3107B848994CFFB8 /* Domain */ = {
 			isa = PBXGroup;
 			children = (
-				4693DE38015762056D70B648 /* .gitkeep */,
 				6399E2439BD46F7F60A99002 /* Models */,
 				4D121EA50340CAB3E34C37AC /* Repositories */,
 			);
@@ -188,7 +183,6 @@
 		7CC5CD50EB9F3FCCA61AD341 /* Backends */ = {
 			isa = PBXGroup;
 			children = (
-				1B7ED24F3709897699EAB8FB /* .gitkeep */,
 				B826BB529F87533B35ECD5C4 /* Remote */,
 			);
 			path = Backends;
@@ -670,7 +664,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.tests;
 				SDKROOT = macosx;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Moolah_macOS.app/Contents/MacOS/Moolah_macOS";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Moolah.app/Contents/MacOS/Moolah";
 			};
 			name = Release;
 		};
@@ -729,7 +723,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.tests;
 				SDKROOT = macosx;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Moolah_macOS.app/Contents/MacOS/Moolah_macOS";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Moolah.app/Contents/MacOS/Moolah";
 			};
 			name = Debug;
 		};
