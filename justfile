@@ -18,6 +18,17 @@ build-mac:
         CODE_SIGN_IDENTITY="-" \
         ENABLE_HARDENED_RUNTIME=NO
 
+# Build and launch the macOS app
+run-mac:
+    xcodegen generate
+    xcodebuild build \
+        -scheme Moolah \
+        -destination 'platform=macOS' \
+        -derivedDataPath .build \
+        CODE_SIGN_IDENTITY="-" \
+        ENABLE_HARDENED_RUNTIME=NO
+    open .build/Build/Products/Debug/Moolah.app
+
 # Build the app for the iOS Simulator
 build-ios:
     xcodegen generate

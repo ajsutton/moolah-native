@@ -111,7 +111,7 @@ moolah-native/
 
 ## Incremental Steps
 
-Each step produces a runnable app that builds on the last. Steps are sized to be completable independently and deliver tangible value on their own.
+Each step is a **vertical slice**: it adds domain types, InMemoryBackend implementation, RemoteBackend implementation, and UI together for a single feature. No step builds a backend layer that isn't yet consumed by UI — tests and Previews drive the InMemoryBackend, and the RemoteBackend is wired up at the same time so the app works end-to-end.
 
 ---
 
@@ -162,396 +162,351 @@ The same `SWIFTPM_DISABLE_SANDBOX`, `SWIFT_BUILD_USE_SANDBOX`, and `IDEPackageSu
 
 ---
 
-### Step 2 — Domain Models, Repository Protocols & InMemoryBackend
+### Step 2 — Authentication
 
-**Goal:** The entire domain vocabulary exists as pure Swift types with no backend coupling. A fully functional in-memory backend is available for all future tests and Previews.
+**Goal:** Users can sign in and out. The app shows their name when signed in. Establishes the backend infrastructure all later steps build on.
 
-#### Tasks
+#### Domain types introduced
+- `UserProfile` (id, givenName, familyName, pictureURL) — `Codable`, `Sendable`
+- `BackendError` enum: `.unauthenticated`, `.serverError(Int)`, `.networkUnavailable`
 
-**Domain models** (plain structs, `Identifiable`, `Equatable`, `Sendable`):
-- `Account` (id, name, type, balance, position, hidden)
-- `Transaction` (id, date, payee, amount, type, accountId, toAccountId, categoryId, earmarkId, notes, recurrence, scheduled)
-- `Category` (id, name, parentId)
-- `Earmark` (id, name, balance, saved, spent, hidden, position, savingsGoal?)
-- `InvestmentValue` (accountId, date, value)
-- `DailyBalance` (date, balance, isForecast)
-- `ExpenseBreakdown` (categoryId, amount, percentage)
-- `MonthlyIncomeExpense` (month, income, expense)
-- `UserProfile` (id, givenName, familyName, pictureURL)
-- `TransactionFilter` (dateRange, categoryIds, payee, accountId, earmarkId, scheduled)
-- `Recurrence` (period: daily/weekly/monthly/yearly, every: Int)
+#### Protocols introduced
+- `AuthProvider`: `var requiresExplicitSignIn: Bool`, `func currentUser() async throws -> UserProfile?`, `func signIn() async throws -> UserProfile`, `func signOut() async throws`
+- `BackendProvider`: `var auth: any AuthProvider { get }` *(grows a property each step)*
 
-**Repository protocols** (in `Domain/Repositories/`):
-- `AuthProvider`: `func currentUser() async throws -> UserProfile?`, `func signIn() async throws -> UserProfile`, `func signOut() async throws`
-- `AccountRepository`: fetch all, create, update, delete
-- `TransactionRepository`: fetch (with filter + pagination), create, update, delete, fetchPayeeSuggestions
-- `CategoryRepository`: fetch all, create, update, delete (withReplacement:)
-- `EarmarkRepository`: fetch all, create, update, fetchBudget, updateBudget
-- `InvestmentRepository`: fetchValues (paginated), setValue, deleteValue
-- `AnalysisRepository`: fetchDailyBalances, fetchExpenseBreakdown, fetchIncomeAndExpense
+#### InMemoryBackend (auth only)
+- `InMemoryAuthProvider`: configurable starting state (signed in with a fixture profile, or signed out); `signIn()` / `signOut()` toggle state.
 
-**`BackendProvider` protocol** (in `Domain/`):
-```swift
-protocol BackendProvider {
-    var auth: any AuthProvider { get }
-    var accounts: any AccountRepository { get }
-    var transactions: any TransactionRepository { get }
-    var categories: any CategoryRepository { get }
-    var earmarks: any EarmarkRepository { get }
-    var investments: any InvestmentRepository { get }
-    var analysis: any AnalysisRepository { get }
-}
-```
+#### RemoteBackend (auth only)
+- `APIClient`: base URL injection, cookie session, `async throws` request → `Data`, HTTP error mapping to `BackendError`.
+- `RemoteAuthProvider`: Google Sign-In SDK integration.
+- `RemoteBackend: BackendProvider` (auth only for now).
+- Wire `RemoteBackend` into the composition root.
 
-**`InMemoryBackend`** (in `MoolahTests/Support/InMemoryBackend/`):
-- Implements `BackendProvider` + all protocols using `[ID: Model]` dictionaries.
-- Supports pre-seeding with fixture data.
-- `TransactionRepository.fetch` applies filter + pagination in memory.
-- `AnalysisRepository` computes breakdowns from in-memory transactions.
+#### UI
+- `AuthStore` (`@Observable`): state `.loading` / `.signedOut` / `.signedIn(UserProfile)`.
+- `AppRootView`: switches on auth state.
+- `WelcomeView`: shows "Sign in with Google" only when `requiresExplicitSignIn == true`.
+- `UserMenuView`: avatar, name, sign-out button.
 
-**Tests:**
-- Every domain model encodes/decodes round-trips via `Codable` (for future persistence).
-- `InMemoryBackend` CRUD operations behave correctly (create → fetch → update → delete cycle).
-- Filter logic: each `TransactionFilter` field is tested in isolation and in combination.
-- Pagination: returns correct page slices and stops at the final page.
-
-#### Definition of Done
-- All domain types exist with no backend imports.
-- `InMemoryBackend` passes all repository contract tests.
-- No UI changes.
-
----
-
-### Step 3 — Remote Backend (REST API Implementation)
-
-**Goal:** A concrete `RemoteBackend` that satisfies every repository protocol by talking to the existing REST server.
-
-#### Tasks
-- Implement `APIClient` (internal to `Backends/Remote/`) using `URLSession`:
-  - Base URL configuration (injected, not hard-coded).
-  - Cookie-based session management.
-  - `async throws` request method returning `Data`.
-  - HTTP error mapping: 401 → `BackendError.unauthenticated`, 5xx → `BackendError.serverError(Int)`, network failure → `BackendError.networkUnavailable`.
-- Define all `Codable` DTO types matching server JSON (in `Backends/Remote/DTOs/`).
-- Implement `RemoteAuthProvider` (Google Sign-In SDK).
-- Implement each `Remote*Repository`, translating DTOs ↔ domain models.
-- Implement `RemoteBackend: BackendProvider`.
-- Register `RemoteBackend` in the app's composition root (`App/`).
-
-**Tests** (using `URLProtocol` stubs — no live network):
-- Each repository method constructs the correct URL, method, and request body.
-- Each repository method decodes fixture JSON into the correct domain model.
-- Each error case (`401`, `500`, network failure) surfaces as the correct `BackendError`.
-- DTO ↔ domain model translation is tested for every field, including optional fields and edge cases.
-
-#### Definition of Done
-- All API model types decode correctly from fixture JSON.
-- All error cases are covered by tests.
-- No UI changes; `RemoteBackend` is wired up but not yet exercised by views.
-
----
-
-### Step 4 — Authentication
-
-**Goal:** Users can sign in (via `AuthProvider`) and the app shows their name. Sign-out works. The sign-in UI is only shown when the active backend requires it.
-
-#### Tasks
-- Implement `AuthStore` (`@Observable`):
-  - State: `.loading`, `.signedOut`, `.signedIn(UserProfile)`.
-  - On launch: calls `auth.currentUser()` to restore session.
-  - `signIn()` / `signOut()` delegate to `AuthProvider`.
-- Build `WelcomeView`:
-  - Asks `AuthProvider` whether explicit sign-in is required (`var requiresExplicitSignIn: Bool`).
-  - Shows "Sign in with Google" button only when required (REST backend: yes; future CloudKit backend: no).
-- Build `UserMenuView` (avatar + name + sign-out).
-- Implement `AppRootView` switching on auth state.
-
-**Tests** (using `InMemoryBackend`'s auth provider):
+#### Tests
 - `AuthStore` transitions: `.loading` → `.signedIn` when `currentUser()` returns a profile.
 - `AuthStore` transitions: `.loading` → `.signedOut` when `currentUser()` returns nil.
 - `AuthStore` transitions: `.signedIn` → `.signedOut` on `signOut()`.
-- Auth failure (`BackendError.networkUnavailable`) leaves store in `.signedOut` with error message.
+- Auth failure leaves store in `.signedOut` with error message.
 - `WelcomeView` hides sign-in button when `requiresExplicitSignIn == false`.
 
 #### Definition of Done
-- Signing in shows the user's name.
-- Signing out returns to `WelcomeView`.
-- Tests cover all `AuthStore` transitions using `InMemoryBackend`.
+- Signing in shows the user's name. Signing out returns to `WelcomeView`.
+- `InMemoryBackend` auth contract tests pass.
 
 ---
 
-### Step 5 — Account List (Read-Only)
+### Step 3 — Account List (Read-Only)
 
 **Goal:** A signed-in user sees their accounts grouped by type in a sidebar/list, with totals.
 
-#### Tasks
-- Implement `AccountStore` (`@Observable`) using `AccountRepository`:
-  - `func load() async throws`
-  - Computed: `currentAccounts`, `earmarkedTotal`, `investmentTotal`, `netWorth`.
-- Define SwiftData `AccountCache` for offline reads.
-- Build `SidebarView` (`NavigationSplitView`):
-  - Current Accounts section (bank + credit card) with subtotal.
-  - Earmarked Funds placeholder.
-  - Investments section with net-worth total.
-- Build `AccountRowView` (name, balance, type icon, color).
-- Handle loading and error states (skeleton / error banner).
+#### Domain types introduced
+- `Account` (id, name, type, balance, position, hidden) — `Codable`, `Sendable`
+- `AccountType` enum matching server values
 
-**Tests** (using `InMemoryBackend`):
-- `AccountStore` populates correctly from seeded accounts.
-- Correct subtotals computed for each section.
-- Store exposes `.error` state on repository failure.
-- Accounts sorted by `position`.
+#### Protocols introduced
+- `AccountRepository`: `func fetchAll() async throws -> [Account]`
+- `BackendProvider` gains: `var accounts: any AccountRepository { get }`
+
+#### InMemoryBackend
+- `InMemoryAccountRepository`: stores `[UUID: Account]`; pre-seedable.
+
+#### RemoteBackend
+- `AccountDTO`: `Codable` matching server JSON.
+- `RemoteAccountRepository`: GET `/accounts` → decode DTOs → map to domain models.
+- Fixture JSON in `MoolahTests/Support/Fixtures/accounts.json`.
+
+#### UI
+- `AccountStore` (`@Observable`): `load()`, computed `currentAccounts`, `earmarkedTotal`, `investmentTotal`, `netWorth`.
+- `SidebarView` (`NavigationSplitView`): Current Accounts, Earmarked Funds (placeholder), Investments.
+- `AccountRowView`: name, balance, type icon.
+
+#### Tests
+- `AccountStore` populates from seeded accounts; subtotals correct; sorted by `position`.
+- `RemoteAccountRepository` decodes fixture JSON; maps all fields.
 
 #### Definition of Done
-- Accounts display on both iPhone (list) and Mac (sidebar).
-- Subtotals are accurate.
-- Tests pass using `InMemoryBackend`.
+- Accounts display on both platforms. Subtotals accurate.
 
 ---
 
-### Step 6 — Transaction List (Read-Only)
+### Step 4 — Transaction List (Read-Only)
 
-**Goal:** Tapping an account shows its paginated transaction list with running balance.
+**Goal:** Tapping an account shows its paginated transaction list.
 
-#### Tasks
-- Implement `TransactionStore` (`@Observable`) using `TransactionRepository`:
-  - `func load(filter: TransactionFilter, page: Int) async throws`
-  - Appends pages; deduplicates by id.
-  - Detects end-of-results when page returns fewer rows than `pageSize`.
-- Build `TransactionListView`:
-  - Rows: payee, date, amount (coloured by type), running balance.
-  - Infinite scroll triggering next page load.
-- Build `TransactionRowView`.
+#### Domain types introduced
+- `Transaction` (id, date, payee, amount, type, accountId, toAccountId, categoryId, earmarkId, notes, scheduled)
+- `TransactionType` enum (income / expense / transfer)
+- `TransactionFilter` (accountId, dateRange, scheduled) — grows each step
 
-**Tests** (using `InMemoryBackend`):
-- First-page load populates store correctly.
-- Appending second page does not duplicate rows.
-- Transfer transactions show correct sign on each side.
-- End-of-results detection.
-- Empty state shown when no transactions.
+#### Protocols introduced
+- `TransactionRepository`: `func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> [Transaction]`
+- `BackendProvider` gains: `var transactions: any TransactionRepository { get }`
+
+#### InMemoryBackend
+- `InMemoryTransactionRepository`: in-memory filter + pagination.
+
+#### RemoteBackend
+- `TransactionDTO`: `Codable` matching server JSON.
+- `RemoteTransactionRepository`: GET `/transactions` with query params → domain models.
+- Fixture JSON.
+
+#### UI
+- `TransactionStore` (`@Observable`): paginated load, append, end-of-results detection.
+- `TransactionListView`: rows with payee, date, amount (coloured by type), infinite scroll.
+- `TransactionRowView`.
+
+#### Tests
+- Pagination: first page, append second page without duplicates, end-of-results.
+- Filter by `accountId`.
+- `RemoteTransactionRepository` decodes fixture; constructs correct URL params.
 
 #### Definition of Done
-- Large accounts scroll without duplicate entries on both platforms.
+- Large account transaction lists scroll correctly on both platforms.
 
 ---
 
-### Step 7 — Create & Edit Transactions
+### Step 5 — Create & Edit Transactions
 
 **Goal:** Users can add, edit, and delete transactions.
 
-#### Tasks
-- Build `TransactionFormView` (sheet / detail panel):
-  - Payee field with autocomplete (via `TransactionRepository.fetchPayeeSuggestions`).
-  - Amount input.
-  - Date picker.
-  - Transaction type segmented control (Income / Expense / Transfer).
-  - Transfer destination account picker.
-  - Category picker (flat list for now).
-  - Notes field.
-  - Delete button with confirmation.
-- `TransactionStore` mutations: `create`, `update`, `delete` with optimistic updates and rollback on error.
+#### Domain types introduced
+- `Category` (id, name, parentId) — needed for category picker
+- `Earmark` (id, name) — needed for earmark picker; full model comes in Step 8
 
-**Tests** (using `InMemoryBackend`):
-- Creating a transaction adds it to the repository and to the store.
-- Editing updates the repository and the store.
-- Deleting removes from repository and store.
-- Optimistic rollback: store reverts when repository throws.
+#### Protocols introduced
+- `TransactionRepository` gains: `func create(_:) async throws -> Transaction`, `func update(_:) async throws -> Transaction`, `func delete(id:) async throws`, `func fetchPayeeSuggestions(prefix:) async throws -> [String]`
+- `CategoryRepository`: `func fetchAll() async throws -> [Category]`
+- `BackendProvider` gains: `var categories: any CategoryRepository { get }`
+
+#### InMemoryBackend
+- Extend `InMemoryTransactionRepository` with mutations.
+- `InMemoryCategoryRepository`.
+
+#### RemoteBackend
+- `RemoteCategoryRepository`: GET `/categories`.
+- Extend `RemoteTransactionRepository` with POST/PUT/DELETE endpoints.
+- Fixture JSON.
+
+#### UI
+- `TransactionFormView` (sheet): payee autocomplete, amount, date, type, transfer destination, category picker, notes, delete.
+- `TransactionStore` gains `create`, `update`, `delete` with optimistic updates + rollback.
+
+#### Tests
+- Create → fetch → update → delete cycle.
+- Optimistic rollback on error.
 - Transfer creates two entries (one per account).
-- Payee autocomplete returns suggestions from existing transaction payees.
+- Payee autocomplete from existing payees.
 
 #### Definition of Done
-- Full CRUD cycle works end-to-end on both platforms via `InMemoryBackend` in tests.
-- All tests pass.
+- Full CRUD works end-to-end in tests via `InMemoryBackend`.
 
 ---
 
-### Step 8 — All Transactions View & Filtering
+### Step 6 — All Transactions & Filtering
 
 **Goal:** A global transactions view with date/category/payee/account/earmark filters.
 
-#### Tasks
-- Build `AllTransactionsView` (reuses `TransactionListView` with no account scoping).
-- Build `TransactionFilterView` sheet:
-  - Date range pickers.
-  - Category multi-select.
-  - Payee text field.
-  - Account picker.
-  - Earmark picker.
-  - Clear-all button.
-- Show active filter badge when any filter is set.
-- `TransactionStore` is re-loaded with the updated `TransactionFilter`.
+#### Domain types extended
+- `TransactionFilter` gains: `dateRange`, `categoryIds`, `payee`, `earmarkId`
 
-**Tests** (using `InMemoryBackend`):
-- Each filter field narrows results correctly (in-memory filter logic tested in Step 2; here test store correctly passes filter through).
-- Clearing filter reloads unfiltered list.
-- Filter badge visibility reflects active state.
+#### InMemoryBackend
+- Extend filter logic in `InMemoryTransactionRepository`.
+
+#### RemoteBackend
+- Extend query param construction.
+
+#### UI
+- `AllTransactionsView` (no account scoping).
+- `TransactionFilterView` sheet: date range, category multi-select, payee text field, account picker, earmark picker, clear-all.
+- Active filter badge.
+
+#### Tests
+- Each filter field narrows results in isolation and in combination.
+- Clearing filter reloads unfiltered.
 
 #### Definition of Done
 - Filtering by every combination works.
-- The active filter is clearly indicated.
 
 ---
 
-### Step 9 — Category Management
+### Step 7 — Category Management
 
 **Goal:** Users can view, create, rename, merge, and delete categories.
 
-#### Tasks
-- Implement `CategoryStore` using `CategoryRepository`.
-- Build `CategoriesView`: hierarchical tree (`List` with `children` key path built from `parentId`).
-- Build `CategoryDetailView`: rename field, delete action (with "Replace with…" picker when transactions exist).
-- All CRUD operations routed through `CategoryRepository`.
+#### Protocols introduced
+- `CategoryRepository` gains: `func create(_:) async throws -> Category`, `func update(_:) async throws -> Category`, `func delete(id:withReplacement:) async throws`
 
-**Tests** (using `InMemoryBackend`):
-- Tree built correctly from flat list with `parentId` relationships.
-- Creating a subcategory sets `parentId`.
-- Deleting with replacement invokes `delete(withReplacement:)` on the repository.
-- Renaming updates the correct node in the tree.
+#### InMemoryBackend / RemoteBackend
+- Extend `InMemoryCategoryRepository` and `RemoteCategoryRepository` with mutations.
+
+#### UI
+- `CategoryStore`.
+- `CategoriesView`: hierarchical tree.
+- `CategoryDetailView`: rename, delete with replacement picker.
+
+#### Tests
+- Tree built from flat list with `parentId`. CRUD cycle.
 
 #### Definition of Done
-- Category tree renders with correct indentation.
-- All CRUD operations work and are tested.
+- Category tree renders with correct indentation. All CRUD tested.
 
 ---
 
-### Step 10 — Earmarks
+### Step 8 — Earmarks
 
 **Goal:** Users can view earmarks, see their transactions, and manage savings goals.
 
-#### Tasks
-- Implement `EarmarkStore` using `EarmarkRepository`.
-- Add earmarks section to `SidebarView`.
-- Build `EarmarkDetailView`:
-  - **Overview tab**: balance, saved, spent; savings goal progress bar.
-  - **Spending Breakdown tab**: category allocations via `EarmarkRepository.fetchBudget`.
-- Show transactions filtered to the earmark (reuse `TransactionListView`).
-- Create / edit earmark dialogs.
-- Update `TransactionFormView` to include earmark picker.
+#### Domain types introduced
+- `Earmark` full model (id, name, balance, saved, spent, hidden, position, savingsGoal?)
+- `EarmarkBudgetItem` (categoryId, amount)
 
-**Tests** (using `InMemoryBackend`):
-- Savings goal progress: `saved / savingsTarget`.
-- Spending breakdown data populates correctly.
-- Earmark filter correctly scopes transaction list.
-- Budget allocation update calls repository correctly.
+#### Protocols introduced
+- `EarmarkRepository`: `fetchAll`, `create`, `update`, `fetchBudget`, `updateBudget`
+- `BackendProvider` gains: `var earmarks: any EarmarkRepository { get }`
+
+#### InMemoryBackend / RemoteBackend
+- `InMemoryEarmarkRepository`, `RemoteEarmarkRepository`.
+
+#### UI
+- Earmarks section in `SidebarView`.
+- `EarmarkDetailView`: Overview tab (balance, saved, spent, savings goal progress), Spending Breakdown tab.
+- Transactions scoped to earmark (reuse `TransactionListView`).
+- `TransactionFormView` gains earmark picker.
+
+#### Tests
+- Savings goal progress. Budget allocation. Earmark filter scopes transactions.
 
 #### Definition of Done
-- Full earmark lifecycle works.
-- Savings progress is accurate.
+- Full earmark lifecycle works and is tested.
 
 ---
 
-### Step 11 — Upcoming / Scheduled Transactions
+### Step 9 — Upcoming / Scheduled Transactions
 
 **Goal:** Users can view overdue and upcoming scheduled transactions and mark them paid.
 
-#### Tasks
-- Build `UpcomingView` fetching with `TransactionFilter(scheduled: true)`.
-- Overdue = `date < today`; highlight in red.
-- "Pay" action: create a non-scheduled copy dated today via `TransactionRepository.create`.
-- `TransactionFormView` extended with recurrence fields: period + interval.
+#### Domain types introduced
+- `Recurrence` (period: daily/weekly/monthly/yearly, every: Int)
+- `Transaction` gains `recurrence` field
 
-**Tests** (using `InMemoryBackend`):
-- Overdue classification (date < today).
-- Pay action creates a new non-scheduled transaction and does not delete the original scheduled one.
-- Recurrence fields round-trip through create/update.
+#### InMemoryBackend / RemoteBackend
+- Update filter for `scheduled: true`.
+
+#### UI
+- `UpcomingView`: overdue highlighted in red, "Pay" action.
+- `TransactionFormView` gains recurrence fields.
+
+#### Tests
+- Overdue classification. Pay action creates non-scheduled copy.
 
 #### Definition of Done
-- Overdue items are visually distinct.
-- Paying a scheduled transaction works.
+- Overdue items visually distinct. Paying works.
 
 ---
 
-### Step 12 — Analysis Dashboard
+### Step 10 — Analysis Dashboard
 
 **Goal:** The home screen shows net-worth graph, expense breakdown, income/expense table, and upcoming summary.
 
-#### Tasks
-- Implement `AnalysisStore` using `AnalysisRepository`.
-- Build `AnalysisView`:
-  - **Net Worth Graph** (Swift Charts area mark): `AnalysisRepository.fetchDailyBalances` with forecast series.
-  - **Expense Breakdown** (Swift Charts sector mark): `AnalysisRepository.fetchExpenseBreakdown`.
-  - **Income vs. Expense Table**: `AnalysisRepository.fetchIncomeAndExpense`.
-  - **Upcoming widget**: next 5 scheduled transactions.
-- Financial-year picker + custom date range controls.
+#### Domain types introduced
+- `DailyBalance` (date, balance, isForecast)
+- `ExpenseBreakdown` (categoryId, amount, percentage)
+- `MonthlyIncomeExpense` (month, income, expense)
 
-**Tests** (using `InMemoryBackend` — analysis methods compute from in-memory transactions):
-- Daily balance series is ordered by date.
-- Forecast data points are flagged `isForecast = true`.
-- Expense breakdown percentages sum to 100.
-- Income/expense totals match sum of in-memory transactions for the period.
+#### Protocols introduced
+- `AnalysisRepository`: `fetchDailyBalances(dateRange:)`, `fetchExpenseBreakdown(dateRange:)`, `fetchIncomeAndExpense(dateRange:)`
+- `BackendProvider` gains: `var analysis: any AnalysisRepository { get }`
+
+#### InMemoryBackend
+- `InMemoryAnalysisRepository`: computes all three from in-memory transactions.
+
+#### RemoteBackend
+- `RemoteAnalysisRepository`: calls server analysis endpoints; fixture JSON.
+
+#### UI
+- `AnalysisStore`.
+- `AnalysisView`: net-worth area chart, expense breakdown pie, income/expense table, upcoming widget.
+- Financial-year picker + custom date range.
+
+#### Tests
+- Balances ordered by date. Forecast flagged correctly. Breakdown percentages sum to 100.
 
 #### Definition of Done
-- Dashboard renders real data on both platforms.
-- Charts are interactive.
+- Dashboard renders real data on both platforms. Charts interactive.
 
 ---
 
-### Step 13 — Reports
+### Step 11 — Reports
 
-**Goal:** Users can view income and expense breakdowns by category for any date range.
+**Goal:** Income and expense breakdowns by category for any date range.
 
-#### Tasks
-- Build `ReportsView`:
-  - Date range / financial-year selector.
-  - Income by category table (expandable subcategory rows).
-  - Expenses by category table.
-  - Totals row.
-- Reuses `AnalysisRepository.fetchExpenseBreakdown` and `fetchIncomeAndExpense`.
+#### UI
+- `ReportsView`: date range selector, income/expense by category tables with subcategory rows, totals.
+- Reuses `AnalysisRepository`.
 
-**Tests**:
-- Subcategory rows nest under correct parents.
-- Totals match sum of category amounts.
-- Changing date range triggers fresh repository fetch.
+#### Tests
+- Subcategory nesting. Totals match.
 
 #### Definition of Done
-- Reports are readable on both form factors.
+- Reports readable on both form factors.
 
 ---
 
-### Step 14 — Investment Tracking
+### Step 12 — Investment Tracking
 
 **Goal:** Investment accounts show value history and allow manual value entries.
 
-#### Tasks
-- Build `InvestmentValuesView` (inside `AccountDetailView` for investment accounts):
-  - Line chart of value over time.
-  - List of entries (date + amount) with delete.
-  - "Add Value" form.
-- All operations via `InvestmentRepository`.
+#### Domain types introduced
+- `InvestmentValue` (accountId, date, value)
 
-**Tests** (using `InMemoryBackend`):
-- Pagination loads all pages without duplicates.
-- Adding a value inserts it into the repository.
-- Deleting removes the entry and the chart updates.
+#### Protocols introduced
+- `InvestmentRepository`: `fetchValues(accountId:page:)`, `setValue(_:)`, `deleteValue(id:)`
+- `BackendProvider` gains: `var investments: any InvestmentRepository { get }`
+
+#### InMemoryBackend / RemoteBackend
+- `InMemoryInvestmentRepository`, `RemoteInvestmentRepository`.
+
+#### UI
+- `InvestmentValuesView` (inside `AccountDetailView` for investment accounts): line chart, list of entries, "Add Value" form.
+
+#### Tests
+- Pagination. Add / delete cycle.
 
 #### Definition of Done
-- Investment charts render correctly.
-- CRUD for values works.
+- Investment charts render correctly. CRUD for values works.
 
 ---
 
-### Step 15 — Account Management (Create / Edit / Reorder)
+### Step 13 — Account Management (Create / Edit / Reorder)
 
 **Goal:** Users can create, edit, and reorder accounts.
 
-#### Tasks
-- Build `CreateAccountView` sheet (name, type, initial balance, hidden toggle).
-- Build `EditAccountView` (adds closed toggle).
-- Drag-and-drop reordering in sidebar via `.onMove`; persist updated `position` via `AccountRepository.update`.
-- Reorder is debounced to batch updates.
+#### Protocols introduced
+- `AccountRepository` gains: `func create(_:) async throws -> Account`, `func update(_:) async throws -> Account`, `func delete(id:) async throws`
 
-**Tests** (using `InMemoryBackend`):
-- Create adds account to repository.
-- Edit updates repository.
-- Reorder assigns correct `position` values to all affected accounts.
-- Closing an account sets `hidden = true` and removes it from active sections.
+#### InMemoryBackend / RemoteBackend
+- Extend with mutations.
+
+#### UI
+- `CreateAccountView`, `EditAccountView`.
+- Drag-and-drop reordering via `.onMove`.
+
+#### Tests
+- Create / update / delete / reorder cycle.
 
 #### Definition of Done
 - Full account CRUD with ordering works on both platforms.
 
 ---
 
-### Step 16 — Platform Polish & Feature Parity
+### Step 14 — Platform Polish & Feature Parity (final)
 
 **Goal:** Match remaining UX details; ensure both platforms feel native.
 
@@ -601,6 +556,7 @@ protocol BackendProvider {
 
 - Test files are written **before** implementation files (TDD).
 - Every repository protocol has a shared **contract test suite** that both `InMemoryBackend` and `RemoteBackend` must pass. This guarantees substitutability.
+- **Before implementing any `InMemoryBackend` method**, read the corresponding route/controller in `../moolah-server/src/` to verify exact compatibility: filtering semantics, sort order, pagination contract, and computed values must match the server precisely.
 - `InMemoryBackend` is used in all feature tests and all SwiftUI Previews.
 - Fixture JSON files for every API response live in `MoolahTests/Support/Fixtures/`.
 - Tests must pass in parallel.

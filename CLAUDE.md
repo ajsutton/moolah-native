@@ -30,6 +30,7 @@ Never edit `Moolah.xcodeproj/project.pbxproj` directly. All project configuratio
 - All feature tests use `InMemoryBackend`, never `RemoteBackend`.
 - All SwiftUI Previews use `InMemoryBackend`.
 - `InMemoryBackend` lives in `MoolahTests/Support/InMemoryBackend/` — it is a test-only target, not shipped in the app.
+- **Every `InMemoryBackend` method must be verified against `moolah-server` source before implementation.** Read the corresponding route/controller in `../moolah-server/src/` to confirm filtering semantics, sort order, pagination contract, and computed values are exactly compatible.
 
 ### Adding a new backend
 - Implement `BackendProvider` and all repository protocols in a new `Backends/<Name>/` folder.

@@ -27,12 +27,16 @@ just open       # opens in Xcode
 > **Tip:** Re-run `just generate` after editing `project.yml`. Never edit
 > `Moolah.xcodeproj/project.pbxproj` directly.
 
-## Building
+## Building & Running
 
 ```bash
-just build-mac   # build for macOS (ad-hoc signed, no certificate needed)
+just run-mac     # build and launch the macOS app directly
+just build-mac   # build for macOS without launching (ad-hoc signed, no certificate needed)
 just build-ios   # build for iPhone 17 Pro simulator
 ```
+
+`just run-mac` writes its build products to `.build/` in the repo root so they don't
+mix with Xcode's DerivedData, then opens the resulting `.app` bundle directly.
 
 To build and run from Xcode: select the **Moolah** scheme and your destination, then
 press **Run** (⌘R).
