@@ -7,11 +7,41 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0E0392A21BC5262F4AF03FE5 /* BackendProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */; };
+		0F56E83D688105CEEB912A36 /* InMemoryBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21076A3E98D0A26C91D53619 /* InMemoryBackend.swift */; };
+		18EBFFD7591E79F6C5AC49D4 /* AuthStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44F485E6BD2F32A1579E64C8 /* AuthStoreTests.swift */; };
+		4080C3FFFDC17F45D715B812 /* InMemoryAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB9D954910A399A25A020BB5 /* InMemoryAuthProvider.swift */; };
+		4140EDAF0C1A9E0A3723E357 /* UserMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE5A7458FFA37A4C6DC6BF1 /* UserMenuView.swift */; };
+		41DF550E13133F22A453AAE3 /* BackendProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */; };
+		48F0CBC848C55813FEBB8FE2 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0431C044B183CBD75A93A60 /* APIClient.swift */; };
+		4CE05B3BF9ADAE11FA683CF0 /* InMemoryBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21076A3E98D0A26C91D53619 /* InMemoryBackend.swift */; };
+		4D1AA5636717544A23434905 /* RemoteAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E5AD68A218108F0A5F67D0 /* RemoteAuthProvider.swift */; };
 		54976604A4A32D269D4585EA /* ModelContainerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */; };
 		557A175478652AC4A3ACD655 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22495C74E2B63C2956AE9437 /* ContentView.swift */; };
+		58122BFD91F09DDD9D0523D0 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0431C044B183CBD75A93A60 /* APIClient.swift */; };
+		5DD56EF420C18507AF3B5463 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E37BF3BEA54A6FC23CC7FE3 /* WelcomeView.swift */; };
+		60C4D29AF9D3027B180A8797 /* RemoteAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E5AD68A218108F0A5F67D0 /* RemoteAuthProvider.swift */; };
 		67C6A90C925461E98AFFDF15 /* ModelContainerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */; };
+		6864F6A01E05302DC8560FFC /* InMemoryAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB9D954910A399A25A020BB5 /* InMemoryAuthProvider.swift */; };
+		7CBE8BFF98E1ED319BDB0762 /* UserMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE5A7458FFA37A4C6DC6BF1 /* UserMenuView.swift */; };
+		7D97D59B3682BBB7C98AC832 /* BackendError.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB59F0807A41AE9577AFB9E1 /* BackendError.swift */; };
+		7F25E616B673451369F9FC55 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E37BF3BEA54A6FC23CC7FE3 /* WelcomeView.swift */; };
+		8CD72E510AE6F5A680D87E3C /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55CFB29D6757420CB3C9C8C8 /* AppRootView.swift */; };
+		8DAB18C30AA26CD11A371099 /* AuthStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44F485E6BD2F32A1579E64C8 /* AuthStoreTests.swift */; };
 		9CDEBDC3CFBDAF9165F882A7 /* MoolahApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E7D532967ACF605512D332 /* MoolahApp.swift */; };
+		9E80B7C29F305231A7F25430 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 394716AE7AB11EB9DB2FC537 /* UserProfile.swift */; };
+		A0CE6F785996CBF25B4B8493 /* RemoteBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B6CD88ED67E56DC24998EF5 /* RemoteBackend.swift */; };
+		A9550E23152D9AD0201BABB7 /* AuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B66104D9C8D82B1A0427CE79 /* AuthProvider.swift */; };
+		B460D4029D5F6F80F23FCF0B /* AuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B66104D9C8D82B1A0427CE79 /* AuthProvider.swift */; };
+		B7381FF84C13F63F6B9AD69C /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1537B5ED73BDFE589AFBDF /* AuthStore.swift */; };
+		B8FFDDF839C1C39B1435553A /* AuthContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF82ABEAD4CD6082C14CC50 /* AuthContractTests.swift */; };
+		C65F03B98023C20985ACFD0B /* BackendError.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB59F0807A41AE9577AFB9E1 /* BackendError.swift */; };
 		C733D2B154E165B22A927403 /* MoolahApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E7D532967ACF605512D332 /* MoolahApp.swift */; };
+		C7E1B4D98E0E2E59F30E8760 /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1537B5ED73BDFE589AFBDF /* AuthStore.swift */; };
+		C861572FA5EFADAADAEB5BBC /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 394716AE7AB11EB9DB2FC537 /* UserProfile.swift */; };
+		CF2ED2A7D750143B1408AAC8 /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55CFB29D6757420CB3C9C8C8 /* AppRootView.swift */; };
+		D3D60831E18FB860048FC37C /* RemoteBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B6CD88ED67E56DC24998EF5 /* RemoteBackend.swift */; };
+		E0BB6B5944977FDD58DD8C83 /* AuthContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF82ABEAD4CD6082C14CC50 /* AuthContractTests.swift */; };
 		F394864BEA7331E44D8C1FA6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22495C74E2B63C2956AE9437 /* ContentView.swift */; };
 /* End PBXBuildFile section */
 
@@ -33,17 +63,45 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0AE5A7458FFA37A4C6DC6BF1 /* UserMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserMenuView.swift; sourceTree = "<group>"; };
 		17A51A52AB99705A4984A754 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		1B7ED24F3709897699EAB8FB /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		21076A3E98D0A26C91D53619 /* InMemoryBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryBackend.swift; sourceTree = "<group>"; };
 		22398332D8AEF0450E12B382 /* MoolahTests_iOS.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MoolahTests_iOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		22495C74E2B63C2956AE9437 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		29E5AD68A218108F0A5F67D0 /* RemoteAuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteAuthProvider.swift; sourceTree = "<group>"; };
 		3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerTests.swift; sourceTree = "<group>"; };
+		394716AE7AB11EB9DB2FC537 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
+		3E37BF3BEA54A6FC23CC7FE3 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		3FF82ABEAD4CD6082C14CC50 /* AuthContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthContractTests.swift; sourceTree = "<group>"; };
+		44F485E6BD2F32A1579E64C8 /* AuthStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStoreTests.swift; sourceTree = "<group>"; };
+		4693DE38015762056D70B648 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		4CA48181968E160CE8E9302B /* Moolah_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Moolah_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		55CFB29D6757420CB3C9C8C8 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
+		689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendProvider.swift; sourceTree = "<group>"; };
+		6B6CD88ED67E56DC24998EF5 /* RemoteBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBackend.swift; sourceTree = "<group>"; };
+		9B1537B5ED73BDFE589AFBDF /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
+		B12DB012354485E82073F1C2 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		B49F4CED68007895BCFE0658 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		B66104D9C8D82B1A0427CE79 /* AuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthProvider.swift; sourceTree = "<group>"; };
 		BE221BC137F6FA398968FDFF /* Moolah_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Moolah_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CB9D954910A399A25A020BB5 /* InMemoryAuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryAuthProvider.swift; sourceTree = "<group>"; };
+		DB59F0807A41AE9577AFB9E1 /* BackendError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendError.swift; sourceTree = "<group>"; };
+		E0431C044B183CBD75A93A60 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		E0E7D532967ACF605512D332 /* MoolahApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoolahApp.swift; sourceTree = "<group>"; };
 		FA6F0E982E4C074B8CF56F88 /* MoolahTests_macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoolahTests_macOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		042645CE16B2E3382BE163D4 /* InMemoryBackend */ = {
+			isa = PBXGroup;
+			children = (
+				CB9D954910A399A25A020BB5 /* InMemoryAuthProvider.swift */,
+				21076A3E98D0A26C91D53619 /* InMemoryBackend.swift */,
+			);
+			path = InMemoryBackend;
+			sourceTree = "<group>";
+		};
 		27D432CB805778E78FAC27AE /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -58,13 +116,49 @@
 		39930F16261E6D91BB4C2DB5 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				B49F4CED68007895BCFE0658 /* .gitkeep */,
 			);
 			path = Shared;
+			sourceTree = "<group>";
+		};
+		3A7D396FC84B1E61563117BB /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				44F485E6BD2F32A1579E64C8 /* AuthStoreTests.swift */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		3C38468D8EFA243FD55CF920 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				042645CE16B2E3382BE163D4 /* InMemoryBackend */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		4D121EA50340CAB3E34C37AC /* Repositories */ = {
+			isa = PBXGroup;
+			children = (
+				B66104D9C8D82B1A0427CE79 /* AuthProvider.swift */,
+				689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */,
+			);
+			path = Repositories;
+			sourceTree = "<group>";
+		};
+		5107DA1D4EAD5EAA78609644 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				29E5AD68A218108F0A5F67D0 /* RemoteAuthProvider.swift */,
+			);
+			path = Auth;
 			sourceTree = "<group>";
 		};
 		52E521D2D8A8957D9486389D /* Features */ = {
 			isa = PBXGroup;
 			children = (
+				B12DB012354485E82073F1C2 /* .gitkeep */,
+				9EB76ED522EB8ACA5326F0CD /* Auth */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -72,13 +166,27 @@
 		583D638B3107B848994CFFB8 /* Domain */ = {
 			isa = PBXGroup;
 			children = (
+				4693DE38015762056D70B648 /* .gitkeep */,
+				6399E2439BD46F7F60A99002 /* Models */,
+				4D121EA50340CAB3E34C37AC /* Repositories */,
 			);
 			path = Domain;
+			sourceTree = "<group>";
+		};
+		6399E2439BD46F7F60A99002 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				DB59F0807A41AE9577AFB9E1 /* BackendError.swift */,
+				394716AE7AB11EB9DB2FC537 /* UserProfile.swift */,
+			);
+			path = Models;
 			sourceTree = "<group>";
 		};
 		7CC5CD50EB9F3FCCA61AD341 /* Backends */ = {
 			isa = PBXGroup;
 			children = (
+				1B7ED24F3709897699EAB8FB /* .gitkeep */,
+				B826BB529F87533B35ECD5C4 /* Remote */,
 			);
 			path = Backends;
 			sourceTree = "<group>";
@@ -87,16 +195,48 @@
 			isa = PBXGroup;
 			children = (
 				A460CA9A7712C78B290D4ED8 /* Domain */,
+				3A7D396FC84B1E61563117BB /* Features */,
+				3C38468D8EFA243FD55CF920 /* Support */,
 			);
 			path = MoolahTests;
+			sourceTree = "<group>";
+		};
+		9EB76ED522EB8ACA5326F0CD /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				55CFB29D6757420CB3C9C8C8 /* AppRootView.swift */,
+				9B1537B5ED73BDFE589AFBDF /* AuthStore.swift */,
+				0AE5A7458FFA37A4C6DC6BF1 /* UserMenuView.swift */,
+				3E37BF3BEA54A6FC23CC7FE3 /* WelcomeView.swift */,
+			);
+			path = Auth;
 			sourceTree = "<group>";
 		};
 		A460CA9A7712C78B290D4ED8 /* Domain */ = {
 			isa = PBXGroup;
 			children = (
+				3FF82ABEAD4CD6082C14CC50 /* AuthContractTests.swift */,
 				3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */,
 			);
 			path = Domain;
+			sourceTree = "<group>";
+		};
+		B19846DB3F9C18E0F99C8CE1 /* APIClient */ = {
+			isa = PBXGroup;
+			children = (
+				E0431C044B183CBD75A93A60 /* APIClient.swift */,
+			);
+			path = APIClient;
+			sourceTree = "<group>";
+		};
+		B826BB529F87533B35ECD5C4 /* Remote */ = {
+			isa = PBXGroup;
+			children = (
+				6B6CD88ED67E56DC24998EF5 /* RemoteBackend.swift */,
+				B19846DB3F9C18E0F99C8CE1 /* APIClient */,
+				5107DA1D4EAD5EAA78609644 /* Auth */,
+			);
+			path = Remote;
 			sourceTree = "<group>";
 		};
 		DC6EA9ACC22A52F350446AD2 /* App */ = {
@@ -120,20 +260,6 @@
 				39930F16261E6D91BB4C2DB5 /* Shared */,
 				27D432CB805778E78FAC27AE /* Products */,
 			);
-			sourceTree = "<group>";
-		};
-		"TEMP_0D1A8AD5-202F-4FA3-AD16-9424B39E10C1" /* Remote */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Remote;
-			sourceTree = "<group>";
-		};
-		"TEMP_E117C166-DE53-4666-88EF-5760B0DE8CF4" /* Support */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Support;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -247,6 +373,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E0BB6B5944977FDD58DD8C83 /* AuthContractTests.swift in Sources */,
+				8DAB18C30AA26CD11A371099 /* AuthStoreTests.swift in Sources */,
+				6864F6A01E05302DC8560FFC /* InMemoryAuthProvider.swift in Sources */,
+				0F56E83D688105CEEB912A36 /* InMemoryBackend.swift in Sources */,
 				67C6A90C925461E98AFFDF15 /* ModelContainerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -255,8 +385,19 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				58122BFD91F09DDD9D0523D0 /* APIClient.swift in Sources */,
+				8CD72E510AE6F5A680D87E3C /* AppRootView.swift in Sources */,
+				A9550E23152D9AD0201BABB7 /* AuthProvider.swift in Sources */,
+				C7E1B4D98E0E2E59F30E8760 /* AuthStore.swift in Sources */,
+				C65F03B98023C20985ACFD0B /* BackendError.swift in Sources */,
+				41DF550E13133F22A453AAE3 /* BackendProvider.swift in Sources */,
 				557A175478652AC4A3ACD655 /* ContentView.swift in Sources */,
 				9CDEBDC3CFBDAF9165F882A7 /* MoolahApp.swift in Sources */,
+				60C4D29AF9D3027B180A8797 /* RemoteAuthProvider.swift in Sources */,
+				A0CE6F785996CBF25B4B8493 /* RemoteBackend.swift in Sources */,
+				4140EDAF0C1A9E0A3723E357 /* UserMenuView.swift in Sources */,
+				C861572FA5EFADAADAEB5BBC /* UserProfile.swift in Sources */,
+				7F25E616B673451369F9FC55 /* WelcomeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -264,8 +405,19 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				48F0CBC848C55813FEBB8FE2 /* APIClient.swift in Sources */,
+				CF2ED2A7D750143B1408AAC8 /* AppRootView.swift in Sources */,
+				B460D4029D5F6F80F23FCF0B /* AuthProvider.swift in Sources */,
+				B7381FF84C13F63F6B9AD69C /* AuthStore.swift in Sources */,
+				7D97D59B3682BBB7C98AC832 /* BackendError.swift in Sources */,
+				0E0392A21BC5262F4AF03FE5 /* BackendProvider.swift in Sources */,
 				F394864BEA7331E44D8C1FA6 /* ContentView.swift in Sources */,
 				C733D2B154E165B22A927403 /* MoolahApp.swift in Sources */,
+				4D1AA5636717544A23434905 /* RemoteAuthProvider.swift in Sources */,
+				D3D60831E18FB860048FC37C /* RemoteBackend.swift in Sources */,
+				7CBE8BFF98E1ED319BDB0762 /* UserMenuView.swift in Sources */,
+				9E80B7C29F305231A7F25430 /* UserProfile.swift in Sources */,
+				5DD56EF420C18507AF3B5463 /* WelcomeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -273,6 +425,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B8FFDDF839C1C39B1435553A /* AuthContractTests.swift in Sources */,
+				18EBFFD7591E79F6C5AC49D4 /* AuthStoreTests.swift in Sources */,
+				4080C3FFFDC17F45D715B812 /* InMemoryAuthProvider.swift in Sources */,
+				4CE05B3BF9ADAE11FA683CF0 /* InMemoryBackend.swift in Sources */,
 				54976604A4A32D269D4585EA /* ModelContainerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -308,6 +464,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.app;
+				PRODUCT_MODULE_NAME = Moolah;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -504,6 +661,7 @@
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.app;
+				PRODUCT_MODULE_NAME = Moolah;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -522,6 +680,7 @@
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.app;
+				PRODUCT_MODULE_NAME = Moolah;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -563,6 +722,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.app;
+				PRODUCT_MODULE_NAME = Moolah;
 				SDKROOT = macosx;
 			};
 			name = Release;

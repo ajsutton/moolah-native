@@ -2,8 +2,10 @@ import SwiftUI
 import SwiftData
 
 @main
+@MainActor
 struct MoolahApp: App {
-    let container: ModelContainer
+    private let container: ModelContainer
+    private let authStore: AuthStore
 
     init() {
         do {
@@ -11,11 +13,14 @@ struct MoolahApp: App {
         } catch {
             fatalError("Failed to initialize ModelContainer: \(error)")
         }
+        let backend = RemoteBackend(baseURL: URL(string: "https://moolah.rocks/api/")!)
+        authStore = AuthStore(backend: backend)
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AppRootView()
+                .environment(authStore)
         }
         .modelContainer(container)
     }

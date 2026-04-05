@@ -24,6 +24,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.moolah.app
+        PRODUCT_MODULE_NAME: Moolah
         INFOPLIST_FILE: App/Info.plist
         # iOS Simulator doesn't require signing
         CODE_SIGN_IDENTITY: ""
@@ -42,6 +43,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.moolah.app
+        PRODUCT_MODULE_NAME: Moolah
         INFOPLIST_FILE: App/Info.plist
         # Ad-hoc signing (-) satisfies Gatekeeper for local runs.
         # Hardened Runtime requires a real certificate, so disable it.

@@ -12,11 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install tools
+        run: brew install xcodegen just
 
       - name: Generate Xcode project
-        run: xcodegen generate
+        run: just generate
 
       - name: Test
-        run: bash scripts/test.sh
+        run: just test
