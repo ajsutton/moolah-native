@@ -1,6 +1,6 @@
 # Moolah — Native iOS/macOS App
 
-A universal personal finance app for iPhone and Mac. Tracks accounts, transactions, categories, earmarks (savings goals), scheduled payments, and provides analysis and reporting. Connects to the [Moolah backend](../moolah) REST API.
+A universal personal finance app for iPhone and Mac. Tracks accounts, transactions, categories, earmarks (savings goals), scheduled payments, and provides analysis and reporting. Connects to the [ajsutton/moolah-server](https://github.com/ajsutton/moolah-server) REST API.
 
 ## Requirements
 
