@@ -8,50 +8,59 @@ export SWIFTPM_DISABLE_SANDBOX=1
 export SWIFT_BUILD_USE_SANDBOX=0
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DERIVED_DATA="$REPO_ROOT/.DerivedData"
 
 COMMON_ARGS=(
     -scheme Moolah
-    -derivedDataPath "$DERIVED_DATA"
+    -derivedDataPath "$REPO_ROOT/.DerivedData"
     -IDEPackageSupportDisableManifestSandbox=1
     -IDEPackageSupportDisablePackageSandbox=1
     'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox'
 )
 
 # ---------------------------------------------------------------------------
-# iOS Simulator — xcodebuild test works directly (no install service needed)
+# iOS Simulator
 # ---------------------------------------------------------------------------
 echo "==> Testing iOS Simulator…"
-xcodebuild test \
-    "${COMMON_ARGS[@]}" \
-    -destination "platform=iOS Simulator,name=iPhone 17 Pro" \
-    CODE_SIGN_IDENTITY="" \
-    CODE_SIGNING_REQUIRED=NO \
-    CODE_SIGNING_ALLOWED=NO
+xcodebuild test "${COMMON_ARGS[@]}" \
+    -destination "platform=iOS Simulator,name=iPhone 17 Pro"
 
 # ---------------------------------------------------------------------------
-# macOS — IDEInstallLocalMacService is blocked in sandvault, so we build the
-# test bundle separately and run it directly via xcrun xctest.
+# macOS
+#
+# Normally: xcodebuild test works directly — the macOS targets are ad-hoc
+# signed (CODE_SIGN_IDENTITY="-"), which satisfies Gatekeeper.
+#
+# Inside sandvault: IDEInstallLocalMacService, the XPC service xcodebuild
+# uses to install the test bundle before running, cannot communicate across
+# the sandbox boundary. Work around it by building the test bundle then
+# running it directly with xcrun xctest, which needs no install service.
 # ---------------------------------------------------------------------------
-echo "==> Building macOS tests…"
-xcodebuild build-for-testing \
-    "${COMMON_ARGS[@]}" \
-    -destination "platform=macOS" \
-    CODE_SIGN_IDENTITY="-" \
-    CODE_SIGNING_REQUIRED=NO \
-    AD_HOC_CODE_SIGNING_ALLOWED=YES
+echo "==> Testing macOS…"
 
-PRODUCTS="$DERIVED_DATA/Moolah/Build/Products"
-APP_BUNDLE="$PRODUCTS/Debug/Moolah_macOS.app"
-TEST_BUNDLE="$APP_BUNDLE/Contents/PlugIns/MoolahTests_macOS.xctest"
-DYLIB="$APP_BUNDLE/Contents/MacOS/Moolah_macOS.debug.dylib"
+if [[ -n "${SV_SESSION_ID:-}" ]]; then
+    echo "    (sandvault detected — using xcrun xctest workaround)"
 
-# The test bundle's @rpath resolves Moolah_macOS.debug.dylib relative to its
-# own Contents/Frameworks/ — copy it there before running.
-mkdir -p "$TEST_BUNDLE/Contents/Frameworks"
-cp "$DYLIB" "$TEST_BUNDLE/Contents/Frameworks/"
+    xcodebuild build-for-testing "${COMMON_ARGS[@]}" \
+        -destination "platform=macOS"
 
-echo "==> Running macOS tests…"
-xcrun xctest "$TEST_BUNDLE"
+    PRODUCTS="$REPO_ROOT/.DerivedData/Moolah/Build/Products"
+    APP_BUNDLE="$PRODUCTS/Debug/Moolah_macOS.app"
+    TEST_BUNDLE="$APP_BUNDLE/Contents/PlugIns/MoolahTests_macOS.xctest"
+
+    # The test bundle's @rpath looks for the debug dylib in its own
+    # Contents/Frameworks/ — copy it there before running.
+    DYLIB="$(find "$APP_BUNDLE/Contents/MacOS" -name "*.debug.dylib" | head -1)"
+    if [[ -z "$DYLIB" ]]; then
+        echo "error: Could not find debug dylib in $APP_BUNDLE/Contents/MacOS" >&2
+        exit 1
+    fi
+    mkdir -p "$TEST_BUNDLE/Contents/Frameworks"
+    cp "$DYLIB" "$TEST_BUNDLE/Contents/Frameworks/"
+
+    xcrun xctest "$TEST_BUNDLE"
+else
+    xcodebuild test "${COMMON_ARGS[@]}" \
+        -destination "platform=macOS"
+fi
 
 echo "==> All tests passed."

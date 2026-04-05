@@ -10,9 +10,6 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     ENABLE_TESTABILITY: YES
-    CODE_SIGN_IDENTITY: ""
-    CODE_SIGNING_REQUIRED: NO
-    CODE_SIGNING_ALLOWED: NO
 
 targets:
   Moolah_iOS:
@@ -28,6 +25,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.moolah.app
         INFOPLIST_FILE: App/Info.plist
+        # iOS Simulator doesn't require signing
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
 
   Moolah_macOS:
     type: application
@@ -42,6 +43,12 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.moolah.app
         INFOPLIST_FILE: App/Info.plist
+        # Ad-hoc signing (-) satisfies Gatekeeper for local runs.
+        # Hardened Runtime requires a real certificate, so disable it.
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: YES
+        CODE_SIGNING_ALLOWED: YES
+        ENABLE_HARDENED_RUNTIME: NO
 
   MoolahTests_iOS:
     type: bundle.unit-test
@@ -51,6 +58,9 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.moolah.tests
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
     dependencies:
       - target: Moolah_iOS
 
@@ -62,6 +72,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.moolah.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: YES
+        CODE_SIGNING_ALLOWED: YES
+        ENABLE_HARDENED_RUNTIME: NO
     dependencies:
       - target: Moolah_macOS
 
