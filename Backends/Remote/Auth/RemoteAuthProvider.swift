@@ -80,6 +80,10 @@ final class RemoteAuthProvider: NSObject, AuthProvider, ASWebAuthenticationPrese
                     callbackURLScheme: "moolah"
                 ) { _, error in
                     Task { @MainActor [weak self] in
+                        // Cancel before releasing: avoids ASWebAuthenticationSession
+                        // internal teardown issues when the session is released from
+                        // within its own completion handler on macOS.
+                        self?.activeSession?.cancel()
                         self?.activeSession = nil
                         if let error {
                             continuation.resume(throwing: error)
