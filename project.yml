@@ -1,0 +1,77 @@
+name: Moolah
+options:
+  deploymentTarget:
+    iOS: "26.0"
+    macOS: "26.0"
+  defaultConfig: Debug
+  bundleIdPrefix: com.moolah
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    ENABLE_TESTABILITY: YES
+    CODE_SIGN_IDENTITY: ""
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGNING_ALLOWED: NO
+
+targets:
+  Moolah_iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - path: Domain
+      - path: Backends
+      - path: Features
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.moolah.app
+        INFOPLIST_FILE: App/Info.plist
+
+  Moolah_macOS:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+      - path: Domain
+      - path: Backends
+      - path: Features
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.moolah.app
+        INFOPLIST_FILE: App/Info.plist
+
+  MoolahTests_iOS:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: MoolahTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.moolah.tests
+    dependencies:
+      - target: Moolah_iOS
+
+  MoolahTests_macOS:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: MoolahTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.moolah.tests
+    dependencies:
+      - target: Moolah_macOS
+
+schemes:
+  Moolah:
+    build:
+      targets:
+        Moolah_iOS: all
+        Moolah_macOS: all
+    test:
+      targets:
+        - MoolahTests_iOS
+        - MoolahTests_macOS

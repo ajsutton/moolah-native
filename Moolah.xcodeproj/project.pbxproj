@@ -1,0 +1,599 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		54976604A4A32D269D4585EA /* ModelContainerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */; };
+		557A175478652AC4A3ACD655 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22495C74E2B63C2956AE9437 /* ContentView.swift */; };
+		67C6A90C925461E98AFFDF15 /* ModelContainerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */; };
+		9CDEBDC3CFBDAF9165F882A7 /* MoolahApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E7D532967ACF605512D332 /* MoolahApp.swift */; };
+		C733D2B154E165B22A927403 /* MoolahApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E7D532967ACF605512D332 /* MoolahApp.swift */; };
+		F394864BEA7331E44D8C1FA6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22495C74E2B63C2956AE9437 /* ContentView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		3717087926038673C2A78AE7 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 521E30D9C633D699D31BCF06 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CEEC6C7FA4A2AD599F559559;
+			remoteInfo = Moolah_macOS;
+		};
+		7A872E3F876FCFB5EA59F581 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 521E30D9C633D699D31BCF06 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D2D1E17F27954F4772C18F0E;
+			remoteInfo = Moolah_iOS;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		17A51A52AB99705A4984A754 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		22398332D8AEF0450E12B382 /* MoolahTests_iOS.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MoolahTests_iOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		22495C74E2B63C2956AE9437 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerTests.swift; sourceTree = "<group>"; };
+		4CA48181968E160CE8E9302B /* Moolah_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Moolah_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BE221BC137F6FA398968FDFF /* Moolah_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Moolah_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E0E7D532967ACF605512D332 /* MoolahApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoolahApp.swift; sourceTree = "<group>"; };
+		FA6F0E982E4C074B8CF56F88 /* MoolahTests_macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoolahTests_macOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		27D432CB805778E78FAC27AE /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BE221BC137F6FA398968FDFF /* Moolah_iOS.app */,
+				4CA48181968E160CE8E9302B /* Moolah_macOS.app */,
+				22398332D8AEF0450E12B382 /* MoolahTests_iOS.xctest */,
+				FA6F0E982E4C074B8CF56F88 /* MoolahTests_macOS.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		39930F16261E6D91BB4C2DB5 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		52E521D2D8A8957D9486389D /* Features */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		583D638B3107B848994CFFB8 /* Domain */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Domain;
+			sourceTree = "<group>";
+		};
+		7CC5CD50EB9F3FCCA61AD341 /* Backends */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Backends;
+			sourceTree = "<group>";
+		};
+		8A5B74A85A6F71D7F53ECCD6 /* MoolahTests */ = {
+			isa = PBXGroup;
+			children = (
+				A460CA9A7712C78B290D4ED8 /* Domain */,
+			);
+			path = MoolahTests;
+			sourceTree = "<group>";
+		};
+		A460CA9A7712C78B290D4ED8 /* Domain */ = {
+			isa = PBXGroup;
+			children = (
+				3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */,
+			);
+			path = Domain;
+			sourceTree = "<group>";
+		};
+		DC6EA9ACC22A52F350446AD2 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				22495C74E2B63C2956AE9437 /* ContentView.swift */,
+				17A51A52AB99705A4984A754 /* Info.plist */,
+				E0E7D532967ACF605512D332 /* MoolahApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		FFFAA414CF2CE7B9B90607CE = {
+			isa = PBXGroup;
+			children = (
+				DC6EA9ACC22A52F350446AD2 /* App */,
+				7CC5CD50EB9F3FCCA61AD341 /* Backends */,
+				583D638B3107B848994CFFB8 /* Domain */,
+				52E521D2D8A8957D9486389D /* Features */,
+				8A5B74A85A6F71D7F53ECCD6 /* MoolahTests */,
+				39930F16261E6D91BB4C2DB5 /* Shared */,
+				27D432CB805778E78FAC27AE /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		"TEMP_61BCD5E0-45BE-40A4-A489-048F3A890951" /* Remote */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Remote;
+			sourceTree = "<group>";
+		};
+		"TEMP_77B01D62-E99B-4A92-A562-133BE0F6B46B" /* Support */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A870983A437D5981D552A736 /* MoolahTests_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = ACBABA4AD202E61316D46DCD /* Build configuration list for PBXNativeTarget "MoolahTests_iOS" */;
+			buildPhases = (
+				2DC8167477AC262CB71B009A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				87DD2588F12DC2488734DDB2 /* PBXTargetDependency */,
+			);
+			name = MoolahTests_iOS;
+			packageProductDependencies = (
+			);
+			productName = MoolahTests_iOS;
+			productReference = 22398332D8AEF0450E12B382 /* MoolahTests_iOS.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		C20057C792D7E1CBBAB3012C /* MoolahTests_macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5CCDCD8EEDBD4943E9DB88F3 /* Build configuration list for PBXNativeTarget "MoolahTests_macOS" */;
+			buildPhases = (
+				EE167E42262E45DD5E8F4029 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8DE404C21AABD9FD2A3EE2A4 /* PBXTargetDependency */,
+			);
+			name = MoolahTests_macOS;
+			packageProductDependencies = (
+			);
+			productName = MoolahTests_macOS;
+			productReference = FA6F0E982E4C074B8CF56F88 /* MoolahTests_macOS.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		CEEC6C7FA4A2AD599F559559 /* Moolah_macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2B67DA81BC9C3E528A25DD16 /* Build configuration list for PBXNativeTarget "Moolah_macOS" */;
+			buildPhases = (
+				D865AA4C1F8E54145B65BA68 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Moolah_macOS;
+			packageProductDependencies = (
+			);
+			productName = Moolah_macOS;
+			productReference = 4CA48181968E160CE8E9302B /* Moolah_macOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D2D1E17F27954F4772C18F0E /* Moolah_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EA8E07F5A108E96BBECF8D12 /* Build configuration list for PBXNativeTarget "Moolah_iOS" */;
+			buildPhases = (
+				A5936A632284E3DBB5E4C30F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Moolah_iOS;
+			packageProductDependencies = (
+			);
+			productName = Moolah_iOS;
+			productReference = BE221BC137F6FA398968FDFF /* Moolah_iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		521E30D9C633D699D31BCF06 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = C709FAD92C89EED95359CF5B /* Build configuration list for PBXProject "Moolah" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = FFFAA414CF2CE7B9B90607CE;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 27D432CB805778E78FAC27AE /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A870983A437D5981D552A736 /* MoolahTests_iOS */,
+				C20057C792D7E1CBBAB3012C /* MoolahTests_macOS */,
+				D2D1E17F27954F4772C18F0E /* Moolah_iOS */,
+				CEEC6C7FA4A2AD599F559559 /* Moolah_macOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		2DC8167477AC262CB71B009A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				67C6A90C925461E98AFFDF15 /* ModelContainerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A5936A632284E3DBB5E4C30F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				557A175478652AC4A3ACD655 /* ContentView.swift in Sources */,
+				9CDEBDC3CFBDAF9165F882A7 /* MoolahApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D865AA4C1F8E54145B65BA68 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F394864BEA7331E44D8C1FA6 /* ContentView.swift in Sources */,
+				C733D2B154E165B22A927403 /* MoolahApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EE167E42262E45DD5E8F4029 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				54976604A4A32D269D4585EA /* ModelContainerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		87DD2588F12DC2488734DDB2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D2D1E17F27954F4772C18F0E /* Moolah_iOS */;
+			targetProxy = 7A872E3F876FCFB5EA59F581 /* PBXContainerItemProxy */;
+		};
+		8DE404C21AABD9FD2A3EE2A4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CEEC6C7FA4A2AD599F559559 /* Moolah_macOS */;
+			targetProxy = 3717087926038673C2A78AE7 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0E502C1680DA677104A74F54 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.app;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		1CAF5A09AB572ABE4E4543BF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		27479F197CCA6F2EED50B7D4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Moolah_iOS.app/Moolah_iOS";
+			};
+			name = Debug;
+		};
+		6B7CDAC6141742C10A286E2A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		9952336C6F7043B1EAEB32EB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Moolah_iOS.app/Moolah_iOS";
+			};
+			name = Release;
+		};
+		9D409A92DD832E19D7FA5FBF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Moolah_macOS.app/Contents/MacOS/Moolah_macOS";
+			};
+			name = Release;
+		};
+		A58FDF40A77AD0E16B929E75 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		DFD1430730D4FBE8760C4A99 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		F29E288ADB5D2FDC02F2DB3D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Moolah_macOS.app/Contents/MacOS/Moolah_macOS";
+			};
+			name = Debug;
+		};
+		FD77A88E4C17F736FC4E7038 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.app;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2B67DA81BC9C3E528A25DD16 /* Build configuration list for PBXNativeTarget "Moolah_macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0E502C1680DA677104A74F54 /* Debug */,
+				FD77A88E4C17F736FC4E7038 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		5CCDCD8EEDBD4943E9DB88F3 /* Build configuration list for PBXNativeTarget "MoolahTests_macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F29E288ADB5D2FDC02F2DB3D /* Debug */,
+				9D409A92DD832E19D7FA5FBF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		ACBABA4AD202E61316D46DCD /* Build configuration list for PBXNativeTarget "MoolahTests_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				27479F197CCA6F2EED50B7D4 /* Debug */,
+				9952336C6F7043B1EAEB32EB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C709FAD92C89EED95359CF5B /* Build configuration list for PBXProject "Moolah" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6B7CDAC6141742C10A286E2A /* Debug */,
+				1CAF5A09AB572ABE4E4543BF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		EA8E07F5A108E96BBECF8D12 /* Build configuration list for PBXNativeTarget "Moolah_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DFD1430730D4FBE8760C4A99 /* Debug */,
+				A58FDF40A77AD0E16B929E75 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 521E30D9C633D699D31BCF06 /* Project object */;
+}
