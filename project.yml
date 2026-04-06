@@ -96,6 +96,8 @@ schemes:
       targets:
         Moolah_iOS: all
         Moolah_macOS: all
+    run:
+      executable: Moolah_macOS
 
   Moolah-iOS:
     build:

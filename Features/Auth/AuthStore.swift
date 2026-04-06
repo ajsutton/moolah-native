@@ -56,4 +56,5 @@ final class AuthStore {
             errorMessage = error.localizedDescription
         }
     }
+
 }

@@ -44,9 +44,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "D2D1E17F27954F4772C18F0E"
-            BuildableName = "Moolah_iOS.app"
-            BlueprintName = "Moolah_iOS"
+            BlueprintIdentifier = "CEEC6C7FA4A2AD599F559559"
+            BuildableName = "Moolah.app"
+            BlueprintName = "Moolah_macOS"
             ReferencedContainer = "container:Moolah.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -67,9 +67,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "D2D1E17F27954F4772C18F0E"
-            BuildableName = "Moolah_iOS.app"
-            BlueprintName = "Moolah_iOS"
+            BlueprintIdentifier = "CEEC6C7FA4A2AD599F559559"
+            BuildableName = "Moolah.app"
+            BlueprintName = "Moolah_macOS"
             ReferencedContainer = "container:Moolah.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -84,9 +84,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "D2D1E17F27954F4772C18F0E"
-            BuildableName = "Moolah_iOS.app"
-            BlueprintName = "Moolah_iOS"
+            BlueprintIdentifier = "CEEC6C7FA4A2AD599F559559"
+            BuildableName = "Moolah.app"
+            BlueprintName = "Moolah_macOS"
             ReferencedContainer = "container:Moolah.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
