@@ -4,6 +4,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(AuthStore.self) private var authStore
     @Environment(AccountStore.self) private var accountStore
+    @Environment(TransactionStore.self) private var transactionStore
     @State private var selection: UUID?
 
     var body: some View {
@@ -20,7 +21,7 @@ struct ContentView: View {
                 }
         } detail: {
             if let selection, let account = accountStore.accounts.first(where: { $0.id == selection }) {
-                Text("Account Detail: \(account.name)")
+                TransactionListView(account: account, transactionStore: transactionStore)
             } else {
                 Text("Select an account")
             }

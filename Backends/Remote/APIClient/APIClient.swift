@@ -69,6 +69,15 @@ final class APIClient: Sendable {
         return try await data(for: request)
     }
 
+    func get(_ path: String, queryItems: [URLQueryItem]) async throws -> Data {
+        var components = URLComponents(url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)!
+        if !queryItems.isEmpty {
+            components.queryItems = queryItems
+        }
+        let request = URLRequest(url: components.url!)
+        return try await data(for: request)
+    }
+
     func post(_ path: String, body: some Encodable & Sendable) async throws -> Data {
         var request = URLRequest(url: baseURL.appending(path: path))
         request.httpMethod = "POST"

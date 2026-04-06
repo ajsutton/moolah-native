@@ -1,7 +1,7 @@
 import Foundation
 
 struct AccountDTO: Codable {
-    let id: UUID
+    let id: String
     let name: String
     let type: String
     let balance: Int // Transaction-based balance in cents
@@ -14,7 +14,7 @@ struct AccountDTO: Codable {
         let effectiveBalance = (type == "investment" && value != nil) ? value! : balance
         
         return Account(
-            id: id,
+            id: FlexibleUUID.parse(id) ?? UUID(),
             name: name,
             type: AccountType(rawValue: type) ?? .asset,
             balance: effectiveBalance,

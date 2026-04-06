@@ -5,4 +5,5 @@ import Foundation
 protocol BackendProvider: Sendable {
     var auth: any AuthProvider { get }
     var accounts: any AccountRepository { get }
+    var transactions: any TransactionRepository { get }
 }
