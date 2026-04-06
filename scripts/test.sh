@@ -45,7 +45,7 @@ if [[ -n "${SV_SESSION_ID:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
         -destination "platform=macOS"
 
     PRODUCTS="$REPO_ROOT/.DerivedData/Build/Products"
-    APP_BUNDLE="$PRODUCTS/Debug/Moolah_macOS.app"
+    APP_BUNDLE="$PRODUCTS/Debug/Moolah.app"
     TEST_BUNDLE="$APP_BUNDLE/Contents/PlugIns/MoolahTests_macOS.xctest"
 
     # The test bundle's @rpath looks for the debug dylib in its own
