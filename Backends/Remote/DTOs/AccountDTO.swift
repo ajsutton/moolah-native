@@ -16,7 +16,7 @@ struct AccountDTO: Codable {
         return Account(
             id: id,
             name: name,
-            type: AccountType(rawValue: type) ?? .checking,
+            type: AccountType(rawValue: type) ?? .asset,
             balance: effectiveBalance,
             position: position,
             isHidden: hidden

@@ -12,13 +12,19 @@ struct SidebarView: View {
                         AccountRowView(account: account)
                     }
                 }
+                
+                totalRow(label: "Current Total", value: accountStore.currentTotal)
             }
             
-            Section("Earmarked Funds") {
-                ForEach(accountStore.earmarkAccounts) { account in
-                    NavigationLink(value: account.id) {
-                        AccountRowView(account: account)
+            if !accountStore.earmarkAccounts.isEmpty {
+                Section("Earmarked Funds") {
+                    ForEach(accountStore.earmarkAccounts) { account in
+                        NavigationLink(value: account.id) {
+                            AccountRowView(account: account)
+                        }
                     }
+                    
+                    totalRow(label: "Earmarked Total", value: accountStore.earmarkedTotal)
                 }
             }
             
@@ -28,14 +34,16 @@ struct SidebarView: View {
                         AccountRowView(account: account)
                     }
                 }
+                
+                totalRow(label: "Investment Total", value: accountStore.investmentTotal)
             }
             
-            Section("Totals") {
-                LabeledContent("Current Total", value: Decimal(accountStore.currentTotal) / 100, format: .currency(code: Constants.defaultCurrency))
-                LabeledContent("Earmarked Total", value: Decimal(accountStore.earmarkedTotal) / 100, format: .currency(code: Constants.defaultCurrency))
-                LabeledContent("Investment Total", value: Decimal(accountStore.investmentTotal) / 100, format: .currency(code: Constants.defaultCurrency))
-                Divider()
+            Section {
+                LabeledContent("Available Funds", value: Decimal(accountStore.availableFunds) / 100, format: .currency(code: Constants.defaultCurrency))
+                    .font(.headline)
+                
                 LabeledContent("Net Worth", value: Decimal(accountStore.netWorth) / 100, format: .currency(code: Constants.defaultCurrency))
+                    .font(.headline)
                     .bold()
             }
         }
@@ -45,15 +53,20 @@ struct SidebarView: View {
             await accountStore.load()
         }
     }
+    
+    private func totalRow(label: String, value: Int) -> some View {
+        LabeledContent(label, value: Decimal(value) / 100, format: .currency(code: Constants.defaultCurrency))
+            .foregroundStyle(.secondary)
+            .font(.callout)
+    }
 }
 
 #Preview {
     let backend = InMemoryBackend(accounts: InMemoryAccountRepository(initialAccounts: [
-        Account(name: "Checking", type: .checking, balance: 100000),
-        Account(name: "Savings", type: .savings, balance: 500000),
+        Account(name: "Bank", type: .bank, balance: 100000),
+        Account(name: "Asset", type: .asset, balance: 500000),
         Account(name: "Credit Card", type: .creditCard, balance: -50000),
         Account(name: "Investment", type: .investment, balance: 2000000),
-        Account(name: "House Fund", type: .earmark, balance: 300000)
     ]))
     let store = AccountStore(repository: backend.accounts)
     

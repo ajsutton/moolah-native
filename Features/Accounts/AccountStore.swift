@@ -39,7 +39,7 @@ final class AccountStore {
     }
     
     var earmarkAccounts: [Account] {
-        accounts.filter { $0.type == .earmark && !$0.isHidden }
+        return []
     }
     
     var investmentAccounts: [Account] {
@@ -56,6 +56,15 @@ final class AccountStore {
     
     var investmentTotal: Int {
         investmentAccounts.reduce(0) { $0 + $1.balance }
+    }
+    
+    /// Total of current accounts minus the total of all positive earmarked funds.
+    /// Negative earmarked values are skipped in the sum.
+    var availableFunds: Int {
+        let positiveEarmarksTotal = earmarkAccounts
+            .filter { $0.balance > 0 }
+            .reduce(0) { $0 + $1.balance }
+        return currentTotal - positiveEarmarksTotal
     }
     
     var netWorth: Int {

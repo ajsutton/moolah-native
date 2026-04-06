@@ -1,14 +1,13 @@
 import Foundation
 
 enum AccountType: String, Codable, Sendable, CaseIterable {
-    case checking
-    case savings
-    case creditCard = "credit"
+    case bank
+    case creditCard = "cc"
+    case asset
     case investment
-    case earmark
     
     var isCurrent: Bool {
-        self == .checking || self == .savings || self == .creditCard
+        self == .bank || self == .asset || self == .creditCard
     }
 }
 

@@ -48,4 +48,22 @@ struct AccountStoreTests {
         #expect(store.investmentTotal == 2000000)
         #expect(store.netWorth == 2850000)
     }
+    
+    @Test func testAvailableFunds() async throws {
+        let accounts = [
+            Account(name: "Checking", type: .checking, balance: 100000), // 1000.00
+            Account(name: "Savings", type: .savings, balance: 500000),   // 5000.00
+            // Current Total = 6000.00
+            
+            Account(name: "Positive Earmark", type: .earmark, balance: 300000), // 3000.00
+            Account(name: "Negative Earmark", type: .earmark, balance: -100000) // -1000.00 (should be ignored)
+        ]
+        let repository = InMemoryAccountRepository(initialAccounts: accounts)
+        let store = AccountStore(repository: repository)
+        
+        await store.load()
+        
+        // Available Funds = Current Total (6000.00) - Positive Earmarks (3000.00) = 3000.00
+        #expect(store.availableFunds == 300000)
+    }
 }

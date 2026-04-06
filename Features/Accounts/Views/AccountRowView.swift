@@ -21,19 +21,18 @@ struct AccountRowView: View {
     
     private var iconName: String {
         switch account.type {
-        case .checking: return "building.columns"
-        case .savings: return "leaf"
+        case .bank: return "building.columns"
+        case .asset: return "house.fill"
         case .creditCard: return "creditcard"
         case .investment: return "chart.line.uptrend.xyaxis"
-        case .earmark: return "tag"
         }
     }
 }
 
 #Preview {
     AccountRowView(account: Account(
-        name: "Checking",
-        type: .checking,
+        name: "Bank",
+        type: .bank,
         balance: 123456
     ))
     .padding()
