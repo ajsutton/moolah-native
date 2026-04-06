@@ -5,11 +5,15 @@ struct UserMenuView: View {
     let user: UserProfile
     @Environment(AuthStore.self) private var authStore
 
+    private let avatarSize: CGFloat = 28
+
     var body: some View {
         Menu {
             Text("\(user.givenName) \(user.familyName)")
                 .font(.headline)
+
             Divider()
+
             Button(String(localized: "Sign Out"), role: .destructive) {
                 Task { await authStore.signOut() }
             }
@@ -19,26 +23,33 @@ struct UserMenuView: View {
                 Text(user.givenName)
                     .font(.subheadline)
             }
+            .frame(height: avatarSize)
         }
-        .accessibilityLabel(String(localized: "User menu for \(user.givenName) \(user.familyName)"))
+        .accessibilityLabel(
+            String(localized: "User menu for \(user.givenName) \(user.familyName)")
+        )
     }
 
-    @ViewBuilder
+    // MARK: - Avatar
+
     private var avatarView: some View {
-        if let url = user.pictureURL {
-            Color.clear
-                .frame(width: 28, height: 28)
-                .overlay {
-                    AsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Circle().fill(.gray.opacity(0.3))
-                    }
-                }
-                .clipShape(Circle())
-        } else {
-            Image(systemName: "person.crop.circle")
-                .imageScale(.large)
+        Group {
+            placeholder
         }
+        .frame(width: avatarSize, height: avatarSize)
+    }
+
+    // MARK: - Placeholder
+
+    private var placeholder: some View {
+        ZStack {
+            Color.gray.opacity(0.3)
+            Image(systemName: "person.fill")
+                .font(.system(size: 12))
+                .foregroundColor(.white)
+        }
+        .frame(width: avatarSize, height: avatarSize)
+        .clipShape(Circle())
+        .drawingGroup()
     }
 }
