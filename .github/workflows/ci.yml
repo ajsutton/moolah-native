@@ -19,7 +19,7 @@ jobs:
         run: just generate
 
       - name: Format
-        run: swift-format lint -r .
+        run: just lint
 
       - name: Test
         run: just test

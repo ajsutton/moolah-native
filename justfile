@@ -5,6 +5,12 @@
 default:
     @just --list
 
+lint:
+    swift-format lint -r . --configuration .swift-format
+
+lint-fix:
+    swift-format format -i -r . --configuration .swift-format
+
 # Run the full test suite on iOS Simulator and macOS
 test:
     bash scripts/test.sh
