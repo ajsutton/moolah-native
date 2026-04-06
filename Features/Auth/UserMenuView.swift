@@ -26,13 +26,16 @@ struct UserMenuView: View {
     @ViewBuilder
     private var avatarView: some View {
         if let url = user.pictureURL {
-            AsyncImage(url: url) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Circle().fill(.gray.opacity(0.3))
-            }
-            .frame(width: 28, height: 28)
-            .clipShape(Circle())
+            Color.clear
+                .frame(width: 28, height: 28)
+                .overlay {
+                    AsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Circle().fill(.gray.opacity(0.3))
+                    }
+                }
+                .clipShape(Circle())
         } else {
             Image(systemName: "person.crop.circle")
                 .imageScale(.large)

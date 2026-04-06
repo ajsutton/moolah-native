@@ -19,12 +19,20 @@ final class RemoteAuthProvider: AuthProvider {
     nonisolated let requiresExplicitSignIn = true
 
     private let client: APIClient
+    private let cookieKeychain: CookieKeychain
+    private var hasRestoredCookies = false
 
-    init(client: APIClient) {
+    init(client: APIClient, cookieKeychain: CookieKeychain = CookieKeychain()) {
         self.client = client
+        self.cookieKeychain = cookieKeychain
     }
 
     func currentUser() async throws -> UserProfile? {
+        if !hasRestoredCookies {
+            hasRestoredCookies = true
+            restoreCookiesIfNeeded()
+        }
+
         do {
             let data = try await client.get("auth/")
             let response = try JSONDecoder().decode(LoginStateResponse.self, from: data)
@@ -67,6 +75,7 @@ final class RemoteAuthProvider: AuthProvider {
             let data = try await client.post("auth/token", body: body)
             let response = try JSONDecoder().decode(LoginStateResponse.self, from: data)
             if response.loggedIn, let profile = response.profile {
+                saveCookies()
                 return UserProfile(
                     id: profile.userId,
                     givenName: profile.givenName,
@@ -80,6 +89,47 @@ final class RemoteAuthProvider: AuthProvider {
 
     func signOut() async throws {
         _ = try await client.delete("auth/")
+        cookieKeychain.clear()
+        clearCookieStorage()
+    }
+
+    // MARK: - Cookie Persistence
+
+    /// All cookies whose domain matches the API server.
+    private func serverCookies(in storage: HTTPCookieStorage) -> [HTTPCookie] {
+        guard let host = client.baseURL.host() else { return [] }
+        return (storage.cookies ?? []).filter { $0.domain == host }
+    }
+
+    private func saveCookies() {
+        let cookies = serverCookies(in: .shared)
+        guard !cookies.isEmpty else { return }
+        do {
+            try cookieKeychain.save(cookies: cookies)
+        } catch {
+            // Non-fatal: user is signed in for this session but may need to re-auth next launch.
+        }
+    }
+
+    private func restoreCookiesIfNeeded() {
+        let storage = HTTPCookieStorage.shared
+        guard serverCookies(in: storage).isEmpty else { return }
+
+        do {
+            guard let cookies = try cookieKeychain.restore() else { return }
+            for cookie in cookies {
+                storage.setCookie(cookie)
+            }
+        } catch {
+            // Non-fatal: will fall through to unauthenticated state.
+        }
+    }
+
+    private func clearCookieStorage() {
+        let storage = HTTPCookieStorage.shared
+        for cookie in serverCookies(in: storage) {
+            storage.deleteCookie(cookie)
+        }
     }
 }
 
