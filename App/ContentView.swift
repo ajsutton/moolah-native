@@ -3,23 +3,26 @@ import SwiftUI
 /// Placeholder main content shown after sign-in. Replaced step-by-step with real screens.
 struct ContentView: View {
     @Environment(AuthStore.self) private var authStore
+    @Environment(AccountStore.self) private var accountStore
+    @State private var selection: UUID?
 
     var body: some View {
-        NavigationStack {
-            VStack {
-                Image(systemName: "dollarsign.circle")
-                    .imageScale(.large)
-                    .foregroundStyle(.tint)
-                Text("Moolah")
-                    .font(.largeTitle)
-            }
-            .toolbar {
-                ToolbarItem(placement: .automatic) {
-                    if case .signedIn(let user) = authStore.state {
-                        UserMenuView(user: user)
-                            .environment(authStore)
+        NavigationSplitView {
+            SidebarView(accountStore: accountStore, selection: $selection)
+                .task { await accountStore.load() }
+                .toolbar {
+                    ToolbarItem(placement: .automatic) {
+                        if case .signedIn(let user) = authStore.state {
+                            UserMenuView(user: user)
+                                .environment(authStore)
+                        }
                     }
                 }
+        } detail: {
+            if let selection, let account = accountStore.accounts.first(where: { $0.id == selection }) {
+                Text("Account Detail: \(account.name)")
+            } else {
+                Text("Select an account")
             }
         }
     }

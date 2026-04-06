@@ -1,5 +1,4 @@
 import Foundation
-@testable import Moolah
 
 /// In-memory AuthProvider used in all feature tests and SwiftUI Previews.
 /// Configurable starting state; signIn/signOut toggle state without any networking.

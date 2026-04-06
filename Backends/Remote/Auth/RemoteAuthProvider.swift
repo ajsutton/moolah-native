@@ -4,16 +4,9 @@ import AppKit
 import UIKit
 #endif
 import Foundation
+import OSLog
 
 /// Authenticates via the Moolah REST server's Google OAuth flow.
-///
-/// Sign-in flow:
-/// 1. Generates a random nonce and opens
-///    `<baseURL>googleauth?_native=1&_nonce=<nonce>` in the system browser.
-/// 2. The user completes Google sign-in. The server stores the session
-///    keyed by the nonce and shows a "sign-in complete" page.
-/// 3. Meanwhile the app polls `POST /api/auth/token` with the nonce
-///    until the server returns the session, then sets the cookie.
 @MainActor
 final class RemoteAuthProvider: AuthProvider {
     nonisolated let requiresExplicitSignIn = true
@@ -21,6 +14,7 @@ final class RemoteAuthProvider: AuthProvider {
     private let client: APIClient
     private let cookieKeychain: CookieKeychain
     private var hasRestoredCookies = false
+    private let logger = Logger(subsystem: "com.moolah.app", category: "RemoteAuthProvider")
 
     init(client: APIClient, cookieKeychain: CookieKeychain = CookieKeychain()) {
         self.client = client
@@ -95,34 +89,69 @@ final class RemoteAuthProvider: AuthProvider {
 
     // MARK: - Cookie Persistence
 
-    /// All cookies whose domain matches the API server.
     private func serverCookies(in storage: HTTPCookieStorage) -> [HTTPCookie] {
         guard let host = client.baseURL.host() else { return [] }
-        return (storage.cookies ?? []).filter { $0.domain == host }
+        return (storage.cookies ?? []).filter { $0.domain == host || $0.domain == ".\(host)" }
     }
 
     private func saveCookies() {
-        let cookies = serverCookies(in: .shared)
-        guard !cookies.isEmpty else { return }
+        let storage = HTTPCookieStorage.shared
+        let cookies = serverCookies(in: storage)
+        guard !cookies.isEmpty else { 
+            logger.warning("No cookies found to save")
+            return 
+        }
+        
+        // Ensure cookies have path "/" so they match all API endpoints.
+        let massagedCookies = cookies.compactMap { massageCookie($0) }
+
         do {
-            try cookieKeychain.save(cookies: cookies)
+            try cookieKeychain.save(cookies: massagedCookies)
+            let names = massagedCookies.map(\.name).joined(separator: ", ")
+            logger.debug("Saved \(massagedCookies.count) cookies to keychain: \(names)")
+            
+            // Update storage with massaged cookies too
+            for cookie in massagedCookies {
+                storage.setCookie(cookie)
+            }
         } catch {
-            // Non-fatal: user is signed in for this session but may need to re-auth next launch.
+            logger.error("❌ Failed to save cookies: \(error.localizedDescription)")
         }
     }
 
     private func restoreCookiesIfNeeded() {
         let storage = HTTPCookieStorage.shared
-        guard serverCookies(in: storage).isEmpty else { return }
+        let existing = serverCookies(in: storage)
+        guard existing.isEmpty else { 
+            logger.debug("Already have \(existing.count) cookies in storage, skipping restore")
+            return 
+        }
 
         do {
-            guard let cookies = try cookieKeychain.restore() else { return }
-            for cookie in cookies {
+            guard let cookies = try cookieKeychain.restore() else { 
+                logger.debug("No cookies found in keychain to restore")
+                return 
+            }
+            
+            let massagedCookies = cookies.compactMap { massageCookie($0) }
+            let names = massagedCookies.map(\.name).joined(separator: ", ")
+            logger.debug("Restoring \(massagedCookies.count) cookies from keychain: \(names)")
+            for cookie in massagedCookies {
                 storage.setCookie(cookie)
             }
         } catch {
-            // Non-fatal: will fall through to unauthenticated state.
+            logger.error("❌ Failed to restore cookies: \(error.localizedDescription)")
         }
+    }
+
+    private func massageCookie(_ cookie: HTTPCookie) -> HTTPCookie? {
+        guard var props = cookie.properties else { return cookie }
+        if props[.path] as? String != "/" {
+            logger.debug("Massaging cookie path: \(cookie.name) (\(cookie.path) -> /)")
+            props[.path] = "/"
+            return HTTPCookie(properties: props)
+        }
+        return cookie
     }
 
     private func clearCookieStorage() {
@@ -130,6 +159,7 @@ final class RemoteAuthProvider: AuthProvider {
         for cookie in serverCookies(in: storage) {
             storage.deleteCookie(cookie)
         }
+        logger.debug("Cleared cookie storage")
     }
 }
 

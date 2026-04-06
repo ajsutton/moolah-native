@@ -1,0 +1,45 @@
+{
+    "accounts": [
+        {
+            "id": "76e3d2a4-56b1-4f9e-a89c-8c8d8b9a0b1c",
+            "name": "Checking Account",
+            "type": "checking",
+            "balance": 123456,
+            "position": 1,
+            "hidden": false
+        },
+        {
+            "id": "87f4e3b5-67c2-50af-b90d-9d9e9c0b1c2d",
+            "name": "Savings Account",
+            "type": "savings",
+            "balance": 500000,
+            "position": 2,
+            "hidden": false
+        },
+        {
+            "id": "9805f4c6-78d3-61b0-c01e-0e0f0d1c2d3e",
+            "name": "Credit Card",
+            "type": "credit",
+            "balance": -25000,
+            "position": 3,
+            "hidden": false
+        },
+        {
+            "id": "a91605d7-89e4-72c1-d12f-1f101e2d3e4f",
+            "name": "Investment Portfolio",
+            "type": "investment",
+            "balance": 1500000,
+            "value": 1550000,
+            "position": 4,
+            "hidden": false
+        },
+        {
+            "id": "ba2716e8-9af5-83d2-e230-20212f3e4f50",
+            "name": "House Fund",
+            "type": "earmark",
+            "balance": 250000,
+            "position": 5,
+            "hidden": false
+        }
+    ]
+}

@@ -7,48 +7,74 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00BD18471262934CAF790ADE /* AccountRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D30E668C8761BA80047CE39 /* AccountRepository.swift */; };
+		01F2DF55944558BC342191AD /* RemoteAccountRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0D4706C2F766D144F2F275E /* RemoteAccountRepositoryTests.swift */; };
+		02766F546CE30372596D7E15 /* AccountDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00D0CA559BEF36A9501A07D /* AccountDTO.swift */; };
+		06D29AF99E746E9BCDCA4223 /* accounts.json in Resources */ = {isa = PBXBuildFile; fileRef = 52D898DCF78E5D11679B3412 /* accounts.json */; };
 		0E0392A21BC5262F4AF03FE5 /* BackendProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */; };
-		0F56E83D688105CEEB912A36 /* InMemoryBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21076A3E98D0A26C91D53619 /* InMemoryBackend.swift */; };
 		139C166EF4181897514CEC45 /* CookieKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2307A129A45B6763ADE697AB /* CookieKeychain.swift */; };
+		17CDD5E86E3A4A719D88446B /* InMemoryAccountRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F91D3EB60A793D5FE36DE1E /* InMemoryAccountRepository.swift */; };
 		18EBFFD7591E79F6C5AC49D4 /* AuthStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44F485E6BD2F32A1579E64C8 /* AuthStoreTests.swift */; };
 		1ABA5949F5758274ADC1C8ED /* CookieKeychainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68104891F6BA3CB148906B84 /* CookieKeychainTests.swift */; };
-		4080C3FFFDC17F45D715B812 /* InMemoryAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB9D954910A399A25A020BB5 /* InMemoryAuthProvider.swift */; };
+		244DCC5DC322AEDE39CE1558 /* RemoteAccountRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2737BCF1D305177458789B3E /* RemoteAccountRepository.swift */; };
+		3EC7A0812F7E31B37974A8A2 /* AccountStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EBBF6FC221122AD74625F7E /* AccountStoreTests.swift */; };
 		4140EDAF0C1A9E0A3723E357 /* UserMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE5A7458FFA37A4C6DC6BF1 /* UserMenuView.swift */; };
 		41DF550E13133F22A453AAE3 /* BackendProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */; };
+		4613767B8A9111B9E548B9A2 /* AccountDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00D0CA559BEF36A9501A07D /* AccountDTO.swift */; };
 		48F0CBC848C55813FEBB8FE2 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0431C044B183CBD75A93A60 /* APIClient.swift */; };
-		4CE05B3BF9ADAE11FA683CF0 /* InMemoryBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21076A3E98D0A26C91D53619 /* InMemoryBackend.swift */; };
 		4D1AA5636717544A23434905 /* RemoteAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E5AD68A218108F0A5F67D0 /* RemoteAuthProvider.swift */; };
+		4D1C7574CBF979D0E37D22E2 /* AccountStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EBBF6FC221122AD74625F7E /* AccountStoreTests.swift */; };
 		54976604A4A32D269D4585EA /* ModelContainerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */; };
 		557A175478652AC4A3ACD655 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22495C74E2B63C2956AE9437 /* ContentView.swift */; };
 		58122BFD91F09DDD9D0523D0 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0431C044B183CBD75A93A60 /* APIClient.swift */; };
 		5DD56EF420C18507AF3B5463 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E37BF3BEA54A6FC23CC7FE3 /* WelcomeView.swift */; };
 		60C4D29AF9D3027B180A8797 /* RemoteAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E5AD68A218108F0A5F67D0 /* RemoteAuthProvider.swift */; };
+		65E3EBD7E06C8434C4398601 /* InMemoryAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDB876186C21952AF9CE00EC /* InMemoryAuthProvider.swift */; };
+		67A15B06F1FDA30AE457E2B9 /* InMemoryAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDB876186C21952AF9CE00EC /* InMemoryAuthProvider.swift */; };
 		67C6A90C925461E98AFFDF15 /* ModelContainerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */; };
-		6864F6A01E05302DC8560FFC /* InMemoryAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB9D954910A399A25A020BB5 /* InMemoryAuthProvider.swift */; };
+		69DAA0FF5FF7E3C94A1320D8 /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C85F9D469AB0B735DF3A5BD /* Account.swift */; };
+		700EA1100CE2CDB4EFD4FB4B /* AccountStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2536FF724721319BC3117F /* AccountStore.swift */; };
+		70640E8621324045006D1223 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7D6408D5DBC5B689B523C95 /* Constants.swift */; };
 		7CBE8BFF98E1ED319BDB0762 /* UserMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE5A7458FFA37A4C6DC6BF1 /* UserMenuView.swift */; };
 		7D97D59B3682BBB7C98AC832 /* BackendError.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB59F0807A41AE9577AFB9E1 /* BackendError.swift */; };
+		7DDD1DA44DF2BB7423319415 /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C85F9D469AB0B735DF3A5BD /* Account.swift */; };
 		7F25E616B673451369F9FC55 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E37BF3BEA54A6FC23CC7FE3 /* WelcomeView.swift */; };
+		800EAE6615AE4F44C6A3E2C3 /* AccountRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D30E668C8761BA80047CE39 /* AccountRepository.swift */; };
+		85A57F09FA74650995D31768 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6845C067ABB3CDA81CCB10 /* SidebarView.swift */; };
 		89CA9FF690DA57649DEA8E01 /* CookieKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2307A129A45B6763ADE697AB /* CookieKeychain.swift */; };
 		8CD72E510AE6F5A680D87E3C /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55CFB29D6757420CB3C9C8C8 /* AppRootView.swift */; };
 		8DAB18C30AA26CD11A371099 /* AuthStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44F485E6BD2F32A1579E64C8 /* AuthStoreTests.swift */; };
+		90993D3B1C8552F0962E31AC /* AccountRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00D2192718D35CE9A6CBA1C /* AccountRowView.swift */; };
+		99E8BCF3EC75ADCE30C7A0AD /* TestBundleMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38FB6CBF1CC899B2422E5537 /* TestBundleMarker.swift */; };
 		9CDEBDC3CFBDAF9165F882A7 /* MoolahApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E7D532967ACF605512D332 /* MoolahApp.swift */; };
 		9E80B7C29F305231A7F25430 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 394716AE7AB11EB9DB2FC537 /* UserProfile.swift */; };
 		A0CE6F785996CBF25B4B8493 /* RemoteBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B6CD88ED67E56DC24998EF5 /* RemoteBackend.swift */; };
+		A4720D004F99C4AD4805E926 /* accounts.json in Resources */ = {isa = PBXBuildFile; fileRef = 52D898DCF78E5D11679B3412 /* accounts.json */; };
 		A9550E23152D9AD0201BABB7 /* AuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B66104D9C8D82B1A0427CE79 /* AuthProvider.swift */; };
+		B0913F99CC9CF30546B6A3D6 /* AccountRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00D2192718D35CE9A6CBA1C /* AccountRowView.swift */; };
 		B460D4029D5F6F80F23FCF0B /* AuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B66104D9C8D82B1A0427CE79 /* AuthProvider.swift */; };
 		B7381FF84C13F63F6B9AD69C /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1537B5ED73BDFE589AFBDF /* AuthStore.swift */; };
 		B8FFDDF839C1C39B1435553A /* AuthContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF82ABEAD4CD6082C14CC50 /* AuthContractTests.swift */; };
 		C1715E51D7E72381A479F6EA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7744C6DBEE0256E2BBD1513A /* Assets.xcassets */; };
 		C65F03B98023C20985ACFD0B /* BackendError.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB59F0807A41AE9577AFB9E1 /* BackendError.swift */; };
+		C70F40059B2F4EEB4B7CB6CA /* RemoteAccountRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0D4706C2F766D144F2F275E /* RemoteAccountRepositoryTests.swift */; };
 		C733D2B154E165B22A927403 /* MoolahApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E7D532967ACF605512D332 /* MoolahApp.swift */; };
 		C7E1B4D98E0E2E59F30E8760 /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1537B5ED73BDFE589AFBDF /* AuthStore.swift */; };
 		C861572FA5EFADAADAEB5BBC /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 394716AE7AB11EB9DB2FC537 /* UserProfile.swift */; };
+		CB29B7107D26E771BEC886C0 /* InMemoryBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C53697402D7B4394678D84 /* InMemoryBackend.swift */; };
+		CE32F2D7F43E9A0E49475F78 /* TestBundleMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38FB6CBF1CC899B2422E5537 /* TestBundleMarker.swift */; };
 		CF2ED2A7D750143B1408AAC8 /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55CFB29D6757420CB3C9C8C8 /* AppRootView.swift */; };
 		D3D60831E18FB860048FC37C /* RemoteBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B6CD88ED67E56DC24998EF5 /* RemoteBackend.swift */; };
+		D6F61A17E93F234A10D88E39 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6845C067ABB3CDA81CCB10 /* SidebarView.swift */; };
 		DF200724C634EFFA2E58CA49 /* CookieKeychainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68104891F6BA3CB148906B84 /* CookieKeychainTests.swift */; };
 		E0BB6B5944977FDD58DD8C83 /* AuthContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF82ABEAD4CD6082C14CC50 /* AuthContractTests.swift */; };
+		EAB7D73F9952C5EC7F4CEE2B /* InMemoryAccountRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F91D3EB60A793D5FE36DE1E /* InMemoryAccountRepository.swift */; };
+		EFBB9ED1FE1A8FAD2A4C37FB /* RemoteAccountRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2737BCF1D305177458789B3E /* RemoteAccountRepository.swift */; };
 		F10AEB4F5A672A6B27D230A2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7744C6DBEE0256E2BBD1513A /* Assets.xcassets */; };
 		F394864BEA7331E44D8C1FA6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22495C74E2B63C2956AE9437 /* ContentView.swift */; };
+		F886E9EAA5377C4680F6362F /* AccountStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2536FF724721319BC3117F /* AccountStore.swift */; };
+		FAFABA95DB374DB9AEA12005 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7D6408D5DBC5B689B523C95 /* Constants.swift */; };
+		FC90521205A28AD546896B26 /* InMemoryBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C53697402D7B4394678D84 /* InMemoryBackend.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -70,44 +96,48 @@
 
 /* Begin PBXFileReference section */
 		0AE5A7458FFA37A4C6DC6BF1 /* UserMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserMenuView.swift; sourceTree = "<group>"; };
+		12C53697402D7B4394678D84 /* InMemoryBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryBackend.swift; sourceTree = "<group>"; };
 		17A51A52AB99705A4984A754 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		21076A3E98D0A26C91D53619 /* InMemoryBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryBackend.swift; sourceTree = "<group>"; };
+		1D30E668C8761BA80047CE39 /* AccountRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRepository.swift; sourceTree = "<group>"; };
 		22398332D8AEF0450E12B382 /* MoolahTests_iOS.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MoolahTests_iOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		22495C74E2B63C2956AE9437 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		2307A129A45B6763ADE697AB /* CookieKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieKeychain.swift; sourceTree = "<group>"; };
+		2737BCF1D305177458789B3E /* RemoteAccountRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteAccountRepository.swift; sourceTree = "<group>"; };
 		29E5AD68A218108F0A5F67D0 /* RemoteAuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteAuthProvider.swift; sourceTree = "<group>"; };
+		2F6845C067ABB3CDA81CCB10 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerTests.swift; sourceTree = "<group>"; };
+		38FB6CBF1CC899B2422E5537 /* TestBundleMarker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestBundleMarker.swift; sourceTree = "<group>"; };
 		394716AE7AB11EB9DB2FC537 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
 		3E37BF3BEA54A6FC23CC7FE3 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		3F91D3EB60A793D5FE36DE1E /* InMemoryAccountRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryAccountRepository.swift; sourceTree = "<group>"; };
 		3FF82ABEAD4CD6082C14CC50 /* AuthContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthContractTests.swift; sourceTree = "<group>"; };
 		44F485E6BD2F32A1579E64C8 /* AuthStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStoreTests.swift; sourceTree = "<group>"; };
+		4C85F9D469AB0B735DF3A5BD /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		4CA48181968E160CE8E9302B /* Moolah_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Moolah_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		52D898DCF78E5D11679B3412 /* accounts.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = accounts.json; sourceTree = "<group>"; };
 		55CFB29D6757420CB3C9C8C8 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
 		68104891F6BA3CB148906B84 /* CookieKeychainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieKeychainTests.swift; sourceTree = "<group>"; };
 		689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendProvider.swift; sourceTree = "<group>"; };
 		6B6CD88ED67E56DC24998EF5 /* RemoteBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBackend.swift; sourceTree = "<group>"; };
 		7744C6DBEE0256E2BBD1513A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		7C2536FF724721319BC3117F /* AccountStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountStore.swift; sourceTree = "<group>"; };
+		8EBBF6FC221122AD74625F7E /* AccountStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountStoreTests.swift; sourceTree = "<group>"; };
 		9B1537B5ED73BDFE589AFBDF /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
 		B49F4CED68007895BCFE0658 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		B66104D9C8D82B1A0427CE79 /* AuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthProvider.swift; sourceTree = "<group>"; };
 		BE221BC137F6FA398968FDFF /* Moolah_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Moolah_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		CB9D954910A399A25A020BB5 /* InMemoryAuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryAuthProvider.swift; sourceTree = "<group>"; };
+		C00D2192718D35CE9A6CBA1C /* AccountRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRowView.swift; sourceTree = "<group>"; };
 		DB59F0807A41AE9577AFB9E1 /* BackendError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendError.swift; sourceTree = "<group>"; };
+		DDB876186C21952AF9CE00EC /* InMemoryAuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryAuthProvider.swift; sourceTree = "<group>"; };
 		E0431C044B183CBD75A93A60 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		E0E7D532967ACF605512D332 /* MoolahApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoolahApp.swift; sourceTree = "<group>"; };
+		E7D6408D5DBC5B689B523C95 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
+		F00D0CA559BEF36A9501A07D /* AccountDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountDTO.swift; sourceTree = "<group>"; };
+		F0D4706C2F766D144F2F275E /* RemoteAccountRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteAccountRepositoryTests.swift; sourceTree = "<group>"; };
 		FA6F0E982E4C074B8CF56F88 /* MoolahTests_macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoolahTests_macOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
-		042645CE16B2E3382BE163D4 /* InMemoryBackend */ = {
-			isa = PBXGroup;
-			children = (
-				CB9D954910A399A25A020BB5 /* InMemoryAuthProvider.swift */,
-				21076A3E98D0A26C91D53619 /* InMemoryBackend.swift */,
-			);
-			path = InMemoryBackend;
-			sourceTree = "<group>";
-		};
 		27D432CB805778E78FAC27AE /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -123,6 +153,7 @@
 			isa = PBXGroup;
 			children = (
 				68104891F6BA3CB148906B84 /* CookieKeychainTests.swift */,
+				F0D4706C2F766D144F2F275E /* RemoteAccountRepositoryTests.swift */,
 			);
 			path = Backends;
 			sourceTree = "<group>";
@@ -138,6 +169,7 @@
 		3A7D396FC84B1E61563117BB /* Features */ = {
 			isa = PBXGroup;
 			children = (
+				8EBBF6FC221122AD74625F7E /* AccountStoreTests.swift */,
 				44F485E6BD2F32A1579E64C8 /* AuthStoreTests.swift */,
 			);
 			path = Features;
@@ -146,18 +178,36 @@
 		3C38468D8EFA243FD55CF920 /* Support */ = {
 			isa = PBXGroup;
 			children = (
-				042645CE16B2E3382BE163D4 /* InMemoryBackend */,
+				38FB6CBF1CC899B2422E5537 /* TestBundleMarker.swift */,
+				EB7FA20110E81A4ABFE039C8 /* Fixtures */,
 			);
 			path = Support;
+			sourceTree = "<group>";
+		};
+		48A6F0C10AB760788AD718EE /* Repositories */ = {
+			isa = PBXGroup;
+			children = (
+				2737BCF1D305177458789B3E /* RemoteAccountRepository.swift */,
+			);
+			path = Repositories;
 			sourceTree = "<group>";
 		};
 		4D121EA50340CAB3E34C37AC /* Repositories */ = {
 			isa = PBXGroup;
 			children = (
+				1D30E668C8761BA80047CE39 /* AccountRepository.swift */,
 				B66104D9C8D82B1A0427CE79 /* AuthProvider.swift */,
 				689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */,
 			);
 			path = Repositories;
+			sourceTree = "<group>";
+		};
+		501C3F924C04428E64E5FE59 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				C00D2192718D35CE9A6CBA1C /* AccountRowView.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 		5107DA1D4EAD5EAA78609644 /* Auth */ = {
@@ -169,10 +219,20 @@
 			path = Auth;
 			sourceTree = "<group>";
 		};
+		51306B97B2DDE76A0A0807E2 /* DTOs */ = {
+			isa = PBXGroup;
+			children = (
+				F00D0CA559BEF36A9501A07D /* AccountDTO.swift */,
+			);
+			path = DTOs;
+			sourceTree = "<group>";
+		};
 		52E521D2D8A8957D9486389D /* Features */ = {
 			isa = PBXGroup;
 			children = (
+				F952E8DD86E0BA35107DA1BE /* Accounts */,
 				9EB76ED522EB8ACA5326F0CD /* Auth */,
+				C4A1BAFA40C3C3F54B2E7982 /* Navigation */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -189,15 +249,28 @@
 		6399E2439BD46F7F60A99002 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				4C85F9D469AB0B735DF3A5BD /* Account.swift */,
 				DB59F0807A41AE9577AFB9E1 /* BackendError.swift */,
+				E7D6408D5DBC5B689B523C95 /* Constants.swift */,
 				394716AE7AB11EB9DB2FC537 /* UserProfile.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
 		};
+		6D9FF05DC54FF392F353AB09 /* InMemory */ = {
+			isa = PBXGroup;
+			children = (
+				3F91D3EB60A793D5FE36DE1E /* InMemoryAccountRepository.swift */,
+				DDB876186C21952AF9CE00EC /* InMemoryAuthProvider.swift */,
+				12C53697402D7B4394678D84 /* InMemoryBackend.swift */,
+			);
+			path = InMemory;
+			sourceTree = "<group>";
+		};
 		7CC5CD50EB9F3FCCA61AD341 /* Backends */ = {
 			isa = PBXGroup;
 			children = (
+				6D9FF05DC54FF392F353AB09 /* InMemory */,
 				B826BB529F87533B35ECD5C4 /* Remote */,
 			);
 			path = Backends;
@@ -248,8 +321,18 @@
 				6B6CD88ED67E56DC24998EF5 /* RemoteBackend.swift */,
 				B19846DB3F9C18E0F99C8CE1 /* APIClient */,
 				5107DA1D4EAD5EAA78609644 /* Auth */,
+				51306B97B2DDE76A0A0807E2 /* DTOs */,
+				48A6F0C10AB760788AD718EE /* Repositories */,
 			);
 			path = Remote;
+			sourceTree = "<group>";
+		};
+		C4A1BAFA40C3C3F54B2E7982 /* Navigation */ = {
+			isa = PBXGroup;
+			children = (
+				2F6845C067ABB3CDA81CCB10 /* SidebarView.swift */,
+			);
+			path = Navigation;
 			sourceTree = "<group>";
 		};
 		DC6EA9ACC22A52F350446AD2 /* App */ = {
@@ -261,6 +344,23 @@
 				E0E7D532967ACF605512D332 /* MoolahApp.swift */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		EB7FA20110E81A4ABFE039C8 /* Fixtures */ = {
+			isa = PBXGroup;
+			children = (
+				52D898DCF78E5D11679B3412 /* accounts.json */,
+			);
+			path = Fixtures;
+			sourceTree = "<group>";
+		};
+		F952E8DD86E0BA35107DA1BE /* Accounts */ = {
+			isa = PBXGroup;
+			children = (
+				7C2536FF724721319BC3117F /* AccountStore.swift */,
+				501C3F924C04428E64E5FE59 /* Views */,
+			);
+			path = Accounts;
 			sourceTree = "<group>";
 		};
 		FFFAA414CF2CE7B9B90607CE = {
@@ -284,6 +384,7 @@
 			buildConfigurationList = ACBABA4AD202E61316D46DCD /* Build configuration list for PBXNativeTarget "MoolahTests_iOS" */;
 			buildPhases = (
 				2DC8167477AC262CB71B009A /* Sources */,
+				AAC8CBEC186A9798969C5689 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -302,6 +403,7 @@
 			buildConfigurationList = 5CCDCD8EEDBD4943E9DB88F3 /* Build configuration list for PBXNativeTarget "MoolahTests_macOS" */;
 			buildPhases = (
 				EE167E42262E45DD5E8F4029 /* Sources */,
+				8ED6413EEB5EA765B87603C9 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -401,11 +503,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8ED6413EEB5EA765B87603C9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				06D29AF99E746E9BCDCA4223 /* accounts.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		96ED4A5CCADDFDFA5D76D9FB /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				C1715E51D7E72381A479F6EA /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AAC8CBEC186A9798969C5689 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A4720D004F99C4AD4805E926 /* accounts.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -416,12 +534,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4D1C7574CBF979D0E37D22E2 /* AccountStoreTests.swift in Sources */,
 				E0BB6B5944977FDD58DD8C83 /* AuthContractTests.swift in Sources */,
 				8DAB18C30AA26CD11A371099 /* AuthStoreTests.swift in Sources */,
 				DF200724C634EFFA2E58CA49 /* CookieKeychainTests.swift in Sources */,
-				6864F6A01E05302DC8560FFC /* InMemoryAuthProvider.swift in Sources */,
-				0F56E83D688105CEEB912A36 /* InMemoryBackend.swift in Sources */,
 				67C6A90C925461E98AFFDF15 /* ModelContainerTests.swift in Sources */,
+				01F2DF55944558BC342191AD /* RemoteAccountRepositoryTests.swift in Sources */,
+				CE32F2D7F43E9A0E49475F78 /* TestBundleMarker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -430,16 +549,27 @@
 			buildActionMask = 2147483647;
 			files = (
 				58122BFD91F09DDD9D0523D0 /* APIClient.swift in Sources */,
+				7DDD1DA44DF2BB7423319415 /* Account.swift in Sources */,
+				4613767B8A9111B9E548B9A2 /* AccountDTO.swift in Sources */,
+				800EAE6615AE4F44C6A3E2C3 /* AccountRepository.swift in Sources */,
+				B0913F99CC9CF30546B6A3D6 /* AccountRowView.swift in Sources */,
+				F886E9EAA5377C4680F6362F /* AccountStore.swift in Sources */,
 				8CD72E510AE6F5A680D87E3C /* AppRootView.swift in Sources */,
 				A9550E23152D9AD0201BABB7 /* AuthProvider.swift in Sources */,
 				C7E1B4D98E0E2E59F30E8760 /* AuthStore.swift in Sources */,
 				C65F03B98023C20985ACFD0B /* BackendError.swift in Sources */,
 				41DF550E13133F22A453AAE3 /* BackendProvider.swift in Sources */,
+				70640E8621324045006D1223 /* Constants.swift in Sources */,
 				557A175478652AC4A3ACD655 /* ContentView.swift in Sources */,
 				89CA9FF690DA57649DEA8E01 /* CookieKeychain.swift in Sources */,
+				17CDD5E86E3A4A719D88446B /* InMemoryAccountRepository.swift in Sources */,
+				65E3EBD7E06C8434C4398601 /* InMemoryAuthProvider.swift in Sources */,
+				CB29B7107D26E771BEC886C0 /* InMemoryBackend.swift in Sources */,
 				9CDEBDC3CFBDAF9165F882A7 /* MoolahApp.swift in Sources */,
+				EFBB9ED1FE1A8FAD2A4C37FB /* RemoteAccountRepository.swift in Sources */,
 				60C4D29AF9D3027B180A8797 /* RemoteAuthProvider.swift in Sources */,
 				A0CE6F785996CBF25B4B8493 /* RemoteBackend.swift in Sources */,
+				D6F61A17E93F234A10D88E39 /* SidebarView.swift in Sources */,
 				4140EDAF0C1A9E0A3723E357 /* UserMenuView.swift in Sources */,
 				C861572FA5EFADAADAEB5BBC /* UserProfile.swift in Sources */,
 				7F25E616B673451369F9FC55 /* WelcomeView.swift in Sources */,
@@ -451,16 +581,27 @@
 			buildActionMask = 2147483647;
 			files = (
 				48F0CBC848C55813FEBB8FE2 /* APIClient.swift in Sources */,
+				69DAA0FF5FF7E3C94A1320D8 /* Account.swift in Sources */,
+				02766F546CE30372596D7E15 /* AccountDTO.swift in Sources */,
+				00BD18471262934CAF790ADE /* AccountRepository.swift in Sources */,
+				90993D3B1C8552F0962E31AC /* AccountRowView.swift in Sources */,
+				700EA1100CE2CDB4EFD4FB4B /* AccountStore.swift in Sources */,
 				CF2ED2A7D750143B1408AAC8 /* AppRootView.swift in Sources */,
 				B460D4029D5F6F80F23FCF0B /* AuthProvider.swift in Sources */,
 				B7381FF84C13F63F6B9AD69C /* AuthStore.swift in Sources */,
 				7D97D59B3682BBB7C98AC832 /* BackendError.swift in Sources */,
 				0E0392A21BC5262F4AF03FE5 /* BackendProvider.swift in Sources */,
+				FAFABA95DB374DB9AEA12005 /* Constants.swift in Sources */,
 				F394864BEA7331E44D8C1FA6 /* ContentView.swift in Sources */,
 				139C166EF4181897514CEC45 /* CookieKeychain.swift in Sources */,
+				EAB7D73F9952C5EC7F4CEE2B /* InMemoryAccountRepository.swift in Sources */,
+				67A15B06F1FDA30AE457E2B9 /* InMemoryAuthProvider.swift in Sources */,
+				FC90521205A28AD546896B26 /* InMemoryBackend.swift in Sources */,
 				C733D2B154E165B22A927403 /* MoolahApp.swift in Sources */,
+				244DCC5DC322AEDE39CE1558 /* RemoteAccountRepository.swift in Sources */,
 				4D1AA5636717544A23434905 /* RemoteAuthProvider.swift in Sources */,
 				D3D60831E18FB860048FC37C /* RemoteBackend.swift in Sources */,
+				85A57F09FA74650995D31768 /* SidebarView.swift in Sources */,
 				7CBE8BFF98E1ED319BDB0762 /* UserMenuView.swift in Sources */,
 				9E80B7C29F305231A7F25430 /* UserProfile.swift in Sources */,
 				5DD56EF420C18507AF3B5463 /* WelcomeView.swift in Sources */,
@@ -471,12 +612,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3EC7A0812F7E31B37974A8A2 /* AccountStoreTests.swift in Sources */,
 				B8FFDDF839C1C39B1435553A /* AuthContractTests.swift in Sources */,
 				18EBFFD7591E79F6C5AC49D4 /* AuthStoreTests.swift in Sources */,
 				1ABA5949F5758274ADC1C8ED /* CookieKeychainTests.swift in Sources */,
-				4080C3FFFDC17F45D715B812 /* InMemoryAuthProvider.swift in Sources */,
-				4CE05B3BF9ADAE11FA683CF0 /* InMemoryBackend.swift in Sources */,
 				54976604A4A32D269D4585EA /* ModelContainerTests.swift in Sources */,
+				C70F40059B2F4EEB4B7CB6CA /* RemoteAccountRepositoryTests.swift in Sources */,
+				99E8BCF3EC75ADCE30C7A0AD /* TestBundleMarker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
