@@ -20,8 +20,8 @@ struct ContentView: View {
                     }
                 }
         } detail: {
-            if let selection, let account = accountStore.accounts.first(where: { $0.id == selection }) {
-                TransactionListView(account: account, transactionStore: transactionStore)
+            if let selection, let account = accountStore.accounts.by(id: selection ) {
+                TransactionListView(account: account, accounts: accountStore.accounts, transactionStore: transactionStore)
             } else {
                 Text("Select an account")
             }

@@ -5,7 +5,7 @@ import OSLog
 @Observable
 @MainActor
 final class AccountStore {
-    private(set) var accounts: [Account] = []
+    private(set) var accounts: Accounts = Accounts(from: [])
     private(set) var isLoading = false
     private(set) var error: Error?
     
@@ -24,7 +24,7 @@ final class AccountStore {
         error = nil
         
         do {
-            accounts = try await repository.fetchAll()
+            accounts = Accounts(from: try await repository.fetchAll())
             logger.debug("Loaded \(self.accounts.count) accounts")
         } catch {
             logger.error("❌ Failed to load accounts: \(error.localizedDescription)")

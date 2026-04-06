@@ -11,7 +11,7 @@ enum AccountType: String, Codable, Sendable, CaseIterable {
     }
 }
 
-struct Account: Codable, Sendable, Identifiable, Hashable {
+struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     let id: UUID
     var name: String
     var type: AccountType
@@ -42,5 +42,33 @@ struct Account: Codable, Sendable, Identifiable, Hashable {
         case balance
         case position
         case isHidden = "hidden"
+    }
+    
+    static func < (lhs: Account, rhs: Account) -> Bool {
+        lhs.position < rhs.position
+    }
+}
+
+struct Accounts : RandomAccessCollection {
+    let startIndex: Int = 0
+    
+    let ordered : [Account]
+    let byId : [UUID: Account]
+    
+    init(from: [Account]) {
+        byId = from.reduce(into: [:]) { $0[$1.id] = $1 }
+        ordered = from.sorted()
+    }
+    
+    func by(id: UUID) -> Account? {
+        byId[id]
+    }
+    
+    var endIndex: Int {
+        return ordered.count
+    }
+    
+    subscript(idex: Int) -> Account {
+        ordered[idex]
     }
 }
