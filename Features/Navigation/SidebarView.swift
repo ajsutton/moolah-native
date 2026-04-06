@@ -16,18 +16,6 @@ struct SidebarView: View {
                 totalRow(label: "Current Total", value: accountStore.currentTotal)
             }
             
-            if !accountStore.earmarkAccounts.isEmpty {
-                Section("Earmarked Funds") {
-                    ForEach(accountStore.earmarkAccounts) { account in
-                        NavigationLink(value: account.id) {
-                            AccountRowView(account: account)
-                        }
-                    }
-                    
-                    totalRow(label: "Earmarked Total", value: accountStore.earmarkedTotal)
-                }
-            }
-            
             Section("Investments") {
                 ForEach(accountStore.investmentAccounts) { account in
                     NavigationLink(value: account.id) {

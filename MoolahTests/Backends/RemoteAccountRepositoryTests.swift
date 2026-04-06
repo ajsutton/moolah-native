@@ -34,7 +34,7 @@ struct RemoteAccountRepositoryTests {
         // Then
         #expect(accounts.count == 5)
         #expect(accounts[0].name == "Checking Account")
-        #expect(accounts[0].type == .checking)
+        #expect(accounts[0].type == .bank)
         #expect(accounts[0].balance == 123456)
         #expect(accounts[3].name == "Investment Portfolio")
         #expect(accounts[3].type == .investment)

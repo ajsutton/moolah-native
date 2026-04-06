@@ -6,7 +6,7 @@ import Foundation
 @MainActor
 struct AccountStoreTests {
     @Test func testPopulatesFromRepository() async throws {
-        let account = Account(name: "Checking", type: .checking, balance: 100000)
+        let account = Account(name: "Checking", type: .bank, balance: 100000)
         let repository = InMemoryAccountRepository(initialAccounts: [account])
         let store = AccountStore(repository: repository)
         
@@ -17,8 +17,8 @@ struct AccountStoreTests {
     }
     
     @Test func testSortingByPosition() async throws {
-        let a1 = Account(name: "A1", type: .checking, balance: 10000, position: 2)
-        let a2 = Account(name: "A2", type: .checking, balance: 20000, position: 1)
+        let a1 = Account(name: "A1", type: .bank, balance: 10000, position: 2)
+        let a2 = Account(name: "A2", type: .asset, balance: 20000, position: 1)
         let repository = InMemoryAccountRepository(initialAccounts: [a1, a2])
         let store = AccountStore(repository: repository)
         
@@ -31,12 +31,11 @@ struct AccountStoreTests {
     
     @Test func testCalculatesTotals() async throws {
         let accounts = [
-            Account(name: "Checking", type: .checking, balance: 100000),
-            Account(name: "Savings", type: .savings, balance: 500000),
+            Account(name: "Bank", type: .bank, balance: 100000),
+            Account(name: "Asset", type: .asset, balance: 500000),
             Account(name: "Credit Card", type: .creditCard, balance: -50000),
             Account(name: "Investment", type: .investment, balance: 2000000),
-            Account(name: "House Fund", type: .earmark, balance: 300000),
-            Account(name: "Hidden", type: .checking, balance: 100000000, isHidden: true)
+            Account(name: "Hidden", type: .asset, balance: 100000000, isHidden: true)
         ]
         let repository = InMemoryAccountRepository(initialAccounts: accounts)
         let store = AccountStore(repository: repository)
@@ -44,26 +43,22 @@ struct AccountStoreTests {
         await store.load()
         
         #expect(store.currentTotal == 550000) // 100000 + 500000 - 50000
-        #expect(store.earmarkedTotal == 300000)
         #expect(store.investmentTotal == 2000000)
-        #expect(store.netWorth == 2850000)
+        #expect(store.netWorth == 2550000)
     }
     
     @Test func testAvailableFunds() async throws {
         let accounts = [
-            Account(name: "Checking", type: .checking, balance: 100000), // 1000.00
-            Account(name: "Savings", type: .savings, balance: 500000),   // 5000.00
+            Account(name: "Checking", type: .bank, balance: 100000), // 1000.00
+            Account(name: "Savings", type: .asset, balance: 500000),   // 5000.00
             // Current Total = 6000.00
-            
-            Account(name: "Positive Earmark", type: .earmark, balance: 300000), // 3000.00
-            Account(name: "Negative Earmark", type: .earmark, balance: -100000) // -1000.00 (should be ignored)
         ]
         let repository = InMemoryAccountRepository(initialAccounts: accounts)
         let store = AccountStore(repository: repository)
         
         await store.load()
         
-        // Available Funds = Current Total (6000.00) - Positive Earmarks (3000.00) = 3000.00
-        #expect(store.availableFunds == 300000)
+        // Available Funds = Current Total (6000.00) = 3000.00
+        #expect(store.availableFunds == 600000)
     }
 }
