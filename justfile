@@ -12,12 +12,11 @@ lint-fix:
     swift-format format -i -r . --configuration .swift-format
 
 # Run the full test suite on iOS Simulator and macOS
-test:
+test: generate
     bash scripts/test.sh
 
 # Build the app for macOS (ad-hoc signed, no certificate required)
-build-mac:
-    xcodegen generate
+build-mac: generate
     xcodebuild build \
         -scheme Moolah \
         -destination 'platform=macOS' \
@@ -25,8 +24,7 @@ build-mac:
         ENABLE_HARDENED_RUNTIME=NO
 
 # Build and launch the macOS app
-run-mac:
-    xcodegen generate
+run-mac: generate
     xcodebuild build \
         -scheme Moolah \
         -destination 'platform=macOS' \
@@ -36,8 +34,7 @@ run-mac:
     open .build/Build/Products/Debug/Moolah.app
 
 # Build the app for the iOS Simulator
-build-ios:
-    xcodegen generate
+build-ios: generate
     xcodebuild build \
         -scheme Moolah \
         -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
@@ -45,6 +42,16 @@ build-ios:
 
 # Regenerate Moolah.xcodeproj from project.yml (run after editing project.yml)
 generate:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Provide default
+    export CODE_SIGN_STYLE="Automatic"
+    if [ -f .env ]; then
+        set -a
+        source .env
+        set +a
+    fi
     xcodegen generate
 
 # Open the project in Xcode

@@ -11,6 +11,20 @@ settings:
     SWIFT_VERSION: "6.0"
     ENABLE_TESTABILITY: YES
 
+    # ---- Signing (env-driven) ----
+    DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
+
+    # Default to Automatic if env var not set
+    CODE_SIGN_STYLE: ${CODE_SIGN_STYLE}
+
+    # Only used when CODE_SIGN_STYLE=Manual
+    CODE_SIGN_IDENTITY: ${CODE_SIGN_IDENTITY}
+    PROVISIONING_PROFILE_SPECIFIER: ${PROVISIONING_PROFILE_SPECIFIER}
+
+    # Keep Xcode predictable
+    CODE_SIGNING_REQUIRED: YES
+    CODE_SIGNING_ALLOWED: YES
+
 targets:
   Moolah_iOS:
     type: application
@@ -27,14 +41,6 @@ targets:
         PRODUCT_MODULE_NAME: Moolah
         INFOPLIST_FILE: App/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # iOS Simulator doesn't require signing
-        CODE_SIGN_IDENTITY: "Apple Development"
-        "CODE_SIGN_IDENTITY[sdk=macosx*]": "Apple Development"
-        CODE_SIGNING_REQUIRED: YES
-        CODE_SIGNING_ALLOWED: YES
-        CODE_SIGN_STYLE: "Automatic"
-        DEVELOPMENT_TEAM: "P8LX6DFJM4"
-        PROVISIONING_PROFILE_SPECIFIER: ""
 
   Moolah_macOS:
     type: application
@@ -52,15 +58,6 @@ targets:
         PRODUCT_MODULE_NAME: Moolah
         INFOPLIST_FILE: App/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # Ad-hoc signing (-) satisfies Gatekeeper for local runs.
-        # Hardened Runtime requires a real certificate, so disable it.
-        CODE_SIGN_IDENTITY: "Apple Development"
-        "CODE_SIGN_IDENTITY[sdk=macosx*]": "Apple Development"
-        CODE_SIGNING_REQUIRED: YES
-        CODE_SIGNING_ALLOWED: YES
-        CODE_SIGN_STYLE: "Automatic"
-        DEVELOPMENT_TEAM: "P8LX6DFJM4"
-        PROVISIONING_PROFILE_SPECIFIER: ""
         ENABLE_HARDENED_RUNTIME: NO
 
   MoolahTests_iOS:
@@ -71,7 +68,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.moolah.tests
-        CODE_SIGN_IDENTITY: ""
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGNING_ALLOWED: NO
     dependencies:
@@ -90,9 +86,6 @@ targets:
         CODE_SIGNING_REQUIRED: YES
         CODE_SIGNING_ALLOWED: YES
         ENABLE_HARDENED_RUNTIME: NO
-        # Moolah_macOS uses PRODUCT_NAME=Moolah so it builds as Moolah.app,
-        # not Moolah_macOS.app. XcodeGen derives TEST_HOST from the target
-        # name, so we override it here to match the actual product name.
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Moolah.app/Contents/MacOS/Moolah"
         BUNDLE_LOADER: "$(TEST_HOST)"
     dependencies:
