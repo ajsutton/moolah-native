@@ -127,6 +127,7 @@ struct TransactionDetailView: View {
       Button("Delete", role: .destructive) {
         onDelete(transaction.id)
       }
+      .keyboardShortcut(.delete, modifiers: [])
     } message: {
       Text("Are you sure you want to delete this transaction? This cannot be undone.")
     }

@@ -8,6 +8,7 @@ struct EarmarkRowView: View {
       Image(systemName: "bookmark.fill")
         .foregroundStyle(.secondary)
         .frame(width: 24)
+        .accessibilityLabel("Earmark")
 
       Text(earmark.name)
 

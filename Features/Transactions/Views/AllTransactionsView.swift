@@ -28,6 +28,7 @@ struct AllTransactionsView: View {
             systemImage: hasActiveFilters
               ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
         }
+        .keyboardShortcut("f", modifiers: .command)
       }
     }
     .sheet(isPresented: $showFilterSheet) {

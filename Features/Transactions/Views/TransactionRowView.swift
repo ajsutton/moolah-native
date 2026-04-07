@@ -13,6 +13,7 @@ struct TransactionRowView: View {
       Image(systemName: iconName)
         .foregroundStyle(iconColor)
         .frame(width: 24)
+        .accessibilityLabel(transaction.type.rawValue.capitalized)
 
       VStack(alignment: .leading, spacing: 2) {
         Text(displayPayee)
@@ -44,6 +45,16 @@ struct TransactionRowView: View {
       }
     }
     .padding(.vertical, 2)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(accessibilityDescription)
+  }
+
+  private var accessibilityDescription: String {
+    let dateStr = transaction.date.formatted(date: .abbreviated, time: .omitted)
+    let amountStr = transaction.amount.decimalValue.formatted(
+      .currency(code: transaction.amount.currency.code))
+    let balanceStr = balance.decimalValue.formatted(.currency(code: balance.currency.code))
+    return "\(displayPayee), \(amountStr), \(dateStr), balance \(balanceStr)"
   }
 
   private var iconName: String {

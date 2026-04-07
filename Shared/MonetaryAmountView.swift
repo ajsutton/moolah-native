@@ -13,6 +13,7 @@ struct MonetaryAmountView: View {
       .foregroundStyle(effectiveColor)
       .monospacedDigit()
       .font(font)
+      .accessibilityValue(amount.decimalValue.formatted(.currency(code: amount.currency.code)))
   }
 
   private var effectiveColor: Color {

@@ -66,6 +66,7 @@ struct CategoriesView: View {
         } label: {
           Label("Add Category", systemImage: "plus")
         }
+        .keyboardShortcut("n", modifiers: [.command, .shift])
       }
     }
     .task {

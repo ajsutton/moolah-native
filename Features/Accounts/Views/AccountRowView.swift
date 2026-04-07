@@ -8,6 +8,7 @@ struct AccountRowView: View {
       Image(systemName: iconName)
         .foregroundStyle(.secondary)
         .frame(width: 24)
+        .accessibilityLabel(account.type.rawValue)
 
       Text(account.name)
 

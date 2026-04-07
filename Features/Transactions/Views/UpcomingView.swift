@@ -186,6 +186,7 @@ private struct UpcomingTransactionRow: View {
       }
       .buttonStyle(.borderedProminent)
       .controlSize(.small)
+      .accessibilityLabel("Pay \(transaction.payee ?? "transaction")")
     }
     .contentShape(Rectangle())
   }

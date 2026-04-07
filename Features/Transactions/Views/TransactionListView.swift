@@ -130,12 +130,24 @@ struct TransactionListView: View {
     }
     .navigationTitle(title)
     .toolbar {
+      ToolbarItem(placement: .automatic) {
+        Button {
+          Task {
+            await transactionStore.load(filter: filter)
+          }
+        } label: {
+          Label("Refresh", systemImage: "arrow.clockwise")
+        }
+        .keyboardShortcut("r", modifiers: .command)
+      }
+
       ToolbarItem(placement: .primaryAction) {
         Button {
           createNewTransaction()
         } label: {
           Label("Add Transaction", systemImage: "plus")
         }
+        .keyboardShortcut("n", modifiers: .command)
       }
     }
     .task(id: filter) {

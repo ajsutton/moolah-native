@@ -53,12 +53,18 @@ struct SidebarView: View {
           MonetaryAmountView(amount: availableFunds)
         }
         .font(.headline)
+        .accessibilityLabel(
+          "Available Funds: \(availableFunds.decimalValue.formatted(.currency(code: availableFunds.currency.code)))"
+        )
 
         LabeledContent("Net Worth") {
           MonetaryAmountView(amount: accountStore.netWorth)
         }
         .font(.headline)
         .bold()
+        .accessibilityLabel(
+          "Net Worth: \(accountStore.netWorth.decimalValue.formatted(.currency(code: accountStore.netWorth.currency.code)))"
+        )
       }
 
       Section {
