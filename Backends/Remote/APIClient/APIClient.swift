@@ -101,4 +101,15 @@ final class APIClient: Sendable {
     request.httpMethod = "DELETE"
     return try await data(for: request)
   }
+
+  func delete(_ path: String, queryItems: [URLQueryItem]) async throws -> Data {
+    var components = URLComponents(
+      url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)!
+    if !queryItems.isEmpty {
+      components.queryItems = queryItems
+    }
+    var request = URLRequest(url: components.url!)
+    request.httpMethod = "DELETE"
+    return try await data(for: request)
+  }
 }

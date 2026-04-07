@@ -33,4 +33,52 @@ final class CategoryStore {
 
     isLoading = false
   }
+
+  func create(_ category: Category) async -> Category? {
+    logger.debug("Creating category: \(category.name)")
+    error = nil
+
+    do {
+      let created = try await repository.create(category)
+      // Reload to get fresh state
+      await load()
+      return created
+    } catch {
+      logger.error("❌ Failed to create category: \(error.localizedDescription)")
+      self.error = error
+      return nil
+    }
+  }
+
+  func update(_ category: Category) async -> Category? {
+    logger.debug("Updating category: \(category.name)")
+    error = nil
+
+    do {
+      let updated = try await repository.update(category)
+      // Reload to get fresh state
+      await load()
+      return updated
+    } catch {
+      logger.error("❌ Failed to update category: \(error.localizedDescription)")
+      self.error = error
+      return nil
+    }
+  }
+
+  func delete(id: UUID, withReplacement replacementId: UUID?) async -> Bool {
+    logger.debug("Deleting category \(id)")
+    error = nil
+
+    do {
+      try await repository.delete(id: id, withReplacement: replacementId)
+      // Reload to get fresh state
+      await load()
+      return true
+    } catch {
+      logger.error("❌ Failed to delete category: \(error.localizedDescription)")
+      self.error = error
+      return false
+    }
+  }
 }
