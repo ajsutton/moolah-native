@@ -8,8 +8,9 @@ struct TransactionListView: View {
   let earmarks: Earmarks
   let transactionStore: TransactionStore
 
-  @State private var showingNewTransaction = false
   @State private var selectedTransaction: Transaction?
+  @State private var showError = false
+  @State private var errorMessage = ""
 
   var body: some View {
     HStack(spacing: 0) {
@@ -34,6 +35,59 @@ struct TransactionListView: View {
           }
         )
         .frame(width: 350)
+      }
+    }
+    .alert("Error", isPresented: $showError) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text(errorMessage)
+    }
+    .task(id: transactionStore.error?.localizedDescription) {
+      if let error = transactionStore.error {
+        errorMessage = formatError(error)
+        showError = true
+      }
+    }
+  }
+
+  private func formatError(_ error: Error) -> String {
+    // Extract meaningful error messages
+    if let backendError = error as? BackendError {
+      switch backendError {
+      case .serverError(let statusCode):
+        return "Server error (\(statusCode)). Please try again."
+      case .networkUnavailable:
+        return "Network error. Check your connection."
+      case .unauthenticated:
+        return "Session expired. Please log in again."
+      }
+    }
+    return "Operation failed: \(error.localizedDescription)"
+  }
+
+  private func createNewTransaction() {
+    // Create a new transaction with default values
+    let newTransaction = Transaction(
+      type: .expense,
+      date: Date(),
+      accountId: filter.accountId ?? accounts.ordered.first?.id,
+      amount: MonetaryAmount(cents: 0, currency: Currency.defaultCurrency),
+      payee: ""
+    )
+
+    // Optimistically select it to show the detail panel immediately
+    selectedTransaction = newTransaction
+
+    // Create the transaction in the store and update selection with server-confirmed version
+    Task {
+      if let created = await transactionStore.create(newTransaction) {
+        // Only update selection if it's still pointing to this transaction
+        // (user might have created another transaction in the meantime)
+        await MainActor.run {
+          if selectedTransaction?.id == newTransaction.id {
+            selectedTransaction = created
+          }
+        }
       }
     }
   }
@@ -77,21 +131,11 @@ struct TransactionListView: View {
     .toolbar {
       ToolbarItem(placement: .primaryAction) {
         Button {
-          showingNewTransaction = true
+          createNewTransaction()
         } label: {
           Label("Add Transaction", systemImage: "plus")
         }
       }
-    }
-    .sheet(isPresented: $showingNewTransaction) {
-      TransactionFormView(
-        accounts: accounts,
-        categories: categories,
-        earmarks: earmarks,
-        onSave: { transaction in
-          Task { await transactionStore.create(transaction) }
-        }
-      )
     }
     .task(id: filter) {
       // Clear selection when switching accounts

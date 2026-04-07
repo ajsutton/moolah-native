@@ -44,7 +44,7 @@ final class TransactionStore {
     await fetchPage()
   }
 
-  func create(_ transaction: Transaction) async {
+  func create(_ transaction: Transaction) async -> Transaction? {
     // Optimistic: insert into local state
     let snapshot = rawTransactions
     rawTransactions.append(transaction)
@@ -58,11 +58,13 @@ final class TransactionStore {
       }
       recomputeBalances()
       onMutate?(nil, created)
+      return created
     } catch {
       logger.error("Failed to create transaction: \(error.localizedDescription)")
       rawTransactions = snapshot
       recomputeBalances()
       self.error = error
+      return nil
     }
   }
 

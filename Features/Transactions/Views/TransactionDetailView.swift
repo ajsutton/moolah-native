@@ -19,6 +19,12 @@ struct TransactionDetailView: View {
   @State private var notes: String
   @State private var showDeleteConfirmation = false
   @State private var saveTask: Task<Void, Never>?
+  @FocusState private var focusedField: Field?
+
+  private enum Field: Hashable {
+    case payee
+    case amount
+  }
 
   init(
     transaction: Transaction,
@@ -49,9 +55,14 @@ struct TransactionDetailView: View {
     _notes = State(initialValue: transaction.notes ?? "")
   }
 
+  private var isNewTransaction: Bool {
+    // Detect if this is a new transaction by checking if it has default values
+    transaction.amount.cents == 0 && (transaction.payee?.isEmpty ?? true)
+  }
+
   private var parsedCents: Int? {
     let cleaned = amountText.filter { $0.isNumber || $0 == "." }
-    guard let amount = Double(cleaned), amount > 0 else { return nil }
+    guard let amount = Double(cleaned), amount >= 0 else { return nil }
     return Int(amount * 100)
   }
 
@@ -96,6 +107,12 @@ struct TransactionDetailView: View {
     #if os(iOS)
       .navigationBarTitleDisplayMode(.inline)
     #endif
+    .onAppear {
+      // Focus payee field for new transactions
+      if isNewTransaction {
+        focusedField = .payee
+      }
+    }
     .onChange(of: type) { _, _ in debouncedSave() }
     .onChange(of: payee) { _, _ in debouncedSave() }
     .onChange(of: amountText) { _, _ in debouncedSave() }
@@ -139,6 +156,7 @@ struct TransactionDetailView: View {
   private var detailsSection: some View {
     Section {
       TextField("Payee", text: $payee)
+        .focused($focusedField, equals: .payee)
 
       HStack {
         TextField("Amount", text: $amountText)

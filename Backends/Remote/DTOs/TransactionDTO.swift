@@ -65,3 +65,42 @@ struct TransactionDTO: Codable {
     let totalNumberOfTransactions: Int
   }
 }
+
+/// DTO for creating transactions (omits the id field, which the server generates)
+struct CreateTransactionDTO: Codable {
+  let type: String
+  let date: String  // "YYYY-MM-DD"
+  let accountId: String?
+  let toAccountId: String?
+  let amount: Int
+  let payee: String?
+  let notes: String?
+  let categoryId: String?
+  let earmark: String?
+  let recurPeriod: String?
+  let recurEvery: Int?
+
+  private static let dateFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd"
+    formatter.timeZone = TimeZone(identifier: "UTC")
+    return formatter
+  }()
+
+  static func fromDomain(_ transaction: Transaction) -> CreateTransactionDTO {
+    let dateString = dateFormatter.string(from: transaction.date)
+    return CreateTransactionDTO(
+      type: transaction.type.rawValue,
+      date: dateString,
+      accountId: transaction.accountId?.uuidString,
+      toAccountId: transaction.toAccountId?.uuidString,
+      amount: transaction.amount.cents,
+      payee: transaction.payee,
+      notes: transaction.notes,
+      categoryId: transaction.categoryId?.uuidString,
+      earmark: transaction.earmarkId?.uuidString,
+      recurPeriod: transaction.recurPeriod,
+      recurEvery: transaction.recurEvery
+    )
+  }
+}

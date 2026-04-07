@@ -44,7 +44,7 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
   }
 
   func create(_ transaction: Transaction) async throws -> Transaction {
-    let dto = TransactionDTO.fromDomain(transaction)
+    let dto = CreateTransactionDTO.fromDomain(transaction)
     let data = try await client.post("transactions/", body: dto)
     let responseDTO = try JSONDecoder().decode(TransactionDTO.self, from: data)
     return responseDTO.toDomain()
