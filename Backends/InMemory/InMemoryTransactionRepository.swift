@@ -45,6 +45,35 @@ actor InMemoryTransactionRepository: TransactionRepository {
     return TransactionPage(transactions: pageTransactions, priorBalance: priorBalance)
   }
 
+  func create(_ transaction: Transaction) async throws -> Transaction {
+    transactions[transaction.id] = transaction
+    return transaction
+  }
+
+  func update(_ transaction: Transaction) async throws -> Transaction {
+    guard transactions[transaction.id] != nil else {
+      throw BackendError.serverError(404)
+    }
+    transactions[transaction.id] = transaction
+    return transaction
+  }
+
+  func delete(id: UUID) async throws {
+    guard transactions.removeValue(forKey: id) != nil else {
+      throw BackendError.serverError(404)
+    }
+  }
+
+  func fetchPayeeSuggestions(prefix: String) async throws -> [String] {
+    let lowered = prefix.lowercased()
+    let payees = Set(
+      transactions.values
+        .compactMap(\.payee)
+        .filter { !$0.isEmpty && $0.lowercased().hasPrefix(lowered) }
+    )
+    return payees.sorted()
+  }
+
   // For test setup
   func setTransactions(_ transactions: [Transaction]) {
     self.transactions = Dictionary(uniqueKeysWithValues: transactions.map { ($0.id, $0) })

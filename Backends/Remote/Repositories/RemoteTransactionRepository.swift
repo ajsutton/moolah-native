@@ -42,4 +42,35 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
       throw error
     }
   }
+
+  func create(_ transaction: Transaction) async throws -> Transaction {
+    let dto = TransactionDTO.fromDomain(transaction)
+    let data = try await client.post("transactions/", body: dto)
+    let responseDTO = try JSONDecoder().decode(TransactionDTO.self, from: data)
+    return responseDTO.toDomain()
+  }
+
+  func update(_ transaction: Transaction) async throws -> Transaction {
+    let dto = TransactionDTO.fromDomain(transaction)
+    let data = try await client.put("transactions/\(transaction.id.uuidString)/", body: dto)
+    let responseDTO = try JSONDecoder().decode(TransactionDTO.self, from: data)
+    return responseDTO.toDomain()
+  }
+
+  func delete(id: UUID) async throws {
+    _ = try await client.delete("transactions/\(id.uuidString)/")
+  }
+
+  func fetchPayeeSuggestions(prefix: String) async throws -> [String] {
+    // The server has no dedicated payee suggestion endpoint.
+    // Query transactions filtered by payee substring and extract unique payees.
+    var queryItems = [URLQueryItem(name: "payee", value: prefix)]
+    queryItems.append(URLQueryItem(name: "pageSize", value: "100"))
+    queryItems.append(URLQueryItem(name: "offset", value: "0"))
+
+    let data = try await client.get("transactions/", queryItems: queryItems)
+    let wrapper = try JSONDecoder().decode(TransactionDTO.ListWrapper.self, from: data)
+    let payees = Set(wrapper.transactions.compactMap(\.payee).filter { !$0.isEmpty })
+    return payees.sorted()
+  }
 }

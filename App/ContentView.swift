@@ -35,7 +35,9 @@ struct ContentView: View {
             title: account.name,
             filter: TransactionFilter(accountId: account.id),
             accounts: accountStore.accounts,
-            categories: categoryStore.categories, transactionStore: transactionStore)
+            categories: categoryStore.categories,
+            earmarks: earmarkStore.earmarks,
+            transactionStore: transactionStore)
         }
       case .earmark(let id):
         if let earmark = earmarkStore.earmarks.by(id: id) {
@@ -43,6 +45,7 @@ struct ContentView: View {
             earmark: earmark,
             accounts: accountStore.accounts,
             categories: categoryStore.categories,
+            earmarks: earmarkStore.earmarks,
             transactionStore: transactionStore)
         }
       case .categories:

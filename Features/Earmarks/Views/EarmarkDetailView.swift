@@ -4,6 +4,7 @@ struct EarmarkDetailView: View {
   let earmark: Earmark
   let accounts: Accounts
   let categories: Categories
+  let earmarks: Earmarks
   let transactionStore: TransactionStore
 
   var body: some View {
@@ -15,6 +16,7 @@ struct EarmarkDetailView: View {
         filter: TransactionFilter(earmarkId: earmark.id),
         accounts: accounts,
         categories: categories,
+        earmarks: earmarks,
         transactionStore: transactionStore
       )
     }
@@ -155,6 +157,7 @@ struct EarmarkDetailView: View {
       earmark: earmark,
       accounts: Accounts(from: []),
       categories: Categories(from: []),
+      earmarks: Earmarks(from: []),
       transactionStore: store
     )
   }

@@ -64,6 +64,18 @@ struct Accounts: RandomAccessCollection {
     byId[id]
   }
 
+  /// Returns a new Accounts collection with the balance of the given account adjusted by `delta`.
+  func adjustingBalance(of accountId: UUID, by delta: MonetaryAmount) -> Accounts {
+    guard byId[accountId] != nil else { return self }
+    let adjusted = ordered.map { account in
+      guard account.id == accountId else { return account }
+      var copy = account
+      copy.balance = copy.balance + delta
+      return copy
+    }
+    return Accounts(from: adjusted)
+  }
+
   var endIndex: Int {
     return ordered.count
   }

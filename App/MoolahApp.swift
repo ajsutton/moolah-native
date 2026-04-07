@@ -25,6 +25,12 @@ struct MoolahApp: App {
     self.transactionStore = TransactionStore(repository: remoteBackend.transactions)
     self.categoryStore = CategoryStore(repository: remoteBackend.categories)
     self.earmarkStore = EarmarkStore(repository: remoteBackend.earmarks)
+
+    // Adjust account and earmark balances locally after any transaction mutation
+    self.transactionStore.onMutate = { [accountStore, earmarkStore] old, new in
+      accountStore.applyTransactionDelta(old: old, new: new)
+      earmarkStore.applyTransactionDelta(old: old, new: new)
+    }
   }
 
   var body: some Scene {

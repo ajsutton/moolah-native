@@ -69,6 +69,28 @@ struct Earmarks: RandomAccessCollection {
     byId[id]
   }
 
+  /// Returns a new Earmarks collection with the balance, saved, and spent adjusted for the given earmark.
+  /// Positive deltas increase saved and balance; negative deltas increase spent and decrease balance.
+  func adjustingBalance(of earmarkId: UUID, by delta: MonetaryAmount) -> Earmarks {
+    guard byId[earmarkId] != nil else { return self }
+    let adjusted = ordered.map { earmark in
+      guard earmark.id == earmarkId else { return earmark }
+      var copy = earmark
+      copy.balance = copy.balance + delta
+
+      if delta.cents > 0 {
+        // Positive delta: income/saving
+        copy.saved = copy.saved + delta
+      } else if delta.cents < 0 {
+        // Negative delta: expense
+        let absDelta = MonetaryAmount(cents: abs(delta.cents), currency: delta.currency)
+        copy.spent = copy.spent + absDelta
+      }
+      return copy
+    }
+    return Earmarks(from: adjusted)
+  }
+
   var endIndex: Int {
     return ordered.count
   }

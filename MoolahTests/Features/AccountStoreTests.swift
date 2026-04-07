@@ -85,4 +85,164 @@ struct AccountStoreTests {
     #expect(
       store.availableFunds == MonetaryAmount(cents: 600000, currency: Currency.defaultCurrency))
   }
+
+  // MARK: - applyTransactionDelta
+
+  @Test func testCreateExpenseReducesAccountBalance() async throws {
+    let acctId = UUID()
+    let repository = InMemoryAccountRepository(initialAccounts: [
+      Account(
+        id: acctId, name: "Checking", type: .bank,
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
+    ])
+    let store = AccountStore(repository: repository)
+    await store.load()
+
+    let tx = Transaction(
+      type: .expense, date: Date(), accountId: acctId,
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      payee: "Coffee"
+    )
+    store.applyTransactionDelta(old: nil, new: tx)
+
+    #expect(store.accounts.by(id: acctId)?.balance.cents == 95000)
+  }
+
+  @Test func testCreateIncomeIncreasesAccountBalance() async throws {
+    let acctId = UUID()
+    let repository = InMemoryAccountRepository(initialAccounts: [
+      Account(
+        id: acctId, name: "Checking", type: .bank,
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
+    ])
+    let store = AccountStore(repository: repository)
+    await store.load()
+
+    let tx = Transaction(
+      type: .income, date: Date(), accountId: acctId,
+      amount: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
+      payee: "Salary"
+    )
+    store.applyTransactionDelta(old: nil, new: tx)
+
+    #expect(store.accounts.by(id: acctId)?.balance.cents == 150000)
+  }
+
+  @Test func testDeleteRevertsAccountBalance() async throws {
+    let acctId = UUID()
+    let repository = InMemoryAccountRepository(initialAccounts: [
+      Account(
+        id: acctId, name: "Checking", type: .bank,
+        balance: MonetaryAmount(cents: 95000, currency: Currency.defaultCurrency))
+    ])
+    let store = AccountStore(repository: repository)
+    await store.load()
+
+    let tx = Transaction(
+      type: .expense, date: Date(), accountId: acctId,
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      payee: "Coffee"
+    )
+    store.applyTransactionDelta(old: tx, new: nil)
+
+    // Removing a -5000 expense should add 5000 back
+    #expect(store.accounts.by(id: acctId)?.balance.cents == 100000)
+  }
+
+  @Test func testUpdateAdjustsAccountBalance() async throws {
+    let acctId = UUID()
+    let repository = InMemoryAccountRepository(initialAccounts: [
+      Account(
+        id: acctId, name: "Checking", type: .bank,
+        balance: MonetaryAmount(cents: 95000, currency: Currency.defaultCurrency))
+    ])
+    let store = AccountStore(repository: repository)
+    await store.load()
+
+    let oldTx = Transaction(
+      type: .expense, date: Date(), accountId: acctId,
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      payee: "Coffee"
+    )
+    var newTx = oldTx
+    newTx.amount = MonetaryAmount(cents: -7500, currency: Currency.defaultCurrency)
+
+    store.applyTransactionDelta(old: oldTx, new: newTx)
+
+    // Was 95000 (after -5000 expense). Remove old (-(-5000) = +5000 → 100000), apply new (-7500 → 92500)
+    #expect(store.accounts.by(id: acctId)?.balance.cents == 92500)
+  }
+
+  @Test func testTransferUpdatesBothAccounts() async throws {
+    let checkingId = UUID()
+    let savingsId = UUID()
+    let repository = InMemoryAccountRepository(initialAccounts: [
+      Account(
+        id: checkingId, name: "Checking", type: .bank,
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency)),
+      Account(
+        id: savingsId, name: "Savings", type: .bank,
+        balance: MonetaryAmount(cents: 200000, currency: Currency.defaultCurrency)),
+    ])
+    let store = AccountStore(repository: repository)
+    await store.load()
+
+    // Transfer $100 from checking to savings (amount is -10000 from source perspective)
+    let tx = Transaction(
+      type: .transfer, date: Date(), accountId: checkingId, toAccountId: savingsId,
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency)
+    )
+    store.applyTransactionDelta(old: nil, new: tx)
+
+    #expect(store.accounts.by(id: checkingId)?.balance.cents == 90000)
+    #expect(store.accounts.by(id: savingsId)?.balance.cents == 210000)
+  }
+
+  @Test func testDeleteTransferRevertsBothAccounts() async throws {
+    let checkingId = UUID()
+    let savingsId = UUID()
+    let repository = InMemoryAccountRepository(initialAccounts: [
+      Account(
+        id: checkingId, name: "Checking", type: .bank,
+        balance: MonetaryAmount(cents: 90000, currency: Currency.defaultCurrency)),
+      Account(
+        id: savingsId, name: "Savings", type: .bank,
+        balance: MonetaryAmount(cents: 210000, currency: Currency.defaultCurrency)),
+    ])
+    let store = AccountStore(repository: repository)
+    await store.load()
+
+    let tx = Transaction(
+      type: .transfer, date: Date(), accountId: checkingId, toAccountId: savingsId,
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency)
+    )
+    store.applyTransactionDelta(old: tx, new: nil)
+
+    #expect(store.accounts.by(id: checkingId)?.balance.cents == 100000)
+    #expect(store.accounts.by(id: savingsId)?.balance.cents == 200000)
+  }
+
+  @Test func testTotalsUpdateAfterDelta() async throws {
+    let checkingId = UUID()
+    let repository = InMemoryAccountRepository(initialAccounts: [
+      Account(
+        id: checkingId, name: "Checking", type: .bank,
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
+    ])
+    let store = AccountStore(repository: repository)
+    await store.load()
+
+    #expect(store.currentTotal.cents == 100000)
+    #expect(store.netWorth.cents == 100000)
+
+    let tx = Transaction(
+      type: .expense, date: Date(), accountId: checkingId,
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      payee: "Coffee"
+    )
+    store.applyTransactionDelta(old: nil, new: tx)
+
+    #expect(store.currentTotal.cents == 95000)
+    #expect(store.netWorth.cents == 95000)
+  }
 }

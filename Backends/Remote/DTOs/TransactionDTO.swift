@@ -40,6 +40,24 @@ struct TransactionDTO: Codable {
     )
   }
 
+  static func fromDomain(_ transaction: Transaction) -> TransactionDTO {
+    let dateString = dateFormatter.string(from: transaction.date)
+    return TransactionDTO(
+      id: transaction.id.uuidString,
+      type: transaction.type.rawValue,
+      date: dateString,
+      accountId: transaction.accountId?.uuidString,
+      toAccountId: transaction.toAccountId?.uuidString,
+      amount: transaction.amount.cents,
+      payee: transaction.payee,
+      notes: transaction.notes,
+      categoryId: transaction.categoryId?.uuidString,
+      earmark: transaction.earmarkId?.uuidString,
+      recurPeriod: transaction.recurPeriod,
+      recurEvery: transaction.recurEvery
+    )
+  }
+
   struct ListWrapper: Codable {
     let transactions: [TransactionDTO]
     let hasMore: Bool

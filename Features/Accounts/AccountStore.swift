@@ -59,4 +59,34 @@ final class AccountStore {
   var netWorth: MonetaryAmount {
     currentTotal + investmentTotal
   }
+
+  /// Adjusts account balances locally based on a transaction change.
+  /// - Parameters:
+  ///   - old: The previous transaction (nil for creates).
+  ///   - new: The new transaction (nil for deletes).
+  func applyTransactionDelta(old: Transaction?, new: Transaction?) {
+    var result = accounts
+
+    // Remove the old transaction's effect
+    if let old {
+      if let accountId = old.accountId {
+        result = result.adjustingBalance(of: accountId, by: -old.amount)
+      }
+      if let toAccountId = old.toAccountId {
+        result = result.adjustingBalance(of: toAccountId, by: old.amount)
+      }
+    }
+
+    // Apply the new transaction's effect
+    if let new {
+      if let accountId = new.accountId {
+        result = result.adjustingBalance(of: accountId, by: new.amount)
+      }
+      if let toAccountId = new.toAccountId {
+        result = result.adjustingBalance(of: toAccountId, by: -new.amount)
+      }
+    }
+
+    accounts = result
+  }
 }
