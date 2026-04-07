@@ -3,7 +3,10 @@ import SwiftUI
 enum SidebarSelection: Hashable {
   case account(UUID)
   case earmark(UUID)
+  case allTransactions
+  case upcomingTransactions
   case categories
+  case earmarks
 }
 
 struct SidebarView: View {
@@ -59,8 +62,20 @@ struct SidebarView: View {
       }
 
       Section {
+        NavigationLink(value: SidebarSelection.allTransactions) {
+          Label("All Transactions", systemImage: "list.bullet")
+        }
+
+        NavigationLink(value: SidebarSelection.upcomingTransactions) {
+          Label("Upcoming", systemImage: "calendar")
+        }
+
         NavigationLink(value: SidebarSelection.categories) {
           Label("Categories", systemImage: "tag")
+        }
+
+        NavigationLink(value: SidebarSelection.earmarks) {
+          Label("Manage Earmarks", systemImage: "folder")
         }
       }
     }

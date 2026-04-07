@@ -152,10 +152,12 @@
 		E03B7D098DE1F4D1E111AD05 /* InMemoryTransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A19482E3FC4577044CBCD484 /* InMemoryTransactionRepository.swift */; };
 		E0BB6B5944977FDD58DD8C83 /* AuthContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF82ABEAD4CD6082C14CC50 /* AuthContractTests.swift */; };
 		E41C039E9D946A3DEFF7E030 /* TransactionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6985F839D99BFB3C2B7E5E5 /* TransactionStore.swift */; };
+		E5E4DBF4983ACD4882504EC6 /* EarmarksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EB756E5CDC29B6D6DEAE3D /* EarmarksView.swift */; };
 		E7C3F0B1E1FA34391F334B01 /* TransactionFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B7ACDA8A081731510039853 /* TransactionFormView.swift */; };
 		EAB7D73F9952C5EC7F4CEE2B /* InMemoryAccountRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F91D3EB60A793D5FE36DE1E /* InMemoryAccountRepository.swift */; };
 		EB7CE3B0C3B5FF189E2E1FA1 /* AllTransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BBC588B3A826D2815794E6D /* AllTransactionsView.swift */; };
 		EDC17A78904198B1471A8865 /* ScheduledTransactionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02B9C8DB5FB3E0172E143BD7 /* ScheduledTransactionTests.swift */; };
+		EF50991749771A3E91387F5D /* EarmarksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EB756E5CDC29B6D6DEAE3D /* EarmarksView.swift */; };
 		EFBB9ED1FE1A8FAD2A4C37FB /* RemoteAccountRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2737BCF1D305177458789B3E /* RemoteAccountRepository.swift */; };
 		F10AEB4F5A672A6B27D230A2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7744C6DBEE0256E2BBD1513A /* Assets.xcassets */; };
 		F394864BEA7331E44D8C1FA6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22495C74E2B63C2956AE9437 /* ContentView.swift */; };
@@ -232,6 +234,7 @@
 		6B6CD88ED67E56DC24998EF5 /* RemoteBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBackend.swift; sourceTree = "<group>"; };
 		6C9D26A8790E6F221AD6A048 /* Earmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Earmark.swift; sourceTree = "<group>"; };
 		70CE1D72398150BC0BF951B7 /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
+		72EB756E5CDC29B6D6DEAE3D /* EarmarksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarmarksView.swift; sourceTree = "<group>"; };
 		7744C6DBEE0256E2BBD1513A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		7920C082CF61FC2A86B05B31 /* TransactionRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionRowView.swift; sourceTree = "<group>"; };
 		7A6FA10A728C34F561690045 /* TransactionRepositoryContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionRepositoryContractTests.swift; sourceTree = "<group>"; };
@@ -496,6 +499,7 @@
 			children = (
 				D0B9668ADD913EB51F387E1C /* EarmarkDetailView.swift */,
 				33BDA26130E08FF09E6653AD /* EarmarkRowView.swift */,
+				72EB756E5CDC29B6D6DEAE3D /* EarmarksView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -832,6 +836,7 @@
 				96316601E7C396465BC661C7 /* EarmarkRepository.swift in Sources */,
 				43AE8DF706354B4B0819DDE7 /* EarmarkRowView.swift in Sources */,
 				323BED7138D7611E267C763F /* EarmarkStore.swift in Sources */,
+				EF50991749771A3E91387F5D /* EarmarksView.swift in Sources */,
 				C9B35B912F9EDECD2AE3AFF7 /* FlexibleUUID.swift in Sources */,
 				17CDD5E86E3A4A719D88446B /* InMemoryAccountRepository.swift in Sources */,
 				65E3EBD7E06C8434C4398601 /* InMemoryAuthProvider.swift in Sources */,
@@ -897,6 +902,7 @@
 				3E4217A978AA7E905841D1D5 /* EarmarkRepository.swift in Sources */,
 				A2926D652AF47FDCE2C6D605 /* EarmarkRowView.swift in Sources */,
 				80B396733B2C78CDA4D745E1 /* EarmarkStore.swift in Sources */,
+				E5E4DBF4983ACD4882504EC6 /* EarmarksView.swift in Sources */,
 				04F879ADFD37658000FE852E /* FlexibleUUID.swift in Sources */,
 				EAB7D73F9952C5EC7F4CEE2B /* InMemoryAccountRepository.swift in Sources */,
 				67A15B06F1FDA30AE457E2B9 /* InMemoryAuthProvider.swift in Sources */,

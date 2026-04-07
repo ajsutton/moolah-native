@@ -43,10 +43,7 @@ struct TransactionDetailView: View {
 
     _type = State(initialValue: transaction.type)
     _payee = State(initialValue: transaction.payee ?? "")
-    let amountInCents = abs(transaction.amount.cents)
-    let dollars = amountInCents / 100
-    let cents = amountInCents % 100
-    _amountText = State(initialValue: String(format: "%d.%02d", dollars, cents))
+    _amountText = State(initialValue: transaction.amount.formatNoSymbol)
     _date = State(initialValue: transaction.date)
     _accountId = State(initialValue: transaction.accountId)
     _toAccountId = State(initialValue: transaction.toAccountId)

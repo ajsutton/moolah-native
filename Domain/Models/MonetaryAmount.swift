@@ -20,6 +20,11 @@ struct MonetaryAmount: Codable, Sendable, Hashable, Comparable {
     Decimal(cents) / pow(10, self.currency.decimals)
   }
 
+  var formatNoSymbol: String {
+    return self.decimalValue.formatted(.number.precision(.fractionLength(currency.decimals)))
+    //    return String(format: "%\(currency.decimals)d", )
+  }
+
   static func + (lhs: MonetaryAmount, rhs: MonetaryAmount) -> MonetaryAmount {
     MonetaryAmount(cents: lhs.cents + rhs.cents, currency: lhs.currency)
   }

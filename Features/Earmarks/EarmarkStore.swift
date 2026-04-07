@@ -90,4 +90,34 @@ final class EarmarkStore {
 
     earmarks = Earmarks(from: updated)
   }
+
+  func create(_ earmark: Earmark) async -> Earmark? {
+    logger.debug("Creating earmark: \(earmark.name)")
+    error = nil
+
+    do {
+      let created = try await repository.create(earmark)
+      await load()
+      return created
+    } catch {
+      logger.error("Failed to create earmark: \(error.localizedDescription)")
+      self.error = error
+      return nil
+    }
+  }
+
+  func update(_ earmark: Earmark) async -> Earmark? {
+    logger.debug("Updating earmark: \(earmark.name)")
+    error = nil
+
+    do {
+      let updated = try await repository.update(earmark)
+      await load()
+      return updated
+    } catch {
+      logger.error("Failed to update earmark: \(error.localizedDescription)")
+      self.error = error
+      return nil
+    }
+  }
 }

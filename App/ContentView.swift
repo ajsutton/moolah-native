@@ -48,8 +48,26 @@ struct ContentView: View {
             earmarks: earmarkStore.earmarks,
             transactionStore: transactionStore)
         }
+      case .allTransactions:
+        AllTransactionsView(
+          accounts: accountStore.accounts,
+          categories: categoryStore.categories,
+          earmarks: earmarkStore.earmarks,
+          transactionStore: transactionStore)
+      case .upcomingTransactions:
+        UpcomingView(
+          accounts: accountStore.accounts,
+          categories: categoryStore.categories,
+          earmarks: earmarkStore.earmarks,
+          transactionStore: transactionStore)
       case .categories:
-        CategoryTreeView(categoryStore: categoryStore)
+        CategoriesView(categoryStore: categoryStore)
+      case .earmarks:
+        EarmarksView(
+          earmarkStore: earmarkStore,
+          accounts: accountStore.accounts,
+          categories: categoryStore.categories,
+          transactionStore: transactionStore)
       case nil:
         Text("Select an account")
       }
