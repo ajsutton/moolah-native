@@ -3,13 +3,15 @@ import SwiftUI
 struct TransactionListView: View {
   let account: Account
   let accounts: Accounts
+  let categories: Categories
   let transactionStore: TransactionStore
 
   var body: some View {
     List {
       ForEach(transactionStore.transactions) { entry in
         TransactionRowView(
-          transaction: entry.transaction, accounts: accounts, balance: entry.balance
+          transaction: entry.transaction, accounts: accounts,
+          categories: categories, balance: entry.balance
         )
         .onAppear {
           if entry.id == transactionStore.transactions.last?.id {
@@ -76,6 +78,8 @@ struct TransactionListView: View {
   let store = TransactionStore(repository: repository)
 
   NavigationStack {
-    TransactionListView(account: account, accounts: accounts, transactionStore: store)
+    TransactionListView(
+      account: account, accounts: accounts, categories: Categories(from: []),
+      transactionStore: store)
   }
 }

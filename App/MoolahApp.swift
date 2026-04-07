@@ -9,6 +9,7 @@ struct MoolahApp: App {
   private let authStore: AuthStore
   private let accountStore: AccountStore
   private let transactionStore: TransactionStore
+  private let categoryStore: CategoryStore
 
   init() {
     do {
@@ -21,6 +22,7 @@ struct MoolahApp: App {
     self.authStore = AuthStore(backend: remoteBackend)
     self.accountStore = AccountStore(repository: remoteBackend.accounts)
     self.transactionStore = TransactionStore(repository: remoteBackend.transactions)
+    self.categoryStore = CategoryStore(repository: remoteBackend.categories)
   }
 
   var body: some Scene {
@@ -29,6 +31,7 @@ struct MoolahApp: App {
         .environment(authStore)
         .environment(accountStore)
         .environment(transactionStore)
+        .environment(categoryStore)
     }
     .modelContainer(container)
   }

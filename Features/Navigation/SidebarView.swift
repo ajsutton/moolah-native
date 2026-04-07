@@ -1,14 +1,19 @@
 import SwiftUI
 
+enum SidebarSelection: Hashable {
+  case account(UUID)
+  case categories
+}
+
 struct SidebarView: View {
   let accountStore: AccountStore
-  @Binding var selection: UUID?
+  @Binding var selection: SidebarSelection?
 
   var body: some View {
     List(selection: $selection) {
       Section("Current Accounts") {
         ForEach(accountStore.currentAccounts) { account in
-          NavigationLink(value: account.id) {
+          NavigationLink(value: SidebarSelection.account(account.id)) {
             AccountRowView(account: account)
           }
         }
@@ -18,7 +23,7 @@ struct SidebarView: View {
 
       Section("Investments") {
         ForEach(accountStore.investmentAccounts) { account in
-          NavigationLink(value: account.id) {
+          NavigationLink(value: SidebarSelection.account(account.id)) {
             AccountRowView(account: account)
           }
         }
@@ -37,6 +42,12 @@ struct SidebarView: View {
         }
         .font(.headline)
         .bold()
+      }
+
+      Section {
+        NavigationLink(value: SidebarSelection.categories) {
+          Label("Categories", systemImage: "tag")
+        }
       }
     }
     .listStyle(.sidebar)
@@ -71,11 +82,13 @@ struct SidebarView: View {
         name: "Investment", type: .investment,
         balance: MonetaryAmount(cents: 2_000_000, currency: Currency.defaultCurrency)),
     ]))
-  let store = AccountStore(repository: backend.accounts)
+  let accountStore = AccountStore(repository: backend.accounts)
 
   NavigationSplitView {
-    SidebarView(accountStore: store, selection: .constant(nil))
-      .task { await store.load() }
+    SidebarView(accountStore: accountStore, selection: .constant(nil))
+      .task {
+        await accountStore.load()
+      }
   } detail: {
     Text("Detail")
   }

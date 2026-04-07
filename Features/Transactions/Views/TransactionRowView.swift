@@ -3,6 +3,7 @@ import SwiftUI
 struct TransactionRowView: View {
   let transaction: Transaction
   let accounts: Accounts
+  let categories: Categories
   let balance: MonetaryAmount
 
   var body: some View {
@@ -15,9 +16,16 @@ struct TransactionRowView: View {
         Text(displayPayee)
           .lineLimit(1)
 
-        Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
-          .font(.caption)
-          .foregroundStyle(.secondary)
+        HStack(spacing: 4) {
+          Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
+
+          if let categoryName {
+            Text("·")
+            Text(categoryName)
+          }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
       }
 
       Spacer()
@@ -47,6 +55,11 @@ struct TransactionRowView: View {
     }
   }
 
+  private var categoryName: String? {
+    guard let categoryId = transaction.categoryId else { return nil }
+    return categories.by(id: categoryId)?.name
+  }
+
   private var displayPayee: String {
     guard let toAccountId = transaction.toAccountId else {
       return transaction.payee ?? ""
@@ -64,10 +77,15 @@ struct TransactionRowView: View {
 
 #Preview {
   let savingsId = UUID()
+  let groceriesId = UUID()
   let accounts = Accounts(from: [
     Account(
       id: savingsId, name: "Savings", type: .bank,
       balance: MonetaryAmount(cents: 500000, currency: Currency.defaultCurrency))
+  ])
+  let categories = Categories(from: [
+    Category(id: groceriesId, name: "Groceries"),
+    Category(name: "Transport"),
   ])
 
   List {
@@ -77,8 +95,9 @@ struct TransactionRowView: View {
         date: Date(),
         accountId: UUID(),
         amount: MonetaryAmount(cents: -5023, currency: Currency.defaultCurrency),
-        payee: "Woolworths"
-      ), accounts: accounts,
+        payee: "Woolworths",
+        categoryId: groceriesId
+      ), accounts: accounts, categories: categories,
       balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
     TransactionRowView(
       transaction: Transaction(
@@ -87,7 +106,7 @@ struct TransactionRowView: View {
         accountId: UUID(),
         amount: MonetaryAmount(cents: 350000, currency: Currency.defaultCurrency),
         payee: "Employer Pty Ltd"
-      ), accounts: accounts,
+      ), accounts: accounts, categories: categories,
       balance: MonetaryAmount(cents: 105023, currency: Currency.defaultCurrency))
     TransactionRowView(
       transaction: Transaction(
@@ -97,7 +116,7 @@ struct TransactionRowView: View {
         toAccountId: savingsId,
         amount: MonetaryAmount(cents: -100000, currency: Currency.defaultCurrency),
         payee: ""
-      ), accounts: accounts,
+      ), accounts: accounts, categories: categories,
       balance: MonetaryAmount(cents: -244977, currency: Currency.defaultCurrency))
     TransactionRowView(
       transaction: Transaction(
@@ -107,7 +126,7 @@ struct TransactionRowView: View {
         toAccountId: savingsId,
         amount: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency),
         payee: "Rent Split"
-      ), accounts: accounts,
+      ), accounts: accounts, categories: categories,
       balance: MonetaryAmount(cents: -144977, currency: Currency.defaultCurrency))
   }
 }
