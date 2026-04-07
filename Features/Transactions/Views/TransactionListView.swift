@@ -97,7 +97,8 @@ struct TransactionListView: View {
       ForEach(transactionStore.transactions) { entry in
         TransactionRowView(
           transaction: entry.transaction, accounts: accounts,
-          categories: categories, balance: entry.balance
+          categories: categories, earmarks: earmarks, balance: entry.balance,
+          hideEarmark: filter.earmarkId != nil
         )
         .tag(entry.transaction)
         .contentShape(Rectangle())

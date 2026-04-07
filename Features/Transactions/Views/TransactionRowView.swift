@@ -4,7 +4,9 @@ struct TransactionRowView: View {
   let transaction: Transaction
   let accounts: Accounts
   let categories: Categories
+  let earmarks: Earmarks
   let balance: MonetaryAmount
+  var hideEarmark: Bool = false
 
   var body: some View {
     HStack {
@@ -22,6 +24,11 @@ struct TransactionRowView: View {
           if let categoryName {
             Text("·")
             Text(categoryName)
+          }
+
+          if !hideEarmark, let earmarkName {
+            Text("·")
+            Text(earmarkName)
           }
         }
         .font(.caption)
@@ -60,6 +67,11 @@ struct TransactionRowView: View {
     return categories.by(id: categoryId)?.name
   }
 
+  private var earmarkName: String? {
+    guard let earmarkId = transaction.earmarkId else { return nil }
+    return earmarks.by(id: earmarkId)?.name
+  }
+
   private var displayPayee: String {
     guard let toAccountId = transaction.toAccountId else {
       return transaction.payee ?? ""
@@ -78,6 +90,7 @@ struct TransactionRowView: View {
 #Preview {
   let savingsId = UUID()
   let groceriesId = UUID()
+  let holidayFundId = UUID()
   let accounts = Accounts(from: [
     Account(
       id: savingsId, name: "Savings", type: .bank,
@@ -86,6 +99,13 @@ struct TransactionRowView: View {
   let categories = Categories(from: [
     Category(id: groceriesId, name: "Groceries"),
     Category(name: "Transport"),
+  ])
+  let earmarks = Earmarks(from: [
+    Earmark(
+      id: holidayFundId,
+      name: "Holiday Fund",
+      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency)
+    )
   ])
 
   List {
@@ -97,7 +117,7 @@ struct TransactionRowView: View {
         amount: MonetaryAmount(cents: -5023, currency: Currency.defaultCurrency),
         payee: "Woolworths",
         categoryId: groceriesId
-      ), accounts: accounts, categories: categories,
+      ), accounts: accounts, categories: categories, earmarks: earmarks,
       balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
     TransactionRowView(
       transaction: Transaction(
@@ -105,8 +125,9 @@ struct TransactionRowView: View {
         date: Date(),
         accountId: UUID(),
         amount: MonetaryAmount(cents: 350000, currency: Currency.defaultCurrency),
-        payee: "Employer Pty Ltd"
-      ), accounts: accounts, categories: categories,
+        payee: "Employer Pty Ltd",
+        earmarkId: holidayFundId
+      ), accounts: accounts, categories: categories, earmarks: earmarks,
       balance: MonetaryAmount(cents: 105023, currency: Currency.defaultCurrency))
     TransactionRowView(
       transaction: Transaction(
@@ -116,7 +137,7 @@ struct TransactionRowView: View {
         toAccountId: savingsId,
         amount: MonetaryAmount(cents: -100000, currency: Currency.defaultCurrency),
         payee: ""
-      ), accounts: accounts, categories: categories,
+      ), accounts: accounts, categories: categories, earmarks: earmarks,
       balance: MonetaryAmount(cents: -244977, currency: Currency.defaultCurrency))
     TransactionRowView(
       transaction: Transaction(
@@ -126,7 +147,7 @@ struct TransactionRowView: View {
         toAccountId: savingsId,
         amount: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency),
         payee: "Rent Split"
-      ), accounts: accounts, categories: categories,
+      ), accounts: accounts, categories: categories, earmarks: earmarks,
       balance: MonetaryAmount(cents: -144977, currency: Currency.defaultCurrency))
   }
 }

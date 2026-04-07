@@ -43,6 +43,7 @@ struct UpcomingView: View {
               transaction: entry.transaction,
               accounts: accounts,
               categories: categories,
+              earmarks: earmarks,
               isOverdue: true,
               onPay: {
                 Task {
@@ -62,6 +63,7 @@ struct UpcomingView: View {
               transaction: entry.transaction,
               accounts: accounts,
               categories: categories,
+              earmarks: earmarks,
               isOverdue: false,
               onPay: {
                 Task {
@@ -129,6 +131,7 @@ private struct UpcomingTransactionRow: View {
   let transaction: Transaction
   let accounts: Accounts
   let categories: Categories
+  let earmarks: Earmarks
   let isOverdue: Bool
   let onPay: () -> Void
 
@@ -157,7 +160,17 @@ private struct UpcomingTransactionRow: View {
           {
             Text("•")
               .foregroundStyle(.secondary)
-            Label(category.name, systemImage: "tag")
+            Text(category.name)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+
+          if let earmarkId = transaction.earmarkId,
+            let earmark = earmarks.by(id: earmarkId)
+          {
+            Text("•")
+              .foregroundStyle(.secondary)
+            Text(earmark.name)
               .font(.caption)
               .foregroundStyle(.secondary)
           }
