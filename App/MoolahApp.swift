@@ -1,6 +1,21 @@
 import SwiftData
 import SwiftUI
 
+/// Commands for creating new transactions
+struct NewTransactionCommands: Commands {
+  @FocusedValue(\.newTransactionAction) private var newTransactionAction
+
+  var body: some Commands {
+    CommandGroup(replacing: .newItem) {
+      Button("New Transaction") {
+        newTransactionAction?()
+      }
+      .keyboardShortcut("n", modifiers: .command)
+      .disabled(newTransactionAction == nil)
+    }
+  }
+}
+
 @main
 @MainActor
 struct MoolahApp: App {
@@ -43,5 +58,8 @@ struct MoolahApp: App {
         .environment(earmarkStore)
     }
     .modelContainer(container)
+    .commands {
+      NewTransactionCommands()
+    }
   }
 }

@@ -35,8 +35,10 @@ struct TransactionListView: View {
           }
         )
         .frame(width: 350)
+        .id(selected.id)  // Force recreation when transaction changes
       }
     }
+    .focusedSceneValue(\.newTransactionAction, createNewTransaction)
     .alert("Error", isPresented: $showError) {
       Button("OK", role: .cancel) {}
     } message: {

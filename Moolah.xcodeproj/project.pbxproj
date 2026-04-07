@@ -31,6 +31,8 @@
 		1ABA5949F5758274ADC1C8ED /* CookieKeychainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68104891F6BA3CB148906B84 /* CookieKeychainTests.swift */; };
 		1BB1FA3CDD4C40E5DECF02C2 /* InMemoryEarmarkRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F20F717D81B87717A1628FE /* InMemoryEarmarkRepository.swift */; };
 		20C80194918A336EFC5B3EB0 /* Currency.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8911ED8F00C2346E71AB4FF /* Currency.swift */; };
+		217046222F85CBA70096BC7C /* FocusedValues.swift in Sources */ = {isa = PBXBuildFile; fileRef = 217046212F85CBA70096BC7C /* FocusedValues.swift */; };
+		217046232F85CBA70096BC7C /* FocusedValues.swift in Sources */ = {isa = PBXBuildFile; fileRef = 217046212F85CBA70096BC7C /* FocusedValues.swift */; };
 		23D989C6AAA36D0565C65D0A /* CategoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BF9E7F5B9AD23AF5AB94EC /* CategoryStore.swift */; };
 		244DCC5DC322AEDE39CE1558 /* RemoteAccountRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2737BCF1D305177458789B3E /* RemoteAccountRepository.swift */; };
 		2A38BC093FB59F6DE6641D5C /* RemoteTransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF6714F83887D49711778B57 /* RemoteTransactionRepository.swift */; };
@@ -199,6 +201,7 @@
 		17A51A52AB99705A4984A754 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		1D30E668C8761BA80047CE39 /* AccountRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRepository.swift; sourceTree = "<group>"; };
 		1DC71133FC75BEC73BF54723 /* RemoteCategoryRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCategoryRepositoryTests.swift; sourceTree = "<group>"; };
+		217046212F85CBA70096BC7C /* FocusedValues.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusedValues.swift; sourceTree = "<group>"; };
 		22398332D8AEF0450E12B382 /* MoolahTests_iOS.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MoolahTests_iOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		22495C74E2B63C2956AE9437 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		2307A129A45B6763ADE697AB /* CookieKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieKeychain.swift; sourceTree = "<group>"; };
@@ -221,7 +224,7 @@
 		49C90215EDD39E8617F01739 /* TransactionFilterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionFilterView.swift; sourceTree = "<group>"; };
 		4B7099043D0CE923649E44C7 /* EarmarkStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarmarkStoreTests.swift; sourceTree = "<group>"; };
 		4C85F9D469AB0B735DF3A5BD /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
-		4CA48181968E160CE8E9302B /* Moolah_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Moolah_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4CA48181968E160CE8E9302B /* Moolah_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = Moolah_macOS.app; path = Moolah.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		52D898DCF78E5D11679B3412 /* accounts.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = accounts.json; sourceTree = "<group>"; };
 		55CFB29D6757420CB3C9C8C8 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
 		5A99C47DE3EDE48570602580 /* EarmarkRepositoryContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarmarkRepositoryContractTests.swift; sourceTree = "<group>"; };
@@ -247,7 +250,7 @@
 		93A43D8E355050F1AD6E08E6 /* EarmarkDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarmarkDTO.swift; sourceTree = "<group>"; };
 		9B1537B5ED73BDFE589AFBDF /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
 		A19482E3FC4577044CBCD484 /* InMemoryTransactionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryTransactionRepository.swift; sourceTree = "<group>"; };
-		B49F4CED68007895BCFE0658 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		B49F4CED68007895BCFE0658 /* .gitkeep */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitkeep; sourceTree = "<group>"; };
 		B66104D9C8D82B1A0427CE79 /* AuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthProvider.swift; sourceTree = "<group>"; };
 		B6985F839D99BFB3C2B7E5E5 /* TransactionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionStore.swift; sourceTree = "<group>"; };
 		B8BF9E7F5B9AD23AF5AB94EC /* CategoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryStore.swift; sourceTree = "<group>"; };
@@ -334,6 +337,7 @@
 			children = (
 				B49F4CED68007895BCFE0658 /* .gitkeep */,
 				00AF0C1750B6219581F77E10 /* MonetaryAmountView.swift */,
+				217046212F85CBA70096BC7C /* FocusedValues.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -811,6 +815,7 @@
 				58122BFD91F09DDD9D0523D0 /* APIClient.swift in Sources */,
 				7DDD1DA44DF2BB7423319415 /* Account.swift in Sources */,
 				4613767B8A9111B9E548B9A2 /* AccountDTO.swift in Sources */,
+				217046232F85CBA70096BC7C /* FocusedValues.swift in Sources */,
 				800EAE6615AE4F44C6A3E2C3 /* AccountRepository.swift in Sources */,
 				B0913F99CC9CF30546B6A3D6 /* AccountRowView.swift in Sources */,
 				F886E9EAA5377C4680F6362F /* AccountStore.swift in Sources */,
@@ -877,6 +882,7 @@
 				48F0CBC848C55813FEBB8FE2 /* APIClient.swift in Sources */,
 				69DAA0FF5FF7E3C94A1320D8 /* Account.swift in Sources */,
 				02766F546CE30372596D7E15 /* AccountDTO.swift in Sources */,
+				217046222F85CBA70096BC7C /* FocusedValues.swift in Sources */,
 				00BD18471262934CAF790ADE /* AccountRepository.swift in Sources */,
 				90993D3B1C8552F0962E31AC /* AccountRowView.swift in Sources */,
 				700EA1100CE2CDB4EFD4FB4B /* AccountStore.swift in Sources */,
