@@ -15,6 +15,7 @@
 		06D29AF99E746E9BCDCA4223 /* accounts.json in Resources */ = {isa = PBXBuildFile; fileRef = 52D898DCF78E5D11679B3412 /* accounts.json */; };
 		09B343854A493F577C868076 /* TransactionDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61827C4BBD42236FDB411A5E /* TransactionDTO.swift */; };
 		0E0392A21BC5262F4AF03FE5 /* BackendProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */; };
+		0FCB31EC6AFEDDBC77557602 /* MonetaryAmountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00AF0C1750B6219581F77E10 /* MonetaryAmountView.swift */; };
 		118ACBE554F485DF857C681E /* TransactionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2136B9FFE21FA794B7CF641 /* TransactionStoreTests.swift */; };
 		139C166EF4181897514CEC45 /* CookieKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2307A129A45B6763ADE697AB /* CookieKeychain.swift */; };
 		17CDD5E86E3A4A719D88446B /* InMemoryAccountRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F91D3EB60A793D5FE36DE1E /* InMemoryAccountRepository.swift */; };
@@ -24,9 +25,11 @@
 		2A38BC093FB59F6DE6641D5C /* RemoteTransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF6714F83887D49711778B57 /* RemoteTransactionRepository.swift */; };
 		32044C7A90DF8223E8BB441C /* TransactionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6372CC4DA6A7D2423E8A8C5E /* TransactionListView.swift */; };
 		3C4FB711102939161CBC8075 /* TransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBD9CC5FEB48F60711FA4B1D /* TransactionRepository.swift */; };
+		3E4ED1B16FC4E78C7B71E50E /* MonetaryAmountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4F17D02B2C9EC2CDA89AF3 /* MonetaryAmountTests.swift */; };
 		3EC7A0812F7E31B37974A8A2 /* AccountStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EBBF6FC221122AD74625F7E /* AccountStoreTests.swift */; };
 		4140EDAF0C1A9E0A3723E357 /* UserMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE5A7458FFA37A4C6DC6BF1 /* UserMenuView.swift */; };
 		41DF550E13133F22A453AAE3 /* BackendProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */; };
+		44CF65A943FBE51D7180DAE1 /* MonetaryAmount.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED93E0B23118A6BF13150C0 /* MonetaryAmount.swift */; };
 		4613767B8A9111B9E548B9A2 /* AccountDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00D0CA559BEF36A9501A07D /* AccountDTO.swift */; };
 		48F0CBC848C55813FEBB8FE2 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0431C044B183CBD75A93A60 /* APIClient.swift */; };
 		4D1AA5636717544A23434905 /* RemoteAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E5AD68A218108F0A5F67D0 /* RemoteAuthProvider.swift */; };
@@ -68,6 +71,7 @@
 		AFB55A3B857037BB6002F0D4 /* TransactionRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7920C082CF61FC2A86B05B31 /* TransactionRowView.swift */; };
 		B0913F99CC9CF30546B6A3D6 /* AccountRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00D2192718D35CE9A6CBA1C /* AccountRowView.swift */; };
 		B460D4029D5F6F80F23FCF0B /* AuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B66104D9C8D82B1A0427CE79 /* AuthProvider.swift */; };
+		B648B1EBA170CDE290D72E7F /* MonetaryAmountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00AF0C1750B6219581F77E10 /* MonetaryAmountView.swift */; };
 		B7381FF84C13F63F6B9AD69C /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1537B5ED73BDFE589AFBDF /* AuthStore.swift */; };
 		B8FFDDF839C1C39B1435553A /* AuthContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF82ABEAD4CD6082C14CC50 /* AuthContractTests.swift */; };
 		C1715E51D7E72381A479F6EA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7744C6DBEE0256E2BBD1513A /* Assets.xcassets */; };
@@ -94,8 +98,10 @@
 		EFBB9ED1FE1A8FAD2A4C37FB /* RemoteAccountRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2737BCF1D305177458789B3E /* RemoteAccountRepository.swift */; };
 		F10AEB4F5A672A6B27D230A2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7744C6DBEE0256E2BBD1513A /* Assets.xcassets */; };
 		F394864BEA7331E44D8C1FA6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22495C74E2B63C2956AE9437 /* ContentView.swift */; };
+		F546CD86928CBF06040127F7 /* MonetaryAmountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4F17D02B2C9EC2CDA89AF3 /* MonetaryAmountTests.swift */; };
 		F6121DE1DBDE9574C143215D /* RemoteTransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF6714F83887D49711778B57 /* RemoteTransactionRepository.swift */; };
 		F67CF26E9C6131F7537FB408 /* TransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBD9CC5FEB48F60711FA4B1D /* TransactionRepository.swift */; };
+		F7F93308F5EF05CEB7B66D3A /* MonetaryAmount.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED93E0B23118A6BF13150C0 /* MonetaryAmount.swift */; };
 		F886E9EAA5377C4680F6362F /* AccountStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2536FF724721319BC3117F /* AccountStore.swift */; };
 		FAFABA95DB374DB9AEA12005 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7D6408D5DBC5B689B523C95 /* Constants.swift */; };
 		FC90521205A28AD546896B26 /* InMemoryBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C53697402D7B4394678D84 /* InMemoryBackend.swift */; };
@@ -119,6 +125,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		00AF0C1750B6219581F77E10 /* MonetaryAmountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonetaryAmountView.swift; sourceTree = "<group>"; };
 		0AE5A7458FFA37A4C6DC6BF1 /* UserMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserMenuView.swift; sourceTree = "<group>"; };
 		12C53697402D7B4394678D84 /* InMemoryBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryBackend.swift; sourceTree = "<group>"; };
 		17A51A52AB99705A4984A754 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -141,6 +148,7 @@
 		4CA48181968E160CE8E9302B /* Moolah_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Moolah_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		52D898DCF78E5D11679B3412 /* accounts.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = accounts.json; sourceTree = "<group>"; };
 		55CFB29D6757420CB3C9C8C8 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
+		5C4F17D02B2C9EC2CDA89AF3 /* MonetaryAmountTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonetaryAmountTests.swift; sourceTree = "<group>"; };
 		61827C4BBD42236FDB411A5E /* TransactionDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionDTO.swift; sourceTree = "<group>"; };
 		6372CC4DA6A7D2423E8A8C5E /* TransactionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionListView.swift; sourceTree = "<group>"; };
 		68104891F6BA3CB148906B84 /* CookieKeychainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieKeychainTests.swift; sourceTree = "<group>"; };
@@ -158,6 +166,7 @@
 		B6985F839D99BFB3C2B7E5E5 /* TransactionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionStore.swift; sourceTree = "<group>"; };
 		BE221BC137F6FA398968FDFF /* Moolah_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Moolah_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C00D2192718D35CE9A6CBA1C /* AccountRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRowView.swift; sourceTree = "<group>"; };
+		CED93E0B23118A6BF13150C0 /* MonetaryAmount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonetaryAmount.swift; sourceTree = "<group>"; };
 		D2136B9FFE21FA794B7CF641 /* TransactionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionStoreTests.swift; sourceTree = "<group>"; };
 		DB59F0807A41AE9577AFB9E1 /* BackendError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendError.swift; sourceTree = "<group>"; };
 		DDB876186C21952AF9CE00EC /* InMemoryAuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryAuthProvider.swift; sourceTree = "<group>"; };
@@ -208,6 +217,7 @@
 			isa = PBXGroup;
 			children = (
 				B49F4CED68007895BCFE0658 /* .gitkeep */,
+				00AF0C1750B6219581F77E10 /* MonetaryAmountView.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -313,6 +323,7 @@
 				4C85F9D469AB0B735DF3A5BD /* Account.swift */,
 				DB59F0807A41AE9577AFB9E1 /* BackendError.swift */,
 				E7D6408D5DBC5B689B523C95 /* Constants.swift */,
+				CED93E0B23118A6BF13150C0 /* MonetaryAmount.swift */,
 				70CE1D72398150BC0BF951B7 /* Transaction.swift */,
 				394716AE7AB11EB9DB2FC537 /* UserProfile.swift */,
 			);
@@ -366,6 +377,7 @@
 			children = (
 				3FF82ABEAD4CD6082C14CC50 /* AuthContractTests.swift */,
 				3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */,
+				5C4F17D02B2C9EC2CDA89AF3 /* MonetaryAmountTests.swift */,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -613,6 +625,7 @@
 				8DAB18C30AA26CD11A371099 /* AuthStoreTests.swift in Sources */,
 				DF200724C634EFFA2E58CA49 /* CookieKeychainTests.swift in Sources */,
 				67C6A90C925461E98AFFDF15 /* ModelContainerTests.swift in Sources */,
+				3E4ED1B16FC4E78C7B71E50E /* MonetaryAmountTests.swift in Sources */,
 				01F2DF55944558BC342191AD /* RemoteAccountRepositoryTests.swift in Sources */,
 				D693F63C07C8F3E7E7730236 /* RemoteTransactionRepositoryTests.swift in Sources */,
 				CE32F2D7F43E9A0E49475F78 /* TestBundleMarker.swift in Sources */,
@@ -643,6 +656,8 @@
 				65E3EBD7E06C8434C4398601 /* InMemoryAuthProvider.swift in Sources */,
 				CB29B7107D26E771BEC886C0 /* InMemoryBackend.swift in Sources */,
 				93FCE73793E9D76B76E87940 /* InMemoryTransactionRepository.swift in Sources */,
+				F7F93308F5EF05CEB7B66D3A /* MonetaryAmount.swift in Sources */,
+				B648B1EBA170CDE290D72E7F /* MonetaryAmountView.swift in Sources */,
 				9CDEBDC3CFBDAF9165F882A7 /* MoolahApp.swift in Sources */,
 				EFBB9ED1FE1A8FAD2A4C37FB /* RemoteAccountRepository.swift in Sources */,
 				60C4D29AF9D3027B180A8797 /* RemoteAuthProvider.swift in Sources */,
@@ -684,6 +699,8 @@
 				67A15B06F1FDA30AE457E2B9 /* InMemoryAuthProvider.swift in Sources */,
 				FC90521205A28AD546896B26 /* InMemoryBackend.swift in Sources */,
 				E03B7D098DE1F4D1E111AD05 /* InMemoryTransactionRepository.swift in Sources */,
+				44CF65A943FBE51D7180DAE1 /* MonetaryAmount.swift in Sources */,
+				0FCB31EC6AFEDDBC77557602 /* MonetaryAmountView.swift in Sources */,
 				C733D2B154E165B22A927403 /* MoolahApp.swift in Sources */,
 				244DCC5DC322AEDE39CE1558 /* RemoteAccountRepository.swift in Sources */,
 				4D1AA5636717544A23434905 /* RemoteAuthProvider.swift in Sources */,
@@ -711,6 +728,7 @@
 				18EBFFD7591E79F6C5AC49D4 /* AuthStoreTests.swift in Sources */,
 				1ABA5949F5758274ADC1C8ED /* CookieKeychainTests.swift in Sources */,
 				54976604A4A32D269D4585EA /* ModelContainerTests.swift in Sources */,
+				F546CD86928CBF06040127F7 /* MonetaryAmountTests.swift in Sources */,
 				C70F40059B2F4EEB4B7CB6CA /* RemoteAccountRepositoryTests.swift in Sources */,
 				4DC59F69205FFC72F4FFE467 /* RemoteTransactionRepositoryTests.swift in Sources */,
 				99E8BCF3EC75ADCE30C7A0AD /* TestBundleMarker.swift in Sources */,

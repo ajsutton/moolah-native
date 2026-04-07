@@ -12,7 +12,7 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
   var date: Date
   var accountId: UUID?
   var toAccountId: UUID?
-  var amount: Int  // Amount in cents
+  var amount: MonetaryAmount
   var payee: String?
   var notes: String?
   var categoryId: UUID?
@@ -30,7 +30,7 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
     date: Date,
     accountId: UUID? = nil,
     toAccountId: UUID? = nil,
-    amount: Int,
+    amount: MonetaryAmount,
     payee: String? = nil,
     notes: String? = nil,
     categoryId: UUID? = nil,
@@ -67,14 +67,14 @@ struct TransactionFilter: Sendable {
 /// balance prior to the earliest transaction in this page.
 struct TransactionPage: Sendable {
   let transactions: [Transaction]
-  let priorBalance: Int
+  let priorBalance: MonetaryAmount
 
   /// Computes the running balance after each transaction.
   /// Transactions must be ordered newest-first (as returned by the repository).
   /// `priorBalance` is the account balance before the oldest transaction in the list.
   static func withRunningBalances(
     transactions: [Transaction],
-    priorBalance: Int
+    priorBalance: MonetaryAmount
   ) -> [TransactionWithBalance] {
     // Walk oldest-to-newest accumulating the balance
     var balance = priorBalance
@@ -95,7 +95,7 @@ struct TransactionPage: Sendable {
 /// A transaction paired with the account balance after it was applied.
 struct TransactionWithBalance: Sendable, Identifiable {
   let transaction: Transaction
-  let balance: Int
+  let balance: MonetaryAmount
 
   var id: UUID { transaction.id }
 }

@@ -13,9 +13,7 @@ struct AccountRowView: View {
 
       Spacer()
 
-      Text(Decimal(account.balance) / 100, format: .currency(code: Constants.defaultCurrency))
-        .foregroundStyle(account.balance < 0 ? .red : .primary)
-        .monospacedDigit()
+      MonetaryAmountView(amount: account.balance)
     }
   }
 
@@ -34,7 +32,7 @@ struct AccountRowView: View {
     account: Account(
       name: "Bank",
       type: .bank,
-      balance: 123456
+      balance: MonetaryAmount(cents: 123456)
     )
   )
   .padding()

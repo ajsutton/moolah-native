@@ -36,10 +36,10 @@ struct RemoteAccountRepositoryTests {
     #expect(accounts.count == 5)
     #expect(accounts[0].name == "Checking Account")
     #expect(accounts[0].type == .bank)
-    #expect(accounts[0].balance == 123456)
+    #expect(accounts[0].balance == MonetaryAmount(cents: 123456))
     #expect(accounts[3].name == "Investment Portfolio")
     #expect(accounts[3].type == .investment)
-    #expect(accounts[3].balance == 1_550_000)  // Prefers 'value' from JSON
+    #expect(accounts[3].balance == MonetaryAmount(cents: 1_550_000))  // Prefers 'value' from JSON
   }
 }
 

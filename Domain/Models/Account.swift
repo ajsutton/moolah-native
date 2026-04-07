@@ -15,7 +15,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
   let id: UUID
   var name: String
   var type: AccountType
-  var balance: Int  // Balance in cents
+  var balance: MonetaryAmount
   var position: Int
   var isHidden: Bool
 
@@ -23,7 +23,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     id: UUID = UUID(),
     name: String,
     type: AccountType,
-    balance: Int = 0,
+    balance: MonetaryAmount = .zero,
     position: Int = 0,
     isHidden: Bool = false
   ) {

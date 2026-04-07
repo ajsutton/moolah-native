@@ -29,13 +29,13 @@ actor InMemoryTransactionRepository: TransactionRepository {
     // Paginate
     let offset = page * pageSize
     guard offset < result.count else {
-      return TransactionPage(transactions: [], priorBalance: 0)
+      return TransactionPage(transactions: [], priorBalance: .zero)
     }
     let end = min(offset + pageSize, result.count)
     let pageTransactions = Array(result[offset..<end])
 
     // priorBalance = sum of all transactions older than this page
-    let priorBalance = result[end...].reduce(0) { $0 + $1.amount }
+    let priorBalance = result[end...].reduce(MonetaryAmount.zero) { $0 + $1.amount }
 
     return TransactionPage(transactions: pageTransactions, priorBalance: priorBalance)
   }

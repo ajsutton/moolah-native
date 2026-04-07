@@ -42,21 +42,21 @@ final class AccountStore {
     accounts.filter { $0.type == .investment && !$0.isHidden }
   }
 
-  var currentTotal: Int {
-    currentAccounts.reduce(0) { $0 + $1.balance }
+  var currentTotal: MonetaryAmount {
+    currentAccounts.reduce(.zero) { $0 + $1.balance }
   }
 
-  var investmentTotal: Int {
-    investmentAccounts.reduce(0) { $0 + $1.balance }
+  var investmentTotal: MonetaryAmount {
+    investmentAccounts.reduce(.zero) { $0 + $1.balance }
   }
 
   /// Total of current accounts minus the total of all positive earmarked funds.
   /// Negative earmarked values are skipped in the sum.
-  var availableFunds: Int {
+  var availableFunds: MonetaryAmount {
     return currentTotal
   }
 
-  var netWorth: Int {
+  var netWorth: MonetaryAmount {
     currentTotal + investmentTotal
   }
 }

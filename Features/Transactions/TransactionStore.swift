@@ -16,7 +16,7 @@ final class TransactionStore {
   private var currentFilter = TransactionFilter()
   private var currentPage = 0
   private var rawTransactions: [Transaction] = []
-  private var priorBalance: Int = 0
+  private var priorBalance: MonetaryAmount = .zero
 
   init(repository: TransactionRepository, pageSize: Int = 50) {
     self.repository = repository
@@ -27,7 +27,7 @@ final class TransactionStore {
     currentFilter = filter
     currentPage = 0
     rawTransactions = []
-    priorBalance = 0
+    priorBalance = .zero
     transactions = []
     hasMore = true
     error = nil

@@ -3,7 +3,7 @@ import SwiftUI
 struct TransactionRowView: View {
   let transaction: Transaction
   let accounts: Accounts
-  let balance: Int
+  let balance: MonetaryAmount
 
   var body: some View {
     HStack {
@@ -23,14 +23,9 @@ struct TransactionRowView: View {
       Spacer()
 
       VStack(alignment: .trailing, spacing: 2) {
-        Text(Decimal(transaction.amount) / 100, format: .currency(code: Constants.defaultCurrency))
-          .foregroundStyle(amountColor)
-          .monospacedDigit()
+        MonetaryAmountView(amount: transaction.amount)
 
-        Text(Decimal(balance) / 100, format: .currency(code: Constants.defaultCurrency))
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .monospacedDigit()
+        MonetaryAmountView(amount: balance)
       }
     }
     .padding(.vertical, 2)
@@ -52,12 +47,6 @@ struct TransactionRowView: View {
     }
   }
 
-  private var amountColor: Color {
-    if transaction.amount > 0 { return .green }
-    if transaction.amount < 0 { return .red }
-    return .primary
-  }
-
   private var displayPayee: String {
     guard let toAccountId = transaction.toAccountId else {
       return transaction.payee ?? ""
@@ -76,7 +65,7 @@ struct TransactionRowView: View {
 #Preview {
   let savingsId = UUID()
   let accounts = Accounts(from: [
-    Account(id: savingsId, name: "Savings", type: .bank, balance: 500000)
+    Account(id: savingsId, name: "Savings", type: .bank, balance: MonetaryAmount(cents: 500000))
   ])
 
   List {
@@ -85,34 +74,34 @@ struct TransactionRowView: View {
         type: .expense,
         date: Date(),
         accountId: UUID(),
-        amount: -5023,
+        amount: MonetaryAmount(cents: -5023),
         payee: "Woolworths"
-      ), accounts: accounts, balance: 100000)
+      ), accounts: accounts, balance: MonetaryAmount(cents: 100000))
     TransactionRowView(
       transaction: Transaction(
         type: .income,
         date: Date(),
         accountId: UUID(),
-        amount: 350000,
+        amount: MonetaryAmount(cents: 350000),
         payee: "Employer Pty Ltd"
-      ), accounts: accounts, balance: 105023)
+      ), accounts: accounts, balance: MonetaryAmount(cents: 105023))
     TransactionRowView(
       transaction: Transaction(
         type: .transfer,
         date: Date(),
         accountId: UUID(),
         toAccountId: savingsId,
-        amount: -100000,
+        amount: MonetaryAmount(cents: -100000),
         payee: ""
-      ), accounts: accounts, balance: -244977)
+      ), accounts: accounts, balance: MonetaryAmount(cents: -244977))
     TransactionRowView(
       transaction: Transaction(
         type: .transfer,
         date: Date(),
         accountId: UUID(),
         toAccountId: savingsId,
-        amount: -50000,
+        amount: MonetaryAmount(cents: -50000),
         payee: "Rent Split"
-      ), accounts: accounts, balance: -144977)
+      ), accounts: accounts, balance: MonetaryAmount(cents: -144977))
   }
 }

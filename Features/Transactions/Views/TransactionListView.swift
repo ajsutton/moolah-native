@@ -8,14 +8,16 @@ struct TransactionListView: View {
   var body: some View {
     List {
       ForEach(transactionStore.transactions) { entry in
-        TransactionRowView(transaction: entry.transaction, accounts: accounts, balance: entry.balance)
-          .onAppear {
-            if entry.id == transactionStore.transactions.last?.id {
-              Task {
-                await transactionStore.loadMore()
-              }
+        TransactionRowView(
+          transaction: entry.transaction, accounts: accounts, balance: entry.balance
+        )
+        .onAppear {
+          if entry.id == transactionStore.transactions.last?.id {
+            Task {
+              await transactionStore.loadMore()
             }
           }
+        }
       }
 
       if transactionStore.isLoading {
@@ -48,20 +50,20 @@ struct TransactionListView: View {
 #Preview {
   let accountId = UUID()
   let savingsId = UUID()
-  let account = Account(id: accountId, name: "Checking", type: .bank, balance: 244977)
+  let account = Account(id: accountId, name: "Checking", type: .bank, balance: MonetaryAmount(cents: 244977))
   let accounts = Accounts(from: [
     account,
-    Account(id: savingsId, name: "Savings", type: .bank, balance: 500000),
+    Account(id: savingsId, name: "Savings", type: .bank, balance: MonetaryAmount(cents: 500000)),
   ])
   let repository = InMemoryTransactionRepository(initialTransactions: [
     Transaction(
-      type: .expense, date: Date(), accountId: accountId, amount: -5023, payee: "Woolworths"),
+      type: .expense, date: Date(), accountId: accountId, amount: MonetaryAmount(cents: -5023), payee: "Woolworths"),
     Transaction(
-      type: .income, date: Date().addingTimeInterval(-86400), accountId: accountId, amount: 350000,
+      type: .income, date: Date().addingTimeInterval(-86400), accountId: accountId, amount: MonetaryAmount(cents: 350000),
       payee: "Employer"),
     Transaction(
       type: .transfer, date: Date().addingTimeInterval(-172800), accountId: accountId,
-      toAccountId: savingsId, amount: -100000, payee: ""),
+      toAccountId: savingsId, amount: MonetaryAmount(cents: -100000), payee: ""),
   ])
   let store = TransactionStore(repository: repository)
 

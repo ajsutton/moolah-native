@@ -30,7 +30,7 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
       logger.debug("Successfully decoded \(wrapper.transactions.count) transactions")
       return TransactionPage(
         transactions: wrapper.transactions.map { $0.toDomain() },
-        priorBalance: wrapper.priorBalance
+        priorBalance: MonetaryAmount(cents: wrapper.priorBalance)
       )
     } catch {
       logger.error("Decoding error: \(error.localizedDescription)")

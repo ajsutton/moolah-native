@@ -30,7 +30,7 @@ struct TransactionDTO: Codable {
       date: parsedDate,
       accountId: accountId.flatMap { FlexibleUUID.parse($0) },
       toAccountId: toAccountId.flatMap { FlexibleUUID.parse($0) },
-      amount: amount,
+      amount: MonetaryAmount(cents: amount),
       payee: payee,
       notes: notes,
       categoryId: categoryId.flatMap { FlexibleUUID.parse($0) },

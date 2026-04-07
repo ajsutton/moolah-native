@@ -17,7 +17,7 @@ struct AccountDTO: Codable {
       id: FlexibleUUID.parse(id) ?? UUID(),
       name: name,
       type: AccountType(rawValue: type) ?? .asset,
-      balance: effectiveBalance,
+      balance: MonetaryAmount(cents: effectiveBalance),
       position: position,
       isHidden: hidden
     )
