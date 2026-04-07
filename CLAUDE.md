@@ -44,3 +44,44 @@ just generate
 - **Verification:** Every `InMemoryBackend` method must be verified against `moolah-server` source before implementation. Read the corresponding route/controller in `../moolah-server/src/` to confirm filtering semantics, sort order, and computed values.
 - **Fixtures:** Remote backend tests use `URLProtocol` stubs against fixture JSON in `MoolahTests/Support/Fixtures/`.
 - **Targets:** `MoolahTests_iOS` (simulator) and `MoolahTests_macOS` (native).
+
+## UI Design & Style Guide
+
+- **Style Guide:** All UI work MUST follow `STYLE_GUIDE.md`. This is not optional.
+- **Apple HIG Compliance:** Follow Apple Human Interface Guidelines for macOS and iOS. When in doubt, consult the official HIG documentation.
+- **macOS-First:** Optimize for desktop patterns (keyboard navigation, context menus, pointer precision), then adapt for iOS.
+- **Semantic Colors:** Use system colors (`.green`, `.red`, `.secondary`) for automatic dark mode support. Never hardcode RGB values.
+- **Monospaced Digits:** Always apply `.monospacedDigit()` to monetary amounts and dates.
+- **Accessibility:** Every UI component must be VoiceOver-accessible with proper labels and keyboard navigation (macOS).
+- **Before Shipping UI:** Run the `ui-review` agent (see Agents section) to validate compliance with STYLE_GUIDE.md and identify accessibility issues.
+
+## Agents
+
+This project defines specialized agents for specific review tasks. Use the Task tool to invoke them.
+
+### ui-review Agent
+
+**Purpose:** Expert in UI design, accessibility, and usability. Reviews SwiftUI views for compliance with `STYLE_GUIDE.md` and Apple Human Interface Guidelines.
+
+**When to use:**
+- After creating or significantly modifying UI components
+- Before committing UI-related changes
+- When investigating accessibility or usability issues
+
+**Usage:**
+```
+Task tool with prompt: "Review [ViewName] for style guide compliance and accessibility"
+```
+
+**What it checks:**
+- Adherence to STYLE_GUIDE.md patterns (layout, typography, colors, spacing)
+- Apple HIG compliance (navigation, controls, platform conventions)
+- Accessibility (VoiceOver labels, keyboard navigation, color contrast, Dynamic Type support)
+- SwiftUI best practices (proper use of modifiers, semantic colors, layout primitives)
+- Usability issues (touch target sizes, visual hierarchy, clarity)
+
+**Output:** A detailed report with:
+- Issues found (categorized by severity: Critical, Important, Minor)
+- Specific code locations (file:line)
+- Recommended fixes with code examples
+- Positive highlights (what's done well)
