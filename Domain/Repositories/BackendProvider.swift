@@ -7,4 +7,5 @@ protocol BackendProvider: Sendable {
   var accounts: any AccountRepository { get }
   var transactions: any TransactionRepository { get }
   var categories: any CategoryRepository { get }
+  var earmarks: any EarmarkRepository { get }
 }

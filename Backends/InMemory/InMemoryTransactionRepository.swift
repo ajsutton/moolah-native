@@ -15,6 +15,11 @@ actor InMemoryTransactionRepository: TransactionRepository {
       result = result.filter { $0.accountId == accountId || $0.toAccountId == accountId }
     }
 
+    // Filter by earmarkId
+    if let earmarkId = filter.earmarkId {
+      result = result.filter { $0.earmarkId == earmarkId }
+    }
+
     // Filter by scheduled
     if let scheduled = filter.scheduled {
       result = result.filter { $0.isScheduled == scheduled }

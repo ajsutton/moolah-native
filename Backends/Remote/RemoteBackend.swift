@@ -8,6 +8,7 @@ final class RemoteBackend: BackendProvider {
   let accounts: any AccountRepository
   let transactions: any TransactionRepository
   let categories: any CategoryRepository
+  let earmarks: any EarmarkRepository
 
   init(baseURL: URL) {
     let client = APIClient(baseURL: baseURL)
@@ -15,5 +16,6 @@ final class RemoteBackend: BackendProvider {
     accounts = RemoteAccountRepository(client: client)
     transactions = RemoteTransactionRepository(client: client)
     categories = RemoteCategoryRepository(client: client)
+    earmarks = RemoteEarmarkRepository(client: client)
   }
 }

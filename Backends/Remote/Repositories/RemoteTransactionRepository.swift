@@ -19,6 +19,10 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
       queryItems.append(URLQueryItem(name: "account", value: accountId.uuidString))
     }
 
+    if let earmarkId = filter.earmarkId {
+      queryItems.append(URLQueryItem(name: "earmark", value: earmarkId.uuidString))
+    }
+
     if let scheduled = filter.scheduled {
       queryItems.append(URLQueryItem(name: "scheduled", value: String(scheduled)))
     }

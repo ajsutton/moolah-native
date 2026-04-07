@@ -6,30 +6,44 @@ struct ContentView: View {
   @Environment(AccountStore.self) private var accountStore
   @Environment(TransactionStore.self) private var transactionStore
   @Environment(CategoryStore.self) private var categoryStore
+  @Environment(EarmarkStore.self) private var earmarkStore
   @State private var selection: SidebarSelection?
 
   var body: some View {
     NavigationSplitView {
-      SidebarView(accountStore: accountStore, selection: $selection)
-        .task {
-          await accountStore.load()
-          await categoryStore.load()
-        }
-        .toolbar {
-          ToolbarItem(placement: .automatic) {
-            if case .signedIn(let user) = authStore.state {
-              UserMenuView(user: user)
-                .environment(authStore)
-            }
+      SidebarView(
+        accountStore: accountStore, earmarkStore: earmarkStore, selection: $selection
+      )
+      .task {
+        await accountStore.load()
+        await categoryStore.load()
+        await earmarkStore.load()
+      }
+      .toolbar {
+        ToolbarItem(placement: .automatic) {
+          if case .signedIn(let user) = authStore.state {
+            UserMenuView(user: user)
+              .environment(authStore)
           }
         }
+      }
     } detail: {
       switch selection {
       case .account(let id):
         if let account = accountStore.accounts.by(id: id) {
           TransactionListView(
-            account: account, accounts: accountStore.accounts,
+            title: account.name,
+            filter: TransactionFilter(accountId: account.id),
+            accounts: accountStore.accounts,
             categories: categoryStore.categories, transactionStore: transactionStore)
+        }
+      case .earmark(let id):
+        if let earmark = earmarkStore.earmarks.by(id: id) {
+          EarmarkDetailView(
+            earmark: earmark,
+            accounts: accountStore.accounts,
+            categories: categoryStore.categories,
+            transactionStore: transactionStore)
         }
       case .categories:
         CategoryTreeView(categoryStore: categoryStore)

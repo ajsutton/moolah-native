@@ -2,11 +2,13 @@ import SwiftUI
 
 enum SidebarSelection: Hashable {
   case account(UUID)
+  case earmark(UUID)
   case categories
 }
 
 struct SidebarView: View {
   let accountStore: AccountStore
+  let earmarkStore: EarmarkStore
   @Binding var selection: SidebarSelection?
 
   var body: some View {
@@ -21,6 +23,18 @@ struct SidebarView: View {
         totalRow(label: "Current Total", value: accountStore.currentTotal)
       }
 
+      if !earmarkStore.visibleEarmarks.isEmpty {
+        Section("Earmarks") {
+          ForEach(earmarkStore.visibleEarmarks) { earmark in
+            NavigationLink(value: SidebarSelection.earmark(earmark.id)) {
+              EarmarkRowView(earmark: earmark)
+            }
+          }
+
+          totalRow(label: "Earmarked Total", value: earmarkStore.totalBalance)
+        }
+      }
+
       Section("Investments") {
         ForEach(accountStore.investmentAccounts) { account in
           NavigationLink(value: SidebarSelection.account(account.id)) {
@@ -33,7 +47,7 @@ struct SidebarView: View {
 
       Section {
         LabeledContent("Available Funds") {
-          MonetaryAmountView(amount: accountStore.availableFunds)
+          MonetaryAmountView(amount: availableFunds)
         }
         .font(.headline)
 
@@ -54,7 +68,16 @@ struct SidebarView: View {
     .navigationTitle("Moolah")
     .refreshable {
       await accountStore.load()
+      await earmarkStore.load()
     }
+  }
+
+  /// Current account total minus the sum of positive earmark balances.
+  private var availableFunds: MonetaryAmount {
+    let earmarked = earmarkStore.visibleEarmarks
+      .filter { $0.balance.isPositive }
+      .reduce(MonetaryAmount.zero) { $0 + $1.balance }
+    return accountStore.currentTotal - earmarked
   }
 
   private func totalRow(label: String, value: MonetaryAmount) -> some View {
@@ -81,14 +104,26 @@ struct SidebarView: View {
       Account(
         name: "Investment", type: .investment,
         balance: MonetaryAmount(cents: 2_000_000, currency: Currency.defaultCurrency)),
+    ]),
+    earmarks: InMemoryEarmarkRepository(initialEarmarks: [
+      Earmark(
+        name: "Holiday Fund",
+        balance: MonetaryAmount(cents: 150000, currency: Currency.defaultCurrency)),
+      Earmark(
+        name: "Emergency Fund",
+        balance: MonetaryAmount(cents: 300000, currency: Currency.defaultCurrency)),
     ]))
   let accountStore = AccountStore(repository: backend.accounts)
+  let earmarkStore = EarmarkStore(repository: backend.earmarks)
 
   NavigationSplitView {
-    SidebarView(accountStore: accountStore, selection: .constant(nil))
-      .task {
-        await accountStore.load()
-      }
+    SidebarView(
+      accountStore: accountStore, earmarkStore: earmarkStore, selection: .constant(nil)
+    )
+    .task {
+      await accountStore.load()
+      await earmarkStore.load()
+    }
   } detail: {
     Text("Detail")
   }

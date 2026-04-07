@@ -53,12 +53,14 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
   }
 }
 
-struct TransactionFilter: Sendable {
+struct TransactionFilter: Sendable, Equatable {
   var accountId: UUID?
+  var earmarkId: UUID?
   var scheduled: Bool?
 
-  init(accountId: UUID? = nil, scheduled: Bool? = nil) {
+  init(accountId: UUID? = nil, earmarkId: UUID? = nil, scheduled: Bool? = nil) {
     self.accountId = accountId
+    self.earmarkId = earmarkId
     self.scheduled = scheduled
   }
 }

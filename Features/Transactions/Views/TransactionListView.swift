@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct TransactionListView: View {
-  let account: Account
+  let title: String
+  let filter: TransactionFilter
   let accounts: Accounts
   let categories: Categories
   let transactionStore: TransactionStore
@@ -30,19 +31,19 @@ struct TransactionListView: View {
         }
       }
     }
-    .navigationTitle(account.name)
-    .task(id: account.id) {
-      await transactionStore.load(filter: TransactionFilter(accountId: account.id))
+    .navigationTitle(title)
+    .task(id: filter) {
+      await transactionStore.load(filter: filter)
     }
     .refreshable {
-      await transactionStore.load(filter: TransactionFilter(accountId: account.id))
+      await transactionStore.load(filter: filter)
     }
     .overlay {
       if !transactionStore.isLoading && transactionStore.transactions.isEmpty {
         ContentUnavailableView(
           "No Transactions",
           systemImage: "tray",
-          description: Text("This account has no transactions yet.")
+          description: Text("No transactions found.")
         )
       }
     }
@@ -79,7 +80,8 @@ struct TransactionListView: View {
 
   NavigationStack {
     TransactionListView(
-      account: account, accounts: accounts, categories: Categories(from: []),
+      title: account.name, filter: TransactionFilter(accountId: accountId),
+      accounts: accounts, categories: Categories(from: []),
       transactionStore: store)
   }
 }
