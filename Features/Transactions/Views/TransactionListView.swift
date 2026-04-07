@@ -50,20 +50,28 @@ struct TransactionListView: View {
 #Preview {
   let accountId = UUID()
   let savingsId = UUID()
-  let account = Account(id: accountId, name: "Checking", type: .bank, balance: MonetaryAmount(cents: 244977))
+  let account = Account(
+    id: accountId, name: "Checking", type: .bank,
+    balance: MonetaryAmount(cents: 244977, currency: Currency.defaultCurrency))
   let accounts = Accounts(from: [
     account,
-    Account(id: savingsId, name: "Savings", type: .bank, balance: MonetaryAmount(cents: 500000)),
+    Account(
+      id: savingsId, name: "Savings", type: .bank,
+      balance: MonetaryAmount(cents: 500000, currency: Currency.defaultCurrency)),
   ])
   let repository = InMemoryTransactionRepository(initialTransactions: [
     Transaction(
-      type: .expense, date: Date(), accountId: accountId, amount: MonetaryAmount(cents: -5023), payee: "Woolworths"),
+      type: .expense, date: Date(), accountId: accountId,
+      amount: MonetaryAmount(cents: -5023, currency: Currency.defaultCurrency),
+      payee: "Woolworths"),
     Transaction(
-      type: .income, date: Date().addingTimeInterval(-86400), accountId: accountId, amount: MonetaryAmount(cents: 350000),
+      type: .income, date: Date().addingTimeInterval(-86400), accountId: accountId,
+      amount: MonetaryAmount(cents: 350000, currency: Currency.defaultCurrency),
       payee: "Employer"),
     Transaction(
       type: .transfer, date: Date().addingTimeInterval(-172800), accountId: accountId,
-      toAccountId: savingsId, amount: MonetaryAmount(cents: -100000), payee: ""),
+      toAccountId: savingsId,
+      amount: MonetaryAmount(cents: -100000, currency: Currency.defaultCurrency), payee: ""),
   ])
   let store = TransactionStore(repository: repository)
 

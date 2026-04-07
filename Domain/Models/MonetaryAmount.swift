@@ -2,11 +2,11 @@ import Foundation
 
 struct MonetaryAmount: Codable, Sendable, Hashable, Comparable {
   let cents: Int
-  let currency: String
+  let currency: Currency
 
-  static let zero = MonetaryAmount(cents: 0, currency: Constants.defaultCurrency)
+  static let zero = MonetaryAmount(cents: 0, currency: Currency.defaultCurrency)
 
-  init(cents: Int, currency: String = Constants.defaultCurrency) {
+  init(cents: Int, currency: Currency) {
     self.cents = cents
     self.currency = currency
   }
@@ -17,7 +17,7 @@ struct MonetaryAmount: Codable, Sendable, Hashable, Comparable {
 
   /// The amount as a Decimal suitable for currency formatting (e.g. 5023 cents -> 50.23).
   var decimalValue: Decimal {
-    Decimal(cents) / 100
+    Decimal(cents) / pow(10, self.currency.decimals)
   }
 
   static func + (lhs: MonetaryAmount, rhs: MonetaryAmount) -> MonetaryAmount {

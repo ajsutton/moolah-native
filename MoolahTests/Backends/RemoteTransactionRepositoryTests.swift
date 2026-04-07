@@ -46,20 +46,23 @@ struct RemoteTransactionRepositoryTests {
 
     // First transaction: expense
     #expect(transactions[0].type == .expense)
-    #expect(transactions[0].amount == MonetaryAmount(cents: -5023))
+    #expect(
+      transactions[0].amount == MonetaryAmount(cents: -5023, currency: Currency.defaultCurrency))
     #expect(transactions[0].payee == "Woolworths")
     #expect(transactions[0].notes == "Weekly groceries")
     #expect(transactions[0].categoryId != nil)
 
     // Second transaction: income
     #expect(transactions[1].type == .income)
-    #expect(transactions[1].amount == MonetaryAmount(cents: 350000))
+    #expect(
+      transactions[1].amount == MonetaryAmount(cents: 350000, currency: Currency.defaultCurrency))
     #expect(transactions[1].payee == "Employer Pty Ltd")
 
     // Third transaction: transfer
     #expect(transactions[2].type == .transfer)
     #expect(transactions[2].toAccountId != nil)
-    #expect(transactions[2].amount == MonetaryAmount(cents: -100000))
+    #expect(
+      transactions[2].amount == MonetaryAmount(cents: -100000, currency: Currency.defaultCurrency))
 
     // Fourth transaction: scheduled expense
     #expect(transactions[3].recurPeriod == "MONTH")

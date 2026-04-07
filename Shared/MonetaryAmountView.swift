@@ -9,7 +9,7 @@ struct MonetaryAmountView: View {
   var colorOverride: Color? = nil
 
   var body: some View {
-    Text(amount.decimalValue, format: .currency(code: amount.currency))
+    Text(amount.decimalValue, format: .currency(code: amount.currency.code))
       .foregroundStyle(effectiveColor)
       .monospacedDigit()
       .font(font)

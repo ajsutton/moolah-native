@@ -65,7 +65,9 @@ struct TransactionRowView: View {
 #Preview {
   let savingsId = UUID()
   let accounts = Accounts(from: [
-    Account(id: savingsId, name: "Savings", type: .bank, balance: MonetaryAmount(cents: 500000))
+    Account(
+      id: savingsId, name: "Savings", type: .bank,
+      balance: MonetaryAmount(cents: 500000, currency: Currency.defaultCurrency))
   ])
 
   List {
@@ -74,34 +76,38 @@ struct TransactionRowView: View {
         type: .expense,
         date: Date(),
         accountId: UUID(),
-        amount: MonetaryAmount(cents: -5023),
+        amount: MonetaryAmount(cents: -5023, currency: Currency.defaultCurrency),
         payee: "Woolworths"
-      ), accounts: accounts, balance: MonetaryAmount(cents: 100000))
+      ), accounts: accounts,
+      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
     TransactionRowView(
       transaction: Transaction(
         type: .income,
         date: Date(),
         accountId: UUID(),
-        amount: MonetaryAmount(cents: 350000),
+        amount: MonetaryAmount(cents: 350000, currency: Currency.defaultCurrency),
         payee: "Employer Pty Ltd"
-      ), accounts: accounts, balance: MonetaryAmount(cents: 105023))
+      ), accounts: accounts,
+      balance: MonetaryAmount(cents: 105023, currency: Currency.defaultCurrency))
     TransactionRowView(
       transaction: Transaction(
         type: .transfer,
         date: Date(),
         accountId: UUID(),
         toAccountId: savingsId,
-        amount: MonetaryAmount(cents: -100000),
+        amount: MonetaryAmount(cents: -100000, currency: Currency.defaultCurrency),
         payee: ""
-      ), accounts: accounts, balance: MonetaryAmount(cents: -244977))
+      ), accounts: accounts,
+      balance: MonetaryAmount(cents: -244977, currency: Currency.defaultCurrency))
     TransactionRowView(
       transaction: Transaction(
         type: .transfer,
         date: Date(),
         accountId: UUID(),
         toAccountId: savingsId,
-        amount: MonetaryAmount(cents: -50000),
+        amount: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency),
         payee: "Rent Split"
-      ), accounts: accounts, balance: MonetaryAmount(cents: -144977))
+      ), accounts: accounts,
+      balance: MonetaryAmount(cents: -144977, currency: Currency.defaultCurrency))
   }
 }

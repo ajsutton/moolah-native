@@ -21,7 +21,7 @@ struct TransactionStoreTests {
         type: .expense,
         date: makeDate("2024-01-\(String(format: "%02d", min(i + 1, 28)))"),
         accountId: accountId,
-        amount: MonetaryAmount(cents: -(i + 1) * 1000),
+        amount: MonetaryAmount(cents: -(i + 1) * 1000, currency: Currency.defaultCurrency),
         payee: "Payee \(i)"
       )
     }
@@ -85,14 +85,18 @@ struct TransactionStoreTests {
     let otherAccountId = UUID()
     let transactions = [
       Transaction(
-        type: .expense, date: makeDate("2024-01-01"), accountId: accountId, amount: MonetaryAmount(cents: -1000),
+        type: .expense, date: makeDate("2024-01-01"), accountId: accountId,
+        amount: MonetaryAmount(cents: -1000, currency: Currency.defaultCurrency),
         payee: "Mine"),
       Transaction(
-        type: .expense, date: makeDate("2024-01-02"), accountId: otherAccountId, amount: MonetaryAmount(cents: -2000),
+        type: .expense, date: makeDate("2024-01-02"), accountId: otherAccountId,
+        amount: MonetaryAmount(cents: -2000, currency: Currency.defaultCurrency),
         payee: "Other"),
       Transaction(
         type: .transfer, date: makeDate("2024-01-03"), accountId: otherAccountId,
-        toAccountId: accountId, amount: MonetaryAmount(cents: -5000), payee: "Transfer In"),
+        toAccountId: accountId,
+        amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+        payee: "Transfer In"),
     ]
     let repository = InMemoryTransactionRepository(initialTransactions: transactions)
     let store = TransactionStore(repository: repository)
@@ -108,13 +112,16 @@ struct TransactionStoreTests {
   @Test func testSortedByDateDescending() async throws {
     let transactions = [
       Transaction(
-        type: .expense, date: makeDate("2024-01-01"), accountId: accountId, amount: MonetaryAmount(cents: -1000),
+        type: .expense, date: makeDate("2024-01-01"), accountId: accountId,
+        amount: MonetaryAmount(cents: -1000, currency: Currency.defaultCurrency),
         payee: "Oldest"),
       Transaction(
-        type: .expense, date: makeDate("2024-01-15"), accountId: accountId, amount: MonetaryAmount(cents: -2000),
+        type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
+        amount: MonetaryAmount(cents: -2000, currency: Currency.defaultCurrency),
         payee: "Middle"),
       Transaction(
-        type: .expense, date: makeDate("2024-01-30"), accountId: accountId, amount: MonetaryAmount(cents: -3000),
+        type: .expense, date: makeDate("2024-01-30"), accountId: accountId,
+        amount: MonetaryAmount(cents: -3000, currency: Currency.defaultCurrency),
         payee: "Newest"),
     ]
     let repository = InMemoryTransactionRepository(initialTransactions: transactions)
@@ -130,13 +137,16 @@ struct TransactionStoreTests {
   @Test func testRunningBalancesComputed() async throws {
     let transactions = [
       Transaction(
-        type: .income, date: makeDate("2024-01-03"), accountId: accountId, amount: MonetaryAmount(cents: 100000),
+        type: .income, date: makeDate("2024-01-03"), accountId: accountId,
+        amount: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency),
         payee: "Salary"),
       Transaction(
-        type: .expense, date: makeDate("2024-01-02"), accountId: accountId, amount: MonetaryAmount(cents: -2500),
+        type: .expense, date: makeDate("2024-01-02"), accountId: accountId,
+        amount: MonetaryAmount(cents: -2500, currency: Currency.defaultCurrency),
         payee: "Coffee"),
       Transaction(
-        type: .expense, date: makeDate("2024-01-01"), accountId: accountId, amount: MonetaryAmount(cents: -10000),
+        type: .expense, date: makeDate("2024-01-01"), accountId: accountId,
+        amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency),
         payee: "Groceries"),
     ]
     let repository = InMemoryTransactionRepository(initialTransactions: transactions)
@@ -151,9 +161,15 @@ struct TransactionStoreTests {
     // Groceries (oldest): 0 + (-10000) = -10000
     // Coffee: -10000 + (-2500) = -12500
     // Salary (newest): -12500 + 100000 = 87500
-    #expect(store.transactions[0].balance == MonetaryAmount(cents: 87500))  // After Salary
-    #expect(store.transactions[1].balance == MonetaryAmount(cents: -12500))  // After Coffee
-    #expect(store.transactions[2].balance == MonetaryAmount(cents: -10000))  // After Groceries
+    #expect(
+      store.transactions[0].balance
+        == MonetaryAmount(cents: 87500, currency: Currency.defaultCurrency))  // After Salary
+    #expect(
+      store.transactions[1].balance
+        == MonetaryAmount(cents: -12500, currency: Currency.defaultCurrency))  // After Coffee
+    #expect(
+      store.transactions[2].balance
+        == MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency))  // After Groceries
   }
 
   @Test func testReloadClearsExisting() async throws {

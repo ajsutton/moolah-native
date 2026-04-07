@@ -58,10 +58,18 @@ struct SidebarView: View {
 #Preview {
   let backend = InMemoryBackend(
     accounts: InMemoryAccountRepository(initialAccounts: [
-      Account(name: "Bank", type: .bank, balance: MonetaryAmount(cents: 100000)),
-      Account(name: "Asset", type: .asset, balance: MonetaryAmount(cents: 500000)),
-      Account(name: "Credit Card", type: .creditCard, balance: MonetaryAmount(cents: -50000)),
-      Account(name: "Investment", type: .investment, balance: MonetaryAmount(cents: 2_000_000)),
+      Account(
+        name: "Bank", type: .bank,
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency)),
+      Account(
+        name: "Asset", type: .asset,
+        balance: MonetaryAmount(cents: 500000, currency: Currency.defaultCurrency)),
+      Account(
+        name: "Credit Card", type: .creditCard,
+        balance: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency)),
+      Account(
+        name: "Investment", type: .investment,
+        balance: MonetaryAmount(cents: 2_000_000, currency: Currency.defaultCurrency)),
     ]))
   let store = AccountStore(repository: backend.accounts)
 

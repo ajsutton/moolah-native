@@ -32,7 +32,7 @@ struct AccountRowView: View {
     account: Account(
       name: "Bank",
       type: .bank,
-      balance: MonetaryAmount(cents: 123456)
+      balance: MonetaryAmount(cents: 123456, currency: Currency.defaultCurrency)
     )
   )
   .padding()
