@@ -36,7 +36,48 @@ struct EarmarkDTO: Codable {
     )
   }
 
+  static func fromDomain(_ earmark: Earmark) -> EarmarkDTO {
+    EarmarkDTO(
+      id: earmark.id.uuidString,
+      name: earmark.name,
+      position: earmark.position,
+      hidden: earmark.isHidden,
+      savingsTarget: earmark.savingsGoal?.cents,
+      savingsStartDate: earmark.savingsStartDate.map { Self.dateFormatter.string(from: $0) },
+      savingsEndDate: earmark.savingsEndDate.map { Self.dateFormatter.string(from: $0) },
+      balance: earmark.balance.cents,
+      saved: earmark.saved.cents,
+      spent: earmark.spent.cents
+    )
+  }
+
   struct ListWrapper: Codable {
     let earmarks: [EarmarkDTO]
+  }
+}
+
+struct EarmarkBudgetItemDTO: Codable {
+  let id: String
+  let category: String
+  let amount: Int
+
+  func toDomain() -> EarmarkBudgetItem {
+    EarmarkBudgetItem(
+      id: FlexibleUUID.parse(id) ?? UUID(),
+      categoryId: FlexibleUUID.parse(category) ?? UUID(),
+      amount: MonetaryAmount(cents: amount, currency: Currency.defaultCurrency)
+    )
+  }
+
+  static func fromDomain(_ item: EarmarkBudgetItem) -> EarmarkBudgetItemDTO {
+    EarmarkBudgetItemDTO(
+      id: item.id.uuidString,
+      category: item.categoryId.uuidString,
+      amount: item.amount.cents
+    )
+  }
+
+  struct ListWrapper: Codable {
+    let budget: [EarmarkBudgetItemDTO]
   }
 }

@@ -1,5 +1,17 @@
 import Foundation
 
+struct EarmarkBudgetItem: Codable, Sendable, Identifiable, Hashable {
+  let id: UUID
+  var categoryId: UUID
+  var amount: MonetaryAmount
+
+  init(id: UUID = UUID(), categoryId: UUID, amount: MonetaryAmount) {
+    self.id = id
+    self.categoryId = categoryId
+    self.amount = amount
+  }
+}
+
 struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
   let id: UUID
   var name: String
