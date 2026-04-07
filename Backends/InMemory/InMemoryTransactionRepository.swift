@@ -25,6 +25,28 @@ actor InMemoryTransactionRepository: TransactionRepository {
       result = result.filter { $0.isScheduled == scheduled }
     }
 
+    // Filter by date range
+    if let dateRange = filter.dateRange {
+      result = result.filter { dateRange.contains($0.date) }
+    }
+
+    // Filter by categoryIds
+    if let categoryIds = filter.categoryIds, !categoryIds.isEmpty {
+      result = result.filter { transaction in
+        guard let categoryId = transaction.categoryId else { return false }
+        return categoryIds.contains(categoryId)
+      }
+    }
+
+    // Filter by payee (case-insensitive contains)
+    if let payee = filter.payee, !payee.isEmpty {
+      let lowered = payee.lowercased()
+      result = result.filter { transaction in
+        guard let transactionPayee = transaction.payee else { return false }
+        return transactionPayee.lowercased().contains(lowered)
+      }
+    }
+
     // Sort by date DESC, then id for stable ordering (matches server)
     result.sort { a, b in
       if a.date != b.date { return a.date > b.date }

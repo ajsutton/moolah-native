@@ -141,6 +141,118 @@ struct RemoteTransactionRepositoryTests {
 
     #expect(queryDict["scheduled"] == "true")
   }
+
+  @Test func testDateRangeFilterParam() async throws {
+    let emptyResponse = """
+      {"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}
+      """.data(using: .utf8)!
+
+    let (_, client) = makeStubSession(data: emptyResponse)
+    let repository = RemoteTransactionRepository(client: client)
+
+    let calendar = Calendar.current
+    let startDate = calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!
+    let endDate = calendar.date(from: DateComponents(year: 2024, month: 12, day: 31))!
+    let dateRange = startDate...endDate
+
+    var capturedURL: URL?
+    TransactionURLProtocolStub.requestHandler = { request in
+      capturedURL = request.url
+      let response = HTTPURLResponse(
+        url: request.url!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )!
+      return (response, emptyResponse)
+    }
+
+    _ = try await repository.fetch(
+      filter: TransactionFilter(dateRange: dateRange),
+      page: 0,
+      pageSize: 50
+    )
+
+    let components = URLComponents(url: capturedURL!, resolvingAgainstBaseURL: false)!
+    let queryItems = components.queryItems ?? []
+    let queryDict = Dictionary(uniqueKeysWithValues: queryItems.map { ($0.name, $0.value) })
+
+    let formatter = ISO8601DateFormatter()
+    #expect(queryDict["startDate"] == formatter.string(from: startDate))
+    #expect(queryDict["endDate"] == formatter.string(from: endDate))
+  }
+
+  @Test func testCategoryIdsFilterParam() async throws {
+    let emptyResponse = """
+      {"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}
+      """.data(using: .utf8)!
+
+    let (_, client) = makeStubSession(data: emptyResponse)
+    let repository = RemoteTransactionRepository(client: client)
+
+    let category1 = UUID()
+    let category2 = UUID()
+    let categoryIds: Set<UUID> = [category1, category2]
+
+    var capturedURL: URL?
+    TransactionURLProtocolStub.requestHandler = { request in
+      capturedURL = request.url
+      let response = HTTPURLResponse(
+        url: request.url!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )!
+      return (response, emptyResponse)
+    }
+
+    _ = try await repository.fetch(
+      filter: TransactionFilter(categoryIds: categoryIds),
+      page: 0,
+      pageSize: 50
+    )
+
+    let components = URLComponents(url: capturedURL!, resolvingAgainstBaseURL: false)!
+    let queryItems = components.queryItems ?? []
+    let categoryParams = queryItems.filter { $0.name == "category" }.compactMap { $0.value }
+
+    #expect(categoryParams.count == 2)
+    #expect(categoryParams.contains(category1.uuidString))
+    #expect(categoryParams.contains(category2.uuidString))
+  }
+
+  @Test func testPayeeFilterParam() async throws {
+    let emptyResponse = """
+      {"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}
+      """.data(using: .utf8)!
+
+    let (_, client) = makeStubSession(data: emptyResponse)
+    let repository = RemoteTransactionRepository(client: client)
+
+    var capturedURL: URL?
+    TransactionURLProtocolStub.requestHandler = { request in
+      capturedURL = request.url
+      let response = HTTPURLResponse(
+        url: request.url!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )!
+      return (response, emptyResponse)
+    }
+
+    _ = try await repository.fetch(
+      filter: TransactionFilter(payee: "Woolworths"),
+      page: 0,
+      pageSize: 50
+    )
+
+    let components = URLComponents(url: capturedURL!, resolvingAgainstBaseURL: false)!
+    let queryItems = components.queryItems ?? []
+    let queryDict = Dictionary(uniqueKeysWithValues: queryItems.map { ($0.name, $0.value) })
+
+    #expect(queryDict["payee"] == "Woolworths")
+  }
 }
 
 // URLProtocol stub for transaction tests

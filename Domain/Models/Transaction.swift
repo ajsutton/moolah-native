@@ -57,11 +57,24 @@ struct TransactionFilter: Sendable, Equatable {
   var accountId: UUID?
   var earmarkId: UUID?
   var scheduled: Bool?
+  var dateRange: ClosedRange<Date>?
+  var categoryIds: Set<UUID>?
+  var payee: String?
 
-  init(accountId: UUID? = nil, earmarkId: UUID? = nil, scheduled: Bool? = nil) {
+  init(
+    accountId: UUID? = nil,
+    earmarkId: UUID? = nil,
+    scheduled: Bool? = nil,
+    dateRange: ClosedRange<Date>? = nil,
+    categoryIds: Set<UUID>? = nil,
+    payee: String? = nil
+  ) {
     self.accountId = accountId
     self.earmarkId = earmarkId
     self.scheduled = scheduled
+    self.dateRange = dateRange
+    self.categoryIds = categoryIds
+    self.payee = payee
   }
 }
 

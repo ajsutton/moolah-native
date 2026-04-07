@@ -27,6 +27,24 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
       queryItems.append(URLQueryItem(name: "scheduled", value: String(scheduled)))
     }
 
+    if let dateRange = filter.dateRange {
+      let formatter = ISO8601DateFormatter()
+      queryItems.append(
+        URLQueryItem(name: "startDate", value: formatter.string(from: dateRange.lowerBound)))
+      queryItems.append(
+        URLQueryItem(name: "endDate", value: formatter.string(from: dateRange.upperBound)))
+    }
+
+    if let categoryIds = filter.categoryIds, !categoryIds.isEmpty {
+      for categoryId in categoryIds {
+        queryItems.append(URLQueryItem(name: "category", value: categoryId.uuidString))
+      }
+    }
+
+    if let payee = filter.payee, !payee.isEmpty {
+      queryItems.append(URLQueryItem(name: "payee", value: payee))
+    }
+
     let data = try await client.get("transactions/", queryItems: queryItems)
 
     do {
