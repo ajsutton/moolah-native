@@ -7,10 +7,10 @@ struct TransactionListView: View {
 
   var body: some View {
     List {
-      ForEach(transactionStore.transactions) { transaction in
-        TransactionRowView(transaction: transaction, accounts: accounts)
+      ForEach(transactionStore.transactions) { entry in
+        TransactionRowView(transaction: entry.transaction, accounts: accounts, balance: entry.balance)
           .onAppear {
-            if transaction.id == transactionStore.transactions.last?.id {
+            if entry.id == transactionStore.transactions.last?.id {
               Task {
                 await transactionStore.loadMore()
               }
@@ -48,7 +48,7 @@ struct TransactionListView: View {
 #Preview {
   let accountId = UUID()
   let savingsId = UUID()
-  let account = Account(id: accountId, name: "Checking", type: .bank, balance: 100000)
+  let account = Account(id: accountId, name: "Checking", type: .bank, balance: 244977)
   let accounts = Accounts(from: [
     account,
     Account(id: savingsId, name: "Savings", type: .bank, balance: 500000),

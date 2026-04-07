@@ -36,6 +36,11 @@ struct TransactionStoreTests {
 
     #expect(store.transactions.count == 3)
     #expect(!store.isLoading)
+
+    // Each entry should have a running balance
+    for entry in store.transactions {
+      #expect(entry.transaction.accountId == accountId)
+    }
   }
 
   @Test func testPaginationAppendsSecondPage() async throws {
@@ -95,7 +100,7 @@ struct TransactionStoreTests {
     await store.load(filter: TransactionFilter(accountId: accountId))
 
     #expect(store.transactions.count == 2)  // Direct + transfer-in
-    let payees = store.transactions.map(\.payee)
+    let payees = store.transactions.map(\.transaction.payee)
     #expect(payees.contains("Mine"))
     #expect(payees.contains("Transfer In"))
   }
@@ -117,9 +122,38 @@ struct TransactionStoreTests {
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
-    #expect(store.transactions[0].payee == "Newest")
-    #expect(store.transactions[1].payee == "Middle")
-    #expect(store.transactions[2].payee == "Oldest")
+    #expect(store.transactions[0].transaction.payee == "Newest")
+    #expect(store.transactions[1].transaction.payee == "Middle")
+    #expect(store.transactions[2].transaction.payee == "Oldest")
+  }
+
+  @Test func testRunningBalancesComputed() async throws {
+    let transactions = [
+      Transaction(
+        type: .income, date: makeDate("2024-01-03"), accountId: accountId, amount: 100000,
+        payee: "Salary"),
+      Transaction(
+        type: .expense, date: makeDate("2024-01-02"), accountId: accountId, amount: -2500,
+        payee: "Coffee"),
+      Transaction(
+        type: .expense, date: makeDate("2024-01-01"), accountId: accountId, amount: -10000,
+        payee: "Groceries"),
+    ]
+    let repository = InMemoryTransactionRepository(initialTransactions: transactions)
+    let store = TransactionStore(repository: repository)
+
+    await store.load(filter: TransactionFilter(accountId: accountId))
+
+    #expect(store.transactions.count == 3)
+
+    // Transactions are newest-first; balance is the running total after each tx
+    // priorBalance = 0 (no older transactions)
+    // Groceries (oldest): 0 + (-10000) = -10000
+    // Coffee: -10000 + (-2500) = -12500
+    // Salary (newest): -12500 + 100000 = 87500
+    #expect(store.transactions[0].balance == 87500)  // After Salary
+    #expect(store.transactions[1].balance == -12500)  // After Coffee
+    #expect(store.transactions[2].balance == -10000)  // After Groceries
   }
 
   @Test func testReloadClearsExisting() async throws {

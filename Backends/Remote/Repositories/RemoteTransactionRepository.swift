@@ -9,7 +9,7 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
     self.client = client
   }
 
-  func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> [Transaction] {
+  func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> TransactionPage {
     var queryItems: [URLQueryItem] = []
 
     queryItems.append(URLQueryItem(name: "pageSize", value: String(pageSize)))
@@ -28,7 +28,10 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
     do {
       let wrapper = try JSONDecoder().decode(TransactionDTO.ListWrapper.self, from: data)
       logger.debug("Successfully decoded \(wrapper.transactions.count) transactions")
-      return wrapper.transactions.map { $0.toDomain() }
+      return TransactionPage(
+        transactions: wrapper.transactions.map { $0.toDomain() },
+        priorBalance: wrapper.priorBalance
+      )
     } catch {
       logger.error("Decoding error: \(error.localizedDescription)")
       throw error

@@ -7,7 +7,7 @@ actor InMemoryTransactionRepository: TransactionRepository {
     self.transactions = Dictionary(uniqueKeysWithValues: initialTransactions.map { ($0.id, $0) })
   }
 
-  func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> [Transaction] {
+  func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> TransactionPage {
     var result = Array(transactions.values)
 
     // Filter by accountId (matches account_id OR to_account_id, like the server)
@@ -28,9 +28,16 @@ actor InMemoryTransactionRepository: TransactionRepository {
 
     // Paginate
     let offset = page * pageSize
-    guard offset < result.count else { return [] }
+    guard offset < result.count else {
+      return TransactionPage(transactions: [], priorBalance: 0)
+    }
     let end = min(offset + pageSize, result.count)
-    return Array(result[offset..<end])
+    let pageTransactions = Array(result[offset..<end])
+
+    // priorBalance = sum of all transactions older than this page
+    let priorBalance = result[end...].reduce(0) { $0 + $1.amount }
+
+    return TransactionPage(transactions: pageTransactions, priorBalance: priorBalance)
   }
 
   // For test setup

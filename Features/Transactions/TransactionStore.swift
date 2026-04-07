@@ -5,7 +5,7 @@ import Observation
 @Observable
 @MainActor
 final class TransactionStore {
-  private(set) var transactions: [Transaction] = []
+  private(set) var transactions: [TransactionWithBalance] = []
   private(set) var isLoading = false
   private(set) var hasMore = true
   private(set) var error: Error?
@@ -15,6 +15,8 @@ final class TransactionStore {
   private let logger = Logger(subsystem: "com.moolah.app", category: "TransactionStore")
   private var currentFilter = TransactionFilter()
   private var currentPage = 0
+  private var rawTransactions: [Transaction] = []
+  private var priorBalance: Int = 0
 
   init(repository: TransactionRepository, pageSize: Int = 50) {
     self.repository = repository
@@ -24,6 +26,8 @@ final class TransactionStore {
   func load(filter: TransactionFilter) async {
     currentFilter = filter
     currentPage = 0
+    rawTransactions = []
+    priorBalance = 0
     transactions = []
     hasMore = true
     error = nil
@@ -45,10 +49,16 @@ final class TransactionStore {
         page: currentPage,
         pageSize: pageSize
       )
-      transactions.append(contentsOf: page)
-      hasMore = page.count >= pageSize
+      rawTransactions.append(contentsOf: page.transactions)
+      priorBalance = page.priorBalance
+      hasMore = page.transactions.count >= pageSize
       currentPage += 1
-      logger.debug("Loaded \(page.count) transactions (total: \(self.transactions.count))")
+      transactions = TransactionPage.withRunningBalances(
+        transactions: rawTransactions,
+        priorBalance: priorBalance
+      )
+      logger.debug(
+        "Loaded \(page.transactions.count) transactions (total: \(self.rawTransactions.count))")
     } catch {
       logger.error("Failed to load transactions: \(error.localizedDescription)")
       self.error = error

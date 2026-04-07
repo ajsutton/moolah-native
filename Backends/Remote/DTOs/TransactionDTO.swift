@@ -43,6 +43,7 @@ struct TransactionDTO: Codable {
   struct ListWrapper: Codable {
     let transactions: [TransactionDTO]
     let hasMore: Bool
+    let priorBalance: Int
     let totalNumberOfTransactions: Int
   }
 }

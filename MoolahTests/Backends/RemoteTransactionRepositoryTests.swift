@@ -33,13 +33,16 @@ struct RemoteTransactionRepositoryTests {
       return (response, data)
     }
 
-    let transactions = try await repository.fetch(
+    let page = try await repository.fetch(
       filter: TransactionFilter(),
       page: 0,
       pageSize: 50
     )
 
-    #expect(transactions.count == 5)
+    #expect(page.transactions.count == 5)
+    #expect(page.priorBalance == 0)
+
+    let transactions = page.transactions
 
     // First transaction: expense
     #expect(transactions[0].type == .expense)

@@ -3,6 +3,7 @@ import SwiftUI
 struct TransactionRowView: View {
   let transaction: Transaction
   let accounts: Accounts
+  let balance: Int
 
   var body: some View {
     HStack {
@@ -21,9 +22,16 @@ struct TransactionRowView: View {
 
       Spacer()
 
-      Text(Decimal(transaction.amount) / 100, format: .currency(code: Constants.defaultCurrency))
-        .foregroundStyle(amountColor)
-        .monospacedDigit()
+      VStack(alignment: .trailing, spacing: 2) {
+        Text(Decimal(transaction.amount) / 100, format: .currency(code: Constants.defaultCurrency))
+          .foregroundStyle(amountColor)
+          .monospacedDigit()
+
+        Text(Decimal(balance) / 100, format: .currency(code: Constants.defaultCurrency))
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .monospacedDigit()
+      }
     }
     .padding(.vertical, 2)
   }
@@ -79,7 +87,7 @@ struct TransactionRowView: View {
         accountId: UUID(),
         amount: -5023,
         payee: "Woolworths"
-      ), accounts: accounts)
+      ), accounts: accounts, balance: 100000)
     TransactionRowView(
       transaction: Transaction(
         type: .income,
@@ -87,7 +95,7 @@ struct TransactionRowView: View {
         accountId: UUID(),
         amount: 350000,
         payee: "Employer Pty Ltd"
-      ), accounts: accounts)
+      ), accounts: accounts, balance: 105023)
     TransactionRowView(
       transaction: Transaction(
         type: .transfer,
@@ -96,7 +104,7 @@ struct TransactionRowView: View {
         toAccountId: savingsId,
         amount: -100000,
         payee: ""
-      ), accounts: accounts)
+      ), accounts: accounts, balance: -244977)
     TransactionRowView(
       transaction: Transaction(
         type: .transfer,
@@ -105,6 +113,6 @@ struct TransactionRowView: View {
         toAccountId: savingsId,
         amount: -50000,
         payee: "Rent Split"
-      ), accounts: accounts)
+      ), accounts: accounts, balance: -144977)
   }
 }

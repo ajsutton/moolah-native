@@ -62,3 +62,40 @@ struct TransactionFilter: Sendable {
     self.scheduled = scheduled
   }
 }
+
+/// A page of transactions returned from the repository, including the account
+/// balance prior to the earliest transaction in this page.
+struct TransactionPage: Sendable {
+  let transactions: [Transaction]
+  let priorBalance: Int
+
+  /// Computes the running balance after each transaction.
+  /// Transactions must be ordered newest-first (as returned by the repository).
+  /// `priorBalance` is the account balance before the oldest transaction in the list.
+  static func withRunningBalances(
+    transactions: [Transaction],
+    priorBalance: Int
+  ) -> [TransactionWithBalance] {
+    // Walk oldest-to-newest accumulating the balance
+    var balance = priorBalance
+    var result: [TransactionWithBalance] = []
+    result.reserveCapacity(transactions.count)
+
+    for transaction in transactions.reversed() {
+      balance += transaction.amount
+      result.append(TransactionWithBalance(transaction: transaction, balance: balance))
+    }
+
+    // Reverse back to newest-first display order
+    result.reverse()
+    return result
+  }
+}
+
+/// A transaction paired with the account balance after it was applied.
+struct TransactionWithBalance: Sendable, Identifiable {
+  let transaction: Transaction
+  let balance: Int
+
+  var id: UUID { transaction.id }
+}
