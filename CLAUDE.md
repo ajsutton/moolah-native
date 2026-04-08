@@ -37,10 +37,35 @@ just generate
   - Use `Sendable` on all types that cross actor boundaries.
   - Prefer `async/await` over callbacks or completion handlers.
 
+### Thin Views, Testable Stores
+
+Views must be thin wrappers that bind state, dispatch actions, and render. **All business logic belongs in stores, model extensions, or shared utilities** — never in private view methods.
+
+**What belongs in a Store:**
+- Multi-step orchestration (e.g., create transaction → update scheduled date → reload). See `TransactionStore.payScheduledTransaction(_:)` as the reference pattern.
+- Any async sequence where step N depends on step N-1 succeeding.
+- Error formatting and error state management.
+- Computed aggregations over domain data (e.g., available funds, filtered totals).
+
+**What belongs in a Model extension or Shared utility:**
+- Data transformation and validation (e.g., form fields → Transaction, currency text → cents).
+- Parsing logic (use `MonetaryAmount.parseCents(from:)` — never duplicate `parseCurrency` in views).
+- Computed display properties that are reused across views.
+
+**What stays in the View:**
+- `@State` bindings for local UI state (selection, sheet visibility, search text).
+- Dispatching store actions (one-liner `Task { await store.doThing() }`).
+- Passing the store's result to local UI state (e.g., updating `selectedTransaction` from a `PayResult`).
+- SwiftUI layout, styling, and modifiers.
+
+**Why:** Private view methods cannot be unit-tested. Logic in stores runs against `InMemoryBackend` in milliseconds with no simulator. See `plans/UI_TESTING_PLAN.md` for the full audit and refactoring roadmap.
+
 ## Testing & TDD
 
 - **Write the test file before the implementation file (TDD).**
 - **Contract Tests:** Every repository protocol has a contract test suite in `MoolahTests/Domain/`. Both `InMemoryBackend` and `RemoteBackend` must satisfy these tests.
+- **Store Tests:** Every store method that mutates state must have tests verifying both the store's published state and the underlying repository state. Use `InMemoryBackend` — never mock the repository. Test error paths (rollback on failure) not just happy paths.
+- **When adding a new user action** (button tap, swipe, menu item) that triggers a multi-step async flow: put the logic in the store, write the test for the store method, then wire the view to call it.
 - **Verification:** Every `InMemoryBackend` method must be verified against `moolah-server` source before implementation. Read the corresponding route/controller in `../moolah-server/src/` to confirm filtering semantics, sort order, and computed values.
 - **Fixtures:** Remote backend tests use `URLProtocol` stubs against fixture JSON in `MoolahTests/Support/Fixtures/`.
 - **Targets:** `MoolahTests_iOS` (simulator) and `MoolahTests_macOS` (native).
@@ -61,6 +86,7 @@ just generate
 - **Current Plans:**
   - `plans/NATIVE_APP_PLAN.md` — master implementation plan (vertical slices, steps 1-14)
   - `plans/SCHEDULED_TRANSACTIONS_GAP_ANALYSIS.md` — detailed comparison of scheduled transaction functionality between moolah-server, moolah web app, and moolah-native
+  - `plans/UI_TESTING_PLAN.md` — store-level refactoring (extract view logic, ~54 tests) and XCUITest plan (~12 tests) for high-risk UI flows
 - **Creating New Plans:** When documenting new features, architecture decisions, or gap analyses, create a new markdown file in `plans/` with a descriptive name (e.g., `OFFLINE_SYNC_DESIGN.md`, `CLOUDKIT_BACKEND_PLAN.md`).
 
 ## Agents
