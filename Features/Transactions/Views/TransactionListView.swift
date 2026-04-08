@@ -35,7 +35,7 @@ struct TransactionListView: View {
             selectedTransaction = nil
           }
         )
-        .frame(width: 350)
+        .frame(width: UIConstants.detailPanelWidth)
         .id(selected.id)  // Force recreation when transaction changes
       }
     }

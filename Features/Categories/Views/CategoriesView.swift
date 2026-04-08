@@ -33,7 +33,7 @@ struct CategoriesView: View {
             }
           }
         )
-        .frame(width: 350)
+        .frame(width: UIConstants.detailPanelWidth)
       }
     }
     .sheet(isPresented: $showCreateSheet) {
@@ -99,6 +99,13 @@ struct CategoriesView: View {
     #endif
     .navigationTitle("Categories")
     .toolbar {
+      if categoryStore.isLoading && !categoryStore.categories.roots.isEmpty {
+        ToolbarItem(placement: .automatic) {
+          ProgressView()
+            .controlSize(.small)
+            .accessibilityLabel("Refreshing categories")
+        }
+      }
       ToolbarItem(placement: .primaryAction) {
         Button {
           showCreateSheet = true

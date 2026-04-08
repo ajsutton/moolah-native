@@ -170,6 +170,7 @@ struct TransactionFilterView: View {
             Button("Clear All") {
               clearAll()
             }
+            .keyboardShortcut(.delete, modifiers: .command)
           }
         #endif
       }

@@ -8,6 +8,12 @@ struct TransactionRowView: View {
   let balance: MonetaryAmount
   var hideEarmark: Bool = false
 
+  #if os(macOS)
+    @ScaledMetric private var verticalPadding: CGFloat = 8
+  #else
+    @ScaledMetric private var verticalPadding: CGFloat = 12
+  #endif
+
   var body: some View {
     HStack {
       Image(systemName: iconName)
@@ -51,11 +57,7 @@ struct TransactionRowView: View {
         MonetaryAmountView(amount: balance, font: .caption)
       }
     }
-    #if os(macOS)
-      .padding(.vertical, 8)
-    #else
-      .padding(.vertical, 12)
-    #endif
+    .padding(.vertical, verticalPadding)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityDescription)
   }

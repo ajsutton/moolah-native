@@ -115,7 +115,12 @@
 | 9 | Important | Fixed | Changed .blue to .secondary for neutral savings column |
 | 10 | Important | Fixed | Increased legend circle from 10pt to 12pt |
 | 11 | Important | Fixed | Changed .frame(height: 60) to .frame(minHeight: 60, maxHeight: 120) |
-| 12 | Important | Deferred | Card empty state intentionally uses lighter treatment (not a full list view) |
-| 13 | Important | Deferred | Recurrence logic is small, extraction would add complexity for no benefit |
+| 12 | Important | Fixed | Replaced plain Text with ContentUnavailableView |
+| 13 | Important | Fixed | Extracted RecurPeriod.recurrenceDescription(every:) shared utility |
 | 14 | Important | Fixed | Added .accessibilityLabel("Loading more values") to ProgressView |
-| 15-20 | Minor | Deferred | Low-impact consistency items |
+| 15 | Minor | Fixed | Added UIConstants.detailPanelWidth, replaced all hardcoded 350pt |
+| 16 | Minor | N/A | Button pattern is correct: toolbar = Label+icon, form submit = Text only (Apple HIG) |
+| 17 | Minor | Fixed | Added Cmd+Delete shortcut to Clear All filter button (macOS) |
+| 18 | Minor | Fixed | UpcomingTransactionsCard uses .inset on macOS, .plain on iOS |
+| 19 | Minor | Fixed | TransactionRowView padding uses @ScaledMetric for Dynamic Type |
+| 20 | Minor | Fixed | Added toolbar ProgressView during category refresh |

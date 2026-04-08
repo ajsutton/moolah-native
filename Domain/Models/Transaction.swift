@@ -56,6 +56,15 @@ enum RecurPeriod: String, Codable, Sendable, CaseIterable {
   }
 }
 
+extension RecurPeriod {
+  /// Human-readable recurrence description, e.g. "Every month" or "Every 2 weeks".
+  func recurrenceDescription(every: Int) -> String {
+    guard self != .once else { return "" }
+    let periodName = every == 1 ? displayName.lowercased() : pluralDisplayName.lowercased()
+    return every == 1 ? "Every \(periodName)" : "Every \(every) \(periodName)"
+  }
+}
+
 struct Transaction: Codable, Sendable, Identifiable, Hashable {
   let id: UUID
   var type: TransactionType

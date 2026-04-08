@@ -25,10 +25,12 @@ struct UpcomingTransactionsCard: View {
   }
 
   private var emptyState: some View {
-    Text("No upcoming transactions")
-      .foregroundStyle(.secondary)
-      .frame(maxWidth: .infinity, alignment: .center)
-      .padding(.vertical, 20)
+    ContentUnavailableView(
+      "No Upcoming Transactions",
+      systemImage: "calendar",
+      description: Text("No scheduled transactions due in the next 14 days.")
+    )
+    .frame(maxHeight: 200)
   }
 
   private var transactionList: some View {
@@ -39,7 +41,11 @@ struct UpcomingTransactionsCard: View {
         }
       }
     }
-    .listStyle(.plain)
+    #if os(macOS)
+      .listStyle(.inset)
+    #else
+      .listStyle(.plain)
+    #endif
     .frame(height: 200)
     .accessibilityLabel("List of upcoming transactions in the next 14 days")
   }
@@ -73,12 +79,17 @@ private struct SimpleTransactionRow: View {
             .foregroundStyle(.secondary)
             .monospacedDigit()
 
-          if let recurPeriod = transaction.recurPeriod, recurPeriod != .once {
+          if let recurPeriod = transaction.recurPeriod,
+            let recurEvery = transaction.recurEvery,
+            recurPeriod != .once
+          {
             Text("•")
               .foregroundStyle(.secondary)
-            Text(recurPeriod.displayName)
+            Text(recurPeriod.recurrenceDescription(every: recurEvery))
               .font(.caption)
               .foregroundStyle(.secondary)
+              .accessibilityLabel(
+                "Repeats \(recurPeriod.recurrenceDescription(every: recurEvery))")
           }
         }
       }

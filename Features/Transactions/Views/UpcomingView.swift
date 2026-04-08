@@ -29,7 +29,7 @@ struct UpcomingView: View {
             selectedTransaction = nil
           }
         )
-        .frame(width: 350)
+        .frame(width: UIConstants.detailPanelWidth)
       }
     }
   }
@@ -259,10 +259,7 @@ struct UpcomingTransactionRow: View {
     else {
       return nil
     }
-
-    let periodName =
-      every == 1 ? period.displayName.lowercased() : period.pluralDisplayName.lowercased()
-    return every == 1 ? "Every \(periodName)" : "Every \(every) \(periodName)"
+    return period.recurrenceDescription(every: every)
   }
 }
 
