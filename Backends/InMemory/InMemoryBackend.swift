@@ -8,18 +8,29 @@ final class InMemoryBackend: BackendProvider, @unchecked Sendable {
   let transactions: any TransactionRepository
   let categories: any CategoryRepository
   let earmarks: any EarmarkRepository
+  let analysis: any AnalysisRepository
 
-  init(
-    auth: any AuthProvider = InMemoryAuthProvider(),
-    accounts: any AccountRepository = InMemoryAccountRepository(),
-    transactions: any TransactionRepository = InMemoryTransactionRepository(),
-    categories: any CategoryRepository = InMemoryCategoryRepository(),
-    earmarks: any EarmarkRepository = InMemoryEarmarkRepository()
-  ) {
-    self.auth = auth
-    self.accounts = accounts
-    self.transactions = transactions
-    self.categories = categories
-    self.earmarks = earmarks
+  init() {
+    // Create concrete repositories first
+    let authRepo = InMemoryAuthProvider()
+    let accountsRepo = InMemoryAccountRepository()
+    let transactionsRepo = InMemoryTransactionRepository()
+    let categoriesRepo = InMemoryCategoryRepository()
+    let earmarksRepo = InMemoryEarmarkRepository()
+
+    // Create analysis repository with dependencies
+    let analysisRepo = InMemoryAnalysisRepository(
+      transactionRepository: transactionsRepo,
+      accountRepository: accountsRepo,
+      earmarkRepository: earmarksRepo
+    )
+
+    // Assign to properties
+    self.auth = authRepo
+    self.accounts = accountsRepo
+    self.transactions = transactionsRepo
+    self.categories = categoriesRepo
+    self.earmarks = earmarksRepo
+    self.analysis = analysisRepo
   }
 }

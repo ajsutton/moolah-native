@@ -301,29 +301,7 @@ private struct CreateEarmarkSheet: View {
 }
 
 #Preview {
-  let backend = InMemoryBackend(
-    accounts: InMemoryAccountRepository(initialAccounts: [
-      Account(
-        name: "Bank", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency)),
-      Account(
-        name: "Asset", type: .asset,
-        balance: MonetaryAmount(cents: 500000, currency: Currency.defaultCurrency)),
-      Account(
-        name: "Credit Card", type: .creditCard,
-        balance: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency)),
-      Account(
-        name: "Investment", type: .investment,
-        balance: MonetaryAmount(cents: 2_000_000, currency: Currency.defaultCurrency)),
-    ]),
-    earmarks: InMemoryEarmarkRepository(initialEarmarks: [
-      Earmark(
-        name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 150000, currency: Currency.defaultCurrency)),
-      Earmark(
-        name: "Emergency Fund",
-        balance: MonetaryAmount(cents: 300000, currency: Currency.defaultCurrency)),
-    ]))
+  let backend = InMemoryBackend()
   let accountStore = AccountStore(repository: backend.accounts)
   let earmarkStore = EarmarkStore(repository: backend.earmarks)
 
@@ -332,6 +310,20 @@ private struct CreateEarmarkSheet: View {
       .environment(accountStore)
       .environment(earmarkStore)
       .task {
+        // Add some preview data
+        try? await backend.accounts.create(
+          Account(
+            name: "Bank", type: .bank,
+            balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency)))
+        try? await backend.accounts.create(
+          Account(
+            name: "Asset", type: .asset,
+            balance: MonetaryAmount(cents: 500000, currency: Currency.defaultCurrency)))
+        try? await backend.earmarks.create(
+          Earmark(
+            name: "Holiday Fund",
+            balance: MonetaryAmount(cents: 150000, currency: Currency.defaultCurrency)))
+
         await accountStore.load()
         await earmarkStore.load()
       }

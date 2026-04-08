@@ -119,7 +119,7 @@ struct UpcomingView: View {
   }
 }
 
-private struct UpcomingTransactionRow: View {
+struct UpcomingTransactionRow: View {
   let transaction: Transaction
   let accounts: Accounts
   let categories: Categories

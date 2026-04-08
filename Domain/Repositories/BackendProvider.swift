@@ -8,4 +8,5 @@ protocol BackendProvider: Sendable {
   var transactions: any TransactionRepository { get }
   var categories: any CategoryRepository { get }
   var earmarks: any EarmarkRepository { get }
+  var analysis: any AnalysisRepository { get }
 }

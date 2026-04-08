@@ -41,6 +41,10 @@ struct MonetaryAmount: Codable, Sendable, Hashable, Comparable {
     lhs = lhs + rhs
   }
 
+  static func -= (lhs: inout MonetaryAmount, rhs: MonetaryAmount) {
+    lhs = lhs - rhs
+  }
+
   static func < (lhs: MonetaryAmount, rhs: MonetaryAmount) -> Bool {
     lhs.cents < rhs.cents
   }
