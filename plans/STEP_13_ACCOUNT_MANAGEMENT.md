@@ -1,0 +1,1484 @@
+# Step 13 — Account Management (Create / Edit / Reorder)
+
+**Date:** 2026-04-08
+**Status:** Planning
+
+---
+
+## Executive Summary
+
+Account management is **partially implemented** in moolah-native. The read-only view layer (AccountStore, AccountRowView) and repository pattern are in place, but all mutation operations (create, update, delete, reorder) are missing.
+
+This document provides a complete specification for account CRUD operations, including repository protocol extensions, backend implementations, UI components, and comprehensive testing.
+
+**Estimated Total Effort:** ~12 hours
+
+---
+
+## 1. Overview
+
+### Feature Scope
+
+Users must be able to:
+1. **Create** new accounts with name, type, and initial balance
+2. **Edit** existing accounts (change name, type, hide/show)
+3. **Reorder** accounts via drag-and-drop
+4. **Delete** accounts (soft delete via `hidden` flag)
+
+### Current State
+
+**✅ Implemented:**
+- `Account` domain model with all required fields (id, name, type, balance, position, isHidden)
+- `AccountType` enum (bank, creditCard, asset, investment)
+- `AccountRepository` protocol with `fetchAll()` read operation
+- `InMemoryAccountRepository` and `RemoteAccountRepository` with read-only implementations
+- `AccountStore` with computed properties (currentAccounts, investmentAccounts, totals)
+- `AccountRowView` for displaying accounts in lists
+
+**❌ Missing:**
+- Repository mutation methods (create, update, delete)
+- Backend implementations (InMemory + Remote)
+- UI views (CreateAccountView, EditAccountView)
+- Drag-and-drop reordering
+- Form validation
+- Contract tests for mutations
+- Error handling and optimistic updates
+
+---
+
+## 2. Server API Reference
+
+Based on analysis of `moolah-server/src/routes/accounts.js` and handlers.
+
+### 2.1 Create Account
+
+**Endpoint:** `POST /api/accounts/`
+
+**Request Body:**
+```json
+{
+  "name": "Savings Account",
+  "type": "bank",
+  "balance": 100000,
+  "position": 0,
+  "date": "2026-01-15"  // optional, defaults to today
+}
+```
+
+**Response:** `201 Created`
+```json
+{
+  "id": "abc-123",
+  "name": "Savings Account",
+  "type": "bank",
+  "balance": 100000,
+  "position": 0,
+  "hidden": false
+}
+```
+
+**Server Behavior:**
+- Generates a new UUID for the account
+- Creates both an `account` record and an `openingBalance` transaction
+- The transaction ID matches the account ID
+- The `date` field from request is used for the opening balance transaction date (defaults to today if omitted)
+- Sets `hidden: false` by default
+- Uses `position: 0` if not specified
+
+**Validation:**
+- `name`: required, max 255 characters
+- `type`: required, must be one of: `"bank"`, `"cc"`, `"asset"`, `"investment"`
+- `balance`: required, integer (cents)
+- `position`: optional, integer >= 0
+- `date`: optional, ISO 8601 date string
+
+### 2.2 Update Account
+
+**Endpoint:** `PUT /api/accounts/{id}/`
+
+**Request Body:**
+```json
+{
+  "id": "abc-123",
+  "name": "Updated Savings",
+  "type": "bank",
+  "position": 2,
+  "hidden": true
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "id": "abc-123",
+  "name": "Updated Savings",
+  "type": "bank",
+  "balance": 123456,
+  "position": 2,
+  "hidden": true
+}
+```
+
+**Server Behavior:**
+- Fetches current account to verify it exists
+- Merges request payload into existing account
+- Recalculates balance from transactions (always server-authoritative)
+- Updates account record in database
+- Returns updated account with current balance
+
+**Validation:**
+- `id`: must match URL parameter
+- `name`: required, max 255 characters
+- `type`: required, must be one of: `"bank"`, `"cc"`, `"asset"`, `"investment"`
+- `position`: optional, integer >= 0
+- `hidden`: optional, boolean
+
+**Important:**
+- Balance is NOT editable via PUT (it's computed from transactions)
+- To change balance, create/edit transactions
+- Client should accept server's balance value in response
+
+### 2.3 Delete Account
+
+**Gap:** moolah-server has **no DELETE endpoint** for accounts. Deletion is achieved by setting `hidden: true` (soft delete).
+
+**Implementation:**
+- Client calls `PUT /api/accounts/{id}/` with `{ hidden: true }`
+- Server validation: account balance must be $0.00 to hide (web app enforces this)
+- Hidden accounts are filtered client-side (not returned by default GET)
+
+---
+
+## 3. Repository Protocol Extensions
+
+### 3.1 AccountRepository Protocol
+
+**File:** `Domain/Repositories/AccountRepository.swift`
+
+**New Methods:**
+
+```swift
+protocol AccountRepository: Sendable {
+  // Existing
+  func fetchAll() async throws -> [Account]
+
+  // NEW: Mutations
+  func create(_ account: Account) async throws -> Account
+  func update(_ account: Account) async throws -> Account
+  func delete(id: UUID) async throws  // Soft delete (sets hidden: true)
+}
+```
+
+**Method Specifications:**
+
+#### `create(_ account: Account) async throws -> Account`
+
+**Parameters:**
+- `account`: Account instance with all required fields
+  - `id`: UUID (pre-generated by caller)
+  - `name`: Non-empty string
+  - `type`: AccountType enum value
+  - `balance`: Initial balance (MonetaryAmount)
+  - `position`: Integer >= 0 (defaults to 0)
+  - `isHidden`: Boolean (defaults to false)
+
+**Returns:** Created account with server-confirmed values
+
+**Throws:**
+- `RepositoryError.validationFailed` if name is empty
+- `RepositoryError.networkError` for network failures (RemoteBackend)
+- `RepositoryError.unauthorized` if session expired
+
+**Behavior:**
+- InMemoryBackend: Appends to internal array, updates balance via opening transaction
+- RemoteBackend: POST to `/api/accounts/`, uses current date for opening balance
+
+**Validation:**
+- Name must not be empty or whitespace-only
+- Balance can be negative (e.g., credit cards, loans)
+- Position must be >= 0
+
+#### `update(_ account: Account) async throws -> Account`
+
+**Parameters:**
+- `account`: Account instance with updated fields
+  - Must include existing `id`
+  - All other fields are updatable (name, type, position, isHidden)
+
+**Returns:** Updated account with server-confirmed balance
+
+**Throws:**
+- `RepositoryError.notFound` if account ID doesn't exist
+- `RepositoryError.validationFailed` if name is empty
+- `RepositoryError.networkError` for network failures
+
+**Behavior:**
+- InMemoryBackend: Replaces account in array, preserves balance
+- RemoteBackend: PUT to `/api/accounts/{id}/`, accepts server's balance value
+
+**Important:**
+- Balance is **read-only** and computed from transactions
+- Client should update local balance from server response
+- Type changes are allowed (e.g., bank → credit card)
+
+#### `delete(id: UUID) async throws`
+
+**Parameters:**
+- `id`: UUID of account to soft-delete
+
+**Returns:** Void
+
+**Throws:**
+- `RepositoryError.notFound` if account ID doesn't exist
+- `RepositoryError.validationFailed` if account balance != 0 (must be zeroed first)
+
+**Behavior:**
+- InMemoryBackend: Sets `isHidden: true`, validates balance == 0
+- RemoteBackend: PUT to `/api/accounts/{id}/` with `{ hidden: true }`
+
+**Validation:**
+- Account balance must be exactly $0.00
+- If balance != 0, throw `RepositoryError.validationFailed("Cannot delete account with non-zero balance")`
+
+---
+
+## 4. Backend Implementations
+
+### 4.1 InMemoryAccountRepository
+
+**File:** `Backends/InMemory/InMemoryAccountRepository.swift`
+
+**Current State:** Only implements `fetchAll()`
+
+**New Implementation:**
+
+```swift
+actor InMemoryAccountRepository: AccountRepository {
+  private var accounts: [Account]
+  private var transactions: [Transaction] = []  // Track opening balance txns
+
+  func create(_ account: Account) async throws -> Account {
+    // Validation
+    guard !account.name.trimmingCharacters(in: .whitespaces).isEmpty else {
+      throw RepositoryError.validationFailed("Account name cannot be empty")
+    }
+
+    // Check for duplicate ID (shouldn't happen, but defensive)
+    guard !accounts.contains(where: { $0.id == account.id }) else {
+      throw RepositoryError.validationFailed("Account ID already exists")
+    }
+
+    // Create opening balance transaction
+    let openingBalanceTxn = Transaction(
+      id: account.id,  // Same ID as account
+      accountId: account.id,
+      date: Date(),  // Today
+      payee: "Opening Balance",
+      amount: account.balance,
+      categoryId: nil,
+      earmarkId: nil,
+      notes: nil,
+      recurPeriod: nil,
+      recurEvery: nil
+    )
+
+    transactions.append(openingBalanceTxn)
+    accounts.append(account)
+
+    return account
+  }
+
+  func update(_ account: Account) async throws -> Account {
+    guard let index = accounts.firstIndex(where: { $0.id == account.id }) else {
+      throw RepositoryError.notFound("Account not found")
+    }
+
+    // Validation
+    guard !account.name.trimmingCharacters(in: .whitespaces).isEmpty else {
+      throw RepositoryError.validationFailed("Account name cannot be empty")
+    }
+
+    // Preserve balance (server-computed, not updated by client)
+    var updated = account
+    updated.balance = accounts[index].balance
+
+    accounts[index] = updated
+    return updated
+  }
+
+  func delete(id: UUID) async throws {
+    guard let account = accounts.first(where: { $0.id == id }) else {
+      throw RepositoryError.notFound("Account not found")
+    }
+
+    // Validate balance is zero
+    guard account.balance.cents == 0 else {
+      throw RepositoryError.validationFailed("Cannot delete account with non-zero balance")
+    }
+
+    // Soft delete
+    guard let index = accounts.firstIndex(where: { $0.id == id }) else { return }
+    accounts[index].isHidden = true
+  }
+}
+```
+
+**Position Management:**
+
+Reordering is handled client-side by updating `position` values and calling `update(_:)` for each affected account. The backend does not need special reordering logic.
+
+**Testing Notes:**
+- Must verify opening balance transaction is created
+- Must verify balance validation on delete
+- Must verify duplicate ID rejection
+
+### 4.2 RemoteAccountRepository
+
+**File:** `Backends/Remote/RemoteAccountRepository.swift`
+
+**New Implementation:**
+
+```swift
+actor RemoteAccountRepository: AccountRepository {
+  private let httpClient: HTTPClient
+
+  func create(_ account: Account) async throws -> Account {
+    // Validation
+    guard !account.name.trimmingCharacters(in: .whitespaces).isEmpty else {
+      throw RepositoryError.validationFailed("Account name cannot be empty")
+    }
+
+    let dto = CreateAccountDTO(
+      name: account.name,
+      type: account.type.rawValue,
+      balance: account.balance.cents,
+      position: account.position,
+      date: ISO8601DateFormatter().string(from: Date())  // Today
+    )
+
+    let request = HTTPRequest(
+      method: .POST,
+      path: "/api/accounts/",
+      body: try JSONEncoder().encode(dto)
+    )
+
+    let response: AccountDTO = try await httpClient.execute(request)
+    return response.toDomain()
+  }
+
+  func update(_ account: Account) async throws -> Account {
+    // Validation
+    guard !account.name.trimmingCharacters(in: .whitespaces).isEmpty else {
+      throw RepositoryError.validationFailed("Account name cannot be empty")
+    }
+
+    let dto = UpdateAccountDTO(
+      id: account.id.uuidString,
+      name: account.name,
+      type: account.type.rawValue,
+      position: account.position,
+      hidden: account.isHidden
+    )
+
+    let request = HTTPRequest(
+      method: .PUT,
+      path: "/api/accounts/\(account.id.uuidString)/",
+      body: try JSONEncoder().encode(dto)
+    )
+
+    let response: AccountDTO = try await httpClient.execute(request)
+    return response.toDomain()  // Accept server's balance
+  }
+
+  func delete(id: UUID) async throws {
+    // Soft delete via update
+    let existing = try await fetchAll().first { $0.id == id }
+    guard let account = existing else {
+      throw RepositoryError.notFound("Account not found")
+    }
+
+    guard account.balance.cents == 0 else {
+      throw RepositoryError.validationFailed("Cannot delete account with non-zero balance")
+    }
+
+    var updated = account
+    updated.isHidden = true
+    _ = try await update(updated)
+  }
+}
+```
+
+**DTOs:**
+
+**File:** `Backends/Remote/DTOs/AccountDTO.swift`
+
+```swift
+// Add to existing file:
+
+struct CreateAccountDTO: Codable {
+  let name: String
+  let type: String
+  let balance: Int
+  let position: Int
+  let date: String
+}
+
+struct UpdateAccountDTO: Codable {
+  let id: String
+  let name: String
+  let type: String
+  let position: Int
+  let hidden: Bool
+}
+```
+
+**Optimistic Updates:**
+
+The `AccountStore` should implement optimistic updates for better UX:
+1. Immediately update local state
+2. Call backend mutation
+3. On success: accept server's response (especially balance)
+4. On failure: rollback local state, show error
+
+---
+
+## 5. UI Components
+
+### 5.1 CreateAccountView
+
+**File:** `Features/Accounts/Views/CreateAccountView.swift`
+
+**Purpose:** Sheet/modal for creating new accounts
+
+**Layout (Form-based):**
+
+```
+┌─────────────────────────────────────┐
+│ Create Account                   ✕  │  ← Navigation bar with dismiss
+├─────────────────────────────────────┤
+│                                     │
+│  Name *                             │
+│  ┌───────────────────────────────┐  │
+│  │ Savings Account               │  │
+│  └───────────────────────────────┘  │
+│                                     │
+│  Account Type *                     │
+│  ┌───────────────────────────────┐  │
+│  │ Bank Account              ▼   │  │  ← Picker: Bank, Credit Card, Asset, Investment
+│  └───────────────────────────────┘  │
+│                                     │
+│  Initial Balance *                  │
+│  ┌───────────────────────────────┐  │
+│  │ $ 1,000.00                    │  │  ← Monetary input
+│  └───────────────────────────────┘  │
+│                                     │
+│  Date                               │
+│  ┌───────────────────────────────┐  │
+│  │ 2026-04-08                    │  │  ← DatePicker (defaults to today)
+│  └───────────────────────────────┘  │
+│                                     │
+│  * Required                         │
+│                                     │
+├─────────────────────────────────────┤
+│              [Create Account]       │  ← Toolbar button (macOS) or inline (iOS)
+└─────────────────────────────────────┘
+```
+
+**Validation:**
+- Name: Required, non-empty, max 255 characters
+- Type: Required, must select from enum
+- Balance: Required, can be negative
+- Date: Optional, defaults to today
+
+**Implementation Details:**
+
+```swift
+struct CreateAccountView: View {
+  @Environment(\.dismiss) private var dismiss
+  @Environment(BackendProvider.self) private var backend
+
+  @State private var name = ""
+  @State private var type: AccountType = .bank
+  @State private var balance = MonetaryAmount.zero
+  @State private var date = Date()
+  @State private var isSubmitting = false
+  @State private var errorMessage: String?
+
+  var accountStore: AccountStore
+
+  var body: some View {
+    NavigationStack {
+      Form {
+        Section {
+          TextField("Name", text: $name)
+            .textFieldStyle(.plain)
+            .accessibilityLabel("Account name")
+
+          Picker("Account Type", selection: $type) {
+            ForEach(AccountType.allCases, id: \.self) { type in
+              Text(type.displayName).tag(type)
+            }
+          }
+
+          MonetaryAmountField(amount: $balance)
+            .accessibilityLabel("Initial balance")
+
+          DatePicker("Date", selection: $date, displayedComponents: .date)
+        }
+
+        if let errorMessage {
+          Section {
+            Text(errorMessage)
+              .foregroundStyle(.red)
+              .font(.caption)
+          }
+        }
+      }
+      .navigationTitle("Create Account")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") { dismiss() }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Create") { Task { await submit() } }
+            .disabled(!isValid || isSubmitting)
+        }
+      }
+    }
+  }
+
+  private var isValid: Bool {
+    !name.trimmingCharacters(in: .whitespaces).isEmpty
+  }
+
+  private func submit() async {
+    guard isValid else { return }
+
+    isSubmitting = true
+    errorMessage = nil
+
+    let newAccount = Account(
+      id: UUID(),
+      name: name.trimmingCharacters(in: .whitespaces),
+      type: type,
+      balance: balance,
+      position: 0  // Will be set to max(position) + 1 by backend
+    )
+
+    do {
+      _ = try await accountStore.create(newAccount)
+      dismiss()
+    } catch {
+      errorMessage = error.localizedDescription
+      isSubmitting = false
+    }
+  }
+}
+
+extension AccountType {
+  var displayName: String {
+    switch self {
+    case .bank: return "Bank Account"
+    case .creditCard: return "Credit Card"
+    case .asset: return "Asset"
+    case .investment: return "Investment"
+    }
+  }
+}
+```
+
+**Accessibility:**
+- All form fields have explicit labels
+- Error messages are announced by VoiceOver
+- Submit button disabled state is clear
+
+**Platform Adaptations:**
+- macOS: Fixed-width sheet (400pt), cmd+Enter to submit
+- iOS: Full-screen sheet, large touch targets
+
+### 5.2 EditAccountView
+
+**File:** `Features/Accounts/Views/EditAccountView.swift`
+
+**Purpose:** Sheet/modal for editing existing accounts
+
+**Layout (similar to CreateAccountView):**
+
+```
+┌─────────────────────────────────────┐
+│ Edit Account                     ✕  │
+├─────────────────────────────────────┤
+│                                     │
+│  Name *                             │
+│  ┌───────────────────────────────┐  │
+│  │ Savings Account               │  │
+│  └───────────────────────────────┘  │
+│                                     │
+│  Account Type *                     │
+│  ┌───────────────────────────────┐  │
+│  │ Bank Account              ▼   │  │
+│  └───────────────────────────────┘  │
+│                                     │
+│  Current Balance                    │
+│  ┌───────────────────────────────┐  │
+│  │ $ 1,234.56                    │  │  ← Read-only, gray text
+│  └───────────────────────────────┘  │
+│                                     │
+│  ☐ Hide Account                     │  ← Toggle (only if balance == 0)
+│                                     │
+├─────────────────────────────────────┤
+│  [Delete Account]    [Save Changes] │
+└─────────────────────────────────────┘
+```
+
+**Differences from Create:**
+- Balance is **read-only** (computed from transactions)
+- Shows "Hide Account" toggle (only enabled if balance == 0)
+- Shows "Delete Account" button (destructive action)
+
+**Implementation:**
+
+```swift
+struct EditAccountView: View {
+  @Environment(\.dismiss) private var dismiss
+  @State private var name: String
+  @State private var type: AccountType
+  @State private var isHidden: Bool
+  @State private var isSubmitting = false
+  @State private var errorMessage: String?
+  @State private var showingDeleteConfirmation = false
+
+  let account: Account
+  var accountStore: AccountStore
+
+  init(account: Account, accountStore: AccountStore) {
+    self.account = account
+    self.accountStore = accountStore
+    _name = State(initialValue: account.name)
+    _type = State(initialValue: account.type)
+    _isHidden = State(initialValue: account.isHidden)
+  }
+
+  var body: some View {
+    NavigationStack {
+      Form {
+        Section {
+          TextField("Name", text: $name)
+
+          Picker("Account Type", selection: $type) {
+            ForEach(AccountType.allCases, id: \.self) { type in
+              Text(type.displayName).tag(type)
+            }
+          }
+
+          LabeledContent("Current Balance") {
+            MonetaryAmountView(amount: account.balance)
+              .foregroundStyle(.secondary)
+          }
+          .accessibilityLabel("Current balance, read-only")
+        }
+
+        Section {
+          Toggle("Hide Account", isOn: $isHidden)
+            .disabled(account.balance.cents != 0)
+            .accessibilityHint(
+              account.balance.cents != 0
+                ? "Account must have zero balance to hide"
+                : ""
+            )
+        }
+
+        if let errorMessage {
+          Section {
+            Text(errorMessage)
+              .foregroundStyle(.red)
+              .font(.caption)
+          }
+        }
+
+        Section {
+          Button("Delete Account", role: .destructive) {
+            showingDeleteConfirmation = true
+          }
+          .disabled(account.balance.cents != 0)
+          .accessibilityHint(
+            account.balance.cents != 0
+              ? "Account must have zero balance to delete"
+              : ""
+          )
+        }
+      }
+      .navigationTitle("Edit Account")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") { dismiss() }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Save") { Task { await save() } }
+            .disabled(!isValid || isSubmitting)
+        }
+      }
+      .confirmationDialog(
+        "Delete Account",
+        isPresented: $showingDeleteConfirmation,
+        titleVisibility: .visible
+      ) {
+        Button("Delete", role: .destructive) {
+          Task { await delete() }
+        }
+        Button("Cancel", role: .cancel) {}
+      } message: {
+        Text("This account will be hidden. You can unhide it later if needed.")
+      }
+    }
+  }
+
+  private var isValid: Bool {
+    !name.trimmingCharacters(in: .whitespaces).isEmpty
+  }
+
+  private func save() async {
+    guard isValid else { return }
+
+    isSubmitting = true
+    errorMessage = nil
+
+    var updated = account
+    updated.name = name.trimmingCharacters(in: .whitespaces)
+    updated.type = type
+    updated.isHidden = isHidden
+
+    do {
+      _ = try await accountStore.update(updated)
+      dismiss()
+    } catch {
+      errorMessage = error.localizedDescription
+      isSubmitting = false
+    }
+  }
+
+  private func delete() async {
+    isSubmitting = true
+    errorMessage = nil
+
+    do {
+      try await accountStore.delete(id: account.id)
+      dismiss()
+    } catch {
+      errorMessage = error.localizedDescription
+      isSubmitting = false
+    }
+  }
+}
+```
+
+**Validation:**
+- Name required
+- Delete/hide only allowed if balance == 0
+- Confirmation dialog before delete
+
+### 5.3 Drag-and-Drop Reordering
+
+**Location:** Modify existing `SidebarView.swift` (or wherever accounts are listed)
+
+**Implementation:**
+
+```swift
+// In SidebarView or AccountsListView
+List {
+  Section("Current Accounts") {
+    ForEach(accountStore.currentAccounts) { account in
+      AccountRowView(account: account)
+    }
+    .onMove { source, destination in
+      Task { await reorderAccounts(from: source, to: destination) }
+    }
+  }
+  .onDelete { indexSet in
+    // Optional: swipe-to-delete gesture
+  }
+}
+.environment(\.editMode, $editMode)  // Enable edit mode for drag handles
+
+private func reorderAccounts(from source: IndexSet, to destination: Int) async {
+  var accounts = accountStore.currentAccounts
+  accounts.move(fromOffsets: source, toOffset: destination)
+
+  // Update positions (0-indexed)
+  for (index, account) in accounts.enumerated() {
+    var updated = account
+    updated.position = index
+    try? await accountStore.update(updated)
+  }
+}
+```
+
+**UX:**
+- macOS: Drag handle appears on hover
+- iOS: Long-press to enter edit mode, then drag
+
+**Alternative (more efficient):**
+Batch update positions in a single operation:
+
+```swift
+func reorderAccounts(newOrder: [Account]) async {
+  await withTaskGroup(of: Void.self) { group in
+    for (index, account) in newOrder.enumerated() {
+      group.addTask {
+        var updated = account
+        updated.position = index
+        try? await self.repository.update(updated)
+      }
+    }
+  }
+}
+```
+
+**STYLE_GUIDE Compliance:**
+- Use semantic colors for accounts by type (bank = blue, creditCard = orange, etc.)
+- Monospaced digits for all balances
+- Consistent spacing (12pt inline padding)
+- Clear visual feedback during drag (shadow, opacity)
+
+---
+
+## 6. AccountStore Mutations
+
+**File:** `Features/Accounts/AccountStore.swift`
+
+**Add to existing class:**
+
+```swift
+@MainActor
+final class AccountStore {
+  // ... existing properties ...
+
+  func create(_ account: Account) async throws -> Account {
+    isLoading = true
+    error = nil
+
+    do {
+      let created = try await repository.create(account)
+
+      // Optimistically add to local state
+      accounts = Accounts(from: accounts.ordered + [created])
+      logger.debug("Created account: \(created.name)")
+
+      return created
+    } catch {
+      logger.error("Failed to create account: \(error.localizedDescription)")
+      self.error = error
+      throw error
+    }
+  }
+
+  func update(_ account: Account) async throws -> Account {
+    isLoading = true
+    error = nil
+
+    // Store previous state for rollback
+    let previousAccounts = accounts
+
+    // Optimistic update
+    accounts = Accounts(from: accounts.ordered.map { $0.id == account.id ? account : $0 })
+
+    do {
+      let updated = try await repository.update(account)
+
+      // Replace with server's version (accept server's balance)
+      accounts = Accounts(from: accounts.ordered.map { $0.id == updated.id ? updated : $0 })
+      logger.debug("Updated account: \(updated.name)")
+
+      return updated
+    } catch {
+      // Rollback on failure
+      accounts = previousAccounts
+      logger.error("Failed to update account: \(error.localizedDescription)")
+      self.error = error
+      throw error
+    }
+  }
+
+  func delete(id: UUID) async throws {
+    isLoading = true
+    error = nil
+
+    // Store previous state for rollback
+    let previousAccounts = accounts
+
+    do {
+      try await repository.delete(id: id)
+
+      // Remove from local state (or mark as hidden)
+      accounts = Accounts(from: accounts.ordered.filter { $0.id != id || $0.isHidden })
+      logger.debug("Deleted account: \(id)")
+    } catch {
+      // Rollback on failure
+      accounts = previousAccounts
+      logger.error("Failed to delete account: \(error.localizedDescription)")
+      self.error = error
+      throw error
+    }
+  }
+}
+```
+
+**Optimistic Updates Strategy:**
+1. Immediately update UI (no spinner/delay)
+2. Call backend
+3. On success: reconcile with server response
+4. On failure: rollback + show error banner
+
+---
+
+## 7. Testing Strategy
+
+### 7.1 Contract Tests
+
+**File:** `MoolahTests/Domain/AccountRepositoryContractTests.swift` (new file)
+
+**Test Suite:**
+
+```swift
+import Testing
+@testable import Moolah
+
+@Suite("AccountRepository Contract")
+struct AccountRepositoryContractTests {
+
+  // CREATE TESTS
+
+  @Test("InMemoryAccountRepository - creates account with opening balance")
+  func testCreatesAccount() async throws {
+    let repository = InMemoryAccountRepository()
+
+    let newAccount = Account(
+      name: "Savings",
+      type: .bank,
+      balance: MonetaryAmount(cents: 100000, currency: .defaultCurrency)
+    )
+
+    let created = try await repository.create(newAccount)
+
+    #expect(created.id == newAccount.id)
+    #expect(created.name == "Savings")
+    #expect(created.balance.cents == 100000)
+
+    let all = try await repository.fetchAll()
+    #expect(all.count == 1)
+  }
+
+  @Test("InMemoryAccountRepository - rejects empty name")
+  func testRejectsEmptyName() async throws {
+    let repository = InMemoryAccountRepository()
+
+    let invalidAccount = Account(
+      name: "   ",  // Whitespace only
+      type: .bank,
+      balance: .zero
+    )
+
+    await #expect(throws: RepositoryError.validationFailed) {
+      try await repository.create(invalidAccount)
+    }
+  }
+
+  @Test("InMemoryAccountRepository - allows negative balance")
+  func testAllowsNegativeBalance() async throws {
+    let repository = InMemoryAccountRepository()
+
+    let creditCard = Account(
+      name: "Credit Card",
+      type: .creditCard,
+      balance: MonetaryAmount(cents: -50000, currency: .defaultCurrency)
+    )
+
+    let created = try await repository.create(creditCard)
+    #expect(created.balance.cents == -50000)
+  }
+
+  // UPDATE TESTS
+
+  @Test("InMemoryAccountRepository - updates account name and type")
+  func testUpdatesAccount() async throws {
+    let repository = InMemoryAccountRepository(initialAccounts: [
+      Account(id: UUID(), name: "Checking", type: .bank, balance: .zero)
+    ])
+
+    let accounts = try await repository.fetchAll()
+    var toUpdate = accounts[0]
+    toUpdate.name = "Business Checking"
+    toUpdate.type = .asset
+
+    let updated = try await repository.update(toUpdate)
+
+    #expect(updated.name == "Business Checking")
+    #expect(updated.type == .asset)
+  }
+
+  @Test("InMemoryAccountRepository - preserves balance on update")
+  func testPreservesBalance() async throws {
+    let repository = InMemoryAccountRepository(initialAccounts: [
+      Account(
+        id: UUID(),
+        name: "Savings",
+        type: .bank,
+        balance: MonetaryAmount(cents: 100000, currency: .defaultCurrency)
+      )
+    ])
+
+    let accounts = try await repository.fetchAll()
+    var toUpdate = accounts[0]
+    toUpdate.name = "Updated Savings"
+    toUpdate.balance = MonetaryAmount(cents: 999999, currency: .defaultCurrency)  // Try to change
+
+    let updated = try await repository.update(toUpdate)
+
+    // Balance should be unchanged (server-authoritative)
+    #expect(updated.balance.cents == 100000)
+  }
+
+  @Test("InMemoryAccountRepository - throws on update non-existent")
+  func testThrowsOnUpdateNonExistent() async throws {
+    let repository = InMemoryAccountRepository()
+
+    let nonExistent = Account(name: "DoesNotExist", type: .bank)
+
+    await #expect(throws: RepositoryError.notFound) {
+      try await repository.update(nonExistent)
+    }
+  }
+
+  // DELETE TESTS
+
+  @Test("InMemoryAccountRepository - soft deletes account with zero balance")
+  func testDeletesAccountWithZeroBalance() async throws {
+    let repository = InMemoryAccountRepository(initialAccounts: [
+      Account(id: UUID(), name: "Old Account", type: .bank, balance: .zero)
+    ])
+
+    let accounts = try await repository.fetchAll()
+    let toDelete = accounts[0]
+
+    try await repository.delete(id: toDelete.id)
+
+    let remaining = try await repository.fetchAll()
+    // Account should be hidden
+    #expect(!remaining.contains { $0.id == toDelete.id })
+  }
+
+  @Test("InMemoryAccountRepository - rejects delete with non-zero balance")
+  func testRejectsDeleteWithBalance() async throws {
+    let repository = InMemoryAccountRepository(initialAccounts: [
+      Account(
+        id: UUID(),
+        name: "Active Account",
+        type: .bank,
+        balance: MonetaryAmount(cents: 100000, currency: .defaultCurrency)
+      )
+    ])
+
+    let accounts = try await repository.fetchAll()
+    let toDelete = accounts[0]
+
+    await #expect(throws: RepositoryError.validationFailed) {
+      try await repository.delete(id: toDelete.id)
+    }
+  }
+
+  // REORDERING TESTS
+
+  @Test("InMemoryAccountRepository - updates positions")
+  func testUpdatesPositions() async throws {
+    let account1 = Account(id: UUID(), name: "First", type: .bank, position: 0)
+    let account2 = Account(id: UUID(), name: "Second", type: .bank, position: 1)
+    let account3 = Account(id: UUID(), name: "Third", type: .bank, position: 2)
+
+    let repository = InMemoryAccountRepository(initialAccounts: [
+      account1, account2, account3
+    ])
+
+    // Reorder: move "Third" to first position
+    var updated3 = account3
+    updated3.position = 0
+
+    var updated1 = account1
+    updated1.position = 1
+
+    var updated2 = account2
+    updated2.position = 2
+
+    _ = try await repository.update(updated3)
+    _ = try await repository.update(updated1)
+    _ = try await repository.update(updated2)
+
+    let all = try await repository.fetchAll()
+    let sorted = all.sorted()  // Uses position for Comparable
+
+    #expect(sorted[0].name == "Third")
+    #expect(sorted[1].name == "First")
+    #expect(sorted[2].name == "Second")
+  }
+}
+```
+
+### 7.2 Remote Backend Tests
+
+**File:** `MoolahTests/Backends/RemoteAccountRepositoryTests.swift`
+
+**Fixtures:** Create JSON fixtures in `MoolahTests/Support/Fixtures/`
+
+**Fixture:** `account_create_response.json`
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "Savings Account",
+  "type": "bank",
+  "balance": 100000,
+  "position": 0,
+  "hidden": false
+}
+```
+
+**Tests:**
+- Mock POST `/api/accounts/` with fixture
+- Verify request body includes name, type, balance, position, date
+- Verify response DTO is correctly decoded
+- Verify domain conversion
+
+### 7.3 UI Tests
+
+**File:** `MoolahTests/Features/AccountStoreTests.swift`
+
+**Test Cases:**
+- Create account updates local state optimistically
+- Update account preserves server's balance
+- Delete account validates zero balance
+- Error handling rollback on failure
+- Loading states during mutations
+
+### 7.4 Integration Tests
+
+**Full CRUD Cycle:**
+1. Create account → verify in list
+2. Update account name → verify change persisted
+3. Reorder accounts → verify positions updated
+4. Delete account (zero balance) → verify hidden
+
+**Error Scenarios:**
+- Network failure during create → rollback + error message
+- Validation failure (empty name) → error before network call
+- Delete with non-zero balance → error dialog
+
+---
+
+## 8. Acceptance Criteria
+
+### Must-Have (Definition of Done)
+
+- [ ] Repository protocol includes `create`, `update`, `delete` methods
+- [ ] InMemoryAccountRepository implements all mutations with validation
+- [ ] RemoteAccountRepository implements all mutations with correct API calls
+- [ ] CreateAccountView allows creating accounts with all fields
+- [ ] EditAccountView allows editing name, type, hiding accounts
+- [ ] Delete account validates balance == 0
+- [ ] Drag-and-drop reordering updates positions
+- [ ] Contract tests pass for both InMemory and Remote backends
+- [ ] Optimistic updates in AccountStore with rollback on failure
+- [ ] Error messages shown to user for validation failures
+- [ ] All UI components follow STYLE_GUIDE.md
+- [ ] VoiceOver accessibility labels for all form fields
+- [ ] Works on both macOS and iOS
+
+### Nice-to-Have (Future Enhancements)
+
+- [ ] Undo/redo for account mutations
+- [ ] Bulk import accounts from CSV
+- [ ] Account balance history graph
+- [ ] Custom account icons/colors
+- [ ] Archive accounts instead of hiding
+
+---
+
+## 9. Implementation Steps (TDD Order)
+
+Follow Test-Driven Development: write tests first, then implementation.
+
+### Step 1: Repository Protocol & Errors (30 min)
+
+1. Define `create`, `update`, `delete` in `AccountRepository` protocol
+2. Add `RepositoryError.validationFailed` case if not exists
+3. Write contract test file skeleton (no implementations yet)
+
+**Checkpoint:** Protocol compiles, contract tests marked as `@available(*, deprecated)` to skip
+
+### Step 2: InMemoryAccountRepository — Create (1 hour)
+
+1. Write contract test: `testCreatesAccount`
+2. Implement `InMemoryAccountRepository.create(_:)`
+3. Write test: `testRejectsEmptyName`
+4. Add validation to `create(_:)`
+5. Write test: `testAllowsNegativeBalance`
+6. Run tests, verify all pass
+
+**Checkpoint:** Create operation works with validation
+
+### Step 3: InMemoryAccountRepository — Update (1 hour)
+
+1. Write contract test: `testUpdatesAccount`
+2. Implement `InMemoryAccountRepository.update(_:)`
+3. Write test: `testPreservesBalance`
+4. Add balance preservation logic
+5. Write test: `testThrowsOnUpdateNonExistent`
+6. Add existence check
+7. Run tests, verify all pass
+
+**Checkpoint:** Update operation works with validation
+
+### Step 4: InMemoryAccountRepository — Delete (45 min)
+
+1. Write contract test: `testDeletesAccountWithZeroBalance`
+2. Implement `InMemoryAccountRepository.delete(id:)`
+3. Write test: `testRejectsDeleteWithBalance`
+4. Add balance validation
+5. Run tests, verify all pass
+
+**Checkpoint:** Delete operation works with validation
+
+### Step 5: RemoteAccountRepository — Create (1 hour)
+
+1. Create `CreateAccountDTO` and `UpdateAccountDTO`
+2. Create fixture `account_create_response.json`
+3. Write test with URLProtocol stub
+4. Implement `RemoteAccountRepository.create(_:)`
+5. Run tests, verify pass
+
+**Checkpoint:** Remote create works with correct API call
+
+### Step 6: RemoteAccountRepository — Update & Delete (1 hour)
+
+1. Create fixture `account_update_response.json`
+2. Write update test with stub
+3. Implement `RemoteAccountRepository.update(_:)`
+4. Write delete test (reuses update endpoint)
+5. Implement `RemoteAccountRepository.delete(id:)`
+6. Run tests, verify pass
+
+**Checkpoint:** All remote mutations work
+
+### Step 7: AccountStore Mutations (1 hour)
+
+1. Write tests for `AccountStore.create`, `update`, `delete`
+2. Implement methods with optimistic updates
+3. Write test for rollback on error
+4. Add error handling
+5. Run tests, verify pass
+
+**Checkpoint:** AccountStore orchestrates mutations correctly
+
+### Step 8: CreateAccountView UI (2 hours)
+
+1. Create `CreateAccountView.swift`
+2. Build form layout (name, type, balance, date)
+3. Add validation logic
+4. Wire to `AccountStore.create`
+5. Test manually on macOS and iOS simulator
+6. Run UI review agent for STYLE_GUIDE compliance
+
+**Checkpoint:** Can create accounts via UI
+
+### Step 9: EditAccountView UI (2 hours)
+
+1. Create `EditAccountView.swift`
+2. Build form layout (name, type, hide toggle, delete button)
+3. Show read-only balance
+4. Wire to `AccountStore.update` and `delete`
+5. Add confirmation dialog for delete
+6. Test manually on both platforms
+7. Run UI review agent
+
+**Checkpoint:** Can edit/delete accounts via UI
+
+### Step 10: Drag-and-Drop Reordering (1.5 hours)
+
+1. Add `.onMove` to accounts list
+2. Implement `reorderAccounts` function
+3. Update positions via `AccountStore.update`
+4. Test manual drag on macOS and iOS
+5. Add visual feedback (drag shadow, etc.)
+
+**Checkpoint:** Reordering works and persists
+
+### Step 11: Integration Testing (1 hour)
+
+1. Write full CRUD cycle test (create → update → reorder → delete)
+2. Test error scenarios (network failure, validation errors)
+3. Verify optimistic updates and rollback
+4. Test on both backends (InMemory + Remote with real server)
+
+**Checkpoint:** End-to-end flow works
+
+### Step 12: Polish & Accessibility (30 min)
+
+1. Run VoiceOver on macOS and iOS
+2. Verify all form fields have labels
+3. Test keyboard navigation (macOS)
+4. Verify error announcements
+5. Test with large text sizes (Dynamic Type)
+
+**Checkpoint:** Accessible to all users
+
+### Step 13: Documentation & PR (30 min)
+
+1. Update `NATIVE_APP_PLAN.md` to mark Step 13 complete
+2. Add inline code documentation for new methods
+3. Create commit with detailed message
+4. Optional: Create PR for review
+
+**Checkpoint:** Step 13 complete, ready for Step 14
+
+---
+
+## 10. Error Handling
+
+### Validation Errors
+
+**Client-Side:**
+- Empty account name → show inline error below field
+- Delete with non-zero balance → disable button + show tooltip
+
+**Server-Side:**
+- 400 Bad Request → parse error message, show in banner
+- 409 Conflict (duplicate ID) → retry with new UUID
+
+### Network Errors
+
+**Offline:**
+- Show banner: "No network connection. Changes will sync when online."
+- Queue mutations for retry (future enhancement)
+
+**Timeout:**
+- Show banner: "Request timed out. Please try again."
+- Rollback optimistic update
+
+### Concurrency Errors
+
+**Stale Data:**
+- If server returns updated balance different from local, accept server's version
+- Show subtle notification: "Account balance updated from server"
+
+---
+
+## 11. Security & Data Integrity
+
+### Balance Protection
+
+**Critical:** Account balance is **read-only** from client perspective.
+- Client NEVER sends balance in update requests (except create)
+- Server always recomputes balance from transactions
+- Client accepts server's balance in responses
+
+### Soft Delete vs Hard Delete
+
+**Current Design:** Soft delete only (set `hidden: true`)
+
+**Rationale:**
+- Preserves transaction history
+- Allows undo/unhide
+- No data loss
+
+**Future Enhancement:** Add "Permanently Delete" option:
+- Requires confirmation + password
+- Deletes all transactions for account
+- Irreversible
+
+---
+
+## 12. Performance Considerations
+
+### Batch Reordering
+
+**Current:** Individual `update` calls for each account position change
+
+**Optimization (future):**
+- Add `POST /api/accounts/reorder` endpoint
+- Request body: `{ accountIds: ["id1", "id2", "id3"] }` (in new order)
+- Server updates all positions in single transaction
+
+**Estimated Savings:** 90% reduction in network calls for reordering
+
+### Caching
+
+**AccountStore** caches accounts in memory
+- Invalidate cache on mutations
+- Refresh from server on app launch
+- Use `@Observable` for reactive UI updates
+
+---
+
+## 13. Platform-Specific Notes
+
+### macOS
+
+- Use `⌘N` keyboard shortcut to open CreateAccountView
+- Drag-and-drop with mouse precision
+- Context menu on right-click (Edit, Delete)
+- Three-column layout: Sidebar → Accounts List → Account Detail
+
+### iOS
+
+- Long-press to enter edit mode for reordering
+- Swipe-to-delete gesture (optional)
+- Full-screen sheets for Create/Edit
+- Pull-to-refresh for accounts list
+
+---
+
+## 14. Future Enhancements (Out of Scope)
+
+- **Account Templates:** Pre-fill common account types (e.g., "Mortgage", "401k")
+- **Multi-Currency Accounts:** Allow different currencies per account
+- **Account Groups:** Organize accounts into folders (e.g., "Personal", "Business")
+- **Account Search:** Filter accounts by name/type
+- **Account Icons:** Custom SF Symbols or emoji for visual distinction
+- **Account Colors:** User-assigned colors for theming
+- **Reconciliation:** Mark account as "reconciled" on specific date
+- **Account Statements:** Upload/attach PDF statements
+
+---
+
+## Appendices
+
+### A. Web App File References
+
+| Feature | File Path |
+|---------|-----------|
+| Create/Edit account | `moolah/src/components/accounts/CreateAccount.vue` |
+| Account detail view | `moolah/src/components/accounts/Account.vue` |
+| Account store actions | `moolah/src/stores/accountsStore.js` |
+
+### B. Native App File References
+
+| Component | File Path |
+|-----------|-----------|
+| Account model | `Moolah/Domain/Models/Account.swift` |
+| Account repository | `Moolah/Domain/Repositories/AccountRepository.swift` |
+| Account store | `Moolah/Features/Accounts/AccountStore.swift` |
+| Account row view | `Moolah/Features/Accounts/Views/AccountRowView.swift` |
+| InMemory backend | `Moolah/Backends/InMemory/InMemoryAccountRepository.swift` |
+| Remote backend | `Moolah/Backends/Remote/RemoteAccountRepository.swift` |
+
+### C. Server API File References
+
+| Endpoint | File Path |
+|----------|-----------|
+| Routes | `moolah-server/src/routes/accounts.js` |
+| Create handler | `moolah-server/src/handlers/account/createAccount.js` |
+| Update handler | `moolah-server/src/handlers/account/putAccount.js` |
+| DAO | `moolah-server/src/db/accountDao.js` |
+
+---
+
+**End of Implementation Plan**
