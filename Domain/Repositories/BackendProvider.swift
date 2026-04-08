@@ -9,4 +9,5 @@ protocol BackendProvider: Sendable {
   var categories: any CategoryRepository { get }
   var earmarks: any EarmarkRepository { get }
   var analysis: any AnalysisRepository { get }
+  var investments: any InvestmentRepository { get }
 }

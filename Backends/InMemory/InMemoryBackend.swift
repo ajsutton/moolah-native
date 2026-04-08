@@ -9,13 +9,15 @@ final class InMemoryBackend: BackendProvider, @unchecked Sendable {
   let categories: any CategoryRepository
   let earmarks: any EarmarkRepository
   let analysis: any AnalysisRepository
+  let investments: any InvestmentRepository
 
   init(
     auth: (any AuthProvider)? = nil,
     accounts: (any AccountRepository)? = nil,
     transactions: (any TransactionRepository)? = nil,
     categories: (any CategoryRepository)? = nil,
-    earmarks: (any EarmarkRepository)? = nil
+    earmarks: (any EarmarkRepository)? = nil,
+    investments: (any InvestmentRepository)? = nil
   ) {
     // Use provided repositories or create defaults
     let authRepo = auth ?? InMemoryAuthProvider()
@@ -39,5 +41,6 @@ final class InMemoryBackend: BackendProvider, @unchecked Sendable {
     self.categories = categoriesRepo
     self.earmarks = earmarksRepo
     self.analysis = analysisRepo
+    self.investments = investments ?? InMemoryInvestmentRepository()
   }
 }

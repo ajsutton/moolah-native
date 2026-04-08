@@ -41,6 +41,7 @@ struct MoolahApp: App {
   private let categoryStore: CategoryStore
   private let earmarkStore: EarmarkStore
   private let analysisStore: AnalysisStore
+  private let investmentStore: InvestmentStore
 
   init() {
     do {
@@ -56,6 +57,7 @@ struct MoolahApp: App {
     self.categoryStore = CategoryStore(repository: remoteBackend.categories)
     self.earmarkStore = EarmarkStore(repository: remoteBackend.earmarks)
     self.analysisStore = AnalysisStore(repository: remoteBackend.analysis)
+    self.investmentStore = InvestmentStore(repository: remoteBackend.investments)
 
     // Adjust account and earmark balances locally after any transaction mutation
     self.transactionStore.onMutate = { [accountStore, earmarkStore] old, new in
@@ -73,6 +75,7 @@ struct MoolahApp: App {
         .environment(categoryStore)
         .environment(earmarkStore)
         .environment(analysisStore)
+        .environment(investmentStore)
     }
     .modelContainer(container)
     .commands {

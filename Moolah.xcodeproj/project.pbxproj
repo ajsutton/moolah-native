@@ -7,7 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		000870E0C91C7CDE4CEC75CB /* AddInvestmentValueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ACB232AEC7EE19C9C5D4C9C /* AddInvestmentValueView.swift */; };
 		00BD18471262934CAF790ADE /* AccountRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D30E668C8761BA80047CE39 /* AccountRepository.swift */; };
+		017C16BCA703F16ACFC872FC /* InvestmentStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC10FA9603BEAD1EEDAA838A /* InvestmentStoreTests.swift */; };
 		01F2DF55944558BC342191AD /* RemoteAccountRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0D4706C2F766D144F2F275E /* RemoteAccountRepositoryTests.swift */; };
 		02766F546CE30372596D7E15 /* AccountDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00D0CA559BEF36A9501A07D /* AccountDTO.swift */; };
 		02ADB11E10C232F944504BB6 /* CategoryTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E5EEA26C0D2D71C2EB15030 /* CategoryTreeView.swift */; };
@@ -25,6 +27,7 @@
 		0FCB31EC6AFEDDBC77557602 /* MonetaryAmountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00AF0C1750B6219581F77E10 /* MonetaryAmountView.swift */; };
 		11694861A60E437DDFC71473 /* CategoryDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = E541549DB643C0BF54034DAD /* CategoryDTO.swift */; };
 		118ACBE554F485DF857C681E /* TransactionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2136B9FFE21FA794B7CF641 /* TransactionStoreTests.swift */; };
+		122322859527F19E0A32C26C /* investment_values.json in Resources */ = {isa = PBXBuildFile; fileRef = 2EC02118CD6C5B19D540A76F /* investment_values.json */; };
 		1258DF821C1A69DFDD22BB7C /* ExpenseBreakdownCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 529D595B13537E6FFC99FFD9 /* ExpenseBreakdownCard.swift */; };
 		138C6B01F7112C533F109095 /* CategoryDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = E541549DB643C0BF54034DAD /* CategoryDTO.swift */; };
 		139C166EF4181897514CEC45 /* CookieKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2307A129A45B6763ADE697AB /* CookieKeychain.swift */; };
@@ -37,18 +40,23 @@
 		1ABA5949F5758274ADC1C8ED /* CookieKeychainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68104891F6BA3CB148906B84 /* CookieKeychainTests.swift */; };
 		1BB1FA3CDD4C40E5DECF02C2 /* InMemoryEarmarkRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F20F717D81B87717A1628FE /* InMemoryEarmarkRepository.swift */; };
 		1CB61D2540186AA16FFEEDE3 /* UpcomingTransactionsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D57E97531288FB84806CC14 /* UpcomingTransactionsCard.swift */; };
+		1D84A704F75E70E6449F655F /* investment_values.json in Resources */ = {isa = PBXBuildFile; fileRef = 2EC02118CD6C5B19D540A76F /* investment_values.json */; };
+		1E43D5313BD8F9FFFC16960C /* InvestmentValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70CB2800A65F1A4322E21650 /* InvestmentValue.swift */; };
 		20C80194918A336EFC5B3EB0 /* Currency.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8911ED8F00C2346E71AB4FF /* Currency.swift */; };
 		23D989C6AAA36D0565C65D0A /* CategoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BF9E7F5B9AD23AF5AB94EC /* CategoryStore.swift */; };
 		244DCC5DC322AEDE39CE1558 /* RemoteAccountRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2737BCF1D305177458789B3E /* RemoteAccountRepository.swift */; };
+		273BBC72AB0E92A7231C94F7 /* InvestmentRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A059E45B21A8888E5925B19E /* InvestmentRepositoryContractTests.swift */; };
 		28D5985C1B3DF8DA20C367D3 /* AnalysisStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F14D68D3D0B279D8CF6145B /* AnalysisStore.swift */; };
 		2A38BC093FB59F6DE6641D5C /* RemoteTransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF6714F83887D49711778B57 /* RemoteTransactionRepository.swift */; };
 		2AC0B9B38B353643B133380A /* ExpenseBreakdownDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB79E4BB46C6F3561058323B /* ExpenseBreakdownDTO.swift */; };
 		2AE54953F1D7793E73E2F97B /* InMemoryAnalysisRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6362FD75F8E4A31B831E8CE5 /* InMemoryAnalysisRepository.swift */; };
 		32044C7A90DF8223E8BB441C /* TransactionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6372CC4DA6A7D2423E8A8C5E /* TransactionListView.swift */; };
 		323BED7138D7611E267C763F /* EarmarkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69224841A23B128697F76EEE /* EarmarkStore.swift */; };
+		3B289338AC8C60C70D9A76AD /* AddInvestmentValueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ACB232AEC7EE19C9C5D4C9C /* AddInvestmentValueView.swift */; };
 		3C3CA45271B385E8E4812ABD /* ExpenseBreakdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = E344D186E5F99BD5ADA75594 /* ExpenseBreakdown.swift */; };
 		3C4FB711102939161CBC8075 /* TransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBD9CC5FEB48F60711FA4B1D /* TransactionRepository.swift */; };
 		3CFAF7B7BB4F2AC4A7033266 /* AnalysisRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E6811E934AB80F3317DBFA /* AnalysisRepository.swift */; };
+		3D3E5FC22680ADAC2740C10E /* InvestmentRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BCE0C2346C903718E9534DA /* InvestmentRepository.swift */; };
 		3D6F418C407FA270375B6736 /* AccountRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1C761FAB125B40676C2E68 /* AccountRepositoryContractTests.swift */; };
 		3E4217A978AA7E905841D1D5 /* EarmarkRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCF35B5FE24DF01F650A61BE /* EarmarkRepository.swift */; };
 		3E4ED1B16FC4E78C7B71E50E /* MonetaryAmountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4F17D02B2C9EC2CDA89AF3 /* MonetaryAmountTests.swift */; };
@@ -59,6 +67,7 @@
 		4140EDAF0C1A9E0A3723E357 /* UserMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE5A7458FFA37A4C6DC6BF1 /* UserMenuView.swift */; };
 		41DF550E13133F22A453AAE3 /* BackendProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */; };
 		43AE8DF706354B4B0819DDE7 /* EarmarkRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BDA26130E08FF09E6653AD /* EarmarkRowView.swift */; };
+		440B16330A183087E517F157 /* InvestmentRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BCE0C2346C903718E9534DA /* InvestmentRepository.swift */; };
 		44CF65A943FBE51D7180DAE1 /* MonetaryAmount.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED93E0B23118A6BF13150C0 /* MonetaryAmount.swift */; };
 		4613767B8A9111B9E548B9A2 /* AccountDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00D0CA559BEF36A9501A07D /* AccountDTO.swift */; };
 		48EC942BE34EFD71548D31FF /* RemoteEarmarkRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9AA932A0CC2A4AF4157C666 /* RemoteEarmarkRepository.swift */; };
@@ -71,6 +80,7 @@
 		4D1C7574CBF979D0E37D22E2 /* AccountStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EBBF6FC221122AD74625F7E /* AccountStoreTests.swift */; };
 		4DC59F69205FFC72F4FFE467 /* RemoteTransactionRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE77BEF3133FEE582F8A3277 /* RemoteTransactionRepositoryTests.swift */; };
 		4E8FE6B924833B991158D4C4 /* categories.json in Resources */ = {isa = PBXBuildFile; fileRef = 136DBADEFD09E56AAD06A644 /* categories.json */; };
+		511B93A559A05F82DBECF31F /* InMemoryInvestmentRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B2E1A51ABD1A8718BDB3E7 /* InMemoryInvestmentRepository.swift */; };
 		5178EAD7B72CA32AF7008786 /* DateRangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107399A645BD5792A4641B0E /* DateRangeTests.swift */; };
 		5184B6A996237F82C6A31B21 /* AnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F37936ACEA9036D516858495 /* AnalysisView.swift */; };
 		52047E9173A1C0C95C33C28D /* DailyBalance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479671F2BA48D4E1B21B0DC3 /* DailyBalance.swift */; };
@@ -96,13 +106,16 @@
 		662ACA2CA9D7190D72EAEDCF /* EarmarkRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A99C47DE3EDE48570602580 /* EarmarkRepositoryContractTests.swift */; };
 		67A15B06F1FDA30AE457E2B9 /* InMemoryAuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDB876186C21952AF9CE00EC /* InMemoryAuthProvider.swift */; };
 		67C6A90C925461E98AFFDF15 /* ModelContainerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */; };
+		684B5E164F2B6C9F030DB2BB /* RemoteInvestmentRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 666FCE49ABC19DC1CA55089E /* RemoteInvestmentRepositoryTests.swift */; };
 		69DAA0FF5FF7E3C94A1320D8 /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C85F9D469AB0B735DF3A5BD /* Account.swift */; };
 		6CA92117AE9031BEB781D63E /* TransactionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6985F839D99BFB3C2B7E5E5 /* TransactionStore.swift */; };
 		6D8CBD51B145FDC95FC4BB79 /* TransactionFilterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49C90215EDD39E8617F01739 /* TransactionFilterView.swift */; };
 		6F94224C45B33919B5DDCF86 /* DomainModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 538FB9BF8ED6B3B3EA3E891A /* DomainModelsTests.swift */; };
 		700EA1100CE2CDB4EFD4FB4B /* AccountStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2536FF724721319BC3117F /* AccountStore.swift */; };
+		70849F0DABF3F5F03C30BACD /* InvestmentValueDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA1EBFC9AA08D191CCFFF2A0 /* InvestmentValueDTO.swift */; };
 		70E928CC2C3284A2C20BF5F4 /* RemoteCategoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8825F56CD0329C37F43E8420 /* RemoteCategoryRepository.swift */; };
 		71DB7F9A1B85408D487E7D8E /* transactions.json in Resources */ = {isa = PBXBuildFile; fileRef = FE5B728FC6801C05FE8CB62B /* transactions.json */; };
+		76C9D872A9470011B8ED5E49 /* RemoteInvestmentRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89AA954D7C50D1C59180B67D /* RemoteInvestmentRepository.swift */; };
 		776E181635EF91F6F3666F56 /* Earmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C9D26A8790E6F221AD6A048 /* Earmark.swift */; };
 		77DA0B1DB0A897FC7993E83B /* InMemoryAnalysisRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6362FD75F8E4A31B831E8CE5 /* InMemoryAnalysisRepository.swift */; };
 		782CB6DF50CA92CE399D43AF /* EarmarkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0B9668ADD913EB51F387E1C /* EarmarkDetailView.swift */; };
@@ -123,8 +136,11 @@
 		888E358528BF4D21C8A56AC4 /* transactions.json in Resources */ = {isa = PBXBuildFile; fileRef = FE5B728FC6801C05FE8CB62B /* transactions.json */; };
 		8968D89975C39C83F9D08A34 /* DateRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B046F0A0CF492D4CDD6326 /* DateRange.swift */; };
 		89CA9FF690DA57649DEA8E01 /* CookieKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2307A129A45B6763ADE697AB /* CookieKeychain.swift */; };
+		8BF00BA30FBE88A9CF53CF05 /* InvestmentRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A059E45B21A8888E5925B19E /* InvestmentRepositoryContractTests.swift */; };
 		8CD72E510AE6F5A680D87E3C /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55CFB29D6757420CB3C9C8C8 /* AppRootView.swift */; };
+		8D196E53CC547E13657F0215 /* InvestmentValuesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C6463F34B96ECFB41CC3A7D /* InvestmentValuesView.swift */; };
 		8DAB18C30AA26CD11A371099 /* AuthStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44F485E6BD2F32A1579E64C8 /* AuthStoreTests.swift */; };
+		8F19DDB89EF2AD3A5B0FAE61 /* InvestmentValueDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA1EBFC9AA08D191CCFFF2A0 /* InvestmentValueDTO.swift */; };
 		8FF588CBA83A7D1EC67539C4 /* RemoteCategoryRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DC71133FC75BEC73BF54723 /* RemoteCategoryRepositoryTests.swift */; };
 		90993D3B1C8552F0962E31AC /* AccountRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00D2192718D35CE9A6CBA1C /* AccountRowView.swift */; };
 		933B37BE2214DE4C4A2144E9 /* Earmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C9D26A8790E6F221AD6A048 /* Earmark.swift */; };
@@ -133,6 +149,8 @@
 		9493B0B9A390073295558761 /* CategoryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D3422686B645906AD3E3B2D /* CategoryRepository.swift */; };
 		949E2AF8EF8F2A75520E5935 /* CreateAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C9395AFB6A08977BD423A9 /* CreateAccountView.swift */; };
 		96316601E7C396465BC661C7 /* EarmarkRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCF35B5FE24DF01F650A61BE /* EarmarkRepository.swift */; };
+		967DE0098FF2C62AF6A47A40 /* InvestmentValuesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C6463F34B96ECFB41CC3A7D /* InvestmentValuesView.swift */; };
+		97C243AFA5F2E0E9527612EC /* InvestmentValueRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66CB9CD2A20D343BA7B138A2 /* InvestmentValueRow.swift */; };
 		98AEE4E6063D66C5B24F9B92 /* CategoryBalanceTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E5FF7059AFD2EE85A10124 /* CategoryBalanceTable.swift */; };
 		98E47E772CDEBCEAC9BA0C23 /* RemoteEarmarkRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9AA932A0CC2A4AF4157C666 /* RemoteEarmarkRepository.swift */; };
 		98EE568DC0F3E79335857D00 /* Currency.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8911ED8F00C2346E71AB4FF /* Currency.swift */; };
@@ -142,8 +160,11 @@
 		9E80B7C29F305231A7F25430 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 394716AE7AB11EB9DB2FC537 /* UserProfile.swift */; };
 		9F890B94BD2C05590487FDFD /* EditAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF9E45314570B9ACBD691A36 /* EditAccountView.swift */; };
 		9F9C47948599ABAB0E006D2F /* ExpenseBreakdownDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB79E4BB46C6F3561058323B /* ExpenseBreakdownDTO.swift */; };
+		A09D034E30C6B2D00FB1F6A0 /* InvestmentValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70CB2800A65F1A4322E21650 /* InvestmentValue.swift */; };
 		A0CE6F785996CBF25B4B8493 /* RemoteBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B6CD88ED67E56DC24998EF5 /* RemoteBackend.swift */; };
+		A1114EE586DE23AC97C7FC78 /* RemoteInvestmentRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89AA954D7C50D1C59180B67D /* RemoteInvestmentRepository.swift */; };
 		A16027800F30D848E2288F29 /* ReportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07DDE42E7E1C752480A079E4 /* ReportsView.swift */; };
+		A23DD721E27AEB8EF5AF441D /* InvestmentValueRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66CB9CD2A20D343BA7B138A2 /* InvestmentValueRow.swift */; };
 		A2926D652AF47FDCE2C6D605 /* EarmarkRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BDA26130E08FF09E6653AD /* EarmarkRowView.swift */; };
 		A3401FF9148BC72558660505 /* account_create_response.json in Resources */ = {isa = PBXBuildFile; fileRef = 56C9EA94385063B33B950E3E /* account_create_response.json */; };
 		A4720D004F99C4AD4805E926 /* accounts.json in Resources */ = {isa = PBXBuildFile; fileRef = 52D898DCF78E5D11679B3412 /* accounts.json */; };
@@ -154,11 +175,13 @@
 		AA4A5B03331CA81F0F13E9D1 /* FocusedValues.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3979B2EDAE9E843A47D7DE06 /* FocusedValues.swift */; };
 		ABB7D81DC8E5157091C7FE27 /* MonthlyIncomeExpenseDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = F315ADF8D2E47FC8FE4D97C8 /* MonthlyIncomeExpenseDTO.swift */; };
 		AC529F3F9DA9D3C45B911B54 /* account_update_response.json in Resources */ = {isa = PBXBuildFile; fileRef = 6635238A562EA17B81673C5A /* account_update_response.json */; };
+		AC68EAA1FA6151482E27A1A3 /* InMemoryInvestmentRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B2E1A51ABD1A8718BDB3E7 /* InMemoryInvestmentRepository.swift */; };
 		AD1CCFD73369226105DB1E2F /* TransactionFilterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49C90215EDD39E8617F01739 /* TransactionFilterView.swift */; };
 		AFB55A3B857037BB6002F0D4 /* TransactionRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7920C082CF61FC2A86B05B31 /* TransactionRowView.swift */; };
 		B0913F99CC9CF30546B6A3D6 /* AccountRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00D2192718D35CE9A6CBA1C /* AccountRowView.swift */; };
 		B0BEE52AF598D5B81590C836 /* RemoteAnalysisRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 787CA6AE0B445FD6A022691C /* RemoteAnalysisRepository.swift */; };
 		B17498F887290F082225E1A6 /* DailyBalanceDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6B272DA61BF3AF1A05462F3 /* DailyBalanceDTO.swift */; };
+		B3C80B008BEBBFD33798D8B2 /* RemoteInvestmentRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 666FCE49ABC19DC1CA55089E /* RemoteInvestmentRepositoryTests.swift */; };
 		B460D4029D5F6F80F23FCF0B /* AuthProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B66104D9C8D82B1A0427CE79 /* AuthProvider.swift */; };
 		B49348102DF0126F586FFEB6 /* UpcomingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 886EE430E1C6721891325649 /* UpcomingView.swift */; };
 		B648B1EBA170CDE290D72E7F /* MonetaryAmountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00AF0C1750B6219581F77E10 /* MonetaryAmountView.swift */; };
@@ -167,6 +190,7 @@
 		B993E4DD97A9978DEFCF6973 /* IncomeExpenseTableCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77D8161F8D10B04DCE422392 /* IncomeExpenseTableCard.swift */; };
 		BA163022FD95BC1ED4E2AC9B /* UIConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD01884C3447BF75CE0E798 /* UIConstants.swift */; };
 		BC0C94147B4EDA66DFEFDE28 /* UpcomingTransactionsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D57E97531288FB84806CC14 /* UpcomingTransactionsCard.swift */; };
+		BC8A47F270F7C1D1DF788E23 /* InvestmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6532C8AF63F150C2B65226D9 /* InvestmentStore.swift */; };
 		BE8EF69FB14777957E7B6773 /* BackendDateFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D190943A082D94DFFBBF510 /* BackendDateFormatter.swift */; };
 		BF633F5962C22BD2CDF82766 /* CategoryTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E5EEA26C0D2D71C2EB15030 /* CategoryTreeView.swift */; };
 		BFF41BDF77C53D6CC12FB0CB /* UIConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD01884C3447BF75CE0E798 /* UIConstants.swift */; };
@@ -182,6 +206,7 @@
 		C837D4C19F04AE3FEE568F96 /* TransactionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F96CC893369568364661CAE4 /* TransactionDetailView.swift */; };
 		C861572FA5EFADAADAEB5BBC /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 394716AE7AB11EB9DB2FC537 /* UserProfile.swift */; };
 		C9B35B912F9EDECD2AE3AFF7 /* FlexibleUUID.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24690034181D47021DED8793 /* FlexibleUUID.swift */; };
+		CA575698DBA96DB417F032D1 /* InvestmentStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC10FA9603BEAD1EEDAA838A /* InvestmentStoreTests.swift */; };
 		CA7A3FF9F9835B1F9624D8EF /* TransactionRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7920C082CF61FC2A86B05B31 /* TransactionRowView.swift */; };
 		CAA86173F38CFE979B92405A /* CategoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 498570048DEA32F7F70C157A /* CategoryDetailView.swift */; };
 		CB29B7107D26E771BEC886C0 /* InMemoryBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C53697402D7B4394678D84 /* InMemoryBackend.swift */; };
@@ -200,6 +225,7 @@
 		D7DAE78FABA8B61689D26CC2 /* AllTransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BBC588B3A826D2815794E6D /* AllTransactionsView.swift */; };
 		D7E9684A023E0048298AD60D /* ScheduledTransactionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02B9C8DB5FB3E0172E143BD7 /* ScheduledTransactionTests.swift */; };
 		D87F631E6578D69533164665 /* EarmarkRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A99C47DE3EDE48570602580 /* EarmarkRepositoryContractTests.swift */; };
+		DE9881684B114439AC328C4A /* InvestmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6532C8AF63F150C2B65226D9 /* InvestmentStore.swift */; };
 		DF200724C634EFFA2E58CA49 /* CookieKeychainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68104891F6BA3CB148906B84 /* CookieKeychainTests.swift */; };
 		E03B7D098DE1F4D1E111AD05 /* InMemoryTransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A19482E3FC4577044CBCD484 /* InMemoryTransactionRepository.swift */; };
 		E0BB6B5944977FDD58DD8C83 /* AuthContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF82ABEAD4CD6082C14CC50 /* AuthContractTests.swift */; };
@@ -267,6 +293,7 @@
 		24690034181D47021DED8793 /* FlexibleUUID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlexibleUUID.swift; sourceTree = "<group>"; };
 		2737BCF1D305177458789B3E /* RemoteAccountRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteAccountRepository.swift; sourceTree = "<group>"; };
 		29E5AD68A218108F0A5F67D0 /* RemoteAuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteAuthProvider.swift; sourceTree = "<group>"; };
+		2EC02118CD6C5B19D540A76F /* investment_values.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = investment_values.json; sourceTree = "<group>"; };
 		2F6845C067ABB3CDA81CCB10 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		33BDA26130E08FF09E6653AD /* EarmarkRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarmarkRowView.swift; sourceTree = "<group>"; };
 		3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerTests.swift; sourceTree = "<group>"; };
@@ -274,6 +301,7 @@
 		394716AE7AB11EB9DB2FC537 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
 		3979B2EDAE9E843A47D7DE06 /* FocusedValues.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusedValues.swift; sourceTree = "<group>"; };
 		3B7ACDA8A081731510039853 /* TransactionFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionFormView.swift; sourceTree = "<group>"; };
+		3BCE0C2346C903718E9534DA /* InvestmentRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentRepository.swift; sourceTree = "<group>"; };
 		3CAA3B5D360B1D1D2E334778 /* CategoryRepositoryContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryRepositoryContractTests.swift; sourceTree = "<group>"; };
 		3E37BF3BEA54A6FC23CC7FE3 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		3F20F717D81B87717A1628FE /* InMemoryEarmarkRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryEarmarkRepository.swift; sourceTree = "<group>"; };
@@ -283,6 +311,7 @@
 		479671F2BA48D4E1B21B0DC3 /* DailyBalance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBalance.swift; sourceTree = "<group>"; };
 		498570048DEA32F7F70C157A /* CategoryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryDetailView.swift; sourceTree = "<group>"; };
 		49C90215EDD39E8617F01739 /* TransactionFilterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionFilterView.swift; sourceTree = "<group>"; };
+		4ACB232AEC7EE19C9C5D4C9C /* AddInvestmentValueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddInvestmentValueView.swift; sourceTree = "<group>"; };
 		4B7099043D0CE923649E44C7 /* EarmarkStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarmarkStoreTests.swift; sourceTree = "<group>"; };
 		4C85F9D469AB0B735DF3A5BD /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		4CA48181968E160CE8E9302B /* Moolah_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Moolah_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -297,12 +326,17 @@
 		61827C4BBD42236FDB411A5E /* TransactionDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionDTO.swift; sourceTree = "<group>"; };
 		6362FD75F8E4A31B831E8CE5 /* InMemoryAnalysisRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryAnalysisRepository.swift; sourceTree = "<group>"; };
 		6372CC4DA6A7D2423E8A8C5E /* TransactionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionListView.swift; sourceTree = "<group>"; };
+		6532C8AF63F150C2B65226D9 /* InvestmentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentStore.swift; sourceTree = "<group>"; };
 		6635238A562EA17B81673C5A /* account_update_response.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = account_update_response.json; sourceTree = "<group>"; };
+		666FCE49ABC19DC1CA55089E /* RemoteInvestmentRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteInvestmentRepositoryTests.swift; sourceTree = "<group>"; };
+		66CB9CD2A20D343BA7B138A2 /* InvestmentValueRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentValueRow.swift; sourceTree = "<group>"; };
+		67B2E1A51ABD1A8718BDB3E7 /* InMemoryInvestmentRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryInvestmentRepository.swift; sourceTree = "<group>"; };
 		68104891F6BA3CB148906B84 /* CookieKeychainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieKeychainTests.swift; sourceTree = "<group>"; };
 		689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendProvider.swift; sourceTree = "<group>"; };
 		69224841A23B128697F76EEE /* EarmarkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarmarkStore.swift; sourceTree = "<group>"; };
 		6B6CD88ED67E56DC24998EF5 /* RemoteBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBackend.swift; sourceTree = "<group>"; };
 		6C9D26A8790E6F221AD6A048 /* Earmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Earmark.swift; sourceTree = "<group>"; };
+		70CB2800A65F1A4322E21650 /* InvestmentValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentValue.swift; sourceTree = "<group>"; };
 		70CE1D72398150BC0BF951B7 /* Transaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transaction.swift; sourceTree = "<group>"; };
 		72EB756E5CDC29B6D6DEAE3D /* EarmarksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarmarksView.swift; sourceTree = "<group>"; };
 		7744C6DBEE0256E2BBD1513A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -315,17 +349,21 @@
 		84C9395AFB6A08977BD423A9 /* CreateAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateAccountView.swift; sourceTree = "<group>"; };
 		8825F56CD0329C37F43E8420 /* RemoteCategoryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCategoryRepository.swift; sourceTree = "<group>"; };
 		886EE430E1C6721891325649 /* UpcomingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingView.swift; sourceTree = "<group>"; };
+		89AA954D7C50D1C59180B67D /* RemoteInvestmentRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteInvestmentRepository.swift; sourceTree = "<group>"; };
 		8D3422686B645906AD3E3B2D /* CategoryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryRepository.swift; sourceTree = "<group>"; };
 		8E5EEA26C0D2D71C2EB15030 /* CategoryTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryTreeView.swift; sourceTree = "<group>"; };
 		8EBBF6FC221122AD74625F7E /* AccountStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountStoreTests.swift; sourceTree = "<group>"; };
 		9278968B7D64DD7013549FE6 /* NetWorthGraphCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetWorthGraphCard.swift; sourceTree = "<group>"; };
 		93A43D8E355050F1AD6E08E6 /* EarmarkDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarmarkDTO.swift; sourceTree = "<group>"; };
 		9B1537B5ED73BDFE589AFBDF /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
+		9C6463F34B96ECFB41CC3A7D /* InvestmentValuesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentValuesView.swift; sourceTree = "<group>"; };
+		A059E45B21A8888E5925B19E /* InvestmentRepositoryContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentRepositoryContractTests.swift; sourceTree = "<group>"; };
 		A19482E3FC4577044CBCD484 /* InMemoryTransactionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryTransactionRepository.swift; sourceTree = "<group>"; };
 		B49F4CED68007895BCFE0658 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		B66104D9C8D82B1A0427CE79 /* AuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthProvider.swift; sourceTree = "<group>"; };
 		B6985F839D99BFB3C2B7E5E5 /* TransactionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionStore.swift; sourceTree = "<group>"; };
 		B8BF9E7F5B9AD23AF5AB94EC /* CategoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryStore.swift; sourceTree = "<group>"; };
+		BA1EBFC9AA08D191CCFFF2A0 /* InvestmentValueDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentValueDTO.swift; sourceTree = "<group>"; };
 		BB79E4BB46C6F3561058323B /* ExpenseBreakdownDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseBreakdownDTO.swift; sourceTree = "<group>"; };
 		BE221BC137F6FA398968FDFF /* Moolah_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Moolah_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C00D2192718D35CE9A6CBA1C /* AccountRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRowView.swift; sourceTree = "<group>"; };
@@ -359,6 +397,7 @@
 		FA6F0E982E4C074B8CF56F88 /* MoolahTests_macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoolahTests_macOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FB8BBCFD6F9B6C1331088FE2 /* InMemoryCategoryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryCategoryRepository.swift; sourceTree = "<group>"; };
 		FBD9CC5FEB48F60711FA4B1D /* TransactionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionRepository.swift; sourceTree = "<group>"; };
+		FC10FA9603BEAD1EEDAA838A /* InvestmentStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentStoreTests.swift; sourceTree = "<group>"; };
 		FCF35B5FE24DF01F650A61BE /* EarmarkRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarmarkRepository.swift; sourceTree = "<group>"; };
 		FDC2E9F955AD5A327CF1550C /* RemoteEarmarkRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteEarmarkRepositoryTests.swift; sourceTree = "<group>"; };
 		FE5B728FC6801C05FE8CB62B /* transactions.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = transactions.json; sourceTree = "<group>"; };
@@ -373,6 +412,16 @@
 				A4B2171A9B1B99143A05AE0D /* Views */,
 			);
 			path = Analysis;
+			sourceTree = "<group>";
+		};
+		12C85A8E816C8C7EC37B18CA /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				4ACB232AEC7EE19C9C5D4C9C /* AddInvestmentValueView.swift */,
+				66CB9CD2A20D343BA7B138A2 /* InvestmentValueRow.swift */,
+				9C6463F34B96ECFB41CC3A7D /* InvestmentValuesView.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 		1511972B9562253B8AA749EC /* Earmarks */ = {
@@ -420,6 +469,7 @@
 				F0D4706C2F766D144F2F275E /* RemoteAccountRepositoryTests.swift */,
 				1DC71133FC75BEC73BF54723 /* RemoteCategoryRepositoryTests.swift */,
 				FDC2E9F955AD5A327CF1550C /* RemoteEarmarkRepositoryTests.swift */,
+				666FCE49ABC19DC1CA55089E /* RemoteInvestmentRepositoryTests.swift */,
 				EE77BEF3133FEE582F8A3277 /* RemoteTransactionRepositoryTests.swift */,
 			);
 			path = Backends;
@@ -443,6 +493,7 @@
 				8EBBF6FC221122AD74625F7E /* AccountStoreTests.swift */,
 				44F485E6BD2F32A1579E64C8 /* AuthStoreTests.swift */,
 				4B7099043D0CE923649E44C7 /* EarmarkStoreTests.swift */,
+				FC10FA9603BEAD1EEDAA838A /* InvestmentStoreTests.swift */,
 				D2136B9FFE21FA794B7CF641 /* TransactionStoreTests.swift */,
 			);
 			path = Features;
@@ -464,6 +515,7 @@
 				787CA6AE0B445FD6A022691C /* RemoteAnalysisRepository.swift */,
 				8825F56CD0329C37F43E8420 /* RemoteCategoryRepository.swift */,
 				D9AA932A0CC2A4AF4157C666 /* RemoteEarmarkRepository.swift */,
+				89AA954D7C50D1C59180B67D /* RemoteInvestmentRepository.swift */,
 				FF6714F83887D49711778B57 /* RemoteTransactionRepository.swift */,
 			);
 			path = Repositories;
@@ -488,6 +540,7 @@
 				689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */,
 				8D3422686B645906AD3E3B2D /* CategoryRepository.swift */,
 				FCF35B5FE24DF01F650A61BE /* EarmarkRepository.swift */,
+				3BCE0C2346C903718E9534DA /* InvestmentRepository.swift */,
 				FBD9CC5FEB48F60711FA4B1D /* TransactionRepository.swift */,
 			);
 			path = Repositories;
@@ -535,6 +588,7 @@
 				93A43D8E355050F1AD6E08E6 /* EarmarkDTO.swift */,
 				BB79E4BB46C6F3561058323B /* ExpenseBreakdownDTO.swift */,
 				24690034181D47021DED8793 /* FlexibleUUID.swift */,
+				BA1EBFC9AA08D191CCFFF2A0 /* InvestmentValueDTO.swift */,
 				F315ADF8D2E47FC8FE4D97C8 /* MonthlyIncomeExpenseDTO.swift */,
 				61827C4BBD42236FDB411A5E /* TransactionDTO.swift */,
 			);
@@ -549,6 +603,7 @@
 				9EB76ED522EB8ACA5326F0CD /* Auth */,
 				17AEC3496CBDB04B0F0A54A0 /* Categories */,
 				1511972B9562253B8AA749EC /* Earmarks */,
+				83B4BB496B34FDB590CC7A81 /* Investments */,
 				C4A1BAFA40C3C3F54B2E7982 /* Navigation */,
 				B34A1F99C8D634D88387C6DD /* Reports */,
 				1BE841AE531AA7BA96842504 /* Transactions */,
@@ -575,6 +630,7 @@
 				479671F2BA48D4E1B21B0DC3 /* DailyBalance.swift */,
 				6C9D26A8790E6F221AD6A048 /* Earmark.swift */,
 				E344D186E5F99BD5ADA75594 /* ExpenseBreakdown.swift */,
+				70CB2800A65F1A4322E21650 /* InvestmentValue.swift */,
 				CED93E0B23118A6BF13150C0 /* MonetaryAmount.swift */,
 				E380721F3A50DFBF5E8C8584 /* MonthlyIncomeExpense.swift */,
 				70CE1D72398150BC0BF951B7 /* Transaction.swift */,
@@ -592,6 +648,7 @@
 				12C53697402D7B4394678D84 /* InMemoryBackend.swift */,
 				FB8BBCFD6F9B6C1331088FE2 /* InMemoryCategoryRepository.swift */,
 				3F20F717D81B87717A1628FE /* InMemoryEarmarkRepository.swift */,
+				67B2E1A51ABD1A8718BDB3E7 /* InMemoryInvestmentRepository.swift */,
 				A19482E3FC4577044CBCD484 /* InMemoryTransactionRepository.swift */,
 			);
 			path = InMemory;
@@ -614,6 +671,15 @@
 				72EB756E5CDC29B6D6DEAE3D /* EarmarksView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		83B4BB496B34FDB590CC7A81 /* Investments */ = {
+			isa = PBXGroup;
+			children = (
+				6532C8AF63F150C2B65226D9 /* InvestmentStore.swift */,
+				12C85A8E816C8C7EC37B18CA /* Views */,
+			);
+			path = Investments;
 			sourceTree = "<group>";
 		};
 		8A5B74A85A6F71D7F53ECCD6 /* MoolahTests */ = {
@@ -648,6 +714,7 @@
 				3CAA3B5D360B1D1D2E334778 /* CategoryRepositoryContractTests.swift */,
 				538FB9BF8ED6B3B3EA3E891A /* DomainModelsTests.swift */,
 				5A99C47DE3EDE48570602580 /* EarmarkRepositoryContractTests.swift */,
+				A059E45B21A8888E5925B19E /* InvestmentRepositoryContractTests.swift */,
 				3867FAEEC81BDE650D50509D /* ModelContainerTests.swift */,
 				5C4F17D02B2C9EC2CDA89AF3 /* MonetaryAmountTests.swift */,
 				02B9C8DB5FB3E0172E143BD7 /* ScheduledTransactionTests.swift */,
@@ -749,6 +816,7 @@
 				52D898DCF78E5D11679B3412 /* accounts.json */,
 				136DBADEFD09E56AAD06A644 /* categories.json */,
 				CDB0992C6831C5A674E811CE /* earmarks.json */,
+				2EC02118CD6C5B19D540A76F /* investment_values.json */,
 				FE5B728FC6801C05FE8CB62B /* transactions.json */,
 			);
 			path = Fixtures;
@@ -920,6 +988,7 @@
 				06D29AF99E746E9BCDCA4223 /* accounts.json in Resources */,
 				7A1CD54E49744D6FDACAC405 /* categories.json in Resources */,
 				79D7E2DCF0ABFAF8A909B1A7 /* earmarks.json in Resources */,
+				1D84A704F75E70E6449F655F /* investment_values.json in Resources */,
 				888E358528BF4D21C8A56AC4 /* transactions.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -941,6 +1010,7 @@
 				A4720D004F99C4AD4805E926 /* accounts.json in Resources */,
 				4E8FE6B924833B991158D4C4 /* categories.json in Resources */,
 				5C4F979EC24AE0373027553C /* earmarks.json in Resources */,
+				122322859527F19E0A32C26C /* investment_values.json in Resources */,
 				71DB7F9A1B85408D487E7D8E /* transactions.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -963,11 +1033,14 @@
 				3EF4CE5300733ED2D65B7994 /* DomainModelsTests.swift in Sources */,
 				662ACA2CA9D7190D72EAEDCF /* EarmarkRepositoryContractTests.swift in Sources */,
 				F6B1F1E4D8AAA7B8134A27B2 /* EarmarkStoreTests.swift in Sources */,
+				8BF00BA30FBE88A9CF53CF05 /* InvestmentRepositoryContractTests.swift in Sources */,
+				017C16BCA703F16ACFC872FC /* InvestmentStoreTests.swift in Sources */,
 				67C6A90C925461E98AFFDF15 /* ModelContainerTests.swift in Sources */,
 				3E4ED1B16FC4E78C7B71E50E /* MonetaryAmountTests.swift in Sources */,
 				01F2DF55944558BC342191AD /* RemoteAccountRepositoryTests.swift in Sources */,
 				8FF588CBA83A7D1EC67539C4 /* RemoteCategoryRepositoryTests.swift in Sources */,
 				D61A0020FAC2CB41263BB3BD /* RemoteEarmarkRepositoryTests.swift in Sources */,
+				684B5E164F2B6C9F030DB2BB /* RemoteInvestmentRepositoryTests.swift in Sources */,
 				D693F63C07C8F3E7E7730236 /* RemoteTransactionRepositoryTests.swift in Sources */,
 				D7E9684A023E0048298AD60D /* ScheduledTransactionTests.swift in Sources */,
 				CE32F2D7F43E9A0E49475F78 /* TestBundleMarker.swift in Sources */,
@@ -986,6 +1059,7 @@
 				800EAE6615AE4F44C6A3E2C3 /* AccountRepository.swift in Sources */,
 				B0913F99CC9CF30546B6A3D6 /* AccountRowView.swift in Sources */,
 				F886E9EAA5377C4680F6362F /* AccountStore.swift in Sources */,
+				000870E0C91C7CDE4CEC75CB /* AddInvestmentValueView.swift in Sources */,
 				EB7CE3B0C3B5FF189E2E1FA1 /* AllTransactionsView.swift in Sources */,
 				3CFAF7B7BB4F2AC4A7033266 /* AnalysisRepository.swift in Sources */,
 				28D5985C1B3DF8DA20C367D3 /* AnalysisStore.swift in Sources */,
@@ -1030,8 +1104,15 @@
 				CB29B7107D26E771BEC886C0 /* InMemoryBackend.swift in Sources */,
 				995CD901BAF3D8BF0C782F7C /* InMemoryCategoryRepository.swift in Sources */,
 				4ACAFC3B4F2719E860579956 /* InMemoryEarmarkRepository.swift in Sources */,
+				511B93A559A05F82DBECF31F /* InMemoryInvestmentRepository.swift in Sources */,
 				93FCE73793E9D76B76E87940 /* InMemoryTransactionRepository.swift in Sources */,
 				658966C90496F314F205AADC /* IncomeExpenseTableCard.swift in Sources */,
+				440B16330A183087E517F157 /* InvestmentRepository.swift in Sources */,
+				DE9881684B114439AC328C4A /* InvestmentStore.swift in Sources */,
+				1E43D5313BD8F9FFFC16960C /* InvestmentValue.swift in Sources */,
+				8F19DDB89EF2AD3A5B0FAE61 /* InvestmentValueDTO.swift in Sources */,
+				A23DD721E27AEB8EF5AF441D /* InvestmentValueRow.swift in Sources */,
+				8D196E53CC547E13657F0215 /* InvestmentValuesView.swift in Sources */,
 				F7F93308F5EF05CEB7B66D3A /* MonetaryAmount.swift in Sources */,
 				B648B1EBA170CDE290D72E7F /* MonetaryAmountView.swift in Sources */,
 				64B0923FD3D6994A439D20BC /* MonthlyIncomeExpense.swift in Sources */,
@@ -1044,6 +1125,7 @@
 				A0CE6F785996CBF25B4B8493 /* RemoteBackend.swift in Sources */,
 				70E928CC2C3284A2C20BF5F4 /* RemoteCategoryRepository.swift in Sources */,
 				48EC942BE34EFD71548D31FF /* RemoteEarmarkRepository.swift in Sources */,
+				A1114EE586DE23AC97C7FC78 /* RemoteInvestmentRepository.swift in Sources */,
 				2A38BC093FB59F6DE6641D5C /* RemoteTransactionRepository.swift in Sources */,
 				5BEB6A68ACE1CE3E65C25B66 /* ReportsView.swift in Sources */,
 				D6F61A17E93F234A10D88E39 /* SidebarView.swift in Sources */,
@@ -1075,6 +1157,7 @@
 				00BD18471262934CAF790ADE /* AccountRepository.swift in Sources */,
 				90993D3B1C8552F0962E31AC /* AccountRowView.swift in Sources */,
 				700EA1100CE2CDB4EFD4FB4B /* AccountStore.swift in Sources */,
+				3B289338AC8C60C70D9A76AD /* AddInvestmentValueView.swift in Sources */,
 				D7DAE78FABA8B61689D26CC2 /* AllTransactionsView.swift in Sources */,
 				043957251CC280206FF1DD5D /* AnalysisRepository.swift in Sources */,
 				A53A6DACE44715BAEEB9E25F /* AnalysisStore.swift in Sources */,
@@ -1119,8 +1202,15 @@
 				FC90521205A28AD546896B26 /* InMemoryBackend.swift in Sources */,
 				521DCED3F9746139C48F6B61 /* InMemoryCategoryRepository.swift in Sources */,
 				1BB1FA3CDD4C40E5DECF02C2 /* InMemoryEarmarkRepository.swift in Sources */,
+				AC68EAA1FA6151482E27A1A3 /* InMemoryInvestmentRepository.swift in Sources */,
 				E03B7D098DE1F4D1E111AD05 /* InMemoryTransactionRepository.swift in Sources */,
 				B993E4DD97A9978DEFCF6973 /* IncomeExpenseTableCard.swift in Sources */,
+				3D3E5FC22680ADAC2740C10E /* InvestmentRepository.swift in Sources */,
+				BC8A47F270F7C1D1DF788E23 /* InvestmentStore.swift in Sources */,
+				A09D034E30C6B2D00FB1F6A0 /* InvestmentValue.swift in Sources */,
+				70849F0DABF3F5F03C30BACD /* InvestmentValueDTO.swift in Sources */,
+				97C243AFA5F2E0E9527612EC /* InvestmentValueRow.swift in Sources */,
+				967DE0098FF2C62AF6A47A40 /* InvestmentValuesView.swift in Sources */,
 				44CF65A943FBE51D7180DAE1 /* MonetaryAmount.swift in Sources */,
 				0FCB31EC6AFEDDBC77557602 /* MonetaryAmountView.swift in Sources */,
 				0FBC6033BAD1332040F1736F /* MonthlyIncomeExpense.swift in Sources */,
@@ -1133,6 +1223,7 @@
 				D3D60831E18FB860048FC37C /* RemoteBackend.swift in Sources */,
 				5F510CED371E37940EEA781D /* RemoteCategoryRepository.swift in Sources */,
 				98E47E772CDEBCEAC9BA0C23 /* RemoteEarmarkRepository.swift in Sources */,
+				76C9D872A9470011B8ED5E49 /* RemoteInvestmentRepository.swift in Sources */,
 				F6121DE1DBDE9574C143215D /* RemoteTransactionRepository.swift in Sources */,
 				A16027800F30D848E2288F29 /* ReportsView.swift in Sources */,
 				85A57F09FA74650995D31768 /* SidebarView.swift in Sources */,
@@ -1169,11 +1260,14 @@
 				6F94224C45B33919B5DDCF86 /* DomainModelsTests.swift in Sources */,
 				D87F631E6578D69533164665 /* EarmarkRepositoryContractTests.swift in Sources */,
 				F56156E2370D5D0B1659EC8B /* EarmarkStoreTests.swift in Sources */,
+				273BBC72AB0E92A7231C94F7 /* InvestmentRepositoryContractTests.swift in Sources */,
+				CA575698DBA96DB417F032D1 /* InvestmentStoreTests.swift in Sources */,
 				54976604A4A32D269D4585EA /* ModelContainerTests.swift in Sources */,
 				F546CD86928CBF06040127F7 /* MonetaryAmountTests.swift in Sources */,
 				C70F40059B2F4EEB4B7CB6CA /* RemoteAccountRepositoryTests.swift in Sources */,
 				087B1BD6B50E59485ADB0B37 /* RemoteCategoryRepositoryTests.swift in Sources */,
 				4B06464EB3A094412B524E96 /* RemoteEarmarkRepositoryTests.swift in Sources */,
+				B3C80B008BEBBFD33798D8B2 /* RemoteInvestmentRepositoryTests.swift in Sources */,
 				4DC59F69205FFC72F4FFE467 /* RemoteTransactionRepositoryTests.swift in Sources */,
 				EDC17A78904198B1471A8865 /* ScheduledTransactionTests.swift in Sources */,
 				99E8BCF3EC75ADCE30C7A0AD /* TestBundleMarker.swift in Sources */,

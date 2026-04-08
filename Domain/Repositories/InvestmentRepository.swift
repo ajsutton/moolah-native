@@ -1,0 +1,26 @@
+import Foundation
+
+/// Repository for managing investment account valuations over time.
+/// Values are keyed by (accountId, date) — one value per account per day.
+protocol InvestmentRepository: Sendable {
+  /// Fetch investment values for an account, sorted by date descending.
+  /// - Parameters:
+  ///   - accountId: The investment account to fetch values for
+  ///   - page: Zero-indexed page number
+  ///   - pageSize: Number of items per page
+  /// - Returns: A page of investment values with hasMore flag
+  func fetchValues(accountId: UUID, page: Int, pageSize: Int) async throws -> InvestmentValuePage
+
+  /// Set the investment value for an account on a specific date (upsert).
+  /// - Parameters:
+  ///   - accountId: The investment account
+  ///   - date: The valuation date
+  ///   - value: The monetary value in cents
+  func setValue(accountId: UUID, date: Date, value: MonetaryAmount) async throws
+
+  /// Remove the investment value for an account on a specific date.
+  /// - Parameters:
+  ///   - accountId: The investment account
+  ///   - date: The valuation date to remove
+  func removeValue(accountId: UUID, date: Date) async throws
+}

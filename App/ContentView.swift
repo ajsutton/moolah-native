@@ -8,6 +8,7 @@ struct ContentView: View {
   @Environment(CategoryStore.self) private var categoryStore
   @Environment(EarmarkStore.self) private var earmarkStore
   @Environment(AnalysisStore.self) private var analysisStore
+  @Environment(InvestmentStore.self) private var investmentStore
   @State private var selection: SidebarSelection?
 
   @State private var showCreateEarmarkSheet = false
@@ -32,13 +33,19 @@ struct ContentView: View {
       switch selection {
       case .account(let id):
         if let account = accountStore.accounts.by(id: id) {
-          TransactionListView(
-            title: account.name,
-            filter: TransactionFilter(accountId: account.id),
-            accounts: accountStore.accounts,
-            categories: categoryStore.categories,
-            earmarks: earmarkStore.earmarks,
-            transactionStore: transactionStore)
+          if account.type == .investment {
+            InvestmentValuesView(
+              account: account,
+              store: investmentStore)
+          } else {
+            TransactionListView(
+              title: account.name,
+              filter: TransactionFilter(accountId: account.id),
+              accounts: accountStore.accounts,
+              categories: categoryStore.categories,
+              earmarks: earmarkStore.earmarks,
+              transactionStore: transactionStore)
+          }
         }
       case .earmark(let id):
         if let earmark = earmarkStore.earmarks.by(id: id) {
