@@ -62,4 +62,43 @@ final class RemoteAnalysisRepository: AnalysisRepository {
 
     return response.incomeAndExpense.map { $0.toDomain() }
   }
+
+  func fetchCategoryBalances(
+    dateRange: ClosedRange<Date>,
+    transactionType: TransactionType,
+    filters: TransactionFilter?
+  ) async throws -> [UUID: Int] {
+    var queryItems: [URLQueryItem] = [
+      URLQueryItem(name: "from", value: BackendDateFormatter.string(from: dateRange.lowerBound)),
+      URLQueryItem(name: "to", value: BackendDateFormatter.string(from: dateRange.upperBound)),
+      URLQueryItem(name: "transactionType", value: transactionType.rawValue),
+    ]
+
+    // Add optional filters
+    if let accountId = filters?.accountId {
+      queryItems.append(URLQueryItem(name: "account", value: accountId.uuidString))
+    }
+    if let earmarkId = filters?.earmarkId {
+      queryItems.append(URLQueryItem(name: "earmark", value: earmarkId.uuidString))
+    }
+    if let categoryIds = filters?.categoryIds {
+      queryItems.append(
+        contentsOf: categoryIds.map {
+          URLQueryItem(name: "category", value: $0.uuidString)
+        })
+    }
+    if let payee = filters?.payee {
+      queryItems.append(URLQueryItem(name: "payee", value: payee))
+    }
+
+    let data = try await client.get("analysis/categoryBalances/", queryItems: queryItems)
+    let response = try JSONDecoder().decode([String: Int].self, from: data)
+
+    // Convert string keys to UUIDs
+    return response.reduce(into: [:]) { result, pair in
+      if let uuid = UUID(uuidString: pair.key) {
+        result[uuid] = pair.value
+      }
+    }
+  }
 }

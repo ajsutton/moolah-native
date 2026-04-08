@@ -392,35 +392,35 @@ protocol AnalysisRepository {
 
 ## Implementation Roadmap
 
-### Phase 1: Core Functionality (High Priority)
+### Phase 1: Core Functionality ✅ COMPLETE (2026-04-09)
 
-1. **Define `RecurPeriod` enum** (replace `String?`)
+1. ✅ **Define `RecurPeriod` enum** (replace `String?`)
    - Update `Transaction`, `TransactionDTO`, tests
-   - Estimated effort: 1 hour
+   - Implemented in `Domain/Models/Transaction.swift`
 
-2. **Implement `nextDueDate(transaction:)` utility**
+2. ✅ **Implement `nextDueDate(transaction:)` utility**
    - Add to `Domain/Models/Transaction.swift` extension
    - Write tests for each period type
-   - Estimated effort: 2 hours
+   - Implemented at Transaction.swift:178
 
-3. **Add recurrence UI to `TransactionFormView`**
+3. ✅ **Add recurrence UI to `TransactionFormView`**
    - Toggle, period picker, frequency field
    - Validation
    - Tests (UI snapshot + unit)
-   - Estimated effort: 4 hours
+   - Implemented at TransactionFormView.swift:212-254
 
-4. **Implement full pay action in `TransactionStore`**
+4. ✅ **Implement full pay action in `TransactionStore`**
    - Create + update/delete orchestration
    - Error handling + rollback
    - Contract tests
-   - Estimated effort: 3 hours
+   - Implemented at TransactionStore.swift:99-136
 
-5. **Validation: require both period and frequency when repeat is on**
+5. ✅ **Validation: require both period and frequency when repeat is on**
    - Form-level validation
    - Domain-level `Transaction.validate()`
-   - Estimated effort: 1 hour
+   - Implemented at TransactionFormView.swift:88-90
 
-**Total Phase 1: ~11 hours**
+**Total Phase 1: COMPLETE**
 
 ### Phase 2: Analysis Forecasting (Medium Priority)
 
@@ -458,18 +458,21 @@ protocol AnalysisRepository {
 
 ## Summary
 
-**Current State:**
+**Current State (Updated 2026-04-09):**
 - ✅ Data model complete
 - ✅ Filtering and viewing scheduled transactions works
-- ✅ Basic pay action creates a paid transaction
-- ❌ No UI to create/edit recurrence
-- ❌ Pay action does not update/delete original scheduled transaction
-- ❌ No forecasting for analysis graphs
+- ✅ **Phase 1 COMPLETE**: Full recurrence UI and pay action implemented
+  - ✅ RecurPeriod enum defined
+  - ✅ UI to create/edit recurrence in TransactionFormView
+  - ✅ Complete pay action with update/delete logic
+  - ✅ Next due date calculation
+  - ✅ Validation for recurrence fields
+- ❌ No forecasting for analysis graphs (Phase 2)
 
-**Estimated Total Effort:** ~21 hours for full feature parity
+**Estimated Remaining Effort:** ~10 hours for forecasting (Phase 2 + 3)
 
 **Recommended Approach:**
-1. Complete Phase 1 (core functionality) as part of **Step 9** in `NATIVE_APP_PLAN.md`
+1. ✅ **Phase 1 (core functionality) — COMPLETE**
 2. Defer Phase 2 (forecasting) until **Step 10** (Analysis Dashboard)
 3. Defer Phase 3 (polish) until **Step 14** (Platform Polish & Feature Parity)
 

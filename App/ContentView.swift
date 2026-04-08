@@ -7,6 +7,7 @@ struct ContentView: View {
   @Environment(TransactionStore.self) private var transactionStore
   @Environment(CategoryStore.self) private var categoryStore
   @Environment(EarmarkStore.self) private var earmarkStore
+  @Environment(AnalysisStore.self) private var analysisStore
   @State private var selection: SidebarSelection?
 
   @State private var showCreateEarmarkSheet = false
@@ -62,6 +63,10 @@ struct ContentView: View {
           transactionStore: transactionStore)
       case .categories:
         CategoriesView(categoryStore: categoryStore)
+      case .reports:
+        ReportsView(
+          analysisRepository: analysisStore.repository,
+          categories: categoryStore.categories)
       case nil:
         Text("Select an account")
       }

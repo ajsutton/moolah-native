@@ -388,6 +388,59 @@ final class InMemoryAnalysisRepository: AnalysisRepository {
     }.sorted { $0.month > $1.month }  // Most recent first
   }
 
+  // MARK: - Category Balances
+
+  func fetchCategoryBalances(
+    dateRange: ClosedRange<Date>,
+    transactionType: TransactionType,
+    filters: TransactionFilter?
+  ) async throws -> [UUID: Int] {
+    // 1. Fetch all transactions
+    let page = try await transactionRepository.fetch(
+      filter: TransactionFilter(), page: 0, pageSize: 10000)
+    let allTransactions = page.transactions
+
+    // 2. Apply filters
+    let filtered = allTransactions.filter { tx in
+      // Date range
+      guard dateRange.contains(tx.date) else { return false }
+
+      // Transaction type
+      guard tx.type == transactionType else { return false }
+
+      // Must have category
+      guard tx.categoryId != nil else { return false }
+
+      // Exclude scheduled transactions
+      guard tx.recurPeriod == nil else { return false }
+
+      // Apply optional filters
+      if let accountId = filters?.accountId, tx.accountId != accountId {
+        return false
+      }
+      if let earmarkId = filters?.earmarkId, tx.earmarkId != earmarkId {
+        return false
+      }
+      if let categoryIds = filters?.categoryIds, !categoryIds.contains(tx.categoryId!) {
+        return false
+      }
+      if let payee = filters?.payee, tx.payee != payee {
+        return false
+      }
+
+      return true
+    }
+
+    // 3. Group by category and sum amounts
+    var balances: [UUID: Int] = [:]
+    for transaction in filtered {
+      let categoryId = transaction.categoryId!
+      balances[categoryId, default: 0] += transaction.amount.cents
+    }
+
+    return balances
+  }
+
   // MARK: - Helper Methods
 
   private func financialMonth(for date: Date, monthEnd: Int) -> String {

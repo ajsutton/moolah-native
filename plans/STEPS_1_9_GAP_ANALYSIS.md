@@ -611,32 +611,31 @@
 
 ### Missing ❌
 
-#### 1. Recurrence UI in TransactionFormView
+#### 1. Recurrence UI in TransactionFormView ✅ COMPLETE
 **Gap:** No UI to set `recurPeriod` and `recurEvery` when creating or editing transactions.
 
-**Status:** Covered in SCHEDULED_TRANSACTIONS_GAP_ANALYSIS.md, Phase 1, Task 3.
+**Status:** ✅ **IMPLEMENTED** (2026-04-09) - See SCHEDULED_TRANSACTIONS_GAP_ANALYSIS.md Phase 1.
 
 **Impact:** Critical — Cannot create scheduled transactions.
 
-**Estimate:** 4 hours (see scheduled gap analysis)
+**Estimate:** 4 hours (COMPLETE)
 
 ---
 
-#### 2. Complete Pay Action Implementation
+#### 2. Complete Pay Action Implementation ✅ COMPLETE
 **Gap:** Paying a scheduled transaction creates a new transaction but does not advance the scheduled transaction's date (recurring) or delete it (one-time).
 
-**Status:** Covered in SCHEDULED_TRANSACTIONS_GAP_ANALYSIS.md, Phase 1, Task 4.
+**Status:** ✅ **IMPLEMENTED** (2026-04-09) - See SCHEDULED_TRANSACTIONS_GAP_ANALYSIS.md Phase 1.
 
 **Impact:** Critical — Scheduled transactions don't behave correctly after being paid.
 
 **Required:**
-- Extend `TransactionStore.payTransaction(_:)` to:
-  1. Create paid transaction (already done)
-  2. If `recurPeriod == .once`: delete the original scheduled transaction
-  3. Else: calculate next due date and update the original scheduled transaction's `date`
-- Full logic in SCHEDULED_TRANSACTIONS_GAP_ANALYSIS.md
+- ✅ `TransactionStore.payScheduledTransaction(_:)` fully implemented (TransactionStore.swift:99-136)
+  1. ✅ Create paid transaction
+  2. ✅ If `recurPeriod == .once`: delete the original scheduled transaction
+  3. ✅ Else: calculate next due date and update the original scheduled transaction's `date`
 
-**Estimate:** 3 hours (see scheduled gap analysis)
+**Estimate:** 3 hours (COMPLETE)
 
 ---
 

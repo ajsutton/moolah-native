@@ -17,7 +17,7 @@ final class AnalysisStore {
   var forecastMonths: Int = 1  // 0 = "None", 1, 3, 6, etc.
   var monthEnd: Int = 25  // User's financial month-end day (1-31)
 
-  private let repository: AnalysisRepository
+  let repository: AnalysisRepository
   private let logger = Logger(subsystem: "com.moolah.app", category: "AnalysisStore")
 
   init(repository: AnalysisRepository) {

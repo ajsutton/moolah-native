@@ -6,6 +6,7 @@ enum SidebarSelection: Hashable {
   case allTransactions
   case upcomingTransactions
   case categories
+  case reports
 }
 
 struct SidebarView: View {
@@ -133,6 +134,10 @@ struct SidebarView: View {
 
         NavigationLink(value: SidebarSelection.categories) {
           Label("Categories", systemImage: "tag")
+        }
+
+        NavigationLink(value: SidebarSelection.reports) {
+          Label("Reports", systemImage: "chart.bar.fill")
         }
       }
     }

@@ -307,4 +307,354 @@ struct AnalysisRepositoryContractTests {
     #expect(!data.isEmpty, "Should have at least one month")
     // Note: Actual earmarkedIncome verification requires understanding the full algorithm
   }
+
+  // MARK: - Category Balances Tests
+
+  @Test("fetchCategoryBalances returns flat mapping")
+  func categoryBalancesFlatMapping() async throws {
+    let backend = InMemoryBackend()
+
+    let account = Account(
+      id: UUID(),
+      name: "Test Account",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let cat1 = Category(id: UUID(), name: "Groceries")
+    _ = try await backend.categories.create(cat1)
+
+    let cat2 = Category(id: UUID(), name: "Restaurants")
+    _ = try await backend.categories.create(cat2)
+
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
+    let dateRange = today...today
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: today,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -5000, currency: .defaultCurrency),
+        payee: "Store",
+        categoryId: cat1.id
+      ))
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: today,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -3000, currency: .defaultCurrency),
+        payee: "Restaurant",
+        categoryId: cat2.id
+      ))
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: today,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -2000, currency: .defaultCurrency),
+        payee: "Store 2",
+        categoryId: cat1.id
+      ))
+
+    let balances = try await backend.analysis.fetchCategoryBalances(
+      dateRange: dateRange,
+      transactionType: .expense,
+      filters: nil
+    )
+
+    // Verify totals are correct
+    #expect(balances[cat1.id] == -7000)  // 5000 + 2000
+    #expect(balances[cat2.id] == -3000)
+  }
+
+  @Test("fetchCategoryBalances excludes scheduled transactions")
+  func categoryBalancesExcludesScheduled() async throws {
+    let backend = InMemoryBackend()
+
+    let account = Account(
+      id: UUID(),
+      name: "Test Account",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let cat = Category(id: UUID(), name: "Rent")
+    _ = try await backend.categories.create(cat)
+
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
+    let dateRange = today...today
+
+    // Scheduled transaction
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: today,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -100000, currency: .defaultCurrency),
+        payee: "Landlord",
+        categoryId: cat.id,
+        recurPeriod: .month,
+        recurEvery: 1
+      ))
+
+    // Completed transaction
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: today,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -100000, currency: .defaultCurrency),
+        payee: "Landlord",
+        categoryId: cat.id,
+        recurPeriod: nil
+      ))
+
+    let balances = try await backend.analysis.fetchCategoryBalances(
+      dateRange: dateRange,
+      transactionType: .expense,
+      filters: nil
+    )
+
+    // Only completed transaction counted
+    #expect(balances[cat.id] == -100000)
+  }
+
+  @Test("fetchCategoryBalances filters by transaction type")
+  func categoryBalancesFiltersByType() async throws {
+    let backend = InMemoryBackend()
+
+    let account = Account(
+      id: UUID(),
+      name: "Test Account",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let cat = Category(id: UUID(), name: "Salary")
+    _ = try await backend.categories.create(cat)
+
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
+    let dateRange = today...today
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: today,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: 500000, currency: .defaultCurrency),
+        payee: "Employer",
+        categoryId: cat.id
+      ))
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: today,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -5000, currency: .defaultCurrency),
+        payee: "Store",
+        categoryId: cat.id
+      ))
+
+    let incomeBalances = try await backend.analysis.fetchCategoryBalances(
+      dateRange: dateRange,
+      transactionType: .income,
+      filters: nil
+    )
+
+    // Only income counted
+    #expect(incomeBalances[cat.id] == 500000)
+
+    let expenseBalances = try await backend.analysis.fetchCategoryBalances(
+      dateRange: dateRange,
+      transactionType: .expense,
+      filters: nil
+    )
+
+    // Only expense counted
+    #expect(expenseBalances[cat.id] == -5000)
+  }
+
+  @Test("fetchCategoryBalances respects date range")
+  func categoryBalancesRespectsDateRange() async throws {
+    let backend = InMemoryBackend()
+
+    let account = Account(
+      id: UUID(),
+      name: "Test Account",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let cat = Category(id: UUID(), name: "Gas")
+    _ = try await backend.categories.create(cat)
+
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
+    let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+    let lastMonth = calendar.date(byAdding: .month, value: -1, to: today)!
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: yesterday,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -5000, currency: .defaultCurrency),
+        payee: "Gas Station",
+        categoryId: cat.id
+      ))
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: lastMonth,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -3000, currency: .defaultCurrency),
+        payee: "Gas Station",
+        categoryId: cat.id
+      ))
+
+    let balances = try await backend.analysis.fetchCategoryBalances(
+      dateRange: yesterday...today,
+      transactionType: .expense,
+      filters: nil
+    )
+
+    // Only yesterday's transaction counted
+    #expect(balances[cat.id] == -5000)
+  }
+
+  @Test("fetchCategoryBalances applies additional filters")
+  func categoryBalancesAppliesFilters() async throws {
+    let backend = InMemoryBackend()
+
+    let account1 = Account(
+      id: UUID(),
+      name: "Checking",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+    )
+    _ = try await backend.accounts.create(account1)
+
+    let account2 = Account(
+      id: UUID(),
+      name: "Credit Card",
+      type: .creditCard,
+      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+    )
+    _ = try await backend.accounts.create(account2)
+
+    let cat = Category(id: UUID(), name: "Groceries")
+    _ = try await backend.categories.create(cat)
+
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
+    let dateRange = today...today
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: today,
+        accountId: account1.id,
+        amount: MonetaryAmount(cents: -5000, currency: .defaultCurrency),
+        payee: "Store",
+        categoryId: cat.id
+      ))
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: today,
+        accountId: account2.id,
+        amount: MonetaryAmount(cents: -3000, currency: .defaultCurrency),
+        payee: "Store",
+        categoryId: cat.id
+      ))
+
+    let balances = try await backend.analysis.fetchCategoryBalances(
+      dateRange: dateRange,
+      transactionType: .expense,
+      filters: TransactionFilter(accountId: account1.id)
+    )
+
+    // Only account1 transaction counted
+    #expect(balances[cat.id] == -5000)
+  }
+
+  @Test("fetchCategoryBalances excludes transactions without category")
+  func categoryBalancesRequiresCategory() async throws {
+    let backend = InMemoryBackend()
+
+    let account = Account(
+      id: UUID(),
+      name: "Test Account",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let cat = Category(id: UUID(), name: "Misc")
+    _ = try await backend.categories.create(cat)
+
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
+    let dateRange = today...today
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: today,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -5000, currency: .defaultCurrency),
+        payee: "Store",
+        categoryId: cat.id
+      ))
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: today,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -3000, currency: .defaultCurrency),
+        payee: "Uncategorized",
+        categoryId: nil
+      ))
+
+    let balances = try await backend.analysis.fetchCategoryBalances(
+      dateRange: dateRange,
+      transactionType: .expense,
+      filters: nil
+    )
+
+    #expect(balances.count == 1)
+    #expect(balances[cat.id] == -5000)
+  }
+
+  @Test("fetchCategoryBalances handles empty result")
+  func categoryBalancesEmptyResult() async throws {
+    let backend = InMemoryBackend()
+
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
+    let dateRange = today...today
+
+    let balances = try await backend.analysis.fetchCategoryBalances(
+      dateRange: dateRange,
+      transactionType: .expense,
+      filters: nil
+    )
+
+    #expect(balances.isEmpty)
+  }
 }
