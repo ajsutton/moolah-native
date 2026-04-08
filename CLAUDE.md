@@ -70,6 +70,32 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
 - **Fixtures:** Remote backend tests use `URLProtocol` stubs against fixture JSON in `MoolahTests/Support/Fixtures/`.
 - **Targets:** `MoolahTests_iOS` (simulator) and `MoolahTests_macOS` (native).
 
+## Pre-Commit Checklist
+
+**Before committing any code, you MUST:**
+
+1. **Check for Compiler Warnings**
+   - Use Xcode MCP: `mcp__xcode__XcodeListNavigatorIssues` with `severity: "warning"`
+   - Or run `xcodebuild` and check for warnings
+   - **ALL warnings in user code must be fixed.** (Preview macro warnings from `#Preview` can be ignored.)
+
+2. **Common Warning Fixes:**
+   - **"Result of call to X is unused"**: Add `_ = ` before the call to explicitly discard the result
+     ```swift
+     // Before
+     try await store.create(item)
+
+     // After
+     _ = try await store.create(item)
+     ```
+   - **"Variable 'x' was never mutated"**: Change `var` to `let`
+   - **"Initialization of immutable value 'x' was never used"**: Remove unused variables
+
+3. **Build Configuration**
+   - The project is configured with `SWIFT_TREAT_WARNINGS_AS_ERRORS: YES`
+   - Builds will fail if there are any warnings in user code
+   - This ensures warning-free commits at all times
+
 ## UI Design & Style Guide
 
 - **Style Guide:** All UI work MUST follow `STYLE_GUIDE.md`. This is not optional.

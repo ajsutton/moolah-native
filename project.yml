@@ -10,6 +10,8 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     ENABLE_TESTABILITY: YES
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
 
     # ---- Signing (env-driven) ----
     DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}

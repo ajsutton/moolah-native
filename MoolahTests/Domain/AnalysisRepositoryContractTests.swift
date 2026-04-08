@@ -31,7 +31,7 @@ struct AnalysisRepositoryContractTests {
       type: .bank,
       balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
     )
-    try await backend.accounts.create(account)
+    _ = try await backend.accounts.create(account)
 
     // Add transactions on different dates
     let calendar = Calendar.current
@@ -39,7 +39,7 @@ struct AnalysisRepositoryContractTests {
     let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
     let twoDaysAgo = calendar.date(byAdding: .day, value: -2, to: today)!
 
-    try await backend.transactions.create(
+    _ = try await backend.transactions.create(
       Transaction(
         type: .income,
         date: yesterday,
@@ -48,7 +48,7 @@ struct AnalysisRepositoryContractTests {
         payee: "Income"
       ))
 
-    try await backend.transactions.create(
+    _ = try await backend.transactions.create(
       Transaction(
         type: .income,
         date: twoDaysAgo,
@@ -75,17 +75,17 @@ struct AnalysisRepositoryContractTests {
       type: .bank,
       balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
     )
-    try await backend.accounts.create(account)
+    _ = try await backend.accounts.create(account)
 
     let earmark = Earmark(
       id: UUID(),
       name: "Savings",
       balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
     )
-    try await backend.earmarks.create(earmark)
+    _ = try await backend.earmarks.create(earmark)
 
     // Add income (not earmarked)
-    try await backend.transactions.create(
+    _ = try await backend.transactions.create(
       Transaction(
         type: .income,
         date: Date(),
@@ -95,7 +95,7 @@ struct AnalysisRepositoryContractTests {
       ))
 
     // Add earmarked income
-    try await backend.transactions.create(
+    _ = try await backend.transactions.create(
       Transaction(
         type: .income,
         date: Date(),
@@ -123,10 +123,10 @@ struct AnalysisRepositoryContractTests {
       type: .bank,
       balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
     )
-    try await backend.accounts.create(account)
+    _ = try await backend.accounts.create(account)
 
     // Add a scheduled transaction (weekly)
-    try await backend.transactions.create(
+    _ = try await backend.transactions.create(
       Transaction(
         type: .income,
         date: Date(),
@@ -159,20 +159,20 @@ struct AnalysisRepositoryContractTests {
       type: .bank,
       balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
     )
-    try await backend.accounts.create(account)
+    _ = try await backend.accounts.create(account)
 
     let category = Category(
       id: UUID(),
       name: "Groceries"
     )
-    try await backend.categories.create(category)
+    _ = try await backend.categories.create(category)
 
     // Add expenses in different months
     let calendar = Calendar.current
     let thisMonth = Date()
     let lastMonth = calendar.date(byAdding: .month, value: -1, to: thisMonth)!
 
-    try await backend.transactions.create(
+    _ = try await backend.transactions.create(
       Transaction(
         type: .expense,
         date: thisMonth,
@@ -182,7 +182,7 @@ struct AnalysisRepositoryContractTests {
         categoryId: category.id
       ))
 
-    try await backend.transactions.create(
+    _ = try await backend.transactions.create(
       Transaction(
         type: .expense,
         date: lastMonth,
@@ -209,10 +209,10 @@ struct AnalysisRepositoryContractTests {
       type: .bank,
       balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
     )
-    try await backend.accounts.create(account)
+    _ = try await backend.accounts.create(account)
 
     // Add a scheduled expense
-    try await backend.transactions.create(
+    _ = try await backend.transactions.create(
       Transaction(
         type: .expense,
         date: Date(),
@@ -241,9 +241,9 @@ struct AnalysisRepositoryContractTests {
       type: .bank,
       balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
     )
-    try await backend.accounts.create(account)
+    _ = try await backend.accounts.create(account)
 
-    try await backend.transactions.create(
+    _ = try await backend.transactions.create(
       Transaction(
         type: .income,
         date: Date(),
@@ -252,7 +252,7 @@ struct AnalysisRepositoryContractTests {
         payee: "Income"
       ))
 
-    try await backend.transactions.create(
+    _ = try await backend.transactions.create(
       Transaction(
         type: .expense,
         date: Date(),
@@ -280,7 +280,7 @@ struct AnalysisRepositoryContractTests {
       type: .bank,
       balance: MonetaryAmount(cents: 1000, currency: .defaultCurrency)
     )
-    try await backend.accounts.create(currentAccount)
+    _ = try await backend.accounts.create(currentAccount)
 
     let investmentAccount = Account(
       id: UUID(),
@@ -288,10 +288,10 @@ struct AnalysisRepositoryContractTests {
       type: .investment,
       balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
     )
-    try await backend.accounts.create(investmentAccount)
+    _ = try await backend.accounts.create(investmentAccount)
 
     // Transfer to investment (should count as earmarkedIncome)
-    try await backend.transactions.create(
+    _ = try await backend.transactions.create(
       Transaction(
         type: .transfer,
         date: Date(),

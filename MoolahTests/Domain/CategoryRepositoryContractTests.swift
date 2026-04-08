@@ -70,7 +70,6 @@ struct CategoryRepositoryContractTests {
   func testDeletesCategoryAndUpdatesChildren(repository: InMemoryCategoryRepository) async throws {
     let categories = try await repository.fetchAll()
     let groceries = categories.first { $0.name == "Groceries" }!
-    let fruit = categories.first { $0.name == "Fruit" }!
     let transport = categories.first { $0.name == "Transport" }!
 
     // Delete Groceries and replace with Transport

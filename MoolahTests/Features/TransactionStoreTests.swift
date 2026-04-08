@@ -199,7 +199,7 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
       payee: "Coffee Shop"
     )
-    await store.create(tx)
+    _ = await store.create(tx)
 
     #expect(store.transactions.count == 1)
     #expect(store.transactions[0].transaction.payee == "Coffee Shop")
@@ -259,7 +259,7 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency),
       payee: "Salary"
     )
-    await store.create(tx)
+    _ = await store.create(tx)
     #expect(store.transactions.count == 1)
 
     // Update
@@ -292,7 +292,7 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -3000, currency: Currency.defaultCurrency),
       payee: "Coffee"
     )
-    await store.create(expense)
+    _ = await store.create(expense)
 
     // Newest first: expense (balance 97000), then income (balance 100000)
     #expect(store.transactions.count == 2)
@@ -344,7 +344,7 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
       payee: "Test"
     )
-    await store.create(tx)
+    _ = await store.create(tx)
     #expect(receivedOld == .some(nil))
     #expect(receivedNew?.id == tx.id)
   }
