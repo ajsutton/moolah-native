@@ -134,14 +134,22 @@ struct UpcomingView: View {
       var updated = scheduledTransaction
       updated.date = nextDate
       await transactionStore.update(updated)
-      // Find the updated transaction in the store by ID (it may have moved sections due to date change)
+    } else {
+      // For one-time scheduled transactions (.once), delete the original
+      await transactionStore.delete(id: scheduledTransaction.id)
+    }
+
+    // Reload to re-apply the scheduled filter (removes the paid transaction from the list)
+    await transactionStore.load(filter: TransactionFilter(scheduled: true))
+
+    // Clear or update selection
+    if scheduledTransaction.isRecurring {
+      // Find the updated transaction in the refreshed store
       selectedTransaction =
         transactionStore.transactions.first { $0.transaction.id == scheduledTransaction.id }?
         .transaction
     } else {
-      // For one-time scheduled transactions (.once), delete the original
-      await transactionStore.delete(id: scheduledTransaction.id)
-      // Clear selection since the transaction was deleted
+      // Transaction was deleted, clear selection
       selectedTransaction = nil
     }
   }
