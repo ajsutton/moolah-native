@@ -89,13 +89,42 @@ struct EarmarksView: View {
             .font(.caption)
           }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+          "\(earmark.name), balance \(earmark.balance.decimalValue.formatted(.currency(code: earmark.balance.currency.code)))"
+        )
         .tag(earmark)
         .contextMenu {
+          Button("Edit", systemImage: "pencil") {
+            earmarkToEdit = earmark
+          }
+          Divider()
+          Button("Hide", systemImage: "eye.slash", role: .destructive) {
+            Task {
+              var hidden = earmark
+              hidden.isHidden = true
+              _ = await earmarkStore.update(hidden)
+            }
+          }
+        }
+        .swipeActions(edge: .trailing) {
+          Button(role: .destructive) {
+            Task {
+              var hidden = earmark
+              hidden.isHidden = true
+              _ = await earmarkStore.update(hidden)
+            }
+          } label: {
+            Label("Hide", systemImage: "eye.slash")
+          }
+        }
+        .swipeActions(edge: .leading) {
           Button {
             earmarkToEdit = earmark
           } label: {
             Label("Edit", systemImage: "pencil")
           }
+          .tint(.blue)
         }
       }
     }

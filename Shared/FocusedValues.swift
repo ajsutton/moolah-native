@@ -10,6 +10,11 @@ struct NewEarmarkActionKey: FocusedValueKey {
   typealias Value = () -> Void
 }
 
+/// Focused value key for the refresh action
+struct RefreshActionKey: FocusedValueKey {
+  typealias Value = () -> Void
+}
+
 extension FocusedValues {
   var newTransactionAction: NewTransactionActionKey.Value? {
     get { self[NewTransactionActionKey.self] }
@@ -19,5 +24,10 @@ extension FocusedValues {
   var newEarmarkAction: NewEarmarkActionKey.Value? {
     get { self[NewEarmarkActionKey.self] }
     set { self[NewEarmarkActionKey.self] = newValue }
+  }
+
+  var refreshAction: RefreshActionKey.Value? {
+    get { self[RefreshActionKey.self] }
+    set { self[RefreshActionKey.self] = newValue }
   }
 }

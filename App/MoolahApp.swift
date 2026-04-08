@@ -25,7 +25,24 @@ struct NewEarmarkCommands: Commands {
       Button("New Earmark") {
         newEarmarkAction?()
       }
+      .keyboardShortcut("n", modifiers: [.command, .shift])
       .disabled(newEarmarkAction == nil)
+    }
+  }
+}
+
+/// Commands for refreshing data
+struct RefreshCommands: Commands {
+  @FocusedValue(\.refreshAction) private var refreshAction
+
+  var body: some Commands {
+    CommandGroup(after: .newItem) {
+      Divider()
+      Button("Refresh") {
+        refreshAction?()
+      }
+      .keyboardShortcut("r", modifiers: .command)
+      .disabled(refreshAction == nil)
     }
   }
 }
@@ -81,6 +98,7 @@ struct MoolahApp: App {
     .commands {
       NewTransactionCommands()
       NewEarmarkCommands()
+      RefreshCommands()
     }
   }
 }

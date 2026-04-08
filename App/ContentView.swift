@@ -81,6 +81,13 @@ struct ContentView: View {
     .focusedSceneValue(\.newEarmarkAction) {
       showCreateEarmarkSheet = true
     }
+    .focusedSceneValue(\.refreshAction) {
+      Task {
+        await accountStore.load()
+        await categoryStore.load()
+        await earmarkStore.load()
+      }
+    }
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
         onCreate: { newEarmark in

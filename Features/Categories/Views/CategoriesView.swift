@@ -75,11 +75,20 @@ struct CategoriesView: View {
           category: category,
           categories: categoryStore.categories
         )
+        .accessibilityLabel(category.name)
         .tag(category)
         .contextMenu {
           Button("Edit", systemImage: "pencil") {
             selectedCategory = category
           }
+        }
+        .swipeActions(edge: .leading) {
+          Button {
+            selectedCategory = category
+          } label: {
+            Label("Edit", systemImage: "pencil")
+          }
+          .tint(.blue)
         }
       }
     }

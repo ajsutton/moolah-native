@@ -52,6 +52,33 @@ struct UpcomingView: View {
               }
             )
             .tag(entry.transaction)
+            .contextMenu {
+              Button("Pay Now", systemImage: "checkmark.circle") {
+                Task { await payTransaction(entry.transaction) }
+              }
+              Button("Edit", systemImage: "pencil") {
+                selectedTransaction = entry.transaction
+              }
+              Divider()
+              Button("Delete", systemImage: "trash", role: .destructive) {
+                Task { await transactionStore.delete(id: entry.transaction.id) }
+              }
+            }
+            .swipeActions(edge: .trailing) {
+              Button(role: .destructive) {
+                Task { await transactionStore.delete(id: entry.transaction.id) }
+              } label: {
+                Label("Delete", systemImage: "trash")
+              }
+            }
+            .swipeActions(edge: .leading) {
+              Button {
+                Task { await payTransaction(entry.transaction) }
+              } label: {
+                Label("Pay", systemImage: "checkmark.circle")
+              }
+              .tint(.green)
+            }
           }
         }
       }
@@ -72,6 +99,33 @@ struct UpcomingView: View {
               }
             )
             .tag(entry.transaction)
+            .contextMenu {
+              Button("Pay Now", systemImage: "checkmark.circle") {
+                Task { await payTransaction(entry.transaction) }
+              }
+              Button("Edit", systemImage: "pencil") {
+                selectedTransaction = entry.transaction
+              }
+              Divider()
+              Button("Delete", systemImage: "trash", role: .destructive) {
+                Task { await transactionStore.delete(id: entry.transaction.id) }
+              }
+            }
+            .swipeActions(edge: .trailing) {
+              Button(role: .destructive) {
+                Task { await transactionStore.delete(id: entry.transaction.id) }
+              } label: {
+                Label("Delete", systemImage: "trash")
+              }
+            }
+            .swipeActions(edge: .leading) {
+              Button {
+                Task { await payTransaction(entry.transaction) }
+              } label: {
+                Label("Pay", systemImage: "checkmark.circle")
+              }
+              .tint(.green)
+            }
           }
         }
       }
