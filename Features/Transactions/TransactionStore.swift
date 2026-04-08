@@ -92,6 +92,55 @@ final class TransactionStore {
     }
   }
 
+  /// Pays a scheduled transaction: creates a non-scheduled copy with today's date,
+  /// then either advances the scheduled transaction to its next due date (recurring)
+  /// or deletes it (one-time). Reloads with the scheduled filter afterward.
+  /// Returns the updated scheduled transaction if recurring, nil if deleted or failed.
+  func payScheduledTransaction(_ scheduledTransaction: Transaction) async -> PayResult {
+    // Create a non-scheduled copy with today's date
+    let paidTransaction = Transaction(
+      id: UUID(),
+      type: scheduledTransaction.type,
+      date: Date(),
+      accountId: scheduledTransaction.accountId,
+      toAccountId: scheduledTransaction.toAccountId,
+      amount: scheduledTransaction.amount,
+      payee: scheduledTransaction.payee,
+      notes: scheduledTransaction.notes,
+      categoryId: scheduledTransaction.categoryId,
+      earmarkId: scheduledTransaction.earmarkId,
+      recurPeriod: nil,
+      recurEvery: nil
+    )
+
+    guard await create(paidTransaction) != nil else {
+      return .failed
+    }
+
+    if scheduledTransaction.isRecurring, let nextDate = scheduledTransaction.nextDueDate() {
+      var updated = scheduledTransaction
+      updated.date = nextDate
+      await update(updated)
+    } else {
+      await delete(id: scheduledTransaction.id)
+    }
+
+    await load(filter: TransactionFilter(scheduled: true))
+
+    if scheduledTransaction.isRecurring {
+      let updated = transactions.first { $0.transaction.id == scheduledTransaction.id }?.transaction
+      return .paid(updatedScheduledTransaction: updated)
+    } else {
+      return .deleted
+    }
+  }
+
+  enum PayResult {
+    case paid(updatedScheduledTransaction: Transaction?)
+    case deleted
+    case failed
+  }
+
   func delete(id: UUID) async {
     // Optimistic: remove from local state
     let snapshot = rawTransactions

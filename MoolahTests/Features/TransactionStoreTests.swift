@@ -763,4 +763,222 @@ struct TransactionStoreTests {
     #expect(store.transactions[0].balance.cents == 95000)  // After updated Coffee
     #expect(store.transactions[1].balance.cents == 100000)  // After Salary (unchanged)
   }
+
+  // MARK: - Pay Scheduled Transaction
+
+  @Test func testPayRecurringTransactionAdvancesDate() async throws {
+    let originalDate = makeDate("2024-01-15")
+    let scheduled = Transaction(
+      type: .expense,
+      date: originalDate,
+      accountId: accountId,
+      amount: MonetaryAmount(cents: -200000, currency: Currency.defaultCurrency),
+      payee: "Rent",
+      recurPeriod: .month,
+      recurEvery: 1
+    )
+    let repository = InMemoryTransactionRepository(initialTransactions: [scheduled])
+    let store = TransactionStore(repository: repository)
+
+    await store.load(filter: TransactionFilter(scheduled: true))
+    #expect(store.transactions.count == 1)
+
+    let result = await store.payScheduledTransaction(scheduled)
+
+    // Store should show the scheduled tx with advanced date
+    #expect(store.transactions.count == 1)
+    #expect(store.transactions[0].transaction.id == scheduled.id)
+    #expect(store.transactions[0].transaction.date == makeDate("2024-02-15"))
+    #expect(store.transactions[0].transaction.recurPeriod == .month)
+
+    // Result should return the updated transaction
+    guard case .paid(let updated) = result else {
+      Issue.record("Expected .paid result, got \(result)")
+      return
+    }
+    #expect(updated?.id == scheduled.id)
+    #expect(updated?.date == makeDate("2024-02-15"))
+
+    // Backend should also have the paid (non-scheduled) transaction
+    let allPage = try await repository.fetch(
+      filter: TransactionFilter(), page: 0, pageSize: 50)
+    #expect(allPage.transactions.count == 2)
+
+    let paidTx = allPage.transactions.first { $0.id != scheduled.id }
+    #expect(paidTx != nil)
+    #expect(paidTx?.recurPeriod == nil)
+    #expect(paidTx?.recurEvery == nil)
+    #expect(paidTx?.payee == "Rent")
+    #expect(paidTx?.amount.cents == -200000)
+  }
+
+  @Test func testPayRecurringWeeklyTransactionAdvancesByWeek() async throws {
+    let scheduled = Transaction(
+      type: .expense,
+      date: makeDate("2024-01-15"),
+      accountId: accountId,
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      payee: "Groceries",
+      recurPeriod: .week,
+      recurEvery: 2
+    )
+    let repository = InMemoryTransactionRepository(initialTransactions: [scheduled])
+    let store = TransactionStore(repository: repository)
+
+    await store.load(filter: TransactionFilter(scheduled: true))
+    let result = await store.payScheduledTransaction(scheduled)
+
+    #expect(store.transactions.count == 1)
+    #expect(store.transactions[0].transaction.date == makeDate("2024-01-29"))
+
+    guard case .paid(let updated) = result else {
+      Issue.record("Expected .paid result")
+      return
+    }
+    #expect(updated?.date == makeDate("2024-01-29"))
+  }
+
+  @Test func testPayOneTimeScheduledTransactionDeletesIt() async throws {
+    let scheduled = Transaction(
+      type: .expense,
+      date: makeDate("2024-01-15"),
+      accountId: accountId,
+      amount: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency),
+      payee: "Annual Fee",
+      recurPeriod: .once,
+      recurEvery: 1
+    )
+    let repository = InMemoryTransactionRepository(initialTransactions: [scheduled])
+    let store = TransactionStore(repository: repository)
+
+    await store.load(filter: TransactionFilter(scheduled: true))
+    #expect(store.transactions.count == 1)
+
+    let result = await store.payScheduledTransaction(scheduled)
+
+    // Store should show no scheduled transactions (the original was deleted)
+    #expect(store.transactions.isEmpty)
+
+    // Result should be .deleted
+    guard case .deleted = result else {
+      Issue.record("Expected .deleted result, got \(result)")
+      return
+    }
+
+    // Backend should have only the paid transaction
+    let allPage = try await repository.fetch(
+      filter: TransactionFilter(), page: 0, pageSize: 50)
+    #expect(allPage.transactions.count == 1)
+    #expect(allPage.transactions[0].recurPeriod == nil)
+    #expect(allPage.transactions[0].payee == "Annual Fee")
+  }
+
+  @Test func testPayPreservesAllTransactionFields() async throws {
+    let categoryId = UUID()
+    let earmarkId = UUID()
+    let toAccountId = UUID()
+    let scheduled = Transaction(
+      type: .transfer,
+      date: makeDate("2024-01-15"),
+      accountId: accountId,
+      toAccountId: toAccountId,
+      amount: MonetaryAmount(cents: -100000, currency: Currency.defaultCurrency),
+      payee: "Savings Transfer",
+      notes: "Monthly savings",
+      categoryId: categoryId,
+      earmarkId: earmarkId,
+      recurPeriod: .month,
+      recurEvery: 1
+    )
+    let repository = InMemoryTransactionRepository(initialTransactions: [scheduled])
+    let store = TransactionStore(repository: repository)
+
+    await store.load(filter: TransactionFilter(scheduled: true))
+    _ = await store.payScheduledTransaction(scheduled)
+
+    // Find the paid (non-scheduled) transaction in the backend
+    let allPage = try await repository.fetch(
+      filter: TransactionFilter(), page: 0, pageSize: 50)
+    let paidTx = allPage.transactions.first { $0.id != scheduled.id }
+    #expect(paidTx != nil)
+    #expect(paidTx?.type == .transfer)
+    #expect(paidTx?.accountId == accountId)
+    #expect(paidTx?.toAccountId == toAccountId)
+    #expect(paidTx?.amount.cents == -100000)
+    #expect(paidTx?.payee == "Savings Transfer")
+    #expect(paidTx?.notes == "Monthly savings")
+    #expect(paidTx?.categoryId == categoryId)
+    #expect(paidTx?.earmarkId == earmarkId)
+    #expect(paidTx?.recurPeriod == nil)
+    #expect(paidTx?.recurEvery == nil)
+  }
+
+  @Test func testPayFiresOnMutateForCreateAndUpdate() async throws {
+    let scheduled = Transaction(
+      type: .expense,
+      date: makeDate("2024-01-15"),
+      accountId: accountId,
+      amount: MonetaryAmount(cents: -200000, currency: Currency.defaultCurrency),
+      payee: "Rent",
+      recurPeriod: .month,
+      recurEvery: 1
+    )
+    let repository = InMemoryTransactionRepository(initialTransactions: [scheduled])
+    let store = TransactionStore(repository: repository)
+
+    var mutations: [(old: Transaction?, new: Transaction?)] = []
+    store.onMutate = { old, new in
+      mutations.append((old: old, new: new))
+    }
+
+    await store.load(filter: TransactionFilter(scheduled: true))
+    _ = await store.payScheduledTransaction(scheduled)
+
+    // Should have fired twice: once for create (paid tx), once for update (advance date)
+    #expect(mutations.count == 2)
+
+    // First mutation: create paid transaction (old=nil, new=paid)
+    #expect(mutations[0].old == nil)
+    #expect(mutations[0].new?.recurPeriod == nil)
+    #expect(mutations[0].new?.payee == "Rent")
+
+    // Second mutation: update scheduled transaction date (old=original, new=advanced)
+    #expect(mutations[1].old?.id == scheduled.id)
+    #expect(mutations[1].old?.date == makeDate("2024-01-15"))
+    #expect(mutations[1].new?.id == scheduled.id)
+    #expect(mutations[1].new?.date == makeDate("2024-02-15"))
+  }
+
+  @Test func testPayOneTimeFiresOnMutateForCreateAndDelete() async throws {
+    let scheduled = Transaction(
+      type: .expense,
+      date: makeDate("2024-01-15"),
+      accountId: accountId,
+      amount: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency),
+      payee: "Annual Fee",
+      recurPeriod: .once,
+      recurEvery: 1
+    )
+    let repository = InMemoryTransactionRepository(initialTransactions: [scheduled])
+    let store = TransactionStore(repository: repository)
+
+    var mutations: [(old: Transaction?, new: Transaction?)] = []
+    store.onMutate = { old, new in
+      mutations.append((old: old, new: new))
+    }
+
+    await store.load(filter: TransactionFilter(scheduled: true))
+    _ = await store.payScheduledTransaction(scheduled)
+
+    // Should have fired twice: once for create, once for delete
+    #expect(mutations.count == 2)
+
+    // First: create (old=nil)
+    #expect(mutations[0].old == nil)
+    #expect(mutations[0].new?.recurPeriod == nil)
+
+    // Second: delete (new=nil)
+    #expect(mutations[1].old?.id == scheduled.id)
+    #expect(mutations[1].new == nil)
+  }
 }
