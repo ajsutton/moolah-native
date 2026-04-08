@@ -50,7 +50,7 @@ struct UserMenuView: View {
       #endif
       Image(systemName: "person.fill")
         .font(.system(size: 12))
-        .foregroundColor(.white)
+        .foregroundStyle(.white)
     }
     .frame(width: avatarSize, height: avatarSize)
     .clipShape(Circle())

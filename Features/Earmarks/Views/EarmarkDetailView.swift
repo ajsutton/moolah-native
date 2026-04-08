@@ -49,9 +49,9 @@ struct EarmarkDetailView: View {
     VStack(spacing: 12) {
       HStack(spacing: 24) {
         summaryItem(label: "Balance", amount: earmark.balance)
-        Divider().frame(height: 32)
+        Divider().frame(maxHeight: 32)
         summaryItem(label: "Saved", amount: earmark.saved)
-        Divider().frame(height: 32)
+        Divider().frame(maxHeight: 32)
         summaryItem(label: "Spent", amount: earmark.spent)
       }
 

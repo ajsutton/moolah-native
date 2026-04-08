@@ -67,7 +67,7 @@ struct ExpenseBreakdownCard: View {
           HStack {
             Circle()
               .fill(categoryColor(for: item.categoryId))
-              .frame(width: 10, height: 10)
+              .frame(width: 12, height: 12)
             Text(categoryName(for: item.categoryId))
               .font(.caption)
               .foregroundStyle(.primary)
@@ -140,14 +140,15 @@ struct ExpenseBreakdownCard: View {
     return categories.by(id: id)?.name ?? "Unknown"
   }
 
+  /// Fixed palette of system-compatible colors for chart segments.
+  private static let chartPalette: [Color] = [
+    .blue, .green, .orange, .purple, .red, .teal, .indigo, .pink, .mint, .cyan, .brown, .yellow,
+  ]
+
   private func categoryColor(for id: UUID?) -> Color {
     guard let id = id else { return .gray }
-    // Generate consistent color from UUID
-    let hash = id.uuidString.hashValue
-    let r = Double((hash & 0xFF0000) >> 16) / 255.0
-    let g = Double((hash & 0x00FF00) >> 8) / 255.0
-    let b = Double(hash & 0x0000FF) / 255.0
-    return Color(red: r, green: g, blue: b)
+    let index = abs(id.hashValue) % Self.chartPalette.count
+    return Self.chartPalette[index]
   }
 
   private func hasChildren(_ categoryId: UUID?) -> Bool {

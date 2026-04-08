@@ -81,7 +81,7 @@ struct IncomeExpenseTableCard: View {
       TableColumn("Total Savings") { item in
         Text(cumulativeSavings(upTo: item).formatNoSymbol)
           .monospacedDigit()
-          .foregroundStyle(.blue)
+          .foregroundStyle(.secondary)
       }
       .width(min: 100)
       .alignment(.trailing)

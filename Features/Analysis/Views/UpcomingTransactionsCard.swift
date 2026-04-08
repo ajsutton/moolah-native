@@ -85,10 +85,13 @@ private struct SimpleTransactionRow: View {
 
       Spacer()
 
-      Text(transaction.amount.formatNoSymbol)
-        .font(.body)
-        .monospacedDigit()
-        .foregroundStyle(transaction.amount.cents >= 0 ? .green : .red)
+      Text(
+        transaction.amount.decimalValue,
+        format: .currency(code: transaction.amount.currency.code)
+      )
+      .font(.body)
+      .monospacedDigit()
+      .foregroundStyle(transaction.amount.cents >= 0 ? .green : .red)
 
       Button {
         Task {

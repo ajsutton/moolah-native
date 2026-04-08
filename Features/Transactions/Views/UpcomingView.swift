@@ -197,7 +197,7 @@ struct UpcomingTransactionRow: View {
         }
 
         HStack(spacing: 4) {
-          Text(transaction.date, style: .date)
+          Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
             .font(.caption)
             .foregroundStyle(.secondary)
             .monospacedDigit()
@@ -242,10 +242,11 @@ struct UpcomingTransactionRow: View {
       }
       #if os(iOS)
         .buttonStyle(.borderedProminent)
+        .controlSize(.regular)
       #else
         .buttonStyle(.bordered)
+        .controlSize(.small)
       #endif
-      .controlSize(.small)
       .accessibilityLabel("Pay \(transaction.payee ?? "transaction")")
     }
     .contentShape(Rectangle())

@@ -6,7 +6,7 @@ struct InvestmentValueRow: View {
 
   var body: some View {
     HStack {
-      Text(value.date, format: .dateTime.day().month().year())
+      Text(value.date, format: .dateTime.day().month(.abbreviated).year())
         .font(.headline)
         .monospacedDigit()
 

@@ -35,6 +35,7 @@ struct InvestmentValuesView: View {
           if store.hasMore {
             ProgressView()
               .frame(maxWidth: .infinity)
+              .accessibilityLabel("Loading more values")
               .task {
                 await store.loadValues(accountId: account.id)
               }

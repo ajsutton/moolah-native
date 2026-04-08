@@ -290,7 +290,7 @@ struct TransactionDetailView: View {
       VStack(alignment: .leading) {
         Text("Notes")
         TextEditor(text: $notes)
-          .frame(height: 60)
+          .frame(minHeight: 60, maxHeight: 120)
           .scrollContentBackground(.hidden)
           .padding()
           #if os(macOS)
