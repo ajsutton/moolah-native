@@ -140,6 +140,11 @@ Task tool with prompt: "Review [ViewName] for style guide compliance and accessi
 - SwiftUI best practices (proper use of modifiers, semantic colors, layout primitives)
 - Usability issues (touch target sizes, visual hierarchy, clarity)
 
+**Important: Avoid these false-positive patterns:**
+- **Do not flag individual child view accessibility labels when the parent uses `.accessibilityElement(children: .combine)` with a combined label.** The combined label already covers all children.
+- **Do not flag a modifier as missing without verifying.** Read the actual code to confirm a modifier like `.monospacedDigit()` is absent before reporting it.
+- **Toolbar "Add" buttons should use `Label` with icons. Form submit buttons ("Create", "Save", "Apply", "Cancel") should use plain `Button("Text")`.** This is correct Apple HIG — do not flag it as inconsistent.
+
 **Output:** A detailed report with:
 - Issues found (categorized by severity: Critical, Important, Minor)
 - Specific code locations (file:line)
