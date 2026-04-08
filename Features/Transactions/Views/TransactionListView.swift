@@ -11,6 +11,7 @@ struct TransactionListView: View {
   @State private var selectedTransaction: Transaction?
   @State private var showError = false
   @State private var errorMessage = ""
+  @State private var searchText = ""
 
   var body: some View {
     HStack(spacing: 0) {
@@ -94,9 +95,18 @@ struct TransactionListView: View {
     }
   }
 
+  private var filteredTransactions: [TransactionWithBalance] {
+    if searchText.isEmpty {
+      return transactionStore.transactions
+    }
+    return transactionStore.transactions.filter {
+      $0.transaction.payee?.localizedCaseInsensitiveContains(searchText) ?? false
+    }
+  }
+
   private var listView: some View {
     List(selection: $selectedTransaction) {
-      ForEach(transactionStore.transactions) { entry in
+      ForEach(filteredTransactions) { entry in
         TransactionRowView(
           transaction: entry.transaction, accounts: accounts,
           categories: categories, earmarks: earmarks, balance: entry.balance,
@@ -176,6 +186,7 @@ struct TransactionListView: View {
     .refreshable {
       await transactionStore.load(filter: filter)
     }
+    .searchable(text: $searchText, prompt: "Search payee")
     .overlay {
       if !transactionStore.isLoading && transactionStore.transactions.isEmpty {
         ContentUnavailableView(

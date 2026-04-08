@@ -7,7 +7,7 @@ struct AccountRowView: View {
     HStack {
       Image(systemName: iconName)
         .foregroundStyle(.secondary)
-        .frame(width: 24)
+        .frame(width: UIConstants.IconSize.listIcon, height: UIConstants.IconSize.listIcon)
         .accessibilityLabel(account.type.rawValue)
 
       Text(account.name)

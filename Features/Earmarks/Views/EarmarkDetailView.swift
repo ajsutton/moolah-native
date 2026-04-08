@@ -54,6 +54,7 @@ struct EarmarkDetailView: View {
                 .font(.caption)
             }
           }
+          .tint(progress >= 1.0 ? .green : .blue)
 
           savingsDateRow
         }

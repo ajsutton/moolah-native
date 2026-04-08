@@ -9,6 +9,7 @@ struct EarmarksView: View {
   @State private var showCreateSheet = false
   @State private var selectedEarmark: Earmark?
   @State private var earmarkToEdit: Earmark?
+  @State private var searchText = ""
 
   var body: some View {
     HStack(spacing: 0) {
@@ -50,9 +51,18 @@ struct EarmarksView: View {
     }
   }
 
+  private var filteredEarmarks: [Earmark] {
+    if searchText.isEmpty {
+      return earmarkStore.earmarks.ordered
+    }
+    return earmarkStore.earmarks.ordered.filter {
+      $0.name.localizedCaseInsensitiveContains(searchText)
+    }
+  }
+
   private var listView: some View {
     List(selection: $selectedEarmark) {
-      ForEach(earmarkStore.earmarks.ordered) { earmark in
+      ForEach(filteredEarmarks) { earmark in
         VStack(alignment: .leading, spacing: 4) {
           HStack {
             Text(earmark.name)
@@ -110,13 +120,14 @@ struct EarmarksView: View {
     .refreshable {
       await earmarkStore.load()
     }
+    .searchable(text: $searchText, prompt: "Search earmarks")
     .overlay {
       if earmarkStore.isLoading && earmarkStore.earmarks.ordered.isEmpty {
         ProgressView()
       } else if !earmarkStore.isLoading && earmarkStore.earmarks.ordered.isEmpty {
         ContentUnavailableView(
           "No Earmarks",
-          systemImage: "folder",
+          systemImage: "bookmark.fill",
           description: Text("Create an earmark to start tracking savings goals.")
         )
       }

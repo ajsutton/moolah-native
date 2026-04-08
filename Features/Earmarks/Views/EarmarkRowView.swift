@@ -7,7 +7,7 @@ struct EarmarkRowView: View {
     HStack {
       Image(systemName: "bookmark.fill")
         .foregroundStyle(.secondary)
-        .frame(width: 24)
+        .frame(width: UIConstants.IconSize.listIcon, height: UIConstants.IconSize.listIcon)
         .accessibilityLabel("Earmark")
 
       Text(earmark.name)

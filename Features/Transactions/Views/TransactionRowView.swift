@@ -12,7 +12,7 @@ struct TransactionRowView: View {
     HStack {
       Image(systemName: iconName)
         .foregroundStyle(iconColor)
-        .frame(width: 24)
+        .frame(width: UIConstants.IconSize.listIcon, height: UIConstants.IconSize.listIcon)
         .accessibilityLabel(transaction.type.rawValue.capitalized)
 
       VStack(alignment: .leading, spacing: 2) {
@@ -46,9 +46,9 @@ struct TransactionRowView: View {
       Spacer()
 
       VStack(alignment: .trailing, spacing: 2) {
-        MonetaryAmountView(amount: transaction.amount)
+        MonetaryAmountView(amount: transaction.amount, font: .headline)
 
-        MonetaryAmountView(amount: balance)
+        MonetaryAmountView(amount: balance, font: .caption)
       }
     }
     #if os(macOS)

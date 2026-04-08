@@ -6,6 +6,7 @@ struct CategoriesView: View {
   @State private var showCreateSheet = false
   @State private var selectedCategory: Category?
   @State private var showDetailSheet = false
+  @State private var searchText = ""
 
   var body: some View {
     HStack(spacing: 0) {
@@ -48,9 +49,28 @@ struct CategoriesView: View {
     }
   }
 
+  private var filteredCategories: [Category] {
+    if searchText.isEmpty {
+      return categoryStore.categories.roots
+    }
+    return categoryStore.categories.roots.filter {
+      matchesSearch($0)
+    }
+  }
+
+  private func matchesSearch(_ category: Category) -> Bool {
+    if category.name.localizedCaseInsensitiveContains(searchText) {
+      return true
+    }
+    // Also check children
+    return categoryStore.categories.children(of: category.id).contains {
+      $0.name.localizedCaseInsensitiveContains(searchText)
+    }
+  }
+
   private var listView: some View {
     List(selection: $selectedCategory) {
-      ForEach(categoryStore.categories.roots) { category in
+      ForEach(filteredCategories) { category in
         CategoryNodeView(
           category: category,
           categories: categoryStore.categories
@@ -85,6 +105,7 @@ struct CategoriesView: View {
     .refreshable {
       await categoryStore.load()
     }
+    .searchable(text: $searchText, prompt: "Search categories")
     .overlay {
       if categoryStore.isLoading && categoryStore.categories.roots.isEmpty {
         ProgressView()

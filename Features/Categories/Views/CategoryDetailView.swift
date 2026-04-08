@@ -39,11 +39,6 @@ struct CategoryDetailView: View {
       }
 
       Section {
-        Button("Save Changes", action: saveChanges)
-          .disabled(editedName == category.name || editedName.isEmpty)
-      }
-
-      Section {
         Button("Delete Category", role: .destructive) {
           showDeleteConfirmation = true
         }
@@ -53,6 +48,12 @@ struct CategoryDetailView: View {
     #if os(iOS)
       .navigationBarTitleDisplayMode(.inline)
     #endif
+    .toolbar {
+      ToolbarItem(placement: .confirmationAction) {
+        Button("Save", action: saveChanges)
+          .disabled(editedName == category.name || editedName.isEmpty)
+      }
+    }
     .confirmationDialog(
       "Delete Category",
       isPresented: $showDeleteConfirmation,
