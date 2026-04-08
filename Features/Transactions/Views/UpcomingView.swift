@@ -107,50 +107,14 @@ struct UpcomingView: View {
   }
 
   private func payTransaction(_ scheduledTransaction: Transaction) async {
-    // Create a non-scheduled copy with today's date
-    let paidTransaction = Transaction(
-      id: UUID(),
-      type: scheduledTransaction.type,
-      date: Date(),
-      accountId: scheduledTransaction.accountId,
-      toAccountId: scheduledTransaction.toAccountId,
-      amount: scheduledTransaction.amount,
-      payee: scheduledTransaction.payee,
-      notes: scheduledTransaction.notes,
-      categoryId: scheduledTransaction.categoryId,
-      earmarkId: scheduledTransaction.earmarkId,
-      recurPeriod: nil,
-      recurEvery: nil
-    )
-
-    // Create the paid transaction
-    guard await transactionStore.create(paidTransaction) != nil else {
-      return  // Failed to create, don't modify the scheduled transaction
-    }
-
-    // Update or delete the scheduled transaction based on whether it's recurring
-    if scheduledTransaction.isRecurring, let nextDate = scheduledTransaction.nextDueDate() {
-      // For recurring transactions, update the date to the next occurrence
-      var updated = scheduledTransaction
-      updated.date = nextDate
-      await transactionStore.update(updated)
-    } else {
-      // For one-time scheduled transactions (.once), delete the original
-      await transactionStore.delete(id: scheduledTransaction.id)
-    }
-
-    // Reload to re-apply the scheduled filter (removes the paid transaction from the list)
-    await transactionStore.load(filter: TransactionFilter(scheduled: true))
-
-    // Clear or update selection
-    if scheduledTransaction.isRecurring {
-      // Find the updated transaction in the refreshed store
-      selectedTransaction =
-        transactionStore.transactions.first { $0.transaction.id == scheduledTransaction.id }?
-        .transaction
-    } else {
-      // Transaction was deleted, clear selection
+    let result = await transactionStore.payScheduledTransaction(scheduledTransaction)
+    switch result {
+    case .paid(let updated):
+      selectedTransaction = updated
+    case .deleted:
       selectedTransaction = nil
+    case .failed:
+      break
     }
   }
 }
