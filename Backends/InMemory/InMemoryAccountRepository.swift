@@ -8,7 +8,61 @@ actor InMemoryAccountRepository: AccountRepository {
   }
 
   func fetchAll() async throws -> [Account] {
-    return Array(accounts.values).sorted { $0.position < $1.position }
+    // Filter out hidden accounts (soft delete)
+    return Array(accounts.values)
+      .filter { !$0.isHidden }
+      .sorted { $0.position < $1.position }
+  }
+
+  func create(_ account: Account) async throws -> Account {
+    // Validation
+    guard !account.name.trimmingCharacters(in: .whitespaces).isEmpty else {
+      throw BackendError.validationFailed("Account name cannot be empty")
+    }
+
+    // Check for duplicate ID (shouldn't happen, but defensive)
+    guard accounts[account.id] == nil else {
+      throw BackendError.validationFailed("Account ID already exists")
+    }
+
+    // Store account (opening balance is already in the account.balance field)
+    accounts[account.id] = account
+
+    return account
+  }
+
+  func update(_ account: Account) async throws -> Account {
+    guard let existing = accounts[account.id] else {
+      throw BackendError.notFound("Account not found")
+    }
+
+    // Validation
+    guard !account.name.trimmingCharacters(in: .whitespaces).isEmpty else {
+      throw BackendError.validationFailed("Account name cannot be empty")
+    }
+
+    // Preserve balance (server-computed, not updated by client)
+    var updated = account
+    updated.balance = existing.balance
+
+    accounts[account.id] = updated
+    return updated
+  }
+
+  func delete(id: UUID) async throws {
+    guard let account = accounts[id] else {
+      throw BackendError.notFound("Account not found")
+    }
+
+    // Validate balance is zero
+    guard account.balance.cents == 0 else {
+      throw BackendError.validationFailed("Cannot delete account with non-zero balance")
+    }
+
+    // Soft delete
+    var updated = account
+    updated.isHidden = true
+    accounts[id] = updated
   }
 
   // For test setup

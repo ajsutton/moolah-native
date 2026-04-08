@@ -27,3 +27,19 @@ struct AccountDTO: Codable {
     let accounts: [AccountDTO]
   }
 }
+
+struct CreateAccountDTO: Codable {
+  let name: String
+  let type: String
+  let balance: Int
+  let position: Int
+  let date: String
+}
+
+struct UpdateAccountDTO: Codable {
+  let id: String
+  let name: String
+  let type: String
+  let position: Int
+  let hidden: Bool
+}

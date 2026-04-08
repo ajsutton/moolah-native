@@ -63,6 +63,10 @@ struct TransactionListView: View {
         return "Network error. Check your connection."
       case .unauthenticated:
         return "Session expired. Please log in again."
+      case .validationFailed(let message):
+        return message
+      case .notFound(let message):
+        return message
       }
     }
     return "Operation failed: \(error.localizedDescription)"

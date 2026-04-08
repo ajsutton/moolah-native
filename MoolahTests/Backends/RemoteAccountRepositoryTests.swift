@@ -43,6 +43,95 @@ struct RemoteAccountRepositoryTests {
     #expect(
       accounts[3].balance == MonetaryAmount(cents: 1_550_000, currency: Currency.defaultCurrency))  // Prefers 'value' from JSON
   }
+
+  @Test func testCreateAccountCallsCorrectEndpoint() async throws {
+    // Given
+    let bundle = Bundle(for: TestBundleMarker.self)
+    guard let url = bundle.url(forResource: "account_create_response", withExtension: "json") else {
+      fatalError("Could not find account_create_response.json fixture")
+    }
+    let data = try Data(contentsOf: url)
+
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [URLProtocolStub.self]
+    let session = URLSession(configuration: config)
+    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let repository = RemoteAccountRepository(client: client)
+
+    var capturedRequest: URLRequest?
+    URLProtocolStub.requestHandler = { request in
+      capturedRequest = request
+      let response = HTTPURLResponse(
+        url: request.url!,
+        statusCode: 201,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )!
+      return (response, data)
+    }
+
+    let newAccount = Account(
+      name: "Savings Account",
+      type: .bank,
+      balance: MonetaryAmount(cents: 100000, currency: .defaultCurrency)
+    )
+
+    // When
+    let created = try await repository.create(newAccount)
+
+    // Then
+    #expect(capturedRequest?.httpMethod == "POST")
+    #expect(capturedRequest?.url?.path == "/accounts/")
+    #expect(created.name == "Savings Account")
+    #expect(created.balance.cents == 100000)
+  }
+
+  @Test func testUpdateAccountCallsCorrectEndpoint() async throws {
+    // Given
+    let bundle = Bundle(for: TestBundleMarker.self)
+    guard let url = bundle.url(forResource: "account_update_response", withExtension: "json") else {
+      fatalError("Could not find account_update_response.json fixture")
+    }
+    let data = try Data(contentsOf: url)
+
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [URLProtocolStub.self]
+    let session = URLSession(configuration: config)
+    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let repository = RemoteAccountRepository(client: client)
+
+    var capturedRequest: URLRequest?
+    URLProtocolStub.requestHandler = { request in
+      capturedRequest = request
+      let response = HTTPURLResponse(
+        url: request.url!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )!
+      return (response, data)
+    }
+
+    let accountId = UUID(uuidString: "550e8400-e29b-41d4-a716-446655440000")!
+    let updatedAccount = Account(
+      id: accountId,
+      name: "Updated Savings",
+      type: .bank,
+      balance: MonetaryAmount(cents: 100000, currency: .defaultCurrency),
+      position: 2,
+      isHidden: true
+    )
+
+    // When
+    let updated = try await repository.update(updatedAccount)
+
+    // Then
+    #expect(capturedRequest?.httpMethod == "PUT")
+    #expect(capturedRequest?.url?.path == "/accounts/550e8400-e29b-41d4-a716-446655440000/")
+    #expect(updated.name == "Updated Savings")
+    #expect(updated.balance.cents == 123456)  // Server's balance, not client's
+    #expect(updated.isHidden == true)
+  }
 }
 
 // Simple URLProtocol stub for testing

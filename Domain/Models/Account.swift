@@ -9,6 +9,15 @@ enum AccountType: String, Codable, Sendable, CaseIterable {
   var isCurrent: Bool {
     self == .bank || self == .asset || self == .creditCard
   }
+
+  var displayName: String {
+    switch self {
+    case .bank: return "Bank Account"
+    case .creditCard: return "Credit Card"
+    case .asset: return "Asset"
+    case .investment: return "Investment"
+    }
+  }
 }
 
 struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {

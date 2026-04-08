@@ -89,4 +89,81 @@ final class AccountStore {
 
     accounts = result
   }
+
+  // MARK: - Mutations
+
+  func create(_ account: Account) async throws -> Account {
+    isLoading = true
+    error = nil
+
+    do {
+      let created = try await repository.create(account)
+
+      // Optimistically add to local state
+      accounts = Accounts(from: accounts.ordered + [created])
+      logger.debug("Created account: \(created.name)")
+
+      isLoading = false
+      return created
+    } catch {
+      logger.error("Failed to create account: \(error.localizedDescription)")
+      self.error = error
+      isLoading = false
+      throw error
+    }
+  }
+
+  func update(_ account: Account) async throws -> Account {
+    isLoading = true
+    error = nil
+
+    // Store previous state for rollback
+    let previousAccounts = accounts
+
+    // Optimistic update
+    accounts = Accounts(from: accounts.ordered.map { $0.id == account.id ? account : $0 })
+
+    do {
+      let updated = try await repository.update(account)
+
+      // Replace with server's version (accept server's balance)
+      accounts = Accounts(from: accounts.ordered.map { $0.id == updated.id ? updated : $0 })
+      logger.debug("Updated account: \(updated.name)")
+
+      isLoading = false
+      return updated
+    } catch {
+      // Rollback on failure
+      accounts = previousAccounts
+      logger.error("Failed to update account: \(error.localizedDescription)")
+      self.error = error
+      isLoading = false
+      throw error
+    }
+  }
+
+  func delete(id: UUID) async throws {
+    isLoading = true
+    error = nil
+
+    // Store previous state for rollback
+    let previousAccounts = accounts
+
+    do {
+      try await repository.delete(id: id)
+
+      // Remove from local state (filter out hidden)
+      accounts = Accounts(from: accounts.ordered.filter { $0.id != id })
+      logger.debug("Deleted account: \(id)")
+
+      isLoading = false
+    } catch {
+      // Rollback on failure
+      accounts = previousAccounts
+      logger.error("Failed to delete account: \(error.localizedDescription)")
+      self.error = error
+      isLoading = false
+      throw error
+    }
+  }
 }

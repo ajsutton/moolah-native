@@ -13,22 +13,47 @@ struct SidebarView: View {
   @Environment(EarmarkStore.self) private var earmarkStore
   @Binding var selection: SidebarSelection?
   @State private var showCreateEarmarkSheet = false
+  @State private var showCreateAccountSheet = false
+  @State private var accountToEdit: Account?
+  #if os(iOS)
+    @State private var editMode: EditMode = .inactive
+  #endif
 
   var body: some View {
     List(selection: $selection) {
-      Section("Current Accounts") {
+      Section {
         ForEach(accountStore.currentAccounts) { account in
           NavigationLink(value: SidebarSelection.account(account.id)) {
             AccountRowView(account: account)
           }
           .contextMenu {
+            Button("Edit Account", systemImage: "pencil") {
+              accountToEdit = account
+            }
             Button("View Transactions", systemImage: "list.bullet") {
               selection = .account(account.id)
             }
           }
         }
+        .onMove { source, destination in
+          Task { await reorderCurrentAccounts(from: source, to: destination) }
+        }
 
         totalRow(label: "Current Total", value: accountStore.currentTotal)
+      } header: {
+        HStack {
+          Text("Current Accounts")
+          Spacer()
+          #if os(iOS)
+            Button {
+              showCreateAccountSheet = true
+            } label: {
+              Image(systemName: "plus")
+                .font(.caption)
+            }
+            .buttonStyle(.plain)
+          #endif
+        }
       }
 
       if !earmarkStore.visibleEarmarks.isEmpty {
@@ -63,10 +88,16 @@ struct SidebarView: View {
             AccountRowView(account: account)
           }
           .contextMenu {
+            Button("Edit Account", systemImage: "pencil") {
+              accountToEdit = account
+            }
             Button("View Transactions", systemImage: "list.bullet") {
               selection = .account(account.id)
             }
           }
+        }
+        .onMove { source, destination in
+          Task { await reorderInvestmentAccounts(from: source, to: destination) }
         }
 
         totalRow(label: "Investment Total", value: accountStore.investmentTotal)
@@ -107,10 +138,25 @@ struct SidebarView: View {
     }
     .listStyle(.sidebar)
     .navigationTitle("Moolah")
+    #if os(iOS)
+      .environment(\.editMode, $editMode)
+    #endif
     .refreshable {
       await accountStore.load()
       await earmarkStore.load()
     }
+    #if os(macOS)
+      .toolbar {
+        ToolbarItem(placement: .primaryAction) {
+          Button {
+            showCreateAccountSheet = true
+          } label: {
+            Label("New Account", systemImage: "plus")
+          }
+          .help("Create new account")
+        }
+      }
+    #endif
     .focusedSceneValue(\.newEarmarkAction) {
       showCreateEarmarkSheet = true
     }
@@ -123,6 +169,12 @@ struct SidebarView: View {
           }
         }
       )
+    }
+    .sheet(isPresented: $showCreateAccountSheet) {
+      CreateAccountView(accountStore: accountStore)
+    }
+    .sheet(item: $accountToEdit) { account in
+      EditAccountView(account: account, accountStore: accountStore)
     }
   }
 
@@ -140,6 +192,31 @@ struct SidebarView: View {
     }
     .foregroundStyle(.secondary)
     .font(.callout)
+  }
+
+  private func reorderCurrentAccounts(from source: IndexSet, to destination: Int) async {
+    var accounts = accountStore.currentAccounts
+    accounts.move(fromOffsets: source, toOffset: destination)
+
+    // Update positions (0-indexed)
+    for (index, account) in accounts.enumerated() {
+      var updated = account
+      updated.position = index
+      try? await accountStore.update(updated)
+    }
+  }
+
+  private func reorderInvestmentAccounts(from source: IndexSet, to destination: Int) async {
+    var accounts = accountStore.investmentAccounts
+    accounts.move(fromOffsets: source, toOffset: destination)
+
+    // Update positions (starting after current accounts)
+    let offset = accountStore.currentAccounts.count
+    for (index, account) in accounts.enumerated() {
+      var updated = account
+      updated.position = offset + index
+      try? await accountStore.update(updated)
+    }
   }
 }
 
