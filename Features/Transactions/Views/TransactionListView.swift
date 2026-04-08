@@ -104,6 +104,17 @@ struct TransactionListView: View {
         )
         .tag(entry.transaction)
         .contentShape(Rectangle())
+        .contextMenu {
+          Button("Edit", systemImage: "pencil") {
+            selectedTransaction = entry.transaction
+          }
+          Divider()
+          Button("Delete", systemImage: "trash", role: .destructive) {
+            Task {
+              await transactionStore.delete(id: entry.transaction.id)
+            }
+          }
+        }
         .swipeActions(edge: .trailing) {
           Button(role: .destructive) {
             Task {
@@ -130,6 +141,11 @@ struct TransactionListView: View {
         }
       }
     }
+    #if os(macOS)
+      .listStyle(.inset)
+    #else
+      .listStyle(.plain)
+    #endif
     .navigationTitle(title)
     .toolbar {
       ToolbarItem(placement: .automatic) {

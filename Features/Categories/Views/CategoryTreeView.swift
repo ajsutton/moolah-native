@@ -12,6 +12,11 @@ struct CategoryTreeView: View {
         )
       }
     }
+    #if os(macOS)
+      .listStyle(.inset)
+    #else
+      .listStyle(.plain)
+    #endif
     .navigationTitle("Categories")
     .overlay {
       if categoryStore.isLoading && categoryStore.categories.roots.isEmpty {

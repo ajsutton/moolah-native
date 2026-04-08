@@ -146,6 +146,7 @@ private struct UpcomingTransactionRow: View {
           Text(transaction.date, style: .date)
             .font(.caption)
             .foregroundStyle(.secondary)
+            .monospacedDigit()
 
           if let recurrence = recurrenceDescription {
             Text("•")

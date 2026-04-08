@@ -21,6 +21,7 @@ struct TransactionRowView: View {
 
         HStack(spacing: 4) {
           Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
+            .monospacedDigit()
 
           if let categoryName {
             Text("·")
@@ -44,7 +45,11 @@ struct TransactionRowView: View {
         MonetaryAmountView(amount: balance)
       }
     }
-    .padding(.vertical, 2)
+    #if os(macOS)
+      .padding(.vertical, 8)
+    #else
+      .padding(.vertical, 12)
+    #endif
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityDescription)
   }
@@ -59,8 +64,8 @@ struct TransactionRowView: View {
 
   private var iconName: String {
     switch transaction.type {
-    case .income: return "arrow.up.circle"
-    case .expense: return "arrow.down.circle"
+    case .income: return "arrow.up"
+    case .expense: return "arrow.down"
     case .transfer: return "arrow.left.arrow.right"
     }
   }

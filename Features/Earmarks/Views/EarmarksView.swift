@@ -65,7 +65,7 @@ struct EarmarksView: View {
             Label {
               MonetaryAmountView(amount: earmark.saved, font: .caption)
             } icon: {
-              Image(systemName: "arrow.down.circle")
+              Image(systemName: "arrow.up")
                 .foregroundStyle(.green)
             }
             .font(.caption)
@@ -73,7 +73,7 @@ struct EarmarksView: View {
             Label {
               MonetaryAmountView(amount: earmark.spent, font: .caption)
             } icon: {
-              Image(systemName: "arrow.up.circle")
+              Image(systemName: "arrow.down")
                 .foregroundStyle(.red)
             }
             .font(.caption)
@@ -89,6 +89,11 @@ struct EarmarksView: View {
         }
       }
     }
+    #if os(macOS)
+      .listStyle(.inset)
+    #else
+      .listStyle(.plain)
+    #endif
     .navigationTitle("Earmarks")
     .toolbar {
       ToolbarItem(placement: .primaryAction) {

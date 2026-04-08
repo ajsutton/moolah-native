@@ -396,12 +396,12 @@ Moolah uses SF Symbols 6 for all icons. **Never** use custom bitmap icons.
 | Concept | Symbol | Example Usage |
 |---------|--------|---------------|
 | Transaction | `"arrow.left.arrow.right"` | Generic transaction icon |
-| Income | `"arrow.down.circle"` | Positive flow (money in) |
-| Expense | `"arrow.up.circle"` | Negative flow (money out) |
-| Transfer | `"arrow.left.arrow.right.circle"` | Between accounts |
+| Income | `"arrow.up"` | Positive flow (money in) |
+| Expense | `"arrow.down"` | Negative flow (money out) |
+| Transfer | `"arrow.left.arrow.right"` | Between accounts |
 | Account | `"creditcard"`, `"banknote"` | Bank accounts, cash |
 | Category | `"tag"`, `"folder"` | Transaction categories |
-| Earmark/Budget | `"chart.pie"`, `"target"` | Budget allocations |
+| Earmark/Budget | `"bookmark.fill"` | Earmark allocations and savings goals |
 | Calendar | `"calendar"` | Scheduled transactions |
 | Search | `"magnifyingglass"` | Search/filter |
 | Add | `"plus"` | Create new item |
@@ -412,7 +412,7 @@ Moolah uses SF Symbols 6 for all icons. **Never** use custom bitmap icons.
 #### Rendering Modes
 ```swift
 // Monochrome (default, use semantic colors)
-Image(systemName: "arrow.down.circle")
+Image(systemName: "arrow.up")
   .foregroundStyle(.green)
 
 // Hierarchical (automatic depth via opacity)

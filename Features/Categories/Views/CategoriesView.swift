@@ -56,8 +56,18 @@ struct CategoriesView: View {
           categories: categoryStore.categories
         )
         .tag(category)
+        .contextMenu {
+          Button("Edit", systemImage: "pencil") {
+            selectedCategory = category
+          }
+        }
       }
     }
+    #if os(macOS)
+      .listStyle(.inset)
+    #else
+      .listStyle(.plain)
+    #endif
     .navigationTitle("Categories")
     .toolbar {
       ToolbarItem(placement: .primaryAction) {

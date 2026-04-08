@@ -21,6 +21,11 @@ struct SidebarView: View {
           NavigationLink(value: SidebarSelection.account(account.id)) {
             AccountRowView(account: account)
           }
+          .contextMenu {
+            Button("View Transactions", systemImage: "list.bullet") {
+              selection = .account(account.id)
+            }
+          }
         }
 
         totalRow(label: "Current Total", value: accountStore.currentTotal)
@@ -42,6 +47,11 @@ struct SidebarView: View {
         ForEach(accountStore.investmentAccounts) { account in
           NavigationLink(value: SidebarSelection.account(account.id)) {
             AccountRowView(account: account)
+          }
+          .contextMenu {
+            Button("View Transactions", systemImage: "list.bullet") {
+              selection = .account(account.id)
+            }
           }
         }
 
@@ -81,7 +91,7 @@ struct SidebarView: View {
         }
 
         NavigationLink(value: SidebarSelection.earmarks) {
-          Label("Manage Earmarks", systemImage: "folder")
+          Label("Manage Earmarks", systemImage: "bookmark.fill")
         }
       }
     }
