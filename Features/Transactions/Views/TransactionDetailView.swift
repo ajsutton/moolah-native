@@ -17,6 +17,9 @@ struct TransactionDetailView: View {
   @State private var categoryId: UUID?
   @State private var earmarkId: UUID?
   @State private var notes: String
+  @State private var recurPeriod: RecurPeriod?
+  @State private var recurEvery: Int
+  @State private var isRepeating: Bool
   @State private var showDeleteConfirmation = false
   @State private var saveTask: Task<Void, Never>?
   @FocusState private var focusedField: Field?
@@ -50,6 +53,10 @@ struct TransactionDetailView: View {
     _categoryId = State(initialValue: transaction.categoryId)
     _earmarkId = State(initialValue: transaction.earmarkId)
     _notes = State(initialValue: transaction.notes ?? "")
+    _recurPeriod = State(initialValue: transaction.recurPeriod)
+    _recurEvery = State(initialValue: transaction.recurEvery ?? 1)
+    _isRepeating = State(
+      initialValue: transaction.recurPeriod != nil && transaction.recurPeriod != .once)
   }
 
   private var isNewTransaction: Bool {
@@ -77,6 +84,9 @@ struct TransactionDetailView: View {
     if type == .transfer {
       guard toAccountId != nil, toAccountId != accountId else { return false }
     }
+    if isRepeating {
+      guard recurPeriod != nil, recurEvery >= 1 else { return false }
+    }
     return true
   }
 
@@ -96,6 +106,7 @@ struct TransactionDetailView: View {
       detailsSection
       accountSection
       categorySection
+      recurrenceSection
       notesSection
       deleteSection
     }
@@ -119,6 +130,9 @@ struct TransactionDetailView: View {
     .onChange(of: categoryId) { _, _ in debouncedSave() }
     .onChange(of: earmarkId) { _, _ in debouncedSave() }
     .onChange(of: notes) { _, _ in debouncedSave() }
+    .onChange(of: isRepeating) { _, _ in debouncedSave() }
+    .onChange(of: recurPeriod) { _, _ in debouncedSave() }
+    .onChange(of: recurEvery) { _, _ in debouncedSave() }
     .confirmationDialog(
       "Delete Transaction",
       isPresented: $showDeleteConfirmation,
@@ -216,6 +230,53 @@ struct TransactionDetailView: View {
     }
   }
 
+  private var recurrenceSection: some View {
+    Section("Recurrence") {
+      Toggle("Repeat", isOn: $isRepeating)
+        .onChange(of: isRepeating) { _, newValue in
+          if newValue {
+            // Default to monthly recurrence when enabled
+            if recurPeriod == nil || recurPeriod == .once {
+              recurPeriod = .month
+            }
+          } else {
+            recurPeriod = nil
+          }
+        }
+
+      if isRepeating {
+        HStack {
+          Text("Every")
+          Spacer()
+          TextField("", value: $recurEvery, format: .number)
+            #if os(iOS)
+              .keyboardType(.numberPad)
+            #endif
+            .multilineTextAlignment(.trailing)
+            .frame(minWidth: 40, idealWidth: 60, maxWidth: 80)
+            .accessibilityLabel("Recurrence interval")
+        }
+
+        Picker(
+          "Period",
+          selection: Binding(
+            get: { recurPeriod ?? .month },
+            set: { recurPeriod = $0 }
+          )
+        ) {
+          ForEach(RecurPeriod.allCases.filter { $0 != .once }, id: \.self) { period in
+            Text(recurEvery == 1 ? period.displayName : period.pluralDisplayName)
+              .tag(period)
+          }
+        }
+        .accessibilityLabel("Recurrence period")
+        #if os(macOS)
+          .pickerStyle(.menu)
+        #endif
+      }
+    }
+  }
+
   private var notesSection: some View {
     Section {
       VStack(alignment: .leading) {
@@ -289,8 +350,8 @@ struct TransactionDetailView: View {
       notes: notes.isEmpty ? nil : notes,
       categoryId: categoryId,
       earmarkId: earmarkId,
-      recurPeriod: transaction.recurPeriod,
-      recurEvery: transaction.recurEvery
+      recurPeriod: isRepeating ? recurPeriod : nil,
+      recurEvery: isRepeating ? recurEvery : nil
     )
 
     onUpdate(updated)

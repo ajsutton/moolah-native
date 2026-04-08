@@ -35,7 +35,7 @@ struct TransactionDTO: Codable {
       notes: notes,
       categoryId: categoryId.flatMap { FlexibleUUID.parse($0) },
       earmarkId: earmark.flatMap { FlexibleUUID.parse($0) },
-      recurPeriod: recurPeriod,
+      recurPeriod: recurPeriod.flatMap { RecurPeriod(rawValue: $0) },
       recurEvery: recurEvery
     )
   }
@@ -53,7 +53,7 @@ struct TransactionDTO: Codable {
       notes: transaction.notes,
       categoryId: transaction.categoryId?.uuidString,
       earmark: transaction.earmarkId?.uuidString,
-      recurPeriod: transaction.recurPeriod,
+      recurPeriod: transaction.recurPeriod?.rawValue,
       recurEvery: transaction.recurEvery
     )
   }
@@ -99,7 +99,7 @@ struct CreateTransactionDTO: Codable {
       notes: transaction.notes,
       categoryId: transaction.categoryId?.uuidString,
       earmark: transaction.earmarkId?.uuidString,
-      recurPeriod: transaction.recurPeriod,
+      recurPeriod: transaction.recurPeriod?.rawValue,
       recurEvery: transaction.recurEvery
     )
   }

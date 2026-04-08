@@ -55,6 +55,14 @@ just generate
 - **Accessibility:** Every UI component must be VoiceOver-accessible with proper labels and keyboard navigation (macOS).
 - **Before Shipping UI:** Run the `ui-review` agent (see Agents section) to validate compliance with STYLE_GUIDE.md and identify accessibility issues.
 
+## Planning & Documentation
+
+- **Plans Directory:** All planning documents, feature specifications, and gap analyses live in `plans/`.
+- **Current Plans:**
+  - `plans/NATIVE_APP_PLAN.md` — master implementation plan (vertical slices, steps 1-14)
+  - `plans/SCHEDULED_TRANSACTIONS_GAP_ANALYSIS.md` — detailed comparison of scheduled transaction functionality between moolah-server, moolah web app, and moolah-native
+- **Creating New Plans:** When documenting new features, architecture decisions, or gap analyses, create a new markdown file in `plans/` with a descriptive name (e.g., `OFFLINE_SYNC_DESIGN.md`, `CLOUDKIT_BACKEND_PLAN.md`).
+
 ## Agents
 
 This project defines specialized agents for specific review tasks. Use the Task tool to invoke them.

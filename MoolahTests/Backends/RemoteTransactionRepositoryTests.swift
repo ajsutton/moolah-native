@@ -65,7 +65,7 @@ struct RemoteTransactionRepositoryTests {
       transactions[2].amount == MonetaryAmount(cents: -100000, currency: Currency.defaultCurrency))
 
     // Fourth transaction: scheduled expense
-    #expect(transactions[3].recurPeriod == "MONTH")
+    #expect(transactions[3].recurPeriod == .month)
     #expect(transactions[3].recurEvery == 1)
     #expect(transactions[3].isScheduled == true)
 

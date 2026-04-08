@@ -6,6 +6,34 @@ enum TransactionType: String, Codable, Sendable, CaseIterable {
   case transfer
 }
 
+enum RecurPeriod: String, Codable, Sendable, CaseIterable {
+  case once = "ONCE"
+  case day = "DAY"
+  case week = "WEEK"
+  case month = "MONTH"
+  case year = "YEAR"
+
+  var displayName: String {
+    switch self {
+    case .once: return "Once"
+    case .day: return "Day"
+    case .week: return "Week"
+    case .month: return "Month"
+    case .year: return "Year"
+    }
+  }
+
+  var pluralDisplayName: String {
+    switch self {
+    case .once: return "Once"
+    case .day: return "Days"
+    case .week: return "Weeks"
+    case .month: return "Months"
+    case .year: return "Years"
+    }
+  }
+}
+
 struct Transaction: Codable, Sendable, Identifiable, Hashable {
   let id: UUID
   var type: TransactionType
@@ -17,11 +45,16 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
   var notes: String?
   var categoryId: UUID?
   var earmarkId: UUID?
-  var recurPeriod: String?  // DAY, WEEK, MONTH, YEAR
+  var recurPeriod: RecurPeriod?
   var recurEvery: Int?
 
   var isScheduled: Bool {
     recurPeriod != nil
+  }
+
+  var isRecurring: Bool {
+    guard let period = recurPeriod else { return false }
+    return period != .once
   }
 
   init(
@@ -35,7 +68,7 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
     notes: String? = nil,
     categoryId: UUID? = nil,
     earmarkId: UUID? = nil,
-    recurPeriod: String? = nil,
+    recurPeriod: RecurPeriod? = nil,
     recurEvery: Int? = nil
   ) {
     self.id = id
@@ -113,4 +146,62 @@ struct TransactionWithBalance: Sendable, Identifiable {
   let balance: MonetaryAmount
 
   var id: UUID { transaction.id }
+}
+
+// MARK: - Recurrence Utilities
+
+extension Transaction {
+  /// Calculates the next due date for a recurring transaction.
+  /// Returns nil if the transaction is not recurring (period is nil or .once).
+  func nextDueDate() -> Date? {
+    guard let period = recurPeriod, let every = recurEvery, period != .once else {
+      return nil
+    }
+
+    let calendar = Calendar.current
+    var components = DateComponents()
+
+    switch period {
+    case .day:
+      components.day = every
+    case .week:
+      components.weekOfYear = every
+    case .month:
+      components.month = every
+    case .year:
+      components.year = every
+    case .once:
+      return nil
+    }
+
+    return calendar.date(byAdding: components, to: date)
+  }
+
+  /// Validates the transaction's recurrence fields.
+  /// Throws an error if recurrence is partially configured (only period or only every is set).
+  func validate() throws {
+    // If either recurPeriod or recurEvery is set, both must be set
+    if (recurPeriod != nil) != (recurEvery != nil) {
+      throw ValidationError.incompleteRecurrence
+    }
+
+    // If recurring, recurEvery must be at least 1
+    if let every = recurEvery, every < 1 {
+      throw ValidationError.invalidRecurEvery
+    }
+  }
+
+  enum ValidationError: LocalizedError {
+    case incompleteRecurrence
+    case invalidRecurEvery
+
+    var errorDescription: String? {
+      switch self {
+      case .incompleteRecurrence:
+        return "Recurrence must have both period and frequency set"
+      case .invalidRecurEvery:
+        return "Recurrence frequency must be at least 1"
+      }
+    }
+  }
 }

@@ -11,7 +11,7 @@ struct ScheduledTransactionTests {
       type: .expense,
       date: Date(),
       amount: MonetaryAmount.zero,
-      recurPeriod: "MONTH",
+      recurPeriod: .month,
       recurEvery: 1
     )
 
@@ -37,7 +37,7 @@ struct ScheduledTransactionTests {
       accountId: UUID(),
       amount: MonetaryAmount(cents: -100000, currency: Currency.defaultCurrency),
       payee: "Rent",
-      recurPeriod: "MONTH",
+      recurPeriod: .month,
       recurEvery: 1
     )
 
@@ -72,7 +72,7 @@ struct ScheduledTransactionTests {
       date: Date(),
       accountId: UUID(),
       amount: MonetaryAmount(cents: -100000, currency: Currency.defaultCurrency),
-      recurPeriod: "MONTH",
+      recurPeriod: .month,
       recurEvery: 1
     )
 
@@ -104,7 +104,7 @@ struct ScheduledTransactionTests {
       type: .expense,
       date: calendar.date(byAdding: .day, value: -5, to: today)!,
       amount: MonetaryAmount.zero,
-      recurPeriod: "MONTH",
+      recurPeriod: .month,
       recurEvery: 1
     )
 
@@ -112,7 +112,7 @@ struct ScheduledTransactionTests {
       type: .expense,
       date: calendar.date(byAdding: .day, value: 5, to: today)!,
       amount: MonetaryAmount.zero,
-      recurPeriod: "MONTH",
+      recurPeriod: .month,
       recurEvery: 1
     )
 
@@ -124,26 +124,319 @@ struct ScheduledTransactionTests {
   func testRecurrencePeriods() {
     let daily = Transaction(
       type: .expense, date: Date(), amount: MonetaryAmount.zero,
-      recurPeriod: "DAY", recurEvery: 1
+      recurPeriod: .day, recurEvery: 1
     )
     let weekly = Transaction(
       type: .expense, date: Date(), amount: MonetaryAmount.zero,
-      recurPeriod: "WEEK", recurEvery: 2
+      recurPeriod: .week, recurEvery: 2
     )
     let monthly = Transaction(
       type: .expense, date: Date(), amount: MonetaryAmount.zero,
-      recurPeriod: "MONTH", recurEvery: 1
+      recurPeriod: .month, recurEvery: 1
     )
     let yearly = Transaction(
       type: .expense, date: Date(), amount: MonetaryAmount.zero,
-      recurPeriod: "YEAR", recurEvery: 1
+      recurPeriod: .year, recurEvery: 1
     )
 
-    #expect(daily.recurPeriod == "DAY")
+    #expect(daily.recurPeriod == .day)
     #expect(daily.recurEvery == 1)
-    #expect(weekly.recurPeriod == "WEEK")
+    #expect(weekly.recurPeriod == .week)
     #expect(weekly.recurEvery == 2)
-    #expect(monthly.recurPeriod == "MONTH")
-    #expect(yearly.recurPeriod == "YEAR")
+    #expect(monthly.recurPeriod == .month)
+    #expect(yearly.recurPeriod == .year)
+  }
+
+  @Test("nextDueDate returns nil for non-recurring transactions")
+  func testNextDueDateNonRecurring() {
+    let oneTime = Transaction(
+      type: .expense,
+      date: Date(),
+      amount: MonetaryAmount.zero
+    )
+
+    #expect(oneTime.nextDueDate() == nil)
+
+    let once = Transaction(
+      type: .expense,
+      date: Date(),
+      amount: MonetaryAmount.zero,
+      recurPeriod: .once,
+      recurEvery: 1
+    )
+
+    #expect(once.nextDueDate() == nil)
+  }
+
+  @Test("nextDueDate calculates daily recurrence")
+  func testNextDueDateDaily() {
+    let calendar = Calendar.current
+    let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+
+    let transaction = Transaction(
+      type: .expense,
+      date: startDate,
+      amount: MonetaryAmount.zero,
+      recurPeriod: .day,
+      recurEvery: 1
+    )
+
+    let nextDate = transaction.nextDueDate()!
+    let expectedDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 16))!
+
+    #expect(calendar.isDate(nextDate, inSameDayAs: expectedDate))
+  }
+
+  @Test("nextDueDate calculates weekly recurrence")
+  func testNextDueDateWeekly() {
+    let calendar = Calendar.current
+    let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+
+    let transaction = Transaction(
+      type: .expense,
+      date: startDate,
+      amount: MonetaryAmount.zero,
+      recurPeriod: .week,
+      recurEvery: 2
+    )
+
+    let nextDate = transaction.nextDueDate()!
+    let expectedDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 29))!
+
+    #expect(calendar.isDate(nextDate, inSameDayAs: expectedDate))
+  }
+
+  @Test("nextDueDate calculates monthly recurrence")
+  func testNextDueDateMonthly() {
+    let calendar = Calendar.current
+    let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+
+    let transaction = Transaction(
+      type: .expense,
+      date: startDate,
+      amount: MonetaryAmount.zero,
+      recurPeriod: .month,
+      recurEvery: 1
+    )
+
+    let nextDate = transaction.nextDueDate()!
+    let expectedDate = calendar.date(from: DateComponents(year: 2026, month: 2, day: 15))!
+
+    #expect(calendar.isDate(nextDate, inSameDayAs: expectedDate))
+  }
+
+  @Test("nextDueDate calculates yearly recurrence")
+  func testNextDueDateYearly() {
+    let calendar = Calendar.current
+    let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+
+    let transaction = Transaction(
+      type: .expense,
+      date: startDate,
+      amount: MonetaryAmount.zero,
+      recurPeriod: .year,
+      recurEvery: 1
+    )
+
+    let nextDate = transaction.nextDueDate()!
+    let expectedDate = calendar.date(from: DateComponents(year: 2027, month: 1, day: 15))!
+
+    #expect(calendar.isDate(nextDate, inSameDayAs: expectedDate))
+  }
+
+  @Test("isRecurring distinguishes between once and recurring")
+  func testIsRecurring() {
+    let once = Transaction(
+      type: .expense,
+      date: Date(),
+      amount: MonetaryAmount.zero,
+      recurPeriod: .once,
+      recurEvery: 1
+    )
+
+    let recurring = Transaction(
+      type: .expense,
+      date: Date(),
+      amount: MonetaryAmount.zero,
+      recurPeriod: .month,
+      recurEvery: 1
+    )
+
+    let notScheduled = Transaction(
+      type: .expense,
+      date: Date(),
+      amount: MonetaryAmount.zero
+    )
+
+    #expect(once.isRecurring == false)
+    #expect(recurring.isRecurring == true)
+    #expect(notScheduled.isRecurring == false)
+  }
+
+  @Test("Pay action for one-time scheduled transaction")
+  func testPayOneTimeScheduled() async throws {
+    let calendar = Calendar.current
+    let futureDate = calendar.date(byAdding: .day, value: 7, to: Date())!
+
+    let scheduled = Transaction(
+      id: UUID(),
+      type: .expense,
+      date: futureDate,
+      accountId: UUID(),
+      amount: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency),
+      payee: "One-time payment",
+      recurPeriod: .once,
+      recurEvery: 1
+    )
+
+    let repository = InMemoryTransactionRepository(initialTransactions: [scheduled])
+
+    // Verify it exists and is scheduled
+    let page1 = try await repository.fetch(
+      filter: TransactionFilter(scheduled: true), page: 0, pageSize: 50)
+    #expect(page1.transactions.count == 1)
+
+    // Create paid transaction (simulating the pay action)
+    let paid = Transaction(
+      id: UUID(),
+      type: scheduled.type,
+      date: Date(),
+      accountId: scheduled.accountId,
+      amount: scheduled.amount,
+      payee: scheduled.payee,
+      recurPeriod: nil,
+      recurEvery: nil
+    )
+    _ = try await repository.create(paid)
+
+    // For .once, the scheduled transaction should be deleted
+    try await repository.delete(id: scheduled.id)
+
+    // Verify the scheduled transaction is gone
+    let page2 = try await repository.fetch(
+      filter: TransactionFilter(scheduled: true), page: 0, pageSize: 50)
+    #expect(page2.transactions.count == 0)
+
+    // Verify the paid transaction exists
+    let page3 = try await repository.fetch(
+      filter: TransactionFilter(scheduled: false), page: 0, pageSize: 50)
+    #expect(page3.transactions.count == 1)
+    #expect(page3.transactions[0].isScheduled == false)
+  }
+
+  @Test("Pay action for recurring scheduled transaction")
+  func testPayRecurringScheduled() async throws {
+    let calendar = Calendar.current
+    let startDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+
+    let scheduled = Transaction(
+      id: UUID(),
+      type: .expense,
+      date: startDate,
+      accountId: UUID(),
+      amount: MonetaryAmount(cents: -150000, currency: Currency.defaultCurrency),
+      payee: "Monthly rent",
+      recurPeriod: .month,
+      recurEvery: 1
+    )
+
+    let repository = InMemoryTransactionRepository(initialTransactions: [scheduled])
+
+    // Create paid transaction
+    let paid = Transaction(
+      id: UUID(),
+      type: scheduled.type,
+      date: Date(),
+      accountId: scheduled.accountId,
+      amount: scheduled.amount,
+      payee: scheduled.payee,
+      recurPeriod: nil,
+      recurEvery: nil
+    )
+    _ = try await repository.create(paid)
+
+    // For recurring, update the scheduled transaction's date to next occurrence
+    guard let nextDate = scheduled.nextDueDate() else {
+      fatalError("nextDueDate should not be nil for recurring transaction")
+    }
+
+    var updated = scheduled
+    updated.date = nextDate
+    _ = try await repository.update(updated)
+
+    // Verify the scheduled transaction still exists with updated date
+    let page = try await repository.fetch(
+      filter: TransactionFilter(scheduled: true), page: 0, pageSize: 50)
+    #expect(page.transactions.count == 1)
+    #expect(page.transactions[0].isScheduled == true)
+
+    let expectedDate = calendar.date(from: DateComponents(year: 2026, month: 2, day: 1))!
+    #expect(calendar.isDate(page.transactions[0].date, inSameDayAs: expectedDate))
+  }
+
+  @Test("Validation passes for valid transactions")
+  func testValidationPassesForValid() throws {
+    // Non-scheduled transaction
+    let normal = Transaction(
+      type: .expense,
+      date: Date(),
+      amount: MonetaryAmount.zero
+    )
+    try normal.validate()
+
+    // Scheduled transaction with both period and every
+    let scheduled = Transaction(
+      type: .expense,
+      date: Date(),
+      amount: MonetaryAmount.zero,
+      recurPeriod: .month,
+      recurEvery: 1
+    )
+    try scheduled.validate()
+  }
+
+  @Test("Validation fails when only period is set")
+  func testValidationFailsWithOnlyPeriod() {
+    let transaction = Transaction(
+      type: .expense,
+      date: Date(),
+      amount: MonetaryAmount.zero,
+      recurPeriod: .month,
+      recurEvery: nil
+    )
+
+    #expect(throws: Transaction.ValidationError.incompleteRecurrence) {
+      try transaction.validate()
+    }
+  }
+
+  @Test("Validation fails when only every is set")
+  func testValidationFailsWithOnlyEvery() {
+    let transaction = Transaction(
+      type: .expense,
+      date: Date(),
+      amount: MonetaryAmount.zero,
+      recurPeriod: nil,
+      recurEvery: 1
+    )
+
+    #expect(throws: Transaction.ValidationError.incompleteRecurrence) {
+      try transaction.validate()
+    }
+  }
+
+  @Test("Validation fails when recurEvery is less than 1")
+  func testValidationFailsWithInvalidEvery() {
+    let transaction = Transaction(
+      type: .expense,
+      date: Date(),
+      amount: MonetaryAmount.zero,
+      recurPeriod: .month,
+      recurEvery: 0
+    )
+
+    #expect(throws: Transaction.ValidationError.invalidRecurEvery) {
+      try transaction.validate()
+    }
   }
 }

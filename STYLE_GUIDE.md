@@ -250,6 +250,106 @@ Form {
 - Use `.disabled(true)` on save button until form is valid
 - Provide immediate feedback (not just on submit)
 
+**Form Section Order:**
+Follow this standard order for transaction forms:
+1. Type selection (if applicable)
+2. Details (payee, amount, date)
+3. Accounts
+4. Categories/Earmarks
+5. Recurrence (scheduled transactions)
+6. Notes
+7. Destructive actions (delete)
+
+**Multi-line Text Input:**
+- Use `TextField(axis: .vertical)` with `.lineLimit(3...6)` for short notes
+- Use `TextEditor` with `.frame(height:)` for longer content (>6 lines)
+- Always set bounds to prevent layout issues
+
+### Scheduled Transactions
+
+#### Recurrence UI Pattern
+Use a Toggle + conditional fields for recurrence settings:
+```swift
+Section("Recurrence") {
+  Toggle("Repeat", isOn: $isRepeating)
+
+  if isRepeating {
+    HStack {
+      Text("Every")
+      Spacer()
+      TextField("", value: $recurEvery, format: .number)
+        .keyboardType(.numberPad)
+        .multilineTextAlignment(.trailing)
+        .frame(minWidth: 40, idealWidth: 60, maxWidth: 80)
+        .accessibilityLabel("Recurrence interval")
+    }
+
+    Picker("Period", selection: $recurPeriod) {
+      Text("Days").tag(RecurPeriod.day)
+      Text("Weeks").tag(RecurPeriod.week)
+      Text("Months").tag(RecurPeriod.month)
+      Text("Years").tag(RecurPeriod.year)
+    }
+    .accessibilityLabel("Recurrence period")
+  }
+}
+```
+
+**Validation:**
+- Both period and frequency must be set when repeat is enabled
+- Frequency must be ≥ 1
+- Disable save button if incomplete
+
+#### Upcoming Transactions Display
+Structure upcoming lists with "Overdue" and "Upcoming" sections:
+```swift
+List {
+  Section("Overdue") {
+    ForEach(overdueTransactions) { transaction in
+      UpcomingRow(transaction: transaction, isOverdue: true)
+    }
+  }
+
+  Section("Upcoming") {
+    ForEach(upcomingTransactions) { transaction in
+      UpcomingRow(transaction: transaction, isOverdue: false)
+    }
+  }
+}
+```
+
+**Overdue Visual Treatment:**
+- ⚠️ Use **icon + color** to indicate overdue (not color alone)
+- Red text + exclamation triangle icon
+- Add `.accessibilityLabel("Overdue")` to icon
+
+```swift
+HStack(spacing: 4) {
+  if isOverdue {
+    Image(systemName: "exclamationmark.triangle.fill")
+      .foregroundStyle(.red)
+      .imageScale(.small)
+      .accessibilityLabel("Overdue")
+  }
+  Text(transaction.payee)
+    .foregroundStyle(isOverdue ? .red : .primary)
+}
+```
+
+**Recurrence Description:**
+Display in caption text with accessibility label:
+```swift
+Text("Every 2 weeks")
+  .font(.caption)
+  .foregroundStyle(.secondary)
+  .accessibilityLabel("Repeats every 2 weeks")
+```
+
+**Pay Action:**
+- iOS: Use `.buttonStyle(.borderedProminent)` for primary action
+- macOS: Use `.buttonStyle(.bordered)` to match platform conventions
+- Include accessibility label with payee name
+
 ### Buttons & Actions
 
 #### Primary Actions

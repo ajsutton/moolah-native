@@ -19,6 +19,9 @@ struct TransactionFormView: View {
   @State private var categoryId: UUID?
   @State private var earmarkId: UUID?
   @State private var notes: String
+  @State private var recurPeriod: RecurPeriod?
+  @State private var recurEvery: Int
+  @State private var isRepeating: Bool
   @State private var showDeleteConfirmation = false
 
   init(
@@ -47,6 +50,9 @@ struct TransactionFormView: View {
       _categoryId = State(initialValue: tx.categoryId)
       _earmarkId = State(initialValue: tx.earmarkId)
       _notes = State(initialValue: tx.notes ?? "")
+      _recurPeriod = State(initialValue: tx.recurPeriod)
+      _recurEvery = State(initialValue: tx.recurEvery ?? 1)
+      _isRepeating = State(initialValue: tx.recurPeriod != nil && tx.recurPeriod != .once)
     } else {
       _type = State(initialValue: .expense)
       _payee = State(initialValue: "")
@@ -57,6 +63,9 @@ struct TransactionFormView: View {
       _categoryId = State(initialValue: nil)
       _earmarkId = State(initialValue: nil)
       _notes = State(initialValue: "")
+      _recurPeriod = State(initialValue: nil)
+      _recurEvery = State(initialValue: 1)
+      _isRepeating = State(initialValue: false)
     }
   }
 
@@ -76,6 +85,9 @@ struct TransactionFormView: View {
     if type == .transfer {
       guard toAccountId != nil, toAccountId != accountId else { return false }
     }
+    if isRepeating {
+      guard recurPeriod != nil, recurEvery >= 1 else { return false }
+    }
     return true
   }
 
@@ -86,12 +98,14 @@ struct TransactionFormView: View {
         detailsSection
         accountSection
         categorySection
+        recurrenceSection
         notesSection
 
         if isEditing {
           deleteSection
         }
       }
+      .formStyle(.grouped)
       .navigationTitle(title)
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -99,10 +113,12 @@ struct TransactionFormView: View {
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
           Button("Cancel") { dismiss() }
+            .keyboardShortcut(.cancelAction)
         }
         ToolbarItem(placement: .confirmationAction) {
           Button("Save") { save() }
             .disabled(!canSave)
+            .keyboardShortcut(.defaultAction)
         }
       }
       .confirmationDialog(
@@ -193,6 +209,50 @@ struct TransactionFormView: View {
     }
   }
 
+  private var recurrenceSection: some View {
+    Section("Recurrence") {
+      Toggle("Repeat", isOn: $isRepeating)
+        .onChange(of: isRepeating) { _, newValue in
+          if newValue {
+            // Default to monthly recurrence when enabled
+            if recurPeriod == nil || recurPeriod == .once {
+              recurPeriod = .month
+            }
+          } else {
+            recurPeriod = nil
+          }
+        }
+
+      if isRepeating {
+        HStack {
+          Text("Every")
+          Spacer()
+          TextField("", value: $recurEvery, format: .number)
+            #if os(iOS)
+              .keyboardType(.numberPad)
+            #endif
+            .multilineTextAlignment(.trailing)
+            .frame(minWidth: 40, idealWidth: 60, maxWidth: 80)
+            .accessibilityLabel("Recurrence interval")
+        }
+
+        Picker(
+          "Period",
+          selection: Binding(
+            get: { recurPeriod ?? .month },
+            set: { recurPeriod = $0 }
+          )
+        ) {
+          ForEach(RecurPeriod.allCases.filter { $0 != .once }, id: \.self) { period in
+            Text(recurEvery == 1 ? period.displayName : period.pluralDisplayName)
+              .tag(period)
+          }
+        }
+        .accessibilityLabel("Recurrence period")
+      }
+    }
+  }
+
   private var notesSection: some View {
     Section("Notes") {
       TextField("Notes", text: $notes, axis: .vertical)
@@ -231,8 +291,8 @@ struct TransactionFormView: View {
       notes: notes.isEmpty ? nil : notes,
       categoryId: categoryId,
       earmarkId: earmarkId,
-      recurPeriod: existing?.recurPeriod,
-      recurEvery: existing?.recurEvery
+      recurPeriod: isRepeating ? recurPeriod : nil,
+      recurEvery: isRepeating ? recurEvery : nil
     )
 
     onSave(transaction)

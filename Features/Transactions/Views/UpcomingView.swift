@@ -123,7 +123,27 @@ struct UpcomingView: View {
       recurEvery: nil
     )
 
-    _ = await transactionStore.create(paidTransaction)
+    // Create the paid transaction
+    guard await transactionStore.create(paidTransaction) != nil else {
+      return  // Failed to create, don't modify the scheduled transaction
+    }
+
+    // Update or delete the scheduled transaction based on whether it's recurring
+    if scheduledTransaction.isRecurring, let nextDate = scheduledTransaction.nextDueDate() {
+      // For recurring transactions, update the date to the next occurrence
+      var updated = scheduledTransaction
+      updated.date = nextDate
+      await transactionStore.update(updated)
+      // Find the updated transaction in the store by ID (it may have moved sections due to date change)
+      selectedTransaction =
+        transactionStore.transactions.first { $0.transaction.id == scheduledTransaction.id }?
+        .transaction
+    } else {
+      // For one-time scheduled transactions (.once), delete the original
+      await transactionStore.delete(id: scheduledTransaction.id)
+      // Clear selection since the transaction was deleted
+      selectedTransaction = nil
+    }
   }
 }
 
@@ -138,11 +158,19 @@ private struct UpcomingTransactionRow: View {
   var body: some View {
     HStack {
       VStack(alignment: .leading, spacing: 4) {
-        Text(transaction.payee ?? "Untitled")
-          .font(.headline)
-          .foregroundStyle(isOverdue ? .red : .primary)
+        HStack(spacing: 4) {
+          if isOverdue {
+            Image(systemName: "exclamationmark.triangle.fill")
+              .foregroundStyle(.red)
+              .imageScale(.small)
+              .accessibilityLabel("Overdue")
+          }
+          Text(transaction.payee ?? "Untitled")
+            .font(.headline)
+            .foregroundStyle(isOverdue ? .red : .primary)
+        }
 
-        HStack(spacing: 8) {
+        HStack(spacing: 4) {
           Text(transaction.date, style: .date)
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -154,6 +182,7 @@ private struct UpcomingTransactionRow: View {
             Text(recurrence)
               .font(.caption)
               .foregroundStyle(.secondary)
+              .accessibilityLabel("Repeats \(recurrence)")
           }
 
           if let categoryId = transaction.categoryId,
@@ -185,7 +214,11 @@ private struct UpcomingTransactionRow: View {
       Button("Pay") {
         onPay()
       }
-      .buttonStyle(.borderedProminent)
+      #if os(iOS)
+        .buttonStyle(.borderedProminent)
+      #else
+        .buttonStyle(.bordered)
+      #endif
       .controlSize(.small)
       .accessibilityLabel("Pay \(transaction.payee ?? "transaction")")
     }
@@ -194,25 +227,14 @@ private struct UpcomingTransactionRow: View {
 
   private var recurrenceDescription: String? {
     guard let period = transaction.recurPeriod,
-      let every = transaction.recurEvery
+      let every = transaction.recurEvery,
+      period != .once
     else {
       return nil
     }
 
-    let periodName: String
-    switch period {
-    case "DAY":
-      periodName = every == 1 ? "day" : "days"
-    case "WEEK":
-      periodName = every == 1 ? "week" : "weeks"
-    case "MONTH":
-      periodName = every == 1 ? "month" : "months"
-    case "YEAR":
-      periodName = every == 1 ? "year" : "years"
-    default:
-      return nil
-    }
-
+    let periodName =
+      every == 1 ? period.displayName.lowercased() : period.pluralDisplayName.lowercased()
     return every == 1 ? "Every \(periodName)" : "Every \(every) \(periodName)"
   }
 }
@@ -245,7 +267,7 @@ private struct UpcomingTransactionRow: View {
       amount: MonetaryAmount(cents: -200000, currency: Currency.defaultCurrency),
       payee: "Rent",
       categoryId: categoryId,
-      recurPeriod: "MONTH",
+      recurPeriod: .month,
       recurEvery: 1
     ),
     Transaction(
@@ -255,7 +277,7 @@ private struct UpcomingTransactionRow: View {
       amount: MonetaryAmount(cents: -15000, currency: Currency.defaultCurrency),
       payee: "Internet",
       categoryId: categoryId,
-      recurPeriod: "MONTH",
+      recurPeriod: .month,
       recurEvery: 1
     ),
   ])
