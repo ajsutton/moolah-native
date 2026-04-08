@@ -41,7 +41,7 @@ struct CategoriesView: View {
         categories: categoryStore.categories,
         onCreate: { newCategory in
           Task {
-            await categoryStore.create(newCategory)
+            _ = await categoryStore.create(newCategory)
             showCreateSheet = false
           }
         }

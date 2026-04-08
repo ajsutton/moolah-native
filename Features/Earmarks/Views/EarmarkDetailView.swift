@@ -37,7 +37,7 @@ struct EarmarkDetailView: View {
         earmark: earmark,
         onUpdate: { updated in
           Task {
-            await earmarkStore.update(updated)
+            _ = await earmarkStore.update(updated)
             showEditSheet = false
           }
         }

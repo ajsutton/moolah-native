@@ -118,17 +118,17 @@ struct ForecastPicker: View {
           type: .bank,
           balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
         )
-        try? await backend.accounts.create(account)
+        _ = try? await backend.accounts.create(account)
 
         let category = Category(
           id: UUID(),
           name: "Groceries"
         )
-        try? await backend.categories.create(category)
+        _ = try? await backend.categories.create(category)
 
         // Add some transactions
         for i in 0..<30 {
-          try? await backend.transactions.create(
+          _ = try? await backend.transactions.create(
             Transaction(
               id: UUID(),
               type: i % 2 == 0 ? .income : .expense,

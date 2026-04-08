@@ -73,7 +73,7 @@ struct ContentView: View {
       CreateEarmarkSheet(
         onCreate: { newEarmark in
           Task {
-            await earmarkStore.create(newEarmark)
+            _ = await earmarkStore.create(newEarmark)
             showCreateEarmarkSheet = false
           }
         }

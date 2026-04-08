@@ -127,9 +127,9 @@ private struct SimpleTransactionRow: View {
         type: .bank,
         balance: MonetaryAmount(cents: 100000, currency: .defaultCurrency)
       )
-      try? await backend.accounts.create(account)
+      _ = try? await backend.accounts.create(account)
 
-      try? await backend.transactions.create(
+      _ = try? await backend.transactions.create(
         Transaction(
           id: UUID(),
           type: .expense,
@@ -141,7 +141,7 @@ private struct SimpleTransactionRow: View {
           recurEvery: 1
         ))
 
-      try? await backend.transactions.create(
+      _ = try? await backend.transactions.create(
         Transaction(
           id: UUID(),
           type: .income,

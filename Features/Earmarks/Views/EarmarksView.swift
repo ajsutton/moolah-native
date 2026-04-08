@@ -31,7 +31,7 @@ struct EarmarksView: View {
       CreateEarmarkSheet(
         onCreate: { newEarmark in
           Task {
-            await earmarkStore.create(newEarmark)
+            _ = await earmarkStore.create(newEarmark)
             showCreateSheet = false
           }
         }
@@ -42,7 +42,7 @@ struct EarmarksView: View {
         earmark: earmark,
         onUpdate: { updated in
           Task {
-            await earmarkStore.update(updated)
+            _ = await earmarkStore.update(updated)
             selectedEarmark = updated
             earmarkToEdit = nil
           }

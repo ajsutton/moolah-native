@@ -117,7 +117,7 @@ final class EarmarkStore {
     do {
       let updated = try await repository.update(earmark)
       // Update the earmark in local state instead of reloading
-      var updatedList = earmarks.ordered.map { existing in
+      let updatedList = earmarks.ordered.map { existing in
         existing.id == updated.id ? updated : existing
       }
       earmarks = Earmarks(from: updatedList)
