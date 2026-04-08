@@ -25,11 +25,17 @@ struct TransactionRowView: View {
 
           if let categoryName {
             Text("·")
+            Label(categoryName, systemImage: "tag")
+              .labelStyle(.iconOnly)
+              .imageScale(.small)
             Text(categoryName)
           }
 
           if !hideEarmark, let earmarkName {
             Text("·")
+            Label(earmarkName, systemImage: "bookmark.fill")
+              .labelStyle(.iconOnly)
+              .imageScale(.small)
             Text(earmarkName)
           }
         }
