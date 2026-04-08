@@ -46,7 +46,7 @@ struct TransactionRowView: View {
       Spacer()
 
       VStack(alignment: .trailing, spacing: 2) {
-        MonetaryAmountView(amount: transaction.amount, font: .headline)
+        MonetaryAmountView(amount: transaction.amount, font: .body)
 
         MonetaryAmountView(amount: balance, font: .caption)
       }

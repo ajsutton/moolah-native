@@ -180,7 +180,7 @@ private struct UpcomingTransactionRow: View {
 
       Spacer()
 
-      MonetaryAmountView(amount: transaction.amount, font: .headline)
+      MonetaryAmountView(amount: transaction.amount, font: .body)
 
       Button("Pay") {
         onPay()

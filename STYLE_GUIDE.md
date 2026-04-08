@@ -174,7 +174,7 @@ HStack(alignment: .firstTextBaseline, spacing: 12) {
   Spacer()
 
   VStack(alignment: .trailing, spacing: 4) {
-    MonetaryAmountView(amount: amount, font: .headline)
+    MonetaryAmountView(amount: amount, font: .body)
     if let balance = balance {
       MonetaryAmountView(amount: balance, colorOverride: .secondary, font: .caption)
     }
@@ -369,7 +369,7 @@ Chart(categoryTotals) { category in
 Gauge(value: spent, in: 0...budgeted) {
   Text(category.name)
 } currentValueLabel: {
-  MonetaryAmountView(amount: spentAmount, font: .headline)
+  MonetaryAmountView(amount: spentAmount, font: .body)
 } minimumValueLabel: {
   Text("$0")
 } maximumValueLabel: {
