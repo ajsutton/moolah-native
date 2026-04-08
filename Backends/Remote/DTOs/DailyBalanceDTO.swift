@@ -16,11 +16,8 @@ struct DailyBalanceDTO: Codable {
   let bestFit: Double?
 
   func toDomain(isForecast: Bool) -> DailyBalance {
-    let dateFormatter = ISO8601DateFormatter()
-    dateFormatter.formatOptions = [.withFullDate]
-
     return DailyBalance(
-      date: dateFormatter.date(from: date) ?? Date(),
+      date: BackendDateFormatter.date(from: date) ?? Date(),
       balance: MonetaryAmount(cents: balance, currency: .defaultCurrency),
       earmarked: MonetaryAmount(cents: earmarked, currency: .defaultCurrency),
       availableFunds: MonetaryAmount(cents: availableFunds, currency: .defaultCurrency),

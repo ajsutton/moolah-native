@@ -14,15 +14,8 @@ struct TransactionDTO: Codable {
   let recurPeriod: String?
   let recurEvery: Int?
 
-  private static let dateFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "yyyy-MM-dd"
-    formatter.timeZone = TimeZone(identifier: "UTC")
-    return formatter
-  }()
-
   func toDomain() -> Transaction {
-    let parsedDate = TransactionDTO.dateFormatter.date(from: date) ?? Date()
+    let parsedDate = BackendDateFormatter.date(from: date) ?? Date()
 
     return Transaction(
       id: FlexibleUUID.parse(id) ?? UUID(),
@@ -41,7 +34,7 @@ struct TransactionDTO: Codable {
   }
 
   static func fromDomain(_ transaction: Transaction) -> TransactionDTO {
-    let dateString = dateFormatter.string(from: transaction.date)
+    let dateString = BackendDateFormatter.string(from: transaction.date)
     return TransactionDTO(
       id: transaction.id.uuidString,
       type: transaction.type.rawValue,
@@ -80,15 +73,8 @@ struct CreateTransactionDTO: Codable {
   let recurPeriod: String?
   let recurEvery: Int?
 
-  private static let dateFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "yyyy-MM-dd"
-    formatter.timeZone = TimeZone(identifier: "UTC")
-    return formatter
-  }()
-
   static func fromDomain(_ transaction: Transaction) -> CreateTransactionDTO {
-    let dateString = dateFormatter.string(from: transaction.date)
+    let dateString = BackendDateFormatter.string(from: transaction.date)
     return CreateTransactionDTO(
       type: transaction.type.rawValue,
       date: dateString,

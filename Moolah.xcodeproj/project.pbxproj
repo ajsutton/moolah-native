@@ -81,6 +81,7 @@
 		5C4F979EC24AE0373027553C /* earmarks.json in Resources */ = {isa = PBXBuildFile; fileRef = CDB0992C6831C5A674E811CE /* earmarks.json */; };
 		5D2A4D972CFB78108610D379 /* AnalysisRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D439CA729C875611381DEDF6 /* AnalysisRepositoryContractTests.swift */; };
 		5D705F42B76E94E34245039A /* TransactionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2136B9FFE21FA794B7CF641 /* TransactionStoreTests.swift */; };
+		5D87DDD49C3D23082F898DFF /* BackendDateFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D190943A082D94DFFBBF510 /* BackendDateFormatter.swift */; };
 		5DD56EF420C18507AF3B5463 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E37BF3BEA54A6FC23CC7FE3 /* WelcomeView.swift */; };
 		5E3549B31CCEB4F1188225F4 /* CategoryRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CAA3B5D360B1D1D2E334778 /* CategoryRepositoryContractTests.swift */; };
 		5E4330752C2CB28364432D61 /* ExpenseBreakdownCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 529D595B13537E6FFC99FFD9 /* ExpenseBreakdownCard.swift */; };
@@ -161,6 +162,7 @@
 		B993E4DD97A9978DEFCF6973 /* IncomeExpenseTableCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77D8161F8D10B04DCE422392 /* IncomeExpenseTableCard.swift */; };
 		BA163022FD95BC1ED4E2AC9B /* UIConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD01884C3447BF75CE0E798 /* UIConstants.swift */; };
 		BC0C94147B4EDA66DFEFDE28 /* UpcomingTransactionsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D57E97531288FB84806CC14 /* UpcomingTransactionsCard.swift */; };
+		BE8EF69FB14777957E7B6773 /* BackendDateFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D190943A082D94DFFBBF510 /* BackendDateFormatter.swift */; };
 		BF633F5962C22BD2CDF82766 /* CategoryTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E5EEA26C0D2D71C2EB15030 /* CategoryTreeView.swift */; };
 		BFF41BDF77C53D6CC12FB0CB /* UIConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD01884C3447BF75CE0E798 /* UIConstants.swift */; };
 		C1429A45F23B09C7E108357E /* UpcomingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 886EE430E1C6721891325649 /* UpcomingView.swift */; };
@@ -299,6 +301,7 @@
 		7920C082CF61FC2A86B05B31 /* TransactionRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionRowView.swift; sourceTree = "<group>"; };
 		7A6FA10A728C34F561690045 /* TransactionRepositoryContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionRepositoryContractTests.swift; sourceTree = "<group>"; };
 		7C2536FF724721319BC3117F /* AccountStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountStore.swift; sourceTree = "<group>"; };
+		7D190943A082D94DFFBBF510 /* BackendDateFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendDateFormatter.swift; sourceTree = "<group>"; };
 		84C9395AFB6A08977BD423A9 /* CreateAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateAccountView.swift; sourceTree = "<group>"; };
 		8825F56CD0329C37F43E8420 /* RemoteCategoryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCategoryRepository.swift; sourceTree = "<group>"; };
 		886EE430E1C6721891325649 /* UpcomingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingView.swift; sourceTree = "<group>"; };
@@ -654,6 +657,7 @@
 			isa = PBXGroup;
 			children = (
 				E0431C044B183CBD75A93A60 /* APIClient.swift */,
+				7D190943A082D94DFFBBF510 /* BackendDateFormatter.swift */,
 			);
 			path = APIClient;
 			sourceTree = "<group>";
@@ -940,6 +944,7 @@
 				8CD72E510AE6F5A680D87E3C /* AppRootView.swift in Sources */,
 				A9550E23152D9AD0201BABB7 /* AuthProvider.swift in Sources */,
 				C7E1B4D98E0E2E59F30E8760 /* AuthStore.swift in Sources */,
+				BE8EF69FB14777957E7B6773 /* BackendDateFormatter.swift in Sources */,
 				C65F03B98023C20985ACFD0B /* BackendError.swift in Sources */,
 				41DF550E13133F22A453AAE3 /* BackendProvider.swift in Sources */,
 				CD9200A470282154CA8F1533 /* CategoriesView.swift in Sources */,
@@ -1025,6 +1030,7 @@
 				CF2ED2A7D750143B1408AAC8 /* AppRootView.swift in Sources */,
 				B460D4029D5F6F80F23FCF0B /* AuthProvider.swift in Sources */,
 				B7381FF84C13F63F6B9AD69C /* AuthStore.swift in Sources */,
+				5D87DDD49C3D23082F898DFF /* BackendDateFormatter.swift in Sources */,
 				7D97D59B3682BBB7C98AC832 /* BackendError.swift in Sources */,
 				0E0392A21BC5262F4AF03FE5 /* BackendProvider.swift in Sources */,
 				651EBC461B961CAAF8061302 /* CategoriesView.swift in Sources */,

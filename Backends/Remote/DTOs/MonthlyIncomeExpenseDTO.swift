@@ -16,13 +16,10 @@ struct MonthlyIncomeExpenseDTO: Codable {
   let earmarkedProfit: Int
 
   func toDomain() -> MonthlyIncomeExpense {
-    let dateFormatter = ISO8601DateFormatter()
-    dateFormatter.formatOptions = [.withFullDate]
-
     return MonthlyIncomeExpense(
       month: month,
-      start: dateFormatter.date(from: start) ?? Date(),
-      end: dateFormatter.date(from: end) ?? Date(),
+      start: BackendDateFormatter.date(from: start) ?? Date(),
+      end: BackendDateFormatter.date(from: end) ?? Date(),
       income: MonetaryAmount(cents: income, currency: .defaultCurrency),
       expense: MonetaryAmount(cents: expense, currency: .defaultCurrency),
       profit: MonetaryAmount(cents: profit, currency: .defaultCurrency),

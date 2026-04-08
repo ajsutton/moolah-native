@@ -53,7 +53,11 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
       type: account.type.rawValue,
       balance: account.balance.cents,
       position: account.position,
-      date: ISO8601DateFormatter().string(from: Date())  // Today
+      date: BackendDateFormatter.string(from: Date())
+    )
+
+    logger.debug(
+      "Creating account with: name=\(dto.name), type=\(dto.type), balance=\(dto.balance), date=\(dto.date)"
     )
 
     let data = try await client.post("accounts/", body: dto)
