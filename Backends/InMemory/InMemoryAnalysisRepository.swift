@@ -114,10 +114,10 @@ final class InMemoryAnalysisRepository: AnalysisRepository {
     let isToInvestment = txn.toAccountId.map { investmentAccountIds.contains($0) } ?? false
 
     switch txn.type {
-    case .income, .expense:
+    case .income, .expense, .openingBalance:
       // Only count if accountId is non-nil (completed transaction)
       if txn.accountId != nil {
-        balance += txn.amount  // income: positive, expense: negative
+        balance += txn.amount  // income/openingBalance: positive, expense: negative
       }
       if txn.earmarkId != nil {
         earmarks += txn.amount
@@ -337,7 +337,7 @@ final class InMemoryAnalysisRepository: AnalysisRepository {
       let isToInvestment = txn.toAccountId.map { investmentAccountIds.contains($0) } ?? false
 
       switch txn.type {
-      case .income:
+      case .income, .openingBalance:
         if isEarmarked {
           monthlyData[month]!.earmarkedIncome += txn.amount
         } else {

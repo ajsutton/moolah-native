@@ -143,8 +143,8 @@ struct TransactionFormView: View {
   private var typeSection: some View {
     Section {
       Picker("Type", selection: $type) {
-        ForEach(TransactionType.allCases, id: \.self) { t in
-          Text(t.rawValue.capitalized).tag(t)
+        ForEach(TransactionType.userSelectableTypes, id: \.self) { t in
+          Text(t.displayName).tag(t)
         }
       }
       .pickerStyle(.segmented)
@@ -278,6 +278,7 @@ struct TransactionFormView: View {
     case .expense: signedCents = -abs(cents)
     case .income: signedCents = abs(cents)
     case .transfer: signedCents = -abs(cents)
+    case .openingBalance: signedCents = abs(cents)  // Should never be created via form
     }
 
     let transaction = Transaction(

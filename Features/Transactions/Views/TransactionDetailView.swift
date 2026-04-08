@@ -151,15 +151,23 @@ struct TransactionDetailView: View {
 
   private var typeSection: some View {
     Section {
-      Picker("Type", selection: $type) {
-        ForEach(TransactionType.allCases, id: \.self) { t in
-          Text(t.rawValue.capitalized).tag(t)
+      if transaction.type == .openingBalance {
+        // Opening balance transactions cannot be edited
+        LabeledContent("Type") {
+          Text(TransactionType.openingBalance.displayName)
+            .foregroundStyle(.secondary)
         }
-      }
-      .onChange(of: type) { oldValue, newValue in
-        if newValue == .transfer && toAccountId == nil {
-          // Set first available account (excluding current account) as default
-          toAccountId = sortedAccounts.first { $0.id != accountId }?.id
+      } else {
+        Picker("Type", selection: $type) {
+          ForEach(TransactionType.userSelectableTypes, id: \.self) { t in
+            Text(t.displayName).tag(t)
+          }
+        }
+        .onChange(of: type) { oldValue, newValue in
+          if newValue == .transfer && toAccountId == nil {
+            // Set first available account (excluding current account) as default
+            toAccountId = sortedAccounts.first { $0.id != accountId }?.id
+          }
         }
       }
     }
@@ -337,6 +345,7 @@ struct TransactionDetailView: View {
     case .expense: signedCents = -abs(cents)
     case .income: signedCents = abs(cents)
     case .transfer: signedCents = -abs(cents)
+    case .openingBalance: signedCents = abs(cents)  // Should never be edited
     }
 
     let updated = Transaction(

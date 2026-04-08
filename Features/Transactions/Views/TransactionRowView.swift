@@ -73,6 +73,7 @@ struct TransactionRowView: View {
     case .income: return "arrow.up"
     case .expense: return "arrow.down"
     case .transfer: return "arrow.left.arrow.right"
+    case .openingBalance: return "flag.fill"
     }
   }
 
@@ -81,6 +82,7 @@ struct TransactionRowView: View {
     case .income: return .green
     case .expense: return .red
     case .transfer: return .blue
+    case .openingBalance: return .orange
     }
   }
 
