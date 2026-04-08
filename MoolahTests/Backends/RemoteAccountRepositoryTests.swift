@@ -81,7 +81,7 @@ struct RemoteAccountRepositoryTests {
 
     // Then
     #expect(capturedRequest?.httpMethod == "POST")
-    #expect(capturedRequest?.url?.path == "/accounts/")
+    #expect(capturedRequest?.url?.absoluteString == "https://api.example.com/accounts/")
     #expect(created.name == "Savings Account")
     #expect(created.balance.cents == 100000)
   }
@@ -127,7 +127,9 @@ struct RemoteAccountRepositoryTests {
 
     // Then
     #expect(capturedRequest?.httpMethod == "PUT")
-    #expect(capturedRequest?.url?.path == "/accounts/550e8400-e29b-41d4-a716-446655440000/")
+    #expect(
+      capturedRequest?.url?.absoluteString
+        == "https://api.example.com/accounts/550e8400-e29b-41d4-a716-446655440000/")
     #expect(updated.name == "Updated Savings")
     #expect(updated.balance.cents == 123456)  // Server's balance, not client's
     #expect(updated.isHidden == true)

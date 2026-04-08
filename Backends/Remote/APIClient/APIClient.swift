@@ -65,14 +65,21 @@ final class APIClient: Sendable {
     }
   }
 
+  private func url(for path: String) -> URL {
+    // Construct URL preserving trailing slashes
+    // Both appending(path:) and URL(string:relativeTo:) normalize paths
+    let baseString = baseURL.absoluteString
+    let separator = baseString.hasSuffix("/") ? "" : "/"
+    return URL(string: baseString + separator + path)!
+  }
+
   func get(_ path: String) async throws -> Data {
-    let request = URLRequest(url: baseURL.appending(path: path))
+    let request = URLRequest(url: url(for: path))
     return try await data(for: request)
   }
 
   func get(_ path: String, queryItems: [URLQueryItem]) async throws -> Data {
-    var components = URLComponents(
-      url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)!
+    var components = URLComponents(url: url(for: path), resolvingAgainstBaseURL: false)!
     if !queryItems.isEmpty {
       components.queryItems = queryItems
     }
@@ -81,7 +88,7 @@ final class APIClient: Sendable {
   }
 
   func post(_ path: String, body: some Encodable & Sendable) async throws -> Data {
-    var request = URLRequest(url: baseURL.appending(path: path))
+    var request = URLRequest(url: url(for: path))
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.httpBody = try JSONEncoder().encode(body)
@@ -89,7 +96,7 @@ final class APIClient: Sendable {
   }
 
   func put(_ path: String, body: some Encodable & Sendable) async throws -> Data {
-    var request = URLRequest(url: baseURL.appending(path: path))
+    var request = URLRequest(url: url(for: path))
     request.httpMethod = "PUT"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.httpBody = try JSONEncoder().encode(body)
@@ -97,14 +104,13 @@ final class APIClient: Sendable {
   }
 
   func delete(_ path: String) async throws -> Data {
-    var request = URLRequest(url: baseURL.appending(path: path))
+    var request = URLRequest(url: url(for: path))
     request.httpMethod = "DELETE"
     return try await data(for: request)
   }
 
   func delete(_ path: String, queryItems: [URLQueryItem]) async throws -> Data {
-    var components = URLComponents(
-      url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)!
+    var components = URLComponents(url: url(for: path), resolvingAgainstBaseURL: false)!
     if !queryItems.isEmpty {
       components.queryItems = queryItems
     }
