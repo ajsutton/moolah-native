@@ -5,9 +5,19 @@ struct NewTransactionActionKey: FocusedValueKey {
   typealias Value = () -> Void
 }
 
+/// Focused value key for the new earmark action
+struct NewEarmarkActionKey: FocusedValueKey {
+  typealias Value = () -> Void
+}
+
 extension FocusedValues {
   var newTransactionAction: NewTransactionActionKey.Value? {
     get { self[NewTransactionActionKey.self] }
     set { self[NewTransactionActionKey.self] = newValue }
+  }
+
+  var newEarmarkAction: NewEarmarkActionKey.Value? {
+    get { self[NewEarmarkActionKey.self] }
+    set { self[NewEarmarkActionKey.self] = newValue }
   }
 }

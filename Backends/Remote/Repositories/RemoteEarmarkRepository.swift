@@ -23,7 +23,7 @@ final class RemoteEarmarkRepository: EarmarkRepository, Sendable {
   }
 
   func create(_ earmark: Earmark) async throws -> Earmark {
-    let dto = EarmarkDTO.fromDomain(earmark)
+    let dto = CreateEarmarkDTO(from: earmark)
     let data = try await client.post("earmarks/", body: dto)
     let responseDTO = try JSONDecoder().decode(EarmarkDTO.self, from: data)
     return responseDTO.toDomain()

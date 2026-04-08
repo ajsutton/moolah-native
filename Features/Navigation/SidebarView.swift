@@ -6,13 +6,13 @@ enum SidebarSelection: Hashable {
   case allTransactions
   case upcomingTransactions
   case categories
-  case earmarks
 }
 
 struct SidebarView: View {
-  let accountStore: AccountStore
-  let earmarkStore: EarmarkStore
+  @Environment(AccountStore.self) private var accountStore
+  @Environment(EarmarkStore.self) private var earmarkStore
   @Binding var selection: SidebarSelection?
+  @State private var showCreateEarmarkSheet = false
 
   var body: some View {
     List(selection: $selection) {
@@ -32,7 +32,7 @@ struct SidebarView: View {
       }
 
       if !earmarkStore.visibleEarmarks.isEmpty {
-        Section("Earmarks") {
+        Section {
           ForEach(earmarkStore.visibleEarmarks) { earmark in
             NavigationLink(value: SidebarSelection.earmark(earmark.id)) {
               EarmarkRowView(earmark: earmark)
@@ -40,6 +40,20 @@ struct SidebarView: View {
           }
 
           totalRow(label: "Earmarked Total", value: earmarkStore.totalBalance)
+        } header: {
+          HStack {
+            Text("Earmarks")
+            Spacer()
+            #if os(iOS)
+              Button {
+                showCreateEarmarkSheet = true
+              } label: {
+                Image(systemName: "plus")
+                  .font(.caption)
+              }
+              .buttonStyle(.plain)
+            #endif
+          }
         }
       }
 
@@ -89,10 +103,6 @@ struct SidebarView: View {
         NavigationLink(value: SidebarSelection.categories) {
           Label("Categories", systemImage: "tag")
         }
-
-        NavigationLink(value: SidebarSelection.earmarks) {
-          Label("Manage Earmarks", systemImage: "bookmark.fill")
-        }
       }
     }
     .listStyle(.sidebar)
@@ -100,6 +110,19 @@ struct SidebarView: View {
     .refreshable {
       await accountStore.load()
       await earmarkStore.load()
+    }
+    .focusedSceneValue(\.newEarmarkAction) {
+      showCreateEarmarkSheet = true
+    }
+    .sheet(isPresented: $showCreateEarmarkSheet) {
+      CreateEarmarkSheet(
+        onCreate: { newEarmark in
+          Task {
+            await earmarkStore.create(newEarmark)
+            showCreateEarmarkSheet = false
+          }
+        }
+      )
     }
   }
 
@@ -117,6 +140,86 @@ struct SidebarView: View {
     }
     .foregroundStyle(.secondary)
     .font(.callout)
+  }
+}
+
+private struct CreateEarmarkSheet: View {
+  let onCreate: (Earmark) -> Void
+
+  @State private var name: String = ""
+  @State private var savingsGoal: String = ""
+  @State private var startDate: Date = Date()
+  @State private var endDate: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date())!
+  @State private var useDateRange: Bool = false
+  @Environment(\.dismiss) private var dismiss
+
+  var body: some View {
+    NavigationStack {
+      Form {
+        Section("Details") {
+          TextField("Name", text: $name)
+        }
+
+        Section("Savings Goal") {
+          HStack {
+            Text(Currency.defaultCurrency.code)
+              .foregroundStyle(.secondary)
+            TextField("Amount", text: $savingsGoal)
+              #if os(iOS)
+                .keyboardType(.decimalPad)
+              #endif
+          }
+
+          Toggle("Set Date Range", isOn: $useDateRange)
+
+          if useDateRange {
+            DatePicker("Start Date", selection: $startDate, displayedComponents: .date)
+            DatePicker("End Date", selection: $endDate, displayedComponents: .date)
+          }
+        }
+      }
+      .formStyle(.grouped)
+      .navigationTitle("New Earmark")
+      #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+      #endif
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") {
+            dismiss()
+          }
+        }
+
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Create") {
+            createEarmark()
+          }
+          .disabled(name.isEmpty)
+        }
+      }
+    }
+  }
+
+  private func createEarmark() {
+    let goalCents = parseCurrency(savingsGoal)
+    let goal =
+      goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: Currency.defaultCurrency) : nil
+
+    let newEarmark = Earmark(
+      name: name,
+      savingsGoal: goal,
+      savingsStartDate: useDateRange ? startDate : nil,
+      savingsEndDate: useDateRange ? endDate : nil
+    )
+    onCreate(newEarmark)
+  }
+
+  private func parseCurrency(_ text: String) -> Int {
+    let cleaned = text.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
+    if let decimal = Decimal(string: cleaned) {
+      return Int(truncating: (decimal * 100) as NSNumber)
+    }
+    return 0
   }
 }
 
@@ -148,13 +251,13 @@ struct SidebarView: View {
   let earmarkStore = EarmarkStore(repository: backend.earmarks)
 
   NavigationSplitView {
-    SidebarView(
-      accountStore: accountStore, earmarkStore: earmarkStore, selection: .constant(nil)
-    )
-    .task {
-      await accountStore.load()
-      await earmarkStore.load()
-    }
+    SidebarView(selection: .constant(nil))
+      .environment(accountStore)
+      .environment(earmarkStore)
+      .task {
+        await accountStore.load()
+        await earmarkStore.load()
+      }
   } detail: {
     Text("Detail")
   }

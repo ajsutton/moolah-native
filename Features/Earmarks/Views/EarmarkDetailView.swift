@@ -6,6 +6,8 @@ struct EarmarkDetailView: View {
   let categories: Categories
   let earmarks: Earmarks
   let transactionStore: TransactionStore
+  @State private var showEditSheet = false
+  @Environment(EarmarkStore.self) private var earmarkStore
 
   var body: some View {
     VStack(spacing: 0) {
@@ -21,6 +23,26 @@ struct EarmarkDetailView: View {
       )
     }
     .navigationTitle(earmark.name)
+    .toolbar {
+      ToolbarItem(placement: .primaryAction) {
+        Button {
+          showEditSheet = true
+        } label: {
+          Label("Edit", systemImage: "pencil")
+        }
+      }
+    }
+    .sheet(isPresented: $showEditSheet) {
+      EditEarmarkSheet(
+        earmark: earmark,
+        onUpdate: { updated in
+          Task {
+            await earmarkStore.update(updated)
+            showEditSheet = false
+          }
+        }
+      )
+    }
   }
 
   private var overviewPanel: some View {
@@ -129,6 +151,104 @@ struct EarmarkDetailView: View {
   }
 }
 
+private struct EditEarmarkSheet: View {
+  let earmark: Earmark
+  let onUpdate: (Earmark) -> Void
+
+  @State private var name: String
+  @State private var savingsGoal: String
+  @State private var startDate: Date
+  @State private var endDate: Date
+  @State private var useDateRange: Bool
+  @State private var isHidden: Bool
+  @Environment(\.dismiss) private var dismiss
+
+  init(earmark: Earmark, onUpdate: @escaping (Earmark) -> Void) {
+    self.earmark = earmark
+    self.onUpdate = onUpdate
+    _name = State(initialValue: earmark.name)
+    _savingsGoal = State(initialValue: earmark.savingsGoal?.decimalValue.description ?? "")
+    _startDate = State(initialValue: earmark.savingsStartDate ?? Date())
+    _endDate = State(
+      initialValue: earmark.savingsEndDate ?? Calendar.current.date(
+        byAdding: .year, value: 1, to: Date())!)
+    _useDateRange = State(
+      initialValue: earmark.savingsStartDate != nil || earmark.savingsEndDate != nil)
+    _isHidden = State(initialValue: earmark.isHidden)
+  }
+
+  var body: some View {
+    NavigationStack {
+      Form {
+        Section("Details") {
+          TextField("Name", text: $name)
+          Toggle("Hidden", isOn: $isHidden)
+        }
+
+        Section("Savings Goal") {
+          HStack {
+            Text(Currency.defaultCurrency.code)
+              .foregroundStyle(.secondary)
+            TextField("Amount", text: $savingsGoal)
+              #if os(iOS)
+                .keyboardType(.decimalPad)
+              #endif
+          }
+
+          Toggle("Set Date Range", isOn: $useDateRange)
+
+          if useDateRange {
+            DatePicker("Start Date", selection: $startDate, displayedComponents: .date)
+            DatePicker("End Date", selection: $endDate, displayedComponents: .date)
+          }
+        }
+      }
+      .formStyle(.grouped)
+      .navigationTitle("Edit Earmark")
+      #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+      #endif
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") {
+            dismiss()
+          }
+        }
+
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Save") {
+            saveChanges()
+          }
+          .disabled(name.isEmpty)
+        }
+      }
+    }
+  }
+
+  private func saveChanges() {
+    let goalCents = parseCurrency(savingsGoal)
+    let goal =
+      goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: Currency.defaultCurrency) : nil
+
+    var updated = earmark
+    updated.name = name
+    updated.savingsGoal = goal
+    updated.savingsStartDate = useDateRange ? startDate : nil
+    updated.savingsEndDate = useDateRange ? endDate : nil
+    updated.isHidden = isHidden
+
+    onUpdate(updated)
+  }
+
+  private func parseCurrency(_ text: String) -> Int {
+    let cleaned = text.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
+    if let decimal = Decimal(string: cleaned) {
+      return Int(truncating: (decimal * 100) as NSNumber)
+    }
+    return 0
+  }
+}
+
 #Preview {
   let earmarkId = UUID()
   let earmark = Earmark(
@@ -141,6 +261,8 @@ struct EarmarkDetailView: View {
     savingsStartDate: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1)),
     savingsEndDate: Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 31))
   )
+  let earmarkRepository = InMemoryEarmarkRepository(initialEarmarks: [earmark])
+  let earmarkStore = EarmarkStore(repository: earmarkRepository)
   let repository = InMemoryTransactionRepository(initialTransactions: [
     Transaction(
       type: .expense, date: Date(), accountId: UUID(),
@@ -161,5 +283,6 @@ struct EarmarkDetailView: View {
       earmarks: Earmarks(from: []),
       transactionStore: store
     )
+    .environment(earmarkStore)
   }
 }

@@ -97,7 +97,11 @@ final class EarmarkStore {
 
     do {
       let created = try await repository.create(earmark)
-      await load()
+      // Add the created earmark to local state instead of reloading
+      var updated = earmarks.ordered
+      updated.append(created)
+      earmarks = Earmarks(from: updated)
+      logger.debug("Added earmark to local state: \(created.name)")
       return created
     } catch {
       logger.error("Failed to create earmark: \(error.localizedDescription)")
@@ -112,7 +116,12 @@ final class EarmarkStore {
 
     do {
       let updated = try await repository.update(earmark)
-      await load()
+      // Update the earmark in local state instead of reloading
+      var updatedList = earmarks.ordered.map { existing in
+        existing.id == updated.id ? updated : existing
+      }
+      earmarks = Earmarks(from: updatedList)
+      logger.debug("Updated earmark in local state: \(updated.name)")
       return updated
     } catch {
       logger.error("Failed to update earmark: \(error.localizedDescription)")

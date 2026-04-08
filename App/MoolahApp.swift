@@ -16,6 +16,20 @@ struct NewTransactionCommands: Commands {
   }
 }
 
+/// Commands for creating new earmarks
+struct NewEarmarkCommands: Commands {
+  @FocusedValue(\.newEarmarkAction) private var newEarmarkAction
+
+  var body: some Commands {
+    CommandGroup(after: .newItem) {
+      Button("New Earmark") {
+        newEarmarkAction?()
+      }
+      .disabled(newEarmarkAction == nil)
+    }
+  }
+}
+
 @main
 @MainActor
 struct MoolahApp: App {
@@ -60,6 +74,7 @@ struct MoolahApp: App {
     .modelContainer(container)
     .commands {
       NewTransactionCommands()
+      NewEarmarkCommands()
     }
   }
 }
