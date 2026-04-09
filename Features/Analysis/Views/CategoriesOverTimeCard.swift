@@ -114,14 +114,14 @@ struct CategoriesOverTimeCard: View {
             .font(.caption)
             .lineLimit(1)
           Spacer()
-          Text(MonetaryAmount(cents: entry.totalCents, currency: .defaultCurrency).formatNoSymbol)
+          Text(MonetaryAmount(cents: entry.totalCents, currency: .defaultCurrency).formatted)
             .font(.caption)
             .monospacedDigit()
             .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-          "\(categoryName(for: entry.categoryId)): \(MonetaryAmount(cents: entry.totalCents, currency: .defaultCurrency).formatNoSymbol)"
+          "\(categoryName(for: entry.categoryId)): \(MonetaryAmount(cents: entry.totalCents, currency: .defaultCurrency).formatted)"
         )
       }
     }

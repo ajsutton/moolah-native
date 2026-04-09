@@ -72,7 +72,7 @@ struct ExpenseBreakdownCard: View {
               .font(.caption)
               .foregroundStyle(.primary)
             Spacer()
-            Text(item.totalExpenses.formatNoSymbol)
+            Text(item.totalExpenses.formatted)
               .font(.caption)
               .monospacedDigit()
               .foregroundStyle(.secondary)
@@ -80,7 +80,7 @@ struct ExpenseBreakdownCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(
-          "\(categoryName(for: item.categoryId)): \(item.totalExpenses.formatNoSymbol)"
+          "\(categoryName(for: item.categoryId)): \(item.totalExpenses.formatted)"
         )
         .accessibilityHint(hasChildren(item.categoryId) ? "Double tap to drill down" : "")
       }

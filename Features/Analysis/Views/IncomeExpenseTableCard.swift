@@ -55,7 +55,7 @@ struct IncomeExpenseTableCard: View {
       .width(min: 120)
 
       TableColumn("Income") { item in
-        Text(income(for: item).formatNoSymbol)
+        Text(income(for: item).formatted)
           .monospacedDigit()
           .foregroundStyle(.green)
       }
@@ -63,7 +63,7 @@ struct IncomeExpenseTableCard: View {
       .alignment(.trailing)
 
       TableColumn("Expense") { item in
-        Text(expense(for: item).formatNoSymbol)
+        Text(expense(for: item).formatted)
           .monospacedDigit()
           .foregroundStyle(.red)
       }
@@ -71,7 +71,7 @@ struct IncomeExpenseTableCard: View {
       .alignment(.trailing)
 
       TableColumn("Savings") { item in
-        Text(profit(for: item).formatNoSymbol)
+        Text(profit(for: item).formatted)
           .monospacedDigit()
           .foregroundStyle(profit(for: item).cents >= 0 ? .green : .red)
       }
@@ -79,7 +79,7 @@ struct IncomeExpenseTableCard: View {
       .alignment(.trailing)
 
       TableColumn("Total Savings") { item in
-        Text(cumulativeSavings(upTo: item).formatNoSymbol)
+        Text(cumulativeSavings(upTo: item).formatted)
           .monospacedDigit()
           .foregroundStyle(.secondary)
       }

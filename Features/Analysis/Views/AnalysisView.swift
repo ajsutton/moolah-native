@@ -60,22 +60,17 @@ struct AnalysisView: View {
       // Net Worth Graph (full width)
       NetWorthGraphCard(balances: store.dailyBalances)
 
-      // Two-column layout for cards
-      HStack(alignment: .top, spacing: 20) {
-        // Left column: Upcoming + Expense Breakdown
-        VStack(spacing: 20) {
-          UpcomingTransactionsCard(transactionStore: transactionStore)
-          ExpenseBreakdownCard(
-            breakdown: store.expenseBreakdown,
-            categories: categoryStore.categories
-          )
-        }
-        .frame(maxWidth: .infinity)
+      // Upcoming Transactions (full width)
+      UpcomingTransactionsCard(transactionStore: transactionStore)
 
-        // Right column: Income & Expense Table
-        IncomeExpenseTableCard(data: store.incomeAndExpense)
-          .frame(maxWidth: .infinity)
-      }
+      // Monthly Income & Expense (full width)
+      IncomeExpenseTableCard(data: store.incomeAndExpense)
+
+      // Expense Breakdown (full width)
+      ExpenseBreakdownCard(
+        breakdown: store.expenseBreakdown,
+        categories: categoryStore.categories
+      )
 
       // Categories Over Time (full width)
       CategoriesOverTimeCard(
