@@ -1,20 +1,30 @@
 import SwiftUI
 
-struct CategoryPicker: View {
-  let categories: Categories
-  @Binding var selection: UUID?
-  let label: String
+/// Preference key for positioning the category dropdown relative to the text field.
+struct CategoryPickerAnchorKey: PreferenceKey {
+  static let defaultValue: Anchor<CGRect>? = nil
+  static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+    value = value ?? nextValue()
+  }
+}
 
-  @State private var searchText = ""
-  @State private var isEditing = false
-  @State private var highlightedIndex: Int?
-  @FocusState private var isFieldFocused: Bool
+/// Shared state for coordinating between CategoryPicker (in the form) and its dropdown overlay (on the form).
+@Observable @MainActor
+final class CategoryPickerState {
+  var searchText = ""
+  var isEditing = false
+  var highlightedIndex: Int?
+  var categories: Categories = Categories(from: [])
+  var selection: UUID?
 
-  private var allEntries: [Categories.FlatEntry] {
+  // Callback set by the CategoryPicker to propagate selection back to the binding
+  var onSelectionChanged: ((UUID?) -> Void)?
+
+  var allEntries: [Categories.FlatEntry] {
     categories.flattenedByPath()
   }
 
-  private var filteredEntries: [Categories.FlatEntry] {
+  var filteredEntries: [Categories.FlatEntry] {
     let entries = allEntries
     guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else {
       return entries
@@ -22,10 +32,56 @@ struct CategoryPicker: View {
     return entries.filter { matchesCategorySearch($0.path, query: searchText) }
   }
 
-  /// Total row count including the "None" row at index 0.
-  private var totalRowCount: Int {
-    min(filteredEntries.count, 8) + 1
+  var visibleEntries: [Categories.FlatEntry] {
+    Array(filteredEntries.prefix(8))
   }
+
+  /// Total row count including "None" at index 0.
+  var totalRowCount: Int {
+    visibleEntries.count + 1
+  }
+
+  func open(categories: Categories, selection: UUID?) {
+    self.categories = categories
+    self.selection = selection
+    searchText = ""
+    highlightedIndex = nil
+    isEditing = true
+  }
+
+  func close() {
+    isEditing = false
+    searchText = ""
+    highlightedIndex = nil
+  }
+
+  func select(_ id: UUID?) {
+    selection = id
+    onSelectionChanged?(id)
+    close()
+  }
+
+  func acceptHighlighted(at index: Int) {
+    if index == 0 {
+      select(nil)
+    } else {
+      let entryIndex = index - 1
+      guard entryIndex >= 0 && entryIndex < visibleEntries.count else { return }
+      select(visibleEntries[entryIndex].category.id)
+    }
+  }
+}
+
+/// A category selection field with autocomplete search and browse-all support.
+///
+/// Place this inside a Form. Add `.categoryPickerOverlay(state:)` on the Form
+/// so the dropdown renders above form content.
+struct CategoryPicker: View {
+  let categories: Categories
+  @Binding var selection: UUID?
+  let label: String
+  @Bindable var state: CategoryPickerState
+  @FocusState private var isFieldFocused: Bool
 
   private var selectedLabel: String {
     if let id = selection, let cat = categories.by(id: id) {
@@ -34,96 +90,100 @@ struct CategoryPicker: View {
     return "None"
   }
 
-  init(categories: Categories, selection: Binding<UUID?>, label: String = "Category") {
+  init(
+    categories: Categories,
+    selection: Binding<UUID?>,
+    state: CategoryPickerState,
+    label: String = "Category"
+  ) {
     self.categories = categories
     self._selection = selection
+    self.state = state
     self.label = label
   }
 
   var body: some View {
     LabeledContent(label) {
-      if isEditing {
-        TextField("Search categories...", text: $searchText)
+      if state.isEditing {
+        TextField("", text: $state.searchText)
           .focused($isFieldFocused)
           .textFieldStyle(.plain)
-          .onChange(of: searchText) { _, _ in highlightedIndex = nil }
+          .anchorPreference(key: CategoryPickerAnchorKey.self, value: .bounds) { $0 }
+          .onChange(of: state.searchText) { _, _ in state.highlightedIndex = nil }
           #if os(macOS)
             .onKeyPress(.downArrow) {
-              guard totalRowCount > 0 else { return .ignored }
-              highlightedIndex = min((highlightedIndex ?? -1) + 1, totalRowCount - 1)
+              guard state.totalRowCount > 0 else { return .ignored }
+              state.highlightedIndex = min(
+                (state.highlightedIndex ?? -1) + 1, state.totalRowCount - 1)
               return .handled
             }
             .onKeyPress(.upArrow) {
-              guard let current = highlightedIndex else { return .ignored }
-              highlightedIndex = current > 0 ? current - 1 : nil
+              guard let current = state.highlightedIndex else { return .ignored }
+              state.highlightedIndex = current > 0 ? current - 1 : nil
               return .handled
             }
             .onKeyPress(.return) {
-              guard let index = highlightedIndex else { return .ignored }
-              acceptHighlighted(at: index)
+              guard let index = state.highlightedIndex else { return .ignored }
+              state.acceptHighlighted(at: index)
               return .handled
             }
             .onKeyPress(.escape) {
-              closeDropdown()
+              state.close()
               return .handled
             }
           #endif
           .onAppear {
             isFieldFocused = true
-          }
-          .overlay(alignment: .top) {
-            CategoryDropdownContent(
-              entries: Array(filteredEntries.prefix(8)),
-              searchText: searchText,
-              highlightedIndex: $highlightedIndex,
-              onSelectNone: {
-                selection = nil
-                closeDropdown()
-              },
-              onSelect: { entry in
-                selection = entry.category.id
-                closeDropdown()
-              }
-            )
-            .offset(y: 32)
+            state.onSelectionChanged = { [self] newValue in
+              self.selection = newValue
+            }
           }
       } else {
         Text(selectedLabel)
           .foregroundStyle(selection == nil ? .secondary : .primary)
           .frame(maxWidth: .infinity, alignment: .trailing)
           .contentShape(Rectangle())
-          .onTapGesture { openDropdown() }
+          .onTapGesture {
+            state.open(categories: categories, selection: selection)
+          }
           .accessibilityLabel("\(label): \(selectedLabel)")
           .accessibilityAddTraits(.isButton)
           .accessibilityHint("Tap to change category")
       }
     }
   }
+}
 
-  private func openDropdown() {
-    searchText = ""
-    highlightedIndex = nil
-    isEditing = true
+// MARK: - Form Overlay Modifier
+
+/// Adds a category picker dropdown overlay to a Form. Use with `CategoryPickerState`.
+struct CategoryPickerOverlayModifier: ViewModifier {
+  @Bindable var state: CategoryPickerState
+
+  func body(content: Content) -> some View {
+    content
+      .overlayPreferenceValue(CategoryPickerAnchorKey.self) { anchor in
+        if state.isEditing, let anchor {
+          GeometryReader { proxy in
+            let rect = proxy[anchor]
+            CategoryDropdownContent(
+              entries: state.visibleEntries,
+              searchText: state.searchText,
+              highlightedIndex: $state.highlightedIndex,
+              onSelectNone: { state.select(nil) },
+              onSelect: { entry in state.select(entry.category.id) }
+            )
+            .frame(width: rect.width)
+            .offset(x: rect.minX, y: rect.maxY + 4)
+          }
+        }
+      }
   }
+}
 
-  private func closeDropdown() {
-    isEditing = false
-    isFieldFocused = false
-    searchText = ""
-    highlightedIndex = nil
-  }
-
-  private func acceptHighlighted(at index: Int) {
-    if index == 0 {
-      selection = nil
-      closeDropdown()
-    } else {
-      let entries = Array(filteredEntries.prefix(8))
-      let entryIndex = index - 1
-      guard entryIndex >= 0 && entryIndex < entries.count else { return }
-      selection = entries[entryIndex].category.id
-      closeDropdown()
-    }
+extension View {
+  func categoryPickerOverlay(state: CategoryPickerState) -> some View {
+    modifier(CategoryPickerOverlayModifier(state: state))
   }
 }
 
@@ -136,15 +196,9 @@ private struct CategoryDropdownContent: View {
   let onSelectNone: () -> Void
   let onSelect: (Categories.FlatEntry) -> Void
 
-  /// Total row count: 1 for "None" + category entries.
-  private var rowCount: Int {
-    entries.count + 1
-  }
-
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 0) {
-        // "None" row at index 0
         noneRow
 
         if !entries.isEmpty {
@@ -183,7 +237,7 @@ private struct CategoryDropdownContent: View {
         #endif
     )
     .compositingGroup()
-    .accessibilityLabel("\(rowCount) category suggestions")
+    .accessibilityLabel("\(entries.count + 1) category suggestions")
   }
 
   private var noneRow: some View {
@@ -233,7 +287,6 @@ private struct CategoryDropdownContent: View {
     .accessibilityAddTraits(.isButton)
   }
 
-  /// Highlights matched characters as secondary weight, unmatched as bold.
   private func highlightedCategoryText(_ text: String, matching search: String) -> Text {
     let words = search.split(whereSeparator: \.isWhitespace).map { $0.lowercased() }
     guard !words.isEmpty else {
@@ -273,6 +326,7 @@ private struct CategoryDropdownContent: View {
 #Preview {
   struct PreviewWrapper: View {
     @State private var selection: UUID?
+    @State private var pickerState = CategoryPickerState()
 
     private let sampleCategories: Categories = {
       let income = Category(id: UUID(), name: "Income")
@@ -290,8 +344,14 @@ private struct CategoryDropdownContent: View {
 
     var body: some View {
       Form {
-        CategoryPicker(categories: sampleCategories, selection: $selection)
+        CategoryPicker(
+          categories: sampleCategories,
+          selection: $selection,
+          state: pickerState
+        )
       }
+      .formStyle(.grouped)
+      .categoryPickerOverlay(state: pickerState)
       .frame(width: 400, height: 500)
       .padding()
     }

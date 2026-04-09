@@ -26,6 +26,7 @@ struct TransactionFormView: View {
   @State private var showDeleteConfirmation = false
   @State private var showPayeeSuggestions = false
   @State private var payeeHighlightedIndex: Int?
+  @State private var categoryPickerState = CategoryPickerState()
 
   init(
     accounts: Accounts,
@@ -138,6 +139,7 @@ struct TransactionFormView: View {
           }
         }
       }
+      .categoryPickerOverlay(state: categoryPickerState)
       .navigationTitle(title)
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -235,7 +237,7 @@ struct TransactionFormView: View {
 
   private var categorySection: some View {
     Section {
-      CategoryPicker(categories: categories, selection: $categoryId)
+      CategoryPicker(categories: categories, selection: $categoryId, state: categoryPickerState)
 
       Picker("Earmark", selection: $earmarkId) {
         Text("None").tag(UUID?.none)

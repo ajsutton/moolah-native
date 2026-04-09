@@ -25,6 +25,7 @@ struct TransactionDetailView: View {
   @State private var showDeleteConfirmation = false
   @State private var showPayeeSuggestions = false
   @State private var payeeHighlightedIndex: Int?
+  @State private var categoryPickerState = CategoryPickerState()
   @FocusState private var focusedField: Field?
 
   private enum Field: Hashable {
@@ -137,6 +138,7 @@ struct TransactionDetailView: View {
         }
       }
     }
+    .categoryPickerOverlay(state: categoryPickerState)
     .navigationTitle("Transaction Details")
     #if os(iOS)
       .navigationBarTitleDisplayMode(.inline)
@@ -248,7 +250,7 @@ struct TransactionDetailView: View {
 
   private var categorySection: some View {
     Section {
-      CategoryPicker(categories: categories, selection: $categoryId)
+      CategoryPicker(categories: categories, selection: $categoryId, state: categoryPickerState)
 
       Picker("Earmark", selection: $earmarkId) {
         Text("None").tag(UUID?.none)

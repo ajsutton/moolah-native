@@ -6,6 +6,7 @@ struct AddBudgetLineItemSheet: View {
   let existingCategoryIds: Set<UUID>
   @State private var selectedCategoryId: UUID?
   @State private var amountText = ""
+  @State private var categoryPickerState = CategoryPickerState()
   @Environment(EarmarkStore.self) private var earmarkStore
   @Environment(\.dismiss) private var dismiss
 
@@ -13,7 +14,8 @@ struct AddBudgetLineItemSheet: View {
     NavigationStack {
       Form {
         Section("Category") {
-          CategoryPicker(categories: categories, selection: $selectedCategoryId)
+          CategoryPicker(
+            categories: categories, selection: $selectedCategoryId, state: categoryPickerState)
         }
 
         Section("Budget Amount") {
@@ -28,6 +30,7 @@ struct AddBudgetLineItemSheet: View {
         }
       }
       .formStyle(.grouped)
+      .categoryPickerOverlay(state: categoryPickerState)
       .navigationTitle("Add Budget Item")
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
