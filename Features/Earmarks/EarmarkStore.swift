@@ -97,7 +97,11 @@ final class EarmarkStore {
 
     for index in visible.indices {
       visible[index].position = index
-      _ = try? await repository.update(visible[index])
+      do {
+        _ = try await repository.update(visible[index])
+      } catch {
+        logger.error("Failed to persist earmark reorder for \(visible[index].id): \(error)")
+      }
     }
 
     let hiddenEarmarks = earmarks.ordered.filter { $0.isHidden }

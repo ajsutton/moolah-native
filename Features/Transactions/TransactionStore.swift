@@ -184,6 +184,21 @@ final class TransactionStore {
     isLoading = false
   }
 
+  // MARK: - Debounced Save
+
+  private var saveTask: Task<Void, Never>?
+
+  /// Debounces save calls: cancels any pending save, waits 300ms, then calls the callback.
+  /// The callback is invoked on the main actor after the debounce delay.
+  func debouncedSave(perform action: @escaping @MainActor () -> Void) {
+    saveTask?.cancel()
+    saveTask = Task {
+      try? await Task.sleep(nanoseconds: 300_000_000)  // 300ms debounce
+      guard !Task.isCancelled else { return }
+      action()
+    }
+  }
+
   // MARK: - Payee Suggestions
 
   private(set) var payeeSuggestions: [String] = []

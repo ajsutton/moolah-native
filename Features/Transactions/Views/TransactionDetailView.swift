@@ -23,7 +23,6 @@ struct TransactionDetailView: View {
   @State private var recurEvery: Int
   @State private var isRepeating: Bool
   @State private var showDeleteConfirmation = false
-  @State private var saveTask: Task<Void, Never>?
   @State private var showPayeeSuggestions = false
   @State private var payeeHighlightedIndex: Int?
   @FocusState private var focusedField: Field?
@@ -408,16 +407,8 @@ struct TransactionDetailView: View {
   }
 
   private func debouncedSave() {
-    // Cancel any pending save
-    saveTask?.cancel()
-
-    // Schedule a new save after a short delay
-    saveTask = Task {
-      try? await Task.sleep(nanoseconds: 300_000_000)  // 300ms debounce
-      guard !Task.isCancelled else { return }
-      await MainActor.run {
-        saveIfValid()
-      }
+    transactionStore.debouncedSave { [self] in
+      saveIfValid()
     }
   }
 

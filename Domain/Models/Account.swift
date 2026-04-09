@@ -72,7 +72,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
   }
 }
 
-struct Accounts: RandomAccessCollection {
+struct Accounts: RandomAccessCollection, Sendable {
   let startIndex: Int = 0
 
   let ordered: [Account]

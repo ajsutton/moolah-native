@@ -1,6 +1,6 @@
 import Foundation
 
-final class InMemoryAnalysisRepository: AnalysisRepository {
+final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
   private let transactionRepository: InMemoryTransactionRepository
   private let accountRepository: InMemoryAccountRepository
   private let earmarkRepository: InMemoryEarmarkRepository

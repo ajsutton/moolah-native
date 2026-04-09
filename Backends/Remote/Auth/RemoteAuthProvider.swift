@@ -8,6 +8,8 @@ import OSLog
 #endif
 
 /// Authenticates via the Moolah REST server's Google OAuth flow.
+/// @MainActor because of mutable state (hasRestoredCookies) and
+/// HTTPCookieStorage.shared access requiring main-thread safety.
 @MainActor
 final class RemoteAuthProvider: AuthProvider {
   nonisolated let requiresExplicitSignIn = true

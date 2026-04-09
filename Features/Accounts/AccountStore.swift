@@ -142,6 +142,20 @@ final class AccountStore {
     }
   }
 
+  func reorderAccounts(_ reordered: [Account], positionOffset: Int = 0) async {
+    for (index, account) in reordered.enumerated() {
+      var updated = account
+      updated.position = positionOffset + index
+      do {
+        _ = try await repository.update(updated)
+      } catch {
+        logger.error("Failed to persist account reorder for \(updated.id): \(error)")
+      }
+    }
+    // Reload to get consistent state
+    await load()
+  }
+
   func delete(id: UUID) async throws {
     isLoading = true
     error = nil

@@ -1056,6 +1056,34 @@ struct TransactionStoreTests {
     #expect(match?.amount.cents == -7500)
   }
 
+  @Test func testDebouncedSaveOnlyCallsLastAction() async throws {
+    let repository = InMemoryTransactionRepository()
+    let store = TransactionStore(repository: repository)
+
+    var callCount = 0
+    var lastValue = ""
+
+    // Rapidly call debouncedSave 3 times — only the last should fire
+    store.debouncedSave {
+      callCount += 1
+      lastValue = "first"
+    }
+    store.debouncedSave {
+      callCount += 1
+      lastValue = "second"
+    }
+    store.debouncedSave {
+      callCount += 1
+      lastValue = "third"
+    }
+
+    // Wait for the debounce delay (300ms) plus a small buffer
+    try await Task.sleep(nanoseconds: 500_000_000)
+
+    #expect(callCount == 1)
+    #expect(lastValue == "third")
+  }
+
   @Test func testFetchPayeeSuggestionsEmptyPrefixReturnsEmpty() async throws {
     let repository = InMemoryTransactionRepository(initialTransactions: [
       Transaction(

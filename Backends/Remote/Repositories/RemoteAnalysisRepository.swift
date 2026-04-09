@@ -1,6 +1,6 @@
 import Foundation
 
-final class RemoteAnalysisRepository: AnalysisRepository {
+final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
   private let client: APIClient
 
   init(client: APIClient) {

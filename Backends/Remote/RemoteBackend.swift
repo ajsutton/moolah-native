@@ -2,6 +2,7 @@ import Foundation
 
 /// Concrete BackendProvider that talks to the Moolah REST API.
 /// Assembled at the composition root in MoolahApp; never imported by features directly.
+/// @MainActor because it constructs RemoteAuthProvider which requires main-actor isolation.
 @MainActor
 final class RemoteBackend: BackendProvider {
   let auth: any AuthProvider

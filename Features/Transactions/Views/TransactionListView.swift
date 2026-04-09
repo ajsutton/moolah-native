@@ -91,10 +91,8 @@ struct TransactionListView: View {
       if let created = await transactionStore.create(newTransaction) {
         // Only update selection if it's still pointing to this transaction
         // (user might have created another transaction in the meantime)
-        await MainActor.run {
-          if selectedTransaction?.id == newTransaction.id {
-            selectedTransaction = created
-          }
+        if selectedTransaction?.id == newTransaction.id {
+          selectedTransaction = created
         }
       }
     }

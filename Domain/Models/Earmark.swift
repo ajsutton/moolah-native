@@ -66,7 +66,7 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
   }
 }
 
-struct Earmarks: RandomAccessCollection {
+struct Earmarks: RandomAccessCollection, Sendable {
   let startIndex: Int = 0
 
   let ordered: [Earmark]

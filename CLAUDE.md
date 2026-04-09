@@ -32,7 +32,7 @@ just generate
 - **Features:** Only talk to repository protocols via `@Environment(BackendProvider.self)`. No feature file may import `Backends/` or reference `Remote*` types directly.
 - **Currency:** All currency values are stored as `Int` (cents). Use `Constants.defaultCurrency` (currently "AUD") for formatting.
 - **Backend:** `BackendProvider` is the injection point. `RemoteBackend` for production, `InMemoryBackend` for tests and previews.
-- **Swift 6 Concurrency:**
+- **Concurrency:** All concurrency work MUST follow `CONCURRENCY_GUIDE.md`. This is not optional.
   - Mark types `@MainActor` when they own UI-bound state (e.g., Stores).
   - Use `Sendable` on all types that cross actor boundaries.
   - Prefer `async/await` over callbacks or completion handlers.
@@ -113,41 +113,13 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
   - `plans/NATIVE_APP_PLAN.md` — master implementation plan (vertical slices, steps 1-14)
   - `plans/SCHEDULED_TRANSACTIONS_GAP_ANALYSIS.md` — detailed comparison of scheduled transaction functionality between moolah-server, moolah web app, and moolah-native
   - `plans/UI_TESTING_PLAN.md` — store-level refactoring (extract view logic, ~54 tests) and XCUITest plan (~12 tests) for high-risk UI flows
+  - `plans/CONCURRENCY_FIXES_PLAN.md` — fixes from concurrency review (redundant MainActor.run, missing Sendable, saveTask in view)
 - **Creating New Plans:** When documenting new features, architecture decisions, or gap analyses, create a new markdown file in `plans/` with a descriptive name (e.g., `OFFLINE_SYNC_DESIGN.md`, `CLOUDKIT_BACKEND_PLAN.md`).
 - **Completing Plans:** When a plan is fully implemented, move it to `plans/completed/` (e.g., `mv plans/MY_PLAN.md plans/completed/`).
 
 ## Agents
 
-This project defines specialized agents for specific review tasks. Use the Task tool to invoke them.
+This project defines specialized review agents in `.claude/agents/`. Invoke them with `@agent-name` (e.g., `@ui-review`, `@concurrency-review`).
 
-### ui-review Agent
-
-**Purpose:** Expert in UI design, accessibility, and usability. Reviews SwiftUI views for compliance with `STYLE_GUIDE.md` and Apple Human Interface Guidelines.
-
-**When to use:**
-- After creating or significantly modifying UI components
-- Before committing UI-related changes
-- When investigating accessibility or usability issues
-
-**Usage:**
-```
-Task tool with prompt: "Review [ViewName] for style guide compliance and accessibility"
-```
-
-**What it checks:**
-- Adherence to STYLE_GUIDE.md patterns (layout, typography, colors, spacing)
-- Apple HIG compliance (navigation, controls, platform conventions)
-- Accessibility (VoiceOver labels, keyboard navigation, color contrast, Dynamic Type support)
-- SwiftUI best practices (proper use of modifiers, semantic colors, layout primitives)
-- Usability issues (touch target sizes, visual hierarchy, clarity)
-
-**Important: Avoid these false-positive patterns:**
-- **Do not flag individual child view accessibility labels when the parent uses `.accessibilityElement(children: .combine)` with a combined label.** The combined label already covers all children.
-- **Do not flag a modifier as missing without verifying.** Read the actual code to confirm a modifier like `.monospacedDigit()` is absent before reporting it.
-- **Toolbar "Add" buttons should use `Label` with icons. Form submit buttons ("Create", "Save", "Apply", "Cancel") should use plain `Button("Text")`.** This is correct Apple HIG — do not flag it as inconsistent.
-
-**Output:** A detailed report with:
-- Issues found (categorized by severity: Critical, Important, Minor)
-- Specific code locations (file:line)
-- Recommended fixes with code examples
-- Positive highlights (what's done well)
+- **`ui-review`** — Reviews SwiftUI views for `STYLE_GUIDE.md` compliance, Apple HIG, and accessibility. Use after creating or modifying UI components.
+- **`concurrency-review`** — Reviews Swift code for `CONCURRENCY_GUIDE.md` compliance: actor isolation, task hygiene, Sendable, async patterns. Use after modifying stores, repositories, or backend code.

@@ -210,26 +210,14 @@ struct SidebarView: View {
   private func reorderCurrentAccounts(from source: IndexSet, to destination: Int) async {
     var accounts = accountStore.currentAccounts
     accounts.move(fromOffsets: source, toOffset: destination)
-
-    // Update positions (0-indexed)
-    for (index, account) in accounts.enumerated() {
-      var updated = account
-      updated.position = index
-      _ = try? await accountStore.update(updated)
-    }
+    await accountStore.reorderAccounts(accounts)
   }
 
   private func reorderInvestmentAccounts(from source: IndexSet, to destination: Int) async {
     var accounts = accountStore.investmentAccounts
     accounts.move(fromOffsets: source, toOffset: destination)
-
-    // Update positions (starting after current accounts)
-    let offset = accountStore.currentAccounts.count
-    for (index, account) in accounts.enumerated() {
-      var updated = account
-      updated.position = offset + index
-      _ = try? await accountStore.update(updated)
-    }
+    await accountStore.reorderAccounts(
+      accounts, positionOffset: accountStore.currentAccounts.count)
   }
 }
 
