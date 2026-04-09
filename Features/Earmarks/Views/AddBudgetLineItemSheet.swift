@@ -9,22 +9,11 @@ struct AddBudgetLineItemSheet: View {
   @Environment(EarmarkStore.self) private var earmarkStore
   @Environment(\.dismiss) private var dismiss
 
-  private var availableCategories: [Category] {
-    allCategories(from: categories)
-      .filter { !existingCategoryIds.contains($0.id) }
-      .sorted { $0.name < $1.name }
-  }
-
   var body: some View {
     NavigationStack {
       Form {
         Section("Category") {
-          Picker("Category", selection: $selectedCategoryId) {
-            Text("Select a category").tag(UUID?.none)
-            ForEach(availableCategories) { category in
-              Text(category.name).tag(UUID?.some(category.id))
-            }
-          }
+          CategoryPicker(categories: categories, selection: $selectedCategoryId)
         }
 
         Section("Budget Amount") {
@@ -74,17 +63,4 @@ struct AddBudgetLineItemSheet: View {
     }
   }
 
-  /// Flattens the category hierarchy into a single list.
-  private func allCategories(from categories: Categories) -> [Category] {
-    var result: [Category] = []
-    func collect(_ parentId: UUID?) {
-      let children = parentId.map { categories.children(of: $0) } ?? categories.roots
-      for child in children {
-        result.append(child)
-        collect(child.id)
-      }
-    }
-    collect(nil)
-    return result
-  }
 }

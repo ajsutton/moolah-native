@@ -77,31 +77,6 @@ struct TransactionDetailView: View {
     return NSDecimalNumber(decimal: decimal * 100).intValue
   }
 
-  private func categoryPath(for category: Category) -> String {
-    var parts: [String] = [category.name]
-    var current = category
-    while let parentId = current.parentId, let parent = categories.by(id: parentId) {
-      parts.insert(parent.name, at: 0)
-      current = parent
-    }
-    return parts.joined(separator: ":")
-  }
-
-  private func flattenedCategories() -> [(category: Category, label: String)] {
-    var result: [(category: Category, label: String)] = []
-    func addChildren(of parentId: UUID, depth: Int) {
-      for child in categories.children(of: parentId) {
-        result.append((child, categoryPath(for: child)))
-        addChildren(of: child.id, depth: depth + 1)
-      }
-    }
-    for root in categories.roots {
-      result.append((root, root.name))
-      addChildren(of: root.id, depth: 1)
-    }
-    return result
-  }
-
   private var isValid: Bool {
     guard parsedCents != nil else { return false }
     if type == .transfer {
@@ -273,15 +248,7 @@ struct TransactionDetailView: View {
 
   private var categorySection: some View {
     Section {
-      Picker("Category", selection: $categoryId) {
-        Text("None").tag(UUID?.none)
-        ForEach(flattenedCategories(), id: \.category.id) { entry in
-          Text(entry.label).tag(UUID?.some(entry.category.id))
-        }
-      }
-      #if os(macOS)
-        .pickerStyle(.menu)
-      #endif
+      CategoryPicker(categories: categories, selection: $categoryId)
 
       Picker("Earmark", selection: $earmarkId) {
         Text("None").tag(UUID?.none)
