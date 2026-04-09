@@ -15,8 +15,8 @@ struct ReportsView: View {
 
   /// Resolved date range, computed once when dateRange or custom dates change.
   /// Stored in @State to avoid re-evaluating Date() on every SwiftUI render cycle.
-  @State private var resolvedFrom: Date = DateRange.last12Months.startDate
-  @State private var resolvedTo: Date = DateRange.last12Months.endDate
+  @State private var resolvedFrom: Date = DateRange.last12Months.startDate()
+  @State private var resolvedTo: Date = DateRange.last12Months.endDate()
 
   @State private var incomeBalances: [UUID: MonetaryAmount] = [:]
   @State private var expenseBalances: [UUID: MonetaryAmount] = [:]
@@ -86,8 +86,8 @@ struct ReportsView: View {
     }
     .onChange(of: dateRange) { _, newValue in
       if newValue != .custom {
-        resolvedFrom = newValue.startDate
-        resolvedTo = newValue.endDate
+        resolvedFrom = newValue.startDate()
+        resolvedTo = newValue.endDate()
       }
       Task { await loadData() }
     }

@@ -13,6 +13,8 @@ struct ProfileTests {
       backendType: .remote,
       serverURL: URL(string: "https://moolah.rocks/api/")!,
       cachedUserName: "Ada Lovelace",
+      currencyCode: "USD",
+      financialYearStartMonth: 1,
       createdAt: Date(timeIntervalSince1970: 1_700_000_000)
     )
 
@@ -25,10 +27,12 @@ struct ProfileTests {
     #expect(decoded.backendType == .remote)
     #expect(decoded.serverURL == URL(string: "https://moolah.rocks/api/")!)
     #expect(decoded.cachedUserName == "Ada Lovelace")
+    #expect(decoded.currencyCode == "USD")
+    #expect(decoded.financialYearStartMonth == 1)
     #expect(decoded.createdAt == Date(timeIntervalSince1970: 1_700_000_000))
   }
 
-  @Test("defaults: generates UUID, sets createdAt, nil cachedUserName")
+  @Test("defaults: AUD currency and July FY start")
   func defaults() {
     let profile = Profile(
       label: "Moolah",
@@ -38,7 +42,24 @@ struct ProfileTests {
     #expect(!profile.id.uuidString.isEmpty)
     #expect(profile.backendType == .remote)
     #expect(profile.cachedUserName == nil)
+    #expect(profile.currencyCode == "AUD")
+    #expect(profile.financialYearStartMonth == 7)
+    #expect(profile.currency == .AUD)
     #expect(profile.createdAt.timeIntervalSince1970 > 0)
+  }
+
+  @Test("currency computed property maps known codes")
+  func currencyMapping() {
+    var profile = Profile(label: "Test", serverURL: URL(string: "https://test.com/")!)
+
+    profile.currencyCode = "AUD"
+    #expect(profile.currency == .AUD)
+
+    profile.currencyCode = "USD"
+    #expect(profile.currency == .USD)
+
+    profile.currencyCode = "GBP"
+    #expect(profile.currency.code == "GBP")
   }
 
   @Test("equality compares all fields")

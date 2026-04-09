@@ -14,8 +14,8 @@ struct DateRangeTests {
     let today = calendar.startOfDay(for: Date())
     let expected = calendar.date(byAdding: .month, value: -12, to: today)!
 
-    #expect(range.startDate == expected)
-    #expect(range.endDate == today)
+    #expect(range.startDate() == expected)
+    #expect(range.endDate() == today)
   }
 
   @Test("Month to date returns first day of current month")
@@ -26,9 +26,9 @@ struct DateRangeTests {
     let month = calendar.component(.month, from: today)
     let year = calendar.component(.year, from: today)
 
-    let startMonth = calendar.component(.month, from: range.startDate)
-    let startYear = calendar.component(.year, from: range.startDate)
-    let startDay = calendar.component(.day, from: range.startDate)
+    let startMonth = calendar.component(.month, from: range.startDate())
+    let startYear = calendar.component(.year, from: range.startDate())
+    let startDay = calendar.component(.day, from: range.startDate())
 
     #expect(startYear == year)
     #expect(startMonth == month)
@@ -45,8 +45,8 @@ struct DateRangeTests {
     // Calculate expected quarter start month (Q1: Jan, Q2: Apr, Q3: Jul, Q4: Oct)
     let expectedQuarterStart = ((currentMonth - 1) / 3) * 3 + 1
 
-    let startMonth = calendar.component(.month, from: range.startDate)
-    let startDay = calendar.component(.day, from: range.startDate)
+    let startMonth = calendar.component(.month, from: range.startDate())
+    let startDay = calendar.component(.day, from: range.startDate())
 
     #expect(startMonth == expectedQuarterStart)
     #expect(startDay == 1)
@@ -59,9 +59,9 @@ struct DateRangeTests {
     let today = Date()
     let year = calendar.component(.year, from: today)
 
-    let startYear = calendar.component(.year, from: range.startDate)
-    let startMonth = calendar.component(.month, from: range.startDate)
-    let startDay = calendar.component(.day, from: range.startDate)
+    let startYear = calendar.component(.year, from: range.startDate())
+    let startMonth = calendar.component(.month, from: range.startDate())
+    let startDay = calendar.component(.day, from: range.startDate())
 
     #expect(startYear == year)
     #expect(startMonth == 1)
@@ -79,13 +79,13 @@ struct DateRangeTests {
     // FY year is current year if we're past July, otherwise last year
     let expectedFYYear = currentMonth >= 7 ? currentYear : currentYear - 1
 
-    let startYear = calendar.component(.year, from: range.startDate)
-    let startMonth = calendar.component(.month, from: range.startDate)
-    let startDay = calendar.component(.day, from: range.startDate)
+    let startYear = calendar.component(.year, from: range.startDate())
+    let startMonth = calendar.component(.month, from: range.startDate())
+    let startDay = calendar.component(.day, from: range.startDate())
 
-    let endYear = calendar.component(.year, from: range.endDate)
-    let endMonth = calendar.component(.month, from: range.endDate)
-    let endDay = calendar.component(.day, from: range.endDate)
+    let endYear = calendar.component(.year, from: range.endDate())
+    let endMonth = calendar.component(.month, from: range.endDate())
+    let endDay = calendar.component(.day, from: range.endDate())
 
     #expect(startYear == expectedFYYear)
     #expect(startMonth == 7)
@@ -102,16 +102,16 @@ struct DateRangeTests {
     let lastRange = DateRange.lastFinancialYear
     let calendar = Calendar.current
 
-    let thisYear = calendar.component(.year, from: thisRange.startDate)
-    let lastYear = calendar.component(.year, from: lastRange.startDate)
+    let thisYear = calendar.component(.year, from: thisRange.startDate())
+    let lastYear = calendar.component(.year, from: lastRange.startDate())
 
     #expect(lastYear == thisYear - 1)
 
     // Verify it's still July 1 to June 30
-    let startMonth = calendar.component(.month, from: lastRange.startDate)
-    let startDay = calendar.component(.day, from: lastRange.startDate)
-    let endMonth = calendar.component(.month, from: lastRange.endDate)
-    let endDay = calendar.component(.day, from: lastRange.endDate)
+    let startMonth = calendar.component(.month, from: lastRange.startDate())
+    let startDay = calendar.component(.day, from: lastRange.startDate())
+    let endMonth = calendar.component(.month, from: lastRange.endDate())
+    let endDay = calendar.component(.day, from: lastRange.endDate())
 
     #expect(startMonth == 7)
     #expect(startDay == 1)
@@ -134,7 +134,7 @@ struct DateRangeTests {
 
     for (range, months) in testCases {
       let expected = calendar.date(byAdding: .month, value: months, to: today)!
-      #expect(range.startDate == expected, "Failed for \(range.displayName)")
+      #expect(range.startDate() == expected, "Failed for \(range.displayName)")
     }
   }
 
@@ -146,8 +146,8 @@ struct DateRangeTests {
 
     // Custom defaults to 1 year ago → today
     let expectedStart = calendar.date(byAdding: .year, value: -1, to: today)!
-    #expect(range.startDate == expectedStart)
-    #expect(range.endDate == today)
+    #expect(range.startDate() == expectedStart)
+    #expect(range.endDate() == today)
   }
 
   @Test("All cases are iterable")
@@ -163,5 +163,55 @@ struct DateRangeTests {
     for range in DateRange.allCases {
       #expect(range.displayName == range.rawValue)
     }
+  }
+
+  // MARK: - Custom financial year start month
+
+  @Test("Financial year with January start (calendar year)")
+  func financialYearJanuaryStart() throws {
+    let range = DateRange.thisFinancialYear
+    let calendar = Calendar.current
+    // Use a fixed date in March 2026 for predictability
+    let today = calendar.date(from: DateComponents(year: 2026, month: 3, day: 15))!
+
+    let start = range.startDate(today: today, financialYearStartMonth: 1)
+    let end = range.endDate(today: today, financialYearStartMonth: 1)
+
+    #expect(calendar.component(.year, from: start) == 2026)
+    #expect(calendar.component(.month, from: start) == 1)
+    #expect(calendar.component(.day, from: start) == 1)
+
+    #expect(calendar.component(.year, from: end) == 2026)
+    #expect(calendar.component(.month, from: end) == 12)
+    #expect(calendar.component(.day, from: end) == 31)
+  }
+
+  @Test("Financial year with April start (UK style)")
+  func financialYearAprilStart() throws {
+    let range = DateRange.thisFinancialYear
+    let calendar = Calendar.current
+    // May 2026 → FY started April 2026
+    let today = calendar.date(from: DateComponents(year: 2026, month: 5, day: 10))!
+
+    let start = range.startDate(today: today, financialYearStartMonth: 4)
+    let end = range.endDate(today: today, financialYearStartMonth: 4)
+
+    #expect(calendar.component(.year, from: start) == 2026)
+    #expect(calendar.component(.month, from: start) == 4)
+    #expect(calendar.component(.day, from: start) == 1)
+
+    #expect(calendar.component(.year, from: end) == 2027)
+    #expect(calendar.component(.month, from: end) == 3)
+    #expect(calendar.component(.day, from: end) == 31)
+  }
+
+  @Test("Non-FY ranges ignore financial year start month")
+  func nonFYRangesUnaffected() throws {
+    let range = DateRange.last6Months
+    let start7 = range.startDate(financialYearStartMonth: 7)
+    let start1 = range.startDate(financialYearStartMonth: 1)
+
+    // Should be identical — last6Months doesn't use FY
+    #expect(start7 == start1)
   }
 }

@@ -18,16 +18,21 @@ enum DateRange: String, CaseIterable, Identifiable, Sendable {
 
   var displayName: String { rawValue }
 
-  var startDate: Date {
+  func startDate(financialYearStartMonth: Int = 7) -> Date {
+    startDate(
+      today: Calendar.current.startOfDay(for: Date()),
+      financialYearStartMonth: financialYearStartMonth)
+  }
+
+  func startDate(today: Date, financialYearStartMonth: Int = 7) -> Date {
     let calendar = Calendar.current
-    let today = calendar.startOfDay(for: Date())
 
     switch self {
     case .thisFinancialYear:
-      return financialYear(for: today).start
+      return financialYear(for: today, startMonth: financialYearStartMonth).start
     case .lastFinancialYear:
       let lastYear = calendar.date(byAdding: .year, value: -1, to: today)!
-      return financialYear(for: lastYear).start
+      return financialYear(for: lastYear, startMonth: financialYearStartMonth).start
     case .lastMonth:
       return calendar.date(byAdding: .month, value: -1, to: today)!
     case .last3Months:
@@ -57,32 +62,45 @@ enum DateRange: String, CaseIterable, Identifiable, Sendable {
     }
   }
 
-  var endDate: Date {
+  func endDate(financialYearStartMonth: Int = 7) -> Date {
+    endDate(
+      today: Calendar.current.startOfDay(for: Date()),
+      financialYearStartMonth: financialYearStartMonth)
+  }
+
+  func endDate(today: Date, financialYearStartMonth: Int = 7) -> Date {
     let calendar = Calendar.current
-    let today = calendar.startOfDay(for: Date())
 
     switch self {
     case .thisFinancialYear:
-      return financialYear(for: today).end
+      return financialYear(for: today, startMonth: financialYearStartMonth).end
     case .lastFinancialYear:
       let lastYear = calendar.date(byAdding: .year, value: -1, to: today)!
-      return financialYear(for: lastYear).end
+      return financialYear(for: lastYear, startMonth: financialYearStartMonth).end
     default:
       return today
     }
   }
 
   /// Calculates the financial year boundaries for a given date.
-  /// Financial year runs from July 1 to June 30.
-  private func financialYear(for date: Date) -> (start: Date, end: Date) {
+  /// Financial year runs from the given start month (e.g. 7 for July 1 → June 30).
+  private func financialYear(for date: Date, startMonth: Int) -> (start: Date, end: Date) {
     let calendar = Calendar.current
     let year = calendar.component(.year, from: date)
     let month = calendar.component(.month, from: date)
 
-    // Financial year: July 1 → June 30
-    let fyYear = month >= 7 ? year : year - 1
-    let start = calendar.date(from: DateComponents(year: fyYear, month: 7, day: 1))!
-    let end = calendar.date(from: DateComponents(year: fyYear + 1, month: 6, day: 30))!
+    let fyYear = month >= startMonth ? year : year - 1
+    let endMonth = startMonth == 1 ? 12 : startMonth - 1
+    let endYear = startMonth == 1 ? fyYear : fyYear + 1
+
+    let start = calendar.date(from: DateComponents(year: fyYear, month: startMonth, day: 1))!
+    let lastDayOfEndMonth =
+      calendar.range(
+        of: .day, in: .month,
+        for: calendar.date(from: DateComponents(year: endYear, month: endMonth, day: 1))!
+      )!.upperBound - 1
+    let end = calendar.date(
+      from: DateComponents(year: endYear, month: endMonth, day: lastDayOfEndMonth))!
 
     return (start, end)
   }
