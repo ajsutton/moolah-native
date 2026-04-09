@@ -3,6 +3,7 @@ import SwiftUI
 struct AnalysisView: View {
   @Environment(CategoryStore.self) private var categoryStore
   @Environment(TransactionStore.self) private var transactionStore
+  @Environment(\.scenePhase) private var scenePhase
 
   @Bindable var store: AnalysisStore
 
@@ -51,6 +52,11 @@ struct AnalysisView: View {
     }
     .onChange(of: store.forecastMonths) { _, _ in
       Task { await store.loadAll() }
+    }
+    .onChange(of: scenePhase) { _, newPhase in
+      if newPhase == .active {
+        Task { await store.loadAll() }
+      }
     }
   }
 

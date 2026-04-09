@@ -3,6 +3,65 @@ import Testing
 
 @testable import Moolah
 
+@Suite("AnalysisStore — filter persistence")
+@MainActor
+struct AnalysisStoreFilterPersistenceTests {
+
+  private func makeDefaults() -> UserDefaults {
+    let suiteName = "com.moolah.test.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defaults.removePersistentDomain(forName: suiteName)
+    return defaults
+  }
+
+  @Test("defaults to historyMonths=12 and forecastMonths=1 with no saved values")
+  func defaultValues() {
+    let store = AnalysisStore(
+      repository: InMemoryBackend().analysis, defaults: makeDefaults())
+    #expect(store.historyMonths == 12)
+    #expect(store.forecastMonths == 1)
+  }
+
+  @Test("persists historyMonths across instances")
+  func historyMonthsPersists() {
+    let defaults = makeDefaults()
+
+    let store1 = AnalysisStore(
+      repository: InMemoryBackend().analysis, defaults: defaults)
+    store1.historyMonths = 6
+
+    let store2 = AnalysisStore(
+      repository: InMemoryBackend().analysis, defaults: defaults)
+    #expect(store2.historyMonths == 6)
+  }
+
+  @Test("persists forecastMonths across instances")
+  func forecastMonthsPersists() {
+    let defaults = makeDefaults()
+
+    let store1 = AnalysisStore(
+      repository: InMemoryBackend().analysis, defaults: defaults)
+    store1.forecastMonths = 3
+
+    let store2 = AnalysisStore(
+      repository: InMemoryBackend().analysis, defaults: defaults)
+    #expect(store2.forecastMonths == 3)
+  }
+
+  @Test("forecastMonths=0 (None) persists correctly")
+  func forecastMonthsZeroPersists() {
+    let defaults = makeDefaults()
+
+    let store1 = AnalysisStore(
+      repository: InMemoryBackend().analysis, defaults: defaults)
+    store1.forecastMonths = 0
+
+    let store2 = AnalysisStore(
+      repository: InMemoryBackend().analysis, defaults: defaults)
+    #expect(store2.forecastMonths == 0)
+  }
+}
+
 @Suite("AnalysisStore — categoriesOverTime")
 @MainActor
 struct AnalysisStoreCategoriesOverTimeTests {

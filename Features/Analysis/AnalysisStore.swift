@@ -12,19 +12,38 @@ final class AnalysisStore {
   private(set) var isLoading = false
   private(set) var error: Error?
 
-  // Filters
-  var historyMonths: Int = 12  // 1, 3, 6, 12, 24, 36, etc., or 0 = "All"
-  var forecastMonths: Int = 1  // 0 = "None", 1, 3, 6, etc.
+  // Filters (persisted across launches)
+  var historyMonths: Int {
+    didSet { defaults.set(historyMonths, forKey: "analysisHistoryMonths") }
+  }
+  var forecastMonths: Int {
+    didSet { defaults.set(forecastMonths, forKey: "analysisForecastMonths") }
+  }
   var showActualValues: Bool = false  // false = percentage, true = actual amounts
 
   let repository: AnalysisRepository
+  private let defaults: UserDefaults
   private let logger = Logger(subsystem: "com.moolah.app", category: "AnalysisStore")
 
-  init(repository: AnalysisRepository) {
+  init(repository: AnalysisRepository, defaults: UserDefaults = .standard) {
     self.repository = repository
+    self.defaults = defaults
+
+    // Restore last-used values (UserDefaults returns 0 for missing keys)
+    let savedHistory = defaults.integer(forKey: "analysisHistoryMonths")
+    self.historyMonths = savedHistory > 0 ? savedHistory : 12
+
+    let savedForecast = defaults.integer(forKey: "analysisForecastMonths")
+    // forecastMonths=0 means "None" which is valid, so only default if key is absent
+    if defaults.object(forKey: "analysisForecastMonths") != nil {
+      self.forecastMonths = savedForecast
+    } else {
+      self.forecastMonths = 1
+    }
   }
 
   func loadAll() async {
+    monthEnd = Calendar.current.component(.day, from: Date())
     isLoading = true
     error = nil
 
@@ -176,10 +195,9 @@ final class AnalysisStore {
   }
 
   /// Today's day-of-month, used as the financial month boundary (matching the web app).
-  /// Private so SwiftUI doesn't observe it and trigger redraws.
-  private var monthEnd: Int {
-    Calendar.current.component(.day, from: Date())
-  }
+  /// Stored so SwiftUI can observe changes (e.g. date rollover triggers reload).
+  /// Updated at the start of each loadAll() call.
+  private(set) var monthEnd: Int = Calendar.current.component(.day, from: Date())
 
   private func afterDate(monthsAgo: Int) -> Date? {
     guard monthsAgo > 0 else { return nil }  // 0 = "All"
