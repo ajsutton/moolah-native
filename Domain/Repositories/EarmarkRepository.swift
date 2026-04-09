@@ -5,5 +5,5 @@ protocol EarmarkRepository: Sendable {
   func create(_ earmark: Earmark) async throws -> Earmark
   func update(_ earmark: Earmark) async throws -> Earmark
   func fetchBudget(earmarkId: UUID) async throws -> [EarmarkBudgetItem]
-  func updateBudget(earmarkId: UUID, items: [EarmarkBudgetItem]) async throws
+  func setBudget(earmarkId: UUID, categoryId: UUID, amount: Int) async throws
 }

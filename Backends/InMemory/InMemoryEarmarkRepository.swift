@@ -30,9 +30,21 @@ actor InMemoryEarmarkRepository: EarmarkRepository {
     return budgets[earmarkId] ?? []
   }
 
-  func updateBudget(earmarkId: UUID, items: [EarmarkBudgetItem]) async throws {
+  func setBudget(earmarkId: UUID, categoryId: UUID, amount: Int) async throws {
     guard earmarks[earmarkId] != nil else {
       throw BackendError.serverError(404)
+    }
+    var items = budgets[earmarkId] ?? []
+    if amount == 0 {
+      items.removeAll { $0.categoryId == categoryId }
+    } else if let index = items.firstIndex(where: { $0.categoryId == categoryId }) {
+      items[index].amount = MonetaryAmount(cents: amount, currency: Currency.defaultCurrency)
+    } else {
+      items.append(
+        EarmarkBudgetItem(
+          categoryId: categoryId,
+          amount: MonetaryAmount(cents: amount, currency: Currency.defaultCurrency)
+        ))
     }
     budgets[earmarkId] = items
   }

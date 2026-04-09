@@ -12,7 +12,10 @@ struct EarmarkBudgetTests {
   ) async -> (EarmarkStore, InMemoryEarmarkRepository) {
     let repository = InMemoryEarmarkRepository(initialEarmarks: earmarks)
     for (earmarkId, items) in budgetItems {
-      try? await repository.updateBudget(earmarkId: earmarkId, items: items)
+      for item in items {
+        try? await repository.setBudget(
+          earmarkId: earmarkId, categoryId: item.categoryId, amount: item.amount.cents)
+      }
     }
     let store = EarmarkStore(repository: repository)
     await store.load()

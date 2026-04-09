@@ -40,18 +40,31 @@ final class RemoteEarmarkRepository: EarmarkRepository, Sendable {
     let data = try await client.get("earmarks/\(earmarkId.uuidString)/budget/")
 
     do {
-      let wrapper = try JSONDecoder().decode(EarmarkBudgetItemDTO.ListWrapper.self, from: data)
-      logger.debug("Successfully decoded \(wrapper.budget.count) budget items")
-      return wrapper.budget.map { $0.toDomain() }
+      // Server returns { "categoryId1": amount, "categoryId2": amount, ... }
+      let dict = try JSONDecoder().decode([String: Int].self, from: data)
+      logger.debug("Successfully decoded \(dict.count) budget items")
+      return dict.compactMap { (key, value) in
+        guard let categoryId = FlexibleUUID.parse(key) else { return nil }
+        return EarmarkBudgetItem(
+          categoryId: categoryId,
+          amount: MonetaryAmount(cents: value, currency: Currency.defaultCurrency)
+        )
+      }
     } catch {
       logger.error("Decoding error: \(error.localizedDescription)")
       throw error
     }
   }
 
-  func updateBudget(earmarkId: UUID, items: [EarmarkBudgetItem]) async throws {
-    let dtos = items.map { EarmarkBudgetItemDTO.fromDomain($0) }
-    let wrapper = EarmarkBudgetItemDTO.ListWrapper(budget: dtos)
-    _ = try await client.put("earmarks/\(earmarkId.uuidString)/budget/", body: wrapper)
+  func setBudget(earmarkId: UUID, categoryId: UUID, amount: Int) async throws {
+    let body = SetBudgetDTO(amount: amount)
+    _ = try await client.put(
+      "earmarks/\(earmarkId.uuidString)/budget/\(categoryId.uuidString)/",
+      body: body
+    )
   }
+}
+
+private struct SetBudgetDTO: Codable {
+  let amount: Int
 }

@@ -162,7 +162,8 @@ final class EarmarkStore {
     }
 
     do {
-      try await repository.updateBudget(earmarkId: earmarkId, items: budgetItems)
+      try await repository.setBudget(
+        earmarkId: earmarkId, categoryId: categoryId, amount: amount.cents)
     } catch {
       logger.error("Failed to update budget item: \(error.localizedDescription)")
       budgetItems = oldItems
@@ -178,7 +179,8 @@ final class EarmarkStore {
     budgetItems.append(newItem)
 
     do {
-      try await repository.updateBudget(earmarkId: earmarkId, items: budgetItems)
+      try await repository.setBudget(
+        earmarkId: earmarkId, categoryId: categoryId, amount: amount.cents)
     } catch {
       logger.error("Failed to add budget item: \(error.localizedDescription)")
       budgetItems = oldItems
@@ -191,7 +193,9 @@ final class EarmarkStore {
     budgetItems.removeAll { $0.categoryId == categoryId }
 
     do {
-      try await repository.updateBudget(earmarkId: earmarkId, items: budgetItems)
+      // Setting amount to 0 removes the budget entry on the server
+      try await repository.setBudget(
+        earmarkId: earmarkId, categoryId: categoryId, amount: 0)
     } catch {
       logger.error("Failed to remove budget item: \(error.localizedDescription)")
       budgetItems = oldItems

@@ -86,29 +86,3 @@ struct CreateEarmarkDTO: Codable {
     case savingsEndDate
   }
 }
-
-struct EarmarkBudgetItemDTO: Codable {
-  let id: String
-  let category: String
-  let amount: Int
-
-  func toDomain() -> EarmarkBudgetItem {
-    EarmarkBudgetItem(
-      id: FlexibleUUID.parse(id) ?? UUID(),
-      categoryId: FlexibleUUID.parse(category) ?? UUID(),
-      amount: MonetaryAmount(cents: amount, currency: Currency.defaultCurrency)
-    )
-  }
-
-  static func fromDomain(_ item: EarmarkBudgetItem) -> EarmarkBudgetItemDTO {
-    EarmarkBudgetItemDTO(
-      id: item.id.uuidString,
-      category: item.categoryId.uuidString,
-      amount: item.amount.cents
-    )
-  }
-
-  struct ListWrapper: Codable {
-    let budget: [EarmarkBudgetItemDTO]
-  }
-}

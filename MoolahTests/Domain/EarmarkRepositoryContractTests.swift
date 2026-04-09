@@ -72,18 +72,9 @@ struct EarmarkRepositoryContractTests {
 
     let category1 = UUID()
     let category2 = UUID()
-    let budgetItems = [
-      EarmarkBudgetItem(
-        categoryId: category1,
-        amount: MonetaryAmount(cents: 10000, currency: Currency.defaultCurrency)
-      ),
-      EarmarkBudgetItem(
-        categoryId: category2,
-        amount: MonetaryAmount(cents: 20000, currency: Currency.defaultCurrency)
-      ),
-    ]
 
-    try await repository.updateBudget(earmarkId: earmarkId, items: budgetItems)
+    try await repository.setBudget(earmarkId: earmarkId, categoryId: category1, amount: 10000)
+    try await repository.setBudget(earmarkId: earmarkId, categoryId: category2, amount: 20000)
 
     let fetchedBudget = try await repository.fetchBudget(earmarkId: earmarkId)
     #expect(fetchedBudget.count == 2)
@@ -111,7 +102,7 @@ struct EarmarkRepositoryContractTests {
     ])
   func testThrowsOnBudgetUpdateNonExistent(repository: InMemoryEarmarkRepository) async throws {
     await #expect(throws: BackendError.serverError(404)) {
-      try await repository.updateBudget(earmarkId: UUID(), items: [])
+      try await repository.setBudget(earmarkId: UUID(), categoryId: UUID(), amount: 10000)
     }
   }
 }
