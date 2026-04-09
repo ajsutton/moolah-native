@@ -106,7 +106,7 @@ struct RemoteInvestmentRepositoryTests {
 
     #expect(capturedRequest?.httpMethod == "PUT")
     let requestURL = capturedRequest?.url?.absoluteString ?? ""
-    #expect(requestURL.contains("accounts/\(accountId.uuidString.lowercased())/values/2024-03-15/"))
+    #expect(requestURL.contains("accounts/\(accountId.uuidString.lowercased())/values/2024-03-15"))
   }
 
   @Test("Fetch daily balances decodes fixture JSON correctly")
@@ -183,7 +183,7 @@ struct RemoteInvestmentRepositoryTests {
 
     #expect(capturedRequest?.httpMethod == "DELETE")
     let requestURL = capturedRequest?.url?.absoluteString ?? ""
-    #expect(requestURL.contains("accounts/\(accountId.uuidString.lowercased())/values/2024-03-15/"))
+    #expect(requestURL.contains("accounts/\(accountId.uuidString.lowercased())/values/2024-03-15"))
   }
 }
 

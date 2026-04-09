@@ -4,18 +4,11 @@ struct EarmarkRowView: View {
   let earmark: Earmark
 
   var body: some View {
-    HStack {
-      Image(systemName: "bookmark.fill")
-        .foregroundStyle(.secondary)
-        .frame(width: UIConstants.IconSize.listIcon, height: UIConstants.IconSize.listIcon)
-        .accessibilityLabel("Earmark")
-
-      Text(earmark.name)
-
-      Spacer()
-
-      MonetaryAmountView(amount: earmark.balance)
-    }
+    SidebarRowView(
+      icon: "bookmark.fill",
+      name: earmark.name,
+      amount: earmark.balance
+    )
   }
 }
 

@@ -1,25 +1,44 @@
 import SwiftUI
 
-struct AccountRowView: View {
-  let account: Account
+/// Shared row view for sidebar items (accounts, earmarks) that displays
+/// an icon, name, and balance with selection-aware color coding.
+/// When `isSelected` is true, uses `.mint` / `.pink` instead of `.green` / `.red`
+/// for better contrast against the blue selection highlight.
+struct SidebarRowView: View {
+  let icon: String
+  let name: String
+  let amount: MonetaryAmount
+  var isSelected: Bool = false
+
+  /// Bright green/red that contrast well against the blue selection highlight.
+  private static let selectedPositiveColor = Color(red: 0.55, green: 1.0, blue: 0.65)
+  private static let selectedNegativeColor = Color(red: 1.0, green: 0.6, blue: 0.6)
+
+  private var amountColorOverride: Color? {
+    guard isSelected else { return nil }
+    if amount.isPositive { return Self.selectedPositiveColor }
+    if amount.isNegative { return Self.selectedNegativeColor }
+    return nil
+  }
 
   var body: some View {
     HStack {
-      Image(systemName: iconName)
+      Image(systemName: icon)
         .foregroundStyle(.secondary)
         .frame(width: UIConstants.IconSize.listIcon, height: UIConstants.IconSize.listIcon)
-        .accessibilityLabel(account.type.rawValue)
 
-      Text(account.name)
+      Text(name)
 
       Spacer()
 
-      MonetaryAmountView(amount: account.displayBalance)
+      MonetaryAmountView(amount: amount, colorOverride: amountColorOverride)
     }
   }
+}
 
-  private var iconName: String {
-    switch account.type {
+extension Account {
+  var sidebarIcon: String {
+    switch type {
     case .bank: return "building.columns"
     case .asset: return "house.fill"
     case .creditCard: return "creditcard"
@@ -29,12 +48,28 @@ struct AccountRowView: View {
 }
 
 #Preview {
-  AccountRowView(
-    account: Account(
-      name: "Bank",
-      type: .bank,
-      balance: MonetaryAmount(cents: 123456, currency: Currency.AUD)
+  List(selection: .constant(Optional("selected"))) {
+    SidebarRowView(
+      icon: "building.columns",
+      name: "Bank Account (selected)",
+      amount: MonetaryAmount(cents: 123456, currency: Currency.AUD),
+      isSelected: true
     )
-  )
-  .padding()
+    .tag("selected")
+
+    SidebarRowView(
+      icon: "bookmark.fill",
+      name: "Holiday Fund",
+      amount: MonetaryAmount(cents: 150000, currency: Currency.AUD)
+    )
+    .tag("other1")
+
+    SidebarRowView(
+      icon: "creditcard",
+      name: "Credit Card",
+      amount: MonetaryAmount(cents: -50000, currency: Currency.AUD)
+    )
+    .tag("other2")
+  }
+  .listStyle(.sidebar)
 }

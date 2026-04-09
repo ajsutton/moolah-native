@@ -233,15 +233,37 @@ struct TransactionFormView: View {
     }
   }
 
+  private func categoryPath(for category: Category) -> String {
+    var parts: [String] = [category.name]
+    var current = category
+    while let parentId = current.parentId, let parent = categories.by(id: parentId) {
+      parts.insert(parent.name, at: 0)
+      current = parent
+    }
+    return parts.joined(separator: ":")
+  }
+
+  private func flattenedCategories() -> [(category: Category, label: String)] {
+    var result: [(category: Category, label: String)] = []
+    func addChildren(of parentId: UUID, depth: Int) {
+      for child in categories.children(of: parentId) {
+        result.append((child, categoryPath(for: child)))
+        addChildren(of: child.id, depth: depth + 1)
+      }
+    }
+    for root in categories.roots {
+      result.append((root, root.name))
+      addChildren(of: root.id, depth: 1)
+    }
+    return result
+  }
+
   private var categorySection: some View {
     Section {
       Picker("Category", selection: $categoryId) {
         Text("None").tag(UUID?.none)
-        ForEach(categories.roots) { root in
-          Text(root.name).tag(UUID?.some(root.id))
-          ForEach(categories.children(of: root.id)) { child in
-            Text("  \(child.name)").tag(UUID?.some(child.id))
-          }
+        ForEach(flattenedCategories(), id: \.category.id) { entry in
+          Text(entry.label).tag(UUID?.some(entry.category.id))
         }
       }
 

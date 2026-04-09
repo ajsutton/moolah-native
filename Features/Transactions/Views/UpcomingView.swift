@@ -94,6 +94,7 @@ struct UpcomingView: View {
               categories: categories,
               earmarks: earmarks,
               isOverdue: false,
+              isDueToday: isDueToday(entry.transaction),
               onPay: {
                 Task {
                   await payTransaction(entry.transaction)
@@ -151,15 +152,23 @@ struct UpcomingView: View {
   }
 
   private var overdueTransactions: [TransactionWithBalance] {
-    transactionStore.transactions.filter { isOverdue($0.transaction) }
+    transactionStore.transactions
+      .filter { isOverdue($0.transaction) }
+      .sorted { $0.transaction.date < $1.transaction.date }
   }
 
   private var upcomingTransactions: [TransactionWithBalance] {
-    transactionStore.transactions.filter { !isOverdue($0.transaction) }
+    transactionStore.transactions
+      .filter { !isOverdue($0.transaction) }
+      .sorted { $0.transaction.date < $1.transaction.date }
   }
 
   private func isOverdue(_ transaction: Transaction) -> Bool {
-    transaction.date < Date()
+    transaction.date < Calendar.current.startOfDay(for: Date())
+  }
+
+  private func isDueToday(_ transaction: Transaction) -> Bool {
+    Calendar.current.isDateInToday(transaction.date)
   }
 
   private func payTransaction(_ scheduledTransaction: Transaction) async {
@@ -181,6 +190,7 @@ struct UpcomingTransactionRow: View {
   let categories: Categories
   let earmarks: Earmarks
   let isOverdue: Bool
+  var isDueToday: Bool = false
   let onPay: () -> Void
 
   var body: some View {
@@ -201,7 +211,8 @@ struct UpcomingTransactionRow: View {
         HStack(spacing: 4) {
           Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(isDueToday ? .orange : .secondary)
+            .fontWeight(isDueToday ? .semibold : .regular)
             .monospacedDigit()
 
           if let recurrence = recurrenceDescription {

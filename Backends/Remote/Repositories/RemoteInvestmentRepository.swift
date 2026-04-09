@@ -29,13 +29,13 @@ final class RemoteInvestmentRepository: InvestmentRepository, Sendable {
 
   func setValue(accountId: UUID, date: Date, value: MonetaryAmount) async throws {
     let dateString = BackendDateFormatter.string(from: date)
-    let path = "accounts/\(accountId.uuidString.lowercased())/values/\(dateString)/"
+    let path = "accounts/\(accountId.uuidString.lowercased())/values/\(dateString)"
     _ = try await client.put(path, body: value.cents)
   }
 
   func removeValue(accountId: UUID, date: Date) async throws {
     let dateString = BackendDateFormatter.string(from: date)
-    let path = "accounts/\(accountId.uuidString.lowercased())/values/\(dateString)/"
+    let path = "accounts/\(accountId.uuidString.lowercased())/values/\(dateString)"
     _ = try await client.delete(path)
   }
 

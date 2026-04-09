@@ -10,6 +10,7 @@ struct AddInvestmentValueView: View {
   @State private var date = Date()
   @State private var valueString = ""
   @State private var isSubmitting = false
+  @FocusState private var isValueFieldFocused: Bool
 
   private var parsedCents: Int? {
     let cleaned = valueString.replacingOccurrences(
@@ -33,19 +34,13 @@ struct AddInvestmentValueView: View {
             Text(currency.code)
               .foregroundStyle(.secondary)
             TextField("Value", text: $valueString)
+              .focused($isValueFieldFocused)
               #if os(iOS)
                 .keyboardType(.decimalPad)
               #endif
           }
         } header: {
           Text("Investment Value")
-        } footer: {
-          if let cents = parsedCents {
-            Text(
-              "Value: \(MonetaryAmount(cents: cents, currency: currency).decimalValue, format: .currency(code: currency.code))"
-            )
-            .monospacedDigit()
-          }
         }
       }
       .formStyle(.grouped)
@@ -53,6 +48,9 @@ struct AddInvestmentValueView: View {
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
       #endif
+      .onAppear {
+        isValueFieldFocused = true
+      }
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
           Button("Cancel") {

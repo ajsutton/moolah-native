@@ -73,17 +73,33 @@ struct TransactionDetailView: View {
 
   private var parsedCents: Int? {
     let cleaned = amountText.filter { $0.isNumber || $0 == "." }
-    guard let amount = Double(cleaned), amount >= 0 else { return nil }
-    return Int(amount * 100)
+    guard let decimal = Decimal(string: cleaned), decimal >= 0 else { return nil }
+    return NSDecimalNumber(decimal: decimal * 100).intValue
   }
 
-  private func categoryLabel(for category: Category) -> String {
-    if let parentId = category.parentId,
-      let parent = categories.by(id: parentId)
-    {
-      return "\(parent.name):\(category.name)"
+  private func categoryPath(for category: Category) -> String {
+    var parts: [String] = [category.name]
+    var current = category
+    while let parentId = current.parentId, let parent = categories.by(id: parentId) {
+      parts.insert(parent.name, at: 0)
+      current = parent
     }
-    return category.name
+    return parts.joined(separator: ":")
+  }
+
+  private func flattenedCategories() -> [(category: Category, label: String)] {
+    var result: [(category: Category, label: String)] = []
+    func addChildren(of parentId: UUID, depth: Int) {
+      for child in categories.children(of: parentId) {
+        result.append((child, categoryPath(for: child)))
+        addChildren(of: child.id, depth: depth + 1)
+      }
+    }
+    for root in categories.roots {
+      result.append((root, root.name))
+      addChildren(of: root.id, depth: 1)
+    }
+    return result
   }
 
   private var isValid: Bool {
@@ -117,6 +133,9 @@ struct TransactionDetailView: View {
         recurrenceSection
       }
       notesSection
+      if isScheduled {
+        paySection
+      }
       deleteSection
     }
     .formStyle(.grouped)
@@ -256,11 +275,8 @@ struct TransactionDetailView: View {
     Section {
       Picker("Category", selection: $categoryId) {
         Text("None").tag(UUID?.none)
-        ForEach(categories.roots) { root in
-          Text(root.name).tag(UUID?.some(root.id))
-          ForEach(categories.children(of: root.id)) { child in
-            Text(categoryLabel(for: child)).tag(UUID?.some(child.id))
-          }
+        ForEach(flattenedCategories(), id: \.category.id) { entry in
+          Text(entry.label).tag(UUID?.some(entry.category.id))
         }
       }
       #if os(macOS)
@@ -348,6 +364,48 @@ struct TransactionDetailView: View {
               #endif
           )
       }
+    }
+  }
+
+  @State private var isPaying = false
+
+  private var isScheduled: Bool {
+    showRecurrence && (transaction.recurPeriod != nil || transaction.recurPeriod == .once)
+  }
+
+  private var paySection: some View {
+    Section {
+      Button {
+        Task {
+          isPaying = true
+          let result = await transactionStore.payScheduledTransaction(transaction)
+          isPaying = false
+          switch result {
+          case .paid(let updated):
+            if let updated {
+              onUpdate(updated)
+            } else {
+              onDelete(transaction.id)
+            }
+          case .deleted:
+            onDelete(transaction.id)
+          case .failed:
+            break
+          }
+        }
+      } label: {
+        HStack {
+          Spacer()
+          if isPaying {
+            ProgressView()
+              .controlSize(.small)
+          } else {
+            Text("Pay Now")
+          }
+          Spacer()
+        }
+      }
+      .disabled(isPaying)
     }
   }
 

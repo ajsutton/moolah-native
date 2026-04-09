@@ -10,7 +10,7 @@ struct UpcomingTransactionsCard: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      Text("Upcoming (Next 14 Days)")
+      Text("Upcoming & Overdue")
         .font(.title2)
         .fontWeight(.semibold)
 
@@ -33,7 +33,7 @@ struct UpcomingTransactionsCard: View {
     ContentUnavailableView(
       "No Upcoming Transactions",
       systemImage: "calendar",
-      description: Text("No scheduled transactions due in the next 14 days.")
+      description: Text("No overdue or scheduled transactions due in the next 14 days.")
     )
     .frame(maxHeight: 200)
   }
@@ -41,7 +41,12 @@ struct UpcomingTransactionsCard: View {
   private var transactionList: some View {
     List(selection: $selectedTransaction) {
       ForEach(shortTermTransactions) { txn in
-        SimpleTransactionRow(transaction: txn.transaction, earmarks: earmarks) {
+        SimpleTransactionRow(
+          transaction: txn.transaction,
+          earmarks: earmarks,
+          isOverdue: isOverdue(txn.transaction),
+          isDueToday: isDueToday(txn.transaction)
+        ) {
           await payTransaction(txn.transaction)
         }
         .tag(txn.transaction)
@@ -54,7 +59,7 @@ struct UpcomingTransactionsCard: View {
       .listStyle(.plain)
     #endif
     .frame(height: 200)
-    .accessibilityLabel("List of upcoming transactions in the next 14 days")
+    .accessibilityLabel("List of upcoming and overdue transactions")
     .sheet(item: $selectedTransaction) { transaction in
       NavigationStack {
         TransactionDetailView(
@@ -85,8 +90,19 @@ struct UpcomingTransactionsCard: View {
   }
 
   private var shortTermTransactions: [TransactionWithBalance] {
-    let twoWeeksFromNow = Calendar.current.date(byAdding: .day, value: 14, to: Date()) ?? Date()
-    return transactionStore.transactions.filter { $0.transaction.date <= twoWeeksFromNow }
+    let now = Date()
+    let twoWeeksFromNow = Calendar.current.date(byAdding: .day, value: 14, to: now) ?? now
+    return transactionStore.transactions
+      .filter { $0.transaction.date <= twoWeeksFromNow }
+      .sorted { $0.transaction.date < $1.transaction.date }
+  }
+
+  private func isOverdue(_ transaction: Transaction) -> Bool {
+    transaction.date < Calendar.current.startOfDay(for: Date())
+  }
+
+  private func isDueToday(_ transaction: Transaction) -> Bool {
+    Calendar.current.isDateInToday(transaction.date)
   }
 
   private func payTransaction(_ scheduledTransaction: Transaction) async {
@@ -97,6 +113,8 @@ struct UpcomingTransactionsCard: View {
 private struct SimpleTransactionRow: View {
   let transaction: Transaction
   let earmarks: Earmarks
+  let isOverdue: Bool
+  let isDueToday: Bool
   let onPay: () async -> Void
 
   @State private var isPaying = false
@@ -104,14 +122,24 @@ private struct SimpleTransactionRow: View {
   var body: some View {
     HStack(spacing: 12) {
       VStack(alignment: .leading, spacing: 4) {
-        Text(displayPayee)
-          .font(.body)
-          .fontWeight(.medium)
+        HStack(spacing: 4) {
+          if isOverdue {
+            Image(systemName: "exclamationmark.triangle.fill")
+              .foregroundStyle(.red)
+              .imageScale(.small)
+              .accessibilityLabel("Overdue")
+          }
+          Text(displayPayee)
+            .font(.body)
+            .fontWeight(.medium)
+            .foregroundStyle(isOverdue ? .red : .primary)
+        }
 
         HStack(spacing: 8) {
           Text(transaction.date, format: .dateTime.month().day())
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(isDueToday ? .orange : .secondary)
+            .fontWeight(isDueToday ? .semibold : .regular)
             .monospacedDigit()
 
           if let recurPeriod = transaction.recurPeriod,

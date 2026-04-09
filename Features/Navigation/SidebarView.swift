@@ -27,7 +27,9 @@ struct SidebarView: View {
       Section {
         ForEach(accountStore.currentAccounts) { account in
           NavigationLink(value: SidebarSelection.account(account.id)) {
-            AccountRowView(account: account)
+            SidebarRowView(
+              icon: account.sidebarIcon, name: account.name, amount: account.displayBalance,
+              isSelected: selection == .account(account.id))
           }
           .contextMenu {
             Button("Edit Account", systemImage: "pencil") {
@@ -63,7 +65,9 @@ struct SidebarView: View {
         Section {
           ForEach(earmarkStore.visibleEarmarks) { earmark in
             NavigationLink(value: SidebarSelection.earmark(earmark.id)) {
-              EarmarkRowView(earmark: earmark)
+              SidebarRowView(
+                icon: "bookmark.fill", name: earmark.name, amount: earmark.balance,
+                isSelected: selection == .earmark(earmark.id))
             }
           }
           .onMove { source, destination in
@@ -91,7 +95,9 @@ struct SidebarView: View {
       Section("Investments") {
         ForEach(accountStore.investmentAccounts) { account in
           NavigationLink(value: SidebarSelection.account(account.id)) {
-            AccountRowView(account: account)
+            SidebarRowView(
+              icon: account.sidebarIcon, name: account.name, amount: account.displayBalance,
+              isSelected: selection == .account(account.id))
           }
           .contextMenu {
             Button("Edit Account", systemImage: "pencil") {
