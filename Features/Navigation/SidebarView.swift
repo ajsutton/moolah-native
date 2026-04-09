@@ -128,24 +128,24 @@ struct SidebarView: View {
       }
 
       Section {
-        NavigationLink(value: SidebarSelection.allTransactions) {
-          Label("All Transactions", systemImage: "list.bullet")
-        }
-
-        NavigationLink(value: SidebarSelection.upcomingTransactions) {
-          Label("Upcoming", systemImage: "calendar")
-        }
-
-        NavigationLink(value: SidebarSelection.categories) {
-          Label("Categories", systemImage: "tag")
+        NavigationLink(value: SidebarSelection.analysis) {
+          Label("Analysis", systemImage: "chart.bar.xaxis")
         }
 
         NavigationLink(value: SidebarSelection.reports) {
           Label("Reports", systemImage: "chart.bar.fill")
         }
 
-        NavigationLink(value: SidebarSelection.analysis) {
-          Label("Analysis", systemImage: "chart.bar.xaxis")
+        NavigationLink(value: SidebarSelection.categories) {
+          Label("Categories", systemImage: "tag")
+        }
+
+        NavigationLink(value: SidebarSelection.upcomingTransactions) {
+          Label("Upcoming", systemImage: "calendar")
+        }
+
+        NavigationLink(value: SidebarSelection.allTransactions) {
+          Label("All Transactions", systemImage: "list.bullet")
         }
       }
     }
