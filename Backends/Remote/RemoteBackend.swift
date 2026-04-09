@@ -13,9 +13,15 @@ final class RemoteBackend: BackendProvider {
   let analysis: any AnalysisRepository
   let investments: any InvestmentRepository
 
-  init(baseURL: URL) {
-    let client = APIClient(baseURL: baseURL)
-    auth = RemoteAuthProvider(client: client)
+  init(
+    baseURL: URL,
+    session: URLSession = .shared,
+    cookieKeychain: CookieKeychain = CookieKeychain()
+  ) {
+    let client = APIClient(baseURL: baseURL, session: session)
+    let cookieStorage = session.configuration.httpCookieStorage ?? .shared
+    auth = RemoteAuthProvider(
+      client: client, cookieKeychain: cookieKeychain, cookieStorage: cookieStorage)
     accounts = RemoteAccountRepository(client: client)
     transactions = RemoteTransactionRepository(client: client)
     categories = RemoteCategoryRepository(client: client)

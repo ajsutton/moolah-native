@@ -51,14 +51,8 @@ struct RefreshCommands: Commands {
 @MainActor
 struct MoolahApp: App {
   private let container: ModelContainer
-  private let backend: BackendProvider
-  private let authStore: AuthStore
-  private let accountStore: AccountStore
-  private let transactionStore: TransactionStore
-  private let categoryStore: CategoryStore
-  private let earmarkStore: EarmarkStore
-  private let analysisStore: AnalysisStore
-  private let investmentStore: InvestmentStore
+  private let profileStore: ProfileStore
+  @State private var activeSession: ProfileSession?
 
   init() {
     do {
@@ -66,33 +60,13 @@ struct MoolahApp: App {
     } catch {
       fatalError("Failed to initialize ModelContainer: \(error)")
     }
-    let remoteBackend = RemoteBackend(baseURL: URL(string: "http://localhost:8080/api/")!)
-    self.backend = remoteBackend
-    self.authStore = AuthStore(backend: remoteBackend)
-    self.accountStore = AccountStore(repository: remoteBackend.accounts)
-    self.transactionStore = TransactionStore(repository: remoteBackend.transactions)
-    self.categoryStore = CategoryStore(repository: remoteBackend.categories)
-    self.earmarkStore = EarmarkStore(repository: remoteBackend.earmarks)
-    self.analysisStore = AnalysisStore(repository: remoteBackend.analysis)
-    self.investmentStore = InvestmentStore(repository: remoteBackend.investments)
-
-    // Adjust account and earmark balances locally after any transaction mutation
-    self.transactionStore.onMutate = { [accountStore, earmarkStore] old, new in
-      accountStore.applyTransactionDelta(old: old, new: new)
-      earmarkStore.applyTransactionDelta(old: old, new: new)
-    }
+    self.profileStore = ProfileStore()
   }
 
   var body: some Scene {
     WindowGroup {
-      AppRootView()
-        .environment(authStore)
-        .environment(accountStore)
-        .environment(transactionStore)
-        .environment(categoryStore)
-        .environment(earmarkStore)
-        .environment(analysisStore)
-        .environment(investmentStore)
+      ProfileRootView(activeSession: $activeSession)
+        .environment(profileStore)
     }
     .modelContainer(container)
     .commands {

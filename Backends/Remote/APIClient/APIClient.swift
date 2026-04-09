@@ -19,7 +19,9 @@ final class APIClient: Sendable {
     logger.debug("➡️ \(request.httpMethod ?? "GET") \(request.url?.absoluteString ?? "")")
 
     // Log outgoing cookie names (hiding values)
-    if let url = request.url, let cookies = HTTPCookieStorage.shared.cookies(for: url) {
+    if let url = request.url,
+      let cookies = session.configuration.httpCookieStorage?.cookies(for: url)
+    {
       let names = cookies.map(\.name).joined(separator: ", ")
       if !names.isEmpty {
         logger.debug("   Sending cookies: \(names)")

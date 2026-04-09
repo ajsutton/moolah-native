@@ -16,12 +16,18 @@ final class RemoteAuthProvider: AuthProvider {
 
   private let client: APIClient
   private let cookieKeychain: CookieKeychain
+  private let cookieStorage: HTTPCookieStorage
   private var hasRestoredCookies = false
   private let logger = Logger(subsystem: "com.moolah.app", category: "RemoteAuthProvider")
 
-  init(client: APIClient, cookieKeychain: CookieKeychain = CookieKeychain()) {
+  init(
+    client: APIClient,
+    cookieKeychain: CookieKeychain = CookieKeychain(),
+    cookieStorage: HTTPCookieStorage = .shared
+  ) {
     self.client = client
     self.cookieKeychain = cookieKeychain
+    self.cookieStorage = cookieStorage
   }
 
   func currentUser() async throws -> UserProfile? {
@@ -99,7 +105,7 @@ final class RemoteAuthProvider: AuthProvider {
   }
 
   private func saveCookies() {
-    let storage = HTTPCookieStorage.shared
+    let storage = cookieStorage
     let cookies = serverCookies(in: storage)
     guard !cookies.isEmpty else {
       logger.warning("No cookies found to save")
@@ -124,7 +130,7 @@ final class RemoteAuthProvider: AuthProvider {
   }
 
   private func restoreCookiesIfNeeded() {
-    let storage = HTTPCookieStorage.shared
+    let storage = cookieStorage
     let existing = serverCookies(in: storage)
     guard existing.isEmpty else {
       logger.debug("Already have \(existing.count) cookies in storage, skipping restore")
@@ -159,7 +165,7 @@ final class RemoteAuthProvider: AuthProvider {
   }
 
   private func clearCookieStorage() {
-    let storage = HTTPCookieStorage.shared
+    let storage = cookieStorage
     for cookie in serverCookies(in: storage) {
       storage.deleteCookie(cookie)
     }
