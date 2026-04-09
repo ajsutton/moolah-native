@@ -4,7 +4,7 @@ import SwiftUI
 /// Used for both income and expense columns in the Reports view.
 struct CategoryBalanceTable: View {
   let title: String
-  let balances: [UUID: Int]
+  let balances: [UUID: MonetaryAmount]
   let categories: Categories
   let dateRange: ClosedRange<Date>
 
@@ -24,7 +24,7 @@ struct CategoryBalanceTable: View {
         ?? CategoryGroup(
           categoryId: rootId,
           name: categories.by(id: rootId)?.name ?? "Unknown",
-          totalAmount: 0,
+          totalAmount: .zero,
           children: []
         )
 
@@ -49,14 +49,14 @@ struct CategoryBalanceTable: View {
     return roots.values
       .map { group in
         var sorted = group
-        sorted.children.sort { $0.amount.magnitude > $1.amount.magnitude }
+        sorted.children.sort { $0.amount.cents.magnitude > $1.amount.cents.magnitude }
         return sorted
       }
-      .sorted { $0.totalAmount.magnitude > $1.totalAmount.magnitude }
+      .sorted { $0.totalAmount.cents.magnitude > $1.totalAmount.cents.magnitude }
   }
 
-  private var grandTotal: Int {
-    balances.values.reduce(0, +)
+  private var grandTotal: MonetaryAmount {
+    balances.values.reduce(.zero, +)
   }
 
   var body: some View {
@@ -97,8 +97,7 @@ struct CategoryBalanceTable: View {
                       Text(child.name)
                         .font(.body)
                       Spacer()
-                      Text(formatCurrency(child.amount))
-                        .monospacedDigit()
+                      MonetaryAmountView(amount: child.amount)
                     }
                   }
                 }
@@ -108,9 +107,7 @@ struct CategoryBalanceTable: View {
                 Text(group.name)
                   .font(.headline)
                 Spacer()
-                Text(formatCurrency(group.totalAmount))
-                  .font(.headline)
-                  .monospacedDigit()
+                MonetaryAmountView(amount: group.totalAmount, font: .headline)
               }
             }
           }
@@ -124,9 +121,7 @@ struct CategoryBalanceTable: View {
         Text("Total")
           .font(.headline)
         Spacer()
-        Text(formatCurrency(grandTotal))
-          .font(.headline)
-          .monospacedDigit()
+        MonetaryAmountView(amount: grandTotal, font: .headline)
       }
       .padding()
     }
@@ -142,18 +137,12 @@ struct CategoryBalanceTable: View {
     return current
   }
 
-  private func formatCurrency(_ amount: Int) -> String {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .currency
-    formatter.currencyCode = Currency.defaultCurrency.code
-    return formatter.string(from: NSNumber(value: Double(amount) / 100)) ?? "$0.00"
-  }
 }
 
 struct CategoryGroup: Identifiable {
   let categoryId: UUID
   let name: String
-  var totalAmount: Int
+  var totalAmount: MonetaryAmount
   var children: [CategoryChild]
 
   var id: UUID { categoryId }
@@ -162,7 +151,7 @@ struct CategoryGroup: Identifiable {
 struct CategoryChild: Identifiable {
   let categoryId: UUID
   let name: String
-  let amount: Int
+  let amount: MonetaryAmount
 
   var id: UUID { categoryId }
 }

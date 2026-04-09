@@ -77,7 +77,10 @@ struct ContentView: View {
       case .reports:
         ReportsView(
           analysisRepository: analysisStore.repository,
-          categories: categoryStore.categories)
+          categories: categoryStore.categories,
+          accounts: accountStore.accounts,
+          earmarks: earmarkStore.earmarks,
+          transactionStore: transactionStore)
       case nil:
         Text("Select an account")
       }

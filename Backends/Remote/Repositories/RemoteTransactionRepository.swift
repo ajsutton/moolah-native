@@ -30,10 +30,10 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
     if let dateRange = filter.dateRange {
       queryItems.append(
         URLQueryItem(
-          name: "startDate", value: BackendDateFormatter.string(from: dateRange.lowerBound)))
+          name: "from", value: BackendDateFormatter.string(from: dateRange.lowerBound)))
       queryItems.append(
         URLQueryItem(
-          name: "endDate", value: BackendDateFormatter.string(from: dateRange.upperBound)))
+          name: "to", value: BackendDateFormatter.string(from: dateRange.upperBound)))
     }
 
     if let categoryIds = filter.categoryIds, !categoryIds.isEmpty {

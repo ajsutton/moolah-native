@@ -394,7 +394,7 @@ final class InMemoryAnalysisRepository: AnalysisRepository {
     dateRange: ClosedRange<Date>,
     transactionType: TransactionType,
     filters: TransactionFilter?
-  ) async throws -> [UUID: Int] {
+  ) async throws -> [UUID: MonetaryAmount] {
     // 1. Fetch all transactions
     let page = try await transactionRepository.fetch(
       filter: TransactionFilter(), page: 0, pageSize: 10000)
@@ -432,10 +432,10 @@ final class InMemoryAnalysisRepository: AnalysisRepository {
     }
 
     // 3. Group by category and sum amounts
-    var balances: [UUID: Int] = [:]
+    var balances: [UUID: MonetaryAmount] = [:]
     for transaction in filtered {
       let categoryId = transaction.categoryId!
-      balances[categoryId, default: 0] += transaction.amount.cents
+      balances[categoryId, default: .zero] += transaction.amount
     }
 
     return balances

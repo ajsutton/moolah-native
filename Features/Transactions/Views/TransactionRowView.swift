@@ -99,17 +99,28 @@ struct TransactionRowView: View {
   }
 
   private var displayPayee: String {
-    guard let toAccountId = transaction.toAccountId else {
-      return transaction.payee ?? ""
-    }
+    if let toAccountId = transaction.toAccountId {
+      let toAccountName = accounts.by(id: toAccountId)?.name ?? "Unknown Account"
+      let transferLabel = "Transfer to \(toAccountName)"
 
-    let toAccountName = accounts.by(id: toAccountId)?.name ?? "Unknown Account"
-    let transferLabel = "Transfer to \(toAccountName)"
+      if let payee = transaction.payee, !payee.isEmpty {
+        return "\(payee) (\(transferLabel))"
+      }
+      return transferLabel
+    }
 
     if let payee = transaction.payee, !payee.isEmpty {
-      return "\(payee) (\(transferLabel))"
+      return payee
     }
-    return transferLabel
+
+    // Earmark transactions with no payee show a descriptive label
+    if let earmarkId = transaction.earmarkId,
+      let earmark = earmarks.by(id: earmarkId)
+    {
+      return "Earmark funds for \(earmark.name)"
+    }
+
+    return ""
   }
 }
 

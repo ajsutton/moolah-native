@@ -4,6 +4,9 @@ import SwiftUI
 struct ReportsView: View {
   let analysisRepository: AnalysisRepository
   let categories: Categories
+  let accounts: Accounts
+  let earmarks: Earmarks
+  let transactionStore: TransactionStore
 
   @State private var dateRange: DateRange = .last12Months
   @State private var customFrom: Date = Calendar.current.date(
@@ -15,53 +18,69 @@ struct ReportsView: View {
   @State private var resolvedFrom: Date = DateRange.last12Months.startDate
   @State private var resolvedTo: Date = DateRange.last12Months.endDate
 
-  @State private var incomeBalances: [UUID: Int] = [:]
-  @State private var expenseBalances: [UUID: Int] = [:]
+  @State private var incomeBalances: [UUID: MonetaryAmount] = [:]
+  @State private var expenseBalances: [UUID: MonetaryAmount] = [:]
   @State private var isLoading = false
   @State private var error: Error?
 
   var body: some View {
-    VStack(spacing: 0) {
-      // Date range selector
-      dateRangeSelector
+    NavigationStack {
+      VStack(spacing: 0) {
+        // Date range selector
+        dateRangeSelector
 
-      Divider()
+        Divider()
 
-      if isLoading {
-        ProgressView("Loading report...")
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else if let error {
-        ContentUnavailableView {
-          Label("Error Loading Report", systemImage: "exclamationmark.triangle")
-        } description: {
-          Text(error.localizedDescription)
-        } actions: {
-          Button("Try Again") {
-            Task { await loadData() }
+        if isLoading {
+          ProgressView("Loading report...")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let error {
+          ContentUnavailableView {
+            Label("Error Loading Report", systemImage: "exclamationmark.triangle")
+          } description: {
+            Text(error.localizedDescription)
+          } actions: {
+            Button("Try Again") {
+              Task { await loadData() }
+            }
+          }
+        } else {
+          // Income and Expense columns
+          HStack(spacing: 0) {
+            CategoryBalanceTable(
+              title: "Income",
+              balances: incomeBalances,
+              categories: categories,
+              dateRange: resolvedFrom...resolvedTo
+            )
+
+            Divider()
+
+            CategoryBalanceTable(
+              title: "Expenses",
+              balances: expenseBalances,
+              categories: categories,
+              dateRange: resolvedFrom...resolvedTo
+            )
           }
         }
-      } else {
-        // Income and Expense columns
-        HStack(spacing: 0) {
-          CategoryBalanceTable(
-            title: "Income",
-            balances: incomeBalances,
-            categories: categories,
-            dateRange: resolvedFrom...resolvedTo
-          )
-
-          Divider()
-
-          CategoryBalanceTable(
-            title: "Expenses",
-            balances: expenseBalances,
-            categories: categories,
-            dateRange: resolvedFrom...resolvedTo
-          )
-        }
+      }
+      .navigationTitle("Reports")
+      .navigationDestination(for: CategoryDrillDown.self) { drillDown in
+        let categoryName = categories.by(id: drillDown.categoryId)?.name ?? "Category"
+        TransactionListView(
+          title: categoryName,
+          filter: TransactionFilter(
+            dateRange: drillDown.dateRange,
+            categoryIds: [drillDown.categoryId]
+          ),
+          accounts: accounts,
+          categories: categories,
+          earmarks: earmarks,
+          transactionStore: transactionStore
+        )
       }
     }
-    .navigationTitle("Reports")
     .task {
       await loadData()
     }

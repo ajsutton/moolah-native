@@ -11,13 +11,11 @@ struct DateRangeTests {
   func last12MonthsCalculation() throws {
     let range = DateRange.last12Months
     let calendar = Calendar.current
-    let today = Date()
+    let today = calendar.startOfDay(for: Date())
     let expected = calendar.date(byAdding: .month, value: -12, to: today)!
 
-    // Allow 1 second tolerance for test execution time
-    let diff = abs(range.startDate.timeIntervalSince(expected))
-    #expect(diff < 1.0)
-    #expect(range.endDate.timeIntervalSince(today) < 1.0)
+    #expect(range.startDate == expected)
+    #expect(range.endDate == today)
   }
 
   @Test("Month to date returns first day of current month")
@@ -124,7 +122,7 @@ struct DateRangeTests {
   @Test("Last N months calculations")
   func lastNMonthsCalculations() throws {
     let calendar = Calendar.current
-    let today = Date()
+    let today = calendar.startOfDay(for: Date())
 
     let testCases: [(DateRange, Int)] = [
       (.lastMonth, -1),
@@ -136,8 +134,7 @@ struct DateRangeTests {
 
     for (range, months) in testCases {
       let expected = calendar.date(byAdding: .month, value: months, to: today)!
-      let diff = abs(range.startDate.timeIntervalSince(expected))
-      #expect(diff < 1.0, "Failed for \(range.displayName)")
+      #expect(range.startDate == expected, "Failed for \(range.displayName)")
     }
   }
 
@@ -145,15 +142,12 @@ struct DateRangeTests {
   func customRangeDefaults() throws {
     let range = DateRange.custom
     let calendar = Calendar.current
-    let today = Date()
+    let today = calendar.startOfDay(for: Date())
 
     // Custom defaults to 1 year ago → today
     let expectedStart = calendar.date(byAdding: .year, value: -1, to: today)!
-    let diff = abs(range.startDate.timeIntervalSince(expectedStart))
-    #expect(diff < 1.0)
-
-    let endDiff = abs(range.endDate.timeIntervalSince(today))
-    #expect(endDiff < 1.0)
+    #expect(range.startDate == expectedStart)
+    #expect(range.endDate == today)
   }
 
   @Test("All cases are iterable")

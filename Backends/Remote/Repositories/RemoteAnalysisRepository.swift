@@ -67,7 +67,7 @@ final class RemoteAnalysisRepository: AnalysisRepository {
     dateRange: ClosedRange<Date>,
     transactionType: TransactionType,
     filters: TransactionFilter?
-  ) async throws -> [UUID: Int] {
+  ) async throws -> [UUID: MonetaryAmount] {
     var queryItems: [URLQueryItem] = [
       URLQueryItem(name: "from", value: BackendDateFormatter.string(from: dateRange.lowerBound)),
       URLQueryItem(name: "to", value: BackendDateFormatter.string(from: dateRange.upperBound)),
@@ -94,10 +94,10 @@ final class RemoteAnalysisRepository: AnalysisRepository {
     let data = try await client.get("analysis/categoryBalances/", queryItems: queryItems)
     let response = try JSONDecoder().decode([String: Int].self, from: data)
 
-    // Convert string keys to UUIDs
+    // Convert string keys to UUIDs and cents to MonetaryAmount (server doesn't specify currency)
     return response.reduce(into: [:]) { result, pair in
       if let uuid = UUID(uuidString: pair.key) {
-        result[uuid] = pair.value
+        result[uuid] = MonetaryAmount(cents: pair.value, currency: Currency.defaultCurrency)
       }
     }
   }

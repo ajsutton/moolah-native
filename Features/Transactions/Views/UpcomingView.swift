@@ -21,6 +21,7 @@ struct UpcomingView: View {
           categories: categories,
           earmarks: earmarks,
           transactionStore: transactionStore,
+          showRecurrence: true,
           onUpdate: { updated in
             Task { await transactionStore.update(updated) }
             selectedTransaction = updated

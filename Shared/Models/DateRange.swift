@@ -19,8 +19,8 @@ enum DateRange: String, CaseIterable, Identifiable, Sendable {
   var displayName: String { rawValue }
 
   var startDate: Date {
-    let today = Date()
     let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
 
     switch self {
     case .thisFinancialYear:
@@ -58,8 +58,8 @@ enum DateRange: String, CaseIterable, Identifiable, Sendable {
   }
 
   var endDate: Date {
-    let today = Date()
     let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
 
     switch self {
     case .thisFinancialYear:

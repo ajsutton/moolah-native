@@ -369,8 +369,8 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Verify totals are correct
-    #expect(balances[cat1.id] == -7000)  // 5000 + 2000
-    #expect(balances[cat2.id] == -3000)
+    #expect(balances[cat1.id] == MonetaryAmount(cents: -7000, currency: .defaultCurrency))  // 5000 + 2000
+    #expect(balances[cat2.id] == MonetaryAmount(cents: -3000, currency: .defaultCurrency))
   }
 
   @Test("fetchCategoryBalances excludes scheduled transactions")
@@ -424,7 +424,7 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Only completed transaction counted
-    #expect(balances[cat.id] == -100000)
+    #expect(balances[cat.id] == MonetaryAmount(cents: -100000, currency: .defaultCurrency))
   }
 
   @Test("fetchCategoryBalances filters by transaction type")
@@ -473,7 +473,7 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Only income counted
-    #expect(incomeBalances[cat.id] == 500000)
+    #expect(incomeBalances[cat.id] == MonetaryAmount(cents: 500000, currency: .defaultCurrency))
 
     let expenseBalances = try await backend.analysis.fetchCategoryBalances(
       dateRange: dateRange,
@@ -482,7 +482,7 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Only expense counted
-    #expect(expenseBalances[cat.id] == -5000)
+    #expect(expenseBalances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultCurrency))
   }
 
   @Test("fetchCategoryBalances respects date range")
@@ -532,7 +532,7 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Only yesterday's transaction counted
-    #expect(balances[cat.id] == -5000)
+    #expect(balances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultCurrency))
   }
 
   @Test("fetchCategoryBalances applies additional filters")
@@ -589,7 +589,7 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Only account1 transaction counted
-    #expect(balances[cat.id] == -5000)
+    #expect(balances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultCurrency))
   }
 
   @Test("fetchCategoryBalances excludes transactions without category")
@@ -638,7 +638,7 @@ struct AnalysisRepositoryContractTests {
     )
 
     #expect(balances.count == 1)
-    #expect(balances[cat.id] == -5000)
+    #expect(balances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultCurrency))
   }
 
   @Test("fetchCategoryBalances handles empty result")

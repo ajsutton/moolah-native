@@ -40,18 +40,18 @@ protocol AnalysisRepository: Sendable {
 
   /// Fetch category balances (total amounts per category) for a date range and transaction type.
   ///
-  /// Returns a flat dictionary mapping category IDs to total amounts in cents.
+  /// Returns a flat dictionary mapping category IDs to total monetary amounts.
   /// The client is responsible for grouping subcategories under root categories.
   ///
   /// - Parameters:
   ///   - dateRange: Date range to analyze (inclusive on both ends).
   ///   - transactionType: Filter to 'income' or 'expense' transactions.
   ///   - filters: Optional additional filters (account, earmark, payee, etc.).
-  /// - Returns: Dictionary where keys are category UUIDs and values are totals in cents.
+  /// - Returns: Dictionary where keys are category UUIDs and values are total MonetaryAmounts.
   /// - Throws: BackendError on network/auth failure.
   func fetchCategoryBalances(
     dateRange: ClosedRange<Date>,
     transactionType: TransactionType,
     filters: TransactionFilter?
-  ) async throws -> [UUID: Int]
+  ) async throws -> [UUID: MonetaryAmount]
 }
