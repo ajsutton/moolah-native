@@ -15,7 +15,7 @@ struct AccountRepositoryContractTests {
     let newAccount = Account(
       name: "Savings",
       type: .bank,
-      balance: MonetaryAmount(cents: 100000, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
     )
 
     let created = try await repository.create(newAccount)
@@ -35,7 +35,7 @@ struct AccountRepositoryContractTests {
     let invalidAccount = Account(
       name: "   ",  // Whitespace only
       type: .bank,
-      balance: .zero
+      balance: .zero(currency: .defaultTestCurrency)
     )
 
     await #expect(throws: BackendError.self) {
@@ -50,7 +50,7 @@ struct AccountRepositoryContractTests {
     let creditCard = Account(
       name: "Credit Card",
       type: .creditCard,
-      balance: MonetaryAmount(cents: -50000, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: -50000, currency: .defaultTestCurrency)
     )
 
     let created = try await repository.create(creditCard)
@@ -62,7 +62,8 @@ struct AccountRepositoryContractTests {
   @Test("InMemoryAccountRepository - updates account name and type")
   func testUpdatesAccount() async throws {
     let repository = InMemoryAccountRepository(initialAccounts: [
-      Account(id: UUID(), name: "Checking", type: .bank, balance: .zero)
+      Account(
+        id: UUID(), name: "Checking", type: .bank, balance: .zero(currency: .defaultTestCurrency))
     ])
 
     let accounts = try await repository.fetchAll()
@@ -83,14 +84,14 @@ struct AccountRepositoryContractTests {
         id: UUID(),
         name: "Savings",
         type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: .defaultCurrency)
+        balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
       )
     ])
 
     let accounts = try await repository.fetchAll()
     var toUpdate = accounts[0]
     toUpdate.name = "Updated Savings"
-    toUpdate.balance = MonetaryAmount(cents: 999999, currency: .defaultCurrency)  // Try to change
+    toUpdate.balance = MonetaryAmount(cents: 999999, currency: .defaultTestCurrency)  // Try to change
 
     let updated = try await repository.update(toUpdate)
 
@@ -114,7 +115,9 @@ struct AccountRepositoryContractTests {
   @Test("InMemoryAccountRepository - soft deletes account with zero balance")
   func testDeletesAccountWithZeroBalance() async throws {
     let repository = InMemoryAccountRepository(initialAccounts: [
-      Account(id: UUID(), name: "Old Account", type: .bank, balance: .zero)
+      Account(
+        id: UUID(), name: "Old Account", type: .bank, balance: .zero(currency: .defaultTestCurrency)
+      )
     ])
 
     let accounts = try await repository.fetchAll()
@@ -136,7 +139,7 @@ struct AccountRepositoryContractTests {
         id: UUID(),
         name: "Active Account",
         type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: .defaultCurrency)
+        balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
       )
     ])
 

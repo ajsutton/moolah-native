@@ -31,6 +31,7 @@ struct EarmarksView: View {
     }
     .sheet(isPresented: $showCreateSheet) {
       CreateEarmarkSheet(
+        currency: earmarkStore.totalBalance.currency,
         onCreate: { newEarmark in
           Task {
             _ = await earmarkStore.create(newEarmark)
@@ -167,6 +168,7 @@ struct EarmarksView: View {
 }
 
 private struct CreateEarmarkSheet: View {
+  let currency: Currency
   let onCreate: (Earmark) -> Void
 
   @State private var name: String = ""
@@ -221,7 +223,7 @@ private struct CreateEarmarkSheet: View {
   private func createEarmark() {
     let goalCents = MonetaryAmount.parseCents(from: savingsGoal)
     let goal =
-      goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: Currency.defaultCurrency) : nil
+      goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: currency) : nil
 
     let newEarmark = Earmark(
       name: name,
@@ -318,7 +320,7 @@ private struct EditEarmarkSheet: View {
   private func saveChanges() {
     let goalCents = MonetaryAmount.parseCents(from: savingsGoal)
     let goal =
-      goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: Currency.defaultCurrency) : nil
+      goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: earmark.balance.currency) : nil
 
     var updated = earmark
     updated.name = name
@@ -336,15 +338,15 @@ private struct EditEarmarkSheet: View {
   let repository = InMemoryEarmarkRepository(initialEarmarks: [
     Earmark(
       name: "Holiday Fund",
-      balance: MonetaryAmount(cents: 150000, currency: Currency.defaultCurrency),
-      saved: MonetaryAmount(cents: 200000, currency: Currency.defaultCurrency),
-      spent: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
-      savingsGoal: MonetaryAmount(cents: 500000, currency: Currency.defaultCurrency)
+      balance: MonetaryAmount(cents: 150000, currency: Currency.AUD),
+      saved: MonetaryAmount(cents: 200000, currency: Currency.AUD),
+      spent: MonetaryAmount(cents: 50000, currency: Currency.AUD),
+      savingsGoal: MonetaryAmount(cents: 500000, currency: Currency.AUD)
     ),
     Earmark(
       name: "Emergency Fund",
-      balance: MonetaryAmount(cents: 300000, currency: Currency.defaultCurrency),
-      saved: MonetaryAmount(cents: 300000, currency: Currency.defaultCurrency)
+      balance: MonetaryAmount(cents: 300000, currency: Currency.AUD),
+      saved: MonetaryAmount(cents: 300000, currency: Currency.AUD)
     ),
   ])
 

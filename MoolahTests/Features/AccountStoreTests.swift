@@ -9,7 +9,7 @@ struct AccountStoreTests {
   @Test func testPopulatesFromRepository() async throws {
     let account = Account(
       name: "Checking", type: .bank,
-      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
+      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
     let repository = InMemoryAccountRepository(initialAccounts: [account])
     let store = AccountStore(repository: repository)
 
@@ -22,10 +22,10 @@ struct AccountStoreTests {
   @Test func testSortingByPosition() async throws {
     let a1 = Account(
       name: "A1", type: .bank,
-      balance: MonetaryAmount(cents: 10000, currency: Currency.defaultCurrency), position: 2)
+      balance: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency), position: 2)
     let a2 = Account(
       name: "A2", type: .asset,
-      balance: MonetaryAmount(cents: 20000, currency: Currency.defaultCurrency), position: 1)
+      balance: MonetaryAmount(cents: 20000, currency: Currency.defaultTestCurrency), position: 1)
     let repository = InMemoryAccountRepository(initialAccounts: [a1, a2])
     let store = AccountStore(repository: repository)
 
@@ -40,19 +40,19 @@ struct AccountStoreTests {
     let accounts = [
       Account(
         name: "Bank", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency)),
       Account(
         name: "Asset", type: .asset,
-        balance: MonetaryAmount(cents: 500000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 500000, currency: Currency.defaultTestCurrency)),
       Account(
         name: "Credit Card", type: .creditCard,
-        balance: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: -50000, currency: Currency.defaultTestCurrency)),
       Account(
         name: "Investment", type: .investment,
-        balance: MonetaryAmount(cents: 2_000_000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 2_000_000, currency: Currency.defaultTestCurrency)),
       Account(
         name: "Hidden", type: .asset,
-        balance: MonetaryAmount(cents: 100_000_000, currency: Currency.defaultCurrency),
+        balance: MonetaryAmount(cents: 100_000_000, currency: Currency.defaultTestCurrency),
         isHidden: true),
     ]
     let repository = InMemoryAccountRepository(initialAccounts: accounts)
@@ -60,20 +60,23 @@ struct AccountStoreTests {
 
     await store.load()
 
-    #expect(store.currentTotal == MonetaryAmount(cents: 550000, currency: Currency.defaultCurrency))  // 100000 + 500000 - 50000
     #expect(
-      store.investmentTotal == MonetaryAmount(cents: 2_000_000, currency: Currency.defaultCurrency))
-    #expect(store.netWorth == MonetaryAmount(cents: 2_550_000, currency: Currency.defaultCurrency))
+      store.currentTotal == MonetaryAmount(cents: 550000, currency: Currency.defaultTestCurrency))  // 100000 + 500000 - 50000
+    #expect(
+      store.investmentTotal
+        == MonetaryAmount(cents: 2_000_000, currency: Currency.defaultTestCurrency))
+    #expect(
+      store.netWorth == MonetaryAmount(cents: 2_550_000, currency: Currency.defaultTestCurrency))
   }
 
   @Test func testAvailableFunds() async throws {
     let accounts = [
       Account(
         name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency)),  // 1000.00
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency)),  // 1000.00
       Account(
         name: "Savings", type: .asset,
-        balance: MonetaryAmount(cents: 500000, currency: Currency.defaultCurrency)),  // 5000.00
+        balance: MonetaryAmount(cents: 500000, currency: Currency.defaultTestCurrency)),  // 5000.00
       // Current Total = 6000.00
     ]
     let repository = InMemoryAccountRepository(initialAccounts: accounts)
@@ -83,7 +86,7 @@ struct AccountStoreTests {
 
     // Available Funds = Current Total (6000.00) = 3000.00
     #expect(
-      store.availableFunds == MonetaryAmount(cents: 600000, currency: Currency.defaultCurrency))
+      store.availableFunds == MonetaryAmount(cents: 600000, currency: Currency.defaultTestCurrency))
   }
 
   // MARK: - applyTransactionDelta
@@ -93,14 +96,14 @@ struct AccountStoreTests {
     let repository = InMemoryAccountRepository(initialAccounts: [
       Account(
         id: acctId, name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
     ])
     let store = AccountStore(repository: repository)
     await store.load()
 
     let tx = Transaction(
       type: .expense, date: Date(), accountId: acctId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Coffee"
     )
     store.applyTransactionDelta(old: nil, new: tx)
@@ -113,14 +116,14 @@ struct AccountStoreTests {
     let repository = InMemoryAccountRepository(initialAccounts: [
       Account(
         id: acctId, name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
     ])
     let store = AccountStore(repository: repository)
     await store.load()
 
     let tx = Transaction(
       type: .income, date: Date(), accountId: acctId,
-      amount: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
       payee: "Salary"
     )
     store.applyTransactionDelta(old: nil, new: tx)
@@ -133,14 +136,14 @@ struct AccountStoreTests {
     let repository = InMemoryAccountRepository(initialAccounts: [
       Account(
         id: acctId, name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 95000, currency: Currency.defaultCurrency))
+        balance: MonetaryAmount(cents: 95000, currency: Currency.defaultTestCurrency))
     ])
     let store = AccountStore(repository: repository)
     await store.load()
 
     let tx = Transaction(
       type: .expense, date: Date(), accountId: acctId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Coffee"
     )
     store.applyTransactionDelta(old: tx, new: nil)
@@ -154,18 +157,18 @@ struct AccountStoreTests {
     let repository = InMemoryAccountRepository(initialAccounts: [
       Account(
         id: acctId, name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 95000, currency: Currency.defaultCurrency))
+        balance: MonetaryAmount(cents: 95000, currency: Currency.defaultTestCurrency))
     ])
     let store = AccountStore(repository: repository)
     await store.load()
 
     let oldTx = Transaction(
       type: .expense, date: Date(), accountId: acctId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Coffee"
     )
     var newTx = oldTx
-    newTx.amount = MonetaryAmount(cents: -7500, currency: Currency.defaultCurrency)
+    newTx.amount = MonetaryAmount(cents: -7500, currency: Currency.defaultTestCurrency)
 
     store.applyTransactionDelta(old: oldTx, new: newTx)
 
@@ -179,10 +182,10 @@ struct AccountStoreTests {
     let repository = InMemoryAccountRepository(initialAccounts: [
       Account(
         id: checkingId, name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency)),
       Account(
         id: savingsId, name: "Savings", type: .bank,
-        balance: MonetaryAmount(cents: 200000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 200000, currency: Currency.defaultTestCurrency)),
     ])
     let store = AccountStore(repository: repository)
     await store.load()
@@ -190,7 +193,7 @@ struct AccountStoreTests {
     // Transfer $100 from checking to savings (amount is -10000 from source perspective)
     let tx = Transaction(
       type: .transfer, date: Date(), accountId: checkingId, toAccountId: savingsId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency)
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency)
     )
     store.applyTransactionDelta(old: nil, new: tx)
 
@@ -204,17 +207,17 @@ struct AccountStoreTests {
     let repository = InMemoryAccountRepository(initialAccounts: [
       Account(
         id: checkingId, name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 90000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 90000, currency: Currency.defaultTestCurrency)),
       Account(
         id: savingsId, name: "Savings", type: .bank,
-        balance: MonetaryAmount(cents: 210000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 210000, currency: Currency.defaultTestCurrency)),
     ])
     let store = AccountStore(repository: repository)
     await store.load()
 
     let tx = Transaction(
       type: .transfer, date: Date(), accountId: checkingId, toAccountId: savingsId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency)
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency)
     )
     store.applyTransactionDelta(old: tx, new: nil)
 
@@ -227,7 +230,7 @@ struct AccountStoreTests {
     let repository = InMemoryAccountRepository(initialAccounts: [
       Account(
         id: checkingId, name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
     ])
     let store = AccountStore(repository: repository)
     await store.load()
@@ -237,7 +240,7 @@ struct AccountStoreTests {
 
     let tx = Transaction(
       type: .expense, date: Date(), accountId: checkingId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Coffee"
     )
     store.applyTransactionDelta(old: nil, new: tx)
@@ -252,10 +255,10 @@ struct AccountStoreTests {
   func hiddenAccountsExcluded() async {
     let visible = Account(
       name: "Visible", type: .bank,
-      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
+      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
     let hidden = Account(
       name: "Hidden", type: .bank,
-      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
+      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
       isHidden: true)
     let repository = InMemoryAccountRepository(initialAccounts: [visible, hidden])
     let store = AccountStore(repository: repository)
@@ -270,10 +273,10 @@ struct AccountStoreTests {
   func hiddenAccountsIncluded() async {
     let visible = Account(
       name: "Visible", type: .bank,
-      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
+      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
     let hidden = Account(
       name: "Hidden", type: .bank,
-      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
+      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
       isHidden: true)
     let repository = InMemoryAccountRepository(initialAccounts: [visible, hidden])
     let store = AccountStore(repository: repository)
@@ -288,10 +291,10 @@ struct AccountStoreTests {
   func hiddenInvestmentAccounts() async {
     let visible = Account(
       name: "Visible", type: .investment,
-      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
+      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
     let hidden = Account(
       name: "Hidden", type: .investment,
-      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
+      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
       isHidden: true)
     let repository = InMemoryAccountRepository(initialAccounts: [visible, hidden])
     let store = AccountStore(repository: repository)

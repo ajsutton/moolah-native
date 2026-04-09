@@ -12,14 +12,14 @@ struct MonetaryAmountTests {
   }
 
   @Test func initDefaultsToDefaultCurrency() {
-    let amount = MonetaryAmount(cents: 1000, currency: Currency.defaultCurrency)
-    #expect(amount.currency == Currency.defaultCurrency)
+    let amount = MonetaryAmount(cents: 1000, currency: Currency.defaultTestCurrency)
+    #expect(amount.currency == Currency.defaultTestCurrency)
   }
 
   @Test func zeroReturnsDefaultCurrency() {
-    let zero = MonetaryAmount.zero
+    let zero = MonetaryAmount.zero(currency: .defaultTestCurrency)
     #expect(zero.cents == 0)
-    #expect(zero.currency == Currency.defaultCurrency)
+    #expect(zero.currency == Currency.defaultTestCurrency)
   }
 
   @Test func addition() {
@@ -79,7 +79,7 @@ struct MonetaryAmountTests {
       MonetaryAmount(cents: 200, currency: Currency.AUD),
       MonetaryAmount(cents: -50, currency: Currency.AUD),
     ]
-    let total = amounts.reduce(.zero) { $0 + $1 }
+    let total = amounts.reduce(.zero(currency: .defaultTestCurrency)) { $0 + $1 }
     #expect(total.cents == 250)
   }
 

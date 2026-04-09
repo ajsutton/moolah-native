@@ -3,10 +3,12 @@ import OSLog
 
 final class RemoteInvestmentRepository: InvestmentRepository, Sendable {
   private let client: APIClient
+  private let currency: Currency
   private let logger = Logger(subsystem: "com.moolah.app", category: "RemoteInvestmentRepository")
 
-  init(client: APIClient) {
+  init(client: APIClient, currency: Currency) {
     self.client = client
+    self.currency = currency
   }
 
   func fetchValues(accountId: UUID, page: Int, pageSize: Int) async throws -> InvestmentValuePage {
@@ -20,7 +22,7 @@ final class RemoteInvestmentRepository: InvestmentRepository, Sendable {
     let wrapper = try JSONDecoder().decode(InvestmentValueDTO.ListWrapper.self, from: data)
 
     return InvestmentValuePage(
-      values: wrapper.values.map { $0.toDomain() },
+      values: wrapper.values.map { $0.toDomain(currency: currency) },
       hasMore: wrapper.hasMore
     )
   }
@@ -41,6 +43,6 @@ final class RemoteInvestmentRepository: InvestmentRepository, Sendable {
     let path = "accounts/\(accountId.uuidString.lowercased())/balances"
     let data = try await client.get(path)
     let dtos = try JSONDecoder().decode([AccountDailyBalanceDTO].self, from: data)
-    return dtos.map { $0.toDomain() }
+    return dtos.map { $0.toDomain(currency: currency) }
   }
 }

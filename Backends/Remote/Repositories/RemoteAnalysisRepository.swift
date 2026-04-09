@@ -2,9 +2,11 @@ import Foundation
 
 final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
   private let client: APIClient
+  private let currency: Currency
 
-  init(client: APIClient) {
+  init(client: APIClient, currency: Currency) {
     self.client = client
+    self.currency = currency
   }
 
   func fetchDailyBalances(
@@ -22,9 +24,10 @@ final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
     let data = try await client.get("analysis/dailyBalances/", queryItems: queryItems)
     let response = try JSONDecoder().decode(DailyBalancesResponseDTO.self, from: data)
 
-    var balances = response.dailyBalances.map { $0.toDomain(isForecast: false) }
+    var balances = response.dailyBalances.map { $0.toDomain(currency: currency, isForecast: false) }
     if let scheduled = response.scheduledBalances {
-      balances.append(contentsOf: scheduled.map { $0.toDomain(isForecast: true) })
+      balances.append(
+        contentsOf: scheduled.map { $0.toDomain(currency: self.currency, isForecast: true) })
     }
     return balances.sorted { $0.date < $1.date }
   }
@@ -43,7 +46,7 @@ final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
     let data = try await client.get("analysis/expenseBreakdown/", queryItems: queryItems)
     let response = try JSONDecoder().decode([ExpenseBreakdownDTO].self, from: data)
 
-    return response.map { $0.toDomain() }
+    return response.map { $0.toDomain(currency: currency) }
   }
 
   func fetchIncomeAndExpense(
@@ -60,7 +63,7 @@ final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
     let data = try await client.get("analysis/incomeAndExpense/", queryItems: queryItems)
     let response = try JSONDecoder().decode(IncomeAndExpenseResponseDTO.self, from: data)
 
-    return response.incomeAndExpense.map { $0.toDomain() }
+    return response.incomeAndExpense.map { $0.toDomain(currency: currency) }
   }
 
   func fetchCategoryBalances(
@@ -97,7 +100,7 @@ final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
     // Convert string keys to UUIDs and cents to MonetaryAmount (server doesn't specify currency)
     return response.reduce(into: [:]) { result, pair in
       if let uuid = FlexibleUUID.parse(pair.key) {
-        result[uuid] = MonetaryAmount(cents: pair.value, currency: Currency.defaultCurrency)
+        result[uuid] = MonetaryAmount(cents: pair.value, currency: currency)
       }
     }
   }

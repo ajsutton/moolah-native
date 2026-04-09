@@ -3,10 +3,12 @@ import OSLog
 
 final class RemoteAccountRepository: AccountRepository, Sendable {
   private let client: APIClient
+  private let currency: Currency
   private let logger = Logger(subsystem: "com.moolah.app", category: "RemoteAccountRepository")
 
-  init(client: APIClient) {
+  init(client: APIClient, currency: Currency) {
     self.client = client
+    self.currency = currency
   }
 
   func fetchAll() async throws -> [Account] {
@@ -16,7 +18,7 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
     do {
       let wrapper = try JSONDecoder().decode(AccountDTO.ListWrapper.self, from: data)
       logger.debug("Successfully decoded \(wrapper.accounts.count) accounts")
-      return wrapper.accounts.map { $0.toDomain() }
+      return wrapper.accounts.map { $0.toDomain(currency: self.currency) }
     } catch {
       logger.error("❌ Decoding error: \(error.localizedDescription)")
       if let decodingError = error as? DecodingError {
@@ -65,7 +67,7 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
     do {
       let response = try JSONDecoder().decode(AccountDTO.self, from: data)
       logger.debug("Successfully created account: \(response.name)")
-      return response.toDomain()
+      return response.toDomain(currency: currency)
     } catch {
       logger.error("❌ Decoding error: \(error.localizedDescription)")
       throw error
@@ -91,7 +93,7 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
     do {
       let response = try JSONDecoder().decode(AccountDTO.self, from: data)
       logger.debug("Successfully updated account: \(response.name)")
-      return response.toDomain()  // Accept server's balance
+      return response.toDomain(currency: currency)  // Accept server's balance
     } catch {
       logger.error("❌ Decoding error: \(error.localizedDescription)")
       throw error

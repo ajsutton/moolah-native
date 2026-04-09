@@ -3,10 +3,12 @@ import Foundation
 actor InMemoryEarmarkRepository: EarmarkRepository {
   private var earmarks: [UUID: Earmark]
   private var budgets: [UUID: [EarmarkBudgetItem]]
+  private let currency: Currency
 
-  init(initialEarmarks: [Earmark] = []) {
+  init(initialEarmarks: [Earmark] = [], currency: Currency = .AUD) {
     self.earmarks = Dictionary(uniqueKeysWithValues: initialEarmarks.map { ($0.id, $0) })
     self.budgets = [:]
+    self.currency = currency
   }
 
   func fetchAll() async throws -> [Earmark] {
@@ -38,12 +40,12 @@ actor InMemoryEarmarkRepository: EarmarkRepository {
     if amount == 0 {
       items.removeAll { $0.categoryId == categoryId }
     } else if let index = items.firstIndex(where: { $0.categoryId == categoryId }) {
-      items[index].amount = MonetaryAmount(cents: amount, currency: Currency.defaultCurrency)
+      items[index].amount = MonetaryAmount(cents: amount, currency: currency)
     } else {
       items.append(
         EarmarkBudgetItem(
           categoryId: categoryId,
-          amount: MonetaryAmount(cents: amount, currency: Currency.defaultCurrency)
+          amount: MonetaryAmount(cents: amount, currency: currency)
         ))
     }
     budgets[earmarkId] = items

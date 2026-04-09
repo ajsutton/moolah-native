@@ -15,7 +15,7 @@ struct InvestmentStoreTests {
     let values = (0..<count).map { i in
       InvestmentValue(
         date: Calendar.current.date(byAdding: .day, value: -i, to: Date())!,
-        value: MonetaryAmount(cents: 100_000 + (i * 1000), currency: Currency.defaultCurrency)
+        value: MonetaryAmount(cents: 100_000 + (i * 1000), currency: Currency.defaultTestCurrency)
       )
     }
     return [accountId: values]
@@ -57,7 +57,7 @@ struct InvestmentStoreTests {
     let store = InvestmentStore(repository: repo)
 
     let date = makeDate(year: 2024, month: 3, day: 15)
-    let amount = MonetaryAmount(cents: 125_000_00, currency: Currency.defaultCurrency)
+    let amount = MonetaryAmount(cents: 125_000_00, currency: Currency.defaultTestCurrency)
 
     await store.setValue(accountId: accountId, date: date, value: amount)
 
@@ -74,7 +74,7 @@ struct InvestmentStoreTests {
       accountId: [
         InvestmentValue(
           date: date,
-          value: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency))
+          value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency))
       ]
     ]
     let repo = InMemoryInvestmentRepository(initialValues: initialValues)
@@ -83,7 +83,7 @@ struct InvestmentStoreTests {
     await store.loadValues(accountId: accountId)
     #expect(store.values.count == 1)
 
-    let newAmount = MonetaryAmount(cents: 200_000, currency: Currency.defaultCurrency)
+    let newAmount = MonetaryAmount(cents: 200_000, currency: Currency.defaultTestCurrency)
     await store.setValue(accountId: accountId, date: date, value: newAmount)
 
     #expect(store.values.count == 1)
@@ -98,7 +98,7 @@ struct InvestmentStoreTests {
       accountId: [
         InvestmentValue(
           date: date,
-          value: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency))
+          value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency))
       ]
     ]
     let repo = InMemoryInvestmentRepository(initialValues: initialValues)
@@ -130,10 +130,10 @@ struct InvestmentStoreTests {
     let balances = [
       AccountDailyBalance(
         date: makeDate(year: 2024, month: 1, day: 1),
-        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
       AccountDailyBalance(
         date: makeDate(year: 2024, month: 2, day: 1),
-        balance: MonetaryAmount(cents: 200_000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 200_000, currency: Currency.defaultTestCurrency)),
     ]
     await repo.setDailyBalances(balances, for: accountId)
 
@@ -170,19 +170,19 @@ struct InvestmentStoreTests {
     let values = [
       InvestmentValue(
         date: date2,
-        value: MonetaryAmount(cents: 120_000, currency: Currency.defaultCurrency)),
+        value: MonetaryAmount(cents: 120_000, currency: Currency.defaultTestCurrency)),
       InvestmentValue(
         date: date1,
-        value: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency)),
+        value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
     ]
 
     let balances = [
       AccountDailyBalance(
         date: date1,
-        balance: MonetaryAmount(cents: 90_000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 90_000, currency: Currency.defaultTestCurrency)),
       AccountDailyBalance(
         date: date2,
-        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
     ]
 
     let result = mergeChartData(values: values, balances: balances, period: .all)
@@ -206,19 +206,19 @@ struct InvestmentStoreTests {
     let values = [
       InvestmentValue(
         date: date3,
-        value: MonetaryAmount(cents: 130_000, currency: Currency.defaultCurrency)),
+        value: MonetaryAmount(cents: 130_000, currency: Currency.defaultTestCurrency)),
       InvestmentValue(
         date: date1,
-        value: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency)),
+        value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
     ]
 
     let balances = [
       AccountDailyBalance(
         date: date1,
-        balance: MonetaryAmount(cents: 90_000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 90_000, currency: Currency.defaultTestCurrency)),
       AccountDailyBalance(
         date: date2,
-        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
     ]
 
     let result = mergeChartData(values: values, balances: balances, period: .all)
@@ -246,25 +246,25 @@ struct InvestmentStoreTests {
     let values = [
       InvestmentValue(
         date: now,
-        value: MonetaryAmount(cents: 150_000, currency: Currency.defaultCurrency)),
+        value: MonetaryAmount(cents: 150_000, currency: Currency.defaultTestCurrency)),
       InvestmentValue(
         date: oneMonthAgo,
-        value: MonetaryAmount(cents: 130_000, currency: Currency.defaultCurrency)),
+        value: MonetaryAmount(cents: 130_000, currency: Currency.defaultTestCurrency)),
       InvestmentValue(
         date: sixMonthsAgo,
-        value: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency)),
+        value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
     ]
 
     let balances = [
       AccountDailyBalance(
         date: sixMonthsAgo,
-        balance: MonetaryAmount(cents: 80_000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 80_000, currency: Currency.defaultTestCurrency)),
       AccountDailyBalance(
         date: threeMonthsAgo,
-        balance: MonetaryAmount(cents: 90_000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 90_000, currency: Currency.defaultTestCurrency)),
       AccountDailyBalance(
         date: now,
-        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
     ]
 
     // Filter to 3 months: should include threeMonthsAgo and now,

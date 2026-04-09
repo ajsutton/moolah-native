@@ -85,11 +85,13 @@ struct EarmarkBudgetSectionView: View {
   }
 
   private var totalActual: MonetaryAmount {
-    lineItems.reduce(.zero) { $0 + $1.actual }
+    lineItems.reduce(.zero(currency: lineItems.first?.actual.currency ?? .AUD)) { $0 + $1.actual }
   }
 
   private var totalBudgeted: MonetaryAmount {
-    lineItems.reduce(.zero) { $0 + $1.budgeted }
+    lineItems.reduce(.zero(currency: lineItems.first?.budgeted.currency ?? .AUD)) {
+      $0 + $1.budgeted
+    }
   }
 
   private var totalRemaining: MonetaryAmount {

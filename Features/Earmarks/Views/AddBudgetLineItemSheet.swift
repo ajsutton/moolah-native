@@ -29,7 +29,7 @@ struct AddBudgetLineItemSheet: View {
 
         Section("Budget Amount") {
           HStack {
-            Text(Currency.defaultCurrency.symbol)
+            Text(earmark.balance.currency.symbol)
               .foregroundStyle(.secondary)
             TextField("Amount", text: $amountText)
               #if os(iOS)
@@ -63,7 +63,7 @@ struct AddBudgetLineItemSheet: View {
   private func save() {
     guard let categoryId = selectedCategoryId else { return }
     let cents = MonetaryAmount.parseCents(from: amountText)
-    let amount = MonetaryAmount(cents: cents, currency: Currency.defaultCurrency)
+    let amount = MonetaryAmount(cents: cents, currency: earmark.balance.currency)
     Task {
       await earmarkStore.addBudgetItem(
         earmarkId: earmark.id,

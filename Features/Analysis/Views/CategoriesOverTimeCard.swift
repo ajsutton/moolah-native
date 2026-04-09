@@ -4,6 +4,7 @@ import SwiftUI
 struct CategoriesOverTimeCard: View {
   let entries: [CategoryOverTimeEntry]
   let categories: Categories
+  let currency: Currency
   @Binding var showActualValues: Bool
 
   @State private var selectedDate: Date?
@@ -86,7 +87,7 @@ struct CategoriesOverTimeCard: View {
         AxisValueLabel {
           if let amount = value.as(Double.self) {
             if showActualValues {
-              Text(MonetaryAmount(cents: Int(amount), currency: .defaultCurrency).formatNoSymbol)
+              Text(MonetaryAmount(cents: Int(amount), currency: currency).formatNoSymbol)
                 .monospacedDigit()
             } else {
               Text("\(Int(amount))%")
@@ -114,14 +115,14 @@ struct CategoriesOverTimeCard: View {
             .font(.caption)
             .lineLimit(1)
           Spacer()
-          Text(MonetaryAmount(cents: entry.totalCents, currency: .defaultCurrency).formatted)
+          Text(MonetaryAmount(cents: entry.totalCents, currency: currency).formatted)
             .font(.caption)
             .monospacedDigit()
             .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-          "\(categoryName(for: entry.categoryId)): \(MonetaryAmount(cents: entry.totalCents, currency: .defaultCurrency).formatted)"
+          "\(categoryName(for: entry.categoryId)): \(MonetaryAmount(cents: entry.totalCents, currency: currency).formatted)"
         )
       }
     }
@@ -169,6 +170,7 @@ struct CategoriesOverTimeCard: View {
   CategoriesOverTimeCard(
     entries: entries,
     categories: Categories(from: categories),
+    currency: .AUD,
     showActualValues: .constant(false)
   )
   .frame(width: 800)

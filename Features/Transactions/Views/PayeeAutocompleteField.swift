@@ -157,7 +157,7 @@ struct PayeeSuggestionDropdown: View {
       HStack {
         TextField("Amount", text: .constant("0.00"))
           .multilineTextAlignment(.trailing)
-        Text("AUD").foregroundStyle(.secondary)
+        Text(Currency.AUD.code).foregroundStyle(.secondary)
       }
 
       DatePicker("Date", selection: .constant(Date()), displayedComponents: .date)

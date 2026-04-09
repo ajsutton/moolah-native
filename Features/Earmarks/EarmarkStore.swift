@@ -45,7 +45,9 @@ final class EarmarkStore {
   }
 
   var totalBalance: MonetaryAmount {
-    visibleEarmarks.reduce(.zero) { $0 + $1.balance }
+    visibleEarmarks.reduce(.zero(currency: visibleEarmarks.first?.balance.currency ?? .AUD)) {
+      $0 + $1.balance
+    }
   }
 
   /// Adjusts earmark balances locally based on a transaction change.

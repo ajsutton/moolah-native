@@ -74,6 +74,10 @@ struct TransactionFormView: View {
     }
   }
 
+  private var selectedCurrency: Currency {
+    accounts.ordered.first(where: { $0.id == accountId })?.balance.currency ?? .AUD
+  }
+
   private var isEditing: Bool { existing != nil }
 
   private var title: String {
@@ -197,7 +201,7 @@ struct TransactionFormView: View {
       }
 
       HStack {
-        Text(Currency.defaultCurrency.code)
+        Text(selectedCurrency.code)
           .foregroundStyle(.secondary)
         TextField("Amount", text: $amountText)
           #if os(iOS)
@@ -372,7 +376,7 @@ struct TransactionFormView: View {
       date: date,
       accountId: accountId,
       toAccountId: type == .transfer ? toAccountId : nil,
-      amount: MonetaryAmount(cents: signedCents, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: signedCents, currency: selectedCurrency),
       payee: payee.isEmpty ? nil : payee,
       notes: notes.isEmpty ? nil : notes,
       categoryId: categoryId,
@@ -420,7 +424,7 @@ struct TransactionFormView: View {
       type: .expense,
       date: Date(),
       accountId: accountId,
-      amount: MonetaryAmount(cents: -5023, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5023, currency: .AUD),
       payee: "Woolworths"
     ),
     onSave: { _ in },

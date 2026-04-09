@@ -192,8 +192,11 @@ struct NetWorthGraphCard: View {
         AxisGridLine()
         AxisValueLabel {
           if let cents = value.as(Int.self) {
-            Text(MonetaryAmount(cents: cents, currency: .defaultCurrency).formatNoSymbol)
-              .monospacedDigit()
+            Text(
+              MonetaryAmount(cents: cents, currency: balances.first?.balance.currency ?? .AUD)
+                .formatNoSymbol
+            )
+            .monospacedDigit()
           }
         }
       }
@@ -291,21 +294,21 @@ struct LegendItem: View {
   let balances = [
     DailyBalance(
       date: Date().addingTimeInterval(-86400 * 7),
-      balance: MonetaryAmount(cents: 100000, currency: .defaultCurrency),
-      earmarked: MonetaryAmount(cents: 20000, currency: .defaultCurrency),
-      investments: MonetaryAmount(cents: 50000, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 100000, currency: .AUD),
+      earmarked: MonetaryAmount(cents: 20000, currency: .AUD),
+      investments: MonetaryAmount(cents: 50000, currency: .AUD)
     ),
     DailyBalance(
       date: Date().addingTimeInterval(-86400 * 3),
-      balance: MonetaryAmount(cents: 120000, currency: .defaultCurrency),
-      earmarked: MonetaryAmount(cents: 25000, currency: .defaultCurrency),
-      investments: MonetaryAmount(cents: 55000, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 120000, currency: .AUD),
+      earmarked: MonetaryAmount(cents: 25000, currency: .AUD),
+      investments: MonetaryAmount(cents: 55000, currency: .AUD)
     ),
     DailyBalance(
       date: Date(),
-      balance: MonetaryAmount(cents: 110000, currency: .defaultCurrency),
-      earmarked: MonetaryAmount(cents: 22000, currency: .defaultCurrency),
-      investments: MonetaryAmount(cents: 60000, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 110000, currency: .AUD),
+      earmarked: MonetaryAmount(cents: 22000, currency: .AUD),
+      investments: MonetaryAmount(cents: 60000, currency: .AUD)
     ),
   ]
 

@@ -139,7 +139,7 @@ private struct SimpleTransactionRow: View {
         id: UUID(),
         name: "Test Account",
         type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: .defaultCurrency)
+        balance: MonetaryAmount(cents: 100000, currency: .AUD)
       )
       _ = try? await backend.accounts.create(account)
 
@@ -149,7 +149,7 @@ private struct SimpleTransactionRow: View {
           type: .expense,
           date: Date().addingTimeInterval(86400 * 2),
           accountId: account.id,
-          amount: MonetaryAmount(cents: -5000, currency: .defaultCurrency),
+          amount: MonetaryAmount(cents: -5000, currency: .AUD),
           payee: "Utility Bill",
           recurPeriod: .month,
           recurEvery: 1
@@ -161,7 +161,7 @@ private struct SimpleTransactionRow: View {
           type: .income,
           date: Date().addingTimeInterval(86400 * 7),
           accountId: account.id,
-          amount: MonetaryAmount(cents: 200000, currency: .defaultCurrency),
+          amount: MonetaryAmount(cents: 200000, currency: .AUD),
           payee: "Paycheck",
           recurPeriod: .week,
           recurEvery: 2

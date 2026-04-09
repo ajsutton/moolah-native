@@ -131,7 +131,7 @@ struct TransactionRowView: View {
   let accounts = Accounts(from: [
     Account(
       id: savingsId, name: "Savings", type: .bank,
-      balance: MonetaryAmount(cents: 500000, currency: Currency.defaultCurrency))
+      balance: MonetaryAmount(cents: 500000, currency: Currency.AUD))
   ])
   let categories = Categories(from: [
     Category(id: groceriesId, name: "Groceries"),
@@ -141,7 +141,7 @@ struct TransactionRowView: View {
     Earmark(
       id: holidayFundId,
       name: "Holiday Fund",
-      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency)
+      balance: MonetaryAmount(cents: 50000, currency: Currency.AUD)
     )
   ])
 
@@ -151,40 +151,40 @@ struct TransactionRowView: View {
         type: .expense,
         date: Date(),
         accountId: UUID(),
-        amount: MonetaryAmount(cents: -5023, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -5023, currency: Currency.AUD),
         payee: "Woolworths",
         categoryId: groceriesId
       ), accounts: accounts, categories: categories, earmarks: earmarks,
-      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
+      balance: MonetaryAmount(cents: 100000, currency: Currency.AUD))
     TransactionRowView(
       transaction: Transaction(
         type: .income,
         date: Date(),
         accountId: UUID(),
-        amount: MonetaryAmount(cents: 350000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: 350000, currency: Currency.AUD),
         payee: "Employer Pty Ltd",
         earmarkId: holidayFundId
       ), accounts: accounts, categories: categories, earmarks: earmarks,
-      balance: MonetaryAmount(cents: 105023, currency: Currency.defaultCurrency))
+      balance: MonetaryAmount(cents: 105023, currency: Currency.AUD))
     TransactionRowView(
       transaction: Transaction(
         type: .transfer,
         date: Date(),
         accountId: UUID(),
         toAccountId: savingsId,
-        amount: MonetaryAmount(cents: -100000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -100000, currency: Currency.AUD),
         payee: ""
       ), accounts: accounts, categories: categories, earmarks: earmarks,
-      balance: MonetaryAmount(cents: -244977, currency: Currency.defaultCurrency))
+      balance: MonetaryAmount(cents: -244977, currency: Currency.AUD))
     TransactionRowView(
       transaction: Transaction(
         type: .transfer,
         date: Date(),
         accountId: UUID(),
         toAccountId: savingsId,
-        amount: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -50000, currency: Currency.AUD),
         payee: "Rent Split"
       ), accounts: accounts, categories: categories, earmarks: earmarks,
-      balance: MonetaryAmount(cents: -144977, currency: Currency.defaultCurrency))
+      balance: MonetaryAmount(cents: -144977, currency: Currency.AUD))
   }
 }

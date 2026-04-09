@@ -12,6 +12,7 @@ final class InMemoryBackend: BackendProvider, @unchecked Sendable {
   let investments: any InvestmentRepository
 
   init(
+    currency: Currency = .AUD,
     auth: (any AuthProvider)? = nil,
     accounts: (any AccountRepository)? = nil,
     transactions: (any TransactionRepository)? = nil,
@@ -22,16 +23,17 @@ final class InMemoryBackend: BackendProvider, @unchecked Sendable {
     // Use provided repositories or create defaults
     let authRepo = auth ?? InMemoryAuthProvider()
     let accountsRepo = accounts ?? InMemoryAccountRepository()
-    let transactionsRepo = transactions ?? InMemoryTransactionRepository()
+    let transactionsRepo = transactions ?? InMemoryTransactionRepository(currency: currency)
     let categoriesRepo = categories ?? InMemoryCategoryRepository()
-    let earmarksRepo = earmarks ?? InMemoryEarmarkRepository()
+    let earmarksRepo = earmarks ?? InMemoryEarmarkRepository(currency: currency)
 
     // Create analysis repository with dependencies
     // Analysis repository requires concrete InMemory types for computation
     let analysisRepo = InMemoryAnalysisRepository(
       transactionRepository: transactionsRepo as! InMemoryTransactionRepository,
       accountRepository: accountsRepo as! InMemoryAccountRepository,
-      earmarkRepository: earmarksRepo as! InMemoryEarmarkRepository
+      earmarkRepository: earmarksRepo as! InMemoryEarmarkRepository,
+      currency: currency
     )
 
     // Assign to properties

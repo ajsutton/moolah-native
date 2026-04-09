@@ -21,7 +21,7 @@ struct TransactionStoreTests {
         type: .expense,
         date: makeDate("2024-01-\(String(format: "%02d", min(i + 1, 28)))"),
         accountId: accountId,
-        amount: MonetaryAmount(cents: -(i + 1) * 1000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -(i + 1) * 1000, currency: Currency.defaultTestCurrency),
         payee: "Payee \(i)"
       )
     }
@@ -86,16 +86,16 @@ struct TransactionStoreTests {
     let transactions = [
       Transaction(
         type: .expense, date: makeDate("2024-01-01"), accountId: accountId,
-        amount: MonetaryAmount(cents: -1000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -1000, currency: Currency.defaultTestCurrency),
         payee: "Mine"),
       Transaction(
         type: .expense, date: makeDate("2024-01-02"), accountId: otherAccountId,
-        amount: MonetaryAmount(cents: -2000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -2000, currency: Currency.defaultTestCurrency),
         payee: "Other"),
       Transaction(
         type: .transfer, date: makeDate("2024-01-03"), accountId: otherAccountId,
         toAccountId: accountId,
-        amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
         payee: "Transfer In"),
     ]
     let repository = InMemoryTransactionRepository(initialTransactions: transactions)
@@ -113,15 +113,15 @@ struct TransactionStoreTests {
     let transactions = [
       Transaction(
         type: .expense, date: makeDate("2024-01-01"), accountId: accountId,
-        amount: MonetaryAmount(cents: -1000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -1000, currency: Currency.defaultTestCurrency),
         payee: "Oldest"),
       Transaction(
         type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-        amount: MonetaryAmount(cents: -2000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -2000, currency: Currency.defaultTestCurrency),
         payee: "Middle"),
       Transaction(
         type: .expense, date: makeDate("2024-01-30"), accountId: accountId,
-        amount: MonetaryAmount(cents: -3000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -3000, currency: Currency.defaultTestCurrency),
         payee: "Newest"),
     ]
     let repository = InMemoryTransactionRepository(initialTransactions: transactions)
@@ -138,15 +138,15 @@ struct TransactionStoreTests {
     let transactions = [
       Transaction(
         type: .income, date: makeDate("2024-01-03"), accountId: accountId,
-        amount: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency),
         payee: "Salary"),
       Transaction(
         type: .expense, date: makeDate("2024-01-02"), accountId: accountId,
-        amount: MonetaryAmount(cents: -2500, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -2500, currency: Currency.defaultTestCurrency),
         payee: "Coffee"),
       Transaction(
         type: .expense, date: makeDate("2024-01-01"), accountId: accountId,
-        amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
         payee: "Groceries"),
     ]
     let repository = InMemoryTransactionRepository(initialTransactions: transactions)
@@ -163,13 +163,13 @@ struct TransactionStoreTests {
     // Salary (newest): -12500 + 100000 = 87500
     #expect(
       store.transactions[0].balance
-        == MonetaryAmount(cents: 87500, currency: Currency.defaultCurrency))  // After Salary
+        == MonetaryAmount(cents: 87500, currency: Currency.defaultTestCurrency))  // After Salary
     #expect(
       store.transactions[1].balance
-        == MonetaryAmount(cents: -12500, currency: Currency.defaultCurrency))  // After Coffee
+        == MonetaryAmount(cents: -12500, currency: Currency.defaultTestCurrency))  // After Coffee
     #expect(
       store.transactions[2].balance
-        == MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency))  // After Groceries
+        == MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency))  // After Groceries
   }
 
   @Test func testReloadClearsExisting() async throws {
@@ -196,7 +196,7 @@ struct TransactionStoreTests {
 
     let tx = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Coffee Shop"
     )
     _ = await store.create(tx)
@@ -209,7 +209,7 @@ struct TransactionStoreTests {
   @Test func testUpdateModifiesTransaction() async throws {
     let tx = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Coffee Shop"
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [tx])
@@ -220,7 +220,7 @@ struct TransactionStoreTests {
 
     var updated = tx
     updated.payee = "Fancy Coffee"
-    updated.amount = MonetaryAmount(cents: -7500, currency: Currency.defaultCurrency)
+    updated.amount = MonetaryAmount(cents: -7500, currency: Currency.defaultTestCurrency)
     await store.update(updated)
 
     #expect(store.transactions.count == 1)
@@ -232,7 +232,7 @@ struct TransactionStoreTests {
   @Test func testDeleteRemovesTransaction() async throws {
     let tx = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Coffee Shop"
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [tx])
@@ -256,7 +256,7 @@ struct TransactionStoreTests {
     // Create
     let tx = Transaction(
       type: .income, date: makeDate("2024-01-10"), accountId: accountId,
-      amount: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency),
       payee: "Salary"
     )
     _ = await store.create(tx)
@@ -264,7 +264,7 @@ struct TransactionStoreTests {
 
     // Update
     var modified = tx
-    modified.amount = MonetaryAmount(cents: 110000, currency: Currency.defaultCurrency)
+    modified.amount = MonetaryAmount(cents: 110000, currency: Currency.defaultTestCurrency)
     await store.update(modified)
     #expect(store.transactions.count == 1)
     #expect(store.transactions[0].transaction.amount.cents == 110000)
@@ -277,7 +277,7 @@ struct TransactionStoreTests {
   @Test func testRunningBalancesUpdateAfterCreate() async throws {
     let existing = Transaction(
       type: .income, date: makeDate("2024-01-01"), accountId: accountId,
-      amount: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency),
       payee: "Initial"
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [existing])
@@ -289,7 +289,7 @@ struct TransactionStoreTests {
     // Add a newer expense
     let expense = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -3000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -3000, currency: Currency.defaultTestCurrency),
       payee: "Coffee"
     )
     _ = await store.create(expense)
@@ -305,12 +305,12 @@ struct TransactionStoreTests {
   @Test func testRunningBalancesUpdateAfterDelete() async throws {
     let tx1 = Transaction(
       type: .income, date: makeDate("2024-01-01"), accountId: accountId,
-      amount: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency),
       payee: "Salary"
     )
     let tx2 = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -3000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -3000, currency: Currency.defaultTestCurrency),
       payee: "Coffee"
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [tx1, tx2])
@@ -341,7 +341,7 @@ struct TransactionStoreTests {
 
     let tx = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
     _ = await store.create(tx)
@@ -352,7 +352,7 @@ struct TransactionStoreTests {
   @Test func testOnMutatePassesBothOnUpdate() async throws {
     let tx = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [tx])
@@ -378,7 +378,7 @@ struct TransactionStoreTests {
   @Test func testOnMutatePassesNilNewOnDelete() async throws {
     let tx = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [tx])
@@ -405,7 +405,7 @@ struct TransactionStoreTests {
     let tx = Transaction(
       type: .transfer, date: makeDate("2024-01-15"), accountId: accountId,
       toAccountId: savingsId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
       payee: ""
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [tx])
@@ -422,7 +422,7 @@ struct TransactionStoreTests {
 
     // Update the transfer amount
     var updated = tx
-    updated.amount = MonetaryAmount(cents: -15000, currency: Currency.defaultCurrency)
+    updated.amount = MonetaryAmount(cents: -15000, currency: Currency.defaultTestCurrency)
     await store.update(updated)
 
     #expect(receivedOld?.id == tx.id)
@@ -438,7 +438,7 @@ struct TransactionStoreTests {
     let tx = Transaction(
       type: .transfer, date: makeDate("2024-01-15"), accountId: accountId,
       toAccountId: savingsId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
       payee: ""
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [tx])
@@ -466,7 +466,7 @@ struct TransactionStoreTests {
     let newAccountId = UUID()
     let tx = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [tx])
@@ -496,7 +496,7 @@ struct TransactionStoreTests {
     let earmarkId = UUID()
     let tx = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test",
       earmarkId: earmarkId
     )
@@ -514,7 +514,7 @@ struct TransactionStoreTests {
 
     // Update the amount
     var updated = tx
-    updated.amount = MonetaryAmount(cents: -7500, currency: Currency.defaultCurrency)
+    updated.amount = MonetaryAmount(cents: -7500, currency: Currency.defaultTestCurrency)
     await store.update(updated)
 
     #expect(receivedOld?.earmarkId == earmarkId)
@@ -528,7 +528,7 @@ struct TransactionStoreTests {
     let earmarkId2 = UUID()
     let tx = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test",
       earmarkId: earmarkId1
     )
@@ -557,7 +557,7 @@ struct TransactionStoreTests {
     let earmarkId = UUID()
     let tx = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [tx])
@@ -585,7 +585,7 @@ struct TransactionStoreTests {
     let earmarkId = UUID()
     let tx = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test",
       earmarkId: earmarkId
     )
@@ -615,7 +615,7 @@ struct TransactionStoreTests {
   @Test func testOnMutateChangingTypeExpenseToIncome() async throws {
     let tx = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [tx])
@@ -633,7 +633,7 @@ struct TransactionStoreTests {
     // Change type to income (amount sign should flip)
     var updated = tx
     updated.type = .income
-    updated.amount = MonetaryAmount(cents: 5000, currency: Currency.defaultCurrency)
+    updated.amount = MonetaryAmount(cents: 5000, currency: Currency.defaultTestCurrency)
     await store.update(updated)
 
     #expect(receivedOld?.type == .expense)
@@ -646,7 +646,7 @@ struct TransactionStoreTests {
     let savingsId = UUID()
     let tx = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [tx])
@@ -678,7 +678,7 @@ struct TransactionStoreTests {
     let tx = Transaction(
       type: .transfer, date: makeDate("2024-01-15"), accountId: accountId,
       toAccountId: savingsId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: ""
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [tx])
@@ -711,7 +711,7 @@ struct TransactionStoreTests {
   @Test func testOnMutateChangingAmount() async throws {
     let tx = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [tx])
@@ -728,7 +728,7 @@ struct TransactionStoreTests {
 
     // Change the amount
     var updated = tx
-    updated.amount = MonetaryAmount(cents: -7500, currency: Currency.defaultCurrency)
+    updated.amount = MonetaryAmount(cents: -7500, currency: Currency.defaultTestCurrency)
     await store.update(updated)
 
     #expect(receivedOld?.amount.cents == -5000)
@@ -738,12 +738,12 @@ struct TransactionStoreTests {
   @Test func testRunningBalancesUpdateAfterAmountChange() async throws {
     let tx1 = Transaction(
       type: .income, date: makeDate("2024-01-01"), accountId: accountId,
-      amount: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency),
       payee: "Salary"
     )
     let tx2 = Transaction(
       type: .expense, date: makeDate("2024-01-15"), accountId: accountId,
-      amount: MonetaryAmount(cents: -3000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -3000, currency: Currency.defaultTestCurrency),
       payee: "Coffee"
     )
     let repository = InMemoryTransactionRepository(initialTransactions: [tx1, tx2])
@@ -756,7 +756,7 @@ struct TransactionStoreTests {
 
     // Update Coffee amount to -5000
     var updated = tx2
-    updated.amount = MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency)
+    updated.amount = MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency)
     await store.update(updated)
 
     #expect(store.transactions.count == 2)
@@ -772,7 +772,7 @@ struct TransactionStoreTests {
       type: .expense,
       date: originalDate,
       accountId: accountId,
-      amount: MonetaryAmount(cents: -200000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -200000, currency: Currency.defaultTestCurrency),
       payee: "Rent",
       recurPeriod: .month,
       recurEvery: 1
@@ -817,7 +817,7 @@ struct TransactionStoreTests {
       type: .expense,
       date: makeDate("2024-01-15"),
       accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Groceries",
       recurPeriod: .week,
       recurEvery: 2
@@ -843,7 +843,7 @@ struct TransactionStoreTests {
       type: .expense,
       date: makeDate("2024-01-15"),
       accountId: accountId,
-      amount: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -50000, currency: Currency.defaultTestCurrency),
       payee: "Annual Fee",
       recurPeriod: .once,
       recurEvery: 1
@@ -882,7 +882,7 @@ struct TransactionStoreTests {
       date: makeDate("2024-01-15"),
       accountId: accountId,
       toAccountId: toAccountId,
-      amount: MonetaryAmount(cents: -100000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -100000, currency: Currency.defaultTestCurrency),
       payee: "Savings Transfer",
       notes: "Monthly savings",
       categoryId: categoryId,
@@ -918,7 +918,7 @@ struct TransactionStoreTests {
       type: .expense,
       date: makeDate("2024-01-15"),
       accountId: accountId,
-      amount: MonetaryAmount(cents: -200000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -200000, currency: Currency.defaultTestCurrency),
       payee: "Rent",
       recurPeriod: .month,
       recurEvery: 1
@@ -954,7 +954,7 @@ struct TransactionStoreTests {
       type: .expense,
       date: makeDate("2024-01-15"),
       accountId: accountId,
-      amount: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -50000, currency: Currency.defaultTestCurrency),
       payee: "Annual Fee",
       recurPeriod: .once,
       recurEvery: 1
@@ -988,15 +988,15 @@ struct TransactionStoreTests {
     let repository = InMemoryTransactionRepository(initialTransactions: [
       Transaction(
         type: .expense, date: makeDate("2024-01-01"), accountId: accountId,
-        amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
         payee: "Woolworths"),
       Transaction(
         type: .expense, date: makeDate("2024-01-02"), accountId: accountId,
-        amount: MonetaryAmount(cents: -3000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -3000, currency: Currency.defaultTestCurrency),
         payee: "Woollies Market"),
       Transaction(
         type: .expense, date: makeDate("2024-01-03"), accountId: accountId,
-        amount: MonetaryAmount(cents: -2000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -2000, currency: Currency.defaultTestCurrency),
         payee: "Coles"),
     ])
 
@@ -1011,19 +1011,19 @@ struct TransactionStoreTests {
     let repository = InMemoryTransactionRepository(initialTransactions: [
       Transaction(
         type: .expense, date: makeDate("2024-01-01"), accountId: accountId,
-        amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
         payee: "Woolworths"),
       Transaction(
         type: .expense, date: makeDate("2024-01-02"), accountId: accountId,
-        amount: MonetaryAmount(cents: -3000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -3000, currency: Currency.defaultTestCurrency),
         payee: "Woollies Market"),
       Transaction(
         type: .expense, date: makeDate("2024-01-03"), accountId: accountId,
-        amount: MonetaryAmount(cents: -4000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -4000, currency: Currency.defaultTestCurrency),
         payee: "Woolworths"),
       Transaction(
         type: .expense, date: makeDate("2024-01-04"), accountId: accountId,
-        amount: MonetaryAmount(cents: -6000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -6000, currency: Currency.defaultTestCurrency),
         payee: "Woolworths"),
     ])
 
@@ -1039,11 +1039,11 @@ struct TransactionStoreTests {
     let repository = InMemoryTransactionRepository(initialTransactions: [
       Transaction(
         type: .expense, date: makeDate("2024-01-01"), accountId: accountId,
-        amount: MonetaryAmount(cents: -3000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -3000, currency: Currency.defaultTestCurrency),
         payee: "Woolworths"),
       Transaction(
         type: .expense, date: makeDate("2024-03-01"), accountId: accountId,
-        amount: MonetaryAmount(cents: -7500, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -7500, currency: Currency.defaultTestCurrency),
         payee: "Woolworths",
         categoryId: categoryId),
     ])
@@ -1088,7 +1088,7 @@ struct TransactionStoreTests {
     let repository = InMemoryTransactionRepository(initialTransactions: [
       Transaction(
         type: .expense, date: makeDate("2024-01-01"), accountId: accountId,
-        amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
         payee: "Woolworths")
     ])
 

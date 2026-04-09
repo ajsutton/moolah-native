@@ -39,8 +39,8 @@ extension DailyBalance {
   init(
     date: Date,
     balance: MonetaryAmount,
-    earmarked: MonetaryAmount = .zero,
-    investments: MonetaryAmount = .zero,
+    earmarked: MonetaryAmount = .zero(currency: .AUD),
+    investments: MonetaryAmount = .zero(currency: .AUD),
     investmentValue: MonetaryAmount? = nil
   ) {
     self.date = date

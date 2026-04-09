@@ -24,7 +24,7 @@ struct CategoryBalanceTable: View {
         ?? CategoryGroup(
           categoryId: rootId,
           name: categories.by(id: rootId)?.name ?? "Unknown",
-          totalAmount: .zero,
+          totalAmount: .zero(currency: amount.currency),
           children: []
         )
 
@@ -56,7 +56,7 @@ struct CategoryBalanceTable: View {
   }
 
   private var grandTotal: MonetaryAmount {
-    balances.values.reduce(.zero, +)
+    balances.values.reduce(.zero(currency: balances.values.first?.currency ?? .AUD), +)
   }
 
   var body: some View {

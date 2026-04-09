@@ -45,11 +45,15 @@ final class AccountStore {
   }
 
   var currentTotal: MonetaryAmount {
-    currentAccounts.reduce(.zero) { $0 + $1.balance }
+    currentAccounts.reduce(.zero(currency: currentAccounts.first?.balance.currency ?? .AUD)) {
+      $0 + $1.balance
+    }
   }
 
   var investmentTotal: MonetaryAmount {
-    investmentAccounts.reduce(.zero) { $0 + $1.displayBalance }
+    investmentAccounts.reduce(
+      .zero(currency: investmentAccounts.first?.displayBalance.currency ?? .AUD)
+    ) { $0 + $1.displayBalance }
   }
 
   /// Total of current accounts minus the total of all positive earmarked funds.

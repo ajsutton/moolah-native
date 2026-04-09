@@ -4,15 +4,18 @@ final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
   private let transactionRepository: InMemoryTransactionRepository
   private let accountRepository: InMemoryAccountRepository
   private let earmarkRepository: InMemoryEarmarkRepository
+  private let currency: Currency
 
   init(
     transactionRepository: InMemoryTransactionRepository,
     accountRepository: InMemoryAccountRepository,
-    earmarkRepository: InMemoryEarmarkRepository
+    earmarkRepository: InMemoryEarmarkRepository,
+    currency: Currency = .AUD
   ) {
     self.transactionRepository = transactionRepository
     self.accountRepository = accountRepository
     self.earmarkRepository = earmarkRepository
+    self.currency = currency
   }
 
   // MARK: - Daily Balances
@@ -38,9 +41,9 @@ final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
 
     // 4. Compute daily balances
     var dailyBalances: [Date: DailyBalance] = [:]
-    var currentBalance: MonetaryAmount = .zero
-    var currentInvestments: MonetaryAmount = .zero
-    var currentEarmarks: MonetaryAmount = .zero
+    var currentBalance: MonetaryAmount = .zero(currency: currency)
+    var currentInvestments: MonetaryAmount = .zero(currency: currency)
+    var currentEarmarks: MonetaryAmount = .zero(currency: currency)
 
     // If 'after' is provided, compute starting balances up to that date
     if let after = after {
@@ -267,7 +270,7 @@ final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
       if breakdown[month] == nil {
         breakdown[month] = [:]
       }
-      let current = breakdown[month]![categoryId] ?? .zero
+      let current = breakdown[month]![categoryId] ?? .zero(currency: currency)
       breakdown[month]![categoryId] =
         current
         + MonetaryAmount(
@@ -321,7 +324,7 @@ final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
 
       // Initialize month entry
       if monthlyData[month] == nil {
-        monthlyData[month] = MonthData(start: txn.date, end: txn.date)
+        monthlyData[month] = MonthData(start: txn.date, end: txn.date, currency: currency)
       }
 
       // Update date range
@@ -435,7 +438,8 @@ final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
     var balances: [UUID: MonetaryAmount] = [:]
     for transaction in filtered {
       let categoryId = transaction.categoryId!
-      balances[categoryId, default: .zero] += transaction.amount
+      balances[categoryId, default: .zero(currency: transaction.amount.currency)] +=
+        transaction.amount
     }
 
     return balances
@@ -461,8 +465,19 @@ final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
 private struct MonthData {
   var start: Date
   var end: Date
-  var income: MonetaryAmount = .zero
-  var expense: MonetaryAmount = .zero
-  var earmarkedIncome: MonetaryAmount = .zero
-  var earmarkedExpense: MonetaryAmount = .zero
+  let currency: Currency
+  var income: MonetaryAmount
+  var expense: MonetaryAmount
+  var earmarkedIncome: MonetaryAmount
+  var earmarkedExpense: MonetaryAmount
+
+  init(start: Date, end: Date, currency: Currency) {
+    self.start = start
+    self.end = end
+    self.currency = currency
+    self.income = .zero(currency: currency)
+    self.expense = .zero(currency: currency)
+    self.earmarkedIncome = .zero(currency: currency)
+    self.earmarkedExpense = .zero(currency: currency)
+  }
 }

@@ -31,6 +31,7 @@ final class ProfileSession: Identifiable {
 
     let remoteBackend = RemoteBackend(
       baseURL: profile.serverURL,
+      currency: profile.currency,
       session: session,
       cookieKeychain: cookieKeychain
     )

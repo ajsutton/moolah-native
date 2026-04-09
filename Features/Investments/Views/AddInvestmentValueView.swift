@@ -4,6 +4,7 @@ struct AddInvestmentValueView: View {
   @Environment(\.dismiss) private var dismiss
 
   let accountId: UUID
+  let currency: Currency
   let store: InvestmentStore
 
   @State private var date = Date()
@@ -29,7 +30,7 @@ struct AddInvestmentValueView: View {
           DatePicker("Date", selection: $date, displayedComponents: .date)
 
           HStack {
-            Text(Currency.defaultCurrency.code)
+            Text(currency.code)
               .foregroundStyle(.secondary)
             TextField("Value", text: $valueString)
               #if os(iOS)
@@ -41,7 +42,7 @@ struct AddInvestmentValueView: View {
         } footer: {
           if let cents = parsedCents {
             Text(
-              "Value: \(MonetaryAmount(cents: cents, currency: Currency.defaultCurrency).decimalValue, format: .currency(code: Currency.defaultCurrency.code))"
+              "Value: \(MonetaryAmount(cents: cents, currency: currency).decimalValue, format: .currency(code: currency.code))"
             )
             .monospacedDigit()
           }
@@ -75,7 +76,7 @@ struct AddInvestmentValueView: View {
     guard let cents = parsedCents else { return }
     isSubmitting = true
 
-    let amount = MonetaryAmount(cents: cents, currency: Currency.defaultCurrency)
+    let amount = MonetaryAmount(cents: cents, currency: currency)
     await store.setValue(accountId: accountId, date: date, value: amount)
 
     isSubmitting = false

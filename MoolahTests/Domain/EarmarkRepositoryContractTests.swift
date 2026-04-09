@@ -13,7 +13,7 @@ struct EarmarkRepositoryContractTests {
   func testCreatesEarmark(repository: InMemoryEarmarkRepository) async throws {
     let newEarmark = Earmark(
       name: "Emergency Fund",
-      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency)
+      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency)
     )
 
     let created = try await repository.create(newEarmark)
@@ -37,7 +37,7 @@ struct EarmarkRepositoryContractTests {
     let earmarks = try await repository.fetchAll()
     var toUpdate = earmarks[0]
     toUpdate.name = "Rainy Day Fund"
-    toUpdate.savingsGoal = MonetaryAmount(cents: 500000, currency: Currency.defaultCurrency)
+    toUpdate.savingsGoal = MonetaryAmount(cents: 500000, currency: Currency.defaultTestCurrency)
 
     let updated = try await repository.update(toUpdate)
 

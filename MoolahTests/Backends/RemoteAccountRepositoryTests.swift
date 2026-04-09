@@ -17,7 +17,7 @@ struct RemoteAccountRepositoryTests {
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
     let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
-    let repository = RemoteAccountRepository(client: client)
+    let repository = RemoteAccountRepository(client: client, currency: .defaultTestCurrency)
 
     URLProtocolStub.requestHandler = { request in
       let response = HTTPURLResponse(
@@ -37,18 +37,19 @@ struct RemoteAccountRepositoryTests {
     #expect(accounts[0].name == "Checking Account")
     #expect(accounts[0].type == .bank)
     #expect(
-      accounts[0].balance == MonetaryAmount(cents: 123456, currency: Currency.defaultCurrency))
+      accounts[0].balance == MonetaryAmount(cents: 123456, currency: Currency.defaultTestCurrency))
     #expect(accounts[3].name == "Investment Portfolio")
     #expect(accounts[3].type == .investment)
     // balance is the transaction-based invested amount
     #expect(
-      accounts[3].balance == MonetaryAmount(cents: 1_500_000, currency: Currency.defaultCurrency))
+      accounts[3].balance
+        == MonetaryAmount(cents: 1_500_000, currency: Currency.defaultTestCurrency))
     // investmentValue is the market value from the server's 'value' field
     #expect(accounts[3].investmentValue != nil)
     #expect(
       accounts[3].investmentValue
         == MonetaryAmount(
-          cents: 1_550_000, currency: Currency.defaultCurrency))
+          cents: 1_550_000, currency: Currency.defaultTestCurrency))
     // displayBalance prefers investmentValue for investment accounts
     #expect(accounts[3].displayBalance.cents == 1_550_000)
   }
@@ -65,7 +66,7 @@ struct RemoteAccountRepositoryTests {
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
     let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
-    let repository = RemoteAccountRepository(client: client)
+    let repository = RemoteAccountRepository(client: client, currency: .defaultTestCurrency)
 
     var capturedRequest: URLRequest?
     URLProtocolStub.requestHandler = { request in
@@ -82,7 +83,7 @@ struct RemoteAccountRepositoryTests {
     let newAccount = Account(
       name: "Savings Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 100000, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
     )
 
     // When
@@ -107,7 +108,7 @@ struct RemoteAccountRepositoryTests {
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
     let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
-    let repository = RemoteAccountRepository(client: client)
+    let repository = RemoteAccountRepository(client: client, currency: .defaultTestCurrency)
 
     var capturedRequest: URLRequest?
     URLProtocolStub.requestHandler = { request in
@@ -126,7 +127,7 @@ struct RemoteAccountRepositoryTests {
       id: accountId,
       name: "Updated Savings",
       type: .bank,
-      balance: MonetaryAmount(cents: 100000, currency: .defaultCurrency),
+      balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency),
       position: 2,
       isHidden: true
     )

@@ -11,7 +11,7 @@ struct RemoteInvestmentRepositoryTests {
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
     let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
-    let repository = RemoteInvestmentRepository(client: client)
+    let repository = RemoteInvestmentRepository(client: client, currency: .defaultTestCurrency)
 
     URLProtocolStub.requestHandler = { request in
       let response = HTTPURLResponse(
@@ -55,7 +55,7 @@ struct RemoteInvestmentRepositoryTests {
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
     let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
-    let repository = RemoteInvestmentRepository(client: client)
+    let repository = RemoteInvestmentRepository(client: client, currency: .defaultTestCurrency)
 
     var capturedRequest: URLRequest?
     URLProtocolStub.requestHandler = { request in
@@ -84,7 +84,7 @@ struct RemoteInvestmentRepositoryTests {
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
     let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
-    let repository = RemoteInvestmentRepository(client: client)
+    let repository = RemoteInvestmentRepository(client: client, currency: .defaultTestCurrency)
 
     var capturedRequest: URLRequest?
     URLProtocolStub.requestHandler = { request in
@@ -100,7 +100,7 @@ struct RemoteInvestmentRepositoryTests {
 
     let accountId = UUID()
     let date = BackendDateFormatter.date(from: "2024-03-15")!
-    let amount = MonetaryAmount(cents: 12_500_000, currency: Currency.defaultCurrency)
+    let amount = MonetaryAmount(cents: 12_500_000, currency: Currency.defaultTestCurrency)
 
     try await repository.setValue(accountId: accountId, date: date, value: amount)
 
@@ -135,7 +135,7 @@ struct RemoteInvestmentRepositoryTests {
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
     let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
-    let repository = RemoteInvestmentRepository(client: client)
+    let repository = RemoteInvestmentRepository(client: client, currency: .defaultTestCurrency)
 
     var capturedRequest: URLRequest?
     URLProtocolStub.requestHandler = { request in
@@ -162,7 +162,7 @@ struct RemoteInvestmentRepositoryTests {
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
     let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
-    let repository = RemoteInvestmentRepository(client: client)
+    let repository = RemoteInvestmentRepository(client: client, currency: .defaultTestCurrency)
 
     var capturedRequest: URLRequest?
     URLProtocolStub.requestHandler = { request in

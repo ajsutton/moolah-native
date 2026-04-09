@@ -3,10 +3,12 @@ import OSLog
 
 final class RemoteTransactionRepository: TransactionRepository, Sendable {
   private let client: APIClient
+  private let currency: Currency
   private let logger = Logger(subsystem: "com.moolah.app", category: "RemoteTransactionRepository")
 
-  init(client: APIClient) {
+  init(client: APIClient, currency: Currency) {
     self.client = client
+    self.currency = currency
   }
 
   func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> TransactionPage {
@@ -52,9 +54,9 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
       let wrapper = try JSONDecoder().decode(TransactionDTO.ListWrapper.self, from: data)
       logger.debug("Successfully decoded \(wrapper.transactions.count) transactions")
       return TransactionPage(
-        transactions: wrapper.transactions.map { $0.toDomain() },
+        transactions: wrapper.transactions.map { $0.toDomain(currency: self.currency) },
         priorBalance: MonetaryAmount(
-          cents: wrapper.priorBalance, currency: Currency.defaultCurrency)
+          cents: wrapper.priorBalance, currency: currency)
       )
     } catch {
       logger.error("Decoding error: \(error.localizedDescription)")
@@ -66,14 +68,14 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
     let dto = CreateTransactionDTO.fromDomain(transaction)
     let data = try await client.post("transactions/", body: dto)
     let responseDTO = try JSONDecoder().decode(TransactionDTO.self, from: data)
-    return responseDTO.toDomain()
+    return responseDTO.toDomain(currency: currency)
   }
 
   func update(_ transaction: Transaction) async throws -> Transaction {
     let dto = TransactionDTO.fromDomain(transaction)
     let data = try await client.put("transactions/\(transaction.id.uuidString)/", body: dto)
     let responseDTO = try JSONDecoder().decode(TransactionDTO.self, from: data)
-    return responseDTO.toDomain()
+    return responseDTO.toDomain(currency: currency)
   }
 
   func delete(id: UUID) async throws {

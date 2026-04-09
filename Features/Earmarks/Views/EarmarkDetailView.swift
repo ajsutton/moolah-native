@@ -81,7 +81,7 @@ struct EarmarkDetailView: View {
         summaryItem(label: "Spent", amount: earmark.spent)
       }
 
-      if let goal = earmark.savingsGoal, goal > .zero {
+      if let goal = earmark.savingsGoal, goal.isPositive {
         VStack(spacing: 4) {
           let progress =
             earmark.balance.cents > 0
@@ -213,7 +213,7 @@ private struct EditEarmarkSheet: View {
 
         Section("Savings Goal") {
           HStack {
-            Text(Currency.defaultCurrency.code)
+            Text(earmark.balance.currency.code)
               .foregroundStyle(.secondary)
             TextField("Amount", text: $savingsGoal)
               #if os(iOS)
@@ -254,7 +254,7 @@ private struct EditEarmarkSheet: View {
   private func saveChanges() {
     let goalCents = MonetaryAmount.parseCents(from: savingsGoal)
     let goal =
-      goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: Currency.defaultCurrency) : nil
+      goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: earmark.balance.currency) : nil
 
     var updated = earmark
     updated.name = name
@@ -272,10 +272,10 @@ private struct EditEarmarkSheet: View {
   let earmark = Earmark(
     id: earmarkId,
     name: "Holiday Fund",
-    balance: MonetaryAmount(cents: 250000, currency: Currency.defaultCurrency),
-    saved: MonetaryAmount(cents: 300000, currency: Currency.defaultCurrency),
-    spent: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency),
-    savingsGoal: MonetaryAmount(cents: 500000, currency: Currency.defaultCurrency),
+    balance: MonetaryAmount(cents: 250000, currency: Currency.AUD),
+    saved: MonetaryAmount(cents: 300000, currency: Currency.AUD),
+    spent: MonetaryAmount(cents: -50000, currency: Currency.AUD),
+    savingsGoal: MonetaryAmount(cents: 500000, currency: Currency.AUD),
     savingsStartDate: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1)),
     savingsEndDate: Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 31))
   )
@@ -284,11 +284,11 @@ private struct EditEarmarkSheet: View {
   let repository = InMemoryTransactionRepository(initialTransactions: [
     Transaction(
       type: .expense, date: Date(), accountId: UUID(),
-      amount: MonetaryAmount(cents: -5023, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5023, currency: Currency.AUD),
       payee: "Flight Booking", earmarkId: earmarkId),
     Transaction(
       type: .income, date: Date().addingTimeInterval(-86400), accountId: UUID(),
-      amount: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: 50000, currency: Currency.AUD),
       payee: "Savings Transfer", earmarkId: earmarkId),
   ])
   let store = TransactionStore(repository: repository)

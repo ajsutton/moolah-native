@@ -4,11 +4,11 @@ struct AccountDailyBalanceDTO: Codable {
   let date: String  // "yyyy-MM-dd"
   let balance: Int  // Cents
 
-  func toDomain() -> AccountDailyBalance {
+  func toDomain(currency: Currency) -> AccountDailyBalance {
     let parsedDate = BackendDateFormatter.date(from: date) ?? Date()
     return AccountDailyBalance(
       date: parsedDate,
-      balance: MonetaryAmount(cents: balance, currency: Currency.defaultCurrency)
+      balance: MonetaryAmount(cents: balance, currency: currency)
     )
   }
 }

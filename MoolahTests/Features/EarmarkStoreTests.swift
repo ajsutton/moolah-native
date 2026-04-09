@@ -9,7 +9,7 @@ struct EarmarkStoreTests {
   @Test func testPopulatesFromRepository() async throws {
     let earmark = Earmark(
       name: "Holiday Fund",
-      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency))
+      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency))
     let repository = InMemoryEarmarkRepository(initialEarmarks: [earmark])
     let store = EarmarkStore(repository: repository)
 
@@ -22,10 +22,10 @@ struct EarmarkStoreTests {
   @Test func testSortingByPosition() async throws {
     let e1 = Earmark(
       name: "E1",
-      balance: MonetaryAmount(cents: 10000, currency: Currency.defaultCurrency), position: 2)
+      balance: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency), position: 2)
     let e2 = Earmark(
       name: "E2",
-      balance: MonetaryAmount(cents: 20000, currency: Currency.defaultCurrency), position: 1)
+      balance: MonetaryAmount(cents: 20000, currency: Currency.defaultTestCurrency), position: 1)
     let repository = InMemoryEarmarkRepository(initialEarmarks: [e1, e2])
     let store = EarmarkStore(repository: repository)
 
@@ -40,13 +40,13 @@ struct EarmarkStoreTests {
     let earmarks = [
       Earmark(
         name: "Holiday",
-        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency)),
       Earmark(
         name: "Car Repair",
-        balance: MonetaryAmount(cents: 30000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency)),
       Earmark(
         name: "Hidden",
-        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency),
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency),
         isHidden: true),
     ]
     let repository = InMemoryEarmarkRepository(initialEarmarks: earmarks)
@@ -55,7 +55,8 @@ struct EarmarkStoreTests {
     await store.load()
 
     // Total should only include visible earmarks
-    #expect(store.totalBalance == MonetaryAmount(cents: 80000, currency: Currency.defaultCurrency))
+    #expect(
+      store.totalBalance == MonetaryAmount(cents: 80000, currency: Currency.defaultTestCurrency))
   }
 
   // MARK: - applyTransactionDelta
@@ -66,9 +67,9 @@ struct EarmarkStoreTests {
     let repository = InMemoryEarmarkRepository(initialEarmarks: [
       Earmark(
         id: earmarkId, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
-        spent: MonetaryAmount(cents: 0, currency: Currency.defaultCurrency))
+        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+        spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
     ])
     let store = EarmarkStore(repository: repository)
     await store.load()
@@ -76,7 +77,7 @@ struct EarmarkStoreTests {
     // Spend $100 from the earmark
     let tx = Transaction(
       type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
       payee: "Flight Tickets",
       earmarkId: earmarkId
     )
@@ -93,9 +94,9 @@ struct EarmarkStoreTests {
     let repository = InMemoryEarmarkRepository(initialEarmarks: [
       Earmark(
         id: earmarkId, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
-        spent: MonetaryAmount(cents: 0, currency: Currency.defaultCurrency))
+        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+        spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
     ])
     let store = EarmarkStore(repository: repository)
     await store.load()
@@ -103,7 +104,7 @@ struct EarmarkStoreTests {
     // Add $200 to the earmark
     let tx = Transaction(
       type: .income, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: 20000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: 20000, currency: Currency.defaultTestCurrency),
       payee: "Bonus",
       earmarkId: earmarkId
     )
@@ -120,9 +121,9 @@ struct EarmarkStoreTests {
     let repository = InMemoryEarmarkRepository(initialEarmarks: [
       Earmark(
         id: earmarkId, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 40000, currency: Currency.defaultCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
-        spent: MonetaryAmount(cents: 10000, currency: Currency.defaultCurrency))
+        balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
+        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+        spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency))
     ])
     let store = EarmarkStore(repository: repository)
     await store.load()
@@ -130,7 +131,7 @@ struct EarmarkStoreTests {
     // Remove a $100 expense from the earmark
     let tx = Transaction(
       type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
       payee: "Flight Tickets",
       earmarkId: earmarkId
     )
@@ -148,21 +149,21 @@ struct EarmarkStoreTests {
     let repository = InMemoryEarmarkRepository(initialEarmarks: [
       Earmark(
         id: earmarkId, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 40000, currency: Currency.defaultCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
-        spent: MonetaryAmount(cents: 10000, currency: Currency.defaultCurrency))
+        balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
+        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+        spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency))
     ])
     let store = EarmarkStore(repository: repository)
     await store.load()
 
     let oldTx = Transaction(
       type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
       payee: "Flight Tickets",
       earmarkId: earmarkId
     )
     var newTx = oldTx
-    newTx.amount = MonetaryAmount(cents: -15000, currency: Currency.defaultCurrency)
+    newTx.amount = MonetaryAmount(cents: -15000, currency: Currency.defaultTestCurrency)
 
     store.applyTransactionDelta(old: oldTx, new: newTx)
 
@@ -179,14 +180,14 @@ struct EarmarkStoreTests {
     let repository = InMemoryEarmarkRepository(initialEarmarks: [
       Earmark(
         id: earmark1Id, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 40000, currency: Currency.defaultCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
-        spent: MonetaryAmount(cents: 10000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
+        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+        spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency)),
       Earmark(
         id: earmark2Id, name: "Car Repair",
-        balance: MonetaryAmount(cents: 30000, currency: Currency.defaultCurrency),
-        saved: MonetaryAmount(cents: 30000, currency: Currency.defaultCurrency),
-        spent: MonetaryAmount(cents: 0, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency),
+        saved: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency),
+        spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency)),
     ])
     let store = EarmarkStore(repository: repository)
     await store.load()
@@ -194,7 +195,7 @@ struct EarmarkStoreTests {
     // Original transaction was to earmark1
     let oldTx = Transaction(
       type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
       payee: "Flight Tickets",
       earmarkId: earmark1Id
     )
@@ -219,9 +220,9 @@ struct EarmarkStoreTests {
     let repository = InMemoryEarmarkRepository(initialEarmarks: [
       Earmark(
         id: earmarkId, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
-        spent: MonetaryAmount(cents: 0, currency: Currency.defaultCurrency))
+        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+        spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
     ])
     let store = EarmarkStore(repository: repository)
     await store.load()
@@ -229,7 +230,7 @@ struct EarmarkStoreTests {
     // Original transaction had no earmark
     let oldTx = Transaction(
       type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
       payee: "Flight Tickets"
     )
     // Add earmark to it
@@ -248,9 +249,9 @@ struct EarmarkStoreTests {
     let repository = InMemoryEarmarkRepository(initialEarmarks: [
       Earmark(
         id: earmarkId, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 40000, currency: Currency.defaultCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
-        spent: MonetaryAmount(cents: 10000, currency: Currency.defaultCurrency))
+        balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
+        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+        spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency))
     ])
     let store = EarmarkStore(repository: repository)
     await store.load()
@@ -258,7 +259,7 @@ struct EarmarkStoreTests {
     // Original transaction had an earmark
     let oldTx = Transaction(
       type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
       payee: "Flight Tickets",
       earmarkId: earmarkId
     )
@@ -278,9 +279,9 @@ struct EarmarkStoreTests {
     let repository = InMemoryEarmarkRepository(initialEarmarks: [
       Earmark(
         id: earmarkId, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
-        spent: MonetaryAmount(cents: 0, currency: Currency.defaultCurrency))
+        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+        spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
     ])
     let store = EarmarkStore(repository: repository)
     await store.load()
@@ -289,7 +290,7 @@ struct EarmarkStoreTests {
 
     let tx = Transaction(
       type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
       payee: "Flight Tickets",
       earmarkId: earmarkId
     )
@@ -386,10 +387,10 @@ struct EarmarkStoreTests {
   func hiddenEarmarksExcluded() async {
     let visible = Earmark(
       name: "Visible",
-      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency))
+      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency))
     let hidden = Earmark(
       name: "Hidden",
-      balance: MonetaryAmount(cents: 30000, currency: Currency.defaultCurrency),
+      balance: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency),
       isHidden: true)
     let repository = InMemoryEarmarkRepository(initialEarmarks: [visible, hidden])
     let store = EarmarkStore(repository: repository)
@@ -404,10 +405,10 @@ struct EarmarkStoreTests {
   func hiddenEarmarksIncluded() async {
     let visible = Earmark(
       name: "Visible",
-      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency))
+      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency))
     let hidden = Earmark(
       name: "Hidden",
-      balance: MonetaryAmount(cents: 30000, currency: Currency.defaultCurrency),
+      balance: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency),
       isHidden: true)
     let repository = InMemoryEarmarkRepository(initialEarmarks: [visible, hidden])
     let store = EarmarkStore(repository: repository)

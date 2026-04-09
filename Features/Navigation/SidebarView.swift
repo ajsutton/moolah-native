@@ -191,6 +191,7 @@ struct SidebarView: View {
     }
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
+        currency: accountStore.currentTotal.currency,
         onCreate: { newEarmark in
           Task {
             _ = await earmarkStore.create(newEarmark)
@@ -200,7 +201,7 @@ struct SidebarView: View {
       )
     }
     .sheet(isPresented: $showCreateAccountSheet) {
-      CreateAccountView(accountStore: accountStore)
+      CreateAccountView(currency: accountStore.currentTotal.currency, accountStore: accountStore)
     }
     .sheet(item: $accountToEdit) { account in
       EditAccountView(account: account, accountStore: accountStore)
@@ -211,7 +212,7 @@ struct SidebarView: View {
   private var availableFunds: MonetaryAmount {
     let earmarked = earmarkStore.visibleEarmarks
       .filter { $0.balance.isPositive }
-      .reduce(MonetaryAmount.zero) { $0 + $1.balance }
+      .reduce(MonetaryAmount.zero(currency: accountStore.currentTotal.currency)) { $0 + $1.balance }
     return accountStore.currentTotal - earmarked
   }
 
@@ -238,6 +239,7 @@ struct SidebarView: View {
 }
 
 private struct CreateEarmarkSheet: View {
+  let currency: Currency
   let onCreate: (Earmark) -> Void
 
   @State private var name: String = ""
@@ -256,7 +258,7 @@ private struct CreateEarmarkSheet: View {
 
         Section("Savings Goal") {
           HStack {
-            Text(Currency.defaultCurrency.code)
+            Text(currency.code)
               .foregroundStyle(.secondary)
             TextField("Amount", text: $savingsGoal)
               #if os(iOS)
@@ -297,7 +299,7 @@ private struct CreateEarmarkSheet: View {
   private func createEarmark() {
     let goalCents = parseCurrency(savingsGoal)
     let goal =
-      goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: Currency.defaultCurrency) : nil
+      goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: currency) : nil
 
     let newEarmark = Earmark(
       name: name,
@@ -331,15 +333,15 @@ private struct CreateEarmarkSheet: View {
         _ = try? await backend.accounts.create(
           Account(
             name: "Bank", type: .bank,
-            balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency)))
+            balance: MonetaryAmount(cents: 100000, currency: Currency.AUD)))
         _ = try? await backend.accounts.create(
           Account(
             name: "Asset", type: .asset,
-            balance: MonetaryAmount(cents: 500000, currency: Currency.defaultCurrency)))
+            balance: MonetaryAmount(cents: 500000, currency: Currency.AUD)))
         _ = try? await backend.earmarks.create(
           Earmark(
             name: "Holiday Fund",
-            balance: MonetaryAmount(cents: 150000, currency: Currency.defaultCurrency)))
+            balance: MonetaryAmount(cents: 150000, currency: Currency.AUD)))
 
         await accountStore.load()
         await earmarkStore.load()

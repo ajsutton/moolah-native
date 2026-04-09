@@ -156,7 +156,7 @@ private func makeTestTransactions() -> [Transaction] {
       type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 15))!,
       accountId: accountId,
-      amount: MonetaryAmount(cents: -5023, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5023, currency: Currency.defaultTestCurrency),
       payee: "Woolworths",
       categoryId: groceryCategoryId
     ),
@@ -165,7 +165,7 @@ private func makeTestTransactions() -> [Transaction] {
       type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 7, day: 10))!,
       accountId: accountId,
-      amount: MonetaryAmount(cents: -3500, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -3500, currency: Currency.defaultTestCurrency),
       payee: "Metro Transport",
       categoryId: transportCategoryId
     ),
@@ -174,7 +174,7 @@ private func makeTestTransactions() -> [Transaction] {
       type: .income,
       date: calendar.date(from: DateComponents(year: 2024, month: 5, day: 30))!,
       accountId: accountId,
-      amount: MonetaryAmount(cents: 350000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: 350000, currency: Currency.defaultTestCurrency),
       payee: "Employer Pty Ltd"
     ),
     // Grocery expense in April (older, different payee)
@@ -182,7 +182,7 @@ private func makeTestTransactions() -> [Transaction] {
       type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 4, day: 20))!,
       accountId: accountId,
-      amount: MonetaryAmount(cents: -4200, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -4200, currency: Currency.defaultTestCurrency),
       payee: "Coles",
       categoryId: groceryCategoryId
     ),
@@ -191,7 +191,7 @@ private func makeTestTransactions() -> [Transaction] {
       type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 20))!,
       accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
       payee: "Electronics Store",
       categoryId: transportCategoryId,
       earmarkId: earmarkId

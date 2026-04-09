@@ -14,7 +14,7 @@ struct TransactionDTO: Codable {
   let recurPeriod: String?
   let recurEvery: Int?
 
-  func toDomain() -> Transaction {
+  func toDomain(currency: Currency) -> Transaction {
     let parsedDate = BackendDateFormatter.date(from: date) ?? Date()
 
     return Transaction(
@@ -23,7 +23,7 @@ struct TransactionDTO: Codable {
       date: parsedDate,
       accountId: accountId.flatMap { FlexibleUUID.parse($0) },
       toAccountId: toAccountId.flatMap { FlexibleUUID.parse($0) },
-      amount: MonetaryAmount(cents: amount, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: amount, currency: currency),
       payee: payee,
       notes: notes,
       categoryId: categoryId.flatMap { FlexibleUUID.parse($0) },

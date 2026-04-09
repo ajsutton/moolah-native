@@ -2,9 +2,11 @@ import Foundation
 
 actor InMemoryTransactionRepository: TransactionRepository {
   private var transactions: [UUID: Transaction]
+  private let currency: Currency
 
-  init(initialTransactions: [Transaction] = []) {
+  init(initialTransactions: [Transaction] = [], currency: Currency = .AUD) {
     self.transactions = Dictionary(uniqueKeysWithValues: initialTransactions.map { ($0.id, $0) })
+    self.currency = currency
   }
 
   func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> TransactionPage {
@@ -56,13 +58,16 @@ actor InMemoryTransactionRepository: TransactionRepository {
     // Paginate
     let offset = page * pageSize
     guard offset < result.count else {
-      return TransactionPage(transactions: [], priorBalance: .zero)
+      return TransactionPage(
+        transactions: [], priorBalance: MonetaryAmount(cents: 0, currency: currency))
     }
     let end = min(offset + pageSize, result.count)
     let pageTransactions = Array(result[offset..<end])
 
     // priorBalance = sum of all transactions older than this page
-    let priorBalance = result[end...].reduce(MonetaryAmount.zero) { $0 + $1.amount }
+    let priorBalance = result[end...].reduce(MonetaryAmount(cents: 0, currency: currency)) {
+      $0 + $1.amount
+    }
 
     return TransactionPage(transactions: pageTransactions, priorBalance: priorBalance)
   }

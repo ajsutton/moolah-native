@@ -29,7 +29,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(account)
 
@@ -44,7 +44,7 @@ struct AnalysisRepositoryContractTests {
         type: .income,
         date: yesterday,
         accountId: account.id,
-        amount: MonetaryAmount(cents: 100, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: 100, currency: .defaultTestCurrency),
         payee: "Income"
       ))
 
@@ -53,7 +53,7 @@ struct AnalysisRepositoryContractTests {
         type: .income,
         date: twoDaysAgo,
         accountId: account.id,
-        amount: MonetaryAmount(cents: 50, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: 50, currency: .defaultTestCurrency),
         payee: "Earlier Income"
       ))
 
@@ -73,14 +73,14 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(account)
 
     let earmark = Earmark(
       id: UUID(),
       name: "Savings",
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -90,7 +90,7 @@ struct AnalysisRepositoryContractTests {
         type: .income,
         date: Date(),
         accountId: account.id,
-        amount: MonetaryAmount(cents: 100000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency),
         payee: "Income"
       ))
 
@@ -100,7 +100,7 @@ struct AnalysisRepositoryContractTests {
         type: .income,
         date: Date(),
         accountId: account.id,
-        amount: MonetaryAmount(cents: 30000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: 30000, currency: .defaultTestCurrency),
         payee: "Earmarked Income",
         earmarkId: earmark.id
       ))
@@ -121,7 +121,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(account)
 
@@ -131,7 +131,7 @@ struct AnalysisRepositoryContractTests {
         type: .income,
         date: Date(),
         accountId: account.id,
-        amount: MonetaryAmount(cents: 100, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: 100, currency: .defaultTestCurrency),
         payee: "Weekly Income",
         recurPeriod: .week,
         recurEvery: 1
@@ -157,7 +157,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(account)
 
@@ -177,7 +177,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: thisMonth,
         accountId: account.id,
-        amount: MonetaryAmount(cents: -100, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -100, currency: .defaultTestCurrency),
         payee: "Store A",
         categoryId: category.id
       ))
@@ -187,7 +187,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: lastMonth,
         accountId: account.id,
-        amount: MonetaryAmount(cents: -50, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -50, currency: .defaultTestCurrency),
         payee: "Store B",
         categoryId: category.id
       ))
@@ -207,7 +207,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(account)
 
@@ -217,7 +217,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: Date(),
         accountId: account.id,
-        amount: MonetaryAmount(cents: -100, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -100, currency: .defaultTestCurrency),
         payee: "Monthly Bill",
         recurPeriod: .month,
         recurEvery: 1
@@ -239,7 +239,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(account)
 
@@ -248,7 +248,7 @@ struct AnalysisRepositoryContractTests {
         type: .income,
         date: Date(),
         accountId: account.id,
-        amount: MonetaryAmount(cents: 500, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: 500, currency: .defaultTestCurrency),
         payee: "Income"
       ))
 
@@ -257,7 +257,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: Date(),
         accountId: account.id,
-        amount: MonetaryAmount(cents: -200, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -200, currency: .defaultTestCurrency),
         payee: "Expense"
       ))
 
@@ -278,7 +278,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
-      balance: MonetaryAmount(cents: 1000, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 1000, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(currentAccount)
 
@@ -286,7 +286,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Investment",
       type: .investment,
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(investmentAccount)
 
@@ -297,7 +297,7 @@ struct AnalysisRepositoryContractTests {
         date: Date(),
         accountId: currentAccount.id,
         toAccountId: investmentAccount.id,
-        amount: MonetaryAmount(cents: -100, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -100, currency: .defaultTestCurrency),
         payee: "Investment Contribution"
       ))
 
@@ -318,7 +318,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(account)
 
@@ -337,7 +337,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: today,
         accountId: account.id,
-        amount: MonetaryAmount(cents: -5000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -5000, currency: .defaultTestCurrency),
         payee: "Store",
         categoryId: cat1.id
       ))
@@ -347,7 +347,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: today,
         accountId: account.id,
-        amount: MonetaryAmount(cents: -3000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -3000, currency: .defaultTestCurrency),
         payee: "Restaurant",
         categoryId: cat2.id
       ))
@@ -357,7 +357,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: today,
         accountId: account.id,
-        amount: MonetaryAmount(cents: -2000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -2000, currency: .defaultTestCurrency),
         payee: "Store 2",
         categoryId: cat1.id
       ))
@@ -369,8 +369,8 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Verify totals are correct
-    #expect(balances[cat1.id] == MonetaryAmount(cents: -7000, currency: .defaultCurrency))  // 5000 + 2000
-    #expect(balances[cat2.id] == MonetaryAmount(cents: -3000, currency: .defaultCurrency))
+    #expect(balances[cat1.id] == MonetaryAmount(cents: -7000, currency: .defaultTestCurrency))  // 5000 + 2000
+    #expect(balances[cat2.id] == MonetaryAmount(cents: -3000, currency: .defaultTestCurrency))
   }
 
   @Test("fetchCategoryBalances excludes scheduled transactions")
@@ -381,7 +381,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(account)
 
@@ -398,7 +398,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: today,
         accountId: account.id,
-        amount: MonetaryAmount(cents: -100000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -100000, currency: .defaultTestCurrency),
         payee: "Landlord",
         categoryId: cat.id,
         recurPeriod: .month,
@@ -411,7 +411,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: today,
         accountId: account.id,
-        amount: MonetaryAmount(cents: -100000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -100000, currency: .defaultTestCurrency),
         payee: "Landlord",
         categoryId: cat.id,
         recurPeriod: nil
@@ -424,7 +424,7 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Only completed transaction counted
-    #expect(balances[cat.id] == MonetaryAmount(cents: -100000, currency: .defaultCurrency))
+    #expect(balances[cat.id] == MonetaryAmount(cents: -100000, currency: .defaultTestCurrency))
   }
 
   @Test("fetchCategoryBalances filters by transaction type")
@@ -435,7 +435,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(account)
 
@@ -451,7 +451,7 @@ struct AnalysisRepositoryContractTests {
         type: .income,
         date: today,
         accountId: account.id,
-        amount: MonetaryAmount(cents: 500000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: 500000, currency: .defaultTestCurrency),
         payee: "Employer",
         categoryId: cat.id
       ))
@@ -461,7 +461,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: today,
         accountId: account.id,
-        amount: MonetaryAmount(cents: -5000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -5000, currency: .defaultTestCurrency),
         payee: "Store",
         categoryId: cat.id
       ))
@@ -473,7 +473,7 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Only income counted
-    #expect(incomeBalances[cat.id] == MonetaryAmount(cents: 500000, currency: .defaultCurrency))
+    #expect(incomeBalances[cat.id] == MonetaryAmount(cents: 500000, currency: .defaultTestCurrency))
 
     let expenseBalances = try await backend.analysis.fetchCategoryBalances(
       dateRange: dateRange,
@@ -482,7 +482,7 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Only expense counted
-    #expect(expenseBalances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultCurrency))
+    #expect(expenseBalances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultTestCurrency))
   }
 
   @Test("fetchCategoryBalances respects date range")
@@ -493,7 +493,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(account)
 
@@ -510,7 +510,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: yesterday,
         accountId: account.id,
-        amount: MonetaryAmount(cents: -5000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -5000, currency: .defaultTestCurrency),
         payee: "Gas Station",
         categoryId: cat.id
       ))
@@ -520,7 +520,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: lastMonth,
         accountId: account.id,
-        amount: MonetaryAmount(cents: -3000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -3000, currency: .defaultTestCurrency),
         payee: "Gas Station",
         categoryId: cat.id
       ))
@@ -532,7 +532,7 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Only yesterday's transaction counted
-    #expect(balances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultCurrency))
+    #expect(balances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultTestCurrency))
   }
 
   @Test("fetchCategoryBalances applies additional filters")
@@ -543,7 +543,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(account1)
 
@@ -551,7 +551,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Credit Card",
       type: .creditCard,
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(account2)
 
@@ -567,7 +567,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: today,
         accountId: account1.id,
-        amount: MonetaryAmount(cents: -5000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -5000, currency: .defaultTestCurrency),
         payee: "Store",
         categoryId: cat.id
       ))
@@ -577,7 +577,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: today,
         accountId: account2.id,
-        amount: MonetaryAmount(cents: -3000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -3000, currency: .defaultTestCurrency),
         payee: "Store",
         categoryId: cat.id
       ))
@@ -589,7 +589,7 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Only account1 transaction counted
-    #expect(balances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultCurrency))
+    #expect(balances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultTestCurrency))
   }
 
   @Test("fetchCategoryBalances excludes transactions without category")
@@ -600,7 +600,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
     )
     _ = try await backend.accounts.create(account)
 
@@ -616,7 +616,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: today,
         accountId: account.id,
-        amount: MonetaryAmount(cents: -5000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -5000, currency: .defaultTestCurrency),
         payee: "Store",
         categoryId: cat.id
       ))
@@ -626,7 +626,7 @@ struct AnalysisRepositoryContractTests {
         type: .expense,
         date: today,
         accountId: account.id,
-        amount: MonetaryAmount(cents: -3000, currency: .defaultCurrency),
+        amount: MonetaryAmount(cents: -3000, currency: .defaultTestCurrency),
         payee: "Uncategorized",
         categoryId: nil
       ))
@@ -638,7 +638,7 @@ struct AnalysisRepositoryContractTests {
     )
 
     #expect(balances.count == 1)
-    #expect(balances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultCurrency))
+    #expect(balances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultTestCurrency))
   }
 
   @Test("fetchCategoryBalances handles empty result")

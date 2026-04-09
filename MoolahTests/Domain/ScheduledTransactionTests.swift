@@ -10,7 +10,7 @@ struct ScheduledTransactionTests {
     let transaction = Transaction(
       type: .expense,
       date: Date(),
-      amount: MonetaryAmount.zero,
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .month,
       recurEvery: 1
     )
@@ -23,7 +23,7 @@ struct ScheduledTransactionTests {
     let transaction = Transaction(
       type: .expense,
       date: Date(),
-      amount: MonetaryAmount.zero
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency)
     )
 
     #expect(transaction.isScheduled == false)
@@ -35,7 +35,7 @@ struct ScheduledTransactionTests {
       type: .expense,
       date: Calendar.current.date(byAdding: .day, value: -5, to: Date())!,
       accountId: UUID(),
-      amount: MonetaryAmount(cents: -100000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -100000, currency: Currency.defaultTestCurrency),
       payee: "Rent",
       recurPeriod: .month,
       recurEvery: 1
@@ -71,7 +71,7 @@ struct ScheduledTransactionTests {
       type: .expense,
       date: Date(),
       accountId: UUID(),
-      amount: MonetaryAmount(cents: -100000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -100000, currency: Currency.defaultTestCurrency),
       recurPeriod: .month,
       recurEvery: 1
     )
@@ -80,7 +80,7 @@ struct ScheduledTransactionTests {
       type: .expense,
       date: Date(),
       accountId: UUID(),
-      amount: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency)
+      amount: MonetaryAmount(cents: -50000, currency: Currency.defaultTestCurrency)
     )
 
     let repository = InMemoryTransactionRepository(initialTransactions: [scheduled, oneTime])
@@ -103,7 +103,7 @@ struct ScheduledTransactionTests {
     let overdue = Transaction(
       type: .expense,
       date: calendar.date(byAdding: .day, value: -5, to: today)!,
-      amount: MonetaryAmount.zero,
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .month,
       recurEvery: 1
     )
@@ -111,7 +111,7 @@ struct ScheduledTransactionTests {
     let upcoming = Transaction(
       type: .expense,
       date: calendar.date(byAdding: .day, value: 5, to: today)!,
-      amount: MonetaryAmount.zero,
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .month,
       recurEvery: 1
     )
@@ -123,19 +123,19 @@ struct ScheduledTransactionTests {
   @Test("Recurrence periods")
   func testRecurrencePeriods() {
     let daily = Transaction(
-      type: .expense, date: Date(), amount: MonetaryAmount.zero,
+      type: .expense, date: Date(), amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .day, recurEvery: 1
     )
     let weekly = Transaction(
-      type: .expense, date: Date(), amount: MonetaryAmount.zero,
+      type: .expense, date: Date(), amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .week, recurEvery: 2
     )
     let monthly = Transaction(
-      type: .expense, date: Date(), amount: MonetaryAmount.zero,
+      type: .expense, date: Date(), amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .month, recurEvery: 1
     )
     let yearly = Transaction(
-      type: .expense, date: Date(), amount: MonetaryAmount.zero,
+      type: .expense, date: Date(), amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .year, recurEvery: 1
     )
 
@@ -152,7 +152,7 @@ struct ScheduledTransactionTests {
     let oneTime = Transaction(
       type: .expense,
       date: Date(),
-      amount: MonetaryAmount.zero
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency)
     )
 
     #expect(oneTime.nextDueDate() == nil)
@@ -160,7 +160,7 @@ struct ScheduledTransactionTests {
     let once = Transaction(
       type: .expense,
       date: Date(),
-      amount: MonetaryAmount.zero,
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .once,
       recurEvery: 1
     )
@@ -176,7 +176,7 @@ struct ScheduledTransactionTests {
     let transaction = Transaction(
       type: .expense,
       date: startDate,
-      amount: MonetaryAmount.zero,
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .day,
       recurEvery: 1
     )
@@ -195,7 +195,7 @@ struct ScheduledTransactionTests {
     let transaction = Transaction(
       type: .expense,
       date: startDate,
-      amount: MonetaryAmount.zero,
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .week,
       recurEvery: 2
     )
@@ -214,7 +214,7 @@ struct ScheduledTransactionTests {
     let transaction = Transaction(
       type: .expense,
       date: startDate,
-      amount: MonetaryAmount.zero,
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .month,
       recurEvery: 1
     )
@@ -233,7 +233,7 @@ struct ScheduledTransactionTests {
     let transaction = Transaction(
       type: .expense,
       date: startDate,
-      amount: MonetaryAmount.zero,
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .year,
       recurEvery: 1
     )
@@ -249,7 +249,7 @@ struct ScheduledTransactionTests {
     let once = Transaction(
       type: .expense,
       date: Date(),
-      amount: MonetaryAmount.zero,
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .once,
       recurEvery: 1
     )
@@ -257,7 +257,7 @@ struct ScheduledTransactionTests {
     let recurring = Transaction(
       type: .expense,
       date: Date(),
-      amount: MonetaryAmount.zero,
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .month,
       recurEvery: 1
     )
@@ -265,7 +265,7 @@ struct ScheduledTransactionTests {
     let notScheduled = Transaction(
       type: .expense,
       date: Date(),
-      amount: MonetaryAmount.zero
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency)
     )
 
     #expect(once.isRecurring == false)
@@ -283,7 +283,7 @@ struct ScheduledTransactionTests {
       type: .expense,
       date: futureDate,
       accountId: UUID(),
-      amount: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -50000, currency: Currency.defaultTestCurrency),
       payee: "One-time payment",
       recurPeriod: .once,
       recurEvery: 1
@@ -334,7 +334,7 @@ struct ScheduledTransactionTests {
       type: .expense,
       date: startDate,
       accountId: UUID(),
-      amount: MonetaryAmount(cents: -150000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -150000, currency: Currency.defaultTestCurrency),
       payee: "Monthly rent",
       recurPeriod: .month,
       recurEvery: 1
@@ -380,7 +380,7 @@ struct ScheduledTransactionTests {
     let normal = Transaction(
       type: .expense,
       date: Date(),
-      amount: MonetaryAmount.zero
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency)
     )
     try normal.validate()
 
@@ -388,7 +388,7 @@ struct ScheduledTransactionTests {
     let scheduled = Transaction(
       type: .expense,
       date: Date(),
-      amount: MonetaryAmount.zero,
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .month,
       recurEvery: 1
     )
@@ -400,7 +400,7 @@ struct ScheduledTransactionTests {
     let transaction = Transaction(
       type: .expense,
       date: Date(),
-      amount: MonetaryAmount.zero,
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .month,
       recurEvery: nil
     )
@@ -415,7 +415,7 @@ struct ScheduledTransactionTests {
     let transaction = Transaction(
       type: .expense,
       date: Date(),
-      amount: MonetaryAmount.zero,
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: nil,
       recurEvery: 1
     )
@@ -430,7 +430,7 @@ struct ScheduledTransactionTests {
     let transaction = Transaction(
       type: .expense,
       date: Date(),
-      amount: MonetaryAmount.zero,
+      amount: MonetaryAmount.zero(currency: .defaultTestCurrency),
       recurPeriod: .month,
       recurEvery: 0
     )

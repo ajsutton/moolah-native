@@ -4,7 +4,9 @@ struct MonetaryAmount: Codable, Sendable, Hashable, Comparable {
   let cents: Int
   let currency: Currency
 
-  static let zero = MonetaryAmount(cents: 0, currency: Currency.defaultCurrency)
+  static func zero(currency: Currency) -> MonetaryAmount {
+    MonetaryAmount(cents: 0, currency: currency)
+  }
 
   init(cents: Int, currency: Currency) {
     self.cents = cents

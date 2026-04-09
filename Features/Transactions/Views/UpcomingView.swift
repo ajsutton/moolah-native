@@ -272,7 +272,7 @@ struct UpcomingTransactionRow: View {
   let accounts = Accounts(from: [
     Account(
       id: accountId, name: "Checking", type: .bank,
-      balance: MonetaryAmount(cents: 244977, currency: Currency.defaultCurrency)
+      balance: MonetaryAmount(cents: 244977, currency: Currency.AUD)
     )
   ])
 
@@ -290,7 +290,7 @@ struct UpcomingTransactionRow: View {
       type: .expense,
       date: overdue,
       accountId: accountId,
-      amount: MonetaryAmount(cents: -200000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -200000, currency: Currency.AUD),
       payee: "Rent",
       categoryId: categoryId,
       recurPeriod: .month,
@@ -300,7 +300,7 @@ struct UpcomingTransactionRow: View {
       type: .expense,
       date: upcoming,
       accountId: accountId,
-      amount: MonetaryAmount(cents: -15000, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -15000, currency: Currency.AUD),
       payee: "Internet",
       categoryId: categoryId,
       recurPeriod: .month,

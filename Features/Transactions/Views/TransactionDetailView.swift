@@ -429,7 +429,7 @@ struct TransactionDetailView: View {
       date: date,
       accountId: accountId,
       toAccountId: type == .transfer ? toAccountId : nil,
-      amount: MonetaryAmount(cents: signedCents, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: signedCents, currency: transaction.amount.currency),
       payee: payee.isEmpty ? nil : payee,
       notes: notes.isEmpty ? nil : notes,
       categoryId: categoryId,
@@ -450,7 +450,7 @@ struct TransactionDetailView: View {
         type: .expense,
         date: Date(),
         accountId: accountId,
-        amount: MonetaryAmount(cents: -5023, currency: Currency.defaultCurrency),
+        amount: MonetaryAmount(cents: -5023, currency: Currency.AUD),
         payee: "Woolworths"
       ),
       accounts: Accounts(from: [

@@ -24,13 +24,13 @@ struct EarmarkRowView: View {
     EarmarkRowView(
       earmark: Earmark(
         name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 150000, currency: Currency.defaultCurrency),
-        savingsGoal: MonetaryAmount(cents: 500000, currency: Currency.defaultCurrency)
+        balance: MonetaryAmount(cents: 150000, currency: Currency.AUD),
+        savingsGoal: MonetaryAmount(cents: 500000, currency: Currency.AUD)
       ))
     EarmarkRowView(
       earmark: Earmark(
         name: "Emergency Fund",
-        balance: MonetaryAmount(cents: 300000, currency: Currency.defaultCurrency)
+        balance: MonetaryAmount(cents: 300000, currency: Currency.AUD)
       ))
   }
 }

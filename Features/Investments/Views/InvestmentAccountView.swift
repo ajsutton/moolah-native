@@ -26,7 +26,8 @@ struct InvestmentAccountView: View {
         // Chart with time period picker
         VStack(spacing: 16) {
           timePeriodPicker
-          InvestmentChartView(dataPoints: investmentStore.chartDataPoints)
+          InvestmentChartView(
+            dataPoints: investmentStore.chartDataPoints, currency: account.balance.currency)
         }
         .padding()
 
@@ -51,7 +52,8 @@ struct InvestmentAccountView: View {
     }
     .navigationTitle(account.name)
     .sheet(isPresented: $showingAddValue) {
-      AddInvestmentValueView(accountId: account.id, store: investmentStore)
+      AddInvestmentValueView(
+        accountId: account.id, currency: account.balance.currency, store: investmentStore)
     }
     .task {
       await investmentStore.loadAll(accountId: account.id)

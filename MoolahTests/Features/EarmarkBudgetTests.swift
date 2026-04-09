@@ -30,7 +30,7 @@ struct EarmarkBudgetTests {
     let items = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 80000, currency: Currency.defaultCurrency))
+        amount: MonetaryAmount(cents: 80000, currency: Currency.defaultTestCurrency))
     ]
     let (store, _) = await makeStore(
       earmarks: [Earmark(id: earmarkId, name: "Holiday")],
@@ -65,12 +65,12 @@ struct EarmarkBudgetTests {
         earmark1Id: [
           EarmarkBudgetItem(
             categoryId: cat1Id,
-            amount: MonetaryAmount(cents: 80000, currency: Currency.defaultCurrency))
+            amount: MonetaryAmount(cents: 80000, currency: Currency.defaultTestCurrency))
         ],
         earmark2Id: [
           EarmarkBudgetItem(
             categoryId: cat2Id,
-            amount: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency))
+            amount: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency))
         ],
       ]
     )
@@ -92,7 +92,7 @@ struct EarmarkBudgetTests {
     let items = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 80000, currency: Currency.defaultCurrency))
+        amount: MonetaryAmount(cents: 80000, currency: Currency.defaultTestCurrency))
     ]
     let (store, repository) = await makeStore(
       earmarks: [Earmark(id: earmarkId, name: "Holiday")],
@@ -103,7 +103,7 @@ struct EarmarkBudgetTests {
     await store.updateBudgetItem(
       earmarkId: earmarkId,
       categoryId: catId,
-      amount: MonetaryAmount(cents: 120000, currency: Currency.defaultCurrency)
+      amount: MonetaryAmount(cents: 120000, currency: Currency.defaultTestCurrency)
     )
 
     #expect(store.budgetItems.first?.amount.cents == 120000)
@@ -126,7 +126,7 @@ struct EarmarkBudgetTests {
     await store.addBudgetItem(
       earmarkId: earmarkId,
       categoryId: catId,
-      amount: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency)
+      amount: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency)
     )
 
     #expect(store.budgetItems.count == 1)
@@ -143,7 +143,7 @@ struct EarmarkBudgetTests {
         earmarkId: [
           EarmarkBudgetItem(
             categoryId: cat1Id,
-            amount: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency))
+            amount: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency))
         ]
       ]
     )
@@ -152,7 +152,7 @@ struct EarmarkBudgetTests {
     await store.addBudgetItem(
       earmarkId: earmarkId,
       categoryId: cat2Id,
-      amount: MonetaryAmount(cents: 30000, currency: Currency.defaultCurrency)
+      amount: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency)
     )
 
     let persisted = try await repository.fetchBudget(earmarkId: earmarkId)
@@ -170,7 +170,7 @@ struct EarmarkBudgetTests {
         earmarkId: [
           EarmarkBudgetItem(
             categoryId: catId,
-            amount: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency))
+            amount: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency))
         ]
       ]
     )
@@ -194,10 +194,10 @@ struct BudgetLineItemMergeTests {
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 80000, currency: Currency.defaultCurrency))
+        amount: MonetaryAmount(cents: 80000, currency: Currency.defaultTestCurrency))
     ]
     let categoryBalances: [UUID: MonetaryAmount] = [
-      catId: MonetaryAmount(cents: -50000, currency: Currency.defaultCurrency)
+      catId: MonetaryAmount(cents: -50000, currency: Currency.defaultTestCurrency)
     ]
 
     let result = BudgetLineItem.buildLineItems(
@@ -219,7 +219,7 @@ struct BudgetLineItemMergeTests {
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 30000, currency: Currency.defaultCurrency))
+        amount: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency))
     ]
     let categoryBalances: [UUID: MonetaryAmount] = [:]
 
@@ -239,7 +239,7 @@ struct BudgetLineItemMergeTests {
     let categories = Categories(from: [Category(id: catId, name: "Transport")])
     let budgetItems: [EarmarkBudgetItem] = []
     let categoryBalances: [UUID: MonetaryAmount] = [
-      catId: MonetaryAmount(cents: -20000, currency: Currency.defaultCurrency)
+      catId: MonetaryAmount(cents: -20000, currency: Currency.defaultTestCurrency)
     ]
 
     let result = BudgetLineItem.buildLineItems(
@@ -259,11 +259,11 @@ struct BudgetLineItemMergeTests {
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 60000, currency: Currency.defaultCurrency))
+        amount: MonetaryAmount(cents: 60000, currency: Currency.defaultTestCurrency))
     ]
     // Spending exceeds budget
     let categoryBalances: [UUID: MonetaryAmount] = [
-      catId: MonetaryAmount(cents: -70000, currency: Currency.defaultCurrency)
+      catId: MonetaryAmount(cents: -70000, currency: Currency.defaultTestCurrency)
     ]
 
     let result = BudgetLineItem.buildLineItems(
@@ -284,13 +284,13 @@ struct BudgetLineItemMergeTests {
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: cat1.id,
-        amount: MonetaryAmount(cents: 10000, currency: Currency.defaultCurrency)),
+        amount: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency)),
       EarmarkBudgetItem(
         categoryId: cat2.id,
-        amount: MonetaryAmount(cents: 20000, currency: Currency.defaultCurrency)),
+        amount: MonetaryAmount(cents: 20000, currency: Currency.defaultTestCurrency)),
       EarmarkBudgetItem(
         categoryId: cat3.id,
-        amount: MonetaryAmount(cents: 30000, currency: Currency.defaultCurrency)),
+        amount: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency)),
     ]
 
     let result = BudgetLineItem.buildLineItems(
@@ -307,9 +307,9 @@ struct BudgetLineItemMergeTests {
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 70000, currency: Currency.defaultCurrency))
+        amount: MonetaryAmount(cents: 70000, currency: Currency.defaultTestCurrency))
     ]
-    let savingsGoal = MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency)
+    let savingsGoal = MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency)
 
     let unallocated = BudgetLineItem.unallocatedAmount(
       budgetItems: budgetItems,
@@ -333,9 +333,9 @@ struct BudgetLineItemMergeTests {
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 120000, currency: Currency.defaultCurrency))
+        amount: MonetaryAmount(cents: 120000, currency: Currency.defaultTestCurrency))
     ]
-    let savingsGoal = MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency)
+    let savingsGoal = MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency)
 
     let unallocated = BudgetLineItem.unallocatedAmount(
       budgetItems: budgetItems,
@@ -352,7 +352,7 @@ struct BudgetLineItemMergeTests {
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency))
+        amount: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency))
     ]
 
     let result = BudgetLineItem.buildLineItems(

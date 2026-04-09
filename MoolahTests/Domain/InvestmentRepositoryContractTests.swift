@@ -13,7 +13,7 @@ struct InvestmentRepositoryContractTests {
     let investmentValues = values.map { (date, cents) in
       InvestmentValue(
         date: date,
-        value: MonetaryAmount(cents: cents, currency: Currency.defaultCurrency)
+        value: MonetaryAmount(cents: cents, currency: Currency.defaultTestCurrency)
       )
     }
     let repo = InMemoryInvestmentRepository(
@@ -39,7 +39,7 @@ struct InvestmentRepositoryContractTests {
     let values = dates.map { date in
       InvestmentValue(
         date: date,
-        value: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency)
+        value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)
       )
     }
     let repo = InMemoryInvestmentRepository(initialValues: [accountId: values])
@@ -59,7 +59,7 @@ struct InvestmentRepositoryContractTests {
     let values = (0..<5).map { i in
       InvestmentValue(
         date: Calendar.current.date(byAdding: .day, value: -i, to: Date())!,
-        value: MonetaryAmount(cents: 100_000 + (i * 1000), currency: Currency.defaultCurrency)
+        value: MonetaryAmount(cents: 100_000 + (i * 1000), currency: Currency.defaultTestCurrency)
       )
     }
     let repo = InMemoryInvestmentRepository(initialValues: [accountId: values])
@@ -100,12 +100,12 @@ struct InvestmentRepositoryContractTests {
       account1: [
         InvestmentValue(
           date: date,
-          value: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency))
+          value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency))
       ],
       account2: [
         InvestmentValue(
           date: date,
-          value: MonetaryAmount(cents: 200_000, currency: Currency.defaultCurrency))
+          value: MonetaryAmount(cents: 200_000, currency: Currency.defaultTestCurrency))
       ],
     ])
 
@@ -121,7 +121,7 @@ struct InvestmentRepositoryContractTests {
     let repo = InMemoryInvestmentRepository()
     let accountId = UUID()
     let date = makeDate(year: 2024, month: 3, day: 15)
-    let amount = MonetaryAmount(cents: 125_000_00, currency: Currency.defaultCurrency)
+    let amount = MonetaryAmount(cents: 125_000_00, currency: Currency.defaultTestCurrency)
 
     try await repo.setValue(accountId: accountId, date: date, value: amount)
 
@@ -137,7 +137,7 @@ struct InvestmentRepositoryContractTests {
     let date = makeDate(year: 2024, month: 3, day: 15)
     let (repo, _) = makeRepository(values: [(date, 100_000)], accountId: accountId)
 
-    let newAmount = MonetaryAmount(cents: 200_000, currency: Currency.defaultCurrency)
+    let newAmount = MonetaryAmount(cents: 200_000, currency: Currency.defaultTestCurrency)
     try await repo.setValue(accountId: accountId, date: date, value: newAmount)
 
     let page = try await repo.fetchValues(accountId: accountId, page: 0, pageSize: 50)
@@ -193,13 +193,13 @@ struct InvestmentRepositoryContractTests {
     let balances = [
       AccountDailyBalance(
         date: makeDate(year: 2024, month: 3, day: 15),
-        balance: MonetaryAmount(cents: 300_000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 300_000, currency: Currency.defaultTestCurrency)),
       AccountDailyBalance(
         date: makeDate(year: 2024, month: 1, day: 15),
-        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
       AccountDailyBalance(
         date: makeDate(year: 2024, month: 2, day: 15),
-        balance: MonetaryAmount(cents: 200_000, currency: Currency.defaultCurrency)),
+        balance: MonetaryAmount(cents: 200_000, currency: Currency.defaultTestCurrency)),
     ]
     await repo.setDailyBalances(balances, for: accountId)
 
@@ -229,13 +229,13 @@ struct InvestmentRepositoryContractTests {
       [
         AccountDailyBalance(
           date: makeDate(year: 2024, month: 1, day: 1),
-          balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency))
+          balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency))
       ], for: account1)
     await repo.setDailyBalances(
       [
         AccountDailyBalance(
           date: makeDate(year: 2024, month: 1, day: 1),
-          balance: MonetaryAmount(cents: 200_000, currency: Currency.defaultCurrency))
+          balance: MonetaryAmount(cents: 200_000, currency: Currency.defaultTestCurrency))
       ], for: account2)
 
     let result = try await repo.fetchDailyBalances(accountId: account1)

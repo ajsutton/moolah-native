@@ -68,7 +68,7 @@ struct AllTransactionsView: View {
   let accounts = Accounts(from: [
     Account(
       id: accountId, name: "Checking", type: .bank,
-      balance: MonetaryAmount(cents: 244977, currency: Currency.defaultCurrency)
+      balance: MonetaryAmount(cents: 244977, currency: Currency.AUD)
     )
   ])
 
@@ -79,14 +79,14 @@ struct AllTransactionsView: View {
   let earmarks = Earmarks(from: [
     Earmark(
       id: earmarkId, name: "Emergency Fund",
-      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency)
+      balance: MonetaryAmount(cents: 100000, currency: Currency.AUD)
     )
   ])
 
   let repository = InMemoryTransactionRepository(initialTransactions: [
     Transaction(
       type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -5023, currency: Currency.defaultCurrency),
+      amount: MonetaryAmount(cents: -5023, currency: Currency.AUD),
       payee: "Woolworths", categoryId: categoryId
     )
   ])

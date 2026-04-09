@@ -21,7 +21,7 @@ struct BudgetLineItem: Identifiable, Sendable {
     for item in budgetItems {
       seen.insert(item.categoryId)
       let name = categories.by(id: item.categoryId)?.name ?? "Unknown"
-      let actual = categoryBalances[item.categoryId] ?? .zero
+      let actual = categoryBalances[item.categoryId] ?? .zero(currency: item.amount.currency)
       result.append(
         BudgetLineItem(
           id: item.categoryId,
@@ -39,7 +39,7 @@ struct BudgetLineItem: Identifiable, Sendable {
           id: categoryId,
           categoryName: name,
           actual: actual,
-          budgeted: .zero
+          budgeted: .zero(currency: actual.currency)
         ))
     }
 
@@ -52,8 +52,10 @@ struct BudgetLineItem: Identifiable, Sendable {
     budgetItems: [EarmarkBudgetItem],
     savingsGoal: MonetaryAmount?
   ) -> MonetaryAmount? {
-    guard let goal = savingsGoal, goal > .zero else { return nil }
-    let totalBudget = budgetItems.reduce(MonetaryAmount.zero) { $0 + $1.amount }
+    guard let goal = savingsGoal, goal.isPositive else { return nil }
+    let totalBudget = budgetItems.reduce(MonetaryAmount.zero(currency: goal.currency)) {
+      $0 + $1.amount
+    }
     return goal - totalBudget
   }
 }

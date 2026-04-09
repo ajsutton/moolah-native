@@ -27,9 +27,9 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
   init(
     id: UUID = UUID(),
     name: String,
-    balance: MonetaryAmount = .zero,
-    saved: MonetaryAmount = .zero,
-    spent: MonetaryAmount = .zero,
+    balance: MonetaryAmount = .zero(currency: .AUD),
+    saved: MonetaryAmount = .zero(currency: .AUD),
+    spent: MonetaryAmount = .zero(currency: .AUD),
     isHidden: Bool = false,
     position: Int = 0,
     savingsGoal: MonetaryAmount? = nil,

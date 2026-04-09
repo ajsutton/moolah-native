@@ -100,6 +100,7 @@ struct ContentView: View {
     }
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
+        currency: accountStore.currentTotal.currency,
         onCreate: { newEarmark in
           Task {
             _ = await earmarkStore.create(newEarmark)
@@ -112,6 +113,7 @@ struct ContentView: View {
 }
 
 private struct CreateEarmarkSheet: View {
+  let currency: Currency
   let onCreate: (Earmark) -> Void
 
   @State private var name: String = ""
@@ -130,7 +132,7 @@ private struct CreateEarmarkSheet: View {
 
         Section("Savings Goal") {
           HStack {
-            Text(Currency.defaultCurrency.code)
+            Text(currency.code)
               .foregroundStyle(.secondary)
             TextField("Amount", text: $savingsGoal)
               #if os(iOS)
@@ -171,7 +173,7 @@ private struct CreateEarmarkSheet: View {
   private func createEarmark() {
     let goalCents = parseCurrency(savingsGoal)
     let goal =
-      goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: Currency.defaultCurrency) : nil
+      goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: currency) : nil
 
     let newEarmark = Earmark(
       name: name,

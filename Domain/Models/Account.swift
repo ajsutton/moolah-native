@@ -43,7 +43,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     id: UUID = UUID(),
     name: String,
     type: AccountType,
-    balance: MonetaryAmount = .zero,
+    balance: MonetaryAmount = .zero(currency: .AUD),
     investmentValue: MonetaryAmount? = nil,
     position: Int = 0,
     isHidden: Bool = false

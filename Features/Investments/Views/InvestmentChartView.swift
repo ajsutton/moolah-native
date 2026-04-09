@@ -4,6 +4,7 @@ import SwiftUI
 /// Multi-series investment chart with value, invested amount, and profit/loss.
 struct InvestmentChartView: View {
   let dataPoints: [InvestmentChartDataPoint]
+  let currency: Currency
 
   @State private var selectedDate: Date?
 
@@ -95,7 +96,7 @@ struct InvestmentChartView: View {
           AxisGridLine()
           AxisValueLabel {
             if let cents = value.as(Int.self) {
-              Text(MonetaryAmount(cents: cents, currency: .defaultCurrency).formatNoSymbol)
+              Text(MonetaryAmount(cents: cents, currency: currency).formatNoSymbol)
                 .monospacedDigit()
                 .font(.caption)
             }
@@ -126,21 +127,21 @@ struct InvestmentChartView: View {
       if let value = point.value {
         detailItem(
           label: "Value",
-          amount: MonetaryAmount(cents: value, currency: .defaultCurrency),
+          amount: MonetaryAmount(cents: value, currency: currency),
           color: .blue)
       }
 
       if let balance = point.balance {
         detailItem(
           label: "Invested",
-          amount: MonetaryAmount(cents: balance, currency: .defaultCurrency),
+          amount: MonetaryAmount(cents: balance, currency: currency),
           color: .gray)
       }
 
       if let profitLoss = point.profitLoss {
         detailItem(
           label: "P/L",
-          amount: MonetaryAmount(cents: profitLoss, currency: .defaultCurrency),
+          amount: MonetaryAmount(cents: profitLoss, currency: currency),
           color: .orange)
       }
     }

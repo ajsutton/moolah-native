@@ -140,10 +140,11 @@ struct IncomeExpenseTableCard: View {
 
   private func cumulativeSavings(upTo item: MonthlyIncomeExpense) -> MonetaryAmount {
     guard let index = data.firstIndex(where: { $0.id == item.id }) else {
-      return .zero
+      return .zero(currency: data.first?.income.currency ?? .AUD)
     }
     // Sum from the current item to the end (data is sorted most recent first)
-    return data[index...].reduce(MonetaryAmount.zero) { total, month in
+    return data[index...].reduce(MonetaryAmount.zero(currency: item.income.currency)) {
+      total, month in
       total + profit(for: month)
     }
   }
@@ -168,23 +169,23 @@ struct IncomeExpenseTableCard: View {
       month: "202604",
       start: Date().addingTimeInterval(-86400 * 30),
       end: Date(),
-      income: MonetaryAmount(cents: 500000, currency: .defaultCurrency),
-      expense: MonetaryAmount(cents: 300000, currency: .defaultCurrency),
-      profit: MonetaryAmount(cents: 200000, currency: .defaultCurrency),
-      earmarkedIncome: MonetaryAmount(cents: 50000, currency: .defaultCurrency),
-      earmarkedExpense: MonetaryAmount(cents: 20000, currency: .defaultCurrency),
-      earmarkedProfit: MonetaryAmount(cents: 30000, currency: .defaultCurrency)
+      income: MonetaryAmount(cents: 500000, currency: .AUD),
+      expense: MonetaryAmount(cents: 300000, currency: .AUD),
+      profit: MonetaryAmount(cents: 200000, currency: .AUD),
+      earmarkedIncome: MonetaryAmount(cents: 50000, currency: .AUD),
+      earmarkedExpense: MonetaryAmount(cents: 20000, currency: .AUD),
+      earmarkedProfit: MonetaryAmount(cents: 30000, currency: .AUD)
     ),
     MonthlyIncomeExpense(
       month: "202603",
       start: Date().addingTimeInterval(-86400 * 60),
       end: Date().addingTimeInterval(-86400 * 31),
-      income: MonetaryAmount(cents: 480000, currency: .defaultCurrency),
-      expense: MonetaryAmount(cents: 320000, currency: .defaultCurrency),
-      profit: MonetaryAmount(cents: 160000, currency: .defaultCurrency),
-      earmarkedIncome: MonetaryAmount(cents: 40000, currency: .defaultCurrency),
-      earmarkedExpense: MonetaryAmount(cents: 25000, currency: .defaultCurrency),
-      earmarkedProfit: MonetaryAmount(cents: 15000, currency: .defaultCurrency)
+      income: MonetaryAmount(cents: 480000, currency: .AUD),
+      expense: MonetaryAmount(cents: 320000, currency: .AUD),
+      profit: MonetaryAmount(cents: 160000, currency: .AUD),
+      earmarkedIncome: MonetaryAmount(cents: 40000, currency: .AUD),
+      earmarkedExpense: MonetaryAmount(cents: 25000, currency: .AUD),
+      earmarkedProfit: MonetaryAmount(cents: 15000, currency: .AUD)
     ),
   ]
 

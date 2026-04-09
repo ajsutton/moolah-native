@@ -82,6 +82,7 @@ struct AnalysisView: View {
       CategoriesOverTimeCard(
         entries: store.categoriesOverTime(categories: categoryStore.categories),
         categories: categoryStore.categories,
+        currency: store.dailyBalances.first?.balance.currency ?? .AUD,
         showActualValues: $store.showActualValues
       )
     }
@@ -134,7 +135,7 @@ struct ForecastPicker: View {
           id: UUID(),
           name: "Checking",
           type: .bank,
-          balance: MonetaryAmount(cents: 0, currency: .defaultCurrency)
+          balance: MonetaryAmount(cents: 0, currency: .AUD)
         )
         _ = try? await backend.accounts.create(account)
 
@@ -154,7 +155,7 @@ struct ForecastPicker: View {
               accountId: account.id,
               amount: MonetaryAmount(
                 cents: i % 2 == 0 ? Int.random(in: 10000...50000) : -Int.random(in: 5000...20000),
-                currency: .defaultCurrency
+                currency: .AUD
               ),
               payee: "Transaction \(i)",
               categoryId: i % 3 == 0 ? category.id : nil

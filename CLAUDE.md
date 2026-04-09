@@ -30,7 +30,7 @@ just generate
 - **Targeting:** iOS 26+ and macOS 26+ (Universal SwiftUI app).
 - **Domain Layer:** Strictly isolated. `Domain/Models/` and `Domain/Repositories/` must never import `SwiftUI`, `SwiftData`, `URLSession`, or any backend module.
 - **Features:** Only talk to repository protocols via `@Environment(BackendProvider.self)`. No feature file may import `Backends/` or reference `Remote*` types directly.
-- **Currency:** All currency values are stored as `Int` (cents). Use `Constants.defaultCurrency` (currently "AUD") for formatting.
+- **Currency:** All currency values are stored as `Int` (cents). Currency flows from `Profile.currency` → backend → `MonetaryAmount` on all domain objects. Views derive currency from loaded domain objects, never from a global constant. Tests use `Currency.defaultTestCurrency` (defined in `MoolahTests/Support/TestCurrency.swift`).
 - **Backend:** `BackendProvider` is the injection point. `RemoteBackend` for production, `InMemoryBackend` for tests and previews.
 - **Concurrency:** All concurrency work MUST follow `CONCURRENCY_GUIDE.md`. This is not optional.
   - Mark types `@MainActor` when they own UI-bound state (e.g., Stores).

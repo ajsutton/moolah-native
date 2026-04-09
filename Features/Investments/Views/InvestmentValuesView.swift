@@ -46,7 +46,8 @@ struct InvestmentValuesView: View {
       }
     }
     .sheet(isPresented: $showingAddValue) {
-      AddInvestmentValueView(accountId: account.id, store: store)
+      AddInvestmentValueView(
+        accountId: account.id, currency: account.balance.currency, store: store)
     }
     .task {
       await store.loadValues(accountId: account.id)
@@ -80,7 +81,7 @@ struct InvestmentValuesView: View {
       AxisMarks(position: .leading) { axisValue in
         if let decimal = axisValue.as(Decimal.self) {
           AxisValueLabel {
-            Text(decimal, format: .currency(code: Currency.defaultCurrency.code))
+            Text(decimal, format: .currency(code: account.balance.currency.code))
               .font(.caption)
               .monospacedDigit()
           }

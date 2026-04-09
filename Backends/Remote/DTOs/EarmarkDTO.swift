@@ -12,17 +12,17 @@ struct EarmarkDTO: Codable {
   let saved: Int
   let spent: Int
 
-  func toDomain() -> Earmark {
+  func toDomain(currency: Currency) -> Earmark {
     Earmark(
       id: FlexibleUUID.parse(id) ?? UUID(),
       name: name,
-      balance: MonetaryAmount(cents: balance, currency: Currency.defaultCurrency),
-      saved: MonetaryAmount(cents: saved, currency: Currency.defaultCurrency),
-      spent: MonetaryAmount(cents: spent, currency: Currency.defaultCurrency),
+      balance: MonetaryAmount(cents: balance, currency: currency),
+      saved: MonetaryAmount(cents: saved, currency: currency),
+      spent: MonetaryAmount(cents: spent, currency: currency),
       isHidden: hidden,
       position: position ?? 0,
       savingsGoal: savingsTarget.map {
-        MonetaryAmount(cents: $0, currency: Currency.defaultCurrency)
+        MonetaryAmount(cents: $0, currency: currency)
       },
       savingsStartDate: savingsStartDate.flatMap { BackendDateFormatter.date(from: $0) },
       savingsEndDate: savingsEndDate.flatMap { BackendDateFormatter.date(from: $0) }

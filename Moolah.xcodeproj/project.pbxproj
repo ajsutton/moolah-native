@@ -225,6 +225,7 @@
 		BC0C94147B4EDA66DFEFDE28 /* UpcomingTransactionsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D57E97531288FB84806CC14 /* UpcomingTransactionsCard.swift */; };
 		BC8A47F270F7C1D1DF788E23 /* InvestmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6532C8AF63F150C2B65226D9 /* InvestmentStore.swift */; };
 		BE8EF69FB14777957E7B6773 /* BackendDateFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D190943A082D94DFFBBF510 /* BackendDateFormatter.swift */; };
+		BE95D97635BE0DB9C372C69B /* TestCurrency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AA59E4564A158D5E6BFEED8 /* TestCurrency.swift */; };
 		BF633F5962C22BD2CDF82766 /* CategoryTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E5EEA26C0D2D71C2EB15030 /* CategoryTreeView.swift */; };
 		BFF41BDF77C53D6CC12FB0CB /* UIConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD01884C3447BF75CE0E798 /* UIConstants.swift */; };
 		C1429A45F23B09C7E108357E /* UpcomingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 886EE430E1C6721891325649 /* UpcomingView.swift */; };
@@ -266,6 +267,7 @@
 		DD41B78A36F9DDA8C4BB4228 /* AccountDailyBalance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E9466B4E085AA57F9B5E5BE /* AccountDailyBalance.swift */; };
 		DE9881684B114439AC328C4A /* InvestmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6532C8AF63F150C2B65226D9 /* InvestmentStore.swift */; };
 		DF200724C634EFFA2E58CA49 /* CookieKeychainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68104891F6BA3CB148906B84 /* CookieKeychainTests.swift */; };
+		DF3ADD3470C05EE4F4301FAB /* TestCurrency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AA59E4564A158D5E6BFEED8 /* TestCurrency.swift */; };
 		E03B7D098DE1F4D1E111AD05 /* InMemoryTransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A19482E3FC4577044CBCD484 /* InMemoryTransactionRepository.swift */; };
 		E0BB6B5944977FDD58DD8C83 /* AuthContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF82ABEAD4CD6082C14CC50 /* AuthContractTests.swift */; };
 		E1EC9E5AFB743BADA676EC8B /* DateRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B046F0A0CF492D4CDD6326 /* DateRange.swift */; };
@@ -398,6 +400,7 @@
 		68104891F6BA3CB148906B84 /* CookieKeychainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieKeychainTests.swift; sourceTree = "<group>"; };
 		689C68CCE94CDCB34D4D0A09 /* BackendProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendProvider.swift; sourceTree = "<group>"; };
 		69224841A23B128697F76EEE /* EarmarkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarmarkStore.swift; sourceTree = "<group>"; };
+		6AA59E4564A158D5E6BFEED8 /* TestCurrency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCurrency.swift; sourceTree = "<group>"; };
 		6B6CD88ED67E56DC24998EF5 /* RemoteBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteBackend.swift; sourceTree = "<group>"; };
 		6C9D26A8790E6F221AD6A048 /* Earmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Earmark.swift; sourceTree = "<group>"; };
 		70CB2800A65F1A4322E21650 /* InvestmentValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentValue.swift; sourceTree = "<group>"; };
@@ -605,6 +608,7 @@
 			isa = PBXGroup;
 			children = (
 				38FB6CBF1CC899B2422E5537 /* TestBundleMarker.swift */,
+				6AA59E4564A158D5E6BFEED8 /* TestCurrency.swift */,
 				EB7FA20110E81A4ABFE039C8 /* Fixtures */,
 			);
 			path = Support;
@@ -1179,6 +1183,7 @@
 				D693F63C07C8F3E7E7730236 /* RemoteTransactionRepositoryTests.swift in Sources */,
 				D7E9684A023E0048298AD60D /* ScheduledTransactionTests.swift in Sources */,
 				CE32F2D7F43E9A0E49475F78 /* TestBundleMarker.swift in Sources */,
+				DF3ADD3470C05EE4F4301FAB /* TestCurrency.swift in Sources */,
 				7D2B15C16E46B5E582862F0B /* TransactionRepositoryContractTests.swift in Sources */,
 				5D705F42B76E94E34245039A /* TransactionStoreTests.swift in Sources */,
 			);
@@ -1451,6 +1456,7 @@
 				4DC59F69205FFC72F4FFE467 /* RemoteTransactionRepositoryTests.swift in Sources */,
 				EDC17A78904198B1471A8865 /* ScheduledTransactionTests.swift in Sources */,
 				99E8BCF3EC75ADCE30C7A0AD /* TestBundleMarker.swift in Sources */,
+				BE95D97635BE0DB9C372C69B /* TestCurrency.swift in Sources */,
 				08DBB4D2DB2CD7424BD3E0B4 /* TransactionRepositoryContractTests.swift in Sources */,
 				118ACBE554F485DF857C681E /* TransactionStoreTests.swift in Sources */,
 			);

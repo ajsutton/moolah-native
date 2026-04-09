@@ -106,7 +106,9 @@ struct ExpenseBreakdownCard: View {
     // (server returns negative amounts for expenses)
     let categoryTotals = Dictionary(grouping: breakdown) { $0.categoryId }
       .mapValues { items -> MonetaryAmount in
-        let sum = items.reduce(MonetaryAmount.zero) { $0 + $1.totalExpenses }
+        let sum = items.reduce(MonetaryAmount.zero(currency: items.first!.totalExpenses.currency)) {
+          $0 + $1.totalExpenses
+        }
         return MonetaryAmount(cents: max(0, -sum.cents), currency: sum.currency)
       }
 
@@ -125,7 +127,7 @@ struct ExpenseBreakdownCard: View {
     }
 
     let filtered = categoryTotals.filter { visibleCategories.contains($0.key) }
-    let total = filtered.values.reduce(MonetaryAmount.zero, +)
+    let total = filtered.values.reduce(.zero(currency: filtered.values.first?.currency ?? .AUD), +)
 
     return filtered.map { categoryId, amount in
       ExpenseBreakdownWithPercentage(
@@ -186,17 +188,17 @@ struct ExpenseBreakdownWithPercentage: Identifiable {
     ExpenseBreakdown(
       categoryId: categories[0].id,
       month: "202604",
-      totalExpenses: MonetaryAmount(cents: 45000, currency: .defaultCurrency)
+      totalExpenses: MonetaryAmount(cents: 45000, currency: .AUD)
     ),
     ExpenseBreakdown(
       categoryId: categories[1].id,
       month: "202604",
-      totalExpenses: MonetaryAmount(cents: 25000, currency: .defaultCurrency)
+      totalExpenses: MonetaryAmount(cents: 25000, currency: .AUD)
     ),
     ExpenseBreakdown(
       categoryId: categories[2].id,
       month: "202604",
-      totalExpenses: MonetaryAmount(cents: 15000, currency: .defaultCurrency)
+      totalExpenses: MonetaryAmount(cents: 15000, currency: .AUD)
     ),
   ]
 

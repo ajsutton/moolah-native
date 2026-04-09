@@ -77,7 +77,7 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: catId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -10000, currency: .defaultCurrency))
+        totalExpenses: MonetaryAmount(cents: -10000, currency: .defaultTestCurrency))
     ]
     let categories = Categories(from: [Category(id: catId, name: "Groceries")])
 
@@ -97,10 +97,10 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: cat1, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -75000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -75000, currency: .defaultTestCurrency)),
       ExpenseBreakdown(
         categoryId: cat2, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -25000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -25000, currency: .defaultTestCurrency)),
     ]
     let categories = Categories(from: [
       Category(id: cat1, name: "Groceries"),
@@ -123,10 +123,10 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: rootId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -30000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -30000, currency: .defaultTestCurrency)),
       ExpenseBreakdown(
         categoryId: childId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -20000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -20000, currency: .defaultTestCurrency)),
     ]
     let categories = Categories(from: [
       Category(id: rootId, name: "Food"),
@@ -146,13 +146,13 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: catId, month: "202606",
-        totalExpenses: MonetaryAmount(cents: -10000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -10000, currency: .defaultTestCurrency)),
       ExpenseBreakdown(
         categoryId: catId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -20000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -20000, currency: .defaultTestCurrency)),
       ExpenseBreakdown(
         categoryId: catId, month: "202605",
-        totalExpenses: MonetaryAmount(cents: -15000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -15000, currency: .defaultTestCurrency)),
     ]
     let categories = Categories(from: [Category(id: catId, name: "Groceries")])
 
@@ -171,10 +171,10 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: catId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -60000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -60000, currency: .defaultTestCurrency)),
       ExpenseBreakdown(
         categoryId: nil, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -40000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -40000, currency: .defaultTestCurrency)),
     ]
     let categories = Categories(from: [Category(id: catId, name: "Groceries")])
 
@@ -195,7 +195,7 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: catId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: 10000, currency: .defaultCurrency))
+        totalExpenses: MonetaryAmount(cents: 10000, currency: .defaultTestCurrency))
     ]
     let categories = Categories(from: [Category(id: catId, name: "Groceries")])
 
@@ -212,7 +212,7 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: catId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: 0, currency: .defaultCurrency))
+        totalExpenses: MonetaryAmount(cents: 0, currency: .defaultTestCurrency))
     ]
     let categories = Categories(from: [Category(id: catId, name: "Groceries")])
 
@@ -240,14 +240,14 @@ struct AnalysisStoreExtrapolateTests {
     daysFromToday: Int, cents: Int = 1000, isForecast: Bool = false,
     relativeTo today: Date = Date()
   ) -> DailyBalance {
-    let amount = MonetaryAmount(cents: cents, currency: .defaultCurrency)
+    let amount = MonetaryAmount(cents: cents, currency: .defaultTestCurrency)
     if isForecast {
       return DailyBalance(
         date: date(daysFromToday, relativeTo: today),
         balance: amount,
-        earmarked: .zero,
+        earmarked: .zero(currency: .defaultTestCurrency),
         availableFunds: amount,
-        investments: .zero,
+        investments: .zero(currency: .defaultTestCurrency),
         investmentValue: nil,
         netWorth: amount,
         bestFit: nil,
@@ -257,8 +257,8 @@ struct AnalysisStoreExtrapolateTests {
     return DailyBalance(
       date: date(daysFromToday, relativeTo: today),
       balance: amount,
-      earmarked: .zero,
-      investments: .zero,
+      earmarked: .zero(currency: .defaultTestCurrency),
+      investments: .zero(currency: .defaultTestCurrency),
       investmentValue: nil
     )
   }
