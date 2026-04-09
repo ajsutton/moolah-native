@@ -193,7 +193,7 @@ struct UpcomingTransactionRow: View {
               .imageScale(.small)
               .accessibilityLabel("Overdue")
           }
-          Text(transaction.payee ?? "Untitled")
+          Text(displayPayee)
             .font(.headline)
             .foregroundStyle(isOverdue ? .red : .primary)
         }
@@ -252,6 +252,18 @@ struct UpcomingTransactionRow: View {
       .accessibilityLabel("Pay \(transaction.payee ?? "transaction")")
     }
     .contentShape(Rectangle())
+  }
+
+  private var displayPayee: String {
+    if let payee = transaction.payee, !payee.isEmpty {
+      return payee
+    }
+    if let earmarkId = transaction.earmarkId,
+      let earmark = earmarks.by(id: earmarkId)
+    {
+      return "Earmark funds for \(earmark.name)"
+    }
+    return "Untitled"
   }
 
   private var recurrenceDescription: String? {

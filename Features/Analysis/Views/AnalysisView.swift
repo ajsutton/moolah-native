@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct AnalysisView: View {
+  @Environment(AccountStore.self) private var accountStore
   @Environment(CategoryStore.self) private var categoryStore
+  @Environment(EarmarkStore.self) private var earmarkStore
   @Environment(TransactionStore.self) private var transactionStore
   @Environment(\.scenePhase) private var scenePhase
 
@@ -67,7 +69,12 @@ struct AnalysisView: View {
       NetWorthGraphCard(balances: store.dailyBalances)
 
       // Upcoming Transactions (full width)
-      UpcomingTransactionsCard(transactionStore: transactionStore)
+      UpcomingTransactionsCard(
+        accounts: accountStore.accounts,
+        categories: categoryStore.categories,
+        earmarks: earmarkStore.earmarks,
+        transactionStore: transactionStore
+      )
 
       // Monthly Income & Expense (full width)
       IncomeExpenseTableCard(data: store.incomeAndExpense)
@@ -121,13 +128,17 @@ struct ForecastPicker: View {
 
 #Preview {
   let backend = InMemoryBackend()
+  let accountStore = AccountStore(repository: backend.accounts)
   let categoryStore = CategoryStore(repository: backend.categories)
+  let earmarkStore = EarmarkStore(repository: backend.earmarks)
   let transactionStore = TransactionStore(repository: backend.transactions)
   let analysisStore = AnalysisStore(repository: backend.analysis)
 
   NavigationStack {
     AnalysisView(store: analysisStore)
+      .environment(accountStore)
       .environment(categoryStore)
+      .environment(earmarkStore)
       .environment(transactionStore)
       .task {
         // Add some preview data
