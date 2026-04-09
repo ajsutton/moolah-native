@@ -24,6 +24,8 @@ struct TransactionFormView: View {
   @State private var recurEvery: Int
   @State private var isRepeating: Bool
   @State private var showDeleteConfirmation = false
+  @State private var showPayeeSuggestions = false
+  @State private var payeeHighlightedIndex: Int?
 
   init(
     accounts: Accounts,
@@ -109,6 +111,29 @@ struct TransactionFormView: View {
         }
       }
       .formStyle(.grouped)
+      .overlayPreferenceValue(PayeeFieldAnchorKey.self) { anchor in
+        if let store = transactionStore, showPayeeSuggestions, !payee.isEmpty,
+          !store.payeeSuggestions.isEmpty, let anchor
+        {
+          GeometryReader { proxy in
+            let rect = proxy[anchor]
+            PayeeSuggestionDropdown(
+              suggestions: store.payeeSuggestions,
+              searchText: payee,
+              highlightedIndex: $payeeHighlightedIndex,
+              onSelect: { selected in
+                showPayeeSuggestions = false
+                payeeHighlightedIndex = nil
+                payee = selected
+                store.clearPayeeSuggestions()
+                autofillFromPayee(selected, store: store)
+              }
+            )
+            .frame(width: rect.width)
+            .offset(x: rect.minX, y: rect.maxY + 4)
+          }
+        }
+      }
       .navigationTitle(title)
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -154,21 +179,18 @@ struct TransactionFormView: View {
     }
   }
 
-  private var isNewTransaction: Bool { existing == nil }
-
   private var detailsSection: some View {
     Section {
-      if let store = transactionStore {
+      if transactionStore != nil {
         PayeeAutocompleteField(
           text: $payee,
-          suggestions: store.payeeSuggestions,
+          highlightedIndex: $payeeHighlightedIndex,
+          suggestionCount: payeeVisibleSuggestionCount,
           onTextChange: { newValue in
-            store.fetchPayeeSuggestions(prefix: newValue)
+            showPayeeSuggestions = !newValue.isEmpty
+            transactionStore?.fetchPayeeSuggestions(prefix: newValue)
           },
-          onSelect: { selectedPayee in
-            store.clearPayeeSuggestions()
-            autofillFromPayee(selectedPayee, store: store)
-          }
+          onAcceptHighlighted: acceptHighlightedPayee
         )
       } else {
         TextField("Payee", text: $payee)
@@ -289,20 +311,42 @@ struct TransactionFormView: View {
 
   // MARK: - Actions
 
+  private var payeeVisibleSuggestions: [String] {
+    guard showPayeeSuggestions, !payee.isEmpty, let store = transactionStore else { return [] }
+    return store.payeeSuggestions
+      .filter { $0.localizedCaseInsensitiveCompare(payee) != .orderedSame }
+      .prefix(8).map { $0 }
+  }
+
+  private var payeeVisibleSuggestionCount: Int {
+    payeeVisibleSuggestions.count
+  }
+
+  private func acceptHighlightedPayee() {
+    guard let store = transactionStore,
+      let index = payeeHighlightedIndex, index < payeeVisibleSuggestions.count
+    else { return }
+    let selected = payeeVisibleSuggestions[index]
+    showPayeeSuggestions = false
+    payeeHighlightedIndex = nil
+    payee = selected
+    store.clearPayeeSuggestions()
+    autofillFromPayee(selected, store: store)
+  }
+
   private func autofillFromPayee(_ selectedPayee: String, store: TransactionStore) {
-    guard isNewTransaction else { return }
     Task {
       guard let match = await store.fetchTransactionForAutofill(payee: selectedPayee) else {
         return
       }
-      if parsedCents == nil {
+      if parsedCents == nil || parsedCents == 0 {
         let decimal = Decimal(abs(match.amount.cents)) / 100
         amountText = "\(decimal)"
       }
       if categoryId == nil {
         categoryId = match.categoryId
       }
-      if type == .expense {
+      if type == .expense && match.type != .expense {
         type = match.type
       }
       if type == .transfer, toAccountId == nil {
