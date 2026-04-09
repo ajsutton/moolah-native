@@ -47,10 +47,48 @@ final class AnalysisStore {
     let after = afterDate(monthsAgo: historyMonths)
     let forecastUntil = forecastDate(monthsAhead: forecastMonths)
 
-    dailyBalances = try await repository.fetchDailyBalances(
+    let raw = try await repository.fetchDailyBalances(
       after: after,
       forecastUntil: forecastUntil
     )
+    dailyBalances = Self.extrapolateBalances(
+      raw, today: Date(), forecastUntil: forecastUntil
+    )
+  }
+
+  /// Extends balance data to fill gaps, matching the web app's extrapolateBalances logic:
+  /// 1. Extend actual balances forward to today (so the step chart reaches the present).
+  /// 2. Extend forecast balances back to today (so forecast connects to actual data).
+  /// 3. Extend forecast balances forward to the forecast end date.
+  nonisolated static func extrapolateBalances(
+    _ balances: [DailyBalance], today: Date, forecastUntil: Date?
+  ) -> [DailyBalance] {
+    let todayStart = Calendar.current.startOfDay(for: today)
+    var actual = balances.filter { !$0.isForecast }
+    var forecast = balances.filter { $0.isForecast }
+
+    // Extend actual balances to today
+    if let last = actual.last, Calendar.current.startOfDay(for: last.date) < todayStart {
+      actual.append(last.withDate(todayStart))
+    }
+
+    // Extend forecast back to today (so forecast line starts where actual ends)
+    if !forecast.isEmpty, let lastActual = actual.last {
+      let firstForecastDay = Calendar.current.startOfDay(for: forecast[0].date)
+      if firstForecastDay > todayStart {
+        forecast.insert(lastActual.withDate(todayStart, isForecast: true), at: 0)
+      }
+    }
+
+    // Extend forecast to the forecast end date
+    if let forecastUntil, let last = forecast.last {
+      let untilStart = Calendar.current.startOfDay(for: forecastUntil)
+      if Calendar.current.startOfDay(for: last.date) < untilStart {
+        forecast.append(last.withDate(untilStart))
+      }
+    }
+
+    return (actual + forecast).sorted { $0.date < $1.date }
   }
 
   private func loadExpenseBreakdown() async throws {

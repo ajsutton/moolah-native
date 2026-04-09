@@ -165,3 +165,134 @@ struct AnalysisStoreCategoriesOverTimeTests {
     #expect(result[0].points[0].percentage == 0.0)
   }
 }
+
+// MARK: - extrapolateBalances
+
+@Suite("AnalysisStore — extrapolateBalances")
+struct AnalysisStoreExtrapolateTests {
+
+  private let calendar = Calendar.current
+
+  private func date(_ daysFromToday: Int, relativeTo today: Date = Date()) -> Date {
+    calendar.startOfDay(for: calendar.date(byAdding: .day, value: daysFromToday, to: today)!)
+  }
+
+  private func balance(
+    daysFromToday: Int, cents: Int = 1000, isForecast: Bool = false,
+    relativeTo today: Date = Date()
+  ) -> DailyBalance {
+    let amount = MonetaryAmount(cents: cents, currency: .defaultCurrency)
+    if isForecast {
+      return DailyBalance(
+        date: date(daysFromToday, relativeTo: today),
+        balance: amount,
+        earmarked: .zero,
+        availableFunds: amount,
+        investments: .zero,
+        investmentValue: nil,
+        netWorth: amount,
+        bestFit: nil,
+        isForecast: true
+      )
+    }
+    return DailyBalance(
+      date: date(daysFromToday, relativeTo: today),
+      balance: amount,
+      earmarked: .zero,
+      investments: .zero,
+      investmentValue: nil
+    )
+  }
+
+  @Test func emptyBalancesReturnsEmpty() {
+    let result = AnalysisStore.extrapolateBalances([], today: Date(), forecastUntil: nil)
+    #expect(result.isEmpty)
+  }
+
+  @Test func extendsActualBalancesToToday() {
+    let today = calendar.startOfDay(for: Date())
+    let balances = [balance(daysFromToday: -5, relativeTo: today)]
+
+    let result = AnalysisStore.extrapolateBalances(balances, today: today, forecastUntil: nil)
+
+    #expect(result.count == 2)
+    #expect(calendar.startOfDay(for: result[0].date) == date(-5, relativeTo: today))
+    #expect(calendar.startOfDay(for: result[1].date) == today)
+    #expect(result[1].balance.cents == result[0].balance.cents)
+    #expect(!result[1].isForecast)
+  }
+
+  @Test func doesNotExtendIfActualAlreadyAtToday() {
+    let today = calendar.startOfDay(for: Date())
+    let balances = [balance(daysFromToday: 0, relativeTo: today)]
+
+    let result = AnalysisStore.extrapolateBalances(balances, today: today, forecastUntil: nil)
+
+    #expect(result.count == 1)
+  }
+
+  @Test func extendsForecastBackToToday() {
+    let today = calendar.startOfDay(for: Date())
+    let balances = [
+      balance(daysFromToday: -3, cents: 1000, relativeTo: today),
+      balance(daysFromToday: 5, cents: 1500, isForecast: true, relativeTo: today),
+    ]
+
+    let forecastUntil = date(30, relativeTo: today)
+    let result = AnalysisStore.extrapolateBalances(
+      balances, today: today, forecastUntil: forecastUntil)
+
+    let forecasts = result.filter { $0.isForecast }
+    // Forecast should be extended back to today using the last actual balance
+    #expect(forecasts.count >= 2)
+    #expect(calendar.startOfDay(for: forecasts[0].date) == today)
+    #expect(forecasts[0].balance.cents == 1000)  // Last actual balance value
+  }
+
+  @Test func extendsForecastToEndDate() {
+    let today = calendar.startOfDay(for: Date())
+    let forecastUntil = date(30, relativeTo: today)
+    let balances = [
+      balance(daysFromToday: -3, cents: 1000, relativeTo: today),
+      balance(daysFromToday: 5, cents: 1500, isForecast: true, relativeTo: today),
+    ]
+
+    let result = AnalysisStore.extrapolateBalances(
+      balances, today: today, forecastUntil: forecastUntil)
+
+    let forecasts = result.filter { $0.isForecast }
+    let lastForecast = forecasts.last!
+    #expect(calendar.startOfDay(for: lastForecast.date) == forecastUntil)
+    #expect(lastForecast.balance.cents == 1500)
+  }
+
+  @Test func noForecastDataSkipsForecastExtension() {
+    let today = calendar.startOfDay(for: Date())
+    let forecastUntil = date(30, relativeTo: today)
+    let balances = [balance(daysFromToday: -3, cents: 1000, relativeTo: today)]
+
+    let result = AnalysisStore.extrapolateBalances(
+      balances, today: today, forecastUntil: forecastUntil)
+
+    let forecasts = result.filter { $0.isForecast }
+    #expect(forecasts.isEmpty)
+  }
+
+  @Test func resultIsSortedByDate() {
+    let today = calendar.startOfDay(for: Date())
+    let forecastUntil = date(30, relativeTo: today)
+    let balances = [
+      balance(daysFromToday: -10, cents: 800, relativeTo: today),
+      balance(daysFromToday: -3, cents: 1000, relativeTo: today),
+      balance(daysFromToday: 5, cents: 1500, isForecast: true, relativeTo: today),
+      balance(daysFromToday: 15, cents: 1200, isForecast: true, relativeTo: today),
+    ]
+
+    let result = AnalysisStore.extrapolateBalances(
+      balances, today: today, forecastUntil: forecastUntil)
+
+    for i in 1..<result.count {
+      #expect(result[i].date >= result[i - 1].date)
+    }
+  }
+}

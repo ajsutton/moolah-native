@@ -53,4 +53,19 @@ extension DailyBalance {
     self.bestFit = nil
     self.isForecast = false
   }
+
+  /// Returns a copy of this balance with a different date and optionally different forecast flag.
+  func withDate(_ newDate: Date, isForecast: Bool? = nil) -> DailyBalance {
+    DailyBalance(
+      date: newDate,
+      balance: balance,
+      earmarked: earmarked,
+      availableFunds: availableFunds,
+      investments: investments,
+      investmentValue: investmentValue,
+      netWorth: netWorth,
+      bestFit: bestFit,
+      isForecast: isForecast ?? self.isForecast
+    )
+  }
 }
