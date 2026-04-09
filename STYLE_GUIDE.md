@@ -119,7 +119,7 @@ Expenses are stored internally as **negative cents** (they reduce the account ba
 let displayAmount = MonetaryAmount(cents: max(0, -serverAmount.cents), currency: serverAmount.currency)
 ```
 
-This matches the web app's `Math.max(0, -totalExpenses)` pattern. Transaction lists that show the raw amount (income, expense, transfer) should continue to display the signed value — this convention only applies to aggregated expense summaries.
+This matches the web app's `Math.max(0, -totalExpenses)` pattern. This convention applies to both aggregated expense summaries **and** expense amount fields in forms/editors — users enter and see positive values (e.g., "$50"), and the sign is applied internally based on transaction type. Transaction lists that show the raw signed amount (with income positive and expenses negative) are the exception.
 
 **Do:**
 - Use system colors (`.green`, `.red`) for automatic dark mode adaptation
