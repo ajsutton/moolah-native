@@ -96,7 +96,7 @@ final class RemoteAnalysisRepository: AnalysisRepository {
 
     // Convert string keys to UUIDs and cents to MonetaryAmount (server doesn't specify currency)
     return response.reduce(into: [:]) { result, pair in
-      if let uuid = UUID(uuidString: pair.key) {
+      if let uuid = FlexibleUUID.parse(pair.key) {
         result[uuid] = MonetaryAmount(cents: pair.value, currency: Currency.defaultCurrency)
       }
     }

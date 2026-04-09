@@ -12,6 +12,16 @@ struct AnalysisView: View {
         ProgressView("Loading analysis...")
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .frame(minHeight: 400)
+      } else if let error = store.error {
+        ContentUnavailableView {
+          Label("Error Loading Analysis", systemImage: "exclamationmark.triangle")
+        } description: {
+          Text(error.localizedDescription)
+        } actions: {
+          Button("Try Again") {
+            Task { await store.loadAll() }
+          }
+        }
       } else {
         contentView(store: store)
       }
@@ -66,6 +76,13 @@ struct AnalysisView: View {
         IncomeExpenseTableCard(data: store.incomeAndExpense)
           .frame(maxWidth: .infinity)
       }
+
+      // Categories Over Time (full width)
+      CategoriesOverTimeCard(
+        entries: store.categoriesOverTime(categories: categoryStore.categories),
+        categories: categoryStore.categories,
+        showActualValues: $store.showActualValues
+      )
     }
     .padding()
   }

@@ -1,10 +1,41 @@
 import Charts
 import SwiftUI
 
+enum ChartSeries: String, CaseIterable, Identifiable {
+  case availableFunds = "Available Funds"
+  case currentFunds = "Current Funds"
+  case investedAmount = "Invested Amount"
+  case investmentValue = "Investment Value"
+  case netWorth = "Net Worth"
+  case bestFit = "Best Fit"
+
+  var id: String { rawValue }
+
+  var color: Color {
+    switch self {
+    case .availableFunds: .green
+    case .currentFunds: .orange
+    case .investedAmount: .purple
+    case .investmentValue: .indigo
+    case .netWorth: .blue
+    case .bestFit: .gray
+    }
+  }
+
+  var enabledByDefault: Bool {
+    switch self {
+    case .availableFunds, .netWorth, .bestFit: true
+    case .currentFunds, .investedAmount, .investmentValue: false
+    }
+  }
+}
+
 struct NetWorthGraphCard: View {
   let balances: [DailyBalance]
 
   @State private var selectedDate: Date?
+  @State private var visibleSeries: Set<ChartSeries> = Set(
+    ChartSeries.allCases.filter(\.enabledByDefault))
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -16,7 +47,7 @@ struct NetWorthGraphCard: View {
         emptyState
       } else {
         chart
-        legend
+        seriesToggles
       }
     }
     .padding()
@@ -37,79 +68,22 @@ struct NetWorthGraphCard: View {
 
   private var chart: some View {
     Chart {
-      // Actual balances
       ForEach(actualBalances) { balance in
-        // Available Funds (green area)
-        AreaMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", balance.availableFunds.cents)
-        )
-        .foregroundStyle(.green.opacity(0.3))
-        .interpolationMethod(.stepEnd)
-
-        LineMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", balance.availableFunds.cents)
-        )
-        .foregroundStyle(.green)
-        .lineStyle(StrokeStyle(lineWidth: 2))
-        .interpolationMethod(.stepEnd)
-
-        // Net Worth (blue line)
-        LineMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", balance.netWorth.cents)
-        )
-        .foregroundStyle(.blue)
-        .lineStyle(StrokeStyle(lineWidth: 2))
-        .interpolationMethod(.stepEnd)
-
-        // Best Fit (gray dashed line)
-        if let bestFit = balance.bestFit {
-          LineMark(
-            x: .value("Date", balance.date),
-            y: .value("Amount", bestFit.cents)
-          )
-          .foregroundStyle(.gray)
-          .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
-        }
+        actualMarks(for: balance)
       }
 
-      // Forecasted balances (lighter colors, dashed)
       ForEach(forecastBalances) { balance in
-        AreaMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", balance.availableFunds.cents)
-        )
-        .foregroundStyle(.green.opacity(0.1))
-        .interpolationMethod(.stepEnd)
-
-        LineMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", balance.availableFunds.cents)
-        )
-        .foregroundStyle(.green.opacity(0.5))
-        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-        .interpolationMethod(.stepEnd)
-
-        LineMark(
-          x: .value("Date", balance.date),
-          y: .value("Amount", balance.netWorth.cents)
-        )
-        .foregroundStyle(.blue.opacity(0.5))
-        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-        .interpolationMethod(.stepEnd)
+        forecastMarks(for: balance)
       }
 
-      // Selection rule
-      if let selectedDate = selectedDate {
+      if let selectedDate {
         RuleMark(x: .value("Selected", selectedDate))
           .foregroundStyle(.gray.opacity(0.5))
           .lineStyle(StrokeStyle(lineWidth: 1))
       }
     }
     .chartXAxis {
-      AxisMarks(values: .automatic(desiredCount: 6)) { value in
+      AxisMarks(values: .automatic(desiredCount: 6)) { _ in
         AxisGridLine()
         AxisTick()
         AxisValueLabel(format: .dateTime.month().day())
@@ -128,21 +102,167 @@ struct NetWorthGraphCard: View {
     }
     .chartXSelection(value: $selectedDate)
     .frame(height: 300)
-    .accessibilityLabel("Net worth graph showing available funds and total net worth over time")
+    .accessibilityLabel("Net worth graph showing financial data over time")
   }
 
-  private var legend: some View {
+  @ChartContentBuilder
+  private func actualMarks(for balance: DailyBalance) -> some ChartContent {
+    if visibleSeries.contains(.availableFunds) {
+      AreaMark(
+        x: .value("Date", balance.date),
+        y: .value("Amount", balance.availableFunds.cents)
+      )
+      .foregroundStyle(.green.opacity(0.3))
+      .interpolationMethod(.stepEnd)
+
+      LineMark(
+        x: .value("Date", balance.date),
+        y: .value("Amount", balance.availableFunds.cents)
+      )
+      .foregroundStyle(.green)
+      .lineStyle(StrokeStyle(lineWidth: 2))
+      .interpolationMethod(.stepEnd)
+    }
+
+    if visibleSeries.contains(.currentFunds) {
+      LineMark(
+        x: .value("Date", balance.date),
+        y: .value("Amount", balance.balance.cents)
+      )
+      .foregroundStyle(.orange)
+      .lineStyle(StrokeStyle(lineWidth: 2))
+      .interpolationMethod(.stepEnd)
+    }
+
+    if visibleSeries.contains(.investedAmount) {
+      LineMark(
+        x: .value("Date", balance.date),
+        y: .value("Amount", balance.investments.cents)
+      )
+      .foregroundStyle(.purple)
+      .lineStyle(StrokeStyle(lineWidth: 2))
+      .interpolationMethod(.stepEnd)
+    }
+
+    if visibleSeries.contains(.investmentValue), let investmentValue = balance.investmentValue {
+      LineMark(
+        x: .value("Date", balance.date),
+        y: .value("Amount", investmentValue.cents)
+      )
+      .foregroundStyle(.indigo)
+      .lineStyle(StrokeStyle(lineWidth: 2))
+      .interpolationMethod(.stepEnd)
+    }
+
+    if visibleSeries.contains(.netWorth) {
+      LineMark(
+        x: .value("Date", balance.date),
+        y: .value("Amount", balance.netWorth.cents)
+      )
+      .foregroundStyle(.blue)
+      .lineStyle(StrokeStyle(lineWidth: 2))
+      .interpolationMethod(.stepEnd)
+    }
+
+    if visibleSeries.contains(.bestFit), let bestFit = balance.bestFit {
+      LineMark(
+        x: .value("Date", balance.date),
+        y: .value("Amount", bestFit.cents)
+      )
+      .foregroundStyle(.gray)
+      .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
+    }
+  }
+
+  @ChartContentBuilder
+  private func forecastMarks(for balance: DailyBalance) -> some ChartContent {
+    if visibleSeries.contains(.availableFunds) {
+      AreaMark(
+        x: .value("Date", balance.date),
+        y: .value("Amount", balance.availableFunds.cents)
+      )
+      .foregroundStyle(.green.opacity(0.1))
+      .interpolationMethod(.stepEnd)
+
+      LineMark(
+        x: .value("Date", balance.date),
+        y: .value("Amount", balance.availableFunds.cents)
+      )
+      .foregroundStyle(.green.opacity(0.5))
+      .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+      .interpolationMethod(.stepEnd)
+    }
+
+    if visibleSeries.contains(.currentFunds) {
+      LineMark(
+        x: .value("Date", balance.date),
+        y: .value("Amount", balance.balance.cents)
+      )
+      .foregroundStyle(.orange.opacity(0.5))
+      .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+      .interpolationMethod(.stepEnd)
+    }
+
+    if visibleSeries.contains(.netWorth) {
+      LineMark(
+        x: .value("Date", balance.date),
+        y: .value("Amount", balance.netWorth.cents)
+      )
+      .foregroundStyle(.blue.opacity(0.5))
+      .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+      .interpolationMethod(.stepEnd)
+    }
+  }
+
+  private var seriesToggles: some View {
     HStack(spacing: 16) {
-      LegendItem(color: .green, label: "Available Funds")
-      LegendItem(color: .blue, label: "Net Worth")
-      if actualBalances.contains(where: { $0.bestFit != nil }) {
-        LegendItem(color: .gray, label: "Best Fit", dashed: true)
-      }
-      if !forecastBalances.isEmpty {
-        LegendItem(color: .green.opacity(0.5), label: "Forecast", dashed: true)
+      ForEach(availableSeries) { series in
+        Button {
+          if visibleSeries.contains(series) {
+            visibleSeries.remove(series)
+          } else {
+            visibleSeries.insert(series)
+          }
+        } label: {
+          HStack(spacing: 4) {
+            if series == .bestFit {
+              Rectangle()
+                .stroke(series.color, style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
+                .frame(width: 16, height: 2)
+            } else {
+              Rectangle()
+                .fill(series.color)
+                .frame(width: 16, height: 2)
+            }
+            Text(series.rawValue)
+              .foregroundStyle(visibleSeries.contains(series) ? .primary : .tertiary)
+          }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(series.rawValue) series")
+        .accessibilityAddTraits(visibleSeries.contains(series) ? .isSelected : [])
+        .accessibilityHint("Double tap to toggle visibility")
       }
     }
     .font(.caption)
+  }
+
+  private var availableSeries: [ChartSeries] {
+    var series: [ChartSeries] = [.availableFunds, .currentFunds, .netWorth]
+
+    if balances.contains(where: { $0.investments.cents != 0 }) {
+      series.append(.investedAmount)
+    }
+    if balances.contains(where: { $0.investmentValue != nil }) {
+      series.append(.investmentValue)
+    }
+    if balances.contains(where: { $0.bestFit != nil }) {
+      series.append(.bestFit)
+    }
+    if !forecastBalances.isEmpty {
+      // Forecast is implicit — shown when forecast data exists for enabled series
+    }
+    return series
   }
 
   private var actualBalances: [DailyBalance] {

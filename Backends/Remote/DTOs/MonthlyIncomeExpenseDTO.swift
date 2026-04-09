@@ -5,7 +5,7 @@ struct IncomeAndExpenseResponseDTO: Codable {
 }
 
 struct MonthlyIncomeExpenseDTO: Codable {
-  let month: String  // "YYYYMM"
+  let month: Int  // YYYYMM (integer from server)
   let start: String  // "YYYY-MM-DD"
   let end: String  // "YYYY-MM-DD"
   let income: Int
@@ -17,7 +17,7 @@ struct MonthlyIncomeExpenseDTO: Codable {
 
   func toDomain() -> MonthlyIncomeExpense {
     return MonthlyIncomeExpense(
-      month: month,
+      month: String(month),
       start: BackendDateFormatter.date(from: start) ?? Date(),
       end: BackendDateFormatter.date(from: end) ?? Date(),
       income: MonetaryAmount(cents: income, currency: .defaultCurrency),
