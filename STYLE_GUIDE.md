@@ -110,6 +110,17 @@ Moolah uses semantic colors to communicate financial meaning at a glance.
 | Zero | `.primary` | Standard text color |
 | Balances (neutral) | `.secondary` | Use `colorOverride: .secondary` |
 
+#### Expense Amount Display Convention
+Expenses are stored internally as **negative cents** (they reduce the account balance). However, when displaying expense totals to the user (e.g., in category breakdowns, analysis summaries), **negate them to positive** values. Users expect "an expense of $20" — not "$-20". A negative expense (e.g., a refund) should display as a negative value.
+
+```swift
+// Server returns -5000 cents for a $50 expense
+// Display as: $50.00 (positive)
+let displayAmount = MonetaryAmount(cents: max(0, -serverAmount.cents), currency: serverAmount.currency)
+```
+
+This matches the web app's `Math.max(0, -totalExpenses)` pattern. Transaction lists that show the raw amount (income, expense, transfer) should continue to display the signed value — this convention only applies to aggregated expense summaries.
+
 **Do:**
 - Use system colors (`.green`, `.red`) for automatic dark mode adaptation
 - Reserve `.green` and `.red` exclusively for amounts; don't use for buttons or accents

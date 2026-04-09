@@ -102,10 +102,12 @@ struct ExpenseBreakdownCard: View {
   }
 
   private var filteredBreakdown: [ExpenseBreakdownWithPercentage] {
-    // Sum all expenses for this category level
+    // Sum all expenses for this category level, negated to positive for display
+    // (server returns negative amounts for expenses)
     let categoryTotals = Dictionary(grouping: breakdown) { $0.categoryId }
-      .mapValues { items in
-        items.reduce(MonetaryAmount.zero) { $0 + $1.totalExpenses }
+      .mapValues { items -> MonetaryAmount in
+        let sum = items.reduce(MonetaryAmount.zero) { $0 + $1.totalExpenses }
+        return MonetaryAmount(cents: max(0, -sum.cents), currency: sum.currency)
       }
 
     // Filter by selectedCategoryId (show only children if drill-down active)
