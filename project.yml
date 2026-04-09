@@ -27,6 +27,15 @@ settings:
     CODE_SIGNING_REQUIRED: YES
     CODE_SIGNING_ALLOWED: YES
 
+fileGroups:
+  - plans
+  - CLAUDE.md
+  - STYLE_GUIDE.md
+  - CONCURRENCY_GUIDE.md
+  - BUGS.md
+  - justfile
+  - project.yml
+
 targets:
   Moolah_iOS:
     type: application
