@@ -21,19 +21,26 @@ struct SettingsView: View {
 
   #if os(macOS)
     private var macOSLayout: some View {
-      HSplitView {
-        profileList
-          .frame(minWidth: 180, idealWidth: 220, maxWidth: 280)
+      Group {
+        if profileStore.profiles.isEmpty {
+          emptyState
+        } else {
+          HSplitView {
+            profileList
+              .frame(minWidth: 180, idealWidth: 220, maxWidth: 280)
 
-        detailPane
-          .frame(minWidth: 300, idealWidth: 400)
-      }
-      .frame(minWidth: 500, minHeight: 300)
-      .onAppear {
-        if selectedProfileID == nil {
-          selectedProfileID = profileStore.activeProfileID ?? profileStore.profiles.first?.id
+            detailPane
+              .frame(minWidth: 300, idealWidth: 400)
+          }
+          .onAppear {
+            if selectedProfileID == nil {
+              selectedProfileID =
+                profileStore.activeProfileID ?? profileStore.profiles.first?.id
+            }
+          }
         }
       }
+      .frame(minWidth: 500, minHeight: 300)
       .sheet(isPresented: $showAddProfile) {
         ProfileFormView()
           .environment(profileStore)
@@ -43,6 +50,19 @@ struct SettingsView: View {
         deleteAlertButtons
       } message: {
         deleteAlertMessage
+      }
+    }
+
+    private var emptyState: some View {
+      ContentUnavailableView {
+        Label("No Profiles", systemImage: "person.crop.circle.badge.plus")
+      } description: {
+        Text("Add a profile to connect to a Moolah server.")
+      } actions: {
+        Button("Add Profile") {
+          showAddProfile = true
+        }
+        .buttonStyle(.bordered)
       }
     }
   #endif
