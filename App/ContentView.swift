@@ -58,7 +58,8 @@ struct ContentView: View {
             accounts: accountStore.accounts,
             categories: categoryStore.categories,
             earmarks: earmarkStore.earmarks,
-            transactionStore: transactionStore)
+            transactionStore: transactionStore,
+            analysisRepository: analysisStore.repository)
         }
       case .allTransactions:
         AllTransactionsView(

@@ -5,6 +5,7 @@ struct EarmarksView: View {
   let accounts: Accounts
   let categories: Categories
   let transactionStore: TransactionStore
+  let analysisRepository: AnalysisRepository
 
   @State private var showCreateSheet = false
   @State private var selectedEarmark: Earmark?
@@ -23,7 +24,8 @@ struct EarmarksView: View {
           accounts: accounts,
           categories: categories,
           earmarks: earmarkStore.earmarks,
-          transactionStore: transactionStore
+          transactionStore: transactionStore,
+          analysisRepository: analysisRepository
         )
       }
     }
@@ -217,7 +219,7 @@ private struct CreateEarmarkSheet: View {
   }
 
   private func createEarmark() {
-    let goalCents = parseCurrency(savingsGoal)
+    let goalCents = MonetaryAmount.parseCents(from: savingsGoal)
     let goal =
       goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: Currency.defaultCurrency) : nil
 
@@ -230,13 +232,6 @@ private struct CreateEarmarkSheet: View {
     onCreate(newEarmark)
   }
 
-  private func parseCurrency(_ text: String) -> Int {
-    let cleaned = text.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
-    if let decimal = Decimal(string: cleaned) {
-      return Int(truncating: (decimal * 100) as NSNumber)
-    }
-    return 0
-  }
 }
 
 private struct EditEarmarkSheet: View {
@@ -321,7 +316,7 @@ private struct EditEarmarkSheet: View {
   }
 
   private func saveChanges() {
-    let goalCents = parseCurrency(savingsGoal)
+    let goalCents = MonetaryAmount.parseCents(from: savingsGoal)
     let goal =
       goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: Currency.defaultCurrency) : nil
 
@@ -335,13 +330,6 @@ private struct EditEarmarkSheet: View {
     onUpdate(updated)
   }
 
-  private func parseCurrency(_ text: String) -> Int {
-    let cleaned = text.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
-    if let decimal = Decimal(string: cleaned) {
-      return Int(truncating: (decimal * 100) as NSNumber)
-    }
-    return 0
-  }
 }
 
 #Preview {
@@ -368,7 +356,8 @@ private struct EditEarmarkSheet: View {
       earmarkStore: earmarkStore,
       accounts: Accounts(from: []),
       categories: Categories(from: []),
-      transactionStore: transactionStore
+      transactionStore: transactionStore,
+      analysisRepository: InMemoryBackend().analysis
     )
   }
   .task { await earmarkStore.load() }

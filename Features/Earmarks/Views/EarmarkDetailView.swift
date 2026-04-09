@@ -1,26 +1,52 @@
 import SwiftUI
 
 struct EarmarkDetailView: View {
+  private enum DetailTab: String, CaseIterable {
+    case transactions = "Transactions"
+    case budget = "Budget"
+  }
+
   let earmark: Earmark
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
   let transactionStore: TransactionStore
+  let analysisRepository: AnalysisRepository
   @State private var showEditSheet = false
+  @State private var selectedTab: DetailTab = .transactions
   @Environment(EarmarkStore.self) private var earmarkStore
 
   var body: some View {
     VStack(spacing: 0) {
       overviewPanel
       Divider()
-      TransactionListView(
-        title: earmark.name,
-        filter: TransactionFilter(earmarkId: earmark.id),
-        accounts: accounts,
-        categories: categories,
-        earmarks: earmarks,
-        transactionStore: transactionStore
-      )
+
+      Picker("View", selection: $selectedTab) {
+        ForEach(DetailTab.allCases, id: \.self) { tab in
+          Text(tab.rawValue).tag(tab)
+        }
+      }
+      .pickerStyle(.segmented)
+      .padding(.horizontal)
+      .padding(.vertical, 8)
+
+      switch selectedTab {
+      case .transactions:
+        TransactionListView(
+          title: earmark.name,
+          filter: TransactionFilter(earmarkId: earmark.id),
+          accounts: accounts,
+          categories: categories,
+          earmarks: earmarks,
+          transactionStore: transactionStore
+        )
+      case .budget:
+        EarmarkBudgetSectionView(
+          earmark: earmark,
+          categories: categories,
+          analysisRepository: analysisRepository
+        )
+      }
     }
     .navigationTitle(earmark.name)
     .toolbar {
@@ -226,7 +252,7 @@ private struct EditEarmarkSheet: View {
   }
 
   private func saveChanges() {
-    let goalCents = parseCurrency(savingsGoal)
+    let goalCents = MonetaryAmount.parseCents(from: savingsGoal)
     let goal =
       goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: Currency.defaultCurrency) : nil
 
@@ -238,14 +264,6 @@ private struct EditEarmarkSheet: View {
     updated.isHidden = isHidden
 
     onUpdate(updated)
-  }
-
-  private func parseCurrency(_ text: String) -> Int {
-    let cleaned = text.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
-    if let decimal = Decimal(string: cleaned) {
-      return Int(truncating: (decimal * 100) as NSNumber)
-    }
-    return 0
   }
 }
 
@@ -274,6 +292,7 @@ private struct EditEarmarkSheet: View {
       payee: "Savings Transfer", earmarkId: earmarkId),
   ])
   let store = TransactionStore(repository: repository)
+  let backend = InMemoryBackend()
 
   NavigationStack {
     EarmarkDetailView(
@@ -281,7 +300,8 @@ private struct EditEarmarkSheet: View {
       accounts: Accounts(from: []),
       categories: Categories(from: []),
       earmarks: Earmarks(from: []),
-      transactionStore: store
+      transactionStore: store,
+      analysisRepository: backend.analysis
     )
     .environment(earmarkStore)
   }

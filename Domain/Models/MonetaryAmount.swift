@@ -51,4 +51,12 @@ struct MonetaryAmount: Codable, Sendable, Hashable, Comparable {
   static func < (lhs: MonetaryAmount, rhs: MonetaryAmount) -> Bool {
     lhs.cents < rhs.cents
   }
+
+  /// Parses a currency string (e.g. "50.23", "$1,234.56") into cents.
+  /// Strips non-numeric characters except decimal point, multiplies by 100.
+  static func parseCents(from text: String) -> Int {
+    let cleaned = text.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
+    guard let decimal = Decimal(string: cleaned) else { return 0 }
+    return Int(truncating: (decimal * 100) as NSNumber)
+  }
 }

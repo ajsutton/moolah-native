@@ -9,6 +9,10 @@ final class EarmarkStore {
   private(set) var isLoading = false
   private(set) var error: Error?
 
+  private(set) var budgetItems: [EarmarkBudgetItem] = []
+  private(set) var isBudgetLoading = false
+  private(set) var budgetError: Error?
+
   private let repository: EarmarkRepository
   private let logger = Logger(subsystem: "com.moolah.app", category: "EarmarkStore")
 
@@ -124,6 +128,74 @@ final class EarmarkStore {
       logger.error("Failed to create earmark: \(error.localizedDescription)")
       self.error = error
       return nil
+    }
+  }
+
+  // MARK: - Budget
+
+  func loadBudget(earmarkId: UUID) async {
+    guard !isBudgetLoading else { return }
+    isBudgetLoading = true
+    budgetError = nil
+
+    do {
+      budgetItems = try await repository.fetchBudget(earmarkId: earmarkId)
+    } catch {
+      logger.error("Failed to load budget: \(error.localizedDescription)")
+      budgetError = error
+    }
+
+    isBudgetLoading = false
+  }
+
+  func updateBudgetItem(
+    earmarkId: UUID, categoryId: UUID, amount: MonetaryAmount
+  ) async {
+    let oldItems = budgetItems
+
+    // Optimistic update
+    budgetItems = budgetItems.map { item in
+      guard item.categoryId == categoryId else { return item }
+      var copy = item
+      copy.amount = amount
+      return copy
+    }
+
+    do {
+      try await repository.updateBudget(earmarkId: earmarkId, items: budgetItems)
+    } catch {
+      logger.error("Failed to update budget item: \(error.localizedDescription)")
+      budgetItems = oldItems
+      budgetError = error
+    }
+  }
+
+  func addBudgetItem(
+    earmarkId: UUID, categoryId: UUID, amount: MonetaryAmount
+  ) async {
+    let newItem = EarmarkBudgetItem(categoryId: categoryId, amount: amount)
+    let oldItems = budgetItems
+    budgetItems.append(newItem)
+
+    do {
+      try await repository.updateBudget(earmarkId: earmarkId, items: budgetItems)
+    } catch {
+      logger.error("Failed to add budget item: \(error.localizedDescription)")
+      budgetItems = oldItems
+      budgetError = error
+    }
+  }
+
+  func removeBudgetItem(earmarkId: UUID, categoryId: UUID) async {
+    let oldItems = budgetItems
+    budgetItems.removeAll { $0.categoryId == categoryId }
+
+    do {
+      try await repository.updateBudget(earmarkId: earmarkId, items: budgetItems)
+    } catch {
+      logger.error("Failed to remove budget item: \(error.localizedDescription)")
+      budgetItems = oldItems
+      budgetError = error
     }
   }
 
