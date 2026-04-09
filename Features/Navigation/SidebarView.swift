@@ -17,6 +17,7 @@ struct SidebarView: View {
   @State private var showCreateEarmarkSheet = false
   @State private var showCreateAccountSheet = false
   @State private var accountToEdit: Account?
+  @AppStorage("showHiddenAccounts") private var showHidden = false
   #if os(iOS)
     @State private var editMode: EditMode = .inactive
   #endif
@@ -147,10 +148,25 @@ struct SidebarView: View {
         NavigationLink(value: SidebarSelection.allTransactions) {
           Label("All Transactions", systemImage: "list.bullet")
         }
+
+        #if os(iOS)
+          Toggle(isOn: $showHidden) {
+            Label("Show Hidden", systemImage: "eye.slash")
+          }
+        #endif
       }
     }
     .listStyle(.sidebar)
     .navigationTitle("Moolah")
+    .focusedSceneValue(\.showHiddenAccounts, $showHidden)
+    .onChange(of: showHidden) { _, newValue in
+      accountStore.showHidden = newValue
+      earmarkStore.showHidden = newValue
+    }
+    .onAppear {
+      accountStore.showHidden = showHidden
+      earmarkStore.showHidden = showHidden
+    }
     #if os(iOS)
       .environment(\.editMode, $editMode)
     #endif

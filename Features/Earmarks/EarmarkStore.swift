@@ -38,8 +38,10 @@ final class EarmarkStore {
     isLoading = false
   }
 
+  var showHidden: Bool = false
+
   var visibleEarmarks: [Earmark] {
-    earmarks.filter { !$0.isHidden }
+    earmarks.filter { showHidden || !$0.isHidden }
   }
 
   var totalBalance: MonetaryAmount {

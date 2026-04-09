@@ -34,12 +34,14 @@ final class AccountStore {
     isLoading = false
   }
 
+  var showHidden: Bool = false
+
   var currentAccounts: [Account] {
-    accounts.filter { $0.type.isCurrent && !$0.isHidden }
+    accounts.filter { $0.type.isCurrent && (showHidden || !$0.isHidden) }
   }
 
   var investmentAccounts: [Account] {
-    accounts.filter { $0.type == .investment && !$0.isHidden }
+    accounts.filter { $0.type == .investment && (showHidden || !$0.isHidden) }
   }
 
   var currentTotal: MonetaryAmount {

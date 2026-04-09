@@ -379,4 +379,42 @@ struct EarmarkStoreTests {
     #expect(persisted[1].position == 1)
     #expect(persisted[2].position == 2)
   }
+
+  // MARK: - Show Hidden
+
+  @Test("visibleEarmarks excludes hidden earmarks by default")
+  func hiddenEarmarksExcluded() async {
+    let visible = Earmark(
+      name: "Visible",
+      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency))
+    let hidden = Earmark(
+      name: "Hidden",
+      balance: MonetaryAmount(cents: 30000, currency: Currency.defaultCurrency),
+      isHidden: true)
+    let repository = InMemoryEarmarkRepository(initialEarmarks: [visible, hidden])
+    let store = EarmarkStore(repository: repository)
+
+    await store.load()
+
+    #expect(store.visibleEarmarks.count == 1)
+    #expect(store.visibleEarmarks[0].name == "Visible")
+  }
+
+  @Test("visibleEarmarks includes hidden earmarks when showHidden is true")
+  func hiddenEarmarksIncluded() async {
+    let visible = Earmark(
+      name: "Visible",
+      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency))
+    let hidden = Earmark(
+      name: "Hidden",
+      balance: MonetaryAmount(cents: 30000, currency: Currency.defaultCurrency),
+      isHidden: true)
+    let repository = InMemoryEarmarkRepository(initialEarmarks: [visible, hidden])
+    let store = EarmarkStore(repository: repository)
+
+    await store.load()
+    store.showHidden = true
+
+    #expect(store.visibleEarmarks.count == 2)
+  }
 }

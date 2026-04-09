@@ -15,6 +15,11 @@ struct RefreshActionKey: FocusedValueKey {
   typealias Value = () -> Void
 }
 
+/// Focused value key for the show hidden accounts binding
+struct ShowHiddenAccountsKey: FocusedValueKey {
+  typealias Value = Binding<Bool>
+}
+
 extension FocusedValues {
   var newTransactionAction: NewTransactionActionKey.Value? {
     get { self[NewTransactionActionKey.self] }
@@ -29,5 +34,10 @@ extension FocusedValues {
   var refreshAction: RefreshActionKey.Value? {
     get { self[RefreshActionKey.self] }
     set { self[RefreshActionKey.self] = newValue }
+  }
+
+  var showHiddenAccounts: ShowHiddenAccountsKey.Value? {
+    get { self[ShowHiddenAccountsKey.self] }
+    set { self[ShowHiddenAccountsKey.self] = newValue }
   }
 }

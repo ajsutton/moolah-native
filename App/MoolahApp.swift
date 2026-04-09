@@ -47,6 +47,20 @@ struct RefreshCommands: Commands {
   }
 }
 
+/// View menu toggle for showing hidden accounts and earmarks
+struct ShowHiddenCommands: Commands {
+  @FocusedValue(\.showHiddenAccounts) private var showHidden
+
+  var body: some Commands {
+    CommandGroup(after: .sidebar) {
+      if let showHidden {
+        Toggle("Show Hidden Accounts", isOn: showHidden)
+          .keyboardShortcut("h", modifiers: [.command, .shift])
+      }
+    }
+  }
+}
+
 @main
 @MainActor
 struct MoolahApp: App {
@@ -73,6 +87,7 @@ struct MoolahApp: App {
       NewTransactionCommands()
       NewEarmarkCommands()
       RefreshCommands()
+      ShowHiddenCommands()
     }
   }
 }

@@ -245,4 +245,61 @@ struct AccountStoreTests {
     #expect(store.currentTotal.cents == 95000)
     #expect(store.netWorth.cents == 95000)
   }
+
+  // MARK: - Show Hidden
+
+  @Test("currentAccounts excludes hidden accounts by default")
+  func hiddenAccountsExcluded() async {
+    let visible = Account(
+      name: "Visible", type: .bank,
+      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
+    let hidden = Account(
+      name: "Hidden", type: .bank,
+      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
+      isHidden: true)
+    let repository = InMemoryAccountRepository(initialAccounts: [visible, hidden])
+    let store = AccountStore(repository: repository)
+
+    await store.load()
+
+    #expect(store.currentAccounts.count == 1)
+    #expect(store.currentAccounts[0].name == "Visible")
+  }
+
+  @Test("currentAccounts includes hidden accounts when showHidden is true")
+  func hiddenAccountsIncluded() async {
+    let visible = Account(
+      name: "Visible", type: .bank,
+      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
+    let hidden = Account(
+      name: "Hidden", type: .bank,
+      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
+      isHidden: true)
+    let repository = InMemoryAccountRepository(initialAccounts: [visible, hidden])
+    let store = AccountStore(repository: repository)
+
+    await store.load()
+    store.showHidden = true
+
+    #expect(store.currentAccounts.count == 2)
+  }
+
+  @Test("investmentAccounts respects showHidden flag")
+  func hiddenInvestmentAccounts() async {
+    let visible = Account(
+      name: "Visible", type: .investment,
+      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultCurrency))
+    let hidden = Account(
+      name: "Hidden", type: .investment,
+      balance: MonetaryAmount(cents: 50000, currency: Currency.defaultCurrency),
+      isHidden: true)
+    let repository = InMemoryAccountRepository(initialAccounts: [visible, hidden])
+    let store = AccountStore(repository: repository)
+
+    await store.load()
+
+    #expect(store.investmentAccounts.count == 1)
+    store.showHidden = true
+    #expect(store.investmentAccounts.count == 2)
+  }
 }

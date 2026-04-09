@@ -8,9 +8,9 @@ actor InMemoryAccountRepository: AccountRepository {
   }
 
   func fetchAll() async throws -> [Account] {
-    // Filter out hidden accounts (soft delete)
+    // Return all accounts including hidden (matches server behavior).
+    // UI-level filtering of hidden accounts is done by AccountStore.
     return Array(accounts.values)
-      .filter { !$0.isHidden }
       .sorted { $0.position < $1.position }
   }
 

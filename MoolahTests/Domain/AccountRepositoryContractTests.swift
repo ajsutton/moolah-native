@@ -123,8 +123,10 @@ struct AccountRepositoryContractTests {
     try await repository.delete(id: toDelete.id)
 
     let remaining = try await repository.fetchAll()
-    // Account should be hidden (filtered out)
-    #expect(!remaining.contains { $0.id == toDelete.id })
+    // Account should be marked hidden (soft delete)
+    let deleted = remaining.first { $0.id == toDelete.id }
+    #expect(deleted != nil)
+    #expect(deleted?.isHidden == true)
   }
 
   @Test("InMemoryAccountRepository - rejects delete with non-zero balance")
