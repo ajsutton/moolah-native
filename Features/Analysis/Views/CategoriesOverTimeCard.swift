@@ -56,7 +56,7 @@ struct CategoriesOverTimeCard: View {
         ForEach(entry.points) { point in
           AreaMark(
             x: .value("Month", point.monthDate),
-            y: .value("Amount", showActualValues ? point.actualCents : Int(point.percentage)),
+            y: .value("Amount", showActualValues ? Double(point.actualCents) : point.percentage),
             stacking: .standard
           )
           .foregroundStyle(by: .value("Category", name))
@@ -84,12 +84,12 @@ struct CategoriesOverTimeCard: View {
       AxisMarks { value in
         AxisGridLine()
         AxisValueLabel {
-          if let amount = value.as(Int.self) {
+          if let amount = value.as(Double.self) {
             if showActualValues {
-              Text(MonetaryAmount(cents: amount, currency: .defaultCurrency).formatNoSymbol)
+              Text(MonetaryAmount(cents: Int(amount), currency: .defaultCurrency).formatNoSymbol)
                 .monospacedDigit()
             } else {
-              Text("\(amount)%")
+              Text("\(Int(amount))%")
                 .monospacedDigit()
             }
           }
