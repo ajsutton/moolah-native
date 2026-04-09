@@ -108,14 +108,7 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
 
 ## Planning & Documentation
 
-- **Plans Directory:** All planning documents, feature specifications, and gap analyses live in `plans/`.
-- **Current Plans:**
-  - `plans/NATIVE_APP_PLAN.md` — master implementation plan (vertical slices, steps 1-14)
-  - `plans/SCHEDULED_TRANSACTIONS_GAP_ANALYSIS.md` — detailed comparison of scheduled transaction functionality between moolah-server, moolah web app, and moolah-native
-  - `plans/UI_TESTING_PLAN.md` — store-level refactoring (extract view logic, ~54 tests) and XCUITest plan (~12 tests) for high-risk UI flows
-  - `plans/CONCURRENCY_FIXES_PLAN.md` — fixes from concurrency review (redundant MainActor.run, missing Sendable, saveTask in view)
-- **Creating New Plans:** When documenting new features, architecture decisions, or gap analyses, create a new markdown file in `plans/` with a descriptive name (e.g., `OFFLINE_SYNC_DESIGN.md`, `CLOUDKIT_BACKEND_PLAN.md`).
-- **Completing Plans:** When a plan is fully implemented, move it to `plans/completed/` (e.g., `mv plans/MY_PLAN.md plans/completed/`).
+- **Plans Directory:** All planning documents, feature specifications, and gap analyses live in `plans/`. Completed plans are moved to `plans/completed/`.
 
 ## Agents
 
