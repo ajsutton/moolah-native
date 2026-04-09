@@ -15,7 +15,6 @@ final class AnalysisStore {
   // Filters
   var historyMonths: Int = 12  // 1, 3, 6, 12, 24, 36, etc., or 0 = "All"
   var forecastMonths: Int = 1  // 0 = "None", 1, 3, 6, etc.
-  var monthEnd: Int = 25  // User's financial month-end day (1-31)
   var showActualValues: Bool = false  // false = percentage, true = actual amounts
 
   let repository: AnalysisRepository
@@ -174,6 +173,12 @@ final class AnalysisStore {
     formatter.dateFormat = "yyyyMM"
     formatter.timeZone = TimeZone(identifier: "UTC")
     return formatter.date(from: month) ?? Date.distantPast
+  }
+
+  /// Today's day-of-month, used as the financial month boundary (matching the web app).
+  /// Private so SwiftUI doesn't observe it and trigger redraws.
+  private var monthEnd: Int {
+    Calendar.current.component(.day, from: Date())
   }
 
   private func afterDate(monthsAgo: Int) -> Date? {
