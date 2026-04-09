@@ -66,11 +66,13 @@ final class CategoryRecord {
   @Attribute(.preserveValueOnDeletion)
   var id: UUID
 
+  var profileId: UUID    // multi-profile scoping — all queries filter by this
   var name: String
   var parentId: UUID?
 
-  init(id: UUID, name: String, parentId: UUID? = nil) {
+  init(id: UUID, profileId: UUID, name: String, parentId: UUID? = nil) {
     self.id = id
+    self.profileId = profileId
     self.name = name
     self.parentId = parentId
   }
@@ -100,9 +102,16 @@ import OSLog
 @ModelActor
 actor CloudKitCategoryRepository: CategoryRepository {
   private let logger = Logger(subsystem: "com.moolah.app", category: "CloudKitCategoryRepo")
+  private let profileId: UUID
+
+  init(modelContainer: ModelContainer, profileId: UUID) {
+    self.profileId = profileId
+  }
 
   func fetchAll() async throws -> [Category] {
+    let pid = profileId
     let descriptor = FetchDescriptor<CategoryRecord>(
+      predicate: #Predicate<CategoryRecord> { $0.profileId == pid },
       sortBy: [SortDescriptor(\.name, order: .forward)]
     )
     let records = try modelContext.fetch(descriptor)
@@ -112,6 +121,7 @@ actor CloudKitCategoryRepository: CategoryRepository {
   func create(_ category: Category) async throws -> Category {
     let record = CategoryRecord(
       id: category.id,
+      profileId: profileId,
       name: category.name,
       parentId: category.parentId
     )
@@ -143,7 +153,7 @@ actor CloudKitCategoryRepository: CategoryRepository {
       throw BackendError.serverError(404)
     }
 
-    // Re-parent children
+    // Re-parent children (scoped to same profile via parentId matching)
     let childDescriptor = FetchDescriptor<CategoryRecord>(
       predicate: #Predicate<CategoryRecord> { $0.parentId == id }
     )

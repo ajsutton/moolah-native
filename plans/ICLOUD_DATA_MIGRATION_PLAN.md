@@ -187,6 +187,8 @@ The server returns transactions in pages. A user with thousands of transactions 
 
 ### CloudKitDataImporter
 
+The importer receives a `profileId` and `currencyCode` to stamp on every record. This scopes all imported data to the target profile and stores currency for future multi-currency support.
+
 ```swift
 struct ImportResult: Sendable {
   let accountCount: Int
@@ -198,6 +200,8 @@ struct ImportResult: Sendable {
 
 actor CloudKitDataImporter {
   private let modelContainer: ModelContainer
+  private let profileId: UUID
+  private let currencyCode: String
 
   enum ImportProgress: Sendable {
     case importing(step: String, current: Int, total: Int)
@@ -218,6 +222,7 @@ actor CloudKitDataImporter {
     for (i, category) in data.categories.enumerated() {
       let record = CategoryRecord(
         id: category.id,
+        profileId: profileId,
         name: category.name,
         parentId: category.parentId
       )
@@ -232,10 +237,12 @@ actor CloudKitDataImporter {
     for account in data.accounts {
       let record = AccountRecord(
         id: account.id,
+        profileId: profileId,
         name: account.name,
         type: account.type.rawValue,
         position: account.position,
-        isHidden: account.isHidden
+        isHidden: account.isHidden,
+        currencyCode: currencyCode
       )
       context.insert(record)
     }
@@ -245,10 +252,12 @@ actor CloudKitDataImporter {
     for earmark in data.earmarks {
       let record = EarmarkRecord(
         id: earmark.id,
+        profileId: profileId,
         name: earmark.name,
         position: earmark.position,
         isHidden: earmark.isHidden,
         savingsTarget: earmark.savingsGoal?.cents,
+        currencyCode: currencyCode,
         savingsStartDate: earmark.savingsStartDate,
         savingsEndDate: earmark.savingsEndDate
       )
@@ -263,7 +272,8 @@ actor CloudKitDataImporter {
           id: item.id,
           earmarkId: earmarkId,
           categoryId: item.categoryId,
-          amount: item.amount.cents
+          amount: item.amount.cents,
+          currencyCode: currencyCode
         )
         context.insert(record)
         budgetItemCount += 1
@@ -276,11 +286,13 @@ actor CloudKitDataImporter {
     for (i, txn) in data.transactions.enumerated() {
       let record = TransactionRecord(
         id: txn.id,
+        profileId: profileId,
         type: txn.type.rawValue,
         date: txn.date,
         accountId: txn.accountId,
         toAccountId: txn.toAccountId,
         amount: txn.amount.cents,
+        currencyCode: currencyCode,
         payee: txn.payee,
         notes: txn.notes,
         categoryId: txn.categoryId,
@@ -455,7 +467,9 @@ final class MigrationCoordinator {
 
   func migrate(
     from remoteBackend: RemoteBackend,
-    to modelContainer: ModelContainer
+    to modelContainer: ModelContainer,
+    profileId: UUID,
+    currencyCode: String
   ) async {
     state = .exporting(step: "Starting...")
 
@@ -477,8 +491,12 @@ final class MigrationCoordinator {
         }
       }
 
-      // 2. Import
-      let importer = CloudKitDataImporter(modelContainer: modelContainer)
+      // 2. Import — stamp all records with profileId and currencyCode
+      let importer = CloudKitDataImporter(
+        modelContainer: modelContainer,
+        profileId: profileId,
+        currencyCode: currencyCode
+      )
       let result = try await importer.importData(exported) { [weak self] progress in
         Task { @MainActor in
           switch progress {
@@ -516,32 +534,24 @@ final class MigrationCoordinator {
 
 ### Backend Switching
 
-After successful migration:
-1. Store a flag in `UserDefaults`: `iCloudMigrationCompleted = true`
-2. On next app launch, the composition root checks this flag
-3. If `true`: create `CloudKitBackend` instead of `RemoteBackend`
-4. If `false`: create `RemoteBackend` (or show migration prompt)
+After successful migration, the profile's `backendType` is updated from `.remote` to `.cloudKit`. The existing `ProfileSession` infrastructure handles the rest:
+
+1. `ProfileStore.updateProfile()` sets `profile.backendType = .cloudKit`
+2. On next session creation, `ProfileSession` checks `profile.backendType`
+3. If `.cloudKit`: create `CloudKitBackend(modelContainer:, profileId: profile.id, currency: profile.currency)`
+4. If `.remote`: create `RemoteBackend(baseURL: profile.serverURL, currency: profile.currency, ...)`
 
 ```swift
-// In MoolahApp.swift (composition root)
-@main
-struct MoolahApp: App {
-  var body: some Scene {
-    WindowGroup {
-      ContentView()
-        .environment(backend)
-    }
-  }
-
-  var backend: any BackendProvider {
-    if UserDefaults.standard.bool(forKey: "iCloudMigrationCompleted") {
-      return CloudKitBackend()
-    } else {
-      return RemoteBackend(baseURL: serverURL)
-    }
-  }
+// In ProfileSession.init()
+let backend: any BackendProvider = switch profile.backendType {
+case .remote:
+  RemoteBackend(baseURL: profile.serverURL, currency: profile.currency, ...)
+case .cloudKit:
+  CloudKitBackend(modelContainer: sharedContainer, profileId: profile.id, currency: profile.currency)
 }
 ```
+
+All profiles share a single `ModelContainer` — data isolation is enforced by `profileId` on every record. The container is created once at app startup and passed to each `ProfileSession`.
 
 ---
 

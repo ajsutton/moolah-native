@@ -48,7 +48,7 @@ Scheduled transactions are stored as regular `TransactionRecord` entries in Swif
 
 ### Filtering
 
-The `CloudKitTransactionRepository` already handles the `scheduled` filter (see Transactions plan):
+The `CloudKitTransactionRepository` already handles the `scheduled` filter (see Transactions plan). All queries are scoped by `profileId`:
 ```swift
 if let scheduled = filter.scheduled {
   result = result.filter { ($0.recurPeriod != nil) == scheduled }
@@ -57,10 +57,10 @@ if let scheduled = filter.scheduled {
 
 ### Balance Exclusion
 
-Scheduled transactions are excluded from account and earmark balance computations:
+Scheduled transactions are excluded from account and earmark balance computations. All predicates include `profileId` scoping:
 ```swift
 // In CloudKitAccountRepository.fetchAll()
-predicate: #Predicate<TransactionRecord> { $0.recurPeriod == nil }
+predicate: #Predicate<TransactionRecord> { $0.profileId == pid && $0.recurPeriod == nil }
 ```
 
 This matches the server behavior — scheduled transactions represent future/projected amounts, not actual balances.
@@ -99,7 +99,7 @@ func payScheduledTransaction(_ transaction: Transaction) async throws -> Transac
     recurPeriod: nil,    // non-scheduled
     recurEvery: nil
   )
-  let paidRecord = TransactionRecord(from: paidTransaction)
+  let paidRecord = TransactionRecord(from: paidTransaction, profileId: profileId)
   modelContext.insert(paidRecord)
 
   // 2. Handle the original scheduled transaction

@@ -66,17 +66,21 @@ final class AccountRecord {
   @Attribute(.preserveValueOnDeletion)
   var id: UUID
 
+  var profileId: UUID    // multi-profile scoping — all queries filter by this
   var name: String
   var type: String       // raw value: "bank", "cc", "asset", "investment"
   var position: Int
   var isHidden: Bool
+  var currencyCode: String  // ISO currency code — initially from profile, future per-account currency
 
-  init(id: UUID, name: String, type: String, position: Int, isHidden: Bool) {
+  init(id: UUID, profileId: UUID, name: String, type: String, position: Int, isHidden: Bool, currencyCode: String) {
     self.id = id
+    self.profileId = profileId
     self.name = name
     self.type = type
     self.position = position
     self.isHidden = isHidden
+    self.currencyCode = currencyCode
   }
 }
 ```
@@ -110,17 +114,26 @@ import OSLog
 @ModelActor
 actor CloudKitAccountRepository: AccountRepository {
   private let logger = Logger(subsystem: "com.moolah.app", category: "CloudKitAccountRepo")
+  private let profileId: UUID
+
+  init(modelContainer: ModelContainer, profileId: UUID) {
+    self.profileId = profileId
+    // @ModelActor init
+  }
 
   func fetchAll() async throws -> [Account] {
-    // 1. Fetch all account records, sorted by position
-    var descriptor = FetchDescriptor<AccountRecord>(
+    let pid = profileId
+
+    // 1. Fetch all account records for this profile, sorted by position
+    let descriptor = FetchDescriptor<AccountRecord>(
+      predicate: #Predicate<AccountRecord> { $0.profileId == pid },
       sortBy: [SortDescriptor(\.position, order: .forward)]
     )
     let accountRecords = try modelContext.fetch(descriptor)
 
-    // 2. Fetch all non-scheduled transactions for balance computation
+    // 2. Fetch all non-scheduled transactions for this profile for balance computation
     let txnDescriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate<TransactionRecord> { $0.recurPeriod == nil }
+      predicate: #Predicate<TransactionRecord> { $0.profileId == pid && $0.recurPeriod == nil }
     )
     let transactions = try modelContext.fetch(txnDescriptor)
 
@@ -138,13 +151,15 @@ actor CloudKitAccountRepository: AccountRepository {
     }
 
     // 4. Map to domain models with computed balances
+    // Currency is read from each record (future: per-account currency)
     return accountRecords.map { record in
       let balanceCents = balances[record.id] ?? 0
+      let currency = Currency.from(code: record.currencyCode)
       return Account(
         id: record.id,
         name: record.name,
         type: AccountType(rawValue: record.type) ?? .asset,
-        balance: MonetaryAmount(cents: balanceCents, currency: .defaultCurrency),
+        balance: MonetaryAmount(cents: balanceCents, currency: currency),
         position: record.position,
         isHidden: record.isHidden
       )
@@ -270,11 +285,12 @@ func delete(id: UUID) async throws {
 ```swift
 extension AccountRecord {
   func toDomain(balanceCents: Int) -> Account {
-    Account(
+    let currency = Currency.from(code: currencyCode)
+    return Account(
       id: id,
       name: name,
       type: AccountType(rawValue: type) ?? .asset,
-      balance: MonetaryAmount(cents: balanceCents, currency: .defaultCurrency),
+      balance: MonetaryAmount(cents: balanceCents, currency: currency),
       position: position,
       isHidden: isHidden
     )
@@ -285,13 +301,15 @@ extension AccountRecord {
 ### Account → AccountRecord
 ```swift
 extension AccountRecord {
-  convenience init(from domain: Account) {
+  convenience init(from domain: Account, profileId: UUID) {
     self.init(
       id: domain.id,
+      profileId: profileId,
       name: domain.name,
       type: domain.type.rawValue,
       position: domain.position,
-      isHidden: domain.isHidden
+      isHidden: domain.isHidden,
+      currencyCode: domain.balance.currency.code
     )
   }
 }

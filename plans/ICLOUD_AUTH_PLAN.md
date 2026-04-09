@@ -45,6 +45,49 @@ struct UserProfile: Codable, Sendable, Equatable {
 
 ---
 
+## Multi-Profile Considerations
+
+With iCloud, **profiles are purely local metadata** managed by `ProfileStore` (in `UserDefaults`). There is no server-side concept of "which profile am I signed into" — the iCloud account is the same for all profiles. Data isolation is handled by `profileId` on every SwiftData record, not by authentication.
+
+This means:
+- `CloudKitAuthProvider` does NOT need a `profileId` — it only checks "is iCloud available?"
+- Profile names, currency, and settings are stored in `Profile` (via `ProfileStore`), not in CloudKit
+- Creating a new iCloud profile just means adding a new `Profile` with `backendType = .cloudKit` and a fresh UUID — no server interaction needed
+- The profile's UUID becomes the `profileId` stamped on all its SwiftData records
+
+### Profile Creation Flow (iCloud)
+
+1. User taps "Add Profile" → enters a name and currency (e.g., "Personal", AUD)
+2. App inserts a `ProfileRecord(id: UUID(), label: name, currencyCode: selectedCurrency, ...)` into SwiftData
+3. CloudKit syncs the `ProfileRecord` to all devices — the profile appears automatically
+4. `ProfileStore` observes the new record and adds it to `cloudProfiles`
+5. `ProfileSession` creates `CloudKitBackend(profileId: profile.id, ...)` with an empty data set
+6. User starts adding accounts, categories, etc. — all records stamped with this `profileId`
+
+### Profile Deletion Flow (iCloud)
+
+1. Delete the `ProfileRecord` from SwiftData
+2. Batch-delete all records with `profileId == id` from every model type:
+   ```swift
+   try modelContext.delete(model: TransactionRecord.self, where: #Predicate { $0.profileId == id })
+   try modelContext.delete(model: AccountRecord.self, where: #Predicate { $0.profileId == id })
+   try modelContext.delete(model: CategoryRecord.self, where: #Predicate { $0.profileId == id })
+   try modelContext.delete(model: EarmarkRecord.self, where: #Predicate { $0.profileId == id })
+   // EarmarkBudgetItemRecords are cleaned up by earmark deletion or separately
+   ```
+3. CloudKit propagates the deletes to all devices
+4. `ProfileStore` observes the removal and updates `cloudProfiles`
+
+### Profile Discovery on New Device
+
+1. User installs app on device B and signs into iCloud
+2. On launch, `ProfileStore` fetches all `ProfileRecord`s from SwiftData
+3. CloudKit syncs existing profiles + their data in the background
+4. Profiles appear in the UI as they sync — data populates gradually
+5. User selects which profile to activate (per-device choice, stored in `UserDefaults`)
+
+---
+
 ## CloudKitAuthProvider Design
 
 ### File Location

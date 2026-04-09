@@ -75,6 +75,192 @@ Each component has a dedicated detailed plan in this directory.
 | Computed Values | Local computation | Balances, earmark totals computed from local transactions |
 | Conflict Resolution | Last-writer-wins (CloudKit default) | Acceptable for single-user financial data |
 | Migration | Export/import via REST API | One-time data transfer from server to iCloud |
+| Multi-Profile | `profileId` field on every record | Multiple profiles share one iCloud private database; queries scoped by profileId |
+| Currency Storage | `currencyCode` on monetary records | Initially set from profile currency; storage ready for per-account/transaction currencies in future |
+
+---
+
+## Multi-Profile Support
+
+The existing app supports multiple profiles via `ProfileStore` (persisted in `UserDefaults`). Each profile currently points to a different server, with data isolation enforced by server-side auth. For iCloud, all profiles share a single CloudKit private database, so **data isolation must be enforced client-side via a `profileId` field on every record**.
+
+### How It Works
+
+1. **Profile creation**: When the user creates a new iCloud profile, a `ProfileRecord` is inserted into SwiftData. Its `id` becomes the `profileId` for all records belonging to that profile. CloudKit syncs the `ProfileRecord` to all devices.
+2. **Profile discovery**: On launch, `ProfileStore` fetches all `ProfileRecord`s from SwiftData. Profiles created on other devices appear automatically via CloudKit sync.
+3. **Backend initialization**: `CloudKitBackend` is initialized with a `profileId: UUID`. All repositories receive this ID and filter every query by it.
+4. **ProfileSession integration**: `ProfileSession` already creates an isolated backend per profile. For iCloud profiles, it passes `profile.id` as the `profileId` to `CloudKitBackend`.
+5. **No cross-profile queries**: Repositories never see data from other profiles. This mirrors the server isolation pattern.
+6. **Profile deletion**: Deleting a profile deletes the `ProfileRecord` and all records with that `profileId` from SwiftData. CloudKit propagates the deletes to all devices.
+
+### Profile Storage: SwiftData vs UserDefaults
+
+iCloud profiles **must** be stored in SwiftData/CloudKit (not just `UserDefaults`) so they sync across devices. Without this, a profile created on device A would be invisible on device B — the data would sync via CloudKit but no profile would exist to access it.
+
+| Data | Storage | Syncs? |
+|------|---------|--------|
+| iCloud profile metadata (name, currency, financial year) | SwiftData `ProfileRecord` → CloudKit | Yes, across all devices |
+| Remote profile metadata (label, serverURL, currency) | `UserDefaults` (existing) | No (per-device, per-server) |
+| Active profile selection | `UserDefaults` | No (per-device — each device can have a different active profile) |
+
+### ProfileRecord SwiftData Model
+
+```swift
+@Model
+final class ProfileRecord {
+  #Unique<ProfileRecord>([\.id])
+
+  @Attribute(.preserveValueOnDeletion)
+  var id: UUID
+
+  var label: String            // user-friendly name ("Personal", "Business")
+  var currencyCode: String     // ISO code (AUD, USD, etc.)
+  var financialYearStartMonth: Int  // 1-12
+  var createdAt: Date
+
+  init(id: UUID, label: String, currencyCode: String, financialYearStartMonth: Int = 7, createdAt: Date = .now) {
+    self.id = id
+    self.label = label
+    self.currencyCode = currencyCode
+    self.financialYearStartMonth = financialYearStartMonth
+    self.createdAt = createdAt
+  }
+}
+```
+
+### ProfileStore Changes
+
+`ProfileStore` currently reads/writes all profiles from `UserDefaults`. With iCloud support, it becomes a hybrid:
+
+- **Remote profiles**: Continue using `UserDefaults` (unchanged)
+- **iCloud profiles**: Read from SwiftData (`ProfileRecord`), observe for CloudKit sync changes
+- **Active profile ID**: Stays in `UserDefaults` (per-device selection)
+
+```swift
+@Observable
+@MainActor
+final class ProfileStore {
+  // Existing: remote profiles from UserDefaults
+  private(set) var remoteProfiles: [Profile] { ... }
+
+  // New: iCloud profiles from SwiftData (auto-discovered via CloudKit sync)
+  private(set) var cloudProfiles: [Profile] { ... }
+
+  // Combined view
+  var profiles: [Profile] { remoteProfiles + cloudProfiles }
+
+  // Per-device selection (UserDefaults)
+  var activeProfileID: UUID? { ... }
+}
+```
+
+### Profile Model Changes
+
+`BackendType` needs a `.cloudKit` case. iCloud profiles don't have a `serverURL` — they store only the profile metadata (label, currency, financial year).
+
+```swift
+enum BackendType: String, Codable, Sendable {
+  case remote    // existing moolah-server
+  case cloudKit  // local SwiftData + iCloud sync
+}
+```
+
+---
+
+## Currency Storage Strategy
+
+Currently, currency flows from `Profile.currency` → backend → `MonetaryAmount` on all domain objects. DTOs and records store only cents (`Int`). To support future per-account/earmark/transaction currencies, **all SwiftData records that store monetary amounts must also store a `currencyCode: String`**.
+
+### Design
+
+- Every record with an `amount`/`balance` field gets a `currencyCode: String` column.
+- Initially, `currencyCode` is set from `profile.currency.code` for all records.
+- Repository `toDomain()` mapping reads `currencyCode` from the record (not from the profile), constructing `Currency` from the stored code.
+- This means the storage is ready for multi-currency without schema migration — only the business logic needs to change.
+
+### Records Affected
+
+| Record | Currency Fields |
+|--------|----------------|
+| `TransactionRecord` | `currencyCode` (for `amount`) |
+| `AccountRecord` | `currencyCode` (for future per-account currency) |
+| `EarmarkRecord` | `currencyCode` (for `savingsTarget` and computed values) |
+| `EarmarkBudgetItemRecord` | `currencyCode` (for `amount`) |
+| `CategoryRecord` | None (categories have no monetary values) |
+
+### Currency Lookup
+
+```swift
+extension Currency {
+  /// Construct Currency from a stored code. Falls back to a generic representation.
+  static func from(code: String) -> Currency {
+    switch code {
+    case "AUD": return .AUD
+    case "USD": return .USD
+    default: return Currency(code: code, symbol: code, decimals: 2)
+    }
+  }
+}
+```
+
+---
+
+## Performance Analysis
+
+### Transaction Volume Estimates
+
+| User Type | Transactions/Month | 5 Years Total | Memory (~200 bytes/txn) |
+|-----------|-------------------|---------------|------------------------|
+| Light | 30-50 | 1,800-3,000 | < 1 MB |
+| Typical | 100-200 | 6,000-12,000 | ~2 MB |
+| Heavy | 300-500 | 18,000-30,000 | ~6 MB |
+| Power user | 500+ | 30,000-60,000 | ~12 MB |
+
+### In-Memory Processing Benchmarks (estimated)
+
+All analysis queries fetch all non-scheduled transactions and compute in memory. This matches the existing `InMemoryAnalysisRepository` pattern (which uses `pageSize: 10000`).
+
+| Operation | 10K txns | 30K txns | 50K txns |
+|-----------|----------|----------|----------|
+| SwiftData fetch (SQLite) | 10-30ms | 30-80ms | 50-150ms |
+| Filter + sort (in-memory) | 1-3ms | 3-8ms | 5-15ms |
+| Balance summation | < 1ms | < 1ms | 1-2ms |
+| Total per query | ~15-35ms | ~35-90ms | ~60-170ms |
+
+### Verdict
+
+**For typical users (< 20K transactions): No performance concern.** Integer arithmetic over small structs is extremely fast. SwiftData's SQLite-backed fetch is the bottleneck, not computation.
+
+**For power users (30K-50K+ transactions):** Acceptable but worth optimizing:
+
+1. **Predicate push-down** — Push simple filters (scheduled, dateRange, accountId) into SwiftData predicates to reduce the fetch size. The plans already describe this.
+2. **Cached account balances** — `AccountStore.applyTransactionDelta()` already maintains incremental balance updates. The full scan only happens on `load()` (app launch / pull-to-refresh).
+3. **Background computation** — Run analysis queries on a background `ModelActor`, post results to the main actor. The `@ModelActor` macro already provides this isolation.
+4. **Profile scoping** — The `profileId` predicate filter is always applied, which limits the working set to one profile's data. Users who split data across profiles will naturally have smaller per-profile datasets.
+
+### Analysis Query Performance
+
+The four `AnalysisRepository` methods all scan the full transaction set. With iCloud backend:
+
+| Query | Scan Size | Notes |
+|-------|-----------|-------|
+| `fetchDailyBalances` | All non-scheduled txns | Sorted chronologically, running balance — O(n) |
+| `fetchExpenseBreakdown` | All negative txns | Group by (category, month) — O(n) |
+| `fetchIncomeAndExpense` | All txns | Group by month — O(n) |
+| `fetchCategoryBalances` | Filtered txns | Date range + type filter reduces set significantly |
+
+All are O(n) and embarrassingly parallelizable. The existing code runs these concurrently via `async let` in `AnalysisStore.loadAll()`. Even at 50K transactions, each query completes in under 200ms — well within acceptable UI latency for a data load triggered by tab switch or pull-to-refresh.
+
+### Comparison: Server vs Local
+
+| Aspect | RemoteBackend (current) | CloudKitBackend (proposed) |
+|--------|------------------------|---------------------------|
+| Latency per query | 200-800ms (network RTT) | 15-170ms (local SQLite) |
+| Parallelism | Limited by server concurrency | Unlimited local threads |
+| Offline | Fails | Works |
+| Memory | Low (server computes) | Higher (all txns in memory) |
+
+**Local computation is faster than network round-trips in virtually all cases.** The only scenario where the server wins is if it can use SQL aggregates (SUM, GROUP BY) to avoid transferring raw transaction data — but the current server endpoints return pre-computed results, so the app never downloads bulk transactions for analysis anyway. With iCloud, the local SQLite is the database, and the in-memory scan replaces the SQL aggregates.
 
 ---
 
@@ -208,22 +394,37 @@ All SwiftData `@Model` classes live in `Backends/CloudKit/Models/`. They are int
 
 ### Model Relationships
 
+Every record includes `profileId: UUID` for multi-profile isolation. All queries filter by `profileId`.
+
+Records with monetary values include `currencyCode: String` for future multi-currency support (initially set from profile currency).
+
 ```
+ProfileRecord                          ← synced via CloudKit, discovered on all devices
+  ├── id: UUID (unique)                ← this IS the profileId used by all other records
+  ├── label: String
+  ├── currencyCode: String
+  ├── financialYearStartMonth: Int
+  └── createdAt: Date
+
 AccountRecord
   ├── id: UUID (unique)
+  ├── profileId: UUID              ← multi-profile scoping
   ├── name: String
   ├── type: String (raw value of AccountType)
   ├── position: Int
   ├── isHidden: Bool
+  ├── currencyCode: String         ← future per-account currency
   └── ← TransactionRecord.accountId / toAccountId (implicit)
 
 TransactionRecord
   ├── id: UUID (unique)
+  ├── profileId: UUID              ← multi-profile scoping
   ├── type: String (raw value of TransactionType)
   ├── date: Date
   ├── accountId: UUID?
   ├── toAccountId: UUID?
   ├── amount: Int (cents)
+  ├── currencyCode: String         ← future per-transaction currency
   ├── payee: String?
   ├── notes: String?
   ├── categoryId: UUID?
@@ -233,15 +434,18 @@ TransactionRecord
 
 CategoryRecord
   ├── id: UUID (unique)
+  ├── profileId: UUID              ← multi-profile scoping
   ├── name: String
   └── parentId: UUID?
 
 EarmarkRecord
   ├── id: UUID (unique)
+  ├── profileId: UUID              ← multi-profile scoping
   ├── name: String
   ├── position: Int
   ├── isHidden: Bool
   ├── savingsTarget: Int? (cents)
+  ├── currencyCode: String         ← future per-earmark currency
   ├── savingsStartDate: Date?
   └── savingsEndDate: Date?
 
@@ -249,7 +453,8 @@ EarmarkBudgetItemRecord
   ├── id: UUID (unique)
   ├── earmarkId: UUID
   ├── categoryId: UUID
-  └── amount: Int (cents)
+  ├── amount: Int (cents)
+  └── currencyCode: String         ← future per-budget-item currency
 ```
 
 ### CloudKit Considerations
@@ -257,7 +462,7 @@ EarmarkBudgetItemRecord
 - **Container:** Use the app's default CloudKit container
 - **Database:** Private database only (no public or shared)
 - **Record Zone:** Default zone (SwiftData manages this)
-- **Indexes:** SwiftData automatically creates CloudKit indexes for `@Attribute` properties used in predicates
+- **Indexes:** SwiftData automatically creates CloudKit indexes for `@Attribute` properties used in predicates. `profileId` will be indexed automatically since it appears in every query predicate.
 - **Size Limits:** CloudKit record size limit is 1MB — financial records are well within this
 - **Rate Limits:** CloudKit has per-user rate limits; batch operations should be chunked appropriately during migration
 
@@ -320,23 +525,26 @@ The recommended implementation order minimizes risk and allows incremental testi
 
 ```
 Backends/CloudKit/
-├── CloudKitBackend.swift              # BackendProvider implementation
+├── CloudKitBackend.swift              # BackendProvider implementation (takes profileId + currency)
 ├── Auth/
-│   └── CloudKitAuthProvider.swift     # Implicit iCloud auth
+│   └── CloudKitAuthProvider.swift     # Implicit iCloud auth (profile-agnostic)
 ├── Models/
-│   ├── AccountRecord.swift            # @Model for accounts
-│   ├── TransactionRecord.swift        # @Model for transactions
-│   ├── CategoryRecord.swift           # @Model for categories
-│   ├── EarmarkRecord.swift            # @Model for earmarks
-│   └── EarmarkBudgetItemRecord.swift  # @Model for earmark budgets
+│   ├── ProfileRecord.swift             # @Model — profile metadata, synced across devices
+│   ├── AccountRecord.swift            # @Model — includes profileId, currencyCode
+│   ├── TransactionRecord.swift        # @Model — includes profileId, currencyCode
+│   ├── CategoryRecord.swift           # @Model — includes profileId
+│   ├── EarmarkRecord.swift            # @Model — includes profileId, currencyCode
+│   └── EarmarkBudgetItemRecord.swift  # @Model — includes currencyCode
 ├── Repositories/
-│   ├── CloudKitAccountRepository.swift
-│   ├── CloudKitTransactionRepository.swift
-│   ├── CloudKitCategoryRepository.swift
-│   └── CloudKitEarmarkRepository.swift
+│   ├── CloudKitAccountRepository.swift     # All queries scoped by profileId
+│   ├── CloudKitTransactionRepository.swift # All queries scoped by profileId
+│   ├── CloudKitCategoryRepository.swift    # All queries scoped by profileId
+│   ├── CloudKitEarmarkRepository.swift     # All queries scoped by profileId
+│   └── CloudKitAnalysisRepository.swift    # All queries scoped by profileId
 └── Migration/
     ├── ServerDataExporter.swift        # Fetches all data from REST API
-    └── CloudKitDataImporter.swift      # Writes data to SwiftData/CloudKit
+    ├── CloudKitDataImporter.swift      # Writes data to SwiftData/CloudKit (stamps profileId + currencyCode)
+    └── ProfileDataDeleter.swift        # Batch-deletes all records for a profileId
 ```
 
 ---

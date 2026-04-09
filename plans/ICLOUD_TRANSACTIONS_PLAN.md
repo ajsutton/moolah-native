@@ -72,11 +72,13 @@ final class TransactionRecord {
   @Attribute(.preserveValueOnDeletion)
   var id: UUID
 
+  var profileId: UUID       // multi-profile scoping — all queries filter by this
   var type: String          // "income", "expense", "transfer"
   var date: Date
   var accountId: UUID?
   var toAccountId: UUID?
   var amount: Int           // cents
+  var currencyCode: String  // ISO currency code — initially from profile, future per-transaction currency
   var payee: String?
   var notes: String?
   var categoryId: UUID?
@@ -89,11 +91,13 @@ final class TransactionRecord {
 
   init(
     id: UUID,
+    profileId: UUID,
     type: String,
     date: Date,
     accountId: UUID? = nil,
     toAccountId: UUID? = nil,
     amount: Int,
+    currencyCode: String,
     payee: String? = nil,
     notes: String? = nil,
     categoryId: UUID? = nil,
@@ -102,11 +106,13 @@ final class TransactionRecord {
     recurEvery: Int? = nil
   ) {
     self.id = id
+    self.profileId = profileId
     self.type = type
     self.date = date
     self.accountId = accountId
     self.toAccountId = toAccountId
     self.amount = amount
+    self.currencyCode = currencyCode
     self.payee = payee
     self.notes = notes
     self.categoryId = categoryId
@@ -125,6 +131,8 @@ final class TransactionRecord {
 | Store `type` as `String` | Yes | CloudKit doesn't support custom enums; raw values work |
 | Store `recurPeriod` as `String?` | Yes | Same reason; map to `RecurPeriod` enum in domain layer |
 | Store `amount` as `Int` | Yes | Cents, matches domain model |
+| Store `currencyCode` as `String` | Yes | ISO code; initially from profile, ready for per-transaction currency |
+| Store `profileId` as `UUID` | Yes | Scopes all queries to a single profile |
 | Denormalized `payeeLower` | Yes | SwiftData `#Predicate` doesn't support `.lowercased()` calls |
 | No SwiftData relationships | Yes | Use UUID foreign keys; relationships complicate CloudKit sync |
 | `@Attribute(.preserveValueOnDeletion)` on `id` | Yes | Helps CloudKit tombstone tracking |
@@ -148,12 +156,20 @@ SwiftData `#Predicate` with CloudKit has significant limitations:
 ```swift
 @ModelActor
 actor CloudKitTransactionRepository: TransactionRepository {
+  private let profileId: UUID
+
+  init(modelContainer: ModelContainer, profileId: UUID) {
+    self.profileId = profileId
+  }
+
   func fetch(
     filter: TransactionFilter, page: Int, pageSize: Int
   ) async throws -> TransactionPage {
+    let pid = profileId
 
-    // Phase 1: SwiftData predicate for filters it CAN handle
+    // Phase 1: SwiftData predicate — always scoped to profileId
     var descriptor = FetchDescriptor<TransactionRecord>(
+      predicate: #Predicate<TransactionRecord> { $0.profileId == pid },
       sortBy: [
         SortDescriptor(\.date, order: .reverse),
         SortDescriptor(\.id, order: .forward)
@@ -173,8 +189,10 @@ actor CloudKitTransactionRepository: TransactionRepository {
     let pageRecords = Array(filtered[offset..<end])
 
     // Phase 4: Compute priorBalance (sum of transactions after this page)
+    // Currency is read from the first transaction or falls back to profile currency
     let priorCents = filtered[end...].reduce(0) { $0 + $1.amount }
-    let priorBalance = MonetaryAmount(cents: priorCents, currency: .defaultCurrency)
+    let currency = filtered.first.map { Currency.from(code: $0.currencyCode) } ?? .AUD
+    let priorBalance = MonetaryAmount(cents: priorCents, currency: currency)
 
     // Phase 5: Map to domain models
     let transactions = pageRecords.map { $0.toDomain() }
@@ -267,7 +285,7 @@ A more complete optimization can build compound predicates for filter combinatio
 
 ```swift
 func create(_ transaction: Transaction) async throws -> Transaction {
-  let record = TransactionRecord(from: transaction)
+  let record = TransactionRecord(from: transaction, profileId: profileId)
   modelContext.insert(record)
   try modelContext.save()
   return transaction
@@ -326,13 +344,14 @@ func fetchPayeeSuggestions(prefix: String) async throws -> [String] {
 ```swift
 extension TransactionRecord {
   func toDomain() -> Transaction {
-    Transaction(
+    let currency = Currency.from(code: currencyCode)
+    return Transaction(
       id: id,
       type: TransactionType(rawValue: type) ?? .expense,
       date: date,
       accountId: accountId,
       toAccountId: toAccountId,
-      amount: MonetaryAmount(cents: amount, currency: .defaultCurrency),
+      amount: MonetaryAmount(cents: amount, currency: currency),
       payee: payee,
       notes: notes,
       categoryId: categoryId,
@@ -348,14 +367,16 @@ extension TransactionRecord {
 
 ```swift
 extension TransactionRecord {
-  convenience init(from domain: Transaction) {
+  convenience init(from domain: Transaction, profileId: UUID) {
     self.init(
       id: domain.id,
+      profileId: profileId,
       type: domain.type.rawValue,
       date: domain.date,
       accountId: domain.accountId,
       toAccountId: domain.toAccountId,
       amount: domain.amount.cents,
+      currencyCode: domain.amount.currency.code,
       payee: domain.payee,
       notes: domain.notes,
       categoryId: domain.categoryId,
@@ -371,6 +392,7 @@ extension TransactionRecord {
     accountId = domain.accountId
     toAccountId = domain.toAccountId
     amount = domain.amount.cents
+    currencyCode = domain.amount.currency.code
     payee = domain.payee
     payeeLower = domain.payee?.lowercased()
     notes = domain.notes
@@ -464,6 +486,7 @@ SwiftData automatically indexes `@Attribute` properties used in `#Predicate`. En
 | Field | Used In | Index Priority |
 |-------|---------|---------------|
 | `id` | Lookups, updates, deletes | High (unique constraint) |
+| `profileId` | Every query | High (always in predicate) |
 | `date` | Date range filter, sorting | High |
 | `accountId` | Account filter | High |
 | `earmarkId` | Earmark filter | Medium |

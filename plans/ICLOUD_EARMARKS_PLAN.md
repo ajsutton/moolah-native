@@ -75,27 +75,33 @@ final class EarmarkRecord {
   @Attribute(.preserveValueOnDeletion)
   var id: UUID
 
+  var profileId: UUID       // multi-profile scoping — all queries filter by this
   var name: String
   var position: Int
   var isHidden: Bool
   var savingsTarget: Int?   // cents (nil = no savings goal)
+  var currencyCode: String  // ISO currency code — initially from profile, future per-earmark currency
   var savingsStartDate: Date?
   var savingsEndDate: Date?
 
   init(
     id: UUID,
+    profileId: UUID,
     name: String,
     position: Int = 0,
     isHidden: Bool = false,
     savingsTarget: Int? = nil,
+    currencyCode: String,
     savingsStartDate: Date? = nil,
     savingsEndDate: Date? = nil
   ) {
     self.id = id
+    self.profileId = profileId
     self.name = name
     self.position = position
     self.isHidden = isHidden
     self.savingsTarget = savingsTarget
+    self.currencyCode = currencyCode
     self.savingsStartDate = savingsStartDate
     self.savingsEndDate = savingsEndDate
   }
@@ -119,13 +125,15 @@ final class EarmarkBudgetItemRecord {
 
   var earmarkId: UUID
   var categoryId: UUID
-  var amount: Int   // cents
+  var amount: Int          // cents
+  var currencyCode: String // ISO currency code — initially from profile
 
-  init(id: UUID, earmarkId: UUID, categoryId: UUID, amount: Int) {
+  init(id: UUID, earmarkId: UUID, categoryId: UUID, amount: Int, currencyCode: String) {
     self.id = id
     self.earmarkId = earmarkId
     self.categoryId = categoryId
     self.amount = amount
+    self.currencyCode = currencyCode
   }
 }
 ```
@@ -145,17 +153,26 @@ import OSLog
 actor CloudKitEarmarkRepository: EarmarkRepository {
   private let logger = Logger(subsystem: "com.moolah.app", category: "CloudKitEarmarkRepo")
 
+  private let profileId: UUID
+
+  init(modelContainer: ModelContainer, profileId: UUID) {
+    self.profileId = profileId
+  }
+
   func fetchAll() async throws -> [Earmark] {
-    // 1. Fetch all earmark records
+    let pid = profileId
+
+    // 1. Fetch all earmark records for this profile
     let descriptor = FetchDescriptor<EarmarkRecord>(
+      predicate: #Predicate<EarmarkRecord> { $0.profileId == pid },
       sortBy: [SortDescriptor(\.position, order: .forward)]
     )
     let earmarkRecords = try modelContext.fetch(descriptor)
 
-    // 2. Fetch all non-scheduled transactions with earmarkIds
+    // 2. Fetch all non-scheduled transactions with earmarkIds for this profile
     let txnDescriptor = FetchDescriptor<TransactionRecord>(
       predicate: #Predicate<TransactionRecord> {
-        $0.earmarkId != nil && $0.recurPeriod == nil
+        $0.profileId == pid && $0.earmarkId != nil && $0.recurPeriod == nil
       }
     )
     let transactions = try modelContext.fetch(txnDescriptor)
@@ -175,21 +192,22 @@ actor CloudKitEarmarkRepository: EarmarkRepository {
       }
     }
 
-    // 4. Map to domain models
+    // 4. Map to domain models — currency read from each record
     return earmarkRecords.map { record in
-      Earmark(
+      let currency = Currency.from(code: record.currencyCode)
+      return Earmark(
         id: record.id,
         name: record.name,
         balance: MonetaryAmount(
-          cents: balances[record.id] ?? 0, currency: .defaultCurrency),
+          cents: balances[record.id] ?? 0, currency: currency),
         saved: MonetaryAmount(
-          cents: savedAmounts[record.id] ?? 0, currency: .defaultCurrency),
+          cents: savedAmounts[record.id] ?? 0, currency: currency),
         spent: MonetaryAmount(
-          cents: spentAmounts[record.id] ?? 0, currency: .defaultCurrency),
+          cents: spentAmounts[record.id] ?? 0, currency: currency),
         isHidden: record.isHidden,
         position: record.position,
         savingsGoal: record.savingsTarget.map {
-          MonetaryAmount(cents: $0, currency: .defaultCurrency)
+          MonetaryAmount(cents: $0, currency: currency)
         },
         savingsStartDate: record.savingsStartDate,
         savingsEndDate: record.savingsEndDate
@@ -198,12 +216,15 @@ actor CloudKitEarmarkRepository: EarmarkRepository {
   }
 
   func create(_ earmark: Earmark) async throws -> Earmark {
+    let currency = earmark.balance.currency
     let record = EarmarkRecord(
       id: earmark.id,
+      profileId: profileId,
       name: earmark.name,
       position: earmark.position,
       isHidden: earmark.isHidden,
       savingsTarget: earmark.savingsGoal?.cents,
+      currencyCode: currency.code,
       savingsStartDate: earmark.savingsStartDate,
       savingsEndDate: earmark.savingsEndDate
     )
@@ -248,10 +269,11 @@ actor CloudKitEarmarkRepository: EarmarkRepository {
     )
     let records = try modelContext.fetch(descriptor)
     return records.map { record in
-      EarmarkBudgetItem(
+      let currency = Currency.from(code: record.currencyCode)
+      return EarmarkBudgetItem(
         id: record.id,
         categoryId: record.categoryId,
-        amount: MonetaryAmount(cents: record.amount, currency: .defaultCurrency)
+        amount: MonetaryAmount(cents: record.amount, currency: currency)
       )
     }
   }
@@ -280,7 +302,8 @@ actor CloudKitEarmarkRepository: EarmarkRepository {
         id: item.id,
         earmarkId: earmarkId,
         categoryId: item.categoryId,
-        amount: item.amount.cents
+        amount: item.amount.cents,
+        currencyCode: item.amount.currency.code
       )
       modelContext.insert(record)
     }
