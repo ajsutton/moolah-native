@@ -10,54 +10,58 @@ struct ProfileSetupView: View {
   @State private var customLabel = ""
 
   var body: some View {
-    VStack(spacing: 32) {
-      VStack(spacing: 8) {
-        Text("Moolah")
-          .font(.largeTitle.bold())
-        Text(String(localized: "Personal finance, your way."))
-          .foregroundStyle(.secondary)
-      }
-
-      VStack(spacing: 12) {
-        Button {
-          Task { await addDefaultProfile() }
-        } label: {
-          Label(
-            String(localized: "Sign in to Moolah"),
-            systemImage: "person.crop.circle.badge.checkmark"
-          )
-          .frame(maxWidth: 280)
+    ScrollView {
+      VStack(spacing: 32) {
+        VStack(spacing: 8) {
+          Text("Moolah")
+            .font(.largeTitle.bold())
+            .accessibilityAddTraits(.isHeader)
+          Text(String(localized: "Personal finance, your way."))
+            .foregroundStyle(.secondary)
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .disabled(profileStore.isValidating)
 
-        if !showCustomServer {
+        VStack(spacing: 12) {
           Button {
-            withAnimation { showCustomServer = true }
+            Task { await addDefaultProfile() }
           } label: {
-            Text(String(localized: "Use a custom server"))
-              .font(.subheadline)
+            Label(
+              String(localized: "Sign in to Moolah"),
+              systemImage: "person.crop.circle.badge.checkmark"
+            )
+            .frame(maxWidth: 280)
           }
-          .buttonStyle(.plain)
-          .foregroundStyle(.secondary)
+          .buttonStyle(.borderedProminent)
+          .controlSize(.large)
+          .disabled(profileStore.isValidating)
+
+          if !showCustomServer {
+            Button {
+              withAnimation { showCustomServer = true }
+            } label: {
+              Text(String(localized: "Use a custom server"))
+                .font(.subheadline)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+          }
+        }
+
+        if showCustomServer {
+          customServerFields
+        }
+
+        if profileStore.isValidating {
+          ProgressView("Connecting to server...")
+            .accessibilityAddTraits(.updatesFrequently)
+        } else if let error = profileStore.validationError {
+          Label(error, systemImage: "exclamationmark.triangle.fill")
+            .foregroundStyle(.red)
+            .font(.subheadline)
+            .accessibilityLabel("Error: \(error)")
         }
       }
-
-      if showCustomServer {
-        customServerFields
-      }
-
-      if profileStore.isValidating {
-        ProgressView("Connecting to server...")
-      } else if let error = profileStore.validationError {
-        Label(error, systemImage: "exclamationmark.triangle.fill")
-          .foregroundStyle(.red)
-          .font(.subheadline)
-          .accessibilityLabel("Error: \(error)")
-      }
+      .padding()
     }
-    .padding()
   }
 
   private var customServerFields: some View {
@@ -68,6 +72,7 @@ struct ProfileSetupView: View {
       VStack(alignment: .leading, spacing: 8) {
         TextField("Server URL", text: $customURL)
           .textFieldStyle(.roundedBorder)
+          .autocorrectionDisabled()
           #if os(iOS)
             .keyboardType(.URL)
             .textInputAutocapitalization(.never)
@@ -106,7 +111,7 @@ struct ProfileSetupView: View {
   private func addDefaultProfile() async {
     let profile = Profile(
       label: "Moolah",
-      serverURL: URL(string: "https://moolah.rocks/api/")!
+      backendType: .moolah
     )
     _ = await profileStore.validateAndAddProfile(profile)
   }
@@ -116,7 +121,7 @@ struct ProfileSetupView: View {
     guard let url = URL(string: urlString) else { return }
 
     let label = customLabel.isEmpty ? url.host() ?? "Custom Server" : customLabel
-    let profile = Profile(label: label, serverURL: url)
+    let profile = Profile(label: label, backendType: .remote, serverURL: url)
     _ = await profileStore.validateAndAddProfile(profile)
   }
 }

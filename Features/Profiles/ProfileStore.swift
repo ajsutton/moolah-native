@@ -74,14 +74,14 @@ final class ProfileStore {
 
   /// Validates the server URL then adds the profile. Returns true on success.
   func validateAndAddProfile(_ profile: Profile) async -> Bool {
-    guard await validateServer(url: profile.serverURL) else { return false }
+    guard await validateServer(url: profile.resolvedServerURL) else { return false }
     addProfile(profile)
     return true
   }
 
   /// Validates the server URL then updates the profile. Returns true on success.
   func validateAndUpdateProfile(_ profile: Profile) async -> Bool {
-    guard await validateServer(url: profile.serverURL) else { return false }
+    guard await validateServer(url: profile.resolvedServerURL) else { return false }
     updateProfile(profile)
     return true
   }

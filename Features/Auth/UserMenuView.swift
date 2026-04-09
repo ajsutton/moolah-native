@@ -7,6 +7,7 @@ struct UserMenuView: View {
   let user: UserProfile
   @Environment(AuthStore.self) private var authStore
   @Environment(ProfileStore.self) private var profileStore
+  @Environment(ProfileSession.self) private var session
   @State private var showManageProfiles = false
 
   private let avatarSize: CGFloat = 28
@@ -39,7 +40,7 @@ struct UserMenuView: View {
     #if os(iOS)
       .sheet(isPresented: $showManageProfiles) {
         NavigationStack {
-          SettingsView()
+          SettingsView(activeSession: session)
           .environment(profileStore)
           .toolbar {
             ToolbarItem(placement: .cancellationAction) {

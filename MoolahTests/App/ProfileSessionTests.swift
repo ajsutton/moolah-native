@@ -40,7 +40,7 @@ struct ProfileSessionTests {
 
     // They should be separate instances
     #expect(session1.id != session2.id)
-    #expect(session1.profile.serverURL != session2.profile.serverURL)
+    #expect(session1.profile.resolvedServerURL != session2.profile.resolvedServerURL)
   }
 
   @Test("onMutate wiring connects transaction store to account and earmark stores")

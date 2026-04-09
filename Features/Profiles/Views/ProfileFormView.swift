@@ -1,36 +1,71 @@
 import SwiftUI
 
-/// Unified form for adding or editing a profile.
-/// Shows server URL validation errors inline and prevents submission until valid.
+/// Sheet for adding a new profile. Presents two choices:
+/// - Moolah (fixed URL, instant add)
+/// - Custom Server (user enters URL)
 struct ProfileFormView: View {
   @Environment(ProfileStore.self) private var profileStore
   @Environment(\.dismiss) private var dismiss
 
-  let existingProfile: Profile?
-
-  @State private var serverURL: String
-  @State private var label: String
-
-  init(profile: Profile? = nil) {
-    self.existingProfile = profile
-    _serverURL = State(initialValue: profile?.serverURL.absoluteString ?? "")
-    _label = State(initialValue: profile?.label ?? "")
-  }
+  @State private var selectedType: BackendType?
+  @State private var serverURL = ""
+  @State private var label = ""
 
   var body: some View {
     NavigationStack {
       Form {
-        Section("Server") {
-          TextField("Server URL", text: $serverURL)
-            #if os(iOS)
-              .keyboardType(.URL)
-              .textInputAutocapitalization(.never)
-            #endif
-            .onChange(of: serverURL) {
-              profileStore.clearValidationError()
+        Section {
+          Button {
+            selectedType = .moolah
+          } label: {
+            HStack {
+              Label("Moolah", systemImage: "cloud")
+              Spacer()
+              if selectedType == .moolah {
+                Image(systemName: "checkmark")
+                  .foregroundStyle(.tint)
+                  .accessibilityHidden(true)
+              }
             }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .accessibilityAddTraits(selectedType == .moolah ? .isSelected : [])
 
-          TextField("Label (optional)", text: $label)
+          Button {
+            selectedType = .remote
+          } label: {
+            HStack {
+              Label("Custom Server", systemImage: "server.rack")
+              Spacer()
+              if selectedType == .remote {
+                Image(systemName: "checkmark")
+                  .foregroundStyle(.tint)
+                  .accessibilityHidden(true)
+              }
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .accessibilityAddTraits(selectedType == .remote ? .isSelected : [])
+        }
+
+        if selectedType == .remote {
+          Section("Server") {
+            TextField("Server URL", text: $serverURL)
+              .autocorrectionDisabled()
+              #if os(iOS)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+              #endif
+              .onChange(of: serverURL) {
+                profileStore.clearValidationError()
+              }
+
+            TextField("Label (optional)", text: $label)
+          }
         }
 
         if let error = profileStore.validationError {
@@ -42,7 +77,7 @@ struct ProfileFormView: View {
         }
       }
       .formStyle(.grouped)
-      .navigationTitle(existingProfile == nil ? "Add Profile" : "Edit Profile")
+      .navigationTitle("Add Profile")
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
       #endif
@@ -59,38 +94,44 @@ struct ProfileFormView: View {
             ProgressView()
               .controlSize(.small)
           } else {
-            Button(existingProfile == nil ? "Add" : "Save") {
+            Button("Add") {
               Task { await save() }
             }
-            .disabled(!isValidURL)
+            .disabled(!canAdd)
           }
         }
       }
     }
   }
 
-  private var isValidURL: Bool {
-    guard !serverURL.isEmpty else { return false }
-    let urlString = serverURL.hasPrefix("http") ? serverURL : "https://\(serverURL)"
-    return URL(string: urlString) != nil
+  private var canAdd: Bool {
+    guard let type = selectedType else { return false }
+    switch type {
+    case .moolah:
+      return true
+    case .remote:
+      guard !serverURL.isEmpty else { return false }
+      let urlString = serverURL.hasPrefix("http") ? serverURL : "https://\(serverURL)"
+      return URL(string: urlString) != nil
+    }
   }
 
   private func save() async {
-    let urlString = serverURL.hasPrefix("http") ? serverURL : "https://\(serverURL)"
-    guard let url = URL(string: urlString) else { return }
-    let profileLabel = label.isEmpty ? url.host() ?? "Custom Server" : label
+    guard let type = selectedType else { return }
 
-    if var existing = existingProfile {
-      existing.serverURL = url
-      existing.label = profileLabel
-      if await profileStore.validateAndUpdateProfile(existing) {
-        dismiss()
-      }
-    } else {
-      let profile = Profile(label: profileLabel, serverURL: url)
-      if await profileStore.validateAndAddProfile(profile) {
-        dismiss()
-      }
+    let profile: Profile
+    switch type {
+    case .moolah:
+      profile = Profile(label: "Moolah", backendType: .moolah)
+    case .remote:
+      let urlString = serverURL.hasPrefix("http") ? serverURL : "https://\(serverURL)"
+      guard let url = URL(string: urlString) else { return }
+      let profileLabel = label.isEmpty ? url.host() ?? "Custom Server" : label
+      profile = Profile(label: profileLabel, backendType: .remote, serverURL: url)
+    }
+
+    if await profileStore.validateAndAddProfile(profile) {
+      dismiss()
     }
   }
 }

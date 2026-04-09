@@ -21,7 +21,7 @@ struct ProfileRootView: View {
     .onChange(of: profileStore.activeProfileID) { _, newID in
       updateSession(for: newID)
     }
-    .onChange(of: profileStore.activeProfile?.serverURL) { _, _ in
+    .onChange(of: profileStore.activeProfile?.resolvedServerURL) { _, _ in
       // Recreate session when the active profile's URL changes (e.g. edited in Settings)
       rebuildSessionIfNeeded()
     }
@@ -57,7 +57,9 @@ struct ProfileRootView: View {
   private func rebuildSessionIfNeeded() {
     guard let profile = profileStore.activeProfile else { return }
     // Rebuild if the URL changed (needs new backend) or if we have no session yet
-    if let session = activeSession, session.profile.serverURL != profile.serverURL {
+    if let session = activeSession,
+      session.profile.resolvedServerURL != profile.resolvedServerURL
+    {
       activeSession = ProfileSession(profile: profile)
     }
   }

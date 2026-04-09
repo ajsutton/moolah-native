@@ -75,10 +75,35 @@ struct ProfileTests {
     #expect(a != c)
   }
 
+  @Test("moolah profile resolves to moolah.rocks URL")
+  func moolahResolvedURL() {
+    let profile = Profile(label: "Moolah", backendType: .moolah)
+
+    #expect(profile.serverURL == nil)
+    #expect(profile.resolvedServerURL == Profile.moolahServerURL)
+    #expect(profile.resolvedServerURL.absoluteString == "https://moolah.rocks/api/")
+  }
+
+  @Test("remote profile resolves to stored URL")
+  func remoteResolvedURL() {
+    let url = URL(string: "https://custom.example.com/api/")!
+    let profile = Profile(label: "Custom", backendType: .remote, serverURL: url)
+
+    #expect(profile.serverURL == url)
+    #expect(profile.resolvedServerURL == url)
+  }
+
   @Test("BackendType round-trips through JSON")
   func backendTypeRoundTrip() throws {
     let data = try JSONEncoder().encode(BackendType.remote)
     let decoded = try JSONDecoder().decode(BackendType.self, from: data)
     #expect(decoded == .remote)
+  }
+
+  @Test("moolah BackendType round-trips through JSON")
+  func moolahBackendTypeRoundTrip() throws {
+    let data = try JSONEncoder().encode(BackendType.moolah)
+    let decoded = try JSONDecoder().decode(BackendType.self, from: data)
+    #expect(decoded == .moolah)
   }
 }

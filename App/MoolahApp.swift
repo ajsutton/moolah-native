@@ -95,7 +95,7 @@ struct MoolahApp: App {
 
     #if os(macOS)
       Settings {
-        SettingsView()
+        SettingsView(activeSession: activeSession)
           .environment(profileStore)
       }
     #endif

@@ -8,6 +8,7 @@ struct SessionRootView: View {
   var body: some View {
     AppRootView()
       .id(session.id)
+      .environment(session)
       .environment(session.authStore)
       .environment(session.accountStore)
       .environment(session.transactionStore)

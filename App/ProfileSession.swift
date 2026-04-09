@@ -30,7 +30,7 @@ final class ProfileSession: Identifiable {
     let cookieKeychain = CookieKeychain(account: profile.id.uuidString)
 
     let remoteBackend = RemoteBackend(
-      baseURL: profile.serverURL,
+      baseURL: profile.resolvedServerURL,
       currency: profile.currency,
       session: session,
       cookieKeychain: cookieKeychain
