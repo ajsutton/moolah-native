@@ -177,8 +177,8 @@ struct RemoteTransactionRepositoryTests {
     let queryItems = components.queryItems ?? []
     let queryDict = Dictionary(uniqueKeysWithValues: queryItems.map { ($0.name, $0.value) })
 
-    #expect(queryDict["startDate"] == BackendDateFormatter.string(from: startDate))
-    #expect(queryDict["endDate"] == BackendDateFormatter.string(from: endDate))
+    #expect(queryDict["from"] == BackendDateFormatter.string(from: startDate))
+    #expect(queryDict["to"] == BackendDateFormatter.string(from: endDate))
   }
 
   @Test func testCategoryIdsFilterParam() async throws {
