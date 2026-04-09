@@ -158,7 +158,7 @@ struct CategoriesOverTimeCard: View {
           month: "20260\(month + 1)",
           monthDate: Calendar.current.date(
             byAdding: .month, value: -5 + month, to: Date())!,
-          actualCents: Int.random(in: 10000...50000),
+          actualCents: -Int.random(in: 10000...50000),
           percentage: Double.random(in: 10...50)
         )
       },

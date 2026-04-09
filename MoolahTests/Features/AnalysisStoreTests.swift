@@ -129,6 +129,33 @@ struct AnalysisStoreCategoriesOverTimeTests {
     #expect(uncategorized?.points[0].percentage == 40.0)
   }
 
+  @Test func negativeExpenseAmountsComputePercentagesCorrectly() {
+    let cat1 = UUID()
+    let cat2 = UUID()
+    let breakdown = [
+      ExpenseBreakdown(
+        categoryId: cat1, month: "202604",
+        totalExpenses: MonetaryAmount(cents: -75000, currency: .defaultCurrency)),
+      ExpenseBreakdown(
+        categoryId: cat2, month: "202604",
+        totalExpenses: MonetaryAmount(cents: -25000, currency: .defaultCurrency)),
+    ]
+    let categories = Categories(from: [
+      Category(id: cat1, name: "Groceries"),
+      Category(id: cat2, name: "Transport"),
+    ])
+
+    let result = AnalysisStore.buildCategoriesOverTime(
+      from: breakdown, categories: categories)
+
+    #expect(result.count == 2)
+    // Sorted by largest expense first (by absolute value)
+    #expect(result[0].categoryId == cat1)
+    #expect(result[0].points[0].percentage == 75.0)
+    #expect(result[1].categoryId == cat2)
+    #expect(result[1].points[0].percentage == 25.0)
+  }
+
   @Test func allZeroMonthsHandled() {
     let catId = UUID()
     let breakdown = [

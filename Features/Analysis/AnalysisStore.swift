@@ -103,7 +103,7 @@ final class AnalysisStore {
       let points = orderedMonths.map { month -> CategoryOverTimePoint in
         let cents = months[month] ?? 0
         let total = monthTotals[month] ?? 1
-        let percentage = total > 0 ? Double(cents) / Double(total) * 100 : 0
+        let percentage = total != 0 ? Double(cents) / Double(total) * 100 : 0
         return CategoryOverTimePoint(
           month: month,
           monthDate: parseMonth(month),
@@ -118,7 +118,7 @@ final class AnalysisStore {
         totalCents: totalCents
       )
     }
-    .sorted { $0.totalCents > $1.totalCents }
+    .sorted { abs($0.totalCents) > abs($1.totalCents) }
   }
 
   private static func rootCategoryId(for categoryId: UUID?, categories: Categories) -> UUID? {
