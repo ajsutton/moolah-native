@@ -18,7 +18,7 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: catId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: 10000, currency: .defaultCurrency))
+        totalExpenses: MonetaryAmount(cents: -10000, currency: .defaultCurrency))
     ]
     let categories = Categories(from: [Category(id: catId, name: "Groceries")])
 
@@ -38,10 +38,10 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: cat1, month: "202604",
-        totalExpenses: MonetaryAmount(cents: 75000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -75000, currency: .defaultCurrency)),
       ExpenseBreakdown(
         categoryId: cat2, month: "202604",
-        totalExpenses: MonetaryAmount(cents: 25000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -25000, currency: .defaultCurrency)),
     ]
     let categories = Categories(from: [
       Category(id: cat1, name: "Groceries"),
@@ -64,10 +64,10 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: rootId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: 30000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -30000, currency: .defaultCurrency)),
       ExpenseBreakdown(
         categoryId: childId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: 20000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -20000, currency: .defaultCurrency)),
     ]
     let categories = Categories(from: [
       Category(id: rootId, name: "Food"),
@@ -87,13 +87,13 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: catId, month: "202606",
-        totalExpenses: MonetaryAmount(cents: 10000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -10000, currency: .defaultCurrency)),
       ExpenseBreakdown(
         categoryId: catId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: 20000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -20000, currency: .defaultCurrency)),
       ExpenseBreakdown(
         categoryId: catId, month: "202605",
-        totalExpenses: MonetaryAmount(cents: 15000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -15000, currency: .defaultCurrency)),
     ]
     let categories = Categories(from: [Category(id: catId, name: "Groceries")])
 
@@ -112,10 +112,10 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: catId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: 60000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -60000, currency: .defaultCurrency)),
       ExpenseBreakdown(
         categoryId: nil, month: "202604",
-        totalExpenses: MonetaryAmount(cents: 40000, currency: .defaultCurrency)),
+        totalExpenses: MonetaryAmount(cents: -40000, currency: .defaultCurrency)),
     ]
     let categories = Categories(from: [Category(id: catId, name: "Groceries")])
 
@@ -129,31 +129,23 @@ struct AnalysisStoreCategoriesOverTimeTests {
     #expect(uncategorized?.points[0].percentage == 40.0)
   }
 
-  @Test func negativeExpenseAmountsComputePercentagesCorrectly() {
-    let cat1 = UUID()
-    let cat2 = UUID()
+  @Test func positiveExpenseValuesClampsToZero() {
+    // If server somehow returns positive expenses, they negate to negative
+    // and get clamped to 0 (matching web app's Math.max(0, ...) behavior)
+    let catId = UUID()
     let breakdown = [
       ExpenseBreakdown(
-        categoryId: cat1, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -75000, currency: .defaultCurrency)),
-      ExpenseBreakdown(
-        categoryId: cat2, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -25000, currency: .defaultCurrency)),
+        categoryId: catId, month: "202604",
+        totalExpenses: MonetaryAmount(cents: 10000, currency: .defaultCurrency))
     ]
-    let categories = Categories(from: [
-      Category(id: cat1, name: "Groceries"),
-      Category(id: cat2, name: "Transport"),
-    ])
+    let categories = Categories(from: [Category(id: catId, name: "Groceries")])
 
     let result = AnalysisStore.buildCategoriesOverTime(
       from: breakdown, categories: categories)
 
-    #expect(result.count == 2)
-    // Sorted by largest expense first (by absolute value)
-    #expect(result[0].categoryId == cat1)
-    #expect(result[0].points[0].percentage == 75.0)
-    #expect(result[1].categoryId == cat2)
-    #expect(result[1].points[0].percentage == 25.0)
+    #expect(result.count == 1)
+    #expect(result[0].points[0].actualCents == 0)
+    #expect(result[0].points[0].percentage == 0.0)
   }
 
   @Test func allZeroMonthsHandled() {

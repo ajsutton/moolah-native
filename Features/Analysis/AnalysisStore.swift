@@ -84,10 +84,12 @@ final class AnalysisStore {
     var rootTotals: [UUID?: [String: Int]] = [:]
     var allMonths: Set<String> = []
 
+    // Negate totalExpenses (server returns negative for expenses) and clamp to zero,
+    // matching the web app's categoryOverTimeData.js approach.
     for item in breakdown {
       let rootId = rootCategoryId(for: item.categoryId, categories: categories)
       allMonths.insert(item.month)
-      rootTotals[rootId, default: [:]][item.month, default: 0] += item.totalExpenses.cents
+      rootTotals[rootId, default: [:]][item.month, default: 0] += -item.totalExpenses.cents
     }
 
     let orderedMonths = allMonths.sorted()
@@ -95,15 +97,15 @@ final class AnalysisStore {
     var monthTotals: [String: Int] = [:]
     for (_, months) in rootTotals {
       for (month, cents) in months {
-        monthTotals[month, default: 0] += cents
+        monthTotals[month, default: 0] += max(0, cents)
       }
     }
 
     return rootTotals.map { categoryId, months in
       let points = orderedMonths.map { month -> CategoryOverTimePoint in
-        let cents = months[month] ?? 0
+        let cents = max(0, months[month] ?? 0)
         let total = monthTotals[month] ?? 1
-        let percentage = total != 0 ? Double(cents) / Double(total) * 100 : 0
+        let percentage = total > 0 ? Double(cents) / Double(total) * 100 : 0
         return CategoryOverTimePoint(
           month: month,
           monthDate: parseMonth(month),
@@ -118,7 +120,7 @@ final class AnalysisStore {
         totalCents: totalCents
       )
     }
-    .sorted { abs($0.totalCents) > abs($1.totalCents) }
+    .sorted { $0.totalCents > $1.totalCents }
   }
 
   private static func rootCategoryId(for categoryId: UUID?, categories: Categories) -> UUID? {
