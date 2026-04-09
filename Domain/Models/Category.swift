@@ -35,4 +35,35 @@ struct Categories: Sendable {
   func children(of parentId: UUID) -> [Category] {
     (childrenOf[parentId] ?? []).sorted { $0.name < $1.name }
   }
+
+  /// Full path for a category, e.g. "Income:Salary:Janet".
+  func path(for category: Category) -> String {
+    var parts: [String] = [category.name]
+    var current = category
+    while let parentId = current.parentId, let parent = by(id: parentId) {
+      parts.insert(parent.name, at: 0)
+      current = parent
+    }
+    return parts.joined(separator: ":")
+  }
+
+  /// An entry in the flattened category list.
+  struct FlatEntry: Sendable {
+    let category: Category
+    let path: String
+  }
+
+  /// All categories flattened with full paths, sorted alphabetically by path.
+  func flattenedByPath() -> [FlatEntry] {
+    var result: [FlatEntry] = []
+    func collect(_ parentId: UUID?) {
+      let children = parentId.map { self.children(of: $0) } ?? roots
+      for child in children {
+        result.append(FlatEntry(category: child, path: path(for: child)))
+        collect(child.id)
+      }
+    }
+    collect(nil)
+    return result.sorted { $0.path.localizedCaseInsensitiveCompare($1.path) == .orderedAscending }
+  }
 }
