@@ -64,6 +64,9 @@ struct SidebarView: View {
               EarmarkRowView(earmark: earmark)
             }
           }
+          .onMove { source, destination in
+            Task { await earmarkStore.reorderEarmarks(from: source, to: destination) }
+          }
 
           totalRow(label: "Earmarked Total", value: earmarkStore.totalBalance)
         } header: {

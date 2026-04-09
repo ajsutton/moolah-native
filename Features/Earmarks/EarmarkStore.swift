@@ -91,6 +91,19 @@ final class EarmarkStore {
     earmarks = Earmarks(from: updated)
   }
 
+  func reorderEarmarks(from source: IndexSet, to destination: Int) async {
+    var visible = visibleEarmarks
+    visible.move(fromOffsets: source, toOffset: destination)
+
+    for index in visible.indices {
+      visible[index].position = index
+      _ = try? await repository.update(visible[index])
+    }
+
+    let hiddenEarmarks = earmarks.ordered.filter { $0.isHidden }
+    earmarks = Earmarks(from: visible + hiddenEarmarks)
+  }
+
   func create(_ earmark: Earmark) async -> Earmark? {
     logger.debug("Creating earmark: \(earmark.name)")
     error = nil

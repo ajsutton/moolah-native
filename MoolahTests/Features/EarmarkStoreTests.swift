@@ -297,4 +297,86 @@ struct EarmarkStoreTests {
 
     #expect(store.totalBalance.cents == 40000)
   }
+
+  // MARK: - reorderEarmarks
+
+  @Test func testReorderEarmarksUpdatesPositions() async throws {
+    let e0 = Earmark(name: "First", position: 0)
+    let e1 = Earmark(name: "Second", position: 1)
+    let e2 = Earmark(name: "Third", position: 2)
+    let repository = InMemoryEarmarkRepository(initialEarmarks: [e0, e1, e2])
+    let store = EarmarkStore(repository: repository)
+    await store.load()
+
+    // Move last to first
+    await store.reorderEarmarks(from: IndexSet(integer: 2), to: 0)
+
+    #expect(store.visibleEarmarks[0].name == "Third")
+    #expect(store.visibleEarmarks[1].name == "First")
+    #expect(store.visibleEarmarks[2].name == "Second")
+    #expect(store.visibleEarmarks[0].position == 0)
+    #expect(store.visibleEarmarks[1].position == 1)
+    #expect(store.visibleEarmarks[2].position == 2)
+  }
+
+  @Test func testReorderEarmarksSkipsHiddenEarmarks() async throws {
+    let e0 = Earmark(name: "Visible1", position: 0)
+    let e1 = Earmark(name: "Hidden", isHidden: true, position: 1)
+    let e2 = Earmark(name: "Visible2", position: 2)
+    let repository = InMemoryEarmarkRepository(initialEarmarks: [e0, e1, e2])
+    let store = EarmarkStore(repository: repository)
+    await store.load()
+
+    // Swap the two visible earmarks
+    await store.reorderEarmarks(from: IndexSet(integer: 1), to: 0)
+
+    #expect(store.visibleEarmarks[0].name == "Visible2")
+    #expect(store.visibleEarmarks[1].name == "Visible1")
+    // Hidden earmark position unchanged
+    let hidden = store.earmarks.ordered.first { $0.isHidden }
+    #expect(hidden?.position == 1)
+  }
+
+  @Test func testReorderSingleEarmarkIsNoOp() async throws {
+    let e0 = Earmark(name: "Only", position: 0)
+    let repository = InMemoryEarmarkRepository(initialEarmarks: [e0])
+    let store = EarmarkStore(repository: repository)
+    await store.load()
+
+    await store.reorderEarmarks(from: IndexSet(integer: 0), to: 0)
+
+    #expect(store.visibleEarmarks.count == 1)
+    #expect(store.visibleEarmarks[0].position == 0)
+  }
+
+  @Test func testReorderEmptyListIsNoOp() async throws {
+    let repository = InMemoryEarmarkRepository(initialEarmarks: [])
+    let store = EarmarkStore(repository: repository)
+    await store.load()
+
+    await store.reorderEarmarks(from: IndexSet(integer: 0), to: 0)
+
+    #expect(store.visibleEarmarks.isEmpty)
+  }
+
+  @Test func testReorderPersistsToRepository() async throws {
+    let e0 = Earmark(name: "First", position: 0)
+    let e1 = Earmark(name: "Second", position: 1)
+    let e2 = Earmark(name: "Third", position: 2)
+    let repository = InMemoryEarmarkRepository(initialEarmarks: [e0, e1, e2])
+    let store = EarmarkStore(repository: repository)
+    await store.load()
+
+    // Move last to first
+    await store.reorderEarmarks(from: IndexSet(integer: 2), to: 0)
+
+    // Verify repository has updated positions
+    let persisted = try await repository.fetchAll().sorted { $0.position < $1.position }
+    #expect(persisted[0].name == "Third")
+    #expect(persisted[1].name == "First")
+    #expect(persisted[2].name == "Second")
+    #expect(persisted[0].position == 0)
+    #expect(persisted[1].position == 1)
+    #expect(persisted[2].position == 2)
+  }
 }
