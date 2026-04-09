@@ -23,10 +23,13 @@ struct EarmarkBudgetSectionView: View {
           systemImage: "bookmark",
           description: Text("Add budget allocations to categories")
         )
+        .frame(maxHeight: .infinity, alignment: .top)
+        .padding(.top, 40)
       } else {
         budgetList
       }
     }
+    .frame(maxHeight: .infinity, alignment: .top)
     .task(id: earmark.id) {
       await loadData()
     }
