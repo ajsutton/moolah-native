@@ -77,10 +77,14 @@ struct AddBudgetLineItemSheet: View {
   /// Flattens the category hierarchy into a single list.
   private func allCategories(from categories: Categories) -> [Category] {
     var result: [Category] = []
-    for root in categories.roots {
-      result.append(root)
-      result.append(contentsOf: categories.children(of: root.id))
+    func collect(_ parentId: UUID?) {
+      let children = parentId.map { categories.children(of: $0) } ?? categories.roots
+      for child in children {
+        result.append(child)
+        collect(child.id)
+      }
     }
+    collect(nil)
     return result
   }
 }
