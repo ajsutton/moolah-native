@@ -55,7 +55,7 @@ struct InvestmentAccountView: View {
       AddInvestmentValueView(
         accountId: account.id, currency: account.balance.currency, store: investmentStore)
     }
-    .task {
+    .task(id: account.id) {
       await investmentStore.loadAll(accountId: account.id)
     }
     .refreshable {
