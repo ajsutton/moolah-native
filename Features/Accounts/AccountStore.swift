@@ -47,7 +47,7 @@ final class AccountStore {
   }
 
   var investmentTotal: MonetaryAmount {
-    investmentAccounts.reduce(.zero) { $0 + $1.balance }
+    investmentAccounts.reduce(.zero) { $0 + $1.displayBalance }
   }
 
   /// Total of current accounts minus the total of all positive earmarked funds.

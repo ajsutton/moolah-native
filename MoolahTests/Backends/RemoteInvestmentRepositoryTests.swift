@@ -109,6 +109,53 @@ struct RemoteInvestmentRepositoryTests {
     #expect(requestURL.contains("accounts/\(accountId.uuidString.lowercased())/values/2024-03-15/"))
   }
 
+  @Test("Fetch daily balances decodes fixture JSON correctly")
+  func testFetchDailyBalances() async throws {
+    let bundle = Bundle(for: TestBundleMarker.self)
+    guard let url = bundle.url(forResource: "account_balances", withExtension: "json") else {
+      fatalError("Could not find account_balances.json fixture")
+    }
+    let data = try Data(contentsOf: url)
+    let (_, repository) = makeClient(fixtureData: data)
+
+    let accountId = UUID()
+    let balances = try await repository.fetchDailyBalances(accountId: accountId)
+
+    #expect(balances.count == 3)
+    #expect(balances[0].balance.cents == 100_000)
+    #expect(balances[1].balance.cents == 200_000)
+    #expect(balances[2].balance.cents == 300_000)
+  }
+
+  @Test("Fetch daily balances sends correct URL")
+  func testFetchDailyBalancesURL() async throws {
+    let fixtureData = "[]".data(using: .utf8)!
+
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [URLProtocolStub.self]
+    let session = URLSession(configuration: config)
+    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let repository = RemoteInvestmentRepository(client: client)
+
+    var capturedRequest: URLRequest?
+    URLProtocolStub.requestHandler = { request in
+      capturedRequest = request
+      let response = HTTPURLResponse(
+        url: request.url!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )!
+      return (response, fixtureData)
+    }
+
+    let accountId = UUID()
+    _ = try await repository.fetchDailyBalances(accountId: accountId)
+
+    let requestURL = capturedRequest?.url?.absoluteString ?? ""
+    #expect(requestURL.contains("accounts/\(accountId.uuidString.lowercased())/balances"))
+  }
+
   @Test("Remove value sends DELETE request")
   func testRemoveValue() async throws {
     let config = URLSessionConfiguration.ephemeral

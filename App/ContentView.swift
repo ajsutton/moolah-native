@@ -34,9 +34,13 @@ struct ContentView: View {
       case .account(let id):
         if let account = accountStore.accounts.by(id: id) {
           if account.type == .investment {
-            InvestmentValuesView(
+            InvestmentAccountView(
               account: account,
-              store: investmentStore)
+              accounts: accountStore.accounts,
+              categories: categoryStore.categories,
+              earmarks: earmarkStore.earmarks,
+              investmentStore: investmentStore,
+              transactionStore: transactionStore)
           } else {
             TransactionListView(
               title: account.name,

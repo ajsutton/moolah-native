@@ -23,4 +23,11 @@ protocol InvestmentRepository: Sendable {
   ///   - accountId: The investment account
   ///   - date: The valuation date to remove
   func removeValue(accountId: UUID, date: Date) async throws
+
+  /// Fetch daily cumulative balances for an account, sorted by date ascending.
+  /// Each entry represents the running total of transactions up to that date.
+  /// - Parameters:
+  ///   - accountId: The account to fetch balances for
+  /// - Returns: Array of daily balances sorted by date ascending
+  func fetchDailyBalances(accountId: UUID) async throws -> [AccountDailyBalance]
 }

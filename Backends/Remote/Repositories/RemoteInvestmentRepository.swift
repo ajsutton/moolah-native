@@ -36,4 +36,11 @@ final class RemoteInvestmentRepository: InvestmentRepository, Sendable {
     let path = "accounts/\(accountId.uuidString.lowercased())/values/\(dateString)/"
     _ = try await client.delete(path)
   }
+
+  func fetchDailyBalances(accountId: UUID) async throws -> [AccountDailyBalance] {
+    let path = "accounts/\(accountId.uuidString.lowercased())/balances"
+    let data = try await client.get(path)
+    let dtos = try JSONDecoder().decode([AccountDailyBalanceDTO].self, from: data)
+    return dtos.map { $0.toDomain() }
+  }
 }

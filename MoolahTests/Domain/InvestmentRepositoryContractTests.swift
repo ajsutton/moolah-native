@@ -182,4 +182,64 @@ struct InvestmentRepositoryContractTests {
     #expect(page.values.isEmpty)
     #expect(page.hasMore == false)
   }
+
+  // MARK: - fetchDailyBalances
+
+  @Test("Fetch daily balances returns sorted by date ascending")
+  func testFetchDailyBalancesSorted() async throws {
+    let accountId = UUID()
+    let repo = InMemoryInvestmentRepository()
+
+    let balances = [
+      AccountDailyBalance(
+        date: makeDate(year: 2024, month: 3, day: 15),
+        balance: MonetaryAmount(cents: 300_000, currency: Currency.defaultCurrency)),
+      AccountDailyBalance(
+        date: makeDate(year: 2024, month: 1, day: 15),
+        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency)),
+      AccountDailyBalance(
+        date: makeDate(year: 2024, month: 2, day: 15),
+        balance: MonetaryAmount(cents: 200_000, currency: Currency.defaultCurrency)),
+    ]
+    await repo.setDailyBalances(balances, for: accountId)
+
+    let result = try await repo.fetchDailyBalances(accountId: accountId)
+
+    #expect(result.count == 3)
+    // Ascending order: January, February, March
+    #expect(result[0].balance.cents == 100_000)
+    #expect(result[1].balance.cents == 200_000)
+    #expect(result[2].balance.cents == 300_000)
+  }
+
+  @Test("Fetch daily balances for empty account returns empty array")
+  func testFetchDailyBalancesEmpty() async throws {
+    let repo = InMemoryInvestmentRepository()
+    let result = try await repo.fetchDailyBalances(accountId: UUID())
+    #expect(result.isEmpty)
+  }
+
+  @Test("Fetch daily balances only returns balances for requested account")
+  func testFetchDailyBalancesFiltersByAccount() async throws {
+    let account1 = UUID()
+    let account2 = UUID()
+    let repo = InMemoryInvestmentRepository()
+
+    await repo.setDailyBalances(
+      [
+        AccountDailyBalance(
+          date: makeDate(year: 2024, month: 1, day: 1),
+          balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultCurrency))
+      ], for: account1)
+    await repo.setDailyBalances(
+      [
+        AccountDailyBalance(
+          date: makeDate(year: 2024, month: 1, day: 1),
+          balance: MonetaryAmount(cents: 200_000, currency: Currency.defaultCurrency))
+      ], for: account2)
+
+    let result = try await repo.fetchDailyBalances(accountId: account1)
+    #expect(result.count == 1)
+    #expect(result[0].balance.cents == 100_000)
+  }
 }

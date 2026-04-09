@@ -10,18 +10,15 @@ struct ReportsView: View {
     byAdding: .year, value: -1, to: Date())!
   @State private var customTo: Date = Date()
 
+  /// Resolved date range, computed once when dateRange or custom dates change.
+  /// Stored in @State to avoid re-evaluating Date() on every SwiftUI render cycle.
+  @State private var resolvedFrom: Date = DateRange.last12Months.startDate
+  @State private var resolvedTo: Date = DateRange.last12Months.endDate
+
   @State private var incomeBalances: [UUID: Int] = [:]
   @State private var expenseBalances: [UUID: Int] = [:]
   @State private var isLoading = false
   @State private var error: Error?
-
-  private var effectiveFrom: Date {
-    dateRange == .custom ? customFrom : dateRange.startDate
-  }
-
-  private var effectiveTo: Date {
-    dateRange == .custom ? customTo : dateRange.endDate
-  }
 
   var body: some View {
     VStack(spacing: 0) {
@@ -50,7 +47,7 @@ struct ReportsView: View {
             title: "Income",
             balances: incomeBalances,
             categories: categories,
-            dateRange: effectiveFrom...effectiveTo
+            dateRange: resolvedFrom...resolvedTo
           )
 
           Divider()
@@ -59,7 +56,7 @@ struct ReportsView: View {
             title: "Expenses",
             balances: expenseBalances,
             categories: categories,
-            dateRange: effectiveFrom...effectiveTo
+            dateRange: resolvedFrom...resolvedTo
           )
         }
       }
@@ -68,10 +65,21 @@ struct ReportsView: View {
     .task {
       await loadData()
     }
-    .onChange(of: effectiveFrom) { _, _ in
+    .onChange(of: dateRange) { _, newValue in
+      if newValue != .custom {
+        resolvedFrom = newValue.startDate
+        resolvedTo = newValue.endDate
+      }
       Task { await loadData() }
     }
-    .onChange(of: effectiveTo) { _, _ in
+    .onChange(of: customFrom) { _, newValue in
+      guard dateRange == .custom else { return }
+      resolvedFrom = newValue
+      Task { await loadData() }
+    }
+    .onChange(of: customTo) { _, newValue in
+      guard dateRange == .custom else { return }
+      resolvedTo = newValue
       Task { await loadData() }
     }
   }
@@ -104,7 +112,7 @@ struct ReportsView: View {
     error = nil
 
     do {
-      let range = effectiveFrom...effectiveTo
+      let range = resolvedFrom...resolvedTo
       async let income = analysisRepository.fetchCategoryBalances(
         dateRange: range,
         transactionType: .income,

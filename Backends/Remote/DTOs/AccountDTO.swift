@@ -10,14 +10,19 @@ struct AccountDTO: Codable {
   let hidden: Bool
 
   func toDomain() -> Account {
-    // For investments, prefer 'value' if present, otherwise fall back to 'balance'
-    let effectiveBalance = (type == "investment" && value != nil) ? value! : balance
+    let investmentValue: MonetaryAmount? =
+      if type == "investment", let value {
+        MonetaryAmount(cents: value, currency: Currency.defaultCurrency)
+      } else {
+        nil
+      }
 
     return Account(
       id: FlexibleUUID.parse(id) ?? UUID(),
       name: name,
       type: AccountType(rawValue: type) ?? .asset,
-      balance: MonetaryAmount(cents: effectiveBalance, currency: Currency.defaultCurrency),
+      balance: MonetaryAmount(cents: balance, currency: Currency.defaultCurrency),
+      investmentValue: investmentValue,
       position: position,
       isHidden: hidden
     )

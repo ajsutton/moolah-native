@@ -44,4 +44,19 @@ actor InMemoryInvestmentRepository: InvestmentRepository {
       throw BackendError.notFound("Investment value not found")
     }
   }
+
+  // MARK: - Daily Balances
+
+  /// Storage for seeded daily balances (for testing)
+  private var dailyBalances: [UUID: [AccountDailyBalance]] = [:]
+
+  /// Seed daily balances for testing.
+  func setDailyBalances(_ balances: [AccountDailyBalance], for accountId: UUID) {
+    dailyBalances[accountId] = balances
+  }
+
+  func fetchDailyBalances(accountId: UUID) async throws -> [AccountDailyBalance] {
+    let balances = dailyBalances[accountId] ?? []
+    return balances.sorted { $0.date < $1.date }
+  }
 }

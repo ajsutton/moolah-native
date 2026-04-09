@@ -25,14 +25,26 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
   var name: String
   var type: AccountType
   var balance: MonetaryAmount
+  /// Market value for investment accounts. Nil for non-investment accounts.
+  var investmentValue: MonetaryAmount?
   var position: Int
   var isHidden: Bool
+
+  /// The display value for this account. For investment accounts, prefers
+  /// `investmentValue` (market value) over `balance` (invested amount).
+  var displayBalance: MonetaryAmount {
+    if type == .investment, let investmentValue {
+      return investmentValue
+    }
+    return balance
+  }
 
   init(
     id: UUID = UUID(),
     name: String,
     type: AccountType,
     balance: MonetaryAmount = .zero,
+    investmentValue: MonetaryAmount? = nil,
     position: Int = 0,
     isHidden: Bool = false
   ) {
@@ -40,6 +52,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     self.name = name
     self.type = type
     self.balance = balance
+    self.investmentValue = investmentValue
     self.position = position
     self.isHidden = isHidden
   }
@@ -49,6 +62,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     case name
     case type
     case balance
+    case investmentValue
     case position
     case isHidden = "hidden"
   }

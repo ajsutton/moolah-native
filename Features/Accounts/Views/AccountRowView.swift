@@ -14,7 +14,7 @@ struct AccountRowView: View {
 
       Spacer()
 
-      MonetaryAmountView(amount: account.balance)
+      MonetaryAmountView(amount: account.displayBalance)
     }
   }
 

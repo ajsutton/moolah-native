@@ -12,7 +12,7 @@ struct InvestmentValueRow: View {
 
       Spacer()
 
-      MonetaryAmountView(amount: value.value, colorOverride: .primary)
+      MonetaryAmountView(amount: value.value)
         .font(.headline)
     }
     .accessibilityElement(children: .combine)

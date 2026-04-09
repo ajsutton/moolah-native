@@ -31,15 +31,6 @@ struct InvestmentValuesView: View {
               }
             }
           }
-
-          if store.hasMore {
-            ProgressView()
-              .frame(maxWidth: .infinity)
-              .accessibilityLabel("Loading more values")
-              .task {
-                await store.loadValues(accountId: account.id)
-              }
-          }
         }
         .listStyle(.inset)
       }
@@ -58,10 +49,10 @@ struct InvestmentValuesView: View {
       AddInvestmentValueView(accountId: account.id, store: store)
     }
     .task {
-      await store.loadValues(accountId: account.id, reset: true)
+      await store.loadValues(accountId: account.id)
     }
     .refreshable {
-      await store.loadValues(accountId: account.id, reset: true)
+      await store.loadValues(accountId: account.id)
     }
   }
 

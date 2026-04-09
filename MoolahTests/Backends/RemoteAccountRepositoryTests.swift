@@ -40,8 +40,17 @@ struct RemoteAccountRepositoryTests {
       accounts[0].balance == MonetaryAmount(cents: 123456, currency: Currency.defaultCurrency))
     #expect(accounts[3].name == "Investment Portfolio")
     #expect(accounts[3].type == .investment)
+    // balance is the transaction-based invested amount
     #expect(
-      accounts[3].balance == MonetaryAmount(cents: 1_550_000, currency: Currency.defaultCurrency))  // Prefers 'value' from JSON
+      accounts[3].balance == MonetaryAmount(cents: 1_500_000, currency: Currency.defaultCurrency))
+    // investmentValue is the market value from the server's 'value' field
+    #expect(accounts[3].investmentValue != nil)
+    #expect(
+      accounts[3].investmentValue
+        == MonetaryAmount(
+          cents: 1_550_000, currency: Currency.defaultCurrency))
+    // displayBalance prefers investmentValue for investment accounts
+    #expect(accounts[3].displayBalance.cents == 1_550_000)
   }
 
   @Test func testCreateAccountCallsCorrectEndpoint() async throws {
