@@ -20,6 +20,7 @@ struct UpcomingView: View {
           accounts: accounts,
           categories: categories,
           earmarks: earmarks,
+          transactionStore: transactionStore,
           onUpdate: { updated in
             Task { await transactionStore.update(updated) }
             selectedTransaction = updated

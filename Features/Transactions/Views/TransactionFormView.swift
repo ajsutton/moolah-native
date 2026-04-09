@@ -5,6 +5,7 @@ struct TransactionFormView: View {
   let categories: Categories
   let earmarks: Earmarks
   let existing: Transaction?
+  let transactionStore: TransactionStore?
   let onSave: (Transaction) -> Void
   let onDelete: ((UUID) -> Void)?
 
@@ -29,6 +30,7 @@ struct TransactionFormView: View {
     categories: Categories,
     earmarks: Earmarks,
     existing: Transaction? = nil,
+    transactionStore: TransactionStore? = nil,
     onSave: @escaping (Transaction) -> Void,
     onDelete: ((UUID) -> Void)? = nil
   ) {
@@ -36,6 +38,7 @@ struct TransactionFormView: View {
     self.categories = categories
     self.earmarks = earmarks
     self.existing = existing
+    self.transactionStore = transactionStore
     self.onSave = onSave
     self.onDelete = onDelete
 
@@ -151,9 +154,25 @@ struct TransactionFormView: View {
     }
   }
 
+  private var isNewTransaction: Bool { existing == nil }
+
   private var detailsSection: some View {
     Section {
-      TextField("Payee", text: $payee)
+      if let store = transactionStore {
+        PayeeAutocompleteField(
+          text: $payee,
+          suggestions: store.payeeSuggestions,
+          onTextChange: { newValue in
+            store.fetchPayeeSuggestions(prefix: newValue)
+          },
+          onSelect: { selectedPayee in
+            store.clearPayeeSuggestions()
+            autofillFromPayee(selectedPayee, store: store)
+          }
+        )
+      } else {
+        TextField("Payee", text: $payee)
+      }
 
       HStack {
         Text(Currency.defaultCurrency.code)
@@ -269,6 +288,28 @@ struct TransactionFormView: View {
   }
 
   // MARK: - Actions
+
+  private func autofillFromPayee(_ selectedPayee: String, store: TransactionStore) {
+    guard isNewTransaction else { return }
+    Task {
+      guard let match = await store.fetchTransactionForAutofill(payee: selectedPayee) else {
+        return
+      }
+      if parsedCents == nil {
+        let decimal = Decimal(abs(match.amount.cents)) / 100
+        amountText = "\(decimal)"
+      }
+      if categoryId == nil {
+        categoryId = match.categoryId
+      }
+      if type == .expense {
+        type = match.type
+      }
+      if type == .transfer, toAccountId == nil {
+        toAccountId = match.toAccountId
+      }
+    }
+  }
 
   private func save() {
     guard let cents = parsedCents else { return }

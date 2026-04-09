@@ -184,6 +184,58 @@ final class TransactionStore {
     isLoading = false
   }
 
+  // MARK: - Payee Suggestions
+
+  private(set) var payeeSuggestions: [String] = []
+  private var suggestionTask: Task<Void, Never>?
+
+  func fetchPayeeSuggestions(prefix: String) {
+    suggestionTask?.cancel()
+
+    guard !prefix.isEmpty else {
+      payeeSuggestions = []
+      return
+    }
+
+    suggestionTask = Task {
+      // Debounce: wait 200ms before firing
+      try? await Task.sleep(nanoseconds: 200_000_000)
+      guard !Task.isCancelled else { return }
+
+      do {
+        let suggestions = try await repository.fetchPayeeSuggestions(prefix: prefix)
+        guard !Task.isCancelled else { return }
+        payeeSuggestions = suggestions
+      } catch {
+        guard !Task.isCancelled else { return }
+        logger.error("Failed to fetch payee suggestions: \(error.localizedDescription)")
+        payeeSuggestions = []
+      }
+    }
+  }
+
+  func clearPayeeSuggestions() {
+    suggestionTask?.cancel()
+    payeeSuggestions = []
+  }
+
+  /// Fetch the most recent transaction matching a payee for auto-fill.
+  func fetchTransactionForAutofill(payee: String) async -> Transaction? {
+    do {
+      let page = try await repository.fetch(
+        filter: TransactionFilter(payee: payee),
+        page: 0,
+        pageSize: 1
+      )
+      return page.transactions.first
+    } catch {
+      logger.error("Failed to fetch autofill transaction: \(error.localizedDescription)")
+      return nil
+    }
+  }
+
+  // MARK: - Balance Computation
+
   private func recomputeBalances() {
     // Re-sort newest-first to account for newly inserted/updated transactions
     rawTransactions.sort { a, b in

@@ -89,7 +89,12 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
 
     let data = try await client.get("transactions/", queryItems: queryItems)
     let wrapper = try JSONDecoder().decode(TransactionDTO.ListWrapper.self, from: data)
-    let payees = Set(wrapper.transactions.compactMap(\.payee).filter { !$0.isEmpty })
-    return payees.sorted()
+    // Count frequency of each payee and sort most-used first
+    let matching = wrapper.transactions.compactMap(\.payee).filter { !$0.isEmpty }
+    var counts: [String: Int] = [:]
+    for payee in matching {
+      counts[payee, default: 0] += 1
+    }
+    return counts.sorted { $0.value > $1.value }.map(\.key)
   }
 }

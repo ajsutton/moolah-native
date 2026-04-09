@@ -141,6 +141,7 @@
 		888E358528BF4D21C8A56AC4 /* transactions.json in Resources */ = {isa = PBXBuildFile; fileRef = FE5B728FC6801C05FE8CB62B /* transactions.json */; };
 		8968D89975C39C83F9D08A34 /* DateRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B046F0A0CF492D4CDD6326 /* DateRange.swift */; };
 		89CA9FF690DA57649DEA8E01 /* CookieKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2307A129A45B6763ADE697AB /* CookieKeychain.swift */; };
+		89E30FB2A56A7AED0DD52C8D /* PayeeAutocompleteField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B48A98D7607DA236122036FB /* PayeeAutocompleteField.swift */; };
 		8BF00BA30FBE88A9CF53CF05 /* InvestmentRepositoryContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A059E45B21A8888E5925B19E /* InvestmentRepositoryContractTests.swift */; };
 		8C63342D8AE674E382C25E70 /* InvestmentAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21481D64CE58C6D2C8C453D8 /* InvestmentAccountView.swift */; };
 		8CD72E510AE6F5A680D87E3C /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55CFB29D6757420CB3C9C8C8 /* AppRootView.swift */; };
@@ -222,6 +223,7 @@
 		CA7A3FF9F9835B1F9624D8EF /* TransactionRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7920C082CF61FC2A86B05B31 /* TransactionRowView.swift */; };
 		CAA86173F38CFE979B92405A /* CategoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 498570048DEA32F7F70C157A /* CategoryDetailView.swift */; };
 		CB29B7107D26E771BEC886C0 /* InMemoryBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C53697402D7B4394678D84 /* InMemoryBackend.swift */; };
+		CD68C693F2580ADC91F31576 /* PayeeAutocompleteField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B48A98D7607DA236122036FB /* PayeeAutocompleteField.swift */; };
 		CD9200A470282154CA8F1533 /* CategoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDC52DF5F3E1AA880AFDA9EC /* CategoriesView.swift */; };
 		CDC27A4EA6861820117DE56E /* FocusedValues.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3979B2EDAE9E843A47D7DE06 /* FocusedValues.swift */; };
 		CE32F2D7F43E9A0E49475F78 /* TestBundleMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38FB6CBF1CC899B2422E5537 /* TestBundleMarker.swift */; };
@@ -379,6 +381,7 @@
 		9C6463F34B96ECFB41CC3A7D /* InvestmentValuesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentValuesView.swift; sourceTree = "<group>"; };
 		A059E45B21A8888E5925B19E /* InvestmentRepositoryContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentRepositoryContractTests.swift; sourceTree = "<group>"; };
 		A19482E3FC4577044CBCD484 /* InMemoryTransactionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryTransactionRepository.swift; sourceTree = "<group>"; };
+		B48A98D7607DA236122036FB /* PayeeAutocompleteField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PayeeAutocompleteField.swift; sourceTree = "<group>"; };
 		B49F4CED68007895BCFE0658 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		B66104D9C8D82B1A0427CE79 /* AuthProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthProvider.swift; sourceTree = "<group>"; };
 		B6985F839D99BFB3C2B7E5E5 /* TransactionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionStore.swift; sourceTree = "<group>"; };
@@ -577,6 +580,7 @@
 			isa = PBXGroup;
 			children = (
 				0BBC588B3A826D2815794E6D /* AllTransactionsView.swift */,
+				B48A98D7607DA236122036FB /* PayeeAutocompleteField.swift */,
 				F96CC893369568364661CAE4 /* TransactionDetailView.swift */,
 				49C90215EDD39E8617F01739 /* TransactionFilterView.swift */,
 				3B7ACDA8A081731510039853 /* TransactionFormView.swift */,
@@ -1159,6 +1163,7 @@
 				ABB7D81DC8E5157091C7FE27 /* MonthlyIncomeExpenseDTO.swift in Sources */,
 				9CDEBDC3CFBDAF9165F882A7 /* MoolahApp.swift in Sources */,
 				9475B3D667D732BF5C477EDE /* NetWorthGraphCard.swift in Sources */,
+				CD68C693F2580ADC91F31576 /* PayeeAutocompleteField.swift in Sources */,
 				EFBB9ED1FE1A8FAD2A4C37FB /* RemoteAccountRepository.swift in Sources */,
 				791D66A06AA110F56ED41AEC /* RemoteAnalysisRepository.swift in Sources */,
 				60C4D29AF9D3027B180A8797 /* RemoteAuthProvider.swift in Sources */,
@@ -1264,6 +1269,7 @@
 				E853F2D6C10EC02D6E77F697 /* MonthlyIncomeExpenseDTO.swift in Sources */,
 				C733D2B154E165B22A927403 /* MoolahApp.swift in Sources */,
 				E4A602FE6AF8157AFE4A5C7F /* NetWorthGraphCard.swift in Sources */,
+				89E30FB2A56A7AED0DD52C8D /* PayeeAutocompleteField.swift in Sources */,
 				244DCC5DC322AEDE39CE1558 /* RemoteAccountRepository.swift in Sources */,
 				B0BEE52AF598D5B81590C836 /* RemoteAnalysisRepository.swift in Sources */,
 				4D1AA5636717544A23434905 /* RemoteAuthProvider.swift in Sources */,

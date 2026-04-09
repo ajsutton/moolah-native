@@ -5,6 +5,7 @@ struct TransactionDetailView: View {
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
+  let transactionStore: TransactionStore
   let onUpdate: (Transaction) -> Void
   let onDelete: (UUID) -> Void
 
@@ -34,6 +35,7 @@ struct TransactionDetailView: View {
     accounts: Accounts,
     categories: Categories,
     earmarks: Earmarks,
+    transactionStore: TransactionStore,
     onUpdate: @escaping (Transaction) -> Void,
     onDelete: @escaping (UUID) -> Void
   ) {
@@ -41,6 +43,7 @@ struct TransactionDetailView: View {
     self.accounts = accounts
     self.categories = categories
     self.earmarks = earmarks
+    self.transactionStore = transactionStore
     self.onUpdate = onUpdate
     self.onDelete = onDelete
 
@@ -175,8 +178,18 @@ struct TransactionDetailView: View {
 
   private var detailsSection: some View {
     Section {
-      TextField("Payee", text: $payee)
-        .focused($focusedField, equals: .payee)
+      PayeeAutocompleteField(
+        text: $payee,
+        suggestions: transactionStore.payeeSuggestions,
+        onTextChange: { newValue in
+          transactionStore.fetchPayeeSuggestions(prefix: newValue)
+        },
+        onSelect: { selectedPayee in
+          transactionStore.clearPayeeSuggestions()
+          autofillFromPayee(selectedPayee)
+        }
+      )
+      .focused($focusedField, equals: .payee)
 
       HStack {
         TextField("Amount", text: $amountText)
@@ -323,6 +336,28 @@ struct TransactionDetailView: View {
 
   // MARK: - Actions
 
+  private func autofillFromPayee(_ selectedPayee: String) {
+    guard isNewTransaction else { return }
+    Task {
+      guard let match = await transactionStore.fetchTransactionForAutofill(payee: selectedPayee)
+      else { return }
+      // Only auto-fill fields the user hasn't touched (still at defaults)
+      if parsedCents == nil || parsedCents == 0 {
+        let decimal = Decimal(abs(match.amount.cents)) / 100
+        amountText = "\(decimal)"
+      }
+      if categoryId == nil {
+        categoryId = match.categoryId
+      }
+      if type == .expense {
+        type = match.type
+      }
+      if type == .transfer, toAccountId == nil {
+        toAccountId = match.toAccountId
+      }
+    }
+  }
+
   private func debouncedSave() {
     // Cancel any pending save
     saveTask?.cancel()
@@ -389,6 +424,7 @@ struct TransactionDetailView: View {
       earmarks: Earmarks(from: [
         Earmark(name: "Holiday Fund")
       ]),
+      transactionStore: TransactionStore(repository: InMemoryTransactionRepository()),
       onUpdate: { _ in },
       onDelete: { _ in }
     )

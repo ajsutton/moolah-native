@@ -981,4 +981,90 @@ struct TransactionStoreTests {
     #expect(mutations[1].old?.id == scheduled.id)
     #expect(mutations[1].new == nil)
   }
+
+  // MARK: - Payee Suggestions
+
+  @Test func testFetchPayeeSuggestionsReturnsMatchingPayees() async throws {
+    let repository = InMemoryTransactionRepository(initialTransactions: [
+      Transaction(
+        type: .expense, date: makeDate("2024-01-01"), accountId: accountId,
+        amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+        payee: "Woolworths"),
+      Transaction(
+        type: .expense, date: makeDate("2024-01-02"), accountId: accountId,
+        amount: MonetaryAmount(cents: -3000, currency: Currency.defaultCurrency),
+        payee: "Woollies Market"),
+      Transaction(
+        type: .expense, date: makeDate("2024-01-03"), accountId: accountId,
+        amount: MonetaryAmount(cents: -2000, currency: Currency.defaultCurrency),
+        payee: "Coles"),
+    ])
+
+    let suggestions = try await repository.fetchPayeeSuggestions(prefix: "Wool")
+    #expect(suggestions.count == 2)
+    #expect(suggestions.contains("Woolworths"))
+    #expect(suggestions.contains("Woollies Market"))
+    #expect(!suggestions.contains("Coles"))
+  }
+
+  @Test func testPayeeSuggestionsAreSortedByFrequency() async throws {
+    let repository = InMemoryTransactionRepository(initialTransactions: [
+      Transaction(
+        type: .expense, date: makeDate("2024-01-01"), accountId: accountId,
+        amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+        payee: "Woolworths"),
+      Transaction(
+        type: .expense, date: makeDate("2024-01-02"), accountId: accountId,
+        amount: MonetaryAmount(cents: -3000, currency: Currency.defaultCurrency),
+        payee: "Woollies Market"),
+      Transaction(
+        type: .expense, date: makeDate("2024-01-03"), accountId: accountId,
+        amount: MonetaryAmount(cents: -4000, currency: Currency.defaultCurrency),
+        payee: "Woolworths"),
+      Transaction(
+        type: .expense, date: makeDate("2024-01-04"), accountId: accountId,
+        amount: MonetaryAmount(cents: -6000, currency: Currency.defaultCurrency),
+        payee: "Woolworths"),
+    ])
+
+    let suggestions = try await repository.fetchPayeeSuggestions(prefix: "Wool")
+    #expect(suggestions.count == 2)
+    // Woolworths appears 3 times, Woollies Market once — Woolworths should be first
+    #expect(suggestions[0] == "Woolworths")
+    #expect(suggestions[1] == "Woollies Market")
+  }
+
+  @Test func testFetchTransactionForAutofillReturnsMostRecent() async throws {
+    let categoryId = UUID()
+    let repository = InMemoryTransactionRepository(initialTransactions: [
+      Transaction(
+        type: .expense, date: makeDate("2024-01-01"), accountId: accountId,
+        amount: MonetaryAmount(cents: -3000, currency: Currency.defaultCurrency),
+        payee: "Woolworths"),
+      Transaction(
+        type: .expense, date: makeDate("2024-03-01"), accountId: accountId,
+        amount: MonetaryAmount(cents: -7500, currency: Currency.defaultCurrency),
+        payee: "Woolworths",
+        categoryId: categoryId),
+    ])
+    let store = TransactionStore(repository: repository)
+
+    let match = await store.fetchTransactionForAutofill(payee: "Woolworths")
+    #expect(match != nil)
+    // Most recent (newest first from server) should have the category
+    #expect(match?.categoryId == categoryId)
+    #expect(match?.amount.cents == -7500)
+  }
+
+  @Test func testFetchPayeeSuggestionsEmptyPrefixReturnsEmpty() async throws {
+    let repository = InMemoryTransactionRepository(initialTransactions: [
+      Transaction(
+        type: .expense, date: makeDate("2024-01-01"), accountId: accountId,
+        amount: MonetaryAmount(cents: -5000, currency: Currency.defaultCurrency),
+        payee: "Woolworths")
+    ])
+
+    let suggestions = try await repository.fetchPayeeSuggestions(prefix: "")
+    #expect(suggestions.isEmpty)
+  }
 }

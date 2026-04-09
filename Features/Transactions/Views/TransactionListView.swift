@@ -25,6 +25,7 @@ struct TransactionListView: View {
           accounts: accounts,
           categories: categories,
           earmarks: earmarks,
+          transactionStore: transactionStore,
           onUpdate: { updated in
             Task { await transactionStore.update(updated) }
             // Update the selected transaction to reflect changes

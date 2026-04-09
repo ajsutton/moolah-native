@@ -87,13 +87,17 @@ actor InMemoryTransactionRepository: TransactionRepository {
   }
 
   func fetchPayeeSuggestions(prefix: String) async throws -> [String] {
+    guard !prefix.isEmpty else { return [] }
     let lowered = prefix.lowercased()
-    let payees = Set(
-      transactions.values
-        .compactMap(\.payee)
-        .filter { !$0.isEmpty && $0.lowercased().hasPrefix(lowered) }
-    )
-    return payees.sorted()
+    let matching = transactions.values
+      .compactMap(\.payee)
+      .filter { !$0.isEmpty && $0.lowercased().hasPrefix(lowered) }
+    // Count frequency of each payee and sort most-used first
+    var counts: [String: Int] = [:]
+    for payee in matching {
+      counts[payee, default: 0] += 1
+    }
+    return counts.sorted { $0.value > $1.value }.map(\.key)
   }
 
   // For test setup
