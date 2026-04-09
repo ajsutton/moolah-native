@@ -3,7 +3,11 @@ import SwiftUI
 struct IncomeExpenseTableCard: View {
   let data: [MonthlyIncomeExpense]
 
+  private static let initialVisibleCount = 6
+  private static let loadMoreCount = 6
+
   @State private var includeEarmarks = false
+  @State private var visibleCount = IncomeExpenseTableCard.initialVisibleCount
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -32,6 +36,9 @@ struct IncomeExpenseTableCard: View {
       .background(Color(uiColor: .systemBackground))
     #endif
     .cornerRadius(12)
+    .onChange(of: data.count) { _, _ in
+      visibleCount = Self.initialVisibleCount
+    }
   }
 
   private var emptyState: some View {
@@ -41,53 +48,81 @@ struct IncomeExpenseTableCard: View {
       .padding(.vertical, 40)
   }
 
+  private var visibleData: [MonthlyIncomeExpense] {
+    Array(data.prefix(visibleCount))
+  }
+
   private var tableView: some View {
-    Table(data) {
-      TableColumn("Month") { item in
-        VStack(alignment: .leading, spacing: 2) {
-          Text(monthLabel(for: item))
-            .font(.body)
-          Text(monthsAgoLabel(for: item))
-            .font(.caption)
-            .foregroundStyle(.secondary)
+    VStack(spacing: 0) {
+      // Header row
+      HStack(spacing: 0) {
+        Text("Month")
+          .frame(maxWidth: .infinity, alignment: .leading)
+        Text("Income")
+          .frame(width: 100, alignment: .trailing)
+        Text("Expense")
+          .frame(width: 100, alignment: .trailing)
+        Text("Savings")
+          .frame(width: 100, alignment: .trailing)
+        Text("Total Savings")
+          .frame(width: 110, alignment: .trailing)
+      }
+      .font(.caption)
+      .foregroundStyle(.secondary)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+
+      Divider()
+
+      // Data rows (lazy, participates in outer ScrollView)
+      LazyVStack(spacing: 0) {
+        ForEach(visibleData) { item in
+          VStack(spacing: 0) {
+            HStack(spacing: 0) {
+              VStack(alignment: .leading, spacing: 2) {
+                Text(monthLabel(for: item))
+                  .font(.body)
+                Text(monthsAgoLabel(for: item))
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
+              .frame(maxWidth: .infinity, alignment: .leading)
+
+              Text(income(for: item).formatted)
+                .monospacedDigit()
+                .foregroundStyle(.green)
+                .frame(width: 100, alignment: .trailing)
+
+              Text(expense(for: item).formatted)
+                .monospacedDigit()
+                .foregroundStyle(.red)
+                .frame(width: 100, alignment: .trailing)
+
+              let savings = profit(for: item)
+              Text(savings.formatted)
+                .monospacedDigit()
+                .foregroundStyle(savings.cents >= 0 ? .green : .red)
+                .frame(width: 100, alignment: .trailing)
+
+              let totalSavings = cumulativeSavings(upTo: item)
+              Text(totalSavings.formatted)
+                .monospacedDigit()
+                .foregroundStyle(totalSavings.cents >= 0 ? .green : .red)
+                .frame(width: 110, alignment: .trailing)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+          }
+          .onAppear {
+            if item.id == visibleData.last?.id, visibleCount < data.count {
+              visibleCount += Self.loadMoreCount
+            }
+          }
         }
       }
-      .width(min: 120)
-
-      TableColumn("Income") { item in
-        Text(income(for: item).formatted)
-          .monospacedDigit()
-          .foregroundStyle(.green)
-      }
-      .width(min: 80)
-      .alignment(.trailing)
-
-      TableColumn("Expense") { item in
-        Text(expense(for: item).formatted)
-          .monospacedDigit()
-          .foregroundStyle(.red)
-      }
-      .width(min: 80)
-      .alignment(.trailing)
-
-      TableColumn("Savings") { item in
-        Text(profit(for: item).formatted)
-          .monospacedDigit()
-          .foregroundStyle(profit(for: item).cents >= 0 ? .green : .red)
-      }
-      .width(min: 80)
-      .alignment(.trailing)
-
-      TableColumn("Total Savings") { item in
-        let savings = cumulativeSavings(upTo: item)
-        Text(savings.formatted)
-          .monospacedDigit()
-          .foregroundStyle(savings.cents >= 0 ? .green : .red)
-      }
-      .width(min: 100)
-      .alignment(.trailing)
     }
-    .frame(height: 400)
     .accessibilityLabel("Monthly income and expense table")
   }
 

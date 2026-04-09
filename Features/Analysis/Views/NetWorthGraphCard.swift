@@ -23,10 +23,7 @@ enum ChartSeries: String, CaseIterable, Identifiable {
   }
 
   var enabledByDefault: Bool {
-    switch self {
-    case .availableFunds, .netWorth, .bestFit: true
-    case .currentFunds, .investedAmount, .investmentValue: false
-    }
+    true
   }
 }
 
