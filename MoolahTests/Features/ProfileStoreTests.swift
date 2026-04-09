@@ -199,4 +199,98 @@ struct ProfileStoreTests {
     #expect(store.activeProfile == nil)
     #expect(store.hasProfiles == false)
   }
+
+  // MARK: - Validation: Add
+
+  @Test("validateAndAddProfile adds profile when validation succeeds")
+  func validateAndAddSuccess() async {
+    let validator = InMemoryServerValidator()
+    let store = ProfileStore(defaults: makeDefaults(), validator: validator)
+    let profile = makeProfile()
+
+    let result = await store.validateAndAddProfile(profile)
+
+    #expect(result == true)
+    #expect(store.profiles.count == 1)
+    #expect(store.profiles[0] == profile)
+    #expect(store.validationError == nil)
+  }
+
+  @Test("validateAndAddProfile does not add profile when validation fails")
+  func validateAndAddFailure() async {
+    let validator = InMemoryServerValidator()
+    validator.shouldSucceed = false
+    validator.errorMessage = "Could not connect to server"
+    let store = ProfileStore(defaults: makeDefaults(), validator: validator)
+    let profile = makeProfile()
+
+    let result = await store.validateAndAddProfile(profile)
+
+    #expect(result == false)
+    #expect(store.profiles.isEmpty)
+    #expect(store.validationError == "Could not connect to server")
+  }
+
+  @Test("validateAndAddProfile clears previous error on success")
+  func validateAndAddClearsPreviousError() async {
+    let validator = InMemoryServerValidator()
+    validator.shouldSucceed = false
+    let store = ProfileStore(defaults: makeDefaults(), validator: validator)
+    let profile = makeProfile()
+
+    _ = await store.validateAndAddProfile(profile)
+    #expect(store.validationError != nil)
+
+    validator.shouldSucceed = true
+    let result = await store.validateAndAddProfile(profile)
+
+    #expect(result == true)
+    #expect(store.validationError == nil)
+  }
+
+  // MARK: - Validation: Update
+
+  @Test("validateAndUpdateProfile updates profile when validation succeeds")
+  func validateAndUpdateSuccess() async {
+    let validator = InMemoryServerValidator()
+    let store = ProfileStore(defaults: makeDefaults(), validator: validator)
+    var profile = makeProfile(label: "Old")
+    store.addProfile(profile)
+
+    profile.label = "New"
+    let result = await store.validateAndUpdateProfile(profile)
+
+    #expect(result == true)
+    #expect(store.profiles[0].label == "New")
+    #expect(store.validationError == nil)
+  }
+
+  @Test("validateAndUpdateProfile does not update profile when validation fails")
+  func validateAndUpdateFailure() async {
+    let validator = InMemoryServerValidator()
+    let store = ProfileStore(defaults: makeDefaults(), validator: validator)
+    var profile = makeProfile(label: "Old")
+    store.addProfile(profile)
+
+    validator.shouldSucceed = false
+    profile.label = "New"
+    let result = await store.validateAndUpdateProfile(profile)
+
+    #expect(result == false)
+    #expect(store.profiles[0].label == "Old")
+    #expect(store.validationError != nil)
+  }
+
+  // MARK: - Validation: nil validator
+
+  @Test("validateAndAddProfile skips validation when no validator is set")
+  func validateAndAddWithoutValidator() async {
+    let store = ProfileStore(defaults: makeDefaults())
+    let profile = makeProfile()
+
+    let result = await store.validateAndAddProfile(profile)
+
+    #expect(result == true)
+    #expect(store.profiles.count == 1)
+  }
 }

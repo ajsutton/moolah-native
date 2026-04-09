@@ -12,8 +12,11 @@ final class ProfileStore {
 
   private(set) var profiles: [Profile] = []
   private(set) var activeProfileID: UUID?
+  private(set) var isValidating = false
+  private(set) var validationError: String?
 
   private let defaults: UserDefaults
+  private let validator: (any ServerValidator)?
   private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileStore")
 
   var activeProfile: Profile? {
@@ -24,8 +27,9 @@ final class ProfileStore {
     !profiles.isEmpty
   }
 
-  init(defaults: UserDefaults = .standard) {
+  init(defaults: UserDefaults = .standard, validator: (any ServerValidator)? = nil) {
     self.defaults = defaults
+    self.validator = validator
     loadFromDefaults()
   }
 
@@ -64,6 +68,48 @@ final class ProfileStore {
     profiles[index] = profile
     saveToDefaults()
     logger.debug("Updated profile: \(profile.label)")
+  }
+
+  // MARK: - Validated mutations
+
+  /// Validates the server URL then adds the profile. Returns true on success.
+  func validateAndAddProfile(_ profile: Profile) async -> Bool {
+    guard await validateServer(url: profile.serverURL) else { return false }
+    addProfile(profile)
+    return true
+  }
+
+  /// Validates the server URL then updates the profile. Returns true on success.
+  func validateAndUpdateProfile(_ profile: Profile) async -> Bool {
+    guard await validateServer(url: profile.serverURL) else { return false }
+    updateProfile(profile)
+    return true
+  }
+
+  func clearValidationError() {
+    validationError = nil
+  }
+
+  private func validateServer(url: URL) async -> Bool {
+    guard let validator else { return true }
+    isValidating = true
+    validationError = nil
+    defer { isValidating = false }
+
+    do {
+      try await validator.validate(url: url)
+      return true
+    } catch let error as BackendError {
+      if case .validationFailed(let message) = error {
+        validationError = message
+      } else {
+        validationError = "Could not connect to server"
+      }
+      return false
+    } catch {
+      validationError = "Could not connect to server"
+      return false
+    }
   }
 
   // MARK: - Persistence

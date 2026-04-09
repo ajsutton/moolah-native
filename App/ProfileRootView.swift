@@ -21,6 +21,14 @@ struct ProfileRootView: View {
     .onChange(of: profileStore.activeProfileID) { _, newID in
       updateSession(for: newID)
     }
+    .onChange(of: profileStore.activeProfile?.serverURL) { _, _ in
+      // Recreate session when the active profile's URL changes (e.g. edited in Settings)
+      rebuildSessionIfNeeded()
+    }
+    .onChange(of: profileStore.activeProfile?.label) { _, _ in
+      // Update cached profile in session when label changes
+      rebuildSessionIfNeeded()
+    }
     .onChange(of: activeSession?.authStore.state) { _, newState in
       cacheUserNameIfNeeded(newState)
     }
@@ -41,6 +49,15 @@ struct ProfileRootView: View {
 
     // Only create a new session if profile changed
     if activeSession?.profile.id != profileID {
+      activeSession = ProfileSession(profile: profile)
+    }
+  }
+
+  /// Recreates the session if the active profile's properties changed (e.g. URL edited in Settings).
+  private func rebuildSessionIfNeeded() {
+    guard let profile = profileStore.activeProfile else { return }
+    // Rebuild if the URL changed (needs new backend) or if we have no session yet
+    if let session = activeSession, session.profile.serverURL != profile.serverURL {
       activeSession = ProfileSession(profile: profile)
     }
   }

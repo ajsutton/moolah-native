@@ -74,7 +74,7 @@ struct MoolahApp: App {
     } catch {
       fatalError("Failed to initialize ModelContainer: \(error)")
     }
-    self.profileStore = ProfileStore()
+    self.profileStore = ProfileStore(validator: RemoteServerValidator())
   }
 
   var body: some Scene {
@@ -84,10 +84,20 @@ struct MoolahApp: App {
     }
     .modelContainer(container)
     .commands {
+      #if os(macOS)
+        ProfileCommands(profileStore: profileStore)
+      #endif
       NewTransactionCommands()
       NewEarmarkCommands()
       RefreshCommands()
       ShowHiddenCommands()
     }
+
+    #if os(macOS)
+      Settings {
+        SettingsView()
+          .environment(profileStore)
+      }
+    #endif
   }
 }

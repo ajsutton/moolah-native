@@ -2,6 +2,7 @@ import SwiftUI
 
 /// First-run experience shown when no profiles exist.
 /// Lets the user sign in to the default moolah.rocks server or enter a custom URL.
+/// Validates the server URL before creating the profile.
 struct ProfileSetupView: View {
   @Environment(ProfileStore.self) private var profileStore
   @State private var showCustomServer = false
@@ -19,7 +20,7 @@ struct ProfileSetupView: View {
 
       VStack(spacing: 12) {
         Button {
-          addDefaultProfile()
+          Task { await addDefaultProfile() }
         } label: {
           Label(
             String(localized: "Sign in to Moolah"),
@@ -29,6 +30,7 @@ struct ProfileSetupView: View {
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
+        .disabled(profileStore.isValidating)
 
         if !showCustomServer {
           Button {
@@ -44,6 +46,15 @@ struct ProfileSetupView: View {
 
       if showCustomServer {
         customServerFields
+      }
+
+      if profileStore.isValidating {
+        ProgressView("Connecting to server...")
+      } else if let error = profileStore.validationError {
+        Label(error, systemImage: "exclamationmark.triangle.fill")
+          .foregroundStyle(.red)
+          .font(.subheadline)
+          .accessibilityLabel("Error: \(error)")
       }
     }
     .padding()
@@ -61,6 +72,9 @@ struct ProfileSetupView: View {
             .keyboardType(.URL)
             .textInputAutocapitalization(.never)
           #endif
+          .onChange(of: customURL) {
+            profileStore.clearValidationError()
+          }
 
         TextField("Label (optional)", text: $customLabel)
           .textFieldStyle(.roundedBorder)
@@ -68,14 +82,18 @@ struct ProfileSetupView: View {
       .frame(maxWidth: 280)
 
       Button {
-        addCustomProfile()
+        Task { await addCustomProfile() }
       } label: {
         Text(String(localized: "Connect"))
           .frame(maxWidth: 280)
       }
-      .buttonStyle(.bordered)
+      #if os(macOS)
+        .buttonStyle(.bordered)
+      #else
+        .buttonStyle(.borderedProminent)
+      #endif
       .controlSize(.large)
-      .disabled(!isValidURL)
+      .disabled(!isValidURL || profileStore.isValidating)
     }
   }
 
@@ -85,20 +103,20 @@ struct ProfileSetupView: View {
     return URL(string: urlString) != nil
   }
 
-  private func addDefaultProfile() {
+  private func addDefaultProfile() async {
     let profile = Profile(
       label: "Moolah",
       serverURL: URL(string: "https://moolah.rocks/api/")!
     )
-    profileStore.addProfile(profile)
+    _ = await profileStore.validateAndAddProfile(profile)
   }
 
-  private func addCustomProfile() {
+  private func addCustomProfile() async {
     let urlString = customURL.hasPrefix("http") ? customURL : "https://\(customURL)"
     guard let url = URL(string: urlString) else { return }
 
     let label = customLabel.isEmpty ? url.host() ?? "Custom Server" : customLabel
     let profile = Profile(label: label, serverURL: url)
-    profileStore.addProfile(profile)
+    _ = await profileStore.validateAndAddProfile(profile)
   }
 }

@@ -1,12 +1,13 @@
 import SwiftUI
 
 /// Toolbar button showing the signed-in user's avatar, name, and a sign-out action.
-/// Also shows profile switching when multiple profiles exist.
+/// On macOS, profile switching is handled by the File menu (ProfileCommands), so only
+/// sign-out is shown here. On iOS, the full profile switcher and manage profiles are included.
 struct UserMenuView: View {
   let user: UserProfile
   @Environment(AuthStore.self) private var authStore
   @Environment(ProfileStore.self) private var profileStore
-  @State private var showAddProfile = false
+  @State private var showManageProfiles = false
 
   private let avatarSize: CGFloat = 28
 
@@ -17,7 +18,9 @@ struct UserMenuView: View {
 
       Divider()
 
-      profileSection
+      #if os(iOS)
+        profileSection
+      #endif
 
       Button(String(localized: "Sign Out"), role: .destructive) {
         Task { await authStore.signOut() }
@@ -33,35 +36,47 @@ struct UserMenuView: View {
     .accessibilityLabel(
       String(localized: "User menu for \(user.givenName) \(user.familyName)")
     )
-    .sheet(isPresented: $showAddProfile) {
-      AddProfileView()
-        .environment(profileStore)
-    }
-  }
-
-  // MARK: - Profile Section
-
-  @ViewBuilder
-  private var profileSection: some View {
-    ForEach(profileStore.profiles) { profile in
-      Button {
-        profileStore.setActiveProfile(profile.id)
-      } label: {
-        HStack {
-          if profile.id == profileStore.activeProfileID {
-            Image(systemName: "checkmark")
+    #if os(iOS)
+      .sheet(isPresented: $showManageProfiles) {
+        NavigationStack {
+          SettingsView()
+          .environment(profileStore)
+          .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+              Button("Done") { showManageProfiles = false }
+            }
           }
-          Text(profile.label)
         }
       }
-    }
-
-    Button(String(localized: "Add Profile...")) {
-      showAddProfile = true
-    }
-
-    Divider()
+    #endif
   }
+
+  // MARK: - Profile Section (iOS only)
+
+  #if os(iOS)
+    @ViewBuilder
+    private var profileSection: some View {
+      ForEach(profileStore.profiles) { profile in
+        Button {
+          profileStore.setActiveProfile(profile.id)
+        } label: {
+          HStack {
+            if profile.id == profileStore.activeProfileID {
+              Image(systemName: "checkmark")
+                .accessibilityHidden(true)
+            }
+            Text(profile.label)
+          }
+        }
+      }
+
+      Button(String(localized: "Manage Profiles...")) {
+        showManageProfiles = true
+      }
+
+      Divider()
+    }
+  #endif
 
   // MARK: - Avatar
 
@@ -84,6 +99,7 @@ struct UserMenuView: View {
       Image(systemName: "person.fill")
         .font(.system(size: 12))
         .foregroundStyle(.white)
+        .accessibilityHidden(true)
     }
     .frame(width: avatarSize, height: avatarSize)
     .clipShape(Circle())
