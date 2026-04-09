@@ -20,10 +20,11 @@ final class ProfileSession: Identifiable {
   init(profile: Profile) {
     self.profile = profile
 
-    // Each profile gets its own cookie storage and URLSession
-    let cookieStorage = HTTPCookieStorage()
-    let config = URLSessionConfiguration.default
-    config.httpCookieStorage = cookieStorage
+    // Each profile gets its own cookie storage and URLSession.
+    // Ephemeral config provides an isolated cookie storage that URLSession
+    // actually integrates with for automatic Set-Cookie handling.
+    let config = URLSessionConfiguration.ephemeral
+    let cookieStorage = config.httpCookieStorage!
     let session = URLSession(configuration: config)
 
     // Each profile gets its own keychain entry keyed by profile ID
@@ -33,7 +34,8 @@ final class ProfileSession: Identifiable {
       baseURL: profile.resolvedServerURL,
       currency: profile.currency,
       session: session,
-      cookieKeychain: cookieKeychain
+      cookieKeychain: cookieKeychain,
+      cookieStorage: cookieStorage
     )
     self.backend = remoteBackend
 
