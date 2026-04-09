@@ -118,19 +118,25 @@ final class ProfileStore {
     if let data = defaults.data(forKey: Self.profilesKey) {
       do {
         profiles = try JSONDecoder().decode([Profile].self, from: data)
+        logger.debug("Loaded \(self.profiles.count) profiles from defaults")
       } catch {
         logger.error("Failed to decode profiles: \(error.localizedDescription)")
         profiles = []
       }
     }
 
-    if let idString = defaults.string(forKey: Self.activeProfileKey),
+    let savedIDString = defaults.string(forKey: Self.activeProfileKey)
+    if let idString = savedIDString,
       let id = UUID(uuidString: idString),
       profiles.contains(where: { $0.id == id })
     {
       activeProfileID = id
+      logger.debug("Restored active profile: \(id)")
     } else {
       activeProfileID = profiles.first?.id
+      logger.debug(
+        "No saved active profile (saved=\(savedIDString ?? "nil")), defaulting to first: \(self.activeProfileID?.uuidString ?? "nil")"
+      )
     }
   }
 
@@ -144,8 +150,10 @@ final class ProfileStore {
 
     if let activeProfileID {
       defaults.set(activeProfileID.uuidString, forKey: Self.activeProfileKey)
+      logger.debug("Saved active profile: \(activeProfileID)")
     } else {
       defaults.removeObject(forKey: Self.activeProfileKey)
+      logger.debug("Cleared active profile key")
     }
   }
 }

@@ -65,7 +65,7 @@ struct ShowHiddenCommands: Commands {
 @MainActor
 struct MoolahApp: App {
   private let container: ModelContainer
-  private let profileStore: ProfileStore
+  @State private var profileStore = ProfileStore(validator: RemoteServerValidator())
   @State private var activeSession: ProfileSession?
 
   init() {
@@ -74,7 +74,6 @@ struct MoolahApp: App {
     } catch {
       fatalError("Failed to initialize ModelContainer: \(error)")
     }
-    self.profileStore = ProfileStore(validator: RemoteServerValidator())
   }
 
   var body: some Scene {
