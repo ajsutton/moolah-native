@@ -281,6 +281,7 @@ struct TransactionFormView: View {
       .focused($categoryFieldFocused)
       .onChange(of: categoryFieldFocused) { _, focused in
         if !focused {
+          categoryJustSelected = true
           showCategorySuggestions = false
           categoryHighlightedIndex = nil
           if let id = categoryId, let cat = categories.by(id: id) {

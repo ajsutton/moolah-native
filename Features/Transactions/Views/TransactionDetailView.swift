@@ -285,6 +285,7 @@ struct TransactionDetailView: View {
       .onChange(of: categoryFieldFocused) { _, focused in
         if !focused {
           // Revert to the valid category path when focus leaves
+          categoryJustSelected = true
           showCategorySuggestions = false
           categoryHighlightedIndex = nil
           if let id = categoryId, let cat = categories.by(id: id) {

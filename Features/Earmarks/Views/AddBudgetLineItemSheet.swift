@@ -34,6 +34,7 @@ struct AddBudgetLineItemSheet: View {
           .focused($categoryFieldFocused)
           .onChange(of: categoryFieldFocused) { _, focused in
             if !focused {
+              categoryJustSelected = true
               showCategorySuggestions = false
               categoryHighlightedIndex = nil
               if let id = selectedCategoryId, let cat = categories.by(id: id) {
