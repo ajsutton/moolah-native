@@ -15,7 +15,13 @@ final class CategoryPickerState {
   var isEditing = false
   var highlightedIndex: Int?
   var categories: Categories = Categories(from: [])
-  var selection: UUID?
+
+  /// Set by `select()` when the user picks from the dropdown. The view reads and clears this.
+  var pendingSelection: SelectionChange?
+
+  struct SelectionChange {
+    let id: UUID?
+  }
 
   var allEntries: [Categories.FlatEntry] {
     categories.flattenedByPath()
@@ -38,9 +44,8 @@ final class CategoryPickerState {
     visibleEntries.count + 1
   }
 
-  func open(categories: Categories, selection: UUID?) {
+  func open(categories: Categories) {
     self.categories = categories
-    self.selection = selection
     searchText = ""
     highlightedIndex = nil
     isEditing = true
@@ -53,7 +58,7 @@ final class CategoryPickerState {
   }
 
   func select(_ id: UUID?) {
-    selection = id
+    pendingSelection = SelectionChange(id: id)
     close()
   }
 
@@ -137,15 +142,17 @@ struct CategoryPicker: View {
           .frame(maxWidth: .infinity, alignment: .trailing)
           .contentShape(Rectangle())
           .onTapGesture {
-            state.open(categories: categories, selection: selection)
+            state.open(categories: categories)
           }
           .accessibilityLabel("\(label): \(selectedLabel)")
           .accessibilityAddTraits(.isButton)
           .accessibilityHint("Tap to change category")
       }
     }
-    .onChange(of: state.selection) { _, newValue in
+    .onChange(of: state.pendingSelection?.id) { _, newValue in
+      guard state.pendingSelection != nil else { return }
       selection = newValue
+      state.pendingSelection = nil
     }
   }
 }
