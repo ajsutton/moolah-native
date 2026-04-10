@@ -16,9 +16,11 @@ struct InvestmentValuesView: View {
         )
       } else {
         if store.values.count > 1 {
-          investmentChart
-            .frame(height: 200)
-            .padding()
+          ExpandableChart(title: account.name) {
+            investmentChart
+              .frame(height: 200)
+          }
+          .padding()
 
           Divider()
         }

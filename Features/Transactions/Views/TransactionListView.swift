@@ -14,31 +14,62 @@ struct TransactionListView: View {
   @State private var searchText = ""
 
   var body: some View {
-    HStack(spacing: 0) {
-      listView
+    Group {
+      #if os(macOS)
+        HStack(spacing: 0) {
+          listView
 
-      if let selected = selectedTransaction {
-        Divider()
+          if let selected = selectedTransaction {
+            Divider()
 
-        TransactionDetailView(
-          transaction: selected,
-          accounts: accounts,
-          categories: categories,
-          earmarks: earmarks,
-          transactionStore: transactionStore,
-          onUpdate: { updated in
-            Task { await transactionStore.update(updated) }
-            // Update the selected transaction to reflect changes
-            selectedTransaction = updated
-          },
-          onDelete: { id in
-            Task { await transactionStore.delete(id: id) }
-            selectedTransaction = nil
+            TransactionDetailView(
+              transaction: selected,
+              accounts: accounts,
+              categories: categories,
+              earmarks: earmarks,
+              transactionStore: transactionStore,
+              onUpdate: { updated in
+                Task { await transactionStore.update(updated) }
+                selectedTransaction = updated
+              },
+              onDelete: { id in
+                Task { await transactionStore.delete(id: id) }
+                selectedTransaction = nil
+              }
+            )
+            .frame(width: UIConstants.detailPanelWidth)
+            .id(selected.id)
           }
-        )
-        .frame(width: UIConstants.detailPanelWidth)
-        .id(selected.id)  // Force recreation when transaction changes
-      }
+        }
+      #else
+        listView
+          .sheet(item: $selectedTransaction) { selected in
+            NavigationStack {
+              TransactionDetailView(
+                transaction: selected,
+                accounts: accounts,
+                categories: categories,
+                earmarks: earmarks,
+                transactionStore: transactionStore,
+                onUpdate: { updated in
+                  Task { await transactionStore.update(updated) }
+                  selectedTransaction = updated
+                },
+                onDelete: { id in
+                  Task { await transactionStore.delete(id: id) }
+                  selectedTransaction = nil
+                }
+              )
+              .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                  Button("Done") {
+                    selectedTransaction = nil
+                  }
+                }
+              }
+            }
+          }
+      #endif
     }
     .focusedSceneValue(\.newTransactionAction, createNewTransaction)
     .alert("Error", isPresented: $showError) {

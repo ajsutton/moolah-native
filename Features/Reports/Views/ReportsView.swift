@@ -45,24 +45,44 @@ struct ReportsView: View {
             }
           }
         } else {
-          // Income and Expense columns
-          HStack(spacing: 0) {
-            CategoryBalanceTable(
-              title: "Income",
-              balances: incomeBalances,
-              categories: categories,
-              dateRange: resolvedFrom...resolvedTo
-            )
+          // Income and Expense columns: side by side on macOS, stacked on iOS
+          #if os(macOS)
+            HStack(spacing: 0) {
+              CategoryBalanceTable(
+                title: "Income",
+                balances: incomeBalances,
+                categories: categories,
+                dateRange: resolvedFrom...resolvedTo
+              )
 
-            Divider()
+              Divider()
 
-            CategoryBalanceTable(
-              title: "Expenses",
-              balances: expenseBalances,
-              categories: categories,
-              dateRange: resolvedFrom...resolvedTo
-            )
-          }
+              CategoryBalanceTable(
+                title: "Expenses",
+                balances: expenseBalances,
+                categories: categories,
+                dateRange: resolvedFrom...resolvedTo
+              )
+            }
+          #else
+            VStack(spacing: 0) {
+              CategoryBalanceTable(
+                title: "Income",
+                balances: incomeBalances,
+                categories: categories,
+                dateRange: resolvedFrom...resolvedTo
+              )
+
+              Divider()
+
+              CategoryBalanceTable(
+                title: "Expenses",
+                balances: expenseBalances,
+                categories: categories,
+                dateRange: resolvedFrom...resolvedTo
+              )
+            }
+          #endif
         }
       }
       .profileNavigationTitle("Reports")
@@ -111,7 +131,9 @@ struct ReportsView: View {
         }
       }
       .pickerStyle(.menu)
-      .frame(width: 200)
+      #if os(macOS)
+        .frame(width: 200)
+      #endif
 
       if dateRange == .custom {
         DatePicker("From", selection: $customFrom, displayedComponents: .date)

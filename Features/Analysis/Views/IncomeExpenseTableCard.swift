@@ -11,16 +11,15 @@ struct IncomeExpenseTableCard: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      HStack {
+      VStack(alignment: .leading, spacing: 8) {
         Text("Monthly Income & Expense")
           .font(.title2)
           .fontWeight(.semibold)
 
-        Spacer()
-
         Toggle("Include Earmarks", isOn: $includeEarmarks)
           .toggleStyle(.switch)
           .font(.caption)
+          .fixedSize()
       }
 
       if data.isEmpty {
@@ -53,75 +52,78 @@ struct IncomeExpenseTableCard: View {
   }
 
   private var tableView: some View {
-    VStack(spacing: 0) {
-      // Header row
-      HStack(spacing: 0) {
-        Text("Month")
-          .frame(maxWidth: .infinity, alignment: .leading)
-        Text("Income")
-          .frame(width: 100, alignment: .trailing)
-        Text("Expense")
-          .frame(width: 100, alignment: .trailing)
-        Text("Savings")
-          .frame(width: 100, alignment: .trailing)
-        Text("Total Savings")
-          .frame(width: 110, alignment: .trailing)
-      }
-      .font(.caption)
-      .foregroundStyle(.secondary)
-      .padding(.horizontal, 12)
-      .padding(.vertical, 8)
+    ScrollView(.horizontal, showsIndicators: false) {
+      VStack(spacing: 0) {
+        // Header row
+        HStack(spacing: 0) {
+          Text("Month")
+            .frame(width: 120, alignment: .leading)
+          Text("Income")
+            .frame(width: 100, alignment: .trailing)
+          Text("Expense")
+            .frame(width: 100, alignment: .trailing)
+          Text("Savings")
+            .frame(width: 100, alignment: .trailing)
+          Text("Total Savings")
+            .frame(width: 110, alignment: .trailing)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
 
-      Divider()
+        Divider()
 
-      // Data rows (lazy, participates in outer ScrollView)
-      LazyVStack(spacing: 0) {
-        ForEach(visibleData) { item in
-          VStack(spacing: 0) {
-            HStack(spacing: 0) {
-              VStack(alignment: .leading, spacing: 2) {
-                Text(monthLabel(for: item))
-                  .font(.body)
-                Text(monthsAgoLabel(for: item))
-                  .font(.caption)
-                  .foregroundStyle(.secondary)
+        // Data rows (lazy, participates in outer ScrollView)
+        LazyVStack(spacing: 0) {
+          ForEach(visibleData) { item in
+            VStack(spacing: 0) {
+              HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 2) {
+                  Text(monthLabel(for: item))
+                    .font(.body)
+                  Text(monthsAgoLabel(for: item))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                .frame(width: 120, alignment: .leading)
+
+                Text(income(for: item).formatted)
+                  .monospacedDigit()
+                  .foregroundStyle(.green)
+                  .frame(width: 100, alignment: .trailing)
+
+                Text(expense(for: item).formatted)
+                  .monospacedDigit()
+                  .foregroundStyle(.red)
+                  .frame(width: 100, alignment: .trailing)
+
+                let savings = profit(for: item)
+                Text(savings.formatted)
+                  .monospacedDigit()
+                  .foregroundStyle(savings.cents >= 0 ? .green : .red)
+                  .frame(width: 100, alignment: .trailing)
+
+                let totalSavings = cumulativeSavings(upTo: item)
+                Text(totalSavings.formatted)
+                  .monospacedDigit()
+                  .foregroundStyle(totalSavings.cents >= 0 ? .green : .red)
+                  .frame(width: 110, alignment: .trailing)
               }
-              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.horizontal, 12)
+              .padding(.vertical, 8)
 
-              Text(income(for: item).formatted)
-                .monospacedDigit()
-                .foregroundStyle(.green)
-                .frame(width: 100, alignment: .trailing)
-
-              Text(expense(for: item).formatted)
-                .monospacedDigit()
-                .foregroundStyle(.red)
-                .frame(width: 100, alignment: .trailing)
-
-              let savings = profit(for: item)
-              Text(savings.formatted)
-                .monospacedDigit()
-                .foregroundStyle(savings.cents >= 0 ? .green : .red)
-                .frame(width: 100, alignment: .trailing)
-
-              let totalSavings = cumulativeSavings(upTo: item)
-              Text(totalSavings.formatted)
-                .monospacedDigit()
-                .foregroundStyle(totalSavings.cents >= 0 ? .green : .red)
-                .frame(width: 110, alignment: .trailing)
+              Divider()
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-
-            Divider()
-          }
-          .onAppear {
-            if item.id == visibleData.last?.id, visibleCount < data.count {
-              visibleCount += Self.loadMoreCount
+            .onAppear {
+              if item.id == visibleData.last?.id, visibleCount < data.count {
+                visibleCount += Self.loadMoreCount
+              }
             }
           }
         }
       }
+      .frame(minWidth: 530)
     }
     .accessibilityLabel("Monthly income and expense table")
   }

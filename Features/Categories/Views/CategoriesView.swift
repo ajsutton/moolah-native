@@ -9,32 +9,67 @@ struct CategoriesView: View {
   @State private var searchText = ""
 
   var body: some View {
-    HStack(spacing: 0) {
-      listView
+    Group {
+      #if os(macOS)
+        HStack(spacing: 0) {
+          listView
 
-      if let selected = selectedCategory {
-        Divider()
+          if let selected = selectedCategory {
+            Divider()
 
-        CategoryDetailView(
-          category: selected,
-          categories: categoryStore.categories,
-          onUpdate: { updated in
-            Task {
-              if await categoryStore.update(updated) != nil {
-                selectedCategory = updated
+            CategoryDetailView(
+              category: selected,
+              categories: categoryStore.categories,
+              onUpdate: { updated in
+                Task {
+                  if await categoryStore.update(updated) != nil {
+                    selectedCategory = updated
+                  }
+                }
+              },
+              onDelete: { id, replacementId in
+                Task {
+                  if await categoryStore.delete(id: id, withReplacement: replacementId) {
+                    selectedCategory = nil
+                  }
+                }
               }
-            }
-          },
-          onDelete: { id, replacementId in
-            Task {
-              if await categoryStore.delete(id: id, withReplacement: replacementId) {
-                selectedCategory = nil
+            )
+            .frame(width: UIConstants.detailPanelWidth)
+          }
+        }
+      #else
+        listView
+          .sheet(item: $selectedCategory) { selected in
+            NavigationStack {
+              CategoryDetailView(
+                category: selected,
+                categories: categoryStore.categories,
+                onUpdate: { updated in
+                  Task {
+                    if await categoryStore.update(updated) != nil {
+                      selectedCategory = updated
+                    }
+                  }
+                },
+                onDelete: { id, replacementId in
+                  Task {
+                    if await categoryStore.delete(id: id, withReplacement: replacementId) {
+                      selectedCategory = nil
+                    }
+                  }
+                }
+              )
+              .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                  Button("Done") {
+                    selectedCategory = nil
+                  }
+                }
               }
             }
           }
-        )
-        .frame(width: UIConstants.detailPanelWidth)
-      }
+      #endif
     }
     .sheet(isPresented: $showCreateSheet) {
       CreateCategorySheet(

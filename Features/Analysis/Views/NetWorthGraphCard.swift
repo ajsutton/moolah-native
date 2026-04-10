@@ -43,7 +43,9 @@ struct NetWorthGraphCard: View {
       if balances.isEmpty {
         emptyState
       } else {
-        chart
+        ExpandableChart(title: "Net Worth") {
+          chart
+        }
         seriesToggles
       }
     }
@@ -207,33 +209,35 @@ struct NetWorthGraphCard: View {
   }
 
   private var seriesToggles: some View {
-    HStack(spacing: 16) {
-      ForEach(availableSeries) { series in
-        Button {
-          if visibleSeries.contains(series) {
-            visibleSeries.remove(series)
-          } else {
-            visibleSeries.insert(series)
-          }
-        } label: {
-          HStack(spacing: 4) {
-            if series == .bestFit {
-              Rectangle()
-                .stroke(series.color, style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
-                .frame(width: 16, height: 2)
+    ScrollView(.horizontal, showsIndicators: false) {
+      HStack(spacing: 16) {
+        ForEach(availableSeries) { series in
+          Button {
+            if visibleSeries.contains(series) {
+              visibleSeries.remove(series)
             } else {
-              Rectangle()
-                .fill(series.color)
-                .frame(width: 16, height: 2)
+              visibleSeries.insert(series)
             }
-            Text(series.rawValue)
-              .foregroundStyle(visibleSeries.contains(series) ? .primary : .tertiary)
+          } label: {
+            HStack(spacing: 4) {
+              if series == .bestFit {
+                Rectangle()
+                  .stroke(series.color, style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
+                  .frame(width: 16, height: 2)
+              } else {
+                Rectangle()
+                  .fill(series.color)
+                  .frame(width: 16, height: 2)
+              }
+              Text(series.rawValue)
+                .foregroundStyle(visibleSeries.contains(series) ? .primary : .tertiary)
+            }
           }
+          .buttonStyle(.plain)
+          .accessibilityLabel("\(series.rawValue) series")
+          .accessibilityAddTraits(visibleSeries.contains(series) ? .isSelected : [])
+          .accessibilityHint("Double tap to toggle visibility")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(series.rawValue) series")
-        .accessibilityAddTraits(visibleSeries.contains(series) ? .isSelected : [])
-        .accessibilityHint("Double tap to toggle visibility")
       }
     }
     .font(.caption)

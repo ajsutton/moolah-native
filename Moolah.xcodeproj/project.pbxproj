@@ -312,6 +312,7 @@
 		CAA86173F38CFE979B92405A /* CategoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 498570048DEA32F7F70C157A /* CategoryDetailView.swift */; };
 		CB29B7107D26E771BEC886C0 /* InMemoryBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C53697402D7B4394678D84 /* InMemoryBackend.swift */; };
 		CCE7F5284BC166F9A461A3F6 /* ServerUUID.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079E876EE0D93EFAAB38348C /* ServerUUID.swift */; };
+		CD6739E9243453C6C27CFF63 /* ExpandableChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A11B1E8146BCF5CAB926B60 /* ExpandableChart.swift */; };
 		CD68C693F2580ADC91F31576 /* PayeeAutocompleteField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B48A98D7607DA236122036FB /* PayeeAutocompleteField.swift */; };
 		CD9200A470282154CA8F1533 /* CategoriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDC52DF5F3E1AA880AFDA9EC /* CategoriesView.swift */; };
 		CDC27A4EA6861820117DE56E /* FocusedValues.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3979B2EDAE9E843A47D7DE06 /* FocusedValues.swift */; };
@@ -377,6 +378,7 @@
 		F7DEBB614AAEEC671D09B053 /* ProfileSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517AF627964C57FE79949889 /* ProfileSession.swift */; };
 		F7F93308F5EF05CEB7B66D3A /* MonetaryAmount.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED93E0B23118A6BF13150C0 /* MonetaryAmount.swift */; };
 		F886E9EAA5377C4680F6362F /* AccountStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2536FF724721319BC3117F /* AccountStore.swift */; };
+		FAB16440058BE8A9E2F14F37 /* ExpandableChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A11B1E8146BCF5CAB926B60 /* ExpandableChart.swift */; };
 		FC90521205A28AD546896B26 /* InMemoryBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12C53697402D7B4394678D84 /* InMemoryBackend.swift */; };
 		FCAA5E56BDF73789AF23053E /* account_balances.json in Resources */ = {isa = PBXBuildFile; fileRef = CA57A98B6A5861195B1E2E60 /* account_balances.json */; };
 		FE3ADF5269D63E9AE872AD19 /* AnalysisStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E953A5FB356462F97BDCFA96 /* AnalysisStoreTests.swift */; };
@@ -467,6 +469,7 @@
 		479671F2BA48D4E1B21B0DC3 /* DailyBalance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBalance.swift; sourceTree = "<group>"; };
 		498570048DEA32F7F70C157A /* CategoryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryDetailView.swift; sourceTree = "<group>"; };
 		49C90215EDD39E8617F01739 /* TransactionFilterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionFilterView.swift; sourceTree = "<group>"; };
+		4A11B1E8146BCF5CAB926B60 /* ExpandableChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpandableChart.swift; sourceTree = "<group>"; };
 		4ACB232AEC7EE19C9C5D4C9C /* AddInvestmentValueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddInvestmentValueView.swift; sourceTree = "<group>"; };
 		4B7099043D0CE923649E44C7 /* EarmarkStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarmarkStoreTests.swift; sourceTree = "<group>"; };
 		4C85F9D469AB0B735DF3A5BD /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
@@ -782,6 +785,7 @@
 			children = (
 				B49F4CED68007895BCFE0658 /* .gitkeep */,
 				940150EC035B635D7DEE3F84 /* CategoryMatching.swift */,
+				4A11B1E8146BCF5CAB926B60 /* ExpandableChart.swift */,
 				3979B2EDAE9E843A47D7DE06 /* FocusedValues.swift */,
 				00AF0C1750B6219581F77E10 /* MonetaryAmountView.swift */,
 				DCC494F1C2473F4C086720CC /* ProfileNavigationTitle.swift */,
@@ -1579,6 +1583,7 @@
 				EF50991749771A3E91387F5D /* EarmarksView.swift in Sources */,
 				183B20CD2AF8698ED4560A2A /* EditAccountView.swift in Sources */,
 				A3DE019D7D17400165A0370E /* EditBudgetAmountSheet.swift in Sources */,
+				FAB16440058BE8A9E2F14F37 /* ExpandableChart.swift in Sources */,
 				A7A7FC4898D44AB56E7C3F6A /* ExpenseBreakdown.swift in Sources */,
 				1258DF821C1A69DFDD22BB7C /* ExpenseBreakdownCard.swift in Sources */,
 				2AC0B9B38B353643B133380A /* ExpenseBreakdownDTO.swift in Sources */,
@@ -1726,6 +1731,7 @@
 				E5E4DBF4983ACD4882504EC6 /* EarmarksView.swift in Sources */,
 				9F890B94BD2C05590487FDFD /* EditAccountView.swift in Sources */,
 				FE95FCE2D0754228388139E6 /* EditBudgetAmountSheet.swift in Sources */,
+				CD6739E9243453C6C27CFF63 /* ExpandableChart.swift in Sources */,
 				3C3CA45271B385E8E4812ABD /* ExpenseBreakdown.swift in Sources */,
 				5E4330752C2CB28364432D61 /* ExpenseBreakdownCard.swift in Sources */,
 				9F9C47948599ABAB0E006D2F /* ExpenseBreakdownDTO.swift in Sources */,

@@ -21,22 +21,36 @@ struct InvestmentAccountView: View {
           .padding(.top)
       }
 
-      // Chart + valuations side by side
-      HStack(alignment: .top, spacing: 0) {
-        // Chart with time period picker
-        VStack(spacing: 16) {
-          timePeriodPicker
-          InvestmentChartView(
-            dataPoints: investmentStore.chartDataPoints, currency: account.balance.currency)
+      // Chart + valuations: side by side on macOS, stacked on iOS
+      #if os(macOS)
+        HStack(alignment: .top, spacing: 0) {
+          VStack(spacing: 16) {
+            timePeriodPicker
+            InvestmentChartView(
+              dataPoints: investmentStore.chartDataPoints, currency: account.balance.currency)
+          }
+          .padding()
+
+          Divider()
+
+          valuationsList
+            .frame(width: 240)
         }
-        .padding()
+      #else
+        VStack(spacing: 0) {
+          VStack(spacing: 16) {
+            timePeriodPicker
+            InvestmentChartView(
+              dataPoints: investmentStore.chartDataPoints, currency: account.balance.currency)
+          }
+          .padding()
 
-        Divider()
+          Divider()
 
-        // Valuations list
-        valuationsList
-          .frame(width: 240)
-      }
+          valuationsList
+            .frame(maxHeight: 300)
+        }
+      #endif
 
       Divider()
 

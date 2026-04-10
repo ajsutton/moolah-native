@@ -13,7 +13,9 @@ struct InvestmentChartView: View {
       if dataPoints.isEmpty {
         emptyState
       } else {
-        chartContent
+        ExpandableChart(title: "Investment Performance") {
+          chartContent
+        }
         legend
       }
     }

@@ -16,7 +16,9 @@ struct ExpenseBreakdownCard: View {
       if filteredBreakdown.isEmpty {
         emptyState
       } else {
-        pieChart
+        ExpandableChart(title: "Expenses by Category") {
+          pieChart
+        }
         legendGrid
         breadcrumbs
       }

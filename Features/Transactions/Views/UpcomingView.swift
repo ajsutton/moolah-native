@@ -9,30 +9,63 @@ struct UpcomingView: View {
   @State private var selectedTransaction: Transaction?
 
   var body: some View {
-    HStack(spacing: 0) {
-      listView
+    Group {
+      #if os(macOS)
+        HStack(spacing: 0) {
+          listView
 
-      if let selected = selectedTransaction {
-        Divider()
+          if let selected = selectedTransaction {
+            Divider()
 
-        TransactionDetailView(
-          transaction: selected,
-          accounts: accounts,
-          categories: categories,
-          earmarks: earmarks,
-          transactionStore: transactionStore,
-          showRecurrence: true,
-          onUpdate: { updated in
-            Task { await transactionStore.update(updated) }
-            selectedTransaction = updated
-          },
-          onDelete: { id in
-            Task { await transactionStore.delete(id: id) }
-            selectedTransaction = nil
+            TransactionDetailView(
+              transaction: selected,
+              accounts: accounts,
+              categories: categories,
+              earmarks: earmarks,
+              transactionStore: transactionStore,
+              showRecurrence: true,
+              onUpdate: { updated in
+                Task { await transactionStore.update(updated) }
+                selectedTransaction = updated
+              },
+              onDelete: { id in
+                Task { await transactionStore.delete(id: id) }
+                selectedTransaction = nil
+              }
+            )
+            .frame(width: UIConstants.detailPanelWidth)
           }
-        )
-        .frame(width: UIConstants.detailPanelWidth)
-      }
+        }
+      #else
+        listView
+          .sheet(item: $selectedTransaction) { selected in
+            NavigationStack {
+              TransactionDetailView(
+                transaction: selected,
+                accounts: accounts,
+                categories: categories,
+                earmarks: earmarks,
+                transactionStore: transactionStore,
+                showRecurrence: true,
+                onUpdate: { updated in
+                  Task { await transactionStore.update(updated) }
+                  selectedTransaction = updated
+                },
+                onDelete: { id in
+                  Task { await transactionStore.delete(id: id) }
+                  selectedTransaction = nil
+                }
+              )
+              .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                  Button("Done") {
+                    selectedTransaction = nil
+                  }
+                }
+              }
+            }
+          }
+      #endif
     }
   }
 

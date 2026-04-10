@@ -13,21 +13,46 @@ struct EarmarksView: View {
   @State private var searchText = ""
 
   var body: some View {
-    HStack(spacing: 0) {
-      listView
+    Group {
+      #if os(macOS)
+        HStack(spacing: 0) {
+          listView
 
-      if let selected = selectedEarmark {
-        Divider()
+          if let selected = selectedEarmark {
+            Divider()
 
-        EarmarkDetailView(
-          earmark: selected,
-          accounts: accounts,
-          categories: categories,
-          earmarks: earmarkStore.earmarks,
-          transactionStore: transactionStore,
-          analysisRepository: analysisRepository
-        )
-      }
+            EarmarkDetailView(
+              earmark: selected,
+              accounts: accounts,
+              categories: categories,
+              earmarks: earmarkStore.earmarks,
+              transactionStore: transactionStore,
+              analysisRepository: analysisRepository
+            )
+          }
+        }
+      #else
+        listView
+          .sheet(item: $selectedEarmark) { selected in
+            NavigationStack {
+              EarmarkDetailView(
+                earmark: selected,
+                accounts: accounts,
+                categories: categories,
+                earmarks: earmarkStore.earmarks,
+                transactionStore: transactionStore,
+                analysisRepository: analysisRepository
+              )
+              .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                  Button("Done") {
+                    selectedEarmark = nil
+                  }
+                }
+              }
+            }
+          }
+      #endif
     }
     .sheet(isPresented: $showCreateSheet) {
       CreateEarmarkSheet(

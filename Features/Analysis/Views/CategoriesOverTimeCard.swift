@@ -11,26 +11,30 @@ struct CategoriesOverTimeCard: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      HStack {
+      VStack(alignment: .leading, spacing: 8) {
         Text("Expenses by Category Over Time")
           .font(.title2)
           .fontWeight(.semibold)
-
-        Spacer()
 
         Picker("Values", selection: $showActualValues) {
           Text("Percentage").tag(false)
           Text("Actual").tag(true)
         }
         .pickerStyle(.segmented)
-        .frame(width: 200)
+        #if os(macOS)
+          .frame(width: 200)
+        #else
+          .frame(maxWidth: 200)
+        #endif
         .accessibilityLabel("Toggle between percentage and actual values")
       }
 
       if entries.isEmpty {
         emptyState
       } else {
-        chart
+        ExpandableChart(title: "Expenses Over Time") {
+          chart
+        }
         legend
       }
     }
