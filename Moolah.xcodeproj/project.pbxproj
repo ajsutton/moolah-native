@@ -74,6 +74,7 @@
 		32DAA32C6D898544E8896D01 /* InvestmentChartDataPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F53497BE84C8E017814E5B /* InvestmentChartDataPoint.swift */; };
 		367704CCC5C999126DEA1A31 /* CategoryPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E1589E0CBE93AAD1BFB2A6B /* CategoryPicker.swift */; };
 		385CC85FC877FBC1618600A4 /* ProfileRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286456C2A5CC2F1F96C906EE /* ProfileRootView.swift */; };
+		3A459380969D6D34A39F2A6F /* CloudKitAnalysisRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB77EE02F8AB888E2660D9FB /* CloudKitAnalysisRepository.swift */; };
 		3B289338AC8C60C70D9A76AD /* AddInvestmentValueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ACB232AEC7EE19C9C5D4C9C /* AddInvestmentValueView.swift */; };
 		3C3CA45271B385E8E4812ABD /* ExpenseBreakdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = E344D186E5F99BD5ADA75594 /* ExpenseBreakdown.swift */; };
 		3C4FB711102939161CBC8075 /* TransactionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBD9CC5FEB48F60711FA4B1D /* TransactionRepository.swift */; };
@@ -269,6 +270,7 @@
 		B993E4DD97A9978DEFCF6973 /* IncomeExpenseTableCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77D8161F8D10B04DCE422392 /* IncomeExpenseTableCard.swift */; };
 		BA163022FD95BC1ED4E2AC9B /* UIConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD01884C3447BF75CE0E798 /* UIConstants.swift */; };
 		BC0C94147B4EDA66DFEFDE28 /* UpcomingTransactionsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D57E97531288FB84806CC14 /* UpcomingTransactionsCard.swift */; };
+		BC6B01B974E6D0FD1E28F1CE /* CloudKitAnalysisRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB77EE02F8AB888E2660D9FB /* CloudKitAnalysisRepository.swift */; };
 		BC8A47F270F7C1D1DF788E23 /* InvestmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6532C8AF63F150C2B65226D9 /* InvestmentStore.swift */; };
 		BDF8BA15F07E864E53D6CE48 /* AccountRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 078DCE2D3DC185DE4EA9B0BF /* AccountRecord.swift */; };
 		BE8EF69FB14777957E7B6773 /* BackendDateFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D190943A082D94DFFBBF510 /* BackendDateFormatter.swift */; };
@@ -542,6 +544,7 @@
 		B6985F839D99BFB3C2B7E5E5 /* TransactionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionStore.swift; sourceTree = "<group>"; };
 		B8BF9E7F5B9AD23AF5AB94EC /* CategoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryStore.swift; sourceTree = "<group>"; };
 		BA1EBFC9AA08D191CCFFF2A0 /* InvestmentValueDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentValueDTO.swift; sourceTree = "<group>"; };
+		BB77EE02F8AB888E2660D9FB /* CloudKitAnalysisRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitAnalysisRepository.swift; sourceTree = "<group>"; };
 		BB79E4BB46C6F3561058323B /* ExpenseBreakdownDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseBreakdownDTO.swift; sourceTree = "<group>"; };
 		BE221BC137F6FA398968FDFF /* Moolah_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Moolah_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BE3ACE1863D4D8F4B6605080 /* RemoteServerValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteServerValidator.swift; sourceTree = "<group>"; };
@@ -723,6 +726,7 @@
 			isa = PBXGroup;
 			children = (
 				5665C37A69A394B77CBDBFF6 /* CloudKitAccountRepository.swift */,
+				BB77EE02F8AB888E2660D9FB /* CloudKitAnalysisRepository.swift */,
 				D7EE076ADB6E89B374CEF608 /* CloudKitCategoryRepository.swift */,
 				804BF77571973BAE83AF9924 /* CloudKitEarmarkRepository.swift */,
 				0FE1C8402B6D9D29B8B17D34 /* CloudKitTransactionRepository.swift */,
@@ -1492,6 +1496,7 @@
 				23D989C6AAA36D0565C65D0A /* CategoryStore.swift in Sources */,
 				02ADB11E10C232F944504BB6 /* CategoryTreeView.swift in Sources */,
 				AA1A88BCE6ED6F5B9DE10702 /* CloudKitAccountRepository.swift in Sources */,
+				3A459380969D6D34A39F2A6F /* CloudKitAnalysisRepository.swift in Sources */,
 				4A86D8ABDF68DB9E1A3D5EAF /* CloudKitCategoryRepository.swift in Sources */,
 				0329EC29862DABC0AE9BA690 /* CloudKitEarmarkRepository.swift in Sources */,
 				6E4C892AE7BD209F7A585AC4 /* CloudKitTransactionRepository.swift in Sources */,
@@ -1633,6 +1638,7 @@
 				4090237938A97076DD94AF16 /* CategoryStore.swift in Sources */,
 				BF633F5962C22BD2CDF82766 /* CategoryTreeView.swift in Sources */,
 				460B51B6298EFAA44AD9B400 /* CloudKitAccountRepository.swift in Sources */,
+				BC6B01B974E6D0FD1E28F1CE /* CloudKitAnalysisRepository.swift in Sources */,
 				47B2EC1B79559D4225B13D3F /* CloudKitCategoryRepository.swift in Sources */,
 				D802E0CF3B24852DF8D084C3 /* CloudKitEarmarkRepository.swift in Sources */,
 				1C1228C64B424326B34E6513 /* CloudKitTransactionRepository.swift in Sources */,

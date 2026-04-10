@@ -1,29 +1,35 @@
 import Foundation
+import SwiftData
 import Testing
 
 @testable import Moolah
 
 /// Contract tests for AnalysisRepository implementations.
-/// Both InMemoryAnalysisRepository and RemoteAnalysisRepository must pass these tests.
+/// Both InMemoryAnalysisRepository and CloudKitAnalysisRepository must pass these tests.
 @Suite("AnalysisRepository Contract Tests")
 struct AnalysisRepositoryContractTests {
 
   // MARK: - Daily Balances Tests
 
-  @Test("fetchDailyBalances returns empty array when no transactions")
-  func dailyBalancesEmpty() async throws {
-    let backend = InMemoryBackend()
-    let repository = backend.analysis
-
-    let balances = try await repository.fetchDailyBalances(after: nil, forecastUntil: nil)
+  @Test(
+    "fetchDailyBalances returns empty array when no transactions",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func dailyBalancesEmpty(backend: any BackendProvider) async throws {
+    let balances = try await backend.analysis.fetchDailyBalances(after: nil, forecastUntil: nil)
 
     #expect(balances.isEmpty)
   }
 
-  @Test("fetchDailyBalances returns balances ordered by date")
-  func dailyBalancesOrdering() async throws {
-    let backend = InMemoryBackend()
-
+  @Test(
+    "fetchDailyBalances returns balances ordered by date",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func dailyBalancesOrdering(backend: any BackendProvider) async throws {
     // Create some sample transactions on different dates
     let account = Account(
       id: UUID(),
@@ -65,10 +71,13 @@ struct AnalysisRepositoryContractTests {
     }
   }
 
-  @Test("fetchDailyBalances computes availableFunds correctly")
-  func availableFundsCalculation() async throws {
-    let backend = InMemoryBackend()
-
+  @Test(
+    "fetchDailyBalances computes availableFunds correctly",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func availableFundsCalculation(backend: any BackendProvider) async throws {
     let account = Account(
       id: UUID(),
       name: "Test Account",
@@ -113,10 +122,13 @@ struct AnalysisRepositoryContractTests {
     }
   }
 
-  @Test("fetchDailyBalances with forecastUntil includes scheduled balances")
-  func forecastIncludesScheduled() async throws {
-    let backend = InMemoryBackend()
-
+  @Test(
+    "fetchDailyBalances with forecastUntil includes scheduled balances",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func forecastIncludesScheduled(backend: any BackendProvider) async throws {
     let account = Account(
       id: UUID(),
       name: "Test Account",
@@ -149,10 +161,13 @@ struct AnalysisRepositoryContractTests {
 
   // MARK: - Expense Breakdown Tests
 
-  @Test("fetchExpenseBreakdown groups by category and month")
-  func expenseBreakdownGrouping() async throws {
-    let backend = InMemoryBackend()
-
+  @Test(
+    "fetchExpenseBreakdown groups by category and month",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func expenseBreakdownGrouping(backend: any BackendProvider) async throws {
     let account = Account(
       id: UUID(),
       name: "Test Account",
@@ -199,10 +214,13 @@ struct AnalysisRepositoryContractTests {
     #expect(uniqueMonths.count >= 1, "Should have at least one month")
   }
 
-  @Test("fetchExpenseBreakdown excludes scheduled transactions")
-  func expenseBreakdownExcludesScheduled() async throws {
-    let backend = InMemoryBackend()
-
+  @Test(
+    "fetchExpenseBreakdown excludes scheduled transactions",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func expenseBreakdownExcludesScheduled(backend: any BackendProvider) async throws {
     let account = Account(
       id: UUID(),
       name: "Test Account",
@@ -231,10 +249,13 @@ struct AnalysisRepositoryContractTests {
 
   // MARK: - Income and Expense Tests
 
-  @Test("fetchIncomeAndExpense computes profit correctly")
-  func incomeExpenseProfitCalculation() async throws {
-    let backend = InMemoryBackend()
-
+  @Test(
+    "fetchIncomeAndExpense computes profit correctly",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func incomeExpenseProfitCalculation(backend: any BackendProvider) async throws {
     let account = Account(
       id: UUID(),
       name: "Test Account",
@@ -270,10 +291,13 @@ struct AnalysisRepositoryContractTests {
     }
   }
 
-  @Test("fetchIncomeAndExpense handles investment transfers as earmarked")
-  func investmentTransfersAsEarmarked() async throws {
-    let backend = InMemoryBackend()
-
+  @Test(
+    "fetchIncomeAndExpense handles investment transfers as earmarked",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func investmentTransfersAsEarmarked(backend: any BackendProvider) async throws {
     let currentAccount = Account(
       id: UUID(),
       name: "Checking",
@@ -305,15 +329,17 @@ struct AnalysisRepositoryContractTests {
 
     // Verify transfer to investment appears in earmarkedIncome
     #expect(!data.isEmpty, "Should have at least one month")
-    // Note: Actual earmarkedIncome verification requires understanding the full algorithm
   }
 
   // MARK: - Category Balances Tests
 
-  @Test("fetchCategoryBalances returns flat mapping")
-  func categoryBalancesFlatMapping() async throws {
-    let backend = InMemoryBackend()
-
+  @Test(
+    "fetchCategoryBalances returns flat mapping",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func categoryBalancesFlatMapping(backend: any BackendProvider) async throws {
     let account = Account(
       id: UUID(),
       name: "Test Account",
@@ -369,14 +395,17 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Verify totals are correct
-    #expect(balances[cat1.id] == MonetaryAmount(cents: -7000, currency: .defaultTestCurrency))  // 5000 + 2000
+    #expect(balances[cat1.id] == MonetaryAmount(cents: -7000, currency: .defaultTestCurrency))
     #expect(balances[cat2.id] == MonetaryAmount(cents: -3000, currency: .defaultTestCurrency))
   }
 
-  @Test("fetchCategoryBalances excludes scheduled transactions")
-  func categoryBalancesExcludesScheduled() async throws {
-    let backend = InMemoryBackend()
-
+  @Test(
+    "fetchCategoryBalances excludes scheduled transactions",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func categoryBalancesExcludesScheduled(backend: any BackendProvider) async throws {
     let account = Account(
       id: UUID(),
       name: "Test Account",
@@ -427,10 +456,13 @@ struct AnalysisRepositoryContractTests {
     #expect(balances[cat.id] == MonetaryAmount(cents: -100000, currency: .defaultTestCurrency))
   }
 
-  @Test("fetchCategoryBalances filters by transaction type")
-  func categoryBalancesFiltersByType() async throws {
-    let backend = InMemoryBackend()
-
+  @Test(
+    "fetchCategoryBalances filters by transaction type",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func categoryBalancesFiltersByType(backend: any BackendProvider) async throws {
     let account = Account(
       id: UUID(),
       name: "Test Account",
@@ -473,7 +505,8 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Only income counted
-    #expect(incomeBalances[cat.id] == MonetaryAmount(cents: 500000, currency: .defaultTestCurrency))
+    #expect(
+      incomeBalances[cat.id] == MonetaryAmount(cents: 500000, currency: .defaultTestCurrency))
 
     let expenseBalances = try await backend.analysis.fetchCategoryBalances(
       dateRange: dateRange,
@@ -482,13 +515,17 @@ struct AnalysisRepositoryContractTests {
     )
 
     // Only expense counted
-    #expect(expenseBalances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultTestCurrency))
+    #expect(
+      expenseBalances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultTestCurrency))
   }
 
-  @Test("fetchCategoryBalances respects date range")
-  func categoryBalancesRespectsDateRange() async throws {
-    let backend = InMemoryBackend()
-
+  @Test(
+    "fetchCategoryBalances respects date range",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func categoryBalancesRespectsDateRange(backend: any BackendProvider) async throws {
     let account = Account(
       id: UUID(),
       name: "Test Account",
@@ -535,10 +572,13 @@ struct AnalysisRepositoryContractTests {
     #expect(balances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultTestCurrency))
   }
 
-  @Test("fetchCategoryBalances applies additional filters")
-  func categoryBalancesAppliesFilters() async throws {
-    let backend = InMemoryBackend()
-
+  @Test(
+    "fetchCategoryBalances applies additional filters",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func categoryBalancesAppliesFilters(backend: any BackendProvider) async throws {
     let account1 = Account(
       id: UUID(),
       name: "Checking",
@@ -592,10 +632,13 @@ struct AnalysisRepositoryContractTests {
     #expect(balances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultTestCurrency))
   }
 
-  @Test("fetchCategoryBalances excludes transactions without category")
-  func categoryBalancesRequiresCategory() async throws {
-    let backend = InMemoryBackend()
-
+  @Test(
+    "fetchCategoryBalances excludes transactions without category",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func categoryBalancesRequiresCategory(backend: any BackendProvider) async throws {
     let account = Account(
       id: UUID(),
       name: "Test Account",
@@ -641,10 +684,13 @@ struct AnalysisRepositoryContractTests {
     #expect(balances[cat.id] == MonetaryAmount(cents: -5000, currency: .defaultTestCurrency))
   }
 
-  @Test("fetchCategoryBalances handles empty result")
-  func categoryBalancesEmptyResult() async throws {
-    let backend = InMemoryBackend()
-
+  @Test(
+    "fetchCategoryBalances handles empty result",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func categoryBalancesEmptyResult(backend: any BackendProvider) async throws {
     let calendar = Calendar.current
     let today = calendar.startOfDay(for: Date())
     let dateRange = today...today
@@ -656,5 +702,36 @@ struct AnalysisRepositoryContractTests {
     )
 
     #expect(balances.isEmpty)
+  }
+}
+
+// MARK: - CloudKit Test Backend
+
+/// A BackendProvider that uses CloudKit repositories backed by an in-memory SwiftData container.
+private struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
+  let auth: any AuthProvider
+  let accounts: any AccountRepository
+  let transactions: any TransactionRepository
+  let categories: any CategoryRepository
+  let earmarks: any EarmarkRepository
+  let analysis: any AnalysisRepository
+  let investments: any InvestmentRepository
+
+  init() {
+    let container = try! TestModelContainer.create()
+    let profileId = UUID()
+    let currency = Currency.defaultTestCurrency
+    self.auth = InMemoryAuthProvider()
+    self.accounts = CloudKitAccountRepository(
+      modelContainer: container, profileId: profileId, currency: currency)
+    self.transactions = CloudKitTransactionRepository(
+      modelContainer: container, profileId: profileId, currency: currency)
+    self.categories = CloudKitCategoryRepository(
+      modelContainer: container, profileId: profileId)
+    self.earmarks = CloudKitEarmarkRepository(
+      modelContainer: container, profileId: profileId, currency: currency)
+    self.analysis = CloudKitAnalysisRepository(
+      modelContainer: container, profileId: profileId, currency: currency)
+    self.investments = InMemoryInvestmentRepository()
   }
 }
