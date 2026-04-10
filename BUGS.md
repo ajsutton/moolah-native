@@ -25,10 +25,11 @@
 - **Platform:** iOS
 - **Description:** Reports use a side-by-side layout that is too wide for the iPhone screen. Should use a stacked layout instead.
 
-## General: Editing transaction drops fields, shows as earmark-only in web
+## General: Editing transaction causes earmark-only display in web UI
 
 - **Platform:** All
-- **Description:** Editing a transaction in moolah-native causes it to appear as an earmark-only transaction in the web view. The edit is likely dropping important fields that aren't being preserved in the update payload.
+- **Description:** Editing a transaction in moolah-native causes the web UI's edit panel to show only earmark fields. Root cause: Swift's `UUID.uuidString` produces uppercase UUIDs, overwriting the server's lowercase UUIDs in the database. The web UI's `EditTransaction.vue` does a case-sensitive account lookup that fails on the uppercase ID, making `isEarmarkAccount` return true.
+- **Plan:** `plans/2026-04-10-transaction-edit-uuid-fix.md`
 
 ## General: No UI to edit profile properties
 

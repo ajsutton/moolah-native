@@ -115,6 +115,35 @@ struct EarmarkRepositoryContractTests {
       try await repository.setBudget(earmarkId: UUID(), categoryId: UUID(), amount: 10000)
     }
   }
+
+  @Test(
+    "setBudget twice updates existing entry, not creates duplicate",
+    arguments: [
+      InMemoryEarmarkRepository(initialEarmarks: [
+        Earmark(name: "Savings")
+      ]) as any EarmarkRepository,
+      makeCloudKitEarmarkRepository(initialEarmarks: [
+        Earmark(name: "Savings")
+      ]) as any EarmarkRepository,
+    ])
+  func testBudgetUpsertSemantics(repository: any EarmarkRepository) async throws {
+    let earmarks = try await repository.fetchAll()
+    let earmarkId = earmarks[0].id
+    let categoryId = UUID()
+
+    // Set budget first time
+    try await repository.setBudget(earmarkId: earmarkId, categoryId: categoryId, amount: 10000)
+
+    // Set budget again with different amount (should update, not duplicate)
+    try await repository.setBudget(earmarkId: earmarkId, categoryId: categoryId, amount: 25000)
+
+    let budget = try await repository.fetchBudget(earmarkId: earmarkId)
+
+    // Should have exactly one entry for this category, not two
+    let entries = budget.filter { $0.categoryId == categoryId }
+    #expect(entries.count == 1, "setBudget should update, not create duplicate")
+    #expect(entries[0].amount.cents == 25000, "Amount should reflect the latest setBudget call")
+  }
 }
 
 private func makeCloudKitEarmarkRepository(

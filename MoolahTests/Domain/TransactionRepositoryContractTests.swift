@@ -212,6 +212,29 @@ struct TransactionRepositoryContractTests {
     #expect(page.transactions.isEmpty)
     #expect(page.priorBalance.cents == 0)
   }
+
+  @Test(
+    "transactions are sorted by date descending",
+    arguments: [
+      InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
+    ])
+  func testTransactionsSortedByDateDesc(repository: any TransactionRepository) async throws {
+    let page = try await repository.fetch(
+      filter: TransactionFilter(),
+      page: 0,
+      pageSize: 50
+    )
+
+    for i in 0..<(page.transactions.count - 1) {
+      #expect(
+        page.transactions[i].date >= page.transactions[i + 1].date,
+        "Transactions should be sorted by date descending"
+      )
+    }
+  }
 }
 
 // Helper function to create test transactions with various attributes

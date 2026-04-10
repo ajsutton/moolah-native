@@ -1090,6 +1090,56 @@ struct AnalysisRepositoryContractTests {
 
     #expect(balances.isEmpty)
   }
+
+  @Test(
+    "fetchExpenseBreakdown returns months in descending order",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func expenseBreakdownSortOrder(backend: any BackendProvider) async throws {
+    let account = Account(
+      id: UUID(),
+      name: "Test Account",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let category = Category(id: UUID(), name: "Food")
+    _ = try await backend.categories.create(category)
+
+    let calendar = Calendar.current
+    let month1 = calendar.date(from: DateComponents(year: 2025, month: 1, day: 15))!
+    let month2 = calendar.date(from: DateComponents(year: 2025, month: 2, day: 15))!
+    let month3 = calendar.date(from: DateComponents(year: 2025, month: 3, day: 15))!
+
+    for date in [month1, month2, month3] {
+      _ = try await backend.transactions.create(
+        Transaction(
+          type: .expense,
+          date: date,
+          accountId: account.id,
+          amount: MonetaryAmount(cents: -100, currency: .defaultTestCurrency),
+          payee: "Store",
+          categoryId: category.id
+        ))
+    }
+
+    let breakdown = try await backend.analysis.fetchExpenseBreakdown(monthEnd: 25, after: nil)
+
+    let months = breakdown.map(\.month)
+    let uniqueMonths = months.reduce(into: [String]()) { result, month in
+      if !result.contains(month) { result.append(month) }
+    }
+
+    for i in 0..<(uniqueMonths.count - 1) {
+      #expect(
+        uniqueMonths[i] > uniqueMonths[i + 1],
+        "Expense breakdown months should be in descending order"
+      )
+    }
+  }
 }
 
 // MARK: - CloudKit Test Backend

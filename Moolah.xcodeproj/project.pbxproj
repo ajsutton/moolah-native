@@ -466,6 +466,8 @@
 		4C85F9D469AB0B735DF3A5BD /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		4CA48181968E160CE8E9302B /* Moolah_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Moolah_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4D57E97531288FB84806CC14 /* UpcomingTransactionsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingTransactionsCard.swift; sourceTree = "<group>"; };
+		50768C9A3FEEF3E22890E94D /* ICLOUD_TEST_GAPS_PLAN.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ICLOUD_TEST_GAPS_PLAN.md; sourceTree = "<group>"; };
+		50A6E2712EDE3F8B9F03C56F /* 2026-04-10-transaction-edit-uuid-fix.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "2026-04-10-transaction-edit-uuid-fix.md"; sourceTree = "<group>"; };
 		517AF627964C57FE79949889 /* ProfileSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSession.swift; sourceTree = "<group>"; };
 		527DDFE1173DAE21E3258CCA /* BudgetLineItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetLineItem.swift; sourceTree = "<group>"; };
 		529D595B13537E6FFC99FFD9 /* ExpenseBreakdownCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseBreakdownCard.swift; sourceTree = "<group>"; };
@@ -1183,6 +1185,7 @@
 		DD947D16BA2DD6B22D20A29B /* plans */ = {
 			isa = PBXGroup;
 			children = (
+				50A6E2712EDE3F8B9F03C56F /* 2026-04-10-transaction-edit-uuid-fix.md */,
 				9F6C745ED28F1287BF11326D /* autocomplete-combobox-guide.md */,
 				38987A1299FD9BA39CF7FA09 /* CATEGORY_AUTOCOMPLETE_DESIGN.md */,
 				63D96425DA29E66CFE1C5211 /* CATEGORY_AUTOCOMPLETE_PLAN.md */,
@@ -1195,6 +1198,7 @@
 				92FE7991681A83E18541246E /* ICLOUD_EARMARKS_PLAN.md */,
 				DB3DAA171BBB020A5296A28A /* ICLOUD_MIGRATION_PLAN.md */,
 				ACEAB4909E10E7576152EBC3 /* ICLOUD_SCHEDULED_TRANSACTIONS_PLAN.md */,
+				50768C9A3FEEF3E22890E94D /* ICLOUD_TEST_GAPS_PLAN.md */,
 				E1AF39DFC43BDB21093C9FB2 /* ICLOUD_TEST_GAPS.md */,
 				102ABC8112DFB7C9EC019E2C /* ICLOUD_TRANSACTIONS_PLAN.md */,
 				0F826A72684F29AD76D86D75 /* completed */,
