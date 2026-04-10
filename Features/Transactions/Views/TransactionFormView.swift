@@ -139,7 +139,7 @@ struct TransactionFormView: View {
           }
         }
       }
-      .categoryPickerOverlay(state: categoryPickerState)
+      .categoryPickerOverlay(state: categoryPickerState, selection: $categoryId)
       .navigationTitle(title)
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

@@ -138,7 +138,7 @@ struct TransactionDetailView: View {
         }
       }
     }
-    .categoryPickerOverlay(state: categoryPickerState)
+    .categoryPickerOverlay(state: categoryPickerState, selection: $categoryId)
     .navigationTitle("Transaction Details")
     #if os(iOS)
       .navigationBarTitleDisplayMode(.inline)

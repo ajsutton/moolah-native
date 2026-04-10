@@ -16,13 +16,6 @@ final class CategoryPickerState {
   var highlightedIndex: Int?
   var categories: Categories = Categories(from: [])
 
-  /// Set by `select()` when the user picks from the dropdown. The view reads and clears this.
-  var pendingSelection: SelectionChange?
-
-  struct SelectionChange {
-    let id: UUID?
-  }
-
   var allEntries: [Categories.FlatEntry] {
     categories.flattenedByPath()
   }
@@ -57,25 +50,20 @@ final class CategoryPickerState {
     highlightedIndex = nil
   }
 
-  func select(_ id: UUID?) {
-    pendingSelection = SelectionChange(id: id)
-    close()
-  }
-
-  func acceptHighlighted(at index: Int) {
+  func acceptHighlighted(at index: Int) -> UUID? {
     if index == 0 {
-      select(nil)
+      return nil
     } else {
       let entryIndex = index - 1
-      guard entryIndex >= 0 && entryIndex < visibleEntries.count else { return }
-      select(visibleEntries[entryIndex].category.id)
+      guard entryIndex >= 0 && entryIndex < visibleEntries.count else { return nil }
+      return visibleEntries[entryIndex].category.id
     }
   }
 }
 
 /// A category selection field with autocomplete search and browse-all support.
 ///
-/// Place this inside a Form. Add `.categoryPickerOverlay(state:)` on the Form
+/// Place this inside a Form. Add `.categoryPickerOverlay(state:selection:)` on the Form
 /// so the dropdown renders above form content.
 struct CategoryPicker: View {
   let categories: Categories
@@ -125,7 +113,8 @@ struct CategoryPicker: View {
             }
             .onKeyPress(.return) {
               guard let index = state.highlightedIndex else { return .ignored }
-              state.acceptHighlighted(at: index)
+              selection = state.acceptHighlighted(at: index)
+              state.close()
               return .handled
             }
             .onKeyPress(.escape) {
@@ -149,19 +138,15 @@ struct CategoryPicker: View {
           .accessibilityHint("Tap to change category")
       }
     }
-    .onChange(of: state.pendingSelection?.id) { _, newValue in
-      guard state.pendingSelection != nil else { return }
-      selection = newValue
-      state.pendingSelection = nil
-    }
   }
 }
 
 // MARK: - Form Overlay Modifier
 
-/// Adds a category picker dropdown overlay to a Form. Use with `CategoryPickerState`.
+/// Adds a category picker dropdown overlay to a Form.
 struct CategoryPickerOverlayModifier: ViewModifier {
   @Bindable var state: CategoryPickerState
+  @Binding var selection: UUID?
 
   func body(content: Content) -> some View {
     content
@@ -173,8 +158,14 @@ struct CategoryPickerOverlayModifier: ViewModifier {
               entries: state.visibleEntries,
               searchText: state.searchText,
               highlightedIndex: $state.highlightedIndex,
-              onSelectNone: { state.select(nil) },
-              onSelect: { entry in state.select(entry.category.id) }
+              onSelectNone: {
+                selection = nil
+                state.close()
+              },
+              onSelect: { entry in
+                selection = entry.category.id
+                state.close()
+              }
             )
             .frame(width: rect.width)
             .offset(x: rect.minX, y: rect.maxY + 4)
@@ -185,8 +176,8 @@ struct CategoryPickerOverlayModifier: ViewModifier {
 }
 
 extension View {
-  func categoryPickerOverlay(state: CategoryPickerState) -> some View {
-    modifier(CategoryPickerOverlayModifier(state: state))
+  func categoryPickerOverlay(state: CategoryPickerState, selection: Binding<UUID?>) -> some View {
+    modifier(CategoryPickerOverlayModifier(state: state, selection: selection))
   }
 }
 
@@ -354,7 +345,7 @@ private struct CategoryDropdownContent: View {
         )
       }
       .formStyle(.grouped)
-      .categoryPickerOverlay(state: pickerState)
+      .categoryPickerOverlay(state: pickerState, selection: $selection)
       .frame(width: 400, height: 500)
       .padding()
     }

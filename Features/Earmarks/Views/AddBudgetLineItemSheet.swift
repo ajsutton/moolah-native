@@ -30,7 +30,7 @@ struct AddBudgetLineItemSheet: View {
         }
       }
       .formStyle(.grouped)
-      .categoryPickerOverlay(state: categoryPickerState)
+      .categoryPickerOverlay(state: categoryPickerState, selection: $selectedCategoryId)
       .navigationTitle("Add Budget Item")
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
