@@ -79,6 +79,14 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
   }
 
   func create(_ transaction: Transaction) async throws -> Transaction {
+    if transaction.type == .transfer {
+      guard transaction.toAccountId != nil else {
+        throw BackendError.validationFailed("Transfer must have a destination account")
+      }
+      guard transaction.toAccountId != transaction.accountId else {
+        throw BackendError.validationFailed("Cannot transfer to the same account")
+      }
+    }
     let record = TransactionRecord.from(transaction, profileId: profileId)
     try await MainActor.run {
       context.insert(record)

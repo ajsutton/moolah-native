@@ -286,6 +286,49 @@ struct TransactionRepositoryContractTests {
   }
 
   @Test(
+    "transfer requires toAccountId",
+    arguments: [
+      InMemoryTransactionRepository() as any TransactionRepository,
+      makeCloudKitTransactionRepository() as any TransactionRepository,
+    ])
+  func testTransferRequiresToAccountId(repository: any TransactionRepository) async throws {
+    let transfer = Transaction(
+      type: .transfer,
+      date: Date(),
+      accountId: UUID(),
+      toAccountId: nil,
+      amount: MonetaryAmount(cents: -500, currency: .defaultTestCurrency),
+      payee: "Transfer"
+    )
+
+    await #expect(throws: BackendError.self) {
+      _ = try await repository.create(transfer)
+    }
+  }
+
+  @Test(
+    "transfer rejects same-account transfer",
+    arguments: [
+      InMemoryTransactionRepository() as any TransactionRepository,
+      makeCloudKitTransactionRepository() as any TransactionRepository,
+    ])
+  func testTransferRejectsSameAccount(repository: any TransactionRepository) async throws {
+    let accountId = UUID()
+    let transfer = Transaction(
+      type: .transfer,
+      date: Date(),
+      accountId: accountId,
+      toAccountId: accountId,
+      amount: MonetaryAmount(cents: -500, currency: .defaultTestCurrency),
+      payee: "Transfer"
+    )
+
+    await #expect(throws: BackendError.self) {
+      _ = try await repository.create(transfer)
+    }
+  }
+
+  @Test(
     "transactions are sorted by date descending",
     arguments: [
       InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
