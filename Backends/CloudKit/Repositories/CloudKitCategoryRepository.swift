@@ -75,6 +75,16 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
         child.parentId = replacementId
       }
 
+      // Update transactions that reference this category
+      let deletedId = id
+      let txnDescriptor = FetchDescriptor<TransactionRecord>(
+        predicate: #Predicate { $0.categoryId == deletedId }
+      )
+      let affectedTxns = try context.fetch(txnDescriptor)
+      for txn in affectedTxns {
+        txn.categoryId = replacementId
+      }
+
       context.delete(record)
       try context.save()
     }

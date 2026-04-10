@@ -2,9 +2,14 @@ import Foundation
 
 actor InMemoryCategoryRepository: CategoryRepository {
   private var categories: [UUID: Category]
+  private let transactionRepository: InMemoryTransactionRepository?
 
-  init(initialCategories: [Category] = []) {
+  init(
+    initialCategories: [Category] = [],
+    transactionRepository: InMemoryTransactionRepository? = nil
+  ) {
     self.categories = Dictionary(uniqueKeysWithValues: initialCategories.map { ($0.id, $0) })
+    self.transactionRepository = transactionRepository
   }
 
   func fetchAll() async throws -> [Category] {
@@ -34,6 +39,9 @@ actor InMemoryCategoryRepository: CategoryRepository {
       child.parentId = replacementId
       categories[childId] = child
     }
+
+    // Update transactions that reference this category
+    await transactionRepository?.replaceCategoryId(id, with: replacementId)
 
     // Remove the category
     categories.removeValue(forKey: id)

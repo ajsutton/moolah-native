@@ -139,6 +139,74 @@ struct CategoryRepositoryContractTests {
       try await repository.delete(id: UUID(), withReplacement: nil)
     }
   }
+
+  @Test(
+    "deleting category nulls categoryId on transactions",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitCategoryTestBackend() as any BackendProvider,
+    ])
+  func testDeleteCategoryCascadesToTransactions(backend: any BackendProvider) async throws {
+    let account = Account(
+      id: UUID(),
+      name: "Test Account",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let category = Category(id: UUID(), name: "Groceries")
+    _ = try await backend.categories.create(category)
+
+    let txn = Transaction(
+      type: .expense,
+      date: Date(),
+      accountId: account.id,
+      amount: MonetaryAmount(cents: -500, currency: .defaultTestCurrency),
+      payee: "Store",
+      categoryId: category.id
+    )
+    let created = try await backend.transactions.create(txn)
+
+    try await backend.categories.delete(id: category.id, withReplacement: nil)
+
+    let page = try await backend.transactions.fetch(
+      filter: TransactionFilter(),
+      page: 0,
+      pageSize: 50
+    )
+    let updated = page.transactions.first { $0.id == created.id }
+    #expect(updated != nil, "Transaction should still exist")
+    #expect(updated?.categoryId == nil, "categoryId should be nulled after category deletion")
+  }
+}
+
+private struct CloudKitCategoryTestBackend: BackendProvider, @unchecked Sendable {
+  let auth: any AuthProvider
+  let accounts: any AccountRepository
+  let transactions: any TransactionRepository
+  let categories: any CategoryRepository
+  let earmarks: any EarmarkRepository
+  let analysis: any AnalysisRepository
+  let investments: any InvestmentRepository
+
+  init() {
+    let container = try! TestModelContainer.create()
+    let profileId = UUID()
+    let currency = Currency.defaultTestCurrency
+    self.auth = InMemoryAuthProvider()
+    self.accounts = CloudKitAccountRepository(
+      modelContainer: container, profileId: profileId, currency: currency)
+    self.transactions = CloudKitTransactionRepository(
+      modelContainer: container, profileId: profileId, currency: currency)
+    self.categories = CloudKitCategoryRepository(
+      modelContainer: container, profileId: profileId)
+    self.earmarks = CloudKitEarmarkRepository(
+      modelContainer: container, profileId: profileId, currency: currency)
+    self.analysis = CloudKitAnalysisRepository(
+      modelContainer: container, profileId: profileId, currency: currency)
+    self.investments = InMemoryInvestmentRepository()
+  }
 }
 
 private func makeRepositoryWithHierarchy() -> InMemoryCategoryRepository {

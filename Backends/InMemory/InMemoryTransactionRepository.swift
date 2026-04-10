@@ -113,6 +113,13 @@ actor InMemoryTransactionRepository: TransactionRepository {
     return counts.sorted { $0.value > $1.value }.map(\.key)
   }
 
+  func replaceCategoryId(_ oldId: UUID, with newId: UUID?) {
+    for (txnId, var txn) in transactions where txn.categoryId == oldId {
+      txn.categoryId = newId
+      transactions[txnId] = txn
+    }
+  }
+
   // For test setup
   func setTransactions(_ transactions: [Transaction]) {
     self.transactions = Dictionary(uniqueKeysWithValues: transactions.map { ($0.id, $0) })
