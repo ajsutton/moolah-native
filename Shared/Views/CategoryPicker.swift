@@ -17,9 +17,6 @@ final class CategoryPickerState {
   var categories: Categories = Categories(from: [])
   var selection: UUID?
 
-  // Callback set by the CategoryPicker to propagate selection back to the binding
-  var onSelectionChanged: ((UUID?) -> Void)?
-
   var allEntries: [Categories.FlatEntry] {
     categories.flattenedByPath()
   }
@@ -57,7 +54,6 @@ final class CategoryPickerState {
 
   func select(_ id: UUID?) {
     selection = id
-    onSelectionChanged?(id)
     close()
   }
 
@@ -134,9 +130,6 @@ struct CategoryPicker: View {
           #endif
           .onAppear {
             isFieldFocused = true
-            state.onSelectionChanged = { [self] newValue in
-              self.selection = newValue
-            }
           }
       } else {
         Text(selectedLabel)
@@ -150,6 +143,9 @@ struct CategoryPicker: View {
           .accessibilityAddTraits(.isButton)
           .accessibilityHint("Tap to change category")
       }
+    }
+    .onChange(of: state.selection) { _, newValue in
+      selection = newValue
     }
   }
 }
