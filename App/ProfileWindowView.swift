@@ -17,7 +17,6 @@
           let session = sessionManager.session(for: profile)
           SessionRootView(session: session)
             .environment(profileStore)
-            .navigationTitle(profile.label)
             .onChange(of: session.authStore.state) { _, newState in
               cacheUserNameIfNeeded(newState, session: session)
             }
@@ -52,4 +51,5 @@
       }
     }
   }
+
 #endif

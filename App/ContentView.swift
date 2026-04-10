@@ -22,12 +22,14 @@ struct ContentView: View {
           await earmarkStore.load()
         }
         .toolbar {
-          ToolbarItem(placement: .automatic) {
-            if case .signedIn(let user) = authStore.state {
-              UserMenuView(user: user)
-                .environment(authStore)
+          #if os(iOS)
+            ToolbarItem(placement: .automatic) {
+              if case .signedIn(let user) = authStore.state {
+                UserMenuView(user: user)
+                  .environment(authStore)
+              }
             }
-          }
+          #endif
         }
     } detail: {
       switch selection {

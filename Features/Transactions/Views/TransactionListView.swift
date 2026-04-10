@@ -159,7 +159,7 @@ struct TransactionListView: View {
     #else
       .listStyle(.plain)
     #endif
-    .navigationTitle(title)
+    .profileNavigationTitle(title)
     .toolbar {
       ToolbarItem(placement: .automatic) {
         Button {

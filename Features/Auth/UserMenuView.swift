@@ -23,21 +23,11 @@ struct UserMenuView: View {
 
   #if os(macOS)
     private var macOSUserLabel: some View {
-      HStack(spacing: 6) {
-        avatarView
-        VStack(alignment: .leading, spacing: 0) {
-          Text(user.givenName)
-            .font(.subheadline)
-          Text(session.profile.label)
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-      }
-      .frame(height: avatarSize)
-      .accessibilityElement(children: .combine)
-      .accessibilityLabel(
-        "\(user.givenName) \(user.familyName), \(session.profile.label)"
-      )
+      Text(session.profile.label)
+        .font(.headline)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: avatarSize)
+        .accessibilityLabel(session.profile.label)
     }
   #endif
 

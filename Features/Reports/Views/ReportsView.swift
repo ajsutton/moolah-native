@@ -65,7 +65,7 @@ struct ReportsView: View {
           }
         }
       }
-      .navigationTitle("Reports")
+      .profileNavigationTitle("Reports")
       .navigationDestination(for: CategoryDrillDown.self) { drillDown in
         let categoryName = categories.by(id: drillDown.categoryId)?.name ?? "Category"
         TransactionListView(

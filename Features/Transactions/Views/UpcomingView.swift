@@ -133,7 +133,7 @@ struct UpcomingView: View {
         }
       }
     }
-    .navigationTitle("Upcoming")
+    .profileNavigationTitle("Upcoming")
     .task {
       await transactionStore.load(filter: TransactionFilter(scheduled: true))
     }

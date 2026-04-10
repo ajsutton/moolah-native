@@ -48,7 +48,7 @@ struct EarmarkDetailView: View {
         )
       }
     }
-    .navigationTitle(earmark.name)
+    .profileNavigationTitle(earmark.name)
     .toolbar {
       ToolbarItem(placement: .primaryAction) {
         Button {

@@ -50,7 +50,7 @@ struct InvestmentAccountView: View {
         transactionStore: transactionStore
       )
     }
-    .navigationTitle(account.name)
+    .profileNavigationTitle(account.name)
     .sheet(isPresented: $showingAddValue) {
       AddInvestmentValueView(
         accountId: account.id, currency: account.balance.currency, store: investmentStore)

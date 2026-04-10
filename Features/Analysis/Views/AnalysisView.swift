@@ -29,7 +29,7 @@ struct AnalysisView: View {
         contentView(store: store)
       }
     }
-    .navigationTitle("Analysis")
+    .profileNavigationTitle("Analysis")
     .toolbar {
       ToolbarItem(placement: .primaryAction) {
         Menu {

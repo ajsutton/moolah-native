@@ -97,7 +97,7 @@ struct CategoriesView: View {
     #else
       .listStyle(.plain)
     #endif
-    .navigationTitle("Categories")
+    .profileNavigationTitle("Categories")
     .toolbar {
       if categoryStore.isLoading && !categoryStore.categories.roots.isEmpty {
         ToolbarItem(placement: .automatic) {
