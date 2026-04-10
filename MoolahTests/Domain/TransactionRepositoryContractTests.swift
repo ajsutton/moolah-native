@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 
 @testable import Moolah
@@ -6,11 +7,14 @@ import Testing
 @Suite("TransactionRepository Contract")
 struct TransactionRepositoryContractTests {
   @Test(
-    "InMemoryTransactionRepository - filters by date range",
+    "filters by date range",
     arguments: [
       InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
     ])
-  func testFiltersByDateRange(repository: InMemoryTransactionRepository) async throws {
+  func testFiltersByDateRange(repository: any TransactionRepository) async throws {
     let calendar = Calendar.current
     let middleDate = calendar.date(from: DateComponents(year: 2024, month: 6, day: 15))!
     let startDate = calendar.date(byAdding: .day, value: -30, to: middleDate)!
@@ -30,11 +34,14 @@ struct TransactionRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryTransactionRepository - filters by category IDs",
+    "filters by category IDs",
     arguments: [
       InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
     ])
-  func testFiltersByCategoryIds(repository: InMemoryTransactionRepository) async throws {
+  func testFiltersByCategoryIds(repository: any TransactionRepository) async throws {
     let transactions = makeTestTransactions()
     let groceryCategory = transactions[0].categoryId!
     let categoryIds: Set<UUID> = [groceryCategory]
@@ -52,11 +59,14 @@ struct TransactionRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryTransactionRepository - filters by payee (case-insensitive contains)",
+    "filters by payee (case-insensitive contains)",
     arguments: [
       InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
     ])
-  func testFiltersByPayee(repository: InMemoryTransactionRepository) async throws {
+  func testFiltersByPayee(repository: any TransactionRepository) async throws {
     let page = try await repository.fetch(
       filter: TransactionFilter(payee: "wool"),
       page: 0,
@@ -72,11 +82,14 @@ struct TransactionRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryTransactionRepository - combines multiple filters",
+    "combines multiple filters",
     arguments: [
       InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
     ])
-  func testCombinesMultipleFilters(repository: InMemoryTransactionRepository) async throws {
+  func testCombinesMultipleFilters(repository: any TransactionRepository) async throws {
     let transactions = makeTestTransactions()
     let groceryCategory = transactions[0].categoryId!
     let calendar = Calendar.current
@@ -104,11 +117,14 @@ struct TransactionRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryTransactionRepository - returns empty when no matches",
+    "returns empty when no matches",
     arguments: [
       InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
     ])
-  func testReturnsEmptyWhenNoMatches(repository: InMemoryTransactionRepository) async throws {
+  func testReturnsEmptyWhenNoMatches(repository: any TransactionRepository) async throws {
     let page = try await repository.fetch(
       filter: TransactionFilter(payee: "NonexistentPayee"),
       page: 0,
@@ -119,11 +135,14 @@ struct TransactionRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryTransactionRepository - clearing filter reloads all",
+    "clearing filter reloads all",
     arguments: [
       InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
     ])
-  func testClearingFilterReloadsAll(repository: InMemoryTransactionRepository) async throws {
+  func testClearingFilterReloadsAll(repository: any TransactionRepository) async throws {
     // First apply a filter
     let filteredPage = try await repository.fetch(
       filter: TransactionFilter(payee: "Woolworths"),
@@ -199,4 +218,24 @@ private func makeTestTransactions() -> [Transaction] {
   ]
 
   return transactions
+}
+
+private func makeCloudKitTransactionRepository(
+  initialTransactions: [Transaction] = [],
+  currency: Currency = .defaultTestCurrency
+) -> CloudKitTransactionRepository {
+  let container = try! TestModelContainer.create()
+  let profileId = UUID()
+  let repo = CloudKitTransactionRepository(
+    modelContainer: container, profileId: profileId, currency: currency)
+
+  if !initialTransactions.isEmpty {
+    let context = ModelContext(container)
+    for txn in initialTransactions {
+      context.insert(TransactionRecord.from(txn, profileId: profileId))
+    }
+    try! context.save()
+  }
+
+  return repo
 }
