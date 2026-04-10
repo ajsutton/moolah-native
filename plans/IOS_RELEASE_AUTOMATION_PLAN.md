@@ -1,0 +1,593 @@
+# iOS Release Automation Plan
+
+**Goal:** Automate the build, signing, and distribution pipeline for Moolah on iOS (App Store / TestFlight) and macOS (direct distribution / Mac App Store), starting from the current state of zero release infrastructure.
+
+**Current State:**
+- GitHub Actions CI runs tests and linting only (`.github/workflows/ci.yml`)
+- XcodeGen generates `Moolah.xcodeproj` from `project.yml`
+- Code signing is environment-variable driven but not configured for distribution
+- No Fastlane, no provisioning profiles, no App Store Connect integration
+- Version is hardcoded to `1.0` (build `1`) in `App/Info.plist`
+- Bundle ID: `com.moolah.app` (shared across iOS and macOS targets)
+
+---
+
+## Architecture Overview
+
+```
+Tag v1.2.0          GitHub Actions              App Store Connect
+    │                    │                            │
+    └──► release.yml ──► Fastlane ──► TestFlight ──► App Store
+              │              │
+              │         match (signing)
+              │         gym (archive)
+              │         pilot (upload)
+              │
+         XcodeGen generate
+```
+
+**Key decisions:**
+- **Fastlane** for build/sign/upload orchestration (industry standard, well-maintained)
+- **Fastlane Match** for code signing (git-encrypted certificate storage)
+- **App Store Connect API Key** for authentication (no passwords, no 2FA prompts)
+- **Git tags** trigger release builds (e.g., `v1.2.0`)
+- **Build numbers** auto-increment from App Store Connect (latest + 1)
+
+---
+
+## Phase 1: Apple Developer Account Setup (Manual, One-Time)
+
+These steps must be done manually in the Apple Developer portal and App Store Connect before any automation can work.
+
+- [ ] **1.1 — Enroll in Apple Developer Program** ($99/year) if not already enrolled
+- [ ] **1.2 — Register App IDs**
+  - `com.moolah.app` for iOS
+  - `com.moolah.app` for macOS (may share the same App ID if using universal purchase)
+- [ ] **1.3 — Create App Store Connect app record**
+  - Set app name, primary language, bundle ID, SKU
+  - Configure pricing (even if free)
+- [ ] **1.4 — Create App Store Connect API Key**
+  - Go to Users & Access → Integrations → App Store Connect API
+  - Create key with "App Manager" role
+  - Download the `.p8` file — it can only be downloaded once
+  - Note the Key ID and Issuer ID
+- [ ] **1.5 — Create a private git repo for Match certificates**
+  - e.g., `github.com/ajsutton/moolah-certificates` (private)
+  - This will store encrypted certificates and provisioning profiles
+
+---
+
+## Phase 2: Fastlane Setup
+
+### 2.1 — Install Fastlane
+
+- [ ] **Add `Gemfile`** to project root:
+
+```ruby
+source "https://rubygems.org"
+
+gem "fastlane"
+gem "xcode-install" # optional, for Xcode version management
+```
+
+- [ ] **Add to `.gitignore`:**
+
+```
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+vendor/bundle
+```
+
+### 2.2 — Fastlane Configuration Files
+
+- [ ] **Create `fastlane/Appfile`:**
+
+```ruby
+app_identifier("com.moolah.app")
+apple_id(ENV["APPLE_ID"])  # only needed for deliver, not for API key auth
+team_id(ENV["DEVELOPMENT_TEAM"])
+```
+
+- [ ] **Create `fastlane/Matchfile`:**
+
+```ruby
+git_url(ENV["MATCH_GIT_URL"])  # e.g., "https://github.com/ajsutton/moolah-certificates.git"
+
+storage_mode("git")
+
+type("appstore")  # default type
+
+app_identifier("com.moolah.app")
+team_id(ENV["DEVELOPMENT_TEAM"])
+
+# Use API key instead of Apple ID password
+api_key_path("fastlane/api_key.json")
+```
+
+- [ ] **Create `fastlane/api_key.json`** (gitignored, injected in CI from secrets):
+
+```json
+{
+  "key_id": "YOUR_KEY_ID",
+  "issuer_id": "YOUR_ISSUER_ID",
+  "key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+  "in_house": false
+}
+```
+
+Add `fastlane/api_key.json` to `.gitignore`.
+
+### 2.3 — Fastfile (Core Automation)
+
+- [ ] **Create `fastlane/Fastfile`:**
+
+```ruby
+default_platform(:ios)
+
+before_all do
+  # Regenerate Xcode project from project.yml
+  sh("cd .. && just generate")
+end
+
+# ─── iOS ────────────────────────────────────────────────────────
+
+platform :ios do
+  desc "Sync certificates and profiles for iOS"
+  lane :certificates do
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+
+    match(
+      type: "appstore",
+      app_identifier: "com.moolah.app",
+      api_key: api_key,
+      readonly: is_ci
+    )
+  end
+
+  desc "Build and upload iOS app to TestFlight"
+  lane :beta do
+    certificates
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+
+    # Auto-increment build number from App Store Connect
+    increment_build_number(
+      build_number: latest_testflight_build_number(api_key: api_key) + 1
+    )
+
+    build_app(
+      scheme: "Moolah-iOS",
+      export_method: "app-store",
+      output_directory: "./build",
+      output_name: "Moolah.ipa",
+      xcargs: "-allowProvisioningUpdates"
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  desc "Build and upload iOS app to App Store"
+  lane :release do
+    certificates
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+
+    increment_build_number(
+      build_number: latest_testflight_build_number(api_key: api_key) + 1
+    )
+
+    build_app(
+      scheme: "Moolah-iOS",
+      export_method: "app-store",
+      output_directory: "./build",
+      output_name: "Moolah.ipa"
+    )
+
+    upload_to_app_store(
+      api_key: api_key,
+      submit_for_review: false,  # manual review submission initially
+      automatic_release: false,
+      phased_release: true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+end
+
+# ─── macOS ──────────────────────────────────────────────────────
+
+platform :mac do
+  desc "Sync certificates and profiles for macOS"
+  lane :certificates do
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+
+    match(
+      type: "appstore",
+      platform: "macos",
+      app_identifier: "com.moolah.app",
+      api_key: api_key,
+      readonly: is_ci
+    )
+
+    match(
+      type: "developer_id",
+      platform: "macos",
+      app_identifier: "com.moolah.app",
+      api_key: api_key,
+      readonly: is_ci
+    )
+  end
+
+  desc "Build and notarize macOS app for direct distribution"
+  lane :beta do
+    certificates
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+
+    build_app(
+      scheme: "Moolah-macOS",
+      export_method: "developer-id",
+      output_directory: "./build",
+      output_name: "Moolah.app"
+    )
+
+    notarize(
+      package: "./build/Moolah.app",
+      api_key: api_key
+    )
+  end
+end
+```
+
+---
+
+## Phase 3: Project Configuration Changes
+
+### 3.1 — Versioning
+
+- [ ] **Switch to `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` build settings** instead of hardcoded `Info.plist` values. Update `project.yml`:
+
+```yaml
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"       # Semantic version (shown to users)
+    CURRENT_PROJECT_VERSION: "1"     # Build number (auto-incremented by Fastlane)
+```
+
+- [ ] **Update `App/Info.plist`** to use build setting variables:
+
+```xml
+<key>CFBundleShortVersionString</key>
+<string>$(MARKETING_VERSION)</string>
+<key>CFBundleVersion</key>
+<string>$(CURRENT_PROJECT_VERSION)</string>
+```
+
+### 3.2 — Signing Configuration for Distribution
+
+- [ ] **Update `project.yml`** to support both development and distribution signing:
+
+```yaml
+# The existing env-var approach works. Fastlane Match will set:
+#   CODE_SIGN_STYLE=Manual
+#   CODE_SIGN_IDENTITY="Apple Distribution"  (or "Developer ID Application" for macOS)
+#   PROVISIONING_PROFILE_SPECIFIER="match AppStore com.moolah.app"
+#   DEVELOPMENT_TEAM="<your-team-id>"
+```
+
+No changes needed — the current env-driven approach in `project.yml` is already compatible with Fastlane Match.
+
+### 3.3 — macOS Hardened Runtime
+
+- [ ] **Enable hardened runtime for macOS release builds.** Currently `ENABLE_HARDENED_RUNTIME: NO` in `project.yml`. Add a Release configuration override:
+
+```yaml
+Moolah_macOS:
+  settings:
+    configs:
+      Release:
+        ENABLE_HARDENED_RUNTIME: YES
+```
+
+Hardened runtime is required for macOS notarization and App Store submission.
+
+### 3.4 — Entitlements (if needed)
+
+- [ ] **Create `App/Moolah.entitlements`** if the app needs capabilities like Keychain sharing, network access, or App Sandbox (required for Mac App Store):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>
+```
+
+---
+
+## Phase 4: GitHub Actions Release Workflow
+
+### 4.1 — GitHub Secrets Configuration
+
+- [ ] **Add the following secrets** to the GitHub repository (Settings → Secrets → Actions):
+
+| Secret | Description |
+|--------|-------------|
+| `ASC_KEY_ID` | App Store Connect API Key ID |
+| `ASC_ISSUER_ID` | App Store Connect Issuer ID |
+| `ASC_KEY_CONTENT` | Base64-encoded `.p8` private key |
+| `MATCH_GIT_URL` | URL of the private certificates repo |
+| `MATCH_PASSWORD` | Passphrase to decrypt Match certificates |
+| `MATCH_GIT_BASIC_AUTHORIZATION` | Base64-encoded `username:PAT` for Match repo access |
+| `DEVELOPMENT_TEAM` | Apple Developer Team ID |
+
+### 4.2 — TestFlight Workflow (on tag push)
+
+- [ ] **Create `.github/workflows/testflight.yml`:**
+
+```yaml
+name: TestFlight
+
+on:
+  push:
+    tags:
+      - "v*"  # Trigger on version tags like v1.0.0, v1.2.3-beta.1
+
+jobs:
+  deploy:
+    name: Build & Upload to TestFlight
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install tools
+        run: brew install xcodegen just
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true  # caches gems from Gemfile.lock
+
+      - name: Set version from tag
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}   # Strip "v" prefix: v1.2.0 → 1.2.0
+          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Update marketing version
+        run: |
+          sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: \"$APP_VERSION\"/" project.yml
+
+      - name: Deploy to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          CODE_SIGN_STYLE: "Manual"
+        run: bundle exec fastlane ios beta
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Moolah-${{ env.APP_VERSION }}.ipa
+          path: build/Moolah.ipa
+```
+
+### 4.3 — App Store Release Workflow (manual trigger)
+
+- [ ] **Create `.github/workflows/release.yml`:**
+
+```yaml
+name: App Store Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g., 1.2.0)"
+        required: true
+        type: string
+      submit_for_review:
+        description: "Submit for App Store review after upload"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  release:
+    name: Build & Upload to App Store
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Install tools
+        run: brew install xcodegen just
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Update marketing version
+        run: |
+          sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: \"${{ inputs.version }}\"/" project.yml
+
+      - name: Deploy to App Store
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          CODE_SIGN_STYLE: "Manual"
+          FL_UPLOAD_TO_APP_STORE_SUBMIT_FOR_REVIEW: ${{ inputs.submit_for_review }}
+        run: bundle exec fastlane ios release
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Moolah-${{ inputs.version }}.ipa
+          path: build/Moolah.ipa
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: Moolah ${{ inputs.version }}
+          generate_release_notes: true
+          draft: true
+```
+
+---
+
+## Phase 5: Justfile Targets
+
+- [ ] **Add release-related targets** to `justfile`:
+
+```just
+# Sync code signing certificates (runs Match)
+certificates:
+    bundle exec fastlane ios certificates
+
+# Build and upload to TestFlight
+testflight: generate
+    bundle exec fastlane ios beta
+
+# Build and notarize macOS app for direct distribution
+notarize-mac: generate
+    bundle exec fastlane mac beta
+
+# Bump marketing version (usage: just bump-version 1.2.0)
+bump-version version:
+    sed -i '' 's/MARKETING_VERSION: .*/MARKETING_VERSION: "{{version}}"/' project.yml
+    just generate
+```
+
+---
+
+## Phase 6: Release Workflow Process
+
+### Releasing a New Version
+
+1. **Prepare:** Ensure `main` is green (CI passes, all tests pass)
+2. **Bump version:** `just bump-version 1.2.0` and commit
+3. **Tag:** `git tag v1.2.0 && git push origin v1.2.0`
+4. **Automatic:** GitHub Actions triggers `testflight.yml` → builds → uploads to TestFlight
+5. **Test:** QA / beta testers validate the TestFlight build
+6. **Ship:** Trigger `release.yml` workflow manually with the version number
+7. **Review:** App goes through Apple review (or auto-submits if configured)
+
+### Hotfix Process
+
+1. Branch from the release tag: `git checkout -b hotfix/1.2.1 v1.2.0`
+2. Fix, test, merge to `main`
+3. Tag `v1.2.1` and push — same automation kicks in
+
+---
+
+## Phase 7: Future Enhancements
+
+These are not required for the initial release pipeline but are valuable additions over time.
+
+- [ ] **7.1 — App Store metadata automation** — Use Fastlane `deliver` to manage screenshots, descriptions, keywords, and release notes from version-controlled files in `fastlane/metadata/`
+- [ ] **7.2 — Automated changelog** — Generate release notes from conventional commit messages or PR titles using `git-cliff` or GitHub's auto-generated release notes
+- [ ] **7.3 — Mac App Store distribution** — Add a separate Fastlane lane for Mac App Store submission (requires App Sandbox entitlements)
+- [ ] **7.4 — Phased rollout configuration** — Configure automatic phased rollout (1% → 2% → 5% → 10% → 20% → 50% → 100% over 7 days)
+- [ ] **7.5 — Build caching** — Cache DerivedData and SPM packages in GitHub Actions to speed up builds
+- [ ] **7.6 — Slack/Discord notifications** — Notify on successful TestFlight uploads or App Store review status changes
+- [ ] **7.7 — dSYM upload** — Upload debug symbols to a crash reporting service (Sentry, Firebase Crashlytics) as part of the release lane
+- [ ] **7.8 — Separate bundle IDs per platform** — If iOS and macOS need separate App Store listings, use `com.moolah.app.ios` and `com.moolah.app.macos`
+
+---
+
+## File Checklist
+
+New files to create:
+
+| File | Purpose |
+|------|---------|
+| `Gemfile` | Ruby dependencies (Fastlane) |
+| `fastlane/Appfile` | App identifier and team configuration |
+| `fastlane/Matchfile` | Match certificate sync configuration |
+| `fastlane/Fastfile` | Build, sign, and upload automation |
+| `.github/workflows/testflight.yml` | TestFlight deployment on tag push |
+| `.github/workflows/release.yml` | App Store deployment (manual trigger) |
+
+Files to modify:
+
+| File | Change |
+|------|--------|
+| `project.yml` | Add `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`, release-config overrides |
+| `App/Info.plist` | Replace hardcoded versions with build setting variables |
+| `justfile` | Add `certificates`, `testflight`, `notarize-mac`, `bump-version` targets |
+| `.gitignore` | Add Fastlane artifacts, `vendor/bundle`, `fastlane/api_key.json` |
+
+---
+
+## Security Considerations
+
+- **Never commit** the `.p8` API key file, certificates, or provisioning profiles to the main repo
+- **Match encrypts** all certificates and profiles with a passphrase before storing in the certificates repo
+- **API keys** are stored as GitHub Actions secrets, never in code
+- **The certificates repo** must be private and access-restricted
+- **Rotate the API key** if it is ever exposed
+- **Use `readonly: is_ci`** in Match to prevent CI from accidentally creating new certificates
+
+---
+
+## Cost & Dependencies
+
+| Item | Cost | Notes |
+|------|------|-------|
+| Apple Developer Program | $99/year | Required for App Store distribution |
+| GitHub Actions (macOS) | ~$0.08/min | macOS runners are 10x Linux pricing; budget ~$2-5 per release build |
+| Private certificates repo | Free | GitHub private repos are free |
+| Fastlane | Free | Open-source |
