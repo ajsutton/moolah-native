@@ -599,6 +599,7 @@
 		E0431C044B183CBD75A93A60 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		E074DFD4922A4E45699DF1EA /* AccountDailyBalanceDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountDailyBalanceDTO.swift; sourceTree = "<group>"; };
 		E0E7D532967ACF605512D332 /* MoolahApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoolahApp.swift; sourceTree = "<group>"; };
+		E1AF39DFC43BDB21093C9FB2 /* ICLOUD_TEST_GAPS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ICLOUD_TEST_GAPS.md; sourceTree = "<group>"; };
 		E2E5FF7059AFD2EE85A10124 /* CategoryBalanceTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryBalanceTable.swift; sourceTree = "<group>"; };
 		E344D186E5F99BD5ADA75594 /* ExpenseBreakdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseBreakdown.swift; sourceTree = "<group>"; };
 		E380721F3A50DFBF5E8C8584 /* MonthlyIncomeExpense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthlyIncomeExpense.swift; sourceTree = "<group>"; };
@@ -1194,6 +1195,7 @@
 				92FE7991681A83E18541246E /* ICLOUD_EARMARKS_PLAN.md */,
 				DB3DAA171BBB020A5296A28A /* ICLOUD_MIGRATION_PLAN.md */,
 				ACEAB4909E10E7576152EBC3 /* ICLOUD_SCHEDULED_TRANSACTIONS_PLAN.md */,
+				E1AF39DFC43BDB21093C9FB2 /* ICLOUD_TEST_GAPS.md */,
 				102ABC8112DFB7C9EC019E2C /* ICLOUD_TRANSACTIONS_PLAN.md */,
 				0F826A72684F29AD76D86D75 /* completed */,
 			);
@@ -1853,7 +1855,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.app;
+				PRODUCT_BUNDLE_IDENTIFIER = rocks.moolah.app;
 				PRODUCT_MODULE_NAME = Moolah;
 				PRODUCT_NAME = Moolah;
 				SDKROOT = macosx;
@@ -1936,7 +1938,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = rocks.moolah.tests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Moolah_iOS.app/Moolah_iOS";
@@ -2025,7 +2027,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = rocks.moolah.tests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Moolah_iOS.app/Moolah_iOS";
@@ -2047,7 +2049,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = rocks.moolah.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Moolah.app/Contents/MacOS/Moolah";
 			};
@@ -2063,7 +2065,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.app;
+				PRODUCT_BUNDLE_IDENTIFIER = rocks.moolah.app;
 				PRODUCT_MODULE_NAME = Moolah;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -2080,7 +2082,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.app;
+				PRODUCT_BUNDLE_IDENTIFIER = rocks.moolah.app;
 				PRODUCT_MODULE_NAME = Moolah;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -2102,7 +2104,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = rocks.moolah.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Moolah.app/Contents/MacOS/Moolah";
 			};
@@ -2119,7 +2121,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.moolah.app;
+				PRODUCT_BUNDLE_IDENTIFIER = rocks.moolah.app;
 				PRODUCT_MODULE_NAME = Moolah;
 				PRODUCT_NAME = Moolah;
 				SDKROOT = macosx;
