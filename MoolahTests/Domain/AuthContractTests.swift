@@ -54,4 +54,15 @@ struct AuthContractTests {
       #expect(InMemoryAuthProvider(requiresExplicitSignIn: false).requiresExplicitSignIn == false)
     }
   }
+
+  // MARK: - CloudKitAuthProvider
+
+  @Suite("CloudKitAuthProvider")
+  struct CloudKitTests {
+    @Test("CloudKitAuthProvider does not require explicit sign in")
+    func testCloudKitNoExplicitSignIn() {
+      let auth = CloudKitAuthProvider(profileLabel: "Test")
+      #expect(auth.requiresExplicitSignIn == false)
+    }
+  }
 }
