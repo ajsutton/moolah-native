@@ -31,6 +31,16 @@
 - **Description:** Editing a transaction in moolah-native causes the web UI's edit panel to show only earmark fields. Root cause: Swift's `UUID.uuidString` produces uppercase UUIDs, overwriting the server's lowercase UUIDs in the database. The web UI's `EditTransaction.vue` does a case-sensitive account lookup that fails on the uppercase ID, making `isEarmarkAccount` return true.
 - **Plan:** `plans/2026-04-10-transaction-edit-uuid-fix.md`
 
+## macOS: Sidebar account balance colors hard to read when selected but unfocused
+
+- **Platform:** macOS
+- **Description:** The lighter green and red balance colors in the sidebar are hard to read when an account row is selected but the sidebar is not focused (grey selection background instead of blue).
+
+## macOS: Payee autocomplete popup doesn't dismiss on tab
+
+- **Platform:** macOS
+- **Description:** When typing in the payee field, the autocomplete suggestion popup remains visible after tabbing to the next field. It should dismiss on focus loss, keeping whatever text has been typed.
+
 ## General: No UI to edit profile properties
 
 - **Platform:** All

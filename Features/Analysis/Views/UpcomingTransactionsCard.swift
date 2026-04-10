@@ -27,6 +27,9 @@ struct UpcomingTransactionsCard: View {
       .background(Color(uiColor: .systemBackground))
     #endif
     .cornerRadius(12)
+    #if os(macOS)
+      .frame(maxHeight: .infinity, alignment: .top)
+    #endif
   }
 
   private var emptyState: some View {
@@ -58,7 +61,11 @@ struct UpcomingTransactionsCard: View {
     #else
       .listStyle(.plain)
     #endif
-    .frame(height: 200)
+    #if os(macOS)
+      .frame(minHeight: 200)
+    #else
+      .frame(height: 200)
+    #endif
     .accessibilityLabel("List of upcoming and overdue transactions")
     .sheet(item: $selectedTransaction) { transaction in
       NavigationStack {

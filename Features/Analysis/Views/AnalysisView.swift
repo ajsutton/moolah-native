@@ -68,16 +68,26 @@ struct AnalysisView: View {
       // Net Worth Graph (full width)
       NetWorthGraphCard(balances: store.dailyBalances)
 
-      // Upcoming Transactions (full width)
-      UpcomingTransactionsCard(
-        accounts: accountStore.accounts,
-        categories: categoryStore.categories,
-        earmarks: earmarkStore.earmarks,
-        transactionStore: transactionStore
-      )
-
-      // Monthly Income & Expense (full width)
-      IncomeExpenseTableCard(data: store.incomeAndExpense)
+      // Upcoming Transactions & Monthly Income/Expense
+      #if os(macOS)
+        HStack(alignment: .top, spacing: 20) {
+          UpcomingTransactionsCard(
+            accounts: accountStore.accounts,
+            categories: categoryStore.categories,
+            earmarks: earmarkStore.earmarks,
+            transactionStore: transactionStore
+          )
+          IncomeExpenseTableCard(data: store.incomeAndExpense)
+        }
+      #else
+        UpcomingTransactionsCard(
+          accounts: accountStore.accounts,
+          categories: categoryStore.categories,
+          earmarks: earmarkStore.earmarks,
+          transactionStore: transactionStore
+        )
+        IncomeExpenseTableCard(data: store.incomeAndExpense)
+      #endif
 
       // Expense Breakdown (full width)
       ExpenseBreakdownCard(
