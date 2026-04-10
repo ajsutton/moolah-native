@@ -9,6 +9,7 @@ struct AddBudgetLineItemSheet: View {
   @State private var categoryText = ""
   @State private var showCategorySuggestions = false
   @State private var categoryHighlightedIndex: Int?
+  @FocusState private var categoryFieldFocused: Bool
   @Environment(EarmarkStore.self) private var earmarkStore
   @Environment(\.dismiss) private var dismiss
 
@@ -25,6 +26,19 @@ struct AddBudgetLineItemSheet: View {
             },
             onAcceptHighlighted: acceptHighlightedCategory
           )
+          .focused($categoryFieldFocused)
+          .onChange(of: categoryFieldFocused) { _, focused in
+            if !focused {
+              showCategorySuggestions = false
+              categoryHighlightedIndex = nil
+              if let id = selectedCategoryId, let cat = categories.by(id: id) {
+                categoryText = categories.path(for: cat)
+              } else {
+                categoryText = ""
+                selectedCategoryId = nil
+              }
+            }
+          }
         }
 
         Section("Budget Amount") {
@@ -48,10 +62,11 @@ struct AddBudgetLineItemSheet: View {
               searchText: categoryText,
               highlightedIndex: $categoryHighlightedIndex,
               onSelect: { selected in
+                selectedCategoryId = selected.id
+                categoryText = selected.path
                 showCategorySuggestions = false
                 categoryHighlightedIndex = nil
-                categoryText = selected.path
-                selectedCategoryId = selected.id
+                categoryFieldFocused = false
               }
             )
             .frame(width: rect.width)
@@ -101,10 +116,11 @@ struct AddBudgetLineItemSheet: View {
       return
     }
     let selected = categoryVisibleSuggestions[index]
+    selectedCategoryId = selected.id
+    categoryText = selected.path
     showCategorySuggestions = false
     categoryHighlightedIndex = nil
-    categoryText = selected.path
-    selectedCategoryId = selected.id
+    categoryFieldFocused = false
   }
 
   private func save() {

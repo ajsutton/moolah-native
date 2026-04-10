@@ -263,6 +263,8 @@ struct TransactionDetailView: View {
     }
   }
 
+  @FocusState private var categoryFieldFocused: Bool
+
   private var categorySection: some View {
     Section {
       CategoryAutocompleteField(
@@ -274,6 +276,20 @@ struct TransactionDetailView: View {
         },
         onAcceptHighlighted: acceptHighlightedCategory
       )
+      .focused($categoryFieldFocused)
+      .onChange(of: categoryFieldFocused) { _, focused in
+        if !focused {
+          // Revert to the valid category path when focus leaves
+          showCategorySuggestions = false
+          categoryHighlightedIndex = nil
+          if let id = categoryId, let cat = categories.by(id: id) {
+            categoryText = categories.path(for: cat)
+          } else {
+            categoryText = ""
+            categoryId = nil
+          }
+        }
+      }
 
       Picker("Earmark", selection: $earmarkId) {
         Text("None").tag(UUID?.none)
@@ -479,10 +495,11 @@ struct TransactionDetailView: View {
       return
     }
     let selected = categoryVisibleSuggestions[index]
+    categoryId = selected.id
+    categoryText = selected.path
     showCategorySuggestions = false
     categoryHighlightedIndex = nil
-    categoryText = selected.path
-    categoryId = selected.id
+    categoryFieldFocused = false
   }
 
   @ViewBuilder
@@ -495,10 +512,11 @@ struct TransactionDetailView: View {
           searchText: categoryText,
           highlightedIndex: $categoryHighlightedIndex,
           onSelect: { selected in
+            categoryId = selected.id
+            categoryText = selected.path
             showCategorySuggestions = false
             categoryHighlightedIndex = nil
-            categoryText = selected.path
-            categoryId = selected.id
+            categoryFieldFocused = false
           }
         )
         .frame(width: rect.width)

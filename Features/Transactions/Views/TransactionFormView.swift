@@ -153,10 +153,11 @@ struct TransactionFormView: View {
               searchText: categoryText,
               highlightedIndex: $categoryHighlightedIndex,
               onSelect: { selected in
+                categoryId = selected.id
+                categoryText = selected.path
                 showCategorySuggestions = false
                 categoryHighlightedIndex = nil
-                categoryText = selected.path
-                categoryId = selected.id
+                categoryFieldFocused = false
               }
             )
             .frame(width: rect.width)
@@ -259,6 +260,8 @@ struct TransactionFormView: View {
     }
   }
 
+  @FocusState private var categoryFieldFocused: Bool
+
   private var categorySection: some View {
     Section {
       CategoryAutocompleteField(
@@ -270,6 +273,19 @@ struct TransactionFormView: View {
         },
         onAcceptHighlighted: acceptHighlightedCategory
       )
+      .focused($categoryFieldFocused)
+      .onChange(of: categoryFieldFocused) { _, focused in
+        if !focused {
+          showCategorySuggestions = false
+          categoryHighlightedIndex = nil
+          if let id = categoryId, let cat = categories.by(id: id) {
+            categoryText = categories.path(for: cat)
+          } else {
+            categoryText = ""
+            categoryId = nil
+          }
+        }
+      }
 
       Picker("Earmark", selection: $earmarkId) {
         Text("None").tag(UUID?.none)
@@ -408,10 +424,11 @@ struct TransactionFormView: View {
       return
     }
     let selected = categoryVisibleSuggestions[index]
+    categoryId = selected.id
+    categoryText = selected.path
     showCategorySuggestions = false
     categoryHighlightedIndex = nil
-    categoryText = selected.path
-    categoryId = selected.id
+    categoryFieldFocused = false
   }
 
   private func save() {
