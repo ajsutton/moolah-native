@@ -64,15 +64,12 @@ final class CategoryPickerState {
 
 /// A category selection field with autocomplete search and browse-all support.
 ///
-/// Uses a single TextField that displays the selected category when idle and
-/// switches to search mode on focus. Place inside a Form and add
-/// `.categoryPickerOverlay(state:selection:)` on the Form.
+/// Uses the same `AutocompleteField` pattern as the payee field. Place inside a
+/// Form Section. Add `.categoryPickerOverlay(state:selection:)` on the Form.
 struct CategoryPicker: View {
   let categories: Categories
   @Binding var selection: UUID?
-  let label: String
   @Bindable var state: CategoryPickerState
-  @FocusState private var isFieldFocused: Bool
 
   private var selectedLabel: String {
     if let id = selection, let cat = categories.by(id: id) {
@@ -81,74 +78,62 @@ struct CategoryPicker: View {
     return "None"
   }
 
+  /// The placeholder shows "Category" when no selection, or "Category — Selected:Path" when one is set.
+  private var placeholder: String {
+    if selection != nil {
+      return "Category — \(selectedLabel)"
+    }
+    return "Category"
+  }
+
   init(
     categories: Categories,
     selection: Binding<UUID?>,
-    state: CategoryPickerState,
-    label: String = "Category"
+    state: CategoryPickerState
   ) {
     self.categories = categories
     self._selection = selection
     self.state = state
-    self.label = label
   }
 
+  @FocusState private var isFieldFocused: Bool
+
   var body: some View {
-    LabeledContent(label) {
-      TextField(selectedLabel, text: $state.searchText)
-        .textFieldStyle(.plain)
-        .multilineTextAlignment(.trailing)
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .focused($isFieldFocused)
-        .anchorPreference(key: CategoryPickerAnchorKey.self, value: .bounds) { $0 }
-        .accessibilityIdentifier("categoryPicker.searchField")
-        .onChange(of: isFieldFocused) { _, focused in
-          if focused && !state.isEditing {
-            state.open(categories: categories)
-          } else if !focused && state.isEditing {
-            // Accept highlighted suggestion on Tab/click-away, then close
-            if let index = state.highlightedIndex {
-              selection = state.acceptHighlighted(at: index)
-            }
-            state.close()
-          }
+    AutocompleteField(
+      placeholder: placeholder,
+      text: $state.searchText,
+      highlightedIndex: $state.highlightedIndex,
+      suggestionCount: state.isEditing ? state.totalRowCount : 0,
+      onTextChange: { _ in
+        if !state.isEditing {
+          state.open(categories: categories)
         }
-        .onChange(of: state.searchText) { _, _ in
-          state.highlightedIndex = nil
+      },
+      onAcceptHighlighted: {
+        guard let index = state.highlightedIndex else { return }
+        selection = state.acceptHighlighted(at: index)
+        state.close()
+      }
+    )
+    .focused($isFieldFocused)
+    .accessibilityIdentifier("categoryPicker.searchField")
+    .onChange(of: isFieldFocused) { _, focused in
+      if focused && !state.isEditing {
+        state.open(categories: categories)
+      } else if !focused && state.isEditing {
+        if let index = state.highlightedIndex {
+          selection = state.acceptHighlighted(at: index)
         }
-        .onChange(of: state.isEditing) { _, editing in
-          if !editing {
-            isFieldFocused = false
-          }
-        }
-        #if os(macOS)
-          .onKeyPress(.downArrow) {
-            guard state.isEditing, state.totalRowCount > 0 else { return .ignored }
-            state.highlightedIndex = min(
-              (state.highlightedIndex ?? -1) + 1, state.totalRowCount - 1)
-            return .handled
-          }
-          .onKeyPress(.upArrow) {
-            guard state.isEditing else { return .ignored }
-            guard let current = state.highlightedIndex else { return .ignored }
-            state.highlightedIndex = current > 0 ? current - 1 : nil
-            return .handled
-          }
-          .onKeyPress(.return) {
-            guard state.isEditing, let index = state.highlightedIndex else { return .ignored }
-            selection = state.acceptHighlighted(at: index)
-            state.close()
-            return .handled
-          }
-          .onKeyPress(.escape) {
-            guard state.isEditing else { return .ignored }
-            state.close()
-            return .handled
-          }
-        #endif
+        state.close()
+      }
+    }
+    .onChange(of: state.isEditing) { _, editing in
+      if !editing && isFieldFocused {
+        isFieldFocused = false
+      }
     }
     .accessibilityRepresentation {
-      Picker(label, selection: $selection) {
+      Picker("Category", selection: $selection) {
         Text("None").tag(UUID?.none)
         ForEach(categories.flattenedByPath(), id: \.category.id) { entry in
           Text(entry.path).tag(UUID?.some(entry.category.id))
@@ -358,11 +343,9 @@ private let previewCategories: Categories = {
   @Previewable @State var pickerState = CategoryPickerState()
 
   Form {
-    CategoryPicker(
-      categories: previewCategories,
-      selection: $selection,
-      state: pickerState
-    )
+    Section {
+      CategoryPicker(categories: previewCategories, selection: $selection, state: pickerState)
+    }
   }
   .formStyle(.grouped)
   .categoryPickerOverlay(state: pickerState, selection: $selection)
@@ -378,11 +361,9 @@ private let previewCategories: Categories = {
   }()
 
   Form {
-    CategoryPicker(
-      categories: previewCategories,
-      selection: $selection,
-      state: pickerState
-    )
+    Section {
+      CategoryPicker(categories: previewCategories, selection: $selection, state: pickerState)
+    }
   }
   .formStyle(.grouped)
   .categoryPickerOverlay(state: pickerState, selection: $selection)

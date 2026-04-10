@@ -15,7 +15,8 @@ struct AddBudgetLineItemSheet: View {
       Form {
         Section("Category") {
           CategoryPicker(
-            categories: categories, selection: $selectedCategoryId, state: categoryPickerState)
+            categories: categories, selection: $selectedCategoryId,
+            state: categoryPickerState)
         }
 
         Section("Budget Amount") {
