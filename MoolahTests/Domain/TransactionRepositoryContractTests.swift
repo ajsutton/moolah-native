@@ -159,6 +159,59 @@ struct TransactionRepositoryContractTests {
 
     #expect(allPage.transactions.count >= filteredPage.transactions.count)
   }
+
+  @Test(
+    "priorBalance is sum of transactions before the page",
+    arguments: [
+      InMemoryTransactionRepository(initialTransactions: makePaginationTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(initialTransactions: makePaginationTestTransactions())
+        as any TransactionRepository,
+    ])
+  func testPriorBalanceAcrossPages(repository: any TransactionRepository) async throws {
+    let page0 = try await repository.fetch(
+      filter: TransactionFilter(),
+      page: 0,
+      pageSize: 2
+    )
+
+    let page1 = try await repository.fetch(
+      filter: TransactionFilter(),
+      page: 1,
+      pageSize: 2
+    )
+
+    // priorBalance for page 0 should be sum of transactions on page 1+
+    let page1Sum = page1.transactions.reduce(
+      MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    ) {
+      $0 + $1.amount
+    }
+    let page1PriorSum = page1Sum + page1.priorBalance
+
+    #expect(
+      page0.priorBalance == page1PriorSum,
+      "priorBalance of page 0 should equal sum of all older transactions")
+  }
+
+  @Test(
+    "empty page returns zero priorBalance",
+    arguments: [
+      InMemoryTransactionRepository(initialTransactions: makePaginationTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(initialTransactions: makePaginationTestTransactions())
+        as any TransactionRepository,
+    ])
+  func testEmptyPagePriorBalance(repository: any TransactionRepository) async throws {
+    let page = try await repository.fetch(
+      filter: TransactionFilter(),
+      page: 100,
+      pageSize: 10
+    )
+
+    #expect(page.transactions.isEmpty)
+    #expect(page.priorBalance.cents == 0)
+  }
 }
 
 // Helper function to create test transactions with various attributes
@@ -218,6 +271,41 @@ private func makeTestTransactions() -> [Transaction] {
   ]
 
   return transactions
+}
+
+private func makePaginationTestTransactions() -> [Transaction] {
+  let accountId = UUID()
+  let calendar = Calendar.current
+  return [
+    Transaction(
+      type: .income,
+      date: calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!,
+      accountId: accountId,
+      amount: MonetaryAmount(cents: 1000, currency: .defaultTestCurrency),
+      payee: "Jan Income"
+    ),
+    Transaction(
+      type: .expense,
+      date: calendar.date(from: DateComponents(year: 2024, month: 2, day: 1))!,
+      accountId: accountId,
+      amount: MonetaryAmount(cents: -300, currency: .defaultTestCurrency),
+      payee: "Feb Expense"
+    ),
+    Transaction(
+      type: .income,
+      date: calendar.date(from: DateComponents(year: 2024, month: 3, day: 1))!,
+      accountId: accountId,
+      amount: MonetaryAmount(cents: 2000, currency: .defaultTestCurrency),
+      payee: "Mar Income"
+    ),
+    Transaction(
+      type: .expense,
+      date: calendar.date(from: DateComponents(year: 2024, month: 4, day: 1))!,
+      accountId: accountId,
+      amount: MonetaryAmount(cents: -500, currency: .defaultTestCurrency),
+      payee: "Apr Expense"
+    ),
+  ]
 }
 
 private func makeCloudKitTransactionRepository(
