@@ -432,6 +432,88 @@ struct AnalysisRepositoryContractTests {
     #expect(!data.isEmpty, "Should have at least one month")
   }
 
+  @Test(
+    "fetchIncomeAndExpense classifies investment transfers correctly",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func investmentTransferClassification(backend: any BackendProvider) async throws {
+    let bankAccount = Account(
+      id: UUID(),
+      name: "Checking",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(bankAccount)
+
+    let investmentA = Account(
+      id: UUID(),
+      name: "Shares",
+      type: .investment,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(investmentA)
+
+    let investmentB = Account(
+      id: UUID(),
+      name: "Bonds",
+      type: .investment,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(investmentB)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    // Bank → Investment (should be earmarkedIncome)
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .transfer,
+        date: today,
+        accountId: bankAccount.id,
+        toAccountId: investmentA.id,
+        amount: MonetaryAmount(cents: -500, currency: .defaultTestCurrency),
+        payee: "Invest"
+      ))
+
+    // Investment → Bank (should be earmarkedExpense)
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .transfer,
+        date: today,
+        accountId: investmentA.id,
+        toAccountId: bankAccount.id,
+        amount: MonetaryAmount(cents: -200, currency: .defaultTestCurrency),
+        payee: "Withdraw"
+      ))
+
+    // Investment → Investment (should not affect income/expense)
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .transfer,
+        date: today,
+        accountId: investmentA.id,
+        toAccountId: investmentB.id,
+        amount: MonetaryAmount(cents: -100, currency: .defaultTestCurrency),
+        payee: "Rebalance"
+      ))
+
+    let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
+
+    #expect(!data.isEmpty, "Should have at least one month")
+    let month = data[0]
+
+    // Bank→Investment = earmarkedIncome of 500
+    #expect(month.earmarkedIncome.cents == 500)
+
+    // Investment→Bank = earmarkedExpense of 200
+    #expect(month.earmarkedExpense.cents == 200)
+
+    // Regular income/expense should be zero
+    #expect(month.income.cents == 0)
+    #expect(month.expense.cents == 0)
+  }
+
   // MARK: - Category Balances Tests
 
   @Test(
