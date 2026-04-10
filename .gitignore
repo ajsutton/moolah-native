@@ -18,6 +18,9 @@ DerivedData/
 build/
 .swiftpm/
 
+# Worktrees
+.worktrees/
+
 # macOS
 .DS_Store
 *.swp
