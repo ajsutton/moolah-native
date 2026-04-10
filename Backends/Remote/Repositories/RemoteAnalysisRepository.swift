@@ -79,15 +79,15 @@ final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
 
     // Add optional filters
     if let accountId = filters?.accountId {
-      queryItems.append(URLQueryItem(name: "account", value: accountId.uuidString))
+      queryItems.append(URLQueryItem(name: "account", value: accountId.apiString))
     }
     if let earmarkId = filters?.earmarkId {
-      queryItems.append(URLQueryItem(name: "earmark", value: earmarkId.uuidString))
+      queryItems.append(URLQueryItem(name: "earmark", value: earmarkId.apiString))
     }
     if let categoryIds = filters?.categoryIds {
       queryItems.append(
         contentsOf: categoryIds.map {
-          URLQueryItem(name: "category", value: $0.uuidString)
+          URLQueryItem(name: "category", value: $0.apiString)
         })
     }
     if let payee = filters?.payee {

@@ -135,6 +135,78 @@ struct TransactionRepositoryContractTests {
   }
 
   @Test(
+    "update preserves all transaction fields",
+    arguments: [
+      InMemoryTransactionRepository(initialTransactions: [])
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(initialTransactions: [])
+        as any TransactionRepository,
+    ])
+  func testUpdatePreservesAllFields(repository: any TransactionRepository) async throws {
+    let calendar = Calendar.current
+    let accountId = UUID()
+    let toAccountId = UUID()
+    let categoryId = UUID()
+    let earmarkId = UUID()
+    let date = calendar.date(from: DateComponents(year: 2024, month: 3, day: 12))!
+
+    let original = Transaction(
+      type: .transfer,
+      date: date,
+      accountId: accountId,
+      toAccountId: toAccountId,
+      amount: MonetaryAmount(cents: 75000, currency: Currency.defaultTestCurrency),
+      payee: "Original Payee",
+      notes: "Some notes",
+      categoryId: categoryId,
+      earmarkId: earmarkId,
+      recurPeriod: .month,
+      recurEvery: 2
+    )
+
+    let created = try await repository.create(original)
+
+    var updated = created
+    updated.payee = "Updated Payee"
+
+    let result = try await repository.update(updated)
+
+    // Verify all fields match the updated transaction
+    #expect(result.id == created.id)
+    #expect(result.type == .transfer)
+    #expect(result.date == date)
+    #expect(result.accountId == accountId)
+    #expect(result.toAccountId == toAccountId)
+    #expect(result.amount == MonetaryAmount(cents: 75000, currency: Currency.defaultTestCurrency))
+    #expect(result.payee == "Updated Payee")
+    #expect(result.notes == "Some notes")
+    #expect(result.categoryId == categoryId)
+    #expect(result.earmarkId == earmarkId)
+    #expect(result.recurPeriod == .month)
+    #expect(result.recurEvery == 2)
+
+    // Verify persistence by fetching back from repository
+    let page = try await repository.fetch(
+      filter: TransactionFilter(),
+      page: 0,
+      pageSize: 50
+    )
+    let fetched = try #require(page.transactions.first(where: { $0.id == created.id }))
+
+    #expect(fetched.type == .transfer)
+    #expect(fetched.date == date)
+    #expect(fetched.accountId == accountId)
+    #expect(fetched.toAccountId == toAccountId)
+    #expect(fetched.amount == MonetaryAmount(cents: 75000, currency: Currency.defaultTestCurrency))
+    #expect(fetched.payee == "Updated Payee")
+    #expect(fetched.notes == "Some notes")
+    #expect(fetched.categoryId == categoryId)
+    #expect(fetched.earmarkId == earmarkId)
+    #expect(fetched.recurPeriod == .month)
+    #expect(fetched.recurEvery == 2)
+  }
+
+  @Test(
     "clearing filter reloads all",
     arguments: [
       InMemoryTransactionRepository(initialTransactions: makeTestTransactions())

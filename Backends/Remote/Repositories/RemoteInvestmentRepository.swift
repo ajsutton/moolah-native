@@ -17,7 +17,7 @@ final class RemoteInvestmentRepository: InvestmentRepository, Sendable {
       URLQueryItem(name: "offset", value: String(page * pageSize)),
     ]
 
-    let path = "accounts/\(accountId.uuidString.lowercased())/values/"
+    let path = "accounts/\(accountId.apiString)/values/"
     let data = try await client.get(path, queryItems: queryItems)
     let wrapper = try JSONDecoder().decode(InvestmentValueDTO.ListWrapper.self, from: data)
 
@@ -29,18 +29,18 @@ final class RemoteInvestmentRepository: InvestmentRepository, Sendable {
 
   func setValue(accountId: UUID, date: Date, value: MonetaryAmount) async throws {
     let dateString = BackendDateFormatter.string(from: date)
-    let path = "accounts/\(accountId.uuidString.lowercased())/values/\(dateString)"
+    let path = "accounts/\(accountId.apiString)/values/\(dateString)"
     _ = try await client.put(path, body: value.cents)
   }
 
   func removeValue(accountId: UUID, date: Date) async throws {
     let dateString = BackendDateFormatter.string(from: date)
-    let path = "accounts/\(accountId.uuidString.lowercased())/values/\(dateString)"
+    let path = "accounts/\(accountId.apiString)/values/\(dateString)"
     _ = try await client.delete(path)
   }
 
   func fetchDailyBalances(accountId: UUID) async throws -> [AccountDailyBalance] {
-    let path = "accounts/\(accountId.uuidString.lowercased())/balances"
+    let path = "accounts/\(accountId.apiString)/balances"
     let data = try await client.get(path)
     let dtos = try JSONDecoder().decode([AccountDailyBalanceDTO].self, from: data)
     return dtos.map { $0.toDomain(currency: currency) }

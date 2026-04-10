@@ -107,7 +107,7 @@ struct RemoteTransactionRepositoryTests {
     let queryItems = components.queryItems ?? []
     let queryDict = Dictionary(uniqueKeysWithValues: queryItems.map { ($0.name, $0.value) })
 
-    #expect(queryDict["account"] == accountId.uuidString)
+    #expect(queryDict["account"] == accountId.apiString)
     #expect(queryDict["pageSize"] == "25")
     #expect(queryDict["offset"] == "50")  // page 2 * pageSize 25
   }
@@ -219,8 +219,8 @@ struct RemoteTransactionRepositoryTests {
     let categoryParams = queryItems.filter { $0.name == "category" }.compactMap { $0.value }
 
     #expect(categoryParams.count == 2)
-    #expect(categoryParams.contains(category1.uuidString))
-    #expect(categoryParams.contains(category2.uuidString))
+    #expect(categoryParams.contains(category1.apiString))
+    #expect(categoryParams.contains(category2.apiString))
   }
 
   @Test func testPayeeFilterParam() async throws {

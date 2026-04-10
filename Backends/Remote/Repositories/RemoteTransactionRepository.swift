@@ -18,11 +18,11 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
     queryItems.append(URLQueryItem(name: "offset", value: String(page * pageSize)))
 
     if let accountId = filter.accountId {
-      queryItems.append(URLQueryItem(name: "account", value: accountId.uuidString))
+      queryItems.append(URLQueryItem(name: "account", value: accountId.apiString))
     }
 
     if let earmarkId = filter.earmarkId {
-      queryItems.append(URLQueryItem(name: "earmark", value: earmarkId.uuidString))
+      queryItems.append(URLQueryItem(name: "earmark", value: earmarkId.apiString))
     }
 
     if let scheduled = filter.scheduled {
@@ -40,7 +40,7 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
 
     if let categoryIds = filter.categoryIds, !categoryIds.isEmpty {
       for categoryId in categoryIds {
-        queryItems.append(URLQueryItem(name: "category", value: categoryId.uuidString))
+        queryItems.append(URLQueryItem(name: "category", value: categoryId.apiString))
       }
     }
 
@@ -73,13 +73,13 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
 
   func update(_ transaction: Transaction) async throws -> Transaction {
     let dto = TransactionDTO.fromDomain(transaction)
-    let data = try await client.put("transactions/\(transaction.id.uuidString)/", body: dto)
+    let data = try await client.put("transactions/\(transaction.id.apiString)/", body: dto)
     let responseDTO = try JSONDecoder().decode(TransactionDTO.self, from: data)
     return responseDTO.toDomain(currency: currency)
   }
 
   func delete(id: UUID) async throws {
-    _ = try await client.delete("transactions/\(id.uuidString)/")
+    _ = try await client.delete("transactions/\(id.apiString)/")
   }
 
   func fetchPayeeSuggestions(prefix: String) async throws -> [String] {

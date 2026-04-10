@@ -81,14 +81,14 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
     }
 
     let dto = UpdateAccountDTO(
-      id: account.id.uuidString.lowercased(),
+      id: account.id.apiString,
       name: account.name,
       type: account.type.rawValue,
       position: account.position,
       hidden: account.isHidden
     )
 
-    let data = try await client.put("accounts/\(account.id.uuidString.lowercased())/", body: dto)
+    let data = try await client.put("accounts/\(account.id.apiString)/", body: dto)
 
     do {
       let response = try JSONDecoder().decode(AccountDTO.self, from: data)

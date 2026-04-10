@@ -31,7 +31,7 @@ final class RemoteCategoryRepository: CategoryRepository, Sendable {
 
   func update(_ category: Category) async throws -> Category {
     let dto = CategoryDTO.fromDomain(category)
-    let data = try await client.put("categories/\(category.id.uuidString)/", body: dto)
+    let data = try await client.put("categories/\(category.id.apiString)/", body: dto)
     let responseDTO = try JSONDecoder().decode(CategoryDTO.self, from: data)
     return responseDTO.toDomain()
   }
@@ -39,8 +39,8 @@ final class RemoteCategoryRepository: CategoryRepository, Sendable {
   func delete(id: UUID, withReplacement replacementId: UUID?) async throws {
     var queryItems: [URLQueryItem] = []
     if let replacementId = replacementId {
-      queryItems.append(URLQueryItem(name: "replacement", value: replacementId.uuidString))
+      queryItems.append(URLQueryItem(name: "replacement", value: replacementId.apiString))
     }
-    _ = try await client.delete("categories/\(id.uuidString)/", queryItems: queryItems)
+    _ = try await client.delete("categories/\(id.apiString)/", queryItems: queryItems)
   }
 }

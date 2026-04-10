@@ -33,13 +33,13 @@ final class RemoteEarmarkRepository: EarmarkRepository, Sendable {
 
   func update(_ earmark: Earmark) async throws -> Earmark {
     let dto = EarmarkDTO.fromDomain(earmark)
-    let data = try await client.put("earmarks/\(earmark.id.uuidString)/", body: dto)
+    let data = try await client.put("earmarks/\(earmark.id.apiString)/", body: dto)
     let responseDTO = try JSONDecoder().decode(EarmarkDTO.self, from: data)
     return responseDTO.toDomain(currency: currency)
   }
 
   func fetchBudget(earmarkId: UUID) async throws -> [EarmarkBudgetItem] {
-    let data = try await client.get("earmarks/\(earmarkId.uuidString.lowercased())/budget/")
+    let data = try await client.get("earmarks/\(earmarkId.apiString)/budget/")
 
     do {
       // Server returns { "categoryId1": amount, "categoryId2": amount, ... }
@@ -61,7 +61,7 @@ final class RemoteEarmarkRepository: EarmarkRepository, Sendable {
   func setBudget(earmarkId: UUID, categoryId: UUID, amount: Int) async throws {
     let body = SetBudgetDTO(amount: amount)
     _ = try await client.put(
-      "earmarks/\(earmarkId.uuidString.lowercased())/budget/\(categoryId.uuidString.lowercased())/",
+      "earmarks/\(earmarkId.apiString)/budget/\(categoryId.apiString)/",
       body: body
     )
   }
