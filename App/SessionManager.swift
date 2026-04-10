@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 /// Owns the mapping from Profile.ID to ProfileSession.
 /// Multiple macOS windows share session instances through this manager.
@@ -7,11 +8,16 @@ import Foundation
 @MainActor
 final class SessionManager {
   private(set) var sessions: [UUID: ProfileSession] = [:]
+  let modelContainer: ModelContainer
+
+  init(modelContainer: ModelContainer) {
+    self.modelContainer = modelContainer
+  }
 
   /// Returns the existing session for a profile, or creates one.
   func session(for profile: Profile) -> ProfileSession {
     if let existing = sessions[profile.id] { return existing }
-    let session = ProfileSession(profile: profile)
+    let session = ProfileSession(profile: profile, modelContainer: modelContainer)
     sessions[profile.id] = session
     return session
   }
@@ -24,6 +30,6 @@ final class SessionManager {
   /// Replaces the session for a profile with a fresh instance
   /// (e.g. when the profile's server URL changes).
   func rebuildSession(for profile: Profile) {
-    sessions[profile.id] = ProfileSession(profile: profile)
+    sessions[profile.id] = ProfileSession(profile: profile, modelContainer: modelContainer)
   }
 }

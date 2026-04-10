@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 /// Holds the backend and all stores for a single profile.
 /// Each profile gets its own isolated URLSession, cookie storage, and keychain entry.
@@ -17,35 +18,50 @@ final class ProfileSession: Identifiable {
 
   nonisolated var id: UUID { profile.id }
 
-  init(profile: Profile) {
+  init(profile: Profile, modelContainer: ModelContainer? = nil) {
     self.profile = profile
 
-    // Each profile gets its own cookie storage and URLSession.
-    // Ephemeral config provides an isolated cookie storage that URLSession
-    // actually integrates with for automatic Set-Cookie handling.
-    let config = URLSessionConfiguration.ephemeral
-    let cookieStorage = config.httpCookieStorage!
-    let session = URLSession(configuration: config)
+    let backend: BackendProvider
+    switch profile.backendType {
+    case .remote, .moolah:
+      // Each profile gets its own cookie storage and URLSession.
+      // Ephemeral config provides an isolated cookie storage that URLSession
+      // actually integrates with for automatic Set-Cookie handling.
+      let config = URLSessionConfiguration.ephemeral
+      let cookieStorage = config.httpCookieStorage!
+      let session = URLSession(configuration: config)
 
-    // Each profile gets its own keychain entry keyed by profile ID
-    let cookieKeychain = CookieKeychain(account: profile.id.uuidString)
+      // Each profile gets its own keychain entry keyed by profile ID
+      let cookieKeychain = CookieKeychain(account: profile.id.uuidString)
 
-    let remoteBackend = RemoteBackend(
-      baseURL: profile.resolvedServerURL,
-      currency: profile.currency,
-      session: session,
-      cookieKeychain: cookieKeychain,
-      cookieStorage: cookieStorage
-    )
-    self.backend = remoteBackend
+      backend = RemoteBackend(
+        baseURL: profile.resolvedServerURL,
+        currency: profile.currency,
+        session: session,
+        cookieKeychain: cookieKeychain,
+        cookieStorage: cookieStorage
+      )
 
-    self.authStore = AuthStore(backend: remoteBackend)
-    self.accountStore = AccountStore(repository: remoteBackend.accounts)
-    self.transactionStore = TransactionStore(repository: remoteBackend.transactions)
-    self.categoryStore = CategoryStore(repository: remoteBackend.categories)
-    self.earmarkStore = EarmarkStore(repository: remoteBackend.earmarks)
-    self.analysisStore = AnalysisStore(repository: remoteBackend.analysis)
-    self.investmentStore = InvestmentStore(repository: remoteBackend.investments)
+    case .cloudKit:
+      guard let modelContainer else {
+        fatalError("ModelContainer is required for CloudKit profiles")
+      }
+      backend = CloudKitBackend(
+        modelContainer: modelContainer,
+        profileId: profile.id,
+        currency: profile.currency,
+        profileLabel: profile.label
+      )
+    }
+    self.backend = backend
+
+    self.authStore = AuthStore(backend: backend)
+    self.accountStore = AccountStore(repository: backend.accounts)
+    self.transactionStore = TransactionStore(repository: backend.transactions)
+    self.categoryStore = CategoryStore(repository: backend.categories)
+    self.earmarkStore = EarmarkStore(repository: backend.earmarks)
+    self.analysisStore = AnalysisStore(repository: backend.analysis)
+    self.investmentStore = InvestmentStore(repository: backend.investments)
 
     // Wire up cross-store side effects
     let accountStore = self.accountStore

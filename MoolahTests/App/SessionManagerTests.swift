@@ -6,6 +6,11 @@ import Testing
 @Suite("SessionManager")
 @MainActor
 struct SessionManagerTests {
+  private func makeManager() throws -> SessionManager {
+    let container = try TestModelContainer.create()
+    return SessionManager(modelContainer: container)
+  }
+
   private func makeProfile(
     label: String = "Test",
     url: String = "https://moolah.rocks/api/"
@@ -14,8 +19,8 @@ struct SessionManagerTests {
   }
 
   @Test("session(for:) creates a new session for unknown profile")
-  func createsNewSession() {
-    let manager = SessionManager()
+  func createsNewSession() throws {
+    let manager = try makeManager()
     let profile = makeProfile()
 
     let session = manager.session(for: profile)
@@ -25,8 +30,8 @@ struct SessionManagerTests {
   }
 
   @Test("session(for:) returns existing session for known profile")
-  func reusesExistingSession() {
-    let manager = SessionManager()
+  func reusesExistingSession() throws {
+    let manager = try makeManager()
     let profile = makeProfile()
 
     let session1 = manager.session(for: profile)
@@ -37,8 +42,8 @@ struct SessionManagerTests {
   }
 
   @Test("removeSession removes the session")
-  func removesSession() {
-    let manager = SessionManager()
+  func removesSession() throws {
+    let manager = try makeManager()
     let profile = makeProfile()
 
     _ = manager.session(for: profile)
@@ -49,8 +54,8 @@ struct SessionManagerTests {
   }
 
   @Test("rebuildSession replaces existing session with new instance")
-  func rebuildsSession() {
-    let manager = SessionManager()
+  func rebuildsSession() throws {
+    let manager = try makeManager()
     let profile = makeProfile()
 
     let original = manager.session(for: profile)
@@ -63,8 +68,8 @@ struct SessionManagerTests {
   }
 
   @Test("multiple profiles get independent sessions")
-  func independentSessions() {
-    let manager = SessionManager()
+  func independentSessions() throws {
+    let manager = try makeManager()
     let profile1 = makeProfile(label: "One", url: "https://one.com/api/")
     let profile2 = makeProfile(label: "Two", url: "https://two.com/api/")
 
@@ -77,8 +82,8 @@ struct SessionManagerTests {
   }
 
   @Test("removeSession for unknown ID is a no-op")
-  func removeUnknownIsNoOp() {
-    let manager = SessionManager()
+  func removeUnknownIsNoOp() throws {
+    let manager = try makeManager()
 
     manager.removeSession(for: UUID())
     #expect(manager.sessions.isEmpty)

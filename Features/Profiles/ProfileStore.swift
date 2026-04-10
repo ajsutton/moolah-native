@@ -1,23 +1,33 @@
+import CloudKit
 import Foundation
 import OSLog
 import Observation
+import SwiftData
 
 /// Manages the list of profiles and which one is active.
-/// Persists to UserDefaults as JSON.
+/// Remote profiles persist in UserDefaults; iCloud profiles persist in SwiftData (ProfileRecord).
+/// Active profile ID is per-device via UserDefaults.
 @Observable
 @MainActor
 final class ProfileStore {
   private static let profilesKey = "com.moolah.profiles"
   private static let activeProfileKey = "com.moolah.activeProfileID"
 
-  private(set) var profiles: [Profile] = []
+  private(set) var remoteProfiles: [Profile] = []
+  private(set) var cloudProfiles: [Profile] = []
   private(set) var activeProfileID: UUID?
   private(set) var isValidating = false
   private(set) var validationError: String?
 
   private let defaults: UserDefaults
   private let validator: (any ServerValidator)?
+  private let modelContainer: ModelContainer?
   private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileStore")
+
+  /// Combined list of all profiles from both backends.
+  var profiles: [Profile] {
+    remoteProfiles + cloudProfiles
+  }
 
   var activeProfile: Profile? {
     profiles.first { $0.id == activeProfileID }
@@ -27,46 +37,101 @@ final class ProfileStore {
     !profiles.isEmpty
   }
 
-  init(defaults: UserDefaults = .standard, validator: (any ServerValidator)? = nil) {
+  init(
+    defaults: UserDefaults = .standard,
+    validator: (any ServerValidator)? = nil,
+    modelContainer: ModelContainer? = nil
+  ) {
     self.defaults = defaults
     self.validator = validator
+    self.modelContainer = modelContainer
     loadFromDefaults()
+    if modelContainer != nil {
+      loadCloudProfiles()
+      observeRemoteChanges()
+    }
   }
 
   func addProfile(_ profile: Profile) {
-    profiles.append(profile)
+    switch profile.backendType {
+    case .remote, .moolah:
+      remoteProfiles.append(profile)
+      saveToDefaults()
+    case .cloudKit:
+      guard let modelContainer else {
+        logger.error("Cannot add CloudKit profile without ModelContainer")
+        return
+      }
+      let context = ModelContext(modelContainer)
+      let record = ProfileRecord.from(profile: profile)
+      context.insert(record)
+      try? context.save()
+      cloudProfiles.append(profile)
+    }
+
     if profiles.count == 1 {
       activeProfileID = profile.id
+      saveActiveProfileID()
     }
-    saveToDefaults()
     logger.debug("Added profile: \(profile.label) (\(profile.id))")
   }
 
   func removeProfile(_ id: UUID) {
-    profiles.removeAll { $0.id == id }
+    if let index = remoteProfiles.firstIndex(where: { $0.id == id }) {
+      remoteProfiles.remove(at: index)
 
-    // Clean up the profile's keychain cookies
-    let keychain = CookieKeychain(account: id.uuidString)
-    keychain.clear()
+      // Clean up the profile's keychain cookies
+      let keychain = CookieKeychain(account: id.uuidString)
+      keychain.clear()
+
+      saveToDefaults()
+    } else if let index = cloudProfiles.firstIndex(where: { $0.id == id }) {
+      cloudProfiles.remove(at: index)
+
+      if let modelContainer {
+        let context = ModelContext(modelContainer)
+        let deleter = ProfileDataDeleter(modelContext: context)
+        deleter.deleteAllData(for: id)
+      }
+    }
 
     if activeProfileID == id {
       activeProfileID = profiles.first?.id
+      saveActiveProfileID()
     }
-    saveToDefaults()
     logger.debug("Removed profile: \(id)")
   }
 
   func setActiveProfile(_ id: UUID) {
     guard profiles.contains(where: { $0.id == id }) else { return }
     activeProfileID = id
-    saveToDefaults()
+    saveActiveProfileID()
     logger.debug("Switched to profile: \(id)")
   }
 
   func updateProfile(_ profile: Profile) {
-    guard let index = profiles.firstIndex(where: { $0.id == profile.id }) else { return }
-    profiles[index] = profile
-    saveToDefaults()
+    switch profile.backendType {
+    case .remote, .moolah:
+      guard let index = remoteProfiles.firstIndex(where: { $0.id == profile.id }) else { return }
+      remoteProfiles[index] = profile
+      saveToDefaults()
+    case .cloudKit:
+      guard let modelContainer else { return }
+      guard let index = cloudProfiles.firstIndex(where: { $0.id == profile.id }) else { return }
+      cloudProfiles[index] = profile
+
+      let context = ModelContext(modelContainer)
+      let profileId = profile.id
+      let descriptor = FetchDescriptor<ProfileRecord>(
+        predicate: #Predicate { $0.id == profileId }
+      )
+      if let record = try? context.fetch(descriptor).first {
+        record.label = profile.label
+        record.currencyCode = profile.currencyCode
+        record.financialYearStartMonth = profile.financialYearStartMonth
+        try? context.save()
+      }
+    }
     logger.debug("Updated profile: \(profile.label)")
   }
 
@@ -74,20 +139,78 @@ final class ProfileStore {
 
   /// Validates the server URL then adds the profile. Returns true on success.
   func validateAndAddProfile(_ profile: Profile) async -> Bool {
-    guard await validateServer(url: profile.resolvedServerURL) else { return false }
+    switch profile.backendType {
+    case .remote, .moolah:
+      guard await validateServer(url: profile.resolvedServerURL) else { return false }
+    case .cloudKit:
+      guard await validateiCloudAvailability() else { return false }
+    }
     addProfile(profile)
     return true
   }
 
   /// Validates the server URL then updates the profile. Returns true on success.
   func validateAndUpdateProfile(_ profile: Profile) async -> Bool {
-    guard await validateServer(url: profile.resolvedServerURL) else { return false }
+    switch profile.backendType {
+    case .remote, .moolah:
+      guard await validateServer(url: profile.resolvedServerURL) else { return false }
+    case .cloudKit:
+      // No validation needed for updating an existing CloudKit profile
+      break
+    }
     updateProfile(profile)
     return true
   }
 
   func clearValidationError() {
     validationError = nil
+  }
+
+  // MARK: - Cloud Profile Loading
+
+  func loadCloudProfiles() {
+    guard let modelContainer else { return }
+    let context = ModelContext(modelContainer)
+    let descriptor = FetchDescriptor<ProfileRecord>(
+      sortBy: [SortDescriptor(\.createdAt)]
+    )
+    do {
+      let records = try context.fetch(descriptor)
+      cloudProfiles = records.map { $0.toProfile() }
+      logger.debug("Loaded \(self.cloudProfiles.count) cloud profiles")
+
+      // Handle active profile being deleted on another device
+      if let activeProfileID, !profiles.contains(where: { $0.id == activeProfileID }) {
+        self.activeProfileID = profiles.first?.id
+        saveActiveProfileID()
+        logger.debug(
+          "Active profile was removed remotely, switched to: \(self.activeProfileID?.uuidString ?? "nil")"
+        )
+      }
+    } catch {
+      logger.error("Failed to load cloud profiles: \(error.localizedDescription)")
+    }
+  }
+
+  // MARK: - Private
+
+  private func validateiCloudAvailability() async -> Bool {
+    isValidating = true
+    validationError = nil
+    defer { isValidating = false }
+
+    do {
+      let status = try await CKContainer.default().accountStatus()
+      if status == .available {
+        return true
+      } else {
+        validationError = "iCloud is not available. Please sign in to iCloud in Settings."
+        return false
+      }
+    } catch {
+      validationError = "Could not check iCloud availability"
+      return false
+    }
   }
 
   private func validateServer(url: URL) async -> Bool {
@@ -112,42 +235,57 @@ final class ProfileStore {
     }
   }
 
+  private func observeRemoteChanges() {
+    NotificationCenter.default.addObserver(
+      forName: .NSPersistentStoreRemoteChange,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      Task { @MainActor in
+        self?.loadCloudProfiles()
+      }
+    }
+  }
+
   // MARK: - Persistence
 
   private func loadFromDefaults() {
     if let data = defaults.data(forKey: Self.profilesKey) {
       do {
-        profiles = try JSONDecoder().decode([Profile].self, from: data)
-        logger.debug("Loaded \(self.profiles.count) profiles from defaults")
+        remoteProfiles = try JSONDecoder().decode([Profile].self, from: data)
+        logger.debug("Loaded \(self.remoteProfiles.count) remote profiles from defaults")
       } catch {
         logger.error("Failed to decode profiles: \(error.localizedDescription)")
-        profiles = []
+        remoteProfiles = []
       }
     }
 
     let savedIDString = defaults.string(forKey: Self.activeProfileKey)
     if let idString = savedIDString,
-      let id = UUID(uuidString: idString),
-      profiles.contains(where: { $0.id == id })
+      let id = UUID(uuidString: idString)
     {
+      // Validate against all profiles after cloud profiles are loaded;
+      // for now just restore the saved ID
       activeProfileID = id
       logger.debug("Restored active profile: \(id)")
     } else {
-      activeProfileID = profiles.first?.id
+      activeProfileID = nil
       logger.debug(
-        "No saved active profile (saved=\(savedIDString ?? "nil")), defaulting to first: \(self.activeProfileID?.uuidString ?? "nil")"
+        "No saved active profile (saved=\(savedIDString ?? "nil"))"
       )
     }
   }
 
   private func saveToDefaults() {
     do {
-      let data = try JSONEncoder().encode(profiles)
+      let data = try JSONEncoder().encode(remoteProfiles)
       defaults.set(data, forKey: Self.profilesKey)
     } catch {
       logger.error("Failed to encode profiles: \(error.localizedDescription)")
     }
+  }
 
+  private func saveActiveProfileID() {
     if let activeProfileID {
       defaults.set(activeProfileID.uuidString, forKey: Self.activeProfileKey)
       logger.debug("Saved active profile: \(activeProfileID)")

@@ -64,22 +64,37 @@ struct ShowHiddenCommands: Commands {
 @main
 @MainActor
 struct MoolahApp: App {
-  @State private var profileStore = ProfileStore(validator: RemoteServerValidator())
-
+  private let container: ModelContainer
+  @State private var profileStore: ProfileStore
   #if os(macOS)
-    @State private var sessionManager = SessionManager()
+    @State private var sessionManager: SessionManager
   #else
-    private let container: ModelContainer
     @State private var activeSession: ProfileSession?
-
-    init() {
-      do {
-        container = try ModelContainer(for: Schema([]))
-      } catch {
-        fatalError("Failed to initialize ModelContainer: \(error)")
-      }
-    }
   #endif
+
+  init() {
+    do {
+      let schema = Schema([
+        ProfileRecord.self,
+        AccountRecord.self,
+        TransactionRecord.self,
+        CategoryRecord.self,
+        EarmarkRecord.self,
+        EarmarkBudgetItemRecord.self,
+        InvestmentValueRecord.self,
+      ])
+      container = try ModelContainer(for: schema)
+    } catch {
+      fatalError("Failed to initialize ModelContainer: \(error)")
+    }
+
+    let store = ProfileStore(validator: RemoteServerValidator(), modelContainer: container)
+    _profileStore = State(initialValue: store)
+
+    #if os(macOS)
+      _sessionManager = State(initialValue: SessionManager(modelContainer: container))
+    #endif
+  }
 
   var body: some Scene {
     #if os(macOS)
