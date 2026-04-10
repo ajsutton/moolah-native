@@ -135,6 +135,10 @@ end
 # ─── iOS ────────────────────────────────────────────────────────
 
 platform :ios do
+  before_all do
+    setup_ci  # Creates a temporary keychain to avoid macOS password prompts
+  end
+
   desc "Sync certificates and profiles for iOS"
   lane :certificates do
     api_key = app_store_connect_api_key(
@@ -217,6 +221,10 @@ end
 # ─── macOS ──────────────────────────────────────────────────────
 
 platform :mac do
+  before_all do
+    setup_ci
+  end
+
   desc "Sync certificates and profiles for macOS"
   lane :certificates do
     api_key = app_store_connect_api_key(
@@ -533,18 +541,49 @@ bump-version version:
 
 ---
 
-## Phase 7: Future Enhancements
+## Phase 7: Build Caching
+
+GitHub Actions macOS runners cost ~10x Linux runners, so caching is important to keep build times and costs down.
+
+- [ ] **7.1 — Add DerivedData caching** to both CI and release workflows. Use `irgaly/xcode-cache` instead of `actions/cache` — it preserves file timestamps with nanosecond precision, which Xcode's incremental build system depends on:
+
+```yaml
+- uses: irgaly/xcode-cache@v1
+  with:
+    key: xcode-derived-${{ runner.os }}-${{ hashFiles('project.yml', '**/*.swift') }}
+    restore-keys: xcode-derived-${{ runner.os }}-
+```
+
+- [ ] **7.2 — Add SPM dependency caching** (if SPM packages are added in the future):
+
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: |
+      ~/Library/Caches/org.swift.swiftpm
+      ~/Library/org.swift.swiftpm
+    key: spm-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}
+    restore-keys: spm-${{ runner.os }}-
+```
+
+- [ ] **7.3 — Ruby gem caching** is handled automatically by `ruby/setup-ruby@v1` with `bundler-cache: true` (already included in the workflows above)
+
+---
+
+## Phase 8: Future Enhancements
 
 These are not required for the initial release pipeline but are valuable additions over time.
 
-- [ ] **7.1 — App Store metadata automation** — Use Fastlane `deliver` to manage screenshots, descriptions, keywords, and release notes from version-controlled files in `fastlane/metadata/`
-- [ ] **7.2 — Automated changelog** — Generate release notes from conventional commit messages or PR titles using `git-cliff` or GitHub's auto-generated release notes
-- [ ] **7.3 — Mac App Store distribution** — Add a separate Fastlane lane for Mac App Store submission (requires App Sandbox entitlements)
-- [ ] **7.4 — Phased rollout configuration** — Configure automatic phased rollout (1% → 2% → 5% → 10% → 20% → 50% → 100% over 7 days)
-- [ ] **7.5 — Build caching** — Cache DerivedData and SPM packages in GitHub Actions to speed up builds
-- [ ] **7.6 — Slack/Discord notifications** — Notify on successful TestFlight uploads or App Store review status changes
-- [ ] **7.7 — dSYM upload** — Upload debug symbols to a crash reporting service (Sentry, Firebase Crashlytics) as part of the release lane
-- [ ] **7.8 — Separate bundle IDs per platform** — If iOS and macOS need separate App Store listings, use `com.moolah.app.ios` and `com.moolah.app.macos`
+- [ ] **8.1 — App Store Connect Webhooks (WWDC 2025)** — Register webhook endpoints to receive push notifications for build processing completion, TestFlight review status, and App Store review status changes. This replaces polling and enables event-driven pipelines (e.g., auto-notify QA when a TestFlight build finishes processing)
+- [ ] **8.2 — App Store metadata automation** — Use Fastlane `deliver` to manage screenshots, descriptions, keywords, and release notes from version-controlled files in `fastlane/metadata/`
+- [ ] **8.3 — Automated changelog** — Generate release notes from conventional commit messages or PR titles using `git-cliff` or GitHub's auto-generated release notes
+- [ ] **8.4 — Mac App Store distribution** — Add a separate Fastlane lane for Mac App Store submission (requires App Sandbox entitlements)
+- [ ] **8.5 — Phased rollout configuration** — Configure automatic phased rollout (1% → 2% → 5% → 10% → 20% → 50% → 100% over 7 days). Can be paused at any stage for up to 30 days
+- [ ] **8.6 — Slack/Discord notifications** — Notify on successful TestFlight uploads or App Store review status changes
+- [ ] **8.7 — dSYM upload** — Upload debug symbols to a crash reporting service (Sentry, Firebase Crashlytics) as part of the release lane
+- [ ] **8.8 — Separate bundle IDs per platform** — If iOS and macOS need separate App Store listings, use `com.moolah.app.ios` and `com.moolah.app.macos`
+- [ ] **8.9 — Precheck validation** — Add Fastlane's `precheck` action to validate metadata against known App Store rejection reasons before submission
+- [ ] **8.10 — TestFlight feedback API (WWDC 2025)** — Programmatically retrieve TestFlight feedback (screenshots, crash reports) and integrate with issue tracking
 
 ---
 
