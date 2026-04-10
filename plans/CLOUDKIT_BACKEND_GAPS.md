@@ -1,7 +1,7 @@
 # CloudKit Backend Gap Analysis
 
 > Generated 2026-04-10. moolah-server is the source of truth.
-> **Status: Child reparenting, budget cascade, and expense breakdown fixes applied. All tests passing.**
+> **Status: All gaps resolved. All tests passing.**
 
 ## Fixed
 
@@ -17,28 +17,25 @@
 
 **Fix applied**: `CloudKitCategoryRepository.delete` now cascades to `EarmarkBudgetItemRecord`, matching server `UPDATE IGNORE` + `DELETE` semantics.
 
-## Remaining Gaps
+### 3. Expense Breakdown — Uncategorized Transactions (was MEDIUM)
 
-### 3. Expense Breakdown — Uncategorized Transactions (MEDIUM)
+**Server**: `AND category_id IS NOT NULL` excludes uncategorized expenses from the breakdown.
 
-**Server**: `AND category_id IS NOT NULL` excludes uncategorized expenses.
+**Decision**: Keep including uncategorized expenses in both CloudKit and InMemory backends. Including all earmarked transactions provides a more accurate status. The UI already handles nil categoryId display.
 
-**CloudKit**: Includes expenses with `categoryId == nil` in the breakdown.
-
-**Fix**: Add `guard txn.categoryId != nil else { continue }` in `CloudKitAnalysisRepository.fetchExpenseBreakdown`.
-
-### 4. Account Sort Order (LOW)
+### 4. Account Sort Order (was LOW)
 
 **Server**: `ORDER BY type = "investment", position, name` — investments last.
 
-**CloudKit**: Sorts by `position` only.
+**Decision**: Not a real gap. The UI always applies its own sort order (e.g., `TransactionDetailView.sortedAccounts` groups current before investment, `SidebarView` separates into sections). Repository sort order is not relied upon for display.
 
-**Fix**: Update `CloudKitAccountRepository.fetchAll` to post-sort with investments last.
+### 5. Daily Balances — investmentValue & bestFit (was LOW)
 
-### 5. Daily Balances — investmentValue & bestFit (LOW)
+**Server**: Computes `investmentValue` (from investment_value table) and `bestFit` (linear regression on availableFunds).
 
-**Server**: Computes `investmentValue` (from investment values) and `bestFit` (linear regression).
+**Fix applied**: Both CloudKit and InMemory analysis repositories now:
+- Compute `investmentValue` by fetching investment values from `InvestmentValueRecord` (CloudKit) or `InMemoryInvestmentRepository` and tracking the most recent value per account for each date.
+- Compute `bestFit` using linear regression (least squares) on `(dayOffset, availableFunds)` data points.
+- Update `netWorth` to use `investmentValue` when available instead of contributed `investments` amount.
 
-**CloudKit**: Sets both to `nil`.
-
-**Fix**: Implement if these features are needed in offline mode. CloudKit has access to `InvestmentValueRecord` so `investmentValue` could be computed.
+Contract tests added: `dailyBalancesInvestmentValue`, `dailyBalancesBestFit`, `dailyBalancesBestFitSinglePoint`.

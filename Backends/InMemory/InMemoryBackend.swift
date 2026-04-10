@@ -32,12 +32,16 @@ final class InMemoryBackend: BackendProvider, @unchecked Sendable {
         earmarkRepository: earmarksRepo as? InMemoryEarmarkRepository
       )
 
+    let investmentsRepo =
+      investments as? InMemoryInvestmentRepository ?? InMemoryInvestmentRepository()
+
     // Create analysis repository with dependencies
     // Analysis repository requires concrete InMemory types for computation
     let analysisRepo = InMemoryAnalysisRepository(
       transactionRepository: transactionsRepo as! InMemoryTransactionRepository,
       accountRepository: accountsRepo as! InMemoryAccountRepository,
       earmarkRepository: earmarksRepo as! InMemoryEarmarkRepository,
+      investmentRepository: investmentsRepo,
       currency: currency
     )
 
@@ -48,6 +52,6 @@ final class InMemoryBackend: BackendProvider, @unchecked Sendable {
     self.categories = categoriesRepo
     self.earmarks = earmarksRepo
     self.analysis = analysisRepo
-    self.investments = investments ?? InMemoryInvestmentRepository()
+    self.investments = investmentsRepo
   }
 }

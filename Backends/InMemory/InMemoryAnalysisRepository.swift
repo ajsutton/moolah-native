@@ -4,17 +4,20 @@ final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
   private let transactionRepository: InMemoryTransactionRepository
   private let accountRepository: InMemoryAccountRepository
   private let earmarkRepository: InMemoryEarmarkRepository
+  private let investmentRepository: InMemoryInvestmentRepository
   private let currency: Currency
 
   init(
     transactionRepository: InMemoryTransactionRepository,
     accountRepository: InMemoryAccountRepository,
     earmarkRepository: InMemoryEarmarkRepository,
+    investmentRepository: InMemoryInvestmentRepository = InMemoryInvestmentRepository(),
     currency: Currency = .AUD
   ) {
     self.transactionRepository = transactionRepository
     self.accountRepository = accountRepository
     self.earmarkRepository = earmarkRepository
+    self.investmentRepository = investmentRepository
     self.currency = currency
   }
 
@@ -80,14 +83,24 @@ final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
         earmarked: currentEarmarks,
         availableFunds: currentBalance - currentEarmarks,
         investments: currentInvestments,
-        investmentValue: nil,  // Not computed in-memory
+        investmentValue: nil,
         netWorth: currentBalance + currentInvestments,
-        bestFit: nil,  // Not computed in-memory
+        bestFit: nil,
         isForecast: false
       )
     }
 
-    // 5. Generate forecasted balances if requested
+    // 5. Apply investment values from investment repository
+    let investmentAccountIdsList = Array(investmentAccountIds)
+    let allInvestmentValues = try await fetchAllInvestmentValues(
+      accountIds: investmentAccountIdsList)
+    applyInvestmentValues(allInvestmentValues, to: &dailyBalances, currency: currency)
+
+    // 6. Compute bestFit (linear regression on availableFunds)
+    var actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
+    InMemoryAnalysisRepository.applyBestFit(to: &actualBalances, currency: currency)
+
+    // 7. Generate forecasted balances if requested
     var scheduledBalances: [DailyBalance] = []
     if let forecastUntil = forecastUntil {
       let lastDate = transactions.last?.date ?? Date()
@@ -101,9 +114,121 @@ final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
       )
     }
 
-    // 6. Combine and return
-    let actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
+    // 8. Combine and return
     return actualBalances + scheduledBalances
+  }
+
+  /// Fetch all investment values across the given accounts, sorted by date ascending.
+  private func fetchAllInvestmentValues(accountIds: [UUID]) async throws -> [(
+    accountId: UUID, date: Date, value: MonetaryAmount
+  )] {
+    var allValues: [(accountId: UUID, date: Date, value: MonetaryAmount)] = []
+    for accountId in accountIds {
+      let page = try await investmentRepository.fetchValues(
+        accountId: accountId, page: 0, pageSize: 10000)
+      for iv in page.values {
+        allValues.append((accountId: accountId, date: iv.date, value: iv.value))
+      }
+    }
+    return allValues.sorted { $0.date < $1.date }
+  }
+
+  /// Apply investment values to daily balances.
+  /// For each date with a daily balance, computes the total investment value
+  /// by finding the most recent value entry for each investment account.
+  private func applyInvestmentValues(
+    _ investmentValues: [(accountId: UUID, date: Date, value: MonetaryAmount)],
+    to dailyBalances: inout [Date: DailyBalance],
+    currency: Currency
+  ) {
+    guard !investmentValues.isEmpty, !dailyBalances.isEmpty else { return }
+
+    // Build sorted list of (date, accountId, value) for efficient lookup
+    // For each account, track the most recent value as of each date
+    var latestByAccount: [UUID: MonetaryAmount] = [:]
+    var valueIndex = 0
+
+    for date in dailyBalances.keys.sorted() {
+      // Advance through investment values up to this date
+      while valueIndex < investmentValues.count {
+        let entry = investmentValues[valueIndex]
+        let entryDay = Calendar.current.startOfDay(for: entry.date)
+        if entryDay <= date {
+          latestByAccount[entry.accountId] = entry.value
+          valueIndex += 1
+        } else {
+          break
+        }
+      }
+
+      // Sum latest values across all accounts
+      if !latestByAccount.isEmpty {
+        let totalValue = latestByAccount.values.reduce(
+          MonetaryAmount.zero(currency: currency), +)
+        let balance = dailyBalances[date]!
+        dailyBalances[date] = DailyBalance(
+          date: balance.date,
+          balance: balance.balance,
+          earmarked: balance.earmarked,
+          availableFunds: balance.availableFunds,
+          investments: balance.investments,
+          investmentValue: totalValue,
+          netWorth: balance.balance + totalValue,
+          bestFit: balance.bestFit,
+          isForecast: balance.isForecast
+        )
+      }
+    }
+  }
+
+  /// Apply linear regression best-fit line to daily balances.
+  /// Uses availableFunds as the y-axis value and day offset as x-axis.
+  static func applyBestFit(to balances: inout [DailyBalance], currency: Currency) {
+    guard balances.count >= 2 else { return }
+
+    // Convert to (x, y) pairs where x = days since first date, y = availableFunds in cents
+    let referenceDate = balances[0].date
+    let calendar = Calendar.current
+
+    var sumX: Double = 0
+    var sumY: Double = 0
+    var sumXY: Double = 0
+    var sumXX: Double = 0
+    let n = Double(balances.count)
+
+    var xValues: [Double] = []
+    for balance in balances {
+      let x = Double(
+        calendar.dateComponents([.day], from: referenceDate, to: balance.date).day ?? 0)
+      let y = Double(balance.availableFunds.cents)
+      xValues.append(x)
+      sumX += x
+      sumY += y
+      sumXY += x * y
+      sumXX += x * x
+    }
+
+    // Linear regression: y = mx + b
+    let denominator = n * sumXX - sumX * sumX
+    guard abs(denominator) > 0.001 else { return }  // Avoid division by zero (all same date)
+
+    let m = (n * sumXY - sumX * sumY) / denominator
+    let b = (sumY - m * sumX) / n
+
+    for i in balances.indices {
+      let predicted = Int(round(m * xValues[i] + b))
+      balances[i] = DailyBalance(
+        date: balances[i].date,
+        balance: balances[i].balance,
+        earmarked: balances[i].earmarked,
+        availableFunds: balances[i].availableFunds,
+        investments: balances[i].investments,
+        investmentValue: balances[i].investmentValue,
+        netWorth: balances[i].netWorth,
+        bestFit: MonetaryAmount(cents: predicted, currency: currency),
+        isForecast: balances[i].isForecast
+      )
+    }
   }
 
   private func applyTransaction(
@@ -264,11 +389,10 @@ final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
     }
 
     // 3. Group by (categoryId, financialMonth)
-    var breakdown: [String: [UUID: MonetaryAmount]] = [:]  // [month: [categoryId: total]]
+    var breakdown: [String: [UUID?: MonetaryAmount]] = [:]  // [month: [categoryId: total]]
 
     for txn in transactions where txn.amount.cents < 0 {
-      // Server excludes uncategorized expenses (AND category_id IS NOT NULL)
-      guard let categoryId = txn.categoryId else { continue }
+      let categoryId = txn.categoryId
       let month = financialMonth(for: txn.date, monthEnd: monthEnd)
 
       if breakdown[month] == nil {

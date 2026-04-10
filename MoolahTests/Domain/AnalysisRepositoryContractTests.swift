@@ -1140,6 +1140,220 @@ struct AnalysisRepositoryContractTests {
       )
     }
   }
+
+  // MARK: - Investment Value Tests
+
+  @Test(
+    "fetchDailyBalances computes investmentValue from investment values",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func dailyBalancesInvestmentValue(backend: any BackendProvider) async throws {
+    // Create an investment account and a bank account
+    let investmentAccount = Account(
+      id: UUID(),
+      name: "Portfolio",
+      type: .investment,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(investmentAccount)
+
+    let bankAccount = Account(
+      id: UUID(),
+      name: "Bank",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(bankAccount)
+
+    // Create a transfer to the investment account
+    let calendar = Calendar.current
+    let day1 = calendar.date(from: DateComponents(year: 2025, month: 3, day: 1))!
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .transfer,
+        date: day1,
+        accountId: bankAccount.id,
+        toAccountId: investmentAccount.id,
+        amount: MonetaryAmount(cents: -50000, currency: .defaultTestCurrency),
+        payee: "Invest"
+      ))
+
+    // Set investment value (market value is higher than contributed)
+    let day2 = calendar.date(from: DateComponents(year: 2025, month: 3, day: 2))!
+    try await backend.investments.setValue(
+      accountId: investmentAccount.id,
+      date: day2,
+      value: MonetaryAmount(cents: 55000, currency: .defaultTestCurrency)
+    )
+
+    // Create another transaction on day2 so we get a daily balance entry for it
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: day2,
+        accountId: bankAccount.id,
+        amount: MonetaryAmount(cents: 1000, currency: .defaultTestCurrency),
+        payee: "Interest"
+      ))
+
+    let balances = try await backend.analysis.fetchDailyBalances(after: nil, forecastUntil: nil)
+
+    // Find the balance for day2
+    let day2Start = calendar.startOfDay(for: day2)
+    let day2Balance = balances.first { $0.date == day2Start }
+    #expect(day2Balance != nil, "Should have a balance for day2")
+    #expect(
+      day2Balance?.investmentValue == MonetaryAmount(cents: 55000, currency: .defaultTestCurrency),
+      "investmentValue should reflect the recorded market value"
+    )
+    // netWorth should use investmentValue when available
+    #expect(
+      day2Balance?.netWorth == day2Balance!.balance + day2Balance!.investmentValue!,
+      "netWorth should be balance + investmentValue"
+    )
+  }
+
+  @Test(
+    "fetchDailyBalances computes bestFit linear regression",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func dailyBalancesBestFit(backend: any BackendProvider) async throws {
+    let account = Account(
+      id: UUID(),
+      name: "Test Account",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    // Create transactions on consecutive days with linearly increasing balances
+    let calendar = Calendar.current
+    let day1 = calendar.date(from: DateComponents(year: 2025, month: 3, day: 1))!
+    let day2 = calendar.date(from: DateComponents(year: 2025, month: 3, day: 2))!
+    let day3 = calendar.date(from: DateComponents(year: 2025, month: 3, day: 3))!
+
+    // Day 1: +1000
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: day1,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: 1000, currency: .defaultTestCurrency),
+        payee: "Day 1"
+      ))
+    // Day 2: +1000 (cumulative 2000)
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: day2,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: 1000, currency: .defaultTestCurrency),
+        payee: "Day 2"
+      ))
+    // Day 3: +1000 (cumulative 3000)
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: day3,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: 1000, currency: .defaultTestCurrency),
+        payee: "Day 3"
+      ))
+
+    let balances = try await backend.analysis.fetchDailyBalances(after: nil, forecastUntil: nil)
+
+    // All balances should have bestFit values (3 data points = enough for regression)
+    for balance in balances {
+      #expect(balance.bestFit != nil, "bestFit should be computed for each daily balance")
+    }
+
+    // For perfectly linear data, bestFit should closely match actual values
+    let day1Start = calendar.startOfDay(for: day1)
+    let day3Start = calendar.startOfDay(for: day3)
+    let day1Balance = balances.first { $0.date == day1Start }
+    let day3Balance = balances.first { $0.date == day3Start }
+    #expect(day1Balance != nil)
+    #expect(day3Balance != nil)
+
+    // bestFit for day1 should be close to 1000 and day3 close to 3000
+    // Allow small floating point tolerance (within 1 cent)
+    #expect(abs(day1Balance!.bestFit!.cents - 1000) <= 1)
+    #expect(abs(day3Balance!.bestFit!.cents - 3000) <= 1)
+  }
+
+  @Test(
+    "fetchDailyBalances returns nil bestFit with fewer than 2 data points",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func dailyBalancesBestFitSinglePoint(backend: any BackendProvider) async throws {
+    let account = Account(
+      id: UUID(),
+      name: "Test Account",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: Date(),
+        accountId: account.id,
+        amount: MonetaryAmount(cents: 1000, currency: .defaultTestCurrency),
+        payee: "Single"
+      ))
+
+    let balances = try await backend.analysis.fetchDailyBalances(after: nil, forecastUntil: nil)
+    #expect(balances.count == 1)
+    #expect(balances[0].bestFit == nil, "bestFit should be nil with only 1 data point")
+  }
+
+  // MARK: - Expense Breakdown Uncategorized Tests
+
+  @Test(
+    "fetchExpenseBreakdown includes uncategorized expenses",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func expenseBreakdownIncludesUncategorized(backend: any BackendProvider) async throws {
+    let account = Account(
+      id: UUID(),
+      name: "Test Account",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    // Create an uncategorized expense (no categoryId)
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: Date(),
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -500, currency: .defaultTestCurrency),
+        payee: "Uncategorized Store"
+      ))
+
+    let breakdown = try await backend.analysis.fetchExpenseBreakdown(monthEnd: 25, after: nil)
+
+    #expect(!breakdown.isEmpty, "Uncategorized expenses should appear in breakdown")
+    let uncategorized = breakdown.filter { $0.categoryId == nil }
+    #expect(
+      uncategorized.count == 1,
+      "Should have one uncategorized expense entry"
+    )
+    #expect(
+      uncategorized[0].totalExpenses.cents == 500,
+      "Uncategorized expense total should be 500 cents"
+    )
+  }
 }
 
 // MARK: - CloudKit Test Backend
@@ -1169,6 +1383,7 @@ private struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable
       modelContainer: container, profileId: profileId, currency: currency)
     self.analysis = CloudKitAnalysisRepository(
       modelContainer: container, profileId: profileId, currency: currency)
-    self.investments = InMemoryInvestmentRepository()
+    self.investments = CloudKitInvestmentRepository(
+      modelContainer: container, profileId: profileId, currency: currency)
   }
 }

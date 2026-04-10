@@ -113,7 +113,16 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       )
     }
 
-    // 5. Generate forecasted balances if requested
+    // 5. Apply investment values from InvestmentValueRecord
+    let investmentValues = try await fetchAllInvestmentValues(
+      investmentAccountIds: investmentAccountIds)
+    applyInvestmentValues(investmentValues, to: &dailyBalances, currency: currency)
+
+    // 6. Compute bestFit (linear regression on availableFunds)
+    var actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
+    InMemoryAnalysisRepository.applyBestFit(to: &actualBalances, currency: currency)
+
+    // 7. Generate forecasted balances if requested
     var scheduledBalances: [DailyBalance] = []
     if let forecastUntil {
       let lastDate = transactions.last?.date ?? Date()
@@ -127,9 +136,69 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       )
     }
 
-    // 6. Combine and return
-    let actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
+    // 8. Combine and return
     return actualBalances + scheduledBalances
+  }
+
+  /// Fetch all investment values for the given accounts from SwiftData, sorted by date ascending.
+  private func fetchAllInvestmentValues(
+    investmentAccountIds: Set<UUID>
+  ) async throws -> [(accountId: UUID, date: Date, value: MonetaryAmount)] {
+    guard !investmentAccountIds.isEmpty else { return [] }
+    let profileId = self.profileId
+    let descriptor = FetchDescriptor<InvestmentValueRecord>(
+      predicate: #Predicate { $0.profileId == profileId }
+    )
+    return try await MainActor.run {
+      let records = try context.fetch(descriptor)
+      return
+        records
+        .filter { investmentAccountIds.contains($0.accountId) }
+        .map { (accountId: $0.accountId, date: $0.date, value: $0.toDomain().value) }
+        .sorted { $0.date < $1.date }
+    }
+  }
+
+  /// Apply investment values to daily balances.
+  private func applyInvestmentValues(
+    _ investmentValues: [(accountId: UUID, date: Date, value: MonetaryAmount)],
+    to dailyBalances: inout [Date: DailyBalance],
+    currency: Currency
+  ) {
+    guard !investmentValues.isEmpty, !dailyBalances.isEmpty else { return }
+
+    var latestByAccount: [UUID: MonetaryAmount] = [:]
+    var valueIndex = 0
+
+    for date in dailyBalances.keys.sorted() {
+      while valueIndex < investmentValues.count {
+        let entry = investmentValues[valueIndex]
+        let entryDay = Calendar.current.startOfDay(for: entry.date)
+        if entryDay <= date {
+          latestByAccount[entry.accountId] = entry.value
+          valueIndex += 1
+        } else {
+          break
+        }
+      }
+
+      if !latestByAccount.isEmpty {
+        let totalValue = latestByAccount.values.reduce(
+          MonetaryAmount.zero(currency: currency), +)
+        let balance = dailyBalances[date]!
+        dailyBalances[date] = DailyBalance(
+          date: balance.date,
+          balance: balance.balance,
+          earmarked: balance.earmarked,
+          availableFunds: balance.availableFunds,
+          investments: balance.investments,
+          investmentValue: totalValue,
+          netWorth: balance.balance + totalValue,
+          bestFit: balance.bestFit,
+          isForecast: balance.isForecast
+        )
+      }
+    }
   }
 
   private func applyTransaction(
