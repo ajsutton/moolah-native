@@ -100,10 +100,15 @@ struct CategoryPicker: View {
         .multilineTextAlignment(.trailing)
         .focused($isFieldFocused)
         .anchorPreference(key: CategoryPickerAnchorKey.self, value: .bounds) { $0 }
+        .accessibilityIdentifier("categoryPicker.searchField")
         .onChange(of: isFieldFocused) { _, focused in
           if focused && !state.isEditing {
             state.open(categories: categories)
           } else if !focused && state.isEditing {
+            // Accept highlighted suggestion on Tab/click-away, then close
+            if let index = state.highlightedIndex {
+              selection = state.acceptHighlighted(at: index)
+            }
             state.close()
           }
         }
@@ -140,8 +145,14 @@ struct CategoryPicker: View {
             return .handled
           }
         #endif
-        .accessibilityLabel("\(label): \(selectedLabel)")
-        .accessibilityHint("Tap to search categories")
+    }
+    .accessibilityRepresentation {
+      Picker(label, selection: $selection) {
+        Text("None").tag(UUID?.none)
+        ForEach(categories.flattenedByPath(), id: \.category.id) { entry in
+          Text(entry.path).tag(UUID?.some(entry.category.id))
+        }
+      }
     }
   }
 }
@@ -157,6 +168,13 @@ struct CategoryPickerOverlayModifier: ViewModifier {
     content
       .overlayPreferenceValue(CategoryPickerAnchorKey.self) { anchor in
         if state.isEditing, let anchor {
+          // Layer 1: invisible full-screen tap catcher for click-outside dismissal
+          Color.clear
+            .contentShape(Rectangle())
+            .onTapGesture { state.close() }
+            .accessibilityHidden(true)
+
+          // Layer 2: positioned dropdown
           GeometryReader { proxy in
             let rect = proxy[anchor]
             CategoryDropdownContent(
@@ -174,6 +192,9 @@ struct CategoryPickerOverlayModifier: ViewModifier {
             )
             .frame(width: rect.width)
             .offset(x: rect.minX, y: rect.maxY + 4)
+            #if os(macOS)
+              .onExitCommand { state.close() }
+            #endif
           }
         }
       }
@@ -259,6 +280,7 @@ private struct CategoryDropdownContent: View {
         if hovering { highlightedIndex = 0 }
       }
     #endif
+    .accessibilityIdentifier("categoryPicker.option.none")
     .accessibilityLabel("None — remove category")
     .accessibilityAddTraits(.isButton)
   }
@@ -282,6 +304,7 @@ private struct CategoryDropdownContent: View {
         if hovering { highlightedIndex = index }
       }
     #endif
+    .accessibilityIdentifier("categoryPicker.option.\(entry.category.id)")
     .accessibilityLabel("Category: \(entry.path)")
     .accessibilityAddTraits(.isButton)
   }
