@@ -45,10 +45,6 @@ struct Profile: Identifiable, Codable, Sendable, Equatable {
   }
 
   var currency: Currency {
-    switch currencyCode {
-    case "USD": return .USD
-    case "AUD": return .AUD
-    default: return Currency(code: currencyCode, symbol: currencyCode, decimals: 2)
-    }
+    Currency.from(code: currencyCode)
   }
 }
