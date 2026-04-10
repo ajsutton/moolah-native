@@ -55,17 +55,17 @@ struct IncomeExpenseTableCard: View {
     ScrollView(.horizontal, showsIndicators: false) {
       VStack(spacing: 0) {
         // Header row
-        HStack(spacing: 0) {
+        HStack(spacing: 12) {
           Text("Month")
             .frame(width: 120, alignment: .leading)
           Text("Income")
-            .frame(width: 100, alignment: .trailing)
+            .frame(minWidth: 100, alignment: .trailing)
           Text("Expense")
-            .frame(width: 100, alignment: .trailing)
+            .frame(minWidth: 100, alignment: .trailing)
           Text("Savings")
-            .frame(width: 100, alignment: .trailing)
+            .frame(minWidth: 100, alignment: .trailing)
           Text("Total Savings")
-            .frame(width: 110, alignment: .trailing)
+            .frame(minWidth: 110, alignment: .trailing)
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -78,7 +78,7 @@ struct IncomeExpenseTableCard: View {
         LazyVStack(spacing: 0) {
           ForEach(visibleData) { item in
             VStack(spacing: 0) {
-              HStack(spacing: 0) {
+              HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                   Text(monthLabel(for: item))
                     .font(.body)
@@ -91,24 +91,24 @@ struct IncomeExpenseTableCard: View {
                 Text(income(for: item).formatted)
                   .monospacedDigit()
                   .foregroundStyle(.green)
-                  .frame(width: 100, alignment: .trailing)
+                  .frame(minWidth: 100, alignment: .trailing)
 
                 Text(expense(for: item).formatted)
                   .monospacedDigit()
                   .foregroundStyle(.red)
-                  .frame(width: 100, alignment: .trailing)
+                  .frame(minWidth: 100, alignment: .trailing)
 
                 let savings = profit(for: item)
                 Text(savings.formatted)
                   .monospacedDigit()
                   .foregroundStyle(savings.cents >= 0 ? .green : .red)
-                  .frame(width: 100, alignment: .trailing)
+                  .frame(minWidth: 100, alignment: .trailing)
 
                 let totalSavings = cumulativeSavings(upTo: item)
                 Text(totalSavings.formatted)
                   .monospacedDigit()
                   .foregroundStyle(totalSavings.cents >= 0 ? .green : .red)
-                  .frame(width: 110, alignment: .trailing)
+                  .frame(minWidth: 110, alignment: .trailing)
               }
               .padding(.horizontal, 12)
               .padding(.vertical, 8)
@@ -141,13 +141,24 @@ struct IncomeExpenseTableCard: View {
   }
 
   private func cumulativeSavings(upTo item: MonthlyIncomeExpense) -> MonetaryAmount {
+    Self.cumulativeSavings(
+      upTo: item, in: data, includeEarmarks: includeEarmarks)
+  }
+
+  /// Cumulative savings from the first row through the given item.
+  /// Data is sorted most-recent-first, so the first row's total equals its own
+  /// savings and each subsequent row adds to the running total.
+  nonisolated static func cumulativeSavings(
+    upTo item: MonthlyIncomeExpense,
+    in data: [MonthlyIncomeExpense],
+    includeEarmarks: Bool
+  ) -> MonetaryAmount {
     guard let index = data.firstIndex(where: { $0.id == item.id }) else {
       return .zero(currency: data.first?.income.currency ?? .AUD)
     }
-    // Sum from the current item to the end (data is sorted most recent first)
-    return data[index...].reduce(MonetaryAmount.zero(currency: item.income.currency)) {
+    return data[...index].reduce(MonetaryAmount.zero(currency: item.income.currency)) {
       total, month in
-      total + profit(for: month)
+      total + (includeEarmarks ? month.totalProfit : month.profit)
     }
   }
 

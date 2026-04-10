@@ -124,7 +124,7 @@ final class AnalysisStore {
     incomeAndExpense = try await repository.fetchIncomeAndExpense(
       monthEnd: monthEnd,
       after: after
-    )
+    ).sorted { $0.month > $1.month }
   }
 
   /// Transforms expense breakdown into chart-ready data grouped by root-level category and month.

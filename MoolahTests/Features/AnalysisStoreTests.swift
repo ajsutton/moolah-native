@@ -225,6 +225,141 @@ struct AnalysisStoreCategoriesOverTimeTests {
   }
 }
 
+// MARK: - IncomeExpenseTableCard.cumulativeSavings
+
+@Suite("IncomeExpenseTableCard — cumulativeSavings")
+struct IncomeExpenseTableCardCumulativeSavingsTests {
+
+  private let currency: Currency = .defaultTestCurrency
+
+  private func amount(_ cents: Int) -> MonetaryAmount {
+    MonetaryAmount(cents: cents, currency: currency)
+  }
+
+  private func monthData(
+    month: String,
+    income: Int,
+    expense: Int,
+    earmarkedIncome: Int = 0,
+    earmarkedExpense: Int = 0
+  ) -> MonthlyIncomeExpense {
+    MonthlyIncomeExpense(
+      month: month,
+      start: Date(),
+      end: Date(),
+      income: amount(income),
+      expense: amount(expense),
+      profit: amount(income - expense),
+      earmarkedIncome: amount(earmarkedIncome),
+      earmarkedExpense: amount(earmarkedExpense),
+      earmarkedProfit: amount(earmarkedIncome - earmarkedExpense)
+    )
+  }
+
+  @Test("first row total savings equals its own savings")
+  func firstRowEqualsOwnSavings() {
+    let data = [
+      monthData(month: "202604", income: 5000_00, expense: 3000_00),
+      monthData(month: "202603", income: 4000_00, expense: 3500_00),
+      monthData(month: "202602", income: 4500_00, expense: 2000_00),
+    ]
+
+    let result = IncomeExpenseTableCard.cumulativeSavings(
+      upTo: data[0], in: data, includeEarmarks: false)
+
+    #expect(result.cents == 2000_00)  // 5000 - 3000
+  }
+
+  @Test("second row accumulates first two rows")
+  func secondRowAccumulatesTwo() {
+    let data = [
+      monthData(month: "202604", income: 5000_00, expense: 3000_00),
+      monthData(month: "202603", income: 4000_00, expense: 3500_00),
+      monthData(month: "202602", income: 4500_00, expense: 2000_00),
+    ]
+
+    let result = IncomeExpenseTableCard.cumulativeSavings(
+      upTo: data[1], in: data, includeEarmarks: false)
+
+    // (5000 - 3000) + (4000 - 3500) = 2000 + 500 = 2500
+    #expect(result.cents == 2500_00)
+  }
+
+  @Test("last row is grand total of all savings")
+  func lastRowIsGrandTotal() {
+    let data = [
+      monthData(month: "202604", income: 5000_00, expense: 3000_00),
+      monthData(month: "202603", income: 4000_00, expense: 3500_00),
+      monthData(month: "202602", income: 4500_00, expense: 2000_00),
+    ]
+
+    let result = IncomeExpenseTableCard.cumulativeSavings(
+      upTo: data[2], in: data, includeEarmarks: false)
+
+    // 2000 + 500 + 2500 = 5000
+    #expect(result.cents == 5000_00)
+  }
+
+  @Test("includeEarmarks uses totalProfit instead of profit")
+  func includeEarmarksUsesTotalProfit() {
+    let data = [
+      monthData(
+        month: "202604", income: 5000_00, expense: 3000_00,
+        earmarkedIncome: 1000_00, earmarkedExpense: 500_00),
+      monthData(
+        month: "202603", income: 4000_00, expense: 3500_00,
+        earmarkedIncome: 200_00, earmarkedExpense: 100_00),
+    ]
+
+    let withoutEarmarks = IncomeExpenseTableCard.cumulativeSavings(
+      upTo: data[1], in: data, includeEarmarks: false)
+    let withEarmarks = IncomeExpenseTableCard.cumulativeSavings(
+      upTo: data[1], in: data, includeEarmarks: true)
+
+    // Without: (5000-3000) + (4000-3500) = 2500
+    #expect(withoutEarmarks.cents == 2500_00)
+    // With: (5000-3000+1000-500) + (4000-3500+200-100) = 2500 + 600 = 3100
+    #expect(withEarmarks.cents == 3100_00)
+  }
+
+  @Test("single row total equals its own savings")
+  func singleRow() {
+    let data = [monthData(month: "202604", income: 9000_00, expense: 8000_00)]
+
+    let result = IncomeExpenseTableCard.cumulativeSavings(
+      upTo: data[0], in: data, includeEarmarks: false)
+
+    #expect(result.cents == 1000_00)
+  }
+
+  @Test("handles negative savings correctly")
+  func negativeSavings() {
+    let data = [
+      monthData(month: "202604", income: 2000_00, expense: 5000_00),
+      monthData(month: "202603", income: 3000_00, expense: 1000_00),
+    ]
+
+    let first = IncomeExpenseTableCard.cumulativeSavings(
+      upTo: data[0], in: data, includeEarmarks: false)
+    let second = IncomeExpenseTableCard.cumulativeSavings(
+      upTo: data[1], in: data, includeEarmarks: false)
+
+    #expect(first.cents == -3000_00)  // 2000 - 5000
+    #expect(second.cents == -1000_00)  // -3000 + 2000
+  }
+
+  @Test("unknown item returns zero")
+  func unknownItem() {
+    let data = [monthData(month: "202604", income: 5000_00, expense: 3000_00)]
+    let unknown = monthData(month: "202501", income: 1000_00, expense: 500_00)
+
+    let result = IncomeExpenseTableCard.cumulativeSavings(
+      upTo: unknown, in: data, includeEarmarks: false)
+
+    #expect(result.cents == 0)
+  }
+}
+
 // MARK: - extrapolateBalances
 
 @Suite("AnalysisStore — extrapolateBalances")
