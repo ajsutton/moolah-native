@@ -6,33 +6,51 @@
 
 ## Overview
 
-This plan describes the one-time migration of existing user data from the moolah-server REST API to the local SwiftData/CloudKit storage. This is the **highest-risk** part of the iCloud migration — data loss or corruption during migration would be unacceptable for a financial application.
+This plan describes the **optional** migration of existing user data from a moolah-server or custom-server profile to a new iCloud profile using SwiftData/CloudKit storage. Migration is user-initiated — it is never automatic or forced. The original profile is preserved so the user can compare data and verify accuracy before deciding to stop using it.
+
+This is the **highest-risk** part of the iCloud migration — data loss or corruption during migration would be unacceptable for a financial application. The non-destructive approach (keeping the original profile) significantly reduces this risk.
+
+---
+
+## Design Principles
+
+1. **Optional:** Migration is never automatic. The user explicitly triggers it.
+2. **Non-destructive:** The original profile is never modified or deleted (only its label changes).
+3. **Verifiable:** Both profiles coexist, so the user can compare data side-by-side.
+4. **Repeatable:** If the first attempt fails or produces incorrect results, the user can delete the new iCloud profile and try again.
 
 ---
 
 ## User Experience Flow
 
+### Trigger
+
+Migration is triggered from **Profile Settings** for a moolah-server or custom-server profile. A button labeled **"Migrate to iCloud"** appears in the profile's settings section. This button is only visible for remote-backend profiles (`.moolah` or `.custom`).
+
 ### Happy Path
-1. User opens the app (currently signed in via Google OAuth to moolah-server)
-2. App detects this is the first launch with iCloud backend available
-3. App shows **"Migrate to iCloud"** screen explaining the change
+1. User navigates to profile settings for their server-based profile
+2. User taps **"Migrate to iCloud"**
+3. Confirmation sheet explains: "This will create a new iCloud profile with a copy of all your data. Your current profile will be kept with '(Migrated)' added to its name."
 4. User taps **"Start Migration"**
 5. Progress indicator shows: "Downloading accounts... categories... earmarks... transactions (page 1 of N)..."
 6. Progress indicator shows: "Saving to iCloud..."
 7. **"Migration Complete"** screen with summary (X accounts, Y transactions, etc.)
-8. User taps **"Continue"** → app switches to CloudKit backend
-9. Old session cookies are cleared
+8. User taps **"Continue"**
+9. The app switches to the newly created iCloud profile
+10. The original profile's label is updated to append " (Migrated)" (e.g., "My Finances" → "My Finances (Migrated)")
+11. The new iCloud profile inherits the original label (e.g., "My Finances")
 
 ### Error Path
 1. Migration fails at any step → error screen with details
 2. User can tap **"Retry"** to restart from the beginning
 3. All partial imports are rolled back (SwiftData context discarded without saving)
-4. User can also tap **"Skip for Now"** to continue using the server backend
+4. The original profile is untouched — no label change occurs on failure
+5. Any partially created iCloud profile is cleaned up
 
 ### No Data Path
 - User has no data on the server (fresh account)
 - Migration completes instantly with "0 items migrated"
-- App switches to CloudKit backend
+- New iCloud profile is created (empty) and original profile is renamed
 
 ---
 
@@ -72,6 +90,7 @@ struct ExportedData: Sendable {
   let earmarks: [Earmark]
   let earmarkBudgets: [UUID: [EarmarkBudgetItem]]  // keyed by earmarkId
   let transactions: [Transaction]
+  let investmentValues: [UUID: [InvestmentValue]]   // keyed by accountId
 }
 
 actor ServerDataExporter {
@@ -79,6 +98,7 @@ actor ServerDataExporter {
   private let categoryRepo: CategoryRepository
   private let earmarkRepo: EarmarkRepository
   private let transactionRepo: TransactionRepository
+  private let investmentRepo: InvestmentRepository
 
   enum ExportProgress: Sendable {
     case downloading(step: String)
@@ -109,12 +129,21 @@ actor ServerDataExporter {
     progress(.downloading(step: "transactions"))
     let transactions = try await fetchAllTransactions()
 
+    // 5. Investment values (paginated per investment account)
+    progress(.downloading(step: "investment values"))
+    let investmentAccounts = accounts.filter { $0.type == .investment }
+    var investmentValues: [UUID: [InvestmentValue]] = [:]
+    for account in investmentAccounts {
+      investmentValues[account.id] = try await fetchAllInvestmentValues(accountId: account.id)
+    }
+
     let data = ExportedData(
       accounts: accounts,
       categories: categories,
       earmarks: earmarks,
       earmarkBudgets: budgets,
-      transactions: transactions
+      transactions: transactions,
+      investmentValues: investmentValues
     )
     progress(.downloadComplete(data))
     return data
@@ -163,6 +192,28 @@ actor ServerDataExporter {
 
     return allTransactions
   }
+
+  private func fetchAllInvestmentValues(accountId: UUID) async throws -> [InvestmentValue] {
+    var allValues: [InvestmentValue] = []
+    var page = 0
+    let pageSize = 200
+
+    while true {
+      let result = try await investmentRepo.fetchValues(
+        accountId: accountId,
+        page: page,
+        pageSize: pageSize
+      )
+      allValues.append(contentsOf: result.values)
+
+      if result.values.count < pageSize {
+        break
+      }
+      page += 1
+    }
+
+    return allValues
+  }
 }
 ```
 
@@ -196,6 +247,7 @@ struct ImportResult: Sendable {
   let earmarkCount: Int
   let budgetItemCount: Int
   let transactionCount: Int
+  let investmentValueCount: Int
 }
 
 actor CloudKitDataImporter {
@@ -307,7 +359,30 @@ actor CloudKitDataImporter {
       }
     }
 
-    // 6. Save all at once (atomic)
+    // 6. Investment values (per investment account)
+    let allInvestmentValues = data.investmentValues.values.flatMap { $0 }
+    let totalValues = allInvestmentValues.count
+    progress(.importing(step: "investment values", current: 0, total: totalValues))
+    var investmentValueCount = 0
+    for (accountId, values) in data.investmentValues {
+      for value in values {
+        let record = InvestmentValueRecord(
+          id: value.id,
+          profileId: profileId,
+          accountId: accountId,
+          date: value.date,
+          value: value.value.cents,
+          currencyCode: currencyCode
+        )
+        context.insert(record)
+        investmentValueCount += 1
+        if investmentValueCount % 100 == 0 {
+          progress(.importing(step: "investment values", current: investmentValueCount, total: totalValues))
+        }
+      }
+    }
+
+    // 7. Save all at once (atomic)
     progress(.importing(step: "saving", current: 0, total: 1))
     try context.save()
 
@@ -316,7 +391,8 @@ actor CloudKitDataImporter {
       categoryCount: data.categories.count,
       earmarkCount: data.earmarks.count,
       budgetItemCount: budgetItemCount,
-      transactionCount: data.transactions.count
+      transactionCount: data.transactions.count,
+      investmentValueCount: investmentValueCount
     )
     progress(.importComplete(result))
     return result
@@ -327,11 +403,12 @@ actor CloudKitDataImporter {
 ### Import Order
 
 ```
-1. Categories    (referenced by transactions, earmark budgets)
-2. Accounts      (referenced by transactions)
-3. Earmarks      (referenced by transactions, budget items)
-4. Budget Items  (references earmarks + categories)
-5. Transactions  (references accounts, categories, earmarks)
+1. Categories          (referenced by transactions, earmark budgets)
+2. Accounts            (referenced by transactions, investment values)
+3. Earmarks            (referenced by transactions, budget items)
+4. Budget Items        (references earmarks + categories)
+5. Transactions        (references accounts, categories, earmarks)
+6. Investment Values   (references accounts)
 ```
 
 Since we use UUID foreign keys (not SwiftData relationships), the order is technically irrelevant — but importing in dependency order makes verification easier.
@@ -344,6 +421,7 @@ Since we use UUID foreign keys (not SwiftData relationships), the order is techn
 - Transaction → Earmark references remain valid
 - Category parent → child references remain valid
 - Earmark → Budget item references remain valid
+- Investment value → Account references remain valid
 
 The domain models already use `UUID` for IDs, and the import code passes them through directly.
 
@@ -370,16 +448,20 @@ struct MigrationVerifier {
   ) async throws -> VerificationResult {
     let context = ModelContext(modelContainer)
 
-    // 1. Record counts
+    // 1. Record counts (scoped to the new profile's profileId)
     let accountCount = try context.fetchCount(FetchDescriptor<AccountRecord>())
     let categoryCount = try context.fetchCount(FetchDescriptor<CategoryRecord>())
     let earmarkCount = try context.fetchCount(FetchDescriptor<EarmarkRecord>())
     let txnCount = try context.fetchCount(FetchDescriptor<TransactionRecord>())
+    let investmentValueCount = try context.fetchCount(FetchDescriptor<InvestmentValueRecord>())
+
+    let expectedInvestmentValueCount = exported.investmentValues.values.reduce(0) { $0 + $1.count }
 
     let countMatch = accountCount == exported.accounts.count
       && categoryCount == exported.categories.count
       && earmarkCount == exported.earmarks.count
       && txnCount == exported.transactions.count
+      && investmentValueCount == expectedInvestmentValueCount
 
     // 2. Account balance verification
     // Compute balances locally and compare with server-provided balances
@@ -411,13 +493,15 @@ struct MigrationVerifier {
         accounts: exported.accounts.count,
         categories: exported.categories.count,
         earmarks: exported.earmarks.count,
-        transactions: exported.transactions.count
+        transactions: exported.transactions.count,
+        investmentValues: expectedInvestmentValueCount
       ),
       actualCounts: (
         accounts: accountCount,
         categories: categoryCount,
         earmarks: earmarkCount,
-        transactions: txnCount
+        transactions: txnCount,
+        investmentValues: investmentValueCount
       ),
       balanceMismatches: balanceMismatches
     )
@@ -433,16 +517,19 @@ struct MigrationVerifier {
 | Category count | `fetchCount` vs exported count | Must match exactly |
 | Earmark count | `fetchCount` vs exported count | Must match exactly |
 | Transaction count | `fetchCount` vs exported count | Must match exactly |
+| Investment value count | `fetchCount` vs exported count | Must match exactly |
 | Account balances | Local computation vs server balance | Must match exactly |
-| Earmark balances | Local computation vs server balance | Must match (within rounding) |
+| Earmark balances | Local computation vs server balance | Must match exactly |
 
 ### Balance Mismatch Handling
 
-If balances don't match:
-- Log the mismatches for debugging
-- Show a warning to the user (not a blocker)
-- Likely causes: scheduled transaction inclusion/exclusion differences, or transfer amount sign conventions
-- The local computation is authoritative going forward — the server balance is just a verification check
+Balance mismatches are treated as a **migration failure** — they are never silently accepted:
+
+- The migration stops and the user is shown a clear error detailing which accounts/earmarks have mismatched balances and by how much
+- The user is given two options:
+  1. **"Keep for Review"** — the new iCloud profile is retained so the user can switch to it and inspect the data. The source profile is **not** renamed. Both profiles have distinct labels (the new one gets a " (Incomplete)" suffix).
+  2. **"Delete and Retry"** — the new iCloud profile and all its data are deleted. The user can retry the migration from the source profile's settings.
+- Likely causes: scheduled transaction inclusion/exclusion differences, transfer amount sign conventions, or missing transactions
 
 ---
 
@@ -460,26 +547,35 @@ final class MigrationCoordinator {
     case importing(step: String, progress: Double)
     case verifying
     case succeeded(ImportResult)
+    case verificationFailed(VerificationResult, newProfileId: UUID)
     case failed(MigrationError)
   }
 
   private(set) var state: State = .idle
 
+  /// Migrates data from a remote profile to a new iCloud profile.
+  ///
+  /// - Parameters:
+  ///   - sourceProfile: The remote profile to migrate from
+  ///   - remoteBackend: The backend for the source profile
+  ///   - modelContainer: The shared SwiftData model container
+  ///   - profileStore: The profile store for creating the new profile and renaming the old one
   func migrate(
+    sourceProfile: Profile,
     from remoteBackend: RemoteBackend,
     to modelContainer: ModelContainer,
-    profileId: UUID,
-    currencyCode: String
+    profileStore: ProfileStore
   ) async {
     state = .exporting(step: "Starting...")
 
     do {
-      // 1. Export
+      // 1. Export all data from the remote backend
       let exporter = ServerDataExporter(
         accountRepo: remoteBackend.accounts,
         categoryRepo: remoteBackend.categories,
         earmarkRepo: remoteBackend.earmarks,
-        transactionRepo: remoteBackend.transactions
+        transactionRepo: remoteBackend.transactions,
+        investmentRepo: remoteBackend.investments
       )
       let exported = try await exporter.export { [weak self] progress in
         Task { @MainActor in
@@ -491,11 +587,21 @@ final class MigrationCoordinator {
         }
       }
 
-      // 2. Import — stamp all records with profileId and currencyCode
+      // 2. Create a new iCloud profile with the original label
+      let newProfileId = UUID()
+      let newProfile = try await profileStore.createProfile(
+        id: newProfileId,
+        label: sourceProfile.label,
+        backendType: .cloudKit,
+        currency: sourceProfile.currency,
+        financialYearStartMonth: sourceProfile.financialYearStartMonth
+      )
+
+      // 3. Import data into the new profile
       let importer = CloudKitDataImporter(
         modelContainer: modelContainer,
-        profileId: profileId,
-        currencyCode: currencyCode
+        profileId: newProfileId,
+        currencyCode: sourceProfile.currency.code
       )
       let result = try await importer.importData(exported) { [weak self] progress in
         Task { @MainActor in
@@ -508,20 +614,30 @@ final class MigrationCoordinator {
         }
       }
 
-      // 3. Verify
+      // 4. Verify imported data
       state = .verifying
       let verifier = MigrationVerifier()
       let verification = try await verifier.verify(
         exported: exported,
-        modelContainer: modelContainer
+        modelContainer: modelContainer,
+        profileId: newProfileId
       )
 
       if !verification.countMatch {
-        throw MigrationError.verificationFailed(verification)
+        // Don't delete the new profile — let the user review it
+        // The UI will offer "Keep for Review" vs "Delete" options
+        state = .verificationFailed(verification, newProfileId: newProfileId)
+        return
       }
 
-      // 4. Cleanup
-      CookieKeychain().clear()  // Remove Google OAuth cookies
+      // 5. Rename the source profile to indicate it has been migrated
+      try await profileStore.updateProfile(
+        id: sourceProfile.id,
+        label: "\(sourceProfile.label) (Migrated)"
+      )
+
+      // 6. Switch to the new iCloud profile
+      try await profileStore.switchToProfile(id: newProfileId)
 
       state = .succeeded(result)
 
@@ -532,26 +648,21 @@ final class MigrationCoordinator {
 }
 ```
 
-### Backend Switching
+### Profile Creation (Not Backend Switching)
 
-After successful migration, the profile's `backendType` is updated from `.remote` to `.cloudKit`. The existing `ProfileSession` infrastructure handles the rest:
+Unlike the original design, migration does **not** modify the source profile's backend type. Instead it creates a brand-new iCloud profile:
 
-1. `ProfileStore.updateProfile()` sets `profile.backendType = .cloudKit`
-2. On next session creation, `ProfileSession` checks `profile.backendType`
-3. If `.cloudKit`: create `CloudKitBackend(modelContainer:, profileId: profile.id, currency: profile.currency)`
-4. If `.remote`: create `RemoteBackend(baseURL: profile.serverURL, currency: profile.currency, ...)`
+1. `MigrationCoordinator` calls `profileStore.createProfile()` with `backendType: .cloudKit`
+2. All exported data is imported scoped to the new profile's `profileId`
+3. On success, the source profile's label gets " (Migrated)" appended
+4. The app switches to the new iCloud profile as the active profile
+5. The source profile remains fully functional — the user can switch back at any time
 
-```swift
-// In ProfileSession.init()
-let backend: any BackendProvider = switch profile.backendType {
-case .remote:
-  RemoteBackend(baseURL: profile.serverURL, currency: profile.currency, ...)
-case .cloudKit:
-  CloudKitBackend(modelContainer: sharedContainer, profileId: profile.id, currency: profile.currency)
-}
-```
+This means both profiles coexist:
+- **"My Finances"** — the new iCloud profile with migrated data
+- **"My Finances (Migrated)"** — the original server profile, untouched
 
-All profiles share a single `ModelContainer` — data isolation is enforced by `profileId` on every record. The container is created once at app startup and passed to each `ProfileSession`.
+The user can compare data between the two profiles and delete the old one when satisfied.
 
 ---
 
@@ -571,18 +682,19 @@ enum MigrationError: Error, Sendable {
 
 ### Rollback Strategy
 
-- **Export failure:** No data has been written locally. Simply show error and allow retry.
-- **Import failure:** The `ModelContext` is discarded without calling `save()`. No data persists. Clean rollback.
-- **Verification failure:** Data was saved but counts don't match. Two options:
-  1. Delete all imported records and retry
-  2. Show warning but allow user to proceed (balances may differ slightly)
-- **Post-switchover issues:** Keep the `RemoteBackend` code available for a transition period. Add a "Switch back to server" option in settings.
+Since migration creates a new profile without modifying the original, rollback is straightforward:
+
+- **Export failure:** No data has been written locally. No new profile created. Simply show error and allow retry.
+- **Import failure:** The `ModelContext` is discarded without calling `save()`. Delete the partially created profile. Clean rollback.
+- **Verification failure:** Data was saved but counts/balances don't match. User chooses to either keep the new profile for review or delete it and retry.
+- **Post-migration issues:** The source profile is still there with all its data. User can switch back at any time. No "switch back" mechanism needed — it's just profile switching.
 
 ### Retry
 
-The migration can be retried from scratch at any time. Before retrying:
-1. Delete all existing records from the SwiftData container (clean slate)
-2. Re-run the full export → import → verify cycle
+The migration can be retried at any time:
+1. Delete the failed/incorrect iCloud profile (if one was created)
+2. Re-run migration from the source profile's settings — creates a fresh iCloud profile
+3. No need to manually clean up data — deleting the profile cleans up all scoped records
 
 ---
 
@@ -616,6 +728,11 @@ The migration can be retried from scratch at any time. Before retrying:
 - `parentId` references are preserved by UUID
 - Import order doesn't matter (UUID foreign keys, not SwiftData relationships)
 
+### Investment Values
+- Fetched per-investment-account (paginated, 200 per page)
+- Only accounts with `type == .investment` are queried
+- Imported as `InvestmentValueRecord` with the new profile's `profileId`
+
 ### Session Expiry During Migration
 - If the Google OAuth session expires mid-export, `APIClient` throws `BackendError.unauthenticated`
 - Show "Session expired. Please sign in again to continue migration."
@@ -627,8 +744,11 @@ The migration can be retried from scratch at any time. Before retrying:
 
 ### MigrationView
 
+Presented as a sheet from the profile settings screen when the user taps "Migrate to iCloud".
+
 ```swift
 struct MigrationView: View {
+  let sourceProfile: Profile
   @State private var coordinator = MigrationCoordinator()
 
   var body: some View {
@@ -644,6 +764,8 @@ struct MigrationView: View {
         ProgressView("Verifying data integrity...")
       case .succeeded(let result):
         migrationSuccess(result)
+      case .verificationFailed(let verification, let newProfileId):
+        verificationFailure(verification, newProfileId: newProfileId)
       case .failed(let error):
         migrationFailure(error)
       }
@@ -658,11 +780,11 @@ struct MigrationView: View {
         .foregroundStyle(.tint)
       Text("Migrate to iCloud")
         .font(.title)
-      Text("Your data will be moved from the Moolah server to iCloud. This enables offline access and removes the dependency on the server.")
+      Text("This will create a new iCloud profile with a copy of all your data from \"\(sourceProfile.label)\". Your current profile will be kept with \"(Migrated)\" added to its name so you can compare and verify the data.")
         .multilineTextAlignment(.center)
         .foregroundStyle(.secondary)
       Button("Start Migration") {
-        Task { await coordinator.migrate(...) }
+        Task { await coordinator.migrate(sourceProfile: sourceProfile, ...) }
       }
       .buttonStyle(.borderedProminent)
     }
@@ -670,11 +792,13 @@ struct MigrationView: View {
 }
 ```
 
-### Settings Integration
-- Add "Data Migration" section in settings
-- Show migration status (completed / not started)
-- Allow re-triggering migration if needed
-- Show "Switch back to server" option during transition period
+### Profile Settings Integration
+
+The "Migrate to iCloud" button appears in the profile settings view for remote-backend profiles (`.moolah` or `.custom`):
+
+- **Button visibility:** Only shown for profiles with `backendType` of `.moolah` or `.custom`
+- **Button action:** Presents the `MigrationView` as a sheet
+- **No status tracking needed:** The existence of a corresponding iCloud profile (with the original label) indicates migration was completed. The "(Migrated)" suffix on the source profile is also a visual indicator.
 
 ---
 
@@ -692,11 +816,13 @@ struct ServerDataExporterTests {
       accountRepo: backend.accounts,
       categoryRepo: backend.categories,
       earmarkRepo: backend.earmarks,
-      transactionRepo: backend.transactions
+      transactionRepo: backend.transactions,
+      investmentRepo: backend.investments
     )
     let data = try await exporter.export { _ in }
     #expect(data.accounts.count == expectedAccountCount)
     #expect(data.transactions.count == expectedTransactionCount)
+    #expect(data.investmentValues.count == expectedInvestmentAccountCount)
   }
 }
 
@@ -789,7 +915,7 @@ func fullMigration() async throws {
 | `MigrationVerifier` (counts + balances) | 2 hours |
 | `MigrationCoordinator` (orchestration) | 2 hours |
 | `MigrationView` UI | 2 hours |
-| Backend switching in composition root | 1 hour |
+| Profile settings integration | 1 hour |
 | Unit tests | 3 hours |
 | Integration tests | 2 hours |
 | **Total** | **~18 hours** |
@@ -800,9 +926,9 @@ func fullMigration() async throws {
 
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|------------|------------|
-| Data loss during migration | Critical | Low | Atomic save, verification, retry capability |
+| Data loss during migration | Critical | Low | Non-destructive: source profile preserved, atomic save, verification, retry |
 | Session expires mid-export | Medium | Medium | Detect and prompt re-auth |
 | Very large datasets (50K+ txns) | Medium | Low | Pagination, progress reporting, memory management |
-| Balance mismatch after migration | Medium | Low | Detailed verification logging; local computation is authoritative |
-| User declines migration | Low | Medium | Keep RemoteBackend working; prompt again later |
+| Balance mismatch after migration | Critical | Low | Migration fails, new profile deleted, detailed error shown to user |
 | CloudKit unavailable during import | Medium | Low | Check iCloud availability before starting |
+| Profile label collision | Low | Low | Check for existing profile with same label before creating |
