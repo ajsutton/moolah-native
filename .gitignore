@@ -1,6 +1,7 @@
 .env
 
 # Xcode
+*.xcodeproj
 *.xcworkspace
 xcuserdata/
 *.xccheckout
