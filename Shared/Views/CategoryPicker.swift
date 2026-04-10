@@ -98,6 +98,7 @@ struct CategoryPicker: View {
       TextField(selectedLabel, text: $state.searchText)
         .textFieldStyle(.plain)
         .multilineTextAlignment(.trailing)
+        .frame(maxWidth: .infinity, alignment: .trailing)
         .focused($isFieldFocused)
         .anchorPreference(key: CategoryPickerAnchorKey.self, value: .bounds) { $0 }
         .accessibilityIdentifier("categoryPicker.searchField")
@@ -168,13 +169,6 @@ struct CategoryPickerOverlayModifier: ViewModifier {
     content
       .overlayPreferenceValue(CategoryPickerAnchorKey.self) { anchor in
         if state.isEditing, let anchor {
-          // Layer 1: invisible full-screen tap catcher for click-outside dismissal
-          Color.clear
-            .contentShape(Rectangle())
-            .onTapGesture { state.close() }
-            .accessibilityHidden(true)
-
-          // Layer 2: positioned dropdown
           GeometryReader { proxy in
             let rect = proxy[anchor]
             CategoryDropdownContent(
