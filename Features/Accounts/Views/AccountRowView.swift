@@ -10,12 +10,17 @@ struct SidebarRowView: View {
   let amount: MonetaryAmount
   var isSelected: Bool = false
 
+  @Environment(\.backgroundProminence) private var backgroundProminence
+
   /// Bright green/red that contrast well against the blue selection highlight.
   private static let selectedPositiveColor = Color(red: 0.55, green: 1.0, blue: 0.65)
   private static let selectedNegativeColor = Color(red: 1.0, green: 0.6, blue: 0.6)
 
   private var amountColorOverride: Color? {
-    guard isSelected else { return nil }
+    // Only use bright overrides when the row has a prominent (blue) selection
+    // background. When the sidebar is unfocused the background is grey and
+    // standard green/red are more readable.
+    guard isSelected, backgroundProminence == .increased else { return nil }
     if amount.isPositive { return Self.selectedPositiveColor }
     if amount.isNegative { return Self.selectedNegativeColor }
     return nil

@@ -285,18 +285,48 @@ struct MoolahProfileDetailView: View {
   let authStore: AuthStore?
 
   @State private var label: String
+  @State private var currencyCode: String
+  @State private var financialYearStartMonth: Int
+
+  private static let monthNames: [String] = {
+    let formatter = DateFormatter()
+    formatter.locale = Locale.current
+    return formatter.monthSymbols ?? []
+  }()
 
   init(profile: Profile, authStore: AuthStore?) {
     self.profile = profile
     self.authStore = authStore
     _label = State(initialValue: profile.label)
+    _currencyCode = State(initialValue: profile.currencyCode)
+    _financialYearStartMonth = State(initialValue: profile.financialYearStartMonth)
   }
 
   var body: some View {
     Form {
       Section("Profile") {
         TextField("Label", text: $label)
-          .onChange(of: label) { _, _ in saveLabel() }
+          .onChange(of: label) { _, _ in saveChanges() }
+      }
+
+      Section("Settings") {
+        Picker("Currency", selection: $currencyCode) {
+          ForEach(ProfileFormView.commonCurrencyCodes, id: \.self) { code in
+            Text("\(code) — \(ProfileFormView.currencyName(for: code))")
+              .tag(code)
+          }
+        }
+        .onChange(of: currencyCode) { _, _ in saveChanges() }
+
+        Picker("Financial Year Starts", selection: $financialYearStartMonth) {
+          ForEach(1...12, id: \.self) { month in
+            if month <= Self.monthNames.count {
+              Text(Self.monthNames[month - 1])
+                .tag(month)
+            }
+          }
+        }
+        .onChange(of: financialYearStartMonth) { _, _ in saveChanges() }
       }
 
       ProfileAuthStatusView(profile: profile, authStore: authStore)
@@ -304,11 +334,29 @@ struct MoolahProfileDetailView: View {
     .formStyle(.grouped)
   }
 
-  private func saveLabel() {
-    guard !label.isEmpty, label != profile.label else { return }
+  private func saveChanges() {
+    let trimmedLabel = label.trimmingCharacters(in: .whitespaces)
+    guard !trimmedLabel.isEmpty else { return }
+
     var updated = profile
-    updated.label = label
-    profileStore.updateProfile(updated)
+    var changed = false
+
+    if trimmedLabel != profile.label {
+      updated.label = trimmedLabel
+      changed = true
+    }
+    if currencyCode != profile.currencyCode {
+      updated.currencyCode = currencyCode
+      changed = true
+    }
+    if financialYearStartMonth != profile.financialYearStartMonth {
+      updated.financialYearStartMonth = financialYearStartMonth
+      changed = true
+    }
+
+    if changed {
+      profileStore.updateProfile(updated)
+    }
   }
 }
 
@@ -322,19 +370,29 @@ struct CustomServerProfileDetailView: View {
 
   @State private var label: String
   @State private var serverURL: String
+  @State private var currencyCode: String
+  @State private var financialYearStartMonth: Int
+
+  private static let monthNames: [String] = {
+    let formatter = DateFormatter()
+    formatter.locale = Locale.current
+    return formatter.monthSymbols ?? []
+  }()
 
   init(profile: Profile, authStore: AuthStore?) {
     self.profile = profile
     self.authStore = authStore
     _label = State(initialValue: profile.label)
     _serverURL = State(initialValue: profile.serverURL?.absoluteString ?? "")
+    _currencyCode = State(initialValue: profile.currencyCode)
+    _financialYearStartMonth = State(initialValue: profile.financialYearStartMonth)
   }
 
   var body: some View {
     Form {
       Section("Server") {
         TextField("Label", text: $label)
-          .onChange(of: label) { _, _ in saveLabel() }
+          .onChange(of: label) { _, _ in saveChanges() }
 
         TextField("Server URL", text: $serverURL)
           .autocorrectionDisabled()
@@ -346,6 +404,26 @@ struct CustomServerProfileDetailView: View {
           .onChange(of: serverURL) {
             profileStore.clearValidationError()
           }
+      }
+
+      Section("Settings") {
+        Picker("Currency", selection: $currencyCode) {
+          ForEach(ProfileFormView.commonCurrencyCodes, id: \.self) { code in
+            Text("\(code) — \(ProfileFormView.currencyName(for: code))")
+              .tag(code)
+          }
+        }
+        .onChange(of: currencyCode) { _, _ in saveChanges() }
+
+        Picker("Financial Year Starts", selection: $financialYearStartMonth) {
+          ForEach(1...12, id: \.self) { month in
+            if month <= Self.monthNames.count {
+              Text(Self.monthNames[month - 1])
+                .tag(month)
+            }
+          }
+        }
+        .onChange(of: financialYearStartMonth) { _, _ in saveChanges() }
       }
 
       if profileStore.isValidating {
@@ -369,11 +447,29 @@ struct CustomServerProfileDetailView: View {
     .formStyle(.grouped)
   }
 
-  private func saveLabel() {
-    guard !label.isEmpty, label != profile.label else { return }
+  private func saveChanges() {
+    let trimmedLabel = label.trimmingCharacters(in: .whitespaces)
+    guard !trimmedLabel.isEmpty else { return }
+
     var updated = profile
-    updated.label = label
-    profileStore.updateProfile(updated)
+    var changed = false
+
+    if trimmedLabel != profile.label {
+      updated.label = trimmedLabel
+      changed = true
+    }
+    if currencyCode != profile.currencyCode {
+      updated.currencyCode = currencyCode
+      changed = true
+    }
+    if financialYearStartMonth != profile.financialYearStartMonth {
+      updated.financialYearStartMonth = financialYearStartMonth
+      changed = true
+    }
+
+    if changed {
+      profileStore.updateProfile(updated)
+    }
   }
 
   private func saveURL() async {

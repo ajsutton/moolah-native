@@ -24,6 +24,7 @@ struct TransactionFormView: View {
   @State private var recurEvery: Int
   @State private var isRepeating: Bool
   @State private var showDeleteConfirmation = false
+  @FocusState private var payeeFieldFocused: Bool
   @State private var showPayeeSuggestions = false
   @State private var payeeHighlightedIndex: Int?
   @State private var categoryText: String = ""
@@ -224,6 +225,13 @@ struct TransactionFormView: View {
           },
           onAcceptHighlighted: acceptHighlightedPayee
         )
+        .focused($payeeFieldFocused)
+        .onChange(of: payeeFieldFocused) { _, focused in
+          if !focused {
+            showPayeeSuggestions = false
+            payeeHighlightedIndex = nil
+          }
+        }
       } else {
         TextField("Payee", text: $payee)
       }
