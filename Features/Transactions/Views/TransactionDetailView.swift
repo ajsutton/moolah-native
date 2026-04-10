@@ -100,6 +100,48 @@ struct TransactionDetailView: View {
   }
 
   var body: some View {
+    formContent
+      .formStyle(.grouped)
+      .overlayPreferenceValue(PayeeFieldAnchorKey.self) { anchor in
+        payeeOverlay(anchor: anchor)
+      }
+      .categoryPickerOverlay(state: categoryPickerState, selection: $categoryId)
+      .navigationTitle("Transaction Details")
+      #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+      #endif
+      .onAppear {
+        if isNewTransaction {
+          focusedField = .payee
+        }
+      }
+      .onChange(of: type) { _, _ in debouncedSave() }
+      .onChange(of: payee) { _, _ in debouncedSave() }
+      .onChange(of: amountText) { _, _ in debouncedSave() }
+      .onChange(of: date) { _, _ in debouncedSave() }
+      .onChange(of: accountId) { _, _ in debouncedSave() }
+      .onChange(of: toAccountId) { _, _ in debouncedSave() }
+      .onChange(of: categoryId) { _, _ in debouncedSave() }
+      .onChange(of: earmarkId) { _, _ in debouncedSave() }
+      .onChange(of: notes) { _, _ in debouncedSave() }
+      .onChange(of: isRepeating) { _, _ in debouncedSave() }
+      .onChange(of: recurPeriod) { _, _ in debouncedSave() }
+      .onChange(of: recurEvery) { _, _ in debouncedSave() }
+      .confirmationDialog(
+        "Delete Transaction",
+        isPresented: $showDeleteConfirmation,
+        titleVisibility: .visible
+      ) {
+        Button("Delete", role: .destructive) {
+          onDelete(transaction.id)
+        }
+        .keyboardShortcut(.delete, modifiers: [])
+      } message: {
+        Text("Are you sure you want to delete this transaction? This cannot be undone.")
+      }
+  }
+
+  private var formContent: some View {
     Form {
       typeSection
       detailsSection
@@ -114,64 +156,30 @@ struct TransactionDetailView: View {
       }
       deleteSection
     }
-    .formStyle(.grouped)
-    .overlayPreferenceValue(PayeeFieldAnchorKey.self) { anchor in
-      if showPayeeSuggestions, !payee.isEmpty,
-        !transactionStore.payeeSuggestions.isEmpty, let anchor
-      {
-        GeometryReader { proxy in
-          let rect = proxy[anchor]
-          PayeeSuggestionDropdown(
-            suggestions: transactionStore.payeeSuggestions,
-            searchText: payee,
-            highlightedIndex: $payeeHighlightedIndex,
-            onSelect: { selected in
-              showPayeeSuggestions = false
-              payeeHighlightedIndex = nil
-              payee = selected
-              transactionStore.clearPayeeSuggestions()
-              autofillFromPayee(selected)
-            }
-          )
-          .frame(width: rect.width)
-          .offset(x: rect.minX, y: rect.maxY + 4)
-        }
+  }
+
+  @ViewBuilder
+  private func payeeOverlay(anchor: Anchor<CGRect>?) -> some View {
+    if showPayeeSuggestions, !payee.isEmpty,
+      !transactionStore.payeeSuggestions.isEmpty, let anchor
+    {
+      GeometryReader { proxy in
+        let rect = proxy[anchor]
+        PayeeSuggestionDropdown(
+          suggestions: transactionStore.payeeSuggestions,
+          searchText: payee,
+          highlightedIndex: $payeeHighlightedIndex,
+          onSelect: { selected in
+            showPayeeSuggestions = false
+            payeeHighlightedIndex = nil
+            payee = selected
+            transactionStore.clearPayeeSuggestions()
+            autofillFromPayee(selected)
+          }
+        )
+        .frame(width: rect.width)
+        .offset(x: rect.minX, y: rect.maxY + 4)
       }
-    }
-    .categoryPickerOverlay(state: categoryPickerState, selection: $categoryId)
-    .navigationTitle("Transaction Details")
-    #if os(iOS)
-      .navigationBarTitleDisplayMode(.inline)
-    #endif
-    .onAppear {
-      // Focus payee field for new transactions
-      if isNewTransaction {
-        focusedField = .payee
-      }
-    }
-    .onChange(of: type) { _, _ in debouncedSave() }
-    .onChange(of: payee) { _, _ in debouncedSave() }
-    .onChange(of: amountText) { _, _ in debouncedSave() }
-    .onChange(of: date) { _, _ in debouncedSave() }
-    .onChange(of: accountId) { _, _ in debouncedSave() }
-    .onChange(of: toAccountId) { _, _ in debouncedSave() }
-    .onChange(of: categoryId) { _, _ in debouncedSave() }
-    .onChange(of: earmarkId) { _, _ in debouncedSave() }
-    .onChange(of: notes) { _, _ in debouncedSave() }
-    .onChange(of: isRepeating) { _, _ in debouncedSave() }
-    .onChange(of: recurPeriod) { _, _ in debouncedSave() }
-    .onChange(of: recurEvery) { _, _ in debouncedSave() }
-    .confirmationDialog(
-      "Delete Transaction",
-      isPresented: $showDeleteConfirmation,
-      titleVisibility: .visible
-    ) {
-      Button("Delete", role: .destructive) {
-        onDelete(transaction.id)
-      }
-      .keyboardShortcut(.delete, modifiers: [])
-    } message: {
-      Text("Are you sure you want to delete this transaction? This cannot be undone.")
     }
   }
 
