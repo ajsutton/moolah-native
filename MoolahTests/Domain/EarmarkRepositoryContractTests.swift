@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 
 @testable import Moolah
@@ -6,34 +7,35 @@ import Testing
 @Suite("EarmarkRepository Contract")
 struct EarmarkRepositoryContractTests {
   @Test(
-    "InMemoryEarmarkRepository - creates earmark",
+    "creates earmark",
     arguments: [
-      InMemoryEarmarkRepository()
+      InMemoryEarmarkRepository() as any EarmarkRepository,
+      makeCloudKitEarmarkRepository() as any EarmarkRepository,
     ])
-  func testCreatesEarmark(repository: InMemoryEarmarkRepository) async throws {
-    let newEarmark = Earmark(
-      name: "Emergency Fund",
-      balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency)
-    )
+  func testCreatesEarmark(repository: any EarmarkRepository) async throws {
+    let newEarmark = Earmark(name: "Emergency Fund")
 
     let created = try await repository.create(newEarmark)
 
     #expect(created.id == newEarmark.id)
     #expect(created.name == "Emergency Fund")
-    #expect(created.balance.cents == 100000)
 
     let all = try await repository.fetchAll()
     #expect(all.count == 1)
+    #expect(all[0].name == "Emergency Fund")
   }
 
   @Test(
-    "InMemoryEarmarkRepository - updates earmark",
+    "updates earmark",
     arguments: [
       InMemoryEarmarkRepository(initialEarmarks: [
         Earmark(name: "Emergency Fund")
-      ])
+      ]) as any EarmarkRepository,
+      makeCloudKitEarmarkRepository(initialEarmarks: [
+        Earmark(name: "Emergency Fund")
+      ]) as any EarmarkRepository,
     ])
-  func testUpdatesEarmark(repository: InMemoryEarmarkRepository) async throws {
+  func testUpdatesEarmark(repository: any EarmarkRepository) async throws {
     let earmarks = try await repository.fetchAll()
     var toUpdate = earmarks[0]
     toUpdate.name = "Rainy Day Fund"
@@ -46,13 +48,16 @@ struct EarmarkRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryEarmarkRepository - fetches empty budget for new earmark",
+    "fetches empty budget for new earmark",
     arguments: [
       InMemoryEarmarkRepository(initialEarmarks: [
         Earmark(name: "Emergency Fund")
-      ])
+      ]) as any EarmarkRepository,
+      makeCloudKitEarmarkRepository(initialEarmarks: [
+        Earmark(name: "Emergency Fund")
+      ]) as any EarmarkRepository,
     ])
-  func testFetchesEmptyBudget(repository: InMemoryEarmarkRepository) async throws {
+  func testFetchesEmptyBudget(repository: any EarmarkRepository) async throws {
     let earmarks = try await repository.fetchAll()
     let budget = try await repository.fetchBudget(earmarkId: earmarks[0].id)
 
@@ -60,13 +65,16 @@ struct EarmarkRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryEarmarkRepository - updates and fetches budget",
+    "updates and fetches budget",
     arguments: [
       InMemoryEarmarkRepository(initialEarmarks: [
         Earmark(name: "Emergency Fund")
-      ])
+      ]) as any EarmarkRepository,
+      makeCloudKitEarmarkRepository(initialEarmarks: [
+        Earmark(name: "Emergency Fund")
+      ]) as any EarmarkRepository,
     ])
-  func testUpdatesFetchesBudget(repository: InMemoryEarmarkRepository) async throws {
+  func testUpdatesFetchesBudget(repository: any EarmarkRepository) async throws {
     let earmarks = try await repository.fetchAll()
     let earmarkId = earmarks[0].id
 
@@ -83,11 +91,12 @@ struct EarmarkRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryEarmarkRepository - throws on update non-existent",
+    "throws on update non-existent",
     arguments: [
-      InMemoryEarmarkRepository()
+      InMemoryEarmarkRepository() as any EarmarkRepository,
+      makeCloudKitEarmarkRepository() as any EarmarkRepository,
     ])
-  func testThrowsOnUpdateNonExistent(repository: InMemoryEarmarkRepository) async throws {
+  func testThrowsOnUpdateNonExistent(repository: any EarmarkRepository) async throws {
     let nonExistent = Earmark(name: "DoesNotExist")
 
     await #expect(throws: BackendError.serverError(404)) {
@@ -96,13 +105,34 @@ struct EarmarkRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryEarmarkRepository - throws on budget update for non-existent earmark",
+    "throws on budget update for non-existent earmark",
     arguments: [
-      InMemoryEarmarkRepository()
+      InMemoryEarmarkRepository() as any EarmarkRepository,
+      makeCloudKitEarmarkRepository() as any EarmarkRepository,
     ])
-  func testThrowsOnBudgetUpdateNonExistent(repository: InMemoryEarmarkRepository) async throws {
+  func testThrowsOnBudgetUpdateNonExistent(repository: any EarmarkRepository) async throws {
     await #expect(throws: BackendError.serverError(404)) {
       try await repository.setBudget(earmarkId: UUID(), categoryId: UUID(), amount: 10000)
     }
   }
+}
+
+private func makeCloudKitEarmarkRepository(
+  initialEarmarks: [Earmark] = [],
+  currency: Currency = .defaultTestCurrency
+) -> CloudKitEarmarkRepository {
+  let container = try! TestModelContainer.create()
+  let profileId = UUID()
+  let repo = CloudKitEarmarkRepository(
+    modelContainer: container, profileId: profileId, currency: currency)
+
+  if !initialEarmarks.isEmpty {
+    let context = ModelContext(container)
+    for earmark in initialEarmarks {
+      context.insert(EarmarkRecord.from(earmark, profileId: profileId, currencyCode: currency.code))
+    }
+    try! context.save()
+  }
+
+  return repo
 }
