@@ -1,7 +1,7 @@
 import Foundation
 
 struct EarmarkDTO: Codable {
-  let id: String
+  let id: ServerUUID
   let name: String
   let position: Int?
   let hidden: Bool
@@ -14,7 +14,7 @@ struct EarmarkDTO: Codable {
 
   func toDomain(currency: Currency) -> Earmark {
     Earmark(
-      id: FlexibleUUID.parse(id) ?? UUID(),
+      id: id.uuid,
       name: name,
       balance: MonetaryAmount(cents: balance, currency: currency),
       saved: MonetaryAmount(cents: saved, currency: currency),
@@ -31,7 +31,7 @@ struct EarmarkDTO: Codable {
 
   static func fromDomain(_ earmark: Earmark) -> EarmarkDTO {
     EarmarkDTO(
-      id: earmark.id.uuidString,
+      id: ServerUUID(earmark.id),
       name: earmark.name,
       position: earmark.position,
       hidden: earmark.isHidden,

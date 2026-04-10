@@ -1,16 +1,16 @@
 import Foundation
 
 struct TransactionDTO: Codable {
-  let id: String
+  let id: ServerUUID
   let type: String
   let date: String  // "YYYY-MM-DD"
-  let accountId: String?
-  let toAccountId: String?
+  let accountId: ServerUUID?
+  let toAccountId: ServerUUID?
   let amount: Int
   let payee: String?
   let notes: String?
-  let categoryId: String?
-  let earmark: String?  // Server uses "earmark", domain uses "earmarkId"
+  let categoryId: ServerUUID?
+  let earmark: ServerUUID?  // Server uses "earmark", domain uses "earmarkId"
   let recurPeriod: String?
   let recurEvery: Int?
 
@@ -18,16 +18,16 @@ struct TransactionDTO: Codable {
     let parsedDate = BackendDateFormatter.date(from: date) ?? Date()
 
     return Transaction(
-      id: FlexibleUUID.parse(id) ?? UUID(),
+      id: id.uuid,
       type: TransactionType(rawValue: type) ?? .expense,
       date: parsedDate,
-      accountId: accountId.flatMap { FlexibleUUID.parse($0) },
-      toAccountId: toAccountId.flatMap { FlexibleUUID.parse($0) },
+      accountId: accountId?.uuid,
+      toAccountId: toAccountId?.uuid,
       amount: MonetaryAmount(cents: amount, currency: currency),
       payee: payee,
       notes: notes,
-      categoryId: categoryId.flatMap { FlexibleUUID.parse($0) },
-      earmarkId: earmark.flatMap { FlexibleUUID.parse($0) },
+      categoryId: categoryId?.uuid,
+      earmarkId: earmark?.uuid,
       recurPeriod: recurPeriod.flatMap { RecurPeriod(rawValue: $0) },
       recurEvery: recurEvery
     )
@@ -36,16 +36,16 @@ struct TransactionDTO: Codable {
   static func fromDomain(_ transaction: Transaction) -> TransactionDTO {
     let dateString = BackendDateFormatter.string(from: transaction.date)
     return TransactionDTO(
-      id: transaction.id.uuidString,
+      id: ServerUUID(transaction.id),
       type: transaction.type.rawValue,
       date: dateString,
-      accountId: transaction.accountId?.uuidString,
-      toAccountId: transaction.toAccountId?.uuidString,
+      accountId: transaction.accountId.map(ServerUUID.init),
+      toAccountId: transaction.toAccountId.map(ServerUUID.init),
       amount: transaction.amount.cents,
       payee: transaction.payee,
       notes: transaction.notes,
-      categoryId: transaction.categoryId?.uuidString,
-      earmark: transaction.earmarkId?.uuidString,
+      categoryId: transaction.categoryId.map(ServerUUID.init),
+      earmark: transaction.earmarkId.map(ServerUUID.init),
       recurPeriod: transaction.recurPeriod?.rawValue,
       recurEvery: transaction.recurEvery
     )
@@ -63,13 +63,13 @@ struct TransactionDTO: Codable {
 struct CreateTransactionDTO: Codable {
   let type: String
   let date: String  // "YYYY-MM-DD"
-  let accountId: String?
-  let toAccountId: String?
+  let accountId: ServerUUID?
+  let toAccountId: ServerUUID?
   let amount: Int
   let payee: String?
   let notes: String?
-  let categoryId: String?
-  let earmark: String?
+  let categoryId: ServerUUID?
+  let earmark: ServerUUID?
   let recurPeriod: String?
   let recurEvery: Int?
 
@@ -78,13 +78,13 @@ struct CreateTransactionDTO: Codable {
     return CreateTransactionDTO(
       type: transaction.type.rawValue,
       date: dateString,
-      accountId: transaction.accountId?.uuidString,
-      toAccountId: transaction.toAccountId?.uuidString,
+      accountId: transaction.accountId.map(ServerUUID.init),
+      toAccountId: transaction.toAccountId.map(ServerUUID.init),
       amount: transaction.amount.cents,
       payee: transaction.payee,
       notes: transaction.notes,
-      categoryId: transaction.categoryId?.uuidString,
-      earmark: transaction.earmarkId?.uuidString,
+      categoryId: transaction.categoryId.map(ServerUUID.init),
+      earmark: transaction.earmarkId.map(ServerUUID.init),
       recurPeriod: transaction.recurPeriod?.rawValue,
       recurEvery: transaction.recurEvery
     )

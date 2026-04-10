@@ -1,23 +1,23 @@
 import Foundation
 
 struct CategoryDTO: Codable {
-  let id: String
+  let id: ServerUUID
   let name: String
-  let parentId: String?
+  let parentId: ServerUUID?
 
   func toDomain() -> Category {
     Category(
-      id: FlexibleUUID.parse(id) ?? UUID(),
+      id: id.uuid,
       name: name,
-      parentId: parentId.flatMap { FlexibleUUID.parse($0) }
+      parentId: parentId?.uuid
     )
   }
 
   static func fromDomain(_ category: Category) -> CategoryDTO {
     CategoryDTO(
-      id: category.id.uuidString,
+      id: ServerUUID(category.id),
       name: category.name,
-      parentId: category.parentId?.uuidString
+      parentId: category.parentId.map(ServerUUID.init)
     )
   }
 
