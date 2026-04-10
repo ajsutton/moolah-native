@@ -208,6 +208,8 @@ struct SettingsView: View {
       MoolahProfileDetailView(profile: profile, authStore: authStore)
     case .remote:
       CustomServerProfileDetailView(profile: profile, authStore: authStore)
+    case .cloudKit:
+      MoolahProfileDetailView(profile: profile, authStore: authStore)
     }
   }
 
@@ -224,6 +226,10 @@ struct SettingsView: View {
           .foregroundStyle(.secondary)
       case .remote:
         Text(profile.resolvedServerURL.host() ?? profile.resolvedServerURL.absoluteString)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      case .cloudKit:
+        Text("iCloud")
           .font(.caption)
           .foregroundStyle(.secondary)
       }

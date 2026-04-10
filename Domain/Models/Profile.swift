@@ -3,7 +3,7 @@ import Foundation
 enum BackendType: String, Codable, Sendable {
   case remote
   case moolah
-  // Future: case iCloud
+  case cloudKit
 }
 
 struct Profile: Identifiable, Codable, Sendable, Equatable {

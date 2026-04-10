@@ -113,6 +113,8 @@ struct ProfileFormView: View {
       guard !serverURL.isEmpty else { return false }
       let urlString = serverURL.hasPrefix("http") ? serverURL : "https://\(serverURL)"
       return URL(string: urlString) != nil
+    case .cloudKit:
+      return true
     }
   }
 
@@ -128,6 +130,8 @@ struct ProfileFormView: View {
       guard let url = URL(string: urlString) else { return }
       let profileLabel = label.isEmpty ? url.host() ?? "Custom Server" : label
       profile = Profile(label: profileLabel, backendType: .remote, serverURL: url)
+    case .cloudKit:
+      profile = Profile(label: "iCloud", backendType: .cloudKit)
     }
 
     if await profileStore.validateAndAddProfile(profile) {
