@@ -152,12 +152,16 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       }
 
     case .transfer:
+      // Transfer: amount is always from the perspective of accountId (negative = money leaving)
+      // Use abs to work with unsigned magnitudes regardless of amount sign.
+      let transferMagnitude = MonetaryAmount(
+        cents: abs(txn.amount.cents), currency: txn.amount.currency)
       if isFromInvestment && !isToInvestment {
-        balance += txn.amount
-        investments -= txn.amount
+        balance += transferMagnitude
+        investments -= transferMagnitude
       } else if !isFromInvestment && isToInvestment {
-        balance -= txn.amount
-        investments += txn.amount
+        balance -= transferMagnitude
+        investments += transferMagnitude
       }
     }
   }

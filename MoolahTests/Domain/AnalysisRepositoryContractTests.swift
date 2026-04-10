@@ -159,6 +159,153 @@ struct AnalysisRepositoryContractTests {
     #expect(forecast.count > 0, "Should have forecast balances")
   }
 
+  @Test(
+    "earmarked balance in dailyBalances reflects earmarked transactions",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func earmarkedBalanceFromTransactions(backend: any BackendProvider) async throws {
+    let account = Account(
+      id: UUID(),
+      name: "Checking",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let earmark = Earmark(
+      id: UUID(),
+      name: "Holiday",
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.earmarks.create(earmark)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    // Earmarked income: +500
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: today,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: 500, currency: .defaultTestCurrency),
+        payee: "Earmarked Save",
+        earmarkId: earmark.id
+      ))
+
+    // Earmarked expense: -200
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: today,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -200, currency: .defaultTestCurrency),
+        payee: "Earmarked Spend",
+        earmarkId: earmark.id
+      ))
+
+    // Non-earmarked income: +1000
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: today,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: 1000, currency: .defaultTestCurrency),
+        payee: "Regular Income"
+      ))
+
+    let balances = try await backend.analysis.fetchDailyBalances(after: nil, forecastUntil: nil)
+
+    #expect(!balances.isEmpty)
+    let todayBalance = balances.first { Calendar.current.isDate($0.date, inSameDayAs: today) }
+    #expect(todayBalance != nil)
+
+    // Total balance = 500 - 200 + 1000 = 1300
+    #expect(todayBalance?.balance.cents == 1300)
+    // Earmarked = 500 - 200 = 300
+    #expect(todayBalance?.earmarked.cents == 300)
+    // Available = 1300 - 300 = 1000
+    #expect(todayBalance?.availableFunds.cents == 1000)
+  }
+
+  @Test(
+    "daily balance + investments equals sum of current + investment account balances",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func balanceInvariantCrossCheck(backend: any BackendProvider) async throws {
+    let checking = Account(
+      id: UUID(),
+      name: "Checking",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(checking)
+
+    let savings = Account(
+      id: UUID(),
+      name: "Savings",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(savings)
+
+    let investment = Account(
+      id: UUID(),
+      name: "Shares",
+      type: .investment,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(investment)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    // Income to checking
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: today,
+        accountId: checking.id,
+        amount: MonetaryAmount(cents: 5000, currency: .defaultTestCurrency),
+        payee: "Salary"
+      ))
+
+    // Transfer checking → investment
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .transfer,
+        date: today,
+        accountId: checking.id,
+        toAccountId: investment.id,
+        amount: MonetaryAmount(cents: -2000, currency: .defaultTestCurrency),
+        payee: "Invest"
+      ))
+
+    // Income to savings
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: today,
+        accountId: savings.id,
+        amount: MonetaryAmount(cents: 1000, currency: .defaultTestCurrency),
+        payee: "Interest"
+      ))
+
+    let balances = try await backend.analysis.fetchDailyBalances(after: nil, forecastUntil: nil)
+
+    #expect(!balances.isEmpty)
+    let todayBalance = balances.last!
+
+    // balance = 5000 - 2000 + 1000 = 4000
+    #expect(todayBalance.balance.cents == 4000)
+    // investments = 2000
+    #expect(todayBalance.investments.cents == 2000)
+    // netWorth = 4000 + 2000 = 6000
+    #expect(todayBalance.netWorth.cents == 6000)
+  }
+
   // MARK: - Expense Breakdown Tests
 
   @Test(
@@ -512,6 +659,63 @@ struct AnalysisRepositoryContractTests {
     // Regular income/expense should be zero
     #expect(month.income.cents == 0)
     #expect(month.expense.cents == 0)
+  }
+
+  @Test(
+    "earmarked income without accountId excluded from balance, included in earmarked",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func nullAccountIdEarmarkedHandling(backend: any BackendProvider) async throws {
+    let account = Account(
+      id: UUID(),
+      name: "Checking",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let earmark = Earmark(
+      id: UUID(),
+      name: "Gift Fund",
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.earmarks.create(earmark)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    // Regular income with accountId
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: today,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: 1000, currency: .defaultTestCurrency),
+        payee: "Salary"
+      ))
+
+    // Earmarked income WITHOUT accountId
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: today,
+        accountId: nil,
+        amount: MonetaryAmount(cents: 500, currency: .defaultTestCurrency),
+        payee: "Gift",
+        earmarkId: earmark.id
+      ))
+
+    let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
+
+    #expect(!data.isEmpty)
+    let month = data[0]
+
+    // Regular income should only include the transaction with accountId
+    #expect(month.income.cents == 1000)
+    // Earmarked income should NOT include the nil-accountId transaction
+    // (fetchIncomeAndExpense skips transactions with nil accountId)
+    #expect(month.earmarkedIncome.cents == 0)
   }
 
   // MARK: - Category Balances Tests

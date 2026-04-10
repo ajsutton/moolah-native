@@ -127,15 +127,18 @@ final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
       }
 
     case .transfer:
-      // Transfer: amount is always from the perspective of accountId
+      // Transfer: amount is always from the perspective of accountId (negative = money leaving)
+      // Use abs to work with unsigned magnitudes regardless of amount sign.
+      let transferMagnitude = MonetaryAmount(
+        cents: abs(txn.amount.cents), currency: txn.amount.currency)
       if isFromInvestment && !isToInvestment {
         // From investment to current: increase balance, decrease investments
-        balance += txn.amount
-        investments -= txn.amount
+        balance += transferMagnitude
+        investments -= transferMagnitude
       } else if !isFromInvestment && isToInvestment {
         // From current to investment: decrease balance, increase investments
-        balance -= txn.amount
-        investments += txn.amount
+        balance -= transferMagnitude
+        investments += transferMagnitude
       }
     // Current-to-current transfers are net-zero on balance
     }
