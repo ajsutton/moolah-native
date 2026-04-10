@@ -29,6 +29,7 @@ struct TransactionFormView: View {
   @State private var categoryText: String = ""
   @State private var showCategorySuggestions = false
   @State private var categoryHighlightedIndex: Int?
+  @State private var categoryJustSelected = false
 
   init(
     accounts: Accounts,
@@ -153,11 +154,11 @@ struct TransactionFormView: View {
               searchText: categoryText,
               highlightedIndex: $categoryHighlightedIndex,
               onSelect: { selected in
+                categoryJustSelected = true
                 categoryId = selected.id
                 categoryText = selected.path
                 showCategorySuggestions = false
                 categoryHighlightedIndex = nil
-                categoryFieldFocused = false
               }
             )
             .frame(width: rect.width)
@@ -269,7 +270,11 @@ struct TransactionFormView: View {
         highlightedIndex: $categoryHighlightedIndex,
         suggestionCount: categoryVisibleSuggestionCount,
         onTextChange: { _ in
-          showCategorySuggestions = true
+          if categoryJustSelected {
+            categoryJustSelected = false
+          } else {
+            showCategorySuggestions = true
+          }
         },
         onAcceptHighlighted: acceptHighlightedCategory
       )
@@ -424,11 +429,11 @@ struct TransactionFormView: View {
       return
     }
     let selected = categoryVisibleSuggestions[index]
+    categoryJustSelected = true
     categoryId = selected.id
     categoryText = selected.path
     showCategorySuggestions = false
     categoryHighlightedIndex = nil
-    categoryFieldFocused = false
   }
 
   private func save() {

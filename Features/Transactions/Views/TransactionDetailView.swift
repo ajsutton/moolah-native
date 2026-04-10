@@ -28,6 +28,7 @@ struct TransactionDetailView: View {
   @State private var categoryText: String = ""
   @State private var showCategorySuggestions = false
   @State private var categoryHighlightedIndex: Int?
+  @State private var categoryJustSelected = false
   @FocusState private var focusedField: Field?
 
   private enum Field: Hashable {
@@ -272,7 +273,11 @@ struct TransactionDetailView: View {
         highlightedIndex: $categoryHighlightedIndex,
         suggestionCount: categoryVisibleSuggestionCount,
         onTextChange: { _ in
-          showCategorySuggestions = true
+          if categoryJustSelected {
+            categoryJustSelected = false
+          } else {
+            showCategorySuggestions = true
+          }
         },
         onAcceptHighlighted: acceptHighlightedCategory
       )
@@ -495,11 +500,11 @@ struct TransactionDetailView: View {
       return
     }
     let selected = categoryVisibleSuggestions[index]
+    categoryJustSelected = true
     categoryId = selected.id
     categoryText = selected.path
     showCategorySuggestions = false
     categoryHighlightedIndex = nil
-    categoryFieldFocused = false
   }
 
   @ViewBuilder
@@ -512,11 +517,11 @@ struct TransactionDetailView: View {
           searchText: categoryText,
           highlightedIndex: $categoryHighlightedIndex,
           onSelect: { selected in
+            categoryJustSelected = true
             categoryId = selected.id
             categoryText = selected.path
             showCategorySuggestions = false
             categoryHighlightedIndex = nil
-            categoryFieldFocused = false
           }
         )
         .frame(width: rect.width)
