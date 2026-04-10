@@ -1,21 +1,43 @@
-import SwiftUI
+#if os(macOS)
+  import SwiftUI
 
-/// macOS File menu commands for switching between profiles.
-/// Placed before .saveItem to appear near the top of the File menu.
-struct ProfileCommands: Commands {
-  let profileStore: ProfileStore
+  /// macOS File menu commands for opening profile windows and signing out.
+  struct ProfileCommands: Commands {
+    let profileStore: ProfileStore
+    let sessionManager: SessionManager
 
-  var body: some Commands {
-    CommandGroup(before: .saveItem) {
+    @FocusedValue(\.authStore) private var authStore
+
+    var body: some Commands {
+      CommandGroup(before: .saveItem) {
+        OpenProfileMenu(profileStore: profileStore)
+
+        Divider()
+      }
+
+      CommandGroup(after: .singleWindowList) {
+        Button("Sign Out") {
+          if let authStore {
+            Task { await authStore.signOut() }
+          }
+        }
+        .disabled(authStore == nil)
+        .keyboardShortcut("o", modifiers: [.command, .shift])
+      }
+    }
+  }
+
+  /// Wrapper view to access `@Environment(\.openWindow)` inside commands.
+  private struct OpenProfileMenu: View {
+    let profileStore: ProfileStore
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
       Menu("Open Profile") {
         ForEach(profileStore.profiles) { profile in
-          let isActive = profile.id == profileStore.activeProfileID
-          Toggle(
-            profile.label,
-            isOn: Binding(
-              get: { isActive },
-              set: { _ in profileStore.setActiveProfile(profile.id) }
-            ))
+          Button(profile.label) {
+            openWindow(value: profile.id)
+          }
         }
 
         if profileStore.profiles.isEmpty {
@@ -24,14 +46,10 @@ struct ProfileCommands: Commands {
 
         Divider()
 
-        #if os(macOS)
-          SettingsLink {
-            Text("Manage Profiles…")
-          }
-        #endif
+        SettingsLink {
+          Text("Manage Profiles…")
+        }
       }
-
-      Divider()
     }
   }
-}
+#endif

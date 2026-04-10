@@ -64,38 +64,54 @@ struct ShowHiddenCommands: Commands {
 @main
 @MainActor
 struct MoolahApp: App {
-  private let container: ModelContainer
   @State private var profileStore = ProfileStore(validator: RemoteServerValidator())
-  @State private var activeSession: ProfileSession?
 
-  init() {
-    do {
-      container = try ModelContainer(for: Schema([]))
-    } catch {
-      fatalError("Failed to initialize ModelContainer: \(error)")
+  #if os(macOS)
+    @State private var sessionManager = SessionManager()
+  #else
+    private let container: ModelContainer
+    @State private var activeSession: ProfileSession?
+
+    init() {
+      do {
+        container = try ModelContainer(for: Schema([]))
+      } catch {
+        fatalError("Failed to initialize ModelContainer: \(error)")
+      }
     }
-  }
+  #endif
 
   var body: some Scene {
-    WindowGroup {
-      ProfileRootView(activeSession: $activeSession)
-        .environment(profileStore)
-    }
-    .modelContainer(container)
-    .commands {
-      #if os(macOS)
-        ProfileCommands(profileStore: profileStore)
-      #endif
-      NewTransactionCommands()
-      NewEarmarkCommands()
-      RefreshCommands()
-      ShowHiddenCommands()
-    }
-
     #if os(macOS)
-      Settings {
-        SettingsView(activeSession: activeSession)
+      WindowGroup(for: Profile.ID.self) { $profileID in
+        ProfileWindowView(profileID: profileID)
           .environment(profileStore)
+          .environment(sessionManager)
+      }
+      .commands {
+        ProfileCommands(profileStore: profileStore, sessionManager: sessionManager)
+        NewTransactionCommands()
+        NewEarmarkCommands()
+        RefreshCommands()
+        ShowHiddenCommands()
+      }
+
+      Settings {
+        SettingsView()
+          .environment(profileStore)
+          .environment(sessionManager)
+      }
+    #else
+      WindowGroup {
+        ProfileRootView(activeSession: $activeSession)
+          .environment(profileStore)
+      }
+      .modelContainer(container)
+      .commands {
+        NewTransactionCommands()
+        NewEarmarkCommands()
+        RefreshCommands()
+        ShowHiddenCommands()
       }
     #endif
   }

@@ -4,16 +4,23 @@ import SwiftUI
 /// and as a sheet on iOS.
 struct SettingsView: View {
   @Environment(ProfileStore.self) private var profileStore
-  let activeSession: ProfileSession?
+
+  #if os(macOS)
+    @Environment(SessionManager.self) private var sessionManager
+  #else
+    let activeSession: ProfileSession?
+  #endif
 
   @State private var selectedProfileID: UUID?
   @State private var showAddProfile = false
   @State private var profileToDelete: Profile?
   @State private var showDeleteAlert = false
 
-  init(activeSession: ProfileSession? = nil) {
-    self.activeSession = activeSession
-  }
+  #if os(iOS)
+    init(activeSession: ProfileSession? = nil) {
+      self.activeSession = activeSession
+    }
+  #endif
 
   var body: some View {
     #if os(macOS)
@@ -189,8 +196,12 @@ struct SettingsView: View {
 
   @ViewBuilder
   private func profileDetailView(for profile: Profile) -> some View {
-    let isActive = profile.id == profileStore.activeProfileID
-    let authStore = isActive ? activeSession?.authStore : nil
+    #if os(macOS)
+      let authStore = sessionManager.sessions[profile.id]?.authStore
+    #else
+      let isActive = profile.id == profileStore.activeProfileID
+      let authStore = isActive ? activeSession?.authStore : nil
+    #endif
 
     switch profile.backendType {
     case .moolah:
@@ -432,9 +443,15 @@ struct ProfileAuthStatusView: View {
           .foregroundStyle(.secondary)
       }
       Spacer()
-      Text("Switch to this profile to sign in")
-        .font(.caption)
-        .foregroundStyle(.secondary)
+      #if os(macOS)
+        Text("Open this profile to sign in")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      #else
+        Text("Switch to this profile to sign in")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      #endif
     }
     .accessibilityElement(children: .combine)
   }

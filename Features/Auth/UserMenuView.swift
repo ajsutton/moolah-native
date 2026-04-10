@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// Toolbar button showing the signed-in user's avatar, name, and a sign-out action.
-/// On macOS, profile switching is handled by the File menu (ProfileCommands), so only
-/// sign-out is shown here. On iOS, the full profile switcher and manage profiles are included.
+/// On macOS: static label showing avatar, name, and profile label (sign out is in File menu).
+/// On iOS: dropdown menu with profile switcher, manage profiles, and sign out.
 struct UserMenuView: View {
   let user: UserProfile
   @Environment(AuthStore.self) private var authStore
@@ -13,44 +12,74 @@ struct UserMenuView: View {
   private let avatarSize: CGFloat = 28
 
   var body: some View {
-    Menu {
-      Text("\(user.givenName) \(user.familyName)")
-        .font(.headline)
+    #if os(macOS)
+      macOSUserLabel
+    #else
+      iOSUserMenu
+    #endif
+  }
 
-      Divider()
+  // MARK: - macOS: Static label (sign out is in File menu)
 
-      #if os(iOS)
-        profileSection
-      #endif
-
-      Button(String(localized: "Sign Out"), role: .destructive) {
-        Task { await authStore.signOut() }
-      }
-    } label: {
+  #if os(macOS)
+    private var macOSUserLabel: some View {
       HStack(spacing: 6) {
         avatarView
-        Text(user.givenName)
-          .font(.subheadline)
+        VStack(alignment: .leading, spacing: 0) {
+          Text(user.givenName)
+            .font(.subheadline)
+          Text(session.profile.label)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
       }
       .frame(height: avatarSize)
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel(
+        "\(user.givenName) \(user.familyName), \(session.profile.label)"
+      )
     }
-    .accessibilityLabel(
-      String(localized: "User menu for \(user.givenName) \(user.familyName)")
-    )
-    #if os(iOS)
+  #endif
+
+  // MARK: - iOS: Full menu with profile switcher and sign out
+
+  #if os(iOS)
+    private var iOSUserMenu: some View {
+      Menu {
+        Text("\(user.givenName) \(user.familyName)")
+          .font(.headline)
+
+        Divider()
+
+        profileSection
+
+        Button(String(localized: "Sign Out"), role: .destructive) {
+          Task { await authStore.signOut() }
+        }
+      } label: {
+        HStack(spacing: 6) {
+          avatarView
+          Text(user.givenName)
+            .font(.subheadline)
+        }
+        .frame(height: avatarSize)
+      }
+      .accessibilityLabel(
+        String(localized: "User menu for \(user.givenName) \(user.familyName)")
+      )
       .sheet(isPresented: $showManageProfiles) {
         NavigationStack {
           SettingsView(activeSession: session)
-          .environment(profileStore)
-          .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-              Button("Done") { showManageProfiles = false }
+            .environment(profileStore)
+            .toolbar {
+              ToolbarItem(placement: .cancellationAction) {
+                Button("Done") { showManageProfiles = false }
+              }
             }
-          }
         }
       }
-    #endif
-  }
+    }
+  #endif
 
   // MARK: - Profile Section (iOS only)
 
