@@ -72,25 +72,29 @@ struct CategoryRepositoryContractTests {
   }
 
   @Test(
-    "deletes category and updates children",
+    "deletes category and orphans children even with replacement",
     arguments: [
       makeRepositoryWithHierarchy() as any CategoryRepository,
       makeCloudKitRepositoryWithHierarchy() as any CategoryRepository,
     ])
-  func testDeletesCategoryAndUpdatesChildren(repository: any CategoryRepository) async throws {
+  func testDeletesCategoryOrphansChildrenEvenWithReplacement(repository: any CategoryRepository)
+    async throws
+  {
     let categories = try await repository.fetchAll()
     let groceries = categories.first { $0.name == "Groceries" }!
     let transport = categories.first { $0.name == "Transport" }!
 
-    // Delete Groceries and replace with Transport
+    // Delete Groceries with Transport as replacement
+    // Server behavior: children are always orphaned (parent_id = NULL),
+    // replacement only applies to transactions and budgets
     try await repository.delete(id: groceries.id, withReplacement: transport.id)
 
     let remaining = try await repository.fetchAll()
-    // Should have Transport and Fruit (now under Transport)
+    // Should have Transport and Fruit (now orphaned at top level)
     #expect(remaining.count == 2)
 
     let updatedFruit = remaining.first { $0.name == "Fruit" }!
-    #expect(updatedFruit.parentId == transport.id)
+    #expect(updatedFruit.parentId == nil, "Children should be orphaned, not reparented")
   }
 
   @Test(
@@ -178,6 +182,63 @@ struct CategoryRepositoryContractTests {
     let updated = page.transactions.first { $0.id == created.id }
     #expect(updated != nil, "Transaction should still exist")
     #expect(updated?.categoryId == nil, "categoryId should be nulled after category deletion")
+  }
+
+  @Test(
+    "deleting category cascades to budget items",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitCategoryTestBackend() as any BackendProvider,
+    ])
+  func testDeleteCategoryCascadesToBudgets(backend: any BackendProvider) async throws {
+    let category = Category(id: UUID(), name: "Groceries")
+    _ = try await backend.categories.create(category)
+
+    let earmark = Earmark(id: UUID(), name: "Savings")
+    _ = try await backend.earmarks.create(earmark)
+
+    // Set a budget for the category
+    try await backend.earmarks.setBudget(
+      earmarkId: earmark.id, categoryId: category.id, amount: 50000)
+
+    let budgetBefore = try await backend.earmarks.fetchBudget(earmarkId: earmark.id)
+    #expect(budgetBefore.count == 1)
+
+    // Delete the category without replacement
+    try await backend.categories.delete(id: category.id, withReplacement: nil)
+
+    // Budget item should be removed
+    let budgetAfter = try await backend.earmarks.fetchBudget(earmarkId: earmark.id)
+    #expect(budgetAfter.isEmpty, "Budget items should be removed when category is deleted")
+  }
+
+  @Test(
+    "deleting category with replacement reassigns budget items",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitCategoryTestBackend() as any BackendProvider,
+    ])
+  func testDeleteCategoryReassignsBudgets(backend: any BackendProvider) async throws {
+    let groceries = Category(id: UUID(), name: "Groceries")
+    let food = Category(id: UUID(), name: "Food")
+    _ = try await backend.categories.create(groceries)
+    _ = try await backend.categories.create(food)
+
+    let earmark = Earmark(id: UUID(), name: "Savings")
+    _ = try await backend.earmarks.create(earmark)
+
+    // Set a budget for groceries
+    try await backend.earmarks.setBudget(
+      earmarkId: earmark.id, categoryId: groceries.id, amount: 50000)
+
+    // Delete groceries with food as replacement
+    try await backend.categories.delete(id: groceries.id, withReplacement: food.id)
+
+    // Budget item should now reference food
+    let budget = try await backend.earmarks.fetchBudget(earmarkId: earmark.id)
+    #expect(budget.count == 1, "Budget should have one entry")
+    #expect(budget.first?.categoryId == food.id, "Budget should reference replacement category")
+    #expect(budget.first?.amount.cents == 50000, "Budget amount should be preserved")
   }
 }
 

@@ -350,6 +350,166 @@ struct TransactionRepositoryContractTests {
       )
     }
   }
+
+  // MARK: - Scheduled Filter
+
+  @Test(
+    "filters scheduled transactions",
+    arguments: [
+      InMemoryTransactionRepository(initialTransactions: makeScheduledTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(initialTransactions: makeScheduledTestTransactions())
+        as any TransactionRepository,
+    ])
+  func testFiltersByScheduled(repository: any TransactionRepository) async throws {
+    let scheduledPage = try await repository.fetch(
+      filter: TransactionFilter(scheduled: true),
+      page: 0,
+      pageSize: 50
+    )
+    #expect(scheduledPage.transactions.count == 1)
+    #expect(scheduledPage.transactions[0].isScheduled)
+
+    let nonScheduledPage = try await repository.fetch(
+      filter: TransactionFilter(scheduled: false),
+      page: 0,
+      pageSize: 50
+    )
+    #expect(nonScheduledPage.transactions.count == 2)
+    for txn in nonScheduledPage.transactions {
+      #expect(!txn.isScheduled)
+    }
+  }
+
+  // MARK: - Earmark Filter
+
+  @Test(
+    "filters by earmarkId",
+    arguments: [
+      InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
+        as any TransactionRepository,
+    ])
+  func testFiltersByEarmarkId(repository: any TransactionRepository) async throws {
+    // The test data has one earmarked transaction
+    let allPage = try await repository.fetch(
+      filter: TransactionFilter(),
+      page: 0,
+      pageSize: 50
+    )
+    let earmarked = allPage.transactions.filter { $0.earmarkId != nil }
+    #expect(earmarked.count == 1, "Test data should have one earmarked transaction")
+
+    let earmarkId = earmarked[0].earmarkId!
+    let filteredPage = try await repository.fetch(
+      filter: TransactionFilter(earmarkId: earmarkId),
+      page: 0,
+      pageSize: 50
+    )
+
+    #expect(filteredPage.transactions.count == 1)
+    #expect(filteredPage.transactions[0].earmarkId == earmarkId)
+  }
+
+  // MARK: - Account Filter
+
+  @Test(
+    "filters by accountId including transfers",
+    arguments: [
+      InMemoryTransactionRepository(initialTransactions: makeTransferTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(initialTransactions: makeTransferTestTransactions())
+        as any TransactionRepository,
+    ])
+  func testFiltersByAccountIdIncludingTransfers(repository: any TransactionRepository) async throws
+  {
+    let sourceAccountId = transferSourceAccountId
+    let destAccountId = transferDestAccountId
+
+    // Filter by source account — should include the transfer AND the expense
+    let sourcePage = try await repository.fetch(
+      filter: TransactionFilter(accountId: sourceAccountId),
+      page: 0,
+      pageSize: 50
+    )
+    #expect(sourcePage.transactions.count == 2)
+
+    // Filter by dest account — should include the transfer only
+    let destPage = try await repository.fetch(
+      filter: TransactionFilter(accountId: destAccountId),
+      page: 0,
+      pageSize: 50
+    )
+    #expect(destPage.transactions.count == 1)
+    #expect(destPage.transactions[0].type == .transfer)
+  }
+
+  // MARK: - Payee Suggestions
+
+  @Test(
+    "fetchPayeeSuggestions returns prefix matches sorted by frequency",
+    arguments: [
+      InMemoryTransactionRepository(initialTransactions: makePayeeSuggestionTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(
+        initialTransactions: makePayeeSuggestionTestTransactions())
+        as any TransactionRepository,
+    ])
+  func testPayeeSuggestions(repository: any TransactionRepository) async throws {
+    let suggestions = try await repository.fetchPayeeSuggestions(prefix: "Wool")
+
+    #expect(suggestions.count == 1)
+    #expect(suggestions[0] == "Woolworths")
+  }
+
+  @Test(
+    "fetchPayeeSuggestions is case insensitive",
+    arguments: [
+      InMemoryTransactionRepository(initialTransactions: makePayeeSuggestionTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(
+        initialTransactions: makePayeeSuggestionTestTransactions())
+        as any TransactionRepository,
+    ])
+  func testPayeeSuggestionsCaseInsensitive(repository: any TransactionRepository) async throws {
+    let suggestions = try await repository.fetchPayeeSuggestions(prefix: "wool")
+
+    #expect(suggestions.count == 1)
+    #expect(suggestions[0] == "Woolworths")
+  }
+
+  @Test(
+    "fetchPayeeSuggestions returns empty for empty prefix",
+    arguments: [
+      InMemoryTransactionRepository(initialTransactions: makePayeeSuggestionTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(
+        initialTransactions: makePayeeSuggestionTestTransactions())
+        as any TransactionRepository,
+    ])
+  func testPayeeSuggestionsEmptyPrefix(repository: any TransactionRepository) async throws {
+    let suggestions = try await repository.fetchPayeeSuggestions(prefix: "")
+    #expect(suggestions.isEmpty)
+  }
+
+  @Test(
+    "fetchPayeeSuggestions sorts by frequency",
+    arguments: [
+      InMemoryTransactionRepository(initialTransactions: makePayeeSuggestionTestTransactions())
+        as any TransactionRepository,
+      makeCloudKitTransactionRepository(
+        initialTransactions: makePayeeSuggestionTestTransactions())
+        as any TransactionRepository,
+    ])
+  func testPayeeSuggestionsByFrequency(repository: any TransactionRepository) async throws {
+    // "Coles" appears 3 times, "Coffee Shop" appears 1 time
+    let suggestions = try await repository.fetchPayeeSuggestions(prefix: "Co")
+
+    #expect(suggestions.count == 2)
+    #expect(suggestions[0] == "Coles", "Most frequent payee should be first")
+    #expect(suggestions[1] == "Coffee Shop")
+  }
 }
 
 // Helper function to create test transactions with various attributes
@@ -442,6 +602,110 @@ private func makePaginationTestTransactions() -> [Transaction] {
       accountId: accountId,
       amount: MonetaryAmount(cents: -500, currency: .defaultTestCurrency),
       payee: "Apr Expense"
+    ),
+  ]
+}
+
+private func makeScheduledTestTransactions() -> [Transaction] {
+  let accountId = UUID()
+  let calendar = Calendar.current
+  return [
+    // Non-scheduled expense
+    Transaction(
+      type: .expense,
+      date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 15))!,
+      accountId: accountId,
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
+      payee: "Store"
+    ),
+    // Non-scheduled income
+    Transaction(
+      type: .income,
+      date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 1))!,
+      accountId: accountId,
+      amount: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency),
+      payee: "Salary"
+    ),
+    // Scheduled (recurring) transaction
+    Transaction(
+      type: .expense,
+      date: calendar.date(from: DateComponents(year: 2024, month: 7, day: 1))!,
+      accountId: accountId,
+      amount: MonetaryAmount(cents: -2000, currency: Currency.defaultTestCurrency),
+      payee: "Netflix",
+      recurPeriod: .month,
+      recurEvery: 1
+    ),
+  ]
+}
+
+// Stable IDs for transfer test data (shared between seed and assertions)
+private let transferSourceAccountId = UUID()
+private let transferDestAccountId = UUID()
+
+private func makeTransferTestTransactions() -> [Transaction] {
+  let sourceAccountId = transferSourceAccountId
+  let destAccountId = transferDestAccountId
+  let calendar = Calendar.current
+  return [
+    // Transfer from source to dest
+    Transaction(
+      type: .transfer,
+      date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 15))!,
+      accountId: sourceAccountId,
+      toAccountId: destAccountId,
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
+      payee: "Transfer"
+    ),
+    // Expense on source account only
+    Transaction(
+      type: .expense,
+      date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 10))!,
+      accountId: sourceAccountId,
+      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
+      payee: "Coffee"
+    ),
+  ]
+}
+
+private func makePayeeSuggestionTestTransactions() -> [Transaction] {
+  let accountId = UUID()
+  let calendar = Calendar.current
+  return [
+    Transaction(
+      type: .expense,
+      date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 1))!,
+      accountId: accountId,
+      amount: MonetaryAmount(cents: -1000, currency: Currency.defaultTestCurrency),
+      payee: "Woolworths"
+    ),
+    Transaction(
+      type: .expense,
+      date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 2))!,
+      accountId: accountId,
+      amount: MonetaryAmount(cents: -2000, currency: Currency.defaultTestCurrency),
+      payee: "Coles"
+    ),
+    Transaction(
+      type: .expense,
+      date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 3))!,
+      accountId: accountId,
+      amount: MonetaryAmount(cents: -3000, currency: Currency.defaultTestCurrency),
+      payee: "Coles"
+    ),
+    Transaction(
+      type: .expense,
+      date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 4))!,
+      accountId: accountId,
+      amount: MonetaryAmount(cents: -1500, currency: Currency.defaultTestCurrency),
+      payee: "Coles"
+    ),
+    Transaction(
+      type: .expense,
+      date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 5))!,
+      accountId: accountId,
+      amount: MonetaryAmount(cents: -500, currency: Currency.defaultTestCurrency),
+      payee: "Coffee Shop"
     ),
   ]
 }

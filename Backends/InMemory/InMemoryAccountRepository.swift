@@ -10,8 +10,13 @@ actor InMemoryAccountRepository: AccountRepository {
   func fetchAll() async throws -> [Account] {
     // Return all accounts including hidden (matches server behavior).
     // UI-level filtering of hidden accounts is done by AccountStore.
+    // Sort: investment accounts last, then by position, then by name (matches server).
     return Array(accounts.values)
-      .sorted { $0.position < $1.position }
+      .sorted { a, b in
+        if a.type.isCurrent != b.type.isCurrent { return a.type.isCurrent }
+        if a.position != b.position { return a.position < b.position }
+        return a.name < b.name
+      }
   }
 
   func create(_ account: Account) async throws -> Account {

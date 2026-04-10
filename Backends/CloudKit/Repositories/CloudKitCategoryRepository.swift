@@ -66,13 +66,13 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
         throw BackendError.serverError(404)
       }
 
-      // Update children to point to replacement (or nil)
+      // Orphan children (server always sets parent_id = NULL)
       let childDescriptor = FetchDescriptor<CategoryRecord>(
         predicate: #Predicate { $0.parentId == targetId && $0.profileId == profileId }
       )
       let children = try context.fetch(childDescriptor)
       for child in children {
-        child.parentId = replacementId
+        child.parentId = nil
       }
 
       // Update transactions that reference this category
@@ -83,6 +83,31 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
       let affectedTxns = try context.fetch(txnDescriptor)
       for txn in affectedTxns {
         txn.categoryId = replacementId
+      }
+
+      // Update budget items that reference this category
+      let budgetDescriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
+        predicate: #Predicate { $0.categoryId == deletedId && $0.profileId == profileId }
+      )
+      let affectedBudgets = try context.fetch(budgetDescriptor)
+      for budget in affectedBudgets {
+        if let replacementId {
+          // If replacement already has a budget for this earmark, drop the old one
+          let budgetEarmarkId = budget.earmarkId
+          let existingDescriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
+            predicate: #Predicate {
+              $0.earmarkId == budgetEarmarkId && $0.categoryId == replacementId
+                && $0.profileId == profileId
+            }
+          )
+          if try context.fetch(existingDescriptor).first != nil {
+            context.delete(budget)
+          } else {
+            budget.categoryId = replacementId
+          }
+        } else {
+          context.delete(budget)
+        }
       }
 
       context.delete(record)

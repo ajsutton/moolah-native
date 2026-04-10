@@ -24,12 +24,13 @@ final class InMemoryBackend: BackendProvider, @unchecked Sendable {
     let authRepo = auth ?? InMemoryAuthProvider()
     let accountsRepo = accounts ?? InMemoryAccountRepository()
     let transactionsRepo = transactions ?? InMemoryTransactionRepository(currency: currency)
+    let earmarksRepo = earmarks ?? InMemoryEarmarkRepository(currency: currency)
     let categoriesRepo =
       categories
       ?? InMemoryCategoryRepository(
-        transactionRepository: transactionsRepo as? InMemoryTransactionRepository
+        transactionRepository: transactionsRepo as? InMemoryTransactionRepository,
+        earmarkRepository: earmarksRepo as? InMemoryEarmarkRepository
       )
-    let earmarksRepo = earmarks ?? InMemoryEarmarkRepository(currency: currency)
 
     // Create analysis repository with dependencies
     // Analysis repository requires concrete InMemory types for computation

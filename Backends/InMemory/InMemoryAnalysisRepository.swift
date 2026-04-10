@@ -264,11 +264,12 @@ final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
     }
 
     // 3. Group by (categoryId, financialMonth)
-    var breakdown: [String: [UUID?: MonetaryAmount]] = [:]  // [month: [categoryId: total]]
+    var breakdown: [String: [UUID: MonetaryAmount]] = [:]  // [month: [categoryId: total]]
 
     for txn in transactions where txn.amount.cents < 0 {
+      // Server excludes uncategorized expenses (AND category_id IS NOT NULL)
+      guard let categoryId = txn.categoryId else { continue }
       let month = financialMonth(for: txn.date, monthEnd: monthEnd)
-      let categoryId = txn.categoryId
 
       if breakdown[month] == nil {
         breakdown[month] = [:]
