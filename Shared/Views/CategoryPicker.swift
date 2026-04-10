@@ -8,11 +8,12 @@ struct CategoryPickerAnchorKey: PreferenceKey {
   }
 }
 
-/// Shared state for coordinating between CategoryPicker (in the form) and its dropdown overlay (on the form).
+/// Shared state for coordinating between CategoryPicker (in the form) and its dropdown overlay
+/// (on the form).
 @Observable @MainActor
 final class CategoryPickerState {
-  var searchText = ""
   var isEditing = false
+  var searchText = ""
   var highlightedIndex: Int?
   var categories: Categories = Categories(from: [])
 
@@ -63,8 +64,9 @@ final class CategoryPickerState {
 
 /// A category selection field with autocomplete search and browse-all support.
 ///
-/// Place this inside a Form. Add `.categoryPickerOverlay(state:selection:)` on the Form
-/// so the dropdown renders above form content.
+/// Uses a single TextField that displays the selected category when idle and
+/// switches to search mode on focus. Place inside a Form and add
+/// `.categoryPickerOverlay(state:selection:)` on the Form.
 struct CategoryPicker: View {
   let categories: Categories
   @Binding var selection: UUID?
@@ -93,50 +95,53 @@ struct CategoryPicker: View {
 
   var body: some View {
     LabeledContent(label) {
-      if state.isEditing {
-        TextField("", text: $state.searchText)
-          .focused($isFieldFocused)
-          .textFieldStyle(.plain)
-          .anchorPreference(key: CategoryPickerAnchorKey.self, value: .bounds) { $0 }
-          .onChange(of: state.searchText) { _, _ in state.highlightedIndex = nil }
-          #if os(macOS)
-            .onKeyPress(.downArrow) {
-              guard state.totalRowCount > 0 else { return .ignored }
-              state.highlightedIndex = min(
-                (state.highlightedIndex ?? -1) + 1, state.totalRowCount - 1)
-              return .handled
-            }
-            .onKeyPress(.upArrow) {
-              guard let current = state.highlightedIndex else { return .ignored }
-              state.highlightedIndex = current > 0 ? current - 1 : nil
-              return .handled
-            }
-            .onKeyPress(.return) {
-              guard let index = state.highlightedIndex else { return .ignored }
-              selection = state.acceptHighlighted(at: index)
-              state.close()
-              return .handled
-            }
-            .onKeyPress(.escape) {
-              state.close()
-              return .handled
-            }
-          #endif
-          .onAppear {
-            isFieldFocused = true
-          }
-      } else {
-        Text(selectedLabel)
-          .foregroundStyle(selection == nil ? .secondary : .primary)
-          .frame(maxWidth: .infinity, alignment: .trailing)
-          .contentShape(Rectangle())
-          .onTapGesture {
+      TextField(selectedLabel, text: $state.searchText)
+        .textFieldStyle(.plain)
+        .multilineTextAlignment(.trailing)
+        .focused($isFieldFocused)
+        .anchorPreference(key: CategoryPickerAnchorKey.self, value: .bounds) { $0 }
+        .onChange(of: isFieldFocused) { _, focused in
+          if focused && !state.isEditing {
             state.open(categories: categories)
+          } else if !focused && state.isEditing {
+            state.close()
           }
-          .accessibilityLabel("\(label): \(selectedLabel)")
-          .accessibilityAddTraits(.isButton)
-          .accessibilityHint("Tap to change category")
-      }
+        }
+        .onChange(of: state.searchText) { _, _ in
+          state.highlightedIndex = nil
+        }
+        .onChange(of: state.isEditing) { _, editing in
+          if !editing {
+            isFieldFocused = false
+          }
+        }
+        #if os(macOS)
+          .onKeyPress(.downArrow) {
+            guard state.isEditing, state.totalRowCount > 0 else { return .ignored }
+            state.highlightedIndex = min(
+              (state.highlightedIndex ?? -1) + 1, state.totalRowCount - 1)
+            return .handled
+          }
+          .onKeyPress(.upArrow) {
+            guard state.isEditing else { return .ignored }
+            guard let current = state.highlightedIndex else { return .ignored }
+            state.highlightedIndex = current > 0 ? current - 1 : nil
+            return .handled
+          }
+          .onKeyPress(.return) {
+            guard state.isEditing, let index = state.highlightedIndex else { return .ignored }
+            selection = state.acceptHighlighted(at: index)
+            state.close()
+            return .handled
+          }
+          .onKeyPress(.escape) {
+            guard state.isEditing else { return .ignored }
+            state.close()
+            return .handled
+          }
+        #endif
+        .accessibilityLabel("\(label): \(selectedLabel)")
+        .accessibilityHint("Tap to search categories")
     }
   }
 }
@@ -315,41 +320,54 @@ private struct CategoryDropdownContent: View {
   }
 }
 
-// MARK: - Preview
+// MARK: - Previews
 
-#Preview {
-  struct PreviewWrapper: View {
-    @State private var selection: UUID?
-    @State private var pickerState = CategoryPickerState()
+private let previewCategories: Categories = {
+  let income = Category(id: UUID(), name: "Income")
+  let salary = Category(id: UUID(), name: "Salary", parentId: income.id)
+  let expenses = Category(id: UUID(), name: "Expenses")
+  let food = Category(id: UUID(), name: "Food", parentId: expenses.id)
+  let groceries = Category(id: UUID(), name: "Groceries", parentId: food.id)
+  let dining = Category(id: UUID(), name: "Dining Out", parentId: food.id)
+  let transport = Category(id: UUID(), name: "Transport", parentId: expenses.id)
+  let housing = Category(id: UUID(), name: "Housing", parentId: expenses.id)
+  return Categories(from: [
+    income, salary, expenses, food, groceries, dining, transport, housing,
+  ])
+}()
 
-    private let sampleCategories: Categories = {
-      let income = Category(id: UUID(), name: "Income")
-      let salary = Category(id: UUID(), name: "Salary", parentId: income.id)
-      let expenses = Category(id: UUID(), name: "Expenses")
-      let food = Category(id: UUID(), name: "Food", parentId: expenses.id)
-      let groceries = Category(id: UUID(), name: "Groceries", parentId: food.id)
-      let dining = Category(id: UUID(), name: "Dining Out", parentId: food.id)
-      let transport = Category(id: UUID(), name: "Transport", parentId: expenses.id)
-      let housing = Category(id: UUID(), name: "Housing", parentId: expenses.id)
-      return Categories(from: [
-        income, salary, expenses, food, groceries, dining, transport, housing,
-      ])
-    }()
+#Preview("Closed") {
+  @Previewable @State var selection: UUID? = nil
+  @Previewable @State var pickerState = CategoryPickerState()
 
-    var body: some View {
-      Form {
-        CategoryPicker(
-          categories: sampleCategories,
-          selection: $selection,
-          state: pickerState
-        )
-      }
-      .formStyle(.grouped)
-      .categoryPickerOverlay(state: pickerState, selection: $selection)
-      .frame(width: 400, height: 500)
-      .padding()
-    }
+  Form {
+    CategoryPicker(
+      categories: previewCategories,
+      selection: $selection,
+      state: pickerState
+    )
   }
+  .formStyle(.grouped)
+  .categoryPickerOverlay(state: pickerState, selection: $selection)
+  .frame(width: 400, height: 500)
+}
 
-  return PreviewWrapper()
+#Preview("Open - browsing") {
+  @Previewable @State var selection: UUID? = nil
+  @Previewable @State var pickerState: CategoryPickerState = {
+    let s = CategoryPickerState()
+    s.open(categories: previewCategories)
+    return s
+  }()
+
+  Form {
+    CategoryPicker(
+      categories: previewCategories,
+      selection: $selection,
+      state: pickerState
+    )
+  }
+  .formStyle(.grouped)
+  .categoryPickerOverlay(state: pickerState, selection: $selection)
+  .frame(width: 400, height: 500)
 }
