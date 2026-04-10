@@ -1,13 +1,25 @@
 import SwiftUI
 
 /// First-run experience shown when no profiles exist.
-/// Lets the user sign in to the default moolah.rocks server or enter a custom URL.
-/// Validates the server URL before creating the profile.
+/// Offers iCloud (recommended), Moolah server, or a custom server URL.
+/// Validates availability/connectivity before creating the profile.
 struct ProfileSetupView: View {
   @Environment(ProfileStore.self) private var profileStore
   @State private var showCustomServer = false
   @State private var customURL = ""
   @State private var customLabel = ""
+
+  // iCloud profile fields
+  @State private var showICloudForm = false
+  @State private var cloudName = ""
+  @State private var cloudCurrencyCode = Locale.current.currency?.identifier ?? "AUD"
+  @State private var cloudFinancialYearStartMonth = 7
+
+  private static let monthNames: [String] = {
+    let formatter = DateFormatter()
+    formatter.locale = Locale.current
+    return formatter.monthSymbols ?? []
+  }()
 
   var body: some View {
     ScrollView {
@@ -21,20 +33,50 @@ struct ProfileSetupView: View {
         }
 
         VStack(spacing: 12) {
-          Button {
-            Task { await addDefaultProfile() }
-          } label: {
-            Label(
-              String(localized: "Sign in to Moolah"),
-              systemImage: "person.crop.circle.badge.checkmark"
-            )
-            .frame(maxWidth: 280)
+          if !showICloudForm {
+            Button {
+              withAnimation { showICloudForm = true }
+            } label: {
+              Label(
+                String(localized: "Store in iCloud"),
+                systemImage: "icloud"
+              )
+              .frame(maxWidth: 280)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(profileStore.isValidating)
           }
-          .buttonStyle(.borderedProminent)
-          .controlSize(.large)
-          .disabled(profileStore.isValidating)
 
-          if !showCustomServer {
+          if showICloudForm {
+            Button {
+              Task { await addDefaultProfile() }
+            } label: {
+              Label(
+                String(localized: "Sign in to Moolah"),
+                systemImage: "person.crop.circle.badge.checkmark"
+              )
+              .frame(maxWidth: 280)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .disabled(profileStore.isValidating)
+          } else {
+            Button {
+              Task { await addDefaultProfile() }
+            } label: {
+              Label(
+                String(localized: "Sign in to Moolah"),
+                systemImage: "person.crop.circle.badge.checkmark"
+              )
+              .frame(maxWidth: 280)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(profileStore.isValidating)
+          }
+
+          if !showCustomServer && !showICloudForm {
             Button {
               withAnimation { showCustomServer = true }
             } label: {
@@ -46,12 +88,16 @@ struct ProfileSetupView: View {
           }
         }
 
+        if showICloudForm {
+          iCloudFields
+        }
+
         if showCustomServer {
           customServerFields
         }
 
         if profileStore.isValidating {
-          ProgressView("Connecting to server...")
+          ProgressView("Connecting...")
             .accessibilityAddTraits(.updatesFrequently)
         } else if let error = profileStore.validationError {
           Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -63,6 +109,50 @@ struct ProfileSetupView: View {
       .padding()
     }
   }
+
+  // MARK: - iCloud Fields
+
+  private var iCloudFields: some View {
+    VStack(spacing: 12) {
+      Divider()
+        .frame(maxWidth: 280)
+
+      VStack(alignment: .leading, spacing: 8) {
+        TextField("Profile Name", text: $cloudName)
+          .textFieldStyle(.roundedBorder)
+
+        Picker("Currency", selection: $cloudCurrencyCode) {
+          ForEach(ProfileFormView.commonCurrencyCodes, id: \.self) { code in
+            Text("\(code) — \(ProfileFormView.currencyName(for: code))")
+              .tag(code)
+          }
+        }
+
+        Picker("Financial Year Starts", selection: $cloudFinancialYearStartMonth) {
+          ForEach(1...12, id: \.self) { month in
+            if month <= Self.monthNames.count {
+              Text(Self.monthNames[month - 1])
+                .tag(month)
+            }
+          }
+        }
+      }
+      .frame(maxWidth: 280)
+
+      Button {
+        Task { await addICloudProfile() }
+      } label: {
+        Label(String(localized: "Create"), systemImage: "icloud")
+          .frame(maxWidth: 280)
+      }
+      .buttonStyle(.borderedProminent)
+      .controlSize(.large)
+      .disabled(
+        cloudName.trimmingCharacters(in: .whitespaces).isEmpty || profileStore.isValidating)
+    }
+  }
+
+  // MARK: - Custom Server Fields
 
   private var customServerFields: some View {
     VStack(spacing: 12) {
@@ -106,6 +196,19 @@ struct ProfileSetupView: View {
     guard !customURL.isEmpty else { return false }
     let urlString = customURL.hasPrefix("http") ? customURL : "https://\(customURL)"
     return URL(string: urlString) != nil
+  }
+
+  // MARK: - Actions
+
+  private func addICloudProfile() async {
+    let trimmedName = cloudName.trimmingCharacters(in: .whitespaces)
+    let profile = Profile(
+      label: trimmedName,
+      backendType: .cloudKit,
+      currencyCode: cloudCurrencyCode,
+      financialYearStartMonth: cloudFinancialYearStartMonth
+    )
+    _ = await profileStore.validateAndAddProfile(profile)
   }
 
   private func addDefaultProfile() async {

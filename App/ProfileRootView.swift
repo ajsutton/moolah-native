@@ -1,4 +1,5 @@
 #if os(iOS)
+  import SwiftData
   import SwiftUI
 
   /// Routes between profile states (iOS only):
@@ -8,6 +9,7 @@
   /// On macOS, ProfileWindowView handles this role.
   struct ProfileRootView: View {
     @Environment(ProfileStore.self) private var profileStore
+    @Environment(\.modelContext) private var modelContext
     @Binding var activeSession: ProfileSession?
 
     var body: some View {
@@ -51,7 +53,10 @@
 
       // Only create a new session if profile changed
       if activeSession?.profile.id != profileID {
-        activeSession = ProfileSession(profile: profile)
+        activeSession = ProfileSession(
+          profile: profile,
+          modelContainer: modelContext.container
+        )
       }
     }
 
@@ -62,7 +67,10 @@
       if let session = activeSession,
         session.profile.resolvedServerURL != profile.resolvedServerURL
       {
-        activeSession = ProfileSession(profile: profile)
+        activeSession = ProfileSession(
+          profile: profile,
+          modelContainer: modelContext.container
+        )
       }
     }
 

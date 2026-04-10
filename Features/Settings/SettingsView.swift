@@ -59,7 +59,7 @@ struct SettingsView: View {
           .environment(profileStore)
           .frame(minWidth: 350, minHeight: 250)
       }
-      .alert("Remove Profile?", isPresented: $showDeleteAlert) {
+      .alert(deleteAlertTitle, isPresented: $showDeleteAlert) {
         deleteAlertButtons
       } message: {
         deleteAlertMessage
@@ -115,7 +115,7 @@ struct SettingsView: View {
         ProfileFormView()
           .environment(profileStore)
       }
-      .alert("Remove Profile?", isPresented: $showDeleteAlert) {
+      .alert(deleteAlertTitle, isPresented: $showDeleteAlert) {
         deleteAlertButtons
       } message: {
         deleteAlertMessage
@@ -209,7 +209,7 @@ struct SettingsView: View {
     case .remote:
       CustomServerProfileDetailView(profile: profile, authStore: authStore)
     case .cloudKit:
-      MoolahProfileDetailView(profile: profile, authStore: authStore)
+      CloudKitProfileDetailView(profile: profile)
     }
   }
 
@@ -237,9 +237,16 @@ struct SettingsView: View {
     .accessibilityElement(children: .combine)
   }
 
+  private var deleteAlertTitle: String {
+    if let profile = profileToDelete, profile.backendType == .cloudKit {
+      return "Delete \(profile.label)?"
+    }
+    return "Remove Profile?"
+  }
+
   @ViewBuilder
   private var deleteAlertButtons: some View {
-    Button("Remove", role: .destructive) {
+    Button(profileToDelete?.backendType == .cloudKit ? "Delete" : "Remove", role: .destructive) {
       if let profile = profileToDelete {
         profileStore.removeProfile(profile.id)
         if selectedProfileID == profile.id {
@@ -256,9 +263,15 @@ struct SettingsView: View {
   @ViewBuilder
   private var deleteAlertMessage: some View {
     if let profile = profileToDelete {
-      Text(
-        "Are you sure you want to remove \"\(profile.label)\"? You will need to sign in again if you re-add it."
-      )
+      if profile.backendType == .cloudKit {
+        Text(
+          "This will permanently delete all accounts, transactions, and other data in this profile across all your devices. This cannot be undone."
+        )
+      } else {
+        Text(
+          "Are you sure you want to remove \"\(profile.label)\"? You will need to sign in again if you re-add it."
+        )
+      }
     }
   }
 }
@@ -460,5 +473,92 @@ struct ProfileAuthStatusView: View {
       #endif
     }
     .accessibilityElement(children: .combine)
+  }
+}
+
+// MARK: - iCloud Profile Detail
+
+/// Settings detail for an iCloud profile. Shows label, currency, and financial year start.
+struct CloudKitProfileDetailView: View {
+  @Environment(ProfileStore.self) private var profileStore
+  let profile: Profile
+
+  @State private var label: String
+  @State private var currencyCode: String
+  @State private var financialYearStartMonth: Int
+
+  private static let monthNames: [String] = {
+    let formatter = DateFormatter()
+    formatter.locale = Locale.current
+    return formatter.monthSymbols ?? []
+  }()
+
+  init(profile: Profile) {
+    self.profile = profile
+    _label = State(initialValue: profile.label)
+    _currencyCode = State(initialValue: profile.currencyCode)
+    _financialYearStartMonth = State(initialValue: profile.financialYearStartMonth)
+  }
+
+  var body: some View {
+    Form {
+      Section("Profile") {
+        TextField("Name", text: $label)
+          .onChange(of: label) { _, _ in saveChanges() }
+
+        HStack {
+          Text("Storage")
+          Spacer()
+          Label("iCloud", systemImage: "icloud")
+            .foregroundStyle(.secondary)
+        }
+      }
+
+      Section("Settings") {
+        Picker("Currency", selection: $currencyCode) {
+          ForEach(ProfileFormView.commonCurrencyCodes, id: \.self) { code in
+            Text("\(code) — \(ProfileFormView.currencyName(for: code))")
+              .tag(code)
+          }
+        }
+        .onChange(of: currencyCode) { _, _ in saveChanges() }
+
+        Picker("Financial Year Starts", selection: $financialYearStartMonth) {
+          ForEach(1...12, id: \.self) { month in
+            if month <= Self.monthNames.count {
+              Text(Self.monthNames[month - 1])
+                .tag(month)
+            }
+          }
+        }
+        .onChange(of: financialYearStartMonth) { _, _ in saveChanges() }
+      }
+    }
+    .formStyle(.grouped)
+  }
+
+  private func saveChanges() {
+    let trimmedLabel = label.trimmingCharacters(in: .whitespaces)
+    guard !trimmedLabel.isEmpty else { return }
+
+    var updated = profile
+    var changed = false
+
+    if trimmedLabel != profile.label {
+      updated.label = trimmedLabel
+      changed = true
+    }
+    if currencyCode != profile.currencyCode {
+      updated.currencyCode = currencyCode
+      changed = true
+    }
+    if financialYearStartMonth != profile.financialYearStartMonth {
+      updated.financialYearStartMonth = financialYearStartMonth
+      changed = true
+    }
+
+    if changed {
+      profileStore.updateProfile(updated)
+    }
   }
 }

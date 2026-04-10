@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Sheet for adding a new profile. Presents two choices:
+/// Sheet for adding a new profile. Presents three choices:
+/// - iCloud (local-only with CloudKit sync)
 /// - Moolah (fixed URL, instant add)
 /// - Custom Server (user enters URL)
 struct ProfileFormView: View {
@@ -11,10 +12,39 @@ struct ProfileFormView: View {
   @State private var serverURL = ""
   @State private var label = ""
 
+  // iCloud profile fields
+  @State private var cloudName = ""
+  @State private var cloudCurrencyCode = Locale.current.currency?.identifier ?? "AUD"
+  @State private var cloudFinancialYearStartMonth = 7
+
+  private static let monthNames: [String] = {
+    let formatter = DateFormatter()
+    formatter.locale = Locale.current
+    return formatter.monthSymbols ?? []
+  }()
+
   var body: some View {
     NavigationStack {
       Form {
         Section {
+          Button {
+            selectedType = .cloudKit
+          } label: {
+            HStack {
+              Label("iCloud", systemImage: "icloud")
+              Spacer()
+              if selectedType == .cloudKit {
+                Image(systemName: "checkmark")
+                  .foregroundStyle(.tint)
+                  .accessibilityHidden(true)
+              }
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .accessibilityAddTraits(selectedType == .cloudKit ? .isSelected : [])
+
           Button {
             selectedType = .moolah
           } label: {
@@ -50,6 +80,28 @@ struct ProfileFormView: View {
           }
           .buttonStyle(.plain)
           .accessibilityAddTraits(selectedType == .remote ? .isSelected : [])
+        }
+
+        if selectedType == .cloudKit {
+          Section("Profile") {
+            TextField("Name", text: $cloudName)
+
+            Picker("Currency", selection: $cloudCurrencyCode) {
+              ForEach(Self.commonCurrencyCodes, id: \.self) { code in
+                Text("\(code) — \(Self.currencyName(for: code))")
+                  .tag(code)
+              }
+            }
+
+            Picker("Financial Year Starts", selection: $cloudFinancialYearStartMonth) {
+              ForEach(1...12, id: \.self) { month in
+                if month <= Self.monthNames.count {
+                  Text(Self.monthNames[month - 1])
+                    .tag(month)
+                }
+              }
+            }
+          }
         }
 
         if selectedType == .remote {
@@ -114,7 +166,7 @@ struct ProfileFormView: View {
       let urlString = serverURL.hasPrefix("http") ? serverURL : "https://\(serverURL)"
       return URL(string: urlString) != nil
     case .cloudKit:
-      return true
+      return !cloudName.trimmingCharacters(in: .whitespaces).isEmpty
     }
   }
 
@@ -131,11 +183,28 @@ struct ProfileFormView: View {
       let profileLabel = label.isEmpty ? url.host() ?? "Custom Server" : label
       profile = Profile(label: profileLabel, backendType: .remote, serverURL: url)
     case .cloudKit:
-      profile = Profile(label: "iCloud", backendType: .cloudKit)
+      let trimmedName = cloudName.trimmingCharacters(in: .whitespaces)
+      profile = Profile(
+        label: trimmedName,
+        backendType: .cloudKit,
+        currencyCode: cloudCurrencyCode,
+        financialYearStartMonth: cloudFinancialYearStartMonth
+      )
     }
 
     if await profileStore.validateAndAddProfile(profile) {
       dismiss()
     }
+  }
+
+  // MARK: - Currency Helpers
+
+  static let commonCurrencyCodes: [String] = [
+    "AUD", "CAD", "CHF", "CNY", "EUR", "GBP", "HKD", "INR", "JPY", "KRW",
+    "MXN", "NOK", "NZD", "SEK", "SGD", "USD", "ZAR",
+  ]
+
+  static func currencyName(for code: String) -> String {
+    Locale.current.localizedString(forCurrencyCode: code) ?? code
   }
 }
