@@ -6,7 +6,9 @@ struct AddBudgetLineItemSheet: View {
   let existingCategoryIds: Set<UUID>
   @State private var selectedCategoryId: UUID?
   @State private var amountText = ""
-  @State private var categoryPickerState = CategoryPickerState()
+  @State private var categoryText = ""
+  @State private var showCategorySuggestions = false
+  @State private var categoryHighlightedIndex: Int?
   @Environment(EarmarkStore.self) private var earmarkStore
   @Environment(\.dismiss) private var dismiss
 
@@ -14,9 +16,15 @@ struct AddBudgetLineItemSheet: View {
     NavigationStack {
       Form {
         Section("Category") {
-          CategoryPicker(
-            categories: categories, selection: $selectedCategoryId,
-            state: categoryPickerState)
+          CategoryAutocompleteField(
+            text: $categoryText,
+            highlightedIndex: $categoryHighlightedIndex,
+            suggestionCount: categoryVisibleSuggestionCount,
+            onTextChange: { _ in
+              showCategorySuggestions = true
+            },
+            onAcceptHighlighted: acceptHighlightedCategory
+          )
         }
 
         Section("Budget Amount") {
@@ -31,7 +39,26 @@ struct AddBudgetLineItemSheet: View {
         }
       }
       .formStyle(.grouped)
-      .categoryPickerOverlay(state: categoryPickerState, selection: $selectedCategoryId)
+      .overlayPreferenceValue(CategoryPickerAnchorKey.self) { anchor in
+        if showCategorySuggestions, !categoryVisibleSuggestions.isEmpty, let anchor {
+          GeometryReader { proxy in
+            let rect = proxy[anchor]
+            CategorySuggestionDropdown(
+              suggestions: categoryVisibleSuggestions,
+              searchText: categoryText,
+              highlightedIndex: $categoryHighlightedIndex,
+              onSelect: { selected in
+                showCategorySuggestions = false
+                categoryHighlightedIndex = nil
+                categoryText = selected.path
+                selectedCategoryId = selected.id
+              }
+            )
+            .frame(width: rect.width)
+            .offset(x: rect.minX, y: rect.maxY + 4)
+          }
+        }
+      }
       .navigationTitle("Add Budget Item")
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -53,6 +80,33 @@ struct AddBudgetLineItemSheet: View {
     .presentationDetents([.medium])
   }
 
+  private var categoryVisibleSuggestions: [CategorySuggestion] {
+    guard showCategorySuggestions else { return [] }
+    let allEntries = categories.flattenedByPath()
+    let filtered: [Categories.FlatEntry]
+    if categoryText.trimmingCharacters(in: .whitespaces).isEmpty {
+      filtered = allEntries
+    } else {
+      filtered = allEntries.filter { matchesCategorySearch($0.path, query: categoryText) }
+    }
+    return filtered.prefix(8).map { CategorySuggestion(id: $0.category.id, path: $0.path) }
+  }
+
+  private var categoryVisibleSuggestionCount: Int {
+    categoryVisibleSuggestions.count
+  }
+
+  private func acceptHighlightedCategory() {
+    guard let index = categoryHighlightedIndex, index < categoryVisibleSuggestions.count else {
+      return
+    }
+    let selected = categoryVisibleSuggestions[index]
+    showCategorySuggestions = false
+    categoryHighlightedIndex = nil
+    categoryText = selected.path
+    selectedCategoryId = selected.id
+  }
+
   private func save() {
     guard let categoryId = selectedCategoryId else { return }
     let cents = MonetaryAmount.parseCents(from: amountText)
@@ -66,5 +120,4 @@ struct AddBudgetLineItemSheet: View {
       dismiss()
     }
   }
-
 }

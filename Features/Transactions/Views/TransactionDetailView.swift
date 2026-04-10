@@ -25,7 +25,9 @@ struct TransactionDetailView: View {
   @State private var showDeleteConfirmation = false
   @State private var showPayeeSuggestions = false
   @State private var payeeHighlightedIndex: Int?
-  @State private var categoryPickerState = CategoryPickerState()
+  @State private var categoryText: String = ""
+  @State private var showCategorySuggestions = false
+  @State private var categoryHighlightedIndex: Int?
   @FocusState private var focusedField: Field?
 
   private enum Field: Hashable {
@@ -59,6 +61,9 @@ struct TransactionDetailView: View {
     _accountId = State(initialValue: transaction.accountId)
     _toAccountId = State(initialValue: transaction.toAccountId)
     _categoryId = State(initialValue: transaction.categoryId)
+    if let catId = transaction.categoryId, let cat = categories.by(id: catId) {
+      _categoryText = State(initialValue: categories.path(for: cat))
+    }
     _earmarkId = State(initialValue: transaction.earmarkId)
     _notes = State(initialValue: transaction.notes ?? "")
     _recurPeriod = State(initialValue: transaction.recurPeriod)
@@ -105,7 +110,9 @@ struct TransactionDetailView: View {
       .overlayPreferenceValue(PayeeFieldAnchorKey.self) { anchor in
         payeeOverlay(anchor: anchor)
       }
-      .categoryPickerOverlay(state: categoryPickerState, selection: $categoryId)
+      .overlayPreferenceValue(CategoryPickerAnchorKey.self) { anchor in
+        categoryOverlay(anchor: anchor)
+      }
       .navigationTitle("Transaction Details")
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -258,7 +265,15 @@ struct TransactionDetailView: View {
 
   private var categorySection: some View {
     Section {
-      CategoryPicker(categories: categories, selection: $categoryId, state: categoryPickerState)
+      CategoryAutocompleteField(
+        text: $categoryText,
+        highlightedIndex: $categoryHighlightedIndex,
+        suggestionCount: categoryVisibleSuggestionCount,
+        onTextChange: { _ in
+          showCategorySuggestions = true
+        },
+        onAcceptHighlighted: acceptHighlightedCategory
+      )
 
       Picker("Earmark", selection: $earmarkId) {
         Text("None").tag(UUID?.none)
@@ -437,6 +452,57 @@ struct TransactionDetailView: View {
       }
       if type == .transfer, toAccountId == nil {
         toAccountId = match.toAccountId
+      }
+    }
+  }
+
+  // MARK: - Category Suggestions
+
+  private var categoryVisibleSuggestions: [CategorySuggestion] {
+    guard showCategorySuggestions else { return [] }
+    let allEntries = categories.flattenedByPath()
+    let filtered: [Categories.FlatEntry]
+    if categoryText.trimmingCharacters(in: .whitespaces).isEmpty {
+      filtered = allEntries
+    } else {
+      filtered = allEntries.filter { matchesCategorySearch($0.path, query: categoryText) }
+    }
+    return filtered.prefix(8).map { CategorySuggestion(id: $0.category.id, path: $0.path) }
+  }
+
+  private var categoryVisibleSuggestionCount: Int {
+    categoryVisibleSuggestions.count
+  }
+
+  private func acceptHighlightedCategory() {
+    guard let index = categoryHighlightedIndex, index < categoryVisibleSuggestions.count else {
+      return
+    }
+    let selected = categoryVisibleSuggestions[index]
+    showCategorySuggestions = false
+    categoryHighlightedIndex = nil
+    categoryText = selected.path
+    categoryId = selected.id
+  }
+
+  @ViewBuilder
+  private func categoryOverlay(anchor: Anchor<CGRect>?) -> some View {
+    if showCategorySuggestions, !categoryVisibleSuggestions.isEmpty, let anchor {
+      GeometryReader { proxy in
+        let rect = proxy[anchor]
+        CategorySuggestionDropdown(
+          suggestions: categoryVisibleSuggestions,
+          searchText: categoryText,
+          highlightedIndex: $categoryHighlightedIndex,
+          onSelect: { selected in
+            showCategorySuggestions = false
+            categoryHighlightedIndex = nil
+            categoryText = selected.path
+            categoryId = selected.id
+          }
+        )
+        .frame(width: rect.width)
+        .offset(x: rect.minX, y: rect.maxY + 4)
       }
     }
   }

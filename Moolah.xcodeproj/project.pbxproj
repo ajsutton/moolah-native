@@ -481,6 +481,7 @@
 		9B1537B5ED73BDFE589AFBDF /* AuthStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthStore.swift; sourceTree = "<group>"; };
 		9BF03784619F9C43E50B10F7 /* ICLOUD_CATEGORIES_PLAN.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ICLOUD_CATEGORIES_PLAN.md; sourceTree = "<group>"; };
 		9C6463F34B96ECFB41CC3A7D /* InvestmentValuesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentValuesView.swift; sourceTree = "<group>"; };
+		9F6C745ED28F1287BF11326D /* autocomplete-combobox-guide.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "autocomplete-combobox-guide.md"; sourceTree = "<group>"; };
 		A0495B1D958C2D21CEA75E1B /* PROFILE_SETTINGS_PLAN.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PROFILE_SETTINGS_PLAN.md; sourceTree = "<group>"; };
 		A059E45B21A8888E5925B19E /* InvestmentRepositoryContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentRepositoryContractTests.swift; sourceTree = "<group>"; };
 		A19482E3FC4577044CBCD484 /* InMemoryTransactionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryTransactionRepository.swift; sourceTree = "<group>"; };
@@ -1074,6 +1075,7 @@
 		DD947D16BA2DD6B22D20A29B /* plans */ = {
 			isa = PBXGroup;
 			children = (
+				9F6C745ED28F1287BF11326D /* autocomplete-combobox-guide.md */,
 				38987A1299FD9BA39CF7FA09 /* CATEGORY_AUTOCOMPLETE_DESIGN.md */,
 				63D96425DA29E66CFE1C5211 /* CATEGORY_AUTOCOMPLETE_PLAN.md */,
 				036F2A95A2EB3C5881FA1DAF /* earmark-budget-ui.md */,

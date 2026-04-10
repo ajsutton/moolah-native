@@ -26,7 +26,9 @@ struct TransactionFormView: View {
   @State private var showDeleteConfirmation = false
   @State private var showPayeeSuggestions = false
   @State private var payeeHighlightedIndex: Int?
-  @State private var categoryPickerState = CategoryPickerState()
+  @State private var categoryText: String = ""
+  @State private var showCategorySuggestions = false
+  @State private var categoryHighlightedIndex: Int?
 
   init(
     accounts: Accounts,
@@ -54,6 +56,9 @@ struct TransactionFormView: View {
       _accountId = State(initialValue: tx.accountId)
       _toAccountId = State(initialValue: tx.toAccountId)
       _categoryId = State(initialValue: tx.categoryId)
+      if let catId = tx.categoryId, let cat = categories.by(id: catId) {
+        _categoryText = State(initialValue: categories.path(for: cat))
+      }
       _earmarkId = State(initialValue: tx.earmarkId)
       _notes = State(initialValue: tx.notes ?? "")
       _recurPeriod = State(initialValue: tx.recurPeriod)
@@ -139,7 +144,26 @@ struct TransactionFormView: View {
           }
         }
       }
-      .categoryPickerOverlay(state: categoryPickerState, selection: $categoryId)
+      .overlayPreferenceValue(CategoryPickerAnchorKey.self) { anchor in
+        if showCategorySuggestions, !categoryVisibleSuggestions.isEmpty, let anchor {
+          GeometryReader { proxy in
+            let rect = proxy[anchor]
+            CategorySuggestionDropdown(
+              suggestions: categoryVisibleSuggestions,
+              searchText: categoryText,
+              highlightedIndex: $categoryHighlightedIndex,
+              onSelect: { selected in
+                showCategorySuggestions = false
+                categoryHighlightedIndex = nil
+                categoryText = selected.path
+                categoryId = selected.id
+              }
+            )
+            .frame(width: rect.width)
+            .offset(x: rect.minX, y: rect.maxY + 4)
+          }
+        }
+      }
       .navigationTitle(title)
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -237,7 +261,15 @@ struct TransactionFormView: View {
 
   private var categorySection: some View {
     Section {
-      CategoryPicker(categories: categories, selection: $categoryId, state: categoryPickerState)
+      CategoryAutocompleteField(
+        text: $categoryText,
+        highlightedIndex: $categoryHighlightedIndex,
+        suggestionCount: categoryVisibleSuggestionCount,
+        onTextChange: { _ in
+          showCategorySuggestions = true
+        },
+        onAcceptHighlighted: acceptHighlightedCategory
+      )
 
       Picker("Earmark", selection: $earmarkId) {
         Text("None").tag(UUID?.none)
@@ -351,6 +383,35 @@ struct TransactionFormView: View {
         toAccountId = match.toAccountId
       }
     }
+  }
+
+  // MARK: - Category Suggestions
+
+  private var categoryVisibleSuggestions: [CategorySuggestion] {
+    guard showCategorySuggestions else { return [] }
+    let allEntries = categories.flattenedByPath()
+    let filtered: [Categories.FlatEntry]
+    if categoryText.trimmingCharacters(in: .whitespaces).isEmpty {
+      filtered = allEntries
+    } else {
+      filtered = allEntries.filter { matchesCategorySearch($0.path, query: categoryText) }
+    }
+    return filtered.prefix(8).map { CategorySuggestion(id: $0.category.id, path: $0.path) }
+  }
+
+  private var categoryVisibleSuggestionCount: Int {
+    categoryVisibleSuggestions.count
+  }
+
+  private func acceptHighlightedCategory() {
+    guard let index = categoryHighlightedIndex, index < categoryVisibleSuggestions.count else {
+      return
+    }
+    let selected = categoryVisibleSuggestions[index]
+    showCategorySuggestions = false
+    categoryHighlightedIndex = nil
+    categoryText = selected.path
+    categoryId = selected.id
   }
 
   private func save() {
