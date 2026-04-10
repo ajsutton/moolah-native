@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 
 @testable import Moolah
@@ -6,11 +7,12 @@ import Testing
 @Suite("CategoryRepository Contract")
 struct CategoryRepositoryContractTests {
   @Test(
-    "InMemoryCategory Repository - creates category",
+    "creates category",
     arguments: [
-      InMemoryCategoryRepository()
+      InMemoryCategoryRepository() as any CategoryRepository,
+      makeCloudKitCategoryRepository() as any CategoryRepository,
     ])
-  func testCreatesCategory(repository: InMemoryCategoryRepository) async throws {
+  func testCreatesCategory(repository: any CategoryRepository) async throws {
     let newCategory = Category(name: "Groceries")
 
     let created = try await repository.create(newCategory)
@@ -24,13 +26,16 @@ struct CategoryRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryCategoryRepository - updates category name",
+    "updates category name",
     arguments: [
       InMemoryCategoryRepository(initialCategories: [
         Category(id: UUID(), name: "Groceries")
-      ])
+      ]) as any CategoryRepository,
+      makeCloudKitCategoryRepository(initialCategories: [
+        Category(id: UUID(), name: "Groceries")
+      ]) as any CategoryRepository,
     ])
-  func testUpdatesCategory(repository: InMemoryCategoryRepository) async throws {
+  func testUpdatesCategory(repository: any CategoryRepository) async throws {
     let categories = try await repository.fetchAll()
     var toUpdate = categories[0]
     toUpdate.name = "Food & Groceries"
@@ -44,14 +49,18 @@ struct CategoryRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryCategoryRepository - deletes category without replacement",
+    "deletes category without replacement",
     arguments: [
       InMemoryCategoryRepository(initialCategories: [
         Category(id: UUID(), name: "Groceries"),
         Category(id: UUID(), name: "Transport"),
-      ])
+      ]) as any CategoryRepository,
+      makeCloudKitCategoryRepository(initialCategories: [
+        Category(id: UUID(), name: "Groceries"),
+        Category(id: UUID(), name: "Transport"),
+      ]) as any CategoryRepository,
     ])
-  func testDeletesCategoryWithoutReplacement(repository: InMemoryCategoryRepository) async throws {
+  func testDeletesCategoryWithoutReplacement(repository: any CategoryRepository) async throws {
     let categories = try await repository.fetchAll()
     let toDelete = categories[0]
 
@@ -63,11 +72,12 @@ struct CategoryRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryCategoryRepository - deletes category and updates children",
+    "deletes category and updates children",
     arguments: [
-      makeRepositoryWithHierarchy()
+      makeRepositoryWithHierarchy() as any CategoryRepository,
+      makeCloudKitRepositoryWithHierarchy() as any CategoryRepository,
     ])
-  func testDeletesCategoryAndUpdatesChildren(repository: InMemoryCategoryRepository) async throws {
+  func testDeletesCategoryAndUpdatesChildren(repository: any CategoryRepository) async throws {
     let categories = try await repository.fetchAll()
     let groceries = categories.first { $0.name == "Groceries" }!
     let transport = categories.first { $0.name == "Transport" }!
@@ -84,11 +94,12 @@ struct CategoryRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryCategoryRepository - deletes category and orphans children",
+    "deletes category and orphans children",
     arguments: [
-      makeRepositoryWithHierarchy()
+      makeRepositoryWithHierarchy() as any CategoryRepository,
+      makeCloudKitRepositoryWithHierarchy() as any CategoryRepository,
     ])
-  func testDeletesCategoryAndOrphansChildren(repository: InMemoryCategoryRepository) async throws {
+  func testDeletesCategoryAndOrphansChildren(repository: any CategoryRepository) async throws {
     let categories = try await repository.fetchAll()
     let groceries = categories.first { $0.name == "Groceries" }!
 
@@ -104,11 +115,12 @@ struct CategoryRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryCategoryRepository - throws on update non-existent",
+    "throws on update non-existent",
     arguments: [
-      InMemoryCategoryRepository()
+      InMemoryCategoryRepository() as any CategoryRepository,
+      makeCloudKitCategoryRepository() as any CategoryRepository,
     ])
-  func testThrowsOnUpdateNonExistent(repository: InMemoryCategoryRepository) async throws {
+  func testThrowsOnUpdateNonExistent(repository: any CategoryRepository) async throws {
     let nonExistent = Category(name: "DoesNotExist")
 
     await #expect(throws: BackendError.serverError(404)) {
@@ -117,11 +129,12 @@ struct CategoryRepositoryContractTests {
   }
 
   @Test(
-    "InMemoryCategoryRepository - throws on delete non-existent",
+    "throws on delete non-existent",
     arguments: [
-      InMemoryCategoryRepository()
+      InMemoryCategoryRepository() as any CategoryRepository,
+      makeCloudKitCategoryRepository() as any CategoryRepository,
     ])
-  func testThrowsOnDeleteNonExistent(repository: InMemoryCategoryRepository) async throws {
+  func testThrowsOnDeleteNonExistent(repository: any CategoryRepository) async throws {
     await #expect(throws: BackendError.serverError(404)) {
       try await repository.delete(id: UUID(), withReplacement: nil)
     }
@@ -134,5 +147,32 @@ private func makeRepositoryWithHierarchy() -> InMemoryCategoryRepository {
     Category(id: groceriesId, name: "Groceries"),
     Category(name: "Fruit", parentId: groceriesId),
     Category(name: "Transport"),
+  ])
+}
+
+private func makeCloudKitCategoryRepository(
+  initialCategories: [Moolah.Category] = []
+) -> CloudKitCategoryRepository {
+  let container = try! TestModelContainer.create()
+  let profileId = UUID()
+  let repo = CloudKitCategoryRepository(modelContainer: container, profileId: profileId)
+
+  if !initialCategories.isEmpty {
+    let context = ModelContext(container)
+    for category in initialCategories {
+      context.insert(CategoryRecord.from(category, profileId: profileId))
+    }
+    try! context.save()
+  }
+
+  return repo
+}
+
+private func makeCloudKitRepositoryWithHierarchy() -> CloudKitCategoryRepository {
+  let groceriesId = UUID()
+  return makeCloudKitCategoryRepository(initialCategories: [
+    Moolah.Category(id: groceriesId, name: "Groceries"),
+    Moolah.Category(name: "Fruit", parentId: groceriesId),
+    Moolah.Category(name: "Transport"),
   ])
 }
