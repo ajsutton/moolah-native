@@ -247,7 +247,108 @@ struct AnalysisRepositoryContractTests {
     #expect(breakdown.isEmpty, "Scheduled transactions should not appear in expense breakdown")
   }
 
+  @Test(
+    "fetchExpenseBreakdown assigns transactions to correct financial month based on monthEnd",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func expenseBreakdownMonthBoundary(backend: any BackendProvider) async throws {
+    let account = Account(
+      id: UUID(),
+      name: "Test Account",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let category = Category(id: UUID(), name: "Groceries")
+    _ = try await backend.categories.create(category)
+
+    let calendar = Calendar.current
+    let onBoundary = calendar.date(from: DateComponents(year: 2025, month: 3, day: 25))!
+    let afterBoundary = calendar.date(from: DateComponents(year: 2025, month: 3, day: 26))!
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: onBoundary,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -1000, currency: .defaultTestCurrency),
+        payee: "On boundary",
+        categoryId: category.id
+      ))
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: afterBoundary,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -2000, currency: .defaultTestCurrency),
+        payee: "After boundary",
+        categoryId: category.id
+      ))
+
+    let breakdown = try await backend.analysis.fetchExpenseBreakdown(monthEnd: 25, after: nil)
+
+    let marchEntries = breakdown.filter { $0.month == "202503" }
+    let aprilEntries = breakdown.filter { $0.month == "202504" }
+
+    #expect(marchEntries.count == 1, "Day 25 should belong to March financial month")
+    #expect(aprilEntries.count == 1, "Day 26 should belong to April financial month")
+    #expect(marchEntries[0].totalExpenses.cents == 1000)
+    #expect(aprilEntries[0].totalExpenses.cents == 2000)
+  }
+
   // MARK: - Income and Expense Tests
+
+  @Test(
+    "fetchIncomeAndExpense groups by financial month using monthEnd",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func incomeExpenseMonthBoundary(backend: any BackendProvider) async throws {
+    let account = Account(
+      id: UUID(),
+      name: "Test Account",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let calendar = Calendar.current
+    let onBoundary = calendar.date(from: DateComponents(year: 2025, month: 3, day: 25))!
+    let afterBoundary = calendar.date(from: DateComponents(year: 2025, month: 3, day: 26))!
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: onBoundary,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: 1000, currency: .defaultTestCurrency),
+        payee: "On boundary"
+      ))
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: afterBoundary,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: 2000, currency: .defaultTestCurrency),
+        payee: "After boundary"
+      ))
+
+    let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
+
+    let march = data.first { $0.month == "202503" }
+    let april = data.first { $0.month == "202504" }
+
+    #expect(march != nil, "Should have March financial month")
+    #expect(april != nil, "Should have April financial month")
+    #expect(march?.income.cents == 1000)
+    #expect(april?.income.cents == 2000)
+  }
 
   @Test(
     "fetchIncomeAndExpense computes profit correctly",
