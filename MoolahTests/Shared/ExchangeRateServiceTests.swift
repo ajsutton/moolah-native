@@ -153,6 +153,26 @@ struct ExchangeRateServiceTests {
     #expect(converted.currency == .AUD)
   }
 
+  @Test func convertUsesBankersRounding() async throws {
+    // 555 cents * 0.5 = 277.5 — banker's rounds to 278 (round half to even)
+    let service = makeService(rates: [
+      "2026-04-11": ["USD": Decimal(string: "0.5")!]
+    ])
+    let amount = MonetaryAmount(cents: 555, currency: .AUD)
+    let converted = try await service.convert(amount, to: .USD, on: date("2026-04-11"))
+    #expect(converted.cents == 278)
+  }
+
+  @Test func convertBankersRoundsDown() async throws {
+    // 545 cents * 0.5 = 272.5 — rounds to 272 (banker's: round half to even)
+    let service = makeService(rates: [
+      "2026-04-11": ["USD": Decimal(string: "0.5")!]
+    ])
+    let amount = MonetaryAmount(cents: 545, currency: .AUD)
+    let converted = try await service.convert(amount, to: .USD, on: date("2026-04-11"))
+    #expect(converted.cents == 272)
+  }
+
   @Test func fallbackNeverUsesFutureDate() async throws {
     // Pre-populate cache with a future date only
     let futureRates: [String: [String: Decimal]] = [
