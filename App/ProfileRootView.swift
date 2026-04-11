@@ -33,6 +33,13 @@
         // Update cached profile in session when label changes
         rebuildSessionIfNeeded()
       }
+      .onChange(of: profileStore.cloudProfiles) { _, _ in
+        // Cloud profiles may arrive late (SwiftData/CloudKit not ready at startup).
+        // Retry session creation once they appear.
+        if activeSession == nil, let id = profileStore.activeProfileID {
+          updateSession(for: id)
+        }
+      }
       .onChange(of: activeSession?.authStore.state) { _, newState in
         cacheUserNameIfNeeded(newState)
       }

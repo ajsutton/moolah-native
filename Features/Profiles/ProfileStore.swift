@@ -47,8 +47,9 @@ final class ProfileStore {
     self.modelContainer = modelContainer
     loadFromDefaults()
     if modelContainer != nil {
-      loadCloudProfiles()
+      loadCloudProfiles(isInitialLoad: true)
       observeRemoteChanges()
+      scheduleRetryIfNeeded()
     }
   }
 
@@ -172,7 +173,7 @@ final class ProfileStore {
 
   // MARK: - Cloud Profile Loading
 
-  func loadCloudProfiles() {
+  func loadCloudProfiles(isInitialLoad: Bool = false) {
     guard let modelContainer else { return }
     let context = ModelContext(modelContainer)
     let descriptor = FetchDescriptor<ProfileRecord>(
@@ -183,8 +184,13 @@ final class ProfileStore {
       cloudProfiles = records.map { $0.toProfile() }
       logger.debug("Loaded \(self.cloudProfiles.count) cloud profiles")
 
-      // Handle active profile being deleted on another device
-      if let activeProfileID, !profiles.contains(where: { $0.id == activeProfileID }) {
+      // Handle active profile being deleted on another device.
+      // Skip this on initial load — SwiftData with CloudKit may return empty results
+      // before the store is fully ready, which would incorrectly reset the active profile.
+      if !isInitialLoad,
+        let activeProfileID,
+        !profiles.contains(where: { $0.id == activeProfileID })
+      {
         self.activeProfileID = profiles.first?.id
         saveActiveProfileID()
         logger.debug(
@@ -245,6 +251,24 @@ final class ProfileStore {
     } catch {
       validationError = "Could not connect to server"
       return false
+    }
+  }
+
+  /// If the initial load returned no cloud profiles but we expect some (saved activeProfileID
+  /// doesn't match any remote profile), retry once after a short delay. SwiftData with CloudKit
+  /// may not have its store ready on the first synchronous fetch.
+  private func scheduleRetryIfNeeded() {
+    guard cloudProfiles.isEmpty,
+      let activeProfileID,
+      !remoteProfiles.contains(where: { $0.id == activeProfileID })
+    else { return }
+
+    logger.debug("Cloud profiles empty on initial load, scheduling retry")
+    Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .seconds(1))
+      guard let self, self.cloudProfiles.isEmpty else { return }
+      self.logger.debug("Retrying cloud profile load")
+      self.loadCloudProfiles()
     }
   }
 

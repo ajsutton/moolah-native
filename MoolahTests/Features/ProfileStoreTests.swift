@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 
 @testable import Moolah
@@ -292,5 +293,61 @@ struct ProfileStoreTests {
 
     #expect(result == true)
     #expect(store.profiles.count == 1)
+  }
+
+  // MARK: - Cloud profile initial load
+
+  @Test("initial load preserves activeProfileID when cloud profiles are empty")
+  func initialLoadPreservesActiveProfileID() throws {
+    let defaults = makeDefaults()
+    let cloudProfileID = UUID()
+
+    // Simulate a previous session that saved a cloud profile as active
+    defaults.set(cloudProfileID.uuidString, forKey: "com.moolah.activeProfileID")
+
+    // Create store with empty ModelContainer (no ProfileRecords stored yet)
+    let container = try TestModelContainer.create()
+    let store = ProfileStore(defaults: defaults, modelContainer: container)
+
+    // The active profile ID should be preserved even though no cloud profiles loaded
+    #expect(store.activeProfileID == cloudProfileID)
+    #expect(store.cloudProfiles.isEmpty)
+  }
+
+  @Test("remote change resets activeProfileID when cloud profile was deleted")
+  func remoteChangeResetsActiveProfileID() throws {
+    let defaults = makeDefaults()
+    let container = try TestModelContainer.create()
+    let store = ProfileStore(defaults: defaults, modelContainer: container)
+
+    // Add a cloud profile and a remote fallback
+    let remoteProfile = makeProfile(label: "Remote")
+    store.addProfile(remoteProfile)
+
+    let cloudProfile = Profile(
+      label: "Cloud",
+      backendType: .cloudKit,
+      currencyCode: "AUD",
+      financialYearStartMonth: 7
+    )
+    store.addProfile(cloudProfile)
+    store.setActiveProfile(cloudProfile.id)
+    #expect(store.activeProfileID == cloudProfile.id)
+
+    // Delete the cloud profile record from SwiftData directly (simulates remote deletion)
+    let context = ModelContext(container)
+    let profileId = cloudProfile.id
+    let descriptor = FetchDescriptor<ProfileRecord>(
+      predicate: #Predicate { $0.id == profileId }
+    )
+    if let record = try context.fetch(descriptor).first {
+      context.delete(record)
+      try context.save()
+    }
+
+    // Simulate a remote change reload — should reset active to fallback
+    store.loadCloudProfiles(isInitialLoad: false)
+
+    #expect(store.activeProfileID == remoteProfile.id)
   }
 }
