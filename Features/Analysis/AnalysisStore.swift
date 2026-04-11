@@ -48,30 +48,26 @@ final class AnalysisStore {
     error = nil
 
     do {
-      async let balances: Void = loadDailyBalances()
-      async let breakdown: Void = loadExpenseBreakdown()
-      async let income: Void = loadIncomeAndExpense()
+      let after = afterDate(monthsAgo: historyMonths)
+      let forecastUntil = forecastDate(monthsAhead: forecastMonths)
 
-      _ = try await (balances, breakdown, income)
+      let data = try await repository.loadAll(
+        historyAfter: after,
+        forecastUntil: forecastUntil,
+        monthEnd: monthEnd
+      )
+
+      dailyBalances = Self.extrapolateBalances(
+        data.dailyBalances, today: Date(), forecastUntil: forecastUntil
+      )
+      expenseBreakdown = data.expenseBreakdown
+      incomeAndExpense = data.incomeAndExpense.sorted { $0.month > $1.month }
     } catch {
       logger.error("Failed to load analysis data: \(error)")
       self.error = error
     }
 
     isLoading = false
-  }
-
-  private func loadDailyBalances() async throws {
-    let after = afterDate(monthsAgo: historyMonths)
-    let forecastUntil = forecastDate(monthsAhead: forecastMonths)
-
-    let raw = try await repository.fetchDailyBalances(
-      after: after,
-      forecastUntil: forecastUntil
-    )
-    dailyBalances = Self.extrapolateBalances(
-      raw, today: Date(), forecastUntil: forecastUntil
-    )
   }
 
   /// Extends balance data to fill gaps, matching the web app's extrapolateBalances logic:
@@ -107,24 +103,6 @@ final class AnalysisStore {
     }
 
     return (actual + forecast).sorted { $0.date < $1.date }
-  }
-
-  private func loadExpenseBreakdown() async throws {
-    let after = afterDate(monthsAgo: historyMonths)
-
-    expenseBreakdown = try await repository.fetchExpenseBreakdown(
-      monthEnd: monthEnd,
-      after: after
-    )
-  }
-
-  private func loadIncomeAndExpense() async throws {
-    let after = afterDate(monthsAgo: historyMonths)
-
-    incomeAndExpense = try await repository.fetchIncomeAndExpense(
-      monthEnd: monthEnd,
-      after: after
-    ).sorted { $0.month > $1.month }
   }
 
   /// Transforms expense breakdown into chart-ready data grouped by root-level category and month.
