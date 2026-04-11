@@ -103,6 +103,7 @@ struct MoolahApp: App {
           .environment(profileStore)
           .environment(sessionManager)
       }
+      .modelContainer(container)
       .commands {
         ProfileCommands(profileStore: profileStore, sessionManager: sessionManager)
         NewTransactionCommands()
@@ -115,6 +116,7 @@ struct MoolahApp: App {
         SettingsView()
           .environment(profileStore)
           .environment(sessionManager)
+          .modelContainer(container)
       }
     #else
       WindowGroup {
