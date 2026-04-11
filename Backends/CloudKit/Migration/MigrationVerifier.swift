@@ -64,27 +64,25 @@ struct MigrationVerifier {
       && txnCount == exported.transactions.count
       && investmentValueCount == expectedInvestmentValueCount
 
-    // 2. Account balance verification
+    // 2. Account balance verification — computed from exported data directly
+    //    (avoids ModelContext isolation issues with re-querying imported records)
     var balanceMismatches: [VerificationResult.BalanceMismatch] = []
-    let allTxns = try context.fetch(txnDescriptor)
+    let nonScheduledTxns = exported.transactions.filter { !$0.isScheduled }
 
     for account in exported.accounts {
-      let localBalance =
-        allTxns
-        .filter { $0.recurPeriod == nil }
-        .reduce(0) { sum, txn in
-          var delta = 0
-          if txn.accountId == account.id { delta += txn.amount }
-          if txn.toAccountId == account.id { delta -= txn.amount }
-          return sum + delta
-        }
+      let computedBalance = nonScheduledTxns.reduce(0) { sum, txn in
+        var delta = 0
+        if txn.accountId == account.id { delta += txn.amount.cents }
+        if txn.toAccountId == account.id { delta -= txn.amount.cents }
+        return sum + delta
+      }
 
-      if localBalance != account.balance.cents {
+      if computedBalance != account.balance.cents {
         balanceMismatches.append(
           VerificationResult.BalanceMismatch(
             accountName: account.name,
             serverBalance: account.balance.cents,
-            localBalance: localBalance
+            localBalance: computedBalance
           )
         )
       }

@@ -96,6 +96,10 @@ final class MigrationCoordinator {
       )
 
       if !verification.countMatch {
+        // Mark the new profile as incomplete so the user knows it needs review
+        var incompleteProfile = newProfile
+        incompleteProfile.label = "\(sourceProfile.label) (Incomplete)"
+        profileStore.updateProfile(incompleteProfile)
         state = .verificationFailed(verification, newProfileId: newProfileId)
         return
       }

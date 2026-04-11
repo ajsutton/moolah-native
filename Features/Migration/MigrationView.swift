@@ -154,17 +154,23 @@ struct MigrationView: View {
       .foregroundStyle(.secondary)
 
       if !verification.balanceMismatches.isEmpty {
-        VStack(alignment: .leading, spacing: 4) {
-          Text("Balance mismatches:")
-            .font(.headline)
-          ForEach(verification.balanceMismatches, id: \.accountName) { mismatch in
-            Text(
-              "\(mismatch.accountName): server \(mismatch.serverBalance) vs local \(mismatch.localBalance)"
-            )
-            .font(.caption.monospacedDigit())
+        ScrollView {
+          VStack(alignment: .leading, spacing: 4) {
+            Text("Balance mismatches:")
+              .font(.headline)
+            ForEach(verification.balanceMismatches, id: \.accountName) { mismatch in
+              HStack {
+                Text(mismatch.accountName)
+                Spacer()
+                Text("server \(mismatch.serverBalance) vs local \(mismatch.localBalance)")
+                  .foregroundStyle(.secondary)
+              }
+              .font(.caption.monospacedDigit())
+            }
           }
+          .padding()
         }
-        .padding()
+        .frame(maxHeight: 200)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
       }
 
