@@ -22,6 +22,14 @@ build/
 # Worktrees
 .worktrees/
 
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+fastlane/api_key.json
+vendor/bundle
+
 # macOS
 .DS_Store
 *.swp

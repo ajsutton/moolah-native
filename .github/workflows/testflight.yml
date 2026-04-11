@@ -1,0 +1,55 @@
+name: TestFlight
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build & Upload to TestFlight
+    runs-on: macos-26
+    timeout-minutes: 30
+    environment: testflight
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install tools
+        run: brew install xcodegen just
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Set version from tag
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Update marketing version
+        run: |
+          sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: \"$APP_VERSION\"/" project.yml
+
+      - name: Deploy to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          CODE_SIGN_STYLE: "Manual"
+        run: bundle exec fastlane ios beta
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Moolah-${{ env.APP_VERSION }}.ipa
+          path: build/Moolah.ipa

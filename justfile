@@ -57,6 +57,19 @@ generate:
     export CODE_SIGN_STYLE="${CODE_SIGN_STYLE:-Automatic}"
     xcodegen generate
 
+# Sync code signing certificates (runs Match)
+certificates:
+    bundle exec fastlane ios certificates
+
+# Build and upload to TestFlight
+testflight: generate
+    bundle exec fastlane ios beta
+
+# Bump marketing version (usage: just bump-version 1.2.0)
+bump-version version:
+    sed -i '' 's/MARKETING_VERSION: .*/MARKETING_VERSION: "{{version}}"/' project.yml
+    just generate
+
 # Open the project in Xcode
 open:
     open Moolah.xcodeproj

@@ -1,0 +1,58 @@
+default_platform(:ios)
+
+before_all do
+  # Regenerate Xcode project from project.yml
+  sh("cd .. && just generate")
+end
+
+platform :ios do
+  before_all do
+    setup_ci
+  end
+
+  desc "Sync certificates and profiles for iOS"
+  lane :certificates do
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+
+    match(
+      type: "appstore",
+      app_identifier: "rocks.moolah.app",
+      api_key: api_key,
+      readonly: is_ci
+    )
+  end
+
+  desc "Build and upload iOS app to TestFlight"
+  lane :beta do
+    certificates
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+
+    increment_build_number(
+      build_number: latest_testflight_build_number(api_key: api_key) + 1
+    )
+
+    build_app(
+      scheme: "Moolah-iOS",
+      export_method: "app-store",
+      output_directory: "./build",
+      output_name: "Moolah.ipa",
+      xcargs: "-allowProvisioningUpdates CODE_SIGN_ENTITLEMENTS=App/Moolah.entitlements"
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true
+    )
+  end
+end

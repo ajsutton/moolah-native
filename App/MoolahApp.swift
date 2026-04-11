@@ -83,7 +83,10 @@ struct MoolahApp: App {
         EarmarkBudgetItemRecord.self,
         InvestmentValueRecord.self,
       ])
-      container = try ModelContainer(for: schema)
+      let config = ModelConfiguration(
+        cloudKitDatabase: .automatic
+      )
+      container = try ModelContainer(for: schema, configurations: [config])
     } catch {
       fatalError("Failed to initialize ModelContainer: \(error)")
     }
