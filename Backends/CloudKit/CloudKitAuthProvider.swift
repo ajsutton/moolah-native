@@ -1,3 +1,4 @@
+import CloudKit
 import Foundation
 
 final class CloudKitAuthProvider: AuthProvider, Sendable {
@@ -10,11 +11,18 @@ final class CloudKitAuthProvider: AuthProvider, Sendable {
   }
 
   func currentUser() async throws -> UserProfile? {
-    // iCloud profiles use implicit auth via the device's Apple ID.
-    // No CKContainer check — SwiftData works locally even without
-    // CloudKit entitlements, and CKContainer.default() crashes with
-    // an NSException if no container is configured.
-    UserProfile(
+    guard isCloudKitAvailable else {
+      // CloudKit not configured — still allow local-only SwiftData access
+      return UserProfile(
+        id: "local-user",
+        givenName: profileLabel,
+        familyName: "",
+        pictureURL: nil
+      )
+    }
+    let status = try await CKContainer.default().accountStatus()
+    guard status == .available else { return nil }
+    return UserProfile(
       id: "icloud-user",
       givenName: profileLabel,
       familyName: "",
@@ -23,7 +31,16 @@ final class CloudKitAuthProvider: AuthProvider, Sendable {
   }
 
   func signIn() async throws -> UserProfile {
-    guard FileManager.default.ubiquityIdentityToken != nil else {
+    guard isCloudKitAvailable else {
+      return UserProfile(
+        id: "local-user",
+        givenName: profileLabel,
+        familyName: "",
+        pictureURL: nil
+      )
+    }
+    let status = try await CKContainer.default().accountStatus()
+    guard status == .available else {
       throw BackendError.unauthenticated
     }
     return UserProfile(
@@ -36,5 +53,13 @@ final class CloudKitAuthProvider: AuthProvider, Sendable {
 
   func signOut() async throws {
     // No-op — cannot sign out of iCloud programmatically
+  }
+
+  /// Whether CloudKit entitlements are configured.
+  /// CKContainer.default() throws an uncatchable NSException without them.
+  private var isCloudKitAvailable: Bool {
+    let containers =
+      Bundle.main.object(forInfoDictionaryKey: "NSUbiquitousContainers") as? [String: Any]
+    return containers != nil && !containers!.isEmpty
   }
 }
