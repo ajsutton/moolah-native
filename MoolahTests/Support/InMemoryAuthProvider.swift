@@ -1,6 +1,8 @@
 import Foundation
 
-/// In-memory AuthProvider used in all feature tests and SwiftUI Previews.
+@testable import Moolah
+
+/// In-memory AuthProvider used in all feature tests.
 /// Configurable starting state; signIn/signOut toggle state without any networking.
 actor InMemoryAuthProvider: AuthProvider {
   nonisolated let requiresExplicitSignIn: Bool

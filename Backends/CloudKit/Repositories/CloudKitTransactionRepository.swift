@@ -27,7 +27,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let allRecords = try context.fetch(descriptor)
       var result = allRecords.map { $0.toDomain() }
 
-      // Apply filters (matches InMemoryTransactionRepository exactly)
+      // Apply filters
       if let accountId = filter.accountId {
         result = result.filter { $0.accountId == accountId || $0.toAccountId == accountId }
       }

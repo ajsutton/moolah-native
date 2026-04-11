@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 
 @testable import Moolah
@@ -83,9 +84,10 @@ struct ScheduledTransactionTests {
       amount: MonetaryAmount(cents: -50000, currency: Currency.defaultTestCurrency)
     )
 
-    let repository = InMemoryTransactionRepository(initialTransactions: [scheduled, oneTime])
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled, oneTime], in: container, profileId: profileId)
 
-    let page = try await repository.fetch(
+    let page = try await backend.transactions.fetch(
       filter: TransactionFilter(scheduled: true),
       page: 0,
       pageSize: 50
@@ -289,10 +291,11 @@ struct ScheduledTransactionTests {
       recurEvery: 1
     )
 
-    let repository = InMemoryTransactionRepository(initialTransactions: [scheduled])
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: container, profileId: profileId)
 
     // Verify it exists and is scheduled
-    let page1 = try await repository.fetch(
+    let page1 = try await backend.transactions.fetch(
       filter: TransactionFilter(scheduled: true), page: 0, pageSize: 50)
     #expect(page1.transactions.count == 1)
 
@@ -307,18 +310,18 @@ struct ScheduledTransactionTests {
       recurPeriod: nil,
       recurEvery: nil
     )
-    _ = try await repository.create(paid)
+    _ = try await backend.transactions.create(paid)
 
     // For .once, the scheduled transaction should be deleted
-    try await repository.delete(id: scheduled.id)
+    try await backend.transactions.delete(id: scheduled.id)
 
     // Verify the scheduled transaction is gone
-    let page2 = try await repository.fetch(
+    let page2 = try await backend.transactions.fetch(
       filter: TransactionFilter(scheduled: true), page: 0, pageSize: 50)
     #expect(page2.transactions.count == 0)
 
     // Verify the paid transaction exists
-    let page3 = try await repository.fetch(
+    let page3 = try await backend.transactions.fetch(
       filter: TransactionFilter(scheduled: false), page: 0, pageSize: 50)
     #expect(page3.transactions.count == 1)
     #expect(page3.transactions[0].isScheduled == false)
@@ -340,7 +343,8 @@ struct ScheduledTransactionTests {
       recurEvery: 1
     )
 
-    let repository = InMemoryTransactionRepository(initialTransactions: [scheduled])
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: container, profileId: profileId)
 
     // Create paid transaction
     let paid = Transaction(
@@ -353,7 +357,7 @@ struct ScheduledTransactionTests {
       recurPeriod: nil,
       recurEvery: nil
     )
-    _ = try await repository.create(paid)
+    _ = try await backend.transactions.create(paid)
 
     // For recurring, update the scheduled transaction's date to next occurrence
     guard let nextDate = scheduled.nextDueDate() else {
@@ -362,10 +366,10 @@ struct ScheduledTransactionTests {
 
     var updated = scheduled
     updated.date = nextDate
-    _ = try await repository.update(updated)
+    _ = try await backend.transactions.update(updated)
 
     // Verify the scheduled transaction still exists with updated date
-    let page = try await repository.fetch(
+    let page = try await backend.transactions.fetch(
       filter: TransactionFilter(scheduled: true), page: 0, pageSize: 50)
     #expect(page.transactions.count == 1)
     #expect(page.transactions[0].isScheduled == true)

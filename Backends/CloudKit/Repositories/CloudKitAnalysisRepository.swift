@@ -170,7 +170,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
     // 6. Compute bestFit (linear regression on availableFunds)
     var actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
-    InMemoryAnalysisRepository.applyBestFit(to: &actualBalances, currency: currency)
+    CloudKitAnalysisRepository.applyBestFit(to: &actualBalances, currency: currency)
 
     // 7. Generate forecasted balances if requested
     var scheduledBalances: [DailyBalance] = []
@@ -462,7 +462,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
     // Compute bestFit
     var actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
-    InMemoryAnalysisRepository.applyBestFit(to: &actualBalances, currency: currency)
+    CloudKitAnalysisRepository.applyBestFit(to: &actualBalances, currency: currency)
 
     // Generate forecasted balances if requested
     var forecastBalances: [DailyBalance] = []
@@ -684,6 +684,54 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
           isForecast: balance.isForecast
         )
       }
+    }
+  }
+
+  /// Apply linear regression best-fit line to daily balances.
+  /// Uses availableFunds as the y-axis value and day offset as x-axis.
+  static func applyBestFit(to balances: inout [DailyBalance], currency: Currency) {
+    guard balances.count >= 2 else { return }
+
+    let referenceDate = balances[0].date
+    let calendar = Calendar.current
+
+    var sumX: Double = 0
+    var sumY: Double = 0
+    var sumXY: Double = 0
+    var sumXX: Double = 0
+    let n = Double(balances.count)
+
+    var xValues: [Double] = []
+    for balance in balances {
+      let x = Double(
+        calendar.dateComponents([.day], from: referenceDate, to: balance.date).day ?? 0)
+      let y = Double(balance.availableFunds.cents)
+      xValues.append(x)
+      sumX += x
+      sumY += y
+      sumXY += x * y
+      sumXX += x * x
+    }
+
+    let denominator = n * sumXX - sumX * sumX
+    guard abs(denominator) > 0.001 else { return }
+
+    let m = (n * sumXY - sumX * sumY) / denominator
+    let b = (sumY - m * sumX) / n
+
+    for i in balances.indices {
+      let predicted = Int(round(m * xValues[i] + b))
+      balances[i] = DailyBalance(
+        date: balances[i].date,
+        balance: balances[i].balance,
+        earmarked: balances[i].earmarked,
+        availableFunds: balances[i].availableFunds,
+        investments: balances[i].investments,
+        investmentValue: balances[i].investmentValue,
+        netWorth: balances[i].netWorth,
+        bestFit: MonetaryAmount(cents: predicted, currency: currency),
+        isForecast: balances[i].isForecast
+      )
     }
   }
 

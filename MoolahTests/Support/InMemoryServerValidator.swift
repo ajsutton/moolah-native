@@ -1,5 +1,7 @@
 import Foundation
 
+@testable import Moolah
+
 /// Test double for ServerValidator. Configurable success/failure behavior.
 final class InMemoryServerValidator: ServerValidator, @unchecked Sendable {
   var shouldSucceed = true
