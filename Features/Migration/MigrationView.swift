@@ -155,19 +155,22 @@ struct MigrationView: View {
 
       if !verification.balanceMismatches.isEmpty {
         ScrollView {
-          VStack(alignment: .leading, spacing: 4) {
-            Text("Balance mismatches:")
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Balance mismatches (\(verification.balanceMismatches.count)):")
               .font(.headline)
             ForEach(verification.balanceMismatches, id: \.accountName) { mismatch in
-              HStack {
+              VStack(alignment: .leading, spacing: 2) {
                 Text(mismatch.accountName)
-                Spacer()
-                Text("server \(mismatch.serverBalance) vs local \(mismatch.localBalance)")
-                  .foregroundStyle(.secondary)
+                  .font(.subheadline)
+                Text(
+                  "server: \(Self.formatCents(mismatch.serverBalance))  local: \(Self.formatCents(mismatch.localBalance))  diff: \(Self.formatCents(mismatch.serverBalance - mismatch.localBalance))"
+                )
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
               }
-              .font(.caption.monospacedDigit())
             }
           }
+          .frame(maxWidth: .infinity, alignment: .leading)
           .padding()
         }
         .frame(maxHeight: 200)
@@ -231,6 +234,11 @@ struct MigrationView: View {
   }
 
   // MARK: - State Helpers
+
+  private static func formatCents(_ cents: Int) -> String {
+    let dollars = Double(cents) / 100.0
+    return String(format: "%.2f", dollars)
+  }
 
   private var isIdle: Bool {
     if case .idle = coordinator.state { return true }
