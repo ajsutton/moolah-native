@@ -133,12 +133,12 @@ https://api.marketstack.com/v1/eod?access_key={key}&symbols=BHP.XASX
 
 ### Cons
 - Free tier is extremely limited (100 calls/month = ~3/day)
-- Free tier is HTTP only (no HTTPS) — unacceptable for an iOS app without ATS exceptions
+- Free tier is HTTP only (no HTTPS) — requires an ATS exception, but acceptable since this is public market data
 - Need to verify exact ASX ticker format
 
 ### Verdict
 
-Possible but the free tier is too restrictive and the HTTP-only limitation on free is a dealbreaker. Only viable on a paid plan.
+The free tier could technically work (100 calls/month covers ~10 stocks daily) but leaves no room for historical backfill or retries. The $9.99/month tier (10,000 calls) is a good cheap option. Worth considering as a documented alternative to Yahoo Finance.
 
 ---
 
