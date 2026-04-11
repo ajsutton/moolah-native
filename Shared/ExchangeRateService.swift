@@ -66,6 +66,62 @@ actor ExchangeRateService {
     throw ExchangeRateError.noRateAvailable(base: base, quote: quote, date: dateString)
   }
 
+  func rates(
+    from: Currency, to: Currency, in range: ClosedRange<Date>
+  ) async throws -> [(date: Date, rate: Decimal)] {
+    if from.code == to.code {
+      return generateDateSeries(in: range).map { ($0, Decimal(1)) }
+    }
+
+    let base = from.code
+    let quote = to.code
+
+    // Load cache if not already in memory
+    if caches[base] == nil {
+      loadCacheFromDisk(base: base)
+    }
+
+    // Determine what we need to fetch
+    let rangeStart = dateFormatter.string(from: range.lowerBound)
+    let rangeEnd = dateFormatter.string(from: range.upperBound)
+
+    if let cache = caches[base] {
+      if rangeStart < cache.earliestDate {
+        let fetchEnd = Calendar(identifier: .gregorian)
+          .date(
+            byAdding: .day, value: -1,
+            to: dateFormatter.date(from: cache.earliestDate)!)!
+        try await fetchInChunks(base: base, from: range.lowerBound, to: fetchEnd)
+      }
+      if rangeEnd > cache.latestDate {
+        let fetchStart = Calendar(identifier: .gregorian)
+          .date(
+            byAdding: .day, value: 1,
+            to: dateFormatter.date(from: cache.latestDate)!)!
+        try await fetchInChunks(base: base, from: fetchStart, to: range.upperBound)
+      }
+    } else {
+      try await fetchInChunks(base: base, from: range.lowerBound, to: range.upperBound)
+    }
+
+    // Build result series
+    let dates = generateDateSeries(in: range)
+    var results: [(date: Date, rate: Decimal)] = []
+    var lastKnownRate: Decimal?
+
+    for date in dates {
+      let dateString = dateFormatter.string(from: date)
+      if let rate = caches[base]?.rates[dateString]?[quote] {
+        lastKnownRate = rate
+        results.append((date, rate))
+      } else if let fallback = lastKnownRate {
+        results.append((date, fallback))
+      }
+    }
+
+    return results
+  }
+
   // MARK: - Private helpers
 
   private func lookupRate(base: String, quote: String, dateString: String) -> Decimal? {
@@ -81,6 +137,30 @@ actor ExchangeRateService {
       }
     }
     return nil
+  }
+
+  private func generateDateSeries(in range: ClosedRange<Date>) -> [Date] {
+    let calendar = Calendar(identifier: .gregorian)
+    var dates: [Date] = []
+    var current = range.lowerBound
+    while current <= range.upperBound {
+      dates.append(current)
+      current = calendar.date(byAdding: .day, value: 1, to: current)!
+    }
+    return dates
+  }
+
+  private func fetchInChunks(base: String, from: Date, to: Date) async throws {
+    let calendar = Calendar(identifier: .gregorian)
+    var chunkStart = from
+    while chunkStart <= to {
+      let chunkEnd = min(
+        calendar.date(byAdding: .year, value: 1, to: chunkStart)!,
+        to
+      )
+      try await fetchAndMerge(base: base, from: chunkStart, to: chunkEnd)
+      chunkStart = calendar.date(byAdding: .day, value: 1, to: chunkEnd)!
+    }
   }
 
   private func fetchAndMerge(base: String, from: Date, to: Date) async throws {
