@@ -65,6 +65,7 @@ final class MigrationCoordinator {
       profileStore.addProfile(newProfile)
 
       // 3. Import data into the new profile
+      state = .importing(step: "saving", progress: 0)
       let importer = CloudKitDataImporter(
         modelContainer: modelContainer,
         profileId: newProfileId,
@@ -72,15 +73,7 @@ final class MigrationCoordinator {
       )
       let result: ImportResult
       do {
-        result = try await importer.importData(exported) {
-          [weak self] (progress: CloudKitDataImporter.ImportProgress) in
-          Task { @MainActor in
-            if case .importing(let step, let current, let total) = progress {
-              let pct = total > 0 ? Double(current) / Double(total) : 0
-              self?.state = .importing(step: step, progress: pct)
-            }
-          }
-        }
+        result = try importer.importData(exported)
       } catch {
         // Import failed — clean up the partially created profile
         profileStore.removeProfile(newProfileId)

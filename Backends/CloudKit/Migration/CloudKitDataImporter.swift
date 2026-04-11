@@ -17,50 +17,37 @@ struct ImportResult: Sendable {
 }
 
 /// Imports exported data into SwiftData records scoped to a specific profile.
-/// Uses DefaultSerialModelExecutor to ensure the ModelContext has proper thread
-/// affinity (plain actors use the cooperative pool which can silently corrupt saves).
-actor CloudKitDataImporter: ModelActor {
-  nonisolated let modelContainer: ModelContainer
-  nonisolated let modelExecutor: any ModelExecutor
+/// Runs on the MainActor using the container's mainContext to ensure data
+/// is immediately visible to CloudKit repositories.
+@MainActor
+struct CloudKitDataImporter {
+  private let modelContainer: ModelContainer
   private let profileId: UUID
   private let currencyCode: String
   private let logger = Logger(subsystem: "com.moolah.app", category: "Migration")
 
-  enum ImportProgress: Sendable {
-    case importing(step: String, current: Int, total: Int)
-    case importComplete(ImportResult)
-    case failed(Error)
-  }
-
   init(modelContainer: ModelContainer, profileId: UUID, currencyCode: String) {
     self.modelContainer = modelContainer
-    let context = ModelContext(modelContainer)
-    self.modelExecutor = DefaultSerialModelExecutor(modelContext: context)
     self.profileId = profileId
     self.currencyCode = currencyCode
   }
 
-  func importData(
-    _ data: ExportedData,
-    progress: @escaping @Sendable (ImportProgress) -> Void
-  ) throws -> ImportResult {
+  @discardableResult
+  func importData(_ data: ExportedData) throws -> ImportResult {
+    let context = modelContainer.mainContext
+
     // 1. Categories (no dependencies)
-    progress(.importing(step: "categories", current: 0, total: data.categories.count))
-    for (i, category) in data.categories.enumerated() {
+    for category in data.categories {
       let record = CategoryRecord(
         id: category.id,
         profileId: profileId,
         name: category.name,
         parentId: category.parentId
       )
-      modelContext.insert(record)
-      if i % 50 == 0 {
-        progress(.importing(step: "categories", current: i, total: data.categories.count))
-      }
+      context.insert(record)
     }
 
     // 2. Accounts (no dependencies)
-    progress(.importing(step: "accounts", current: 0, total: data.accounts.count))
     for account in data.accounts {
       let record = AccountRecord(
         id: account.id,
@@ -71,11 +58,10 @@ actor CloudKitDataImporter: ModelActor {
         isHidden: account.isHidden,
         currencyCode: currencyCode
       )
-      modelContext.insert(record)
+      context.insert(record)
     }
 
     // 3. Earmarks (no dependencies)
-    progress(.importing(step: "earmarks", current: 0, total: data.earmarks.count))
     for earmark in data.earmarks {
       let record = EarmarkRecord(
         id: earmark.id,
@@ -88,7 +74,7 @@ actor CloudKitDataImporter: ModelActor {
         savingsStartDate: earmark.savingsStartDate,
         savingsEndDate: earmark.savingsEndDate
       )
-      modelContext.insert(record)
+      context.insert(record)
     }
 
     // 4. Earmark budget items
@@ -103,15 +89,13 @@ actor CloudKitDataImporter: ModelActor {
           amount: item.amount.cents,
           currencyCode: currencyCode
         )
-        modelContext.insert(record)
+        context.insert(record)
         budgetItemCount += 1
       }
     }
 
-    // 5. Transactions (largest dataset — batch insert with progress)
-    let totalTxns = data.transactions.count
-    progress(.importing(step: "transactions", current: 0, total: totalTxns))
-    for (i, txn) in data.transactions.enumerated() {
+    // 5. Transactions
+    for txn in data.transactions {
       let record = TransactionRecord(
         id: txn.id,
         profileId: profileId,
@@ -128,16 +112,10 @@ actor CloudKitDataImporter: ModelActor {
         recurPeriod: txn.recurPeriod?.rawValue,
         recurEvery: txn.recurEvery
       )
-      modelContext.insert(record)
-
-      if i % 100 == 0 {
-        progress(.importing(step: "transactions", current: i, total: totalTxns))
-      }
+      context.insert(record)
     }
 
-    // 6. Investment values (per investment account)
-    let totalValues = data.investmentValues.values.reduce(0) { $0 + $1.count }
-    progress(.importing(step: "investment values", current: 0, total: totalValues))
+    // 6. Investment values
     var investmentValueCount = 0
     for (accountId, values) in data.investmentValues {
       for value in values {
@@ -149,34 +127,26 @@ actor CloudKitDataImporter: ModelActor {
           value: value.value.cents,
           currencyCode: currencyCode
         )
-        modelContext.insert(record)
+        context.insert(record)
         investmentValueCount += 1
-        if investmentValueCount % 100 == 0 {
-          progress(
-            .importing(
-              step: "investment values", current: investmentValueCount, total: totalValues)
-          )
-        }
       }
     }
 
-    // 7. Save all at once (atomic)
-    progress(.importing(step: "saving", current: 0, total: 1))
+    // 7. Save
     logger.info(
       "Saving \(data.accounts.count) accounts, \(data.categories.count) categories, \(data.transactions.count) transactions to SwiftData"
     )
-    try modelContext.save()
-    logger.info("SwiftData save completed successfully")
+    try context.save()
 
-    // Verify data persisted
+    // Verify
     let profileId = self.profileId
     let descriptor = FetchDescriptor<AccountRecord>(
       predicate: #Predicate { $0.profileId == profileId }
     )
-    let savedCount = (try? modelContext.fetchCount(descriptor)) ?? -1
-    logger.info("Post-save verification: \(savedCount) accounts in context")
+    let savedCount = (try? context.fetchCount(descriptor)) ?? -1
+    logger.info("Post-save verification: \(savedCount) accounts in mainContext")
 
-    let result = ImportResult(
+    return ImportResult(
       accountCount: data.accounts.count,
       categoryCount: data.categories.count,
       earmarkCount: data.earmarks.count,
@@ -184,7 +154,5 @@ actor CloudKitDataImporter: ModelActor {
       transactionCount: data.transactions.count,
       investmentValueCount: investmentValueCount
     )
-    progress(.importComplete(result))
-    return result
   }
 }

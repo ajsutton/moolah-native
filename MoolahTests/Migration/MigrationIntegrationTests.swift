@@ -5,6 +5,7 @@ import Testing
 @testable import Moolah
 
 @Suite("Migration Integration")
+@MainActor
 struct MigrationIntegrationTests {
 
   private let currency = Currency.defaultTestCurrency
@@ -87,7 +88,7 @@ struct MigrationIntegrationTests {
       profileId: profileId,
       currencyCode: currency.code
     )
-    let result = try await importer.importData(exported) { _ in }
+    let result = try importer.importData(exported)
 
     #expect(result.accountCount == exported.accounts.count)
     #expect(result.categoryCount == exported.categories.count)
@@ -154,7 +155,7 @@ struct MigrationIntegrationTests {
       profileId: profileId,
       currencyCode: currency.code
     )
-    _ = try await importer.importData(exported) { _ in }
+    _ = try importer.importData(exported)
 
     // Read back and verify hierarchy
     let cloudBackend = CloudKitBackend(
@@ -192,7 +193,7 @@ struct MigrationIntegrationTests {
       profileId: profileId,
       currencyCode: currency.code
     )
-    _ = try await importer.importData(exported) { _ in }
+    _ = try importer.importData(exported)
 
     // Read back and verify budgets
     let cloudBackend = CloudKitBackend(

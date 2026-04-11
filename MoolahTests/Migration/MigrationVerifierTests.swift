@@ -5,6 +5,7 @@ import Testing
 @testable import Moolah
 
 @Suite("MigrationVerifier")
+@MainActor
 struct MigrationVerifierTests {
 
   private let currency = Currency.defaultTestCurrency
@@ -40,7 +41,7 @@ struct MigrationVerifierTests {
       profileId: profileId,
       currencyCode: currency.code
     )
-    _ = try await importer.importData(exported) { _ in }
+    _ = try importer.importData(exported)
 
     // Verify
     let verifier = MigrationVerifier()
@@ -143,7 +144,7 @@ struct MigrationVerifierTests {
       profileId: profileId,
       currencyCode: currency.code
     )
-    _ = try await importer.importData(exported) { _ in }
+    _ = try importer.importData(exported)
 
     let verifier = MigrationVerifier()
     let result = try await verifier.verify(
@@ -195,7 +196,7 @@ struct MigrationVerifierTests {
       profileId: profileId,
       currencyCode: currency.code
     )
-    _ = try await importer.importData(exported) { _ in }
+    _ = try importer.importData(exported)
 
     let verifier = MigrationVerifier()
     let result = try await verifier.verify(

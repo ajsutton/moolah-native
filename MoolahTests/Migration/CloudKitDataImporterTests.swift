@@ -19,6 +19,7 @@ private final class ProgressTracker: Sendable {
 }
 
 @Suite("CloudKitDataImporter")
+@MainActor
 struct CloudKitDataImporterTests {
 
   private let currency = Currency.defaultTestCurrency
@@ -86,7 +87,7 @@ struct CloudKitDataImporterTests {
       currencyCode: currency.code
     )
 
-    let result = try await importer.importData(exported) { _ in }
+    let result = try importer.importData(exported)
 
     #expect(result.accountCount == 2)
     #expect(result.categoryCount == 2)
@@ -119,7 +120,7 @@ struct CloudKitDataImporterTests {
       currencyCode: currency.code
     )
 
-    _ = try await importer.importData(exported) { _ in }
+    _ = try importer.importData(exported)
 
     let context = ModelContext(container)
     let accounts = try context.fetch(FetchDescriptor<AccountRecord>())
@@ -143,37 +144,13 @@ struct CloudKitDataImporterTests {
       currencyCode: "USD"
     )
 
-    _ = try await importer.importData(exported) { _ in }
+    _ = try importer.importData(exported)
 
     let context = ModelContext(container)
     let accounts = try context.fetch(FetchDescriptor<AccountRecord>())
     for account in accounts {
       #expect(account.currencyCode == "USD")
     }
-  }
-
-  @Test("reports progress during import")
-  func importReportsProgress() async throws {
-    let container = try TestModelContainer.create()
-    let exported = makeExportedData()
-    let importer = CloudKitDataImporter(
-      modelContainer: container,
-      profileId: profileId,
-      currencyCode: currency.code
-    )
-
-    let tracker = ProgressTracker()
-    _ = try await importer.importData(exported) { progress in
-      if case .importing(let step, _, _) = progress {
-        tracker.record(step)
-      }
-    }
-
-    let steps = tracker.steps
-    #expect(steps.contains("categories"))
-    #expect(steps.contains("accounts"))
-    #expect(steps.contains("transactions"))
-    #expect(steps.contains("saving"))
   }
 
   @Test("imports empty data successfully")
@@ -193,7 +170,7 @@ struct CloudKitDataImporterTests {
       currencyCode: currency.code
     )
 
-    let result = try await importer.importData(exported) { _ in }
+    let result = try importer.importData(exported)
 
     #expect(result.totalCount == 0)
   }
