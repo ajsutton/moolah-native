@@ -465,7 +465,6 @@ These steps must be done in the Apple Developer portal.
 ### 4.3 — GitHub Environment Protection
 
 - [ ] **Create GitHub Environment** `testflight` with protection rules:
-  - Required reviewers: at least 1 (yourself)
   - Deployment branches: tags only (`v*`)
 
 ### 4.4 — CI Security
@@ -796,7 +795,6 @@ jobs:
 ### 8.4 — Production GitHub Environment
 
 - [ ] **Create GitHub Environment** `production` with protection rules:
-  - Required reviewers: at least 1 (yourself)
   - Deployment branches: `main` only
 
 ### 8.5 — Additional Justfile Targets
