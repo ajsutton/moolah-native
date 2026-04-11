@@ -2,7 +2,8 @@
 
 A universal personal finance app for iPhone and Mac. Tracks accounts, transactions,
 categories, earmarks (savings goals), scheduled payments, and provides analysis and
-reporting. Connects to the [ajsutton/moolah-server](https://github.com/ajsutton/moolah-server)
+reporting. Supports two backend modes: iCloud/CloudKit for local-first sync across
+devices, and the [ajsutton/moolah-server](https://github.com/ajsutton/moolah-server)
 REST API at `https://moolah.rocks/api/`.
 
 ## Requirements
@@ -14,6 +15,7 @@ REST API at `https://moolah.rocks/api/`.
 | macOS deployment target | 26+ |
 | XcodeGen | Latest (`brew install xcodegen`) |
 | just | Latest (`brew install just`) |
+| Ruby + Bundler | 3.3+ (for Fastlane, release builds only) |
 
 ## Quick start
 
@@ -104,6 +106,7 @@ moolah-native/
 │   ├── Models/             # Plain Swift structs: UserProfile, Account, Transaction, …
 │   └── Repositories/       # Protocol definitions only — no backend imports
 ├── Backends/
+│   ├── CloudKit/           # iCloud/CloudKit backend (SwiftData, local-first sync)
 │   └── Remote/             # REST API backend (URLSession, DTOs, concrete repos)
 │       ├── APIClient/      # URLSession wrapper with HTTP error mapping
 │       └── Auth/           # RemoteAuthProvider (Google OAuth via ASWebAuthenticationSession)
@@ -120,9 +123,12 @@ moolah-native/
 │   │   ├── InMemoryBackend/ # In-memory BackendProvider for tests
 │   │   └── Fixtures/        # JSON fixture files
 │   └── UI/                 # Snapshot and XCUITest
+├── fastlane/               # Fastlane config for TestFlight/App Store builds
 ├── prompts/                # Prompts for related server-side changes
+├── plans/                  # Planning documents and feature specs
 ├── justfile                # Common dev tasks (just build-mac, just test, …)
 ├── project.yml             # XcodeGen spec — edit this, not the .xcodeproj
+├── .github/workflows/      # CI, TestFlight, and monthly auto-tag workflows
 └── scripts/
     └── test.sh             # Runs tests on both platforms
 ```
@@ -130,29 +136,54 @@ moolah-native/
 ## Architecture
 
 The app uses a **repository pattern** to decouple features from any specific backend.
-The current backend is the Moolah REST API; a future iCloud/CloudKit backend can be
-substituted without touching any feature code.
 
 ```
 Views / Stores  →  Repository protocols  →  Backend implementations
-                   (Domain layer)            Remote (URLSession + cookies)
-                                             CloudKit (future)
+                   (Domain layer)            CloudKit (SwiftData + iCloud sync)
+                                             Remote (URLSession + cookies)
 ```
 
 - **Domain models** (`UserProfile`, `Account`, `Transaction`, etc.) are plain Swift
   structs in the `Domain` module. Features only ever see these types.
-- **Repository protocols** (`AuthProvider`, `AccountRepository`, …) express
+- **Repository protocols** (`AuthProvider`, `AccountRepository`, ...) express
   operations in domain terms — no networking or persistence imports.
 - **`BackendProvider`** is the single injection point via `@Environment`. Swap the
   backend at the composition root (`MoolahApp.swift`) without touching feature code.
 - **`InMemoryBackend`** (test target only) is a full in-memory implementation used in
   all tests. It is never compiled into the app binary.
 
-See [`NATIVE_APP_PLAN.md`](NATIVE_APP_PLAN.md) for the full incremental implementation plan.
+Users choose their backend when creating a profile: iCloud (CloudKit), Moolah server,
+or a custom server URL.
 
 ## Code Signing
 
-- **iOS targets:** unsigned (simulators don't require it).
-- **macOS targets:** ad-hoc signed (`CODE_SIGN_IDENTITY="-"`) with Hardened Runtime
-  disabled — satisfies Gatekeeper for local development without a paid developer
-  certificate.
+- **Local development:** iOS targets are unsigned (simulators don't require it). macOS
+  targets are ad-hoc signed (`CODE_SIGN_IDENTITY="-"`) with Hardened Runtime disabled.
+- **Distribution builds:** Fastlane Match manages certificates and provisioning profiles
+  via a private git repo. Entitlements (App Sandbox, CloudKit) are applied during
+  distribution builds only.
+
+## Release & TestFlight
+
+Releases are automated via GitHub Actions and Fastlane:
+
+- **Tag push** (`v1.0.0`) triggers `.github/workflows/testflight.yml` which builds and
+  uploads to TestFlight.
+- **Monthly auto-tag** (`.github/workflows/monthly-tag.yml`) creates a tag on the 1st
+  of each month to keep TestFlight builds within the 90-day expiry.
+- **Manual trigger** via `workflow_dispatch` on either workflow.
+
+```bash
+just bump-version 1.2.0   # update MARKETING_VERSION in project.yml
+git tag v1.2.0 && git push origin v1.2.0   # triggers TestFlight build
+```
+
+Local shortcuts:
+
+```bash
+just certificates   # sync signing certs via Fastlane Match
+just testflight     # build and upload to TestFlight locally
+```
+
+See [`plans/IOS_RELEASE_AUTOMATION_PLAN.md`](plans/IOS_RELEASE_AUTOMATION_PLAN.md) for
+the full setup guide including Apple Developer account configuration and GitHub secrets.

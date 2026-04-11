@@ -13,6 +13,10 @@ settings:
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
     GCC_TREAT_WARNINGS_AS_ERRORS: YES
 
+    # ---- Versioning ----
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+
     # ---- Signing (env-driven) ----
     DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
 
@@ -71,6 +75,9 @@ targets:
         INFOPLIST_FILE: App/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_HARDENED_RUNTIME: NO
+      configs:
+        Release:
+          ENABLE_HARDENED_RUNTIME: YES
 
   MoolahTests_iOS:
     type: bundle.unit-test

@@ -1,0 +1,3 @@
+app_identifier("rocks.moolah.app")
+apple_id(ENV["APPLE_ID"])  # only needed for deliver, not for API key auth
+team_id(ENV["DEVELOPMENT_TEAM"])
