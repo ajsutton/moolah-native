@@ -132,6 +132,27 @@ struct ExchangeRateServiceTests {
     #expect(results.allSatisfy { $0.rate == Decimal(1) })
   }
 
+  // MARK: - Convert
+
+  @Test func convertProducesCorrectAmount() async throws {
+    let service = makeService(rates: [
+      "2026-04-11": ["USD": Decimal(string: "0.632")!]
+    ])
+    let amount = MonetaryAmount(cents: 10000, currency: .AUD)  // $100.00 AUD
+    let converted = try await service.convert(amount, to: .USD, on: date("2026-04-11"))
+    // 10000 cents * 0.632 = 6320 cents = $63.20 USD
+    #expect(converted.cents == 6320)
+    #expect(converted.currency == .USD)
+  }
+
+  @Test func convertSameCurrencyReturnsIdentical() async throws {
+    let service = makeService()
+    let amount = MonetaryAmount(cents: 10000, currency: .AUD)
+    let converted = try await service.convert(amount, to: .AUD, on: date("2026-04-11"))
+    #expect(converted.cents == 10000)
+    #expect(converted.currency == .AUD)
+  }
+
   @Test func fallbackNeverUsesFutureDate() async throws {
     // Pre-populate cache with a future date only
     let futureRates: [String: [String: Decimal]] = [

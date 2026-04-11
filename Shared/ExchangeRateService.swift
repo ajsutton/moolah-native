@@ -122,6 +122,20 @@ actor ExchangeRateService {
     return results
   }
 
+  func convert(_ amount: MonetaryAmount, to currency: Currency, on date: Date) async throws
+    -> MonetaryAmount
+  {
+    if amount.currency.code == currency.code { return amount }
+
+    let exchangeRate = try await rate(from: amount.currency, to: currency, on: date)
+    var decimalCents = Decimal(amount.cents) * exchangeRate
+    // Banker's rounding to minimize cumulative bias
+    var rounded = Decimal()
+    NSDecimalRound(&rounded, &decimalCents, 0, .bankers)
+    let convertedCents = Int(truncating: rounded as NSDecimalNumber)
+    return MonetaryAmount(cents: convertedCents, currency: currency)
+  }
+
   // MARK: - Private helpers
 
   private func lookupRate(base: String, quote: String, dateString: String) -> Decimal? {
