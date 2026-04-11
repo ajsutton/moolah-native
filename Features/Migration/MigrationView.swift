@@ -22,8 +22,8 @@ struct MigrationView: View {
         progressState(title: "Importing \(step)...", progress: progress)
       case .verifying:
         progressState(title: "Verifying data integrity...")
-      case .succeeded(let result):
-        migrationSuccess(result)
+      case .succeeded(let result, let balanceWarnings):
+        migrationSuccess(result, balanceWarnings: balanceWarnings)
       case .verificationFailed(let verification, let newProfileId):
         verificationFailure(verification, newProfileId: newProfileId)
       case .failed(let error):
@@ -91,7 +91,10 @@ struct MigrationView: View {
 
   // MARK: - Success
 
-  private func migrationSuccess(_ result: ImportResult) -> some View {
+  private func migrationSuccess(
+    _ result: ImportResult,
+    balanceWarnings: [VerificationResult.BalanceMismatch]
+  ) -> some View {
     VStack(spacing: 16) {
       Image(systemName: "checkmark.circle.fill")
         .font(.system(size: 48))
@@ -114,6 +117,26 @@ struct MigrationView: View {
         }
       }
       .font(.body.monospacedDigit())
+
+      if !balanceWarnings.isEmpty {
+        DisclosureGroup("Balance differences (\(balanceWarnings.count) accounts)") {
+          VStack(alignment: .leading, spacing: 4) {
+            ForEach(balanceWarnings, id: \.accountName) { mismatch in
+              VStack(alignment: .leading, spacing: 2) {
+                Text(mismatch.accountName)
+                  .font(.subheadline)
+                Text(
+                  "server: \(Self.formatCents(mismatch.serverBalance))  computed: \(Self.formatCents(mismatch.localBalance))  diff: \(Self.formatCents(mismatch.serverBalance - mismatch.localBalance))"
+                )
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+              }
+            }
+          }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      }
 
       Button("Done") {
         dismiss()
@@ -148,34 +171,36 @@ struct MigrationView: View {
         .font(.title)
 
       Text(
-        "The migrated data doesn't perfectly match the source. You can keep the new profile for review or delete it and retry."
+        "The migrated data doesn't match the source. You can keep the new profile for review or delete it and retry."
       )
       .multilineTextAlignment(.center)
       .foregroundStyle(.secondary)
 
-      if !verification.balanceMismatches.isEmpty {
-        ScrollView {
-          VStack(alignment: .leading, spacing: 6) {
-            Text("Balance mismatches (\(verification.balanceMismatches.count)):")
-              .font(.headline)
-            ForEach(verification.balanceMismatches, id: \.accountName) { mismatch in
-              VStack(alignment: .leading, spacing: 2) {
-                Text(mismatch.accountName)
-                  .font(.subheadline)
-                Text(
-                  "server: \(Self.formatCents(mismatch.serverBalance))  local: \(Self.formatCents(mismatch.localBalance))  diff: \(Self.formatCents(mismatch.serverBalance - mismatch.localBalance))"
-                )
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-              }
-            }
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding()
+      ScrollView {
+        VStack(alignment: .leading, spacing: 8) {
+          Text("Record counts:")
+            .font(.headline)
+          countRow(
+            "Accounts", expected: verification.expectedCounts.accounts,
+            actual: verification.actualCounts.accounts)
+          countRow(
+            "Categories", expected: verification.expectedCounts.categories,
+            actual: verification.actualCounts.categories)
+          countRow(
+            "Earmarks", expected: verification.expectedCounts.earmarks,
+            actual: verification.actualCounts.earmarks)
+          countRow(
+            "Transactions", expected: verification.expectedCounts.transactions,
+            actual: verification.actualCounts.transactions)
+          countRow(
+            "Investment Values", expected: verification.expectedCounts.investmentValues,
+            actual: verification.actualCounts.investmentValues)
         }
-        .frame(maxHeight: 200)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
       }
+      .frame(maxHeight: 200)
+      .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
 
       HStack(spacing: 12) {
         Button("Delete and Retry") {
@@ -234,6 +259,21 @@ struct MigrationView: View {
   }
 
   // MARK: - State Helpers
+
+  private func countRow(_ label: String, expected: Int, actual: Int) -> some View {
+    HStack {
+      Text(label)
+      Spacer()
+      if expected == actual {
+        Text("\(actual)")
+          .foregroundStyle(.secondary)
+      } else {
+        Text("expected \(expected), got \(actual)")
+          .foregroundStyle(.red)
+      }
+    }
+    .font(.caption.monospacedDigit())
+  }
 
   private static func formatCents(_ cents: Int) -> String {
     let dollars = Double(cents) / 100.0

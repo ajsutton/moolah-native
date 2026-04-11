@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import Observation
 import SwiftData
 
@@ -10,12 +11,13 @@ final class MigrationCoordinator {
     case exporting(step: String)
     case importing(step: String, progress: Double)
     case verifying
-    case succeeded(ImportResult)
+    case succeeded(ImportResult, balanceWarnings: [VerificationResult.BalanceMismatch])
     case verificationFailed(VerificationResult, newProfileId: UUID)
     case failed(MigrationError)
   }
 
   private(set) var state: State = .idle
+  private let logger = Logger(subsystem: "com.moolah.app", category: "Migration")
 
   /// Migrates data from a remote profile to a new iCloud profile.
   ///
@@ -95,6 +97,16 @@ final class MigrationCoordinator {
         profileId: newProfileId
       )
 
+      // Log verification results
+      logger.info(
+        "Verification: counts match=\(verification.countMatch) accounts=\(verification.actualCounts.accounts)/\(verification.expectedCounts.accounts) categories=\(verification.actualCounts.categories)/\(verification.expectedCounts.categories) earmarks=\(verification.actualCounts.earmarks)/\(verification.expectedCounts.earmarks) transactions=\(verification.actualCounts.transactions)/\(verification.expectedCounts.transactions) investmentValues=\(verification.actualCounts.investmentValues)/\(verification.expectedCounts.investmentValues)"
+      )
+      for mismatch in verification.balanceMismatches {
+        logger.info(
+          "Balance mismatch: \(mismatch.accountName) server=\(mismatch.serverBalance) computed=\(mismatch.localBalance) diff=\(mismatch.serverBalance - mismatch.localBalance)"
+        )
+      }
+
       if !verification.countMatch {
         // Mark the new profile as incomplete so the user knows it needs review
         var incompleteProfile = newProfile
@@ -112,7 +124,7 @@ final class MigrationCoordinator {
       // 6. Switch to the new iCloud profile
       profileStore.setActiveProfile(newProfileId)
 
-      state = .succeeded(result)
+      state = .succeeded(result, balanceWarnings: verification.balanceMismatches)
 
     } catch {
       state = .failed(error as? MigrationError ?? .unexpected(error))

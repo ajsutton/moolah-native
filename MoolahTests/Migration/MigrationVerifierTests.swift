@@ -152,7 +152,8 @@ struct MigrationVerifierTests {
       profileId: profileId
     )
 
-    #expect(result.countMatch == false)
+    // Counts match (1 account, 1 transaction) but balances don't
+    #expect(result.countMatch == true)
     #expect(result.balanceMismatches.count == 1)
     #expect(result.balanceMismatches.first?.accountName == "Checking")
     #expect(result.balanceMismatches.first?.serverBalance == 5000)

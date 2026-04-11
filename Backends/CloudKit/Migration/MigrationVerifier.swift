@@ -105,7 +105,7 @@ struct MigrationVerifier {
     )
 
     return VerificationResult(
-      countMatch: countMatch && balanceMismatches.isEmpty,
+      countMatch: countMatch,
       expectedCounts: expectedCounts,
       actualCounts: actualCounts,
       balanceMismatches: balanceMismatches
