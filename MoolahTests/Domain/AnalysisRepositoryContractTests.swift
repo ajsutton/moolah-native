@@ -443,8 +443,8 @@ struct AnalysisRepositoryContractTests {
 
     #expect(marchEntries.count == 1, "Day 25 should belong to March financial month")
     #expect(aprilEntries.count == 1, "Day 26 should belong to April financial month")
-    #expect(marchEntries[0].totalExpenses.cents == 1000)
-    #expect(aprilEntries[0].totalExpenses.cents == 2000)
+    #expect(marchEntries[0].totalExpenses.cents == -1000)
+    #expect(aprilEntries[0].totalExpenses.cents == -2000)
   }
 
   // MARK: - Income and Expense Tests
@@ -1350,8 +1350,8 @@ struct AnalysisRepositoryContractTests {
       "Should have one uncategorized expense entry"
     )
     #expect(
-      uncategorized[0].totalExpenses.cents == 500,
-      "Uncategorized expense total should be 500 cents"
+      uncategorized[0].totalExpenses.cents == -500,
+      "Uncategorized expense total should be -500 cents"
     )
   }
 }

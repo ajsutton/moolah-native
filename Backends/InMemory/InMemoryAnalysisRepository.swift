@@ -391,7 +391,7 @@ final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
     // 3. Group by (categoryId, financialMonth)
     var breakdown: [String: [UUID?: MonetaryAmount]] = [:]  // [month: [categoryId: total]]
 
-    for txn in transactions where txn.amount.cents < 0 {
+    for txn in transactions {
       let categoryId = txn.categoryId
       let month = financialMonth(for: txn.date, monthEnd: monthEnd)
 
@@ -399,12 +399,7 @@ final class InMemoryAnalysisRepository: AnalysisRepository, Sendable {
         breakdown[month] = [:]
       }
       let current = breakdown[month]![categoryId] ?? .zero(currency: currency)
-      breakdown[month]![categoryId] =
-        current
-        + MonetaryAmount(
-          cents: abs(txn.amount.cents),
-          currency: txn.amount.currency
-        )
+      breakdown[month]![categoryId] = current + txn.amount
     }
 
     // 4. Flatten to ExpenseBreakdown array
