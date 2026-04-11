@@ -62,3 +62,12 @@ struct MonetaryAmount: Codable, Sendable, Hashable, Comparable {
     return Int(truncating: (decimal * 100) as NSNumber)
   }
 }
+
+extension MonetaryAmount {
+  /// Convert this amount to another currency on a given date using the exchange rate service.
+  func converted(
+    to currency: Currency, on date: Date, using service: ExchangeRateService
+  ) async throws -> MonetaryAmount {
+    try await service.convert(self, to: currency, on: date)
+  }
+}
