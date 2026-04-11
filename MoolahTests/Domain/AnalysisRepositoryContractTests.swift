@@ -1354,6 +1354,68 @@ struct AnalysisRepositoryContractTests {
       "Uncategorized expense total should be -500 cents"
     )
   }
+
+  // MARK: - loadAll Tests
+
+  @Test(
+    "loadAll returns combined results matching individual methods",
+    arguments: [
+      InMemoryBackend() as any BackendProvider,
+      CloudKitAnalysisTestBackend() as any BackendProvider,
+    ])
+  func loadAllReturnsCombinedResults(backend: any BackendProvider) async throws {
+    // Create test data
+    let account = Account(
+      id: UUID(),
+      name: "Test Account",
+      type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: Date())
+    let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: today)!
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .income,
+        date: calendar.date(byAdding: .day, value: -10, to: today)!,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: 50000, currency: .defaultTestCurrency),
+        payee: "Salary"
+      ))
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .expense,
+        date: calendar.date(byAdding: .day, value: -5, to: today)!,
+        accountId: account.id,
+        amount: MonetaryAmount(cents: -20000, currency: .defaultTestCurrency),
+        payee: "Groceries"
+      ))
+
+    let monthEnd = calendar.component(.day, from: today)
+
+    // Call loadAll
+    let result = try await backend.analysis.loadAll(
+      historyAfter: thirtyDaysAgo,
+      forecastUntil: nil,
+      monthEnd: monthEnd
+    )
+
+    // Verify it returns non-empty data matching individual calls
+    let individualBalances = try await backend.analysis.fetchDailyBalances(
+      after: thirtyDaysAgo, forecastUntil: nil)
+    let individualBreakdown = try await backend.analysis.fetchExpenseBreakdown(
+      monthEnd: monthEnd, after: thirtyDaysAgo)
+    let individualIncome = try await backend.analysis.fetchIncomeAndExpense(
+      monthEnd: monthEnd, after: thirtyDaysAgo)
+
+    #expect(result.dailyBalances.count == individualBalances.count)
+    #expect(result.expenseBreakdown.count == individualBreakdown.count)
+    #expect(result.incomeAndExpense.count == individualIncome.count)
+  }
 }
 
 // MARK: - CloudKit Test Backend
