@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct AllTransactionsView: View {
@@ -83,15 +84,8 @@ struct AllTransactionsView: View {
     )
   ])
 
-  let repository = InMemoryTransactionRepository(initialTransactions: [
-    Transaction(
-      type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -5023, currency: Currency.AUD),
-      payee: "Woolworths", categoryId: categoryId
-    )
-  ])
-
-  let store = TransactionStore(repository: repository)
+  let (backend, _, _) = PreviewBackend.create()
+  let store = TransactionStore(repository: backend.transactions)
 
   NavigationStack {
     AllTransactionsView(
@@ -100,5 +94,13 @@ struct AllTransactionsView: View {
       earmarks: earmarks,
       transactionStore: store
     )
+  }
+  .task {
+    _ = try? await backend.transactions.create(
+      Transaction(
+        type: .expense, date: Date(), accountId: accountId,
+        amount: MonetaryAmount(cents: -5023, currency: Currency.AUD),
+        payee: "Woolworths", categoryId: categoryId))
+    await store.load(filter: TransactionFilter())
   }
 }

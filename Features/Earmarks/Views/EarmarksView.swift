@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct EarmarksView: View {
@@ -360,23 +361,9 @@ private struct EditEarmarkSheet: View {
 }
 
 #Preview {
-  let repository = InMemoryEarmarkRepository(initialEarmarks: [
-    Earmark(
-      name: "Holiday Fund",
-      balance: MonetaryAmount(cents: 150000, currency: Currency.AUD),
-      saved: MonetaryAmount(cents: 200000, currency: Currency.AUD),
-      spent: MonetaryAmount(cents: 50000, currency: Currency.AUD),
-      savingsGoal: MonetaryAmount(cents: 500000, currency: Currency.AUD)
-    ),
-    Earmark(
-      name: "Emergency Fund",
-      balance: MonetaryAmount(cents: 300000, currency: Currency.AUD),
-      saved: MonetaryAmount(cents: 300000, currency: Currency.AUD)
-    ),
-  ])
-
-  let earmarkStore = EarmarkStore(repository: repository)
-  let transactionStore = TransactionStore(repository: InMemoryTransactionRepository())
+  let (backend, _, _) = PreviewBackend.create()
+  let earmarkStore = EarmarkStore(repository: backend.earmarks)
+  let transactionStore = TransactionStore(repository: backend.transactions)
 
   NavigationStack {
     EarmarksView(
@@ -384,8 +371,16 @@ private struct EditEarmarkSheet: View {
       accounts: Accounts(from: []),
       categories: Categories(from: []),
       transactionStore: transactionStore,
-      analysisRepository: InMemoryBackend().analysis
+      analysisRepository: backend.analysis
     )
   }
-  .task { await earmarkStore.load() }
+  .task {
+    _ = try? await backend.earmarks.create(
+      Earmark(
+        name: "Holiday Fund",
+        savingsGoal: MonetaryAmount(cents: 500000, currency: Currency.AUD)))
+    _ = try? await backend.earmarks.create(
+      Earmark(name: "Emergency Fund"))
+    await earmarkStore.load()
+  }
 }

@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct TransactionListView: View {
@@ -245,21 +246,8 @@ struct TransactionListView: View {
       id: savingsId, name: "Savings", type: .bank,
       balance: MonetaryAmount(cents: 500000, currency: Currency.AUD)),
   ])
-  let repository = InMemoryTransactionRepository(initialTransactions: [
-    Transaction(
-      type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -5023, currency: Currency.AUD),
-      payee: "Woolworths"),
-    Transaction(
-      type: .income, date: Date().addingTimeInterval(-86400), accountId: accountId,
-      amount: MonetaryAmount(cents: 350000, currency: Currency.AUD),
-      payee: "Employer"),
-    Transaction(
-      type: .transfer, date: Date().addingTimeInterval(-172800), accountId: accountId,
-      toAccountId: savingsId,
-      amount: MonetaryAmount(cents: -100000, currency: Currency.AUD), payee: ""),
-  ])
-  let store = TransactionStore(repository: repository)
+  let (backend, _, _) = PreviewBackend.create()
+  let store = TransactionStore(repository: backend.transactions)
 
   NavigationStack {
     TransactionListView(
@@ -267,5 +255,23 @@ struct TransactionListView: View {
       accounts: accounts, categories: Categories(from: []),
       earmarks: Earmarks(from: []),
       transactionStore: store)
+  }
+  .task {
+    _ = try? await backend.transactions.create(
+      Transaction(
+        type: .expense, date: Date(), accountId: accountId,
+        amount: MonetaryAmount(cents: -5023, currency: Currency.AUD),
+        payee: "Woolworths"))
+    _ = try? await backend.transactions.create(
+      Transaction(
+        type: .income, date: Date().addingTimeInterval(-86400), accountId: accountId,
+        amount: MonetaryAmount(cents: 350000, currency: Currency.AUD),
+        payee: "Employer"))
+    _ = try? await backend.transactions.create(
+      Transaction(
+        type: .transfer, date: Date().addingTimeInterval(-172800), accountId: accountId,
+        toAccountId: savingsId,
+        amount: MonetaryAmount(cents: -100000, currency: Currency.AUD), payee: ""))
+    await store.load(filter: TransactionFilter(accountId: accountId))
   }
 }

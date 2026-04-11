@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct CategoriesView: View {
@@ -254,19 +255,23 @@ private struct CreateCategorySheet: View {
 }
 
 #Preview {
-  let groceriesId = UUID()
-  let store = CategoryStore(
-    repository: InMemoryCategoryRepository(initialCategories: [
+  let (backend, _, _) = PreviewBackend.create()
+  let store = CategoryStore(repository: backend.categories)
+
+  NavigationStack {
+    CategoriesView(categoryStore: store)
+  }
+  .task {
+    let groceriesId = UUID()
+    for cat in [
       Category(id: groceriesId, name: "Groceries"),
       Category(name: "Fruit", parentId: groceriesId),
       Category(name: "Vegetables", parentId: groceriesId),
       Category(name: "Transport"),
       Category(name: "Entertainment"),
-    ])
-  )
-
-  NavigationStack {
-    CategoriesView(categoryStore: store)
+    ] {
+      _ = try? await backend.categories.create(cat)
+    }
+    await store.load()
   }
-  .task { await store.load() }
 }

@@ -326,7 +326,7 @@ private struct CreateEarmarkSheet: View {
 }
 
 #Preview {
-  let backend = InMemoryBackend()
+  let (backend, _, _) = PreviewBackend.create()
   let accountStore = AccountStore(repository: backend.accounts)
   let earmarkStore = EarmarkStore(repository: backend.earmarks)
 

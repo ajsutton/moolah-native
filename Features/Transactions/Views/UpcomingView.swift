@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct UpcomingView: View {
@@ -336,35 +337,8 @@ struct UpcomingTransactionRow: View {
     Category(id: categoryId, name: "Rent", parentId: nil)
   ])
 
-  let today = Date()
-  let calendar = Calendar.current
-  let overdue = calendar.date(byAdding: .day, value: -5, to: today)!
-  let upcoming = calendar.date(byAdding: .day, value: 5, to: today)!
-
-  let repository = InMemoryTransactionRepository(initialTransactions: [
-    Transaction(
-      type: .expense,
-      date: overdue,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -200000, currency: Currency.AUD),
-      payee: "Rent",
-      categoryId: categoryId,
-      recurPeriod: .month,
-      recurEvery: 1
-    ),
-    Transaction(
-      type: .expense,
-      date: upcoming,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -15000, currency: Currency.AUD),
-      payee: "Internet",
-      categoryId: categoryId,
-      recurPeriod: .month,
-      recurEvery: 1
-    ),
-  ])
-
-  let store = TransactionStore(repository: repository)
+  let (backend, _, _) = PreviewBackend.create()
+  let store = TransactionStore(repository: backend.transactions)
 
   NavigationStack {
     UpcomingView(
@@ -373,5 +347,25 @@ struct UpcomingTransactionRow: View {
       earmarks: Earmarks(from: []),
       transactionStore: store
     )
+  }
+  .task {
+    let today = Date()
+    let calendar = Calendar.current
+    let overdue = calendar.date(byAdding: .day, value: -5, to: today)!
+    let upcoming = calendar.date(byAdding: .day, value: 5, to: today)!
+
+    _ = try? await backend.transactions.create(
+      Transaction(
+        type: .expense, date: overdue, accountId: accountId,
+        amount: MonetaryAmount(cents: -200000, currency: Currency.AUD),
+        payee: "Rent", categoryId: categoryId,
+        recurPeriod: .month, recurEvery: 1))
+    _ = try? await backend.transactions.create(
+      Transaction(
+        type: .expense, date: upcoming, accountId: accountId,
+        amount: MonetaryAmount(cents: -15000, currency: Currency.AUD),
+        payee: "Internet", categoryId: categoryId,
+        recurPeriod: .month, recurEvery: 1))
+    await store.load(filter: TransactionFilter(scheduled: true))
   }
 }

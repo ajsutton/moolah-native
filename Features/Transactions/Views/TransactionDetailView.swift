@@ -589,7 +589,7 @@ struct TransactionDetailView: View {
       earmarks: Earmarks(from: [
         Earmark(name: "Holiday Fund")
       ]),
-      transactionStore: TransactionStore(repository: InMemoryTransactionRepository()),
+      transactionStore: TransactionStore(repository: PreviewBackend.create().0.transactions),
       onUpdate: { _ in },
       onDelete: { _ in }
     )

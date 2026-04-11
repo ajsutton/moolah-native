@@ -10,11 +10,11 @@ struct MigrationIntegrationTests {
 
   private let currency = Currency.defaultTestCurrency
 
-  /// Seeds an InMemoryBackend with realistic data for testing.
+  /// Seeds a CloudKitBackend with realistic data for testing.
   /// Account balances are set to match the sum of their non-scheduled transactions,
   /// matching server behavior where balances are computed from transactions.
-  private func makeSeededBackend() async throws -> InMemoryBackend {
-    let backend = InMemoryBackend(currency: currency)
+  private func makeSeededBackend() async throws -> CloudKitBackend {
+    let (backend, _, _) = try TestBackend.create(currency: currency)
 
     // Accounts — set balance to match transaction totals below
     // Checking: +100,000 - 2,500 = 97,500

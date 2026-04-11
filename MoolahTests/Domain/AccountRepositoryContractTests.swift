@@ -9,13 +9,9 @@ struct AccountRepositoryContractTests {
 
   // MARK: - CREATE TESTS
 
-  @Test(
-    "creates account with opening balance",
-    arguments: [
-      InMemoryAccountRepository() as any AccountRepository,
-      makeCloudKitAccountRepository() as any AccountRepository,
-    ])
-  func testCreatesAccount(repository: any AccountRepository) async throws {
+  @Test("creates account with opening balance")
+  func testCreatesAccount() async throws {
+    let repository = makeCloudKitAccountRepository()
     let newAccount = Account(
       name: "Savings",
       type: .bank,
@@ -32,13 +28,9 @@ struct AccountRepositoryContractTests {
     #expect(all.count == 1)
   }
 
-  @Test(
-    "rejects empty name",
-    arguments: [
-      InMemoryAccountRepository() as any AccountRepository,
-      makeCloudKitAccountRepository() as any AccountRepository,
-    ])
-  func testRejectsEmptyName(repository: any AccountRepository) async throws {
+  @Test("rejects empty name")
+  func testRejectsEmptyName() async throws {
+    let repository = makeCloudKitAccountRepository()
     let invalidAccount = Account(
       name: "   ",  // Whitespace only
       type: .bank,
@@ -50,13 +42,9 @@ struct AccountRepositoryContractTests {
     }
   }
 
-  @Test(
-    "allows negative balance",
-    arguments: [
-      InMemoryAccountRepository() as any AccountRepository,
-      makeCloudKitAccountRepository() as any AccountRepository,
-    ])
-  func testAllowsNegativeBalance(repository: any AccountRepository) async throws {
+  @Test("allows negative balance")
+  func testAllowsNegativeBalance() async throws {
+    let repository = makeCloudKitAccountRepository()
     let creditCard = Account(
       name: "Credit Card",
       type: .creditCard,
@@ -69,19 +57,12 @@ struct AccountRepositoryContractTests {
 
   // MARK: - UPDATE TESTS
 
-  @Test(
-    "updates account name and type",
-    arguments: [
-      InMemoryAccountRepository(initialAccounts: [
-        Account(
-          id: UUID(), name: "Checking", type: .bank, balance: .zero(currency: .defaultTestCurrency))
-      ]) as any AccountRepository,
-      makeCloudKitAccountRepository(initialAccounts: [
-        Account(
-          id: UUID(), name: "Checking", type: .bank, balance: .zero(currency: .defaultTestCurrency))
-      ]) as any AccountRepository,
+  @Test("updates account name and type")
+  func testUpdatesAccount() async throws {
+    let repository = makeCloudKitAccountRepository(initialAccounts: [
+      Account(
+        id: UUID(), name: "Checking", type: .bank, balance: .zero(currency: .defaultTestCurrency))
     ])
-  func testUpdatesAccount(repository: any AccountRepository) async throws {
     let accounts = try await repository.fetchAll()
     var toUpdate = accounts[0]
     toUpdate.name = "Business Checking"
@@ -93,27 +74,16 @@ struct AccountRepositoryContractTests {
     #expect(updated.type == .asset)
   }
 
-  @Test(
-    "preserves balance on update",
-    arguments: [
-      InMemoryAccountRepository(initialAccounts: [
-        Account(
-          id: UUID(),
-          name: "Savings",
-          type: .bank,
-          balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
-        )
-      ]) as any AccountRepository,
-      makeCloudKitAccountRepository(initialAccounts: [
-        Account(
-          id: UUID(),
-          name: "Savings",
-          type: .bank,
-          balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
-        )
-      ]) as any AccountRepository,
+  @Test("preserves balance on update")
+  func testPreservesBalance() async throws {
+    let repository = makeCloudKitAccountRepository(initialAccounts: [
+      Account(
+        id: UUID(),
+        name: "Savings",
+        type: .bank,
+        balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
+      )
     ])
-  func testPreservesBalance(repository: any AccountRepository) async throws {
     let accounts = try await repository.fetchAll()
     var toUpdate = accounts[0]
     toUpdate.name = "Updated Savings"
@@ -125,13 +95,9 @@ struct AccountRepositoryContractTests {
     #expect(updated.balance.cents == 100000)
   }
 
-  @Test(
-    "throws on update non-existent",
-    arguments: [
-      InMemoryAccountRepository() as any AccountRepository,
-      makeCloudKitAccountRepository() as any AccountRepository,
-    ])
-  func testThrowsOnUpdateNonExistent(repository: any AccountRepository) async throws {
+  @Test("throws on update non-existent")
+  func testThrowsOnUpdateNonExistent() async throws {
+    let repository = makeCloudKitAccountRepository()
     let nonExistent = Account(name: "DoesNotExist", type: .bank)
 
     await #expect(throws: BackendError.self) {
@@ -141,21 +107,13 @@ struct AccountRepositoryContractTests {
 
   // MARK: - DELETE TESTS
 
-  @Test(
-    "soft deletes account with zero balance",
-    arguments: [
-      InMemoryAccountRepository(initialAccounts: [
-        Account(
-          id: UUID(), name: "Old Account", type: .bank,
-          balance: .zero(currency: .defaultTestCurrency))
-      ]) as any AccountRepository,
-      makeCloudKitAccountRepository(initialAccounts: [
-        Account(
-          id: UUID(), name: "Old Account", type: .bank,
-          balance: .zero(currency: .defaultTestCurrency))
-      ]) as any AccountRepository,
+  @Test("soft deletes account with zero balance")
+  func testDeletesAccountWithZeroBalance() async throws {
+    let repository = makeCloudKitAccountRepository(initialAccounts: [
+      Account(
+        id: UUID(), name: "Old Account", type: .bank,
+        balance: .zero(currency: .defaultTestCurrency))
     ])
-  func testDeletesAccountWithZeroBalance(repository: any AccountRepository) async throws {
     let accounts = try await repository.fetchAll()
     let toDelete = accounts[0]
 
@@ -168,27 +126,16 @@ struct AccountRepositoryContractTests {
     #expect(deleted?.isHidden == true)
   }
 
-  @Test(
-    "rejects delete with non-zero balance",
-    arguments: [
-      InMemoryAccountRepository(initialAccounts: [
-        Account(
-          id: UUID(),
-          name: "Active Account",
-          type: .bank,
-          balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
-        )
-      ]) as any AccountRepository,
-      makeCloudKitAccountRepository(initialAccounts: [
-        Account(
-          id: UUID(),
-          name: "Active Account",
-          type: .bank,
-          balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
-        )
-      ]) as any AccountRepository,
+  @Test("rejects delete with non-zero balance")
+  func testRejectsDeleteWithBalance() async throws {
+    let repository = makeCloudKitAccountRepository(initialAccounts: [
+      Account(
+        id: UUID(),
+        name: "Active Account",
+        type: .bank,
+        balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
+      )
     ])
-  func testRejectsDeleteWithBalance(repository: any AccountRepository) async throws {
     let accounts = try await repository.fetchAll()
     let toDelete = accounts[0]
 
@@ -199,13 +146,9 @@ struct AccountRepositoryContractTests {
 
   // MARK: - REORDERING TESTS
 
-  @Test(
-    "updates positions",
-    arguments: [
-      makeInMemoryWithPositionedAccounts() as any AccountRepository,
-      makeCloudKitWithPositionedAccounts() as any AccountRepository,
-    ])
-  func testUpdatesPositions(repository: any AccountRepository) async throws {
+  @Test("updates positions")
+  func testUpdatesPositions() async throws {
+    let repository = makeCloudKitWithPositionedAccounts()
     let accounts = try await repository.fetchAll()
     let account1 = accounts.first { $0.name == "First" }!
     let account2 = accounts.first { $0.name == "Second" }!
@@ -235,13 +178,6 @@ struct AccountRepositoryContractTests {
 }
 
 // MARK: - Factory Helpers
-
-private func makeInMemoryWithPositionedAccounts() -> InMemoryAccountRepository {
-  let account1 = Account(id: UUID(), name: "First", type: .bank, position: 0)
-  let account2 = Account(id: UUID(), name: "Second", type: .bank, position: 1)
-  let account3 = Account(id: UUID(), name: "Third", type: .bank, position: 2)
-  return InMemoryAccountRepository(initialAccounts: [account1, account2, account3])
-}
 
 private func makeCloudKitAccountRepository(
   initialAccounts: [Account] = []

@@ -6,15 +6,9 @@ import Testing
 
 @Suite("TransactionRepository Contract")
 struct TransactionRepositoryContractTests {
-  @Test(
-    "filters by date range",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testFiltersByDateRange(repository: any TransactionRepository) async throws {
+  @Test("filters by date range")
+  func testFiltersByDateRange() async throws {
+    let repository = makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
     let calendar = Calendar.current
     let middleDate = calendar.date(from: DateComponents(year: 2024, month: 6, day: 15))!
     let startDate = calendar.date(byAdding: .day, value: -30, to: middleDate)!
@@ -33,15 +27,9 @@ struct TransactionRepositoryContractTests {
     }
   }
 
-  @Test(
-    "filters by category IDs",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testFiltersByCategoryIds(repository: any TransactionRepository) async throws {
+  @Test("filters by category IDs")
+  func testFiltersByCategoryIds() async throws {
+    let repository = makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
     let transactions = makeTestTransactions()
     let groceryCategory = transactions[0].categoryId!
     let categoryIds: Set<UUID> = [groceryCategory]
@@ -58,15 +46,9 @@ struct TransactionRepositoryContractTests {
     }
   }
 
-  @Test(
-    "filters by payee (case-insensitive contains)",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testFiltersByPayee(repository: any TransactionRepository) async throws {
+  @Test("filters by payee (case-insensitive contains)")
+  func testFiltersByPayee() async throws {
+    let repository = makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
     let page = try await repository.fetch(
       filter: TransactionFilter(payee: "wool"),
       page: 0,
@@ -81,15 +63,9 @@ struct TransactionRepositoryContractTests {
     }
   }
 
-  @Test(
-    "combines multiple filters",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testCombinesMultipleFilters(repository: any TransactionRepository) async throws {
+  @Test("combines multiple filters")
+  func testCombinesMultipleFilters() async throws {
+    let repository = makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
     let transactions = makeTestTransactions()
     let groceryCategory = transactions[0].categoryId!
     let calendar = Calendar.current
@@ -116,15 +92,9 @@ struct TransactionRepositoryContractTests {
     }
   }
 
-  @Test(
-    "returns empty when no matches",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testReturnsEmptyWhenNoMatches(repository: any TransactionRepository) async throws {
+  @Test("returns empty when no matches")
+  func testReturnsEmptyWhenNoMatches() async throws {
+    let repository = makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
     let page = try await repository.fetch(
       filter: TransactionFilter(payee: "NonexistentPayee"),
       page: 0,
@@ -134,15 +104,9 @@ struct TransactionRepositoryContractTests {
     #expect(page.transactions.isEmpty)
   }
 
-  @Test(
-    "update preserves all transaction fields",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: [])
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(initialTransactions: [])
-        as any TransactionRepository,
-    ])
-  func testUpdatePreservesAllFields(repository: any TransactionRepository) async throws {
+  @Test("update preserves all transaction fields")
+  func testUpdatePreservesAllFields() async throws {
+    let repository = makeCloudKitTransactionRepository(initialTransactions: [])
     let calendar = Calendar.current
     let accountId = UUID()
     let toAccountId = UUID()
@@ -206,15 +170,9 @@ struct TransactionRepositoryContractTests {
     #expect(fetched.recurEvery == 2)
   }
 
-  @Test(
-    "clearing filter reloads all",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testClearingFilterReloadsAll(repository: any TransactionRepository) async throws {
+  @Test("clearing filter reloads all")
+  func testClearingFilterReloadsAll() async throws {
+    let repository = makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
     // First apply a filter
     let filteredPage = try await repository.fetch(
       filter: TransactionFilter(payee: "Woolworths"),
@@ -232,15 +190,10 @@ struct TransactionRepositoryContractTests {
     #expect(allPage.transactions.count >= filteredPage.transactions.count)
   }
 
-  @Test(
-    "priorBalance is sum of transactions before the page",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makePaginationTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(initialTransactions: makePaginationTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testPriorBalanceAcrossPages(repository: any TransactionRepository) async throws {
+  @Test("priorBalance is sum of transactions before the page")
+  func testPriorBalanceAcrossPages() async throws {
+    let repository = makeCloudKitTransactionRepository(
+      initialTransactions: makePaginationTestTransactions())
     let page0 = try await repository.fetch(
       filter: TransactionFilter(),
       page: 0,
@@ -266,15 +219,10 @@ struct TransactionRepositoryContractTests {
       "priorBalance of page 0 should equal sum of all older transactions")
   }
 
-  @Test(
-    "empty page returns zero priorBalance",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makePaginationTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(initialTransactions: makePaginationTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testEmptyPagePriorBalance(repository: any TransactionRepository) async throws {
+  @Test("empty page returns zero priorBalance")
+  func testEmptyPagePriorBalance() async throws {
+    let repository = makeCloudKitTransactionRepository(
+      initialTransactions: makePaginationTestTransactions())
     let page = try await repository.fetch(
       filter: TransactionFilter(),
       page: 100,
@@ -285,13 +233,9 @@ struct TransactionRepositoryContractTests {
     #expect(page.priorBalance.cents == 0)
   }
 
-  @Test(
-    "transfer requires toAccountId",
-    arguments: [
-      InMemoryTransactionRepository() as any TransactionRepository,
-      makeCloudKitTransactionRepository() as any TransactionRepository,
-    ])
-  func testTransferRequiresToAccountId(repository: any TransactionRepository) async throws {
+  @Test("transfer requires toAccountId")
+  func testTransferRequiresToAccountId() async throws {
+    let repository = makeCloudKitTransactionRepository()
     let transfer = Transaction(
       type: .transfer,
       date: Date(),
@@ -306,13 +250,9 @@ struct TransactionRepositoryContractTests {
     }
   }
 
-  @Test(
-    "transfer rejects same-account transfer",
-    arguments: [
-      InMemoryTransactionRepository() as any TransactionRepository,
-      makeCloudKitTransactionRepository() as any TransactionRepository,
-    ])
-  func testTransferRejectsSameAccount(repository: any TransactionRepository) async throws {
+  @Test("transfer rejects same-account transfer")
+  func testTransferRejectsSameAccount() async throws {
+    let repository = makeCloudKitTransactionRepository()
     let accountId = UUID()
     let transfer = Transaction(
       type: .transfer,
@@ -328,15 +268,9 @@ struct TransactionRepositoryContractTests {
     }
   }
 
-  @Test(
-    "transactions are sorted by date descending",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testTransactionsSortedByDateDesc(repository: any TransactionRepository) async throws {
+  @Test("transactions are sorted by date descending")
+  func testTransactionsSortedByDateDesc() async throws {
+    let repository = makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
     let page = try await repository.fetch(
       filter: TransactionFilter(),
       page: 0,
@@ -353,15 +287,10 @@ struct TransactionRepositoryContractTests {
 
   // MARK: - Scheduled Filter
 
-  @Test(
-    "filters scheduled transactions",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makeScheduledTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(initialTransactions: makeScheduledTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testFiltersByScheduled(repository: any TransactionRepository) async throws {
+  @Test("filters scheduled transactions")
+  func testFiltersByScheduled() async throws {
+    let repository = makeCloudKitTransactionRepository(
+      initialTransactions: makeScheduledTestTransactions())
     let scheduledPage = try await repository.fetch(
       filter: TransactionFilter(scheduled: true),
       page: 0,
@@ -383,15 +312,9 @@ struct TransactionRepositoryContractTests {
 
   // MARK: - Earmark Filter
 
-  @Test(
-    "filters by earmarkId",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testFiltersByEarmarkId(repository: any TransactionRepository) async throws {
+  @Test("filters by earmarkId")
+  func testFiltersByEarmarkId() async throws {
+    let repository = makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
     // The test data has one earmarked transaction
     let allPage = try await repository.fetch(
       filter: TransactionFilter(),
@@ -414,16 +337,10 @@ struct TransactionRepositoryContractTests {
 
   // MARK: - Account Filter
 
-  @Test(
-    "filters by accountId including transfers",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makeTransferTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(initialTransactions: makeTransferTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testFiltersByAccountIdIncludingTransfers(repository: any TransactionRepository) async throws
-  {
+  @Test("filters by accountId including transfers")
+  func testFiltersByAccountIdIncludingTransfers() async throws {
+    let repository = makeCloudKitTransactionRepository(
+      initialTransactions: makeTransferTestTransactions())
     let sourceAccountId = transferSourceAccountId
     let destAccountId = transferDestAccountId
 
@@ -447,62 +364,38 @@ struct TransactionRepositoryContractTests {
 
   // MARK: - Payee Suggestions
 
-  @Test(
-    "fetchPayeeSuggestions returns prefix matches sorted by frequency",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makePayeeSuggestionTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(
-        initialTransactions: makePayeeSuggestionTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testPayeeSuggestions(repository: any TransactionRepository) async throws {
+  @Test("fetchPayeeSuggestions returns prefix matches sorted by frequency")
+  func testPayeeSuggestions() async throws {
+    let repository = makeCloudKitTransactionRepository(
+      initialTransactions: makePayeeSuggestionTestTransactions())
     let suggestions = try await repository.fetchPayeeSuggestions(prefix: "Wool")
 
     #expect(suggestions.count == 1)
     #expect(suggestions[0] == "Woolworths")
   }
 
-  @Test(
-    "fetchPayeeSuggestions is case insensitive",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makePayeeSuggestionTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(
-        initialTransactions: makePayeeSuggestionTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testPayeeSuggestionsCaseInsensitive(repository: any TransactionRepository) async throws {
+  @Test("fetchPayeeSuggestions is case insensitive")
+  func testPayeeSuggestionsCaseInsensitive() async throws {
+    let repository = makeCloudKitTransactionRepository(
+      initialTransactions: makePayeeSuggestionTestTransactions())
     let suggestions = try await repository.fetchPayeeSuggestions(prefix: "wool")
 
     #expect(suggestions.count == 1)
     #expect(suggestions[0] == "Woolworths")
   }
 
-  @Test(
-    "fetchPayeeSuggestions returns empty for empty prefix",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makePayeeSuggestionTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(
-        initialTransactions: makePayeeSuggestionTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testPayeeSuggestionsEmptyPrefix(repository: any TransactionRepository) async throws {
+  @Test("fetchPayeeSuggestions returns empty for empty prefix")
+  func testPayeeSuggestionsEmptyPrefix() async throws {
+    let repository = makeCloudKitTransactionRepository(
+      initialTransactions: makePayeeSuggestionTestTransactions())
     let suggestions = try await repository.fetchPayeeSuggestions(prefix: "")
     #expect(suggestions.isEmpty)
   }
 
-  @Test(
-    "fetchPayeeSuggestions sorts by frequency",
-    arguments: [
-      InMemoryTransactionRepository(initialTransactions: makePayeeSuggestionTestTransactions())
-        as any TransactionRepository,
-      makeCloudKitTransactionRepository(
-        initialTransactions: makePayeeSuggestionTestTransactions())
-        as any TransactionRepository,
-    ])
-  func testPayeeSuggestionsByFrequency(repository: any TransactionRepository) async throws {
+  @Test("fetchPayeeSuggestions sorts by frequency")
+  func testPayeeSuggestionsByFrequency() async throws {
+    let repository = makeCloudKitTransactionRepository(
+      initialTransactions: makePayeeSuggestionTestTransactions())
     // "Coles" appears 3 times, "Coffee Shop" appears 1 time
     let suggestions = try await repository.fetchPayeeSuggestions(prefix: "Co")
 

@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct CategoryTreeView: View {
@@ -54,19 +55,23 @@ private struct CategoryNodeView: View {
 }
 
 #Preview {
-  let groceriesId = UUID()
-  let store = CategoryStore(
-    repository: InMemoryCategoryRepository(initialCategories: [
+  let (backend, _, _) = PreviewBackend.create()
+  let store = CategoryStore(repository: backend.categories)
+
+  NavigationStack {
+    CategoryTreeView(categoryStore: store)
+  }
+  .task {
+    let groceriesId = UUID()
+    for cat in [
       Category(id: groceriesId, name: "Groceries"),
       Category(name: "Fruit", parentId: groceriesId),
       Category(name: "Vegetables", parentId: groceriesId),
       Category(name: "Transport"),
       Category(name: "Entertainment"),
-    ])
-  )
-
-  NavigationStack {
-    CategoryTreeView(categoryStore: store)
+    ] {
+      _ = try? await backend.categories.create(cat)
+    }
+    await store.load()
   }
-  .task { await store.load() }
 }

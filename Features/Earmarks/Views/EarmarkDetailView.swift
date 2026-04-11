@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct EarmarkDetailView: View {
@@ -279,20 +280,9 @@ private struct EditEarmarkSheet: View {
     savingsStartDate: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1)),
     savingsEndDate: Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 31))
   )
-  let earmarkRepository = InMemoryEarmarkRepository(initialEarmarks: [earmark])
-  let earmarkStore = EarmarkStore(repository: earmarkRepository)
-  let repository = InMemoryTransactionRepository(initialTransactions: [
-    Transaction(
-      type: .expense, date: Date(), accountId: UUID(),
-      amount: MonetaryAmount(cents: -5023, currency: Currency.AUD),
-      payee: "Flight Booking", earmarkId: earmarkId),
-    Transaction(
-      type: .income, date: Date().addingTimeInterval(-86400), accountId: UUID(),
-      amount: MonetaryAmount(cents: 50000, currency: Currency.AUD),
-      payee: "Savings Transfer", earmarkId: earmarkId),
-  ])
-  let store = TransactionStore(repository: repository)
-  let backend = InMemoryBackend()
+  let (backend, _, _) = PreviewBackend.create()
+  let earmarkStore = EarmarkStore(repository: backend.earmarks)
+  let store = TransactionStore(repository: backend.transactions)
 
   NavigationStack {
     EarmarkDetailView(
@@ -304,5 +294,23 @@ private struct EditEarmarkSheet: View {
       analysisRepository: backend.analysis
     )
     .environment(earmarkStore)
+  }
+  .task {
+    let accountId = UUID()
+    _ = try? await backend.accounts.create(
+      Account(id: accountId, name: "Test", type: .bank))
+    _ = try? await backend.earmarks.create(earmark)
+    _ = try? await backend.transactions.create(
+      Transaction(
+        type: .expense, date: Date(), accountId: accountId,
+        amount: MonetaryAmount(cents: -5023, currency: Currency.AUD),
+        payee: "Flight Booking", earmarkId: earmarkId))
+    _ = try? await backend.transactions.create(
+      Transaction(
+        type: .income, date: Date().addingTimeInterval(-86400), accountId: accountId,
+        amount: MonetaryAmount(cents: 50000, currency: Currency.AUD),
+        payee: "Savings Transfer", earmarkId: earmarkId))
+    await earmarkStore.load()
+    await store.load(filter: TransactionFilter(earmarkId: earmarkId))
   }
 }
