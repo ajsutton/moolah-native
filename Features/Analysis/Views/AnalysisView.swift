@@ -46,8 +46,10 @@ struct AnalysisView: View {
       }
     }
     .task {
-      await transactionStore.load(filter: TransactionFilter(scheduled: true))
-      await store.loadAll()
+      async let transactions: Void = transactionStore.load(
+        filter: TransactionFilter(scheduled: true))
+      async let analysis: Void = store.loadAll()
+      _ = await (transactions, analysis)
     }
     .onChange(of: store.historyMonths) { _, _ in
       Task { await store.loadAll() }
