@@ -1,4 +1,3 @@
-import CloudKit
 import Foundation
 import OSLog
 import Observation
@@ -199,16 +198,12 @@ final class ProfileStore {
     validationError = nil
     defer { isValidating = false }
 
-    do {
-      let status = try await CKContainer.default().accountStatus()
-      if status == .available {
-        return true
-      } else {
-        validationError = "iCloud is not available. Please sign in to iCloud in Settings."
-        return false
-      }
-    } catch {
-      validationError = "Could not check iCloud availability"
+    // Use FileManager instead of CKContainer to avoid NSException crash
+    // when CloudKit entitlements aren't configured.
+    if FileManager.default.ubiquityIdentityToken != nil {
+      return true
+    } else {
+      validationError = "iCloud is not available. Please sign in to iCloud in Settings."
       return false
     }
   }

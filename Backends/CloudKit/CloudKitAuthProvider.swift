@@ -1,4 +1,3 @@
-import CloudKit
 import Foundation
 
 final class CloudKitAuthProvider: AuthProvider, Sendable {
@@ -11,9 +10,11 @@ final class CloudKitAuthProvider: AuthProvider, Sendable {
   }
 
   func currentUser() async throws -> UserProfile? {
-    let status = try await CKContainer.default().accountStatus()
-    guard status == .available else { return nil }
-    return UserProfile(
+    // iCloud profiles use implicit auth via the device's Apple ID.
+    // No CKContainer check — SwiftData works locally even without
+    // CloudKit entitlements, and CKContainer.default() crashes with
+    // an NSException if no container is configured.
+    UserProfile(
       id: "icloud-user",
       givenName: profileLabel,
       familyName: "",
@@ -22,8 +23,7 @@ final class CloudKitAuthProvider: AuthProvider, Sendable {
   }
 
   func signIn() async throws -> UserProfile {
-    let status = try await CKContainer.default().accountStatus()
-    guard status == .available else {
+    guard FileManager.default.ubiquityIdentityToken != nil else {
       throw BackendError.unauthenticated
     }
     return UserProfile(
