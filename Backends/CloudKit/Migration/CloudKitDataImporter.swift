@@ -134,17 +134,39 @@ struct CloudKitDataImporter {
 
     // 7. Save
     logger.info(
-      "Saving \(data.accounts.count) accounts, \(data.categories.count) categories, \(data.transactions.count) transactions to SwiftData"
+      "Saving to SwiftData — context.hasChanges=\(context.hasChanges)"
     )
-    try context.save()
 
-    // Verify
+    // Check a single inserted record before save
+    if let firstAccount = data.accounts.first {
+      let testId = firstAccount.id
+      let beforeDescriptor = FetchDescriptor<AccountRecord>(
+        predicate: #Predicate { $0.id == testId }
+      )
+      let beforeCount = (try? context.fetchCount(beforeDescriptor)) ?? -1
+      logger.info(
+        "Before save: account \(firstAccount.name) (id=\(testId)) fetchCount=\(beforeCount)")
+    }
+
+    try context.save()
+    logger.info("SwiftData save completed, context.hasChanges=\(context.hasChanges)")
+
+    // Verify with and without predicate
+    let allDescriptor = FetchDescriptor<AccountRecord>()
+    let allCount = (try? context.fetchCount(allDescriptor)) ?? -1
     let profileId = self.profileId
-    let descriptor = FetchDescriptor<AccountRecord>(
+    let filteredDescriptor = FetchDescriptor<AccountRecord>(
       predicate: #Predicate { $0.profileId == profileId }
     )
-    let savedCount = (try? context.fetchCount(descriptor)) ?? -1
-    logger.info("Post-save verification: \(savedCount) accounts in mainContext")
+    let filteredCount = (try? context.fetchCount(filteredDescriptor)) ?? -1
+    logger.info(
+      "Post-save: ALL accounts=\(allCount), filtered by profileId=\(filteredCount), profileId=\(profileId)"
+    )
+
+    // Check store URL
+    for config in context.container.configurations {
+      logger.info("Store URL: \(config.url.absoluteString)")
+    }
 
     return ImportResult(
       accountCount: data.accounts.count,
