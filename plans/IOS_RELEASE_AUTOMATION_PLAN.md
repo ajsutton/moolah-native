@@ -51,7 +51,7 @@ Minimum work to get Moolah installable on iOS via TestFlight with both CloudKit 
 
 **File: `project.yml`**
 
-- [ ] **Add `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION`** to the base settings:
+- [x] **Add `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION`** to the base settings:
 
 ```yaml
 settings:
@@ -62,7 +62,7 @@ settings:
 
 **File: `App/Info.plist`**
 
-- [ ] **Replace hardcoded version strings** with build setting variables:
+- [x] **Replace hardcoded version strings** with build setting variables:
 
 ```xml
 <key>CFBundleShortVersionString</key>
@@ -75,7 +75,7 @@ settings:
 
 **File: `project.yml`**
 
-- [ ] **Enable hardened runtime for macOS Release builds.** Currently `ENABLE_HARDENED_RUNTIME: NO`. Add a Release configuration override:
+- [x] **Enable hardened runtime for macOS Release builds.** Currently `ENABLE_HARDENED_RUNTIME: NO`. Add a Release configuration override:
 
 ```yaml
 Moolah_macOS:
@@ -91,7 +91,7 @@ Hardened runtime is required for macOS notarization. Not strictly needed for Tes
 
 ### 2.3 — Entitlements File
 
-- [ ] **Create `App/Moolah.entitlements`** (shared by both iOS and macOS targets):
+- [x] **Create `App/Moolah.entitlements`** (shared by both iOS and macOS targets):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -116,7 +116,7 @@ Hardened runtime is required for macOS notarization. Not strictly needed for Tes
 
 ### 2.4 — Project Configuration for Entitlements
 
-- [ ] **Update `project.yml`** to wire entitlements and iCloud capability to both targets:
+- [x] **Update `project.yml`** to wire entitlements and iCloud capability to both targets:
 
 ```yaml
 # In each target's settings:
@@ -133,7 +133,7 @@ attributes:
 
 ### 2.5 — SwiftData CloudKit Configuration
 
-- [ ] **Update `MoolahApp.init()`** to enable CloudKit sync in the `ModelConfiguration`:
+- [x] **Update `MoolahApp.init()`** to enable CloudKit sync in the `ModelConfiguration`:
 
 ```swift
 let config = ModelConfiguration(
@@ -152,7 +152,7 @@ These files can be written and committed now. They won't run until secrets are c
 
 ### 2.1 — Fastlane Setup
 
-- [ ] **Add `Gemfile`** to project root:
+- [x] **Add `Gemfile`** to project root:
 
 ```ruby
 source "https://rubygems.org"
@@ -160,14 +160,14 @@ source "https://rubygems.org"
 gem "fastlane"
 ```
 
-- [ ] **Add Fastlane environment config.** Create `fastlane/.env` (checked into the repo):
+- [x] **Add Fastlane environment config.** Create `fastlane/.env` (checked into the repo):
 
 ```
 FASTLANE_OPT_OUT_USAGE=YES
 FASTLANE_SKIP_UPDATE_CHECK=1
 ```
 
-- [ ] **Add to `.gitignore`** (do this BEFORE creating any Fastlane config files):
+- [x] **Add to `.gitignore`** (do this BEFORE creating any Fastlane config files):
 
 ```
 # Fastlane
@@ -181,7 +181,7 @@ vendor/bundle
 
 ### 2.2 — Fastlane Configuration Files
 
-- [ ] **Create `fastlane/Appfile`:**
+- [x] **Create `fastlane/Appfile`:**
 
 ```ruby
 app_identifier("rocks.moolah.app")
@@ -189,7 +189,7 @@ apple_id(ENV["APPLE_ID"])  # only needed for deliver, not for API key auth
 team_id(ENV["DEVELOPMENT_TEAM"])
 ```
 
-- [ ] **Create `fastlane/Matchfile`:**
+- [x] **Create `fastlane/Matchfile`:**
 
 ```ruby
 git_url(ENV["MATCH_GIT_URL"])  # e.g., "https://github.com/ajsutton/moolah-certificates.git"
@@ -204,7 +204,7 @@ team_id(ENV["DEVELOPMENT_TEAM"])
 # API key is passed directly from env vars in the Fastfile — no local file needed
 ```
 
-- [ ] **`fastlane/api_key.json` (local development only, already gitignored in 2.1):**
+- [x] **`fastlane/api_key.json` (local development only, already gitignored in 2.1):**
 
   If you need to run Fastlane locally (not in CI), create this file manually. Never commit it.
 
@@ -219,7 +219,7 @@ team_id(ENV["DEVELOPMENT_TEAM"])
 
 ### 2.3 — Fastfile
 
-- [ ] **Create `fastlane/Fastfile`:**
+- [x] **Create `fastlane/Fastfile`:**
 
 ```ruby
 default_platform(:ios)
@@ -287,7 +287,7 @@ end
 
 ### 2.4 — TestFlight Workflow
 
-- [ ] **Create `.github/workflows/testflight.yml`:**
+- [x] **Create `.github/workflows/testflight.yml`:**
 
 ```yaml
 name: TestFlight
@@ -349,7 +349,7 @@ jobs:
 
 ### 2.5 — Monthly Auto-Tag Workflow
 
-- [ ] **Create `.github/workflows/monthly-tag.yml`:**
+- [x] **Create `.github/workflows/monthly-tag.yml`:**
 
 ```yaml
 name: Monthly TestFlight Tag
@@ -399,7 +399,7 @@ This runs on the 1st of each month. The tag (e.g., `v1.0.0-monthly.202604`) trig
 
 ### 2.6 — Justfile Targets
 
-- [ ] **Add release-related targets** to `justfile`:
+- [x] **Add release-related targets** to `justfile`:
 
 ```just
 # Sync code signing certificates (runs Match)
