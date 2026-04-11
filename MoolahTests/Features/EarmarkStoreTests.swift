@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 
 @testable import Moolah
@@ -10,8 +11,10 @@ struct EarmarkStoreTests {
     let earmark = Earmark(
       name: "Holiday Fund",
       balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency))
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [earmark])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seedWithTransactions(
+      earmarks: [earmark], accountId: UUID(), in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
 
@@ -26,8 +29,10 @@ struct EarmarkStoreTests {
     let e2 = Earmark(
       name: "E2",
       balance: MonetaryAmount(cents: 20000, currency: Currency.defaultTestCurrency), position: 1)
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [e1, e2])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seedWithTransactions(
+      earmarks: [e1, e2], accountId: UUID(), in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
 
@@ -49,8 +54,14 @@ struct EarmarkStoreTests {
         balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency),
         isHidden: true),
     ]
-    let repository = InMemoryEarmarkRepository(initialEarmarks: earmarks)
-    let store = EarmarkStore(repository: repository)
+    let accountId = UUID()
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
+      profileId: profileId)
+    TestBackend.seedWithTransactions(
+      earmarks: earmarks, accountId: accountId, in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
 
@@ -64,14 +75,19 @@ struct EarmarkStoreTests {
   @Test func testCreateExpenseToEarmarkIncreasesSpentAndDecreasesBalance() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [
-      Earmark(
-        id: earmarkId, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
-        spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
-    ])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
+      profileId: profileId)
+    TestBackend.seedWithTransactions(
+      earmarks: [
+        Earmark(
+          id: earmarkId, name: "Holiday Fund",
+          balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+          saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+          spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
+      ], accountId: accountId, in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Spend $100 from the earmark
@@ -91,14 +107,19 @@ struct EarmarkStoreTests {
   @Test func testCreateIncomeToEarmarkIncreasesSavedAndBalance() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [
-      Earmark(
-        id: earmarkId, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
-        spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
-    ])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
+      profileId: profileId)
+    TestBackend.seedWithTransactions(
+      earmarks: [
+        Earmark(
+          id: earmarkId, name: "Holiday Fund",
+          balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+          saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+          spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
+      ], accountId: accountId, in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Add $200 to the earmark
@@ -118,14 +139,19 @@ struct EarmarkStoreTests {
   @Test func testDeleteRevertsEarmarkBalance() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [
-      Earmark(
-        id: earmarkId, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
-        spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency))
-    ])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
+      profileId: profileId)
+    TestBackend.seedWithTransactions(
+      earmarks: [
+        Earmark(
+          id: earmarkId, name: "Holiday Fund",
+          balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
+          saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+          spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency))
+      ], accountId: accountId, in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Remove a $100 expense from the earmark
@@ -146,14 +172,19 @@ struct EarmarkStoreTests {
   @Test func testUpdateAdjustsEarmarkBalance() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [
-      Earmark(
-        id: earmarkId, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
-        spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency))
-    ])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
+      profileId: profileId)
+    TestBackend.seedWithTransactions(
+      earmarks: [
+        Earmark(
+          id: earmarkId, name: "Holiday Fund",
+          balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
+          saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+          spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency))
+      ], accountId: accountId, in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     let oldTx = Transaction(
@@ -177,19 +208,24 @@ struct EarmarkStoreTests {
     let earmark1Id = UUID()
     let earmark2Id = UUID()
     let accountId = UUID()
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [
-      Earmark(
-        id: earmark1Id, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
-        spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency)),
-      Earmark(
-        id: earmark2Id, name: "Car Repair",
-        balance: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency),
-        saved: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency),
-        spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency)),
-    ])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
+      profileId: profileId)
+    TestBackend.seedWithTransactions(
+      earmarks: [
+        Earmark(
+          id: earmark1Id, name: "Holiday Fund",
+          balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
+          saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+          spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency)),
+        Earmark(
+          id: earmark2Id, name: "Car Repair",
+          balance: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency),
+          saved: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency),
+          spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency)),
+      ], accountId: accountId, in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Original transaction was to earmark1
@@ -217,14 +253,19 @@ struct EarmarkStoreTests {
   @Test func testAddingEarmarkToTransaction() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [
-      Earmark(
-        id: earmarkId, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
-        spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
-    ])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
+      profileId: profileId)
+    TestBackend.seedWithTransactions(
+      earmarks: [
+        Earmark(
+          id: earmarkId, name: "Holiday Fund",
+          balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+          saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+          spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
+      ], accountId: accountId, in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Original transaction had no earmark
@@ -246,14 +287,19 @@ struct EarmarkStoreTests {
   @Test func testRemovingEarmarkFromTransaction() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [
-      Earmark(
-        id: earmarkId, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
-        spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency))
-    ])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
+      profileId: profileId)
+    TestBackend.seedWithTransactions(
+      earmarks: [
+        Earmark(
+          id: earmarkId, name: "Holiday Fund",
+          balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
+          saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+          spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency))
+      ], accountId: accountId, in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Original transaction had an earmark
@@ -276,14 +322,19 @@ struct EarmarkStoreTests {
   @Test func testTotalBalanceUpdatesAfterDelta() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [
-      Earmark(
-        id: earmarkId, name: "Holiday Fund",
-        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
-        saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
-        spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
-    ])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
+      profileId: profileId)
+    TestBackend.seedWithTransactions(
+      earmarks: [
+        Earmark(
+          id: earmarkId, name: "Holiday Fund",
+          balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+          saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+          spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
+      ], accountId: accountId, in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     #expect(store.totalBalance.cents == 50000)
@@ -305,8 +356,9 @@ struct EarmarkStoreTests {
     let e0 = Earmark(name: "First", position: 0)
     let e1 = Earmark(name: "Second", position: 1)
     let e2 = Earmark(name: "Third", position: 2)
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [e0, e1, e2])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(earmarks: [e0, e1, e2], in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Move last to first
@@ -324,8 +376,9 @@ struct EarmarkStoreTests {
     let e0 = Earmark(name: "Visible1", position: 0)
     let e1 = Earmark(name: "Hidden", isHidden: true, position: 1)
     let e2 = Earmark(name: "Visible2", position: 2)
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [e0, e1, e2])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(earmarks: [e0, e1, e2], in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Swap the two visible earmarks
@@ -340,8 +393,9 @@ struct EarmarkStoreTests {
 
   @Test func testReorderSingleEarmarkIsNoOp() async throws {
     let e0 = Earmark(name: "Only", position: 0)
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [e0])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(earmarks: [e0], in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     await store.reorderEarmarks(from: IndexSet(integer: 0), to: 0)
@@ -351,8 +405,9 @@ struct EarmarkStoreTests {
   }
 
   @Test func testReorderEmptyListIsNoOp() async throws {
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(earmarks: [], in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     await store.reorderEarmarks(from: IndexSet(integer: 0), to: 0)
@@ -364,15 +419,16 @@ struct EarmarkStoreTests {
     let e0 = Earmark(name: "First", position: 0)
     let e1 = Earmark(name: "Second", position: 1)
     let e2 = Earmark(name: "Third", position: 2)
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [e0, e1, e2])
-    let store = EarmarkStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(earmarks: [e0, e1, e2], in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Move last to first
     await store.reorderEarmarks(from: IndexSet(integer: 2), to: 0)
 
     // Verify repository has updated positions
-    let persisted = try await repository.fetchAll().sorted { $0.position < $1.position }
+    let persisted = try await backend.earmarks.fetchAll().sorted { $0.position < $1.position }
     #expect(persisted[0].name == "Third")
     #expect(persisted[1].name == "First")
     #expect(persisted[2].name == "Second")
@@ -384,7 +440,7 @@ struct EarmarkStoreTests {
   // MARK: - Show Hidden
 
   @Test("visibleEarmarks excludes hidden earmarks by default")
-  func hiddenEarmarksExcluded() async {
+  func hiddenEarmarksExcluded() async throws {
     let visible = Earmark(
       name: "Visible",
       balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency))
@@ -392,8 +448,14 @@ struct EarmarkStoreTests {
       name: "Hidden",
       balance: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency),
       isHidden: true)
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [visible, hidden])
-    let store = EarmarkStore(repository: repository)
+    let accountId = UUID()
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
+      profileId: profileId)
+    TestBackend.seedWithTransactions(
+      earmarks: [visible, hidden], accountId: accountId, in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
 
@@ -402,7 +464,7 @@ struct EarmarkStoreTests {
   }
 
   @Test("visibleEarmarks includes hidden earmarks when showHidden is true")
-  func hiddenEarmarksIncluded() async {
+  func hiddenEarmarksIncluded() async throws {
     let visible = Earmark(
       name: "Visible",
       balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency))
@@ -410,8 +472,14 @@ struct EarmarkStoreTests {
       name: "Hidden",
       balance: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency),
       isHidden: true)
-    let repository = InMemoryEarmarkRepository(initialEarmarks: [visible, hidden])
-    let store = EarmarkStore(repository: repository)
+    let accountId = UUID()
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
+      profileId: profileId)
+    TestBackend.seedWithTransactions(
+      earmarks: [visible, hidden], accountId: accountId, in: container, profileId: profileId)
+    let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
     store.showHidden = true

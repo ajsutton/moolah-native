@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 
 @testable import Moolah
@@ -22,11 +23,13 @@ struct InvestmentStoreTests {
   }
 
   @Test("Load values populates values array")
-  func testLoadValues() async {
+  func testLoadValues() async throws {
     let accountId = UUID()
-    let repo = InMemoryInvestmentRepository(
-      initialValues: makeValues(accountId: accountId, count: 3))
-    let store = InvestmentStore(repository: repo)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      investmentValues: makeValues(accountId: accountId, count: 3), in: container,
+      profileId: profileId)
+    let store = InvestmentStore(repository: backend.investments)
 
     await store.loadValues(accountId: accountId)
 
@@ -36,11 +39,13 @@ struct InvestmentStoreTests {
   }
 
   @Test("Load values with reset clears existing values")
-  func testLoadValuesReset() async {
+  func testLoadValuesReset() async throws {
     let accountId = UUID()
-    let repo = InMemoryInvestmentRepository(
-      initialValues: makeValues(accountId: accountId, count: 5))
-    let store = InvestmentStore(repository: repo)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      investmentValues: makeValues(accountId: accountId, count: 5), in: container,
+      profileId: profileId)
+    let store = InvestmentStore(repository: backend.investments)
 
     await store.loadValues(accountId: accountId)
     #expect(store.values.count == 5)
@@ -51,10 +56,10 @@ struct InvestmentStoreTests {
   }
 
   @Test("Set value adds to list and re-sorts")
-  func testSetValue() async {
+  func testSetValue() async throws {
     let accountId = UUID()
-    let repo = InMemoryInvestmentRepository()
-    let store = InvestmentStore(repository: repo)
+    let (backend, _, _) = try TestBackend.create()
+    let store = InvestmentStore(repository: backend.investments)
 
     let date = makeDate(year: 2024, month: 3, day: 15)
     let amount = MonetaryAmount(cents: 125_000_00, currency: Currency.defaultTestCurrency)
@@ -67,7 +72,7 @@ struct InvestmentStoreTests {
   }
 
   @Test("Set value upserts existing date")
-  func testSetValueUpserts() async {
+  func testSetValueUpserts() async throws {
     let accountId = UUID()
     let date = makeDate(year: 2024, month: 3, day: 15)
     let initialValues: [UUID: [InvestmentValue]] = [
@@ -77,8 +82,9 @@ struct InvestmentStoreTests {
           value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency))
       ]
     ]
-    let repo = InMemoryInvestmentRepository(initialValues: initialValues)
-    let store = InvestmentStore(repository: repo)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(investmentValues: initialValues, in: container, profileId: profileId)
+    let store = InvestmentStore(repository: backend.investments)
 
     await store.loadValues(accountId: accountId)
     #expect(store.values.count == 1)
@@ -91,7 +97,7 @@ struct InvestmentStoreTests {
   }
 
   @Test("Remove value removes from list")
-  func testRemoveValue() async {
+  func testRemoveValue() async throws {
     let accountId = UUID()
     let date = makeDate(year: 2024, month: 3, day: 15)
     let initialValues: [UUID: [InvestmentValue]] = [
@@ -101,8 +107,9 @@ struct InvestmentStoreTests {
           value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency))
       ]
     ]
-    let repo = InMemoryInvestmentRepository(initialValues: initialValues)
-    let store = InvestmentStore(repository: repo)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(investmentValues: initialValues, in: container, profileId: profileId)
+    let store = InvestmentStore(repository: backend.investments)
 
     await store.loadValues(accountId: accountId)
     #expect(store.values.count == 1)
@@ -112,9 +119,9 @@ struct InvestmentStoreTests {
   }
 
   @Test("Remove value handles error gracefully")
-  func testRemoveNonExistent() async {
-    let repo = InMemoryInvestmentRepository()
-    let store = InvestmentStore(repository: repo)
+  func testRemoveNonExistent() async throws {
+    let (backend, _, _) = try TestBackend.create()
+    let store = InvestmentStore(repository: backend.investments)
 
     await store.removeValue(accountId: UUID(), date: Date())
 
@@ -124,20 +131,22 @@ struct InvestmentStoreTests {
   // MARK: - Daily Balances
 
   @Test("Load daily balances populates dailyBalances array")
-  func testLoadDailyBalances() async {
+  func testLoadDailyBalances() async throws {
     let accountId = UUID()
-    let repo = InMemoryInvestmentRepository()
-    let balances = [
-      AccountDailyBalance(
-        date: makeDate(year: 2024, month: 1, day: 1),
-        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
-      AccountDailyBalance(
-        date: makeDate(year: 2024, month: 2, day: 1),
-        balance: MonetaryAmount(cents: 200_000, currency: Currency.defaultTestCurrency)),
+    let (backend, container, profileId) = try TestBackend.create()
+    let values: [UUID: [InvestmentValue]] = [
+      accountId: [
+        InvestmentValue(
+          date: makeDate(year: 2024, month: 1, day: 1),
+          value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
+        InvestmentValue(
+          date: makeDate(year: 2024, month: 2, day: 1),
+          value: MonetaryAmount(cents: 200_000, currency: Currency.defaultTestCurrency)),
+      ]
     ]
-    await repo.setDailyBalances(balances, for: accountId)
+    TestBackend.seed(investmentValues: values, in: container, profileId: profileId)
 
-    let store = InvestmentStore(repository: repo)
+    let store = InvestmentStore(repository: backend.investments)
     await store.loadDailyBalances(accountId: accountId)
 
     #expect(store.dailyBalances.count == 2)
@@ -148,11 +157,13 @@ struct InvestmentStoreTests {
   // MARK: - Filtered Data
 
   @Test("Filtered values returns all values when period is .all")
-  func testFilteredValuesAll() async {
+  func testFilteredValuesAll() async throws {
     let accountId = UUID()
-    let repo = InMemoryInvestmentRepository(
-      initialValues: makeValues(accountId: accountId, count: 3))
-    let store = InvestmentStore(repository: repo)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      investmentValues: makeValues(accountId: accountId, count: 3), in: container,
+      profileId: profileId)
+    let store = InvestmentStore(repository: backend.investments)
 
     await store.loadValues(accountId: accountId)
     store.selectedPeriod = .all

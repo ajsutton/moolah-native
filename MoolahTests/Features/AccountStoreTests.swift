@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 
 @testable import Moolah
@@ -10,8 +11,9 @@ struct AccountStoreTests {
     let account = Account(
       name: "Checking", type: .bank,
       balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
-    let repository = InMemoryAccountRepository(initialAccounts: [account])
-    let store = AccountStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: container, profileId: profileId)
+    let store = AccountStore(repository: backend.accounts)
 
     await store.load()
 
@@ -26,8 +28,9 @@ struct AccountStoreTests {
     let a2 = Account(
       name: "A2", type: .asset,
       balance: MonetaryAmount(cents: 20000, currency: Currency.defaultTestCurrency), position: 1)
-    let repository = InMemoryAccountRepository(initialAccounts: [a1, a2])
-    let store = AccountStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(accounts: [a1, a2], in: container, profileId: profileId)
+    let store = AccountStore(repository: backend.accounts)
 
     await store.load()
 
@@ -55,8 +58,9 @@ struct AccountStoreTests {
         balance: MonetaryAmount(cents: 100_000_000, currency: Currency.defaultTestCurrency),
         isHidden: true),
     ]
-    let repository = InMemoryAccountRepository(initialAccounts: accounts)
-    let store = AccountStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(accounts: accounts, in: container, profileId: profileId)
+    let store = AccountStore(repository: backend.accounts)
 
     await store.load()
 
@@ -79,8 +83,9 @@ struct AccountStoreTests {
         balance: MonetaryAmount(cents: 500000, currency: Currency.defaultTestCurrency)),  // 5000.00
       // Current Total = 6000.00
     ]
-    let repository = InMemoryAccountRepository(initialAccounts: accounts)
-    let store = AccountStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(accounts: accounts, in: container, profileId: profileId)
+    let store = AccountStore(repository: backend.accounts)
 
     await store.load()
 
@@ -93,12 +98,14 @@ struct AccountStoreTests {
 
   @Test func testCreateExpenseReducesAccountBalance() async throws {
     let acctId = UUID()
-    let repository = InMemoryAccountRepository(initialAccounts: [
-      Account(
-        id: acctId, name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
-    ])
-    let store = AccountStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: acctId, name: "Checking", type: .bank,
+          balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
+      ], in: container, profileId: profileId)
+    let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     let tx = Transaction(
@@ -113,12 +120,14 @@ struct AccountStoreTests {
 
   @Test func testCreateIncomeIncreasesAccountBalance() async throws {
     let acctId = UUID()
-    let repository = InMemoryAccountRepository(initialAccounts: [
-      Account(
-        id: acctId, name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
-    ])
-    let store = AccountStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: acctId, name: "Checking", type: .bank,
+          balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
+      ], in: container, profileId: profileId)
+    let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     let tx = Transaction(
@@ -133,12 +142,14 @@ struct AccountStoreTests {
 
   @Test func testDeleteRevertsAccountBalance() async throws {
     let acctId = UUID()
-    let repository = InMemoryAccountRepository(initialAccounts: [
-      Account(
-        id: acctId, name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 95000, currency: Currency.defaultTestCurrency))
-    ])
-    let store = AccountStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: acctId, name: "Checking", type: .bank,
+          balance: MonetaryAmount(cents: 95000, currency: Currency.defaultTestCurrency))
+      ], in: container, profileId: profileId)
+    let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     let tx = Transaction(
@@ -154,12 +165,14 @@ struct AccountStoreTests {
 
   @Test func testUpdateAdjustsAccountBalance() async throws {
     let acctId = UUID()
-    let repository = InMemoryAccountRepository(initialAccounts: [
-      Account(
-        id: acctId, name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 95000, currency: Currency.defaultTestCurrency))
-    ])
-    let store = AccountStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: acctId, name: "Checking", type: .bank,
+          balance: MonetaryAmount(cents: 95000, currency: Currency.defaultTestCurrency))
+      ], in: container, profileId: profileId)
+    let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     let oldTx = Transaction(
@@ -179,15 +192,17 @@ struct AccountStoreTests {
   @Test func testTransferUpdatesBothAccounts() async throws {
     let checkingId = UUID()
     let savingsId = UUID()
-    let repository = InMemoryAccountRepository(initialAccounts: [
-      Account(
-        id: checkingId, name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency)),
-      Account(
-        id: savingsId, name: "Savings", type: .bank,
-        balance: MonetaryAmount(cents: 200000, currency: Currency.defaultTestCurrency)),
-    ])
-    let store = AccountStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: checkingId, name: "Checking", type: .bank,
+          balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency)),
+        Account(
+          id: savingsId, name: "Savings", type: .bank,
+          balance: MonetaryAmount(cents: 200000, currency: Currency.defaultTestCurrency)),
+      ], in: container, profileId: profileId)
+    let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     // Transfer $100 from checking to savings (amount is -10000 from source perspective)
@@ -204,15 +219,17 @@ struct AccountStoreTests {
   @Test func testDeleteTransferRevertsBothAccounts() async throws {
     let checkingId = UUID()
     let savingsId = UUID()
-    let repository = InMemoryAccountRepository(initialAccounts: [
-      Account(
-        id: checkingId, name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 90000, currency: Currency.defaultTestCurrency)),
-      Account(
-        id: savingsId, name: "Savings", type: .bank,
-        balance: MonetaryAmount(cents: 210000, currency: Currency.defaultTestCurrency)),
-    ])
-    let store = AccountStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: checkingId, name: "Checking", type: .bank,
+          balance: MonetaryAmount(cents: 90000, currency: Currency.defaultTestCurrency)),
+        Account(
+          id: savingsId, name: "Savings", type: .bank,
+          balance: MonetaryAmount(cents: 210000, currency: Currency.defaultTestCurrency)),
+      ], in: container, profileId: profileId)
+    let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     let tx = Transaction(
@@ -227,12 +244,14 @@ struct AccountStoreTests {
 
   @Test func testTotalsUpdateAfterDelta() async throws {
     let checkingId = UUID()
-    let repository = InMemoryAccountRepository(initialAccounts: [
-      Account(
-        id: checkingId, name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
-    ])
-    let store = AccountStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: checkingId, name: "Checking", type: .bank,
+          balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
+      ], in: container, profileId: profileId)
+    let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     #expect(store.currentTotal.cents == 100000)
@@ -252,7 +271,7 @@ struct AccountStoreTests {
   // MARK: - Show Hidden
 
   @Test("currentAccounts excludes hidden accounts by default")
-  func hiddenAccountsExcluded() async {
+  func hiddenAccountsExcluded() async throws {
     let visible = Account(
       name: "Visible", type: .bank,
       balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
@@ -260,8 +279,9 @@ struct AccountStoreTests {
       name: "Hidden", type: .bank,
       balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
       isHidden: true)
-    let repository = InMemoryAccountRepository(initialAccounts: [visible, hidden])
-    let store = AccountStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(accounts: [visible, hidden], in: container, profileId: profileId)
+    let store = AccountStore(repository: backend.accounts)
 
     await store.load()
 
@@ -270,7 +290,7 @@ struct AccountStoreTests {
   }
 
   @Test("currentAccounts includes hidden accounts when showHidden is true")
-  func hiddenAccountsIncluded() async {
+  func hiddenAccountsIncluded() async throws {
     let visible = Account(
       name: "Visible", type: .bank,
       balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
@@ -278,8 +298,9 @@ struct AccountStoreTests {
       name: "Hidden", type: .bank,
       balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
       isHidden: true)
-    let repository = InMemoryAccountRepository(initialAccounts: [visible, hidden])
-    let store = AccountStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(accounts: [visible, hidden], in: container, profileId: profileId)
+    let store = AccountStore(repository: backend.accounts)
 
     await store.load()
     store.showHidden = true
@@ -288,7 +309,7 @@ struct AccountStoreTests {
   }
 
   @Test("investmentAccounts respects showHidden flag")
-  func hiddenInvestmentAccounts() async {
+  func hiddenInvestmentAccounts() async throws {
     let visible = Account(
       name: "Visible", type: .investment,
       balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
@@ -296,8 +317,9 @@ struct AccountStoreTests {
       name: "Hidden", type: .investment,
       balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
       isHidden: true)
-    let repository = InMemoryAccountRepository(initialAccounts: [visible, hidden])
-    let store = AccountStore(repository: repository)
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(accounts: [visible, hidden], in: container, profileId: profileId)
+    let store = AccountStore(repository: backend.accounts)
 
     await store.load()
 

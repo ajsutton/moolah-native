@@ -1,3 +1,4 @@
+import SwiftData
 import Testing
 
 @testable import Moolah
@@ -8,9 +9,10 @@ struct AuthStoreTests {
   // MARK: - load()
 
   @Test("transitions loading → signedIn when currentUser returns a profile")
-  func loadSignedIn() async {
+  func loadSignedIn() async throws {
     let profile = UserProfile(id: "u1", givenName: "Ada", familyName: "Lovelace", pictureURL: nil)
-    let store = AuthStore(backend: InMemoryBackend(auth: InMemoryAuthProvider(signedIn: profile)))
+    let store = AuthStore(
+      backend: try TestAuthBackend(auth: InMemoryAuthProvider(signedIn: profile)))
     await store.load()
     guard case .signedIn(let user) = store.state else {
       Issue.record("Expected .signedIn, got \(store.state)")
@@ -20,24 +22,25 @@ struct AuthStoreTests {
   }
 
   @Test("transitions loading → signedOut when currentUser returns nil")
-  func loadSignedOut() async {
-    let store = AuthStore(backend: InMemoryBackend(auth: InMemoryAuthProvider()))
+  func loadSignedOut() async throws {
+    let store = AuthStore(backend: try TestAuthBackend(auth: InMemoryAuthProvider()))
     await store.load()
     #expect(store.state == .signedOut)
   }
 
   @Test("transitions signedIn → signedOut on signOut()")
-  func signOut() async {
+  func signOut() async throws {
     let profile = UserProfile(id: "u1", givenName: "Ada", familyName: "Lovelace", pictureURL: nil)
-    let store = AuthStore(backend: InMemoryBackend(auth: InMemoryAuthProvider(signedIn: profile)))
+    let store = AuthStore(
+      backend: try TestAuthBackend(auth: InMemoryAuthProvider(signedIn: profile)))
     await store.load()
     await store.signOut()
     #expect(store.state == .signedOut)
   }
 
   @Test("auth failure leaves store in signedOut with error message")
-  func authFailure() async {
-    let store = AuthStore(backend: InMemoryBackend(auth: FailingAuthProvider()))
+  func authFailure() async throws {
+    let store = AuthStore(backend: try TestAuthBackend(auth: FailingAuthProvider()))
     await store.load()
     #expect(store.state == .signedOut)
     #expect(store.errorMessage != nil)
@@ -46,21 +49,43 @@ struct AuthStoreTests {
   // MARK: - requiresSignIn
 
   @Test("requiresSignIn reflects backend provider value when true")
-  func requiresSignInTrue() {
+  func requiresSignInTrue() throws {
     let store = AuthStore(
-      backend: InMemoryBackend(auth: InMemoryAuthProvider(requiresExplicitSignIn: true)))
+      backend: try TestAuthBackend(auth: InMemoryAuthProvider(requiresExplicitSignIn: true)))
     #expect(store.requiresSignIn == true)
   }
 
   @Test("requiresSignIn reflects backend provider value when false")
-  func requiresSignInFalse() {
+  func requiresSignInFalse() throws {
     let store = AuthStore(
-      backend: InMemoryBackend(auth: InMemoryAuthProvider(requiresExplicitSignIn: false)))
+      backend: try TestAuthBackend(auth: InMemoryAuthProvider(requiresExplicitSignIn: false)))
     #expect(store.requiresSignIn == false)
   }
 }
 
 // MARK: - Test helpers
+
+/// Test backend that uses a custom AuthProvider while keeping CloudKitBackend for repositories.
+private struct TestAuthBackend: BackendProvider {
+  let auth: any AuthProvider
+  let accounts: any AccountRepository
+  let transactions: any TransactionRepository
+  let categories: any CategoryRepository
+  let earmarks: any EarmarkRepository
+  let analysis: any AnalysisRepository
+  let investments: any InvestmentRepository
+
+  init(auth: any AuthProvider) throws {
+    let (backend, _, _) = try TestBackend.create()
+    self.auth = auth
+    self.accounts = backend.accounts
+    self.transactions = backend.transactions
+    self.categories = backend.categories
+    self.earmarks = backend.earmarks
+    self.analysis = backend.analysis
+    self.investments = backend.investments
+  }
+}
 
 /// AuthProvider that always throws on currentUser().
 private struct FailingAuthProvider: AuthProvider {

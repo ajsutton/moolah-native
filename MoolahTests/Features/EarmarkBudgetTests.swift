@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 
 @testable import Moolah
@@ -9,17 +10,16 @@ struct EarmarkBudgetTests {
   private func makeStore(
     earmarks: [Earmark] = [],
     budgetItems: [UUID: [EarmarkBudgetItem]] = [:]
-  ) async -> (EarmarkStore, InMemoryEarmarkRepository) {
-    let repository = InMemoryEarmarkRepository(initialEarmarks: earmarks)
+  ) async throws -> (EarmarkStore, CloudKitBackend) {
+    let (backend, container, profileId) = try TestBackend.create()
+    TestBackend.seed(earmarks: earmarks, in: container, profileId: profileId)
     for (earmarkId, items) in budgetItems {
-      for item in items {
-        try? await repository.setBudget(
-          earmarkId: earmarkId, categoryId: item.categoryId, amount: item.amount.cents)
-      }
+      TestBackend.seedBudget(
+        earmarkId: earmarkId, items: items, in: container, profileId: profileId)
     }
-    let store = EarmarkStore(repository: repository)
+    let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
-    return (store, repository)
+    return (store, backend)
   }
 
   // MARK: - loadBudget
@@ -32,7 +32,7 @@ struct EarmarkBudgetTests {
         categoryId: catId,
         amount: MonetaryAmount(cents: 80000, currency: Currency.defaultTestCurrency))
     ]
-    let (store, _) = await makeStore(
+    let (store, _) = try await makeStore(
       earmarks: [Earmark(id: earmarkId, name: "Holiday")],
       budgetItems: [earmarkId: items]
     )
@@ -45,8 +45,9 @@ struct EarmarkBudgetTests {
   }
 
   @Test func testLoadBudgetHandlesError() async throws {
-    let store = EarmarkStore(repository: InMemoryEarmarkRepository())
-    // Loading budget for nonexistent earmark still returns empty (InMemory returns [])
+    let (backend, _, _) = try TestBackend.create()
+    let store = EarmarkStore(repository: backend.earmarks)
+    // Loading budget for nonexistent earmark still returns empty
     await store.loadBudget(earmarkId: UUID())
     #expect(store.budgetItems.isEmpty)
   }
@@ -56,7 +57,7 @@ struct EarmarkBudgetTests {
     let earmark2Id = UUID()
     let cat1Id = UUID()
     let cat2Id = UUID()
-    let (store, _) = await makeStore(
+    let (store, _) = try await makeStore(
       earmarks: [
         Earmark(id: earmark1Id, name: "Holiday"),
         Earmark(id: earmark2Id, name: "Car"),
@@ -94,7 +95,7 @@ struct EarmarkBudgetTests {
         categoryId: catId,
         amount: MonetaryAmount(cents: 80000, currency: Currency.defaultTestCurrency))
     ]
-    let (store, repository) = await makeStore(
+    let (store, backend) = try await makeStore(
       earmarks: [Earmark(id: earmarkId, name: "Holiday")],
       budgetItems: [earmarkId: items]
     )
@@ -109,7 +110,7 @@ struct EarmarkBudgetTests {
     #expect(store.budgetItems.first?.amount.cents == 120000)
 
     // Verify repository state
-    let persisted = try await repository.fetchBudget(earmarkId: earmarkId)
+    let persisted = try await backend.earmarks.fetchBudget(earmarkId: earmarkId)
     #expect(persisted.first?.amount.cents == 120000)
   }
 
@@ -118,7 +119,7 @@ struct EarmarkBudgetTests {
   @Test func testAddBudgetItemAppendsToList() async throws {
     let earmarkId = UUID()
     let catId = UUID()
-    let (store, _) = await makeStore(
+    let (store, _) = try await makeStore(
       earmarks: [Earmark(id: earmarkId, name: "Holiday")]
     )
     await store.loadBudget(earmarkId: earmarkId)
@@ -137,7 +138,7 @@ struct EarmarkBudgetTests {
     let earmarkId = UUID()
     let cat1Id = UUID()
     let cat2Id = UUID()
-    let (store, repository) = await makeStore(
+    let (store, backend) = try await makeStore(
       earmarks: [Earmark(id: earmarkId, name: "Holiday")],
       budgetItems: [
         earmarkId: [
@@ -155,7 +156,7 @@ struct EarmarkBudgetTests {
       amount: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency)
     )
 
-    let persisted = try await repository.fetchBudget(earmarkId: earmarkId)
+    let persisted = try await backend.earmarks.fetchBudget(earmarkId: earmarkId)
     #expect(persisted.count == 2)
   }
 
@@ -164,7 +165,7 @@ struct EarmarkBudgetTests {
   @Test func testRemoveBudgetItemRemovesFromList() async throws {
     let earmarkId = UUID()
     let catId = UUID()
-    let (store, repository) = await makeStore(
+    let (store, backend) = try await makeStore(
       earmarks: [Earmark(id: earmarkId, name: "Holiday")],
       budgetItems: [
         earmarkId: [
@@ -179,7 +180,7 @@ struct EarmarkBudgetTests {
     await store.removeBudgetItem(earmarkId: earmarkId, categoryId: catId)
 
     #expect(store.budgetItems.isEmpty)
-    let persisted = try await repository.fetchBudget(earmarkId: earmarkId)
+    let persisted = try await backend.earmarks.fetchBudget(earmarkId: earmarkId)
     #expect(persisted.isEmpty)
   }
 }

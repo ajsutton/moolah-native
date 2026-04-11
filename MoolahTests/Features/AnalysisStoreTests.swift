@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 
 @testable import Moolah
@@ -15,49 +16,56 @@ struct AnalysisStoreFilterPersistenceTests {
   }
 
   @Test("defaults to historyMonths=12 and forecastMonths=1 with no saved values")
-  func defaultValues() {
+  func defaultValues() throws {
+    let (backend, _, _) = try TestBackend.create()
     let store = AnalysisStore(
-      repository: InMemoryBackend().analysis, defaults: makeDefaults())
+      repository: backend.analysis, defaults: makeDefaults())
     #expect(store.historyMonths == 12)
     #expect(store.forecastMonths == 1)
   }
 
   @Test("persists historyMonths across instances")
-  func historyMonthsPersists() {
+  func historyMonthsPersists() throws {
     let defaults = makeDefaults()
 
+    let (backend1, _, _) = try TestBackend.create()
     let store1 = AnalysisStore(
-      repository: InMemoryBackend().analysis, defaults: defaults)
+      repository: backend1.analysis, defaults: defaults)
     store1.historyMonths = 6
 
+    let (backend2, _, _) = try TestBackend.create()
     let store2 = AnalysisStore(
-      repository: InMemoryBackend().analysis, defaults: defaults)
+      repository: backend2.analysis, defaults: defaults)
     #expect(store2.historyMonths == 6)
   }
 
   @Test("persists forecastMonths across instances")
-  func forecastMonthsPersists() {
+  func forecastMonthsPersists() throws {
     let defaults = makeDefaults()
 
+    let (backend1, _, _) = try TestBackend.create()
     let store1 = AnalysisStore(
-      repository: InMemoryBackend().analysis, defaults: defaults)
+      repository: backend1.analysis, defaults: defaults)
     store1.forecastMonths = 3
 
+    let (backend2, _, _) = try TestBackend.create()
     let store2 = AnalysisStore(
-      repository: InMemoryBackend().analysis, defaults: defaults)
+      repository: backend2.analysis, defaults: defaults)
     #expect(store2.forecastMonths == 3)
   }
 
   @Test("forecastMonths=0 (None) persists correctly")
-  func forecastMonthsZeroPersists() {
+  func forecastMonthsZeroPersists() throws {
     let defaults = makeDefaults()
 
+    let (backend1, _, _) = try TestBackend.create()
     let store1 = AnalysisStore(
-      repository: InMemoryBackend().analysis, defaults: defaults)
+      repository: backend1.analysis, defaults: defaults)
     store1.forecastMonths = 0
 
+    let (backend2, _, _) = try TestBackend.create()
     let store2 = AnalysisStore(
-      repository: InMemoryBackend().analysis, defaults: defaults)
+      repository: backend2.analysis, defaults: defaults)
     #expect(store2.forecastMonths == 0)
   }
 }
