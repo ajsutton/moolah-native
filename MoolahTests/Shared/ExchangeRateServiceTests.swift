@@ -27,4 +27,24 @@ struct ExchangeRateServiceTests {
     let rate = try await service.rate(from: .AUD, to: .AUD, on: date("2025-01-15"))
     #expect(rate == Decimal(1))
   }
+
+  // MARK: - Step 4b: Cache miss and cache hit
+
+  @Test func cacheMissFetchesFromClient() async throws {
+    let service = makeService(rates: [
+      "2025-01-15": ["USD": Decimal(string: "0.6543")!]
+    ])
+    let rate = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-15"))
+    #expect(rate == Decimal(string: "0.6543")!)
+  }
+
+  @Test func cacheHitDoesNotRefetch() async throws {
+    let service = makeService(rates: [
+      "2025-01-15": ["USD": Decimal(string: "0.6543")!]
+    ])
+    let first = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-15"))
+    let second = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-15"))
+    #expect(first == second)
+    #expect(first == Decimal(string: "0.6543")!)
+  }
 }
