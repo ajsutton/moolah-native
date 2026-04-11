@@ -16,29 +16,25 @@ COMMON_ARGS=(
     'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox'
 )
 
-# ---------------------------------------------------------------------------
-# iOS Simulator
-# ---------------------------------------------------------------------------
-echo "==> Testing iOS Simulator…"
-xcodebuild test "${COMMON_ARGS[@]}" \
-    -scheme Moolah-iOS \
-    -destination "platform=iOS Simulator,name=iPhone 17 Pro"
+# Which platforms to test: "all" (default), "ios", or "mac"
+PLATFORM="${1:-all}"
 
 # ---------------------------------------------------------------------------
-# macOS
-#
-# Normally: xcodebuild test works directly — the macOS targets are ad-hoc
-# signed (CODE_SIGN_IDENTITY="-"), which satisfies Gatekeeper.
-#
-# Inside sandvault: IDEInstallLocalMacService, the XPC service xcodebuild
-# uses to install the test bundle before running, cannot communicate across
-# the sandbox boundary. Work around it by building the test bundle then
-# running it directly with xcrun xctest, which needs no install service.
+# Helpers
 # ---------------------------------------------------------------------------
-echo "==> Testing macOS…"
 
-if [[ -n "${SV_SESSION_ID:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
-    echo "    (sandvault/CI detected — using xcrun xctest workaround)"
+run_ios() {
+    echo "==> Testing iOS Simulator…"
+    xcodebuild test "${COMMON_ARGS[@]}" \
+        -scheme Moolah-iOS \
+        -destination "platform=iOS Simulator,name=iPhone 17 Pro"
+}
+
+run_mac() {
+    # Build the test bundle then run it directly with xcrun xctest.
+    # This bypasses IDEInstallLocalMacService which adds ~2 minutes of
+    # unnecessary acknowledgement overhead on macOS.
+    echo "==> Testing macOS…"
 
     xcodebuild build-for-testing "${COMMON_ARGS[@]}" \
         -scheme Moolah-macOS \
@@ -59,10 +55,59 @@ if [[ -n "${SV_SESSION_ID:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
     cp "$DYLIB" "$TEST_BUNDLE/Contents/Frameworks/"
 
     xcrun xctest "$TEST_BUNDLE"
-else
-    xcodebuild test "${COMMON_ARGS[@]}" \
-        -scheme Moolah-macOS \
-        -destination "platform=macOS"
-fi
+}
 
+# ---------------------------------------------------------------------------
+# Run
+# ---------------------------------------------------------------------------
+
+case "$PLATFORM" in
+    ios)
+        run_ios
+        ;;
+    mac)
+        run_mac
+        ;;
+    all)
+        # Run both platforms in parallel, wait for both, fail if either fails.
+        ios_log="$(mktemp)"
+        mac_log="$(mktemp)"
+        trap 'rm -f "$ios_log" "$mac_log"' EXIT
+
+        run_ios >"$ios_log" 2>&1 &
+        ios_pid=$!
+
+        run_mac >"$mac_log" 2>&1 &
+        mac_pid=$!
+
+        failed=0
+
+        if ! wait "$ios_pid"; then
+            failed=1
+        fi
+        if ! wait "$mac_pid"; then
+            failed=1
+        fi
+
+        # Always print both logs so failures are visible.
+        echo ""
+        echo "================= iOS Simulator output ================="
+        cat "$ios_log"
+        echo ""
+        echo "==================== macOS output ======================"
+        cat "$mac_log"
+
+        if [[ "$failed" -ne 0 ]]; then
+            echo ""
+            echo "==> FAILED: one or more platforms had test failures."
+            exit 1
+        fi
+        ;;
+    *)
+        echo "Usage: $0 [all|ios|mac]" >&2
+        exit 1
+        ;;
+esac
+
+echo ""
 echo "==> All tests passed."

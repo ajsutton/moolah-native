@@ -9,3 +9,13 @@ In both `fetchDailyBalances` and `computeDailyBalances`, the forecast start date
 **Impact:** The forecast start date may be incorrect, causing the forecast to begin from the wrong point. In practice, the effect depends on the order SwiftData returns records.
 
 **Fix:** Use `transactions.sorted(by: { $0.date < $1.date }).last?.date` or store the sorted result and reuse it.
+
+## macOS: Upcoming transactions in Analysis open edit dialog instead of detail sidebar
+
+**Location:** `Features/Analysis/Views/UpcomingTransactionsCard.swift` (likely)
+
+On macOS, clicking an upcoming transaction in the Analysis view shows an edit dialog/sheet. It should instead show the transaction detail panel in a right-hand sidebar, matching the behavior when viewing transactions in an account view.
+
+**Impact:** Inconsistent navigation pattern on macOS. Users expect the same detail sidebar used elsewhere in the app.
+
+**Fix:** Use the same navigation/selection pattern as the account transaction list — push to detail in a sidebar rather than presenting a modal edit sheet.

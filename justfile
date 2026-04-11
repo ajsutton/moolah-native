@@ -14,9 +14,17 @@ lint:
 lint-fix:
     swift-format format -i -r . --configuration .swift-format
 
-# Run the full test suite on iOS Simulator and macOS
+# Run the full test suite on iOS Simulator and macOS (in parallel)
 test: generate
     bash scripts/test.sh
+
+# Run tests on macOS only
+test-mac: generate
+    bash scripts/test.sh mac
+
+# Run tests on iOS Simulator only
+test-ios: generate
+    bash scripts/test.sh ios
 
 # Build the app for macOS
 build-mac: generate
