@@ -65,7 +65,11 @@ final class ProfileStore {
       let context = ModelContext(modelContainer)
       let record = ProfileRecord.from(profile: profile)
       context.insert(record)
-      try? context.save()
+      do {
+        try context.save()
+      } catch {
+        logger.error("Failed to save CloudKit profile: \(error)")
+      }
       cloudProfiles.append(profile)
     }
 

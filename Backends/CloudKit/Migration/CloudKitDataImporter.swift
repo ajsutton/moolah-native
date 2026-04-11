@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftData
 
 struct ImportResult: Sendable {
@@ -158,7 +159,21 @@ actor CloudKitDataImporter {
 
       // 7. Save all at once (atomic)
       progress(.importing(step: "saving", current: 0, total: 1))
+      let logger = Logger(subsystem: "com.moolah.app", category: "Migration")
+      logger.info(
+        "Saving \(data.accounts.count) accounts, \(data.categories.count) categories, \(data.transactions.count) transactions to SwiftData"
+      )
       try context.save()
+      logger.info("SwiftData save completed successfully")
+
+      // Verify data is readable from a fresh context
+      let verifyContext = ModelContext(self.modelContainer)
+      let profileId = self.profileId
+      let verifyDescriptor = FetchDescriptor<AccountRecord>(
+        predicate: #Predicate { $0.profileId == profileId }
+      )
+      let savedCount = (try? verifyContext.fetchCount(verifyDescriptor)) ?? -1
+      logger.info("Post-save verification: \(savedCount) accounts readable from fresh context")
 
       let result = ImportResult(
         accountCount: data.accounts.count,
