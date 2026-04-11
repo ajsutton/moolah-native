@@ -83,6 +83,55 @@ struct ExchangeRateServiceTests {
     }
   }
 
+  // MARK: - Date range lookup
+
+  @Test func rangeReturnsRatesForEachDay() async throws {
+    let service = makeService(rates: [
+      "2026-04-07": ["USD": Decimal(string: "0.630")!],
+      "2026-04-08": ["USD": Decimal(string: "0.631")!],
+      "2026-04-09": ["USD": Decimal(string: "0.632")!],
+    ])
+    let results = try await service.rates(
+      from: .AUD, to: .USD,
+      in: date("2026-04-07")...date("2026-04-09")
+    )
+    #expect(results.count == 3)
+    #expect(results[0].rate == Decimal(string: "0.630")!)
+    #expect(results[1].rate == Decimal(string: "0.631")!)
+    #expect(results[2].rate == Decimal(string: "0.632")!)
+  }
+
+  @Test func rangeOnlyFetchesMissingSegments() async throws {
+    let service = makeService(rates: [
+      "2026-04-07": ["USD": Decimal(string: "0.630")!],
+      "2026-04-08": ["USD": Decimal(string: "0.631")!],
+      "2026-04-09": ["USD": Decimal(string: "0.632")!],
+      "2026-04-10": ["USD": Decimal(string: "0.633")!],
+      "2026-04-11": ["USD": Decimal(string: "0.634")!],
+    ])
+    _ = try await service.rates(
+      from: .AUD, to: .USD,
+      in: date("2026-04-08")...date("2026-04-09")
+    )
+    let results = try await service.rates(
+      from: .AUD, to: .USD,
+      in: date("2026-04-07")...date("2026-04-11")
+    )
+    #expect(results.count == 5)
+    #expect(results[0].rate == Decimal(string: "0.630")!)
+    #expect(results[4].rate == Decimal(string: "0.634")!)
+  }
+
+  @Test func sameCurrencyRangeReturnsIdentity() async throws {
+    let service = makeService()
+    let results = try await service.rates(
+      from: .AUD, to: .AUD,
+      in: date("2026-04-07")...date("2026-04-09")
+    )
+    #expect(results.count == 3)
+    #expect(results.allSatisfy { $0.rate == Decimal(1) })
+  }
+
   @Test func fallbackNeverUsesFutureDate() async throws {
     // Pre-populate cache with a future date only
     let futureRates: [String: [String: Decimal]] = [
