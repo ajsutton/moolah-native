@@ -106,12 +106,9 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
 }
 ```
 
-### InMemoryBackend: `@unchecked Sendable`
+### TestBackend: CloudKitBackend with In-Memory SwiftData
 
-The `InMemoryBackend` uses `@unchecked Sendable` because it stores mutable arrays for test data. This is acceptable **only** because:
-- It is used exclusively in tests and previews
-- All access is serialized by the caller (`@MainActor` test methods)
-- It performs no actual async I/O
+Tests and previews use `CloudKitBackend` backed by an in-memory `ModelContainer` (via `TestBackend.create()` in tests and `PreviewBackend.create()` in previews). This runs the same production code path but with no persistent storage or CloudKit sync. The `CloudKitBackend` uses `@unchecked Sendable` because its repositories store a shared `ModelContainer` reference. This is acceptable because all repository methods use `@MainActor` isolation for SwiftData access.
 
 **Do not use `@unchecked Sendable` in production code.** If you need mutable shared state, use an `actor`.
 
@@ -525,20 +522,20 @@ All store tests are `@MainActor` because the stores themselves are `@MainActor`:
 ```swift
 @MainActor
 final class AccountStoreTests: XCTestCase {
-    func testLoad() async {
-        let backend = InMemoryBackend()
+    func testLoad() async throws {
+        let (backend, _, _) = try TestBackend.create()
         let store = AccountStore(repository: backend.accounts)
 
         await store.load()
 
-        XCTAssertEqual(store.accounts.count, 0)
+        #expect(store.accounts.count == 0)
     }
 }
 ```
 
-### Use `InMemoryBackend`, Not Mocks
+### Use `TestBackend`, Not Mocks
 
-Tests use `InMemoryBackend` which stores data in-memory arrays. This is fast (no I/O), deterministic (no network), and tests real behavior (not mocked interfaces).
+Tests use `TestBackend` which creates a `CloudKitBackend` backed by an in-memory `ModelContainer`. This is fast (no I/O), deterministic (no network), and tests real production code paths (not mocked interfaces).
 
 ### Remote Backend Tests Use URLProtocol Stubs
 

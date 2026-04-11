@@ -21,6 +21,7 @@ build/
 
 # Worktrees
 .worktrees/
+.claude/worktrees/
 
 # Fastlane
 fastlane/report.xml

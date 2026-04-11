@@ -25,7 +25,7 @@ This project follows the "main thread by default" philosophy (NetNewsWire / Swif
 - Domain models (in `Domain/Models/`) must be `Sendable` value types (`struct`)
 - Repository protocols (in `Domain/Repositories/`) must conform to `Sendable`
 - Remote repository implementations must be `final class` with explicit `Sendable` conformance
-- InMemory repositories should be `actor` types (or `Sendable` if they hold no mutable state)
+- CloudKit repositories must be `final class` with `@unchecked Sendable` (shared `ModelContainer`)
 - No `@unchecked Sendable` in production code
 - No `nonisolated(unsafe)` in production code
 
@@ -74,7 +74,7 @@ This project follows the "main thread by default" philosophy (NetNewsWire / Swif
 
 ## False Positives to Avoid
 
-- **`@unchecked Sendable` on `InMemoryBackend`** is acceptable -- test/preview only, accessed on `@MainActor`.
+- **`@unchecked Sendable` on `CloudKitBackend`** is acceptable -- shared `ModelContainer` with `@MainActor`-isolated access in repositories.
 - **`nonisolated(unsafe)` on `URLProtocolStub.requestHandler`** is acceptable -- test-only, sequential execution.
 - **`Task.sleep` in `RemoteAuthProvider` OAuth polling** is acceptable -- unavoidable for OAuth redirect flow.
 - **Simple one-line `Task { await store.doThing() }` in button actions** is the correct view pattern -- do not flag.

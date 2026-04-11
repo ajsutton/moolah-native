@@ -31,7 +31,7 @@ just generate
 - **Domain Layer:** Strictly isolated. `Domain/Models/` and `Domain/Repositories/` must never import `SwiftUI`, `SwiftData`, `URLSession`, or any backend module.
 - **Features:** Only talk to repository protocols via `@Environment(BackendProvider.self)`. No feature file may import `Backends/` or reference `Remote*` types directly.
 - **Currency:** All currency values are stored as `Int` (cents). Currency flows from `Profile.currency` → backend → `MonetaryAmount` on all domain objects. Views derive currency from loaded domain objects, never from a global constant. Tests use `Currency.defaultTestCurrency` (defined in `MoolahTests/Support/TestCurrency.swift`).
-- **Backend:** `BackendProvider` is the injection point. `RemoteBackend` for production, `InMemoryBackend` for tests and previews.
+- **Backend:** `BackendProvider` is the injection point. `RemoteBackend` for production, `CloudKitBackend` with in-memory SwiftData for tests (`TestBackend`) and previews (`PreviewBackend`).
 - **Concurrency:** All concurrency work MUST follow `CONCURRENCY_GUIDE.md`. This is not optional.
   - Mark types `@MainActor` when they own UI-bound state (e.g., Stores).
   - Use `Sendable` on all types that cross actor boundaries.
@@ -58,15 +58,15 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
 - Passing the store's result to local UI state (e.g., updating `selectedTransaction` from a `PayResult`).
 - SwiftUI layout, styling, and modifiers.
 
-**Why:** Private view methods cannot be unit-tested. Logic in stores runs against `InMemoryBackend` in milliseconds with no simulator. See `plans/UI_TESTING_PLAN.md` for the full audit and refactoring roadmap.
+**Why:** Private view methods cannot be unit-tested. Logic in stores runs against `TestBackend` (CloudKitBackend + in-memory SwiftData) in milliseconds with no simulator. See `plans/UI_TESTING_PLAN.md` for the full audit and refactoring roadmap.
 
 ## Testing & TDD
 
 - **Write the test file before the implementation file (TDD).**
-- **Contract Tests:** Every repository protocol has a contract test suite in `MoolahTests/Domain/`. Both `InMemoryBackend` and `RemoteBackend` must satisfy these tests.
-- **Store Tests:** Every store method that mutates state must have tests verifying both the store's published state and the underlying repository state. Use `InMemoryBackend` — never mock the repository. Test error paths (rollback on failure) not just happy paths.
+- **Contract Tests:** Every repository protocol has a contract test suite in `MoolahTests/Domain/`. Tests run against `CloudKitBackend` with in-memory SwiftData. `RemoteBackend` tests use fixture JSON stubs.
+- **Store Tests:** Every store method that mutates state must have tests verifying both the store's published state and the underlying repository state. Use `TestBackend` (creates `CloudKitBackend` with in-memory SwiftData) — never mock the repository. Test error paths (rollback on failure) not just happy paths.
 - **When adding a new user action** (button tap, swipe, menu item) that triggers a multi-step async flow: put the logic in the store, write the test for the store method, then wire the view to call it.
-- **Verification:** Every `InMemoryBackend` method must be verified against `moolah-server` source before implementation. Read the corresponding route/controller in `../moolah-server/src/` to confirm filtering semantics, sort order, and computed values.
+- **Verification:** Every `CloudKitBackend` repository method must be verified against `moolah-server` source before implementation. Read the corresponding route/controller in `../moolah-server/src/` to confirm filtering semantics, sort order, and computed values.
 - **Fixtures:** Remote backend tests use `URLProtocol` stubs against fixture JSON in `MoolahTests/Support/Fixtures/`.
 - **Targets:** `MoolahTests_iOS` (simulator) and `MoolahTests_macOS` (native).
 
