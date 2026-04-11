@@ -197,17 +197,19 @@ struct SettingsView: View {
   @ViewBuilder
   private func profileDetailView(for profile: Profile) -> some View {
     #if os(macOS)
-      let authStore = sessionManager.sessions[profile.id]?.authStore
+      let session = sessionManager.sessions[profile.id]
+      let authStore = session?.authStore
     #else
       let isActive = profile.id == profileStore.activeProfileID
-      let authStore = isActive ? activeSession?.authStore : nil
+      let session = isActive ? activeSession : nil
+      let authStore = session?.authStore
     #endif
 
     switch profile.backendType {
     case .moolah:
-      MoolahProfileDetailView(profile: profile, authStore: authStore)
+      MoolahProfileDetailView(profile: profile, authStore: authStore, session: session)
     case .remote:
-      CustomServerProfileDetailView(profile: profile, authStore: authStore)
+      CustomServerProfileDetailView(profile: profile, authStore: authStore, session: session)
     case .cloudKit:
       CloudKitProfileDetailView(profile: profile)
     }
@@ -283,10 +285,12 @@ struct MoolahProfileDetailView: View {
   @Environment(ProfileStore.self) private var profileStore
   let profile: Profile
   let authStore: AuthStore?
+  let session: ProfileSession?
 
   @State private var label: String
   @State private var currencyCode: String
   @State private var financialYearStartMonth: Int
+  @State private var showMigration = false
 
   private static let monthNames: [String] = {
     let formatter = DateFormatter()
@@ -294,9 +298,10 @@ struct MoolahProfileDetailView: View {
     return formatter.monthSymbols ?? []
   }()
 
-  init(profile: Profile, authStore: AuthStore?) {
+  init(profile: Profile, authStore: AuthStore?, session: ProfileSession?) {
     self.profile = profile
     self.authStore = authStore
+    self.session = session
     _label = State(initialValue: profile.label)
     _currencyCode = State(initialValue: profile.currencyCode)
     _financialYearStartMonth = State(initialValue: profile.financialYearStartMonth)
@@ -330,6 +335,14 @@ struct MoolahProfileDetailView: View {
       }
 
       ProfileAuthStatusView(profile: profile, authStore: authStore)
+
+      if let session {
+        MigrateToICloudSection(
+          profile: profile,
+          session: session,
+          showMigration: $showMigration
+        )
+      }
     }
     .formStyle(.grouped)
   }
@@ -367,11 +380,13 @@ struct CustomServerProfileDetailView: View {
   @Environment(ProfileStore.self) private var profileStore
   let profile: Profile
   let authStore: AuthStore?
+  let session: ProfileSession?
 
   @State private var label: String
   @State private var serverURL: String
   @State private var currencyCode: String
   @State private var financialYearStartMonth: Int
+  @State private var showMigration = false
 
   private static let monthNames: [String] = {
     let formatter = DateFormatter()
@@ -379,9 +394,10 @@ struct CustomServerProfileDetailView: View {
     return formatter.monthSymbols ?? []
   }()
 
-  init(profile: Profile, authStore: AuthStore?) {
+  init(profile: Profile, authStore: AuthStore?, session: ProfileSession?) {
     self.profile = profile
     self.authStore = authStore
+    self.session = session
     _label = State(initialValue: profile.label)
     _serverURL = State(initialValue: profile.serverURL?.absoluteString ?? "")
     _currencyCode = State(initialValue: profile.currencyCode)
@@ -443,6 +459,14 @@ struct CustomServerProfileDetailView: View {
       }
 
       ProfileAuthStatusView(profile: profile, authStore: authStore)
+
+      if let session {
+        MigrateToICloudSection(
+          profile: profile,
+          session: session,
+          showMigration: $showMigration
+        )
+      }
     }
     .formStyle(.grouped)
   }
