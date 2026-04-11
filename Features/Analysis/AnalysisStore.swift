@@ -12,6 +12,13 @@ final class AnalysisStore {
   private(set) var isLoading = false
   private(set) var error: Error?
 
+  /// Cached analysis parameters — detect if cache is still valid for current filters
+  private var cachedHistoryMonths: Int?
+  private var cachedForecastMonths: Int?
+  private var hasCachedData: Bool {
+    cachedHistoryMonths != nil && !dailyBalances.isEmpty
+  }
+
   // Filters (persisted across launches)
   var historyMonths: Int {
     didSet { defaults.set(historyMonths, forKey: "analysisHistoryMonths") }
@@ -44,8 +51,22 @@ final class AnalysisStore {
 
   func loadAll() async {
     monthEnd = Calendar.current.component(.day, from: Date())
-    isLoading = true
     error = nil
+
+    // If filters changed, clear cache — stale data with wrong filters is confusing
+    let filtersChanged =
+      historyMonths != cachedHistoryMonths
+      || forecastMonths != cachedForecastMonths
+
+    // Show loading only if we have no cached data or filters changed
+    if !hasCachedData || filtersChanged {
+      isLoading = true
+      if filtersChanged {
+        dailyBalances = []
+        expenseBreakdown = []
+        incomeAndExpense = []
+      }
+    }
 
     do {
       let after = afterDate(monthsAgo: historyMonths)
@@ -62,6 +83,9 @@ final class AnalysisStore {
       )
       expenseBreakdown = data.expenseBreakdown
       incomeAndExpense = data.incomeAndExpense.sorted { $0.month > $1.month }
+
+      cachedHistoryMonths = historyMonths
+      cachedForecastMonths = forecastMonths
     } catch {
       logger.error("Failed to load analysis data: \(error)")
       self.error = error

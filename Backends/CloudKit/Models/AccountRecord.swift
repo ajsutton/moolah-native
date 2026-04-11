@@ -12,6 +12,7 @@ final class AccountRecord {
   var position: Int
   var isHidden: Bool
   var currencyCode: String
+  var cachedBalance: Int?
 
   init(
     id: UUID = UUID(),
@@ -20,7 +21,8 @@ final class AccountRecord {
     type: String,
     position: Int = 0,
     isHidden: Bool = false,
-    currencyCode: String
+    currencyCode: String,
+    cachedBalance: Int? = nil
   ) {
     self.id = id
     self.profileId = profileId
@@ -29,6 +31,7 @@ final class AccountRecord {
     self.position = position
     self.isHidden = isHidden
     self.currencyCode = currencyCode
+    self.cachedBalance = cachedBalance
   }
 
   func toDomain(balance: MonetaryAmount, investmentValue: MonetaryAmount?) -> Account {

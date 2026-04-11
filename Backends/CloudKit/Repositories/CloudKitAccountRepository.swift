@@ -25,8 +25,14 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     )
     return try await MainActor.run {
       let records = try context.fetch(descriptor)
+
+      // If any record has a nil cached balance, recompute all balances in batch
+      if records.contains(where: { $0.cachedBalance == nil }) {
+        try recomputeAllBalances(records: records)
+      }
+
       return try records.map { record in
-        let balance = try computeBalance(for: record.id)
+        let balance = MonetaryAmount(cents: record.cachedBalance ?? 0, currency: currency)
         let investmentValue =
           record.type == AccountType.investment.rawValue
           ? try latestInvestmentValue(for: record.id)
@@ -56,6 +62,9 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
           currencyCode: currency.code
         )
         context.insert(txn)
+        record.cachedBalance = account.balance.cents
+      } else {
+        record.cachedBalance = 0
       }
 
       try context.save()
@@ -119,6 +128,43 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
 
   // MARK: - Balance Computation
 
+  /// Batch-recompute all account balances in a single pass over transactions.
+  /// This replaces N per-account queries with 1 query for all transactions.
+  @MainActor
+  private func recomputeAllBalances(records: [AccountRecord]) throws {
+    let profileId = self.profileId
+    let txnDescriptor = FetchDescriptor<TransactionRecord>(
+      predicate: #Predicate {
+        $0.profileId == profileId && $0.recurPeriod == nil
+      }
+    )
+    let transactions = try context.fetch(txnDescriptor)
+
+    // Accumulate per-account balances in a single pass
+    var balances: [UUID: Int] = [:]
+    for record in records {
+      balances[record.id] = 0
+    }
+
+    for txn in transactions {
+      // Source account gets +amount
+      if let accountId = txn.accountId {
+        balances[accountId, default: 0] += txn.amount
+      }
+      // Destination account (transfers) gets -amount
+      if let toAccountId = txn.toAccountId {
+        balances[toAccountId, default: 0] -= txn.amount
+      }
+    }
+
+    // Write cached balances to records
+    for record in records {
+      record.cachedBalance = balances[record.id] ?? 0
+    }
+
+    try context.save()
+  }
+
   @MainActor
   private func computeBalance(for accountId: UUID) throws -> MonetaryAmount {
     let profileId = self.profileId
@@ -141,7 +187,17 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     let destSum = destRecords.reduce(0) { $0 + $1.amount }
 
     // source account gets the amount, dest account gets the negative (transfer in)
-    return MonetaryAmount(cents: sourceSum - destSum, currency: currency)
+    let balance = MonetaryAmount(cents: sourceSum - destSum, currency: currency)
+
+    // Write through to cache
+    let accountDescriptor = FetchDescriptor<AccountRecord>(
+      predicate: #Predicate { $0.id == accountId && $0.profileId == profileId }
+    )
+    if let record = try context.fetch(accountDescriptor).first {
+      record.cachedBalance = balance.cents
+    }
+
+    return balance
   }
 
   @MainActor
