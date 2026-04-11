@@ -173,6 +173,18 @@ struct ExchangeRateServiceTests {
     #expect(converted.cents == 272)
   }
 
+  // MARK: - Prefetch
+
+  @Test func prefetchUpdatesCache() async throws {
+    let service = makeService(rates: [
+      "2026-04-10": ["USD": Decimal(string: "0.629")!],
+      "2026-04-11": ["USD": Decimal(string: "0.632")!],
+    ])
+    await service.prefetchLatest(base: .AUD)
+    let rate = try await service.rate(from: .AUD, to: .USD, on: date("2026-04-11"))
+    #expect(rate == Decimal(string: "0.632")!)
+  }
+
   @Test func fallbackNeverUsesFutureDate() async throws {
     // Pre-populate cache with a future date only
     let futureRates: [String: [String: Decimal]] = [

@@ -136,6 +136,37 @@ actor ExchangeRateService {
     return MonetaryAmount(cents: convertedCents, currency: currency)
   }
 
+  func prefetchLatest(base: Currency) async {
+    let code = base.code
+
+    if caches[code] == nil {
+      loadCacheFromDisk(base: code)
+    }
+
+    let calendar = Calendar(identifier: .gregorian)
+    let today = Date()
+    let todayString = dateFormatter.string(from: today)
+
+    if let cache = caches[code], cache.latestDate >= todayString {
+      return  // Already up to date
+    }
+
+    let fetchFrom: Date
+    if let cache = caches[code],
+      let latestDate = dateFormatter.date(from: cache.latestDate)
+    {
+      fetchFrom = calendar.date(byAdding: .day, value: 1, to: latestDate)!
+    } else {
+      fetchFrom = calendar.date(byAdding: .day, value: -30, to: today)!
+    }
+
+    do {
+      try await fetchAndMerge(base: code, from: fetchFrom, to: today)
+    } catch {
+      // Prefetch is best-effort — silently ignore network errors
+    }
+  }
+
   // MARK: - Private helpers
 
   private func lookupRate(base: String, quote: String, dateString: String) -> Decimal? {
