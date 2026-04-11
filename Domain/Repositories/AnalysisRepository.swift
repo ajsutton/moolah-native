@@ -54,4 +54,40 @@ protocol AnalysisRepository: Sendable {
     transactionType: TransactionType,
     filters: TransactionFilter?
   ) async throws -> [UUID: MonetaryAmount]
+
+  /// Load all analysis data in a single batch, avoiding redundant fetches.
+  ///
+  /// Backends that compute locally (CloudKit/SwiftData) should override this to fetch
+  /// shared data once. The default implementation calls the three individual methods.
+  func loadAll(
+    historyAfter: Date?,
+    forecastUntil: Date?,
+    monthEnd: Int
+  ) async throws -> AnalysisData
+}
+
+/// Result of loading all analysis data in a single batch.
+/// Used to avoid redundant data fetching in backends that compute locally (e.g. CloudKit).
+struct AnalysisData: Sendable {
+  let dailyBalances: [DailyBalance]
+  let expenseBreakdown: [ExpenseBreakdown]
+  let incomeAndExpense: [MonthlyIncomeExpense]
+}
+
+extension AnalysisRepository {
+  func loadAll(
+    historyAfter: Date?,
+    forecastUntil: Date?,
+    monthEnd: Int
+  ) async throws -> AnalysisData {
+    async let balances = fetchDailyBalances(after: historyAfter, forecastUntil: forecastUntil)
+    async let breakdown = fetchExpenseBreakdown(monthEnd: monthEnd, after: historyAfter)
+    async let income = fetchIncomeAndExpense(monthEnd: monthEnd, after: historyAfter)
+
+    return try await AnalysisData(
+      dailyBalances: balances,
+      expenseBreakdown: breakdown,
+      incomeAndExpense: income
+    )
+  }
 }
