@@ -83,7 +83,9 @@ struct MoolahApp: App {
         EarmarkBudgetItemRecord.self,
         InvestmentValueRecord.self,
       ])
+      let storeURL = URL.applicationSupportDirectory.appending(path: "Moolah.store")
       let config = ModelConfiguration(
+        url: storeURL,
         cloudKitDatabase: .automatic
       )
       container = try ModelContainer(for: schema, configurations: [config])
