@@ -185,6 +185,33 @@ struct ExchangeRateServiceTests {
     #expect(rate == Decimal(string: "0.632")!)
   }
 
+  @Test func gzipRoundTripPreservesData() async throws {
+    let tempDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: tempDir) }
+
+    let client = FixedRateClient(rates: [
+      "2026-04-11": ["USD": Decimal(string: "0.632")!, "EUR": Decimal(string: "0.581")!]
+    ])
+    let service = ExchangeRateService(client: client, cacheDirectory: tempDir)
+
+    // Fetch to populate cache and write to disk
+    let rate = try await service.rate(from: .AUD, to: .USD, on: date("2026-04-11"))
+    #expect(rate == Decimal(string: "0.632")!)
+
+    // Create a new service reading from the same directory (fresh in-memory state)
+    let failingClient = FixedRateClient(shouldFail: true)
+    let service2 = ExchangeRateService(client: failingClient, cacheDirectory: tempDir)
+
+    // Should load from disk cache, not network
+    let cachedRate = try await service2.rate(from: .AUD, to: .USD, on: date("2026-04-11"))
+    #expect(cachedRate == Decimal(string: "0.632")!)
+
+    let cachedEur = try await service2.rate(
+      from: .AUD, to: Currency.from(code: "EUR"), on: date("2026-04-11"))
+    #expect(cachedEur == Decimal(string: "0.581")!)
+  }
+
   @Test func fallbackNeverUsesFutureDate() async throws {
     // Pre-populate cache with a future date only
     let futureRates: [String: [String: Decimal]] = [
