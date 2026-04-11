@@ -15,6 +15,7 @@ final class ProfileSession: Identifiable {
   let earmarkStore: EarmarkStore
   let analysisStore: AnalysisStore
   let investmentStore: InvestmentStore
+  let exchangeRateService: ExchangeRateService
 
   nonisolated var id: UUID { profile.id }
 
@@ -54,6 +55,7 @@ final class ProfileSession: Identifiable {
       )
     }
     self.backend = backend
+    self.exchangeRateService = ExchangeRateService(client: FrankfurterClient())
 
     self.authStore = AuthStore(backend: backend)
     self.accountStore = AccountStore(repository: backend.accounts)
