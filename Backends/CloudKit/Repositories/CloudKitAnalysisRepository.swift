@@ -17,6 +17,56 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     modelContainer.mainContext
   }
 
+  // MARK: - Batch Loading
+
+  func loadAll(
+    historyAfter: Date?,
+    forecastUntil: Date?,
+    monthEnd: Int
+  ) async throws -> AnalysisData {
+    // 1. Fetch shared data on MainActor (SwiftData requirement) — done ONCE
+    let allTransactions = try await fetchTransactions()
+    let accounts = try await fetchAccounts()
+
+    // 2. Split and prepare shared data
+    let nonScheduled = allTransactions.filter { !$0.isScheduled }
+    let scheduled = allTransactions.filter { $0.isScheduled }
+    let investmentAccountIds = Set(accounts.filter { $0.type == .investment }.map(\.id))
+    let investmentValues = try await fetchAllInvestmentValues(
+      investmentAccountIds: investmentAccountIds)
+    let currency = self.currency
+
+    // 3. Compute all three analyses concurrently, off the main thread
+    async let balances = Self.computeDailyBalances(
+      nonScheduled: nonScheduled,
+      scheduled: scheduled,
+      accounts: accounts,
+      investmentValues: investmentValues,
+      after: historyAfter,
+      forecastUntil: forecastUntil,
+      currency: currency
+    )
+    async let breakdown = Self.computeExpenseBreakdown(
+      nonScheduled: nonScheduled,
+      monthEnd: monthEnd,
+      after: historyAfter,
+      currency: currency
+    )
+    async let income = Self.computeIncomeAndExpense(
+      nonScheduled: nonScheduled,
+      accounts: accounts,
+      monthEnd: monthEnd,
+      after: historyAfter,
+      currency: currency
+    )
+
+    return try await AnalysisData(
+      dailyBalances: balances,
+      expenseBreakdown: breakdown,
+      incomeAndExpense: income
+    )
+  }
+
   // MARK: - Data Fetching Helpers
 
   private func fetchTransactions(scheduled: Bool? = nil) async throws -> [Transaction] {
@@ -79,7 +129,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       let priorTransactions = allTransactions.filter { $0.date < after }
 
       for txn in priorTransactions.sorted(by: { $0.date < $1.date }) {
-        applyTransaction(
+        Self.applyTransaction(
           txn,
           to: &currentBalance,
           investments: &currentInvestments,
@@ -91,7 +141,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
     // Apply each transaction to running balances
     for txn in transactions.sorted(by: { $0.date < $1.date }) {
-      applyTransaction(
+      Self.applyTransaction(
         txn,
         to: &currentBalance,
         investments: &currentInvestments,
@@ -116,7 +166,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     // 5. Apply investment values from InvestmentValueRecord
     let investmentValues = try await fetchAllInvestmentValues(
       investmentAccountIds: investmentAccountIds)
-    applyInvestmentValues(investmentValues, to: &dailyBalances, currency: currency)
+    Self.applyInvestmentValues(investmentValues, to: &dailyBalances, currency: currency)
 
     // 6. Compute bestFit (linear regression on availableFunds)
     var actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
@@ -125,8 +175,10 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     // 7. Generate forecasted balances if requested
     var scheduledBalances: [DailyBalance] = []
     if let forecastUntil {
+      let scheduledTransactions = try await fetchTransactions(scheduled: true)
       let lastDate = transactions.last?.date ?? Date()
-      scheduledBalances = try await generateForecast(
+      scheduledBalances = Self.generateForecast(
+        scheduled: scheduledTransactions,
         startDate: lastDate,
         endDate: forecastUntil,
         startingBalance: currentBalance,
@@ -159,180 +211,6 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     }
   }
 
-  /// Apply investment values to daily balances.
-  private func applyInvestmentValues(
-    _ investmentValues: [(accountId: UUID, date: Date, value: MonetaryAmount)],
-    to dailyBalances: inout [Date: DailyBalance],
-    currency: Currency
-  ) {
-    guard !investmentValues.isEmpty, !dailyBalances.isEmpty else { return }
-
-    var latestByAccount: [UUID: MonetaryAmount] = [:]
-    var valueIndex = 0
-
-    for date in dailyBalances.keys.sorted() {
-      while valueIndex < investmentValues.count {
-        let entry = investmentValues[valueIndex]
-        let entryDay = Calendar.current.startOfDay(for: entry.date)
-        if entryDay <= date {
-          latestByAccount[entry.accountId] = entry.value
-          valueIndex += 1
-        } else {
-          break
-        }
-      }
-
-      if !latestByAccount.isEmpty {
-        let totalValue = latestByAccount.values.reduce(
-          MonetaryAmount.zero(currency: currency), +)
-        let balance = dailyBalances[date]!
-        dailyBalances[date] = DailyBalance(
-          date: balance.date,
-          balance: balance.balance,
-          earmarked: balance.earmarked,
-          availableFunds: balance.availableFunds,
-          investments: balance.investments,
-          investmentValue: totalValue,
-          netWorth: balance.balance + totalValue,
-          bestFit: balance.bestFit,
-          isForecast: balance.isForecast
-        )
-      }
-    }
-  }
-
-  private func applyTransaction(
-    _ txn: Transaction,
-    to balance: inout MonetaryAmount,
-    investments: inout MonetaryAmount,
-    earmarks: inout MonetaryAmount,
-    investmentAccountIds: Set<UUID>
-  ) {
-    let isFromInvestment = txn.accountId.map { investmentAccountIds.contains($0) } ?? false
-    let isToInvestment = txn.toAccountId.map { investmentAccountIds.contains($0) } ?? false
-
-    switch txn.type {
-    case .income, .expense, .openingBalance:
-      if txn.accountId != nil {
-        balance += txn.amount
-      }
-      if txn.earmarkId != nil {
-        earmarks += txn.amount
-      }
-
-    case .transfer:
-      // Transfer: amount is always from the perspective of accountId (negative = money leaving)
-      // Use abs to work with unsigned magnitudes regardless of amount sign.
-      let transferMagnitude = MonetaryAmount(
-        cents: abs(txn.amount.cents), currency: txn.amount.currency)
-      if isFromInvestment && !isToInvestment {
-        balance += transferMagnitude
-        investments -= transferMagnitude
-      } else if !isFromInvestment && isToInvestment {
-        balance -= transferMagnitude
-        investments += transferMagnitude
-      }
-    }
-  }
-
-  private func generateForecast(
-    startDate: Date,
-    endDate: Date,
-    startingBalance: MonetaryAmount,
-    startingEarmarks: MonetaryAmount,
-    startingInvestments: MonetaryAmount,
-    investmentAccountIds: Set<UUID>
-  ) async throws -> [DailyBalance] {
-    // 1. Fetch all scheduled transactions
-    let scheduledTransactions = try await fetchTransactions(scheduled: true)
-
-    // 2. Extrapolate instances up to endDate
-    var instances: [Transaction] = []
-    for scheduled in scheduledTransactions {
-      instances.append(contentsOf: extrapolateScheduledTransaction(scheduled, until: endDate))
-    }
-
-    // 3. Sort by date and apply to running balances
-    instances.sort { $0.date < $1.date }
-    var balance = startingBalance
-    var earmarks = startingEarmarks
-    var investments = startingInvestments
-
-    var forecastBalances: [Date: DailyBalance] = [:]
-    for instance in instances {
-      applyTransaction(
-        instance,
-        to: &balance,
-        investments: &investments,
-        earmarks: &earmarks,
-        investmentAccountIds: investmentAccountIds
-      )
-
-      let dayKey = Calendar.current.startOfDay(for: instance.date)
-      forecastBalances[dayKey] = DailyBalance(
-        date: dayKey,
-        balance: balance,
-        earmarked: earmarks,
-        availableFunds: balance - earmarks,
-        investments: investments,
-        investmentValue: nil,
-        netWorth: balance + investments,
-        bestFit: nil,
-        isForecast: true
-      )
-    }
-
-    return forecastBalances.values.sorted { $0.date < $1.date }
-  }
-
-  private func extrapolateScheduledTransaction(
-    _ scheduled: Transaction,
-    until endDate: Date
-  ) -> [Transaction] {
-    guard let period = scheduled.recurPeriod, period != .once else {
-      return scheduled.date <= endDate ? [scheduled] : []
-    }
-
-    let every = scheduled.recurEvery ?? 1
-    var instances: [Transaction] = []
-    var currentDate = scheduled.date
-
-    while currentDate <= endDate {
-      var instance = scheduled
-      instance.date = currentDate
-      instance.recurPeriod = nil
-      instance.recurEvery = nil
-      instances.append(instance)
-
-      guard let nextDate = nextDueDate(from: currentDate, period: period, every: every) else {
-        break
-      }
-      currentDate = nextDate
-    }
-
-    return instances
-  }
-
-  private func nextDueDate(from date: Date, period: RecurPeriod, every: Int) -> Date? {
-    let calendar = Calendar.current
-    var components = DateComponents()
-
-    switch period {
-    case .day:
-      components.day = every
-    case .week:
-      components.weekOfYear = every
-    case .month:
-      components.month = every
-    case .year:
-      components.year = every
-    case .once:
-      return nil
-    }
-
-    return calendar.date(byAdding: components, to: date)
-  }
-
   // MARK: - Expense Breakdown
 
   func fetchExpenseBreakdown(
@@ -352,7 +230,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     var breakdown: [String: [UUID?: MonetaryAmount]] = [:]
 
     for txn in transactions {
-      let month = financialMonth(for: txn.date, monthEnd: monthEnd)
+      let month = Self.financialMonth(for: txn.date, monthEnd: monthEnd)
       let categoryId = txn.categoryId
 
       if breakdown[month] == nil {
@@ -401,7 +279,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
     for txn in transactions {
       guard txn.accountId != nil else { continue }
-      let month = financialMonth(for: txn.date, monthEnd: monthEnd)
+      let month = Self.financialMonth(for: txn.date, monthEnd: monthEnd)
 
       if monthlyData[month] == nil {
         monthlyData[month] = CloudKitMonthData(
@@ -513,9 +391,399 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     return balances
   }
 
-  // MARK: - Helper Methods
+  // MARK: - Static Computation Methods (for off-main-thread use)
 
-  private func financialMonth(for date: Date, monthEnd: Int) -> String {
+  @concurrent
+  private static func computeDailyBalances(
+    nonScheduled: [Transaction],
+    scheduled: [Transaction],
+    accounts: [Account],
+    investmentValues: [(accountId: UUID, date: Date, value: MonetaryAmount)],
+    after: Date?,
+    forecastUntil: Date?,
+    currency: Currency
+  ) async throws -> [DailyBalance] {
+    let investmentAccountIds = Set(accounts.filter { $0.type == .investment }.map(\.id))
+
+    // Filter by date range
+    let transactions: [Transaction]
+    if let after {
+      transactions = nonScheduled.filter { $0.date >= after }
+    } else {
+      transactions = nonScheduled
+    }
+
+    // Compute daily balances
+    var dailyBalances: [Date: DailyBalance] = [:]
+    var currentBalance: MonetaryAmount = .zero(currency: currency)
+    var currentInvestments: MonetaryAmount = .zero(currency: currency)
+    var currentEarmarks: MonetaryAmount = .zero(currency: currency)
+
+    // If 'after' is provided, compute starting balances up to that date
+    if let after {
+      let priorTransactions = nonScheduled.filter { $0.date < after }
+      for txn in priorTransactions.sorted(by: { $0.date < $1.date }) {
+        applyTransaction(
+          txn,
+          to: &currentBalance,
+          investments: &currentInvestments,
+          earmarks: &currentEarmarks,
+          investmentAccountIds: investmentAccountIds
+        )
+      }
+    }
+
+    // Apply each transaction to running balances
+    for txn in transactions.sorted(by: { $0.date < $1.date }) {
+      applyTransaction(
+        txn,
+        to: &currentBalance,
+        investments: &currentInvestments,
+        earmarks: &currentEarmarks,
+        investmentAccountIds: investmentAccountIds
+      )
+
+      let dayKey = Calendar.current.startOfDay(for: txn.date)
+      dailyBalances[dayKey] = DailyBalance(
+        date: dayKey,
+        balance: currentBalance,
+        earmarked: currentEarmarks,
+        availableFunds: currentBalance - currentEarmarks,
+        investments: currentInvestments,
+        investmentValue: nil,
+        netWorth: currentBalance + currentInvestments,
+        bestFit: nil,
+        isForecast: false
+      )
+    }
+
+    // Apply investment values
+    applyInvestmentValues(investmentValues, to: &dailyBalances, currency: currency)
+
+    // Compute bestFit
+    var actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
+    InMemoryAnalysisRepository.applyBestFit(to: &actualBalances, currency: currency)
+
+    // Generate forecasted balances if requested
+    var forecastBalances: [DailyBalance] = []
+    if let forecastUntil {
+      let lastDate = transactions.last?.date ?? Date()
+      forecastBalances = generateForecast(
+        scheduled: scheduled,
+        startDate: lastDate,
+        endDate: forecastUntil,
+        startingBalance: currentBalance,
+        startingEarmarks: currentEarmarks,
+        startingInvestments: currentInvestments,
+        investmentAccountIds: investmentAccountIds
+      )
+    }
+
+    return actualBalances + forecastBalances
+  }
+
+  @concurrent
+  private static func computeExpenseBreakdown(
+    nonScheduled: [Transaction],
+    monthEnd: Int,
+    after: Date?,
+    currency: Currency
+  ) async -> [ExpenseBreakdown] {
+    var transactions = nonScheduled.filter { $0.type == .expense }
+
+    if let after {
+      transactions = transactions.filter { $0.date >= after }
+    }
+
+    var breakdown: [String: [UUID?: MonetaryAmount]] = [:]
+
+    for txn in transactions {
+      let month = financialMonth(for: txn.date, monthEnd: monthEnd)
+      let categoryId = txn.categoryId
+
+      if breakdown[month] == nil {
+        breakdown[month] = [:]
+      }
+      let current = breakdown[month]![categoryId] ?? .zero(currency: currency)
+      breakdown[month]![categoryId] = current + txn.amount
+    }
+
+    var results: [ExpenseBreakdown] = []
+    for (month, categories) in breakdown {
+      for (categoryId, total) in categories {
+        results.append(
+          ExpenseBreakdown(
+            categoryId: categoryId,
+            month: month,
+            totalExpenses: total
+          ))
+      }
+    }
+
+    return results.sorted { $0.month > $1.month }
+  }
+
+  @concurrent
+  private static func computeIncomeAndExpense(
+    nonScheduled: [Transaction],
+    accounts: [Account],
+    monthEnd: Int,
+    after: Date?,
+    currency: Currency
+  ) async -> [MonthlyIncomeExpense] {
+    var transactions = nonScheduled
+
+    if let after {
+      transactions = transactions.filter { $0.date >= after }
+    }
+
+    let investmentAccountIds = Set(accounts.filter { $0.type == .investment }.map(\.id))
+
+    var monthlyData: [String: CloudKitMonthData] = [:]
+
+    for txn in transactions {
+      guard txn.accountId != nil else { continue }
+      let month = financialMonth(for: txn.date, monthEnd: monthEnd)
+
+      if monthlyData[month] == nil {
+        monthlyData[month] = CloudKitMonthData(
+          start: txn.date, end: txn.date, currency: currency)
+      }
+
+      if txn.date < monthlyData[month]!.start {
+        monthlyData[month]!.start = txn.date
+      }
+      if txn.date > monthlyData[month]!.end {
+        monthlyData[month]!.end = txn.date
+      }
+
+      let isEarmarked = txn.earmarkId != nil
+      let isFromInvestment = txn.accountId.map { investmentAccountIds.contains($0) } ?? false
+      let isToInvestment = txn.toAccountId.map { investmentAccountIds.contains($0) } ?? false
+
+      switch txn.type {
+      case .income, .openingBalance:
+        if isEarmarked {
+          monthlyData[month]!.earmarkedIncome += txn.amount
+        } else {
+          monthlyData[month]!.income += txn.amount
+        }
+
+      case .expense:
+        let absAmount = MonetaryAmount(
+          cents: abs(txn.amount.cents),
+          currency: txn.amount.currency
+        )
+        if isEarmarked {
+          monthlyData[month]!.earmarkedExpense += absAmount
+        } else {
+          monthlyData[month]!.expense += absAmount
+        }
+
+      case .transfer:
+        if isFromInvestment && !isToInvestment {
+          monthlyData[month]!.earmarkedExpense += MonetaryAmount(
+            cents: abs(txn.amount.cents),
+            currency: txn.amount.currency
+          )
+        } else if !isFromInvestment && isToInvestment {
+          monthlyData[month]!.earmarkedIncome += MonetaryAmount(
+            cents: abs(txn.amount.cents),
+            currency: txn.amount.currency
+          )
+        }
+      }
+    }
+
+    return monthlyData.map { month, data in
+      MonthlyIncomeExpense(
+        month: month,
+        start: data.start,
+        end: data.end,
+        income: data.income,
+        expense: data.expense,
+        profit: data.income - data.expense,
+        earmarkedIncome: data.earmarkedIncome,
+        earmarkedExpense: data.earmarkedExpense,
+        earmarkedProfit: data.earmarkedIncome - data.earmarkedExpense
+      )
+    }.sorted { $0.month > $1.month }
+  }
+
+  // MARK: - Static Helper Methods
+
+  private static func applyTransaction(
+    _ txn: Transaction,
+    to balance: inout MonetaryAmount,
+    investments: inout MonetaryAmount,
+    earmarks: inout MonetaryAmount,
+    investmentAccountIds: Set<UUID>
+  ) {
+    let isFromInvestment = txn.accountId.map { investmentAccountIds.contains($0) } ?? false
+    let isToInvestment = txn.toAccountId.map { investmentAccountIds.contains($0) } ?? false
+
+    switch txn.type {
+    case .income, .expense, .openingBalance:
+      if txn.accountId != nil {
+        balance += txn.amount
+      }
+      if txn.earmarkId != nil {
+        earmarks += txn.amount
+      }
+
+    case .transfer:
+      // Transfer: amount is always from the perspective of accountId (negative = money leaving)
+      // Use abs to work with unsigned magnitudes regardless of amount sign.
+      let transferMagnitude = MonetaryAmount(
+        cents: abs(txn.amount.cents), currency: txn.amount.currency)
+      if isFromInvestment && !isToInvestment {
+        balance += transferMagnitude
+        investments -= transferMagnitude
+      } else if !isFromInvestment && isToInvestment {
+        balance -= transferMagnitude
+        investments += transferMagnitude
+      }
+    }
+  }
+
+  private static func applyInvestmentValues(
+    _ investmentValues: [(accountId: UUID, date: Date, value: MonetaryAmount)],
+    to dailyBalances: inout [Date: DailyBalance],
+    currency: Currency
+  ) {
+    guard !investmentValues.isEmpty, !dailyBalances.isEmpty else { return }
+
+    var latestByAccount: [UUID: MonetaryAmount] = [:]
+    var valueIndex = 0
+
+    for date in dailyBalances.keys.sorted() {
+      while valueIndex < investmentValues.count {
+        let entry = investmentValues[valueIndex]
+        let entryDay = Calendar.current.startOfDay(for: entry.date)
+        if entryDay <= date {
+          latestByAccount[entry.accountId] = entry.value
+          valueIndex += 1
+        } else {
+          break
+        }
+      }
+
+      if !latestByAccount.isEmpty {
+        let totalValue = latestByAccount.values.reduce(
+          MonetaryAmount.zero(currency: currency), +)
+        let balance = dailyBalances[date]!
+        dailyBalances[date] = DailyBalance(
+          date: balance.date,
+          balance: balance.balance,
+          earmarked: balance.earmarked,
+          availableFunds: balance.availableFunds,
+          investments: balance.investments,
+          investmentValue: totalValue,
+          netWorth: balance.balance + totalValue,
+          bestFit: balance.bestFit,
+          isForecast: balance.isForecast
+        )
+      }
+    }
+  }
+
+  private static func generateForecast(
+    scheduled: [Transaction],
+    startDate: Date,
+    endDate: Date,
+    startingBalance: MonetaryAmount,
+    startingEarmarks: MonetaryAmount,
+    startingInvestments: MonetaryAmount,
+    investmentAccountIds: Set<UUID>
+  ) -> [DailyBalance] {
+    // Extrapolate instances up to endDate
+    var instances: [Transaction] = []
+    for scheduledTxn in scheduled {
+      instances.append(contentsOf: extrapolateScheduledTransaction(scheduledTxn, until: endDate))
+    }
+
+    // Sort by date and apply to running balances
+    instances.sort { $0.date < $1.date }
+    var balance = startingBalance
+    var earmarks = startingEarmarks
+    var investments = startingInvestments
+
+    var forecastBalances: [Date: DailyBalance] = [:]
+    for instance in instances {
+      applyTransaction(
+        instance,
+        to: &balance,
+        investments: &investments,
+        earmarks: &earmarks,
+        investmentAccountIds: investmentAccountIds
+      )
+
+      let dayKey = Calendar.current.startOfDay(for: instance.date)
+      forecastBalances[dayKey] = DailyBalance(
+        date: dayKey,
+        balance: balance,
+        earmarked: earmarks,
+        availableFunds: balance - earmarks,
+        investments: investments,
+        investmentValue: nil,
+        netWorth: balance + investments,
+        bestFit: nil,
+        isForecast: true
+      )
+    }
+
+    return forecastBalances.values.sorted { $0.date < $1.date }
+  }
+
+  private static func extrapolateScheduledTransaction(
+    _ scheduled: Transaction,
+    until endDate: Date
+  ) -> [Transaction] {
+    guard let period = scheduled.recurPeriod, period != .once else {
+      return scheduled.date <= endDate ? [scheduled] : []
+    }
+
+    let every = scheduled.recurEvery ?? 1
+    var instances: [Transaction] = []
+    var currentDate = scheduled.date
+
+    while currentDate <= endDate {
+      var instance = scheduled
+      instance.date = currentDate
+      instance.recurPeriod = nil
+      instance.recurEvery = nil
+      instances.append(instance)
+
+      guard let nextDate = nextDueDate(from: currentDate, period: period, every: every) else {
+        break
+      }
+      currentDate = nextDate
+    }
+
+    return instances
+  }
+
+  private static func nextDueDate(from date: Date, period: RecurPeriod, every: Int) -> Date? {
+    let calendar = Calendar.current
+    var components = DateComponents()
+
+    switch period {
+    case .day:
+      components.day = every
+    case .week:
+      components.weekOfYear = every
+    case .month:
+      components.month = every
+    case .year:
+      components.year = every
+    case .once:
+      return nil
+    }
+
+    return calendar.date(byAdding: components, to: date)
+  }
+
+  private static func financialMonth(for date: Date, monthEnd: Int) -> String {
     let calendar = Calendar.current
     let dayOfMonth = calendar.component(.day, from: date)
     let adjustedDate =
