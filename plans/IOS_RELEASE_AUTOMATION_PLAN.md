@@ -8,7 +8,7 @@
 - Code signing is environment-variable driven but not configured for distribution
 - No Fastlane, no provisioning profiles, no App Store Connect integration
 - Version is hardcoded to `1.0` (build `1`) in `App/Info.plist`
-- Bundle ID: `com.moolah.app` (shared across iOS and macOS targets)
+- Bundle ID: `rocks.moolah.app` (shared across iOS and macOS targets)
 
 ---
 
@@ -41,17 +41,21 @@ These steps must be done manually in the Apple Developer portal and App Store Co
 
 - [ ] **1.1 — Enroll in Apple Developer Program** ($99/year) if not already enrolled
 - [ ] **1.2 — Register App IDs**
-  - `com.moolah.app` for iOS
-  - `com.moolah.app` for macOS (may share the same App ID if using universal purchase)
+  - `rocks.moolah.app` for iOS
+  - `rocks.moolah.app` for macOS (may share the same App ID if using universal purchase)
 - [ ] **1.3 — Create App Store Connect app record**
   - Set app name, primary language, bundle ID, SKU
   - Configure pricing (even if free)
-- [ ] **1.4 — Create App Store Connect API Key**
+- [ ] **1.4 — Register CloudKit container**
+  - Go to Certificates, Identifiers & Profiles → CloudKit Containers
+  - Create container `iCloud.rocks.moolah.app`
+  - Enable iCloud capability on the `rocks.moolah.app` App ID with CloudKit service
+- [ ] **1.5 — Create App Store Connect API Key**
   - Go to Users & Access → Integrations → App Store Connect API
   - Create key with "App Manager" role
   - Download the `.p8` file — it can only be downloaded once
   - Note the Key ID and Issuer ID
-- [ ] **1.5 — Create a private git repo for Match certificates**
+- [ ] **1.6 — Create a private git repo for Match certificates**
   - e.g., `github.com/ajsutton/moolah-certificates` (private)
   - This will store encrypted certificates and provisioning profiles
 
@@ -70,7 +74,20 @@ gem "fastlane"
 gem "xcode-install" # optional, for Xcode version management
 ```
 
-- [ ] **Add to `.gitignore`:**
+- [ ] **Opt out of Fastlane usage reporting** by setting the environment variable in the project. Add to `.env` or export in CI:
+
+```bash
+export FASTLANE_OPT_OUT_USAGE=YES
+```
+
+Alternatively, create a `fastlane/.env` file (checked into the repo) with:
+
+```
+FASTLANE_OPT_OUT_USAGE=YES
+FASTLANE_SKIP_UPDATE_CHECK=1
+```
+
+- [ ] **Add to `.gitignore` (do this BEFORE creating any Fastlane config files):**
 
 ```
 # Fastlane
@@ -78,6 +95,7 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+fastlane/api_key.json
 vendor/bundle
 ```
 
@@ -86,7 +104,7 @@ vendor/bundle
 - [ ] **Create `fastlane/Appfile`:**
 
 ```ruby
-app_identifier("com.moolah.app")
+app_identifier("rocks.moolah.app")
 apple_id(ENV["APPLE_ID"])  # only needed for deliver, not for API key auth
 team_id(ENV["DEVELOPMENT_TEAM"])
 ```
@@ -100,14 +118,15 @@ storage_mode("git")
 
 type("appstore")  # default type
 
-app_identifier("com.moolah.app")
+app_identifier("rocks.moolah.app")
 team_id(ENV["DEVELOPMENT_TEAM"])
 
-# Use API key instead of Apple ID password
-api_key_path("fastlane/api_key.json")
+# API key is passed directly from env vars in the Fastfile — no local file needed
 ```
 
-- [ ] **Create `fastlane/api_key.json`** (gitignored, injected in CI from secrets):
+- [ ] **`fastlane/api_key.json` (local development only, already gitignored in 2.1):**
+
+  If you need to run Fastlane locally (not in CI), create this file manually. It is already in `.gitignore` from step 2.1. Never commit it.
 
 ```json
 {
@@ -117,8 +136,6 @@ api_key_path("fastlane/api_key.json")
   "in_house": false
 }
 ```
-
-Add `fastlane/api_key.json` to `.gitignore`.
 
 ### 2.3 — Fastfile (Core Automation)
 
@@ -150,7 +167,7 @@ platform :ios do
 
     match(
       type: "appstore",
-      app_identifier: "com.moolah.app",
+      app_identifier: "rocks.moolah.app",
       api_key: api_key,
       readonly: is_ci
     )
@@ -237,7 +254,7 @@ platform :mac do
     match(
       type: "appstore",
       platform: "macos",
-      app_identifier: "com.moolah.app",
+      app_identifier: "rocks.moolah.app",
       api_key: api_key,
       readonly: is_ci
     )
@@ -245,7 +262,7 @@ platform :mac do
     match(
       type: "developer_id",
       platform: "macos",
-      app_identifier: "com.moolah.app",
+      app_identifier: "rocks.moolah.app",
       api_key: api_key,
       readonly: is_ci
     )
@@ -309,7 +326,7 @@ settings:
 # The existing env-var approach works. Fastlane Match will set:
 #   CODE_SIGN_STYLE=Manual
 #   CODE_SIGN_IDENTITY="Apple Distribution"  (or "Developer ID Application" for macOS)
-#   PROVISIONING_PROFILE_SPECIFIER="match AppStore com.moolah.app"
+#   PROVISIONING_PROFILE_SPECIFIER="match AppStore rocks.moolah.app"
 #   DEVELOPMENT_TEAM="<your-team-id>"
 ```
 
@@ -329,9 +346,18 @@ Moolah_macOS:
 
 Hardened runtime is required for macOS notarization and App Store submission.
 
-### 3.4 — Entitlements (if needed)
+### 3.4 — Entitlements & iCloud/CloudKit Sync
 
-- [ ] **Create `App/Moolah.entitlements`** if the app needs capabilities like Keychain sharing, network access, or App Sandbox (required for Mac App Store):
+The app uses SwiftData with CloudKit-backed models (`*Record` types) for cross-device iCloud syncing. This requires entitlements, a CloudKit container, and project configuration.
+
+#### 3.4.1 — Apple Developer Portal (Manual, One-Time)
+
+- [ ] **Register a CloudKit container** in the Apple Developer portal: `iCloud.rocks.moolah.app`
+- [ ] **Enable iCloud capability** for App ID `rocks.moolah.app` with CloudKit service selected
+
+#### 3.4.2 — Entitlements Files
+
+- [ ] **Create `App/Moolah.entitlements`** (shared by both iOS and macOS targets):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -342,9 +368,51 @@ Hardened runtime is required for macOS notarization and App Store submission.
     <true/>
     <key>com.apple.security.network.client</key>
     <true/>
+    <key>com.apple.developer.icloud-services</key>
+    <array>
+        <string>CloudKit</string>
+    </array>
+    <key>com.apple.developer.icloud-container-identifiers</key>
+    <array>
+        <string>iCloud.rocks.moolah.app</string>
+    </array>
 </dict>
 </plist>
 ```
+
+#### 3.4.3 — Project Configuration
+
+- [ ] **Update `project.yml`** to wire entitlements and iCloud capability to both targets:
+
+```yaml
+# In each target's settings:
+settings:
+  base:
+    CODE_SIGN_ENTITLEMENTS: App/Moolah.entitlements
+
+# In each target's capabilities (XcodeGen syntax):
+attributes:
+  SystemCapabilities:
+    com.apple.iCloud:
+      enabled: 1
+```
+
+#### 3.4.4 — SwiftData CloudKit Configuration
+
+- [ ] **Update `MoolahApp.init()`** to enable CloudKit sync in the `ModelConfiguration`:
+
+```swift
+let config = ModelConfiguration(
+    cloudKitDatabase: .automatic  // Syncs via iCloud when signed in, local-only otherwise
+)
+container = try ModelContainer(for: schema, configurations: [config])
+```
+
+Using `.automatic` means the app works offline and without an iCloud account (local storage only), and syncs across devices when signed in to iCloud.
+
+#### 3.4.5 — Provisioning Profiles
+
+- [ ] **Update Fastlane Match** to generate provisioning profiles that include the iCloud/CloudKit entitlement. Match handles this automatically as long as the App ID has iCloud enabled in the developer portal (done in 3.4.1)
 
 ---
 
@@ -358,13 +426,72 @@ Hardened runtime is required for macOS notarization and App Store submission.
 |--------|-------------|
 | `ASC_KEY_ID` | App Store Connect API Key ID |
 | `ASC_ISSUER_ID` | App Store Connect Issuer ID |
-| `ASC_KEY_CONTENT` | Base64-encoded `.p8` private key |
-| `MATCH_GIT_URL` | URL of the private certificates repo |
-| `MATCH_PASSWORD` | Passphrase to decrypt Match certificates |
-| `MATCH_GIT_BASIC_AUTHORIZATION` | Base64-encoded `username:PAT` for Match repo access |
-| `DEVELOPMENT_TEAM` | Apple Developer Team ID |
+| `ASC_KEY_CONTENT` | Base64-encoded `.p8` private key content (use `base64 -i AuthKey_XXXXXX.p8 \| pbcopy`) |
+| `MATCH_GIT_URL` | URL of the private certificates repo (e.g., `https://github.com/ajsutton/moolah-certificates.git`) |
+| `MATCH_PASSWORD` | Passphrase to decrypt Match certificates (generate a strong random password, e.g., `openssl rand -base64 32`) |
+| `MATCH_GIT_BASIC_AUTHORIZATION` | Base64-encoded `username:PAT` for Match repo access (use `echo -n "ajsutton:ghp_TOKEN" \| base64`) |
+| `DEVELOPMENT_TEAM` | Apple Developer Team ID (found in Apple Developer portal → Membership) |
 
-### 4.2 — TestFlight Workflow (on tag push)
+**Setup steps:**
+1. Go to GitHub repo → Settings → Secrets and variables → Actions
+2. Add each secret above using "New repository secret"
+3. Verify secrets are stored (they show as `***` in logs — GitHub automatically masks them)
+4. The PAT for `MATCH_GIT_BASIC_AUTHORIZATION` needs only `repo` scope (read access to the private certificates repo)
+
+### 4.2 — CI Security: Protecting Secrets from External PRs
+
+GitHub Actions exposes repository secrets to workflows triggered by events from the same repository. However, **pull requests from forks do NOT have access to secrets** by default — this is critical for public repos.
+
+- [ ] **4.2.1 — Verify repository settings:**
+  - Go to Settings → Actions → General → "Fork pull request workflows from outside collaborators"
+  - Set to **"Require approval for all outside collaborators"** (default, do not change)
+  - This ensures fork PRs cannot run workflows without maintainer approval
+
+- [ ] **4.2.2 — Use `environment` protection for release workflows:**
+
+  Create two GitHub Environments (Settings → Environments):
+
+  | Environment | Protection Rules |
+  |-------------|-----------------|
+  | `testflight` | Required reviewers: at least 1 (yourself). Deployment branches: tags only (`v*`) |
+  | `production` | Required reviewers: at least 1 (yourself). Deployment branches: `main` only |
+
+  This adds an approval gate before any release workflow can access secrets, even if triggered accidentally.
+
+- [ ] **4.2.3 — Never use `pull_request_target` with secrets:**
+
+  The existing `ci.yml` correctly uses `pull_request` (not `pull_request_target`), which is safe — fork PRs cannot access secrets. **Never change CI to `pull_request_target`** unless you fully understand the implications (it runs with the base branch's code but the PR's ref, which can be exploited).
+
+- [ ] **4.2.4 — Pin third-party actions to SHA (supply chain protection):**
+
+  Instead of using mutable tags like `@v6`, pin actions to their full commit SHA to prevent supply chain attacks via tag re-pointing. Use Dependabot or Renovate to keep them updated.
+
+  ```yaml
+  # Instead of:
+  - uses: actions/checkout@v6
+  # Use:
+  - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v6.0.0
+  ```
+
+  At minimum, pin these in the release workflows (the CI workflow is lower risk since it has no secrets).
+
+- [ ] **4.2.5 — Restrict `GITHUB_TOKEN` permissions:**
+
+  Add explicit permissions to each workflow to follow least-privilege:
+
+  ```yaml
+  permissions:
+    contents: read  # Default — only escalate where needed
+  ```
+
+  The release workflow needs `contents: write` for creating GitHub releases. Declare this at the job level, not the workflow level.
+
+- [ ] **4.2.6 — Audit `MATCH_GIT_BASIC_AUTHORIZATION` PAT scope:**
+  - Create a **fine-grained PAT** (not classic) scoped to only the `moolah-certificates` repo with `Contents: Read` permission
+  - Set an expiry (e.g., 1 year) and rotate before it expires
+  - If using a classic PAT, limit to `repo` scope only
+
+### 4.3 — TestFlight Workflow (on tag push)
 
 - [ ] **Create `.github/workflows/testflight.yml`:**
 
@@ -376,11 +503,15 @@ on:
     tags:
       - "v*"  # Trigger on version tags like v1.0.0, v1.2.3-beta.1
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     name: Build & Upload to TestFlight
     runs-on: macos-26
     timeout-minutes: 30
+    environment: testflight
 
     steps:
       - uses: actions/checkout@v6
@@ -442,11 +573,15 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: write  # Needed for creating GitHub releases
+
 jobs:
   release:
     name: Build & Upload to App Store
     runs-on: macos-26
     timeout-minutes: 30
+    environment: production
 
     steps:
       - uses: actions/checkout@v6
@@ -581,7 +716,7 @@ These are not required for the initial release pipeline but are valuable additio
 - [ ] **8.5 — Phased rollout configuration** — Configure automatic phased rollout (1% → 2% → 5% → 10% → 20% → 50% → 100% over 7 days). Can be paused at any stage for up to 30 days
 - [ ] **8.6 — Slack/Discord notifications** — Notify on successful TestFlight uploads or App Store review status changes
 - [ ] **8.7 — dSYM upload** — Upload debug symbols to a crash reporting service (Sentry, Firebase Crashlytics) as part of the release lane
-- [ ] **8.8 — Separate bundle IDs per platform** — If iOS and macOS need separate App Store listings, use `com.moolah.app.ios` and `com.moolah.app.macos`
+- [ ] **8.8 — Separate bundle IDs per platform** — If iOS and macOS need separate App Store listings, use `rocks.moolah.app.ios` and `rocks.moolah.app.macos`
 - [ ] **8.9 — Precheck validation** — Add Fastlane's `precheck` action to validate metadata against known App Store rejection reasons before submission
 - [ ] **8.10 — TestFlight feedback API (WWDC 2025)** — Programmatically retrieve TestFlight feedback (screenshots, crash reports) and integrate with issue tracking
 
@@ -595,8 +730,10 @@ New files to create:
 |------|---------|
 | `Gemfile` | Ruby dependencies (Fastlane) |
 | `fastlane/Appfile` | App identifier and team configuration |
+| `fastlane/.env` | Opt out of Fastlane usage reporting and skip update checks |
 | `fastlane/Matchfile` | Match certificate sync configuration |
 | `fastlane/Fastfile` | Build, sign, and upload automation |
+| `App/Moolah.entitlements` | App Sandbox, network, and iCloud/CloudKit entitlements |
 | `.github/workflows/testflight.yml` | TestFlight deployment on tag push |
 | `.github/workflows/release.yml` | App Store deployment (manual trigger) |
 
@@ -604,8 +741,9 @@ Files to modify:
 
 | File | Change |
 |------|--------|
-| `project.yml` | Add `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`, release-config overrides |
+| `project.yml` | Add `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`, release-config overrides, entitlements path, iCloud capability |
 | `App/Info.plist` | Replace hardcoded versions with build setting variables |
+| `App/MoolahApp.swift` | Configure `ModelContainer` with `cloudKitDatabase: .automatic` for iCloud sync |
 | `justfile` | Add `certificates`, `testflight`, `notarize-mac`, `bump-version` targets |
 | `.gitignore` | Add Fastlane artifacts, `vendor/bundle`, `fastlane/api_key.json` |
 
@@ -613,12 +751,25 @@ Files to modify:
 
 ## Security Considerations
 
+### Secrets & Key Material
+
 - **Never commit** the `.p8` API key file, certificates, or provisioning profiles to the main repo
-- **Match encrypts** all certificates and profiles with a passphrase before storing in the certificates repo
+- **`fastlane/api_key.json` is gitignored** — added to `.gitignore` before any Fastlane files are created (Phase 2.1)
+- **Match encrypts** all certificates and profiles with `MATCH_PASSWORD` before storing in the certificates repo
 - **API keys** are stored as GitHub Actions secrets, never in code
-- **The certificates repo** must be private and access-restricted
-- **Rotate the API key** if it is ever exposed
+- **The certificates repo** (`moolah-certificates`) must be private and access-restricted to only the repo owner
+- **Rotate the API key** if it is ever exposed (revoke in App Store Connect → create new key → update `ASC_KEY_CONTENT` secret)
 - **Use `readonly: is_ci`** in Match to prevent CI from accidentally creating new certificates
+
+### CI Pipeline Security
+
+- **Fork PRs cannot access secrets** — GitHub does not expose repository secrets to `pull_request` events from forks (verified: `ci.yml` uses `pull_request`, not `pull_request_target`)
+- **Environment protection gates** — Release workflows require manual approval via GitHub Environments (`testflight`, `production`) before secrets are exposed
+- **Least-privilege `GITHUB_TOKEN`** — Workflows declare minimal `permissions:` (read-only by default, write only where needed)
+- **Third-party action pinning** — Release workflows should pin actions to full commit SHAs to prevent supply chain attacks via tag manipulation
+- **PAT scope restriction** — The `MATCH_GIT_BASIC_AUTHORIZATION` PAT should be a fine-grained token scoped to only the certificates repo with read-only content access
+- **No secret logging** — Fastlane and GitHub Actions both mask secrets in logs automatically; never use `echo $SECRET` or `print` in lanes
+- **Tag protection** — Consider enabling tag protection rules (Settings → Tags) so only maintainers can push `v*` tags, preventing unauthorized release triggers
 
 ---
 
