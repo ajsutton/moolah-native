@@ -53,8 +53,34 @@ struct ServerUUIDTests {
     #expect(result == nil)
   }
 
+  @Test func optionalEmptyStringDecodesAsNil() throws {
+    let json = """
+      {"id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f", "ref": ""}
+      """
+    let data = json.data(using: .utf8)!
+    let result = try JSONDecoder().decode(OptionalUUIDWrapper.self, from: data)
+    #expect(result.id.uuid == testUUID)
+    #expect(result.ref == nil)
+  }
+
+  @Test func optionalMissingKeyDecodesAsNil() throws {
+    let json = """
+      {"id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f"}
+      """
+    let data = json.data(using: .utf8)!
+    let result = try JSONDecoder().decode(OptionalUUIDWrapper.self, from: data)
+    #expect(result.id.uuid == testUUID)
+    #expect(result.ref == nil)
+  }
+
   @Test func apiStringExtensionIsLowercase() {
     let uuid = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     #expect(uuid.apiString == "e621e1f8-c36c-495a-93fc-0c247a3e6e5f")
   }
+}
+
+/// Helper for testing optional ServerUUID decoding.
+private struct OptionalUUIDWrapper: Codable {
+  let id: ServerUUID
+  let ref: ServerUUID?
 }

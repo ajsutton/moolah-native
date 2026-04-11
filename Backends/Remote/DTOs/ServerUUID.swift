@@ -39,3 +39,23 @@ extension UUID {
     uuidString.lowercased()
   }
 }
+
+extension KeyedDecodingContainer {
+  /// Decodes an optional ServerUUID, treating empty strings as nil.
+  /// The server sometimes sends `""` instead of `null` for absent UUID fields.
+  func decodeIfPresent(_: ServerUUID.Type, forKey key: Key) throws -> ServerUUID? {
+    // If the key is missing or null, return nil
+    guard let string = try decodeIfPresent(String.self, forKey: key) else { return nil }
+    // If the value is an empty string, treat as nil
+    guard !string.isEmpty else { return nil }
+    // Parse the non-empty string
+    guard let uuid = FlexibleUUID.parse(string) else {
+      throw DecodingError.dataCorruptedError(
+        forKey: key,
+        in: self,
+        debugDescription: "Invalid UUID string: \(string)"
+      )
+    }
+    return ServerUUID(uuid)
+  }
+}
