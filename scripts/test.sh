@@ -10,7 +10,6 @@ export SWIFT_BUILD_USE_SANDBOX=0
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 COMMON_ARGS=(
-    -derivedDataPath "$REPO_ROOT/.DerivedData"
     -IDEPackageSupportDisableManifestSandbox=1
     -IDEPackageSupportDisablePackageSandbox=1
     'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox'
@@ -26,6 +25,7 @@ PLATFORM="${1:-all}"
 run_ios() {
     echo "==> Testing iOS Simulator…"
     xcodebuild test "${COMMON_ARGS[@]}" \
+        -derivedDataPath "$REPO_ROOT/.DerivedData-ios" \
         -scheme Moolah-iOS \
         -destination "platform=iOS Simulator,name=iPhone 17 Pro"
 }
@@ -37,10 +37,11 @@ run_mac() {
     echo "==> Testing macOS…"
 
     xcodebuild build-for-testing "${COMMON_ARGS[@]}" \
+        -derivedDataPath "$REPO_ROOT/.DerivedData-mac" \
         -scheme Moolah-macOS \
         -destination "platform=macOS"
 
-    PRODUCTS="$REPO_ROOT/.DerivedData/Build/Products"
+    PRODUCTS="$REPO_ROOT/.DerivedData-mac/Build/Products"
     APP_BUNDLE="$PRODUCTS/Debug/Moolah.app"
     TEST_BUNDLE="$APP_BUNDLE/Contents/PlugIns/MoolahTests_macOS.xctest"
 
