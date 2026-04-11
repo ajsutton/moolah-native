@@ -114,7 +114,7 @@ actor ExchangeRateService {
   }
 
   private func cacheFileURL(base: String) -> URL {
-    cacheDirectory.appendingPathComponent("\(base).json.gz")
+    cacheDirectory.appendingPathComponent("rates-\(base).json.gz")
   }
 
   private func loadCacheFromDisk(base: String) {
@@ -130,7 +130,7 @@ actor ExchangeRateService {
     guard let data = try? JSONEncoder().encode(cache) else { return }
     guard let compressed = compress(data) else { return }
     try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-    try? compressed.write(to: cacheFileURL(base: base))
+    try? compressed.write(to: cacheFileURL(base: base), options: .atomic)
   }
 
   private func compress(_ data: Data) -> Data? {
