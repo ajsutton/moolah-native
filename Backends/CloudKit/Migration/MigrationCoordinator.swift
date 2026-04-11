@@ -72,13 +72,12 @@ final class MigrationCoordinator {
       )
       let result: ImportResult
       do {
-        result = try await importer.importData(exported) { [weak self] progress in
+        result = try await importer.importData(exported) {
+          [weak self] (progress: CloudKitDataImporter.ImportProgress) in
           Task { @MainActor in
-            switch progress {
-            case .importing(let step, let current, let total):
+            if case .importing(let step, let current, let total) = progress {
               let pct = total > 0 ? Double(current) / Double(total) : 0
               self?.state = .importing(step: step, progress: pct)
-            default: break
             }
           }
         }
