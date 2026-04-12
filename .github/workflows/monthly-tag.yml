@@ -5,14 +5,12 @@ on:
     - cron: "0 9 1 * *"  # 9 AM UTC on the 1st of each month
   workflow_dispatch: {}    # Allow manual trigger
 
-permissions:
-  contents: read
-
 jobs:
-  monthly-build:
-    name: Trigger Monthly TestFlight Build
+  get-version:
+    name: Determine Version
     runs-on: ubuntu-latest
-
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -23,8 +21,10 @@ jobs:
           MONTH=$(date -u +%Y%m)
           echo "version=${VERSION}-monthly.${MONTH}" >> "$GITHUB_OUTPUT"
 
-      - name: Trigger TestFlight build
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run testflight.yml -f version="${{ steps.version.outputs.version }}"
+  testflight:
+    name: TestFlight
+    needs: get-version
+    uses: ./.github/workflows/testflight.yml
+    with:
+      version: ${{ needs.get-version.outputs.version }}
+    secrets: inherit
