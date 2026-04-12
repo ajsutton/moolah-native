@@ -827,17 +827,23 @@ struct TransactionStoreTests {
     #expect(updated?.id == scheduled.id)
     #expect(updated?.date == makeDate("2024-02-15"))
 
-    // Backend should also have the paid (non-scheduled) transaction
-    let allPage = try await backend.transactions.fetch(
+    // Backend should have the paid (non-scheduled) transaction
+    let paidPage = try await backend.transactions.fetch(
       filter: TransactionFilter(), page: 0, pageSize: 50)
-    #expect(allPage.transactions.count == 2)
+    #expect(paidPage.transactions.count == 1)
 
-    let paidTx = allPage.transactions.first { $0.id != scheduled.id }
+    let paidTx = paidPage.transactions.first
     #expect(paidTx != nil)
     #expect(paidTx?.recurPeriod == nil)
     #expect(paidTx?.recurEvery == nil)
     #expect(paidTx?.payee == "Rent")
     #expect(paidTx?.amount.cents == -200000)
+
+    // Backend should still have the scheduled transaction with advanced date
+    let scheduledPage = try await backend.transactions.fetch(
+      filter: TransactionFilter(scheduled: true), page: 0, pageSize: 50)
+    #expect(scheduledPage.transactions.count == 1)
+    #expect(scheduledPage.transactions[0].id == scheduled.id)
   }
 
   @Test func testPayRecurringWeeklyTransactionAdvancesByWeek() async throws {

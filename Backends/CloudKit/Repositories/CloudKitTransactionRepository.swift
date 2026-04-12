@@ -17,6 +17,10 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
 
   func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> TransactionPage {
     return try await MainActor.run {
+      // Match moolah-server: when scheduled is not explicitly requested, exclude scheduled
+      // transactions. The server always adds `AND recur_period IS NULL` unless scheduled=true.
+      let scheduled = filter.scheduled ?? false
+
       // --- Fetch records with predicate push-down ---
       let primaryRecords: [TransactionRecord]
       let secondaryRecords: [TransactionRecord]
@@ -27,14 +31,14 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         primaryRecords = try fetchRecords(
           accountId: filterAccountId,
           accountIdField: .primary,
-          scheduled: filter.scheduled,
+          scheduled: scheduled,
           dateRange: filter.dateRange,
           earmarkId: filter.earmarkId
         )
         secondaryRecords = try fetchRecords(
           accountId: filterAccountId,
           accountIdField: .toAccount,
-          scheduled: filter.scheduled,
+          scheduled: scheduled,
           dateRange: filter.dateRange,
           earmarkId: filter.earmarkId
         )
@@ -42,7 +46,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         primaryRecords = try fetchRecords(
           accountId: nil,
           accountIdField: .none,
-          scheduled: filter.scheduled,
+          scheduled: scheduled,
           dateRange: filter.dateRange,
           earmarkId: filter.earmarkId
         )
@@ -71,12 +75,10 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       // already filtered these, the in-memory pass is a no-op (nothing to remove).
       var filteredRecords = mergedRecords
 
-      if let scheduled = filter.scheduled {
-        if scheduled {
-          filteredRecords = filteredRecords.filter { $0.recurPeriod != nil }
-        } else {
-          filteredRecords = filteredRecords.filter { $0.recurPeriod == nil }
-        }
+      if scheduled {
+        filteredRecords = filteredRecords.filter { $0.recurPeriod != nil }
+      } else {
+        filteredRecords = filteredRecords.filter { $0.recurPeriod == nil }
       }
       if let dateRange = filter.dateRange {
         let start = dateRange.lowerBound

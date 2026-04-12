@@ -149,9 +149,10 @@ struct TransactionRepositoryContractTests {
     #expect(result.recurPeriod == .month)
     #expect(result.recurEvery == 2)
 
-    // Verify persistence by fetching back from repository
+    // Verify persistence by fetching back from repository (scheduled filter needed since
+    // the transaction has recurPeriod set, and the default filter excludes scheduled)
     let page = try await repository.fetch(
-      filter: TransactionFilter(),
+      filter: TransactionFilter(scheduled: true),
       page: 0,
       pageSize: 50
     )
