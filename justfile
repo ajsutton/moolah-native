@@ -47,6 +47,19 @@ run-mac: generate
     xcodebuild build "${args[@]}"
     open .build/Build/Products/Debug/Moolah.app
 
+# Build a Release macOS app and install to /Applications
+install-mac: generate
+    #!/usr/bin/env bash
+    set -euo pipefail
+    xcodebuild build \
+        -scheme Moolah-macOS \
+        -destination 'platform=macOS' \
+        -configuration Release \
+        -derivedDataPath .build
+    rm -rf /Applications/Moolah.app
+    cp -R .build/Build/Products/Release/Moolah.app /Applications/Moolah.app
+    echo "Installed Moolah.app to /Applications"
+
 # Build the app for the iOS Simulator
 build-ios: generate
     #!/usr/bin/env bash
@@ -76,6 +89,9 @@ generate:
 # Sync code signing certificates (runs Match)
 certificates:
     bundle exec fastlane ios certificates
+
+# Build and install macOS app, then upload iOS app to TestFlight
+test-release: install-mac testflight
 
 # Build and upload to TestFlight
 testflight: generate
