@@ -36,16 +36,6 @@ jobs:
         run: |
           sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: \"$APP_VERSION\"/" project.yml
 
-      - name: Verify secrets
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
-          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
-        run: |
-          echo "ASC_KEY_ID length: ${#ASC_KEY_ID}"
-          echo "ASC_KEY_CONTENT length: ${#ASC_KEY_CONTENT}"
-          echo "DEVELOPMENT_TEAM length: ${#DEVELOPMENT_TEAM}"
-
       - name: Deploy to TestFlight
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}

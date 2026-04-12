@@ -446,14 +446,16 @@ These steps must be done in the Apple Developer portal.
 - [x] **4.4.1 — Verify fork PR settings:** Fork PR workflows are disabled entirely
 - [x] **4.4.2 — Pin third-party actions to SHA** in release workflows for supply chain protection
 - [x] **4.4.3 — Create a fine-grained PAT** `moolah-match-certificates`, scoped to certificates repo, Contents: Read-only, expires 2027-04-12
+- [x] **4.4.4 — Clean up misplaced secrets** — removed all Actions secrets from `moolah-certificates` repo
+- [x] **4.4.5 — Remove debug step** — removed "Verify secrets" diagnostic step from `testflight.yml`
 
 ---
 
 ## Phase 5: First TestFlight Build
 
-- [ ] **5.1 — Push a version tag:** `git tag v1.0.0 && git push origin v1.0.0`
-- [ ] **5.2 — Approve the environment deployment** in GitHub Actions when prompted
-- [ ] **5.3 — Verify the TestFlight build** appears in App Store Connect / TestFlight app
+- [x] **5.1 — Push a version tag:** `v1.0.0` — triggered TestFlight workflow
+- [x] **5.2 — Environment deployment** — no approval needed (all branches/tags policy)
+- [x] **5.3 — TestFlight build uploaded** — build succeeded and was uploaded to App Store Connect
 - [ ] **5.4 — Install on devices** via TestFlight app and verify:
   - Only iCloud profile creation is available (remote backend hidden)
   - iCloud sync works across devices
