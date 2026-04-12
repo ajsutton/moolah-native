@@ -42,9 +42,12 @@ jobs:
       - name: Set version
         run: |
           if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
+            # Extract base semver (e.g., 1.0.0 from 1.0.0-monthly.202604)
+            VERSION=$(echo "${{ inputs.version }}" | sed 's/-.*//')
           else
             VERSION=${GITHUB_REF_NAME#v}
+            # Also strip any suffix from tag (e.g., v1.0.0-rc1 → 1.0.0)
+            VERSION=$(echo "$VERSION" | sed 's/-.*//')
           fi
           echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
 
