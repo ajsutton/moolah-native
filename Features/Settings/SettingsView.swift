@@ -43,27 +43,27 @@ struct SettingsView: View {
   // MARK: - macOS: HSplitView layout
 
   #if os(macOS)
-    private var macOSLayout: some View {
-      Group {
-        if profileStore.profiles.isEmpty {
-          emptyState
-        } else {
-          HSplitView {
-            profileList
-              .frame(minWidth: 180, idealWidth: 220, maxWidth: 280)
+    private var cryptoPriceServiceForSettings: CryptoPriceService {
+      if let session = sessionManager.sessions.values.first {
+        return session.cryptoPriceService
+      }
+      return CryptoPriceService(
+        clients: [CryptoCompareClient(), BinanceClient()],
+        tokenRepository: ICloudTokenRepository(),
+        resolutionClient: CompositeTokenResolutionClient()
+      )
+    }
 
-            detailPane
-              .frame(minWidth: 300, idealWidth: 400)
-          }
-          .onAppear {
-            if selectedProfileID == nil {
-              selectedProfileID =
-                profileStore.activeProfileID ?? profileStore.profiles.first?.id
-            }
-          }
+    private var macOSLayout: some View {
+      TabView {
+        Tab("Profiles", systemImage: "person.2") {
+          profilesContent
+        }
+        Tab("Crypto", systemImage: "bitcoinsign.circle") {
+          CryptoSettingsView(cryptoPriceService: cryptoPriceServiceForSettings)
         }
       }
-      .frame(minWidth: 500, minHeight: 300)
+      .frame(minWidth: 600, minHeight: 400)
       .sheet(isPresented: $showAddProfile) {
         ProfileFormView()
           .environment(profileStore)
@@ -95,6 +95,27 @@ struct SettingsView: View {
       }
     }
 
+    private var profilesContent: some View {
+      Group {
+        if profileStore.profiles.isEmpty {
+          emptyState
+        } else {
+          HSplitView {
+            profileList
+              .frame(minWidth: 180, idealWidth: 220, maxWidth: 280)
+            detailPane
+              .frame(minWidth: 300, idealWidth: 400)
+          }
+          .onAppear {
+            if selectedProfileID == nil {
+              selectedProfileID =
+                profileStore.activeProfileID ?? profileStore.profiles.first?.id
+            }
+          }
+        }
+      }
+    }
+
     private var emptyState: some View {
       ContentUnavailableView {
         Label("No Profiles", systemImage: "person.crop.circle.badge.plus")
@@ -112,6 +133,17 @@ struct SettingsView: View {
   // MARK: - iOS: NavigationStack layout
 
   #if os(iOS)
+    private var cryptoPriceServiceForSettings: CryptoPriceService {
+      if let session = activeSession {
+        return session.cryptoPriceService
+      }
+      return CryptoPriceService(
+        clients: [CryptoCompareClient(), BinanceClient()],
+        tokenRepository: ICloudTokenRepository(),
+        resolutionClient: CompositeTokenResolutionClient()
+      )
+    }
+
     private var iOSLayout: some View {
       List {
         Section("Profiles") {
@@ -154,6 +186,14 @@ struct SettingsView: View {
             showImportPicker = true
           } label: {
             Label("Import Profile", systemImage: "square.and.arrow.down")
+          }
+        }
+
+        Section {
+          NavigationLink {
+            CryptoSettingsView(cryptoPriceService: cryptoPriceServiceForSettings)
+          } label: {
+            Label("Crypto Tokens", systemImage: "bitcoinsign.circle")
           }
         }
       }
