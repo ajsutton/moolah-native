@@ -307,16 +307,22 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         }
 
       case .transfer:
+        // Compute profit contribution matching server: +amount for from_investment,
+        // -amount for to_investment. Route positive to earmarkedIncome (pool growth),
+        // negative to earmarkedExpense (pool shrinkage). This handles positive-amount
+        // transfers (e.g. dividend reinvestments) correctly.
+        var profitContribution = 0
         if isFromInvestment && !isToInvestment {
-          monthlyData[month]!.earmarkedExpense += MonetaryAmount(
-            cents: abs(txn.amount.cents),
-            currency: txn.amount.currency
-          )
+          profitContribution = txn.amount.cents
         } else if !isFromInvestment && isToInvestment {
+          profitContribution = -txn.amount.cents
+        }
+        if profitContribution > 0 {
           monthlyData[month]!.earmarkedIncome += MonetaryAmount(
-            cents: abs(txn.amount.cents),
-            currency: txn.amount.currency
-          )
+            cents: profitContribution, currency: txn.amount.currency)
+        } else if profitContribution < 0 {
+          monthlyData[month]!.earmarkedExpense += MonetaryAmount(
+            cents: -profitContribution, currency: txn.amount.currency)
         }
       }
     }
@@ -572,16 +578,22 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         }
 
       case .transfer:
+        // Compute profit contribution matching server: +amount for from_investment,
+        // -amount for to_investment. Route positive to earmarkedIncome (pool growth),
+        // negative to earmarkedExpense (pool shrinkage). This handles positive-amount
+        // transfers (e.g. dividend reinvestments) correctly.
+        var profitContribution = 0
         if isFromInvestment && !isToInvestment {
-          monthlyData[month]!.earmarkedExpense += MonetaryAmount(
-            cents: abs(txn.amount.cents),
-            currency: txn.amount.currency
-          )
+          profitContribution = txn.amount.cents
         } else if !isFromInvestment && isToInvestment {
+          profitContribution = -txn.amount.cents
+        }
+        if profitContribution > 0 {
           monthlyData[month]!.earmarkedIncome += MonetaryAmount(
-            cents: abs(txn.amount.cents),
-            currency: txn.amount.currency
-          )
+            cents: profitContribution, currency: txn.amount.currency)
+        } else if profitContribution < 0 {
+          monthlyData[month]!.earmarkedExpense += MonetaryAmount(
+            cents: -profitContribution, currency: txn.amount.currency)
         }
       }
     }
@@ -623,16 +635,15 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       }
 
     case .transfer:
-      // Transfer: amount is always from the perspective of accountId (negative = money leaving)
-      // Use abs to work with unsigned magnitudes regardless of amount sign.
-      let transferMagnitude = MonetaryAmount(
-        cents: abs(txn.amount.cents), currency: txn.amount.currency)
+      // Match server: investments += amount for from_investment, -= amount for to_investment.
+      // Balance gets the opposite. Use signed amounts, not abs(), so positive-amount
+      // transfers (e.g. dividend reinvestments) are handled correctly.
       if isFromInvestment && !isToInvestment {
-        balance += transferMagnitude
-        investments -= transferMagnitude
+        balance -= txn.amount
+        investments += txn.amount
       } else if !isFromInvestment && isToInvestment {
-        balance -= transferMagnitude
-        investments += transferMagnitude
+        balance += txn.amount
+        investments -= txn.amount
       }
     }
   }

@@ -1053,6 +1053,141 @@ struct AnalysisRepositoryContractTests {
     }
   }
 
+  // MARK: - Positive-Amount Transfer Tests
+
+  @Test("daily balances handle positive-amount transfer from investment correctly")
+  func positiveAmountTransferFromInvestment() async throws {
+    let backend = CloudKitAnalysisTestBackend()
+    let checking = Account(
+      id: UUID(), name: "Checking", type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency))
+    _ = try await backend.accounts.create(checking)
+
+    let investment = Account(
+      id: UUID(), name: "Trust Shares", type: .investment,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency))
+    _ = try await backend.accounts.create(investment)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    // Normal deposit: checking → investment, negative amount
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .transfer, date: today,
+        accountId: checking.id, toAccountId: investment.id,
+        amount: MonetaryAmount(cents: -1000, currency: .defaultTestCurrency)))
+
+    // Positive-amount transfer from investment (e.g. dividend reinvestment)
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .transfer, date: today,
+        accountId: investment.id, toAccountId: checking.id,
+        amount: MonetaryAmount(cents: 5000, currency: .defaultTestCurrency)))
+
+    let balances = try await backend.analysis.fetchDailyBalances(after: nil, forecastUntil: nil)
+    let todayBalance = balances.last!
+
+    // investments = -1000 (to_inv) + 5000 (from_inv positive) = net contribution of +1000 deposit + 5000 gain
+    // Deposit: investments -= (-1000) = +1000
+    // Positive from_inv: investments += 5000
+    // Total investments = 6000
+    #expect(todayBalance.investments.cents == 6000)
+
+    // balance is the opposite: +(-1000) for deposit + -(5000) for from_inv
+    // Deposit: balance += (-1000) = -1000
+    // Positive from_inv: balance -= 5000 = -6000
+    // Plus no other income, so balance = -6000
+    #expect(todayBalance.balance.cents == -6000)
+  }
+
+  @Test("income/expense handles positive-amount transfer from investment correctly")
+  func positiveAmountTransferIncomeExpense() async throws {
+    let backend = CloudKitAnalysisTestBackend()
+    let checking = Account(
+      id: UUID(), name: "Checking", type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency))
+    _ = try await backend.accounts.create(checking)
+
+    let investment = Account(
+      id: UUID(), name: "Trust Shares", type: .investment,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency))
+    _ = try await backend.accounts.create(investment)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    // Positive-amount transfer from investment (e.g. dividend reinvestment credited)
+    // accountId=investment, amount=+5000 means investment gained value
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .transfer, date: today,
+        accountId: investment.id, toAccountId: checking.id,
+        amount: MonetaryAmount(cents: 5000, currency: .defaultTestCurrency)))
+
+    let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
+    #expect(!data.isEmpty)
+    let month = data[0]
+
+    // Positive amount from investment: profit contribution = +5000
+    // Positive → earmarkedIncome (investment pool growth)
+    #expect(month.earmarkedIncome.cents == 5000)
+    #expect(month.earmarkedExpense.cents == 0)
+    #expect(month.earmarkedProfit.cents == 5000)
+  }
+
+  @Test("income/expense earmarkedProfit matches server formula for mixed transfers")
+  func earmarkedProfitMatchesServer() async throws {
+    let backend = CloudKitAnalysisTestBackend()
+    let checking = Account(
+      id: UUID(), name: "Checking", type: .bank,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency))
+    _ = try await backend.accounts.create(checking)
+
+    let investment = Account(
+      id: UUID(), name: "Shares", type: .investment,
+      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency))
+    _ = try await backend.accounts.create(investment)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    // Deposit to investment: checking→investment, amount=-1000
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .transfer, date: today,
+        accountId: checking.id, toAccountId: investment.id,
+        amount: MonetaryAmount(cents: -1000, currency: .defaultTestCurrency)))
+
+    // Withdrawal from investment: investment→checking, amount=-500
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .transfer, date: today,
+        accountId: investment.id, toAccountId: checking.id,
+        amount: MonetaryAmount(cents: -500, currency: .defaultTestCurrency)))
+
+    // Positive-amount from investment (dividend reinvestment): investment→checking, amount=+3000
+    _ = try await backend.transactions.create(
+      Transaction(
+        type: .transfer, date: today,
+        accountId: investment.id, toAccountId: checking.id,
+        amount: MonetaryAmount(cents: 3000, currency: .defaultTestCurrency)))
+
+    let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
+    let month = data[0]
+
+    // Server earmarkedProfit formula: sum(amount when from_inv) + sum(-amount when to_inv)
+    // = (-500 + 3000) + -(-1000) = 2500 + 1000 = 3500
+    #expect(month.earmarkedProfit.cents == 3500)
+
+    // Breakdown:
+    // Deposit (to_inv, -1000): profitContribution = +1000 → earmarkedIncome
+    // Withdrawal (from_inv, -500): profitContribution = -500 → earmarkedExpense
+    // Dividend (from_inv, +3000): profitContribution = +3000 → earmarkedIncome
+    #expect(month.earmarkedIncome.cents == 4000)  // 1000 + 3000
+    #expect(month.earmarkedExpense.cents == 500)  // 500
+
+    // Verify invariant: earmarkedProfit = earmarkedIncome - earmarkedExpense
+    #expect(month.earmarkedProfit == month.earmarkedIncome - month.earmarkedExpense)
+  }
+
   // MARK: - Investment Value Tests
 
   @Test("fetchDailyBalances computes investmentValue from investment values")
