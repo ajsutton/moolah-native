@@ -23,6 +23,7 @@ build/
 # Worktrees
 .worktrees/
 .claude/worktrees/
+.claude/scheduled_tasks.lock
 
 # Fastlane
 fastlane/report.xml
