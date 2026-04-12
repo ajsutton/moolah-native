@@ -4,6 +4,8 @@
 
 **Goal:** Enable accounts to hold positions in multiple fiat currencies, with converted totals in the sidebar and a currency conversion transaction flow.
 
+**Completed:** `cd3ed3b` on `feature/multi-instrument` — 608 tests passing on macOS.
+
 **Architecture:** Introduce `InstrumentConversionService` protocol wrapping the existing `ExchangeRateService` for fiat-to-fiat conversion. Add `Position` type computed from leg aggregation per (account, instrument). `AccountStore` gains async conversion for sidebar totals. `TransactionDraft` and `TransactionFormView` support two-amount transfers when accounts use different currencies.
 
 **Tech Stack:** Swift 6, SwiftUI, SwiftData, CloudKit, Swift Testing
