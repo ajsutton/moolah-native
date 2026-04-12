@@ -81,6 +81,32 @@ struct CoinGeckoClient: CryptoPriceClient, Sendable {
     return components.url!
   }
 
+  // MARK: - Token resolution
+
+  static func assetPlatformsURL(apiKey: String) -> URL {
+    var components = URLComponents(
+      url: baseURL.appendingPathComponent("asset_platforms"),
+      resolvingAgainstBaseURL: false
+    )!
+    components.queryItems = [
+      URLQueryItem(name: "x_cg_pro_api_key", value: apiKey)
+    ]
+    return components.url!
+  }
+
+  static func contractLookupURL(platformId: String, contractAddress: String, apiKey: String) -> URL
+  {
+    var components = URLComponents(
+      url: baseURL.appendingPathComponent(
+        "coins/\(platformId)/contract/\(contractAddress.lowercased())"),
+      resolvingAgainstBaseURL: false
+    )!
+    components.queryItems = [
+      URLQueryItem(name: "x_cg_pro_api_key", value: apiKey)
+    ]
+    return components.url!
+  }
+
   static func simplePriceURL(coinIds: [String], apiKey: String) -> URL {
     var components = URLComponents(
       url: baseURL.appendingPathComponent("simple/price"),
@@ -121,6 +147,34 @@ struct CoinGeckoClient: CryptoPriceClient, Sendable {
     return result
   }
 
+  /// Parses the asset platforms response into a chain ID → platform slug mapping.
+  static func parseAssetPlatformsResponse(_ data: Data) throws -> [Int: String] {
+    let platforms = try JSONDecoder().decode([AssetPlatform].self, from: data)
+    var mapping: [Int: String] = [:]
+    for platform in platforms {
+      if let chainId = platform.chain_identifier {
+        mapping[chainId] = platform.id
+      }
+    }
+    return mapping
+  }
+
+  struct ContractLookupResult: Sendable {
+    let id: String
+    let symbol: String
+    let name: String
+    let decimals: Int?
+  }
+
+  /// Parses the contract lookup response to extract token details.
+  static func parseContractLookupResponse(_ data: Data) throws -> ContractLookupResult {
+    let raw = try JSONDecoder().decode(ContractLookupRaw.self, from: data)
+    let decimals = raw.detail_platforms?.values.first?.decimal_place
+    return ContractLookupResult(
+      id: raw.id, symbol: raw.symbol, name: raw.name, decimals: decimals
+    )
+  }
+
   private static func dateString(from date: Date) -> String {
     let f = ISO8601DateFormatter()
     f.formatOptions = [.withFullDate]
@@ -130,4 +184,22 @@ struct CoinGeckoClient: CryptoPriceClient, Sendable {
 
 private struct MarketChartResponse: Decodable {
   let prices: [[Decimal]]
+}
+
+private struct AssetPlatform: Decodable {
+  let id: String
+  let chain_identifier: Int?
+  let name: String
+}
+
+private struct ContractLookupRaw: Decodable {
+  let id: String
+  let symbol: String
+  let name: String
+  let detail_platforms: [String: DetailPlatform]?
+}
+
+private struct DetailPlatform: Decodable {
+  let decimal_place: Int?
+  let contract_address: String?
 }
