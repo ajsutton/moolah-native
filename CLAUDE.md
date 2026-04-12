@@ -29,6 +29,9 @@ just generate
 When running tests, **always pipe output to a file** in `.agent-tmp/` so you can inspect failures without re-running:
 
 ```bash
+# Ensure the directory exists first
+mkdir -p .agent-tmp
+
 # Run tests and capture output
 just test 2>&1 | tee .agent-tmp/test-output.txt
 
