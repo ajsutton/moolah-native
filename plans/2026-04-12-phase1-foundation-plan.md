@@ -4,6 +4,8 @@
 
 **Goal:** Replace the core financial model (MonetaryAmount/Currency/single-amount transactions) with the unified Instrument/InstrumentAmount/transaction-legs model, keeping all existing functionality working.
 
+**Completed:** `00eb0df` on `feature/multi-instrument` — 589 tests passing on macOS.
+
 **Architecture:** Introduce `Instrument` (fiat only in this phase), `InstrumentAmount` (Decimal-based replacement for MonetaryAmount), and `TransactionLeg` as the unit of financial movement. Transactions become metadata + ordered legs. A new CloudKit container with a leg-based schema replaces the current one. Migration from moolah-server converts legacy transfers into two-leg transactions.
 
 **Tech Stack:** Swift 6, SwiftUI, SwiftData, CloudKit, Swift Testing
