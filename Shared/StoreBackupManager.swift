@@ -61,11 +61,16 @@
         return
       }
 
-      let storeFiles = files.filter { $0.hasSuffix(".store") }.sorted().reversed()
+      // Only count .store files (not -shm or -wal) for retention
+      let storeFiles = files.filter { $0.hasSuffix(".store") }
+        .sorted().reversed()
       let toDelete = Array(storeFiles.dropFirst(retentionDays))
       for filename in toDelete {
-        let fileURL = profileDir.appending(path: filename)
-        try? fileManager.removeItem(at: fileURL)
+        // Remove the .store file and its WAL companions
+        for suffix in ["", "-shm", "-wal"] {
+          let fileURL = profileDir.appending(path: filename + suffix)
+          try? fileManager.removeItem(at: fileURL)
+        }
         logger.debug("Pruned old backup: \(filename)")
       }
     }
