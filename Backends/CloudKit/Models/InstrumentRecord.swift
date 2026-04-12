@@ -3,7 +3,6 @@ import SwiftData
 
 @Model
 final class InstrumentRecord {
-  @Attribute(.unique)
   var id: String = ""
   var kind: String = "fiatCurrency"
   var name: String = ""
