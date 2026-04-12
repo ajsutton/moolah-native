@@ -1,6 +1,8 @@
 import Foundation
+import Observation
 import SwiftData
 
+@Observable
 @MainActor
 final class ProfileContainerManager {
   let indexContainer: ModelContainer
