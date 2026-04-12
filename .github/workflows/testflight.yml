@@ -36,12 +36,15 @@ jobs:
         run: |
           sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: \"$APP_VERSION\"/" project.yml
 
-      - name: Verify API key
+      - name: Verify secrets
         env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
         run: |
-          echo "Key length: ${#ASC_KEY_CONTENT}"
-          ruby -e "require 'openssl'; require 'base64'; key = Base64.decode64(ENV['ASC_KEY_CONTENT']); puts 'Curve: ' + OpenSSL::PKey::EC.new(key).group.curve_name"
+          echo "ASC_KEY_ID length: ${#ASC_KEY_ID}"
+          echo "ASC_KEY_CONTENT length: ${#ASC_KEY_CONTENT}"
+          echo "DEVELOPMENT_TEAM length: ${#DEVELOPMENT_TEAM}"
 
       - name: Deploy to TestFlight
         env:
