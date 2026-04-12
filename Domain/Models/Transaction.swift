@@ -142,6 +142,13 @@ struct TransactionFilter: Sendable, Equatable {
   }
 }
 
+extension TransactionFilter {
+  var hasActiveFilters: Bool {
+    accountId != nil || earmarkId != nil || scheduled != nil
+      || dateRange != nil || categoryIds != nil || payee != nil
+  }
+}
+
 /// A page of transactions returned from the repository, including the account
 /// balance prior to the earliest transaction in this page.
 struct TransactionPage: Sendable {

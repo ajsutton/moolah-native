@@ -48,6 +48,23 @@ final class TransactionStore {
     await fetchPage()
   }
 
+  /// Creates a default transaction with sensible defaults (expense, zero amount, today's date).
+  /// Uses `accountId` if non-nil, otherwise falls back to `fallbackAccountId`.
+  func createDefault(
+    accountId: UUID?,
+    fallbackAccountId: UUID?,
+    currency: Currency
+  ) async -> Transaction? {
+    let tx = Transaction(
+      type: .expense,
+      date: Date(),
+      accountId: accountId ?? fallbackAccountId,
+      amount: MonetaryAmount(cents: 0, currency: currency),
+      payee: ""
+    )
+    return await create(tx)
+  }
+
   func create(_ transaction: Transaction) async -> Transaction? {
     // Optimistic: insert into local state
     let snapshot = rawTransactions

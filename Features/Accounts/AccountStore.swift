@@ -56,10 +56,13 @@ final class AccountStore {
     ) { $0 + $1.displayBalance }
   }
 
-  /// Total of current accounts minus the total of all positive earmarked funds.
-  /// Negative earmarked values are skipped in the sum.
-  var availableFunds: MonetaryAmount {
-    return currentTotal
+  /// Total of current accounts minus the total of all positive, visible earmarked funds.
+  /// Hidden earmarks and those with negative balances are excluded from the sum.
+  func availableFunds(earmarks: Earmarks) -> MonetaryAmount {
+    let earmarked = earmarks.ordered
+      .filter { !$0.isHidden && $0.balance.isPositive }
+      .reduce(MonetaryAmount.zero(currency: currentTotal.currency)) { $0 + $1.balance }
+    return currentTotal - earmarked
   }
 
   var netWorth: MonetaryAmount {

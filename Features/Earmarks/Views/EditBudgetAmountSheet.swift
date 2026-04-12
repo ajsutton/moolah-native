@@ -50,7 +50,7 @@ struct EditBudgetAmountSheet: View {
   }
 
   private func save() {
-    let cents = MonetaryAmount.parseCents(from: amountText)
+    guard let cents = MonetaryAmount.parseCents(from: amountText) else { return }
     let amount = MonetaryAmount(cents: cents, currency: lineItem.budgeted.currency)
     Task {
       await earmarkStore.updateBudgetItem(

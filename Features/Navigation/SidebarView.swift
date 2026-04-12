@@ -214,12 +214,8 @@ struct SidebarView: View {
     }
   }
 
-  /// Current account total minus the sum of positive earmark balances.
   private var availableFunds: MonetaryAmount {
-    let earmarked = earmarkStore.visibleEarmarks
-      .filter { $0.balance.isPositive }
-      .reduce(MonetaryAmount.zero(currency: accountStore.currentTotal.currency)) { $0 + $1.balance }
-    return accountStore.currentTotal - earmarked
+    accountStore.availableFunds(earmarks: earmarkStore.earmarks)
   }
 
   private func totalRow(label: String, value: MonetaryAmount) -> some View {
@@ -241,87 +237,6 @@ struct SidebarView: View {
     accounts.move(fromOffsets: source, toOffset: destination)
     await accountStore.reorderAccounts(
       accounts, positionOffset: accountStore.currentAccounts.count)
-  }
-}
-
-private struct CreateEarmarkSheet: View {
-  let currency: Currency
-  let onCreate: (Earmark) -> Void
-
-  @State private var name: String = ""
-  @State private var savingsGoal: String = ""
-  @State private var startDate: Date = Date()
-  @State private var endDate: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date())!
-  @State private var useDateRange: Bool = false
-  @Environment(\.dismiss) private var dismiss
-
-  var body: some View {
-    NavigationStack {
-      Form {
-        Section("Details") {
-          TextField("Name", text: $name)
-        }
-
-        Section("Savings Goal") {
-          HStack {
-            Text(currency.code)
-              .foregroundStyle(.secondary)
-            TextField("Amount", text: $savingsGoal)
-              #if os(iOS)
-                .keyboardType(.decimalPad)
-              #endif
-          }
-
-          Toggle("Set Date Range", isOn: $useDateRange)
-
-          if useDateRange {
-            DatePicker("Start Date", selection: $startDate, displayedComponents: .date)
-            DatePicker("End Date", selection: $endDate, displayedComponents: .date)
-          }
-        }
-      }
-      .formStyle(.grouped)
-      .navigationTitle("New Earmark")
-      #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-      #endif
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") {
-            dismiss()
-          }
-        }
-
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Create") {
-            createEarmark()
-          }
-          .disabled(name.isEmpty)
-        }
-      }
-    }
-  }
-
-  private func createEarmark() {
-    let goalCents = parseCurrency(savingsGoal)
-    let goal =
-      goalCents > 0 ? MonetaryAmount(cents: goalCents, currency: currency) : nil
-
-    let newEarmark = Earmark(
-      name: name,
-      savingsGoal: goal,
-      savingsStartDate: useDateRange ? startDate : nil,
-      savingsEndDate: useDateRange ? endDate : nil
-    )
-    onCreate(newEarmark)
-  }
-
-  private func parseCurrency(_ text: String) -> Int {
-    let cleaned = text.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
-    if let decimal = Decimal(string: cleaned) {
-      return Int(truncating: (decimal * 100) as NSNumber)
-    }
-    return 0
   }
 }
 
