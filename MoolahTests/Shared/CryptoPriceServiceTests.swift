@@ -195,6 +195,22 @@ struct CryptoPriceServiceTests {
 
   // MARK: - Prefetch
 
+  @Test func prefetchLatest_usesRegisteredTokensWhenNoneProvided() async throws {
+    let repo = InMemoryTokenRepository()
+    try await repo.saveTokens([eth, btc])
+
+    let service = makeService(
+      prices: [
+        "1:native": ["2026-04-11": Decimal(string: "1640.00")!],
+        "0:native": ["2026-04-11": Decimal(string: "67890.00")!],
+      ],
+      tokenRepository: repo
+    )
+    await service.prefetchLatest()
+    let ethPrice = try await service.price(for: eth, on: date("2026-04-11"))
+    #expect(ethPrice == Decimal(string: "1640.00")!)
+  }
+
   @Test func prefetchUpdatesCacheForRegisteredTokens() async throws {
     let service = makeService(prices: [
       "1:native": ["2026-04-11": Decimal(string: "1640.00")!],

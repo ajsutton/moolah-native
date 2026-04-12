@@ -181,6 +181,13 @@ actor CryptoPriceService {
 
   // MARK: - Prefetch
 
+  /// Prefetch latest prices for all registered tokens.
+  func prefetchLatest() async {
+    let tokens = await registeredTokens()
+    guard !tokens.isEmpty else { return }
+    await prefetchLatest(for: tokens)
+  }
+
   func prefetchLatest(for tokens: [CryptoToken]) async {
     do {
       let prices = try await currentPrices(for: tokens)
