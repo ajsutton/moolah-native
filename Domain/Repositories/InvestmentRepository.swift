@@ -15,8 +15,8 @@ protocol InvestmentRepository: Sendable {
   /// - Parameters:
   ///   - accountId: The investment account
   ///   - date: The valuation date
-  ///   - value: The monetary value in cents
-  func setValue(accountId: UUID, date: Date, value: MonetaryAmount) async throws
+  ///   - value: The investment value
+  func setValue(accountId: UUID, date: Date, value: InstrumentAmount) async throws
 
   /// Remove the investment value for an account on a specific date.
   /// - Parameters:

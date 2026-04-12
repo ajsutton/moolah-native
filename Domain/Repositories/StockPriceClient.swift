@@ -3,7 +3,7 @@ import Foundation
 
 /// Response from a stock price data source.
 struct StockPriceResponse: Sendable {
-  let currency: Currency
+  let instrument: Instrument
   let prices: [String: Decimal]  // date string -> adjusted close price
 }
 

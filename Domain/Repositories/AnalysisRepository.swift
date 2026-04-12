@@ -47,13 +47,13 @@ protocol AnalysisRepository: Sendable {
   ///   - dateRange: Date range to analyze (inclusive on both ends).
   ///   - transactionType: Filter to 'income' or 'expense' transactions.
   ///   - filters: Optional additional filters (account, earmark, payee, etc.).
-  /// - Returns: Dictionary where keys are category UUIDs and values are total MonetaryAmounts.
+  /// - Returns: Dictionary where keys are category UUIDs and values are total InstrumentAmounts.
   /// - Throws: BackendError on network/auth failure.
   func fetchCategoryBalances(
     dateRange: ClosedRange<Date>,
     transactionType: TransactionType,
     filters: TransactionFilter?
-  ) async throws -> [UUID: MonetaryAmount]
+  ) async throws -> [UUID: InstrumentAmount]
 
   /// Fetch category balances for both income and expense in a single pass.
   ///
