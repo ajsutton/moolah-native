@@ -94,7 +94,11 @@ struct ServerDataExporterTests {
     )
 
     let progressSteps = ProgressTracker()
-    let data = try await exporter.export { progress in
+    let data = try await exporter.export(
+      profileLabel: "Test",
+      currencyCode: Currency.defaultTestCurrency.code,
+      financialYearStartMonth: 7
+    ) { progress in
       if case .downloading(let step) = progress {
         progressSteps.record(step)
       }
@@ -124,7 +128,11 @@ struct ServerDataExporterTests {
       investmentRepo: backend.investments
     )
 
-    let data = try await exporter.export { _ in }
+    let data = try await exporter.export(
+      profileLabel: "Test",
+      currencyCode: Currency.defaultTestCurrency.code,
+      financialYearStartMonth: 7
+    ) { _ in }
 
     let earmark = data.earmarks.first!
     let budgetItems = data.earmarkBudgets[earmark.id]
@@ -144,7 +152,11 @@ struct ServerDataExporterTests {
       investmentRepo: backend.investments
     )
 
-    let data = try await exporter.export { _ in }
+    let data = try await exporter.export(
+      profileLabel: "Test",
+      currencyCode: Currency.defaultTestCurrency.code,
+      financialYearStartMonth: 7
+    ) { _ in }
 
     let investmentAccount = data.accounts.first { $0.type == .investment }!
     let values = data.investmentValues[investmentAccount.id]
@@ -164,7 +176,11 @@ struct ServerDataExporterTests {
       investmentRepo: backend.investments
     )
 
-    let data = try await exporter.export { _ in }
+    let data = try await exporter.export(
+      profileLabel: "Test",
+      currencyCode: Currency.defaultTestCurrency.code,
+      financialYearStartMonth: 7
+    ) { _ in }
 
     #expect(data.accounts.isEmpty)
     #expect(data.categories.isEmpty)
@@ -184,7 +200,11 @@ struct ServerDataExporterTests {
       investmentRepo: backend.investments
     )
 
-    let data = try await exporter.export { _ in }
+    let data = try await exporter.export(
+      profileLabel: "Test",
+      currencyCode: Currency.defaultTestCurrency.code,
+      financialYearStartMonth: 7
+    ) { _ in }
 
     let scheduled = data.transactions.filter { $0.isScheduled }
     #expect(scheduled.count == 1)

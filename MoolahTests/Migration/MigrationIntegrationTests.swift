@@ -79,7 +79,11 @@ struct MigrationIntegrationTests {
       transactionRepo: backend.transactions,
       investmentRepo: backend.investments
     )
-    let exported = try await exporter.export { _ in }
+    let exported = try await exporter.export(
+      profileLabel: "Test",
+      currencyCode: currency.code,
+      financialYearStartMonth: 7
+    ) { _ in }
 
     // 2. Import
     let importer = CloudKitDataImporter(
@@ -143,7 +147,11 @@ struct MigrationIntegrationTests {
       transactionRepo: backend.transactions,
       investmentRepo: backend.investments
     )
-    let exported = try await exporter.export { _ in }
+    let exported = try await exporter.export(
+      profileLabel: "Test",
+      currencyCode: currency.code,
+      financialYearStartMonth: 7
+    ) { _ in }
 
     let importer = CloudKitDataImporter(
       modelContainer: container,
@@ -178,7 +186,11 @@ struct MigrationIntegrationTests {
       transactionRepo: backend.transactions,
       investmentRepo: backend.investments
     )
-    let exported = try await exporter.export { _ in }
+    let exported = try await exporter.export(
+      profileLabel: "Test",
+      currencyCode: currency.code,
+      financialYearStartMonth: 7
+    ) { _ in }
 
     let importer = CloudKitDataImporter(
       modelContainer: container,

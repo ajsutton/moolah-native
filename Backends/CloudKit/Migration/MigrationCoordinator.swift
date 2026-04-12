@@ -43,7 +43,11 @@ final class MigrationCoordinator {
         transactionRepo: backend.transactions,
         investmentRepo: backend.investments
       )
-      let exported = try await exporter.export { [weak self] progress in
+      let exported = try await exporter.export(
+        profileLabel: sourceProfile.label,
+        currencyCode: sourceProfile.currencyCode,
+        financialYearStartMonth: sourceProfile.financialYearStartMonth
+      ) { [weak self] progress in
         Task { @MainActor in
           switch progress {
           case .downloading(let step):

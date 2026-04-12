@@ -1,15 +1,5 @@
 import Foundation
 
-/// All data exported from a server-backed profile, ready for import into SwiftData.
-struct ExportedData: Sendable {
-  let accounts: [Account]
-  let categories: [Category]
-  let earmarks: [Earmark]
-  let earmarkBudgets: [UUID: [EarmarkBudgetItem]]
-  let transactions: [Transaction]
-  let investmentValues: [UUID: [InvestmentValue]]
-}
-
 /// Exports all data from repository protocols (works with any BackendProvider).
 actor ServerDataExporter {
   private let accountRepo: any AccountRepository
@@ -39,6 +29,9 @@ actor ServerDataExporter {
   }
 
   func export(
+    profileLabel: String,
+    currencyCode: String,
+    financialYearStartMonth: Int,
     progress: @escaping @Sendable (ExportProgress) -> Void
   ) async throws -> ExportedData {
     // 1. Accounts
@@ -94,6 +87,11 @@ actor ServerDataExporter {
     }
 
     let data = ExportedData(
+      version: 1,
+      exportedAt: Date(),
+      profileLabel: profileLabel,
+      currencyCode: currencyCode,
+      financialYearStartMonth: financialYearStartMonth,
       accounts: accounts,
       categories: categories,
       earmarks: earmarks,
