@@ -102,13 +102,11 @@ Tax summary and quarterly PAYG instalment estimates for Australian personal and 
 
 ---
 
-## Phase 8: Crypto Price Data
+## Phase 8: Crypto Price Data — Done
 
-Add cryptocurrency price fetching and caching, building on the exchange rate infrastructure patterns from Phase 4.
+Cryptocurrency price fetching, caching, and conversion using CryptoCompare, Binance, and CoinGecko (optional API key). Multi-provider fallback with gzip-compressed on-disk cache. Token registry persisted via NSUbiquitousKeyValueStore (iCloud sync). Token resolution pipeline resolves contract address + chain ID to provider-specific identifiers. PriceConversionService composes crypto prices with fiat exchange rates for end-to-end TOKEN → USD → profile currency conversion. Date-aware USDT/USD rate for Binance prices. Tabbed settings window on macOS (Mail.app style) with Profiles and Crypto tabs; iOS navigation row to crypto token management.
 
-**Why now:** Crypto holdings are already partially supported in the app. Price data lets them be valued in fiat on any date, completing investment tracking for crypto accounts.
-
-**Reference:** `crypto-price-data-design.md`
+**Reference:** `completed/crypto-price-data-design.md`, `completed/crypto-phase6-completion-design.md`
 
 ---
 
