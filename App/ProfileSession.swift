@@ -17,6 +17,8 @@ final class ProfileSession: Identifiable {
   let investmentStore: InvestmentStore
   let exchangeRateService: ExchangeRateService
   let stockPriceService: StockPriceService
+  let cryptoPriceService: CryptoPriceService
+  let priceConversionService: PriceConversionService
 
   nonisolated var id: UUID { profile.id }
 
@@ -58,6 +60,13 @@ final class ProfileSession: Identifiable {
     self.backend = backend
     self.exchangeRateService = ExchangeRateService(client: FrankfurterClient())
     self.stockPriceService = StockPriceService(client: YahooFinanceClient())
+    self.cryptoPriceService = CryptoPriceService(
+      clients: [CryptoCompareClient(), BinanceClient()]
+    )
+    self.priceConversionService = PriceConversionService(
+      cryptoPrices: self.cryptoPriceService,
+      exchangeRates: self.exchangeRateService
+    )
 
     self.authStore = AuthStore(backend: backend)
     self.accountStore = AccountStore(repository: backend.accounts)
