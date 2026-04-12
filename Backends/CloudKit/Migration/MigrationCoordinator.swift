@@ -168,12 +168,22 @@ final class MigrationCoordinator {
   ) async throws -> ImportResult {
     state = .importing(step: "reading file", progress: 0)
 
-    let jsonData = try Data(contentsOf: url)
+    let jsonData: Data
+    do {
+      jsonData = try Data(contentsOf: url)
+    } catch {
+      throw MigrationError.fileReadFailed(url, underlying: error)
+    }
+
     let exported: ExportedData
     do {
       exported = try JSONDecoder.exportDecoder.decode(ExportedData.self, from: jsonData)
     } catch {
       throw MigrationError.importFailed(underlying: error)
+    }
+
+    guard exported.version <= 1 else {
+      throw MigrationError.unsupportedVersion(exported.version)
     }
 
     state = .importing(step: "saving", progress: 0.3)

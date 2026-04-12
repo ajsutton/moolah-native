@@ -3,6 +3,8 @@ import Foundation
 enum MigrationError: Error, Sendable {
   case exportFailed(step: String, underlying: Error)
   case importFailed(underlying: Error)
+  case fileReadFailed(URL, underlying: Error)
+  case unsupportedVersion(Int)
   case verificationFailed(VerificationResult)
   case iCloudUnavailable
   case unexpected(Error)
@@ -15,6 +17,11 @@ extension MigrationError: LocalizedError {
       return "Failed to export \(step): \(Self.detailedDescription(underlying))"
     case .importFailed(let underlying):
       return "Failed to import data: \(Self.detailedDescription(underlying))"
+    case .fileReadFailed(let url, let underlying):
+      return "Failed to read \(url.lastPathComponent): \(Self.detailedDescription(underlying))"
+    case .unsupportedVersion(let version):
+      return
+        "This file uses format version \(version), which is not supported by this version of Moolah."
     case .verificationFailed:
       return "Data verification failed after import"
     case .iCloudUnavailable:
