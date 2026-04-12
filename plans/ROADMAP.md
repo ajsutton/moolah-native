@@ -57,7 +57,7 @@ Two features sharing infrastructure:
 
 Exchange rate fetching, caching, and conversion infrastructure using the Frankfurter API (free, no API key, 161 currencies). Includes gzip-compressed on-disk cache, fallback to most recent prior date on network failure, banker's rounding for conversions, and prefetch on profile load.
 
-**Note:** This covers the infrastructure only. Full multi-currency support (per-account currencies, multi-currency UI, aggregation) is not yet planned — TestFlight comes first.
+**Note:** This covers the infrastructure only. Full multi-currency support (per-account currencies, multi-currency UI, aggregation) is in Phase 6.
 
 **Reference:** `completed/exchange-rate-design.md`, `completed/exchange-rate-implementation-plan.md`
 
@@ -75,7 +75,24 @@ CloudKit compatibility required: removing `#Unique` constraints, adding default 
 
 ---
 
-## Phase 6: Crypto Price Data
+## Phase 6: Multi-Currency Support
+
+Full per-account currency support, building on the exchange rate infrastructure from Phase 4. Accounts can have a currency different from the profile's base currency, and all aggregation (totals, net worth, available funds) converts to the profile currency using ExchangeRateService.
+
+**Why now:** Phases 7 and 8 (crypto prices, stock import) are only useful if the app can aggregate values across currencies. The exchange rate infrastructure is already done — this phase wires it into the data layer and UI.
+
+**Scope:**
+- Per-account currency: currency picker in create/edit account, stored via existing `currencyCode` field in CloudKit
+- Fix CloudKitAccountRepository to use `record.currencyCode` instead of always using profile currency
+- Aggregation with conversion: AccountStore totals, net worth, available funds convert foreign accounts to profile currency
+- Analysis views: net worth graph and expense breakdown use date-appropriate rates
+- Transaction currency derived from account currency (no independent transaction currency picker)
+- Transfers between accounts of different currencies: prompt for exchange rate or use market rate
+- UI: show account currency badges, converted totals with rate disclosure
+
+---
+
+## Phase 7: Crypto Price Data
 
 Add cryptocurrency price fetching and caching, building on the exchange rate infrastructure patterns from Phase 4.
 
@@ -85,7 +102,7 @@ Add cryptocurrency price fetching and caching, building on the exchange rate inf
 
 ---
 
-## Phase 7: CSV Import (SelfWealth)
+## Phase 8: CSV Import (SelfWealth)
 
 Import Australian stock holdings and trade history from SelfWealth CSV exports. SelfWealth has no API, so CSV is the only reliable data path.
 
@@ -95,7 +112,7 @@ Import Australian stock holdings and trade history from SelfWealth CSV exports. 
 
 ---
 
-## Phase 8: App Store Readiness
+## Phase 9: App Store Readiness
 
 Prepare for Apple App Store Review submission.
 
