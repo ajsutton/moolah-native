@@ -4,6 +4,8 @@
 
 **Goal:** Enable investment accounts to hold stock positions with live market valuations, recorded via a dedicated trade transaction UI, and retire the manual `investmentValue` approach for accounts that adopt per-instrument position tracking.
 
+**Completed:** `7d3459c` on `feature/multi-instrument` — 641 tests passing on macOS.
+
 **Architecture:** Extend `Instrument` with a `.stock(ticker:exchange:name:)` factory. Wire `StockPriceService` into `InstrumentConversionService` so stock-to-fiat conversion routes through stock price lookup (getting the listing currency) then fiat-to-fiat if the listing currency differs from the target. Add a `TradeDraft` value type that produces multi-leg transactions (cash out, stock in, optional fee). Build `StockPositionsView` for the investment account detail showing per-instrument quantities with live market values. Add a `usesPositionTracking` flag on `Account` so the UI can switch between the legacy `investmentValue` panel and the new positions-based display.
 
 **Tech Stack:** Swift 6, SwiftUI, SwiftData, CloudKit, Swift Testing, Yahoo Finance API (via existing `YahooFinanceClient`)
