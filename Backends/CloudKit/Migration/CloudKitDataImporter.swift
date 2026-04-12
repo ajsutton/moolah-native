@@ -31,10 +31,16 @@ struct CloudKitDataImporter {
   }
 
   @discardableResult
-  func importData(_ data: ExportedData) throws -> ImportResult {
+  func importData(
+    _ data: ExportedData,
+    progress: ((String, Double) -> Void)? = nil
+  ) async throws -> ImportResult {
     let context = modelContainer.mainContext
+    let totalSteps = 7.0
+    var step = 0.0
 
     // 1. Categories (no dependencies)
+    progress?("categories", step / totalSteps)
     for category in data.categories {
       let record = CategoryRecord(
         id: category.id,
@@ -43,8 +49,11 @@ struct CloudKitDataImporter {
       )
       context.insert(record)
     }
+    step += 1
+    await Task.yield()
 
     // 2. Accounts (no dependencies)
+    progress?("accounts", step / totalSteps)
     for account in data.accounts {
       let record = AccountRecord(
         id: account.id,
@@ -56,8 +65,11 @@ struct CloudKitDataImporter {
       )
       context.insert(record)
     }
+    step += 1
+    await Task.yield()
 
     // 3. Earmarks (no dependencies)
+    progress?("earmarks", step / totalSteps)
     for earmark in data.earmarks {
       let record = EarmarkRecord(
         id: earmark.id,
@@ -71,8 +83,11 @@ struct CloudKitDataImporter {
       )
       context.insert(record)
     }
+    step += 1
+    await Task.yield()
 
     // 4. Earmark budget items
+    progress?("budget items", step / totalSteps)
     var budgetItemCount = 0
     for (earmarkId, items) in data.earmarkBudgets {
       for item in items {
@@ -87,8 +102,11 @@ struct CloudKitDataImporter {
         budgetItemCount += 1
       }
     }
+    step += 1
+    await Task.yield()
 
     // 5. Transactions
+    progress?("transactions", step / totalSteps)
     for txn in data.transactions {
       let record = TransactionRecord(
         id: txn.id,
@@ -107,8 +125,11 @@ struct CloudKitDataImporter {
       )
       context.insert(record)
     }
+    step += 1
+    await Task.yield()
 
     // 6. Investment values
+    progress?("investment values", step / totalSteps)
     var investmentValueCount = 0
     for (accountId, values) in data.investmentValues {
       for value in values {
@@ -123,8 +144,11 @@ struct CloudKitDataImporter {
         investmentValueCount += 1
       }
     }
+    step += 1
+    await Task.yield()
 
     // 7. Save all records atomically
+    progress?("saving", step / totalSteps)
     try context.save()
 
     logger.info(

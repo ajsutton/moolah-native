@@ -86,7 +86,7 @@ struct MigrationIntegrationTests {
       modelContainer: container,
       currencyCode: currency.code
     )
-    let result = try importer.importData(exported)
+    let result = try await importer.importData(exported)
 
     #expect(result.accountCount == exported.accounts.count)
     #expect(result.categoryCount == exported.categories.count)
@@ -149,7 +149,7 @@ struct MigrationIntegrationTests {
       modelContainer: container,
       currencyCode: currency.code
     )
-    _ = try importer.importData(exported)
+    _ = try await importer.importData(exported)
 
     // Read back and verify hierarchy
     let cloudBackend = CloudKitBackend(
@@ -184,7 +184,7 @@ struct MigrationIntegrationTests {
       modelContainer: container,
       currencyCode: currency.code
     )
-    _ = try importer.importData(exported)
+    _ = try await importer.importData(exported)
 
     // Read back and verify budgets
     let cloudBackend = CloudKitBackend(

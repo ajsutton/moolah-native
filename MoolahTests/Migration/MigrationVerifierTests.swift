@@ -39,7 +39,7 @@ struct MigrationVerifierTests {
       modelContainer: container,
       currencyCode: currency.code
     )
-    _ = try importer.importData(exported)
+    _ = try await importer.importData(exported)
 
     // Verify
     let verifier = MigrationVerifier()
@@ -139,7 +139,7 @@ struct MigrationVerifierTests {
       modelContainer: container,
       currencyCode: currency.code
     )
-    _ = try importer.importData(exported)
+    _ = try await importer.importData(exported)
 
     let verifier = MigrationVerifier()
     let result = try await verifier.verify(
@@ -189,7 +189,7 @@ struct MigrationVerifierTests {
       modelContainer: container,
       currencyCode: currency.code
     )
-    _ = try importer.importData(exported)
+    _ = try await importer.importData(exported)
 
     let verifier = MigrationVerifier()
     let result = try await verifier.verify(

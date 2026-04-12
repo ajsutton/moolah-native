@@ -114,6 +114,7 @@ struct MoolahApp: App {
         ProfileWindowView(profileID: profileID)
           .environment(profileStore)
           .environment(sessionManager)
+          .environment(containerManager)
       }
       .modelContainer(containerManager.indexContainer)
       .commands {
@@ -128,6 +129,7 @@ struct MoolahApp: App {
         SettingsView()
           .environment(profileStore)
           .environment(sessionManager)
+          .environment(containerManager)
           .modelContainer(containerManager.indexContainer)
       }
     #else

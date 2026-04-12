@@ -85,7 +85,7 @@ struct CloudKitDataImporterTests {
       currencyCode: currency.code
     )
 
-    let result = try importer.importData(exported)
+    let result = try await importer.importData(exported)
 
     #expect(result.accountCount == 2)
     #expect(result.categoryCount == 2)
@@ -117,7 +117,7 @@ struct CloudKitDataImporterTests {
       currencyCode: "USD"
     )
 
-    _ = try importer.importData(exported)
+    _ = try await importer.importData(exported)
 
     let context = ModelContext(container)
     let accounts = try context.fetch(FetchDescriptor<AccountRecord>())
@@ -142,7 +142,7 @@ struct CloudKitDataImporterTests {
       currencyCode: currency.code
     )
 
-    let result = try importer.importData(exported)
+    let result = try await importer.importData(exported)
 
     #expect(result.totalCount == 0)
   }
