@@ -42,6 +42,68 @@ struct UpcomingTransactionsCard: View {
   }
 
   private var transactionList: some View {
+    Group {
+      #if os(macOS)
+        HStack(spacing: 0) {
+          listContent
+
+          if let selected = selectedTransaction {
+            Divider()
+
+            TransactionDetailView(
+              transaction: selected,
+              accounts: accounts,
+              categories: categories,
+              earmarks: earmarks,
+              transactionStore: transactionStore,
+              showRecurrence: true,
+              onUpdate: { updated in
+                Task { await transactionStore.update(updated) }
+                selectedTransaction = updated
+              },
+              onDelete: { id in
+                Task { await transactionStore.delete(id: id) }
+                selectedTransaction = nil
+              }
+            )
+            .frame(width: UIConstants.detailPanelWidth)
+            .id(selected.id)
+          }
+        }
+      #else
+        listContent
+          .sheet(item: $selectedTransaction) { transaction in
+            NavigationStack {
+              TransactionDetailView(
+                transaction: transaction,
+                accounts: accounts,
+                categories: categories,
+                earmarks: earmarks,
+                transactionStore: transactionStore,
+                showRecurrence: true,
+                onUpdate: { updated in
+                  Task { await transactionStore.update(updated) }
+                  selectedTransaction = updated
+                },
+                onDelete: { id in
+                  Task { await transactionStore.delete(id: id) }
+                  selectedTransaction = nil
+                }
+              )
+              .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                  Button("Done") {
+                    selectedTransaction = nil
+                  }
+                }
+              }
+            }
+          }
+      #endif
+    }
+  }
+
+  private var listContent: some View {
     List(selection: $selectedTransaction) {
       ForEach(shortTermTransactions) { txn in
         SimpleTransactionRow(
@@ -67,33 +129,6 @@ struct UpcomingTransactionsCard: View {
       .frame(height: 200)
     #endif
     .accessibilityLabel("List of upcoming and overdue transactions")
-    .sheet(item: $selectedTransaction) { transaction in
-      NavigationStack {
-        TransactionDetailView(
-          transaction: transaction,
-          accounts: accounts,
-          categories: categories,
-          earmarks: earmarks,
-          transactionStore: transactionStore,
-          showRecurrence: true,
-          onUpdate: { updated in
-            Task { await transactionStore.update(updated) }
-            selectedTransaction = nil
-          },
-          onDelete: { id in
-            Task { await transactionStore.delete(id: id) }
-            selectedTransaction = nil
-          }
-        )
-        .toolbar {
-          ToolbarItem(placement: .cancellationAction) {
-            Button("Done") {
-              selectedTransaction = nil
-            }
-          }
-        }
-      }
-    }
   }
 
   private var shortTermTransactions: [TransactionWithBalance] {

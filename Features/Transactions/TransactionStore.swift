@@ -9,6 +9,8 @@ final class TransactionStore {
   private(set) var isLoading = false
   private(set) var hasMore = true
   private(set) var error: Error?
+  private(set) var loadedCount = 0
+  private(set) var totalCount: Int?
 
   /// Called after a successful create, update, or delete so the caller
   /// can adjust account balances locally.
@@ -36,6 +38,8 @@ final class TransactionStore {
     transactions = []
     hasMore = true
     error = nil
+    loadedCount = 0
+    totalCount = nil
     await fetchPage()
   }
 
@@ -173,6 +177,10 @@ final class TransactionStore {
       priorBalance = page.priorBalance
       hasMore = page.transactions.count >= pageSize
       currentPage += 1
+      loadedCount = rawTransactions.count
+      if let total = page.totalCount {
+        totalCount = total
+      }
       recomputeBalances()
       logger.debug(
         "Loaded \(page.transactions.count) transactions (total: \(self.rawTransactions.count))")

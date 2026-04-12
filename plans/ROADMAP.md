@@ -10,13 +10,12 @@ A prioritized development roadmap. Each phase builds on the previous — later p
 
 Fix known bugs and build a test safety net before adding new features.
 
-### 1a. Bug Fixes
+### 1a. Bug Fixes — Done
 
-| Bug | Impact | Reference |
-|-----|--------|-----------|
-| UI freeze during investment value download | App appears hung | `BUGS.md` |
-| Transaction download shows spinner instead of progress bar | No loading feedback | `BUGS.md` |
-| macOS upcoming transactions open edit dialog instead of sidebar | Inconsistent navigation | `BUGS.md` |
+All bugs fixed:
+- **UI freeze during investment value download** — CloudKit repository now uses `fetchLimit`/`fetchOffset` instead of fetching all records per page. (Migration import save is still synchronous/atomic by design — see `BUGS.md`.)
+- **Transaction download shows progress bar** — `TransactionPage` now carries `totalCount` from the server; `TransactionStore` exposes `loadedCount`/`totalCount`; view shows determinate `ProgressView`.
+- **macOS upcoming transactions use detail sidebar** — `UpcomingTransactionsCard` now uses platform-specific navigation (inline `HStack` detail on macOS, `.sheet()` on iOS).
 
 ### 1b. Test Coverage (UI Testing Plan — Part A)
 
@@ -35,17 +34,9 @@ Extract business logic from views into testable stores and shared utilities. See
 
 ---
 
-## Phase 2: Per-Profile Data Isolation — In Progress
+## Phase 2: Per-Profile Data Isolation — Done
 
-Migrate from a single shared SwiftData store (with `profileId` predicates on every query) to one store file per iCloud profile.
-
-**Why now:** This changes the data layer foundation. Every subsequent feature that touches data benefits from the simpler query model, and retrofitting it later is harder.
-
-**Benefits:**
-- Database-level isolation (no risk of cross-profile data leaks)
-- Simplified queries (remove ~50 `profileId` predicates)
-- Trivial profile deletion (delete the file)
-- Per-profile CloudKit sync zones
+Migrated from a single shared SwiftData store (with `profileId` predicates on every query) to one store file per iCloud profile. Database-level isolation, simplified queries, trivial profile deletion, and per-profile CloudKit sync zones.
 
 **Reference:** `per-profile-stores-design.md`, `per-profile-stores-plan.md`
 

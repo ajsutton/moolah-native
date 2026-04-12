@@ -181,7 +181,18 @@ struct TransactionListView: View {
       if transactionStore.isLoading {
         HStack {
           Spacer()
-          ProgressView()
+          if let total = transactionStore.totalCount, total > 0 {
+            VStack(spacing: 4) {
+              ProgressView(value: Double(transactionStore.loadedCount), total: Double(total))
+                .frame(maxWidth: 200)
+              Text("Loading \(transactionStore.loadedCount) of \(total)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            }
+          } else {
+            ProgressView()
+          }
           Spacer()
         }
       }

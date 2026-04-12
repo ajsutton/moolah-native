@@ -16,19 +16,23 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
   }
 
   func fetchValues(accountId: UUID, page: Int, pageSize: Int) async throws -> InvestmentValuePage {
-    let descriptor = FetchDescriptor<InvestmentValueRecord>(
+    var descriptor = FetchDescriptor<InvestmentValueRecord>(
       predicate: #Predicate { $0.accountId == accountId },
       sortBy: [SortDescriptor(\.date, order: .reverse)]
     )
+    descriptor.fetchOffset = page * pageSize
+    descriptor.fetchLimit = pageSize
+
+    let countDescriptor = FetchDescriptor<InvestmentValueRecord>(
+      predicate: #Predicate { $0.accountId == accountId }
+    )
+
     return try await MainActor.run {
-      let allRecords = try context.fetch(descriptor)
-      let offset = page * pageSize
-      guard offset < allRecords.count else {
-        return InvestmentValuePage(values: [], hasMore: false)
-      }
-      let end = min(offset + pageSize, allRecords.count)
-      let pageValues = allRecords[offset..<end].map { $0.toDomain() }
-      return InvestmentValuePage(values: Array(pageValues), hasMore: end < allRecords.count)
+      let records = try context.fetch(descriptor)
+      let totalCount = try context.fetchCount(countDescriptor)
+      let pageValues = records.map { $0.toDomain() }
+      let nextOffset = (page + 1) * pageSize
+      return InvestmentValuePage(values: pageValues, hasMore: nextOffset < totalCount)
     }
   }
 

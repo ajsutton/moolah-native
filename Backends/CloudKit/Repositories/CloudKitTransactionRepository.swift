@@ -110,9 +110,11 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let offset = page * pageSize
       guard offset < filteredRecords.count else {
         return TransactionPage(
-          transactions: [], priorBalance: MonetaryAmount(cents: 0, currency: self.currency))
+          transactions: [], priorBalance: MonetaryAmount(cents: 0, currency: self.currency),
+          totalCount: filteredRecords.count)
       }
-      let end = min(offset + pageSize, filteredRecords.count)
+      let totalCount = filteredRecords.count
+      let end = min(offset + pageSize, totalCount)
       let pageRecords = filteredRecords[offset..<end]
 
       // Convert only the page slice to domain objects (avoid toDomain() on entire dataset)
@@ -122,7 +124,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let priorBalanceCents = filteredRecords[end...].reduce(0) { $0 + $1.amount }
       let priorBalance = MonetaryAmount(cents: priorBalanceCents, currency: self.currency)
 
-      return TransactionPage(transactions: pageTransactions, priorBalance: priorBalance)
+      return TransactionPage(
+        transactions: pageTransactions, priorBalance: priorBalance, totalCount: totalCount)
     }
   }
 

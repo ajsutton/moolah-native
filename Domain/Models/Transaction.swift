@@ -147,6 +147,7 @@ struct TransactionFilter: Sendable, Equatable {
 struct TransactionPage: Sendable {
   let transactions: [Transaction]
   let priorBalance: MonetaryAmount
+  let totalCount: Int?
 
   /// Computes the running balance after each transaction.
   /// Transactions must be ordered newest-first (as returned by the repository).

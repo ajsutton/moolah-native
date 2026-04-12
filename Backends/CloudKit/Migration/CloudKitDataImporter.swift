@@ -124,36 +124,12 @@ struct CloudKitDataImporter {
       }
     }
 
-    // 7. Save
-    logger.info(
-      "Saving to SwiftData — context.hasChanges=\(context.hasChanges)"
-    )
-
-    // Check a single inserted record before save
-    if let firstAccount = data.accounts.first {
-      let testId = firstAccount.id
-      let beforeDescriptor = FetchDescriptor<AccountRecord>(
-        predicate: #Predicate { $0.id == testId }
-      )
-      let beforeCount = (try? context.fetchCount(beforeDescriptor)) ?? -1
-      logger.info(
-        "Before save: account \(firstAccount.name) (id=\(testId)) fetchCount=\(beforeCount)")
-    }
-
+    // 7. Save all records atomically
     try context.save()
-    logger.info("SwiftData save completed, context.hasChanges=\(context.hasChanges)")
 
-    // Verify record count
-    let allDescriptor = FetchDescriptor<AccountRecord>()
-    let allCount = (try? context.fetchCount(allDescriptor)) ?? -1
     logger.info(
-      "Post-save: ALL accounts=\(allCount)"
+      "Import complete: \(data.accounts.count) accounts, \(data.transactions.count) transactions, \(investmentValueCount) investment values"
     )
-
-    // Check store URL
-    for config in context.container.configurations {
-      logger.info("Store URL: \(config.url.absoluteString)")
-    }
 
     return ImportResult(
       accountCount: data.accounts.count,
