@@ -9,7 +9,7 @@
 
 - **Personal tax** for contractors (income often without PAYG withholding), with investment income (dividends, interest, rental) and capital gains from stocks/crypto
 - **Family trust tax returns** tracked in the same profile as personal finances
-- **Capital gains**: summary import only (from external tools like Sharesight/Koinly), not individual lot tracking. Future enhancement may add full CGT engine.
+- **Capital gains**: computed from transaction legs via FIFO lot tracking in `CostBasisEngine` (Phase 5). `CapitalGainsSummary.asTaxAdjustmentValues()` auto-populates `shortTermCapitalGains`, `longTermCapitalGains`, and `capitalLosses` on `TaxYearAdjustments`. Manual override still available for external adjustments.
 - **Tax calculation**: estimated liability with marginal rates, Medicare levy, CGT discount, franking credits, offsets. Not a lodgeable return — data for accountants plus actionable estimates.
 - **Rate tables**: bundled per financial year so historical reports stay accurate.
 - **iCloud backend**: full support. moolah-server backend: sensible defaults, tax features effectively read-only/inert.
@@ -17,7 +17,7 @@
 ## Non-Goals
 
 - GST / BAS reporting
-- Full capital gains lot tracking and cost base calculations (future)
+- ~~Full capital gains lot tracking and cost base calculations~~ — Now implemented via FIFO in `CostBasisEngine` + `CapitalGainsCalculator` (Phase 5)
 - Percentage splits per category for joint account attribution (future — small amounts, manual adjustment for now)
 - Lodgeable ATO return generation
 
@@ -86,7 +86,8 @@ TaxYearAdjustments
   financialYear: Int              // e.g. 2026 for FY2025-26
   ownerId: String                 // which owner this applies to
 
-  // Capital gains (from external tools)
+  // Capital gains — auto-populated from ReportingStore.capitalGainsSummary via
+  // asTaxAdjustmentValues(), with manual override still available
   shortTermCapitalGains: MonetaryAmount?
   longTermCapitalGains: MonetaryAmount?     // pre-discount amount
   capitalLosses: MonetaryAmount?
