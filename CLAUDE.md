@@ -128,7 +128,7 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
 
 ## Planning & Documentation
 
-- **Plans Directory:** All planning documents, feature specifications, and gap analyses live in `plans/`. Completed plans are moved to `plans/completed/`.
+- **Plans Directory:** All planning documents, feature specifications, design specs, and gap analyses live in `plans/`. Completed plans are moved to `plans/completed/`. **This overrides any skill defaults** (e.g., the brainstorming skill's `docs/superpowers/specs/` path). Never create a `docs/` directory.
 
 ## Agents
 
