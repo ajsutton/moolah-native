@@ -1,6 +1,7 @@
 import Foundation
 import OSLog
 import Observation
+import SwiftData
 
 @Observable
 @MainActor
@@ -36,14 +37,12 @@ final class MigrationCoordinator {
 
     do {
       // 1. Export all data from the source backend
-      let exporter = ServerDataExporter(
-        accountRepo: backend.accounts,
-        categoryRepo: backend.categories,
-        earmarkRepo: backend.earmarks,
-        transactionRepo: backend.transactions,
-        investmentRepo: backend.investments
-      )
-      let exported = try await exporter.export { [weak self] progress in
+      let exporter = DataExporter(backend: backend)
+      let exported = try await exporter.export(
+        profileLabel: sourceProfile.label,
+        currencyCode: sourceProfile.currencyCode,
+        financialYearStartMonth: sourceProfile.financialYearStartMonth
+      ) { [weak self] progress in
         Task { @MainActor in
           switch progress {
           case .downloading(let step):
@@ -124,6 +123,99 @@ final class MigrationCoordinator {
     } catch {
       state = .failed(error as? MigrationError ?? .unexpected(error))
     }
+  }
+
+  /// Exports all data from a profile to a JSON file.
+  ///
+  /// - Parameters:
+  ///   - url: The file URL to write the exported JSON to
+  ///   - backend: The backend for the profile (provides repositories)
+  ///   - profile: The profile to export
+  func exportToFile(
+    url: URL,
+    backend: any BackendProvider,
+    profile: Profile
+  ) async throws {
+    state = .exporting(step: "Starting...")
+
+    let exporter = DataExporter(backend: backend)
+    let exported = try await exporter.export(
+      profileLabel: profile.label,
+      currencyCode: profile.currencyCode,
+      financialYearStartMonth: profile.financialYearStartMonth
+    ) { [weak self] progress in
+      Task { @MainActor in
+        switch progress {
+        case .downloading(let step):
+          self?.state = .exporting(step: step)
+        default: break
+        }
+      }
+    }
+
+    let data = try JSONEncoder.exportEncoder.encode(exported)
+    try data.write(to: url, options: .atomic)
+    state = .idle
+  }
+
+  /// Imports data from a JSON file into a SwiftData container.
+  ///
+  /// - Parameters:
+  ///   - url: The file URL to read the exported JSON from
+  ///   - modelContainer: The target container to import data into
+  /// - Returns: The import result with counts of imported records
+  func importFromFile(
+    url: URL,
+    modelContainer: ModelContainer
+  ) async throws -> ImportResult {
+    state = .importing(step: "reading file", progress: 0)
+
+    let jsonData: Data
+    do {
+      jsonData = try Data(contentsOf: url)
+    } catch {
+      throw MigrationError.fileReadFailed(url, underlying: error)
+    }
+
+    let exported: ExportedData
+    do {
+      exported = try JSONDecoder.exportDecoder.decode(ExportedData.self, from: jsonData)
+    } catch {
+      throw MigrationError.importFailed(underlying: error)
+    }
+
+    guard exported.version <= 1 else {
+      throw MigrationError.unsupportedVersion(exported.version)
+    }
+
+    state = .importing(step: "saving", progress: 0.3)
+
+    let importer = CloudKitDataImporter(
+      modelContainer: modelContainer,
+      currencyCode: exported.currencyCode
+    )
+
+    let result: ImportResult
+    do {
+      result = try importer.importData(exported)
+    } catch {
+      throw MigrationError.importFailed(underlying: error)
+    }
+
+    state = .verifying
+    let verifier = MigrationVerifier()
+    let verification = try await verifier.verify(
+      exported: exported,
+      modelContainer: modelContainer
+    )
+
+    if !verification.countMatch {
+      state = .idle
+      throw MigrationError.verificationFailed(verification)
+    }
+
+    state = .idle
+    return result
   }
 
   /// Deletes a failed migration's profile and resets state.

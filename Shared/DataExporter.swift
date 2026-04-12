@@ -1,22 +1,8 @@
 import Foundation
 
-/// All data exported from a server-backed profile, ready for import into SwiftData.
-struct ExportedData: Sendable {
-  let accounts: [Account]
-  let categories: [Category]
-  let earmarks: [Earmark]
-  let earmarkBudgets: [UUID: [EarmarkBudgetItem]]
-  let transactions: [Transaction]
-  let investmentValues: [UUID: [InvestmentValue]]
-}
-
 /// Exports all data from repository protocols (works with any BackendProvider).
-actor ServerDataExporter {
-  private let accountRepo: any AccountRepository
-  private let categoryRepo: any CategoryRepository
-  private let earmarkRepo: any EarmarkRepository
-  private let transactionRepo: any TransactionRepository
-  private let investmentRepo: any InvestmentRepository
+actor DataExporter {
+  private let backend: any BackendProvider
 
   enum ExportProgress: Sendable {
     case downloading(step: String)
@@ -24,28 +10,21 @@ actor ServerDataExporter {
     case failed(Error)
   }
 
-  init(
-    accountRepo: any AccountRepository,
-    categoryRepo: any CategoryRepository,
-    earmarkRepo: any EarmarkRepository,
-    transactionRepo: any TransactionRepository,
-    investmentRepo: any InvestmentRepository
-  ) {
-    self.accountRepo = accountRepo
-    self.categoryRepo = categoryRepo
-    self.earmarkRepo = earmarkRepo
-    self.transactionRepo = transactionRepo
-    self.investmentRepo = investmentRepo
+  init(backend: any BackendProvider) {
+    self.backend = backend
   }
 
   func export(
+    profileLabel: String,
+    currencyCode: String,
+    financialYearStartMonth: Int,
     progress: @escaping @Sendable (ExportProgress) -> Void
   ) async throws -> ExportedData {
     // 1. Accounts
     progress(.downloading(step: "accounts"))
     let accounts: [Account]
     do {
-      accounts = try await accountRepo.fetchAll()
+      accounts = try await backend.accounts.fetchAll()
     } catch {
       throw MigrationError.exportFailed(step: "accounts", underlying: error)
     }
@@ -54,7 +33,7 @@ actor ServerDataExporter {
     progress(.downloading(step: "categories"))
     let categories: [Category]
     do {
-      categories = try await categoryRepo.fetchAll()
+      categories = try await backend.categories.fetchAll()
     } catch {
       throw MigrationError.exportFailed(step: "categories", underlying: error)
     }
@@ -64,9 +43,9 @@ actor ServerDataExporter {
     let earmarks: [Earmark]
     var budgets: [UUID: [EarmarkBudgetItem]] = [:]
     do {
-      earmarks = try await earmarkRepo.fetchAll()
+      earmarks = try await backend.earmarks.fetchAll()
       for earmark in earmarks {
-        budgets[earmark.id] = try await earmarkRepo.fetchBudget(earmarkId: earmark.id)
+        budgets[earmark.id] = try await backend.earmarks.fetchBudget(earmarkId: earmark.id)
       }
     } catch {
       throw MigrationError.exportFailed(step: "earmarks", underlying: error)
@@ -94,6 +73,11 @@ actor ServerDataExporter {
     }
 
     let data = ExportedData(
+      version: 1,
+      exportedAt: Date(),
+      profileLabel: profileLabel,
+      currencyCode: currencyCode,
+      financialYearStartMonth: financialYearStartMonth,
       accounts: accounts,
       categories: categories,
       earmarks: earmarks,
@@ -112,7 +96,7 @@ actor ServerDataExporter {
 
     // Fetch all non-scheduled transactions
     while true {
-      let result = try await transactionRepo.fetch(
+      let result = try await backend.transactions.fetch(
         filter: TransactionFilter(),
         page: page,
         pageSize: pageSize
@@ -128,7 +112,7 @@ actor ServerDataExporter {
     // Also fetch scheduled transactions explicitly
     var scheduledPage = 0
     while true {
-      let result = try await transactionRepo.fetch(
+      let result = try await backend.transactions.fetch(
         filter: TransactionFilter(scheduled: true),
         page: scheduledPage,
         pageSize: pageSize
@@ -153,7 +137,7 @@ actor ServerDataExporter {
     let pageSize = 200
 
     while true {
-      let result = try await investmentRepo.fetchValues(
+      let result = try await backend.investments.fetchValues(
         accountId: accountId,
         page: page,
         pageSize: pageSize

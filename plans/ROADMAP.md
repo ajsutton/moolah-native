@@ -42,16 +42,14 @@ Migrated from a single shared SwiftData store (with `profileId` predicates on ev
 
 ---
 
-## Phase 3: Backup & Export
+## Phase 3: Backup & Export — Done
 
-Two related features that share infrastructure:
+Two features sharing infrastructure:
 
-1. **Automatic backup** (macOS only) — daily copy of per-profile SwiftData store files as a safety net against data corruption. Keeps 7 daily backups per profile. Not user-visible.
-2. **User-facing import/export** — JSON-based export of all profile data via domain models. Export works with any backend type. Import creates a new iCloud profile. Refactors the existing migration code to be reusable.
+1. **Automatic backup** (macOS only) — daily copy of per-profile SwiftData store files using `NSPersistentStoreCoordinator.replacePersistentStore` (safe with active CloudKit sync). 7-day retention. Triggered on app launch + daily timer.
+2. **User-facing import/export** — JSON-based export via `DataExporter` (refactored from `ServerDataExporter`, backend-agnostic). Import creates a new iCloud profile with verification. macOS File menu commands + profile list buttons on both platforms.
 
-**Why now:** Depends on per-profile stores (Phase 2) for store file URLs and the simplified importer. Should land before the app goes to TestFlight — users need a data safety net before wider use.
-
-**Reference:** `backup-and-export-design.md`
+**Reference:** `completed/backup-and-export-design.md`, `completed/backup-and-export-plan.md`
 
 ---
 

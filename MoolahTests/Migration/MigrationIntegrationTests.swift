@@ -72,14 +72,12 @@ struct MigrationIntegrationTests {
     let container = try TestModelContainer.create()
 
     // 1. Export
-    let exporter = ServerDataExporter(
-      accountRepo: backend.accounts,
-      categoryRepo: backend.categories,
-      earmarkRepo: backend.earmarks,
-      transactionRepo: backend.transactions,
-      investmentRepo: backend.investments
-    )
-    let exported = try await exporter.export { _ in }
+    let exporter = DataExporter(backend: backend)
+    let exported = try await exporter.export(
+      profileLabel: "Test",
+      currencyCode: currency.code,
+      financialYearStartMonth: 7
+    ) { _ in }
 
     // 2. Import
     let importer = CloudKitDataImporter(
@@ -136,14 +134,12 @@ struct MigrationIntegrationTests {
     let backend = try await makeSeededBackend()
     let container = try TestModelContainer.create()
 
-    let exporter = ServerDataExporter(
-      accountRepo: backend.accounts,
-      categoryRepo: backend.categories,
-      earmarkRepo: backend.earmarks,
-      transactionRepo: backend.transactions,
-      investmentRepo: backend.investments
-    )
-    let exported = try await exporter.export { _ in }
+    let exporter = DataExporter(backend: backend)
+    let exported = try await exporter.export(
+      profileLabel: "Test",
+      currencyCode: currency.code,
+      financialYearStartMonth: 7
+    ) { _ in }
 
     let importer = CloudKitDataImporter(
       modelContainer: container,
@@ -171,14 +167,12 @@ struct MigrationIntegrationTests {
     let backend = try await makeSeededBackend()
     let container = try TestModelContainer.create()
 
-    let exporter = ServerDataExporter(
-      accountRepo: backend.accounts,
-      categoryRepo: backend.categories,
-      earmarkRepo: backend.earmarks,
-      transactionRepo: backend.transactions,
-      investmentRepo: backend.investments
-    )
-    let exported = try await exporter.export { _ in }
+    let exporter = DataExporter(backend: backend)
+    let exported = try await exporter.export(
+      profileLabel: "Test",
+      currencyCode: currency.code,
+      financialYearStartMonth: 7
+    ) { _ in }
 
     let importer = CloudKitDataImporter(
       modelContainer: container,
