@@ -4,6 +4,8 @@
 
 **Goal:** Multi-instrument net worth performance, capital gains tracking, profit/loss reporting, and tax integration. The app can show accurate historical net worth across fiat, stocks, and crypto positions, compute capital gains for Australian tax reporting, and display per-instrument P&L.
 
+**Completed:** `4c19ae6` on `feature/multi-instrument` — 697 tests passing on macOS. Note: Task 3 (CloudKitAnalysisRepository wiring) deferred — NetWorthCalculator is ready but needs careful integration.
+
 **Architecture:** Phase 5 builds on Phases 1-4 (Instrument, InstrumentAmount, TransactionLeg, InstrumentConversionService). The analysis layer evolves from single-currency accumulation to multi-instrument position tracking with daily price conversion. Capital gains use FIFO lot tracking on sell legs. Tax integration feeds computed capital gains into TaxYearAdjustments.
 
 **Tech Stack:** Swift 6, SwiftUI, SwiftData, CloudKit, Swift Testing
