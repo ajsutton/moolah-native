@@ -16,39 +16,39 @@ struct MonthlyIncomeExpense: Sendable, Codable, Identifiable, Hashable {
   // --- Non-earmarked income & expenses ---
 
   /// Total income (excluding earmarked income) in cents
-  let income: MonetaryAmount
+  let income: InstrumentAmount
 
   /// Total expenses (excluding earmarked expenses) in cents
-  let expense: MonetaryAmount
+  let expense: InstrumentAmount
 
   /// Profit = income - expense (can be negative)
-  let profit: MonetaryAmount
+  let profit: InstrumentAmount
 
   // --- Earmarked income & expenses ---
 
   /// Income allocated to earmarks (including investment contributions)
-  let earmarkedIncome: MonetaryAmount
+  let earmarkedIncome: InstrumentAmount
 
   /// Expenses paid from earmarks (including investment withdrawals)
-  let earmarkedExpense: MonetaryAmount
+  let earmarkedExpense: InstrumentAmount
 
   /// Earmarked profit = earmarkedIncome - earmarkedExpense
-  let earmarkedProfit: MonetaryAmount
+  let earmarkedProfit: InstrumentAmount
 }
 
 extension MonthlyIncomeExpense {
   /// Compute total income (including earmarks)
-  var totalIncome: MonetaryAmount {
+  var totalIncome: InstrumentAmount {
     income + earmarkedIncome
   }
 
   /// Compute total expenses (including earmarks)
-  var totalExpense: MonetaryAmount {
+  var totalExpense: InstrumentAmount {
     expense + earmarkedExpense
   }
 
   /// Compute total profit (including earmarks)
-  var totalProfit: MonetaryAmount {
+  var totalProfit: InstrumentAmount {
     profit + earmarkedProfit
   }
 }

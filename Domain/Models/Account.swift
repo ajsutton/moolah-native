@@ -24,15 +24,15 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
   let id: UUID
   var name: String
   var type: AccountType
-  var balance: MonetaryAmount
+  var balance: InstrumentAmount
   /// Market value for investment accounts. Nil for non-investment accounts.
-  var investmentValue: MonetaryAmount?
+  var investmentValue: InstrumentAmount?
   var position: Int
   var isHidden: Bool
 
   /// The display value for this account. For investment accounts, prefers
   /// `investmentValue` (market value) over `balance` (invested amount).
-  var displayBalance: MonetaryAmount {
+  var displayBalance: InstrumentAmount {
     if type == .investment, let investmentValue {
       return investmentValue
     }
@@ -43,8 +43,8 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     id: UUID = UUID(),
     name: String,
     type: AccountType,
-    balance: MonetaryAmount = .zero(currency: .AUD),
-    investmentValue: MonetaryAmount? = nil,
+    balance: InstrumentAmount = .zero(instrument: .AUD),
+    investmentValue: InstrumentAmount? = nil,
     position: Int = 0,
     isHidden: Bool = false
   ) {
@@ -88,7 +88,7 @@ struct Accounts: RandomAccessCollection, Sendable {
   }
 
   /// Returns a new Accounts collection with the balance of the given account adjusted by `delta`.
-  func adjustingBalance(of accountId: UUID, by delta: MonetaryAmount) -> Accounts {
+  func adjustingBalance(of accountId: UUID, by delta: InstrumentAmount) -> Accounts {
     guard byId[accountId] != nil else { return self }
     let adjusted = ordered.map { account in
       guard account.id == accountId else { return account }

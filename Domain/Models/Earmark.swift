@@ -3,9 +3,9 @@ import Foundation
 struct EarmarkBudgetItem: Codable, Sendable, Identifiable, Hashable {
   let id: UUID
   var categoryId: UUID
-  var amount: MonetaryAmount
+  var amount: InstrumentAmount
 
-  init(id: UUID = UUID(), categoryId: UUID, amount: MonetaryAmount) {
+  init(id: UUID = UUID(), categoryId: UUID, amount: InstrumentAmount) {
     self.id = id
     self.categoryId = categoryId
     self.amount = amount
@@ -15,24 +15,24 @@ struct EarmarkBudgetItem: Codable, Sendable, Identifiable, Hashable {
 struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
   let id: UUID
   var name: String
-  var balance: MonetaryAmount
-  var saved: MonetaryAmount
-  var spent: MonetaryAmount
+  var balance: InstrumentAmount
+  var saved: InstrumentAmount
+  var spent: InstrumentAmount
   var isHidden: Bool
   var position: Int
-  var savingsGoal: MonetaryAmount?
+  var savingsGoal: InstrumentAmount?
   var savingsStartDate: Date?
   var savingsEndDate: Date?
 
   init(
     id: UUID = UUID(),
     name: String,
-    balance: MonetaryAmount = .zero(currency: .AUD),
-    saved: MonetaryAmount = .zero(currency: .AUD),
-    spent: MonetaryAmount = .zero(currency: .AUD),
+    balance: InstrumentAmount = .zero(instrument: .AUD),
+    saved: InstrumentAmount = .zero(instrument: .AUD),
+    spent: InstrumentAmount = .zero(instrument: .AUD),
     isHidden: Bool = false,
     position: Int = 0,
-    savingsGoal: MonetaryAmount? = nil,
+    savingsGoal: InstrumentAmount? = nil,
     savingsStartDate: Date? = nil,
     savingsEndDate: Date? = nil
   ) {
@@ -83,20 +83,19 @@ struct Earmarks: RandomAccessCollection, Sendable {
 
   /// Returns a new Earmarks collection with the balance, saved, and spent adjusted for the given earmark.
   /// Positive deltas increase saved and balance; negative deltas increase spent and decrease balance.
-  func adjustingBalance(of earmarkId: UUID, by delta: MonetaryAmount) -> Earmarks {
+  func adjustingBalance(of earmarkId: UUID, by delta: InstrumentAmount) -> Earmarks {
     guard byId[earmarkId] != nil else { return self }
     let adjusted = ordered.map { earmark in
       guard earmark.id == earmarkId else { return earmark }
       var copy = earmark
       copy.balance = copy.balance + delta
 
-      if delta.cents > 0 {
+      if delta.isPositive {
         // Positive delta: income/saving
         copy.saved = copy.saved + delta
-      } else if delta.cents < 0 {
+      } else if delta.isNegative {
         // Negative delta: expense
-        let absDelta = MonetaryAmount(cents: abs(delta.cents), currency: delta.currency)
-        copy.spent = copy.spent + absDelta
+        copy.spent = copy.spent + (-delta)
       }
       return copy
     }

@@ -5,7 +5,7 @@ import Foundation
 /// Used for the investment chart's "Invested Amount" line.
 struct AccountDailyBalance: Codable, Sendable, Identifiable, Hashable {
   let date: Date
-  let balance: MonetaryAmount
+  let balance: InstrumentAmount
 
   var id: Date { date }
 }
