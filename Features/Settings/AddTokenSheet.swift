@@ -112,7 +112,11 @@ struct AddTokenSheet: View {
             )
           }
         }
-        .buttonStyle(.borderedProminent)
+        #if os(iOS)
+          .buttonStyle(.borderedProminent)
+        #else
+          .buttonStyle(.bordered)
+        #endif
         .disabled(isNative ? symbolHint.isEmpty : contractAddress.isEmpty)
       }
     }
@@ -157,7 +161,7 @@ struct AddTokenSheet: View {
             "No providers could resolve this token. Price data will not be available.",
             systemImage: "exclamationmark.triangle.fill"
           )
-          .foregroundStyle(.orange)
+          .foregroundStyle(.red)
         }
       }
 
@@ -173,7 +177,11 @@ struct AddTokenSheet: View {
               isPresented = false
             }
           }
-          .buttonStyle(.borderedProminent)
+          #if os(iOS)
+            .buttonStyle(.borderedProminent)
+          #else
+            .buttonStyle(.bordered)
+          #endif
         }
       }
     }
