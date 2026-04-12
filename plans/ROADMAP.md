@@ -92,7 +92,17 @@ Full per-account currency support, building on the exchange rate infrastructure 
 
 ---
 
-## Phase 7: Crypto Price Data
+## Phase 7: Australian Tax Reporting
+
+Tax summary and quarterly PAYG instalment estimates for Australian personal and family trust tax returns. Adds Owner entity, TaxCategory classification on categories, TaxYearAdjustments for external data (capital gains, franking credits, PAYG withheld), and a pure-Swift TaxCalculator. Capital gains are summary import from external tools (Sharesight/Koinly), not lot-level tracking.
+
+**Why now:** FY2025-26 ends June 30, 2026. Quarterly PAYG instalments and year-end estimates are time-sensitive. Doesn't require multi-currency (Phase 6) — most tax-relevant accounts are AUD. May be reordered before Phase 6 once designs are more fleshed out.
+
+**Reference:** `2026-04-11-australian-tax-reporting-design.md`
+
+---
+
+## Phase 8: Crypto Price Data
 
 Add cryptocurrency price fetching and caching, building on the exchange rate infrastructure patterns from Phase 4.
 
@@ -102,7 +112,7 @@ Add cryptocurrency price fetching and caching, building on the exchange rate inf
 
 ---
 
-## Phase 8: CSV Import (SelfWealth)
+## Phase 9: CSV Import (SelfWealth)
 
 Import Australian stock holdings and trade history from SelfWealth CSV exports. SelfWealth has no API, so CSV is the only reliable data path.
 
@@ -112,7 +122,7 @@ Import Australian stock holdings and trade history from SelfWealth CSV exports. 
 
 ---
 
-## Phase 9: App Store Readiness
+## Phase 10: App Store Readiness
 
 Prepare for Apple App Store Review submission.
 
