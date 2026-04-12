@@ -34,6 +34,20 @@ final class AccountStore {
     isLoading = false
   }
 
+  /// Re-fetches accounts without showing loading state or clearing errors.
+  /// Used when CloudKit delivers remote changes — avoids UI flicker.
+  func reloadFromSync() async {
+    do {
+      let fresh = Accounts(from: try await repository.fetchAll())
+      if fresh.ordered != accounts.ordered {
+        accounts = fresh
+        logger.debug("Sync: updated accounts (\(fresh.count) accounts)")
+      }
+    } catch {
+      logger.error("Sync reload failed: \(error.localizedDescription)")
+    }
+  }
+
   var showHidden: Bool = false
 
   var currentAccounts: [Account] {
