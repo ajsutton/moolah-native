@@ -123,7 +123,9 @@ struct SettingsView: View {
               profileRow(profile)
             }
             .swipeActions(edge: .leading) {
-              if profile.backendType == .cloudKit {
+              if profile.backendType == .cloudKit,
+                profile.id == profileStore.activeProfileID
+              {
                 Button {
                   Task { await handleExport(profile: profile) }
                 } label: {
@@ -351,6 +353,7 @@ struct SettingsView: View {
         )
         profileStore.setActiveProfile(newProfile.id)
       } catch {
+        containerManager.deleteStore(for: newProfile.id)
         profileStore.removeProfile(newProfile.id)
         throw error
       }
@@ -363,18 +366,15 @@ struct SettingsView: View {
 
   #if os(iOS)
     private func handleExport(profile: Profile) async {
+      guard let backend = activeSession?.backend else {
+        exportError = "Switch to this profile before exporting."
+        return
+      }
+
       isExporting = true
       defer { isExporting = false }
 
       do {
-        let container = try containerManager.container(for: profile.id)
-        let currency = Currency.from(code: profile.currencyCode)
-        let backend = CloudKitBackend(
-          modelContainer: container,
-          currency: currency,
-          profileLabel: profile.label
-        )
-
         let tempDir = FileManager.default.temporaryDirectory
         let filename = "\(profile.label).json"
         let tempURL = tempDir.appendingPathComponent(filename)

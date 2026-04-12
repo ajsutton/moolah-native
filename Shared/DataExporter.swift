@@ -2,11 +2,7 @@ import Foundation
 
 /// Exports all data from repository protocols (works with any BackendProvider).
 actor DataExporter {
-  private let accountRepo: any AccountRepository
-  private let categoryRepo: any CategoryRepository
-  private let earmarkRepo: any EarmarkRepository
-  private let transactionRepo: any TransactionRepository
-  private let investmentRepo: any InvestmentRepository
+  private let backend: any BackendProvider
 
   enum ExportProgress: Sendable {
     case downloading(step: String)
@@ -15,11 +11,7 @@ actor DataExporter {
   }
 
   init(backend: any BackendProvider) {
-    self.accountRepo = backend.accounts
-    self.categoryRepo = backend.categories
-    self.earmarkRepo = backend.earmarks
-    self.transactionRepo = backend.transactions
-    self.investmentRepo = backend.investments
+    self.backend = backend
   }
 
   func export(
@@ -32,7 +24,7 @@ actor DataExporter {
     progress(.downloading(step: "accounts"))
     let accounts: [Account]
     do {
-      accounts = try await accountRepo.fetchAll()
+      accounts = try await backend.accounts.fetchAll()
     } catch {
       throw MigrationError.exportFailed(step: "accounts", underlying: error)
     }
@@ -41,7 +33,7 @@ actor DataExporter {
     progress(.downloading(step: "categories"))
     let categories: [Category]
     do {
-      categories = try await categoryRepo.fetchAll()
+      categories = try await backend.categories.fetchAll()
     } catch {
       throw MigrationError.exportFailed(step: "categories", underlying: error)
     }
@@ -51,9 +43,9 @@ actor DataExporter {
     let earmarks: [Earmark]
     var budgets: [UUID: [EarmarkBudgetItem]] = [:]
     do {
-      earmarks = try await earmarkRepo.fetchAll()
+      earmarks = try await backend.earmarks.fetchAll()
       for earmark in earmarks {
-        budgets[earmark.id] = try await earmarkRepo.fetchBudget(earmarkId: earmark.id)
+        budgets[earmark.id] = try await backend.earmarks.fetchBudget(earmarkId: earmark.id)
       }
     } catch {
       throw MigrationError.exportFailed(step: "earmarks", underlying: error)
@@ -104,7 +96,7 @@ actor DataExporter {
 
     // Fetch all non-scheduled transactions
     while true {
-      let result = try await transactionRepo.fetch(
+      let result = try await backend.transactions.fetch(
         filter: TransactionFilter(),
         page: page,
         pageSize: pageSize
@@ -120,7 +112,7 @@ actor DataExporter {
     // Also fetch scheduled transactions explicitly
     var scheduledPage = 0
     while true {
-      let result = try await transactionRepo.fetch(
+      let result = try await backend.transactions.fetch(
         filter: TransactionFilter(scheduled: true),
         page: scheduledPage,
         pageSize: pageSize
@@ -145,7 +137,7 @@ actor DataExporter {
     let pageSize = 200
 
     while true {
-      let result = try await investmentRepo.fetchValues(
+      let result = try await backend.investments.fetchValues(
         accountId: accountId,
         page: page,
         pageSize: pageSize

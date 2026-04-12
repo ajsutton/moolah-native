@@ -85,6 +85,7 @@
         )
         profileStore.setActiveProfile(newProfile.id)
       } catch {
+        containerManager.deleteStore(for: newProfile.id)
         profileStore.removeProfile(newProfile.id)
         let alert = NSAlert(error: error)
         alert.runModal()

@@ -73,9 +73,12 @@
     func performDailyBackup(profiles: [Profile], containerManager: ProfileContainerManager) {
       let cloudProfiles = profiles.filter { $0.backendType == .cloudKit }
       for profile in cloudProfiles {
-        let storeURL = URL.applicationSupportDirectory
-          .appending(path: "Moolah-\(profile.id.uuidString).store")
         do {
+          let container = try containerManager.container(for: profile.id)
+          guard let storeURL = container.configurations.first?.url else {
+            logger.warning("No store URL for profile \(profile.id)")
+            continue
+          }
           try backupStore(at: storeURL, profileId: profile.id)
           pruneBackups(profileId: profile.id)
         } catch {

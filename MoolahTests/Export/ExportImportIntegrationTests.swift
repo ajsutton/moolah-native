@@ -164,4 +164,45 @@ struct ExportImportIntegrationTests {
       Issue.record("Expected idle state, got \(coordinator.state)")
     }
   }
+
+  @Test("importFromFile rejects unsupported version")
+  func rejectsUnsupportedVersion() async throws {
+    let exported = ExportedData(
+      version: 99,
+      exportedAt: Date(),
+      profileLabel: "Test",
+      currencyCode: "AUD",
+      financialYearStartMonth: 1,
+      accounts: [],
+      categories: [],
+      earmarks: [],
+      earmarkBudgets: [:],
+      transactions: [],
+      investmentValues: [:]
+    )
+    let tempURL = FileManager.default.temporaryDirectory.appending(
+      path: "\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: tempURL) }
+    let data = try JSONEncoder.exportEncoder.encode(exported)
+    try data.write(to: tempURL)
+
+    let container = try TestModelContainer.create()
+    let coordinator = MigrationCoordinator()
+
+    await #expect(throws: MigrationError.self) {
+      _ = try await coordinator.importFromFile(url: tempURL, modelContainer: container)
+    }
+  }
+
+  @Test("importFromFile rejects nonexistent file")
+  func rejectsNonexistentFile() async throws {
+    let fakeURL = FileManager.default.temporaryDirectory.appending(
+      path: "nonexistent-\(UUID().uuidString).json")
+    let container = try TestModelContainer.create()
+    let coordinator = MigrationCoordinator()
+
+    await #expect(throws: MigrationError.self) {
+      _ = try await coordinator.importFromFile(url: fakeURL, modelContainer: container)
+    }
+  }
 }
