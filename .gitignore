@@ -32,6 +32,9 @@ fastlane/test_output
 fastlane/api_key.json
 vendor/bundle
 
+# Agent temp files (test output, etc.)
+.agent-tmp/
+
 # macOS
 .DS_Store
 *.swp
