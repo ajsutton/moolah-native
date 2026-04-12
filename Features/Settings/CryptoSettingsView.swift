@@ -28,7 +28,13 @@ struct CryptoSettingsView: View {
   @ViewBuilder
   private var tokenListSection: some View {
     Section {
-      if store.tokens.isEmpty && !store.isLoading {
+      if store.isLoading && store.tokens.isEmpty {
+        HStack {
+          Spacer()
+          ProgressView()
+          Spacer()
+        }
+      } else if store.tokens.isEmpty {
         ContentUnavailableView(
           "No Tokens",
           systemImage: "bitcoinsign.circle",
@@ -71,12 +77,15 @@ struct CryptoSettingsView: View {
           .foregroundStyle(.secondary)
       }
       Spacer()
-      Text(chainName(for: token.chainId))
+      Text(CryptoToken.chainName(for: token.chainId))
         .font(.caption)
         .foregroundStyle(.secondary)
       providerIndicators(for: token)
     }
     .accessibilityElement(children: .combine)
+    .accessibilityLabel(
+      "\(token.symbol), \(token.name), \(CryptoToken.chainName(for: token.chainId))"
+    )
     .contextMenu {
       Button(role: .destructive) {
         Task { await store.removeToken(token) }
@@ -93,33 +102,22 @@ struct CryptoSettingsView: View {
           .font(.caption2)
           .padding(.horizontal, 4)
           .padding(.vertical, 1)
-          .background(.green.opacity(0.2), in: RoundedRectangle(cornerRadius: 3))
+          .background(.fill, in: RoundedRectangle(cornerRadius: 3))
       }
       if token.cryptocompareSymbol != nil {
         Text("CC")
           .font(.caption2)
           .padding(.horizontal, 4)
           .padding(.vertical, 1)
-          .background(.blue.opacity(0.2), in: RoundedRectangle(cornerRadius: 3))
+          .background(.fill, in: RoundedRectangle(cornerRadius: 3))
       }
       if token.binanceSymbol != nil {
         Text("BN")
           .font(.caption2)
           .padding(.horizontal, 4)
           .padding(.vertical, 1)
-          .background(.orange.opacity(0.2), in: RoundedRectangle(cornerRadius: 3))
+          .background(.fill, in: RoundedRectangle(cornerRadius: 3))
       }
-    }
-  }
-
-  private func chainName(for chainId: Int) -> String {
-    switch chainId {
-    case 0: "Bitcoin"
-    case 1: "Ethereum"
-    case 10: "Optimism"
-    case 137: "Polygon"
-    case 42161: "Arbitrum"
-    default: "Chain \(chainId)"
     }
   }
 

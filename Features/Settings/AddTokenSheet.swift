@@ -35,6 +35,7 @@ struct AddTokenSheet: View {
           Section {
             Label(error, systemImage: "exclamationmark.triangle.fill")
               .foregroundStyle(.red)
+              .accessibilityLabel("Error: \(error)")
           }
         }
       }
@@ -111,6 +112,7 @@ struct AddTokenSheet: View {
             )
           }
         }
+        .buttonStyle(.borderedProminent)
         .disabled(isNative ? symbolHint.isEmpty : contractAddress.isEmpty)
       }
     }
@@ -136,8 +138,10 @@ struct AddTokenSheet: View {
       Section("Resolved Token") {
         LabeledContent("Name", value: token.name)
         LabeledContent("Symbol", value: token.symbol)
-        LabeledContent("Chain", value: chainName(for: token.chainId))
-        LabeledContent("Decimals", value: "\(token.decimals)")
+        LabeledContent("Chain", value: CryptoToken.chainName(for: token.chainId))
+        LabeledContent("Decimals") {
+          Text("\(token.decimals)").monospacedDigit()
+        }
       }
 
       Section("Provider Coverage") {
@@ -180,12 +184,9 @@ struct AddTokenSheet: View {
       Text(name)
       Spacer()
       Image(systemName: available ? "checkmark.circle.fill" : "xmark.circle")
-        .foregroundStyle(available ? .green : .secondary)
+        .foregroundStyle(available ? .primary : .secondary)
         .accessibilityLabel(available ? "\(name) available" : "\(name) not available")
     }
   }
 
-  private func chainName(for chainId: Int) -> String {
-    chains.first { $0.id == chainId }?.name ?? "Chain \(chainId)"
-  }
 }
