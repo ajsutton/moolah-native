@@ -90,4 +90,34 @@ struct MonetaryAmountTests {
     #expect(a == b)
     #expect(a != c)
   }
+
+  // MARK: - parseCents(from:)
+
+  @Test func parseCentsWholeNumber() {
+    #expect(MonetaryAmount.parseCents(from: "100") == 10000)
+  }
+
+  @Test func parseCentsDecimal() {
+    #expect(MonetaryAmount.parseCents(from: "12.50") == 1250)
+  }
+
+  @Test func parseCentsStripsNonNumeric() {
+    #expect(MonetaryAmount.parseCents(from: "$12.50") == 1250)
+  }
+
+  @Test func parseCentsEmptyString() {
+    #expect(MonetaryAmount.parseCents(from: "") == nil)
+  }
+
+  @Test func parseCentsInvalidString() {
+    #expect(MonetaryAmount.parseCents(from: "abc") == nil)
+  }
+
+  @Test func parseCentsMultipleDecimals() {
+    #expect(MonetaryAmount.parseCents(from: "1.2.3") == nil)
+  }
+
+  @Test func parseCentsZero() {
+    #expect(MonetaryAmount.parseCents(from: "0") == 0)
+  }
 }

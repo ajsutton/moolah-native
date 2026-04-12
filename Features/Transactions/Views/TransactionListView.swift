@@ -80,50 +80,33 @@ struct TransactionListView: View {
     }
     .task(id: transactionStore.error?.localizedDescription) {
       if let error = transactionStore.error {
-        errorMessage = formatError(error)
+        errorMessage = error.userMessage
         showError = true
       }
     }
   }
 
-  private func formatError(_ error: Error) -> String {
-    // Extract meaningful error messages
-    if let backendError = error as? BackendError {
-      switch backendError {
-      case .serverError(let statusCode):
-        return "Server error (\(statusCode)). Please try again."
-      case .networkUnavailable:
-        return "Network error. Check your connection."
-      case .unauthenticated:
-        return "Session expired. Please log in again."
-      case .validationFailed(let message):
-        return message
-      case .notFound(let message):
-        return message
-      }
-    }
-    return "Operation failed: \(error.localizedDescription)"
-  }
-
   private func createNewTransaction() {
-    // Create a new transaction with default values
-    let newTransaction = Transaction(
+    let currency = accounts.ordered.first?.balance.currency ?? .AUD
+
+    // Create a placeholder for optimistic selection while the store creates it
+    let placeholder = Transaction(
       type: .expense,
       date: Date(),
       accountId: filter.accountId ?? accounts.ordered.first?.id,
-      amount: MonetaryAmount(cents: 0, currency: accounts.ordered.first?.balance.currency ?? .AUD),
+      amount: MonetaryAmount(cents: 0, currency: currency),
       payee: ""
     )
-
-    // Optimistically select it to show the detail panel immediately
-    selectedTransaction = newTransaction
+    selectedTransaction = placeholder
 
     // Create the transaction in the store and update selection with server-confirmed version
     Task {
-      if let created = await transactionStore.create(newTransaction) {
-        // Only update selection if it's still pointing to this transaction
-        // (user might have created another transaction in the meantime)
-        if selectedTransaction?.id == newTransaction.id {
+      if let created = await transactionStore.createDefault(
+        accountId: filter.accountId,
+        fallbackAccountId: accounts.ordered.first?.id,
+        currency: currency
+      ) {
+        if selectedTransaction?.id == placeholder.id {
           selectedTransaction = created
         }
       }

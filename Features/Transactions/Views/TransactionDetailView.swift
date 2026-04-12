@@ -78,22 +78,17 @@ struct TransactionDetailView: View {
     transaction.amount.cents == 0 && (transaction.payee?.isEmpty ?? true)
   }
 
-  private var parsedCents: Int? {
-    let cleaned = amountText.filter { $0.isNumber || $0 == "." }
-    guard let decimal = Decimal(string: cleaned), decimal >= 0 else { return nil }
-    return NSDecimalNumber(decimal: decimal * 100).intValue
+  private var draft: TransactionDraft {
+    TransactionDraft(
+      type: type, payee: payee, amountText: amountText, date: date,
+      accountId: accountId, toAccountId: toAccountId, categoryId: categoryId,
+      earmarkId: earmarkId, notes: notes, isRepeating: isRepeating,
+      recurPeriod: recurPeriod, recurEvery: recurEvery)
   }
 
-  private var isValid: Bool {
-    guard parsedCents != nil else { return false }
-    if type == .transfer {
-      guard toAccountId != nil, toAccountId != accountId else { return false }
-    }
-    if isRepeating {
-      guard recurPeriod != nil, recurEvery >= 1 else { return false }
-    }
-    return true
-  }
+  private var parsedCents: Int? { draft.parsedCents }
+
+  private var isValid: Bool { draft.isValid }
 
   private var sortedAccounts: [Account] {
     accounts.ordered.sorted { a, b in
@@ -538,31 +533,10 @@ struct TransactionDetailView: View {
   }
 
   private func saveIfValid() {
-    guard isValid, let cents = parsedCents else { return }
-
-    let signedCents: Int
-    switch type {
-    case .expense: signedCents = -abs(cents)
-    case .income: signedCents = abs(cents)
-    case .transfer: signedCents = -abs(cents)
-    case .openingBalance: signedCents = abs(cents)  // Should never be edited
-    }
-
-    let updated = Transaction(
-      id: transaction.id,
-      type: type,
-      date: date,
-      accountId: accountId,
-      toAccountId: type == .transfer ? toAccountId : nil,
-      amount: MonetaryAmount(cents: signedCents, currency: transaction.amount.currency),
-      payee: payee.isEmpty ? nil : payee,
-      notes: notes.isEmpty ? nil : notes,
-      categoryId: categoryId,
-      earmarkId: earmarkId,
-      recurPeriod: isRepeating ? recurPeriod : nil,
-      recurEvery: isRepeating ? recurEvery : nil
-    )
-
+    guard
+      let updated = draft.toTransaction(
+        id: transaction.id, currency: transaction.amount.currency)
+    else { return }
     onUpdate(updated)
   }
 }

@@ -439,6 +439,71 @@ struct EarmarkStoreTests {
 
   // MARK: - Show Hidden
 
+  // MARK: - create / update
+
+  @Test func testCreateAddsEarmark() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = EarmarkStore(repository: backend.earmarks)
+
+    let earmark = Earmark(name: "New Fund")
+    let created = await store.create(earmark)
+
+    #expect(created != nil)
+    #expect(created?.name == "New Fund")
+    #expect(store.earmarks.count == 1)
+    #expect(store.earmarks.first?.name == "New Fund")
+  }
+
+  @Test func testCreateReturnsNilOnFailure() async throws {
+    let store = EarmarkStore(repository: FailingEarmarkRepository())
+
+    let result = await store.create(Earmark(name: "Fails"))
+
+    #expect(result == nil)
+    #expect(store.error != nil)
+  }
+
+  @Test func testCreateReloadsAfterSuccess() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = EarmarkStore(repository: backend.earmarks)
+
+    let e1 = Earmark(name: "First")
+    _ = await store.create(e1)
+    let e2 = Earmark(name: "Second")
+    _ = await store.create(e2)
+
+    #expect(store.earmarks.count == 2)
+    #expect(store.earmarks.by(id: e1.id) != nil)
+    #expect(store.earmarks.by(id: e2.id) != nil)
+  }
+
+  @Test func testUpdateModifiesEarmark() async throws {
+    let earmark = Earmark(name: "Holiday Fund")
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(earmarks: [earmark], in: container)
+    let store = EarmarkStore(repository: backend.earmarks)
+    await store.load()
+
+    var modified = earmark
+    modified.name = "Vacation Fund"
+    let updated = await store.update(modified)
+
+    #expect(updated != nil)
+    #expect(updated?.name == "Vacation Fund")
+    #expect(store.earmarks.by(id: earmark.id)?.name == "Vacation Fund")
+  }
+
+  @Test func testUpdateReturnsNilOnFailure() async throws {
+    let store = EarmarkStore(repository: FailingEarmarkRepository())
+
+    let result = await store.update(Earmark(name: "Fails"))
+
+    #expect(result == nil)
+    #expect(store.error != nil)
+  }
+
+  // MARK: - Show Hidden
+
   @Test("visibleEarmarks excludes hidden earmarks by default")
   func hiddenEarmarksExcluded() async throws {
     let visible = Earmark(
@@ -485,5 +550,29 @@ struct EarmarkStoreTests {
     store.showHidden = true
 
     #expect(store.visibleEarmarks.count == 2)
+  }
+}
+
+// MARK: - Test helpers
+
+private struct FailingEarmarkRepository: EarmarkRepository {
+  func fetchAll() async throws -> [Earmark] {
+    throw BackendError.networkUnavailable
+  }
+
+  func create(_ earmark: Earmark) async throws -> Earmark {
+    throw BackendError.networkUnavailable
+  }
+
+  func update(_ earmark: Earmark) async throws -> Earmark {
+    throw BackendError.networkUnavailable
+  }
+
+  func fetchBudget(earmarkId: UUID) async throws -> [EarmarkBudgetItem] {
+    throw BackendError.networkUnavailable
+  }
+
+  func setBudget(earmarkId: UUID, categoryId: UUID, amount: Int) async throws {
+    throw BackendError.networkUnavailable
   }
 }

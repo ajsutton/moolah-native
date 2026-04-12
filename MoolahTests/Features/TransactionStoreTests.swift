@@ -1123,6 +1123,76 @@ struct TransactionStoreTests {
     #expect(lastValue == "third")
   }
 
+  // MARK: - createDefault
+
+  @Test func testCreateDefaultUsesFilterAccountId() async throws {
+    let filterAccountId = UUID()
+    let fallbackAccountId = UUID()
+    let (backend, _) = try TestBackend.create()
+    let store = TransactionStore(repository: backend.transactions)
+
+    await store.load(filter: TransactionFilter(accountId: filterAccountId))
+
+    let created = await store.createDefault(
+      accountId: filterAccountId,
+      fallbackAccountId: fallbackAccountId,
+      currency: Currency.defaultTestCurrency
+    )
+
+    #expect(created != nil)
+    #expect(created?.accountId == filterAccountId)
+  }
+
+  @Test func testCreateDefaultFallsBackToFirstAccount() async throws {
+    let fallbackAccountId = UUID()
+    let (backend, _) = try TestBackend.create()
+    let store = TransactionStore(repository: backend.transactions)
+
+    await store.load(filter: TransactionFilter())
+
+    let created = await store.createDefault(
+      accountId: nil,
+      fallbackAccountId: fallbackAccountId,
+      currency: Currency.defaultTestCurrency
+    )
+
+    #expect(created != nil)
+    #expect(created?.accountId == fallbackAccountId)
+  }
+
+  @Test func testCreateDefaultSetsExpenseTypeAndZeroAmount() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = TransactionStore(repository: backend.transactions)
+
+    await store.load(filter: TransactionFilter())
+
+    let created = await store.createDefault(
+      accountId: accountId,
+      fallbackAccountId: nil,
+      currency: Currency.defaultTestCurrency
+    )
+
+    #expect(created != nil)
+    #expect(created?.type == .expense)
+    #expect(created?.amount.cents == 0)
+    #expect(created?.amount.currency == Currency.defaultTestCurrency)
+    #expect(created?.payee == "")
+  }
+
+  @Test func testCreateDefaultReturnsNilOnFailure() async throws {
+    // Use an error-injecting repository to force a failure
+    let failingStore = TransactionStore(repository: FailingTransactionRepository())
+
+    let result = await failingStore.createDefault(
+      accountId: accountId,
+      fallbackAccountId: nil,
+      currency: Currency.defaultTestCurrency
+    )
+
+    #expect(result == nil)
+    #expect(failingStore.error != nil)
+  }
+
   @Test func testFetchPayeeSuggestionsEmptyPrefixReturnsEmpty() async throws {
     let transactions = [
       Transaction(
@@ -1135,5 +1205,29 @@ struct TransactionStoreTests {
 
     let suggestions = try await backend.transactions.fetchPayeeSuggestions(prefix: "")
     #expect(suggestions.isEmpty)
+  }
+}
+
+// MARK: - Test helpers
+
+private struct FailingTransactionRepository: TransactionRepository {
+  func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> TransactionPage {
+    throw BackendError.networkUnavailable
+  }
+
+  func create(_ transaction: Transaction) async throws -> Transaction {
+    throw BackendError.networkUnavailable
+  }
+
+  func update(_ transaction: Transaction) async throws -> Transaction {
+    throw BackendError.networkUnavailable
+  }
+
+  func delete(id: UUID) async throws {
+    throw BackendError.networkUnavailable
+  }
+
+  func fetchPayeeSuggestions(prefix: String) async throws -> [String] {
+    throw BackendError.networkUnavailable
   }
 }

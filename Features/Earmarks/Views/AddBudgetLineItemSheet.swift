@@ -131,7 +131,7 @@ struct AddBudgetLineItemSheet: View {
 
   private func save() {
     guard let categoryId = selectedCategoryId else { return }
-    let cents = MonetaryAmount.parseCents(from: amountText)
+    guard let cents = MonetaryAmount.parseCents(from: amountText) else { return }
     let amount = MonetaryAmount(cents: cents, currency: earmark.balance.currency)
     Task {
       await earmarkStore.addBudgetItem(

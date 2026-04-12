@@ -17,20 +17,20 @@ All bugs fixed:
 - **Transaction download shows progress bar** — `TransactionPage` now carries `totalCount` from the server; `TransactionStore` exposes `loadedCount`/`totalCount`; view shows determinate `ProgressView`.
 - **macOS upcoming transactions use detail sidebar** — `UpcomingTransactionsCard` now uses platform-specific navigation (inline `HStack` detail on macOS, `.sheet()` on iOS).
 
-### 1b. Test Coverage (UI Testing Plan — Part A)
+### 1b. Test Coverage (UI Testing Plan — Part A) — Done
 
-Extract business logic from views into testable stores and shared utilities. See `UI_TESTING_PLAN.md` for full details.
+Extracted business logic from views into testable stores and shared utilities. Added 54 new tests (428 → 482 macOS, 424 → 478 iOS).
 
-| Step | What | New Tests |
-|------|------|-----------|
-| A5 | Deduplicate `parseCurrency` (4 copies) | 6 |
-| A8 | Fill store test gaps (CategoryStore, EarmarkStore, AuthStore) | 17 |
-| A2 | Extract `TransactionDraft` from duplicated view logic | 14 |
-| A9 | Deduplicate earmark sheets (3 copies) | 0 |
-| A1 | Extract `createNewTransaction` to store | 4 |
-| A6 | Extract `availableFunds` to store | 4 |
-| A7 | Extract `hasActiveFilters` to model | 5 |
-| A4 | Extract `formatError` to shared utility | 4 |
+- **A5:** Deduplicated `parseCurrency` — all call sites use `MonetaryAmount.parseCents(from:)`. Changed return type to `Int?` (nil on invalid input) and added multiple-decimal-point rejection. (+7 tests)
+- **A8:** Filled store test gaps — full suites for CategoryStore (9), EarmarkStore create/update (5), AuthStore signIn (3). (+17 tests)
+- **A2:** Extracted `TransactionDraft` — shared value type for form-to-Transaction conversion, replacing duplicated amount-signing and validation in TransactionDetailView and TransactionFormView. (+14 tests)
+- **A9:** Deduplicated earmark sheets — consolidated 3 CreateEarmarkSheet and 2 EditEarmarkSheet copies into `EarmarkFormSheet.swift`.
+- **A1:** Extracted `createNewTransaction` to `TransactionStore.createDefault()`. (+4 tests)
+- **A6:** Extracted `availableFunds` — moved earmark-aware computation from SidebarView to `AccountStore.availableFunds(earmarks:)`. (+4 tests)
+- **A7:** Extracted `hasActiveFilters` to `TransactionFilter` extension. (+5 tests)
+- **A4:** Extracted `formatError` to `BackendError.userMessage` and `Error.userMessage` extensions. (+4 tests)
+
+**Reference:** `completed/UI_TESTING_PLAN.md`
 
 ---
 

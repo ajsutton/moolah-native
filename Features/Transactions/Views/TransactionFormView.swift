@@ -92,21 +92,17 @@ struct TransactionFormView: View {
     isEditing ? "Edit Transaction" : "New Transaction"
   }
 
-  private var parsedCents: Int? {
-    guard let value = Decimal(string: amountText), value > 0 else { return nil }
-    return NSDecimalNumber(decimal: value * 100).intValue
+  private var draft: TransactionDraft {
+    TransactionDraft(
+      type: type, payee: payee, amountText: amountText, date: date,
+      accountId: accountId, toAccountId: toAccountId, categoryId: categoryId,
+      earmarkId: earmarkId, notes: notes, isRepeating: isRepeating,
+      recurPeriod: recurPeriod, recurEvery: recurEvery)
   }
 
-  private var canSave: Bool {
-    guard parsedCents != nil else { return false }
-    if type == .transfer {
-      guard toAccountId != nil, toAccountId != accountId else { return false }
-    }
-    if isRepeating {
-      guard recurPeriod != nil, recurEvery >= 1 else { return false }
-    }
-    return true
-  }
+  private var parsedCents: Int? { draft.parsedCents }
+
+  private var canSave: Bool { draft.isValid }
 
   var body: some View {
     NavigationStack {
@@ -446,31 +442,10 @@ struct TransactionFormView: View {
   }
 
   private func save() {
-    guard let cents = parsedCents else { return }
-
-    let signedCents: Int
-    switch type {
-    case .expense: signedCents = -abs(cents)
-    case .income: signedCents = abs(cents)
-    case .transfer: signedCents = -abs(cents)
-    case .openingBalance: signedCents = abs(cents)  // Should never be created via form
-    }
-
-    let transaction = Transaction(
-      id: existing?.id ?? UUID(),
-      type: type,
-      date: date,
-      accountId: accountId,
-      toAccountId: type == .transfer ? toAccountId : nil,
-      amount: MonetaryAmount(cents: signedCents, currency: selectedCurrency),
-      payee: payee.isEmpty ? nil : payee,
-      notes: notes.isEmpty ? nil : notes,
-      categoryId: categoryId,
-      earmarkId: earmarkId,
-      recurPeriod: isRepeating ? recurPeriod : nil,
-      recurEvery: isRepeating ? recurEvery : nil
-    )
-
+    guard
+      let transaction = draft.toTransaction(
+        id: existing?.id ?? UUID(), currency: selectedCurrency)
+    else { return }
     onSave(transaction)
     dismiss()
   }

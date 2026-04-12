@@ -73,15 +73,14 @@ struct AccountStoreTests {
       store.netWorth == MonetaryAmount(cents: 2_550_000, currency: Currency.defaultTestCurrency))
   }
 
-  @Test func testAvailableFunds() async throws {
+  @Test func testAvailableFundsWithNoEarmarks() async throws {
     let accounts = [
       Account(
         name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency)),  // 1000.00
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency)),
       Account(
         name: "Savings", type: .asset,
-        balance: MonetaryAmount(cents: 500000, currency: Currency.defaultTestCurrency)),  // 5000.00
-      // Current Total = 6000.00
+        balance: MonetaryAmount(cents: 500000, currency: Currency.defaultTestCurrency)),
     ]
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: accounts, in: container)
@@ -89,9 +88,92 @@ struct AccountStoreTests {
 
     await store.load()
 
-    // Available Funds = Current Total (6000.00) = 3000.00
+    let noEarmarks = Earmarks(from: [])
     #expect(
-      store.availableFunds == MonetaryAmount(cents: 600000, currency: Currency.defaultTestCurrency))
+      store.availableFunds(earmarks: noEarmarks)
+        == MonetaryAmount(cents: 600000, currency: Currency.defaultTestCurrency))
+  }
+
+  @Test func testAvailableFundsSubtractsPositiveEarmarks() async throws {
+    let accounts = [
+      Account(
+        name: "Checking", type: .bank,
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency)),
+      Account(
+        name: "Savings", type: .asset,
+        balance: MonetaryAmount(cents: 500000, currency: Currency.defaultTestCurrency)),
+    ]
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: accounts, in: container)
+    let store = AccountStore(repository: backend.accounts)
+
+    await store.load()
+
+    let earmarks = Earmarks(from: [
+      Earmark(
+        name: "Holiday",
+        balance: MonetaryAmount(cents: 150000, currency: Currency.defaultTestCurrency)),
+      Earmark(
+        name: "Emergency",
+        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency)),
+    ])
+    // 600000 - 150000 - 50000 = 400000
+    #expect(
+      store.availableFunds(earmarks: earmarks)
+        == MonetaryAmount(cents: 400000, currency: Currency.defaultTestCurrency))
+  }
+
+  @Test func testAvailableFundsIgnoresNegativeEarmarkBalances() async throws {
+    let accounts = [
+      Account(
+        name: "Checking", type: .bank,
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
+    ]
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: accounts, in: container)
+    let store = AccountStore(repository: backend.accounts)
+
+    await store.load()
+
+    let earmarks = Earmarks(from: [
+      Earmark(
+        name: "Positive",
+        balance: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency)),
+      Earmark(
+        name: "Negative",
+        balance: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency)),
+    ])
+    // 100000 - 30000 = 70000 (negative earmark ignored)
+    #expect(
+      store.availableFunds(earmarks: earmarks)
+        == MonetaryAmount(cents: 70000, currency: Currency.defaultTestCurrency))
+  }
+
+  @Test func testAvailableFundsIgnoresHiddenEarmarks() async throws {
+    let accounts = [
+      Account(
+        name: "Checking", type: .bank,
+        balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
+    ]
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: accounts, in: container)
+    let store = AccountStore(repository: backend.accounts)
+
+    await store.load()
+
+    let earmarks = Earmarks(from: [
+      Earmark(
+        name: "Visible",
+        balance: MonetaryAmount(cents: 20000, currency: Currency.defaultTestCurrency)),
+      Earmark(
+        name: "Hidden",
+        balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+        isHidden: true),
+    ])
+    // 100000 - 20000 = 80000 (hidden earmark ignored)
+    #expect(
+      store.availableFunds(earmarks: earmarks)
+        == MonetaryAmount(cents: 80000, currency: Currency.defaultTestCurrency))
   }
 
   // MARK: - applyTransactionDelta

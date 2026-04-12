@@ -26,7 +26,7 @@ struct AllTransactionsView: View {
         } label: {
           Label(
             "Filter",
-            systemImage: hasActiveFilters
+            systemImage: activeFilter.hasActiveFilters
               ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
         }
         .keyboardShortcut("f", modifiers: .command)
@@ -47,18 +47,13 @@ struct AllTransactionsView: View {
   }
 
   private var filterTitle: String {
-    if hasActiveFilters {
+    if activeFilter.hasActiveFilters {
       return "Filtered Transactions"
     } else {
       return "All Transactions"
     }
   }
 
-  private var hasActiveFilters: Bool {
-    activeFilter.accountId != nil || activeFilter.earmarkId != nil || activeFilter.scheduled != nil
-      || activeFilter.dateRange != nil || activeFilter.categoryIds != nil
-      || activeFilter.payee != nil
-  }
 }
 
 #Preview {
