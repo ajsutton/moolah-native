@@ -9,26 +9,27 @@ final class InvestmentValueRecord {
   var id: UUID = UUID()
   var accountId: UUID = UUID()
   var date: Date = Date()
-  var value: Int = 0  // cents
-  var currencyCode: String = ""
+  var value: Int64 = 0  // storageValue (× 10^8)
+  var instrumentId: String = ""
   var encodedSystemFields: Data?
 
   init(
     id: UUID = UUID(),
     accountId: UUID,
     date: Date,
-    value: Int,
-    currencyCode: String
+    value: Int64,
+    instrumentId: String
   ) {
     self.id = id
     self.accountId = accountId
     self.date = date
     self.value = value
-    self.currencyCode = currencyCode
+    self.instrumentId = instrumentId
   }
 
   func toDomain() -> InvestmentValue {
-    let currency = Currency.from(code: currencyCode)
-    return InvestmentValue(date: date, value: MonetaryAmount(cents: value, currency: currency))
+    let instrument = Instrument.fiat(code: instrumentId)
+    return InvestmentValue(
+      date: date, value: InstrumentAmount(storageValue: value, instrument: instrument))
   }
 }

@@ -10,10 +10,12 @@ enum TestModelContainer {
     let schema = Schema([
       AccountRecord.self,
       TransactionRecord.self,
+      TransactionLegRecord.self,
       CategoryRecord.self,
       EarmarkRecord.self,
       EarmarkBudgetItemRecord.self,
       InvestmentValueRecord.self,
+      InstrumentRecord.self,
     ])
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     return try ModelContainer(for: schema, configurations: [config])

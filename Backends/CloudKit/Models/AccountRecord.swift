@@ -11,8 +11,6 @@ final class AccountRecord {
   var type: String = "bank"  // Raw value of AccountType
   var position: Int = 0
   var isHidden: Bool = false
-  var currencyCode: String = ""
-  var cachedBalance: Int?
   var encodedSystemFields: Data?
 
   init(
@@ -20,20 +18,16 @@ final class AccountRecord {
     name: String,
     type: String,
     position: Int = 0,
-    isHidden: Bool = false,
-    currencyCode: String,
-    cachedBalance: Int? = nil
+    isHidden: Bool = false
   ) {
     self.id = id
     self.name = name
     self.type = type
     self.position = position
     self.isHidden = isHidden
-    self.currencyCode = currencyCode
-    self.cachedBalance = cachedBalance
   }
 
-  func toDomain(balance: MonetaryAmount, investmentValue: MonetaryAmount?) -> Account {
+  func toDomain(balance: InstrumentAmount, investmentValue: InstrumentAmount?) -> Account {
     Account(
       id: id,
       name: name,
@@ -45,14 +39,13 @@ final class AccountRecord {
     )
   }
 
-  static func from(_ account: Account, currencyCode: String) -> AccountRecord {
+  static func from(_ account: Account) -> AccountRecord {
     AccountRecord(
       id: account.id,
       name: account.name,
       type: account.type.rawValue,
       position: account.position,
-      isHidden: account.isHidden,
-      currencyCode: currencyCode
+      isHidden: account.isHidden
     )
   }
 }
