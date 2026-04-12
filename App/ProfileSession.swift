@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftData
 
 /// Holds the backend and all stores for a single profile.
@@ -21,6 +22,9 @@ final class ProfileSession: Identifiable {
   let priceConversionService: PriceConversionService
 
   nonisolated var id: UUID { profile.id }
+
+  private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileSession")
+  private var syncReloadTask: Task<Void, Never>?
 
   init(profile: Profile, containerManager: ProfileContainerManager? = nil) {
     self.profile = profile
@@ -82,6 +86,44 @@ final class ProfileSession: Identifiable {
     self.transactionStore.onMutate = { old, new in
       accountStore.applyTransactionDelta(old: old, new: new)
       earmarkStore.applyTransactionDelta(old: old, new: new)
+    }
+
+    // Observe CloudKit remote changes for iCloud profiles
+    if profile.backendType == .cloudKit {
+      observeRemoteChanges()
+    }
+  }
+
+  // MARK: - CloudKit Sync
+
+  /// Observes remote CloudKit changes and silently reloads stores.
+  /// Debounces rapid-fire notifications (CloudKit often sends several in quick succession).
+  private func observeRemoteChanges() {
+    NotificationCenter.default.addObserver(
+      forName: .NSPersistentStoreRemoteChange,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      Task { @MainActor in
+        self?.scheduleReloadFromSync()
+      }
+    }
+  }
+
+  /// Debounces sync reloads — cancels any pending reload and waits briefly.
+  /// This avoids redundant reloads when CloudKit delivers multiple change notifications
+  /// in quick succession, and gives the ModelContext time to merge the changes.
+  private func scheduleReloadFromSync() {
+    syncReloadTask?.cancel()
+    syncReloadTask = Task {
+      // Wait for ModelContext to merge remote changes and debounce rapid notifications.
+      try? await Task.sleep(for: .milliseconds(500))
+      guard !Task.isCancelled else { return }
+
+      logger.debug("Reloading stores after CloudKit sync")
+      await accountStore.reloadFromSync()
+      await categoryStore.reloadFromSync()
+      await earmarkStore.reloadFromSync()
     }
   }
 }
