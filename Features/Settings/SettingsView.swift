@@ -1,9 +1,11 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Mail-style account management view used in the macOS Settings scene
 /// and as a sheet on iOS.
 struct SettingsView: View {
   @Environment(ProfileStore.self) private var profileStore
+  @Environment(ProfileContainerManager.self) private var containerManager
 
   #if os(macOS)
     @Environment(SessionManager.self) private var sessionManager
@@ -15,8 +17,16 @@ struct SettingsView: View {
   @State private var showAddProfile = false
   @State private var profileToDelete: Profile?
   @State private var showDeleteAlert = false
+  @State private var showImportPicker = false
+  @State private var isImporting = false
+  @State private var importError: String?
 
   #if os(iOS)
+    @State private var exportFileURL: URL?
+    @State private var showExportSheet = false
+    @State private var isExporting = false
+    @State private var exportError: String?
+
     init(activeSession: ProfileSession? = nil) {
       self.activeSession = activeSession
     }
@@ -64,6 +74,25 @@ struct SettingsView: View {
       } message: {
         deleteAlertMessage
       }
+      .fileImporter(
+        isPresented: $showImportPicker,
+        allowedContentTypes: [.json]
+      ) { result in
+        Task { await handleImport(result: result) }
+      }
+      .alert(
+        "Import Failed",
+        isPresented: .init(
+          get: { importError != nil },
+          set: { if !$0 { importError = nil } }
+        )
+      ) {
+        Button("OK") { importError = nil }
+      } message: {
+        if let importError {
+          Text(importError)
+        }
+      }
     }
 
     private var emptyState: some View {
@@ -93,6 +122,16 @@ struct SettingsView: View {
             } label: {
               profileRow(profile)
             }
+            .swipeActions(edge: .leading) {
+              if profile.backendType == .cloudKit {
+                Button {
+                  Task { await handleExport(profile: profile) }
+                } label: {
+                  Label("Export", systemImage: "square.and.arrow.up")
+                }
+                .tint(.blue)
+              }
+            }
           }
           .onDelete { indexSet in
             if let index = indexSet.first {
@@ -108,17 +147,67 @@ struct SettingsView: View {
           } label: {
             Label("Add Profile", systemImage: "plus")
           }
+
+          Button {
+            showImportPicker = true
+          } label: {
+            Label("Import Profile", systemImage: "square.and.arrow.down")
+          }
         }
       }
       .navigationTitle("Settings")
+      .overlay {
+        if isImporting || isExporting {
+          ProgressView(isImporting ? "Importing\u{2026}" : "Exporting\u{2026}")
+            .padding()
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        }
+      }
       .sheet(isPresented: $showAddProfile) {
         ProfileFormView()
           .environment(profileStore)
+      }
+      .sheet(isPresented: $showExportSheet) {
+        if let exportFileURL {
+          ShareSheetView(url: exportFileURL)
+        }
       }
       .alert(deleteAlertTitle, isPresented: $showDeleteAlert) {
         deleteAlertButtons
       } message: {
         deleteAlertMessage
+      }
+      .fileImporter(
+        isPresented: $showImportPicker,
+        allowedContentTypes: [.json]
+      ) { result in
+        Task { await handleImport(result: result) }
+      }
+      .alert(
+        "Import Failed",
+        isPresented: .init(
+          get: { importError != nil },
+          set: { if !$0 { importError = nil } }
+        )
+      ) {
+        Button("OK") { importError = nil }
+      } message: {
+        if let importError {
+          Text(importError)
+        }
+      }
+      .alert(
+        "Export Failed",
+        isPresented: .init(
+          get: { exportError != nil },
+          set: { if !$0 { exportError = nil } }
+        )
+      ) {
+        Button("OK") { exportError = nil }
+      } message: {
+        if let exportError {
+          Text(exportError)
+        }
       }
     }
   #endif
@@ -164,6 +253,14 @@ struct SettingsView: View {
           .disabled(selectedProfileID == nil)
           .accessibilityLabel("Remove selected profile")
           .keyboardShortcut(.delete, modifiers: [])
+
+          Button {
+            showImportPicker = true
+          } label: {
+            Image(systemName: "square.and.arrow.down")
+          }
+          .buttonStyle(.borderless)
+          .accessibilityLabel("Import profile")
 
           Spacer()
         }
@@ -214,6 +311,88 @@ struct SettingsView: View {
       CloudKitProfileDetailView(profile: profile)
     }
   }
+
+  // MARK: - Import
+
+  private func handleImport(result: Result<URL, Error>) async {
+    guard case .success(let url) = result else {
+      if case .failure(let error) = result {
+        importError = error.localizedDescription
+      }
+      return
+    }
+    guard url.startAccessingSecurityScopedResource() else {
+      importError = "Could not access the selected file."
+      return
+    }
+    defer { url.stopAccessingSecurityScopedResource() }
+
+    isImporting = true
+    defer { isImporting = false }
+
+    do {
+      let jsonData = try Data(contentsOf: url)
+      let exported = try JSONDecoder.exportDecoder.decode(ExportedData.self, from: jsonData)
+
+      let newProfile = Profile(
+        label: exported.profileLabel,
+        backendType: .cloudKit,
+        currencyCode: exported.currencyCode,
+        financialYearStartMonth: exported.financialYearStartMonth
+      )
+      profileStore.addProfile(newProfile)
+
+      do {
+        let container = try containerManager.container(for: newProfile.id)
+        let coordinator = MigrationCoordinator()
+        _ = try await coordinator.importFromFile(
+          url: url,
+          modelContainer: container
+        )
+        profileStore.setActiveProfile(newProfile.id)
+      } catch {
+        profileStore.removeProfile(newProfile.id)
+        throw error
+      }
+    } catch {
+      importError = error.localizedDescription
+    }
+  }
+
+  // MARK: - Export (iOS)
+
+  #if os(iOS)
+    private func handleExport(profile: Profile) async {
+      isExporting = true
+      defer { isExporting = false }
+
+      do {
+        let container = try containerManager.container(for: profile.id)
+        let currency = Currency.from(code: profile.currencyCode)
+        let backend = CloudKitBackend(
+          modelContainer: container,
+          currency: currency,
+          profileLabel: profile.label
+        )
+
+        let tempDir = FileManager.default.temporaryDirectory
+        let filename = "\(profile.label).json"
+        let tempURL = tempDir.appendingPathComponent(filename)
+
+        let coordinator = MigrationCoordinator()
+        try await coordinator.exportToFile(
+          url: tempURL,
+          backend: backend,
+          profile: profile
+        )
+
+        exportFileURL = tempURL
+        showExportSheet = true
+      } catch {
+        exportError = error.localizedDescription
+      }
+    }
+  #endif
 
   // MARK: - Shared Components
 
@@ -682,3 +861,20 @@ struct CloudKitProfileDetailView: View {
     }
   }
 }
+
+// MARK: - iOS Share Sheet
+
+#if os(iOS)
+  /// Wraps UIActivityViewController for presenting a share sheet with a file URL.
+  struct ShareSheetView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+      UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+
+    func updateUIViewController(
+      _ uiViewController: UIActivityViewController, context: Context
+    ) {}
+  }
+#endif

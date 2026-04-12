@@ -145,6 +145,7 @@ struct MoolahApp: App {
         SettingsView()
           .environment(profileStore)
           .environment(sessionManager)
+          .environment(containerManager)
           .modelContainer(containerManager.indexContainer)
       }
     #else
