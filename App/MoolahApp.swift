@@ -67,6 +67,7 @@ struct MoolahApp: App {
   private let containerManager: ProfileContainerManager
   @State private var profileStore: ProfileStore
   #if os(macOS)
+    private let backupManager: StoreBackupManager
     @State private var sessionManager: SessionManager
   #else
     @State private var activeSession: ProfileSession?
@@ -104,6 +105,7 @@ struct MoolahApp: App {
     _profileStore = State(initialValue: store)
 
     #if os(macOS)
+      backupManager = StoreBackupManager()
       _sessionManager = State(initialValue: SessionManager(containerManager: containerManager))
     #endif
   }
@@ -114,6 +116,20 @@ struct MoolahApp: App {
         ProfileWindowView(profileID: profileID)
           .environment(profileStore)
           .environment(sessionManager)
+          .task {
+            backupManager.performDailyBackup(
+              profiles: profileStore.profiles,
+              containerManager: containerManager
+            )
+            Timer.scheduledTimer(withTimeInterval: 86400, repeats: true) { _ in
+              Task { @MainActor in
+                backupManager.performDailyBackup(
+                  profiles: profileStore.profiles,
+                  containerManager: containerManager
+                )
+              }
+            }
+          }
       }
       .modelContainer(containerManager.indexContainer)
       .commands {
