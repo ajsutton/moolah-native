@@ -78,8 +78,23 @@ final class ProfileSession: Identifiable {
         return Decimal(1)
       }
     }
+
+    let apiKeyStore = KeychainStore(
+      service: "com.moolah.api-keys", account: "coingecko", synchronizable: true
+    )
+    let coinGeckoApiKey = try? apiKeyStore.restoreString()
+
+    var priceClients: [CryptoPriceClient] = []
+    if let coinGeckoApiKey, !coinGeckoApiKey.isEmpty {
+      priceClients.append(CoinGeckoClient(apiKey: coinGeckoApiKey))
+    }
+    priceClients.append(cryptoCompareClient)
+    priceClients.append(binanceClient)
+
     self.cryptoPriceService = CryptoPriceService(
-      clients: [cryptoCompareClient, binanceClient]
+      clients: priceClients,
+      tokenRepository: ICloudTokenRepository(),
+      resolutionClient: CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey)
     )
     self.priceConversionService = PriceConversionService(
       cryptoPrices: self.cryptoPriceService,
