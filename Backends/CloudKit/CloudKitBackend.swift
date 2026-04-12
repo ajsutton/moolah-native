@@ -17,6 +17,15 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
     profileLabel: String,
     conversionService: (any InstrumentConversionService)? = nil
   ) {
+    let resolvedConversion: any InstrumentConversionService
+    if let conversionService {
+      resolvedConversion = conversionService
+    } else {
+      let client = FrankfurterClient()
+      let exchangeRates = ExchangeRateService(client: client)
+      resolvedConversion = FiatConversionService(exchangeRates: exchangeRates)
+    }
+
     self.auth = CloudKitAuthProvider(profileLabel: profileLabel)
     self.accounts = CloudKitAccountRepository(
       modelContainer: modelContainer, instrument: instrument)
@@ -26,15 +35,10 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
     self.earmarks = CloudKitEarmarkRepository(
       modelContainer: modelContainer, instrument: instrument)
     self.analysis = CloudKitAnalysisRepository(
-      modelContainer: modelContainer, instrument: instrument)
+      modelContainer: modelContainer, instrument: instrument,
+      conversionService: resolvedConversion)
     self.investments = CloudKitInvestmentRepository(
       modelContainer: modelContainer, instrument: instrument)
-    if let conversionService {
-      self.conversionService = conversionService
-    } else {
-      let client = FrankfurterClient()
-      let exchangeRates = ExchangeRateService(client: client)
-      self.conversionService = FiatConversionService(exchangeRates: exchangeRates)
-    }
+    self.conversionService = resolvedConversion
   }
 }

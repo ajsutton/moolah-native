@@ -4,10 +4,16 @@ import SwiftData
 final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
   private let instrument: Instrument
+  private let conversionService: (any InstrumentConversionService)?
 
-  init(modelContainer: ModelContainer, instrument: Instrument) {
+  init(
+    modelContainer: ModelContainer,
+    instrument: Instrument,
+    conversionService: (any InstrumentConversionService)? = nil
+  ) {
     self.modelContainer = modelContainer
     self.instrument = instrument
+    self.conversionService = conversionService
   }
 
   @MainActor
@@ -33,6 +39,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     let investmentValues = try await fetchAllInvestmentValues(
       investmentAccountIds: investmentAccountIds)
     let instrument = self.instrument
+    let conversionService = self.conversionService
 
     // 3. Compute all three analyses concurrently, off the main thread
     async let balances = Self.computeDailyBalances(
@@ -42,7 +49,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       investmentValues: investmentValues,
       after: historyAfter,
       forecastUntil: forecastUntil,
-      instrument: instrument
+      instrument: instrument,
+      conversionService: conversionService
     )
     async let breakdown = Self.computeExpenseBreakdown(
       nonScheduled: nonScheduled,
@@ -180,7 +188,18 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       )
     }
 
-    // 5. Apply investment values from InvestmentValueRecord
+    // 5. Convert multi-instrument positions to profile currency if needed
+    if let conversionService {
+      try await Self.applyMultiInstrumentConversion(
+        to: &dailyBalances,
+        allTransactions: allTransactions,
+        investmentAccountIds: investmentAccountIds,
+        instrument: instrument,
+        conversionService: conversionService
+      )
+    }
+
+    // 6. Apply investment values (overrides net worth with market values where available)
     let investmentValues = try await fetchAllInvestmentValues(
       investmentAccountIds: investmentAccountIds)
     Self.applyInvestmentValues(investmentValues, to: &dailyBalances, instrument: instrument)
@@ -412,7 +431,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     investmentValues: [(accountId: UUID, date: Date, value: InstrumentAmount)],
     after: Date?,
     forecastUntil: Date?,
-    instrument: Instrument
+    instrument: Instrument,
+    conversionService: (any InstrumentConversionService)? = nil
   ) async throws -> [DailyBalance] {
     let investmentAccountIds = Set(accounts.filter { $0.type == .investment }.map(\.id))
 
@@ -468,7 +488,18 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       )
     }
 
-    // Apply investment values
+    // Convert multi-instrument positions to profile currency if needed
+    if let conversionService {
+      try await applyMultiInstrumentConversion(
+        to: &dailyBalances,
+        allTransactions: nonScheduled,
+        investmentAccountIds: investmentAccountIds,
+        instrument: instrument,
+        conversionService: conversionService
+      )
+    }
+
+    // Apply investment values (overrides net worth with market values where available)
     applyInvestmentValues(investmentValues, to: &dailyBalances, instrument: instrument)
 
     // Compute bestFit
@@ -613,6 +644,107 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         earmarkedProfit: data.earmarkedIncome - data.earmarkedExpense
       )
     }.sorted { $0.month > $1.month }
+  }
+
+  // MARK: - Multi-Instrument Net Worth
+
+  /// Recomputes daily balances using currency conversion for multi-instrument positions.
+  /// Accumulates positions per instrument, converts each to profile currency per day,
+  /// then splits into balance (bank accounts) and investments (investment accounts).
+  /// Preserves the invariant: netWorth == balance + investmentValue (or balance + investments).
+  private static func applyMultiInstrumentConversion(
+    to dailyBalances: inout [Date: DailyBalance],
+    allTransactions: [Transaction],
+    investmentAccountIds: Set<UUID>,
+    instrument: Instrument,
+    conversionService: any InstrumentConversionService
+  ) async throws {
+    guard !dailyBalances.isEmpty else { return }
+
+    // Check if any legs use a non-profile instrument; skip if single-instrument
+    let hasMultiInstrument = allTransactions.contains { txn in
+      txn.legs.contains { $0.instrument.id != instrument.id }
+    }
+    guard hasMultiInstrument else { return }
+
+    // Sort transactions chronologically
+    let sorted = allTransactions.sorted { $0.date < $1.date }
+    let calendar = Calendar(identifier: .gregorian)
+
+    // Track positions by instrument, split by bank vs investment
+    var bankPositions: [String: (quantity: Decimal, instrument: Instrument)] = [:]
+    var investmentPositions: [String: (quantity: Decimal, instrument: Instrument)] = [:]
+    var earmarkPositions: [String: (quantity: Decimal, instrument: Instrument)] = [:]
+
+    for txn in sorted {
+      let dayKey = calendar.startOfDay(for: txn.date)
+
+      for leg in txn.legs {
+        let isInvestment = investmentAccountIds.contains(leg.accountId)
+        let key = leg.instrument.id
+
+        if isInvestment {
+          investmentPositions[key, default: (0, leg.instrument)].quantity += leg.quantity
+        } else {
+          bankPositions[key, default: (0, leg.instrument)].quantity += leg.quantity
+        }
+
+        if leg.earmarkId != nil {
+          earmarkPositions[key, default: (0, leg.instrument)].quantity += leg.quantity
+        }
+      }
+
+      // Only update days that have a balance entry
+      guard dailyBalances[dayKey] != nil else { continue }
+
+      // Convert all positions to profile currency
+      var bankTotal: Decimal = 0
+      for (_, pos) in bankPositions where pos.quantity != 0 {
+        if pos.instrument.id == instrument.id {
+          bankTotal += pos.quantity
+        } else {
+          bankTotal += try await conversionService.convert(
+            pos.quantity, from: pos.instrument, to: instrument, on: txn.date)
+        }
+      }
+
+      var investTotal: Decimal = 0
+      for (_, pos) in investmentPositions where pos.quantity != 0 {
+        if pos.instrument.id == instrument.id {
+          investTotal += pos.quantity
+        } else {
+          investTotal += try await conversionService.convert(
+            pos.quantity, from: pos.instrument, to: instrument, on: txn.date)
+        }
+      }
+
+      var earmarkTotal: Decimal = 0
+      for (_, pos) in earmarkPositions where pos.quantity != 0 {
+        if pos.instrument.id == instrument.id {
+          earmarkTotal += pos.quantity
+        } else {
+          earmarkTotal += try await conversionService.convert(
+            pos.quantity, from: pos.instrument, to: instrument, on: txn.date)
+        }
+      }
+
+      let balance = InstrumentAmount(quantity: bankTotal, instrument: instrument)
+      let investments = InstrumentAmount(quantity: investTotal, instrument: instrument)
+      let earmarked = InstrumentAmount(quantity: earmarkTotal, instrument: instrument)
+      let existing = dailyBalances[dayKey]!
+
+      dailyBalances[dayKey] = DailyBalance(
+        date: existing.date,
+        balance: balance,
+        earmarked: earmarked,
+        availableFunds: balance - earmarked,
+        investments: investments,
+        investmentValue: existing.investmentValue,
+        netWorth: balance + (existing.investmentValue ?? investments),
+        bestFit: existing.bestFit,
+        isForecast: existing.isForecast
+      )
+    }
   }
 
   // MARK: - Static Helper Methods
