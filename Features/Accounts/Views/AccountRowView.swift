@@ -36,7 +36,7 @@ struct SidebarRowView: View {
 
       Spacer()
 
-      MonetaryAmountView(amount: amount, colorOverride: amountColorOverride)
+      InstrumentAmountView(amount: amount, colorOverride: amountColorOverride)
     }
   }
 }

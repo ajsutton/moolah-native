@@ -158,21 +158,21 @@ struct EarmarkBudgetSectionView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .font(.body)
 
-      MonetaryAmountView(amount: lineItem.actual)
+      InstrumentAmountView(amount: lineItem.actual)
         .font(.body)
         .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
 
       Button {
         editingLineItem = lineItem
       } label: {
-        MonetaryAmountView(amount: lineItem.budgeted, colorOverride: .primary)
+        InstrumentAmountView(amount: lineItem.budgeted, colorOverride: .primary)
           .font(.body)
           .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Edit budget for \(lineItem.categoryName)")
 
-      MonetaryAmountView(amount: lineItem.remaining)
+      InstrumentAmountView(amount: lineItem.remaining)
         .font(.body)
         .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
     }
@@ -188,15 +188,15 @@ struct EarmarkBudgetSectionView: View {
         .font(.headline)
         .frame(maxWidth: .infinity, alignment: .leading)
 
-      MonetaryAmountView(amount: totalActual)
+      InstrumentAmountView(amount: totalActual)
         .font(.headline)
         .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
 
-      MonetaryAmountView(amount: totalBudgeted, colorOverride: .primary)
+      InstrumentAmountView(amount: totalBudgeted, colorOverride: .primary)
         .font(.headline)
         .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
 
-      MonetaryAmountView(amount: totalRemaining)
+      InstrumentAmountView(amount: totalRemaining)
         .font(.headline)
         .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
     }
@@ -216,11 +216,11 @@ struct EarmarkBudgetSectionView: View {
       Spacer()
         .frame(minWidth: 70, idealWidth: 90)
 
-      MonetaryAmountView(amount: amount)
+      InstrumentAmountView(amount: amount)
         .font(.body)
         .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
 
-      MonetaryAmountView(amount: amount)
+      InstrumentAmountView(amount: amount)
         .font(.body)
         .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
     }

@@ -103,12 +103,12 @@ struct EarmarkDetailView: View {
               Text("Savings Goal")
                 .font(.caption)
               Spacer()
-              MonetaryAmountView(amount: earmark.balance)
+              InstrumentAmountView(amount: earmark.balance)
                 .font(.caption)
               Text("of")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-              MonetaryAmountView(amount: goal)
+              InstrumentAmountView(amount: goal)
                 .font(.caption)
             }
           }
@@ -126,7 +126,7 @@ struct EarmarkDetailView: View {
       Text(label)
         .font(.caption)
         .foregroundStyle(.secondary)
-      MonetaryAmountView(amount: amount)
+      InstrumentAmountView(amount: amount)
         .font(.headline)
     }
     .frame(maxWidth: .infinity)

@@ -97,7 +97,7 @@ struct CategoryBalanceTable: View {
                       Text(child.name)
                         .font(.body)
                       Spacer()
-                      MonetaryAmountView(amount: child.amount)
+                      InstrumentAmountView(amount: child.amount)
                     }
                   }
                 }
@@ -107,7 +107,7 @@ struct CategoryBalanceTable: View {
                 Text(group.name)
                   .font(.headline)
                 Spacer()
-                MonetaryAmountView(amount: group.totalAmount, font: .headline)
+                InstrumentAmountView(amount: group.totalAmount, font: .headline)
               }
             }
           }
@@ -121,7 +121,7 @@ struct CategoryBalanceTable: View {
         Text("Total")
           .font(.headline)
         Spacer()
-        MonetaryAmountView(amount: grandTotal, font: .headline)
+        InstrumentAmountView(amount: grandTotal, font: .headline)
       }
       .padding()
     }

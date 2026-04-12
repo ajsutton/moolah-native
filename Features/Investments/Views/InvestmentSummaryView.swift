@@ -93,7 +93,7 @@ private struct SummaryPanel: View {
         .font(.caption)
         .foregroundStyle(.secondary)
 
-      MonetaryAmountView(amount: amount)
+      InstrumentAmountView(amount: amount)
         .font(.headline)
 
       if let subtitle {

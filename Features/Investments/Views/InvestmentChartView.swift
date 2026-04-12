@@ -160,7 +160,7 @@ struct InvestmentChartView: View {
         .frame(width: 6, height: 6)
       Text(label)
         .foregroundStyle(.secondary)
-      MonetaryAmountView(amount: amount, font: .caption)
+      InstrumentAmountView(amount: amount, font: .caption)
     }
     .accessibilityElement(children: .combine)
   }

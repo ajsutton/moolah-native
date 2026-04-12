@@ -233,7 +233,7 @@ struct UpcomingTransactionRow: View {
 
       Spacer()
 
-      MonetaryAmountView(amount: transaction.primaryAmount, font: .body)
+      InstrumentAmountView(amount: transaction.primaryAmount, font: .body)
 
       Button("Pay") {
         onPay()

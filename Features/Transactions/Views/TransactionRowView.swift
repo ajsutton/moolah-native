@@ -52,9 +52,9 @@ struct TransactionRowView: View {
       Spacer()
 
       VStack(alignment: .trailing, spacing: 2) {
-        MonetaryAmountView(amount: transaction.primaryAmount, font: .body)
+        InstrumentAmountView(amount: transaction.primaryAmount, font: .body)
 
-        MonetaryAmountView(amount: balance, font: .caption)
+        InstrumentAmountView(amount: balance, font: .caption)
       }
     }
     .padding(.vertical, verticalPadding)

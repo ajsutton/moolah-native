@@ -34,7 +34,7 @@ struct EditAccountView: View {
           }
 
           LabeledContent("Current Balance") {
-            MonetaryAmountView(amount: account.displayBalance)
+            InstrumentAmountView(amount: account.displayBalance)
               .foregroundStyle(.secondary)
           }
           .accessibilityLabel("Current balance, read-only")

@@ -122,7 +122,7 @@ struct SidebarView: View {
 
       Section {
         LabeledContent("Available Funds") {
-          MonetaryAmountView(amount: availableFunds)
+          InstrumentAmountView(amount: availableFunds)
         }
         .font(.headline)
         .accessibilityLabel(
@@ -130,7 +130,7 @@ struct SidebarView: View {
         )
 
         LabeledContent("Net Worth") {
-          MonetaryAmountView(amount: convertedNetWorth ?? accountStore.netWorth)
+          InstrumentAmountView(amount: convertedNetWorth ?? accountStore.netWorth)
         }
         .font(.headline)
         .bold()
@@ -247,7 +247,7 @@ struct SidebarView: View {
 
   private func totalRow(label: String, value: InstrumentAmount) -> some View {
     LabeledContent(label) {
-      MonetaryAmountView(amount: value, colorOverride: .secondary)
+      InstrumentAmountView(amount: value, colorOverride: .secondary)
     }
     .foregroundStyle(.secondary)
     .font(.callout)

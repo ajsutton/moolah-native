@@ -110,12 +110,12 @@ struct EarmarksView: View {
             Text(earmark.name)
               .font(.headline)
             Spacer()
-            MonetaryAmountView(amount: earmark.balance, font: .headline)
+            InstrumentAmountView(amount: earmark.balance, font: .headline)
           }
 
           HStack(spacing: 12) {
             Label {
-              MonetaryAmountView(amount: earmark.saved, font: .caption)
+              InstrumentAmountView(amount: earmark.saved, font: .caption)
             } icon: {
               Image(systemName: "arrow.up")
                 .foregroundStyle(.green)
@@ -123,7 +123,7 @@ struct EarmarksView: View {
             .font(.caption)
 
             Label {
-              MonetaryAmountView(amount: earmark.spent, font: .caption)
+              InstrumentAmountView(amount: earmark.spent, font: .caption)
             } icon: {
               Image(systemName: "arrow.down")
                 .foregroundStyle(.red)

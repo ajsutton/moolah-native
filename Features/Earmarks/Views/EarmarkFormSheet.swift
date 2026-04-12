@@ -127,13 +127,13 @@ struct EditEarmarkSheet: View {
 
         Section("Current Values") {
           LabeledContent("Balance") {
-            MonetaryAmountView(amount: earmark.balance)
+            InstrumentAmountView(amount: earmark.balance)
           }
           LabeledContent("Saved") {
-            MonetaryAmountView(amount: earmark.saved)
+            InstrumentAmountView(amount: earmark.saved)
           }
           LabeledContent("Spent") {
-            MonetaryAmountView(amount: earmark.spent)
+            InstrumentAmountView(amount: earmark.spent)
           }
         }
       }
