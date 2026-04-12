@@ -4,6 +4,8 @@
 
 **Goal:** Extend the multi-instrument model from Phases 1-3 to support cryptocurrency tokens. Wire the existing `CryptoPriceClient` infrastructure into `InstrumentConversionService`, build token swap transaction UI, display crypto positions in account detail, and migrate off `CryptoToken` onto `Instrument`.
 
+**Completed:** `6e91a42` on `feature/multi-instrument` — 667 tests passing on macOS. Note: Task 10 (full CryptoToken retirement) deferred — bridging layer in place.
+
 **Architecture:** `Instrument.crypto(...)` factory creates crypto instruments using the same `chainId:address` ID scheme as the existing `CryptoToken`. The `InstrumentConversionService` gains a crypto conversion path: crypto -> USD (via `CryptoPriceService`) -> target fiat (via `ExchangeRateService`). Token swap transactions produce multi-leg transactions where both legs are transfer-type with non-fiat instruments. `CryptoToken` is retired, with its provider mapping data (`coingeckoId`, `cryptocompareSymbol`, `binanceSymbol`) moved to a dedicated `CryptoProviderMapping` type alongside `Instrument`.
 
 **Tech Stack:** Swift 6, SwiftUI, SwiftData, CloudKit, Swift Testing
