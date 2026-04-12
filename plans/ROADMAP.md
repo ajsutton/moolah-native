@@ -63,13 +63,15 @@ Exchange rate fetching, caching, and conversion infrastructure using the Frankfu
 
 ---
 
-## Phase 5: iOS Release via TestFlight
+## Phase 5: iOS Release via TestFlight — Done
 
-Set up Fastlane + GitHub Actions to archive and upload to TestFlight. Includes monthly auto-tagging to avoid the 90-day TestFlight expiry.
+Fastlane + GitHub Actions pipeline for TestFlight distribution. Version tags (`v*`) trigger builds automatically. Monthly cron workflow keeps builds within the 90-day TestFlight expiry via `workflow_call`. CloudKit sync enabled with schema deployed to production.
 
-**Why now:** The app has a stable data layer, per-profile isolation, exchange rate infrastructure, and growing test coverage — it's worth getting on real devices before expanding multi-currency support.
+Key setup: Apple Developer Program (Individual), App Store Connect app "Moolah Rocks", Match certificates in private repo, environment secrets on `testflight` GitHub environment. Entitlements not in project.yml (breaks local dev/CI) — wired via Fastfile `xcargs` for distribution, `ENABLE_ENTITLEMENTS=1` in `.env` for local CloudKit dev.
 
-**Reference:** `IOS_RELEASE_AUTOMATION_PLAN.md`
+CloudKit compatibility required: removing `#Unique` constraints, adding default values to all SwiftData model attributes, `remote-notification` background mode, `UILaunchScreen`, `UISupportedInterfaceOrientations`, `ITSAppUsesNonExemptEncryption`.
+
+**Reference:** `IOS_RELEASE_AUTOMATION_PLAN.md`, `APP_STORE_VALIDATION_PLAN.md`
 
 ---
 
