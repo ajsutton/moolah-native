@@ -56,13 +56,8 @@ struct ExportedDataTests {
       investmentValues: [:]
     )
 
-    let encoder = JSONEncoder()
-    encoder.dateEncodingStrategy = .iso8601
-    let data = try encoder.encode(original)
-
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
-    let decoded = try decoder.decode(ExportedData.self, from: data)
+    let data = try JSONEncoder.exportEncoder.encode(original)
+    let decoded = try JSONDecoder.exportDecoder.decode(ExportedData.self, from: data)
 
     #expect(decoded.version == original.version)
     #expect(decoded.exportedAt == original.exportedAt)
@@ -97,8 +92,7 @@ struct ExportedDataTests {
       investmentValues: [:]
     )
 
-    let encoder = JSONEncoder()
-    let data = try encoder.encode(exported)
+    let data = try JSONEncoder.exportEncoder.encode(exported)
     let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
 
     #expect(json["version"] as? Int == 1)
