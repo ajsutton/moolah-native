@@ -55,7 +55,7 @@ private struct CategoryNodeView: View {
 }
 
 #Preview {
-  let (backend, _, _) = PreviewBackend.create()
+  let (backend, _) = PreviewBackend.create()
   let store = CategoryStore(repository: backend.categories)
 
   NavigationStack {

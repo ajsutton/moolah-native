@@ -84,7 +84,7 @@ struct AllTransactionsView: View {
     )
   ])
 
-  let (backend, _, _) = PreviewBackend.create()
+  let (backend, _) = PreviewBackend.create()
   let store = TransactionStore(repository: backend.transactions)
 
   NavigationStack {

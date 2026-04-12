@@ -361,7 +361,7 @@ private struct EditEarmarkSheet: View {
 }
 
 #Preview {
-  let (backend, _, _) = PreviewBackend.create()
+  let (backend, _) = PreviewBackend.create()
   let earmarkStore = EarmarkStore(repository: backend.earmarks)
   let transactionStore = TransactionStore(repository: backend.transactions)
 

@@ -21,7 +21,7 @@ final class ProfileStore {
 
   private let defaults: UserDefaults
   private let validator: (any ServerValidator)?
-  private let modelContainer: ModelContainer?
+  private let containerManager: ProfileContainerManager?
   private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileStore")
 
   /// Combined list of all profiles from both backends.
@@ -40,13 +40,13 @@ final class ProfileStore {
   init(
     defaults: UserDefaults = .standard,
     validator: (any ServerValidator)? = nil,
-    modelContainer: ModelContainer? = nil
+    containerManager: ProfileContainerManager? = nil
   ) {
     self.defaults = defaults
     self.validator = validator
-    self.modelContainer = modelContainer
+    self.containerManager = containerManager
     loadFromDefaults()
-    if modelContainer != nil {
+    if containerManager != nil {
       loadCloudProfiles(isInitialLoad: true)
       observeRemoteChanges()
       scheduleRetryIfNeeded()
@@ -59,11 +59,11 @@ final class ProfileStore {
       remoteProfiles.append(profile)
       saveToDefaults()
     case .cloudKit:
-      guard let modelContainer else {
-        logger.error("Cannot add CloudKit profile without ModelContainer")
+      guard let containerManager else {
+        logger.error("Cannot add CloudKit profile without ProfileContainerManager")
         return
       }
-      let context = ModelContext(modelContainer)
+      let context = ModelContext(containerManager.indexContainer)
       let record = ProfileRecord.from(profile: profile)
       context.insert(record)
       do {
@@ -93,10 +93,11 @@ final class ProfileStore {
     } else if let index = cloudProfiles.firstIndex(where: { $0.id == id }) {
       cloudProfiles.remove(at: index)
 
-      if let modelContainer {
-        let context = ModelContext(modelContainer)
+      if let containerManager {
+        containerManager.deleteStore(for: id)
+        let context = ModelContext(containerManager.indexContainer)
         let deleter = ProfileDataDeleter(modelContext: context)
-        deleter.deleteAllData(for: id)
+        deleter.deleteProfileRecord(for: id)
       }
     }
 
@@ -121,11 +122,11 @@ final class ProfileStore {
       remoteProfiles[index] = profile
       saveToDefaults()
     case .cloudKit:
-      guard let modelContainer else { return }
+      guard let containerManager else { return }
       guard let index = cloudProfiles.firstIndex(where: { $0.id == profile.id }) else { return }
       cloudProfiles[index] = profile
 
-      let context = ModelContext(modelContainer)
+      let context = ModelContext(containerManager.indexContainer)
       let profileId = profile.id
       let descriptor = FetchDescriptor<ProfileRecord>(
         predicate: #Predicate { $0.id == profileId }
@@ -174,8 +175,8 @@ final class ProfileStore {
   // MARK: - Cloud Profile Loading
 
   func loadCloudProfiles(isInitialLoad: Bool = false) {
-    guard let modelContainer else { return }
-    let context = ModelContext(modelContainer)
+    guard let containerManager else { return }
+    let context = ModelContext(containerManager.indexContainer)
     let descriptor = FetchDescriptor<ProfileRecord>(
       sortBy: [SortDescriptor(\.createdAt)]
     )

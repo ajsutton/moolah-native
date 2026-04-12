@@ -9,7 +9,7 @@
   /// On macOS, ProfileWindowView handles this role.
   struct ProfileRootView: View {
     @Environment(ProfileStore.self) private var profileStore
-    @Environment(\.modelContext) private var modelContext
+    @Environment(ProfileContainerManager.self) private var containerManager
     @Binding var activeSession: ProfileSession?
 
     var body: some View {
@@ -62,7 +62,7 @@
       if activeSession?.profile.id != profileID {
         activeSession = ProfileSession(
           profile: profile,
-          modelContainer: modelContext.container
+          containerManager: containerManager
         )
       }
     }
@@ -76,7 +76,7 @@
       {
         activeSession = ProfileSession(
           profile: profile,
-          modelContainer: modelContext.container
+          containerManager: containerManager
         )
       }
     }
