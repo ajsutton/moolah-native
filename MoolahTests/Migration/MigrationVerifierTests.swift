@@ -9,7 +9,6 @@ import Testing
 struct MigrationVerifierTests {
 
   private let currency = Currency.defaultTestCurrency
-  private let profileId = UUID()
 
   @Test("verification passes when counts and balances match")
   func countsMatch() async throws {
@@ -38,7 +37,6 @@ struct MigrationVerifierTests {
     // Import the data
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      profileId: profileId,
       currencyCode: currency.code
     )
     _ = try importer.importData(exported)
@@ -47,8 +45,7 @@ struct MigrationVerifierTests {
     let verifier = MigrationVerifier()
     let result = try await verifier.verify(
       exported: exported,
-      modelContainer: container,
-      profileId: profileId
+      modelContainer: container
     )
 
     #expect(result.countMatch == true)
@@ -90,13 +87,13 @@ struct MigrationVerifierTests {
     let context = ModelContext(container)
     context.insert(
       AccountRecord(
-        id: accountId, profileId: profileId, name: "Checking", type: "bank",
+        id: accountId, name: "Checking", type: "bank",
         currencyCode: currency.code
       )
     )
     context.insert(
       TransactionRecord(
-        profileId: profileId, type: "income", date: Date(),
+        type: "income", date: Date(),
         accountId: accountId, amount: 1000, currencyCode: currency.code
       )
     )
@@ -105,8 +102,7 @@ struct MigrationVerifierTests {
     let verifier = MigrationVerifier()
     let result = try await verifier.verify(
       exported: exported,
-      modelContainer: container,
-      profileId: profileId
+      modelContainer: container
     )
 
     #expect(result.countMatch == false)
@@ -141,7 +137,6 @@ struct MigrationVerifierTests {
 
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      profileId: profileId,
       currencyCode: currency.code
     )
     _ = try importer.importData(exported)
@@ -149,8 +144,7 @@ struct MigrationVerifierTests {
     let verifier = MigrationVerifier()
     let result = try await verifier.verify(
       exported: exported,
-      modelContainer: container,
-      profileId: profileId
+      modelContainer: container
     )
 
     // Counts match (1 account, 1 transaction) but balances don't
@@ -193,7 +187,6 @@ struct MigrationVerifierTests {
 
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      profileId: profileId,
       currencyCode: currency.code
     )
     _ = try importer.importData(exported)
@@ -201,8 +194,7 @@ struct MigrationVerifierTests {
     let verifier = MigrationVerifier()
     let result = try await verifier.verify(
       exported: exported,
-      modelContainer: container,
-      profileId: profileId
+      modelContainer: container
     )
 
     // Balance should match since scheduled txns are excluded

@@ -23,7 +23,6 @@ private final class ProgressTracker: Sendable {
 struct CloudKitDataImporterTests {
 
   private let currency = Currency.defaultTestCurrency
-  private let profileId = UUID()
 
   private func makeExportedData() -> ExportedData {
     let accountId = UUID()
@@ -83,7 +82,6 @@ struct CloudKitDataImporterTests {
     let exported = makeExportedData()
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      profileId: profileId,
       currencyCode: currency.code
     )
 
@@ -110,37 +108,12 @@ struct CloudKitDataImporterTests {
     #expect(child?.parentId == exported.categories.first?.id)
   }
 
-  @Test("imports data scoped to profileId")
-  func importScopedToProfile() async throws {
-    let container = try TestModelContainer.create()
-    let exported = makeExportedData()
-    let importer = CloudKitDataImporter(
-      modelContainer: container,
-      profileId: profileId,
-      currencyCode: currency.code
-    )
-
-    _ = try importer.importData(exported)
-
-    let context = ModelContext(container)
-    let accounts = try context.fetch(FetchDescriptor<AccountRecord>())
-    for account in accounts {
-      #expect(account.profileId == profileId)
-    }
-
-    let transactions = try context.fetch(FetchDescriptor<TransactionRecord>())
-    for txn in transactions {
-      #expect(txn.profileId == profileId)
-    }
-  }
-
   @Test("stamps currencyCode on all monetary records")
   func importStampsCurrency() async throws {
     let container = try TestModelContainer.create()
     let exported = makeExportedData()
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      profileId: profileId,
       currencyCode: "USD"
     )
 
@@ -166,7 +139,6 @@ struct CloudKitDataImporterTests {
     )
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      profileId: profileId,
       currencyCode: currency.code
     )
 

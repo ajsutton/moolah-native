@@ -608,14 +608,13 @@ private func makeCloudKitTransactionRepository(
   currency: Currency = .defaultTestCurrency
 ) -> CloudKitTransactionRepository {
   let container = try! TestModelContainer.create()
-  let profileId = UUID()
   let repo = CloudKitTransactionRepository(
-    modelContainer: container, profileId: profileId, currency: currency)
+    modelContainer: container, currency: currency)
 
   if !initialTransactions.isEmpty {
     let context = ModelContext(container)
     for txn in initialTransactions {
-      context.insert(TransactionRecord.from(txn, profileId: profileId))
+      context.insert(TransactionRecord.from(txn))
     }
     try! context.save()
   }

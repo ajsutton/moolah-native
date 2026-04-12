@@ -11,9 +11,9 @@ struct EarmarkStoreTests {
     let earmark = Earmark(
       name: "Holiday Fund",
       balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency))
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seedWithTransactions(
-      earmarks: [earmark], accountId: UUID(), in: container, profileId: profileId)
+      earmarks: [earmark], accountId: UUID(), in: container)
     let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
@@ -29,9 +29,9 @@ struct EarmarkStoreTests {
     let e2 = Earmark(
       name: "E2",
       balance: MonetaryAmount(cents: 20000, currency: Currency.defaultTestCurrency), position: 1)
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seedWithTransactions(
-      earmarks: [e1, e2], accountId: UUID(), in: container, profileId: profileId)
+      earmarks: [e1, e2], accountId: UUID(), in: container)
     let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
@@ -55,12 +55,12 @@ struct EarmarkStoreTests {
         isHidden: true),
     ]
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-      profileId: profileId)
+    )
     TestBackend.seedWithTransactions(
-      earmarks: earmarks, accountId: accountId, in: container, profileId: profileId)
+      earmarks: earmarks, accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
@@ -75,10 +75,10 @@ struct EarmarkStoreTests {
   @Test func testCreateExpenseToEarmarkIncreasesSpentAndDecreasesBalance() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-      profileId: profileId)
+    )
     TestBackend.seedWithTransactions(
       earmarks: [
         Earmark(
@@ -86,7 +86,7 @@ struct EarmarkStoreTests {
           balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
           saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
           spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
-      ], accountId: accountId, in: container, profileId: profileId)
+      ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
@@ -107,10 +107,10 @@ struct EarmarkStoreTests {
   @Test func testCreateIncomeToEarmarkIncreasesSavedAndBalance() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-      profileId: profileId)
+    )
     TestBackend.seedWithTransactions(
       earmarks: [
         Earmark(
@@ -118,7 +118,7 @@ struct EarmarkStoreTests {
           balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
           saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
           spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
-      ], accountId: accountId, in: container, profileId: profileId)
+      ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
@@ -139,10 +139,10 @@ struct EarmarkStoreTests {
   @Test func testDeleteRevertsEarmarkBalance() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-      profileId: profileId)
+    )
     TestBackend.seedWithTransactions(
       earmarks: [
         Earmark(
@@ -150,7 +150,7 @@ struct EarmarkStoreTests {
           balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
           saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
           spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency))
-      ], accountId: accountId, in: container, profileId: profileId)
+      ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
@@ -172,10 +172,10 @@ struct EarmarkStoreTests {
   @Test func testUpdateAdjustsEarmarkBalance() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-      profileId: profileId)
+    )
     TestBackend.seedWithTransactions(
       earmarks: [
         Earmark(
@@ -183,7 +183,7 @@ struct EarmarkStoreTests {
           balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
           saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
           spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency))
-      ], accountId: accountId, in: container, profileId: profileId)
+      ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
@@ -208,10 +208,10 @@ struct EarmarkStoreTests {
     let earmark1Id = UUID()
     let earmark2Id = UUID()
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-      profileId: profileId)
+    )
     TestBackend.seedWithTransactions(
       earmarks: [
         Earmark(
@@ -224,7 +224,7 @@ struct EarmarkStoreTests {
           balance: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency),
           saved: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency),
           spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency)),
-      ], accountId: accountId, in: container, profileId: profileId)
+      ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
@@ -253,10 +253,10 @@ struct EarmarkStoreTests {
   @Test func testAddingEarmarkToTransaction() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-      profileId: profileId)
+    )
     TestBackend.seedWithTransactions(
       earmarks: [
         Earmark(
@@ -264,7 +264,7 @@ struct EarmarkStoreTests {
           balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
           saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
           spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
-      ], accountId: accountId, in: container, profileId: profileId)
+      ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
@@ -287,10 +287,10 @@ struct EarmarkStoreTests {
   @Test func testRemovingEarmarkFromTransaction() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-      profileId: profileId)
+    )
     TestBackend.seedWithTransactions(
       earmarks: [
         Earmark(
@@ -298,7 +298,7 @@ struct EarmarkStoreTests {
           balance: MonetaryAmount(cents: 40000, currency: Currency.defaultTestCurrency),
           saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
           spent: MonetaryAmount(cents: 10000, currency: Currency.defaultTestCurrency))
-      ], accountId: accountId, in: container, profileId: profileId)
+      ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
@@ -322,10 +322,10 @@ struct EarmarkStoreTests {
   @Test func testTotalBalanceUpdatesAfterDelta() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-      profileId: profileId)
+    )
     TestBackend.seedWithTransactions(
       earmarks: [
         Earmark(
@@ -333,7 +333,7 @@ struct EarmarkStoreTests {
           balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
           saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
           spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
-      ], accountId: accountId, in: container, profileId: profileId)
+      ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
@@ -356,8 +356,8 @@ struct EarmarkStoreTests {
     let e0 = Earmark(name: "First", position: 0)
     let e1 = Earmark(name: "Second", position: 1)
     let e2 = Earmark(name: "Third", position: 2)
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(earmarks: [e0, e1, e2], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(earmarks: [e0, e1, e2], in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
@@ -376,8 +376,8 @@ struct EarmarkStoreTests {
     let e0 = Earmark(name: "Visible1", position: 0)
     let e1 = Earmark(name: "Hidden", isHidden: true, position: 1)
     let e2 = Earmark(name: "Visible2", position: 2)
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(earmarks: [e0, e1, e2], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(earmarks: [e0, e1, e2], in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
@@ -393,8 +393,8 @@ struct EarmarkStoreTests {
 
   @Test func testReorderSingleEarmarkIsNoOp() async throws {
     let e0 = Earmark(name: "Only", position: 0)
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(earmarks: [e0], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(earmarks: [e0], in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
@@ -405,8 +405,8 @@ struct EarmarkStoreTests {
   }
 
   @Test func testReorderEmptyListIsNoOp() async throws {
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(earmarks: [], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(earmarks: [], in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
@@ -419,8 +419,8 @@ struct EarmarkStoreTests {
     let e0 = Earmark(name: "First", position: 0)
     let e1 = Earmark(name: "Second", position: 1)
     let e2 = Earmark(name: "Third", position: 2)
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(earmarks: [e0, e1, e2], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(earmarks: [e0, e1, e2], in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
@@ -449,12 +449,12 @@ struct EarmarkStoreTests {
       balance: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency),
       isHidden: true)
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-      profileId: profileId)
+    )
     TestBackend.seedWithTransactions(
-      earmarks: [visible, hidden], accountId: accountId, in: container, profileId: profileId)
+      earmarks: [visible, hidden], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
@@ -473,12 +473,12 @@ struct EarmarkStoreTests {
       balance: MonetaryAmount(cents: 30000, currency: Currency.defaultTestCurrency),
       isHidden: true)
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-      profileId: profileId)
+    )
     TestBackend.seedWithTransactions(
-      earmarks: [visible, hidden], accountId: accountId, in: container, profileId: profileId)
+      earmarks: [visible, hidden], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()

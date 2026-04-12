@@ -11,11 +11,11 @@ struct EarmarkBudgetTests {
     earmarks: [Earmark] = [],
     budgetItems: [UUID: [EarmarkBudgetItem]] = [:]
   ) async throws -> (EarmarkStore, CloudKitBackend) {
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(earmarks: earmarks, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(earmarks: earmarks, in: container)
     for (earmarkId, items) in budgetItems {
       TestBackend.seedBudget(
-        earmarkId: earmarkId, items: items, in: container, profileId: profileId)
+        earmarkId: earmarkId, items: items, in: container)
     }
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
@@ -45,7 +45,7 @@ struct EarmarkBudgetTests {
   }
 
   @Test func testLoadBudgetHandlesError() async throws {
-    let (backend, _, _) = try TestBackend.create()
+    let (backend, _) = try TestBackend.create()
     let store = EarmarkStore(repository: backend.earmarks)
     // Loading budget for nonexistent earmark still returns empty
     await store.loadBudget(earmarkId: UUID())

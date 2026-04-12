@@ -9,17 +9,15 @@ enum TestBackend {
   /// Creates a CloudKitBackend backed by an in-memory ModelContainer.
   /// Each call creates a fresh, isolated container — no cross-test contamination.
   static func create(
-    currency: Currency = .defaultTestCurrency,
-    profileId: UUID = UUID()
-  ) throws -> (backend: CloudKitBackend, container: ModelContainer, profileId: UUID) {
+    currency: Currency = .defaultTestCurrency
+  ) throws -> (backend: CloudKitBackend, container: ModelContainer) {
     let container = try TestModelContainer.create()
     let backend = CloudKitBackend(
       modelContainer: container,
-      profileId: profileId,
       currency: currency,
       profileLabel: "Test"
     )
-    return (backend, container, profileId)
+    return (backend, container)
   }
 
   // MARK: - Data Seeding
@@ -31,15 +29,13 @@ enum TestBackend {
   static func seed(
     accounts: [Account],
     in container: ModelContainer,
-    profileId: UUID,
     currency: Currency = .defaultTestCurrency
   ) -> [Account] {
     let context = ModelContext(container)
     for account in accounts {
-      context.insert(AccountRecord.from(account, profileId: profileId, currencyCode: currency.code))
+      context.insert(AccountRecord.from(account, currencyCode: currency.code))
       if account.balance.cents != 0 {
         let txn = TransactionRecord(
-          profileId: profileId,
           type: TransactionType.openingBalance.rawValue,
           date: Date(),
           accountId: account.id,
@@ -57,12 +53,11 @@ enum TestBackend {
   @discardableResult
   static func seed(
     transactions: [Transaction],
-    in container: ModelContainer,
-    profileId: UUID
+    in container: ModelContainer
   ) -> [Transaction] {
     let context = ModelContext(container)
     for txn in transactions {
-      context.insert(TransactionRecord.from(txn, profileId: profileId))
+      context.insert(TransactionRecord.from(txn))
     }
     try! context.save()
     return transactions
@@ -75,13 +70,12 @@ enum TestBackend {
   static func seed(
     earmarks: [Earmark],
     in container: ModelContainer,
-    profileId: UUID,
     currency: Currency = .defaultTestCurrency
   ) -> [Earmark] {
     let context = ModelContext(container)
     for earmark in earmarks {
       context.insert(
-        EarmarkRecord.from(earmark, profileId: profileId, currencyCode: currency.code))
+        EarmarkRecord.from(earmark, currencyCode: currency.code))
     }
     try! context.save()
     return earmarks
@@ -94,13 +88,12 @@ enum TestBackend {
     earmarks: [Earmark],
     accountId: UUID,
     in container: ModelContainer,
-    profileId: UUID,
     currency: Currency = .defaultTestCurrency
   ) -> [Earmark] {
     let context = ModelContext(container)
     for earmark in earmarks {
       context.insert(
-        EarmarkRecord.from(earmark, profileId: profileId, currencyCode: currency.code))
+        EarmarkRecord.from(earmark, currencyCode: currency.code))
 
       // Determine what transactions to create.
       // If saved/spent are explicitly set, use those.
@@ -114,7 +107,6 @@ enum TestBackend {
       // Create income transaction for saved amount
       if savedCents > 0 {
         let txn = TransactionRecord(
-          profileId: profileId,
           type: TransactionType.income.rawValue,
           date: Date(),
           accountId: accountId,
@@ -128,7 +120,6 @@ enum TestBackend {
       // Create expense transaction for spent amount
       if spentCents > 0 {
         let txn = TransactionRecord(
-          profileId: profileId,
           type: TransactionType.expense.rawValue,
           date: Date(),
           accountId: accountId,
@@ -147,12 +138,11 @@ enum TestBackend {
   @discardableResult
   static func seed(
     categories: [Moolah.Category],
-    in container: ModelContainer,
-    profileId: UUID
+    in container: ModelContainer
   ) -> [Moolah.Category] {
     let context = ModelContext(container)
     for category in categories {
-      context.insert(CategoryRecord.from(category, profileId: profileId))
+      context.insert(CategoryRecord.from(category))
     }
     try! context.save()
     return categories
@@ -163,14 +153,12 @@ enum TestBackend {
   static func seed(
     investmentValues: [UUID: [InvestmentValue]],
     in container: ModelContainer,
-    profileId: UUID,
     currency: Currency = .defaultTestCurrency
   ) -> [UUID: [InvestmentValue]] {
     let context = ModelContext(container)
     for (accountId, values) in investmentValues {
       for value in values {
         let record = InvestmentValueRecord(
-          profileId: profileId,
           accountId: accountId,
           date: value.date,
           value: value.value.cents,
@@ -188,13 +176,11 @@ enum TestBackend {
     earmarkId: UUID,
     items: [EarmarkBudgetItem],
     in container: ModelContainer,
-    profileId: UUID,
     currency: Currency = .defaultTestCurrency
   ) {
     let context = ModelContext(container)
     for item in items {
       let record = EarmarkBudgetItemRecord(
-        profileId: profileId,
         earmarkId: earmarkId,
         categoryId: item.categoryId,
         amount: item.amount.cents,

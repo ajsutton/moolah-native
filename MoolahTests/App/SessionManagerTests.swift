@@ -7,8 +7,8 @@ import Testing
 @MainActor
 struct SessionManagerTests {
   private func makeManager() throws -> SessionManager {
-    let container = try TestModelContainer.create()
-    return SessionManager(modelContainer: container)
+    let containerManager = try ProfileContainerManager.forTesting()
+    return SessionManager(containerManager: containerManager)
   }
 
   private func makeProfile(

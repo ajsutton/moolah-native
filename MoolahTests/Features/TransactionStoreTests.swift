@@ -30,8 +30,8 @@ struct TransactionStoreTests {
 
   @Test func testLoadsFirstPage() async throws {
     let transactions = seedTransactions(count: 3, accountId: accountId)
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -48,8 +48,8 @@ struct TransactionStoreTests {
   @Test func testPaginationAppendsSecondPage() async throws {
     // Create more transactions than one page
     let transactions = seedTransactions(count: 5, accountId: accountId)
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: container)
     let store = TransactionStore(repository: backend.transactions, pageSize: 3)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -63,8 +63,8 @@ struct TransactionStoreTests {
 
   @Test func testEndOfResultsDetection() async throws {
     let transactions = seedTransactions(count: 2, accountId: accountId)
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: container)
     let store = TransactionStore(repository: backend.transactions, pageSize: 10)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -75,8 +75,8 @@ struct TransactionStoreTests {
 
   @Test func testLoadMoreDoesNothingWhenNoMore() async throws {
     let transactions = seedTransactions(count: 2, accountId: accountId)
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: container)
     let store = TransactionStore(repository: backend.transactions, pageSize: 10)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -103,8 +103,8 @@ struct TransactionStoreTests {
         amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
         payee: "Transfer In"),
     ]
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -130,8 +130,8 @@ struct TransactionStoreTests {
         amount: MonetaryAmount(cents: -3000, currency: Currency.defaultTestCurrency),
         payee: "Newest"),
     ]
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -156,8 +156,8 @@ struct TransactionStoreTests {
         amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
         payee: "Groceries"),
     ]
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -182,8 +182,8 @@ struct TransactionStoreTests {
 
   @Test func testReloadClearsExisting() async throws {
     let transactions = seedTransactions(count: 5, accountId: accountId)
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: container)
     let store = TransactionStore(repository: backend.transactions, pageSize: 3)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -197,7 +197,7 @@ struct TransactionStoreTests {
   // MARK: - CRUD
 
   @Test func testCreateAddsTransaction() async throws {
-    let (backend, _, _) = try TestBackend.create()
+    let (backend, _) = try TestBackend.create()
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -221,8 +221,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Coffee Shop"
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -245,8 +245,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Coffee Shop"
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -259,7 +259,7 @@ struct TransactionStoreTests {
   }
 
   @Test func testCreateUpdateDeleteCycle() async throws {
-    let (backend, _, _) = try TestBackend.create()
+    let (backend, _) = try TestBackend.create()
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -291,8 +291,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency),
       payee: "Initial"
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [existing], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [existing], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -325,8 +325,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -3000, currency: Currency.defaultTestCurrency),
       payee: "Coffee"
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx1, tx2], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx1, tx2], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -340,7 +340,7 @@ struct TransactionStoreTests {
   }
 
   @Test func testOnMutatePassesNilOldOnCreate() async throws {
-    let (backend, _, _) = try TestBackend.create()
+    let (backend, _) = try TestBackend.create()
     let store = TransactionStore(repository: backend.transactions)
 
     var receivedOld: Transaction?? = .none  // .none = not called, .some(nil) = called with nil
@@ -368,8 +368,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var receivedOld: Transaction?
@@ -395,8 +395,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var receivedOld: Transaction?
@@ -423,8 +423,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
       payee: ""
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var receivedOld: Transaction?
@@ -457,8 +457,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
       payee: ""
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var receivedOld: Transaction?
@@ -486,8 +486,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var receivedOld: Transaction?
@@ -518,8 +518,8 @@ struct TransactionStoreTests {
       payee: "Test",
       earmarkId: earmarkId
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var receivedOld: Transaction?
@@ -551,8 +551,8 @@ struct TransactionStoreTests {
       payee: "Test",
       earmarkId: earmarkId1
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var receivedOld: Transaction?
@@ -580,8 +580,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var receivedOld: Transaction?
@@ -610,8 +610,8 @@ struct TransactionStoreTests {
       payee: "Test",
       earmarkId: earmarkId
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var receivedOld: Transaction?
@@ -640,8 +640,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var receivedOld: Transaction?
@@ -672,8 +672,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var receivedOld: Transaction?
@@ -705,8 +705,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: ""
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var receivedOld: Transaction?
@@ -739,8 +739,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
       payee: "Test"
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var receivedOld: Transaction?
@@ -772,8 +772,8 @@ struct TransactionStoreTests {
       amount: MonetaryAmount(cents: -3000, currency: Currency.defaultTestCurrency),
       payee: "Coffee"
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx1, tx2], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [tx1, tx2], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(accountId: accountId))
@@ -804,8 +804,8 @@ struct TransactionStoreTests {
       recurPeriod: .month,
       recurEvery: 1
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(scheduled: true))
@@ -850,8 +850,8 @@ struct TransactionStoreTests {
       recurPeriod: .week,
       recurEvery: 2
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(scheduled: true))
@@ -877,8 +877,8 @@ struct TransactionStoreTests {
       recurPeriod: .once,
       recurEvery: 1
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(scheduled: true))
@@ -920,8 +920,8 @@ struct TransactionStoreTests {
       recurPeriod: .month,
       recurEvery: 1
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     await store.load(filter: TransactionFilter(scheduled: true))
@@ -954,8 +954,8 @@ struct TransactionStoreTests {
       recurPeriod: .month,
       recurEvery: 1
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var mutations: [(old: Transaction?, new: Transaction?)] = []
@@ -991,8 +991,8 @@ struct TransactionStoreTests {
       recurPeriod: .once,
       recurEvery: 1
     )
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     var mutations: [(old: Transaction?, new: Transaction?)] = []
@@ -1032,8 +1032,8 @@ struct TransactionStoreTests {
         amount: MonetaryAmount(cents: -2000, currency: Currency.defaultTestCurrency),
         payee: "Coles"),
     ]
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: container)
 
     let suggestions = try await backend.transactions.fetchPayeeSuggestions(prefix: "Wool")
     #expect(suggestions.count == 2)
@@ -1061,8 +1061,8 @@ struct TransactionStoreTests {
         amount: MonetaryAmount(cents: -6000, currency: Currency.defaultTestCurrency),
         payee: "Woolworths"),
     ]
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: container)
 
     let suggestions = try await backend.transactions.fetchPayeeSuggestions(prefix: "Wool")
     #expect(suggestions.count == 2)
@@ -1084,8 +1084,8 @@ struct TransactionStoreTests {
         payee: "Woolworths",
         categoryId: categoryId),
     ]
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: container)
     let store = TransactionStore(repository: backend.transactions)
 
     let match = await store.fetchTransactionForAutofill(payee: "Woolworths")
@@ -1096,7 +1096,7 @@ struct TransactionStoreTests {
   }
 
   @Test func testDebouncedSaveOnlyCallsLastAction() async throws {
-    let (backend, _, _) = try TestBackend.create()
+    let (backend, _) = try TestBackend.create()
     let store = TransactionStore(repository: backend.transactions)
 
     var callCount = 0
@@ -1130,8 +1130,8 @@ struct TransactionStoreTests {
         amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
         payee: "Woolworths")
     ]
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: container)
 
     let suggestions = try await backend.transactions.fetchPayeeSuggestions(prefix: "")
     #expect(suggestions.isEmpty)

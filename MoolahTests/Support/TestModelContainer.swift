@@ -8,7 +8,6 @@ import SwiftData
 enum TestModelContainer {
   static func create() throws -> ModelContainer {
     let schema = Schema([
-      ProfileRecord.self,
       AccountRecord.self,
       TransactionRecord.self,
       CategoryRecord.self,

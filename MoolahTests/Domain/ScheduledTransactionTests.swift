@@ -84,8 +84,8 @@ struct ScheduledTransactionTests {
       amount: MonetaryAmount(cents: -50000, currency: Currency.defaultTestCurrency)
     )
 
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled, oneTime], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled, oneTime], in: container)
 
     let page = try await backend.transactions.fetch(
       filter: TransactionFilter(scheduled: true),
@@ -291,8 +291,8 @@ struct ScheduledTransactionTests {
       recurEvery: 1
     )
 
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: container)
 
     // Verify it exists and is scheduled
     let page1 = try await backend.transactions.fetch(
@@ -343,8 +343,8 @@ struct ScheduledTransactionTests {
       recurEvery: 1
     )
 
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: container)
 
     // Create paid transaction
     let paid = Transaction(

@@ -1324,20 +1324,19 @@ private struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable
 
   init() {
     let container = try! TestModelContainer.create()
-    let profileId = UUID()
     let currency = Currency.defaultTestCurrency
     self.auth = InMemoryAuthProvider()
     self.accounts = CloudKitAccountRepository(
-      modelContainer: container, profileId: profileId, currency: currency)
+      modelContainer: container, currency: currency)
     self.transactions = CloudKitTransactionRepository(
-      modelContainer: container, profileId: profileId, currency: currency)
+      modelContainer: container, currency: currency)
     self.categories = CloudKitCategoryRepository(
-      modelContainer: container, profileId: profileId)
+      modelContainer: container)
     self.earmarks = CloudKitEarmarkRepository(
-      modelContainer: container, profileId: profileId, currency: currency)
+      modelContainer: container, currency: currency)
     self.analysis = CloudKitAnalysisRepository(
-      modelContainer: container, profileId: profileId, currency: currency)
+      modelContainer: container, currency: currency)
     self.investments = CloudKitInvestmentRepository(
-      modelContainer: container, profileId: profileId, currency: currency)
+      modelContainer: container, currency: currency)
   }
 }
