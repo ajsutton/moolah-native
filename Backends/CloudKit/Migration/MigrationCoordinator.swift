@@ -36,13 +36,7 @@ final class MigrationCoordinator {
 
     do {
       // 1. Export all data from the source backend
-      let exporter = ServerDataExporter(
-        accountRepo: backend.accounts,
-        categoryRepo: backend.categories,
-        earmarkRepo: backend.earmarks,
-        transactionRepo: backend.transactions,
-        investmentRepo: backend.investments
-      )
+      let exporter = DataExporter(backend: backend)
       let exported = try await exporter.export(
         profileLabel: sourceProfile.label,
         currencyCode: sourceProfile.currencyCode,

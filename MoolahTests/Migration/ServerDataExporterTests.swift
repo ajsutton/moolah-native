@@ -18,8 +18,8 @@ private final class ProgressTracker: Sendable {
   }
 }
 
-@Suite("ServerDataExporter")
-struct ServerDataExporterTests {
+@Suite("DataExporter")
+struct DataExporterTests {
 
   private func makeBackendWithData() async throws -> CloudKitBackend {
     let currency = Currency.defaultTestCurrency
@@ -85,13 +85,7 @@ struct ServerDataExporterTests {
   @Test("exports all data from InMemory backend")
   func exportAll() async throws {
     let backend = try await makeBackendWithData()
-    let exporter = ServerDataExporter(
-      accountRepo: backend.accounts,
-      categoryRepo: backend.categories,
-      earmarkRepo: backend.earmarks,
-      transactionRepo: backend.transactions,
-      investmentRepo: backend.investments
-    )
+    let exporter = DataExporter(backend: backend)
 
     let progressSteps = ProgressTracker()
     let data = try await exporter.export(
@@ -120,13 +114,7 @@ struct ServerDataExporterTests {
   @Test("exports earmark budgets keyed by earmark ID")
   func exportBudgets() async throws {
     let backend = try await makeBackendWithData()
-    let exporter = ServerDataExporter(
-      accountRepo: backend.accounts,
-      categoryRepo: backend.categories,
-      earmarkRepo: backend.earmarks,
-      transactionRepo: backend.transactions,
-      investmentRepo: backend.investments
-    )
+    let exporter = DataExporter(backend: backend)
 
     let data = try await exporter.export(
       profileLabel: "Test",
@@ -144,13 +132,7 @@ struct ServerDataExporterTests {
   @Test("exports investment values per investment account")
   func exportInvestmentValues() async throws {
     let backend = try await makeBackendWithData()
-    let exporter = ServerDataExporter(
-      accountRepo: backend.accounts,
-      categoryRepo: backend.categories,
-      earmarkRepo: backend.earmarks,
-      transactionRepo: backend.transactions,
-      investmentRepo: backend.investments
-    )
+    let exporter = DataExporter(backend: backend)
 
     let data = try await exporter.export(
       profileLabel: "Test",
@@ -168,13 +150,7 @@ struct ServerDataExporterTests {
   @Test("exports empty data from empty backend")
   func exportEmpty() async throws {
     let (backend, _) = try TestBackend.create()
-    let exporter = ServerDataExporter(
-      accountRepo: backend.accounts,
-      categoryRepo: backend.categories,
-      earmarkRepo: backend.earmarks,
-      transactionRepo: backend.transactions,
-      investmentRepo: backend.investments
-    )
+    let exporter = DataExporter(backend: backend)
 
     let data = try await exporter.export(
       profileLabel: "Test",
@@ -192,13 +168,7 @@ struct ServerDataExporterTests {
   @Test("includes scheduled transactions in export")
   func exportIncludesScheduled() async throws {
     let backend = try await makeBackendWithData()
-    let exporter = ServerDataExporter(
-      accountRepo: backend.accounts,
-      categoryRepo: backend.categories,
-      earmarkRepo: backend.earmarks,
-      transactionRepo: backend.transactions,
-      investmentRepo: backend.investments
-    )
+    let exporter = DataExporter(backend: backend)
 
     let data = try await exporter.export(
       profileLabel: "Test",

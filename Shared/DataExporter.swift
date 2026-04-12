@@ -1,7 +1,7 @@
 import Foundation
 
 /// Exports all data from repository protocols (works with any BackendProvider).
-actor ServerDataExporter {
+actor DataExporter {
   private let accountRepo: any AccountRepository
   private let categoryRepo: any CategoryRepository
   private let earmarkRepo: any EarmarkRepository
@@ -14,18 +14,12 @@ actor ServerDataExporter {
     case failed(Error)
   }
 
-  init(
-    accountRepo: any AccountRepository,
-    categoryRepo: any CategoryRepository,
-    earmarkRepo: any EarmarkRepository,
-    transactionRepo: any TransactionRepository,
-    investmentRepo: any InvestmentRepository
-  ) {
-    self.accountRepo = accountRepo
-    self.categoryRepo = categoryRepo
-    self.earmarkRepo = earmarkRepo
-    self.transactionRepo = transactionRepo
-    self.investmentRepo = investmentRepo
+  init(backend: any BackendProvider) {
+    self.accountRepo = backend.accounts
+    self.categoryRepo = backend.categories
+    self.earmarkRepo = backend.earmarks
+    self.transactionRepo = backend.transactions
+    self.investmentRepo = backend.investments
   }
 
   func export(
