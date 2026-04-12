@@ -301,6 +301,45 @@ actor CryptoPriceService {
   private func decompress(_ data: Data) -> Data? {
     try? (data as NSData).decompressed(using: .zlib) as Data
   }
+
+  // MARK: - Instrument bridging
+
+  /// Bridge an Instrument + CryptoProviderMapping to the legacy CryptoToken type
+  /// for use with the existing CryptoPriceClient API.
+  static nonisolated func bridgeToToken(
+    instrument: Instrument, mapping: CryptoProviderMapping
+  ) -> CryptoToken {
+    CryptoToken(
+      chainId: instrument.chainId ?? 0,
+      contractAddress: instrument.contractAddress,
+      symbol: instrument.ticker ?? instrument.name,
+      name: instrument.name,
+      decimals: instrument.decimals,
+      coingeckoId: mapping.coingeckoId,
+      cryptocompareSymbol: mapping.cryptocompareSymbol,
+      binanceSymbol: mapping.binanceSymbol
+    )
+  }
+
+  /// Fetch price for an instrument using its provider mapping.
+  func price(
+    for instrument: Instrument,
+    mapping: CryptoProviderMapping,
+    on date: Date
+  ) async throws -> Decimal {
+    let token = Self.bridgeToToken(instrument: instrument, mapping: mapping)
+    return try await price(for: token, on: date)
+  }
+
+  /// Fetch price range for an instrument using its provider mapping.
+  func prices(
+    for instrument: Instrument,
+    mapping: CryptoProviderMapping,
+    in range: ClosedRange<Date>
+  ) async throws -> [(date: Date, price: Decimal)] {
+    let token = Self.bridgeToToken(instrument: instrument, mapping: mapping)
+    return try await prices(for: token, in: range)
+  }
 }
 
 /// Fallback when no resolution client is configured. Returns empty results.

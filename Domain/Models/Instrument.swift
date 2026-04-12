@@ -65,7 +65,43 @@ struct Instrument: Codable, Sendable, Hashable, Identifiable {
     )
   }
 
+  /// Convenience: the ticker symbol for display. For crypto, this is the short symbol (ETH, BTC).
+  /// For stocks, the exchange ticker. For fiat, nil (use currencySymbol instead).
+  var displaySymbol: String? {
+    ticker
+  }
+
   // Convenience constants
   static let AUD = Instrument.fiat(code: "AUD")
   static let USD = Instrument.fiat(code: "USD")
+}
+
+extension Instrument {
+  /// Factory for cryptocurrency token instruments.
+  /// Uses the same `chainId:address` ID scheme as the legacy CryptoToken type.
+  static func crypto(
+    chainId: Int,
+    contractAddress: String?,
+    symbol: String,
+    name: String,
+    decimals: Int
+  ) -> Instrument {
+    let normalizedAddress = contractAddress?.lowercased()
+    let id: String
+    if let address = normalizedAddress {
+      id = "\(chainId):\(address)"
+    } else {
+      id = "\(chainId):native"
+    }
+    return Instrument(
+      id: id,
+      kind: .cryptoToken,
+      name: name,
+      decimals: decimals,
+      ticker: symbol,
+      exchange: nil,
+      chainId: chainId,
+      contractAddress: normalizedAddress
+    )
+  }
 }

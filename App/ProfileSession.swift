@@ -20,7 +20,6 @@ final class ProfileSession: Identifiable {
   let exchangeRateService: ExchangeRateService
   let stockPriceService: StockPriceService
   let cryptoPriceService: CryptoPriceService
-  let priceConversionService: PriceConversionService
 
   /// The sync engine for this profile's CloudKit zone (nil for remote profiles).
   private(set) var profileSyncEngine: ProfileSyncEngine?
@@ -102,11 +101,6 @@ final class ProfileSession: Identifiable {
       tokenRepository: ICloudTokenRepository(),
       resolutionClient: CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey)
     )
-    self.priceConversionService = PriceConversionService(
-      cryptoPrices: self.cryptoPriceService,
-      exchangeRates: self.exchangeRateService
-    )
-
     self.authStore = AuthStore(backend: backend)
     self.accountStore = AccountStore(
       repository: backend.accounts, conversionService: backend.conversionService)

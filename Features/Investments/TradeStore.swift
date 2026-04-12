@@ -28,6 +28,22 @@ final class TradeStore {
     error = nil
   }
 
+  /// Execute a token swap, creating the multi-leg transaction.
+  /// Returns the created transaction, or throws on failure.
+  @discardableResult
+  func executeSwap(_ transaction: Transaction) async throws -> Transaction {
+    error = nil
+    do {
+      let created = try await transactions.create(transaction)
+      logger.info("Swap executed: \(created.id) with \(created.legs.count) legs")
+      return created
+    } catch {
+      logger.error("Failed to execute swap: \(error.localizedDescription)")
+      self.error = error
+      throw error
+    }
+  }
+
   /// Execute a trade from a draft, creating the multi-leg transaction.
   /// Returns the created transaction, or throws on failure.
   @discardableResult
