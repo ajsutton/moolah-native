@@ -132,7 +132,7 @@ struct ExportImportIntegrationTests {
     // Verify data is readable through CloudKit repositories
     let cloudBackend = CloudKitBackend(
       modelContainer: freshContainer,
-      currency: currency,
+      instrument: Instrument.fiat(code: currency.code),
       profileLabel: "Test Profile"
     )
 

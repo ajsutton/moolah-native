@@ -10,15 +10,18 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
   let analysis: any AnalysisRepository
   let investments: any InvestmentRepository
 
-  init(modelContainer: ModelContainer, currency: Currency, profileLabel: String) {
+  init(modelContainer: ModelContainer, instrument: Instrument, profileLabel: String) {
     self.auth = CloudKitAuthProvider(profileLabel: profileLabel)
-    self.accounts = CloudKitAccountRepository(modelContainer: modelContainer, currency: currency)
+    self.accounts = CloudKitAccountRepository(
+      modelContainer: modelContainer, instrument: instrument)
     self.transactions = CloudKitTransactionRepository(
-      modelContainer: modelContainer, currency: currency)
+      modelContainer: modelContainer, instrument: instrument)
     self.categories = CloudKitCategoryRepository(modelContainer: modelContainer)
-    self.earmarks = CloudKitEarmarkRepository(modelContainer: modelContainer, currency: currency)
-    self.analysis = CloudKitAnalysisRepository(modelContainer: modelContainer, currency: currency)
+    self.earmarks = CloudKitEarmarkRepository(
+      modelContainer: modelContainer, instrument: instrument)
+    self.analysis = CloudKitAnalysisRepository(
+      modelContainer: modelContainer, instrument: instrument)
     self.investments = CloudKitInvestmentRepository(
-      modelContainer: modelContainer, currency: currency)
+      modelContainer: modelContainer, instrument: instrument)
   }
 }

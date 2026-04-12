@@ -62,7 +62,7 @@ final class ProfileSession: Identifiable {
       let profileContainer = try! containerManager.container(for: profile.id)
       backend = CloudKitBackend(
         modelContainer: profileContainer,
-        currency: profile.currency,
+        instrument: profile.instrument,
         profileLabel: profile.label
       )
     }

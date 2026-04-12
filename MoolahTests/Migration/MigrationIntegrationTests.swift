@@ -104,7 +104,7 @@ struct MigrationIntegrationTests {
     // 4. Read back through CloudKit repositories and compare
     let cloudBackend = CloudKitBackend(
       modelContainer: container,
-      currency: currency,
+      instrument: Instrument.fiat(code: currency.code),
       profileLabel: "Test"
     )
     let cloudAccounts = try await cloudBackend.accounts.fetchAll()
@@ -150,7 +150,7 @@ struct MigrationIntegrationTests {
     // Read back and verify hierarchy
     let cloudBackend = CloudKitBackend(
       modelContainer: container,
-      currency: currency,
+      instrument: Instrument.fiat(code: currency.code),
       profileLabel: "Test"
     )
     let categories = try await cloudBackend.categories.fetchAll()
@@ -183,7 +183,7 @@ struct MigrationIntegrationTests {
     // Read back and verify budgets
     let cloudBackend = CloudKitBackend(
       modelContainer: container,
-      currency: currency,
+      instrument: Instrument.fiat(code: currency.code),
       profileLabel: "Test"
     )
     let earmarks = try await cloudBackend.earmarks.fetchAll()

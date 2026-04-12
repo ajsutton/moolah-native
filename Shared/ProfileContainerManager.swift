@@ -93,6 +93,8 @@ final class ProfileContainerManager {
     let dataSchema = Schema([
       AccountRecord.self,
       TransactionRecord.self,
+      TransactionLegRecord.self,
+      InstrumentRecord.self,
       CategoryRecord.self,
       EarmarkRecord.self,
       EarmarkBudgetItemRecord.self,

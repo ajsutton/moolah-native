@@ -4,13 +4,13 @@ import os
 
 final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
-  private let currency: Currency
+  private let instrument: Instrument
   var onRecordChanged: (UUID) -> Void = { _ in }
   var onRecordDeleted: (UUID) -> Void = { _ in }
 
-  init(modelContainer: ModelContainer, currency: Currency) {
+  init(modelContainer: ModelContainer, instrument: Instrument) {
     self.modelContainer = modelContainer
-    self.currency = currency
+    self.instrument = instrument
   }
 
   @MainActor
@@ -44,7 +44,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       os_signpost(
         .end, log: Signposts.repository, name: "EarmarkRepo.create", signpostID: signpostID)
     }
-    let record = EarmarkRecord.from(earmark, currencyCode: currency.code)
+    let record = EarmarkRecord.from(earmark)
     try await MainActor.run {
       context.insert(record)
       try context.save()
@@ -73,7 +73,8 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       record.name = earmark.name
       record.position = earmark.position
       record.isHidden = earmark.isHidden
-      record.savingsTarget = earmark.savingsGoal?.cents
+      record.savingsTarget = earmark.savingsGoal?.storageValue
+      record.savingsTargetInstrumentId = earmark.savingsGoal?.instrument.id
       record.savingsStartDate = earmark.savingsStartDate
       record.savingsEndDate = earmark.savingsEndDate
       try context.save()
@@ -99,7 +100,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
     }
   }
 
-  func setBudget(earmarkId: UUID, categoryId: UUID, amount: Int) async throws {
+  func setBudget(earmarkId: UUID, categoryId: UUID, amount: InstrumentAmount) async throws {
     let signpostID = OSSignpostID(log: Signposts.repository)
     os_signpost(
       .begin, log: Signposts.repository, name: "EarmarkRepo.setBudget", signpostID: signpostID)
@@ -123,7 +124,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       )
       let existing = try context.fetch(budgetDescriptor).first
 
-      if amount == 0 {
+      if amount.isZero {
         if let existing {
           let deletedId = existing.id
           context.delete(existing)
@@ -131,16 +132,16 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
           onRecordDeleted(deletedId)
         }
       } else if let existing {
-        existing.amount = amount
-        existing.currencyCode = currency.code
+        existing.amount = amount.storageValue
+        existing.instrumentId = amount.instrument.id
         try context.save()
         onRecordChanged(existing.id)
       } else {
         let record = EarmarkBudgetItemRecord(
           earmarkId: earmarkId,
           categoryId: categoryId,
-          amount: amount,
-          currencyCode: currency.code
+          amount: amount.storageValue,
+          instrumentId: amount.instrument.id
         )
         context.insert(record)
         try context.save()
@@ -151,27 +152,34 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
 
   @MainActor
   private func computeEarmarkTotals(for earmarkId: UUID) throws -> (
-    balance: MonetaryAmount, saved: MonetaryAmount, spent: MonetaryAmount
+    balance: InstrumentAmount, saved: InstrumentAmount, spent: InstrumentAmount
   ) {
-    let descriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate {
-        $0.earmarkId == earmarkId && $0.recurPeriod == nil
-      }
+    // Get scheduled transaction IDs to exclude
+    let scheduledDescriptor = FetchDescriptor<TransactionRecord>(
+      predicate: #Predicate { $0.recurPeriod != nil }
     )
-    let records = try context.fetch(descriptor)
+    let scheduledIds = Set(try context.fetch(scheduledDescriptor).map(\.id))
 
-    let zero = MonetaryAmount(cents: 0, currency: currency)
+    // Fetch legs with this earmarkId
+    let eid = earmarkId
+    let descriptor = FetchDescriptor<TransactionLegRecord>(
+      predicate: #Predicate { $0.earmarkId == eid }
+    )
+    let legRecords = try context.fetch(descriptor)
+
+    let zero = InstrumentAmount.zero(instrument: instrument)
     var balance = zero
     var saved = zero
     var spent = zero
 
-    for record in records {
-      let amount = MonetaryAmount(cents: record.amount, currency: currency)
+    for leg in legRecords {
+      guard !scheduledIds.contains(leg.transactionId) else { continue }
+      let amount = InstrumentAmount(storageValue: leg.quantity, instrument: instrument)
       balance += amount
-      if record.amount > 0 {
+      if leg.quantity > 0 {
         saved += amount
-      } else if record.amount < 0 {
-        spent += MonetaryAmount(cents: abs(record.amount), currency: currency)
+      } else if leg.quantity < 0 {
+        spent += InstrumentAmount(storageValue: abs(leg.quantity), instrument: instrument)
       }
     }
 

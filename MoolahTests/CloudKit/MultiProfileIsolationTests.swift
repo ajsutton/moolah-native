@@ -35,9 +35,9 @@ struct MultiProfileIsolationTests {
     let containerB = try manager.container(for: profileB)
 
     let backendA = CloudKitBackend(
-      modelContainer: containerA, currency: .defaultTestCurrency, profileLabel: "A")
+      modelContainer: containerA, instrument: .defaultTestInstrument, profileLabel: "A")
     let backendB = CloudKitBackend(
-      modelContainer: containerB, currency: .defaultTestCurrency, profileLabel: "B")
+      modelContainer: containerB, instrument: .defaultTestInstrument, profileLabel: "B")
 
     _ = try await backendA.categories.create(Moolah.Category(name: "A-Cat"))
     _ = try await backendB.categories.create(Moolah.Category(name: "B-Cat"))

@@ -130,7 +130,8 @@
 
       // Create a minimal SQLite database via SwiftData
       let schema = Schema([
-        AccountRecord.self, TransactionRecord.self, CategoryRecord.self,
+        AccountRecord.self, TransactionRecord.self, TransactionLegRecord.self,
+        InstrumentRecord.self, CategoryRecord.self,
         EarmarkRecord.self, EarmarkBudgetItemRecord.self,
         InvestmentValueRecord.self,
       ])

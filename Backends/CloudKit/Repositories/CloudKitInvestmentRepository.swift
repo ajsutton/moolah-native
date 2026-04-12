@@ -3,13 +3,13 @@ import SwiftData
 
 final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
-  private let currency: Currency
+  private let instrument: Instrument
   var onRecordChanged: (UUID) -> Void = { _ in }
   var onRecordDeleted: (UUID) -> Void = { _ in }
 
-  init(modelContainer: ModelContainer, currency: Currency) {
+  init(modelContainer: ModelContainer, instrument: Instrument) {
     self.modelContainer = modelContainer
-    self.currency = currency
+    self.instrument = instrument
   }
 
   @MainActor
@@ -38,7 +38,7 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
     }
   }
 
-  func setValue(accountId: UUID, date: Date, value: MonetaryAmount) async throws {
+  func setValue(accountId: UUID, date: Date, value: InstrumentAmount) async throws {
     let descriptor = FetchDescriptor<InvestmentValueRecord>(
       predicate: #Predicate {
         $0.accountId == accountId && $0.date == date
@@ -47,14 +47,14 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
 
     try await MainActor.run {
       if let existing = try context.fetch(descriptor).first {
-        existing.value = value.cents
-        existing.currencyCode = value.currency.code
+        existing.value = value.storageValue
+        existing.instrumentId = value.instrument.id
         try context.save()
         onRecordChanged(existing.id)
       } else {
         let record = InvestmentValueRecord(
           accountId: accountId, date: date,
-          value: value.cents, currencyCode: value.currency.code)
+          value: value.storageValue, instrumentId: value.instrument.id)
         context.insert(record)
         try context.save()
         onRecordChanged(record.id)
@@ -81,56 +81,60 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
   }
 
   func fetchDailyBalances(accountId: UUID) async throws -> [AccountDailyBalance] {
-    let descriptor = FetchDescriptor<TransactionRecord>()
     return try await MainActor.run {
-      let allRecords = try context.fetch(descriptor)
-      // Filter to non-scheduled transactions involving this account
-      let records = allRecords.filter { record in
-        guard record.recurPeriod == nil else { return false }
-        return record.accountId == accountId || record.toAccountId == accountId
-      }
+      // Get scheduled transaction IDs to exclude
+      let scheduledDescriptor = FetchDescriptor<TransactionRecord>(
+        predicate: #Predicate { $0.recurPeriod != nil }
+      )
+      let scheduledIds = Set(try context.fetch(scheduledDescriptor).map(\.id))
 
-      // Sort by date ascending
-      let sorted = records.sorted { $0.date < $1.date }
+      // Fetch all legs for this account
+      let aid = accountId
+      let legDescriptor = FetchDescriptor<TransactionLegRecord>(
+        predicate: #Predicate { $0.accountId == aid }
+      )
+      let allLegs = try context.fetch(legDescriptor)
+
+      // Filter out scheduled transaction legs
+      let legs = allLegs.filter { !scheduledIds.contains($0.transactionId) }
+
+      // Get transaction dates for sorting
+      let txnIds = Set(legs.map(\.transactionId))
+      let txnDescriptor = FetchDescriptor<TransactionRecord>()
+      let txnRecords = try context.fetch(txnDescriptor)
+      let txnDateById: [UUID: Date] = Dictionary(
+        uniqueKeysWithValues: txnRecords.filter { txnIds.contains($0.id) }.map { ($0.id, $0.date) }
+      )
+
+      // Create (date, quantity) pairs sorted by date
+      let legsWithDates = legs.compactMap { leg -> (date: Date, quantity: Int64)? in
+        guard let date = txnDateById[leg.transactionId] else { return nil }
+        return (date: date, quantity: leg.quantity)
+      }.sorted { $0.date < $1.date }
 
       // Compute cumulative balance per day
-      var runningBalance = 0
-      var dailyBalances: [(date: Date, balance: Int)] = []
+      var runningStorageValue: Int64 = 0
+      var dailyBalances: [(date: Date, storageValue: Int64)] = []
       let calendar = Calendar.current
 
-      for record in sorted {
-        let txnType = TransactionType(rawValue: record.type) ?? .expense
+      for entry in legsWithDates {
+        runningStorageValue += entry.quantity
 
-        switch txnType {
-        case .income, .expense, .openingBalance:
-          if record.accountId == accountId {
-            runningBalance += record.amount
-          }
-        case .transfer:
-          // Amount sign is from accountId's perspective: use it directly for accountId,
-          // negate for toAccountId (mirrors server's SUM(IF(to_account=?,-amount,amount)))
-          if record.accountId == accountId {
-            runningBalance += record.amount
-          } else if record.toAccountId == accountId {
-            runningBalance -= record.amount
-          }
-        }
-
-        let dayKey = calendar.startOfDay(for: record.date)
+        let dayKey = calendar.startOfDay(for: entry.date)
         // Upsert: if same day, overwrite with latest cumulative value
         if let lastIndex = dailyBalances.lastIndex(where: {
           calendar.isDate($0.date, inSameDayAs: dayKey)
         }) {
-          dailyBalances[lastIndex] = (date: dayKey, balance: runningBalance)
+          dailyBalances[lastIndex] = (date: dayKey, storageValue: runningStorageValue)
         } else {
-          dailyBalances.append((date: dayKey, balance: runningBalance))
+          dailyBalances.append((date: dayKey, storageValue: runningStorageValue))
         }
       }
 
       return dailyBalances.map {
         AccountDailyBalance(
           date: $0.date,
-          balance: MonetaryAmount(cents: $0.balance, currency: currency)
+          balance: InstrumentAmount(storageValue: $0.storageValue, instrument: instrument)
         )
       }
     }
