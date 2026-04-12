@@ -1,7 +1,7 @@
 # Moolah — iCloud Migration Plan
 
 **Date:** 2026-04-08
-**Status:** Draft
+**Status:** Complete
 
 ## Executive Summary
 
@@ -492,9 +492,11 @@ The recommended implementation order minimizes risk and allows incremental testi
 11. **Data Migration Tool** — Export from server, import to iCloud
 12. **Migration UI** — In-app flow for existing users
 
-### Phase 5: Cleanup
-13. **Remove RemoteBackend** — Once migration is complete and stable
-14. **Remove Google Sign-In dependency** — No longer needed
+### Phase 5: Cleanup — Skipped
+~~13. **Remove RemoteBackend** — Once migration is complete and stable~~
+~~14. **Remove Google Sign-In dependency** — No longer needed~~
+
+> **Note:** Phase 5 is intentionally skipped. RemoteBackend is retained to support existing server-based profiles and the web app. The `ServerDataExporter` functionality originally planned here was implemented and then refactored into the general-purpose backup & export feature.
 
 ---
 
