@@ -1,0 +1,75 @@
+// MoolahTests/Backends/BinanceClientTests.swift
+import Foundation
+import Testing
+
+@testable import Moolah
+
+@Suite("BinanceClient")
+struct BinanceClientTests {
+  private func date(_ string: String) -> Date {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withFullDate]
+    return f.date(from: string)!
+  }
+
+  // MARK: - URL construction
+
+  @Test func klinesURLIncludesSymbolAndDateRange() {
+    let from = date("2026-04-01")
+    let to = date("2026-04-10")
+    let url = BinanceClient.klinesURL(symbol: "ETHUSDT", from: from, to: to)
+    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+    #expect(components.host == "api.binance.com")
+    #expect(components.path == "/api/v3/klines")
+    let queryItems = Dictionary(
+      uniqueKeysWithValues: components.queryItems!.map { ($0.name, $0.value!) })
+    #expect(queryItems["symbol"] == "ETHUSDT")
+    #expect(queryItems["interval"] == "1d")
+    #expect(queryItems["startTime"] != nil)
+    #expect(queryItems["endTime"] != nil)
+  }
+
+  // MARK: - Response parsing
+
+  @Test func parseKlinesResponse() throws {
+    // Binance klines are arrays: [openTime, open, high, low, close, volume, closeTime, ...]
+    let json = """
+      [
+        [1743465600000, "1600.00", "1650.00", "1590.00", "1623.45", "1000", 1743551999999, "0", 0, "0", "0", "0"],
+        [1743552000000, "1623.45", "1670.00", "1620.00", "1650.00", "1100", 1743638399999, "0", 0, "0", "0", "0"]
+      ]
+      """.data(using: .utf8)!
+
+    let prices = try BinanceClient.parseKlinesResponse(json)
+    #expect(prices.count == 2)
+    #expect(prices.values.contains(Decimal(string: "1623.45")!))
+    #expect(prices.values.contains(Decimal(string: "1650.00")!))
+  }
+
+  // MARK: - USDT to USD conversion
+
+  @Test func pricesAreMultipliedByUsdtRate() throws {
+    let usdtPrices: [String: Decimal] = ["2026-04-10": Decimal(string: "1000.00")!]
+    let converted = BinanceClient.applyUsdtRate(usdtPrices, rate: Decimal(string: "0.999")!)
+    #expect(converted["2026-04-10"] == Decimal(string: "999.000")!)
+  }
+
+  @Test func defaultUsdtRateIsOne() throws {
+    let usdtPrices: [String: Decimal] = ["2026-04-10": Decimal(string: "1000.00")!]
+    let converted = BinanceClient.applyUsdtRate(usdtPrices, rate: Decimal(1))
+    #expect(converted["2026-04-10"] == Decimal(string: "1000.00")!)
+  }
+
+  // MARK: - Token without Binance mapping
+
+  @Test func tokenWithoutBinanceSymbolThrows() async {
+    let token = CryptoToken(
+      chainId: 1, contractAddress: "0xabc", symbol: "OBSCURE", name: "Obscure",
+      decimals: 18, coingeckoId: nil, cryptocompareSymbol: nil, binanceSymbol: nil
+    )
+    let client = BinanceClient(session: URLSession.shared)
+    await #expect(throws: CryptoPriceError.self) {
+      try await client.dailyPrice(for: token, on: Date())
+    }
+  }
+}
