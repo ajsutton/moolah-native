@@ -7,6 +7,9 @@ import SwiftUI
 struct ProfileFormView: View {
   @Environment(ProfileStore.self) private var profileStore
   @Environment(\.dismiss) private var dismiss
+  #if os(macOS)
+    @Environment(\.openWindow) private var openWindow
+  #endif
 
   @State private var selectedType: BackendType?
   @State private var serverURL = ""
@@ -193,6 +196,11 @@ struct ProfileFormView: View {
     }
 
     if await profileStore.validateAndAddProfile(profile) {
+      #if os(macOS)
+        openWindow(value: profile.id)
+      #else
+        profileStore.setActiveProfile(profile.id)
+      #endif
       dismiss()
     }
   }

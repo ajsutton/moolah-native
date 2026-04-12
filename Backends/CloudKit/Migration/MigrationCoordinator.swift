@@ -11,7 +11,8 @@ final class MigrationCoordinator {
     case exporting(step: String)
     case importing(step: String, progress: Double)
     case verifying
-    case succeeded(ImportResult, balanceWarnings: [VerificationResult.BalanceMismatch])
+    case succeeded(
+      ImportResult, newProfileId: UUID, balanceWarnings: [VerificationResult.BalanceMismatch])
     case verificationFailed(VerificationResult, newProfileId: UUID)
     case failed(MigrationError)
   }
@@ -116,7 +117,8 @@ final class MigrationCoordinator {
       // 6. Switch to the new iCloud profile
       profileStore.setActiveProfile(newProfileId)
 
-      state = .succeeded(result, balanceWarnings: verification.balanceMismatches)
+      state = .succeeded(
+        result, newProfileId: newProfileId, balanceWarnings: verification.balanceMismatches)
 
     } catch {
       state = .failed(error as? MigrationError ?? .unexpected(error))

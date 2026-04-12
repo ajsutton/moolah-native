@@ -9,6 +9,9 @@ struct MigrationView: View {
 
   @Environment(ProfileStore.self) private var profileStore
   @Environment(\.dismiss) private var dismiss
+  #if os(macOS)
+    @Environment(\.openWindow) private var openWindow
+  #endif
   @State private var coordinator = MigrationCoordinator()
 
   var body: some View {
@@ -22,8 +25,8 @@ struct MigrationView: View {
         progressState(title: "Importing \(step)...", progress: progress)
       case .verifying:
         progressState(title: "Verifying data integrity...")
-      case .succeeded(let result, let balanceWarnings):
-        migrationSuccess(result, balanceWarnings: balanceWarnings)
+      case .succeeded(let result, let newProfileId, let balanceWarnings):
+        migrationSuccess(result, newProfileId: newProfileId, balanceWarnings: balanceWarnings)
       case .verificationFailed(let verification, let newProfileId):
         verificationFailure(verification, newProfileId: newProfileId)
       case .failed(let error):
@@ -93,6 +96,7 @@ struct MigrationView: View {
 
   private func migrationSuccess(
     _ result: ImportResult,
+    newProfileId: UUID,
     balanceWarnings: [VerificationResult.BalanceMismatch]
   ) -> some View {
     VStack(spacing: 16) {
@@ -139,6 +143,9 @@ struct MigrationView: View {
       }
 
       Button("Done") {
+        #if os(macOS)
+          openWindow(value: newProfileId)
+        #endif
         dismiss()
       }
       .buttonStyle(.borderedProminent)
