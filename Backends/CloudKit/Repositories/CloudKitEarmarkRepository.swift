@@ -3,12 +3,10 @@ import SwiftData
 
 final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
-  private let profileId: UUID
   private let currency: Currency
 
-  init(modelContainer: ModelContainer, profileId: UUID, currency: Currency) {
+  init(modelContainer: ModelContainer, currency: Currency) {
     self.modelContainer = modelContainer
-    self.profileId = profileId
     self.currency = currency
   }
 
@@ -18,10 +16,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   }
 
   func fetchAll() async throws -> [Earmark] {
-    let profileId = self.profileId
-    let descriptor = FetchDescriptor<EarmarkRecord>(
-      predicate: #Predicate { $0.profileId == profileId }
-    )
+    let descriptor = FetchDescriptor<EarmarkRecord>()
     return try await MainActor.run {
       let records = try context.fetch(descriptor)
       return try records.map { record in
@@ -32,7 +27,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   }
 
   func create(_ earmark: Earmark) async throws -> Earmark {
-    let record = EarmarkRecord.from(earmark, profileId: profileId, currencyCode: currency.code)
+    let record = EarmarkRecord.from(earmark, currencyCode: currency.code)
     try await MainActor.run {
       context.insert(record)
       try context.save()
@@ -42,9 +37,8 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
 
   func update(_ earmark: Earmark) async throws -> Earmark {
     let earmarkId = earmark.id
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<EarmarkRecord>(
-      predicate: #Predicate { $0.id == earmarkId && $0.profileId == profileId }
+      predicate: #Predicate { $0.id == earmarkId }
     )
 
     try await MainActor.run {
@@ -63,9 +57,8 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   }
 
   func fetchBudget(earmarkId: UUID) async throws -> [EarmarkBudgetItem] {
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
-      predicate: #Predicate { $0.earmarkId == earmarkId && $0.profileId == profileId }
+      predicate: #Predicate { $0.earmarkId == earmarkId }
     )
     return try await MainActor.run {
       let records = try context.fetch(descriptor)
@@ -74,9 +67,8 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   }
 
   func setBudget(earmarkId: UUID, categoryId: UUID, amount: Int) async throws {
-    let profileId = self.profileId
     let earmarkDescriptor = FetchDescriptor<EarmarkRecord>(
-      predicate: #Predicate { $0.id == earmarkId && $0.profileId == profileId }
+      predicate: #Predicate { $0.id == earmarkId }
     )
 
     try await MainActor.run {
@@ -86,7 +78,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
 
       let budgetDescriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
         predicate: #Predicate {
-          $0.earmarkId == earmarkId && $0.categoryId == categoryId && $0.profileId == profileId
+          $0.earmarkId == earmarkId && $0.categoryId == categoryId
         }
       )
       let existing = try context.fetch(budgetDescriptor).first
@@ -98,7 +90,6 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
         existing.currencyCode = currency.code
       } else {
         let record = EarmarkBudgetItemRecord(
-          profileId: profileId,
           earmarkId: earmarkId,
           categoryId: categoryId,
           amount: amount,
@@ -114,10 +105,9 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   private func computeEarmarkTotals(for earmarkId: UUID) throws -> (
     balance: MonetaryAmount, saved: MonetaryAmount, spent: MonetaryAmount
   ) {
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<TransactionRecord>(
       predicate: #Predicate {
-        $0.profileId == profileId && $0.earmarkId == earmarkId && $0.recurPeriod == nil
+        $0.earmarkId == earmarkId && $0.recurPeriod == nil
       }
     )
     let records = try context.fetch(descriptor)

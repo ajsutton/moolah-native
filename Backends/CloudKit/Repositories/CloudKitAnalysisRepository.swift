@@ -3,12 +3,10 @@ import SwiftData
 
 final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
-  private let profileId: UUID
   private let currency: Currency
 
-  init(modelContainer: ModelContainer, profileId: UUID, currency: Currency) {
+  init(modelContainer: ModelContainer, currency: Currency) {
     self.modelContainer = modelContainer
-    self.profileId = profileId
     self.currency = currency
   }
 
@@ -70,10 +68,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
   // MARK: - Data Fetching Helpers
 
   private func fetchTransactions(scheduled: Bool? = nil) async throws -> [Transaction] {
-    let profileId = self.profileId
-    let descriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate { $0.profileId == profileId }
-    )
+    let descriptor = FetchDescriptor<TransactionRecord>()
     return try await MainActor.run {
       let records = try context.fetch(descriptor)
       var transactions = records.map { $0.toDomain() }
@@ -85,10 +80,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
   }
 
   private func fetchAccounts() async throws -> [Account] {
-    let profileId = self.profileId
-    let descriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.profileId == profileId }
-    )
+    let descriptor = FetchDescriptor<AccountRecord>()
     return try await MainActor.run {
       let records = try context.fetch(descriptor)
       return records.map {
@@ -198,10 +190,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     investmentAccountIds: Set<UUID>
   ) async throws -> [(accountId: UUID, date: Date, value: MonetaryAmount)] {
     guard !investmentAccountIds.isEmpty else { return [] }
-    let profileId = self.profileId
-    let descriptor = FetchDescriptor<InvestmentValueRecord>(
-      predicate: #Predicate { $0.profileId == profileId }
-    )
+    let descriptor = FetchDescriptor<InvestmentValueRecord>()
     return try await MainActor.run {
       let records = try context.fetch(descriptor)
       return

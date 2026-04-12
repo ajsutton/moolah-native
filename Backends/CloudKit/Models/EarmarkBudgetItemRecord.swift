@@ -6,7 +6,6 @@ final class EarmarkBudgetItemRecord {
   #Unique<EarmarkBudgetItemRecord>([\.id])
 
   var id: UUID
-  var profileId: UUID
   var earmarkId: UUID
   var categoryId: UUID
   var amount: Int  // cents
@@ -14,14 +13,12 @@ final class EarmarkBudgetItemRecord {
 
   init(
     id: UUID = UUID(),
-    profileId: UUID,
     earmarkId: UUID,
     categoryId: UUID,
     amount: Int,
     currencyCode: String
   ) {
     self.id = id
-    self.profileId = profileId
     self.earmarkId = earmarkId
     self.categoryId = categoryId
     self.amount = amount

@@ -3,12 +3,10 @@ import SwiftData
 
 final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
-  private let profileId: UUID
   private let currency: Currency
 
-  init(modelContainer: ModelContainer, profileId: UUID, currency: Currency) {
+  init(modelContainer: ModelContainer, currency: Currency) {
     self.modelContainer = modelContainer
-    self.profileId = profileId
     self.currency = currency
   }
 
@@ -18,8 +16,6 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
   }
 
   func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> TransactionPage {
-    let profileId = self.profileId
-
     return try await MainActor.run {
       // --- Fetch records with predicate push-down ---
       let primaryRecords: [TransactionRecord]
@@ -29,7 +25,6 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       // because OR across optional fields is unreliable in #Predicate.
       if let filterAccountId = filter.accountId {
         primaryRecords = try fetchRecords(
-          profileId: profileId,
           accountId: filterAccountId,
           accountIdField: .primary,
           scheduled: filter.scheduled,
@@ -37,7 +32,6 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
           earmarkId: filter.earmarkId
         )
         secondaryRecords = try fetchRecords(
-          profileId: profileId,
           accountId: filterAccountId,
           accountIdField: .toAccount,
           scheduled: filter.scheduled,
@@ -46,7 +40,6 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         )
       } else {
         primaryRecords = try fetchRecords(
-          profileId: profileId,
           accountId: nil,
           accountIdField: .none,
           scheduled: filter.scheduled,
@@ -145,7 +138,6 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
   /// Since `#Predicate` is a macro requiring static expressions, we branch on which filters are set.
   @MainActor
   private func fetchRecords(
-    profileId: UUID,
     accountId: UUID?,
     accountIdField: AccountIdField,
     scheduled: Bool?,
@@ -153,7 +145,6 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
     earmarkId: UUID?
   ) throws -> [TransactionRecord] {
     let descriptor = buildDescriptor(
-      profileId: profileId,
       accountId: accountId,
       accountIdField: accountIdField,
       scheduled: scheduled,
@@ -164,13 +155,11 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
   }
 
   /// Builds a FetchDescriptor with the appropriate predicate based on which filters are active.
-  /// We use a pragmatic approach: profileId is always present, then we branch on
-  /// accountId, scheduled, dateRange, and earmarkId combinations.
-  /// To avoid 2^4 = 16 branches, we handle the most common combinations and fall back
-  /// to fewer pushed-down filters for rare combinations.
+  /// We use a pragmatic approach: branch on accountId, scheduled, dateRange, and earmarkId
+  /// combinations. To avoid 2^4 = 16 branches, we handle the most common combinations and fall
+  /// back to fewer pushed-down filters for rare combinations.
   @MainActor
   private func buildDescriptor(
-    profileId: UUID,
     accountId: UUID?,
     accountIdField: AccountIdField,
     scheduled: Bool?,
@@ -191,21 +180,20 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
     // --- No account filter ---
     case (.none, nil, nil, nil):
       let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.profileId == profileId },
         sortBy: sortDescriptors
       )
       return d
 
     case (.none, .some(_), nil, nil) where isScheduled:
       let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.profileId == profileId && $0.recurPeriod != nil },
+        predicate: #Predicate { $0.recurPeriod != nil },
         sortBy: sortDescriptors
       )
       return d
 
     case (.none, .some(_), nil, nil) where isNotScheduled:
       let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.profileId == profileId && $0.recurPeriod == nil },
+        predicate: #Predicate { $0.recurPeriod == nil },
         sortBy: sortDescriptors
       )
       return d
@@ -214,14 +202,14 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let start = range.lowerBound
       let end = range.upperBound
       let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.profileId == profileId && $0.date >= start && $0.date <= end },
+        predicate: #Predicate { $0.date >= start && $0.date <= end },
         sortBy: sortDescriptors
       )
       return d
 
     case (.none, nil, nil, .some(let eid)):
       let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.profileId == profileId && $0.earmarkId == eid },
+        predicate: #Predicate { $0.earmarkId == eid },
         sortBy: sortDescriptors
       )
       return d
@@ -231,7 +219,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let end = range.upperBound
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate {
-          $0.profileId == profileId && $0.recurPeriod == nil && $0.date >= start && $0.date <= end
+          $0.recurPeriod == nil && $0.date >= start && $0.date <= end
         },
         sortBy: sortDescriptors
       )
@@ -242,7 +230,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let end = range.upperBound
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate {
-          $0.profileId == profileId && $0.recurPeriod != nil && $0.date >= start && $0.date <= end
+          $0.recurPeriod != nil && $0.date >= start && $0.date <= end
         },
         sortBy: sortDescriptors
       )
@@ -252,7 +240,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
     case (.primary, nil, nil, nil):
       let aid = accountId!
       let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.profileId == profileId && $0.accountId == aid },
+        predicate: #Predicate { $0.accountId == aid },
         sortBy: sortDescriptors
       )
       return d
@@ -261,7 +249,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let aid = accountId!
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate {
-          $0.profileId == profileId && $0.accountId == aid && $0.recurPeriod == nil
+          $0.accountId == aid && $0.recurPeriod == nil
         },
         sortBy: sortDescriptors
       )
@@ -271,7 +259,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let aid = accountId!
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate {
-          $0.profileId == profileId && $0.accountId == aid && $0.recurPeriod != nil
+          $0.accountId == aid && $0.recurPeriod != nil
         },
         sortBy: sortDescriptors
       )
@@ -283,7 +271,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let end = range.upperBound
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate {
-          $0.profileId == profileId && $0.accountId == aid && $0.date >= start && $0.date <= end
+          $0.accountId == aid && $0.date >= start && $0.date <= end
         },
         sortBy: sortDescriptors
       )
@@ -293,7 +281,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let aid = accountId!
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate {
-          $0.profileId == profileId && $0.accountId == aid && $0.earmarkId == eid
+          $0.accountId == aid && $0.earmarkId == eid
         },
         sortBy: sortDescriptors
       )
@@ -305,8 +293,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let end = range.upperBound
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate {
-          $0.profileId == profileId && $0.accountId == aid && $0.recurPeriod == nil
-            && $0.date >= start && $0.date <= end
+          $0.accountId == aid && $0.recurPeriod == nil && $0.date >= start && $0.date <= end
         },
         sortBy: sortDescriptors
       )
@@ -318,8 +305,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let end = range.upperBound
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate {
-          $0.profileId == profileId && $0.accountId == aid && $0.recurPeriod != nil
-            && $0.date >= start && $0.date <= end
+          $0.accountId == aid && $0.recurPeriod != nil && $0.date >= start && $0.date <= end
         },
         sortBy: sortDescriptors
       )
@@ -329,7 +315,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
     case (.toAccount, nil, nil, nil):
       let aid = accountId!
       let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.profileId == profileId && $0.toAccountId == aid },
+        predicate: #Predicate { $0.toAccountId == aid },
         sortBy: sortDescriptors
       )
       return d
@@ -338,7 +324,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let aid = accountId!
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate {
-          $0.profileId == profileId && $0.toAccountId == aid && $0.recurPeriod == nil
+          $0.toAccountId == aid && $0.recurPeriod == nil
         },
         sortBy: sortDescriptors
       )
@@ -348,7 +334,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let aid = accountId!
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate {
-          $0.profileId == profileId && $0.toAccountId == aid && $0.recurPeriod != nil
+          $0.toAccountId == aid && $0.recurPeriod != nil
         },
         sortBy: sortDescriptors
       )
@@ -360,7 +346,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let end = range.upperBound
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate {
-          $0.profileId == profileId && $0.toAccountId == aid && $0.date >= start && $0.date <= end
+          $0.toAccountId == aid && $0.date >= start && $0.date <= end
         },
         sortBy: sortDescriptors
       )
@@ -370,7 +356,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let aid = accountId!
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate {
-          $0.profileId == profileId && $0.toAccountId == aid && $0.earmarkId == eid
+          $0.toAccountId == aid && $0.earmarkId == eid
         },
         sortBy: sortDescriptors
       )
@@ -382,8 +368,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let end = range.upperBound
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate {
-          $0.profileId == profileId && $0.toAccountId == aid && $0.recurPeriod == nil
-            && $0.date >= start && $0.date <= end
+          $0.toAccountId == aid && $0.recurPeriod == nil && $0.date >= start && $0.date <= end
         },
         sortBy: sortDescriptors
       )
@@ -395,17 +380,15 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let end = range.upperBound
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate {
-          $0.profileId == profileId && $0.toAccountId == aid && $0.recurPeriod != nil
-            && $0.date >= start && $0.date <= end
+          $0.toAccountId == aid && $0.recurPeriod != nil && $0.date >= start && $0.date <= end
         },
         sortBy: sortDescriptors
       )
       return d
 
-    // --- Fallback: push only profileId, apply everything else in memory ---
+    // --- Fallback: no profileId filter, apply everything else in memory ---
     default:
       let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.profileId == profileId },
         sortBy: sortDescriptors
       )
       return d
@@ -421,7 +404,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         throw BackendError.validationFailed("Cannot transfer to the same account")
       }
     }
-    let record = TransactionRecord.from(transaction, profileId: profileId)
+    let record = TransactionRecord.from(transaction)
     try await MainActor.run {
       context.insert(record)
 
@@ -442,9 +425,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
 
   func update(_ transaction: Transaction) async throws -> Transaction {
     let txnId = transaction.id
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate { $0.id == txnId && $0.profileId == profileId }
+      predicate: #Predicate { $0.id == txnId }
     )
 
     try await MainActor.run {
@@ -492,9 +474,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
   }
 
   func delete(id: UUID) async throws {
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate { $0.id == id && $0.profileId == profileId }
+      predicate: #Predicate { $0.id == id }
     )
 
     try await MainActor.run {
@@ -521,9 +502,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
 
   @MainActor
   private func updateAccountBalance(accountId: UUID, delta: Int) throws {
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.id == accountId && $0.profileId == profileId }
+      predicate: #Predicate { $0.id == accountId }
     )
     if let record = try context.fetch(descriptor).first {
       record.cachedBalance = (record.cachedBalance ?? 0) + delta
@@ -532,9 +512,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
 
   func fetchPayeeSuggestions(prefix: String) async throws -> [String] {
     guard !prefix.isEmpty else { return [] }
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate { $0.profileId == profileId && $0.payee != nil }
+      predicate: #Predicate { $0.payee != nil }
     )
 
     return try await MainActor.run {

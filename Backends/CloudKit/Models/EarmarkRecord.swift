@@ -6,7 +6,6 @@ final class EarmarkRecord {
   #Unique<EarmarkRecord>([\.id])
 
   var id: UUID
-  var profileId: UUID
   var name: String
   var position: Int
   var isHidden: Bool
@@ -17,7 +16,6 @@ final class EarmarkRecord {
 
   init(
     id: UUID = UUID(),
-    profileId: UUID,
     name: String,
     position: Int = 0,
     isHidden: Bool = false,
@@ -27,7 +25,6 @@ final class EarmarkRecord {
     savingsEndDate: Date? = nil
   ) {
     self.id = id
-    self.profileId = profileId
     self.name = name
     self.position = position
     self.isHidden = isHidden
@@ -53,10 +50,9 @@ final class EarmarkRecord {
     )
   }
 
-  static func from(_ earmark: Earmark, profileId: UUID, currencyCode: String) -> EarmarkRecord {
+  static func from(_ earmark: Earmark, currencyCode: String) -> EarmarkRecord {
     EarmarkRecord(
       id: earmark.id,
-      profileId: profileId,
       name: earmark.name,
       position: earmark.position,
       isHidden: earmark.isHidden,

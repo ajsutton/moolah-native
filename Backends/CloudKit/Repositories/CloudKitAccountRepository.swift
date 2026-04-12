@@ -3,12 +3,10 @@ import SwiftData
 
 final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
-  private let profileId: UUID
   private let currency: Currency
 
-  init(modelContainer: ModelContainer, profileId: UUID, currency: Currency) {
+  init(modelContainer: ModelContainer, currency: Currency) {
     self.modelContainer = modelContainer
-    self.profileId = profileId
     self.currency = currency
   }
 
@@ -18,9 +16,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   }
 
   func fetchAll() async throws -> [Account] {
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.profileId == profileId },
       sortBy: [SortDescriptor(\.position)]
     )
     return try await MainActor.run {
@@ -47,14 +43,13 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       throw BackendError.validationFailed("Account name cannot be empty")
     }
 
-    let record = AccountRecord.from(account, profileId: profileId, currencyCode: currency.code)
+    let record = AccountRecord.from(account, currencyCode: currency.code)
     try await MainActor.run {
       context.insert(record)
 
       // If account has an opening balance, create an opening balance transaction
       if account.balance.cents != 0 {
         let txn = TransactionRecord(
-          profileId: profileId,
           type: TransactionType.openingBalance.rawValue,
           date: Date(),
           accountId: account.id,
@@ -75,9 +70,8 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
 
   func update(_ account: Account) async throws -> Account {
     let accountId = account.id
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.id == accountId && $0.profileId == profileId }
+      predicate: #Predicate { $0.id == accountId }
     )
 
     guard !account.name.trimmingCharacters(in: .whitespaces).isEmpty else {
@@ -105,9 +99,8 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   }
 
   func delete(id: UUID) async throws {
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.id == id && $0.profileId == profileId }
+      predicate: #Predicate { $0.id == id }
     )
 
     try await MainActor.run {
@@ -132,10 +125,9 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   /// This replaces N per-account queries with 1 query for all transactions.
   @MainActor
   private func recomputeAllBalances(records: [AccountRecord]) throws {
-    let profileId = self.profileId
     let txnDescriptor = FetchDescriptor<TransactionRecord>(
       predicate: #Predicate {
-        $0.profileId == profileId && $0.recurPeriod == nil
+        $0.recurPeriod == nil
       }
     )
     let transactions = try context.fetch(txnDescriptor)
@@ -167,11 +159,10 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
 
   @MainActor
   private func computeBalance(for accountId: UUID) throws -> MonetaryAmount {
-    let profileId = self.profileId
     // Sum transactions where this is the source account (non-scheduled only)
     let sourceDescriptor = FetchDescriptor<TransactionRecord>(
       predicate: #Predicate {
-        $0.profileId == profileId && $0.accountId == accountId && $0.recurPeriod == nil
+        $0.accountId == accountId && $0.recurPeriod == nil
       }
     )
     let sourceRecords = try context.fetch(sourceDescriptor)
@@ -180,7 +171,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     // For transfers where this is the destination account
     let destDescriptor = FetchDescriptor<TransactionRecord>(
       predicate: #Predicate {
-        $0.profileId == profileId && $0.toAccountId == accountId && $0.recurPeriod == nil
+        $0.toAccountId == accountId && $0.recurPeriod == nil
       }
     )
     let destRecords = try context.fetch(destDescriptor)
@@ -191,7 +182,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
 
     // Write through to cache
     let accountDescriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.id == accountId && $0.profileId == profileId }
+      predicate: #Predicate { $0.id == accountId }
     )
     if let record = try context.fetch(accountDescriptor).first {
       record.cachedBalance = balance.cents
@@ -202,9 +193,8 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
 
   @MainActor
   private func latestInvestmentValue(for accountId: UUID) throws -> MonetaryAmount? {
-    let profileId = self.profileId
     var descriptor = FetchDescriptor<InvestmentValueRecord>(
-      predicate: #Predicate { $0.profileId == profileId && $0.accountId == accountId },
+      predicate: #Predicate { $0.accountId == accountId },
       sortBy: [SortDescriptor(\.date, order: .reverse)]
     )
     descriptor.fetchLimit = 1

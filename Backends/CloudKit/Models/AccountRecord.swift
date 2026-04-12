@@ -6,7 +6,6 @@ final class AccountRecord {
   #Unique<AccountRecord>([\.id])
 
   var id: UUID
-  var profileId: UUID
   var name: String
   var type: String  // Raw value of AccountType
   var position: Int
@@ -16,7 +15,6 @@ final class AccountRecord {
 
   init(
     id: UUID = UUID(),
-    profileId: UUID,
     name: String,
     type: String,
     position: Int = 0,
@@ -25,7 +23,6 @@ final class AccountRecord {
     cachedBalance: Int? = nil
   ) {
     self.id = id
-    self.profileId = profileId
     self.name = name
     self.type = type
     self.position = position
@@ -46,10 +43,9 @@ final class AccountRecord {
     )
   }
 
-  static func from(_ account: Account, profileId: UUID, currencyCode: String) -> AccountRecord {
+  static func from(_ account: Account, currencyCode: String) -> AccountRecord {
     AccountRecord(
       id: account.id,
-      profileId: profileId,
       name: account.name,
       type: account.type.rawValue,
       position: account.position,

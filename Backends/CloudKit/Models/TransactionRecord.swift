@@ -6,7 +6,6 @@ final class TransactionRecord {
   #Unique<TransactionRecord>([\.id])
 
   var id: UUID
-  var profileId: UUID
   var type: String  // Raw value of TransactionType
   var date: Date
   var accountId: UUID?
@@ -22,7 +21,6 @@ final class TransactionRecord {
 
   init(
     id: UUID = UUID(),
-    profileId: UUID,
     type: String,
     date: Date,
     accountId: UUID? = nil,
@@ -37,7 +35,6 @@ final class TransactionRecord {
     recurEvery: Int? = nil
   ) {
     self.id = id
-    self.profileId = profileId
     self.type = type
     self.date = date
     self.accountId = accountId
@@ -70,10 +67,9 @@ final class TransactionRecord {
     )
   }
 
-  static func from(_ transaction: Transaction, profileId: UUID) -> TransactionRecord {
+  static func from(_ transaction: Transaction) -> TransactionRecord {
     TransactionRecord(
       id: transaction.id,
-      profileId: profileId,
       type: transaction.type.rawValue,
       date: transaction.date,
       accountId: transaction.accountId,
