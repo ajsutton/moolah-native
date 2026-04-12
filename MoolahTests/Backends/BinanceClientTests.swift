@@ -60,6 +60,37 @@ struct BinanceClientTests {
     #expect(converted["2026-04-10"] == Decimal(string: "1000.00")!)
   }
 
+  // MARK: - Closure-based init
+
+  @Test func initAcceptsDateAwareUsdtRateClosure() {
+    let client = BinanceClient(session: .shared) { _ in
+      Decimal(string: "0.998")!
+    }
+    // Validates the closure init compiles
+    _ = client
+  }
+
+  // MARK: - Exchange info parsing
+
+  @Test func parseExchangeInfoResponse_findsUsdtPairs() throws {
+    let json = """
+      {
+          "symbols": [
+              { "symbol": "ETHUSDT", "baseAsset": "ETH", "quoteAsset": "USDT", "status": "TRADING" },
+              { "symbol": "BTCUSDT", "baseAsset": "BTC", "quoteAsset": "USDT", "status": "TRADING" },
+              { "symbol": "ETHBTC", "baseAsset": "ETH", "quoteAsset": "BTC", "status": "TRADING" },
+              { "symbol": "OLDUSDT", "baseAsset": "OLD", "quoteAsset": "USDT", "status": "BREAK" }
+          ]
+      }
+      """.data(using: .utf8)!
+
+    let pairs = try BinanceClient.parseExchangeInfoResponse(json)
+    #expect(pairs.contains("ETHUSDT"))
+    #expect(pairs.contains("BTCUSDT"))
+    #expect(!pairs.contains("ETHBTC"))
+    #expect(!pairs.contains("OLDUSDT"))
+  }
+
   // MARK: - Token without Binance mapping
 
   @Test func tokenWithoutBinanceSymbolThrows() async {

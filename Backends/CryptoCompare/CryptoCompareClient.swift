@@ -78,6 +78,17 @@ struct CryptoCompareClient: CryptoPriceClient, Sendable {
     return components.url!
   }
 
+  static func coinListURL() -> URL {
+    var components = URLComponents(
+      url: baseURL.appendingPathComponent("/data/all/coinlist"),
+      resolvingAgainstBaseURL: false
+    )!
+    components.queryItems = [
+      URLQueryItem(name: "summary", value: "true")
+    ]
+    return components.url!
+  }
+
   static func priceMultiURL(symbols: [String]) -> URL {
     var components = URLComponents(
       url: baseURL.appendingPathComponent("/data/pricemulti"),
@@ -105,6 +116,32 @@ struct CryptoCompareClient: CryptoPriceClient, Sendable {
     return result
   }
 
+  /// Parses the coin list response and builds a reverse index: lowercased contract address → symbol.
+  /// Entries with "N/A" or empty contract addresses are excluded.
+  static func parseCoinListResponse(_ data: Data) throws -> [String: String] {
+    let container = try JSONDecoder().decode(CoinListContainer.self, from: data)
+    var index: [String: String] = [:]
+    for (_, coin) in container.Data {
+      let addr = coin.SmartContractAddress
+      guard addr != "N/A", !addr.isEmpty else { continue }
+      index[addr.lowercased()] = coin.Symbol
+    }
+    return index
+  }
+
+  /// Parses the coin list to find symbols that have no smart contract address (native tokens).
+  static func parseNativeSymbols(_ data: Data) throws -> Set<String> {
+    let container = try JSONDecoder().decode(CoinListContainer.self, from: data)
+    var symbols: Set<String> = []
+    for (_, coin) in container.Data {
+      let addr = coin.SmartContractAddress
+      if addr == "N/A" || addr.isEmpty {
+        symbols.insert(coin.Symbol)
+      }
+    }
+    return symbols
+  }
+
   static func parsePriceMultiResponse(_ data: Data) throws -> [String: Decimal] {
     let raw = try JSONDecoder().decode([String: [String: Decimal]].self, from: data)
     var result: [String: Decimal] = [:]
@@ -124,6 +161,16 @@ struct CryptoCompareClient: CryptoPriceClient, Sendable {
 }
 
 // MARK: - Response types
+
+private struct CoinListContainer: Decodable {
+  let Data: [String: CoinListEntry]  // swiftlint:disable:this identifier_name
+}
+
+private struct CoinListEntry: Decodable {
+  let Symbol: String  // swiftlint:disable:this identifier_name
+  let CoinName: String  // swiftlint:disable:this identifier_name
+  let SmartContractAddress: String  // swiftlint:disable:this identifier_name
+}
 
 private struct HistodayContainer: Decodable {
   let Data: HistodayData  // swiftlint:disable:this identifier_name

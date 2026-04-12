@@ -77,6 +77,69 @@ struct CryptoCompareClientTests {
     #expect(prices["BTC"] == Decimal(string: "67890.12")!)
   }
 
+  // MARK: - Coin list parsing
+
+  @Test func parseCoinListResponse_extractsSymbolByContractAddress() throws {
+    let json = """
+      {
+          "Data": {
+              "ETH": {
+                  "Symbol": "ETH",
+                  "CoinName": "Ethereum",
+                  "SmartContractAddress": "N/A"
+              },
+              "UNI": {
+                  "Symbol": "UNI",
+                  "CoinName": "Uniswap",
+                  "SmartContractAddress": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984"
+              },
+              "SCAM": {
+                  "Symbol": "SCAM",
+                  "CoinName": "Scam Token",
+                  "SmartContractAddress": "0xdeadbeef"
+              }
+          }
+      }
+      """.data(using: .utf8)!
+
+    let index = try CryptoCompareClient.parseCoinListResponse(json)
+    #expect(index["0x1f9840a85d5af5bf1d1762f925bdaddc4201f984"] == "UNI")
+    #expect(index["0xdeadbeef"] == "SCAM")
+    #expect(index["N/A"] == nil)
+  }
+
+  @Test func parseCoinListResponse_nativeTokenHasNoContractEntry() throws {
+    let json = """
+      {
+          "Data": {
+              "BTC": {
+                  "Symbol": "BTC",
+                  "CoinName": "Bitcoin",
+                  "SmartContractAddress": "N/A"
+              }
+          }
+      }
+      """.data(using: .utf8)!
+
+    let index = try CryptoCompareClient.parseCoinListResponse(json)
+    #expect(index.isEmpty)
+  }
+
+  @Test func findNativeSymbol_matchesBySymbol() throws {
+    let json = """
+      {
+          "Data": {
+              "BTC": { "Symbol": "BTC", "CoinName": "Bitcoin", "SmartContractAddress": "N/A" },
+              "ETH": { "Symbol": "ETH", "CoinName": "Ethereum", "SmartContractAddress": "N/A" }
+          }
+      }
+      """.data(using: .utf8)!
+
+    let nativeSymbols = try CryptoCompareClient.parseNativeSymbols(json)
+    #expect(nativeSymbols.contains("BTC"))
+    #expect(nativeSymbols.contains("ETH"))
+  }
+
   // MARK: - Token without CryptoCompare mapping
 
   @Test func tokenWithoutCryptoCompareSymbolThrows() async {

@@ -6,9 +6,17 @@ actor CryptoPriceService {
   private var caches: [String: CryptoPriceCache] = [:]
   private let cacheDirectory: URL
   private let dateFormatter: ISO8601DateFormatter
+  private let tokenRepository: CryptoTokenRepository
+  private let resolutionClient: TokenResolutionClient
 
-  init(clients: [CryptoPriceClient], cacheDirectory: URL? = nil) {
+  init(
+    clients: [CryptoPriceClient], cacheDirectory: URL? = nil,
+    tokenRepository: CryptoTokenRepository = ICloudTokenRepository(),
+    resolutionClient: (any TokenResolutionClient)? = nil
+  ) {
     self.clients = clients
+    self.tokenRepository = tokenRepository
+    self.resolutionClient = resolutionClient ?? NoOpTokenResolutionClient()
     self.cacheDirectory =
       cacheDirectory
       ?? FileManager.default.urls(
@@ -16,6 +24,52 @@ actor CryptoPriceService {
       ).first!.appendingPathComponent("crypto-prices")
     self.dateFormatter = ISO8601DateFormatter()
     self.dateFormatter.formatOptions = [.withFullDate]
+  }
+
+  // MARK: - Token resolution
+
+  func resolveToken(
+    chainId: Int, contractAddress: String?, symbol: String?, isNative: Bool
+  ) async throws -> CryptoToken {
+    let result = try await resolutionClient.resolve(
+      chainId: chainId,
+      contractAddress: contractAddress,
+      symbol: symbol,
+      isNative: isNative
+    )
+    return CryptoToken(
+      chainId: chainId,
+      contractAddress: isNative ? nil : contractAddress,
+      symbol: result.resolvedSymbol ?? symbol ?? "???",
+      name: result.resolvedName ?? symbol ?? "Unknown Token",
+      decimals: result.resolvedDecimals ?? 18,
+      coingeckoId: result.coingeckoId,
+      cryptocompareSymbol: result.cryptocompareSymbol,
+      binanceSymbol: result.binanceSymbol
+    )
+  }
+
+  // MARK: - Token management
+
+  func registeredTokens() async -> [CryptoToken] {
+    (try? await tokenRepository.loadTokens()) ?? []
+  }
+
+  func registerToken(_ token: CryptoToken) async throws {
+    var tokens = try await tokenRepository.loadTokens()
+    tokens.removeAll { $0.id == token.id }
+    tokens.append(token)
+    try await tokenRepository.saveTokens(tokens)
+  }
+
+  func removeToken(_ token: CryptoToken) async throws {
+    var tokens = try await tokenRepository.loadTokens()
+    tokens.removeAll { $0.id == token.id }
+    try await tokenRepository.saveTokens(tokens)
+    // Remove cached price data
+    caches.removeValue(forKey: token.id)
+    let url = cacheFileURL(tokenId: token.id)
+    try? FileManager.default.removeItem(at: url)
   }
 
   // MARK: - Single price
@@ -126,6 +180,13 @@ actor CryptoPriceService {
   }
 
   // MARK: - Prefetch
+
+  /// Prefetch latest prices for all registered tokens.
+  func prefetchLatest() async {
+    let tokens = await registeredTokens()
+    guard !tokens.isEmpty else { return }
+    await prefetchLatest(for: tokens)
+  }
 
   func prefetchLatest(for tokens: [CryptoToken]) async {
     do {
@@ -239,5 +300,14 @@ actor CryptoPriceService {
 
   private func decompress(_ data: Data) -> Data? {
     try? (data as NSData).decompressed(using: .zlib) as Data
+  }
+}
+
+/// Fallback when no resolution client is configured. Returns empty results.
+private struct NoOpTokenResolutionClient: TokenResolutionClient {
+  func resolve(
+    chainId: Int, contractAddress: String?, symbol: String?, isNative: Bool
+  ) async throws -> TokenResolutionResult {
+    TokenResolutionResult()
   }
 }

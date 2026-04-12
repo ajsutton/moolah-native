@@ -64,8 +64,37 @@ final class ProfileSession: Identifiable {
     self.backend = backend
     self.exchangeRateService = ExchangeRateService(client: FrankfurterClient())
     self.stockPriceService = StockPriceService(client: YahooFinanceClient())
+    let cryptoCompareClient = CryptoCompareClient()
+    let binanceClient = BinanceClient { date in
+      let usdt = CryptoToken(
+        chainId: 1,
+        contractAddress: "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        symbol: "USDT", name: "Tether", decimals: 6,
+        coingeckoId: "tether", cryptocompareSymbol: "USDT", binanceSymbol: nil
+      )
+      do {
+        return try await cryptoCompareClient.dailyPrice(for: usdt, on: date)
+      } catch {
+        return Decimal(1)
+      }
+    }
+
+    let apiKeyStore = KeychainStore(
+      service: "com.moolah.api-keys", account: "coingecko", synchronizable: true
+    )
+    let coinGeckoApiKey = try? apiKeyStore.restoreString()
+
+    var priceClients: [CryptoPriceClient] = []
+    if let coinGeckoApiKey, !coinGeckoApiKey.isEmpty {
+      priceClients.append(CoinGeckoClient(apiKey: coinGeckoApiKey))
+    }
+    priceClients.append(cryptoCompareClient)
+    priceClients.append(binanceClient)
+
     self.cryptoPriceService = CryptoPriceService(
-      clients: [CryptoCompareClient(), BinanceClient()]
+      clients: priceClients,
+      tokenRepository: ICloudTokenRepository(),
+      resolutionClient: CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey)
     )
     self.priceConversionService = PriceConversionService(
       cryptoPrices: self.cryptoPriceService,

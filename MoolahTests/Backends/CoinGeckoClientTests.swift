@@ -77,6 +77,46 @@ struct CoinGeckoClientTests {
     #expect(prices["bitcoin"] == Decimal(string: "67890.12")!)
   }
 
+  // MARK: - Asset platforms parsing
+
+  @Test func parseAssetPlatformsResponse_mapsChainIdToSlug() throws {
+    let json = """
+      [
+          { "id": "ethereum", "chain_identifier": 1, "name": "Ethereum" },
+          { "id": "optimistic-ethereum", "chain_identifier": 10, "name": "Optimism" },
+          { "id": "polygon-pos", "chain_identifier": 137, "name": "Polygon" },
+          { "id": "no-chain", "chain_identifier": null, "name": "No Chain" }
+      ]
+      """.data(using: .utf8)!
+
+    let mapping = try CoinGeckoClient.parseAssetPlatformsResponse(json)
+    #expect(mapping[1] == "ethereum")
+    #expect(mapping[10] == "optimistic-ethereum")
+    #expect(mapping[137] == "polygon-pos")
+    #expect(mapping.count == 3)
+  }
+
+  // MARK: - Contract lookup parsing
+
+  @Test func parseContractLookupResponse_extractsTokenDetails() throws {
+    let json = """
+      {
+          "id": "uniswap",
+          "symbol": "uni",
+          "name": "Uniswap",
+          "detail_platforms": {
+              "ethereum": { "decimal_place": 18, "contract_address": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984" }
+          }
+      }
+      """.data(using: .utf8)!
+
+    let result = try CoinGeckoClient.parseContractLookupResponse(json)
+    #expect(result.id == "uniswap")
+    #expect(result.symbol == "uni")
+    #expect(result.name == "Uniswap")
+    #expect(result.decimals == 18)
+  }
+
   // MARK: - Token without CoinGecko mapping
 
   @Test func tokenWithoutCoinGeckoIdThrows() async {

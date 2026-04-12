@@ -22,7 +22,9 @@ struct CryptoPriceServiceTests {
     clients: [CryptoPriceClient]? = nil,
     prices: [String: [String: Decimal]] = [:],
     shouldFail: Bool = false,
-    cacheDirectory: URL? = nil
+    cacheDirectory: URL? = nil,
+    tokenRepository: CryptoTokenRepository? = nil,
+    resolutionClient: (any TokenResolutionClient)? = nil
   ) -> CryptoPriceService {
     let clientList = clients ?? [FixedCryptoPriceClient(prices: prices, shouldFail: shouldFail)]
     let cacheDir =
@@ -30,7 +32,12 @@ struct CryptoPriceServiceTests {
       ?? FileManager.default.temporaryDirectory
       .appendingPathComponent("crypto-price-tests")
       .appendingPathComponent(UUID().uuidString)
-    return CryptoPriceService(clients: clientList, cacheDirectory: cacheDir)
+    return CryptoPriceService(
+      clients: clientList,
+      cacheDirectory: cacheDir,
+      tokenRepository: tokenRepository ?? InMemoryTokenRepository(),
+      resolutionClient: resolutionClient
+    )
   }
 
   private func date(_ string: String) -> Date {
@@ -188,6 +195,22 @@ struct CryptoPriceServiceTests {
 
   // MARK: - Prefetch
 
+  @Test func prefetchLatest_usesRegisteredTokensWhenNoneProvided() async throws {
+    let repo = InMemoryTokenRepository()
+    try await repo.saveTokens([eth, btc])
+
+    let service = makeService(
+      prices: [
+        "1:native": ["2026-04-11": Decimal(string: "1640.00")!],
+        "0:native": ["2026-04-11": Decimal(string: "67890.00")!],
+      ],
+      tokenRepository: repo
+    )
+    await service.prefetchLatest()
+    let ethPrice = try await service.price(for: eth, on: date("2026-04-11"))
+    #expect(ethPrice == Decimal(string: "1640.00")!)
+  }
+
   @Test func prefetchUpdatesCacheForRegisteredTokens() async throws {
     let service = makeService(prices: [
       "1:native": ["2026-04-11": Decimal(string: "1640.00")!],
@@ -209,5 +232,87 @@ struct CryptoPriceServiceTests {
     let btcPrice = try await service.price(for: btc, on: date("2026-04-10"))
     #expect(ethPrice == Decimal(string: "1623.45")!)
     #expect(btcPrice == Decimal(string: "67890.00")!)
+  }
+
+  // MARK: - Token management
+
+  @Test func registerTokenAddsToList() async throws {
+    let service = makeService()
+    let token = CryptoToken.builtInPresets[0]
+    try await service.registerToken(token)
+    let tokens = await service.registeredTokens()
+    #expect(tokens.count == 1)
+    #expect(tokens[0].id == token.id)
+  }
+
+  @Test func removeTokenDeletesFromList() async throws {
+    let service = makeService()
+    let token = CryptoToken.builtInPresets[0]
+    try await service.registerToken(token)
+    try await service.removeToken(token)
+    let tokens = await service.registeredTokens()
+    #expect(tokens.isEmpty)
+  }
+
+  @Test func registeredTokensPersistViaRepository() async throws {
+    let repo = InMemoryTokenRepository()
+    let service1 = makeService(tokenRepository: repo)
+    try await service1.registerToken(CryptoToken.builtInPresets[0])
+
+    let service2 = makeService(tokenRepository: repo)
+    let tokens = await service2.registeredTokens()
+    #expect(tokens.count == 1)
+  }
+
+  // MARK: - Token resolution
+
+  @Test func resolveToken_populatesProviderFields() async throws {
+    let result = TokenResolutionResult(
+      coingeckoId: "uniswap",
+      cryptocompareSymbol: "UNI",
+      binanceSymbol: "UNIUSDT",
+      resolvedName: "Uniswap",
+      resolvedSymbol: "UNI",
+      resolvedDecimals: 18
+    )
+    let service = makeService(resolutionClient: FixedTokenResolutionClient(result: result))
+
+    let token = try await service.resolveToken(
+      chainId: 1,
+      contractAddress: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
+      symbol: nil,
+      isNative: false
+    )
+    #expect(token.coingeckoId == "uniswap")
+    #expect(token.cryptocompareSymbol == "UNI")
+    #expect(token.binanceSymbol == "UNIUSDT")
+    #expect(token.name == "Uniswap")
+  }
+
+  @Test func resolveToken_noProvidersMatch_returnsPartialToken() async throws {
+    let service = makeService(
+      resolutionClient: FixedTokenResolutionClient(result: TokenResolutionResult())
+    )
+    let token = try await service.resolveToken(
+      chainId: 999,
+      contractAddress: "0xunknown",
+      symbol: "UNKNOWN",
+      isNative: false
+    )
+    #expect(token.coingeckoId == nil)
+    #expect(token.cryptocompareSymbol == nil)
+    #expect(token.binanceSymbol == nil)
+    #expect(token.symbol == "UNKNOWN")
+  }
+
+  @Test func resolveToken_resolutionFails_throws() async throws {
+    let service = makeService(
+      resolutionClient: FixedTokenResolutionClient(shouldFail: true)
+    )
+    await #expect(throws: (any Error).self) {
+      try await service.resolveToken(
+        chainId: 1, contractAddress: "0xabc", symbol: nil, isNative: false
+      )
+    }
   }
 }
