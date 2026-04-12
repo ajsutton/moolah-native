@@ -22,7 +22,8 @@ struct CryptoPriceServiceTests {
     clients: [CryptoPriceClient]? = nil,
     prices: [String: [String: Decimal]] = [:],
     shouldFail: Bool = false,
-    cacheDirectory: URL? = nil
+    cacheDirectory: URL? = nil,
+    tokenRepository: CryptoTokenRepository? = nil
   ) -> CryptoPriceService {
     let clientList = clients ?? [FixedCryptoPriceClient(prices: prices, shouldFail: shouldFail)]
     let cacheDir =
@@ -30,7 +31,11 @@ struct CryptoPriceServiceTests {
       ?? FileManager.default.temporaryDirectory
       .appendingPathComponent("crypto-price-tests")
       .appendingPathComponent(UUID().uuidString)
-    return CryptoPriceService(clients: clientList, cacheDirectory: cacheDir)
+    return CryptoPriceService(
+      clients: clientList,
+      cacheDirectory: cacheDir,
+      tokenRepository: tokenRepository ?? InMemoryTokenRepository()
+    )
   }
 
   private func date(_ string: String) -> Date {
@@ -209,5 +214,35 @@ struct CryptoPriceServiceTests {
     let btcPrice = try await service.price(for: btc, on: date("2026-04-10"))
     #expect(ethPrice == Decimal(string: "1623.45")!)
     #expect(btcPrice == Decimal(string: "67890.00")!)
+  }
+
+  // MARK: - Token management
+
+  @Test func registerTokenAddsToList() async throws {
+    let service = makeService()
+    let token = CryptoToken.builtInPresets[0]
+    try await service.registerToken(token)
+    let tokens = await service.registeredTokens()
+    #expect(tokens.count == 1)
+    #expect(tokens[0].id == token.id)
+  }
+
+  @Test func removeTokenDeletesFromList() async throws {
+    let service = makeService()
+    let token = CryptoToken.builtInPresets[0]
+    try await service.registerToken(token)
+    try await service.removeToken(token)
+    let tokens = await service.registeredTokens()
+    #expect(tokens.isEmpty)
+  }
+
+  @Test func registeredTokensPersistViaRepository() async throws {
+    let repo = InMemoryTokenRepository()
+    let service1 = makeService(tokenRepository: repo)
+    try await service1.registerToken(CryptoToken.builtInPresets[0])
+
+    let service2 = makeService(tokenRepository: repo)
+    let tokens = await service2.registeredTokens()
+    #expect(tokens.count == 1)
   }
 }

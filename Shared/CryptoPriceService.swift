@@ -6,8 +6,12 @@ actor CryptoPriceService {
   private var caches: [String: CryptoPriceCache] = [:]
   private let cacheDirectory: URL
   private let dateFormatter: ISO8601DateFormatter
+  private let tokenRepository: CryptoTokenRepository
 
-  init(clients: [CryptoPriceClient], cacheDirectory: URL? = nil) {
+  init(
+    clients: [CryptoPriceClient], cacheDirectory: URL? = nil,
+    tokenRepository: CryptoTokenRepository = ICloudTokenRepository()
+  ) {
     self.clients = clients
     self.cacheDirectory =
       cacheDirectory
@@ -16,6 +20,30 @@ actor CryptoPriceService {
       ).first!.appendingPathComponent("crypto-prices")
     self.dateFormatter = ISO8601DateFormatter()
     self.dateFormatter.formatOptions = [.withFullDate]
+    self.tokenRepository = tokenRepository
+  }
+
+  // MARK: - Token management
+
+  func registeredTokens() async -> [CryptoToken] {
+    (try? await tokenRepository.loadTokens()) ?? []
+  }
+
+  func registerToken(_ token: CryptoToken) async throws {
+    var tokens = try await tokenRepository.loadTokens()
+    tokens.removeAll { $0.id == token.id }
+    tokens.append(token)
+    try await tokenRepository.saveTokens(tokens)
+  }
+
+  func removeToken(_ token: CryptoToken) async throws {
+    var tokens = try await tokenRepository.loadTokens()
+    tokens.removeAll { $0.id == token.id }
+    try await tokenRepository.saveTokens(tokens)
+    // Remove cached price data
+    caches.removeValue(forKey: token.id)
+    let url = cacheFileURL(tokenId: token.id)
+    try? FileManager.default.removeItem(at: url)
   }
 
   // MARK: - Single price
