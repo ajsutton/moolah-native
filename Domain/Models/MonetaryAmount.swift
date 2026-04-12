@@ -13,6 +13,24 @@ struct MonetaryAmount: Codable, Sendable, Hashable, Comparable {
     self.currency = currency
   }
 
+  private enum CodingKeys: String, CodingKey {
+    case cents
+    case currency
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    cents = try container.decode(Int.self, forKey: .cents)
+    let code = try container.decode(String.self, forKey: .currency)
+    currency = Currency.from(code: code)
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(cents, forKey: .cents)
+    try container.encode(currency.code, forKey: .currency)
+  }
+
   var isPositive: Bool { cents > 0 }
   var isNegative: Bool { cents < 0 }
   var isZero: Bool { cents == 0 }
