@@ -8,6 +8,8 @@
     let containerManager: ProfileContainerManager
     let session: ProfileSession?
 
+    @Environment(\.openWindow) private var openWindow
+
     var body: some View {
       Button("Export Profile\u{2026}") {
         guard let session else { return }
@@ -79,7 +81,7 @@
           url: url,
           modelContainer: container
         )
-        profileStore.setActiveProfile(newProfile.id)
+        openWindow(value: newProfile.id)
       } catch {
         containerManager.deleteStore(for: newProfile.id)
         profileStore.removeProfile(newProfile.id)
