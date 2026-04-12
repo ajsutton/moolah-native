@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g., 1.0.0-monthly.202604)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -27,9 +33,13 @@ jobs:
           ruby-version: "3.3"
           bundler-cache: true
 
-      - name: Set version from tag
+      - name: Set version
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=${GITHUB_REF_NAME#v}
+          fi
           echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Update marketing version
