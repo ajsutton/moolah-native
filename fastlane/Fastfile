@@ -42,12 +42,20 @@ platform :ios do
       build_number: latest_testflight_build_number(api_key: api_key) + 1
     )
 
+    profile_name = ENV["sigh_rocks.moolah.app_appstore_profile-name"]
+
     build_app(
       scheme: "Moolah-iOS",
       export_method: "app-store",
       output_directory: "./build",
       output_name: "Moolah.ipa",
-      xcargs: "-allowProvisioningUpdates CODE_SIGN_ENTITLEMENTS=App/Moolah.entitlements"
+      xcargs: [
+        "CODE_SIGN_ENTITLEMENTS=App/Moolah.entitlements",
+        "CODE_SIGN_STYLE=Manual",
+        "DEVELOPMENT_TEAM=#{ENV['DEVELOPMENT_TEAM']}",
+        "CODE_SIGN_IDENTITY=Apple Distribution",
+        "PROVISIONING_PROFILE_SPECIFIER=#{profile_name}"
+      ].join(" ")
     )
 
     upload_to_testflight(
