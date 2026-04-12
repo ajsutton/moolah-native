@@ -23,6 +23,7 @@ struct TransactionFormView: View {
   @State private var recurPeriod: RecurPeriod?
   @State private var recurEvery: Int
   @State private var isRepeating: Bool
+  @State private var toAmountText: String
   @State private var showDeleteConfirmation = false
   @FocusState private var payeeFieldFocused: Bool
   @State private var showPayeeSuggestions = false
@@ -57,15 +58,25 @@ struct TransactionFormView: View {
           .number.precision(.fractionLength(2))))
       _date = State(initialValue: tx.date)
       _accountId = State(initialValue: tx.primaryAccountId)
-      _toAccountId = State(
-        initialValue: tx.legs.count > 1
-          ? tx.legs.first(where: { $0.accountId != tx.primaryAccountId })?.accountId : nil)
+      let transferLeg =
+        tx.legs.count > 1
+        ? tx.legs.first(where: { $0.accountId != tx.primaryAccountId })
+        : nil
+      _toAccountId = State(initialValue: transferLeg?.accountId)
       _categoryId = State(initialValue: tx.categoryId)
       if let catId = tx.categoryId, let cat = categories.by(id: catId) {
         _categoryText = State(initialValue: categories.path(for: cat))
       }
       _earmarkId = State(initialValue: tx.earmarkId)
       _notes = State(initialValue: tx.notes ?? "")
+      // Initialize toAmountText for cross-currency transfers
+      if let transferLeg, tx.legs.first?.instrument != transferLeg.instrument {
+        _toAmountText = State(
+          initialValue: abs(transferLeg.quantity).formatted(
+            .number.precision(.fractionLength(2))))
+      } else {
+        _toAmountText = State(initialValue: "")
+      }
       _recurPeriod = State(initialValue: tx.recurPeriod)
       _recurEvery = State(initialValue: tx.recurEvery ?? 1)
       _isRepeating = State(initialValue: tx.recurPeriod != nil && tx.recurPeriod != .once)
@@ -79,6 +90,7 @@ struct TransactionFormView: View {
       _categoryId = State(initialValue: nil)
       _earmarkId = State(initialValue: nil)
       _notes = State(initialValue: "")
+      _toAmountText = State(initialValue: "")
       _recurPeriod = State(initialValue: nil)
       _recurEvery = State(initialValue: 1)
       _isRepeating = State(initialValue: false)
@@ -86,7 +98,25 @@ struct TransactionFormView: View {
   }
 
   private var selectedInstrument: Instrument {
-    accounts.ordered.first(where: { $0.id == accountId })?.balance.instrument ?? .AUD
+    instrumentForAccount(accountId)
+  }
+
+  private var toInstrument: Instrument {
+    instrumentForAccount(toAccountId)
+  }
+
+  private var isCrossCurrencyTransfer: Bool {
+    guard type == .transfer, toAccountId != nil else { return false }
+    return selectedInstrument != toInstrument
+  }
+
+  private func instrumentForAccount(_ id: UUID?) -> Instrument {
+    guard let id, let account = accounts.by(id: id) else { return .AUD }
+    // Use the account's primary position instrument, or fall back to balance instrument
+    if let primary = account.positions.first {
+      return primary.instrument
+    }
+    return account.balance.instrument
   }
 
   private var isEditing: Bool { existing != nil }
@@ -99,7 +129,8 @@ struct TransactionFormView: View {
     TransactionDraft(
       type: type, payee: payee, amountText: amountText, date: date,
       accountId: accountId, toAccountId: toAccountId, categoryId: categoryId,
-      earmarkId: earmarkId, notes: notes, isRepeating: isRepeating,
+      earmarkId: earmarkId, notes: notes, toAmountText: toAmountText,
+      isRepeating: isRepeating,
       recurPeriod: recurPeriod, recurEvery: recurEvery)
   }
 
@@ -242,6 +273,17 @@ struct TransactionFormView: View {
           #if os(iOS)
             .keyboardType(.decimalPad)
           #endif
+      }
+
+      if type == .transfer && (isCrossCurrencyTransfer || !toAmountText.isEmpty) {
+        HStack {
+          Text(toInstrument.id)
+            .foregroundStyle(.secondary)
+          TextField("Received Amount", text: $toAmountText)
+            #if os(iOS)
+              .keyboardType(.decimalPad)
+            #endif
+        }
       }
 
       DatePicker("Date", selection: $date, displayedComponents: .date)
@@ -452,9 +494,12 @@ struct TransactionFormView: View {
   }
 
   private func save() {
+    let toInst: Instrument? = type == .transfer ? toInstrument : nil
     guard
       let transaction = draft.toTransaction(
-        id: existing?.id ?? UUID(), instrument: selectedInstrument)
+        id: existing?.id ?? UUID(),
+        fromInstrument: selectedInstrument,
+        toInstrument: toInst)
     else { return }
     onSave(transaction)
     dismiss()

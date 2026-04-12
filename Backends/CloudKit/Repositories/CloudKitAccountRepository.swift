@@ -32,6 +32,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     return try await MainActor.run {
       let records = try context.fetch(descriptor)
       let balances = try computeAllBalances()
+      let allPositions = try computeAllPositions()
 
       return try records.map { record in
         let storageValue = balances[record.id] ?? 0
@@ -40,7 +41,9 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
           record.type == AccountType.investment.rawValue
           ? try latestInvestmentValue(for: record.id)
           : nil
-        return record.toDomain(balance: balance, investmentValue: investmentValue)
+        let positions = allPositions[record.id] ?? []
+        return record.toDomain(
+          balance: balance, investmentValue: investmentValue, positions: positions)
       }
     }
   }
@@ -128,7 +131,10 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
         record.type == AccountType.investment.rawValue
         ? try latestInvestmentValue(for: accountId)
         : nil
-      return record.toDomain(balance: balance, investmentValue: investmentValue)
+      let allPositions = try computeAllPositions()
+      let positions = allPositions[accountId] ?? []
+      return record.toDomain(
+        balance: balance, investmentValue: investmentValue, positions: positions)
     }
   }
 
@@ -168,22 +174,72 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   /// Returns a dictionary of accountId -> storageValue (Int64).
   @MainActor
   private func computeAllBalances() throws -> [UUID: Int64] {
-    // Get scheduled transaction IDs to exclude
+    let (_, allLegs) = try fetchNonScheduledLegs()
+
+    var balances: [UUID: Int64] = [:]
+    for leg in allLegs {
+      balances[leg.accountId, default: 0] += leg.quantity
+    }
+    return balances
+  }
+
+  /// Compute per-instrument positions for all accounts.
+  /// Returns a dictionary of accountId -> [Position].
+  @MainActor
+  private func computeAllPositions() throws -> [UUID: [Position]] {
+    let (_, allLegs) = try fetchNonScheduledLegs()
+
+    // Group by (accountId, instrumentId) and sum quantities
+    var totals: [UUID: [String: Int64]] = [:]
+    for leg in allLegs {
+      totals[leg.accountId, default: [:]][leg.instrumentId, default: 0] += leg.quantity
+    }
+
+    // Resolve instruments and build Position arrays
+    let instruments = try fetchInstrumentMap()
+    var result: [UUID: [Position]] = [:]
+    for (accountId, instrumentTotals) in totals {
+      var positions: [Position] = []
+      for (instrumentId, quantity) in instrumentTotals {
+        guard quantity != 0 else { continue }
+        let inst = instruments[instrumentId] ?? Instrument.fiat(code: instrumentId)
+        let amount = InstrumentAmount(storageValue: quantity, instrument: inst)
+        positions.append(
+          Position(accountId: accountId, instrument: inst, quantity: amount.quantity))
+      }
+      positions.sort { $0.instrument.id < $1.instrument.id }
+      if !positions.isEmpty {
+        result[accountId] = positions
+      }
+    }
+    return result
+  }
+
+  /// Fetches all non-scheduled legs in a single pass.
+  @MainActor
+  private func fetchNonScheduledLegs() throws -> (Set<UUID>, [TransactionLegRecord]) {
     let scheduledDescriptor = FetchDescriptor<TransactionRecord>(
       predicate: #Predicate { $0.recurPeriod != nil }
     )
     let scheduledIds = Set(try context.fetch(scheduledDescriptor).map(\.id))
 
-    // Fetch all legs and accumulate per account
     let legDescriptor = FetchDescriptor<TransactionLegRecord>()
-    let allLegs = try context.fetch(legDescriptor)
-
-    var balances: [UUID: Int64] = [:]
-    for leg in allLegs {
-      guard !scheduledIds.contains(leg.transactionId) else { continue }
-      balances[leg.accountId, default: 0] += leg.quantity
+    let allLegs = try context.fetch(legDescriptor).filter {
+      !scheduledIds.contains($0.transactionId)
     }
-    return balances
+    return (scheduledIds, allLegs)
+  }
+
+  /// Fetches all known instruments as a lookup map.
+  @MainActor
+  private func fetchInstrumentMap() throws -> [String: Instrument] {
+    let descriptor = FetchDescriptor<InstrumentRecord>()
+    let records = try context.fetch(descriptor)
+    var map: [String: Instrument] = [:]
+    for record in records {
+      map[record.id] = record.toDomain()
+    }
+    return map
   }
 
   // MARK: - Instrument Cache

@@ -9,13 +9,20 @@ enum TestBackend {
   /// Creates a CloudKitBackend backed by an in-memory ModelContainer.
   /// Each call creates a fresh, isolated container — no cross-test contamination.
   static func create(
-    instrument: Instrument = .defaultTestInstrument
+    instrument: Instrument = .defaultTestInstrument,
+    exchangeRates: [String: [String: Decimal]] = [:]
   ) throws -> (backend: CloudKitBackend, container: ModelContainer) {
     let container = try TestModelContainer.create()
+    let rateClient = FixedRateClient(rates: exchangeRates)
+    let cacheDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("test-rates-\(UUID().uuidString)")
+    let exchangeRateService = ExchangeRateService(client: rateClient, cacheDirectory: cacheDir)
+    let conversionService = FiatConversionService(exchangeRates: exchangeRateService)
     let backend = CloudKitBackend(
       modelContainer: container,
       instrument: instrument,
-      profileLabel: "Test"
+      profileLabel: "Test",
+      conversionService: conversionService
     )
     return (backend, container)
   }

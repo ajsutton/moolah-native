@@ -27,13 +27,16 @@ final class AccountRecord {
     self.isHidden = isHidden
   }
 
-  func toDomain(balance: InstrumentAmount, investmentValue: InstrumentAmount?) -> Account {
+  func toDomain(
+    balance: InstrumentAmount, investmentValue: InstrumentAmount?, positions: [Position] = []
+  ) -> Account {
     Account(
       id: id,
       name: name,
       type: AccountType(rawValue: type) ?? .bank,
       balance: balance,
       investmentValue: investmentValue,
+      positions: positions,
       position: position,
       isHidden: isHidden
     )

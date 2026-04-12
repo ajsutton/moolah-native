@@ -10,10 +10,15 @@ final class AccountStore {
   private(set) var error: Error?
 
   private let repository: AccountRepository
+  private let conversionService: (any InstrumentConversionService)?
   private let logger = Logger(subsystem: "com.moolah.app", category: "AccountStore")
 
-  init(repository: AccountRepository) {
+  init(
+    repository: AccountRepository,
+    conversionService: (any InstrumentConversionService)? = nil
+  ) {
     self.repository = repository
+    self.conversionService = conversionService
   }
 
   func load() async {
@@ -86,6 +91,61 @@ final class AccountStore {
 
   var netWorth: InstrumentAmount {
     currentTotal + investmentTotal
+  }
+
+  /// Positions for a given account. Returns empty array if not loaded.
+  func positions(for accountId: UUID) -> [Position] {
+    accounts.by(id: accountId)?.positions ?? []
+  }
+
+  /// Compute the total value of all current accounts in a target instrument,
+  /// converting foreign-currency positions via the conversion service.
+  func convertedTotal(for accountList: [Account], in targetInstrument: Instrument) async throws
+    -> InstrumentAmount
+  {
+    guard let conversionService else {
+      return accountList.reduce(.zero(instrument: targetInstrument)) { $0 + $1.balance }
+    }
+
+    var total = InstrumentAmount.zero(instrument: targetInstrument)
+    let date = Date()
+
+    for account in accountList {
+      let positions = account.positions
+      if positions.isEmpty {
+        // Fallback: use the single balance
+        let converted = try await conversionService.convertAmount(
+          account.balance, to: targetInstrument, on: date)
+        total += converted
+      } else {
+        for position in positions {
+          let converted = try await conversionService.convertAmount(
+            position.amount, to: targetInstrument, on: date)
+          total += converted
+        }
+      }
+    }
+    return total
+  }
+
+  /// Converted total for current accounts.
+  func convertedCurrentTotal(in targetInstrument: Instrument) async throws -> InstrumentAmount {
+    try await convertedTotal(for: currentAccounts, in: targetInstrument)
+  }
+
+  /// Converted total for investment accounts.
+  func convertedInvestmentTotal(in targetInstrument: Instrument) async throws -> InstrumentAmount {
+    guard let conversionService else {
+      return investmentTotal
+    }
+    var total = InstrumentAmount.zero(instrument: targetInstrument)
+    let date = Date()
+    for account in investmentAccounts {
+      let converted = try await conversionService.convertAmount(
+        account.displayBalance, to: targetInstrument, on: date)
+      total += converted
+    }
+    return total
   }
 
   /// Adjusts account balances locally based on a transaction change.

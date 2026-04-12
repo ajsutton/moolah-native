@@ -107,7 +107,8 @@ final class ProfileSession: Identifiable {
     )
 
     self.authStore = AuthStore(backend: backend)
-    self.accountStore = AccountStore(repository: backend.accounts)
+    self.accountStore = AccountStore(
+      repository: backend.accounts, conversionService: backend.conversionService)
     self.transactionStore = TransactionStore(repository: backend.transactions)
     self.categoryStore = CategoryStore(repository: backend.categories)
     self.earmarkStore = EarmarkStore(repository: backend.earmarks)

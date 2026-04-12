@@ -17,9 +17,16 @@ enum PreviewBackend {
     ])
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: schema, configurations: [config])
+    let exchangeRates = ExchangeRateService(
+      client: FrankfurterClient(),
+      cacheDirectory: FileManager.default.temporaryDirectory
+        .appendingPathComponent("preview-rates")
+    )
+    let conversionService = FiatConversionService(exchangeRates: exchangeRates)
     let backend = CloudKitBackend(
       modelContainer: container,
-      instrument: instrument, profileLabel: "Preview"
+      instrument: instrument, profileLabel: "Preview",
+      conversionService: conversionService
     )
     return (backend, container)
   }

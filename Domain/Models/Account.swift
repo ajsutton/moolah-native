@@ -27,6 +27,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
   var balance: InstrumentAmount
   /// Market value for investment accounts. Nil for non-investment accounts.
   var investmentValue: InstrumentAmount?
+  var positions: [Position]
   var position: Int
   var isHidden: Bool
 
@@ -45,6 +46,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     type: AccountType,
     balance: InstrumentAmount = .zero(instrument: .AUD),
     investmentValue: InstrumentAmount? = nil,
+    positions: [Position] = [],
     position: Int = 0,
     isHidden: Bool = false
   ) {
@@ -53,6 +55,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     self.type = type
     self.balance = balance
     self.investmentValue = investmentValue
+    self.positions = positions
     self.position = position
     self.isHidden = isHidden
   }
@@ -65,6 +68,45 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     case investmentValue
     case position
     case isHidden = "hidden"
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(UUID.self, forKey: .id)
+    name = try container.decode(String.self, forKey: .name)
+    type = try container.decode(AccountType.self, forKey: .type)
+    balance = try container.decode(InstrumentAmount.self, forKey: .balance)
+    investmentValue = try container.decodeIfPresent(InstrumentAmount.self, forKey: .investmentValue)
+    positions = []
+    position = try container.decode(Int.self, forKey: .position)
+    isHidden = try container.decode(Bool.self, forKey: .isHidden)
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(id, forKey: .id)
+    try container.encode(name, forKey: .name)
+    try container.encode(type, forKey: .type)
+    try container.encode(balance, forKey: .balance)
+    try container.encodeIfPresent(investmentValue, forKey: .investmentValue)
+    try container.encode(position, forKey: .position)
+    try container.encode(isHidden, forKey: .isHidden)
+  }
+
+  static func == (lhs: Account, rhs: Account) -> Bool {
+    lhs.id == rhs.id && lhs.name == rhs.name && lhs.type == rhs.type
+      && lhs.balance == rhs.balance && lhs.investmentValue == rhs.investmentValue
+      && lhs.position == rhs.position && lhs.isHidden == rhs.isHidden
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine(id)
+    hasher.combine(name)
+    hasher.combine(type)
+    hasher.combine(balance)
+    hasher.combine(investmentValue)
+    hasher.combine(position)
+    hasher.combine(isHidden)
   }
 
   static func < (lhs: Account, rhs: Account) -> Bool {

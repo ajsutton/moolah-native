@@ -22,6 +22,7 @@ struct TransactionDetailView: View {
   @State private var recurPeriod: RecurPeriod?
   @State private var recurEvery: Int
   @State private var isRepeating: Bool
+  @State private var toAmountText: String = ""
   @State private var showDeleteConfirmation = false
   @State private var showPayeeSuggestions = false
   @State private var payeeHighlightedIndex: Int?
@@ -74,6 +75,18 @@ struct TransactionDetailView: View {
     _recurEvery = State(initialValue: transaction.recurEvery ?? 1)
     _isRepeating = State(
       initialValue: transaction.recurPeriod != nil && transaction.recurPeriod != .once)
+
+    // Initialize toAmountText for cross-currency transfers
+    let primaryLeg = transaction.legs.first
+    let transferLeg =
+      transaction.legs.count > 1
+      ? transaction.legs.first(where: { $0.accountId != primaryLeg?.accountId })
+      : nil
+    if let transferLeg, primaryLeg?.instrument != transferLeg.instrument {
+      _toAmountText = State(
+        initialValue: abs(transferLeg.quantity).formatted(
+          .number.precision(.fractionLength(2))))
+    }
   }
 
   private var isNewTransaction: Bool {
@@ -85,7 +98,8 @@ struct TransactionDetailView: View {
     TransactionDraft(
       type: type, payee: payee, amountText: amountText, date: date,
       accountId: accountId, toAccountId: toAccountId, categoryId: categoryId,
-      earmarkId: earmarkId, notes: notes, isRepeating: isRepeating,
+      earmarkId: earmarkId, notes: notes, toAmountText: toAmountText,
+      isRepeating: isRepeating,
       recurPeriod: recurPeriod, recurEvery: recurEvery)
   }
 
@@ -543,9 +557,21 @@ struct TransactionDetailView: View {
   }
 
   private func saveIfValid() {
+    let fromInstrument = transaction.primaryAmount.instrument
+    let toInstrument: Instrument?
+    if type == .transfer, let toAcctId = toAccountId {
+      let toAccountInstrument =
+        accounts.by(id: toAcctId)?.positions.first?.instrument
+        ?? accounts.by(id: toAcctId)?.balance.instrument
+      toInstrument = toAccountInstrument
+    } else {
+      toInstrument = nil
+    }
     guard
       let updated = draft.toTransaction(
-        id: transaction.id, instrument: transaction.primaryAmount.instrument)
+        id: transaction.id,
+        fromInstrument: fromInstrument,
+        toInstrument: toInstrument)
     else { return }
     onUpdate(updated)
   }

@@ -14,6 +14,7 @@ struct TransactionDraftTests {
     amountText: String = "10.00",
     accountId: UUID? = nil,
     toAccountId: UUID? = nil,
+    toAmountText: String = "",
     isRepeating: Bool = false,
     recurPeriod: RecurPeriod? = nil,
     recurEvery: Int = 1
@@ -28,6 +29,7 @@ struct TransactionDraftTests {
       categoryId: nil,
       earmarkId: nil,
       notes: "",
+      toAmountText: toAmountText,
       isRepeating: isRepeating,
       recurPeriod: recurPeriod,
       recurEvery: recurEvery
@@ -143,6 +145,7 @@ struct TransactionDraftTests {
       categoryId: nil,
       earmarkId: nil,
       notes: "",
+      toAmountText: "",
       isRepeating: false,
       recurPeriod: .month,
       recurEvery: 2
@@ -188,5 +191,56 @@ struct TransactionDraftTests {
     #expect(roundTripped!.earmarkId == original.earmarkId)
     #expect(roundTripped!.recurPeriod == original.recurPeriod)
     #expect(roundTripped!.recurEvery == original.recurEvery)
+  }
+
+  // MARK: - Cross-Currency Transfers
+
+  @Test func sameCurrencyTransferProducesTwoLegsWithSameAmount() {
+    let draft = makeDraft(
+      type: .transfer, amountText: "100.00",
+      accountId: accountA, toAccountId: accountB, toAmountText: "")
+    let tx = draft.toTransaction(
+      id: UUID(), fromInstrument: .AUD, toInstrument: .AUD)
+    #expect(tx != nil)
+    #expect(tx!.legs.count == 2)
+
+    let outflow = tx!.legs.first(where: { $0.accountId == accountA })
+    #expect(outflow?.quantity == Decimal(string: "-100.00")!)
+    #expect(outflow?.instrument == .AUD)
+
+    let inflow = tx!.legs.first(where: { $0.accountId == accountB })
+    #expect(inflow?.quantity == Decimal(string: "100.00")!)
+    #expect(inflow?.instrument == .AUD)
+  }
+
+  @Test func crossCurrencyTransferProducesTwoLegsWithDifferentAmounts() {
+    let draft = makeDraft(
+      type: .transfer, amountText: "1000.00",
+      accountId: accountA, toAccountId: accountB, toAmountText: "650.00")
+    let tx = draft.toTransaction(
+      id: UUID(), fromInstrument: .AUD, toInstrument: .USD)
+    #expect(tx != nil)
+    #expect(tx!.legs.count == 2)
+
+    let outflow = tx!.legs.first(where: { $0.accountId == accountA })
+    #expect(outflow?.quantity == Decimal(string: "-1000.00")!)
+    #expect(outflow?.instrument == .AUD)
+
+    let inflow = tx!.legs.first(where: { $0.accountId == accountB })
+    #expect(inflow?.quantity == Decimal(string: "650.00")!)
+    #expect(inflow?.instrument == .USD)
+  }
+
+  @Test func crossCurrencyTransferDefaultsSameAmount() {
+    let draft = makeDraft(
+      type: .transfer, amountText: "1000.00",
+      accountId: accountA, toAccountId: accountB, toAmountText: "")
+    let tx = draft.toTransaction(
+      id: UUID(), fromInstrument: .AUD, toInstrument: .USD)
+    #expect(tx != nil)
+
+    let inflow = tx!.legs.first(where: { $0.accountId == accountB })
+    #expect(inflow?.quantity == Decimal(string: "1000.00")!)
+    #expect(inflow?.instrument == .USD)
   }
 }

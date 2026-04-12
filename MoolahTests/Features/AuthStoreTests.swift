@@ -121,6 +121,7 @@ private struct TestAuthBackend: BackendProvider {
   let earmarks: any EarmarkRepository
   let analysis: any AnalysisRepository
   let investments: any InvestmentRepository
+  let conversionService: any InstrumentConversionService
 
   init(auth: any AuthProvider) throws {
     let (backend, _) = try TestBackend.create()
@@ -131,6 +132,7 @@ private struct TestAuthBackend: BackendProvider {
     self.earmarks = backend.earmarks
     self.analysis = backend.analysis
     self.investments = backend.investments
+    self.conversionService = backend.conversionService
   }
 }
 

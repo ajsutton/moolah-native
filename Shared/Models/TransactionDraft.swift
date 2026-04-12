@@ -14,11 +14,21 @@ struct TransactionDraft: Sendable {
   var categoryId: UUID?
   var earmarkId: UUID?
   var notes: String
+  var toAmountText: String
   var isRepeating: Bool
   var recurPeriod: RecurPeriod?
   var recurEvery: Int
 
   // MARK: - Parsing & Validation
+
+  /// Parse the to-amount text into a positive quantity for cross-currency transfers.
+  var parsedToQuantity: Decimal? {
+    guard !toAmountText.isEmpty else { return nil }
+    guard let qty = InstrumentAmount.parseQuantity(from: toAmountText, decimals: 2),
+      qty > 0
+    else { return nil }
+    return qty
+  }
 
   /// Parse the user-entered amount text into a positive quantity, or `nil` if the
   /// text is unparseable or zero.
@@ -49,6 +59,21 @@ struct TransactionDraft: Sendable {
   /// The caller supplies the transaction `id` (existing or new) and the
   /// `instrument` that should stamp the resulting legs.
   func toTransaction(id: UUID, instrument: Instrument) -> Transaction? {
+    toTransaction(id: id, fromInstrument: instrument, toInstrument: nil)
+  }
+
+  /// Build a `Transaction` with support for cross-currency transfers.
+  ///
+  /// - Parameters:
+  ///   - id: Transaction ID (existing or new).
+  ///   - fromInstrument: The instrument for the source account.
+  ///   - toInstrument: The instrument for the destination account (transfers only).
+  ///     If nil, uses `fromInstrument`.
+  func toTransaction(
+    id: UUID,
+    fromInstrument: Instrument,
+    toInstrument: Instrument?
+  ) -> Transaction? {
     guard let qty = parsedQuantity, isValid else { return nil }
 
     let signedQty: Decimal = (type == .expense || type == .transfer) ? -abs(qty) : abs(qty)
@@ -57,15 +82,19 @@ struct TransactionDraft: Sendable {
     var legs: [TransactionLeg] = []
     legs.append(
       TransactionLeg(
-        accountId: acctId, instrument: instrument, quantity: signedQty,
+        accountId: acctId, instrument: fromInstrument, quantity: signedQty,
         type: type == .transfer ? .transfer : type,
         categoryId: type == .transfer ? nil : categoryId,
         earmarkId: type == .transfer ? nil : earmarkId
       ))
     if type == .transfer, let toAcctId = toAccountId {
+      let resolvedToInstrument = toInstrument ?? fromInstrument
+      // Use toAmountText if provided, otherwise mirror the from amount
+      let toQuantity: Decimal = parsedToQuantity ?? abs(qty)
       legs.append(
         TransactionLeg(
-          accountId: toAcctId, instrument: instrument, quantity: -signedQty, type: .transfer
+          accountId: toAcctId, instrument: resolvedToInstrument,
+          quantity: toQuantity, type: .transfer
         ))
     }
     return Transaction(
@@ -86,6 +115,16 @@ extension TransactionDraft {
       transaction.legs.count > 1
       ? transaction.legs.first(where: { $0.accountId != primaryLeg?.accountId })
       : nil
+
+    // For cross-currency transfers, populate the to-amount from the inflow leg
+    let toAmountText: String
+    if let transferLeg, primaryLeg?.instrument != transferLeg.instrument {
+      toAmountText = abs(transferLeg.quantity).formatted(
+        .number.precision(.fractionLength(2)))
+    } else {
+      toAmountText = ""
+    }
+
     self.init(
       type: primaryLeg?.type == .transfer ? .transfer : (primaryLeg?.type ?? .expense),
       payee: transaction.payee ?? "",
@@ -98,6 +137,7 @@ extension TransactionDraft {
       categoryId: primaryLeg?.categoryId,
       earmarkId: primaryLeg?.earmarkId,
       notes: transaction.notes ?? "",
+      toAmountText: toAmountText,
       isRepeating: transaction.recurPeriod != nil && transaction.recurPeriod != .once,
       recurPeriod: transaction.recurPeriod,
       recurEvery: transaction.recurEvery ?? 1
@@ -116,6 +156,7 @@ extension TransactionDraft {
       categoryId: nil,
       earmarkId: nil,
       notes: "",
+      toAmountText: "",
       isRepeating: false,
       recurPeriod: nil,
       recurEvery: 1

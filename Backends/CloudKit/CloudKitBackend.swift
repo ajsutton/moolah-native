@@ -9,8 +9,14 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
   let earmarks: any EarmarkRepository
   let analysis: any AnalysisRepository
   let investments: any InvestmentRepository
+  let conversionService: any InstrumentConversionService
 
-  init(modelContainer: ModelContainer, instrument: Instrument, profileLabel: String) {
+  init(
+    modelContainer: ModelContainer,
+    instrument: Instrument,
+    profileLabel: String,
+    conversionService: (any InstrumentConversionService)? = nil
+  ) {
     self.auth = CloudKitAuthProvider(profileLabel: profileLabel)
     self.accounts = CloudKitAccountRepository(
       modelContainer: modelContainer, instrument: instrument)
@@ -23,5 +29,12 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
       modelContainer: modelContainer, instrument: instrument)
     self.investments = CloudKitInvestmentRepository(
       modelContainer: modelContainer, instrument: instrument)
+    if let conversionService {
+      self.conversionService = conversionService
+    } else {
+      let client = FrankfurterClient()
+      let exchangeRates = ExchangeRateService(client: client)
+      self.conversionService = FiatConversionService(exchangeRates: exchangeRates)
+    }
   }
 }

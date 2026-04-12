@@ -8,6 +8,7 @@ struct TransactionListView: View {
   let categories: Categories
   let earmarks: Earmarks
   let transactionStore: TransactionStore
+  var positions: [Position] = []
 
   /// When non-nil, the parent owns the selection and handles the inspector.
   /// When nil, TransactionListView manages its own selection and inspector.
@@ -148,6 +149,7 @@ struct TransactionListView: View {
 
   private var listView: some View {
     List(selection: selectedTransactionBinding) {
+      PositionListView(positions: positions)
       ForEach(filteredTransactions) { entry in
         TransactionRowView(
           transaction: entry.transaction, accounts: accounts,

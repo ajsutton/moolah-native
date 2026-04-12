@@ -12,6 +12,7 @@ final class RemoteBackend: BackendProvider {
   let earmarks: any EarmarkRepository
   let analysis: any AnalysisRepository
   let investments: any InvestmentRepository
+  let conversionService: any InstrumentConversionService
 
   init(
     baseURL: URL,
@@ -30,5 +31,7 @@ final class RemoteBackend: BackendProvider {
     earmarks = RemoteEarmarkRepository(client: client, instrument: instrument)
     analysis = RemoteAnalysisRepository(client: client, instrument: instrument)
     investments = RemoteInvestmentRepository(client: client, instrument: instrument)
+    let exchangeRates = ExchangeRateService(client: FrankfurterClient())
+    conversionService = FiatConversionService(exchangeRates: exchangeRates)
   }
 }

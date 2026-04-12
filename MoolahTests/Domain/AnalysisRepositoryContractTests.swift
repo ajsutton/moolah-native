@@ -1456,6 +1456,7 @@ private struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable
   let earmarks: any EarmarkRepository
   let analysis: any AnalysisRepository
   let investments: any InvestmentRepository
+  let conversionService: any InstrumentConversionService
 
   init() {
     let container = try! TestModelContainer.create()
@@ -1473,5 +1474,10 @@ private struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable
       modelContainer: container, instrument: currency)
     self.investments = CloudKitInvestmentRepository(
       modelContainer: container, instrument: currency)
+    let rateClient = FixedRateClient()
+    let cacheDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("test-rates-\(UUID().uuidString)")
+    let exchangeRates = ExchangeRateService(client: rateClient, cacheDirectory: cacheDir)
+    self.conversionService = FiatConversionService(exchangeRates: exchangeRates)
   }
 }
