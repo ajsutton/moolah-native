@@ -4,11 +4,14 @@ import Foundation
 struct BinanceClient: CryptoPriceClient, Sendable {
   private static let baseURL = URL(string: "https://api.binance.com")!
   private let session: URLSession
-  private let usdtUsdRate: Decimal
+  private let usdtRateLookup: @Sendable (Date) async -> Decimal
 
-  init(session: URLSession = .shared, usdtUsdRate: Decimal = Decimal(1)) {
+  init(
+    session: URLSession = .shared,
+    usdtRateLookup: @escaping @Sendable (Date) async -> Decimal = { _ in Decimal(1) }
+  ) {
     self.session = session
-    self.usdtUsdRate = usdtUsdRate
+    self.usdtRateLookup = usdtRateLookup
   }
 
   func dailyPrice(for token: CryptoToken, on date: Date) async throws -> Decimal {
@@ -47,7 +50,12 @@ struct BinanceClient: CryptoPriceClient, Sendable {
       chunkStart = calendar.date(byAdding: .day, value: 1, to: chunkEnd)!
     }
 
-    return Self.applyUsdtRate(allPrices, rate: usdtUsdRate)
+    let midDate = Date(
+      timeIntervalSince1970: (range.lowerBound.timeIntervalSince1970
+        + range.upperBound.timeIntervalSince1970) / 2
+    )
+    let rate = await usdtRateLookup(midDate)
+    return Self.applyUsdtRate(allPrices, rate: rate)
   }
 
   func currentPrices(for tokens: [CryptoToken]) async throws -> [String: Decimal] {

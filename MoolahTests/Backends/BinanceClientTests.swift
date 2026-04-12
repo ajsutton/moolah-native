@@ -60,6 +60,16 @@ struct BinanceClientTests {
     #expect(converted["2026-04-10"] == Decimal(string: "1000.00")!)
   }
 
+  // MARK: - Closure-based init
+
+  @Test func initAcceptsDateAwareUsdtRateClosure() {
+    let client = BinanceClient(session: .shared) { _ in
+      Decimal(string: "0.998")!
+    }
+    // Validates the closure init compiles
+    _ = client
+  }
+
   // MARK: - Token without Binance mapping
 
   @Test func tokenWithoutBinanceSymbolThrows() async {

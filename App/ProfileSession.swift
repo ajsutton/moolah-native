@@ -64,8 +64,22 @@ final class ProfileSession: Identifiable {
     self.backend = backend
     self.exchangeRateService = ExchangeRateService(client: FrankfurterClient())
     self.stockPriceService = StockPriceService(client: YahooFinanceClient())
+    let cryptoCompareClient = CryptoCompareClient()
+    let binanceClient = BinanceClient { date in
+      let usdt = CryptoToken(
+        chainId: 1,
+        contractAddress: "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        symbol: "USDT", name: "Tether", decimals: 6,
+        coingeckoId: "tether", cryptocompareSymbol: "USDT", binanceSymbol: nil
+      )
+      do {
+        return try await cryptoCompareClient.dailyPrice(for: usdt, on: date)
+      } catch {
+        return Decimal(1)
+      }
+    }
     self.cryptoPriceService = CryptoPriceService(
-      clients: [CryptoCompareClient(), BinanceClient()]
+      clients: [cryptoCompareClient, binanceClient]
     )
     self.priceConversionService = PriceConversionService(
       cryptoPrices: self.cryptoPriceService,
