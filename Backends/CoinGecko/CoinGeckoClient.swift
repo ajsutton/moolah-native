@@ -11,20 +11,20 @@ struct CoinGeckoClient: CryptoPriceClient, Sendable {
     self.apiKey = apiKey
   }
 
-  func dailyPrice(for token: CryptoToken, on date: Date) async throws -> Decimal {
-    let prices = try await dailyPrices(for: token, in: date...date)
+  func dailyPrice(for mapping: CryptoProviderMapping, on date: Date) async throws -> Decimal {
+    let prices = try await dailyPrices(for: mapping, in: date...date)
     let dateString = Self.dateString(from: date)
     guard let price = prices[dateString] else {
-      throw CryptoPriceError.noPriceAvailable(tokenId: token.id, date: dateString)
+      throw CryptoPriceError.noPriceAvailable(tokenId: mapping.instrumentId, date: dateString)
     }
     return price
   }
 
   func dailyPrices(
-    for token: CryptoToken, in range: ClosedRange<Date>
+    for mapping: CryptoProviderMapping, in range: ClosedRange<Date>
   ) async throws -> [String: Decimal] {
-    guard let coinId = token.coingeckoId else {
-      throw CryptoPriceError.noProviderMapping(tokenId: token.id, provider: "CoinGecko")
+    guard let coinId = mapping.coingeckoId else {
+      throw CryptoPriceError.noProviderMapping(tokenId: mapping.instrumentId, provider: "CoinGecko")
     }
     let calendar = Calendar(identifier: .gregorian)
     let days = max(
@@ -39,17 +39,17 @@ struct CoinGeckoClient: CryptoPriceClient, Sendable {
     return try Self.parseMarketChartResponse(data)
   }
 
-  func currentPrices(for tokens: [CryptoToken]) async throws -> [String: Decimal] {
-    let idToToken = Dictionary(
-      tokens.compactMap { token -> (String, CryptoToken)? in
-        guard let id = token.coingeckoId else { return nil }
-        return (id, token)
+  func currentPrices(for mappings: [CryptoProviderMapping]) async throws -> [String: Decimal] {
+    let idToMapping = Dictionary(
+      mappings.compactMap { mapping -> (String, CryptoProviderMapping)? in
+        guard let id = mapping.coingeckoId else { return nil }
+        return (id, mapping)
       },
       uniquingKeysWith: { first, _ in first }
     )
-    guard !idToToken.isEmpty else { return [:] }
+    guard !idToMapping.isEmpty else { return [:] }
 
-    let url = Self.simplePriceURL(coinIds: Array(idToToken.keys), apiKey: apiKey)
+    let url = Self.simplePriceURL(coinIds: Array(idToMapping.keys), apiKey: apiKey)
     let (data, response) = try await session.data(for: URLRequest(url: url))
     guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
       throw URLError(.badServerResponse)
@@ -58,8 +58,8 @@ struct CoinGeckoClient: CryptoPriceClient, Sendable {
 
     var result: [String: Decimal] = [:]
     for (coinId, price) in coinPrices {
-      if let token = idToToken[coinId] {
-        result[token.id] = price
+      if let mapping = idToMapping[coinId] {
+        result[mapping.instrumentId] = price
       }
     }
     return result

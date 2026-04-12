@@ -143,18 +143,4 @@ struct InstrumentConversionServiceCryptoTests {
     #expect(result == expected)
   }
 
-  // MARK: - Bridge token test
-
-  @Test func bridgeToTokenPreservesIdentity() {
-    let instrument = Instrument.crypto(
-      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
-    let mapping = CryptoProviderMapping(
-      instrumentId: "1:native", coingeckoId: "ethereum",
-      cryptocompareSymbol: "ETH", binanceSymbol: "ETHUSDT"
-    )
-    let bridgedToken = CryptoPriceService.bridgeToToken(
-      instrument: instrument, mapping: mapping)
-    #expect(bridgedToken.id == "1:native")
-    #expect(bridgedToken.coingeckoId == "ethereum")
-  }
 }

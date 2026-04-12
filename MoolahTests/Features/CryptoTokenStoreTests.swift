@@ -8,13 +8,13 @@ import Testing
 @MainActor
 struct CryptoTokenStoreTests {
   private func makeStore(
-    tokens: [CryptoToken] = [],
+    registrations: [CryptoRegistration] = [],
     resolutionResult: TokenResolutionResult = TokenResolutionResult(),
     resolutionFails: Bool = false
   ) async -> CryptoTokenStore {
     let repo = InMemoryTokenRepository()
-    if !tokens.isEmpty {
-      try? await repo.saveTokens(tokens)
+    if !registrations.isEmpty {
+      try? await repo.saveRegistrations(registrations)
     }
     let service = CryptoPriceService(
       clients: [FixedCryptoPriceClient()],
@@ -30,52 +30,52 @@ struct CryptoTokenStoreTests {
     return CryptoTokenStore(cryptoPriceService: service)
   }
 
-  @Test func loadTokens_populatesTokenList() async {
-    let presets = Array(CryptoToken.builtInPresets.prefix(2))
-    let store = await makeStore(tokens: presets)
-    await store.loadTokens()
-    #expect(store.tokens.count == 2)
+  @Test func loadRegistrations_populatesList() async {
+    let presets = Array(CryptoRegistration.builtInPresets.prefix(2))
+    let store = await makeStore(registrations: presets)
+    await store.loadRegistrations()
+    #expect(store.registrations.count == 2)
   }
 
-  @Test func loadTokens_populatesCryptoInstruments() async {
-    let presets = Array(CryptoToken.builtInPresets.prefix(2))
-    let store = await makeStore(tokens: presets)
-    await store.loadTokens()
-    #expect(store.cryptoInstruments.count == 2)
-    #expect(store.cryptoInstruments.allSatisfy { $0.kind == .cryptoToken })
+  @Test func loadRegistrations_populatesInstruments() async {
+    let presets = Array(CryptoRegistration.builtInPresets.prefix(2))
+    let store = await makeStore(registrations: presets)
+    await store.loadRegistrations()
+    #expect(store.instruments.count == 2)
+    #expect(store.instruments.allSatisfy { $0.kind == .cryptoToken })
   }
 
-  @Test func loadTokens_populatesProviderMappings() async {
-    let presets = Array(CryptoToken.builtInPresets.prefix(2))
-    let store = await makeStore(tokens: presets)
-    await store.loadTokens()
+  @Test func loadRegistrations_populatesProviderMappings() async {
+    let presets = Array(CryptoRegistration.builtInPresets.prefix(2))
+    let store = await makeStore(registrations: presets)
+    await store.loadRegistrations()
     #expect(store.providerMappings.count == 2)
     let btcMapping = store.providerMappings["0:native"]
     #expect(btcMapping?.coingeckoId == "bitcoin")
   }
 
-  @Test func removeToken_removesFromList() async {
-    let presets = Array(CryptoToken.builtInPresets.prefix(2))
-    let store = await makeStore(tokens: presets)
-    await store.loadTokens()
-    await store.removeToken(presets[0])
-    #expect(store.tokens.count == 1)
-    #expect(store.tokens[0].id == presets[1].id)
-    #expect(store.cryptoInstruments.count == 1)
+  @Test func removeRegistration_removesFromList() async {
+    let presets = Array(CryptoRegistration.builtInPresets.prefix(2))
+    let store = await makeStore(registrations: presets)
+    await store.loadRegistrations()
+    await store.removeRegistration(presets[0])
+    #expect(store.registrations.count == 1)
+    #expect(store.registrations[0].id == presets[1].id)
+    #expect(store.instruments.count == 1)
   }
 
   @Test func removeInstrument_removesFromAllCollections() async {
-    let presets = Array(CryptoToken.builtInPresets.prefix(2))
-    let store = await makeStore(tokens: presets)
-    await store.loadTokens()
-    let instrumentToRemove = store.cryptoInstruments[0]
+    let presets = Array(CryptoRegistration.builtInPresets.prefix(2))
+    let store = await makeStore(registrations: presets)
+    await store.loadRegistrations()
+    let instrumentToRemove = store.instruments[0]
     await store.removeInstrument(instrumentToRemove)
-    #expect(store.tokens.count == 1)
-    #expect(store.cryptoInstruments.count == 1)
+    #expect(store.registrations.count == 1)
+    #expect(store.instruments.count == 1)
     #expect(store.providerMappings[instrumentToRemove.id] == nil)
   }
 
-  @Test func resolveToken_populatesResolvedToken() async {
+  @Test func resolveToken_populatesResolvedRegistration() async {
     let result = TokenResolutionResult(
       coingeckoId: "uniswap",
       cryptocompareSymbol: "UNI",
@@ -91,8 +91,8 @@ struct CryptoTokenStoreTests {
       symbol: nil,
       isNative: false
     )
-    #expect(store.resolvedToken != nil)
-    #expect(store.resolvedToken?.coingeckoId == "uniswap")
+    #expect(store.resolvedRegistration != nil)
+    #expect(store.resolvedRegistration?.mapping.coingeckoId == "uniswap")
   }
 
   @Test func resolveToken_populatesInstrumentAndMapping() async {
@@ -111,8 +111,8 @@ struct CryptoTokenStoreTests {
       symbol: nil,
       isNative: false
     )
-    #expect(store.resolvedInstrument?.kind == .cryptoToken)
-    #expect(store.resolvedMapping?.coingeckoId == "uniswap")
+    #expect(store.resolvedRegistration?.instrument.kind == .cryptoToken)
+    #expect(store.resolvedRegistration?.mapping.coingeckoId == "uniswap")
   }
 
   @Test func resolveToken_failure_setsError() async {
@@ -120,12 +120,11 @@ struct CryptoTokenStoreTests {
     await store.resolveToken(
       chainId: 1, contractAddress: "0xabc", symbol: nil, isNative: false
     )
-    #expect(store.resolvedToken == nil)
-    #expect(store.resolvedInstrument == nil)
+    #expect(store.resolvedRegistration == nil)
     #expect(store.error != nil)
   }
 
-  @Test func confirmRegistration_addsToTokenList() async {
+  @Test func confirmRegistration_addsToList() async {
     let result = TokenResolutionResult(
       cryptocompareSymbol: "UNI",
       resolvedName: "Uniswap",
@@ -140,9 +139,8 @@ struct CryptoTokenStoreTests {
       isNative: false
     )
     await store.confirmRegistration()
-    #expect(store.tokens.count == 1)
-    #expect(store.cryptoInstruments.count == 1)
-    #expect(store.resolvedToken == nil)
-    #expect(store.resolvedInstrument == nil)
+    #expect(store.registrations.count == 1)
+    #expect(store.instruments.count == 1)
+    #expect(store.resolvedRegistration == nil)
   }
 }

@@ -171,8 +171,7 @@ actor FullConversionService: InstrumentConversionService {
     guard let mapping = providerMappingsByInstrumentId[instrument.id] else {
       throw ConversionError.noProviderMapping(instrumentId: instrument.id)
     }
-    let token = CryptoPriceService.bridgeToToken(instrument: instrument, mapping: mapping)
-    return try await cryptoPrices.price(for: token, on: date)
+    return try await cryptoPrices.price(for: instrument, mapping: mapping, on: date)
   }
 
   // MARK: - USD intermediary helpers

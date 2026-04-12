@@ -5,7 +5,7 @@ import Foundation
 
 /// Test double that returns pre-configured crypto prices without network calls.
 struct FixedCryptoPriceClient: CryptoPriceClient, Sendable {
-  /// Pre-loaded prices: token ID -> { date string -> price in USD }
+  /// Pre-loaded prices: instrument ID -> { date string -> price in USD }
   let prices: [String: [String: Decimal]]
 
   /// If true, throws on any fetch call (simulates network failure).
@@ -16,20 +16,20 @@ struct FixedCryptoPriceClient: CryptoPriceClient, Sendable {
     self.shouldFail = shouldFail
   }
 
-  func dailyPrice(for token: CryptoToken, on date: Date) async throws -> Decimal {
+  func dailyPrice(for mapping: CryptoProviderMapping, on date: Date) async throws -> Decimal {
     if shouldFail { throw URLError(.notConnectedToInternet) }
     let dateString = Self.dateFormatter.string(from: date)
-    guard let price = prices[token.id]?[dateString] else {
-      throw CryptoPriceError.noPriceAvailable(tokenId: token.id, date: dateString)
+    guard let price = prices[mapping.instrumentId]?[dateString] else {
+      throw CryptoPriceError.noPriceAvailable(tokenId: mapping.instrumentId, date: dateString)
     }
     return price
   }
 
   func dailyPrices(
-    for token: CryptoToken, in range: ClosedRange<Date>
+    for mapping: CryptoProviderMapping, in range: ClosedRange<Date>
   ) async throws -> [String: Decimal] {
     if shouldFail { throw URLError(.notConnectedToInternet) }
-    guard let tokenPrices = prices[token.id] else { return [:] }
+    guard let tokenPrices = prices[mapping.instrumentId] else { return [:] }
 
     let calendar = Calendar(identifier: .gregorian)
     var filtered: [String: Decimal] = [:]
@@ -44,14 +44,14 @@ struct FixedCryptoPriceClient: CryptoPriceClient, Sendable {
     return filtered
   }
 
-  func currentPrices(for tokens: [CryptoToken]) async throws -> [String: Decimal] {
+  func currentPrices(for mappings: [CryptoProviderMapping]) async throws -> [String: Decimal] {
     if shouldFail { throw URLError(.notConnectedToInternet) }
     var result: [String: Decimal] = [:]
-    for token in tokens {
-      if let tokenPrices = prices[token.id],
+    for mapping in mappings {
+      if let tokenPrices = prices[mapping.instrumentId],
         let latest = tokenPrices.keys.sorted().last
       {
-        result[token.id] = tokenPrices[latest]
+        result[mapping.instrumentId] = tokenPrices[latest]
       }
     }
     return result

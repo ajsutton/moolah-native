@@ -14,20 +14,20 @@ struct BinanceClient: CryptoPriceClient, Sendable {
     self.usdtRateLookup = usdtRateLookup
   }
 
-  func dailyPrice(for token: CryptoToken, on date: Date) async throws -> Decimal {
-    let prices = try await dailyPrices(for: token, in: date...date)
+  func dailyPrice(for mapping: CryptoProviderMapping, on date: Date) async throws -> Decimal {
+    let prices = try await dailyPrices(for: mapping, in: date...date)
     let dateString = Self.dateString(from: date)
     guard let price = prices[dateString] else {
-      throw CryptoPriceError.noPriceAvailable(tokenId: token.id, date: dateString)
+      throw CryptoPriceError.noPriceAvailable(tokenId: mapping.instrumentId, date: dateString)
     }
     return price
   }
 
   func dailyPrices(
-    for token: CryptoToken, in range: ClosedRange<Date>
+    for mapping: CryptoProviderMapping, in range: ClosedRange<Date>
   ) async throws -> [String: Decimal] {
-    guard let symbol = token.binanceSymbol else {
-      throw CryptoPriceError.noProviderMapping(tokenId: token.id, provider: "Binance")
+    guard let symbol = mapping.binanceSymbol else {
+      throw CryptoPriceError.noProviderMapping(tokenId: mapping.instrumentId, provider: "Binance")
     }
 
     var allPrices: [String: Decimal] = [:]
@@ -58,14 +58,14 @@ struct BinanceClient: CryptoPriceClient, Sendable {
     return Self.applyUsdtRate(allPrices, rate: rate)
   }
 
-  func currentPrices(for tokens: [CryptoToken]) async throws -> [String: Decimal] {
+  func currentPrices(for mappings: [CryptoProviderMapping]) async throws -> [String: Decimal] {
     // Binance has no batch endpoint — fetch one at a time
     var result: [String: Decimal] = [:]
-    for token in tokens {
-      guard token.binanceSymbol != nil else { continue }
+    for mapping in mappings {
+      guard mapping.binanceSymbol != nil else { continue }
       do {
-        let price = try await dailyPrice(for: token, on: Date())
-        result[token.id] = price
+        let price = try await dailyPrice(for: mapping, on: Date())
+        result[mapping.instrumentId] = price
       } catch {
         continue
       }

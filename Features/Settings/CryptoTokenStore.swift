@@ -3,22 +3,14 @@ import Foundation
 
 @MainActor @Observable
 final class CryptoTokenStore {
-  // Legacy accessor retained for backward compatibility with views
-  private(set) var tokens: [CryptoToken] = []
-
-  // New Instrument-based accessors
-  private(set) var cryptoInstruments: [Instrument] = []
+  private(set) var registrations: [CryptoRegistration] = []
+  private(set) var instruments: [Instrument] = []
   private(set) var providerMappings: [String: CryptoProviderMapping] = [:]
 
   private(set) var isLoading = false
   private(set) var isResolving = false
 
-  // Legacy accessor retained for backward compatibility with views
-  var resolvedToken: CryptoToken?
-
-  // New Instrument-based resolved state
-  var resolvedInstrument: Instrument?
-  var resolvedMapping: CryptoProviderMapping?
+  var resolvedRegistration: CryptoRegistration?
 
   private(set) var error: String?
 
@@ -32,83 +24,63 @@ final class CryptoTokenStore {
     self.cryptoPriceService = cryptoPriceService
   }
 
-  func loadTokens() async {
+  func loadRegistrations() async {
     isLoading = true
     defer { isLoading = false }
-    let loadedTokens = await cryptoPriceService.registeredTokens()
-    tokens = loadedTokens
-    cryptoInstruments = loadedTokens.map { CryptoProviderMapping.instrument(from: $0) }
+    let loaded = await cryptoPriceService.registeredItems()
+    registrations = loaded
+    instruments = loaded.map(\.instrument)
     providerMappings = Dictionary(
-      loadedTokens.map {
-        (CryptoProviderMapping.from($0).instrumentId, CryptoProviderMapping.from($0))
-      },
+      loaded.map { ($0.mapping.instrumentId, $0.mapping) },
       uniquingKeysWith: { _, last in last }
     )
   }
 
-  func removeToken(_ token: CryptoToken) async {
+  func removeRegistration(_ registration: CryptoRegistration) async {
     do {
-      try await cryptoPriceService.removeToken(token)
-      tokens.removeAll { $0.id == token.id }
-      cryptoInstruments.removeAll { $0.id == token.id }
-      providerMappings.removeValue(forKey: token.id)
+      try await cryptoPriceService.remove(registration)
+      registrations.removeAll { $0.id == registration.id }
+      instruments.removeAll { $0.id == registration.id }
+      providerMappings.removeValue(forKey: registration.id)
     } catch {
       self.error = error.localizedDescription
     }
   }
 
   func removeInstrument(_ instrument: Instrument) async {
-    guard let mapping = providerMappings[instrument.id] else { return }
-    let token = CryptoPriceService.bridgeToToken(instrument: instrument, mapping: mapping)
-    do {
-      try await cryptoPriceService.removeToken(token)
-      tokens.removeAll { $0.id == instrument.id }
-      cryptoInstruments.removeAll { $0.id == instrument.id }
-      providerMappings.removeValue(forKey: instrument.id)
-    } catch {
-      self.error = error.localizedDescription
-    }
+    guard let registration = registrations.first(where: { $0.instrument.id == instrument.id })
+    else { return }
+    await removeRegistration(registration)
   }
 
   func resolveToken(
     chainId: Int, contractAddress: String?, symbol: String?, isNative: Bool
   ) async {
     isResolving = true
-    resolvedToken = nil
-    resolvedInstrument = nil
-    resolvedMapping = nil
+    resolvedRegistration = nil
     error = nil
     defer { isResolving = false }
 
     do {
-      let token = try await cryptoPriceService.resolveToken(
+      resolvedRegistration = try await cryptoPriceService.resolveRegistration(
         chainId: chainId,
         contractAddress: contractAddress,
         symbol: symbol,
         isNative: isNative
       )
-      resolvedToken = token
-      resolvedInstrument = CryptoProviderMapping.instrument(from: token)
-      resolvedMapping = CryptoProviderMapping.from(token)
     } catch {
       self.error = "Resolution failed: \(error.localizedDescription)"
     }
   }
 
   func confirmRegistration() async {
-    guard let token = resolvedToken else { return }
+    guard let registration = resolvedRegistration else { return }
     do {
-      try await cryptoPriceService.registerToken(token)
-      tokens.append(token)
-      if let instrument = resolvedInstrument {
-        cryptoInstruments.append(instrument)
-      }
-      if let mapping = resolvedMapping {
-        providerMappings[mapping.instrumentId] = mapping
-      }
-      resolvedToken = nil
-      resolvedInstrument = nil
-      resolvedMapping = nil
+      try await cryptoPriceService.register(registration)
+      registrations.append(registration)
+      instruments.append(registration.instrument)
+      providerMappings[registration.mapping.instrumentId] = registration.mapping
+      resolvedRegistration = nil
     } catch {
       self.error = error.localizedDescription
     }

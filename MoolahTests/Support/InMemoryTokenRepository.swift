@@ -4,13 +4,13 @@ import Foundation
 @testable import Moolah
 
 final class InMemoryTokenRepository: CryptoTokenRepository, @unchecked Sendable {
-  private var tokens: [CryptoToken] = []
+  private var registrations: [CryptoRegistration] = []
 
-  func loadTokens() async throws -> [CryptoToken] {
-    tokens
+  func loadRegistrations() async throws -> [CryptoRegistration] {
+    registrations
   }
 
-  func saveTokens(_ tokens: [CryptoToken]) async throws {
-    self.tokens = tokens
+  func saveRegistrations(_ registrations: [CryptoRegistration]) async throws {
+    self.registrations = registrations
   }
 }

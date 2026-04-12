@@ -12,14 +12,14 @@ enum CryptoPriceError: Error, Equatable {
 /// All prices are denominated in USD.
 protocol CryptoPriceClient: Sendable {
   /// Fetch the daily closing price for a token in USD on a specific date.
-  func dailyPrice(for token: CryptoToken, on date: Date) async throws -> Decimal
+  func dailyPrice(for mapping: CryptoProviderMapping, on date: Date) async throws -> Decimal
 
   /// Fetch daily closing prices for a token in USD over a date range.
   /// Returns prices keyed by ISO date string for each available trading day.
-  func dailyPrices(for token: CryptoToken, in range: ClosedRange<Date>) async throws -> [String:
-    Decimal]
+  func dailyPrices(for mapping: CryptoProviderMapping, in range: ClosedRange<Date>) async throws
+    -> [String: Decimal]
 
   /// Fetch current prices for multiple tokens in a single request (where supported).
-  /// Returns prices keyed by token ID.
-  func currentPrices(for tokens: [CryptoToken]) async throws -> [String: Decimal]
+  /// Returns prices keyed by instrument ID.
+  func currentPrices(for mappings: [CryptoProviderMapping]) async throws -> [String: Decimal]
 }

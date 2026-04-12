@@ -6,9 +6,8 @@ import Testing
 
 @Suite("CoinGeckoClient")
 struct CoinGeckoClientTests {
-  private let eth = CryptoToken(
-    chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum",
-    decimals: 18, coingeckoId: "ethereum", cryptocompareSymbol: nil, binanceSymbol: nil
+  private let ethMapping = CryptoProviderMapping(
+    instrumentId: "1:native", coingeckoId: "ethereum", cryptocompareSymbol: nil, binanceSymbol: nil
   )
 
   private func date(_ string: String) -> Date {
@@ -117,16 +116,15 @@ struct CoinGeckoClientTests {
     #expect(result.decimals == 18)
   }
 
-  // MARK: - Token without CoinGecko mapping
+  // MARK: - Mapping without CoinGecko ID
 
-  @Test func tokenWithoutCoinGeckoIdThrows() async {
-    let token = CryptoToken(
-      chainId: 1, contractAddress: "0xabc", symbol: "X", name: "X",
-      decimals: 18, coingeckoId: nil, cryptocompareSymbol: nil, binanceSymbol: nil
+  @Test func mappingWithoutCoinGeckoIdThrows() async {
+    let mapping = CryptoProviderMapping(
+      instrumentId: "1:0xabc", coingeckoId: nil, cryptocompareSymbol: nil, binanceSymbol: nil
     )
     let client = CoinGeckoClient(session: URLSession.shared, apiKey: "key")
     await #expect(throws: CryptoPriceError.self) {
-      try await client.dailyPrice(for: token, on: Date())
+      try await client.dailyPrice(for: mapping, on: Date())
     }
   }
 }

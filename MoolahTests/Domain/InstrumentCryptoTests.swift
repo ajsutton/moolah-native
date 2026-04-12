@@ -52,7 +52,7 @@ struct InstrumentCryptoTests {
     #expect(btc.decimals == 8)
   }
 
-  @Test func cryptoInstrumentIdMatchesCryptoTokenId() {
+  @Test func cryptoInstrumentIdUsesChainAndAddressScheme() {
     let instrument = Instrument.crypto(
       chainId: 10,
       contractAddress: "0x4200000000000000000000000000000000000042",

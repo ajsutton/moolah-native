@@ -52,36 +52,9 @@ struct CryptoProviderMappingTests {
     #expect(a.id == b.id)
   }
 
-  // MARK: - Conversion from legacy CryptoToken
-
-  @Test func fromCryptoTokenPreservesProviderIds() {
-    let token = CryptoToken(
-      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum",
-      decimals: 18, coingeckoId: "ethereum", cryptocompareSymbol: "ETH",
-      binanceSymbol: "ETHUSDT"
-    )
-    let mapping = CryptoProviderMapping.from(token)
-    #expect(mapping.instrumentId == "1:native")
-    #expect(mapping.coingeckoId == "ethereum")
-    #expect(mapping.cryptocompareSymbol == "ETH")
-    #expect(mapping.binanceSymbol == "ETHUSDT")
-  }
-
-  @Test func fromCryptoTokenWithContractAddress() {
-    let token = CryptoToken(
-      chainId: 10,
-      contractAddress: "0x4200000000000000000000000000000000000042",
-      symbol: "OP", name: "Optimism", decimals: 18,
-      coingeckoId: "optimism", cryptocompareSymbol: "OP",
-      binanceSymbol: "OPUSDT"
-    )
-    let mapping = CryptoProviderMapping.from(token)
-    #expect(mapping.instrumentId == "10:0x4200000000000000000000000000000000000042")
-  }
-
   // MARK: - Built-in presets
 
-  @Test func builtInPresetsMatchCryptoTokenPresets() {
+  @Test func builtInPresetsContainExpectedTokens() {
     let presets = CryptoProviderMapping.builtInPresets
     #expect(presets.count == 5)
 

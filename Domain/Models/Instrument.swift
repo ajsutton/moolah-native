@@ -77,6 +77,20 @@ struct Instrument: Codable, Sendable, Hashable, Identifiable {
 }
 
 extension Instrument {
+  /// Human-readable chain name for a given chain ID (crypto tokens).
+  static func chainName(for chainId: Int) -> String {
+    switch chainId {
+    case 0: "Bitcoin"
+    case 1: "Ethereum"
+    case 10: "Optimism"
+    case 137: "Polygon"
+    case 42161: "Arbitrum"
+    case 8453: "Base"
+    case 43114: "Avalanche"
+    default: "Chain \(chainId)"
+    }
+  }
+
   /// Factory for cryptocurrency token instruments.
   /// Uses the same `chainId:address` ID scheme as the legacy CryptoToken type.
   static func crypto(
