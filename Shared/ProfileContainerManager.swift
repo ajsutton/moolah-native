@@ -30,9 +30,10 @@ final class ProfileContainerManager {
     if inMemory {
       config = ModelConfiguration(isStoredInMemoryOnly: true)
     } else {
+      let storeName = "Moolah-\(profileId.uuidString)"
       let url = URL.applicationSupportDirectory
         .appending(path: "Moolah-\(profileId.uuidString).store")
-      config = ModelConfiguration(url: url, cloudKitDatabase: .none)
+      config = ModelConfiguration(storeName, url: url, cloudKitDatabase: .none)
     }
     let container = try ModelContainer(for: dataSchema, configurations: [config])
     containers[profileId] = container

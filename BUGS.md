@@ -43,3 +43,49 @@ Options: assert in debug builds, throw, or convert to a method that makes the in
 
 The `InstrumentConversionService` protocol is clean — only the implementations leak. Fix: move `FiatConversionService` and `FullConversionService` to `Shared/`, keeping only the protocol in `Domain/Services/`.
 
+## Crypto preferences panel alignment
+
+**Severity:** Low (cosmetic)
+**Files:** Crypto preferences tab view
+
+The "No Tokens" empty state view is left-aligned within the grey panel. It would look better center-aligned within the panel.
+
+## Profile remove button click target too small
+
+**Severity:** Low (UX)
+**Files:** Profile list / settings view
+
+The minus (-) button to remove profiles has a very small click target. It may not be using the full row height for its tap area.
+
+## Migration shows no progress during data download
+
+**Severity:** Low (UX)
+**Files:** `Features/Migration/MigrationView.swift`, `Backends/CloudKit/Migration/MigrationCoordinator.swift`
+
+The migration UI shows a progress bar during the import phase but not during the initial data download (export from remote backend). Should show a progress indicator while downloading accounts, categories, transactions, etc. from the server.
+
+## Migration creates duplicate records
+
+**Severity:** Critical
+**Files:** `Backends/CloudKit/Migration/MigrationCoordinator.swift`, `Shared/ProfileContainerManager.swift`
+
+After migration, accounts and earmarks appear duplicated (4x or more). Root cause under investigation — possibly related to CloudKit zone sharing between profile containers. The `ModelConfiguration` name was defaulting to `"default"` for all profiles (fixed to use unique names), but duplicates still appear even with unique zone names.
+
+## Export Profile disabled for remote backend profiles
+
+**Severity:** Medium (UX)
+**Files:** `Features/Export/ExportImportCommands.swift`
+
+The "Export Profile..." menu item is disabled when a remote backend profile is open. The button's `.disabled(session == nil)` check suggests the `session` focused value is nil for remote profiles. Export should work for any profile type since it uses the same `DataExporter`.
+
+## Migration profile naming
+
+**Severity:** Medium (UX)
+**Files:** Migration/import code
+
+When migrating from Remote to iCloud, profile naming should be:
+- Original remote profile gets "(Remote)" appended if not already present
+- New iCloud profile gets "(iCloud)" appended, or "(Remote)" replaced with "(iCloud)" if present
+- Examples: "Moolah" → rename to "Moolah (Remote)", create "Moolah (iCloud)". "Moolah (Remote)" → unchanged, create "Moolah (iCloud)"
+- If target name already exists, append " 2", " 3", etc. to find a unique name
+
