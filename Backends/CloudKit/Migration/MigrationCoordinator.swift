@@ -197,7 +197,7 @@ final class MigrationCoordinator {
 
     let result: ImportResult
     do {
-      result = try importer.importData(exported)
+      result = try await importer.importData(exported)
     } catch {
       throw MigrationError.importFailed(underlying: error)
     }
