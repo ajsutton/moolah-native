@@ -108,11 +108,11 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     // 1. Fetch all non-scheduled transactions
     let allTransactions = try await fetchTransactions(scheduled: false)
 
-    // 2. Filter by date range
+    // 2. Filter by date range and sort chronologically (sorted once, reused below)
     let transactions = allTransactions.filter { txn in
       guard let after else { return true }
       return txn.date >= after
-    }
+    }.sorted(by: { $0.date < $1.date })
 
     // 3. Get accounts to classify as current vs investment
     let accounts = try await fetchAccounts()
@@ -139,8 +139,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       }
     }
 
-    // Apply each transaction to running balances
-    for txn in transactions.sorted(by: { $0.date < $1.date }) {
+    // Apply each transaction to running balances (transactions already sorted above)
+    for txn in transactions {
       Self.applyTransaction(
         txn,
         to: &currentBalance,
@@ -176,6 +176,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     var scheduledBalances: [DailyBalance] = []
     if let forecastUntil {
       let scheduledTransactions = try await fetchTransactions(scheduled: true)
+      // transactions is sorted chronologically, so .last is the most recent date
       let lastDate = transactions.last?.date ?? Date()
       scheduledBalances = Self.generateForecast(
         scheduled: scheduledTransactions,
@@ -405,12 +406,12 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
   ) async throws -> [DailyBalance] {
     let investmentAccountIds = Set(accounts.filter { $0.type == .investment }.map(\.id))
 
-    // Filter by date range
+    // Filter by date range and sort chronologically (sorted once, reused below)
     let transactions: [Transaction]
     if let after {
-      transactions = nonScheduled.filter { $0.date >= after }
+      transactions = nonScheduled.filter { $0.date >= after }.sorted(by: { $0.date < $1.date })
     } else {
-      transactions = nonScheduled
+      transactions = nonScheduled.sorted(by: { $0.date < $1.date })
     }
 
     // Compute daily balances
@@ -433,8 +434,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       }
     }
 
-    // Apply each transaction to running balances
-    for txn in transactions.sorted(by: { $0.date < $1.date }) {
+    // Apply each transaction to running balances (transactions already sorted above)
+    for txn in transactions {
       applyTransaction(
         txn,
         to: &currentBalance,
@@ -467,6 +468,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     // Generate forecasted balances if requested
     var forecastBalances: [DailyBalance] = []
     if let forecastUntil {
+      // transactions is sorted chronologically, so .last is the most recent date
       let lastDate = transactions.last?.date ?? Date()
       forecastBalances = generateForecast(
         scheduled: scheduled,
