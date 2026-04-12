@@ -91,7 +91,9 @@ Hardened runtime is required for macOS notarization. Not strictly needed for Tes
 
 ### 2.3 — Entitlements File
 
-- [x] **Create `App/Moolah.entitlements`** (shared by both iOS and macOS targets):
+- [x] **Create `App/Moolah.entitlements`** with sandbox, network, and iCloud/CloudKit entitlements.
+
+**Important:** The entitlements file is NOT referenced in `project.yml`. It is wired in only during distribution builds via the Fastfile's `xcargs: "CODE_SIGN_ENTITLEMENTS=App/Moolah.entitlements"`. This keeps local dev and CI builds working without a developer account or provisioning profiles.
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -112,23 +114,6 @@ Hardened runtime is required for macOS notarization. Not strictly needed for Tes
     </array>
 </dict>
 </plist>
-```
-
-### 2.4 — Project Configuration for Entitlements
-
-- [x] **Update `project.yml`** to wire entitlements and iCloud capability to both targets:
-
-```yaml
-# In each target's settings:
-settings:
-  base:
-    CODE_SIGN_ENTITLEMENTS: App/Moolah.entitlements
-
-# In each target's attributes (XcodeGen syntax):
-attributes:
-  SystemCapabilities:
-    com.apple.iCloud:
-      enabled: 1
 ```
 
 ### 2.5 — SwiftData CloudKit Configuration
@@ -422,7 +407,7 @@ bump-version version:
 
 These steps must be done in the Apple Developer portal.
 
-- [ ] **3.1 — Enroll in Apple Developer Program** ($99/year) if not already enrolled
+- [x] **3.1 — Enroll in Apple Developer Program** ($99/year) — Individual enrollment, processing
 - [ ] **3.2 — Register App ID:** `rocks.moolah.app` for iOS
 - [ ] **3.3 — Register CloudKit container**
   - Go to Certificates, Identifiers & Profiles → CloudKit Containers
@@ -470,7 +455,7 @@ These steps must be done in the Apple Developer portal.
 ### 4.4 — CI Security
 
 - [ ] **4.4.1 — Verify fork PR settings:** Settings → Actions → General → "Require approval for all outside collaborators" (default)
-- [ ] **4.4.2 — Pin third-party actions to SHA** in release workflows for supply chain protection
+- [x] **4.4.2 — Pin third-party actions to SHA** in release workflows for supply chain protection
 - [ ] **4.4.3 — Create a fine-grained PAT** for `MATCH_GIT_BASIC_AUTHORIZATION` scoped to only the certificates repo with `Contents: Read` permission. Set an expiry (e.g., 1 year)
 
 ---
@@ -843,7 +828,7 @@ New files to create:
 | `fastlane/Appfile` | App identifier and team configuration | 2.2 |
 | `fastlane/Matchfile` | Match certificate sync configuration | 2.2 |
 | `fastlane/Fastfile` | Build, sign, and upload automation (iOS beta lane) | 2.3 |
-| `App/Moolah.entitlements` | App Sandbox, network, and iCloud/CloudKit entitlements | 1.3 |
+| `App/Moolah.entitlements` | App Sandbox, network, and iCloud/CloudKit entitlements (not referenced in project.yml; wired via Fastfile xcargs for distribution builds only) | 1.3 |
 | `.github/workflows/testflight.yml` | TestFlight deployment on tag push | 2.4 |
 | `.github/workflows/monthly-tag.yml` | Monthly auto-tag to keep TestFlight fresh | 2.5 |
 
@@ -851,7 +836,7 @@ Files to modify:
 
 | File | Change | Phase |
 |------|--------|-------|
-| `project.yml` | Add `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`, release-config overrides, entitlements path, iCloud capability | 1.1, 1.2, 1.4 |
+| `project.yml` | Add `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`, release-config overrides | 1.1, 1.2 |
 | `App/Info.plist` | Replace hardcoded versions with build setting variables | 1.1 |
 | `App/MoolahApp.swift` | Configure `ModelContainer` with `cloudKitDatabase: .automatic` | 1.5 |
 | `justfile` | Add `certificates`, `testflight`, `bump-version` targets | 2.6 |

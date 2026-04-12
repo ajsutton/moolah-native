@@ -16,13 +16,13 @@ jobs:
     environment: testflight
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install tools
         run: brew install xcodegen just
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@e65c17d16e57e481586a6a5a0282698790062f92 # v1.300.0
         with:
           ruby-version: "3.3"
           bundler-cache: true
@@ -49,7 +49,7 @@ jobs:
         run: bundle exec fastlane ios beta
 
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Moolah-${{ env.APP_VERSION }}.ipa
           path: build/Moolah.ipa

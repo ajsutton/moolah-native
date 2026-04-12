@@ -44,8 +44,6 @@ targets:
   Moolah_iOS:
     type: application
     platform: iOS
-    entitlements:
-      path: App/Moolah.entitlements
     sources:
       - path: App
       - path: Domain
@@ -63,8 +61,6 @@ targets:
   Moolah_macOS:
     type: application
     platform: macOS
-    entitlements:
-      path: App/Moolah.entitlements
     sources:
       - path: App
       - path: Domain
