@@ -66,15 +66,22 @@ enum TestBackend {
   }
 
   /// Seeds transactions into the in-memory store.
+  /// Also creates InstrumentRecord entries for non-fiat instruments so they resolve correctly on fetch.
   @discardableResult
   static func seed(
     transactions: [Transaction],
     in container: ModelContainer
   ) -> [Transaction] {
     let context = ModelContext(container)
+    var seenInstruments: Set<String> = []
     for txn in transactions {
       context.insert(TransactionRecord.from(txn))
       for (index, leg) in txn.legs.enumerated() {
+        // Ensure non-fiat instruments have InstrumentRecord entries
+        if leg.instrument.kind != .fiatCurrency && !seenInstruments.contains(leg.instrument.id) {
+          seenInstruments.insert(leg.instrument.id)
+          context.insert(InstrumentRecord.from(leg.instrument))
+        }
         context.insert(TransactionLegRecord.from(leg, transactionId: txn.id, sortOrder: index))
       }
     }

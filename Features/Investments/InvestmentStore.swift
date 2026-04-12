@@ -2,6 +2,14 @@ import Foundation
 import OSLog
 import Observation
 
+/// A position with its current market value in the profile currency.
+struct ValuedPosition: Identifiable, Sendable {
+  let position: Position
+  var marketValue: Decimal?  // nil if price lookup failed
+
+  var id: String { "\(position.accountId)-\(position.instrument.id)" }
+}
+
 @Observable
 @MainActor
 final class InvestmentStore {
@@ -9,14 +17,25 @@ final class InvestmentStore {
   private(set) var dailyBalances: [AccountDailyBalance] = []
   private(set) var isLoading = false
   private(set) var error: Error?
+  private(set) var positions: [Position] = []
+  private(set) var valuedPositions: [ValuedPosition] = []
+  private(set) var totalPortfolioValue: Decimal = 0
 
   var selectedPeriod: TimePeriod = .all
 
   private let repository: InvestmentRepository
+  private let transactionRepository: TransactionRepository?
+  private let conversionService: (any InstrumentConversionService)?
   private let logger = Logger(subsystem: "com.moolah.app", category: "InvestmentStore")
 
-  init(repository: InvestmentRepository) {
+  init(
+    repository: InvestmentRepository,
+    transactionRepository: TransactionRepository? = nil,
+    conversionService: (any InstrumentConversionService)? = nil
+  ) {
     self.repository = repository
+    self.transactionRepository = transactionRepository
+    self.conversionService = conversionService
   }
 
   /// Load all values for the account.
@@ -81,6 +100,91 @@ final class InvestmentStore {
       logger.error("Failed to remove investment value: \(error.localizedDescription)")
       self.error = error
     }
+  }
+
+  // MARK: - Position Tracking
+
+  /// Load positions for a position-tracked account by computing them from transaction legs.
+  func loadPositions(accountId: UUID) async {
+    guard let transactionRepository else {
+      logger.warning("loadPositions called without transactionRepository")
+      return
+    }
+    do {
+      var allTransactions: [Transaction] = []
+      var page = 0
+      while true {
+        let result = try await transactionRepository.fetch(
+          filter: TransactionFilter(accountId: accountId),
+          page: page,
+          pageSize: 200
+        )
+        allTransactions.append(contentsOf: result.transactions)
+        if result.transactions.count < 200 { break }
+        page += 1
+      }
+
+      var quantityByInstrument: [Instrument: Decimal] = [:]
+      for txn in allTransactions {
+        for leg in txn.legs where leg.accountId == accountId {
+          quantityByInstrument[leg.instrument, default: 0] += leg.quantity
+        }
+      }
+
+      positions = quantityByInstrument.compactMap { instrument, quantity in
+        guard quantity != 0 else { return nil }
+        return Position(accountId: accountId, instrument: instrument, quantity: quantity)
+      }.sorted { $0.instrument.name < $1.instrument.name }
+    } catch {
+      logger.error("Failed to load positions: \(error.localizedDescription)")
+      self.error = error
+    }
+  }
+
+  /// Valuate all loaded positions using current market prices.
+  func valuatePositions(profileCurrency: Instrument, on date: Date) async {
+    guard let conversionService else {
+      valuedPositions = positions.map { ValuedPosition(position: $0, marketValue: nil) }
+      return
+    }
+
+    var valued: [ValuedPosition] = []
+    var total: Decimal = 0
+
+    for position in positions {
+      if position.instrument.kind == .fiatCurrency {
+        // Fiat positions: convert to profile currency if different
+        let value: Decimal
+        if position.instrument.id == profileCurrency.id {
+          value = position.quantity
+        } else {
+          do {
+            value = try await conversionService.convert(
+              position.quantity, from: position.instrument, to: profileCurrency, on: date
+            )
+          } catch {
+            valued.append(ValuedPosition(position: position, marketValue: nil))
+            continue
+          }
+        }
+        valued.append(ValuedPosition(position: position, marketValue: value))
+        total += value
+      } else {
+        // Stock positions: convert quantity to profile currency value
+        do {
+          let value = try await conversionService.convert(
+            position.quantity, from: position.instrument, to: profileCurrency, on: date
+          )
+          valued.append(ValuedPosition(position: position, marketValue: value))
+          total += value
+        } catch {
+          valued.append(ValuedPosition(position: position, marketValue: nil))
+        }
+      }
+    }
+
+    valuedPositions = valued
+    totalPortfolioValue = total
   }
 
   // MARK: - Computed Properties

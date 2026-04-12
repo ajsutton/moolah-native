@@ -9,6 +9,7 @@ struct ContentView: View {
   @Environment(EarmarkStore.self) private var earmarkStore
   @Environment(AnalysisStore.self) private var analysisStore
   @Environment(InvestmentStore.self) private var investmentStore
+  @Environment(TradeStore.self) private var tradeStore
   @State private var selection: SidebarSelection? = .analysis
 
   @State private var showCreateEarmarkSheet = false
@@ -43,7 +44,8 @@ struct ContentView: View {
               categories: categoryStore.categories,
               earmarks: earmarkStore.earmarks,
               investmentStore: investmentStore,
-              transactionStore: transactionStore)
+              transactionStore: transactionStore,
+              tradeStore: tradeStore)
           } else {
             TransactionListView(
               title: account.name,

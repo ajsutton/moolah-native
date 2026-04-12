@@ -16,6 +16,7 @@ final class ProfileSession: Identifiable {
   let earmarkStore: EarmarkStore
   let analysisStore: AnalysisStore
   let investmentStore: InvestmentStore
+  let tradeStore: TradeStore
   let exchangeRateService: ExchangeRateService
   let stockPriceService: StockPriceService
   let cryptoPriceService: CryptoPriceService
@@ -113,7 +114,11 @@ final class ProfileSession: Identifiable {
     self.categoryStore = CategoryStore(repository: backend.categories)
     self.earmarkStore = EarmarkStore(repository: backend.earmarks)
     self.analysisStore = AnalysisStore(repository: backend.analysis)
-    self.investmentStore = InvestmentStore(repository: backend.investments)
+    self.investmentStore = InvestmentStore(
+      repository: backend.investments,
+      transactionRepository: backend.transactions
+    )
+    self.tradeStore = TradeStore(transactions: backend.transactions)
 
     // Wire up cross-store side effects
     let accountStore = self.accountStore

@@ -28,6 +28,10 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
   /// Market value for investment accounts. Nil for non-investment accounts.
   var investmentValue: InstrumentAmount?
   var positions: [Position]
+  /// Whether this account tracks per-instrument positions from transaction legs.
+  /// When true, the account's value is derived from positions rather than manual investmentValue entries.
+  /// When false (default), investment accounts use the legacy investmentValue approach.
+  var usesPositionTracking: Bool
   var position: Int
   var isHidden: Bool
 
@@ -47,6 +51,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     balance: InstrumentAmount = .zero(instrument: .AUD),
     investmentValue: InstrumentAmount? = nil,
     positions: [Position] = [],
+    usesPositionTracking: Bool = false,
     position: Int = 0,
     isHidden: Bool = false
   ) {
@@ -56,6 +61,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     self.balance = balance
     self.investmentValue = investmentValue
     self.positions = positions
+    self.usesPositionTracking = usesPositionTracking
     self.position = position
     self.isHidden = isHidden
   }
@@ -66,6 +72,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     case type
     case balance
     case investmentValue
+    case usesPositionTracking
     case position
     case isHidden = "hidden"
   }
@@ -78,6 +85,8 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     balance = try container.decode(InstrumentAmount.self, forKey: .balance)
     investmentValue = try container.decodeIfPresent(InstrumentAmount.self, forKey: .investmentValue)
     positions = []
+    usesPositionTracking =
+      try container.decodeIfPresent(Bool.self, forKey: .usesPositionTracking) ?? false
     position = try container.decode(Int.self, forKey: .position)
     isHidden = try container.decode(Bool.self, forKey: .isHidden)
   }
@@ -89,6 +98,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     try container.encode(type, forKey: .type)
     try container.encode(balance, forKey: .balance)
     try container.encodeIfPresent(investmentValue, forKey: .investmentValue)
+    try container.encode(usesPositionTracking, forKey: .usesPositionTracking)
     try container.encode(position, forKey: .position)
     try container.encode(isHidden, forKey: .isHidden)
   }
@@ -96,6 +106,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
   static func == (lhs: Account, rhs: Account) -> Bool {
     lhs.id == rhs.id && lhs.name == rhs.name && lhs.type == rhs.type
       && lhs.balance == rhs.balance && lhs.investmentValue == rhs.investmentValue
+      && lhs.usesPositionTracking == rhs.usesPositionTracking
       && lhs.position == rhs.position && lhs.isHidden == rhs.isHidden
   }
 
@@ -105,6 +116,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     hasher.combine(type)
     hasher.combine(balance)
     hasher.combine(investmentValue)
+    hasher.combine(usesPositionTracking)
     hasher.combine(position)
     hasher.combine(isHidden)
   }

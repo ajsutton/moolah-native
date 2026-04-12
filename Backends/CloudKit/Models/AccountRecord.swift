@@ -11,6 +11,7 @@ final class AccountRecord {
   var type: String = "bank"  // Raw value of AccountType
   var position: Int = 0
   var isHidden: Bool = false
+  var usesPositionTracking: Bool = false
   var encodedSystemFields: Data?
 
   init(
@@ -18,13 +19,15 @@ final class AccountRecord {
     name: String,
     type: String,
     position: Int = 0,
-    isHidden: Bool = false
+    isHidden: Bool = false,
+    usesPositionTracking: Bool = false
   ) {
     self.id = id
     self.name = name
     self.type = type
     self.position = position
     self.isHidden = isHidden
+    self.usesPositionTracking = usesPositionTracking
   }
 
   func toDomain(
@@ -37,6 +40,7 @@ final class AccountRecord {
       balance: balance,
       investmentValue: investmentValue,
       positions: positions,
+      usesPositionTracking: usesPositionTracking,
       position: position,
       isHidden: isHidden
     )
@@ -48,7 +52,8 @@ final class AccountRecord {
       name: account.name,
       type: account.type.rawValue,
       position: account.position,
-      isHidden: account.isHidden
+      isHidden: account.isHidden,
+      usesPositionTracking: account.usesPositionTracking
     )
   }
 }
