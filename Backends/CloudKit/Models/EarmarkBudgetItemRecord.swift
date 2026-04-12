@@ -3,13 +3,12 @@ import SwiftData
 
 @Model
 final class EarmarkBudgetItemRecord {
-  #Unique<EarmarkBudgetItemRecord>([\.id])
 
-  var id: UUID
-  var earmarkId: UUID
-  var categoryId: UUID
-  var amount: Int  // cents
-  var currencyCode: String
+  var id: UUID = UUID()
+  var earmarkId: UUID = UUID()
+  var categoryId: UUID = UUID()
+  var amount: Int = 0  // cents
+  var currencyCode: String = ""
 
   init(
     id: UUID = UUID(),

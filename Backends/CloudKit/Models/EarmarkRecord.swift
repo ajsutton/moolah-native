@@ -3,14 +3,13 @@ import SwiftData
 
 @Model
 final class EarmarkRecord {
-  #Unique<EarmarkRecord>([\.id])
 
-  var id: UUID
-  var name: String
-  var position: Int
-  var isHidden: Bool
+  var id: UUID = UUID()
+  var name: String = ""
+  var position: Int = 0
+  var isHidden: Bool = false
   var savingsTarget: Int?  // cents
-  var currencyCode: String
+  var currencyCode: String = ""
   var savingsStartDate: Date?
   var savingsEndDate: Date?
 

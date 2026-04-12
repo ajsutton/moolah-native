@@ -3,15 +3,14 @@ import SwiftData
 
 @Model
 final class ProfileRecord {
-  #Unique<ProfileRecord>([\.id])
 
   @Attribute(.preserveValueOnDeletion)
-  var id: UUID
+  var id: UUID = UUID()
 
-  var label: String
-  var currencyCode: String
-  var financialYearStartMonth: Int
-  var createdAt: Date
+  var label: String = ""
+  var currencyCode: String = ""
+  var financialYearStartMonth: Int = 7
+  var createdAt: Date = Date()
 
   init(
     id: UUID = UUID(),

@@ -1,4 +1,5 @@
 .env
+project-entitlements.yml
 
 # Xcode
 *.xcodeproj

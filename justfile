@@ -63,7 +63,15 @@ generate:
 
     # Provide default
     export CODE_SIGN_STYLE="${CODE_SIGN_STYLE:-Automatic}"
-    xcodegen generate
+
+    # Optionally inject entitlements for local CloudKit development
+    if [ "${ENABLE_ENTITLEMENTS:-}" = "1" ]; then
+        SPEC=$(bash scripts/inject-entitlements.sh)
+        trap "rm -f $SPEC" EXIT
+        xcodegen generate --spec "$SPEC"
+    else
+        xcodegen generate
+    fi
 
 # Sync code signing certificates (runs Match)
 certificates:

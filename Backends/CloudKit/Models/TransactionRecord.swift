@@ -3,15 +3,14 @@ import SwiftData
 
 @Model
 final class TransactionRecord {
-  #Unique<TransactionRecord>([\.id])
 
-  var id: UUID
-  var type: String  // Raw value of TransactionType
-  var date: Date
+  var id: UUID = UUID()
+  var type: String = "expense"  // Raw value of TransactionType
+  var date: Date = Date()
   var accountId: UUID?
   var toAccountId: UUID?
-  var amount: Int  // cents
-  var currencyCode: String
+  var amount: Int = 0  // cents
+  var currencyCode: String = ""
   var payee: String?
   var notes: String?
   var categoryId: UUID?

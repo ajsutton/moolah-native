@@ -3,13 +3,12 @@ import SwiftData
 
 @Model
 final class InvestmentValueRecord {
-  #Unique<InvestmentValueRecord>([\.id])
 
-  var id: UUID
-  var accountId: UUID
-  var date: Date
-  var value: Int  // cents
-  var currencyCode: String
+  var id: UUID = UUID()
+  var accountId: UUID = UUID()
+  var date: Date = Date()
+  var value: Int = 0  // cents
+  var currencyCode: String = ""
 
   init(
     id: UUID = UUID(),

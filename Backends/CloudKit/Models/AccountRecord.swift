@@ -3,14 +3,13 @@ import SwiftData
 
 @Model
 final class AccountRecord {
-  #Unique<AccountRecord>([\.id])
 
-  var id: UUID
-  var name: String
-  var type: String  // Raw value of AccountType
-  var position: Int
-  var isHidden: Bool
-  var currencyCode: String
+  var id: UUID = UUID()
+  var name: String = ""
+  var type: String = "bank"  // Raw value of AccountType
+  var position: Int = 0
+  var isHidden: Bool = false
+  var currencyCode: String = ""
   var cachedBalance: Int?
 
   init(

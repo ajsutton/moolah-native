@@ -3,10 +3,9 @@ import SwiftData
 
 @Model
 final class CategoryRecord {
-  #Unique<CategoryRecord>([\.id])
 
-  var id: UUID
-  var name: String
+  var id: UUID = UUID()
+  var name: String = ""
   var parentId: UUID?
 
   init(id: UUID = UUID(), name: String, parentId: UUID? = nil) {
