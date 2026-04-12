@@ -10,7 +10,8 @@ struct EarmarkStoreTests {
   @Test func testPopulatesFromRepository() async throws {
     let earmark = Earmark(
       name: "Holiday Fund",
-      balance: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument))
+      balance: InstrumentAmount(
+        quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
     let (backend, container) = try TestBackend.create()
     TestBackend.seedWithTransactions(
       earmarks: [earmark], accountId: UUID(), in: container)
@@ -25,11 +26,13 @@ struct EarmarkStoreTests {
   @Test func testSortingByPosition() async throws {
     let e1 = Earmark(
       name: "E1",
-      balance: MonetaryAmount(cents: 10000, currency: Instrument.defaultTestInstrument), position: 2
+      balance: InstrumentAmount(
+        quantity: Decimal(10000) / 100, instrument: Instrument.defaultTestInstrument), position: 2
     )
     let e2 = Earmark(
       name: "E2",
-      balance: MonetaryAmount(cents: 20000, currency: Instrument.defaultTestInstrument), position: 1
+      balance: InstrumentAmount(
+        quantity: Decimal(20000) / 100, instrument: Instrument.defaultTestInstrument), position: 1
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seedWithTransactions(
@@ -47,13 +50,16 @@ struct EarmarkStoreTests {
     let earmarks = [
       Earmark(
         name: "Holiday",
-        balance: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument)),
       Earmark(
         name: "Car Repair",
-        balance: MonetaryAmount(cents: 30000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument)),
       Earmark(
         name: "Hidden",
-        balance: MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument),
+        balance: InstrumentAmount(
+          quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument),
         isHidden: true),
     ]
     let accountId = UUID()
@@ -69,7 +75,9 @@ struct EarmarkStoreTests {
 
     // Total should only include visible earmarks
     #expect(
-      store.totalBalance == MonetaryAmount(cents: 80000, currency: Instrument.defaultTestInstrument)
+      store.totalBalance
+        == InstrumentAmount(
+          quantity: Decimal(80000) / 100, instrument: Instrument.defaultTestInstrument)
     )
   }
 
@@ -86,25 +94,29 @@ struct EarmarkStoreTests {
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday Fund",
-          balance: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
-          saved: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
-          spent: MonetaryAmount(cents: 0, currency: Instrument.defaultTestInstrument))
+          balance: InstrumentAmount(
+            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
+          saved: InstrumentAmount(
+            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
+          spent: InstrumentAmount(
+            quantity: Decimal(0) / 100, instrument: Instrument.defaultTestInstrument))
       ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Spend $100 from the earmark
     let tx = Transaction(
-      type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Instrument.defaultTestInstrument),
-      payee: "Flight Tickets",
-      earmarkId: earmarkId
-    )
+      date: Date(), payee: "Flight Tickets",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmarkId)
+      ])
     store.applyTransactionDelta(old: nil, new: tx)
 
-    #expect(store.earmarks.by(id: earmarkId)?.balance.cents == 40000)  // 50000 - 10000
-    #expect(store.earmarks.by(id: earmarkId)?.saved.cents == 50000)  // Unchanged
-    #expect(store.earmarks.by(id: earmarkId)?.spent.cents == 10000)  // 0 + 10000
+    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == Decimal(40000) / 100)  // 500 - 100
+    #expect(store.earmarks.by(id: earmarkId)?.saved.quantity == Decimal(50000) / 100)  // Unchanged
+    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == Decimal(10000) / 100)  // 0 + 100
   }
 
   @Test func testCreateIncomeToEarmarkIncreasesSavedAndBalance() async throws {
@@ -118,25 +130,29 @@ struct EarmarkStoreTests {
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday Fund",
-          balance: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
-          saved: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
-          spent: MonetaryAmount(cents: 0, currency: Instrument.defaultTestInstrument))
+          balance: InstrumentAmount(
+            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
+          saved: InstrumentAmount(
+            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
+          spent: InstrumentAmount(
+            quantity: Decimal(0) / 100, instrument: Instrument.defaultTestInstrument))
       ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Add $200 to the earmark
     let tx = Transaction(
-      type: .income, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: 20000, currency: Instrument.defaultTestInstrument),
-      payee: "Bonus",
-      earmarkId: earmarkId
-    )
+      date: Date(), payee: "Bonus",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(20000) / 100, type: .income, earmarkId: earmarkId)
+      ])
     store.applyTransactionDelta(old: nil, new: tx)
 
-    #expect(store.earmarks.by(id: earmarkId)?.balance.cents == 70000)  // 50000 + 20000
-    #expect(store.earmarks.by(id: earmarkId)?.saved.cents == 70000)  // 50000 + 20000
-    #expect(store.earmarks.by(id: earmarkId)?.spent.cents == 0)  // Unchanged
+    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == Decimal(70000) / 100)  // 500 + 200
+    #expect(store.earmarks.by(id: earmarkId)?.saved.quantity == Decimal(70000) / 100)  // 500 + 200
+    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == Decimal(0) / 100)  // Unchanged
   }
 
   @Test func testDeleteRevertsEarmarkBalance() async throws {
@@ -150,27 +166,31 @@ struct EarmarkStoreTests {
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday Fund",
-          balance: MonetaryAmount(cents: 40000, currency: Instrument.defaultTestInstrument),
-          saved: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
-          spent: MonetaryAmount(cents: 10000, currency: Instrument.defaultTestInstrument))
+          balance: InstrumentAmount(
+            quantity: Decimal(40000) / 100, instrument: Instrument.defaultTestInstrument),
+          saved: InstrumentAmount(
+            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
+          spent: InstrumentAmount(
+            quantity: Decimal(10000) / 100, instrument: Instrument.defaultTestInstrument))
       ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Remove a $100 expense from the earmark
     let tx = Transaction(
-      type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Instrument.defaultTestInstrument),
-      payee: "Flight Tickets",
-      earmarkId: earmarkId
-    )
+      date: Date(), payee: "Flight Tickets",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmarkId)
+      ])
     store.applyTransactionDelta(old: tx, new: nil)
 
-    // Removing -10000 expense adds 10000 back to balance.
+    // Removing -100 expense adds 100 back to balance.
     // adjustingBalance treats positive delta as saving (increases saved).
-    #expect(store.earmarks.by(id: earmarkId)?.balance.cents == 50000)  // 40000 + 10000
-    #expect(store.earmarks.by(id: earmarkId)?.saved.cents == 60000)  // 50000 + 10000
-    #expect(store.earmarks.by(id: earmarkId)?.spent.cents == 10000)  // Unchanged
+    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == Decimal(50000) / 100)  // 400 + 100
+    #expect(store.earmarks.by(id: earmarkId)?.saved.quantity == Decimal(60000) / 100)  // 500 + 100
+    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == Decimal(10000) / 100)  // Unchanged
   }
 
   @Test func testUpdateAdjustsEarmarkBalance() async throws {
@@ -184,28 +204,38 @@ struct EarmarkStoreTests {
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday Fund",
-          balance: MonetaryAmount(cents: 40000, currency: Instrument.defaultTestInstrument),
-          saved: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
-          spent: MonetaryAmount(cents: 10000, currency: Instrument.defaultTestInstrument))
+          balance: InstrumentAmount(
+            quantity: Decimal(40000) / 100, instrument: Instrument.defaultTestInstrument),
+          saved: InstrumentAmount(
+            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
+          spent: InstrumentAmount(
+            quantity: Decimal(10000) / 100, instrument: Instrument.defaultTestInstrument))
       ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     let oldTx = Transaction(
-      type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Instrument.defaultTestInstrument),
-      payee: "Flight Tickets",
-      earmarkId: earmarkId
-    )
-    var newTx = oldTx
-    newTx.amount = MonetaryAmount(cents: -15000, currency: Instrument.defaultTestInstrument)
+      date: Date(), payee: "Flight Tickets",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmarkId)
+      ])
+    // New transaction with updated amount (-150 instead of -100)
+    let newTx = Transaction(
+      id: oldTx.id, date: oldTx.date, payee: oldTx.payee,
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-15000) / 100, type: .expense, earmarkId: earmarkId)
+      ])
 
     store.applyTransactionDelta(old: oldTx, new: newTx)
 
-    // Was 40000 (after -10000 expense). Remove old (+10000 → 50000), apply new (-15000 → 35000)
-    #expect(store.earmarks.by(id: earmarkId)?.balance.cents == 35000)
-    #expect(store.earmarks.by(id: earmarkId)?.saved.cents == 60000)  // 50000 + 10000 (reverting old)
-    #expect(store.earmarks.by(id: earmarkId)?.spent.cents == 25000)  // 10000 + 15000 (new expense)
+    // Was 400 (after -100 expense). Remove old (+100 -> 500), apply new (-150 -> 350)
+    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == Decimal(35000) / 100)
+    #expect(store.earmarks.by(id: earmarkId)?.saved.quantity == Decimal(60000) / 100)  // 500 + 100 (reverting old)
+    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == Decimal(25000) / 100)  // 100 + 150 (new expense)
   }
 
   @Test func testChangingEarmarkIdUpdatesBothEarmarks() async throws {
@@ -220,37 +250,50 @@ struct EarmarkStoreTests {
       earmarks: [
         Earmark(
           id: earmark1Id, name: "Holiday Fund",
-          balance: MonetaryAmount(cents: 40000, currency: Instrument.defaultTestInstrument),
-          saved: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
-          spent: MonetaryAmount(cents: 10000, currency: Instrument.defaultTestInstrument)),
+          balance: InstrumentAmount(
+            quantity: Decimal(40000) / 100, instrument: Instrument.defaultTestInstrument),
+          saved: InstrumentAmount(
+            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
+          spent: InstrumentAmount(
+            quantity: Decimal(10000) / 100, instrument: Instrument.defaultTestInstrument)),
         Earmark(
           id: earmark2Id, name: "Car Repair",
-          balance: MonetaryAmount(cents: 30000, currency: Instrument.defaultTestInstrument),
-          saved: MonetaryAmount(cents: 30000, currency: Instrument.defaultTestInstrument),
-          spent: MonetaryAmount(cents: 0, currency: Instrument.defaultTestInstrument)),
+          balance: InstrumentAmount(
+            quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument),
+          saved: InstrumentAmount(
+            quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument),
+          spent: InstrumentAmount(
+            quantity: Decimal(0) / 100, instrument: Instrument.defaultTestInstrument)),
       ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Original transaction was to earmark1
     let oldTx = Transaction(
-      type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Instrument.defaultTestInstrument),
-      payee: "Flight Tickets",
-      earmarkId: earmark1Id
-    )
+      date: Date(), payee: "Flight Tickets",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmark1Id)
+      ])
     // Change to earmark2
-    let newTx = oldTx.withEarmarkId(earmark2Id)
+    let newTx = Transaction(
+      id: oldTx.id, date: oldTx.date, payee: oldTx.payee,
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmark2Id)
+      ])
 
     store.applyTransactionDelta(old: oldTx, new: newTx)
 
-    // Earmark1 should have the expense removed (+10000) — adjustingBalance treats positive as saving
-    #expect(store.earmarks.by(id: earmark1Id)?.balance.cents == 50000)
-    #expect(store.earmarks.by(id: earmark1Id)?.spent.cents == 10000)  // Unchanged (positive delta adds to saved)
+    // Earmark1 should have the expense removed (+100) — adjustingBalance treats positive as saving
+    #expect(store.earmarks.by(id: earmark1Id)?.balance.quantity == Decimal(50000) / 100)
+    #expect(store.earmarks.by(id: earmark1Id)?.spent.quantity == Decimal(10000) / 100)  // Unchanged (positive delta adds to saved)
 
-    // Earmark2 should have the expense added (-10000)
-    #expect(store.earmarks.by(id: earmark2Id)?.balance.cents == 20000)
-    #expect(store.earmarks.by(id: earmark2Id)?.spent.cents == 10000)
+    // Earmark2 should have the expense added (-100)
+    #expect(store.earmarks.by(id: earmark2Id)?.balance.quantity == Decimal(20000) / 100)
+    #expect(store.earmarks.by(id: earmark2Id)?.spent.quantity == Decimal(10000) / 100)
   }
 
   @Test func testAddingEarmarkToTransaction() async throws {
@@ -264,26 +307,37 @@ struct EarmarkStoreTests {
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday Fund",
-          balance: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
-          saved: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
-          spent: MonetaryAmount(cents: 0, currency: Instrument.defaultTestInstrument))
+          balance: InstrumentAmount(
+            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
+          saved: InstrumentAmount(
+            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
+          spent: InstrumentAmount(
+            quantity: Decimal(0) / 100, instrument: Instrument.defaultTestInstrument))
       ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Original transaction had no earmark
     let oldTx = Transaction(
-      type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Instrument.defaultTestInstrument),
-      payee: "Flight Tickets"
-    )
+      date: Date(), payee: "Flight Tickets",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-10000) / 100, type: .expense)
+      ])
     // Add earmark to it
-    let newTx = oldTx.withEarmarkId(earmarkId)
+    let newTx = Transaction(
+      id: oldTx.id, date: oldTx.date, payee: oldTx.payee,
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmarkId)
+      ])
 
     store.applyTransactionDelta(old: oldTx, new: newTx)
 
-    #expect(store.earmarks.by(id: earmarkId)?.balance.cents == 40000)
-    #expect(store.earmarks.by(id: earmarkId)?.spent.cents == 10000)
+    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == Decimal(40000) / 100)
+    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == Decimal(10000) / 100)
   }
 
   @Test func testRemovingEarmarkFromTransaction() async throws {
@@ -297,27 +351,37 @@ struct EarmarkStoreTests {
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday Fund",
-          balance: MonetaryAmount(cents: 40000, currency: Instrument.defaultTestInstrument),
-          saved: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
-          spent: MonetaryAmount(cents: 10000, currency: Instrument.defaultTestInstrument))
+          balance: InstrumentAmount(
+            quantity: Decimal(40000) / 100, instrument: Instrument.defaultTestInstrument),
+          saved: InstrumentAmount(
+            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
+          spent: InstrumentAmount(
+            quantity: Decimal(10000) / 100, instrument: Instrument.defaultTestInstrument))
       ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     // Original transaction had an earmark
     let oldTx = Transaction(
-      type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Instrument.defaultTestInstrument),
-      payee: "Flight Tickets",
-      earmarkId: earmarkId
-    )
+      date: Date(), payee: "Flight Tickets",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmarkId)
+      ])
     // Remove the earmark
-    let newTx = oldTx.withEarmarkId(nil)
+    let newTx = Transaction(
+      id: oldTx.id, date: oldTx.date, payee: oldTx.payee,
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-10000) / 100, type: .expense)
+      ])
 
     store.applyTransactionDelta(old: oldTx, new: newTx)
 
-    #expect(store.earmarks.by(id: earmarkId)?.balance.cents == 50000)
-    #expect(store.earmarks.by(id: earmarkId)?.spent.cents == 10000)  // Unchanged (positive delta adds to saved)
+    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == Decimal(50000) / 100)
+    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == Decimal(10000) / 100)  // Unchanged (positive delta adds to saved)
   }
 
   @Test func testTotalBalanceUpdatesAfterDelta() async throws {
@@ -331,24 +395,28 @@ struct EarmarkStoreTests {
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday Fund",
-          balance: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
-          saved: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
-          spent: MonetaryAmount(cents: 0, currency: Instrument.defaultTestInstrument))
+          balance: InstrumentAmount(
+            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
+          saved: InstrumentAmount(
+            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
+          spent: InstrumentAmount(
+            quantity: Decimal(0) / 100, instrument: Instrument.defaultTestInstrument))
       ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
-    #expect(store.totalBalance.cents == 50000)
+    #expect(store.totalBalance.quantity == Decimal(50000) / 100)
 
     let tx = Transaction(
-      type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Instrument.defaultTestInstrument),
-      payee: "Flight Tickets",
-      earmarkId: earmarkId
-    )
+      date: Date(), payee: "Flight Tickets",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmarkId)
+      ])
     store.applyTransactionDelta(old: nil, new: tx)
 
-    #expect(store.totalBalance.cents == 40000)
+    #expect(store.totalBalance.quantity == Decimal(40000) / 100)
   }
 
   @Test func testScheduledTransactionDoesNotAffectEarmarkBalance() async throws {
@@ -540,10 +608,12 @@ struct EarmarkStoreTests {
   func hiddenEarmarksExcluded() async throws {
     let visible = Earmark(
       name: "Visible",
-      balance: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument))
+      balance: InstrumentAmount(
+        quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
     let hidden = Earmark(
       name: "Hidden",
-      balance: MonetaryAmount(cents: 30000, currency: Instrument.defaultTestInstrument),
+      balance: InstrumentAmount(
+        quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument),
       isHidden: true)
     let accountId = UUID()
     let (backend, container) = try TestBackend.create()
@@ -564,10 +634,12 @@ struct EarmarkStoreTests {
   func hiddenEarmarksIncluded() async throws {
     let visible = Earmark(
       name: "Visible",
-      balance: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument))
+      balance: InstrumentAmount(
+        quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
     let hidden = Earmark(
       name: "Hidden",
-      balance: MonetaryAmount(cents: 30000, currency: Instrument.defaultTestInstrument),
+      balance: InstrumentAmount(
+        quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument),
       isHidden: true)
     let accountId = UUID()
     let (backend, container) = try TestBackend.create()

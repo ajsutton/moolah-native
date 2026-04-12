@@ -15,14 +15,14 @@ struct AccountRepositoryContractTests {
     let newAccount = Account(
       name: "Savings",
       type: .bank,
-      balance: MonetaryAmount(cents: 100000, currency: .defaultTestInstrument)
+      balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument)
     )
 
     let created = try await repository.create(newAccount)
 
     #expect(created.id == newAccount.id)
     #expect(created.name == "Savings")
-    #expect(created.balance.cents == 100000)
+    #expect(created.balance.quantity == 1000)
 
     let all = try await repository.fetchAll()
     #expect(all.count == 1)
@@ -48,11 +48,11 @@ struct AccountRepositoryContractTests {
     let creditCard = Account(
       name: "Credit Card",
       type: .creditCard,
-      balance: MonetaryAmount(cents: -50000, currency: .defaultTestInstrument)
+      balance: InstrumentAmount(quantity: -500, instrument: .defaultTestInstrument)
     )
 
     let created = try await repository.create(creditCard)
-    #expect(created.balance.cents == -50000)
+    #expect(created.balance.quantity == -500)
   }
 
   // MARK: - UPDATE TESTS
@@ -82,18 +82,19 @@ struct AccountRepositoryContractTests {
         id: UUID(),
         name: "Savings",
         type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: .defaultTestInstrument)
+        balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument)
       )
     ])
     let accounts = try await repository.fetchAll()
     var toUpdate = accounts[0]
     toUpdate.name = "Updated Savings"
-    toUpdate.balance = MonetaryAmount(cents: 999999, currency: .defaultTestInstrument)  // Try to change
+    toUpdate.balance = InstrumentAmount(
+      quantity: Decimal(string: "9999.99")!, instrument: .defaultTestInstrument)  // Try to change
 
     let updated = try await repository.update(toUpdate)
 
     // Balance should be unchanged (server-authoritative)
-    #expect(updated.balance.cents == 100000)
+    #expect(updated.balance.quantity == 1000)
   }
 
   @Test("throws on update non-existent")
@@ -134,7 +135,7 @@ struct AccountRepositoryContractTests {
         id: UUID(),
         name: "Active Account",
         type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: .defaultTestInstrument)
+        balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument)
       )
     ])
     let accounts = try await repository.fetchAll()
@@ -184,9 +185,9 @@ private func makeCloudKitAccountRepository(
   initialAccounts: [Account] = []
 ) -> CloudKitAccountRepository {
   let container = try! TestModelContainer.create()
-  let currency = Instrument.defaultTestInstrument
+  let instrument = Instrument.defaultTestInstrument
   let repo = CloudKitAccountRepository(
-    modelContainer: container, instrument: currency)
+    modelContainer: container, instrument: instrument)
 
   if !initialAccounts.isEmpty {
     let context = ModelContext(container)
@@ -200,7 +201,7 @@ private func makeCloudKitAccountRepository(
         context.insert(txn)
         let leg = TransactionLegRecord.from(
           TransactionLeg(
-            accountId: account.id, instrument: currency,
+            accountId: account.id, instrument: instrument,
             quantity: account.balance.quantity, type: .openingBalance
           ),
           transactionId: txnId, sortOrder: 0

@@ -10,7 +10,8 @@ struct AccountStoreTests {
   @Test func testPopulatesFromRepository() async throws {
     let account = Account(
       name: "Checking", type: .bank,
-      balance: MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument))
+      balance: InstrumentAmount(
+        quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [account], in: container)
     let store = AccountStore(repository: backend.accounts)
@@ -24,11 +25,15 @@ struct AccountStoreTests {
   @Test func testSortingByPosition() async throws {
     let a1 = Account(
       name: "A1", type: .bank,
-      balance: MonetaryAmount(cents: 10000, currency: Instrument.defaultTestInstrument), position: 2
+      balance: InstrumentAmount(
+        quantity: Decimal(10000) / 100, instrument: Instrument.defaultTestInstrument),
+      position: 2
     )
     let a2 = Account(
       name: "A2", type: .asset,
-      balance: MonetaryAmount(cents: 20000, currency: Instrument.defaultTestInstrument), position: 1
+      balance: InstrumentAmount(
+        quantity: Decimal(20000) / 100, instrument: Instrument.defaultTestInstrument),
+      position: 1
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [a1, a2], in: container)
@@ -45,19 +50,24 @@ struct AccountStoreTests {
     let accounts = [
       Account(
         name: "Bank", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument)),
       Account(
         name: "Asset", type: .asset,
-        balance: MonetaryAmount(cents: 500000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(500000) / 100, instrument: Instrument.defaultTestInstrument)),
       Account(
         name: "Credit Card", type: .creditCard,
-        balance: MonetaryAmount(cents: -50000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(-50000) / 100, instrument: Instrument.defaultTestInstrument)),
       Account(
         name: "Investment", type: .investment,
-        balance: MonetaryAmount(cents: 2_000_000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(2_000_000) / 100, instrument: Instrument.defaultTestInstrument)),
       Account(
         name: "Hidden", type: .asset,
-        balance: MonetaryAmount(cents: 100_000_000, currency: Instrument.defaultTestInstrument),
+        balance: InstrumentAmount(
+          quantity: Decimal(100_000_000) / 100, instrument: Instrument.defaultTestInstrument),
         isHidden: true),
     ]
     let (backend, container) = try TestBackend.create()
@@ -68,12 +78,16 @@ struct AccountStoreTests {
 
     #expect(
       store.currentTotal
-        == MonetaryAmount(cents: 550000, currency: Instrument.defaultTestInstrument))  // 100000 + 500000 - 50000
+        == InstrumentAmount(
+          quantity: Decimal(550000) / 100, instrument: Instrument.defaultTestInstrument))  // 100000 + 500000 - 50000
     #expect(
       store.investmentTotal
-        == MonetaryAmount(cents: 2_000_000, currency: Instrument.defaultTestInstrument))
+        == InstrumentAmount(
+          quantity: Decimal(2_000_000) / 100, instrument: Instrument.defaultTestInstrument))
     #expect(
-      store.netWorth == MonetaryAmount(cents: 2_550_000, currency: Instrument.defaultTestInstrument)
+      store.netWorth
+        == InstrumentAmount(
+          quantity: Decimal(2_550_000) / 100, instrument: Instrument.defaultTestInstrument)
     )
   }
 
@@ -81,10 +95,12 @@ struct AccountStoreTests {
     let accounts = [
       Account(
         name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument)),
       Account(
         name: "Savings", type: .asset,
-        balance: MonetaryAmount(cents: 500000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(500000) / 100, instrument: Instrument.defaultTestInstrument)),
     ]
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: accounts, in: container)
@@ -95,17 +111,20 @@ struct AccountStoreTests {
     let noEarmarks = Earmarks(from: [])
     #expect(
       store.availableFunds(earmarks: noEarmarks)
-        == MonetaryAmount(cents: 600000, currency: Instrument.defaultTestInstrument))
+        == InstrumentAmount(
+          quantity: Decimal(600000) / 100, instrument: Instrument.defaultTestInstrument))
   }
 
   @Test func testAvailableFundsSubtractsPositiveEarmarks() async throws {
     let accounts = [
       Account(
         name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument)),
       Account(
         name: "Savings", type: .asset,
-        balance: MonetaryAmount(cents: 500000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(500000) / 100, instrument: Instrument.defaultTestInstrument)),
     ]
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: accounts, in: container)
@@ -116,22 +135,26 @@ struct AccountStoreTests {
     let earmarks = Earmarks(from: [
       Earmark(
         name: "Holiday",
-        balance: MonetaryAmount(cents: 150000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(150000) / 100, instrument: Instrument.defaultTestInstrument)),
       Earmark(
         name: "Emergency",
-        balance: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument)),
     ])
     // 600000 - 150000 - 50000 = 400000
     #expect(
       store.availableFunds(earmarks: earmarks)
-        == MonetaryAmount(cents: 400000, currency: Instrument.defaultTestInstrument))
+        == InstrumentAmount(
+          quantity: Decimal(400000) / 100, instrument: Instrument.defaultTestInstrument))
   }
 
   @Test func testAvailableFundsIgnoresNegativeEarmarkBalances() async throws {
     let accounts = [
       Account(
         name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument))
+        balance: InstrumentAmount(
+          quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
     ]
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: accounts, in: container)
@@ -142,22 +165,26 @@ struct AccountStoreTests {
     let earmarks = Earmarks(from: [
       Earmark(
         name: "Positive",
-        balance: MonetaryAmount(cents: 30000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument)),
       Earmark(
         name: "Negative",
-        balance: MonetaryAmount(cents: -10000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(-10000) / 100, instrument: Instrument.defaultTestInstrument)),
     ])
     // 100000 - 30000 = 70000 (negative earmark ignored)
     #expect(
       store.availableFunds(earmarks: earmarks)
-        == MonetaryAmount(cents: 70000, currency: Instrument.defaultTestInstrument))
+        == InstrumentAmount(
+          quantity: Decimal(70000) / 100, instrument: Instrument.defaultTestInstrument))
   }
 
   @Test func testAvailableFundsIgnoresHiddenEarmarks() async throws {
     let accounts = [
       Account(
         name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument))
+        balance: InstrumentAmount(
+          quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
     ]
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: accounts, in: container)
@@ -168,16 +195,19 @@ struct AccountStoreTests {
     let earmarks = Earmarks(from: [
       Earmark(
         name: "Visible",
-        balance: MonetaryAmount(cents: 20000, currency: Instrument.defaultTestInstrument)),
+        balance: InstrumentAmount(
+          quantity: Decimal(20000) / 100, instrument: Instrument.defaultTestInstrument)),
       Earmark(
         name: "Hidden",
-        balance: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
+        balance: InstrumentAmount(
+          quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
         isHidden: true),
     ])
     // 100000 - 20000 = 80000 (hidden earmark ignored)
     #expect(
       store.availableFunds(earmarks: earmarks)
-        == MonetaryAmount(cents: 80000, currency: Instrument.defaultTestInstrument))
+        == InstrumentAmount(
+          quantity: Decimal(80000) / 100, instrument: Instrument.defaultTestInstrument))
   }
 
   // MARK: - applyTransactionDelta
@@ -189,19 +219,24 @@ struct AccountStoreTests {
       accounts: [
         Account(
           id: acctId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument))
+          balance: InstrumentAmount(
+            quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
       ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     let tx = Transaction(
-      type: .expense, date: Date(), accountId: acctId,
-      amount: MonetaryAmount(cents: -5000, currency: Instrument.defaultTestInstrument),
-      payee: "Coffee"
+      date: Date(),
+      payee: "Coffee",
+      legs: [
+        TransactionLeg(
+          accountId: acctId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-5000) / 100, type: .expense)
+      ]
     )
     store.applyTransactionDelta(old: nil, new: tx)
 
-    #expect(store.accounts.by(id: acctId)?.balance.cents == 95000)
+    #expect(store.accounts.by(id: acctId)?.balance.quantity == Decimal(95000) / 100)
   }
 
   @Test func testCreateIncomeIncreasesAccountBalance() async throws {
@@ -211,19 +246,24 @@ struct AccountStoreTests {
       accounts: [
         Account(
           id: acctId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument))
+          balance: InstrumentAmount(
+            quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
       ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     let tx = Transaction(
-      type: .income, date: Date(), accountId: acctId,
-      amount: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
-      payee: "Salary"
+      date: Date(),
+      payee: "Salary",
+      legs: [
+        TransactionLeg(
+          accountId: acctId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(50000) / 100, type: .income)
+      ]
     )
     store.applyTransactionDelta(old: nil, new: tx)
 
-    #expect(store.accounts.by(id: acctId)?.balance.cents == 150000)
+    #expect(store.accounts.by(id: acctId)?.balance.quantity == Decimal(150000) / 100)
   }
 
   @Test func testDeleteRevertsAccountBalance() async throws {
@@ -233,20 +273,25 @@ struct AccountStoreTests {
       accounts: [
         Account(
           id: acctId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 95000, currency: Instrument.defaultTestInstrument))
+          balance: InstrumentAmount(
+            quantity: Decimal(95000) / 100, instrument: Instrument.defaultTestInstrument))
       ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     let tx = Transaction(
-      type: .expense, date: Date(), accountId: acctId,
-      amount: MonetaryAmount(cents: -5000, currency: Instrument.defaultTestInstrument),
-      payee: "Coffee"
+      date: Date(),
+      payee: "Coffee",
+      legs: [
+        TransactionLeg(
+          accountId: acctId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-5000) / 100, type: .expense)
+      ]
     )
     store.applyTransactionDelta(old: tx, new: nil)
 
     // Removing a -5000 expense should add 5000 back
-    #expect(store.accounts.by(id: acctId)?.balance.cents == 100000)
+    #expect(store.accounts.by(id: acctId)?.balance.quantity == Decimal(100000) / 100)
   }
 
   @Test func testUpdateAdjustsAccountBalance() async throws {
@@ -256,23 +301,36 @@ struct AccountStoreTests {
       accounts: [
         Account(
           id: acctId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 95000, currency: Instrument.defaultTestInstrument))
+          balance: InstrumentAmount(
+            quantity: Decimal(95000) / 100, instrument: Instrument.defaultTestInstrument))
       ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     let oldTx = Transaction(
-      type: .expense, date: Date(), accountId: acctId,
-      amount: MonetaryAmount(cents: -5000, currency: Instrument.defaultTestInstrument),
-      payee: "Coffee"
+      date: Date(),
+      payee: "Coffee",
+      legs: [
+        TransactionLeg(
+          accountId: acctId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-5000) / 100, type: .expense)
+      ]
     )
-    var newTx = oldTx
-    newTx.amount = MonetaryAmount(cents: -7500, currency: Instrument.defaultTestInstrument)
+    let newTx = Transaction(
+      id: oldTx.id,
+      date: oldTx.date,
+      payee: "Coffee",
+      legs: [
+        TransactionLeg(
+          accountId: acctId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-7500) / 100, type: .expense)
+      ]
+    )
 
     store.applyTransactionDelta(old: oldTx, new: newTx)
 
     // Was 95000 (after -5000 expense). Remove old (-(-5000) = +5000 → 100000), apply new (-7500 → 92500)
-    #expect(store.accounts.by(id: acctId)?.balance.cents == 92500)
+    #expect(store.accounts.by(id: acctId)?.balance.quantity == Decimal(92500) / 100)
   }
 
   @Test func testTransferUpdatesBothAccounts() async throws {
@@ -283,23 +341,32 @@ struct AccountStoreTests {
       accounts: [
         Account(
           id: checkingId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument)),
+          balance: InstrumentAmount(
+            quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument)),
         Account(
           id: savingsId, name: "Savings", type: .bank,
-          balance: MonetaryAmount(cents: 200000, currency: Instrument.defaultTestInstrument)),
+          balance: InstrumentAmount(
+            quantity: Decimal(200000) / 100, instrument: Instrument.defaultTestInstrument)),
       ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     // Transfer $100 from checking to savings (amount is -10000 from source perspective)
     let tx = Transaction(
-      type: .transfer, date: Date(), accountId: checkingId, toAccountId: savingsId,
-      amount: MonetaryAmount(cents: -10000, currency: Instrument.defaultTestInstrument)
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: checkingId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-10000) / 100, type: .transfer),
+        TransactionLeg(
+          accountId: savingsId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(10000) / 100, type: .transfer),
+      ]
     )
     store.applyTransactionDelta(old: nil, new: tx)
 
-    #expect(store.accounts.by(id: checkingId)?.balance.cents == 90000)
-    #expect(store.accounts.by(id: savingsId)?.balance.cents == 210000)
+    #expect(store.accounts.by(id: checkingId)?.balance.quantity == Decimal(90000) / 100)
+    #expect(store.accounts.by(id: savingsId)?.balance.quantity == Decimal(210000) / 100)
   }
 
   @Test func testDeleteTransferRevertsBothAccounts() async throws {
@@ -310,22 +377,31 @@ struct AccountStoreTests {
       accounts: [
         Account(
           id: checkingId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 90000, currency: Instrument.defaultTestInstrument)),
+          balance: InstrumentAmount(
+            quantity: Decimal(90000) / 100, instrument: Instrument.defaultTestInstrument)),
         Account(
           id: savingsId, name: "Savings", type: .bank,
-          balance: MonetaryAmount(cents: 210000, currency: Instrument.defaultTestInstrument)),
+          balance: InstrumentAmount(
+            quantity: Decimal(210000) / 100, instrument: Instrument.defaultTestInstrument)),
       ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     let tx = Transaction(
-      type: .transfer, date: Date(), accountId: checkingId, toAccountId: savingsId,
-      amount: MonetaryAmount(cents: -10000, currency: Instrument.defaultTestInstrument)
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: checkingId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-10000) / 100, type: .transfer),
+        TransactionLeg(
+          accountId: savingsId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(10000) / 100, type: .transfer),
+      ]
     )
     store.applyTransactionDelta(old: tx, new: nil)
 
-    #expect(store.accounts.by(id: checkingId)?.balance.cents == 100000)
-    #expect(store.accounts.by(id: savingsId)?.balance.cents == 200000)
+    #expect(store.accounts.by(id: checkingId)?.balance.quantity == Decimal(100000) / 100)
+    #expect(store.accounts.by(id: savingsId)?.balance.quantity == Decimal(200000) / 100)
   }
 
   @Test func testTotalsUpdateAfterDelta() async throws {
@@ -335,23 +411,28 @@ struct AccountStoreTests {
       accounts: [
         Account(
           id: checkingId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument))
+          balance: InstrumentAmount(
+            quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
       ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
-    #expect(store.currentTotal.cents == 100000)
-    #expect(store.netWorth.cents == 100000)
+    #expect(store.currentTotal.quantity == Decimal(100000) / 100)
+    #expect(store.netWorth.quantity == Decimal(100000) / 100)
 
     let tx = Transaction(
-      type: .expense, date: Date(), accountId: checkingId,
-      amount: MonetaryAmount(cents: -5000, currency: Instrument.defaultTestInstrument),
-      payee: "Coffee"
+      date: Date(),
+      payee: "Coffee",
+      legs: [
+        TransactionLeg(
+          accountId: checkingId, instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-5000) / 100, type: .expense)
+      ]
     )
     store.applyTransactionDelta(old: nil, new: tx)
 
-    #expect(store.currentTotal.cents == 95000)
-    #expect(store.netWorth.cents == 95000)
+    #expect(store.currentTotal.quantity == Decimal(95000) / 100)
+    #expect(store.netWorth.quantity == Decimal(95000) / 100)
   }
 
   @Test func testScheduledTransactionDoesNotAffectBalance() async throws {
@@ -437,10 +518,12 @@ struct AccountStoreTests {
   func hiddenAccountsExcluded() async throws {
     let visible = Account(
       name: "Visible", type: .bank,
-      balance: MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument))
+      balance: InstrumentAmount(
+        quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
     let hidden = Account(
       name: "Hidden", type: .bank,
-      balance: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
+      balance: InstrumentAmount(
+        quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
       isHidden: true)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [visible, hidden], in: container)
@@ -456,10 +539,12 @@ struct AccountStoreTests {
   func hiddenAccountsIncluded() async throws {
     let visible = Account(
       name: "Visible", type: .bank,
-      balance: MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument))
+      balance: InstrumentAmount(
+        quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
     let hidden = Account(
       name: "Hidden", type: .bank,
-      balance: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
+      balance: InstrumentAmount(
+        quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
       isHidden: true)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [visible, hidden], in: container)
@@ -475,10 +560,12 @@ struct AccountStoreTests {
   func hiddenInvestmentAccounts() async throws {
     let visible = Account(
       name: "Visible", type: .investment,
-      balance: MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument))
+      balance: InstrumentAmount(
+        quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
     let hidden = Account(
       name: "Hidden", type: .investment,
-      balance: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument),
+      balance: InstrumentAmount(
+        quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
       isHidden: true)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [visible, hidden], in: container)

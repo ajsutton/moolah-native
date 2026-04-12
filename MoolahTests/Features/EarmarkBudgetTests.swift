@@ -30,7 +30,8 @@ struct EarmarkBudgetTests {
     let items = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 80000, currency: Instrument.defaultTestInstrument))
+        amount: InstrumentAmount(
+          quantity: Decimal(80000) / 100, instrument: Instrument.defaultTestInstrument))
     ]
     let (store, _) = try await makeStore(
       earmarks: [Earmark(id: earmarkId, name: "Holiday")],
@@ -41,7 +42,7 @@ struct EarmarkBudgetTests {
 
     #expect(store.budgetItems.count == 1)
     #expect(store.budgetItems.first?.categoryId == catId)
-    #expect(store.budgetItems.first?.amount.cents == 80000)
+    #expect(store.budgetItems.first?.amount.quantity == Decimal(80000) / 100)
   }
 
   @Test func testLoadBudgetHandlesError() async throws {
@@ -66,12 +67,14 @@ struct EarmarkBudgetTests {
         earmark1Id: [
           EarmarkBudgetItem(
             categoryId: cat1Id,
-            amount: MonetaryAmount(cents: 80000, currency: Instrument.defaultTestInstrument))
+            amount: InstrumentAmount(
+              quantity: Decimal(80000) / 100, instrument: Instrument.defaultTestInstrument))
         ],
         earmark2Id: [
           EarmarkBudgetItem(
             categoryId: cat2Id,
-            amount: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument))
+            amount: InstrumentAmount(
+              quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
         ],
       ]
     )
@@ -93,7 +96,8 @@ struct EarmarkBudgetTests {
     let items = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 80000, currency: Instrument.defaultTestInstrument))
+        amount: InstrumentAmount(
+          quantity: Decimal(80000) / 100, instrument: Instrument.defaultTestInstrument))
     ]
     let (store, backend) = try await makeStore(
       earmarks: [Earmark(id: earmarkId, name: "Holiday")],
@@ -104,14 +108,15 @@ struct EarmarkBudgetTests {
     await store.updateBudgetItem(
       earmarkId: earmarkId,
       categoryId: catId,
-      amount: MonetaryAmount(cents: 120000, currency: Instrument.defaultTestInstrument)
+      amount: InstrumentAmount(
+        quantity: Decimal(120000) / 100, instrument: Instrument.defaultTestInstrument)
     )
 
-    #expect(store.budgetItems.first?.amount.cents == 120000)
+    #expect(store.budgetItems.first?.amount.quantity == Decimal(120000) / 100)
 
     // Verify repository state
     let persisted = try await backend.earmarks.fetchBudget(earmarkId: earmarkId)
-    #expect(persisted.first?.amount.cents == 120000)
+    #expect(persisted.first?.amount.quantity == Decimal(120000) / 100)
   }
 
   // MARK: - addBudgetItem
@@ -127,7 +132,8 @@ struct EarmarkBudgetTests {
     await store.addBudgetItem(
       earmarkId: earmarkId,
       categoryId: catId,
-      amount: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument)
+      amount: InstrumentAmount(
+        quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument)
     )
 
     #expect(store.budgetItems.count == 1)
@@ -144,7 +150,8 @@ struct EarmarkBudgetTests {
         earmarkId: [
           EarmarkBudgetItem(
             categoryId: cat1Id,
-            amount: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument))
+            amount: InstrumentAmount(
+              quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
         ]
       ]
     )
@@ -153,7 +160,8 @@ struct EarmarkBudgetTests {
     await store.addBudgetItem(
       earmarkId: earmarkId,
       categoryId: cat2Id,
-      amount: MonetaryAmount(cents: 30000, currency: Instrument.defaultTestInstrument)
+      amount: InstrumentAmount(
+        quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument)
     )
 
     let persisted = try await backend.earmarks.fetchBudget(earmarkId: earmarkId)
@@ -171,7 +179,8 @@ struct EarmarkBudgetTests {
         earmarkId: [
           EarmarkBudgetItem(
             categoryId: catId,
-            amount: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument))
+            amount: InstrumentAmount(
+              quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
         ]
       ]
     )
@@ -195,10 +204,12 @@ struct BudgetLineItemMergeTests {
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 80000, currency: Instrument.defaultTestInstrument))
+        amount: InstrumentAmount(
+          quantity: Decimal(80000) / 100, instrument: Instrument.defaultTestInstrument))
     ]
     let categoryBalances: [UUID: InstrumentAmount] = [
-      catId: MonetaryAmount(cents: -50000, currency: Instrument.defaultTestInstrument)
+      catId: InstrumentAmount(
+        quantity: Decimal(-50000) / 100, instrument: Instrument.defaultTestInstrument)
     ]
 
     let result = BudgetLineItem.buildLineItems(
@@ -209,9 +220,9 @@ struct BudgetLineItemMergeTests {
 
     #expect(result.count == 1)
     #expect(result.first?.categoryName == "Flights")
-    #expect(result.first?.actual.cents == -50000)
-    #expect(result.first?.budgeted.cents == 80000)
-    #expect(result.first?.remaining.cents == 30000)
+    #expect(result.first?.actual.quantity == Decimal(-50000) / 100)
+    #expect(result.first?.budgeted.quantity == Decimal(80000) / 100)
+    #expect(result.first?.remaining.quantity == Decimal(30000) / 100)
   }
 
   @Test func testMergeIncludesBudgetOnlyCategories() {
@@ -220,7 +231,8 @@ struct BudgetLineItemMergeTests {
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 30000, currency: Instrument.defaultTestInstrument))
+        amount: InstrumentAmount(
+          quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument))
     ]
     let categoryBalances: [UUID: InstrumentAmount] = [:]
 
@@ -231,8 +243,8 @@ struct BudgetLineItemMergeTests {
     )
 
     #expect(result.count == 1)
-    #expect(result.first?.actual.cents == 0)
-    #expect(result.first?.remaining.cents == 30000)
+    #expect(result.first?.actual.quantity == Decimal(0))
+    #expect(result.first?.remaining.quantity == Decimal(30000) / 100)
   }
 
   @Test func testMergeIncludesActualOnlyCategories() {
@@ -240,7 +252,8 @@ struct BudgetLineItemMergeTests {
     let categories = Categories(from: [Category(id: catId, name: "Transport")])
     let budgetItems: [EarmarkBudgetItem] = []
     let categoryBalances: [UUID: InstrumentAmount] = [
-      catId: MonetaryAmount(cents: -20000, currency: Instrument.defaultTestInstrument)
+      catId: InstrumentAmount(
+        quantity: Decimal(-20000) / 100, instrument: Instrument.defaultTestInstrument)
     ]
 
     let result = BudgetLineItem.buildLineItems(
@@ -250,8 +263,8 @@ struct BudgetLineItemMergeTests {
     )
 
     #expect(result.count == 1)
-    #expect(result.first?.budgeted.cents == 0)
-    #expect(result.first?.remaining.cents == -20000)
+    #expect(result.first?.budgeted.quantity == Decimal(0))
+    #expect(result.first?.remaining.quantity == Decimal(-20000) / 100)
   }
 
   @Test func testMergeCalculatesRemainingCorrectly() {
@@ -260,11 +273,13 @@ struct BudgetLineItemMergeTests {
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 60000, currency: Instrument.defaultTestInstrument))
+        amount: InstrumentAmount(
+          quantity: Decimal(60000) / 100, instrument: Instrument.defaultTestInstrument))
     ]
     // Spending exceeds budget
     let categoryBalances: [UUID: InstrumentAmount] = [
-      catId: MonetaryAmount(cents: -70000, currency: Instrument.defaultTestInstrument)
+      catId: InstrumentAmount(
+        quantity: Decimal(-70000) / 100, instrument: Instrument.defaultTestInstrument)
     ]
 
     let result = BudgetLineItem.buildLineItems(
@@ -274,7 +289,7 @@ struct BudgetLineItemMergeTests {
     )
 
     // remaining = budget + actual = 60000 + (-70000) = -10000 (over budget)
-    #expect(result.first?.remaining.cents == -10000)
+    #expect(result.first?.remaining.quantity == Decimal(-10000) / 100)
   }
 
   @Test func testMergeSortsByCategoryName() {
@@ -285,13 +300,16 @@ struct BudgetLineItemMergeTests {
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: cat1.id,
-        amount: MonetaryAmount(cents: 10000, currency: Instrument.defaultTestInstrument)),
+        amount: InstrumentAmount(
+          quantity: Decimal(10000) / 100, instrument: Instrument.defaultTestInstrument)),
       EarmarkBudgetItem(
         categoryId: cat2.id,
-        amount: MonetaryAmount(cents: 20000, currency: Instrument.defaultTestInstrument)),
+        amount: InstrumentAmount(
+          quantity: Decimal(20000) / 100, instrument: Instrument.defaultTestInstrument)),
       EarmarkBudgetItem(
         categoryId: cat3.id,
-        amount: MonetaryAmount(cents: 30000, currency: Instrument.defaultTestInstrument)),
+        amount: InstrumentAmount(
+          quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument)),
     ]
 
     let result = BudgetLineItem.buildLineItems(
@@ -308,9 +326,11 @@ struct BudgetLineItemMergeTests {
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 70000, currency: Instrument.defaultTestInstrument))
+        amount: InstrumentAmount(
+          quantity: Decimal(70000) / 100, instrument: Instrument.defaultTestInstrument))
     ]
-    let savingsGoal = MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument)
+    let savingsGoal = InstrumentAmount(
+      quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument)
 
     let unallocated = BudgetLineItem.unallocatedAmount(
       budgetItems: budgetItems,
@@ -318,7 +338,7 @@ struct BudgetLineItemMergeTests {
     )
 
     // 100000 - 70000 = 30000
-    #expect(unallocated?.cents == 30000)
+    #expect(unallocated?.quantity == Decimal(30000) / 100)
   }
 
   @Test func testUnallocatedNilWhenNoSavingsGoal() {
@@ -334,9 +354,11 @@ struct BudgetLineItemMergeTests {
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 120000, currency: Instrument.defaultTestInstrument))
+        amount: InstrumentAmount(
+          quantity: Decimal(120000) / 100, instrument: Instrument.defaultTestInstrument))
     ]
-    let savingsGoal = MonetaryAmount(cents: 100000, currency: Instrument.defaultTestInstrument)
+    let savingsGoal = InstrumentAmount(
+      quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument)
 
     let unallocated = BudgetLineItem.unallocatedAmount(
       budgetItems: budgetItems,
@@ -344,7 +366,7 @@ struct BudgetLineItemMergeTests {
     )
 
     // 100000 - 120000 = -20000 (over-allocated)
-    #expect(unallocated?.cents == -20000)
+    #expect(unallocated?.quantity == Decimal(-20000) / 100)
   }
 
   @Test func testUnknownCategoryNameForDeletedCategory() {
@@ -353,7 +375,8 @@ struct BudgetLineItemMergeTests {
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: catId,
-        amount: MonetaryAmount(cents: 50000, currency: Instrument.defaultTestInstrument))
+        amount: InstrumentAmount(
+          quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
     ]
 
     let result = BudgetLineItem.buildLineItems(
