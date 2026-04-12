@@ -1,7 +1,6 @@
 import Foundation
 import OSLog
 import Observation
-import SwiftData
 
 @Observable
 @MainActor
@@ -25,12 +24,12 @@ final class MigrationCoordinator {
   /// - Parameters:
   ///   - sourceProfile: The remote profile to migrate from
   ///   - backend: The backend for the source profile (provides repositories)
-  ///   - modelContainer: The shared SwiftData model container
+  ///   - containerManager: The per-profile container manager used to create the target store
   ///   - profileStore: The profile store for creating the new profile and renaming the old one
   func migrate(
     sourceProfile: Profile,
     from backend: any BackendProvider,
-    to modelContainer: ModelContainer,
+    to containerManager: ProfileContainerManager,
     profileStore: ProfileStore
   ) async {
     state = .exporting(step: "Starting...")
@@ -67,9 +66,9 @@ final class MigrationCoordinator {
 
       // 3. Import data into the new profile
       state = .importing(step: "saving", progress: 0)
+      let profileContainer = try containerManager.container(for: newProfileId)
       let importer = CloudKitDataImporter(
-        modelContainer: modelContainer,
-        profileId: newProfileId,
+        modelContainer: profileContainer,
         currencyCode: sourceProfile.currencyCode
       )
       let result: ImportResult
@@ -78,6 +77,7 @@ final class MigrationCoordinator {
       } catch {
         // Import failed — clean up the partially created profile
         profileStore.removeProfile(newProfileId)
+        containerManager.deleteStore(for: newProfileId)
         throw error
       }
 
@@ -86,8 +86,7 @@ final class MigrationCoordinator {
       let verifier = MigrationVerifier()
       let verification = try await verifier.verify(
         exported: exported,
-        modelContainer: modelContainer,
-        profileId: newProfileId
+        modelContainer: profileContainer
       )
 
       // Log verification results
@@ -126,8 +125,13 @@ final class MigrationCoordinator {
   }
 
   /// Deletes a failed migration's profile and resets state.
-  func deleteFailedMigration(profileId: UUID, profileStore: ProfileStore) {
+  func deleteFailedMigration(
+    profileId: UUID,
+    profileStore: ProfileStore,
+    containerManager: ProfileContainerManager
+  ) {
     profileStore.removeProfile(profileId)
+    containerManager.deleteStore(for: profileId)
     state = .idle
   }
 }

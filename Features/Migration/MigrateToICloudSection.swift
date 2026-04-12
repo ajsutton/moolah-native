@@ -1,4 +1,3 @@
-import SwiftData
 import SwiftUI
 
 /// Shared section shown in Moolah and Custom Server profile settings.
@@ -7,8 +6,6 @@ struct MigrateToICloudSection: View {
   let profile: Profile
   let session: ProfileSession
   @Binding var showMigration: Bool
-
-  @Environment(\.modelContext) private var modelContext
 
   var body: some View {
     Section {
@@ -23,8 +20,7 @@ struct MigrateToICloudSection: View {
     .sheet(isPresented: $showMigration) {
       MigrationView(
         sourceProfile: profile,
-        backend: session.backend,
-        modelContainer: modelContext.container
+        backend: session.backend
       )
     }
   }

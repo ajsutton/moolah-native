@@ -27,27 +27,16 @@ struct MigrationVerifier {
 
   func verify(
     exported: ExportedData,
-    modelContainer: ModelContainer,
-    profileId: UUID
+    modelContainer: ModelContainer
   ) async throws -> VerificationResult {
     let context = ModelContext(modelContainer)
 
-    // 1. Record counts (scoped to the new profile's profileId)
-    let accountDescriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.profileId == profileId }
-    )
-    let categoryDescriptor = FetchDescriptor<CategoryRecord>(
-      predicate: #Predicate { $0.profileId == profileId }
-    )
-    let earmarkDescriptor = FetchDescriptor<EarmarkRecord>(
-      predicate: #Predicate { $0.profileId == profileId }
-    )
-    let txnDescriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate { $0.profileId == profileId }
-    )
-    let investmentDescriptor = FetchDescriptor<InvestmentValueRecord>(
-      predicate: #Predicate { $0.profileId == profileId }
-    )
+    // 1. Record counts (store is profile-scoped, no predicate needed)
+    let accountDescriptor = FetchDescriptor<AccountRecord>()
+    let categoryDescriptor = FetchDescriptor<CategoryRecord>()
+    let earmarkDescriptor = FetchDescriptor<EarmarkRecord>()
+    let txnDescriptor = FetchDescriptor<TransactionRecord>()
+    let investmentDescriptor = FetchDescriptor<InvestmentValueRecord>()
 
     let accountCount = try context.fetchCount(accountDescriptor)
     let categoryCount = try context.fetchCount(categoryDescriptor)
