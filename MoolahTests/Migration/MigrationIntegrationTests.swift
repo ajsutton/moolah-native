@@ -14,7 +14,7 @@ struct MigrationIntegrationTests {
   /// Account balances are set to match the sum of their non-scheduled transactions,
   /// matching server behavior where balances are computed from transactions.
   private func makeSeededBackend() async throws -> CloudKitBackend {
-    let (backend, _, _) = try TestBackend.create(currency: currency)
+    let (backend, _) = try TestBackend.create(currency: currency)
 
     // Accounts — set balance to match transaction totals below
     // Checking: +100,000 - 2,500 = 97,500
@@ -70,7 +70,6 @@ struct MigrationIntegrationTests {
   func fullMigration() async throws {
     let backend = try await makeSeededBackend()
     let container = try TestModelContainer.create()
-    let profileId = UUID()
 
     // 1. Export
     let exporter = ServerDataExporter(
@@ -85,7 +84,6 @@ struct MigrationIntegrationTests {
     // 2. Import
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      profileId: profileId,
       currencyCode: currency.code
     )
     let result = try importer.importData(exported)
@@ -99,8 +97,7 @@ struct MigrationIntegrationTests {
     let verifier = MigrationVerifier()
     let verification = try await verifier.verify(
       exported: exported,
-      modelContainer: container,
-      profileId: profileId
+      modelContainer: container
     )
 
     #expect(verification.countMatch == true)
@@ -109,7 +106,6 @@ struct MigrationIntegrationTests {
     // 4. Read back through CloudKit repositories and compare
     let cloudBackend = CloudKitBackend(
       modelContainer: container,
-      profileId: profileId,
       currency: currency,
       profileLabel: "Test"
     )
@@ -139,7 +135,6 @@ struct MigrationIntegrationTests {
   func preservesCategoryHierarchy() async throws {
     let backend = try await makeSeededBackend()
     let container = try TestModelContainer.create()
-    let profileId = UUID()
 
     let exporter = ServerDataExporter(
       accountRepo: backend.accounts,
@@ -152,7 +147,6 @@ struct MigrationIntegrationTests {
 
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      profileId: profileId,
       currencyCode: currency.code
     )
     _ = try importer.importData(exported)
@@ -160,7 +154,6 @@ struct MigrationIntegrationTests {
     // Read back and verify hierarchy
     let cloudBackend = CloudKitBackend(
       modelContainer: container,
-      profileId: profileId,
       currency: currency,
       profileLabel: "Test"
     )
@@ -177,7 +170,6 @@ struct MigrationIntegrationTests {
   func preservesEarmarkBudgets() async throws {
     let backend = try await makeSeededBackend()
     let container = try TestModelContainer.create()
-    let profileId = UUID()
 
     let exporter = ServerDataExporter(
       accountRepo: backend.accounts,
@@ -190,7 +182,6 @@ struct MigrationIntegrationTests {
 
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      profileId: profileId,
       currencyCode: currency.code
     )
     _ = try importer.importData(exported)
@@ -198,7 +189,6 @@ struct MigrationIntegrationTests {
     // Read back and verify budgets
     let cloudBackend = CloudKitBackend(
       modelContainer: container,
-      profileId: profileId,
       currency: currency,
       profileLabel: "Test"
     )

@@ -8,16 +8,16 @@ import SwiftData
 @MainActor
 final class SessionManager {
   private(set) var sessions: [UUID: ProfileSession] = [:]
-  let modelContainer: ModelContainer
+  let containerManager: ProfileContainerManager
 
-  init(modelContainer: ModelContainer) {
-    self.modelContainer = modelContainer
+  init(containerManager: ProfileContainerManager) {
+    self.containerManager = containerManager
   }
 
   /// Returns the existing session for a profile, or creates one.
   func session(for profile: Profile) -> ProfileSession {
     if let existing = sessions[profile.id] { return existing }
-    let session = ProfileSession(profile: profile, modelContainer: modelContainer)
+    let session = ProfileSession(profile: profile, containerManager: containerManager)
     sessions[profile.id] = session
     return session
   }
@@ -30,6 +30,6 @@ final class SessionManager {
   /// Replaces the session for a profile with a fresh instance
   /// (e.g. when the profile's server URL changes).
   func rebuildSession(for profile: Profile) {
-    sessions[profile.id] = ProfileSession(profile: profile, modelContainer: modelContainer)
+    sessions[profile.id] = ProfileSession(profile: profile, containerManager: containerManager)
   }
 }

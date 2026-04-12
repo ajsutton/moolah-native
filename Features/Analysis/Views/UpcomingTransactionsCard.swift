@@ -210,7 +210,7 @@ private struct SimpleTransactionRow: View {
 }
 
 #Preview {
-  let (backend, _, _) = PreviewBackend.create()
+  let (backend, _) = PreviewBackend.create()
   let store = TransactionStore(repository: backend.transactions)
 
   UpcomingTransactionsCard(

@@ -115,14 +115,13 @@ private func makeCloudKitEarmarkRepository(
   currency: Currency = .defaultTestCurrency
 ) -> CloudKitEarmarkRepository {
   let container = try! TestModelContainer.create()
-  let profileId = UUID()
   let repo = CloudKitEarmarkRepository(
-    modelContainer: container, profileId: profileId, currency: currency)
+    modelContainer: container, currency: currency)
 
   if !initialEarmarks.isEmpty {
     let context = ModelContext(container)
     for earmark in initialEarmarks {
-      context.insert(EarmarkRecord.from(earmark, profileId: profileId, currencyCode: currency.code))
+      context.insert(EarmarkRecord.from(earmark, currencyCode: currency.code))
     }
     try! context.save()
   }

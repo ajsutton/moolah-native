@@ -183,20 +183,18 @@ private func makeCloudKitAccountRepository(
   initialAccounts: [Account] = []
 ) -> CloudKitAccountRepository {
   let container = try! TestModelContainer.create()
-  let profileId = UUID()
   let currency = Currency.defaultTestCurrency
   let repo = CloudKitAccountRepository(
-    modelContainer: container, profileId: profileId, currency: currency)
+    modelContainer: container, currency: currency)
 
   if !initialAccounts.isEmpty {
     let context = ModelContext(container)
     for account in initialAccounts {
-      let record = AccountRecord.from(account, profileId: profileId, currencyCode: currency.code)
+      let record = AccountRecord.from(account, currencyCode: currency.code)
       context.insert(record)
       // If account has a non-zero balance, create an opening balance transaction
       if account.balance.cents != 0 {
         let txn = TransactionRecord(
-          profileId: profileId,
           type: TransactionType.openingBalance.rawValue,
           date: Date(),
           accountId: account.id,

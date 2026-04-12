@@ -76,7 +76,7 @@ private struct TestAuthBackend: BackendProvider {
   let investments: any InvestmentRepository
 
   init(auth: any AuthProvider) throws {
-    let (backend, _, _) = try TestBackend.create()
+    let (backend, _) = try TestBackend.create()
     self.auth = auth
     self.accounts = backend.accounts
     self.transactions = backend.transactions

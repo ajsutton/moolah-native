@@ -305,9 +305,9 @@ struct ProfileStoreTests {
     // Simulate a previous session that saved a cloud profile as active
     defaults.set(cloudProfileID.uuidString, forKey: "com.moolah.activeProfileID")
 
-    // Create store with empty ModelContainer (no ProfileRecords stored yet)
-    let container = try TestModelContainer.create()
-    let store = ProfileStore(defaults: defaults, modelContainer: container)
+    // Create store with empty ProfileContainerManager (no ProfileRecords stored yet)
+    let containerManager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
 
     // The active profile ID should be preserved even though no cloud profiles loaded
     #expect(store.activeProfileID == cloudProfileID)
@@ -317,8 +317,8 @@ struct ProfileStoreTests {
   @Test("remote change resets activeProfileID when cloud profile was deleted")
   func remoteChangeResetsActiveProfileID() throws {
     let defaults = makeDefaults()
-    let container = try TestModelContainer.create()
-    let store = ProfileStore(defaults: defaults, modelContainer: container)
+    let containerManager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
 
     // Add a cloud profile and a remote fallback
     let remoteProfile = makeProfile(label: "Remote")
@@ -335,7 +335,7 @@ struct ProfileStoreTests {
     #expect(store.activeProfileID == cloudProfile.id)
 
     // Delete the cloud profile record from SwiftData directly (simulates remote deletion)
-    let context = ModelContext(container)
+    let context = ModelContext(containerManager.indexContainer)
     let profileId = cloudProfile.id
     let descriptor = FetchDescriptor<ProfileRecord>(
       predicate: #Predicate { $0.id == profileId }

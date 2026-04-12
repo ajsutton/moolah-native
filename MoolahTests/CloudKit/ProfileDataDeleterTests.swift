@@ -6,57 +6,47 @@ import Testing
 
 @Suite("ProfileDataDeleter")
 struct ProfileDataDeleterTests {
-  @Test("deletes all data for a profile without affecting other profiles")
+  @Test("deletes ProfileRecord from index store")
   @MainActor
-  func testDeletesOnlyTargetProfile() throws {
-    let container = try TestModelContainer.create()
-    let context = container.mainContext
+  func testDeleteProfileRecord() throws {
+    let schema = Schema([ProfileRecord.self])
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try ModelContainer(for: schema, configurations: [config])
+    let context = ModelContext(container)
+
+    let profileId = UUID()
+    let record = ProfileRecord(id: profileId, label: "Test", currencyCode: "AUD")
+    context.insert(record)
+    try context.save()
+
+    let deleter = ProfileDataDeleter(modelContext: context)
+    deleter.deleteProfileRecord(for: profileId)
+
+    let descriptor = FetchDescriptor<ProfileRecord>()
+    let remaining = try context.fetch(descriptor)
+    #expect(remaining.isEmpty)
+  }
+
+  @Test("does not delete other profiles")
+  @MainActor
+  func testDeleteOnlyTargetProfile() throws {
+    let schema = Schema([ProfileRecord.self])
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try ModelContainer(for: schema, configurations: [config])
+    let context = ModelContext(container)
 
     let profileA = UUID()
     let profileB = UUID()
-
-    // Seed data for both profiles
-    context.insert(CategoryRecord(profileId: profileA, name: "Cat A"))
-    context.insert(CategoryRecord(profileId: profileB, name: "Cat B"))
-    context.insert(
-      AccountRecord(
-        profileId: profileA, name: "Account A", type: "bank", currencyCode: "AUD"))
-    context.insert(
-      AccountRecord(
-        profileId: profileB, name: "Account B", type: "bank", currencyCode: "AUD"))
-    context.insert(
-      TransactionRecord(
-        profileId: profileA, type: "expense", date: Date(), amount: -500, currencyCode: "AUD"))
-    context.insert(
-      TransactionRecord(
-        profileId: profileB, type: "income", date: Date(), amount: 1000, currencyCode: "AUD"))
-    context.insert(
-      EarmarkRecord(
-        profileId: profileA, name: "Earmark A", currencyCode: "AUD"))
-    context.insert(
-      EarmarkRecord(
-        profileId: profileB, name: "Earmark B", currencyCode: "AUD"))
+    context.insert(ProfileRecord(id: profileA, label: "A", currencyCode: "AUD"))
+    context.insert(ProfileRecord(id: profileB, label: "B", currencyCode: "AUD"))
     try context.save()
 
-    // Delete profile A's data
     let deleter = ProfileDataDeleter(modelContext: context)
-    deleter.deleteAllData(for: profileA)
+    deleter.deleteProfileRecord(for: profileA)
 
-    // Profile B's data should remain
-    let categories = try context.fetch(FetchDescriptor<CategoryRecord>())
-    #expect(categories.count == 1)
-    #expect(categories[0].name == "Cat B")
-
-    let accounts = try context.fetch(FetchDescriptor<AccountRecord>())
-    #expect(accounts.count == 1)
-    #expect(accounts[0].name == "Account B")
-
-    let transactions = try context.fetch(FetchDescriptor<TransactionRecord>())
-    #expect(transactions.count == 1)
-    #expect(transactions[0].amount == 1000)
-
-    let earmarks = try context.fetch(FetchDescriptor<EarmarkRecord>())
-    #expect(earmarks.count == 1)
-    #expect(earmarks[0].name == "Earmark B")
+    let descriptor = FetchDescriptor<ProfileRecord>()
+    let remaining = try context.fetch(descriptor)
+    #expect(remaining.count == 1)
+    #expect(remaining[0].label == "B")
   }
 }

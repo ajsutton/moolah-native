@@ -22,13 +22,11 @@ struct ImportResult: Sendable {
 @MainActor
 struct CloudKitDataImporter {
   private let modelContainer: ModelContainer
-  private let profileId: UUID
   private let currencyCode: String
   private let logger = Logger(subsystem: "com.moolah.app", category: "Migration")
 
-  init(modelContainer: ModelContainer, profileId: UUID, currencyCode: String) {
+  init(modelContainer: ModelContainer, currencyCode: String) {
     self.modelContainer = modelContainer
-    self.profileId = profileId
     self.currencyCode = currencyCode
   }
 
@@ -40,7 +38,6 @@ struct CloudKitDataImporter {
     for category in data.categories {
       let record = CategoryRecord(
         id: category.id,
-        profileId: profileId,
         name: category.name,
         parentId: category.parentId
       )
@@ -51,7 +48,6 @@ struct CloudKitDataImporter {
     for account in data.accounts {
       let record = AccountRecord(
         id: account.id,
-        profileId: profileId,
         name: account.name,
         type: account.type.rawValue,
         position: account.position,
@@ -65,7 +61,6 @@ struct CloudKitDataImporter {
     for earmark in data.earmarks {
       let record = EarmarkRecord(
         id: earmark.id,
-        profileId: profileId,
         name: earmark.name,
         position: earmark.position,
         isHidden: earmark.isHidden,
@@ -83,7 +78,6 @@ struct CloudKitDataImporter {
       for item in items {
         let record = EarmarkBudgetItemRecord(
           id: item.id,
-          profileId: profileId,
           earmarkId: earmarkId,
           categoryId: item.categoryId,
           amount: item.amount.cents,
@@ -98,7 +92,6 @@ struct CloudKitDataImporter {
     for txn in data.transactions {
       let record = TransactionRecord(
         id: txn.id,
-        profileId: profileId,
         type: txn.type.rawValue,
         date: txn.date,
         accountId: txn.accountId,
@@ -121,7 +114,6 @@ struct CloudKitDataImporter {
       for value in values {
         let record = InvestmentValueRecord(
           id: UUID(),
-          profileId: profileId,
           accountId: accountId,
           date: value.date,
           value: value.value.cents,
@@ -151,16 +143,11 @@ struct CloudKitDataImporter {
     try context.save()
     logger.info("SwiftData save completed, context.hasChanges=\(context.hasChanges)")
 
-    // Verify with and without predicate
+    // Verify record count
     let allDescriptor = FetchDescriptor<AccountRecord>()
     let allCount = (try? context.fetchCount(allDescriptor)) ?? -1
-    let profileId = self.profileId
-    let filteredDescriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.profileId == profileId }
-    )
-    let filteredCount = (try? context.fetchCount(filteredDescriptor)) ?? -1
     logger.info(
-      "Post-save: ALL accounts=\(allCount), filtered by profileId=\(filteredCount), profileId=\(profileId)"
+      "Post-save: ALL accounts=\(allCount)"
     )
 
     // Check store URL

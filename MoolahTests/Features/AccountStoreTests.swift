@@ -11,8 +11,8 @@ struct AccountStoreTests {
     let account = Account(
       name: "Checking", type: .bank,
       balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(accounts: [account], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: container)
     let store = AccountStore(repository: backend.accounts)
 
     await store.load()
@@ -28,8 +28,8 @@ struct AccountStoreTests {
     let a2 = Account(
       name: "A2", type: .asset,
       balance: MonetaryAmount(cents: 20000, currency: Currency.defaultTestCurrency), position: 1)
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(accounts: [a1, a2], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [a1, a2], in: container)
     let store = AccountStore(repository: backend.accounts)
 
     await store.load()
@@ -58,8 +58,8 @@ struct AccountStoreTests {
         balance: MonetaryAmount(cents: 100_000_000, currency: Currency.defaultTestCurrency),
         isHidden: true),
     ]
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(accounts: accounts, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: accounts, in: container)
     let store = AccountStore(repository: backend.accounts)
 
     await store.load()
@@ -83,8 +83,8 @@ struct AccountStoreTests {
         balance: MonetaryAmount(cents: 500000, currency: Currency.defaultTestCurrency)),  // 5000.00
       // Current Total = 6000.00
     ]
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(accounts: accounts, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: accounts, in: container)
     let store = AccountStore(repository: backend.accounts)
 
     await store.load()
@@ -98,13 +98,13 @@ struct AccountStoreTests {
 
   @Test func testCreateExpenseReducesAccountBalance() async throws {
     let acctId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: acctId, name: "Checking", type: .bank,
           balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
-      ], in: container, profileId: profileId)
+      ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
@@ -120,13 +120,13 @@ struct AccountStoreTests {
 
   @Test func testCreateIncomeIncreasesAccountBalance() async throws {
     let acctId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: acctId, name: "Checking", type: .bank,
           balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
-      ], in: container, profileId: profileId)
+      ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
@@ -142,13 +142,13 @@ struct AccountStoreTests {
 
   @Test func testDeleteRevertsAccountBalance() async throws {
     let acctId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: acctId, name: "Checking", type: .bank,
           balance: MonetaryAmount(cents: 95000, currency: Currency.defaultTestCurrency))
-      ], in: container, profileId: profileId)
+      ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
@@ -165,13 +165,13 @@ struct AccountStoreTests {
 
   @Test func testUpdateAdjustsAccountBalance() async throws {
     let acctId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: acctId, name: "Checking", type: .bank,
           balance: MonetaryAmount(cents: 95000, currency: Currency.defaultTestCurrency))
-      ], in: container, profileId: profileId)
+      ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
@@ -192,7 +192,7 @@ struct AccountStoreTests {
   @Test func testTransferUpdatesBothAccounts() async throws {
     let checkingId = UUID()
     let savingsId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
@@ -201,7 +201,7 @@ struct AccountStoreTests {
         Account(
           id: savingsId, name: "Savings", type: .bank,
           balance: MonetaryAmount(cents: 200000, currency: Currency.defaultTestCurrency)),
-      ], in: container, profileId: profileId)
+      ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
@@ -219,7 +219,7 @@ struct AccountStoreTests {
   @Test func testDeleteTransferRevertsBothAccounts() async throws {
     let checkingId = UUID()
     let savingsId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
@@ -228,7 +228,7 @@ struct AccountStoreTests {
         Account(
           id: savingsId, name: "Savings", type: .bank,
           balance: MonetaryAmount(cents: 210000, currency: Currency.defaultTestCurrency)),
-      ], in: container, profileId: profileId)
+      ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
@@ -244,13 +244,13 @@ struct AccountStoreTests {
 
   @Test func testTotalsUpdateAfterDelta() async throws {
     let checkingId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: checkingId, name: "Checking", type: .bank,
           balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
-      ], in: container, profileId: profileId)
+      ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
@@ -279,8 +279,8 @@ struct AccountStoreTests {
       name: "Hidden", type: .bank,
       balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
       isHidden: true)
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(accounts: [visible, hidden], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [visible, hidden], in: container)
     let store = AccountStore(repository: backend.accounts)
 
     await store.load()
@@ -298,8 +298,8 @@ struct AccountStoreTests {
       name: "Hidden", type: .bank,
       balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
       isHidden: true)
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(accounts: [visible, hidden], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [visible, hidden], in: container)
     let store = AccountStore(repository: backend.accounts)
 
     await store.load()
@@ -317,8 +317,8 @@ struct AccountStoreTests {
       name: "Hidden", type: .investment,
       balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
       isHidden: true)
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(accounts: [visible, hidden], in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [visible, hidden], in: container)
     let store = AccountStore(repository: backend.accounts)
 
     await store.load()

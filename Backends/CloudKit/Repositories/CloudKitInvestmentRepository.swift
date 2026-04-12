@@ -3,12 +3,10 @@ import SwiftData
 
 final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
-  private let profileId: UUID
   private let currency: Currency
 
-  init(modelContainer: ModelContainer, profileId: UUID, currency: Currency) {
+  init(modelContainer: ModelContainer, currency: Currency) {
     self.modelContainer = modelContainer
-    self.profileId = profileId
     self.currency = currency
   }
 
@@ -18,9 +16,8 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
   }
 
   func fetchValues(accountId: UUID, page: Int, pageSize: Int) async throws -> InvestmentValuePage {
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<InvestmentValueRecord>(
-      predicate: #Predicate { $0.profileId == profileId && $0.accountId == accountId },
+      predicate: #Predicate { $0.accountId == accountId },
       sortBy: [SortDescriptor(\.date, order: .reverse)]
     )
     return try await MainActor.run {
@@ -36,10 +33,9 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
   }
 
   func setValue(accountId: UUID, date: Date, value: MonetaryAmount) async throws {
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<InvestmentValueRecord>(
       predicate: #Predicate {
-        $0.profileId == profileId && $0.accountId == accountId && $0.date == date
+        $0.accountId == accountId && $0.date == date
       }
     )
 
@@ -49,7 +45,7 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
         existing.currencyCode = value.currency.code
       } else {
         let record = InvestmentValueRecord(
-          profileId: profileId, accountId: accountId, date: date,
+          accountId: accountId, date: date,
           value: value.cents, currencyCode: value.currency.code)
         context.insert(record)
       }
@@ -58,10 +54,9 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
   }
 
   func removeValue(accountId: UUID, date: Date) async throws {
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<InvestmentValueRecord>(
       predicate: #Predicate {
-        $0.profileId == profileId && $0.accountId == accountId && $0.date == date
+        $0.accountId == accountId && $0.date == date
       }
     )
 
@@ -75,9 +70,8 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
   }
 
   func fetchDailyBalances(accountId: UUID) async throws -> [AccountDailyBalance] {
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<InvestmentValueRecord>(
-      predicate: #Predicate { $0.profileId == profileId && $0.accountId == accountId },
+      predicate: #Predicate { $0.accountId == accountId },
       sortBy: [SortDescriptor(\.date)]
     )
     return try await MainActor.run {

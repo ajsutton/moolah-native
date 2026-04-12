@@ -64,7 +64,7 @@ struct ShowHiddenCommands: Commands {
 @main
 @MainActor
 struct MoolahApp: App {
-  private let container: ModelContainer
+  private let containerManager: ProfileContainerManager
   @State private var profileStore: ProfileStore
   #if os(macOS)
     @State private var sessionManager: SessionManager
@@ -74,8 +74,15 @@ struct MoolahApp: App {
 
   init() {
     do {
-      let schema = Schema([
-        ProfileRecord.self,
+      let profileSchema = Schema([ProfileRecord.self])
+      let profileStoreURL = URL.applicationSupportDirectory.appending(path: "Moolah.store")
+      let profileConfig = ModelConfiguration(
+        url: profileStoreURL,
+        cloudKitDatabase: .automatic
+      )
+      let indexContainer = try ModelContainer(for: profileSchema, configurations: [profileConfig])
+
+      let dataSchema = Schema([
         AccountRecord.self,
         TransactionRecord.self,
         CategoryRecord.self,
@@ -83,21 +90,21 @@ struct MoolahApp: App {
         EarmarkBudgetItemRecord.self,
         InvestmentValueRecord.self,
       ])
-      let storeURL = URL.applicationSupportDirectory.appending(path: "Moolah.store")
-      let config = ModelConfiguration(
-        url: storeURL,
-        cloudKitDatabase: .automatic
+
+      let manager = ProfileContainerManager(
+        indexContainer: indexContainer,
+        dataSchema: dataSchema
       )
-      container = try ModelContainer(for: schema, configurations: [config])
+      containerManager = manager
     } catch {
       fatalError("Failed to initialize ModelContainer: \(error)")
     }
 
-    let store = ProfileStore(validator: RemoteServerValidator(), modelContainer: container)
+    let store = ProfileStore(validator: RemoteServerValidator(), containerManager: containerManager)
     _profileStore = State(initialValue: store)
 
     #if os(macOS)
-      _sessionManager = State(initialValue: SessionManager(modelContainer: container))
+      _sessionManager = State(initialValue: SessionManager(containerManager: containerManager))
     #endif
   }
 
@@ -108,7 +115,7 @@ struct MoolahApp: App {
           .environment(profileStore)
           .environment(sessionManager)
       }
-      .modelContainer(container)
+      .modelContainer(containerManager.indexContainer)
       .commands {
         ProfileCommands(profileStore: profileStore, sessionManager: sessionManager)
         NewTransactionCommands()
@@ -121,14 +128,15 @@ struct MoolahApp: App {
         SettingsView()
           .environment(profileStore)
           .environment(sessionManager)
-          .modelContainer(container)
+          .modelContainer(containerManager.indexContainer)
       }
     #else
       WindowGroup {
         ProfileRootView(activeSession: $activeSession)
           .environment(profileStore)
+          .environment(containerManager)
       }
-      .modelContainer(container)
+      .modelContainer(containerManager.indexContainer)
       .commands {
         NewTransactionCommands()
         NewEarmarkCommands()

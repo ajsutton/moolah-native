@@ -206,21 +206,20 @@ private struct CloudKitCategoryTestBackend: BackendProvider, @unchecked Sendable
 
   init() {
     let container = try! TestModelContainer.create()
-    let profileId = UUID()
     let currency = Currency.defaultTestCurrency
     self.auth = InMemoryAuthProvider()
     self.accounts = CloudKitAccountRepository(
-      modelContainer: container, profileId: profileId, currency: currency)
+      modelContainer: container, currency: currency)
     self.transactions = CloudKitTransactionRepository(
-      modelContainer: container, profileId: profileId, currency: currency)
+      modelContainer: container, currency: currency)
     self.categories = CloudKitCategoryRepository(
-      modelContainer: container, profileId: profileId)
+      modelContainer: container)
     self.earmarks = CloudKitEarmarkRepository(
-      modelContainer: container, profileId: profileId, currency: currency)
+      modelContainer: container, currency: currency)
     self.analysis = CloudKitAnalysisRepository(
-      modelContainer: container, profileId: profileId, currency: currency)
+      modelContainer: container, currency: currency)
     self.investments = CloudKitInvestmentRepository(
-      modelContainer: container, profileId: profileId, currency: currency)
+      modelContainer: container, currency: currency)
   }
 }
 
@@ -228,13 +227,12 @@ private func makeCloudKitCategoryRepository(
   initialCategories: [Moolah.Category] = []
 ) -> CloudKitCategoryRepository {
   let container = try! TestModelContainer.create()
-  let profileId = UUID()
-  let repo = CloudKitCategoryRepository(modelContainer: container, profileId: profileId)
+  let repo = CloudKitCategoryRepository(modelContainer: container)
 
   if !initialCategories.isEmpty {
     let context = ModelContext(container)
     for category in initialCategories {
-      context.insert(CategoryRecord.from(category, profileId: profileId))
+      context.insert(CategoryRecord.from(category))
     }
     try! context.save()
   }

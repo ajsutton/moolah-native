@@ -246,7 +246,7 @@ struct TransactionListView: View {
       id: savingsId, name: "Savings", type: .bank,
       balance: MonetaryAmount(cents: 500000, currency: Currency.AUD)),
   ])
-  let (backend, _, _) = PreviewBackend.create()
+  let (backend, _) = PreviewBackend.create()
   let store = TransactionStore(repository: backend.transactions)
 
   NavigationStack {

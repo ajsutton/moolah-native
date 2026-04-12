@@ -23,7 +23,7 @@ struct ServerDataExporterTests {
 
   private func makeBackendWithData() async throws -> CloudKitBackend {
     let currency = Currency.defaultTestCurrency
-    let (backend, _, _) = try TestBackend.create(currency: currency)
+    let (backend, _) = try TestBackend.create(currency: currency)
 
     // Create accounts
     _ = try await backend.accounts.create(
@@ -155,7 +155,7 @@ struct ServerDataExporterTests {
 
   @Test("exports empty data from empty backend")
   func exportEmpty() async throws {
-    let (backend, _, _) = try TestBackend.create()
+    let (backend, _) = try TestBackend.create()
     let exporter = ServerDataExporter(
       accountRepo: backend.accounts,
       categoryRepo: backend.categories,

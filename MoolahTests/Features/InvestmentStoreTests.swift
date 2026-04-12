@@ -25,10 +25,10 @@ struct InvestmentStoreTests {
   @Test("Load values populates values array")
   func testLoadValues() async throws {
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       investmentValues: makeValues(accountId: accountId, count: 3), in: container,
-      profileId: profileId)
+    )
     let store = InvestmentStore(repository: backend.investments)
 
     await store.loadValues(accountId: accountId)
@@ -41,10 +41,10 @@ struct InvestmentStoreTests {
   @Test("Load values with reset clears existing values")
   func testLoadValuesReset() async throws {
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       investmentValues: makeValues(accountId: accountId, count: 5), in: container,
-      profileId: profileId)
+    )
     let store = InvestmentStore(repository: backend.investments)
 
     await store.loadValues(accountId: accountId)
@@ -58,7 +58,7 @@ struct InvestmentStoreTests {
   @Test("Set value adds to list and re-sorts")
   func testSetValue() async throws {
     let accountId = UUID()
-    let (backend, _, _) = try TestBackend.create()
+    let (backend, _) = try TestBackend.create()
     let store = InvestmentStore(repository: backend.investments)
 
     let date = makeDate(year: 2024, month: 3, day: 15)
@@ -82,8 +82,8 @@ struct InvestmentStoreTests {
           value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency))
       ]
     ]
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(investmentValues: initialValues, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(investmentValues: initialValues, in: container)
     let store = InvestmentStore(repository: backend.investments)
 
     await store.loadValues(accountId: accountId)
@@ -107,8 +107,8 @@ struct InvestmentStoreTests {
           value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency))
       ]
     ]
-    let (backend, container, profileId) = try TestBackend.create()
-    TestBackend.seed(investmentValues: initialValues, in: container, profileId: profileId)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(investmentValues: initialValues, in: container)
     let store = InvestmentStore(repository: backend.investments)
 
     await store.loadValues(accountId: accountId)
@@ -120,7 +120,7 @@ struct InvestmentStoreTests {
 
   @Test("Remove value handles error gracefully")
   func testRemoveNonExistent() async throws {
-    let (backend, _, _) = try TestBackend.create()
+    let (backend, _) = try TestBackend.create()
     let store = InvestmentStore(repository: backend.investments)
 
     await store.removeValue(accountId: UUID(), date: Date())
@@ -133,7 +133,7 @@ struct InvestmentStoreTests {
   @Test("Load daily balances populates dailyBalances array")
   func testLoadDailyBalances() async throws {
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     let values: [UUID: [InvestmentValue]] = [
       accountId: [
         InvestmentValue(
@@ -144,7 +144,7 @@ struct InvestmentStoreTests {
           value: MonetaryAmount(cents: 200_000, currency: Currency.defaultTestCurrency)),
       ]
     ]
-    TestBackend.seed(investmentValues: values, in: container, profileId: profileId)
+    TestBackend.seed(investmentValues: values, in: container)
 
     let store = InvestmentStore(repository: backend.investments)
     await store.loadDailyBalances(accountId: accountId)
@@ -159,10 +159,10 @@ struct InvestmentStoreTests {
   @Test("Filtered values returns all values when period is .all")
   func testFilteredValuesAll() async throws {
     let accountId = UUID()
-    let (backend, container, profileId) = try TestBackend.create()
+    let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       investmentValues: makeValues(accountId: accountId, count: 3), in: container,
-      profileId: profileId)
+    )
     let store = InvestmentStore(repository: backend.investments)
 
     await store.loadValues(accountId: accountId)

@@ -230,15 +230,13 @@ private func makeCloudKitInvestmentRepository(
   currency: Currency = .defaultTestCurrency
 ) -> CloudKitInvestmentRepository {
   let container = try! TestModelContainer.create()
-  let profileId = UUID()
   let repo = CloudKitInvestmentRepository(
-    modelContainer: container, profileId: profileId, currency: currency)
+    modelContainer: container, currency: currency)
 
   if !dates.isEmpty {
     let context = ModelContext(container)
     for date in dates {
       let record = InvestmentValueRecord(
-        profileId: profileId,
         accountId: accountId,
         date: date,
         value: cents,

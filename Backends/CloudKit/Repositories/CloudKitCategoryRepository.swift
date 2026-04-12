@@ -3,11 +3,9 @@ import SwiftData
 
 final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
-  private let profileId: UUID
 
-  init(modelContainer: ModelContainer, profileId: UUID) {
+  init(modelContainer: ModelContainer) {
     self.modelContainer = modelContainer
-    self.profileId = profileId
   }
 
   @MainActor
@@ -16,9 +14,7 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
   }
 
   func fetchAll() async throws -> [Category] {
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<CategoryRecord>(
-      predicate: #Predicate { $0.profileId == profileId },
       sortBy: [SortDescriptor(\.name)]
     )
     return try await MainActor.run {
@@ -28,7 +24,7 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
   }
 
   func create(_ category: Category) async throws -> Category {
-    let record = CategoryRecord.from(category, profileId: profileId)
+    let record = CategoryRecord.from(category)
     try await MainActor.run {
       context.insert(record)
       try context.save()
@@ -38,9 +34,8 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
 
   func update(_ category: Category) async throws -> Category {
     let categoryId = category.id
-    let profileId = self.profileId
     let descriptor = FetchDescriptor<CategoryRecord>(
-      predicate: #Predicate { $0.id == categoryId && $0.profileId == profileId }
+      predicate: #Predicate { $0.id == categoryId }
     )
     try await MainActor.run {
       guard let record = try context.fetch(descriptor).first else {
@@ -54,11 +49,10 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
   }
 
   func delete(id: UUID, withReplacement replacementId: UUID?) async throws {
-    let profileId = self.profileId
     let targetId = id
 
     let descriptor = FetchDescriptor<CategoryRecord>(
-      predicate: #Predicate { $0.id == targetId && $0.profileId == profileId }
+      predicate: #Predicate { $0.id == targetId }
     )
 
     try await MainActor.run {
@@ -68,7 +62,7 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
 
       // Orphan children (server always sets parent_id = NULL)
       let childDescriptor = FetchDescriptor<CategoryRecord>(
-        predicate: #Predicate { $0.parentId == targetId && $0.profileId == profileId }
+        predicate: #Predicate { $0.parentId == targetId }
       )
       let children = try context.fetch(childDescriptor)
       for child in children {
@@ -87,7 +81,7 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
 
       // Update budget items that reference this category
       let budgetDescriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
-        predicate: #Predicate { $0.categoryId == deletedId && $0.profileId == profileId }
+        predicate: #Predicate { $0.categoryId == deletedId }
       )
       let affectedBudgets = try context.fetch(budgetDescriptor)
       for budget in affectedBudgets {
@@ -97,7 +91,6 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
           let existingDescriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
             predicate: #Predicate {
               $0.earmarkId == budgetEarmarkId && $0.categoryId == replacementId
-                && $0.profileId == profileId
             }
           )
           if try context.fetch(existingDescriptor).first != nil {

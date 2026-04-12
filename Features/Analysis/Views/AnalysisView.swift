@@ -139,7 +139,7 @@ struct ForecastPicker: View {
 }
 
 #Preview {
-  let (backend, _, _) = PreviewBackend.create()
+  let (backend, _) = PreviewBackend.create()
   let accountStore = AccountStore(repository: backend.accounts)
   let categoryStore = CategoryStore(repository: backend.categories)
   let earmarkStore = EarmarkStore(repository: backend.earmarks)

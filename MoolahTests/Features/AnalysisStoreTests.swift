@@ -17,7 +17,7 @@ struct AnalysisStoreFilterPersistenceTests {
 
   @Test("defaults to historyMonths=12 and forecastMonths=1 with no saved values")
   func defaultValues() throws {
-    let (backend, _, _) = try TestBackend.create()
+    let (backend, _) = try TestBackend.create()
     let store = AnalysisStore(
       repository: backend.analysis, defaults: makeDefaults())
     #expect(store.historyMonths == 12)
@@ -28,12 +28,12 @@ struct AnalysisStoreFilterPersistenceTests {
   func historyMonthsPersists() throws {
     let defaults = makeDefaults()
 
-    let (backend1, _, _) = try TestBackend.create()
+    let (backend1, _) = try TestBackend.create()
     let store1 = AnalysisStore(
       repository: backend1.analysis, defaults: defaults)
     store1.historyMonths = 6
 
-    let (backend2, _, _) = try TestBackend.create()
+    let (backend2, _) = try TestBackend.create()
     let store2 = AnalysisStore(
       repository: backend2.analysis, defaults: defaults)
     #expect(store2.historyMonths == 6)
@@ -43,12 +43,12 @@ struct AnalysisStoreFilterPersistenceTests {
   func forecastMonthsPersists() throws {
     let defaults = makeDefaults()
 
-    let (backend1, _, _) = try TestBackend.create()
+    let (backend1, _) = try TestBackend.create()
     let store1 = AnalysisStore(
       repository: backend1.analysis, defaults: defaults)
     store1.forecastMonths = 3
 
-    let (backend2, _, _) = try TestBackend.create()
+    let (backend2, _) = try TestBackend.create()
     let store2 = AnalysisStore(
       repository: backend2.analysis, defaults: defaults)
     #expect(store2.forecastMonths == 3)
@@ -58,12 +58,12 @@ struct AnalysisStoreFilterPersistenceTests {
   func forecastMonthsZeroPersists() throws {
     let defaults = makeDefaults()
 
-    let (backend1, _, _) = try TestBackend.create()
+    let (backend1, _) = try TestBackend.create()
     let store1 = AnalysisStore(
       repository: backend1.analysis, defaults: defaults)
     store1.forecastMonths = 0
 
-    let (backend2, _, _) = try TestBackend.create()
+    let (backend2, _) = try TestBackend.create()
     let store2 = AnalysisStore(
       repository: backend2.analysis, defaults: defaults)
     #expect(store2.forecastMonths == 0)

@@ -20,7 +20,7 @@ final class ProfileSession: Identifiable {
 
   nonisolated var id: UUID { profile.id }
 
-  init(profile: Profile, modelContainer: ModelContainer? = nil) {
+  init(profile: Profile, containerManager: ProfileContainerManager? = nil) {
     self.profile = profile
 
     let backend: BackendProvider
@@ -45,12 +45,12 @@ final class ProfileSession: Identifiable {
       )
 
     case .cloudKit:
-      guard let modelContainer else {
-        fatalError("ModelContainer is required for CloudKit profiles")
+      guard let containerManager else {
+        fatalError("ProfileContainerManager is required for CloudKit profiles")
       }
+      let profileContainer = try! containerManager.container(for: profile.id)
       backend = CloudKitBackend(
-        modelContainer: modelContainer,
-        profileId: profile.id,
+        modelContainer: profileContainer,
         currency: profile.currency,
         profileLabel: profile.label
       )

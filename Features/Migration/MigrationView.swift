@@ -1,13 +1,12 @@
-import SwiftData
 import SwiftUI
 
 /// Migration sheet UI presented when the user taps "Migrate to iCloud" in profile settings.
 struct MigrationView: View {
   let sourceProfile: Profile
   let backend: any BackendProvider
-  let modelContainer: ModelContainer
 
   @Environment(ProfileStore.self) private var profileStore
+  @Environment(ProfileContainerManager.self) private var containerManager
   @Environment(\.dismiss) private var dismiss
   #if os(macOS)
     @Environment(\.openWindow) private var openWindow
@@ -61,7 +60,7 @@ struct MigrationView: View {
           await coordinator.migrate(
             sourceProfile: sourceProfile,
             from: backend,
-            to: modelContainer,
+            to: containerManager,
             profileStore: profileStore
           )
         }
@@ -213,7 +212,8 @@ struct MigrationView: View {
         Button("Delete and Retry") {
           coordinator.deleteFailedMigration(
             profileId: newProfileId,
-            profileStore: profileStore
+            profileStore: profileStore,
+            containerManager: containerManager
           )
         }
         .controlSize(.large)
@@ -254,7 +254,7 @@ struct MigrationView: View {
             await coordinator.migrate(
               sourceProfile: sourceProfile,
               from: backend,
-              to: modelContainer,
+              to: containerManager,
               profileStore: profileStore
             )
           }
