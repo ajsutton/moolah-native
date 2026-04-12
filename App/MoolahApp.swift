@@ -134,8 +134,9 @@ struct MoolahApp: App {
       }
       .modelContainer(containerManager.indexContainer)
       .commands {
-        ProfileCommands(profileStore: profileStore, sessionManager: sessionManager)
-        ExportImportCommands(profileStore: profileStore, containerManager: containerManager)
+        ProfileCommands(
+          profileStore: profileStore, sessionManager: sessionManager,
+          containerManager: containerManager)
         NewTransactionCommands()
         NewEarmarkCommands()
         RefreshCommands()

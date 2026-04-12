@@ -2,28 +2,24 @@
   import SwiftUI
   import UniformTypeIdentifiers
 
-  struct ExportImportCommands: Commands {
+  /// Export/Import buttons for use inside a CommandGroup.
+  struct ExportImportButtons: View {
     let profileStore: ProfileStore
     let containerManager: ProfileContainerManager
+    let session: ProfileSession?
 
-    @FocusedValue(\.activeProfileSession) private var session
-
-    var body: some Commands {
-      CommandGroup(after: .saveItem) {
-        Divider()
-
-        Button("Export Profile\u{2026}") {
-          guard let session else { return }
-          Task { await exportProfile(session: session) }
-        }
-        .keyboardShortcut("e", modifiers: [.command, .shift])
-        .disabled(session == nil)
-
-        Button("Import Profile\u{2026}") {
-          Task { await importProfile() }
-        }
-        .keyboardShortcut("i", modifiers: [.command, .shift])
+    var body: some View {
+      Button("Export Profile\u{2026}") {
+        guard let session else { return }
+        Task { await exportProfile(session: session) }
       }
+      .keyboardShortcut("e", modifiers: [.command, .shift])
+      .disabled(session == nil)
+
+      Button("Import Profile\u{2026}") {
+        Task { await importProfile() }
+      }
+      .keyboardShortcut("i", modifiers: [.command, .shift])
     }
 
     @MainActor

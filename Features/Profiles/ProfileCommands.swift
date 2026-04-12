@@ -1,16 +1,26 @@
 #if os(macOS)
   import SwiftUI
 
-  /// macOS File menu commands for opening profile windows and signing out.
+  /// macOS File menu commands for opening profile windows, import/export, and signing out.
   struct ProfileCommands: Commands {
     let profileStore: ProfileStore
     let sessionManager: SessionManager
+    let containerManager: ProfileContainerManager
 
     @FocusedValue(\.authStore) private var authStore
+    @FocusedValue(\.activeProfileSession) private var session
 
     var body: some Commands {
       CommandGroup(before: .saveItem) {
         OpenProfileMenu(profileStore: profileStore)
+
+        Divider()
+
+        ExportImportButtons(
+          profileStore: profileStore,
+          containerManager: containerManager,
+          session: session
+        )
 
         Divider()
       }
