@@ -21,6 +21,10 @@ final class ProfileSession: Identifiable {
   let cryptoPriceService: CryptoPriceService
   let priceConversionService: PriceConversionService
 
+  /// The sync engine for this profile's CloudKit zone (nil for remote profiles).
+  private(set) var profileSyncEngine: ProfileSyncEngine?
+  private var changeTracker: ChangeTracker?
+
   nonisolated var id: UUID { profile.id }
 
   private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileSession")
@@ -117,35 +121,31 @@ final class ProfileSession: Identifiable {
       earmarkStore.applyTransactionDelta(old: old, new: new)
     }
 
-    // Observe CloudKit remote changes for iCloud profiles
-    if profile.backendType == .cloudKit {
-      observeRemoteChanges()
+    // Set up CKSyncEngine for iCloud profiles
+    if profile.backendType == .cloudKit, let containerManager {
+      let profileContainer = try! containerManager.container(for: profile.id)
+      let syncEngine = ProfileSyncEngine(profileId: profile.id, modelContainer: profileContainer)
+      syncEngine.onRemoteChangesApplied = { [weak self] in
+        self?.scheduleReloadFromSync()
+      }
+      self.profileSyncEngine = syncEngine
+
+      let tracker = ChangeTracker(syncEngine: syncEngine, modelContainer: profileContainer)
+      tracker.startTracking()
+      self.changeTracker = tracker
+
+      syncEngine.start()
     }
   }
 
   // MARK: - CloudKit Sync
 
-  /// Observes remote CloudKit changes and silently reloads stores.
-  /// Debounces rapid-fire notifications (CloudKit often sends several in quick succession).
-  private func observeRemoteChanges() {
-    NotificationCenter.default.addObserver(
-      forName: .NSPersistentStoreRemoteChange,
-      object: nil,
-      queue: .main
-    ) { [weak self] _ in
-      Task { @MainActor in
-        self?.scheduleReloadFromSync()
-      }
-    }
-  }
-
   /// Debounces sync reloads — cancels any pending reload and waits briefly.
-  /// This avoids redundant reloads when CloudKit delivers multiple change notifications
-  /// in quick succession, and gives the ModelContext time to merge the changes.
+  /// This avoids redundant reloads when CKSyncEngine delivers multiple change batches
+  /// in quick succession.
   private func scheduleReloadFromSync() {
     syncReloadTask?.cancel()
     syncReloadTask = Task {
-      // Wait for ModelContext to merge remote changes and debounce rapid notifications.
       try? await Task.sleep(for: .milliseconds(500))
       guard !Task.isCancelled else { return }
 

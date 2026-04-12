@@ -48,7 +48,6 @@ final class ProfileStore {
     loadFromDefaults()
     if containerManager != nil {
       loadCloudProfiles(isInitialLoad: true)
-      observeRemoteChanges()
       scheduleRetryIfNeeded()
     }
   }
@@ -270,18 +269,6 @@ final class ProfileStore {
       guard let self, self.cloudProfiles.isEmpty else { return }
       self.logger.debug("Retrying cloud profile load")
       self.loadCloudProfiles()
-    }
-  }
-
-  private func observeRemoteChanges() {
-    NotificationCenter.default.addObserver(
-      forName: .NSPersistentStoreRemoteChange,
-      object: nil,
-      queue: .main
-    ) { [weak self] _ in
-      Task { @MainActor in
-        self?.loadCloudProfiles()
-      }
     }
   }
 
