@@ -7,12 +7,16 @@ actor CryptoPriceService {
   private let cacheDirectory: URL
   private let dateFormatter: ISO8601DateFormatter
   private let tokenRepository: CryptoTokenRepository
+  private let resolutionClient: TokenResolutionClient
 
   init(
     clients: [CryptoPriceClient], cacheDirectory: URL? = nil,
-    tokenRepository: CryptoTokenRepository = ICloudTokenRepository()
+    tokenRepository: CryptoTokenRepository = ICloudTokenRepository(),
+    resolutionClient: (any TokenResolutionClient)? = nil
   ) {
     self.clients = clients
+    self.tokenRepository = tokenRepository
+    self.resolutionClient = resolutionClient ?? NoOpTokenResolutionClient()
     self.cacheDirectory =
       cacheDirectory
       ?? FileManager.default.urls(
@@ -20,7 +24,29 @@ actor CryptoPriceService {
       ).first!.appendingPathComponent("crypto-prices")
     self.dateFormatter = ISO8601DateFormatter()
     self.dateFormatter.formatOptions = [.withFullDate]
-    self.tokenRepository = tokenRepository
+  }
+
+  // MARK: - Token resolution
+
+  func resolveToken(
+    chainId: Int, contractAddress: String?, symbol: String?, isNative: Bool
+  ) async throws -> CryptoToken {
+    let result = try await resolutionClient.resolve(
+      chainId: chainId,
+      contractAddress: contractAddress,
+      symbol: symbol,
+      isNative: isNative
+    )
+    return CryptoToken(
+      chainId: chainId,
+      contractAddress: isNative ? nil : contractAddress,
+      symbol: result.resolvedSymbol ?? symbol ?? "???",
+      name: result.resolvedName ?? symbol ?? "Unknown Token",
+      decimals: result.resolvedDecimals ?? 18,
+      coingeckoId: result.coingeckoId,
+      cryptocompareSymbol: result.cryptocompareSymbol,
+      binanceSymbol: result.binanceSymbol
+    )
   }
 
   // MARK: - Token management
@@ -267,5 +293,14 @@ actor CryptoPriceService {
 
   private func decompress(_ data: Data) -> Data? {
     try? (data as NSData).decompressed(using: .zlib) as Data
+  }
+}
+
+/// Fallback when no resolution client is configured. Returns empty results.
+private struct NoOpTokenResolutionClient: TokenResolutionClient {
+  func resolve(
+    chainId: Int, contractAddress: String?, symbol: String?, isNative: Bool
+  ) async throws -> TokenResolutionResult {
+    TokenResolutionResult()
   }
 }
