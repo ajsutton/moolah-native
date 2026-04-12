@@ -55,17 +55,27 @@ Two related features that share infrastructure:
 
 ---
 
-## Phase 4: Exchange Rates & Multi-Currency
+## Phase 4: Exchange Rate Infrastructure — Done
 
-Add exchange rate fetching, caching, and conversion infrastructure using the Frankfurter API (free, no API key, 161 currencies).
+Exchange rate fetching, caching, and conversion infrastructure using the Frankfurter API (free, no API key, 161 currencies). Includes gzip-compressed on-disk cache, fallback to most recent prior date on network failure, banker's rounding for conversions, and prefetch on profile load.
 
-**Why now:** This is a prerequisite for meaningful portfolio views, crypto valuation, and any future account grouping across currencies.
+**Note:** This covers the infrastructure only. Full multi-currency support (per-account currencies, multi-currency UI, aggregation) is not yet planned — TestFlight comes first.
 
-**Reference:** `exchange-rate-design.md`, `exchange-rate-implementation-plan.md`
+**Reference:** `completed/exchange-rate-design.md`, `completed/exchange-rate-implementation-plan.md`
 
 ---
 
-## Phase 5: Crypto Price Data
+## Phase 5: iOS Release via TestFlight
+
+Set up Fastlane + GitHub Actions to archive and upload to TestFlight. Includes monthly auto-tagging to avoid the 90-day TestFlight expiry.
+
+**Why now:** The app has a stable data layer, per-profile isolation, exchange rate infrastructure, and growing test coverage — it's worth getting on real devices before expanding multi-currency support.
+
+**Reference:** `IOS_RELEASE_AUTOMATION_PLAN.md`
+
+---
+
+## Phase 6: Crypto Price Data
 
 Add cryptocurrency price fetching and caching, building on the exchange rate infrastructure patterns from Phase 4.
 
@@ -75,23 +85,13 @@ Add cryptocurrency price fetching and caching, building on the exchange rate inf
 
 ---
 
-## Phase 6: CSV Import (SelfWealth)
+## Phase 7: CSV Import (SelfWealth)
 
 Import Australian stock holdings and trade history from SelfWealth CSV exports. SelfWealth has no API, so CSV is the only reliable data path.
 
 **Why now:** This unlocks investment tracking for real-world use. The Sharesight API was evaluated (`sharesight-api-research.md`) but requires a paid subscription — CSV import works for any SelfWealth user with zero external dependencies.
 
 **Reference:** `csv-import-design.md`
-
----
-
-## Phase 7: iOS Release via TestFlight
-
-Set up Fastlane + GitHub Actions to archive and upload to TestFlight. Includes monthly auto-tagging to avoid the 90-day TestFlight expiry.
-
-**Why now:** By this point the app has a stable data layer, good test coverage, and multi-currency/investment support — it's worth getting on real devices.
-
-**Reference:** `IOS_RELEASE_AUTOMATION_PLAN.md`
 
 ---
 
