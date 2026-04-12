@@ -455,9 +455,8 @@ These steps must be done in the Apple Developer portal.
 
 - [x] **5.1 — Push a version tag:** `v1.0.0` — triggered TestFlight workflow
 - [x] **5.2 — Environment deployment** — no approval needed (all branches/tags policy)
-- [x] **5.3 — TestFlight build uploaded** — build succeeded and was uploaded to App Store Connect
+- [x] **5.3 — TestFlight build uploaded** — v1.0.0 uploaded, then v1.0.1 with CloudKit compatibility fixes
 - [ ] **5.4 — Install on devices** via TestFlight app and verify:
-  - Only iCloud profile creation is available (remote backend hidden)
   - iCloud sync works across devices
   - All core features work (accounts, transactions, categories, etc.)
 - [ ] **5.5 — Verify monthly auto-tag** by triggering `monthly-tag.yml` manually via `workflow_dispatch`
