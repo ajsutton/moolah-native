@@ -16,7 +16,8 @@ struct InvestmentStoreTests {
     let values = (0..<count).map { i in
       InvestmentValue(
         date: Calendar.current.date(byAdding: .day, value: -i, to: Date())!,
-        value: MonetaryAmount(cents: 100_000 + (i * 1000), currency: Currency.defaultTestCurrency)
+        value: InstrumentAmount(
+          quantity: Decimal(1000 + i * 10), instrument: .defaultTestInstrument)
       )
     }
     return [accountId: values]
@@ -27,7 +28,7 @@ struct InvestmentStoreTests {
     let accountId = UUID()
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
-      investmentValues: makeValues(accountId: accountId, count: 3), in: container,
+      investmentValues: makeValues(accountId: accountId, count: 3), in: container
     )
     let store = InvestmentStore(repository: backend.investments)
 
@@ -43,7 +44,7 @@ struct InvestmentStoreTests {
     let accountId = UUID()
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
-      investmentValues: makeValues(accountId: accountId, count: 5), in: container,
+      investmentValues: makeValues(accountId: accountId, count: 5), in: container
     )
     let store = InvestmentStore(repository: backend.investments)
 
@@ -62,13 +63,14 @@ struct InvestmentStoreTests {
     let store = InvestmentStore(repository: backend.investments)
 
     let date = makeDate(year: 2024, month: 3, day: 15)
-    let amount = MonetaryAmount(cents: 125_000_00, currency: Currency.defaultTestCurrency)
+    let amount = InstrumentAmount(
+      quantity: Decimal(string: "125000.00")!, instrument: .defaultTestInstrument)
 
     await store.setValue(accountId: accountId, date: date, value: amount)
 
     #expect(store.values.count == 1)
     #expect(store.values[0].date == date)
-    #expect(store.values[0].value.cents == 125_000_00)
+    #expect(store.values[0].value.quantity == Decimal(string: "125000.00")!)
   }
 
   @Test("Set value upserts existing date")
@@ -79,7 +81,8 @@ struct InvestmentStoreTests {
       accountId: [
         InvestmentValue(
           date: date,
-          value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency))
+          value: InstrumentAmount(
+            quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument))
       ]
     ]
     let (backend, container) = try TestBackend.create()
@@ -89,11 +92,12 @@ struct InvestmentStoreTests {
     await store.loadValues(accountId: accountId)
     #expect(store.values.count == 1)
 
-    let newAmount = MonetaryAmount(cents: 200_000, currency: Currency.defaultTestCurrency)
+    let newAmount = InstrumentAmount(
+      quantity: Decimal(string: "2000.00")!, instrument: .defaultTestInstrument)
     await store.setValue(accountId: accountId, date: date, value: newAmount)
 
     #expect(store.values.count == 1)
-    #expect(store.values[0].value.cents == 200_000)
+    #expect(store.values[0].value.quantity == Decimal(string: "2000.00")!)
   }
 
   @Test("Remove value removes from list")
@@ -104,7 +108,8 @@ struct InvestmentStoreTests {
       accountId: [
         InvestmentValue(
           date: date,
-          value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency))
+          value: InstrumentAmount(
+            quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument))
       ]
     ]
     let (backend, container) = try TestBackend.create()
@@ -134,24 +139,30 @@ struct InvestmentStoreTests {
   func testLoadDailyBalances() async throws {
     let accountId = UUID()
     let (backend, container) = try TestBackend.create()
-    TestBackend.seed(
+    _ = TestBackend.seed(
       transactions: [
         Transaction(
-          id: UUID(), type: .income, date: makeDate(year: 2024, month: 1, day: 1),
-          accountId: accountId,
-          amount: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
+          date: makeDate(year: 2024, month: 1, day: 1),
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "1000.00")!, type: .income)
+          ]),
         Transaction(
-          id: UUID(), type: .income, date: makeDate(year: 2024, month: 2, day: 1),
-          accountId: accountId,
-          amount: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
+          date: makeDate(year: 2024, month: 2, day: 1),
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "1000.00")!, type: .income)
+          ]),
       ], in: container)
 
     let store = InvestmentStore(repository: backend.investments)
     await store.loadDailyBalances(accountId: accountId)
 
     #expect(store.dailyBalances.count == 2)
-    #expect(store.dailyBalances[0].balance.cents == 100_000)
-    #expect(store.dailyBalances[1].balance.cents == 200_000)
+    #expect(store.dailyBalances[0].balance.quantity == Decimal(string: "1000.00")!)
+    #expect(store.dailyBalances[1].balance.quantity == Decimal(string: "2000.00")!)
   }
 
   // MARK: - Filtered Data
@@ -161,7 +172,7 @@ struct InvestmentStoreTests {
     let accountId = UUID()
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
-      investmentValues: makeValues(accountId: accountId, count: 3), in: container,
+      investmentValues: makeValues(accountId: accountId, count: 3), in: container
     )
     let store = InvestmentStore(repository: backend.investments)
 
@@ -181,30 +192,34 @@ struct InvestmentStoreTests {
     let values = [
       InvestmentValue(
         date: date2,
-        value: MonetaryAmount(cents: 120_000, currency: Currency.defaultTestCurrency)),
+        value: InstrumentAmount(
+          quantity: Decimal(string: "1200.00")!, instrument: .defaultTestInstrument)),
       InvestmentValue(
         date: date1,
-        value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
+        value: InstrumentAmount(
+          quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)),
     ]
 
     let balances = [
       AccountDailyBalance(
         date: date1,
-        balance: MonetaryAmount(cents: 90_000, currency: Currency.defaultTestCurrency)),
+        balance: InstrumentAmount(
+          quantity: Decimal(string: "900.00")!, instrument: .defaultTestInstrument)),
       AccountDailyBalance(
         date: date2,
-        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
+        balance: InstrumentAmount(
+          quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)),
     ]
 
     let result = mergeChartData(values: values, balances: balances, period: .all)
 
     #expect(result.count == 2)
-    #expect(result[0].value == 100_000)
-    #expect(result[0].balance == 90_000)
-    #expect(result[0].profitLoss == 10_000)
-    #expect(result[1].value == 120_000)
-    #expect(result[1].balance == 100_000)
-    #expect(result[1].profitLoss == 20_000)
+    #expect(result[0].value == Decimal(string: "1000.00")!)
+    #expect(result[0].balance == Decimal(string: "900.00")!)
+    #expect(result[0].profitLoss == Decimal(string: "100.00")!)
+    #expect(result[1].value == Decimal(string: "1200.00")!)
+    #expect(result[1].balance == Decimal(string: "1000.00")!)
+    #expect(result[1].profitLoss == Decimal(string: "200.00")!)
   }
 
   @Test("Chart data points forward-fill missing values")
@@ -217,33 +232,37 @@ struct InvestmentStoreTests {
     let values = [
       InvestmentValue(
         date: date3,
-        value: MonetaryAmount(cents: 130_000, currency: Currency.defaultTestCurrency)),
+        value: InstrumentAmount(
+          quantity: Decimal(string: "1300.00")!, instrument: .defaultTestInstrument)),
       InvestmentValue(
         date: date1,
-        value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
+        value: InstrumentAmount(
+          quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)),
     ]
 
     let balances = [
       AccountDailyBalance(
         date: date1,
-        balance: MonetaryAmount(cents: 90_000, currency: Currency.defaultTestCurrency)),
+        balance: InstrumentAmount(
+          quantity: Decimal(string: "900.00")!, instrument: .defaultTestInstrument)),
       AccountDailyBalance(
         date: date2,
-        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
+        balance: InstrumentAmount(
+          quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)),
     ]
 
     let result = mergeChartData(values: values, balances: balances, period: .all)
 
     #expect(result.count == 3)
     // date1: both present
-    #expect(result[0].value == 100_000)
-    #expect(result[0].balance == 90_000)
+    #expect(result[0].value == Decimal(string: "1000.00")!)
+    #expect(result[0].balance == Decimal(string: "900.00")!)
     // date2: value forward-filled from date1
-    #expect(result[1].value == 100_000)
-    #expect(result[1].balance == 100_000)
+    #expect(result[1].value == Decimal(string: "1000.00")!)
+    #expect(result[1].balance == Decimal(string: "1000.00")!)
     // date3: balance forward-filled from date2
-    #expect(result[2].value == 130_000)
-    #expect(result[2].balance == 100_000)
+    #expect(result[2].value == Decimal(string: "1300.00")!)
+    #expect(result[2].balance == Decimal(string: "1000.00")!)
   }
 
   @Test("Chart data points with period filter includes pre-period anchor")
@@ -257,25 +276,31 @@ struct InvestmentStoreTests {
     let values = [
       InvestmentValue(
         date: now,
-        value: MonetaryAmount(cents: 150_000, currency: Currency.defaultTestCurrency)),
+        value: InstrumentAmount(
+          quantity: Decimal(string: "1500.00")!, instrument: .defaultTestInstrument)),
       InvestmentValue(
         date: oneMonthAgo,
-        value: MonetaryAmount(cents: 130_000, currency: Currency.defaultTestCurrency)),
+        value: InstrumentAmount(
+          quantity: Decimal(string: "1300.00")!, instrument: .defaultTestInstrument)),
       InvestmentValue(
         date: sixMonthsAgo,
-        value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
+        value: InstrumentAmount(
+          quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)),
     ]
 
     let balances = [
       AccountDailyBalance(
         date: sixMonthsAgo,
-        balance: MonetaryAmount(cents: 80_000, currency: Currency.defaultTestCurrency)),
+        balance: InstrumentAmount(
+          quantity: Decimal(string: "800.00")!, instrument: .defaultTestInstrument)),
       AccountDailyBalance(
         date: threeMonthsAgo,
-        balance: MonetaryAmount(cents: 90_000, currency: Currency.defaultTestCurrency)),
+        balance: InstrumentAmount(
+          quantity: Decimal(string: "900.00")!, instrument: .defaultTestInstrument)),
       AccountDailyBalance(
         date: now,
-        balance: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
+        balance: InstrumentAmount(
+          quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)),
     ]
 
     // Filter to 3 months: should include threeMonthsAgo and now,

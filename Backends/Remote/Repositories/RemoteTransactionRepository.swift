@@ -3,12 +3,12 @@ import OSLog
 
 final class RemoteTransactionRepository: TransactionRepository, Sendable {
   private let client: APIClient
-  private let currency: Currency
+  private let instrument: Instrument
   private let logger = Logger(subsystem: "com.moolah.app", category: "RemoteTransactionRepository")
 
-  init(client: APIClient, currency: Currency) {
+  init(client: APIClient, instrument: Instrument) {
     self.client = client
-    self.currency = currency
+    self.instrument = instrument
   }
 
   func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> TransactionPage {
@@ -54,9 +54,9 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
       let wrapper = try JSONDecoder().decode(TransactionDTO.ListWrapper.self, from: data)
       logger.debug("Successfully decoded \(wrapper.transactions.count) transactions")
       return TransactionPage(
-        transactions: wrapper.transactions.map { $0.toDomain(currency: self.currency) },
-        priorBalance: MonetaryAmount(
-          cents: wrapper.priorBalance, currency: currency),
+        transactions: wrapper.transactions.map { $0.toDomain(instrument: self.instrument) },
+        priorBalance: InstrumentAmount(
+          quantity: Decimal(wrapper.priorBalance) / 100, instrument: instrument),
         totalCount: wrapper.totalNumberOfTransactions
       )
     } catch {
@@ -69,14 +69,14 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
     let dto = CreateTransactionDTO.fromDomain(transaction)
     let data = try await client.post("transactions/", body: dto)
     let responseDTO = try JSONDecoder().decode(TransactionDTO.self, from: data)
-    return responseDTO.toDomain(currency: currency)
+    return responseDTO.toDomain(instrument: instrument)
   }
 
   func update(_ transaction: Transaction) async throws -> Transaction {
     let dto = TransactionDTO.fromDomain(transaction)
     let data = try await client.put("transactions/\(transaction.id.apiString)/", body: dto)
     let responseDTO = try JSONDecoder().decode(TransactionDTO.self, from: data)
-    return responseDTO.toDomain(currency: currency)
+    return responseDTO.toDomain(instrument: instrument)
   }
 
   func delete(id: UUID) async throws {

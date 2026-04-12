@@ -121,7 +121,7 @@ struct SidebarView: View {
         }
         .font(.headline)
         .accessibilityLabel(
-          "Available Funds: \(availableFunds.decimalValue.formatted(.currency(code: availableFunds.currency.code)))"
+          "Available Funds: \(availableFunds.formatted)"
         )
 
         LabeledContent("Net Worth") {
@@ -130,7 +130,7 @@ struct SidebarView: View {
         .font(.headline)
         .bold()
         .accessibilityLabel(
-          "Net Worth: \(accountStore.netWorth.decimalValue.formatted(.currency(code: accountStore.netWorth.currency.code)))"
+          "Net Worth: \(accountStore.netWorth.formatted)"
         )
       }
 
@@ -198,7 +198,7 @@ struct SidebarView: View {
     }
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
-        currency: accountStore.currentTotal.currency,
+        instrument: accountStore.currentTotal.instrument,
         onCreate: { newEarmark in
           Task {
             _ = await earmarkStore.create(newEarmark)
@@ -208,18 +208,19 @@ struct SidebarView: View {
       )
     }
     .sheet(isPresented: $showCreateAccountSheet) {
-      CreateAccountView(currency: accountStore.currentTotal.currency, accountStore: accountStore)
+      CreateAccountView(
+        instrument: accountStore.currentTotal.instrument, accountStore: accountStore)
     }
     .sheet(item: $accountToEdit) { account in
       EditAccountView(account: account, accountStore: accountStore)
     }
   }
 
-  private var availableFunds: MonetaryAmount {
+  private var availableFunds: InstrumentAmount {
     accountStore.availableFunds(earmarks: earmarkStore.earmarks)
   }
 
-  private func totalRow(label: String, value: MonetaryAmount) -> some View {
+  private func totalRow(label: String, value: InstrumentAmount) -> some View {
     LabeledContent(label) {
       MonetaryAmountView(amount: value, colorOverride: .secondary)
     }
@@ -255,15 +256,15 @@ struct SidebarView: View {
         _ = try? await backend.accounts.create(
           Account(
             name: "Bank", type: .bank,
-            balance: MonetaryAmount(cents: 100000, currency: Currency.AUD)))
+            balance: InstrumentAmount(quantity: 1000, instrument: .AUD)))
         _ = try? await backend.accounts.create(
           Account(
             name: "Asset", type: .asset,
-            balance: MonetaryAmount(cents: 500000, currency: Currency.AUD)))
+            balance: InstrumentAmount(quantity: 5000, instrument: .AUD)))
         _ = try? await backend.earmarks.create(
           Earmark(
             name: "Holiday Fund",
-            balance: MonetaryAmount(cents: 150000, currency: Currency.AUD)))
+            balance: InstrumentAmount(quantity: 1500, instrument: .AUD)))
 
         await accountStore.load()
         await earmarkStore.load()

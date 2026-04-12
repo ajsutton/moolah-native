@@ -15,17 +15,20 @@ struct MonthlyIncomeExpenseDTO: Codable {
   let earmarkedExpense: Int
   let earmarkedProfit: Int
 
-  func toDomain(currency: Currency) -> MonthlyIncomeExpense {
+  func toDomain(instrument: Instrument) -> MonthlyIncomeExpense {
     return MonthlyIncomeExpense(
       month: String(month),
       start: BackendDateFormatter.date(from: start) ?? Date(),
       end: BackendDateFormatter.date(from: end) ?? Date(),
-      income: MonetaryAmount(cents: income, currency: currency),
-      expense: MonetaryAmount(cents: expense, currency: currency),
-      profit: MonetaryAmount(cents: profit, currency: currency),
-      earmarkedIncome: MonetaryAmount(cents: earmarkedIncome, currency: currency),
-      earmarkedExpense: MonetaryAmount(cents: earmarkedExpense, currency: currency),
-      earmarkedProfit: MonetaryAmount(cents: earmarkedProfit, currency: currency)
+      income: InstrumentAmount(quantity: Decimal(income) / 100, instrument: instrument),
+      expense: InstrumentAmount(quantity: Decimal(expense) / 100, instrument: instrument),
+      profit: InstrumentAmount(quantity: Decimal(profit) / 100, instrument: instrument),
+      earmarkedIncome: InstrumentAmount(
+        quantity: Decimal(earmarkedIncome) / 100, instrument: instrument),
+      earmarkedExpense: InstrumentAmount(
+        quantity: Decimal(earmarkedExpense) / 100, instrument: instrument),
+      earmarkedProfit: InstrumentAmount(
+        quantity: Decimal(earmarkedProfit) / 100, instrument: instrument)
     )
   }
 }

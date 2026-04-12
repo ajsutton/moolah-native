@@ -106,7 +106,7 @@ struct ContentView: View {
     }
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
-        currency: accountStore.currentTotal.currency,
+        instrument: accountStore.currentTotal.instrument,
         onCreate: { newEarmark in
           Task {
             _ = await earmarkStore.create(newEarmark)

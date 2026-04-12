@@ -17,7 +17,7 @@ struct RemoteEarmarkRepositoryTests {
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
     let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
-    let repository = RemoteEarmarkRepository(client: client, currency: .defaultTestCurrency)
+    let repository = RemoteEarmarkRepository(client: client, instrument: .defaultTestInstrument)
 
     URLProtocolStub.requestHandler = { request in
       let response = HTTPURLResponse(
@@ -38,14 +38,21 @@ struct RemoteEarmarkRepositoryTests {
     #expect(earmarks[0].position == 1)
     #expect(earmarks[0].isHidden == false)
     #expect(
-      earmarks[0].balance == MonetaryAmount(cents: 250000, currency: Currency.defaultTestCurrency))
+      earmarks[0].balance
+        == InstrumentAmount(
+          quantity: Decimal(string: "2500.00")!, instrument: .defaultTestInstrument))
     #expect(
-      earmarks[0].saved == MonetaryAmount(cents: 300000, currency: Currency.defaultTestCurrency))
+      earmarks[0].saved
+        == InstrumentAmount(
+          quantity: Decimal(string: "3000.00")!, instrument: .defaultTestInstrument))
     #expect(
-      earmarks[0].spent == MonetaryAmount(cents: -50000, currency: Currency.defaultTestCurrency))
+      earmarks[0].spent
+        == InstrumentAmount(
+          quantity: Decimal(string: "-500.00")!, instrument: .defaultTestInstrument))
     #expect(
       earmarks[0].savingsGoal
-        == MonetaryAmount(cents: 500000, currency: Currency.defaultTestCurrency))
+        == InstrumentAmount(
+          quantity: Decimal(string: "5000.00")!, instrument: .defaultTestInstrument))
     #expect(earmarks[0].savingsStartDate != nil)
     #expect(earmarks[0].savingsEndDate != nil)
 

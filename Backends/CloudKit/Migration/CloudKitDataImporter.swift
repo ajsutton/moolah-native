@@ -60,8 +60,7 @@ struct CloudKitDataImporter {
         name: account.name,
         type: account.type.rawValue,
         position: account.position,
-        isHidden: account.isHidden,
-        currencyCode: currencyCode
+        isHidden: account.isHidden
       )
       context.insert(record)
     }
@@ -76,8 +75,8 @@ struct CloudKitDataImporter {
         name: earmark.name,
         position: earmark.position,
         isHidden: earmark.isHidden,
-        savingsTarget: earmark.savingsGoal?.cents,
-        currencyCode: currencyCode,
+        savingsTarget: earmark.savingsGoal?.storageValue,
+        savingsTargetInstrumentId: earmark.savingsGoal?.instrument.id,
         savingsStartDate: earmark.savingsStartDate,
         savingsEndDate: earmark.savingsEndDate
       )
@@ -95,8 +94,8 @@ struct CloudKitDataImporter {
           id: item.id,
           earmarkId: earmarkId,
           categoryId: item.categoryId,
-          amount: item.amount.cents,
-          currencyCode: currencyCode
+          amount: item.amount.storageValue,
+          instrumentId: item.amount.instrument.id
         )
         context.insert(record)
         budgetItemCount += 1
@@ -108,22 +107,12 @@ struct CloudKitDataImporter {
     // 5. Transactions
     progress?("transactions", step / totalSteps)
     for txn in data.transactions {
-      let record = TransactionRecord(
-        id: txn.id,
-        type: txn.type.rawValue,
-        date: txn.date,
-        accountId: txn.accountId,
-        toAccountId: txn.toAccountId,
-        amount: txn.amount.cents,
-        currencyCode: currencyCode,
-        payee: txn.payee,
-        notes: txn.notes,
-        categoryId: txn.categoryId,
-        earmarkId: txn.earmarkId,
-        recurPeriod: txn.recurPeriod?.rawValue,
-        recurEvery: txn.recurEvery
-      )
+      let record = TransactionRecord.from(txn)
       context.insert(record)
+      for (index, leg) in txn.legs.enumerated() {
+        let legRecord = TransactionLegRecord.from(leg, transactionId: txn.id, sortOrder: index)
+        context.insert(legRecord)
+      }
     }
     step += 1
     await Task.yield()
@@ -137,8 +126,8 @@ struct CloudKitDataImporter {
           id: UUID(),
           accountId: accountId,
           date: value.date,
-          value: value.value.cents,
-          currencyCode: currencyCode
+          value: value.value.storageValue,
+          instrumentId: value.value.instrument.id
         )
         context.insert(record)
         investmentValueCount += 1

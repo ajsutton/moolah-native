@@ -70,7 +70,7 @@ struct EarmarksView: View {
       #endif
       .sheet(isPresented: $showCreateSheet) {
         CreateEarmarkSheet(
-          currency: earmarkStore.totalBalance.currency,
+          instrument: earmarkStore.totalBalance.instrument,
           onCreate: { newEarmark in
             Task {
               _ = await earmarkStore.create(newEarmark)
@@ -133,7 +133,7 @@ struct EarmarksView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-          "\(earmark.name), balance \(earmark.balance.decimalValue.formatted(.currency(code: earmark.balance.currency.code)))"
+          "\(earmark.name), balance \(earmark.balance.formatted)"
         )
         .tag(earmark)
         .contextMenu {
@@ -224,7 +224,7 @@ struct EarmarksView: View {
     _ = try? await backend.earmarks.create(
       Earmark(
         name: "Holiday Fund",
-        savingsGoal: MonetaryAmount(cents: 500000, currency: Currency.AUD)))
+        savingsGoal: InstrumentAmount(quantity: 5000, instrument: .AUD)))
     _ = try? await backend.earmarks.create(
       Earmark(name: "Emergency Fund"))
     await earmarkStore.load()

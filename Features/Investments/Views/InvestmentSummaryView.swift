@@ -45,17 +45,19 @@ struct InvestmentSummaryView: View {
 
   // MARK: - Computed
 
-  private var currentValue: MonetaryAmount {
+  private var currentValue: InstrumentAmount {
     account.investmentValue ?? account.balance
   }
 
-  private var profitLoss: MonetaryAmount {
+  private var profitLoss: InstrumentAmount {
     currentValue - account.balance
   }
 
   private var profitLossPercent: Double {
-    guard account.balance.cents != 0 else { return 0 }
-    return Double(profitLoss.cents) / Double(account.balance.cents) * 100
+    guard !account.balance.isZero else { return 0 }
+    let balanceValue = Double(truncating: account.balance.quantity as NSDecimalNumber)
+    guard balanceValue != 0 else { return 0 }
+    return Double(truncating: profitLoss.quantity as NSDecimalNumber) / balanceValue * 100
   }
 
   private var profitLossPercentText: String? {
@@ -81,7 +83,7 @@ struct InvestmentSummaryView: View {
 
 private struct SummaryPanel: View {
   let label: String
-  let amount: MonetaryAmount
+  let amount: InstrumentAmount
   let subtitle: String?
   let subtitleColor: Color?
 

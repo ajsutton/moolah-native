@@ -116,7 +116,7 @@ struct CategoryRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+      balance: .zero(instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -124,12 +124,17 @@ struct CategoryRepositoryContractTests {
     _ = try await backend.categories.create(category)
 
     let txn = Transaction(
-      type: .expense,
       date: Date(),
-      accountId: account.id,
-      amount: MonetaryAmount(cents: -500, currency: .defaultTestCurrency),
       payee: "Store",
-      categoryId: category.id
+      legs: [
+        TransactionLeg(
+          accountId: account.id,
+          instrument: .defaultTestInstrument,
+          quantity: Decimal(string: "-5.00")!,
+          type: .expense,
+          categoryId: category.id
+        )
+      ]
     )
     let created = try await backend.transactions.create(txn)
 
@@ -156,7 +161,9 @@ struct CategoryRepositoryContractTests {
 
     // Set a budget for the category
     try await backend.earmarks.setBudget(
-      earmarkId: earmark.id, categoryId: category.id, amount: 50000)
+      earmarkId: earmark.id, categoryId: category.id,
+      amount: InstrumentAmount(
+        quantity: Decimal(string: "500.00")!, instrument: .defaultTestInstrument))
 
     let budgetBefore = try await backend.earmarks.fetchBudget(earmarkId: earmark.id)
     #expect(budgetBefore.count == 1)
@@ -182,7 +189,9 @@ struct CategoryRepositoryContractTests {
 
     // Set a budget for groceries
     try await backend.earmarks.setBudget(
-      earmarkId: earmark.id, categoryId: groceries.id, amount: 50000)
+      earmarkId: earmark.id, categoryId: groceries.id,
+      amount: InstrumentAmount(
+        quantity: Decimal(string: "500.00")!, instrument: .defaultTestInstrument))
 
     // Delete groceries with food as replacement
     try await backend.categories.delete(id: groceries.id, withReplacement: food.id)
@@ -191,7 +200,9 @@ struct CategoryRepositoryContractTests {
     let budget = try await backend.earmarks.fetchBudget(earmarkId: earmark.id)
     #expect(budget.count == 1, "Budget should have one entry")
     #expect(budget.first?.categoryId == food.id, "Budget should reference replacement category")
-    #expect(budget.first?.amount.cents == 50000, "Budget amount should be preserved")
+    #expect(
+      budget.first?.amount.quantity == Decimal(string: "500.00")!,
+      "Budget amount should be preserved")
   }
 }
 
@@ -206,20 +217,20 @@ private struct CloudKitCategoryTestBackend: BackendProvider, @unchecked Sendable
 
   init() {
     let container = try! TestModelContainer.create()
-    let currency = Currency.defaultTestCurrency
+    let instrument = Instrument.defaultTestInstrument
     self.auth = InMemoryAuthProvider()
     self.accounts = CloudKitAccountRepository(
-      modelContainer: container, currency: currency)
+      modelContainer: container, instrument: instrument)
     self.transactions = CloudKitTransactionRepository(
-      modelContainer: container, currency: currency)
+      modelContainer: container, instrument: instrument)
     self.categories = CloudKitCategoryRepository(
       modelContainer: container)
     self.earmarks = CloudKitEarmarkRepository(
-      modelContainer: container, currency: currency)
+      modelContainer: container, instrument: instrument)
     self.analysis = CloudKitAnalysisRepository(
-      modelContainer: container, currency: currency)
+      modelContainer: container, instrument: instrument)
     self.investments = CloudKitInvestmentRepository(
-      modelContainer: container, currency: currency)
+      modelContainer: container, instrument: instrument)
   }
 }
 

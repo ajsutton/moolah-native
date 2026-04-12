@@ -89,7 +89,7 @@ struct YahooFinanceClientTests {
     let result = try await client.fetchDailyPrices(
       ticker: "BHP.AX", from: date("2022-04-05"), to: date("2022-04-07"))
 
-    #expect(result.currency == .AUD)
+    #expect(result.instrument == .AUD)
     // Two entries (third has null adjclose and should be skipped)
     #expect(result.prices.count == 2)
     #expect(result.prices["2022-04-05"] == Decimal(string: "37.80")!)

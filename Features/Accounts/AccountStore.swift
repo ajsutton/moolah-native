@@ -63,28 +63,28 @@ final class AccountStore {
     accounts.filter { $0.type == .investment && (showHidden || !$0.isHidden) }
   }
 
-  var currentTotal: MonetaryAmount {
-    currentAccounts.reduce(.zero(currency: currentAccounts.first?.balance.currency ?? .AUD)) {
+  var currentTotal: InstrumentAmount {
+    currentAccounts.reduce(.zero(instrument: currentAccounts.first?.balance.instrument ?? .AUD)) {
       $0 + $1.balance
     }
   }
 
-  var investmentTotal: MonetaryAmount {
+  var investmentTotal: InstrumentAmount {
     investmentAccounts.reduce(
-      .zero(currency: investmentAccounts.first?.displayBalance.currency ?? .AUD)
+      .zero(instrument: investmentAccounts.first?.displayBalance.instrument ?? .AUD)
     ) { $0 + $1.displayBalance }
   }
 
   /// Total of current accounts minus the total of all positive, visible earmarked funds.
   /// Hidden earmarks and those with negative balances are excluded from the sum.
-  func availableFunds(earmarks: Earmarks) -> MonetaryAmount {
+  func availableFunds(earmarks: Earmarks) -> InstrumentAmount {
     let earmarked = earmarks.ordered
       .filter { !$0.isHidden && $0.balance.isPositive }
-      .reduce(MonetaryAmount.zero(currency: currentTotal.currency)) { $0 + $1.balance }
+      .reduce(InstrumentAmount.zero(instrument: currentTotal.instrument)) { $0 + $1.balance }
     return currentTotal - earmarked
   }
 
-  var netWorth: MonetaryAmount {
+  var netWorth: InstrumentAmount {
     currentTotal + investmentTotal
   }
 
@@ -97,21 +97,15 @@ final class AccountStore {
 
     // Remove the old transaction's effect (skip scheduled — they don't affect balances)
     if let old, !old.isScheduled {
-      if let accountId = old.accountId {
-        result = result.adjustingBalance(of: accountId, by: -old.amount)
-      }
-      if let toAccountId = old.toAccountId {
-        result = result.adjustingBalance(of: toAccountId, by: old.amount)
+      for leg in old.legs {
+        result = result.adjustingBalance(of: leg.accountId, by: -leg.amount)
       }
     }
 
     // Apply the new transaction's effect (skip scheduled — they don't affect balances)
     if let new, !new.isScheduled {
-      if let accountId = new.accountId {
-        result = result.adjustingBalance(of: accountId, by: new.amount)
-      }
-      if let toAccountId = new.toAccountId {
-        result = result.adjustingBalance(of: toAccountId, by: -new.amount)
+      for leg in new.legs {
+        result = result.adjustingBalance(of: leg.accountId, by: leg.amount)
       }
     }
 

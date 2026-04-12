@@ -21,19 +21,20 @@ private final class ProgressTracker: Sendable {
 @Suite("DataExporter")
 struct DataExporterTests {
 
+  private let instrument = Instrument.defaultTestInstrument
+
   private func makeBackendWithData() async throws -> CloudKitBackend {
-    let currency = Currency.defaultTestCurrency
-    let (backend, _) = try TestBackend.create(currency: currency)
+    let (backend, _) = try TestBackend.create(instrument: instrument)
 
     // Create accounts
     _ = try await backend.accounts.create(
-      Account(name: "Checking", type: .bank, balance: .zero(currency: currency))
+      Account(name: "Checking", type: .bank, balance: .zero(instrument: instrument))
     )
     _ = try await backend.accounts.create(
-      Account(name: "Savings", type: .bank, balance: .zero(currency: currency))
+      Account(name: "Savings", type: .bank, balance: .zero(instrument: instrument))
     )
     let investmentAccount = try await backend.accounts.create(
-      Account(name: "Portfolio", type: .investment, balance: .zero(currency: currency))
+      Account(name: "Portfolio", type: .investment, balance: .zero(instrument: instrument))
     )
 
     // Create categories
@@ -42,33 +43,54 @@ struct DataExporterTests {
 
     // Create earmarks
     let holiday = try await backend.earmarks.create(
-      Earmark(name: "Holiday", balance: .zero(currency: currency))
+      Earmark(name: "Holiday", balance: .zero(instrument: instrument))
     )
-    try await backend.earmarks.setBudget(earmarkId: holiday.id, categoryId: food.id, amount: 5000)
+    let budgetAmount = InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
+    try await backend.earmarks.setBudget(
+      earmarkId: holiday.id, categoryId: food.id, amount: budgetAmount)
 
     // Create transactions
     let accounts = try await backend.accounts.fetchAll()
     let checking = accounts.first { $0.name == "Checking" }!
     _ = try await backend.transactions.create(
       Transaction(
-        type: .income, date: Date(), accountId: checking.id,
-        amount: MonetaryAmount(cents: 100_000, currency: currency), payee: "Employer"
+        date: Date(),
+        payee: "Employer",
+        legs: [
+          TransactionLeg(
+            accountId: checking.id, instrument: instrument,
+            quantity: Decimal(string: "1000.00")!, type: .income
+          )
+        ]
       )
     )
     _ = try await backend.transactions.create(
       Transaction(
-        type: .expense, date: Date(), accountId: checking.id,
-        amount: MonetaryAmount(cents: -2500, currency: currency),
-        payee: "Shop", categoryId: food.id, earmarkId: holiday.id
+        date: Date(),
+        payee: "Shop",
+        legs: [
+          TransactionLeg(
+            accountId: checking.id, instrument: instrument,
+            quantity: Decimal(string: "-25.00")!, type: .expense,
+            categoryId: food.id, earmarkId: holiday.id
+          )
+        ]
       )
     )
 
     // Create a scheduled transaction
     _ = try await backend.transactions.create(
       Transaction(
-        type: .expense, date: Date(), accountId: checking.id,
-        amount: MonetaryAmount(cents: -1000, currency: currency),
-        payee: "Streaming", recurPeriod: .month, recurEvery: 1
+        date: Date(),
+        payee: "Streaming",
+        recurPeriod: .month,
+        recurEvery: 1,
+        legs: [
+          TransactionLeg(
+            accountId: checking.id, instrument: instrument,
+            quantity: Decimal(string: "-10.00")!, type: .expense
+          )
+        ]
       )
     )
 
@@ -76,7 +98,7 @@ struct DataExporterTests {
     try await backend.investments.setValue(
       accountId: investmentAccount.id,
       date: Date(),
-      value: MonetaryAmount(cents: 500_000, currency: currency)
+      value: InstrumentAmount(quantity: Decimal(string: "5000.00")!, instrument: instrument)
     )
 
     return backend
@@ -90,7 +112,7 @@ struct DataExporterTests {
     let progressSteps = ProgressTracker()
     let data = try await exporter.export(
       profileLabel: "Test",
-      currencyCode: Currency.defaultTestCurrency.code,
+      currencyCode: instrument.id,
       financialYearStartMonth: 7
     ) { progress in
       if case .downloading(let step) = progress {
@@ -118,7 +140,7 @@ struct DataExporterTests {
 
     let data = try await exporter.export(
       profileLabel: "Test",
-      currencyCode: Currency.defaultTestCurrency.code,
+      currencyCode: instrument.id,
       financialYearStartMonth: 7
     ) { _ in }
 
@@ -126,7 +148,7 @@ struct DataExporterTests {
     let budgetItems = data.earmarkBudgets[earmark.id]
     #expect(budgetItems != nil)
     #expect(budgetItems!.count == 1)
-    #expect(budgetItems!.first!.amount.cents == 5000)
+    #expect(budgetItems!.first!.amount.quantity == Decimal(string: "50.00")!)
   }
 
   @Test("exports investment values per investment account")
@@ -136,7 +158,7 @@ struct DataExporterTests {
 
     let data = try await exporter.export(
       profileLabel: "Test",
-      currencyCode: Currency.defaultTestCurrency.code,
+      currencyCode: instrument.id,
       financialYearStartMonth: 7
     ) { _ in }
 
@@ -144,7 +166,7 @@ struct DataExporterTests {
     let values = data.investmentValues[investmentAccount.id]
     #expect(values != nil)
     #expect(values!.count == 1)
-    #expect(values!.first!.value.cents == 500_000)
+    #expect(values!.first!.value.quantity == Decimal(string: "5000.00")!)
   }
 
   @Test("exports empty data from empty backend")
@@ -154,7 +176,7 @@ struct DataExporterTests {
 
     let data = try await exporter.export(
       profileLabel: "Test",
-      currencyCode: Currency.defaultTestCurrency.code,
+      currencyCode: instrument.id,
       financialYearStartMonth: 7
     ) { _ in }
 
@@ -172,7 +194,7 @@ struct DataExporterTests {
 
     let data = try await exporter.export(
       profileLabel: "Test",
-      currencyCode: Currency.defaultTestCurrency.code,
+      currencyCode: instrument.id,
       financialYearStartMonth: 7
     ) { _ in }
 

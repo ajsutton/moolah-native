@@ -9,10 +9,10 @@ struct AccountDTO: Codable {
   let position: Int
   let hidden: Bool
 
-  func toDomain(currency: Currency) -> Account {
-    let investmentValue: MonetaryAmount? =
+  func toDomain(instrument: Instrument) -> Account {
+    let investmentValue: InstrumentAmount? =
       if type == "investment", let value {
-        MonetaryAmount(cents: value, currency: currency)
+        InstrumentAmount(quantity: Decimal(value) / 100, instrument: instrument)
       } else {
         nil
       }
@@ -21,7 +21,7 @@ struct AccountDTO: Codable {
       id: FlexibleUUID.parse(id) ?? UUID(),
       name: name,
       type: AccountType(rawValue: type) ?? .asset,
-      balance: MonetaryAmount(cents: balance, currency: currency),
+      balance: InstrumentAmount(quantity: Decimal(balance) / 100, instrument: instrument),
       investmentValue: investmentValue,
       position: position,
       isHidden: hidden

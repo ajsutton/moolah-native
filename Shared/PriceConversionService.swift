@@ -10,50 +10,50 @@ actor PriceConversionService {
     self.exchangeRates = exchangeRates
   }
 
-  /// Convert a quantity of a crypto token to a fiat MonetaryAmount on a given date.
+  /// Convert a quantity of a crypto token to a fiat InstrumentAmount on a given date.
   func convert(
     amount: Decimal,
     token: CryptoToken,
-    to currency: Currency,
+    to instrument: Instrument,
     on date: Date
-  ) async throws -> MonetaryAmount {
+  ) async throws -> InstrumentAmount {
     let usdPrice = try await cryptoPrices.price(for: token, on: date)
     let usdValue = amount * usdPrice
 
-    if currency == .USD {
-      return centsFromDecimal(usdValue, currency: currency)
+    if instrument.id == "USD" {
+      return InstrumentAmount(quantity: usdValue, instrument: instrument)
     }
 
-    let fiatRate = try await exchangeRates.rate(from: .USD, to: currency, on: date)
+    let fiatRate = try await exchangeRates.rate(from: .USD, to: instrument, on: date)
     let fiatValue = usdValue * fiatRate
-    return centsFromDecimal(fiatValue, currency: currency)
+    return InstrumentAmount(quantity: fiatValue, instrument: instrument)
   }
 
   /// Get the fiat value of one unit of a token on a given date.
   func unitPrice(
     for token: CryptoToken,
-    in currency: Currency,
+    in instrument: Instrument,
     on date: Date
   ) async throws -> Decimal {
     let usdPrice = try await cryptoPrices.price(for: token, on: date)
-    if currency == .USD { return usdPrice }
-    let fiatRate = try await exchangeRates.rate(from: .USD, to: currency, on: date)
+    if instrument.id == "USD" { return usdPrice }
+    let fiatRate = try await exchangeRates.rate(from: .USD, to: instrument, on: date)
     return usdPrice * fiatRate
   }
 
   /// Get fiat values for one unit of a token over a date range (for charts).
   func priceHistory(
     for token: CryptoToken,
-    in currency: Currency,
+    in instrument: Instrument,
     over range: ClosedRange<Date>
   ) async throws -> [(date: Date, price: Decimal)] {
     let cryptoHistory = try await cryptoPrices.prices(for: token, in: range)
 
-    if currency == .USD {
+    if instrument.id == "USD" {
       return cryptoHistory
     }
 
-    let fiatHistory = try await exchangeRates.rates(from: .USD, to: currency, in: range)
+    let fiatHistory = try await exchangeRates.rates(from: .USD, to: instrument, in: range)
     let fiatByDate = Dictionary(
       fiatHistory.map { ($0.date, $0.rate) },
       uniquingKeysWith: { first, _ in first }
@@ -67,15 +67,5 @@ actor PriceConversionService {
     }
 
     return result
-  }
-
-  // MARK: - Private
-
-  private func centsFromDecimal(_ value: Decimal, currency: Currency) -> MonetaryAmount {
-    var centValue = value * Decimal(100)
-    var rounded = Decimal()
-    NSDecimalRound(&rounded, &centValue, 0, .bankers)
-    let cents = Int(truncating: rounded as NSDecimalNumber)
-    return MonetaryAmount(cents: cents, currency: currency)
   }
 }

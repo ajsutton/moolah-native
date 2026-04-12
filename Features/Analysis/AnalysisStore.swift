@@ -139,7 +139,7 @@ final class AnalysisStore {
   static func buildCategoriesOverTime(
     from breakdown: [ExpenseBreakdown], categories: Categories
   ) -> [CategoryOverTimeEntry] {
-    var rootTotals: [UUID?: [String: Int]] = [:]
+    var rootTotals: [UUID?: [String: Decimal]] = [:]
     var allMonths: Set<String> = []
 
     // Negate totalExpenses (server returns negative for expenses) and clamp to zero,
@@ -147,38 +147,39 @@ final class AnalysisStore {
     for item in breakdown {
       let rootId = rootCategoryId(for: item.categoryId, categories: categories)
       allMonths.insert(item.month)
-      rootTotals[rootId, default: [:]][item.month, default: 0] += -item.totalExpenses.cents
+      rootTotals[rootId, default: [:]][item.month, default: 0] += -item.totalExpenses.quantity
     }
 
     let orderedMonths = allMonths.sorted()
 
-    var monthTotals: [String: Int] = [:]
+    var monthTotals: [String: Decimal] = [:]
     for (_, months) in rootTotals {
-      for (month, cents) in months {
-        monthTotals[month, default: 0] += max(0, cents)
+      for (month, amount) in months {
+        monthTotals[month, default: 0] += max(0, amount)
       }
     }
 
     return rootTotals.map { categoryId, months in
       let points = orderedMonths.map { month -> CategoryOverTimePoint in
-        let cents = max(0, months[month] ?? 0)
+        let amount = max(0, months[month] ?? 0)
         let total = monthTotals[month] ?? 1
-        let percentage = total > 0 ? Double(cents) / Double(total) * 100 : 0
+        let percentage =
+          total > 0 ? Double(truncating: (amount / total * 100) as NSDecimalNumber) : 0
         return CategoryOverTimePoint(
           month: month,
           monthDate: parseMonth(month),
-          actualCents: cents,
+          actualAmount: amount,
           percentage: percentage
         )
       }
-      let totalCents = months.values.reduce(0, +)
+      let totalAmount = months.values.reduce(Decimal(0), +)
       return CategoryOverTimeEntry(
         categoryId: categoryId,
         points: points,
-        totalCents: totalCents
+        totalAmount: totalAmount
       )
     }
-    .sorted { $0.totalCents > $1.totalCents }
+    .sorted { $0.totalAmount > $1.totalAmount }
   }
 
   private static func rootCategoryId(for categoryId: UUID?, categories: Categories) -> UUID? {
@@ -215,7 +216,7 @@ final class AnalysisStore {
 struct CategoryOverTimePoint: Sendable, Identifiable {
   let month: String
   let monthDate: Date
-  let actualCents: Int
+  let actualAmount: Decimal
   let percentage: Double
 
   var id: String { month }
@@ -224,7 +225,7 @@ struct CategoryOverTimePoint: Sendable, Identifiable {
 struct CategoryOverTimeEntry: Sendable, Identifiable {
   let categoryId: UUID?
   let points: [CategoryOverTimePoint]
-  let totalCents: Int
+  let totalAmount: Decimal
 
   var id: String { categoryId?.uuidString ?? "uncategorized" }
 }

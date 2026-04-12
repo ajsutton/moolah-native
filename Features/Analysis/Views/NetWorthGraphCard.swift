@@ -73,7 +73,7 @@ struct NetWorthGraphCard: View {
         ForEach(actualBalances) { balance in
           LineMark(
             x: .value("Date", balance.date),
-            y: .value("Amount", balance.availableFunds.cents),
+            y: .value("Amount", balance.availableFunds.doubleValue),
             series: .value("Series", "Available Funds")
           )
           .foregroundStyle(.green)
@@ -83,7 +83,7 @@ struct NetWorthGraphCard: View {
         ForEach(forecastBalances) { balance in
           LineMark(
             x: .value("Date", balance.date),
-            y: .value("Amount", balance.availableFunds.cents),
+            y: .value("Amount", balance.availableFunds.doubleValue),
             series: .value("Series", "Available Funds Forecast")
           )
           .foregroundStyle(.green.opacity(0.5))
@@ -96,7 +96,7 @@ struct NetWorthGraphCard: View {
         ForEach(actualBalances) { balance in
           LineMark(
             x: .value("Date", balance.date),
-            y: .value("Amount", balance.balance.cents),
+            y: .value("Amount", balance.balance.doubleValue),
             series: .value("Series", "Current Funds")
           )
           .foregroundStyle(.orange)
@@ -106,7 +106,7 @@ struct NetWorthGraphCard: View {
         ForEach(forecastBalances) { balance in
           LineMark(
             x: .value("Date", balance.date),
-            y: .value("Amount", balance.balance.cents),
+            y: .value("Amount", balance.balance.doubleValue),
             series: .value("Series", "Current Funds Forecast")
           )
           .foregroundStyle(.orange.opacity(0.5))
@@ -119,7 +119,7 @@ struct NetWorthGraphCard: View {
         ForEach(actualBalances) { balance in
           LineMark(
             x: .value("Date", balance.date),
-            y: .value("Amount", balance.investments.cents),
+            y: .value("Amount", balance.investments.doubleValue),
             series: .value("Series", "Invested Amount")
           )
           .foregroundStyle(.purple)
@@ -132,7 +132,7 @@ struct NetWorthGraphCard: View {
         ForEach(actualBalances.filter({ $0.investmentValue != nil })) { balance in
           LineMark(
             x: .value("Date", balance.date),
-            y: .value("Amount", balance.investmentValue!.cents),
+            y: .value("Amount", balance.investmentValue!.doubleValue),
             series: .value("Series", "Investment Value")
           )
           .foregroundStyle(.indigo)
@@ -145,7 +145,7 @@ struct NetWorthGraphCard: View {
         ForEach(actualBalances) { balance in
           LineMark(
             x: .value("Date", balance.date),
-            y: .value("Amount", balance.netWorth.cents),
+            y: .value("Amount", balance.netWorth.doubleValue),
             series: .value("Series", "Net Worth")
           )
           .foregroundStyle(.blue)
@@ -155,7 +155,7 @@ struct NetWorthGraphCard: View {
         ForEach(forecastBalances) { balance in
           LineMark(
             x: .value("Date", balance.date),
-            y: .value("Amount", balance.netWorth.cents),
+            y: .value("Amount", balance.netWorth.doubleValue),
             series: .value("Series", "Net Worth Forecast")
           )
           .foregroundStyle(.blue.opacity(0.5))
@@ -168,7 +168,7 @@ struct NetWorthGraphCard: View {
         ForEach(actualBalances.filter({ $0.bestFit != nil })) { balance in
           LineMark(
             x: .value("Date", balance.date),
-            y: .value("Amount", balance.bestFit!.cents),
+            y: .value("Amount", balance.bestFit!.doubleValue),
             series: .value("Series", "Best Fit")
           )
           .foregroundStyle(.gray)
@@ -193,10 +193,12 @@ struct NetWorthGraphCard: View {
       AxisMarks { value in
         AxisGridLine()
         AxisValueLabel {
-          if let cents = value.as(Int.self) {
+          if let amount = value.as(Double.self) {
             Text(
-              MonetaryAmount(cents: cents, currency: balances.first?.balance.currency ?? .AUD)
-                .formatNoSymbol
+              InstrumentAmount(
+                quantity: Decimal(amount), instrument: balances.first?.balance.instrument ?? .AUD
+              )
+              .formatNoSymbol
             )
             .monospacedDigit()
           }
@@ -246,7 +248,7 @@ struct NetWorthGraphCard: View {
   private var availableSeries: [ChartSeries] {
     var series: [ChartSeries] = [.availableFunds, .currentFunds, .netWorth]
 
-    if balances.contains(where: { $0.investments.cents != 0 }) {
+    if balances.contains(where: { $0.investments.quantity != 0 }) {
       series.append(.investedAmount)
     }
     if balances.contains(where: { $0.investmentValue != nil }) {
@@ -298,21 +300,21 @@ struct LegendItem: View {
   let balances = [
     DailyBalance(
       date: Date().addingTimeInterval(-86400 * 7),
-      balance: MonetaryAmount(cents: 100000, currency: .AUD),
-      earmarked: MonetaryAmount(cents: 20000, currency: .AUD),
-      investments: MonetaryAmount(cents: 50000, currency: .AUD)
+      balance: InstrumentAmount(quantity: 100000, instrument: .AUD),
+      earmarked: InstrumentAmount(quantity: 20000, instrument: .AUD),
+      investments: InstrumentAmount(quantity: 50000, instrument: .AUD)
     ),
     DailyBalance(
       date: Date().addingTimeInterval(-86400 * 3),
-      balance: MonetaryAmount(cents: 120000, currency: .AUD),
-      earmarked: MonetaryAmount(cents: 25000, currency: .AUD),
-      investments: MonetaryAmount(cents: 55000, currency: .AUD)
+      balance: InstrumentAmount(quantity: 120000, instrument: .AUD),
+      earmarked: InstrumentAmount(quantity: 25000, instrument: .AUD),
+      investments: InstrumentAmount(quantity: 55000, instrument: .AUD)
     ),
     DailyBalance(
       date: Date(),
-      balance: MonetaryAmount(cents: 110000, currency: .AUD),
-      earmarked: MonetaryAmount(cents: 22000, currency: .AUD),
-      investments: MonetaryAmount(cents: 60000, currency: .AUD)
+      balance: InstrumentAmount(quantity: 110000, instrument: .AUD),
+      earmarked: InstrumentAmount(quantity: 22000, instrument: .AUD),
+      investments: InstrumentAmount(quantity: 60000, instrument: .AUD)
     ),
   ]
 

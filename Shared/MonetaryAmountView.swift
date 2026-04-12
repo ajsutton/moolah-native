@@ -1,19 +1,19 @@
 import SwiftUI
 
-/// Displays a MonetaryAmount with color coding:
+/// Displays an InstrumentAmount with color coding:
 /// green when positive, red when negative, primary when zero.
 /// Use `colorOverride` to force a specific color (e.g. `.secondary` for running balances).
 struct MonetaryAmountView: View {
-  let amount: MonetaryAmount
+  let amount: InstrumentAmount
   var font: Font? = nil
   var colorOverride: Color? = nil
 
   var body: some View {
-    Text(amount.decimalValue, format: .currency(code: amount.currency.code))
+    Text(amount.quantity, format: .currency(code: amount.instrument.id))
       .foregroundStyle(effectiveColor)
       .monospacedDigit()
       .font(font)
-      .accessibilityValue(amount.decimalValue.formatted(.currency(code: amount.currency.code)))
+      .accessibilityValue(amount.quantity.formatted(.currency(code: amount.instrument.id)))
   }
 
   private var effectiveColor: Color {

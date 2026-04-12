@@ -42,9 +42,9 @@ struct EditAccountView: View {
 
         Section {
           Toggle("Hide Account", isOn: $isHidden)
-            .disabled(account.balance.cents != 0)
+            .disabled(!account.balance.isZero)
             .accessibilityHint(
-              account.balance.cents != 0
+              !account.balance.isZero
                 ? "Account must have zero balance to hide"
                 : ""
             )
@@ -62,9 +62,9 @@ struct EditAccountView: View {
           Button("Delete Account", role: .destructive) {
             showingDeleteConfirmation = true
           }
-          .disabled(account.balance.cents != 0)
+          .disabled(!account.balance.isZero)
           .accessibilityHint(
-            account.balance.cents != 0
+            !account.balance.isZero
               ? "Account must have zero balance to delete"
               : ""
           )

@@ -7,7 +7,7 @@ import SwiftUI
 struct SidebarRowView: View {
   let icon: String
   let name: String
-  let amount: MonetaryAmount
+  let amount: InstrumentAmount
   var isSelected: Bool = false
 
   @Environment(\.backgroundProminence) private var backgroundProminence
@@ -57,7 +57,7 @@ extension Account {
     SidebarRowView(
       icon: "building.columns",
       name: "Bank Account (selected)",
-      amount: MonetaryAmount(cents: 123456, currency: Currency.AUD),
+      amount: InstrumentAmount(quantity: 1234.56, instrument: .AUD),
       isSelected: true
     )
     .tag("selected")
@@ -65,14 +65,14 @@ extension Account {
     SidebarRowView(
       icon: "bookmark.fill",
       name: "Holiday Fund",
-      amount: MonetaryAmount(cents: 150000, currency: Currency.AUD)
+      amount: InstrumentAmount(quantity: 1500.00, instrument: .AUD)
     )
     .tag("other1")
 
     SidebarRowView(
       icon: "creditcard",
       name: "Credit Card",
-      amount: MonetaryAmount(cents: -50000, currency: Currency.AUD)
+      amount: InstrumentAmount(quantity: -500.00, instrument: .AUD)
     )
     .tag("other2")
   }

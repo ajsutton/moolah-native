@@ -20,18 +20,18 @@ struct TransactionDraft: Sendable {
 
   // MARK: - Parsing & Validation
 
-  /// Parse the user-entered amount text into positive cents, or `nil` if the
+  /// Parse the user-entered amount text into a positive quantity, or `nil` if the
   /// text is unparseable or zero.
-  var parsedCents: Int? {
-    guard let cents = MonetaryAmount.parseCents(from: amountText),
-      cents > 0
+  var parsedQuantity: Decimal? {
+    guard let qty = InstrumentAmount.parseQuantity(from: amountText, decimals: 2),
+      qty > 0
     else { return nil }
-    return cents
+    return qty
   }
 
   /// Whether the draft represents a valid, saveable transaction.
   var isValid: Bool {
-    guard parsedCents != nil else { return false }
+    guard parsedQuantity != nil else { return false }
     if type == .transfer {
       guard toAccountId != nil, toAccountId != accountId else { return false }
     }
@@ -47,32 +47,32 @@ struct TransactionDraft: Sendable {
   ///
   /// Returns `nil` when the draft is not valid (see ``isValid``).
   /// The caller supplies the transaction `id` (existing or new) and the
-  /// `currency` that should stamp the resulting `MonetaryAmount`.
-  func toTransaction(id: UUID, currency: Currency) -> Transaction? {
-    guard let cents = parsedCents, isValid else { return nil }
+  /// `instrument` that should stamp the resulting legs.
+  func toTransaction(id: UUID, instrument: Instrument) -> Transaction? {
+    guard let qty = parsedQuantity, isValid else { return nil }
 
-    let signedCents: Int
-    switch type {
-    case .expense, .transfer:
-      signedCents = -abs(cents)
-    case .income, .openingBalance:
-      signedCents = abs(cents)
+    let signedQty: Decimal = (type == .expense || type == .transfer) ? -abs(qty) : abs(qty)
+
+    guard let acctId = accountId else { return nil }
+    var legs: [TransactionLeg] = []
+    legs.append(
+      TransactionLeg(
+        accountId: acctId, instrument: instrument, quantity: signedQty,
+        type: type == .transfer ? .transfer : type,
+        categoryId: type == .transfer ? nil : categoryId,
+        earmarkId: type == .transfer ? nil : earmarkId
+      ))
+    if type == .transfer, let toAcctId = toAccountId {
+      legs.append(
+        TransactionLeg(
+          accountId: toAcctId, instrument: instrument, quantity: -signedQty, type: .transfer
+        ))
     }
-
     return Transaction(
-      id: id,
-      type: type,
-      date: date,
-      accountId: accountId,
-      toAccountId: type == .transfer ? toAccountId : nil,
-      amount: MonetaryAmount(cents: signedCents, currency: currency),
-      payee: payee.isEmpty ? nil : payee,
+      id: id, date: date, payee: payee.isEmpty ? nil : payee,
       notes: notes.isEmpty ? nil : notes,
-      categoryId: categoryId,
-      earmarkId: earmarkId,
       recurPeriod: isRepeating ? recurPeriod : nil,
-      recurEvery: isRepeating ? recurEvery : nil
-    )
+      recurEvery: isRepeating ? recurEvery : nil, legs: legs)
   }
 }
 
@@ -81,15 +81,22 @@ struct TransactionDraft: Sendable {
 extension TransactionDraft {
   /// Create a draft pre-populated from an existing transaction (for editing).
   init(from transaction: Transaction) {
+    let primaryLeg = transaction.legs.first
+    let transferLeg =
+      transaction.legs.count > 1
+      ? transaction.legs.first(where: { $0.accountId != primaryLeg?.accountId })
+      : nil
     self.init(
-      type: transaction.type,
+      type: primaryLeg?.type == .transfer ? .transfer : (primaryLeg?.type ?? .expense),
       payee: transaction.payee ?? "",
-      amountText: transaction.amount.formatNoSymbol,
+      amountText: primaryLeg.map {
+        abs($0.quantity).formatted(.number.precision(.fractionLength(2)))
+      } ?? "",
       date: transaction.date,
-      accountId: transaction.accountId,
-      toAccountId: transaction.toAccountId,
-      categoryId: transaction.categoryId,
-      earmarkId: transaction.earmarkId,
+      accountId: primaryLeg?.accountId,
+      toAccountId: transferLeg?.accountId,
+      categoryId: primaryLeg?.categoryId,
+      earmarkId: primaryLeg?.earmarkId,
       notes: transaction.notes ?? "",
       isRepeating: transaction.recurPeriod != nil && transaction.recurPeriod != .once,
       recurPeriod: transaction.recurPeriod,

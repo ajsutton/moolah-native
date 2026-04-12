@@ -101,13 +101,13 @@ struct IncomeExpenseTableCard: View {
                 let savings = profit(for: item)
                 Text(savings.formatted)
                   .monospacedDigit()
-                  .foregroundStyle(savings.cents >= 0 ? .green : .red)
+                  .foregroundStyle(!savings.isNegative ? .green : .red)
                   .frame(minWidth: 100, alignment: .trailing)
 
                 let totalSavings = cumulativeSavings(upTo: item)
                 Text(totalSavings.formatted)
                   .monospacedDigit()
-                  .foregroundStyle(totalSavings.cents >= 0 ? .green : .red)
+                  .foregroundStyle(!totalSavings.isNegative ? .green : .red)
                   .frame(minWidth: 110, alignment: .trailing)
               }
               .padding(.horizontal, 12)
@@ -128,19 +128,19 @@ struct IncomeExpenseTableCard: View {
     .accessibilityLabel("Monthly income and expense table")
   }
 
-  private func income(for item: MonthlyIncomeExpense) -> MonetaryAmount {
+  private func income(for item: MonthlyIncomeExpense) -> InstrumentAmount {
     includeEarmarks ? item.totalIncome : item.income
   }
 
-  private func expense(for item: MonthlyIncomeExpense) -> MonetaryAmount {
+  private func expense(for item: MonthlyIncomeExpense) -> InstrumentAmount {
     includeEarmarks ? item.totalExpense : item.expense
   }
 
-  private func profit(for item: MonthlyIncomeExpense) -> MonetaryAmount {
+  private func profit(for item: MonthlyIncomeExpense) -> InstrumentAmount {
     includeEarmarks ? item.totalProfit : item.profit
   }
 
-  private func cumulativeSavings(upTo item: MonthlyIncomeExpense) -> MonetaryAmount {
+  private func cumulativeSavings(upTo item: MonthlyIncomeExpense) -> InstrumentAmount {
     Self.cumulativeSavings(
       upTo: item, in: data, includeEarmarks: includeEarmarks)
   }
@@ -152,11 +152,11 @@ struct IncomeExpenseTableCard: View {
     upTo item: MonthlyIncomeExpense,
     in data: [MonthlyIncomeExpense],
     includeEarmarks: Bool
-  ) -> MonetaryAmount {
+  ) -> InstrumentAmount {
     guard let index = data.firstIndex(where: { $0.id == item.id }) else {
-      return .zero(currency: data.first?.income.currency ?? .AUD)
+      return .zero(instrument: data.first?.income.instrument ?? .AUD)
     }
-    return data[...index].reduce(MonetaryAmount.zero(currency: item.income.currency)) {
+    return data[...index].reduce(InstrumentAmount.zero(instrument: item.income.instrument)) {
       total, month in
       total + (includeEarmarks ? month.totalProfit : month.profit)
     }
@@ -182,27 +182,27 @@ struct IncomeExpenseTableCard: View {
       month: "202604",
       start: Date().addingTimeInterval(-86400 * 30),
       end: Date(),
-      income: MonetaryAmount(cents: 500000, currency: .AUD),
-      expense: MonetaryAmount(cents: 300000, currency: .AUD),
-      profit: MonetaryAmount(cents: 200000, currency: .AUD),
-      earmarkedIncome: MonetaryAmount(cents: 50000, currency: .AUD),
-      earmarkedExpense: MonetaryAmount(cents: 20000, currency: .AUD),
-      earmarkedProfit: MonetaryAmount(cents: 30000, currency: .AUD)
+      income: InstrumentAmount(quantity: 5000, instrument: .AUD),
+      expense: InstrumentAmount(quantity: 3000, instrument: .AUD),
+      profit: InstrumentAmount(quantity: 2000, instrument: .AUD),
+      earmarkedIncome: InstrumentAmount(quantity: 500, instrument: .AUD),
+      earmarkedExpense: InstrumentAmount(quantity: 200, instrument: .AUD),
+      earmarkedProfit: InstrumentAmount(quantity: 300, instrument: .AUD)
     ),
     MonthlyIncomeExpense(
       month: "202603",
       start: Date().addingTimeInterval(-86400 * 60),
       end: Date().addingTimeInterval(-86400 * 31),
-      income: MonetaryAmount(cents: 480000, currency: .AUD),
-      expense: MonetaryAmount(cents: 320000, currency: .AUD),
-      profit: MonetaryAmount(cents: 160000, currency: .AUD),
-      earmarkedIncome: MonetaryAmount(cents: 40000, currency: .AUD),
-      earmarkedExpense: MonetaryAmount(cents: 25000, currency: .AUD),
-      earmarkedProfit: MonetaryAmount(cents: 15000, currency: .AUD)
+      income: InstrumentAmount(quantity: 4800, instrument: .AUD),
+      expense: InstrumentAmount(quantity: 3200, instrument: .AUD),
+      profit: InstrumentAmount(quantity: 1600, instrument: .AUD),
+      earmarkedIncome: InstrumentAmount(quantity: 400, instrument: .AUD),
+      earmarkedExpense: InstrumentAmount(quantity: 250, instrument: .AUD),
+      earmarkedProfit: InstrumentAmount(quantity: 150, instrument: .AUD)
     ),
   ]
 
-  return IncomeExpenseTableCard(data: data)
+  IncomeExpenseTableCard(data: data)
     .frame(width: 600, height: 500)
     .padding()
 }

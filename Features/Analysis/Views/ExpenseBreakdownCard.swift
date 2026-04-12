@@ -42,7 +42,7 @@ struct ExpenseBreakdownCard: View {
   private var pieChart: some View {
     Chart(filteredBreakdown, id: \.categoryId) { item in
       SectorMark(
-        angle: .value("Amount", item.totalExpenses.cents),
+        angle: .value("Amount", Double(truncating: item.totalExpenses.quantity as NSDecimalNumber)),
         innerRadius: .ratio(0.5),
         angularInset: 1.5
       )
@@ -107,11 +107,14 @@ struct ExpenseBreakdownCard: View {
     // Sum all expenses for this category level, negated to positive for display
     // (server returns negative amounts for expenses)
     let categoryTotals = Dictionary(grouping: breakdown) { $0.categoryId }
-      .mapValues { items -> MonetaryAmount in
-        let sum = items.reduce(MonetaryAmount.zero(currency: items.first!.totalExpenses.currency)) {
+      .mapValues { items -> InstrumentAmount in
+        let sum = items.reduce(
+          InstrumentAmount.zero(instrument: items.first!.totalExpenses.instrument)
+        ) {
           $0 + $1.totalExpenses
         }
-        return MonetaryAmount(cents: max(0, -sum.cents), currency: sum.currency)
+        let negated = InstrumentAmount(quantity: max(0, -sum.quantity), instrument: sum.instrument)
+        return negated
       }
 
     // Filter by selectedCategoryId (show only children if drill-down active)
@@ -129,16 +132,18 @@ struct ExpenseBreakdownCard: View {
     }
 
     let filtered = categoryTotals.filter { visibleCategories.contains($0.key) }
-    let total = filtered.values.reduce(.zero(currency: filtered.values.first?.currency ?? .AUD), +)
+    let total = filtered.values.reduce(
+      .zero(instrument: filtered.values.first?.instrument ?? .AUD), +)
 
     return filtered.map { categoryId, amount in
       ExpenseBreakdownWithPercentage(
         categoryId: categoryId,
         totalExpenses: amount,
-        percentage: total.cents > 0 ? Double(amount.cents) / Double(total.cents) * 100 : 0
+        percentage: total.quantity > 0
+          ? Double(truncating: (amount.quantity / total.quantity * 100) as NSDecimalNumber) : 0
       )
     }
-    .sorted { $0.totalExpenses.cents > $1.totalExpenses.cents }
+    .sorted { $0.totalExpenses.quantity > $1.totalExpenses.quantity }
   }
 
   private func categoryName(for id: UUID?) -> String {
@@ -171,7 +176,7 @@ struct ExpenseBreakdownCard: View {
 
 struct ExpenseBreakdownWithPercentage: Identifiable {
   let categoryId: UUID?
-  let totalExpenses: MonetaryAmount
+  let totalExpenses: InstrumentAmount
   let percentage: Double
 
   var id: String {
@@ -190,17 +195,17 @@ struct ExpenseBreakdownWithPercentage: Identifiable {
     ExpenseBreakdown(
       categoryId: categories[0].id,
       month: "202604",
-      totalExpenses: MonetaryAmount(cents: 45000, currency: .AUD)
+      totalExpenses: InstrumentAmount(quantity: 450, instrument: .AUD)
     ),
     ExpenseBreakdown(
       categoryId: categories[1].id,
       month: "202604",
-      totalExpenses: MonetaryAmount(cents: 25000, currency: .AUD)
+      totalExpenses: InstrumentAmount(quantity: 250, instrument: .AUD)
     ),
     ExpenseBreakdown(
       categoryId: categories[2].id,
       month: "202604",
-      totalExpenses: MonetaryAmount(cents: 15000, currency: .AUD)
+      totalExpenses: InstrumentAmount(quantity: 150, instrument: .AUD)
     ),
   ]
 

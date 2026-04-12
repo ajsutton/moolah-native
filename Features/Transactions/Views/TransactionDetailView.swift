@@ -57,10 +57,13 @@ struct TransactionDetailView: View {
 
     _type = State(initialValue: transaction.type)
     _payee = State(initialValue: transaction.payee ?? "")
-    _amountText = State(initialValue: transaction.amount.formatNoSymbol)
+    _amountText = State(initialValue: transaction.primaryAmount.formatNoSymbol)
     _date = State(initialValue: transaction.date)
-    _accountId = State(initialValue: transaction.accountId)
-    _toAccountId = State(initialValue: transaction.toAccountId)
+    _accountId = State(initialValue: transaction.primaryAccountId)
+    _toAccountId = State(
+      initialValue: transaction.legs.count > 1
+        ? transaction.legs.first(where: { $0.accountId != transaction.primaryAccountId })?.accountId
+        : nil)
     _categoryId = State(initialValue: transaction.categoryId)
     if let catId = transaction.categoryId, let cat = categories.by(id: catId) {
       _categoryText = State(initialValue: categories.path(for: cat))
@@ -75,7 +78,7 @@ struct TransactionDetailView: View {
 
   private var isNewTransaction: Bool {
     // Detect if this is a new transaction by checking if it has default values
-    transaction.amount.cents == 0 && (transaction.payee?.isEmpty ?? true)
+    transaction.primaryAmount.isZero && (transaction.payee?.isEmpty ?? true)
   }
 
   private var draft: TransactionDraft {
@@ -86,7 +89,7 @@ struct TransactionDetailView: View {
       recurPeriod: recurPeriod, recurEvery: recurEvery)
   }
 
-  private var parsedCents: Int? { draft.parsedCents }
+  private var parsedQuantity: Decimal? { draft.parsedQuantity }
 
   private var isValid: Bool { draft.isValid }
 
@@ -232,7 +235,7 @@ struct TransactionDetailView: View {
           #if os(iOS)
             .keyboardType(.decimalPad)
           #endif
-        Text(transaction.amount.currency.code).foregroundStyle(.secondary)
+        Text(transaction.primaryAmount.instrument.id).foregroundStyle(.secondary)
       }
 
       DatePicker("Date", selection: $date, displayedComponents: .date)
@@ -457,9 +460,9 @@ struct TransactionDetailView: View {
       guard let match = await transactionStore.fetchTransactionForAutofill(payee: selectedPayee)
       else { return }
       // Auto-fill fields that are still at defaults
-      if parsedCents == nil || parsedCents == 0 {
-        let decimal = Decimal(abs(match.amount.cents)) / 100
-        amountText = "\(decimal)"
+      if parsedQuantity == nil || parsedQuantity == 0 {
+        amountText = abs(match.primaryAmount.quantity).formatted(
+          .number.precision(.fractionLength(2)))
       }
       if categoryId == nil, let matchCategoryId = match.categoryId {
         categoryId = matchCategoryId
@@ -472,7 +475,10 @@ struct TransactionDetailView: View {
         type = match.type
       }
       if type == .transfer, toAccountId == nil {
-        toAccountId = match.toAccountId
+        let matchTransferLeg =
+          match.legs.count > 1
+          ? match.legs.first(where: { $0.accountId != match.primaryAccountId }) : nil
+        toAccountId = matchTransferLeg?.accountId
       }
     }
   }
@@ -539,7 +545,7 @@ struct TransactionDetailView: View {
   private func saveIfValid() {
     guard
       let updated = draft.toTransaction(
-        id: transaction.id, currency: transaction.amount.currency)
+        id: transaction.id, instrument: transaction.primaryAmount.instrument)
     else { return }
     onUpdate(updated)
   }
@@ -550,11 +556,11 @@ struct TransactionDetailView: View {
   NavigationStack {
     TransactionDetailView(
       transaction: Transaction(
-        type: .expense,
         date: Date(),
-        accountId: accountId,
-        amount: MonetaryAmount(cents: -5023, currency: Currency.AUD),
-        payee: "Woolworths"
+        payee: "Woolworths",
+        legs: [
+          TransactionLeg(accountId: accountId, instrument: .AUD, quantity: -50.23, type: .expense)
+        ]
       ),
       accounts: Accounts(from: [
         Account(id: accountId, name: "Checking", type: .bank),

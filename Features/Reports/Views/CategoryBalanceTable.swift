@@ -4,7 +4,7 @@ import SwiftUI
 /// Used for both income and expense columns in the Reports view.
 struct CategoryBalanceTable: View {
   let title: String
-  let balances: [UUID: MonetaryAmount]
+  let balances: [UUID: InstrumentAmount]
   let categories: Categories
   let dateRange: ClosedRange<Date>
 
@@ -24,7 +24,7 @@ struct CategoryBalanceTable: View {
         ?? CategoryGroup(
           categoryId: rootId,
           name: categories.by(id: rootId)?.name ?? "Unknown",
-          totalAmount: .zero(currency: amount.currency),
+          totalAmount: .zero(instrument: amount.instrument),
           children: []
         )
 
@@ -49,14 +49,14 @@ struct CategoryBalanceTable: View {
     return roots.values
       .map { group in
         var sorted = group
-        sorted.children.sort { $0.amount.cents.magnitude > $1.amount.cents.magnitude }
+        sorted.children.sort { $0.amount.quantity.magnitude > $1.amount.quantity.magnitude }
         return sorted
       }
-      .sorted { $0.totalAmount.cents.magnitude > $1.totalAmount.cents.magnitude }
+      .sorted { $0.totalAmount.quantity.magnitude > $1.totalAmount.quantity.magnitude }
   }
 
-  private var grandTotal: MonetaryAmount {
-    balances.values.reduce(.zero(currency: balances.values.first?.currency ?? .AUD), +)
+  private var grandTotal: InstrumentAmount {
+    balances.values.reduce(.zero(instrument: balances.values.first?.instrument ?? .AUD), +)
   }
 
   var body: some View {
@@ -142,7 +142,7 @@ struct CategoryBalanceTable: View {
 struct CategoryGroup: Identifiable {
   let categoryId: UUID
   let name: String
-  var totalAmount: MonetaryAmount
+  var totalAmount: InstrumentAmount
   var children: [CategoryChild]
 
   var id: UUID { categoryId }
@@ -151,7 +151,7 @@ struct CategoryGroup: Identifiable {
 struct CategoryChild: Identifiable {
   let categoryId: UUID
   let name: String
-  let amount: MonetaryAmount
+  let amount: InstrumentAmount
 
   var id: UUID { categoryId }
 }

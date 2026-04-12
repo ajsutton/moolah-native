@@ -49,7 +49,7 @@ final class ProfileSession: Identifiable {
 
       backend = RemoteBackend(
         baseURL: profile.resolvedServerURL,
-        currency: profile.currency,
+        instrument: profile.instrument,
         session: session,
         cookieKeychain: cookieKeychain,
         cookieStorage: cookieStorage

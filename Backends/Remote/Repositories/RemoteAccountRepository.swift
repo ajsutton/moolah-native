@@ -3,12 +3,12 @@ import OSLog
 
 final class RemoteAccountRepository: AccountRepository, Sendable {
   private let client: APIClient
-  private let currency: Currency
+  private let instrument: Instrument
   private let logger = Logger(subsystem: "com.moolah.app", category: "RemoteAccountRepository")
 
-  init(client: APIClient, currency: Currency) {
+  init(client: APIClient, instrument: Instrument) {
     self.client = client
-    self.currency = currency
+    self.instrument = instrument
   }
 
   func fetchAll() async throws -> [Account] {
@@ -18,9 +18,9 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
     do {
       let wrapper = try JSONDecoder().decode(AccountDTO.ListWrapper.self, from: data)
       logger.debug("Successfully decoded \(wrapper.accounts.count) accounts")
-      return wrapper.accounts.map { $0.toDomain(currency: self.currency) }
+      return wrapper.accounts.map { $0.toDomain(instrument: self.instrument) }
     } catch {
-      logger.error("❌ Decoding error: \(error.localizedDescription)")
+      logger.error("Decoding error: \(error.localizedDescription)")
       if let decodingError = error as? DecodingError {
         switch decodingError {
         case .keyNotFound(let key, let context):
@@ -50,10 +50,11 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
       throw BackendError.validationFailed("Account name cannot be empty")
     }
 
+    let cents = Int(truncating: (account.balance.quantity * 100) as NSDecimalNumber)
     let dto = CreateAccountDTO(
       name: account.name,
       type: account.type.rawValue,
-      balance: account.balance.cents,
+      balance: cents,
       position: account.position,
       date: BackendDateFormatter.string(from: Date())
     )
@@ -67,9 +68,9 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
     do {
       let response = try JSONDecoder().decode(AccountDTO.self, from: data)
       logger.debug("Successfully created account: \(response.name)")
-      return response.toDomain(currency: currency)
+      return response.toDomain(instrument: instrument)
     } catch {
-      logger.error("❌ Decoding error: \(error.localizedDescription)")
+      logger.error("Decoding error: \(error.localizedDescription)")
       throw error
     }
   }
@@ -93,9 +94,9 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
     do {
       let response = try JSONDecoder().decode(AccountDTO.self, from: data)
       logger.debug("Successfully updated account: \(response.name)")
-      return response.toDomain(currency: currency)  // Accept server's balance
+      return response.toDomain(instrument: instrument)  // Accept server's balance
     } catch {
-      logger.error("❌ Decoding error: \(error.localizedDescription)")
+      logger.error("Decoding error: \(error.localizedDescription)")
       throw error
     }
   }
@@ -107,7 +108,7 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
       throw BackendError.notFound("Account not found")
     }
 
-    guard account.balance.cents == 0 else {
+    guard account.balance.isZero else {
       throw BackendError.validationFailed("Cannot delete account with non-zero balance")
     }
 

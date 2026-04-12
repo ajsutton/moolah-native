@@ -63,8 +63,8 @@ final class EarmarkStore {
     earmarks.filter { showHidden || !$0.isHidden }
   }
 
-  var totalBalance: MonetaryAmount {
-    visibleEarmarks.reduce(.zero(currency: visibleEarmarks.first?.balance.currency ?? .AUD)) {
+  var totalBalance: InstrumentAmount {
+    visibleEarmarks.reduce(.zero(instrument: visibleEarmarks.first?.balance.instrument ?? .AUD)) {
       $0 + $1.balance
     }
   }
@@ -74,48 +74,27 @@ final class EarmarkStore {
   ///   - old: The previous transaction (nil for creates).
   ///   - new: The new transaction (nil for deletes).
   func applyTransactionDelta(old: Transaction?, new: Transaction?) {
-    var updated = earmarks.ordered
+    var result = earmarks
 
     // Remove the old transaction's effect (skip scheduled — they don't affect balances)
-    if let old, !old.isScheduled, let earmarkId = old.earmarkId {
-      // Reverse the effect: remove from balance and reverse saved/spent
-      updated = updated.map { earmark in
-        guard earmark.id == earmarkId else { return earmark }
-        var copy = earmark
-        copy.balance = copy.balance - old.amount
-        if old.amount.cents > 0 {
-          // Was income, decrease saved
-          copy.saved = copy.saved - old.amount
-        } else {
-          // Was expense, decrease spent
-          let absAmount = MonetaryAmount(
-            cents: abs(old.amount.cents), currency: old.amount.currency)
-          copy.spent = copy.spent - absAmount
+    if let old, !old.isScheduled {
+      for leg in old.legs {
+        if let earmarkId = leg.earmarkId {
+          result = result.adjustingBalance(of: earmarkId, by: -leg.amount)
         }
-        return copy
       }
     }
 
     // Apply the new transaction's effect (skip scheduled — they don't affect balances)
-    if let new, !new.isScheduled, let earmarkId = new.earmarkId {
-      updated = updated.map { earmark in
-        guard earmark.id == earmarkId else { return earmark }
-        var copy = earmark
-        copy.balance = copy.balance + new.amount
-        if new.amount.cents > 0 {
-          // Is income, increase saved
-          copy.saved = copy.saved + new.amount
-        } else {
-          // Is expense, increase spent
-          let absAmount = MonetaryAmount(
-            cents: abs(new.amount.cents), currency: new.amount.currency)
-          copy.spent = copy.spent + absAmount
+    if let new, !new.isScheduled {
+      for leg in new.legs {
+        if let earmarkId = leg.earmarkId {
+          result = result.adjustingBalance(of: earmarkId, by: leg.amount)
         }
-        return copy
       }
     }
 
-    earmarks = Earmarks(from: updated)
+    earmarks = result
   }
 
   func reorderEarmarks(from source: IndexSet, to destination: Int) async {
@@ -172,7 +151,7 @@ final class EarmarkStore {
   }
 
   func updateBudgetItem(
-    earmarkId: UUID, categoryId: UUID, amount: MonetaryAmount
+    earmarkId: UUID, categoryId: UUID, amount: InstrumentAmount
   ) async {
     let oldItems = budgetItems
 
@@ -186,7 +165,7 @@ final class EarmarkStore {
 
     do {
       try await repository.setBudget(
-        earmarkId: earmarkId, categoryId: categoryId, amount: amount.cents)
+        earmarkId: earmarkId, categoryId: categoryId, amount: amount)
     } catch {
       logger.error("Failed to update budget item: \(error.localizedDescription)")
       budgetItems = oldItems
@@ -195,7 +174,7 @@ final class EarmarkStore {
   }
 
   func addBudgetItem(
-    earmarkId: UUID, categoryId: UUID, amount: MonetaryAmount
+    earmarkId: UUID, categoryId: UUID, amount: InstrumentAmount
   ) async {
     let newItem = EarmarkBudgetItem(categoryId: categoryId, amount: amount)
     let oldItems = budgetItems
@@ -203,7 +182,7 @@ final class EarmarkStore {
 
     do {
       try await repository.setBudget(
-        earmarkId: earmarkId, categoryId: categoryId, amount: amount.cents)
+        earmarkId: earmarkId, categoryId: categoryId, amount: amount)
     } catch {
       logger.error("Failed to add budget item: \(error.localizedDescription)")
       budgetItems = oldItems
@@ -218,7 +197,7 @@ final class EarmarkStore {
     do {
       // Setting amount to 0 removes the budget entry on the server
       try await repository.setBudget(
-        earmarkId: earmarkId, categoryId: categoryId, amount: 0)
+        earmarkId: earmarkId, categoryId: categoryId, amount: .zero(instrument: .AUD))
     } catch {
       logger.error("Failed to remove budget item: \(error.localizedDescription)")
       budgetItems = oldItems

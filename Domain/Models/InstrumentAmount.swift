@@ -12,6 +12,7 @@ struct InstrumentAmount: Codable, Sendable, Hashable, Comparable {
   }
 
   var decimalValue: Decimal { quantity }
+  var doubleValue: Double { Double(truncating: quantity as NSDecimalNumber) }
 
   var isPositive: Bool { quantity > 0 }
   var isNegative: Bool { quantity < 0 }

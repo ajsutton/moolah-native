@@ -49,9 +49,11 @@ struct PriceConversionServiceTests {
     let result = try await service.convert(
       amount: Decimal(string: "2.5")!, token: eth, to: .AUD, on: date("2026-04-10")
     )
-    #expect(result.currency == .AUD)
-    // 2.5 * 1623.45 = 4058.625; 4058.625 * 1.58 = 6412.6275 -> 641263 cents (banker's rounding)
-    #expect(result.cents == 641263)
+    #expect(result.instrument == .AUD)
+    // 2.5 * 1623.45 = 4058.625; 4058.625 * 1.58 = 6412.6275
+    #expect(
+      result.quantity == Decimal(string: "2.5")! * Decimal(string: "1623.45")! * Decimal(
+        string: "1.58")!)
   }
 
   // MARK: - USD profile short-circuits exchange rate
@@ -63,8 +65,8 @@ struct PriceConversionServiceTests {
     let result = try await service.convert(
       amount: Decimal(1), token: eth, to: .USD, on: date("2026-04-10")
     )
-    #expect(result.currency == .USD)
-    #expect(result.cents == 162345)
+    #expect(result.instrument == .USD)
+    #expect(result.quantity == Decimal(string: "1623.45")!)
   }
 
   // MARK: - Unit price

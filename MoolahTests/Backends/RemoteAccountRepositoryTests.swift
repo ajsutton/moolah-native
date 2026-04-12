@@ -17,7 +17,7 @@ struct RemoteAccountRepositoryTests {
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
     let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
-    let repository = RemoteAccountRepository(client: client, currency: .defaultTestCurrency)
+    let repository = RemoteAccountRepository(client: client, instrument: .defaultTestInstrument)
 
     URLProtocolStub.requestHandler = { request in
       let response = HTTPURLResponse(
@@ -37,21 +37,24 @@ struct RemoteAccountRepositoryTests {
     #expect(accounts[0].name == "Checking Account")
     #expect(accounts[0].type == .bank)
     #expect(
-      accounts[0].balance == MonetaryAmount(cents: 123456, currency: Currency.defaultTestCurrency))
+      accounts[0].balance
+        == InstrumentAmount(
+          quantity: Decimal(string: "1234.56")!, instrument: .defaultTestInstrument))
     #expect(accounts[3].name == "Investment Portfolio")
     #expect(accounts[3].type == .investment)
     // balance is the transaction-based invested amount
     #expect(
       accounts[3].balance
-        == MonetaryAmount(cents: 1_500_000, currency: Currency.defaultTestCurrency))
+        == InstrumentAmount(
+          quantity: Decimal(string: "15000.00")!, instrument: .defaultTestInstrument))
     // investmentValue is the market value from the server's 'value' field
     #expect(accounts[3].investmentValue != nil)
     #expect(
       accounts[3].investmentValue
-        == MonetaryAmount(
-          cents: 1_550_000, currency: Currency.defaultTestCurrency))
+        == InstrumentAmount(
+          quantity: Decimal(string: "15500.00")!, instrument: .defaultTestInstrument))
     // displayBalance prefers investmentValue for investment accounts
-    #expect(accounts[3].displayBalance.cents == 1_550_000)
+    #expect(accounts[3].displayBalance.quantity == Decimal(string: "15500.00")!)
   }
 
   @Test func testCreateAccountCallsCorrectEndpoint() async throws {
@@ -66,7 +69,7 @@ struct RemoteAccountRepositoryTests {
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
     let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
-    let repository = RemoteAccountRepository(client: client, currency: .defaultTestCurrency)
+    let repository = RemoteAccountRepository(client: client, instrument: .defaultTestInstrument)
 
     var capturedRequest: URLRequest?
     URLProtocolStub.requestHandler = { request in
@@ -83,7 +86,8 @@ struct RemoteAccountRepositoryTests {
     let newAccount = Account(
       name: "Savings Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
+      balance: InstrumentAmount(
+        quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)
     )
 
     // When
@@ -93,7 +97,7 @@ struct RemoteAccountRepositoryTests {
     #expect(capturedRequest?.httpMethod == "POST")
     #expect(capturedRequest?.url?.absoluteString == "https://api.example.com/accounts/")
     #expect(created.name == "Savings Account")
-    #expect(created.balance.cents == 100000)
+    #expect(created.balance.quantity == Decimal(string: "1000.00")!)
   }
 
   @Test func testUpdateAccountCallsCorrectEndpoint() async throws {
@@ -108,7 +112,7 @@ struct RemoteAccountRepositoryTests {
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
     let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
-    let repository = RemoteAccountRepository(client: client, currency: .defaultTestCurrency)
+    let repository = RemoteAccountRepository(client: client, instrument: .defaultTestInstrument)
 
     var capturedRequest: URLRequest?
     URLProtocolStub.requestHandler = { request in
@@ -127,7 +131,8 @@ struct RemoteAccountRepositoryTests {
       id: accountId,
       name: "Updated Savings",
       type: .bank,
-      balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency),
+      balance: InstrumentAmount(
+        quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument),
       position: 2,
       isHidden: true
     )
@@ -141,7 +146,7 @@ struct RemoteAccountRepositoryTests {
       capturedRequest?.url?.absoluteString
         == "https://api.example.com/accounts/550e8400-e29b-41d4-a716-446655440000/")
     #expect(updated.name == "Updated Savings")
-    #expect(updated.balance.cents == 123456)  // Server's balance, not client's
+    #expect(updated.balance.quantity == Decimal(string: "1234.56")!)  // Server's balance, not client's
     #expect(updated.isHidden == true)
   }
 }

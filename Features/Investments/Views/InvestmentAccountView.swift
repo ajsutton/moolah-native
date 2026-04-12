@@ -28,7 +28,8 @@ struct InvestmentAccountView: View {
           VStack(spacing: 16) {
             timePeriodPicker
             InvestmentChartView(
-              dataPoints: investmentStore.chartDataPoints, currency: account.balance.currency)
+              dataPoints: investmentStore.chartDataPoints, instrument: account.balance.instrument)
+
           }
           .padding()
 
@@ -42,7 +43,8 @@ struct InvestmentAccountView: View {
           VStack(spacing: 16) {
             timePeriodPicker
             InvestmentChartView(
-              dataPoints: investmentStore.chartDataPoints, currency: account.balance.currency)
+              dataPoints: investmentStore.chartDataPoints, instrument: account.balance.instrument)
+
           }
           .padding()
 
@@ -76,7 +78,7 @@ struct InvestmentAccountView: View {
     .profileNavigationTitle(account.name)
     .sheet(isPresented: $showingAddValue) {
       AddInvestmentValueView(
-        accountId: account.id, currency: account.balance.currency, store: investmentStore)
+        accountId: account.id, instrument: account.balance.instrument, store: investmentStore)
     }
     .task(id: account.id) {
       await investmentStore.loadAll(accountId: account.id)

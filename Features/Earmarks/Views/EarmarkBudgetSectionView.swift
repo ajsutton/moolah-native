@@ -6,7 +6,7 @@ struct EarmarkBudgetSectionView: View {
   let analysisRepository: AnalysisRepository
   @Environment(EarmarkStore.self) private var earmarkStore
 
-  @State private var categoryBalances: [UUID: MonetaryAmount] = [:]
+  @State private var categoryBalances: [UUID: InstrumentAmount] = [:]
   @State private var isLoadingBalances = false
   @State private var showAddSheet = false
   @State private var editingLineItem: BudgetLineItem?
@@ -84,21 +84,23 @@ struct EarmarkBudgetSectionView: View {
     )
   }
 
-  private var totalActual: MonetaryAmount {
-    lineItems.reduce(.zero(currency: lineItems.first?.actual.currency ?? .AUD)) { $0 + $1.actual }
+  private var totalActual: InstrumentAmount {
+    lineItems.reduce(.zero(instrument: lineItems.first?.actual.instrument ?? .AUD)) {
+      $0 + $1.actual
+    }
   }
 
-  private var totalBudgeted: MonetaryAmount {
-    lineItems.reduce(.zero(currency: lineItems.first?.budgeted.currency ?? .AUD)) {
+  private var totalBudgeted: InstrumentAmount {
+    lineItems.reduce(.zero(instrument: lineItems.first?.budgeted.instrument ?? .AUD)) {
       $0 + $1.budgeted
     }
   }
 
-  private var totalRemaining: MonetaryAmount {
+  private var totalRemaining: InstrumentAmount {
     totalBudgeted + totalActual
   }
 
-  private var unallocated: MonetaryAmount? {
+  private var unallocated: InstrumentAmount? {
     BudgetLineItem.unallocatedAmount(
       budgetItems: earmarkStore.budgetItems,
       savingsGoal: earmark.savingsGoal
@@ -204,7 +206,7 @@ struct EarmarkBudgetSectionView: View {
     )
   }
 
-  private func unallocatedRow(_ amount: MonetaryAmount) -> some View {
+  private func unallocatedRow(_ amount: InstrumentAmount) -> some View {
     HStack(spacing: 0) {
       Text("Unallocated")
         .font(.body)

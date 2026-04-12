@@ -52,11 +52,14 @@ struct TransactionFormView: View {
     if let tx = existing {
       _type = State(initialValue: tx.type)
       _payee = State(initialValue: tx.payee ?? "")
-      let decimal = Decimal(abs(tx.amount.cents)) / 100
-      _amountText = State(initialValue: "\(decimal)")
+      _amountText = State(
+        initialValue: abs(tx.primaryAmount.quantity).formatted(
+          .number.precision(.fractionLength(2))))
       _date = State(initialValue: tx.date)
-      _accountId = State(initialValue: tx.accountId)
-      _toAccountId = State(initialValue: tx.toAccountId)
+      _accountId = State(initialValue: tx.primaryAccountId)
+      _toAccountId = State(
+        initialValue: tx.legs.count > 1
+          ? tx.legs.first(where: { $0.accountId != tx.primaryAccountId })?.accountId : nil)
       _categoryId = State(initialValue: tx.categoryId)
       if let catId = tx.categoryId, let cat = categories.by(id: catId) {
         _categoryText = State(initialValue: categories.path(for: cat))
@@ -82,8 +85,8 @@ struct TransactionFormView: View {
     }
   }
 
-  private var selectedCurrency: Currency {
-    accounts.ordered.first(where: { $0.id == accountId })?.balance.currency ?? .AUD
+  private var selectedInstrument: Instrument {
+    accounts.ordered.first(where: { $0.id == accountId })?.balance.instrument ?? .AUD
   }
 
   private var isEditing: Bool { existing != nil }
@@ -100,7 +103,7 @@ struct TransactionFormView: View {
       recurPeriod: recurPeriod, recurEvery: recurEvery)
   }
 
-  private var parsedCents: Int? { draft.parsedCents }
+  private var parsedQuantity: Decimal? { draft.parsedQuantity }
 
   private var canSave: Bool { draft.isValid }
 
@@ -233,7 +236,7 @@ struct TransactionFormView: View {
       }
 
       HStack {
-        Text(selectedCurrency.code)
+        Text(selectedInstrument.id)
           .foregroundStyle(.secondary)
         TextField("Amount", text: $amountText)
           #if os(iOS)
@@ -395,9 +398,9 @@ struct TransactionFormView: View {
       guard let match = await store.fetchTransactionForAutofill(payee: selectedPayee) else {
         return
       }
-      if parsedCents == nil || parsedCents == 0 {
-        let decimal = Decimal(abs(match.amount.cents)) / 100
-        amountText = "\(decimal)"
+      if parsedQuantity == nil || parsedQuantity == 0 {
+        amountText = abs(match.primaryAmount.quantity).formatted(
+          .number.precision(.fractionLength(2)))
       }
       if categoryId == nil, let matchCategoryId = match.categoryId {
         categoryId = matchCategoryId
@@ -410,7 +413,10 @@ struct TransactionFormView: View {
         type = match.type
       }
       if type == .transfer, toAccountId == nil {
-        toAccountId = match.toAccountId
+        let matchTransferLeg =
+          match.legs.count > 1
+          ? match.legs.first(where: { $0.accountId != match.primaryAccountId }) : nil
+        toAccountId = matchTransferLeg?.accountId
       }
     }
   }
@@ -448,7 +454,7 @@ struct TransactionFormView: View {
   private func save() {
     guard
       let transaction = draft.toTransaction(
-        id: existing?.id ?? UUID(), currency: selectedCurrency)
+        id: existing?.id ?? UUID(), instrument: selectedInstrument)
     else { return }
     onSave(transaction)
     dismiss()
@@ -486,11 +492,11 @@ struct TransactionFormView: View {
     ]),
     earmarks: Earmarks(from: []),
     existing: Transaction(
-      type: .expense,
       date: Date(),
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -5023, currency: .AUD),
-      payee: "Woolworths"
+      payee: "Woolworths",
+      legs: [
+        TransactionLeg(accountId: accountId, instrument: .AUD, quantity: -50.23, type: .expense)
+      ]
     ),
     onSave: { _ in },
     onDelete: { _ in }

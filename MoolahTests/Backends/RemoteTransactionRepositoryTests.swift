@@ -21,7 +21,7 @@ struct RemoteTransactionRepositoryTests {
     let data = try Data(contentsOf: url)
 
     let (_, client) = makeStubSession(data: data)
-    let repository = RemoteTransactionRepository(client: client, currency: .defaultTestCurrency)
+    let repository = RemoteTransactionRepository(client: client, instrument: .defaultTestInstrument)
 
     TransactionURLProtocolStub.requestHandler = { request in
       let response = HTTPURLResponse(
@@ -40,32 +40,26 @@ struct RemoteTransactionRepositoryTests {
     )
 
     #expect(page.transactions.count == 5)
-    #expect(page.priorBalance == .zero(currency: .defaultTestCurrency))
+    #expect(page.priorBalance == .zero(instrument: .defaultTestInstrument))
 
     let transactions = page.transactions
 
     // First transaction: expense
     #expect(transactions[0].type == .expense)
-    #expect(
-      transactions[0].amount == MonetaryAmount(cents: -5023, currency: Currency.defaultTestCurrency)
-    )
+    #expect(transactions[0].primaryAmount.quantity == Decimal(string: "-50.23")!)
     #expect(transactions[0].payee == "Woolworths")
     #expect(transactions[0].notes == "Weekly groceries")
     #expect(transactions[0].categoryId != nil)
 
     // Second transaction: income
     #expect(transactions[1].type == .income)
-    #expect(
-      transactions[1].amount
-        == MonetaryAmount(cents: 350000, currency: Currency.defaultTestCurrency))
+    #expect(transactions[1].primaryAmount.quantity == Decimal(string: "3500.00")!)
     #expect(transactions[1].payee == "Employer Pty Ltd")
 
     // Third transaction: transfer
     #expect(transactions[2].type == .transfer)
-    #expect(transactions[2].toAccountId != nil)
-    #expect(
-      transactions[2].amount
-        == MonetaryAmount(cents: -100000, currency: Currency.defaultTestCurrency))
+    #expect(transactions[2].legs.count == 2)
+    #expect(transactions[2].primaryAmount.quantity == Decimal(string: "-1000.00")!)
 
     // Fourth transaction: scheduled expense
     #expect(transactions[3].recurPeriod == .month)
@@ -82,7 +76,7 @@ struct RemoteTransactionRepositoryTests {
       """.data(using: .utf8)!
 
     let (_, client) = makeStubSession(data: emptyResponse)
-    let repository = RemoteTransactionRepository(client: client, currency: .defaultTestCurrency)
+    let repository = RemoteTransactionRepository(client: client, instrument: .defaultTestInstrument)
     let accountId = UUID()
 
     var capturedURL: URL?
@@ -118,7 +112,7 @@ struct RemoteTransactionRepositoryTests {
       """.data(using: .utf8)!
 
     let (_, client) = makeStubSession(data: emptyResponse)
-    let repository = RemoteTransactionRepository(client: client, currency: .defaultTestCurrency)
+    let repository = RemoteTransactionRepository(client: client, instrument: .defaultTestInstrument)
 
     var capturedURL: URL?
     TransactionURLProtocolStub.requestHandler = { request in
@@ -151,7 +145,7 @@ struct RemoteTransactionRepositoryTests {
       """.data(using: .utf8)!
 
     let (_, client) = makeStubSession(data: emptyResponse)
-    let repository = RemoteTransactionRepository(client: client, currency: .defaultTestCurrency)
+    let repository = RemoteTransactionRepository(client: client, instrument: .defaultTestInstrument)
 
     let calendar = Calendar.current
     let startDate = calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!
@@ -190,7 +184,7 @@ struct RemoteTransactionRepositoryTests {
       """.data(using: .utf8)!
 
     let (_, client) = makeStubSession(data: emptyResponse)
-    let repository = RemoteTransactionRepository(client: client, currency: .defaultTestCurrency)
+    let repository = RemoteTransactionRepository(client: client, instrument: .defaultTestInstrument)
 
     let category1 = UUID()
     let category2 = UUID()
@@ -229,7 +223,7 @@ struct RemoteTransactionRepositoryTests {
       """.data(using: .utf8)!
 
     let (_, client) = makeStubSession(data: emptyResponse)
-    let repository = RemoteTransactionRepository(client: client, currency: .defaultTestCurrency)
+    let repository = RemoteTransactionRepository(client: client, instrument: .defaultTestInstrument)
 
     var capturedURL: URL?
     TransactionURLProtocolStub.requestHandler = { request in

@@ -15,7 +15,7 @@ final class RemoteBackend: BackendProvider {
 
   init(
     baseURL: URL,
-    currency: Currency,
+    instrument: Instrument,
     session: URLSession = .shared,
     cookieKeychain: CookieKeychain = CookieKeychain(),
     cookieStorage: HTTPCookieStorage? = nil
@@ -24,11 +24,11 @@ final class RemoteBackend: BackendProvider {
     let resolvedCookieStorage = cookieStorage ?? session.configuration.httpCookieStorage ?? .shared
     auth = RemoteAuthProvider(
       client: client, cookieKeychain: cookieKeychain, cookieStorage: resolvedCookieStorage)
-    accounts = RemoteAccountRepository(client: client, currency: currency)
-    transactions = RemoteTransactionRepository(client: client, currency: currency)
+    accounts = RemoteAccountRepository(client: client, instrument: instrument)
+    transactions = RemoteTransactionRepository(client: client, instrument: instrument)
     categories = RemoteCategoryRepository(client: client)
-    earmarks = RemoteEarmarkRepository(client: client, currency: currency)
-    analysis = RemoteAnalysisRepository(client: client, currency: currency)
-    investments = RemoteInvestmentRepository(client: client, currency: currency)
+    earmarks = RemoteEarmarkRepository(client: client, instrument: instrument)
+    analysis = RemoteAnalysisRepository(client: client, instrument: instrument)
+    investments = RemoteInvestmentRepository(client: client, instrument: instrument)
   }
 }

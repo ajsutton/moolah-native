@@ -67,7 +67,7 @@ struct YahooFinanceClient: StockPriceClient, Sendable {
     else {
       throw YahooFinanceError.invalidResponse
     }
-    let currency = Currency.from(code: currencyCode)
+    let instrument = Instrument.fiat(code: currencyCode)
 
     // Extract timestamps
     guard let timestamps = result["timestamp"] as? [Int] else {
@@ -99,6 +99,6 @@ struct YahooFinanceClient: StockPriceClient, Sendable {
       prices[dateString] = Decimal(string: number.stringValue)
     }
 
-    return StockPriceResponse(currency: currency, prices: prices)
+    return StockPriceResponse(instrument: instrument, prices: prices)
   }
 }

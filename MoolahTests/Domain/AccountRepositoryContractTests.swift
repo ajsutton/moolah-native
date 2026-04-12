@@ -15,7 +15,7 @@ struct AccountRepositoryContractTests {
     let newAccount = Account(
       name: "Savings",
       type: .bank,
-      balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
+      balance: MonetaryAmount(cents: 100000, currency: .defaultTestInstrument)
     )
 
     let created = try await repository.create(newAccount)
@@ -34,7 +34,7 @@ struct AccountRepositoryContractTests {
     let invalidAccount = Account(
       name: "   ",  // Whitespace only
       type: .bank,
-      balance: .zero(currency: .defaultTestCurrency)
+      balance: .zero(instrument: .defaultTestInstrument)
     )
 
     await #expect(throws: BackendError.self) {
@@ -48,7 +48,7 @@ struct AccountRepositoryContractTests {
     let creditCard = Account(
       name: "Credit Card",
       type: .creditCard,
-      balance: MonetaryAmount(cents: -50000, currency: .defaultTestCurrency)
+      balance: MonetaryAmount(cents: -50000, currency: .defaultTestInstrument)
     )
 
     let created = try await repository.create(creditCard)
@@ -61,7 +61,8 @@ struct AccountRepositoryContractTests {
   func testUpdatesAccount() async throws {
     let repository = makeCloudKitAccountRepository(initialAccounts: [
       Account(
-        id: UUID(), name: "Checking", type: .bank, balance: .zero(currency: .defaultTestCurrency))
+        id: UUID(), name: "Checking", type: .bank,
+        balance: .zero(instrument: .defaultTestInstrument))
     ])
     let accounts = try await repository.fetchAll()
     var toUpdate = accounts[0]
@@ -81,13 +82,13 @@ struct AccountRepositoryContractTests {
         id: UUID(),
         name: "Savings",
         type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
+        balance: MonetaryAmount(cents: 100000, currency: .defaultTestInstrument)
       )
     ])
     let accounts = try await repository.fetchAll()
     var toUpdate = accounts[0]
     toUpdate.name = "Updated Savings"
-    toUpdate.balance = MonetaryAmount(cents: 999999, currency: .defaultTestCurrency)  // Try to change
+    toUpdate.balance = MonetaryAmount(cents: 999999, currency: .defaultTestInstrument)  // Try to change
 
     let updated = try await repository.update(toUpdate)
 
@@ -112,7 +113,7 @@ struct AccountRepositoryContractTests {
     let repository = makeCloudKitAccountRepository(initialAccounts: [
       Account(
         id: UUID(), name: "Old Account", type: .bank,
-        balance: .zero(currency: .defaultTestCurrency))
+        balance: .zero(instrument: .defaultTestInstrument))
     ])
     let accounts = try await repository.fetchAll()
     let toDelete = accounts[0]
@@ -133,7 +134,7 @@ struct AccountRepositoryContractTests {
         id: UUID(),
         name: "Active Account",
         type: .bank,
-        balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
+        balance: MonetaryAmount(cents: 100000, currency: .defaultTestInstrument)
       )
     ])
     let accounts = try await repository.fetchAll()
@@ -183,25 +184,28 @@ private func makeCloudKitAccountRepository(
   initialAccounts: [Account] = []
 ) -> CloudKitAccountRepository {
   let container = try! TestModelContainer.create()
-  let currency = Currency.defaultTestCurrency
+  let currency = Instrument.defaultTestInstrument
   let repo = CloudKitAccountRepository(
-    modelContainer: container, currency: currency)
+    modelContainer: container, instrument: currency)
 
   if !initialAccounts.isEmpty {
     let context = ModelContext(container)
     for account in initialAccounts {
-      let record = AccountRecord.from(account, currencyCode: currency.code)
+      let record = AccountRecord.from(account)
       context.insert(record)
       // If account has a non-zero balance, create an opening balance transaction
-      if account.balance.cents != 0 {
-        let txn = TransactionRecord(
-          type: TransactionType.openingBalance.rawValue,
-          date: Date(),
-          accountId: account.id,
-          amount: account.balance.cents,
-          currencyCode: currency.code
-        )
+      if !account.balance.isZero {
+        let txnId = UUID()
+        let txn = TransactionRecord(id: txnId, date: Date())
         context.insert(txn)
+        let leg = TransactionLegRecord.from(
+          TransactionLeg(
+            accountId: account.id, instrument: currency,
+            quantity: account.balance.quantity, type: .openingBalance
+          ),
+          transactionId: txnId, sortOrder: 0
+        )
+        context.insert(leg)
       }
     }
     try! context.save()

@@ -6,7 +6,7 @@ import Testing
 @Suite("ExportedData")
 struct ExportedDataTests {
 
-  private let currency = Currency.defaultTestCurrency
+  private let instrument = Instrument.defaultTestInstrument
 
   @Test("JSON round-trip preserves all fields")
   func jsonRoundTrip() throws {
@@ -24,7 +24,7 @@ struct ExportedDataTests {
       accounts: [
         Account(
           id: accountId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 5000, currency: currency)
+          balance: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
         )
       ],
       categories: [
@@ -33,24 +33,29 @@ struct ExportedDataTests {
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday",
-          balance: .zero(currency: currency),
-          saved: .zero(currency: currency),
-          spent: .zero(currency: currency)
+          balance: .zero(instrument: instrument),
+          saved: .zero(instrument: instrument),
+          spent: .zero(instrument: instrument)
         )
       ],
       earmarkBudgets: [
         earmarkId: [
           EarmarkBudgetItem(
             categoryId: categoryId,
-            amount: MonetaryAmount(cents: 1000, currency: currency)
+            amount: InstrumentAmount(quantity: Decimal(string: "10.00")!, instrument: instrument)
           )
         ]
       ],
       transactions: [
         Transaction(
-          type: .income, date: Date(), accountId: accountId,
-          amount: MonetaryAmount(cents: 5000, currency: currency),
-          payee: "Employer"
+          date: Date(),
+          payee: "Employer",
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: instrument,
+              quantity: Decimal(string: "50.00")!, type: .income
+            )
+          ]
         )
       ],
       investmentValues: [:]

@@ -76,14 +76,16 @@ struct InvestmentRepositoryContractTests {
     let ckRepo = makeCloudKitInvestmentRepository()
     try await ckRepo.setValue(
       accountId: account1, date: date,
-      value: MonetaryAmount(cents: 100_000, currency: .defaultTestCurrency))
+      value: InstrumentAmount(
+        quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument))
     try await ckRepo.setValue(
       accountId: account2, date: date,
-      value: MonetaryAmount(cents: 200_000, currency: .defaultTestCurrency))
+      value: InstrumentAmount(
+        quantity: Decimal(string: "2000.00")!, instrument: .defaultTestInstrument))
 
     let ckPage = try await ckRepo.fetchValues(accountId: account1, page: 0, pageSize: 50)
     #expect(ckPage.values.count == 1)
-    #expect(ckPage.values[0].value.cents == 100_000)
+    #expect(ckPage.values[0].value.quantity == Decimal(string: "1000.00")!)
   }
 
   // MARK: - setValue
@@ -92,7 +94,8 @@ struct InvestmentRepositoryContractTests {
   func testSetValueCreatesNew() async throws {
     let repo = makeCloudKitInvestmentRepository()
     let date = makeDate(year: 2024, month: 3, day: 15)
-    let amount = MonetaryAmount(cents: 125_000_00, currency: Currency.defaultTestCurrency)
+    let amount = InstrumentAmount(
+      quantity: Decimal(string: "125000.00")!, instrument: .defaultTestInstrument)
 
     let accountId = UUID()
     try await repo.setValue(accountId: accountId, date: date, value: amount)
@@ -100,7 +103,7 @@ struct InvestmentRepositoryContractTests {
     let page = try await repo.fetchValues(accountId: accountId, page: 0, pageSize: 50)
     #expect(page.values.count == 1)
     #expect(page.values[0].date == date)
-    #expect(page.values[0].value.cents == 125_000_00)
+    #expect(page.values[0].value.quantity == Decimal(string: "125000.00")!)
   }
 
   @Test("Set value upserts existing entry for same date")
@@ -109,13 +112,14 @@ struct InvestmentRepositoryContractTests {
     let accountId = UUID()
 
     let repo = makeCloudKitInvestmentRepository(dates: [date], accountId: accountId)
-    let newAmount = MonetaryAmount(cents: 200_000, currency: Currency.defaultTestCurrency)
+    let newAmount = InstrumentAmount(
+      quantity: Decimal(string: "2000.00")!, instrument: .defaultTestInstrument)
 
     try await repo.setValue(accountId: accountId, date: date, value: newAmount)
 
     let page = try await repo.fetchValues(accountId: accountId, page: 0, pageSize: 50)
     #expect(page.values.count == 1)
-    #expect(page.values[0].value.cents == 200_000)
+    #expect(page.values[0].value.quantity == Decimal(string: "2000.00")!)
   }
 
   // MARK: - removeValue
@@ -165,28 +169,40 @@ struct InvestmentRepositoryContractTests {
 
     let (repo, container) = makeCloudKitInvestmentRepositoryWithContainer()
     // Seed income transactions on three different dates
-    TestBackend.seed(
+    _ = TestBackend.seed(
       transactions: [
         Transaction(
-          id: UUID(), type: .income, date: date3, accountId: accountId,
-          amount: MonetaryAmount(cents: 100_000, currency: .defaultTestCurrency)),
+          date: date3,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "1000.00")!, type: .income)
+          ]),
         Transaction(
-          id: UUID(), type: .income, date: date1, accountId: accountId,
-          amount: MonetaryAmount(cents: 50_000, currency: .defaultTestCurrency)),
+          date: date1,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "500.00")!, type: .income)
+          ]),
         Transaction(
-          id: UUID(), type: .income, date: date2, accountId: accountId,
-          amount: MonetaryAmount(cents: 75_000, currency: .defaultTestCurrency)),
+          date: date2,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "750.00")!, type: .income)
+          ]),
       ], in: container)
 
     let result = try await repo.fetchDailyBalances(accountId: accountId)
     #expect(result.count == 3)
-    // Ascending order with cumulative balances: 50k, 125k, 225k
+    // Ascending order with cumulative balances: 500, 1250, 2250
     #expect(result[0].date == date1)
-    #expect(result[0].balance.cents == 50_000)
+    #expect(result[0].balance.quantity == Decimal(string: "500.00")!)
     #expect(result[1].date == date2)
-    #expect(result[1].balance.cents == 125_000)
+    #expect(result[1].balance.quantity == Decimal(string: "1250.00")!)
     #expect(result[2].date == date3)
-    #expect(result[2].balance.cents == 225_000)
+    #expect(result[2].balance.quantity == Decimal(string: "2250.00")!)
   }
 
   @Test("Fetch daily balances for empty account returns empty array")
@@ -203,19 +219,27 @@ struct InvestmentRepositoryContractTests {
     let date = makeDate(year: 2024, month: 1, day: 1)
 
     let (repo, container) = makeCloudKitInvestmentRepositoryWithContainer()
-    TestBackend.seed(
+    _ = TestBackend.seed(
       transactions: [
         Transaction(
-          id: UUID(), type: .income, date: date, accountId: account1,
-          amount: MonetaryAmount(cents: 100_000, currency: .defaultTestCurrency)),
+          date: date,
+          legs: [
+            TransactionLeg(
+              accountId: account1, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "1000.00")!, type: .income)
+          ]),
         Transaction(
-          id: UUID(), type: .income, date: date, accountId: account2,
-          amount: MonetaryAmount(cents: 200_000, currency: .defaultTestCurrency)),
+          date: date,
+          legs: [
+            TransactionLeg(
+              accountId: account2, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "2000.00")!, type: .income)
+          ]),
       ], in: container)
 
     let result = try await repo.fetchDailyBalances(accountId: account1)
     #expect(result.count == 1)
-    #expect(result[0].balance.cents == 100_000)
+    #expect(result[0].balance.quantity == Decimal(string: "1000.00")!)
   }
 
   @Test("Fetch daily balances includes transfers to this account")
@@ -226,24 +250,36 @@ struct InvestmentRepositoryContractTests {
     let date2 = makeDate(year: 2024, month: 2, day: 15)
 
     let (repo, container) = makeCloudKitInvestmentRepositoryWithContainer()
-    TestBackend.seed(
+    _ = TestBackend.seed(
       transactions: [
         // Transfer $500 from checking to investment
         Transaction(
-          id: UUID(), type: .transfer, date: date1,
-          accountId: checkingAccount, toAccountId: investmentAccount,
-          amount: MonetaryAmount(cents: -50_000, currency: .defaultTestCurrency)),
+          date: date1,
+          legs: [
+            TransactionLeg(
+              accountId: checkingAccount, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "-500.00")!, type: .transfer),
+            TransactionLeg(
+              accountId: investmentAccount, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "500.00")!, type: .transfer),
+          ]),
         // Transfer $300 from checking to investment
         Transaction(
-          id: UUID(), type: .transfer, date: date2,
-          accountId: checkingAccount, toAccountId: investmentAccount,
-          amount: MonetaryAmount(cents: -30_000, currency: .defaultTestCurrency)),
+          date: date2,
+          legs: [
+            TransactionLeg(
+              accountId: checkingAccount, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "-300.00")!, type: .transfer),
+            TransactionLeg(
+              accountId: investmentAccount, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "300.00")!, type: .transfer),
+          ]),
       ], in: container)
 
     let result = try await repo.fetchDailyBalances(accountId: investmentAccount)
     #expect(result.count == 2)
-    #expect(result[0].balance.cents == 50_000)
-    #expect(result[1].balance.cents == 80_000)
+    #expect(result[0].balance.quantity == Decimal(string: "500.00")!)
+    #expect(result[1].balance.quantity == Decimal(string: "800.00")!)
   }
 
   @Test("Fetch daily balances excludes scheduled transactions")
@@ -252,21 +288,29 @@ struct InvestmentRepositoryContractTests {
     let date = makeDate(year: 2024, month: 1, day: 15)
 
     let (repo, container) = makeCloudKitInvestmentRepositoryWithContainer()
-    TestBackend.seed(
+    _ = TestBackend.seed(
       transactions: [
         Transaction(
-          id: UUID(), type: .income, date: date, accountId: accountId,
-          amount: MonetaryAmount(cents: 100_000, currency: .defaultTestCurrency)),
+          date: date,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "1000.00")!, type: .income)
+          ]),
         // Scheduled transaction should be excluded
         Transaction(
-          id: UUID(), type: .income, date: date, accountId: accountId,
-          amount: MonetaryAmount(cents: 50_000, currency: .defaultTestCurrency),
-          recurPeriod: .month, recurEvery: 1),
+          date: date,
+          recurPeriod: .month, recurEvery: 1,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "500.00")!, type: .income)
+          ]),
       ], in: container)
 
     let result = try await repo.fetchDailyBalances(accountId: accountId)
     #expect(result.count == 1)
-    #expect(result[0].balance.cents == 100_000)
+    #expect(result[0].balance.quantity == Decimal(string: "1000.00")!)
   }
 
   @Test("Fetch daily balances handles positive-amount transfer from account correctly")
@@ -277,27 +321,39 @@ struct InvestmentRepositoryContractTests {
     let date2 = makeDate(year: 2024, month: 2, day: 15)
 
     let (repo, container) = makeCloudKitInvestmentRepositoryWithContainer()
-    TestBackend.seed(
+    _ = TestBackend.seed(
       transactions: [
-        // Transfer $1000 into investment (negative amount = money leaving checking)
+        // Transfer $1000 into investment (negative amount = money leaving other)
         Transaction(
-          id: UUID(), type: .transfer, date: date1,
-          accountId: otherAccount, toAccountId: investmentAccount,
-          amount: MonetaryAmount(cents: -100_000, currency: .defaultTestCurrency)),
+          date: date1,
+          legs: [
+            TransactionLeg(
+              accountId: otherAccount, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "-1000.00")!, type: .transfer),
+            TransactionLeg(
+              accountId: investmentAccount, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "1000.00")!, type: .transfer),
+          ]),
         // Positive-amount transfer FROM investment (e.g. dividend credit)
-        // amount is positive from accountId's perspective = money flowing in
+        // The investment account leg has positive quantity = money flowing in
         Transaction(
-          id: UUID(), type: .transfer, date: date2,
-          accountId: investmentAccount, toAccountId: otherAccount,
-          amount: MonetaryAmount(cents: 50_000, currency: .defaultTestCurrency)),
+          date: date2,
+          legs: [
+            TransactionLeg(
+              accountId: investmentAccount, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "500.00")!, type: .transfer),
+            TransactionLeg(
+              accountId: otherAccount, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "-500.00")!, type: .transfer),
+          ]),
       ], in: container)
 
     let result = try await repo.fetchDailyBalances(accountId: investmentAccount)
     #expect(result.count == 2)
     // Day 1: +$1000
-    #expect(result[0].balance.cents == 100_000)
+    #expect(result[0].balance.quantity == Decimal(string: "1000.00")!)
     // Day 2: +$1000 + $500 = $1500 (positive transfer adds to balance)
-    #expect(result[1].balance.cents == 150_000)
+    #expect(result[1].balance.quantity == Decimal(string: "1500.00")!)
   }
 
   @Test("Fetch daily balances collapses multiple transactions on same day")
@@ -306,19 +362,27 @@ struct InvestmentRepositoryContractTests {
     let date = makeDate(year: 2024, month: 3, day: 1)
 
     let (repo, container) = makeCloudKitInvestmentRepositoryWithContainer()
-    TestBackend.seed(
+    _ = TestBackend.seed(
       transactions: [
         Transaction(
-          id: UUID(), type: .income, date: date, accountId: accountId,
-          amount: MonetaryAmount(cents: 100_000, currency: .defaultTestCurrency)),
+          date: date,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "1000.00")!, type: .income)
+          ]),
         Transaction(
-          id: UUID(), type: .income, date: date, accountId: accountId,
-          amount: MonetaryAmount(cents: 50_000, currency: .defaultTestCurrency)),
+          date: date,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "500.00")!, type: .income)
+          ]),
       ], in: container)
 
     let result = try await repo.fetchDailyBalances(accountId: accountId)
     #expect(result.count == 1)
-    #expect(result[0].balance.cents == 150_000)
+    #expect(result[0].balance.quantity == Decimal(string: "1500.00")!)
   }
 }
 
@@ -338,21 +402,22 @@ private func getAccountId(from repo: any InvestmentRepository) async -> UUID {
 private func makeCloudKitInvestmentRepository(
   dates: [Date] = [],
   accountId: UUID = sharedAccountId,
-  cents: Int = 100_000,
-  currency: Currency = .defaultTestCurrency
+  quantity: Decimal = Decimal(string: "1000.00")!,
+  instrument: Instrument = .defaultTestInstrument
 ) -> CloudKitInvestmentRepository {
   let container = try! TestModelContainer.create()
   let repo = CloudKitInvestmentRepository(
-    modelContainer: container, currency: currency)
+    modelContainer: container, instrument: instrument)
 
   if !dates.isEmpty {
     let context = ModelContext(container)
     for date in dates {
+      let amount = InstrumentAmount(quantity: quantity, instrument: instrument)
       let record = InvestmentValueRecord(
         accountId: accountId,
         date: date,
-        value: cents,
-        currencyCode: currency.code
+        value: amount.storageValue,
+        instrumentId: instrument.id
       )
       context.insert(record)
     }
@@ -363,10 +428,10 @@ private func makeCloudKitInvestmentRepository(
 }
 
 private func makeCloudKitInvestmentRepositoryWithContainer(
-  currency: Currency = .defaultTestCurrency
+  instrument: Instrument = .defaultTestInstrument
 ) -> (CloudKitInvestmentRepository, ModelContainer) {
   let container = try! TestModelContainer.create()
   let repo = CloudKitInvestmentRepository(
-    modelContainer: container, currency: currency)
+    modelContainer: container, instrument: instrument)
   return (repo, container)
 }

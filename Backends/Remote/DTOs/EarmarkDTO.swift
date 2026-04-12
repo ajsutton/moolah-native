@@ -12,17 +12,17 @@ struct EarmarkDTO: Codable {
   let saved: Int
   let spent: Int
 
-  func toDomain(currency: Currency) -> Earmark {
+  func toDomain(instrument: Instrument) -> Earmark {
     Earmark(
       id: id.uuid,
       name: name,
-      balance: MonetaryAmount(cents: balance, currency: currency),
-      saved: MonetaryAmount(cents: saved, currency: currency),
-      spent: MonetaryAmount(cents: spent, currency: currency),
+      balance: InstrumentAmount(quantity: Decimal(balance) / 100, instrument: instrument),
+      saved: InstrumentAmount(quantity: Decimal(saved) / 100, instrument: instrument),
+      spent: InstrumentAmount(quantity: Decimal(spent) / 100, instrument: instrument),
       isHidden: hidden,
       position: position ?? 0,
       savingsGoal: savingsTarget.map {
-        MonetaryAmount(cents: $0, currency: currency)
+        InstrumentAmount(quantity: Decimal($0) / 100, instrument: instrument)
       },
       savingsStartDate: savingsStartDate.flatMap { BackendDateFormatter.date(from: $0) },
       savingsEndDate: savingsEndDate.flatMap { BackendDateFormatter.date(from: $0) }
@@ -35,12 +35,14 @@ struct EarmarkDTO: Codable {
       name: earmark.name,
       position: earmark.position,
       hidden: earmark.isHidden,
-      savingsTarget: earmark.savingsGoal?.cents,
+      savingsTarget: earmark.savingsGoal.map {
+        Int(truncating: ($0.quantity * 100) as NSDecimalNumber)
+      },
       savingsStartDate: earmark.savingsStartDate.map { BackendDateFormatter.string(from: $0) },
       savingsEndDate: earmark.savingsEndDate.map { BackendDateFormatter.string(from: $0) },
-      balance: earmark.balance.cents,
-      saved: earmark.saved.cents,
-      spent: earmark.spent.cents
+      balance: Int(truncating: (earmark.balance.quantity * 100) as NSDecimalNumber),
+      saved: Int(truncating: (earmark.saved.quantity * 100) as NSDecimalNumber),
+      spent: Int(truncating: (earmark.spent.quantity * 100) as NSDecimalNumber)
     )
   }
 
@@ -58,7 +60,9 @@ struct CreateEarmarkDTO: Codable {
 
   init(from earmark: Earmark) {
     self.name = earmark.name
-    self.savingsTarget = earmark.savingsGoal?.cents
+    self.savingsTarget = earmark.savingsGoal.map {
+      Int(truncating: ($0.quantity * 100) as NSDecimalNumber)
+    }
     self.savingsStartDate = earmark.savingsStartDate.map { BackendDateFormatter.string(from: $0) }
     self.savingsEndDate = earmark.savingsEndDate.map { BackendDateFormatter.string(from: $0) }
   }

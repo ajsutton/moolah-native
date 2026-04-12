@@ -10,7 +10,7 @@ struct CreateAccountView: View {
   @State private var isSubmitting = false
   @State private var errorMessage: String?
 
-  let currency: Currency
+  let instrument: Instrument
   let accountStore: AccountStore
 
   var body: some View {
@@ -30,7 +30,7 @@ struct CreateAccountView: View {
             TextField(
               "Amount",
               value: $balanceDecimal,
-              format: .currency(code: currency.code)
+              format: .currency(code: instrument.id)
             )
             #if os(iOS)
               .keyboardType(.decimalPad)
@@ -76,12 +76,11 @@ struct CreateAccountView: View {
     isSubmitting = true
     errorMessage = nil
 
-    let balanceCents = Int(truncating: (balanceDecimal * 100) as NSNumber)
     let newAccount = Account(
       id: UUID(),
       name: name.trimmingCharacters(in: .whitespaces),
       type: type,
-      balance: MonetaryAmount(cents: balanceCents, currency: currency),
+      balance: InstrumentAmount(quantity: balanceDecimal, instrument: instrument),
       position: 0  // Server will set appropriate position
     )
 

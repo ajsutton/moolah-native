@@ -74,6 +74,10 @@ struct AnalysisStoreFilterPersistenceTests {
 @MainActor
 struct AnalysisStoreCategoriesOverTimeTests {
 
+  private func amt(_ quantity: Decimal) -> InstrumentAmount {
+    InstrumentAmount(quantity: quantity, instrument: .defaultTestInstrument)
+  }
+
   @Test func emptyBreakdownReturnsNoEntries() {
     let result = AnalysisStore.buildCategoriesOverTime(
       from: [], categories: Categories(from: []))
@@ -85,7 +89,7 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: catId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -10000, currency: .defaultTestCurrency))
+        totalExpenses: amt(Decimal(string: "-100.00")!))
     ]
     let categories = Categories(from: [Category(id: catId, name: "Groceries")])
 
@@ -95,7 +99,7 @@ struct AnalysisStoreCategoriesOverTimeTests {
     #expect(result.count == 1)
     #expect(result[0].categoryId == catId)
     #expect(result[0].points.count == 1)
-    #expect(result[0].points[0].actualCents == 10000)
+    #expect(result[0].points[0].actualAmount == Decimal(string: "100.00")!)
     #expect(result[0].points[0].percentage == 100.0)
   }
 
@@ -105,10 +109,10 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: cat1, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -75000, currency: .defaultTestCurrency)),
+        totalExpenses: amt(Decimal(string: "-750.00")!)),
       ExpenseBreakdown(
         categoryId: cat2, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -25000, currency: .defaultTestCurrency)),
+        totalExpenses: amt(Decimal(string: "-250.00")!)),
     ]
     let categories = Categories(from: [
       Category(id: cat1, name: "Groceries"),
@@ -131,10 +135,10 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: rootId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -30000, currency: .defaultTestCurrency)),
+        totalExpenses: amt(Decimal(string: "-300.00")!)),
       ExpenseBreakdown(
         categoryId: childId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -20000, currency: .defaultTestCurrency)),
+        totalExpenses: amt(Decimal(string: "-200.00")!)),
     ]
     let categories = Categories(from: [
       Category(id: rootId, name: "Food"),
@@ -146,7 +150,7 @@ struct AnalysisStoreCategoriesOverTimeTests {
 
     #expect(result.count == 1)
     #expect(result[0].categoryId == rootId)
-    #expect(result[0].points[0].actualCents == 50000)
+    #expect(result[0].points[0].actualAmount == Decimal(string: "500.00")!)
   }
 
   @Test func multipleMonthsOrdered() {
@@ -154,13 +158,13 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: catId, month: "202606",
-        totalExpenses: MonetaryAmount(cents: -10000, currency: .defaultTestCurrency)),
+        totalExpenses: amt(Decimal(string: "-100.00")!)),
       ExpenseBreakdown(
         categoryId: catId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -20000, currency: .defaultTestCurrency)),
+        totalExpenses: amt(Decimal(string: "-200.00")!)),
       ExpenseBreakdown(
         categoryId: catId, month: "202605",
-        totalExpenses: MonetaryAmount(cents: -15000, currency: .defaultTestCurrency)),
+        totalExpenses: amt(Decimal(string: "-150.00")!)),
     ]
     let categories = Categories(from: [Category(id: catId, name: "Groceries")])
 
@@ -179,10 +183,10 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: catId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -60000, currency: .defaultTestCurrency)),
+        totalExpenses: amt(Decimal(string: "-600.00")!)),
       ExpenseBreakdown(
         categoryId: nil, month: "202604",
-        totalExpenses: MonetaryAmount(cents: -40000, currency: .defaultTestCurrency)),
+        totalExpenses: amt(Decimal(string: "-400.00")!)),
     ]
     let categories = Categories(from: [Category(id: catId, name: "Groceries")])
 
@@ -192,7 +196,7 @@ struct AnalysisStoreCategoriesOverTimeTests {
     #expect(result.count == 2)
     let uncategorized = result.first { $0.categoryId == nil }
     #expect(uncategorized != nil)
-    #expect(uncategorized?.points[0].actualCents == 40000)
+    #expect(uncategorized?.points[0].actualAmount == Decimal(string: "400.00")!)
     #expect(uncategorized?.points[0].percentage == 40.0)
   }
 
@@ -203,7 +207,7 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: catId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: 10000, currency: .defaultTestCurrency))
+        totalExpenses: amt(Decimal(string: "100.00")!))
     ]
     let categories = Categories(from: [Category(id: catId, name: "Groceries")])
 
@@ -211,7 +215,7 @@ struct AnalysisStoreCategoriesOverTimeTests {
       from: breakdown, categories: categories)
 
     #expect(result.count == 1)
-    #expect(result[0].points[0].actualCents == 0)
+    #expect(result[0].points[0].actualAmount == 0)
     #expect(result[0].points[0].percentage == 0.0)
   }
 
@@ -220,7 +224,7 @@ struct AnalysisStoreCategoriesOverTimeTests {
     let breakdown = [
       ExpenseBreakdown(
         categoryId: catId, month: "202604",
-        totalExpenses: MonetaryAmount(cents: 0, currency: .defaultTestCurrency))
+        totalExpenses: amt(0))
     ]
     let categories = Categories(from: [Category(id: catId, name: "Groceries")])
 
@@ -228,7 +232,7 @@ struct AnalysisStoreCategoriesOverTimeTests {
       from: breakdown, categories: categories)
 
     #expect(result.count == 1)
-    #expect(result[0].points[0].actualCents == 0)
+    #expect(result[0].points[0].actualAmount == 0)
     #expect(result[0].points[0].percentage == 0.0)
   }
 }
@@ -238,18 +242,18 @@ struct AnalysisStoreCategoriesOverTimeTests {
 @Suite("IncomeExpenseTableCard — cumulativeSavings")
 struct IncomeExpenseTableCardCumulativeSavingsTests {
 
-  private let currency: Currency = .defaultTestCurrency
+  private let instrument: Instrument = .defaultTestInstrument
 
-  private func amount(_ cents: Int) -> MonetaryAmount {
-    MonetaryAmount(cents: cents, currency: currency)
+  private func amount(_ quantity: Decimal) -> InstrumentAmount {
+    InstrumentAmount(quantity: quantity, instrument: instrument)
   }
 
   private func monthData(
     month: String,
-    income: Int,
-    expense: Int,
-    earmarkedIncome: Int = 0,
-    earmarkedExpense: Int = 0
+    income: Decimal,
+    expense: Decimal,
+    earmarkedIncome: Decimal = 0,
+    earmarkedExpense: Decimal = 0
   ) -> MonthlyIncomeExpense {
     MonthlyIncomeExpense(
       month: month,
@@ -267,56 +271,65 @@ struct IncomeExpenseTableCardCumulativeSavingsTests {
   @Test("first row total savings equals its own savings")
   func firstRowEqualsOwnSavings() {
     let data = [
-      monthData(month: "202604", income: 5000_00, expense: 3000_00),
-      monthData(month: "202603", income: 4000_00, expense: 3500_00),
-      monthData(month: "202602", income: 4500_00, expense: 2000_00),
+      monthData(
+        month: "202604", income: Decimal(string: "5000.00")!, expense: Decimal(string: "3000.00")!),
+      monthData(
+        month: "202603", income: Decimal(string: "4000.00")!, expense: Decimal(string: "3500.00")!),
+      monthData(
+        month: "202602", income: Decimal(string: "4500.00")!, expense: Decimal(string: "2000.00")!),
     ]
 
     let result = IncomeExpenseTableCard.cumulativeSavings(
       upTo: data[0], in: data, includeEarmarks: false)
 
-    #expect(result.cents == 2000_00)  // 5000 - 3000
+    #expect(result.quantity == Decimal(string: "2000.00")!)  // 5000 - 3000
   }
 
   @Test("second row accumulates first two rows")
   func secondRowAccumulatesTwo() {
     let data = [
-      monthData(month: "202604", income: 5000_00, expense: 3000_00),
-      monthData(month: "202603", income: 4000_00, expense: 3500_00),
-      monthData(month: "202602", income: 4500_00, expense: 2000_00),
+      monthData(
+        month: "202604", income: Decimal(string: "5000.00")!, expense: Decimal(string: "3000.00")!),
+      monthData(
+        month: "202603", income: Decimal(string: "4000.00")!, expense: Decimal(string: "3500.00")!),
+      monthData(
+        month: "202602", income: Decimal(string: "4500.00")!, expense: Decimal(string: "2000.00")!),
     ]
 
     let result = IncomeExpenseTableCard.cumulativeSavings(
       upTo: data[1], in: data, includeEarmarks: false)
 
     // (5000 - 3000) + (4000 - 3500) = 2000 + 500 = 2500
-    #expect(result.cents == 2500_00)
+    #expect(result.quantity == Decimal(string: "2500.00")!)
   }
 
   @Test("last row is grand total of all savings")
   func lastRowIsGrandTotal() {
     let data = [
-      monthData(month: "202604", income: 5000_00, expense: 3000_00),
-      monthData(month: "202603", income: 4000_00, expense: 3500_00),
-      monthData(month: "202602", income: 4500_00, expense: 2000_00),
+      monthData(
+        month: "202604", income: Decimal(string: "5000.00")!, expense: Decimal(string: "3000.00")!),
+      monthData(
+        month: "202603", income: Decimal(string: "4000.00")!, expense: Decimal(string: "3500.00")!),
+      monthData(
+        month: "202602", income: Decimal(string: "4500.00")!, expense: Decimal(string: "2000.00")!),
     ]
 
     let result = IncomeExpenseTableCard.cumulativeSavings(
       upTo: data[2], in: data, includeEarmarks: false)
 
     // 2000 + 500 + 2500 = 5000
-    #expect(result.cents == 5000_00)
+    #expect(result.quantity == Decimal(string: "5000.00")!)
   }
 
   @Test("includeEarmarks uses totalProfit instead of profit")
   func includeEarmarksUsesTotalProfit() {
     let data = [
       monthData(
-        month: "202604", income: 5000_00, expense: 3000_00,
-        earmarkedIncome: 1000_00, earmarkedExpense: 500_00),
+        month: "202604", income: Decimal(string: "5000.00")!, expense: Decimal(string: "3000.00")!,
+        earmarkedIncome: Decimal(string: "1000.00")!, earmarkedExpense: Decimal(string: "500.00")!),
       monthData(
-        month: "202603", income: 4000_00, expense: 3500_00,
-        earmarkedIncome: 200_00, earmarkedExpense: 100_00),
+        month: "202603", income: Decimal(string: "4000.00")!, expense: Decimal(string: "3500.00")!,
+        earmarkedIncome: Decimal(string: "200.00")!, earmarkedExpense: Decimal(string: "100.00")!),
     ]
 
     let withoutEarmarks = IncomeExpenseTableCard.cumulativeSavings(
@@ -325,26 +338,31 @@ struct IncomeExpenseTableCardCumulativeSavingsTests {
       upTo: data[1], in: data, includeEarmarks: true)
 
     // Without: (5000-3000) + (4000-3500) = 2500
-    #expect(withoutEarmarks.cents == 2500_00)
+    #expect(withoutEarmarks.quantity == Decimal(string: "2500.00")!)
     // With: (5000-3000+1000-500) + (4000-3500+200-100) = 2500 + 600 = 3100
-    #expect(withEarmarks.cents == 3100_00)
+    #expect(withEarmarks.quantity == Decimal(string: "3100.00")!)
   }
 
   @Test("single row total equals its own savings")
   func singleRow() {
-    let data = [monthData(month: "202604", income: 9000_00, expense: 8000_00)]
+    let data = [
+      monthData(
+        month: "202604", income: Decimal(string: "9000.00")!, expense: Decimal(string: "8000.00")!)
+    ]
 
     let result = IncomeExpenseTableCard.cumulativeSavings(
       upTo: data[0], in: data, includeEarmarks: false)
 
-    #expect(result.cents == 1000_00)
+    #expect(result.quantity == Decimal(string: "1000.00")!)
   }
 
   @Test("handles negative savings correctly")
   func negativeSavings() {
     let data = [
-      monthData(month: "202604", income: 2000_00, expense: 5000_00),
-      monthData(month: "202603", income: 3000_00, expense: 1000_00),
+      monthData(
+        month: "202604", income: Decimal(string: "2000.00")!, expense: Decimal(string: "5000.00")!),
+      monthData(
+        month: "202603", income: Decimal(string: "3000.00")!, expense: Decimal(string: "1000.00")!),
     ]
 
     let first = IncomeExpenseTableCard.cumulativeSavings(
@@ -352,19 +370,23 @@ struct IncomeExpenseTableCardCumulativeSavingsTests {
     let second = IncomeExpenseTableCard.cumulativeSavings(
       upTo: data[1], in: data, includeEarmarks: false)
 
-    #expect(first.cents == -3000_00)  // 2000 - 5000
-    #expect(second.cents == -1000_00)  // -3000 + 2000
+    #expect(first.quantity == Decimal(string: "-3000.00")!)  // 2000 - 5000
+    #expect(second.quantity == Decimal(string: "-1000.00")!)  // -3000 + 2000
   }
 
   @Test("unknown item returns zero")
   func unknownItem() {
-    let data = [monthData(month: "202604", income: 5000_00, expense: 3000_00)]
-    let unknown = monthData(month: "202501", income: 1000_00, expense: 500_00)
+    let data = [
+      monthData(
+        month: "202604", income: Decimal(string: "5000.00")!, expense: Decimal(string: "3000.00")!)
+    ]
+    let unknown = monthData(
+      month: "202501", income: Decimal(string: "1000.00")!, expense: Decimal(string: "500.00")!)
 
     let result = IncomeExpenseTableCard.cumulativeSavings(
       upTo: unknown, in: data, includeEarmarks: false)
 
-    #expect(result.cents == 0)
+    #expect(result.isZero)
   }
 }
 
@@ -380,17 +402,17 @@ struct AnalysisStoreExtrapolateTests {
   }
 
   private func balance(
-    daysFromToday: Int, cents: Int = 1000, isForecast: Bool = false,
+    daysFromToday: Int, quantity: Decimal = Decimal(string: "10.00")!, isForecast: Bool = false,
     relativeTo today: Date = Date()
   ) -> DailyBalance {
-    let amount = MonetaryAmount(cents: cents, currency: .defaultTestCurrency)
+    let amount = InstrumentAmount(quantity: quantity, instrument: .defaultTestInstrument)
     if isForecast {
       return DailyBalance(
         date: date(daysFromToday, relativeTo: today),
         balance: amount,
-        earmarked: .zero(currency: .defaultTestCurrency),
+        earmarked: .zero(instrument: .defaultTestInstrument),
         availableFunds: amount,
-        investments: .zero(currency: .defaultTestCurrency),
+        investments: .zero(instrument: .defaultTestInstrument),
         investmentValue: nil,
         netWorth: amount,
         bestFit: nil,
@@ -400,8 +422,8 @@ struct AnalysisStoreExtrapolateTests {
     return DailyBalance(
       date: date(daysFromToday, relativeTo: today),
       balance: amount,
-      earmarked: .zero(currency: .defaultTestCurrency),
-      investments: .zero(currency: .defaultTestCurrency),
+      earmarked: .zero(instrument: .defaultTestInstrument),
+      investments: .zero(instrument: .defaultTestInstrument),
       investmentValue: nil
     )
   }
@@ -420,7 +442,7 @@ struct AnalysisStoreExtrapolateTests {
     #expect(result.count == 2)
     #expect(calendar.startOfDay(for: result[0].date) == date(-5, relativeTo: today))
     #expect(calendar.startOfDay(for: result[1].date) == today)
-    #expect(result[1].balance.cents == result[0].balance.cents)
+    #expect(result[1].balance.quantity == result[0].balance.quantity)
     #expect(!result[1].isForecast)
   }
 
@@ -436,8 +458,9 @@ struct AnalysisStoreExtrapolateTests {
   @Test func extendsForecastBackToToday() {
     let today = calendar.startOfDay(for: Date())
     let balances = [
-      balance(daysFromToday: -3, cents: 1000, relativeTo: today),
-      balance(daysFromToday: 5, cents: 1500, isForecast: true, relativeTo: today),
+      balance(daysFromToday: -3, quantity: Decimal(string: "10.00")!, relativeTo: today),
+      balance(
+        daysFromToday: 5, quantity: Decimal(string: "15.00")!, isForecast: true, relativeTo: today),
     ]
 
     let forecastUntil = date(30, relativeTo: today)
@@ -448,15 +471,16 @@ struct AnalysisStoreExtrapolateTests {
     // Forecast should be extended back to today using the last actual balance
     #expect(forecasts.count >= 2)
     #expect(calendar.startOfDay(for: forecasts[0].date) == today)
-    #expect(forecasts[0].balance.cents == 1000)  // Last actual balance value
+    #expect(forecasts[0].balance.quantity == Decimal(string: "10.00")!)  // Last actual balance value
   }
 
   @Test func extendsForecastToEndDate() {
     let today = calendar.startOfDay(for: Date())
     let forecastUntil = date(30, relativeTo: today)
     let balances = [
-      balance(daysFromToday: -3, cents: 1000, relativeTo: today),
-      balance(daysFromToday: 5, cents: 1500, isForecast: true, relativeTo: today),
+      balance(daysFromToday: -3, quantity: Decimal(string: "10.00")!, relativeTo: today),
+      balance(
+        daysFromToday: 5, quantity: Decimal(string: "15.00")!, isForecast: true, relativeTo: today),
     ]
 
     let result = AnalysisStore.extrapolateBalances(
@@ -465,13 +489,15 @@ struct AnalysisStoreExtrapolateTests {
     let forecasts = result.filter { $0.isForecast }
     let lastForecast = forecasts.last!
     #expect(calendar.startOfDay(for: lastForecast.date) == forecastUntil)
-    #expect(lastForecast.balance.cents == 1500)
+    #expect(lastForecast.balance.quantity == Decimal(string: "15.00")!)
   }
 
   @Test func noForecastDataSkipsForecastExtension() {
     let today = calendar.startOfDay(for: Date())
     let forecastUntil = date(30, relativeTo: today)
-    let balances = [balance(daysFromToday: -3, cents: 1000, relativeTo: today)]
+    let balances = [
+      balance(daysFromToday: -3, quantity: Decimal(string: "10.00")!, relativeTo: today)
+    ]
 
     let result = AnalysisStore.extrapolateBalances(
       balances, today: today, forecastUntil: forecastUntil)
@@ -484,10 +510,12 @@ struct AnalysisStoreExtrapolateTests {
     let today = calendar.startOfDay(for: Date())
     let forecastUntil = date(30, relativeTo: today)
     let balances = [
-      balance(daysFromToday: -10, cents: 800, relativeTo: today),
-      balance(daysFromToday: -3, cents: 1000, relativeTo: today),
-      balance(daysFromToday: 5, cents: 1500, isForecast: true, relativeTo: today),
-      balance(daysFromToday: 15, cents: 1200, isForecast: true, relativeTo: today),
+      balance(daysFromToday: -10, quantity: Decimal(string: "8.00")!, relativeTo: today),
+      balance(daysFromToday: -3, quantity: Decimal(string: "10.00")!, relativeTo: today),
+      balance(
+        daysFromToday: 5, quantity: Decimal(string: "15.00")!, isForecast: true, relativeTo: today),
+      balance(
+        daysFromToday: 15, quantity: Decimal(string: "12.00")!, isForecast: true, relativeTo: today),
     ]
 
     let result = AnalysisStore.extrapolateBalances(

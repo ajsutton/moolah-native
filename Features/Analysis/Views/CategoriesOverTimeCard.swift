@@ -4,7 +4,7 @@ import SwiftUI
 struct CategoriesOverTimeCard: View {
   let entries: [CategoryOverTimeEntry]
   let categories: Categories
-  let currency: Currency
+  let instrument: Instrument
   @Binding var showActualValues: Bool
 
   @State private var selectedDate: Date?
@@ -61,7 +61,10 @@ struct CategoriesOverTimeCard: View {
         ForEach(entry.points) { point in
           AreaMark(
             x: .value("Month", point.monthDate),
-            y: .value("Amount", showActualValues ? Double(point.actualCents) : point.percentage),
+            y: .value(
+              "Amount",
+              showActualValues
+                ? Double(truncating: point.actualAmount as NSDecimalNumber) : point.percentage),
             stacking: .standard
           )
           .foregroundStyle(by: .value("Category", name))
@@ -91,8 +94,10 @@ struct CategoriesOverTimeCard: View {
         AxisValueLabel {
           if let amount = value.as(Double.self) {
             if showActualValues {
-              Text(MonetaryAmount(cents: Int(amount), currency: currency).formatNoSymbol)
-                .monospacedDigit()
+              Text(
+                InstrumentAmount(quantity: Decimal(amount), instrument: instrument).formatNoSymbol
+              )
+              .monospacedDigit()
             } else {
               Text("\(Int(amount))%")
                 .monospacedDigit()
@@ -119,14 +124,14 @@ struct CategoriesOverTimeCard: View {
             .font(.caption)
             .lineLimit(1)
           Spacer()
-          Text(MonetaryAmount(cents: entry.totalCents, currency: currency).formatted)
+          Text(InstrumentAmount(quantity: entry.totalAmount, instrument: instrument).formatted)
             .font(.caption)
             .monospacedDigit()
             .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-          "\(categoryName(for: entry.categoryId)): \(MonetaryAmount(cents: entry.totalCents, currency: currency).formatted)"
+          "\(categoryName(for: entry.categoryId)): \(InstrumentAmount(quantity: entry.totalAmount, instrument: instrument).formatted)"
         )
       }
     }
@@ -163,18 +168,18 @@ struct CategoriesOverTimeCard: View {
           month: "20260\(month + 1)",
           monthDate: Calendar.current.date(
             byAdding: .month, value: -5 + month, to: Date())!,
-          actualCents: Int.random(in: 10000...50000),
+          actualAmount: Decimal(Int.random(in: 100...500)),
           percentage: Double.random(in: 10...50)
         )
       },
-      totalCents: Int.random(in: 60000...200000)
+      totalAmount: Decimal(Int.random(in: 600...2000))
     )
   }
 
   CategoriesOverTimeCard(
     entries: entries,
     categories: Categories(from: categories),
-    currency: .AUD,
+    instrument: .AUD,
     showActualValues: .constant(false)
   )
   .frame(width: 800)

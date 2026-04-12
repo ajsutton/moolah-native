@@ -59,19 +59,20 @@ struct MigrationVerifier {
     let nonScheduledTxns = exported.transactions.filter { !$0.isScheduled }
 
     for account in exported.accounts {
-      let computedBalance = nonScheduledTxns.reduce(0) { sum, txn in
-        var delta = 0
-        if txn.accountId == account.id { delta += txn.amount.cents }
-        if txn.toAccountId == account.id { delta -= txn.amount.cents }
-        return sum + delta
+      let computedBalance: Decimal = nonScheduledTxns.reduce(Decimal(0)) { sum, txn in
+        var delta = sum
+        for leg in txn.legs where leg.accountId == account.id {
+          delta += leg.quantity
+        }
+        return delta
       }
 
-      if computedBalance != account.balance.cents {
+      if computedBalance != account.balance.quantity {
         balanceMismatches.append(
           VerificationResult.BalanceMismatch(
             accountName: account.name,
-            serverBalance: account.balance.cents,
-            localBalance: computedBalance
+            serverBalance: Int(truncating: (account.balance.quantity * 100) as NSDecimalNumber),
+            localBalance: Int(truncating: (computedBalance * 100) as NSDecimalNumber)
           )
         )
       }

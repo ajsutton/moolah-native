@@ -18,8 +18,8 @@ struct ReportsView: View {
   @State private var resolvedFrom: Date = DateRange.last12Months.startDate()
   @State private var resolvedTo: Date = DateRange.last12Months.endDate()
 
-  @State private var incomeBalances: [UUID: MonetaryAmount] = [:]
-  @State private var expenseBalances: [UUID: MonetaryAmount] = [:]
+  @State private var incomeBalances: [UUID: InstrumentAmount] = [:]
+  @State private var expenseBalances: [UUID: InstrumentAmount] = [:]
   @State private var isLoading = false
   @State private var error: Error?
 
