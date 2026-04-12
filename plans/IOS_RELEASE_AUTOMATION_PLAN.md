@@ -408,20 +408,10 @@ bump-version version:
 These steps must be done in the Apple Developer portal.
 
 - [x] **3.1 — Enroll in Apple Developer Program** ($99/year) — Individual enrollment, processing
-- [ ] **3.2 — Register App ID:** `rocks.moolah.app` for iOS
-- [ ] **3.3 — Register CloudKit container**
-  - Go to Certificates, Identifiers & Profiles → CloudKit Containers
-  - Create container `iCloud.rocks.moolah.app`
-  - Enable iCloud capability on the `rocks.moolah.app` App ID with CloudKit service
-- [ ] **3.4 — Create App Store Connect app record**
-  - Set app name, primary language, bundle ID, SKU
-  - Configure pricing (free)
-  - No metadata polish needed for TestFlight-only
-- [ ] **3.5 — Create App Store Connect API Key**
-  - Go to Users & Access → Integrations → App Store Connect API
-  - Create key with "App Manager" role
-  - Download the `.p8` file — it can only be downloaded once
-  - Note the Key ID and Issuer ID
+- [x] **3.2 — Register App ID:** `rocks.moolah.app` for iOS
+- [x] **3.3 — Register CloudKit container** `iCloud.rocks.moolah.app`, associated with App ID
+- [x] **3.4 — Create App Store Connect app record** — Name: "Moolah Rocks", SKU: moolah, Bundle ID: rocks.moolah.app
+- [x] **3.5 — Create App Store Connect API Key** — "Moolah CI", App Manager role. Key ID: U39622RG2W, Issuer ID: b9a8f2e2-2326-4faa-b969-b424e323284a, .p8 downloaded
 
 ---
 
@@ -429,34 +419,33 @@ These steps must be done in the Apple Developer portal.
 
 ### 4.1 — Match Certificates Repository
 
-- [ ] **4.1.1 — Create a private git repo** for Match certificates (e.g., `github.com/ajsutton/moolah-certificates`)
-- [ ] **4.1.2 — Run `fastlane match init`** to generate initial certificates and profiles
-- [ ] **4.1.3 — Verify provisioning profiles** include the iCloud/CloudKit entitlement (automatic if App ID has iCloud enabled in Phase 3.3)
+- [x] **4.1.1 — Create a private git repo** `github.com/ajsutton/moolah-certificates`
+- [x] **4.1.2 — Run `fastlane match appstore`** — certificate and provisioning profile created and stored in certificates repo
+- [x] **4.1.3 — Verify provisioning profiles** — profile includes iCloud/CloudKit (App ID has iCloud enabled)
 
 ### 4.2 — GitHub Secrets
 
-- [ ] **Add the following secrets** to the GitHub repository (Settings → Secrets → Actions):
+- [x] **Add the following secrets** to the GitHub repository (Settings → Secrets → Actions):
 
-| Secret | Description |
-|--------|-------------|
-| `ASC_KEY_ID` | App Store Connect API Key ID |
-| `ASC_ISSUER_ID` | App Store Connect Issuer ID |
-| `ASC_KEY_CONTENT` | Base64-encoded `.p8` private key content (use `base64 -i AuthKey_XXXXXX.p8 \| pbcopy`) |
-| `MATCH_GIT_URL` | URL of the private certificates repo |
-| `MATCH_PASSWORD` | Passphrase to decrypt Match certificates (generate with `openssl rand -base64 32`) |
-| `MATCH_GIT_BASIC_AUTHORIZATION` | Base64-encoded `username:PAT` for Match repo access (use `echo -n "ajsutton:ghp_TOKEN" \| base64`) |
-| `DEVELOPMENT_TEAM` | Apple Developer Team ID |
+| Secret | Status | Description |
+|--------|--------|-------------|
+| `ASC_KEY_ID` | Done | App Store Connect API Key ID |
+| `ASC_ISSUER_ID` | Done | App Store Connect Issuer ID |
+| `ASC_KEY_CONTENT` | Done | Base64-encoded `.p8` private key content |
+| `MATCH_GIT_URL` | Done | Updated to HTTPS URL |
+| `MATCH_PASSWORD` | Done | Passphrase to decrypt Match certificates |
+| `MATCH_GIT_BASIC_AUTHORIZATION` | Done | Base64-encoded username:PAT |
+| `DEVELOPMENT_TEAM` | Done | Apple Developer Team ID |
 
 ### 4.3 — GitHub Environment Protection
 
-- [ ] **Create GitHub Environment** `testflight` with protection rules:
-  - Deployment branches: tags only (`v*`)
+- [x] **Create GitHub Environment** `testflight` with deployment restricted to `v*` tags
 
 ### 4.4 — CI Security
 
-- [ ] **4.4.1 — Verify fork PR settings:** Settings → Actions → General → "Require approval for all outside collaborators" (default)
+- [x] **4.4.1 — Verify fork PR settings:** Fork PR workflows are disabled entirely
 - [x] **4.4.2 — Pin third-party actions to SHA** in release workflows for supply chain protection
-- [ ] **4.4.3 — Create a fine-grained PAT** for `MATCH_GIT_BASIC_AUTHORIZATION` scoped to only the certificates repo with `Contents: Read` permission. Set an expiry (e.g., 1 year)
+- [x] **4.4.3 — Create a fine-grained PAT** `moolah-match-certificates`, scoped to certificates repo, Contents: Read-only, expires 2027-04-12
 
 ---
 
