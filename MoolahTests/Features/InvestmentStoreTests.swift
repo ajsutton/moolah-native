@@ -134,17 +134,17 @@ struct InvestmentStoreTests {
   func testLoadDailyBalances() async throws {
     let accountId = UUID()
     let (backend, container) = try TestBackend.create()
-    let values: [UUID: [InvestmentValue]] = [
-      accountId: [
-        InvestmentValue(
-          date: makeDate(year: 2024, month: 1, day: 1),
-          value: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
-        InvestmentValue(
-          date: makeDate(year: 2024, month: 2, day: 1),
-          value: MonetaryAmount(cents: 200_000, currency: Currency.defaultTestCurrency)),
-      ]
-    ]
-    TestBackend.seed(investmentValues: values, in: container)
+    TestBackend.seed(
+      transactions: [
+        Transaction(
+          id: UUID(), type: .income, date: makeDate(year: 2024, month: 1, day: 1),
+          accountId: accountId,
+          amount: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
+        Transaction(
+          id: UUID(), type: .income, date: makeDate(year: 2024, month: 2, day: 1),
+          accountId: accountId,
+          amount: MonetaryAmount(cents: 100_000, currency: Currency.defaultTestCurrency)),
+      ], in: container)
 
     let store = InvestmentStore(repository: backend.investments)
     await store.loadDailyBalances(accountId: accountId)

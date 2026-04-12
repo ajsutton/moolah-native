@@ -155,36 +155,43 @@ struct InvestmentRepositoryContractTests {
 
   // MARK: - fetchDailyBalances
 
-  @Test("Fetch daily balances returns sorted by date ascending")
+  @Test(
+    "Fetch daily balances computes cumulative balance from transactions sorted by date ascending")
   func testFetchDailyBalancesSorted() async throws {
     let date1 = makeDate(year: 2024, month: 1, day: 15)
     let date2 = makeDate(year: 2024, month: 2, day: 15)
     let date3 = makeDate(year: 2024, month: 3, day: 15)
     let accountId = UUID()
 
-    // CloudKit — seed via setValue
-    let ckRepo = makeCloudKitInvestmentRepository()
-    try await ckRepo.setValue(
-      accountId: accountId, date: date3,
-      value: MonetaryAmount(cents: 300_000, currency: .defaultTestCurrency))
-    try await ckRepo.setValue(
-      accountId: accountId, date: date1,
-      value: MonetaryAmount(cents: 100_000, currency: .defaultTestCurrency))
-    try await ckRepo.setValue(
-      accountId: accountId, date: date2,
-      value: MonetaryAmount(cents: 200_000, currency: .defaultTestCurrency))
+    let (repo, container) = makeCloudKitInvestmentRepositoryWithContainer()
+    // Seed income transactions on three different dates
+    TestBackend.seed(
+      transactions: [
+        Transaction(
+          id: UUID(), type: .income, date: date3, accountId: accountId,
+          amount: MonetaryAmount(cents: 100_000, currency: .defaultTestCurrency)),
+        Transaction(
+          id: UUID(), type: .income, date: date1, accountId: accountId,
+          amount: MonetaryAmount(cents: 50_000, currency: .defaultTestCurrency)),
+        Transaction(
+          id: UUID(), type: .income, date: date2, accountId: accountId,
+          amount: MonetaryAmount(cents: 75_000, currency: .defaultTestCurrency)),
+      ], in: container)
 
-    let ckResult = try await ckRepo.fetchDailyBalances(accountId: accountId)
-    #expect(ckResult.count == 3)
-    // Ascending order: January, February, March
-    #expect(ckResult[0].balance.cents == 100_000)
-    #expect(ckResult[1].balance.cents == 200_000)
-    #expect(ckResult[2].balance.cents == 300_000)
+    let result = try await repo.fetchDailyBalances(accountId: accountId)
+    #expect(result.count == 3)
+    // Ascending order with cumulative balances: 50k, 125k, 225k
+    #expect(result[0].date == date1)
+    #expect(result[0].balance.cents == 50_000)
+    #expect(result[1].date == date2)
+    #expect(result[1].balance.cents == 125_000)
+    #expect(result[2].date == date3)
+    #expect(result[2].balance.cents == 225_000)
   }
 
   @Test("Fetch daily balances for empty account returns empty array")
   func testFetchDailyBalancesEmpty() async throws {
-    let repo = makeCloudKitInvestmentRepository()
+    let (repo, _) = makeCloudKitInvestmentRepositoryWithContainer()
     let result = try await repo.fetchDailyBalances(accountId: UUID())
     #expect(result.isEmpty)
   }
@@ -195,18 +202,123 @@ struct InvestmentRepositoryContractTests {
     let account2 = UUID()
     let date = makeDate(year: 2024, month: 1, day: 1)
 
-    // CloudKit — seed via setValue
-    let ckRepo = makeCloudKitInvestmentRepository()
-    try await ckRepo.setValue(
-      accountId: account1, date: date,
-      value: MonetaryAmount(cents: 100_000, currency: .defaultTestCurrency))
-    try await ckRepo.setValue(
-      accountId: account2, date: date,
-      value: MonetaryAmount(cents: 200_000, currency: .defaultTestCurrency))
+    let (repo, container) = makeCloudKitInvestmentRepositoryWithContainer()
+    TestBackend.seed(
+      transactions: [
+        Transaction(
+          id: UUID(), type: .income, date: date, accountId: account1,
+          amount: MonetaryAmount(cents: 100_000, currency: .defaultTestCurrency)),
+        Transaction(
+          id: UUID(), type: .income, date: date, accountId: account2,
+          amount: MonetaryAmount(cents: 200_000, currency: .defaultTestCurrency)),
+      ], in: container)
 
-    let ckResult = try await ckRepo.fetchDailyBalances(accountId: account1)
-    #expect(ckResult.count == 1)
-    #expect(ckResult[0].balance.cents == 100_000)
+    let result = try await repo.fetchDailyBalances(accountId: account1)
+    #expect(result.count == 1)
+    #expect(result[0].balance.cents == 100_000)
+  }
+
+  @Test("Fetch daily balances includes transfers to this account")
+  func testFetchDailyBalancesWithTransfers() async throws {
+    let investmentAccount = UUID()
+    let checkingAccount = UUID()
+    let date1 = makeDate(year: 2024, month: 1, day: 15)
+    let date2 = makeDate(year: 2024, month: 2, day: 15)
+
+    let (repo, container) = makeCloudKitInvestmentRepositoryWithContainer()
+    TestBackend.seed(
+      transactions: [
+        // Transfer $500 from checking to investment
+        Transaction(
+          id: UUID(), type: .transfer, date: date1,
+          accountId: checkingAccount, toAccountId: investmentAccount,
+          amount: MonetaryAmount(cents: -50_000, currency: .defaultTestCurrency)),
+        // Transfer $300 from checking to investment
+        Transaction(
+          id: UUID(), type: .transfer, date: date2,
+          accountId: checkingAccount, toAccountId: investmentAccount,
+          amount: MonetaryAmount(cents: -30_000, currency: .defaultTestCurrency)),
+      ], in: container)
+
+    let result = try await repo.fetchDailyBalances(accountId: investmentAccount)
+    #expect(result.count == 2)
+    #expect(result[0].balance.cents == 50_000)
+    #expect(result[1].balance.cents == 80_000)
+  }
+
+  @Test("Fetch daily balances excludes scheduled transactions")
+  func testFetchDailyBalancesExcludesScheduled() async throws {
+    let accountId = UUID()
+    let date = makeDate(year: 2024, month: 1, day: 15)
+
+    let (repo, container) = makeCloudKitInvestmentRepositoryWithContainer()
+    TestBackend.seed(
+      transactions: [
+        Transaction(
+          id: UUID(), type: .income, date: date, accountId: accountId,
+          amount: MonetaryAmount(cents: 100_000, currency: .defaultTestCurrency)),
+        // Scheduled transaction should be excluded
+        Transaction(
+          id: UUID(), type: .income, date: date, accountId: accountId,
+          amount: MonetaryAmount(cents: 50_000, currency: .defaultTestCurrency),
+          recurPeriod: .month, recurEvery: 1),
+      ], in: container)
+
+    let result = try await repo.fetchDailyBalances(accountId: accountId)
+    #expect(result.count == 1)
+    #expect(result[0].balance.cents == 100_000)
+  }
+
+  @Test("Fetch daily balances handles positive-amount transfer from account correctly")
+  func testFetchDailyBalancesPositiveTransferFrom() async throws {
+    let investmentAccount = UUID()
+    let otherAccount = UUID()
+    let date1 = makeDate(year: 2024, month: 1, day: 15)
+    let date2 = makeDate(year: 2024, month: 2, day: 15)
+
+    let (repo, container) = makeCloudKitInvestmentRepositoryWithContainer()
+    TestBackend.seed(
+      transactions: [
+        // Transfer $1000 into investment (negative amount = money leaving checking)
+        Transaction(
+          id: UUID(), type: .transfer, date: date1,
+          accountId: otherAccount, toAccountId: investmentAccount,
+          amount: MonetaryAmount(cents: -100_000, currency: .defaultTestCurrency)),
+        // Positive-amount transfer FROM investment (e.g. dividend credit)
+        // amount is positive from accountId's perspective = money flowing in
+        Transaction(
+          id: UUID(), type: .transfer, date: date2,
+          accountId: investmentAccount, toAccountId: otherAccount,
+          amount: MonetaryAmount(cents: 50_000, currency: .defaultTestCurrency)),
+      ], in: container)
+
+    let result = try await repo.fetchDailyBalances(accountId: investmentAccount)
+    #expect(result.count == 2)
+    // Day 1: +$1000
+    #expect(result[0].balance.cents == 100_000)
+    // Day 2: +$1000 + $500 = $1500 (positive transfer adds to balance)
+    #expect(result[1].balance.cents == 150_000)
+  }
+
+  @Test("Fetch daily balances collapses multiple transactions on same day")
+  func testFetchDailyBalancesSameDayCollapse() async throws {
+    let accountId = UUID()
+    let date = makeDate(year: 2024, month: 3, day: 1)
+
+    let (repo, container) = makeCloudKitInvestmentRepositoryWithContainer()
+    TestBackend.seed(
+      transactions: [
+        Transaction(
+          id: UUID(), type: .income, date: date, accountId: accountId,
+          amount: MonetaryAmount(cents: 100_000, currency: .defaultTestCurrency)),
+        Transaction(
+          id: UUID(), type: .income, date: date, accountId: accountId,
+          amount: MonetaryAmount(cents: 50_000, currency: .defaultTestCurrency)),
+      ], in: container)
+
+    let result = try await repo.fetchDailyBalances(accountId: accountId)
+    #expect(result.count == 1)
+    #expect(result[0].balance.cents == 150_000)
   }
 }
 
@@ -248,4 +360,13 @@ private func makeCloudKitInvestmentRepository(
   }
 
   return repo
+}
+
+private func makeCloudKitInvestmentRepositoryWithContainer(
+  currency: Currency = .defaultTestCurrency
+) -> (CloudKitInvestmentRepository, ModelContainer) {
+  let container = try! TestModelContainer.create()
+  let repo = CloudKitInvestmentRepository(
+    modelContainer: container, currency: currency)
+  return (repo, container)
 }
