@@ -1,4 +1,6 @@
+import CloudKit
 import Foundation
+import OSLog
 import Observation
 import SwiftData
 
@@ -7,19 +9,16 @@ import SwiftData
 final class ProfileContainerManager {
   let indexContainer: ModelContainer
   private let dataSchema: Schema
-  private let cloudKitDatabase: ModelConfiguration.CloudKitDatabase
   private let inMemory: Bool
   private var containers: [UUID: ModelContainer] = [:]
 
   init(
     indexContainer: ModelContainer,
     dataSchema: Schema,
-    cloudKitDatabase: ModelConfiguration.CloudKitDatabase = .automatic,
     inMemory: Bool = false
   ) {
     self.indexContainer = indexContainer
     self.dataSchema = dataSchema
-    self.cloudKitDatabase = cloudKitDatabase
     self.inMemory = inMemory
   }
 
@@ -33,12 +32,14 @@ final class ProfileContainerManager {
     } else {
       let url = URL.applicationSupportDirectory
         .appending(path: "Moolah-\(profileId.uuidString).store")
-      config = ModelConfiguration(url: url, cloudKitDatabase: cloudKitDatabase)
+      config = ModelConfiguration(url: url, cloudKitDatabase: .none)
     }
     let container = try ModelContainer(for: dataSchema, configurations: [config])
     containers[profileId] = container
     return container
   }
+
+  private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileContainerManager")
 
   func deleteStore(for profileId: UUID) {
     containers.removeValue(forKey: profileId)
@@ -52,6 +53,29 @@ final class ProfileContainerManager {
       let url = baseURL.deletingLastPathComponent()
         .appending(path: baseURL.lastPathComponent + suffix)
       try? fm.removeItem(at: url)
+    }
+
+    // Delete the sync state file
+    let syncStateURL = URL.applicationSupportDirectory
+      .appending(path: "Moolah-\(profileId.uuidString).syncstate")
+    try? fm.removeItem(at: syncStateURL)
+
+    // Delete the CloudKit zone for this profile
+    deleteCloudKitZone(for: profileId)
+  }
+
+  private func deleteCloudKitZone(for profileId: UUID) {
+    let zoneID = CKRecordZone.ID(
+      zoneName: "profile-\(profileId.uuidString)",
+      ownerName: CKCurrentUserDefaultName
+    )
+    Task {
+      do {
+        try await CKContainer.default().privateCloudDatabase.deleteRecordZone(withID: zoneID)
+        logger.info("Deleted CloudKit zone for profile \(profileId)")
+      } catch {
+        logger.error("Failed to delete CloudKit zone for profile \(profileId): \(error)")
+      }
     }
   }
 

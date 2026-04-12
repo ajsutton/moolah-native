@@ -65,6 +65,7 @@ struct ShowHiddenCommands: Commands {
 @MainActor
 struct MoolahApp: App {
   private let containerManager: ProfileContainerManager
+  private let profileIndexSyncEngine: ProfileIndexSyncEngine
   @State private var profileStore: ProfileStore
   #if os(macOS)
     private let backupManager: StoreBackupManager
@@ -79,7 +80,7 @@ struct MoolahApp: App {
       let profileStoreURL = URL.applicationSupportDirectory.appending(path: "Moolah.store")
       let profileConfig = ModelConfiguration(
         url: profileStoreURL,
-        cloudKitDatabase: .automatic
+        cloudKitDatabase: .none
       )
       let indexContainer = try ModelContainer(for: profileSchema, configurations: [profileConfig])
 
@@ -97,12 +98,22 @@ struct MoolahApp: App {
         dataSchema: dataSchema
       )
       containerManager = manager
+      profileIndexSyncEngine = ProfileIndexSyncEngine(modelContainer: indexContainer)
     } catch {
       fatalError("Failed to initialize ModelContainer: \(error)")
     }
 
     let store = ProfileStore(validator: RemoteServerValidator(), containerManager: containerManager)
     _profileStore = State(initialValue: store)
+
+    // Wire sync engine to reload profiles on remote changes
+    profileIndexSyncEngine.onRemoteChangesApplied = { [weak store] in
+      store?.loadCloudProfiles()
+    }
+    profileIndexSyncEngine.start()
+
+    // Clean up the legacy CloudKit zone from SwiftData's automatic sync
+    LegacyZoneCleanup.performIfNeeded()
 
     #if os(macOS)
       backupManager = StoreBackupManager()
