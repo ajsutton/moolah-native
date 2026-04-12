@@ -75,6 +75,10 @@ struct BinanceClient: CryptoPriceClient, Sendable {
 
   // MARK: - URL builders (internal for testing)
 
+  static func exchangeInfoURL() -> URL {
+    baseURL.appendingPathComponent("/api/v3/exchangeInfo")
+  }
+
   static func klinesURL(symbol: String, from: Date, to: Date) -> URL {
     let startMs = Int(from.timeIntervalSince1970 * 1000)
     let endMs = Int(to.timeIntervalSince1970 * 1000)
@@ -112,6 +116,18 @@ struct BinanceClient: CryptoPriceClient, Sendable {
     return result
   }
 
+  /// Parses the exchange info response and returns the set of active USDT trading pair symbols.
+  static func parseExchangeInfoResponse(_ data: Data) throws -> Set<String> {
+    let container = try JSONDecoder().decode(ExchangeInfoContainer.self, from: data)
+    var pairs: Set<String> = []
+    for symbol in container.symbols {
+      if symbol.quoteAsset == "USDT", symbol.status == "TRADING" {
+        pairs.insert(symbol.symbol)
+      }
+    }
+    return pairs
+  }
+
   static func applyUsdtRate(_ prices: [String: Decimal], rate: Decimal) -> [String: Decimal] {
     prices.mapValues { $0 * rate }
   }
@@ -121,6 +137,19 @@ struct BinanceClient: CryptoPriceClient, Sendable {
     f.formatOptions = [.withFullDate]
     return f.string(from: date)
   }
+}
+
+// MARK: - Exchange info response types
+
+private struct ExchangeInfoContainer: Decodable {
+  let symbols: [ExchangeInfoSymbol]
+}
+
+private struct ExchangeInfoSymbol: Decodable {
+  let symbol: String
+  let baseAsset: String
+  let quoteAsset: String
+  let status: String
 }
 
 // MARK: - Binance kline array values are mixed types (int, string)

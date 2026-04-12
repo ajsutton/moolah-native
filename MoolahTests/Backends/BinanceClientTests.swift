@@ -70,6 +70,27 @@ struct BinanceClientTests {
     _ = client
   }
 
+  // MARK: - Exchange info parsing
+
+  @Test func parseExchangeInfoResponse_findsUsdtPairs() throws {
+    let json = """
+      {
+          "symbols": [
+              { "symbol": "ETHUSDT", "baseAsset": "ETH", "quoteAsset": "USDT", "status": "TRADING" },
+              { "symbol": "BTCUSDT", "baseAsset": "BTC", "quoteAsset": "USDT", "status": "TRADING" },
+              { "symbol": "ETHBTC", "baseAsset": "ETH", "quoteAsset": "BTC", "status": "TRADING" },
+              { "symbol": "OLDUSDT", "baseAsset": "OLD", "quoteAsset": "USDT", "status": "BREAK" }
+          ]
+      }
+      """.data(using: .utf8)!
+
+    let pairs = try BinanceClient.parseExchangeInfoResponse(json)
+    #expect(pairs.contains("ETHUSDT"))
+    #expect(pairs.contains("BTCUSDT"))
+    #expect(!pairs.contains("ETHBTC"))
+    #expect(!pairs.contains("OLDUSDT"))
+  }
+
   // MARK: - Token without Binance mapping
 
   @Test func tokenWithoutBinanceSymbolThrows() async {
