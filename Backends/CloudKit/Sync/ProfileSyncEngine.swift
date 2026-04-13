@@ -222,26 +222,18 @@ final class ProfileSyncEngine: Sendable {
   // MARK: - Building CKRecords
 
   /// Builds a CKRecord from a local SwiftData record for upload.
-  /// If cached system fields exist for this record, uses them as the base
-  /// to preserve the change tag and avoid `.serverRecordChanged` conflicts.
-  func buildCKRecord<T: CloudKitRecordConvertible>(for record: T) -> CKRecord {
-    let freshRecord = record.toCKRecord(in: zoneID)
-    return applySystemFieldsCache(to: freshRecord)
-  }
-
-  /// If we have cached system fields for this record, creates a CKRecord from
-  /// the cached data (preserving the change tag) and copies field values onto it.
-  private func applySystemFieldsCache(to freshRecord: CKRecord) -> CKRecord {
-    let recordName = freshRecord.recordID.recordName
-    guard let cachedData = systemFieldsCache[recordName],
+  /// If cached system fields exist for this record, applies fields directly onto the
+  /// cached record to preserve the change tag and avoid `.serverRecordChanged` conflicts.
+  /// This avoids creating a throwaway CKRecord when cached system fields are available.
+  func buildCKRecord<T: CloudKitRecordConvertible & IdentifiableRecord>(for record: T) -> CKRecord {
+    let recordName = record.id.uuidString
+    if let cachedData = systemFieldsCache[recordName],
       let cachedRecord = CKRecord.fromEncodedSystemFields(cachedData)
-    else {
-      return freshRecord
+    {
+      record.applyFields(to: cachedRecord)
+      return cachedRecord
     }
-    for key in freshRecord.allKeys() {
-      cachedRecord[key] = freshRecord[key]
-    }
-    return cachedRecord
+    return record.toCKRecord(in: zoneID)
   }
 
   // MARK: - Applying Remote Changes
