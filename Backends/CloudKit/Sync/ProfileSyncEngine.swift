@@ -247,6 +247,15 @@ final class ProfileSyncEngine: Sendable {
     Self.applyBatchSaves(saved, context: context)
     Self.applyBatchDeletions(deleted, context: context)
 
+    // Invalidate cached balances when transactions arrive from other devices.
+    // The local cache is stale — it will be recomputed on next fetchAll().
+    let hasTransactionChanges =
+      saved.contains { $0.recordType == TransactionRecord.recordType }
+      || deleted.contains { $0.1 == TransactionRecord.recordType }
+    if hasTransactionChanges {
+      Self.invalidateCachedBalances(context: context)
+    }
+
     do {
       try context.save()
       onRemoteChangesApplied?()
@@ -406,6 +415,17 @@ final class ProfileSyncEngine: Sendable {
     }
   }
 
+  // MARK: - Balance Cache Invalidation
+
+  /// Sets cachedBalance to nil on all accounts so it will be recomputed on next load.
+  /// Called when remote transaction changes arrive that may affect balances.
+  nonisolated private static func invalidateCachedBalances(context: ModelContext) {
+    guard let accounts = try? context.fetch(FetchDescriptor<AccountRecord>()) else { return }
+    for account in accounts {
+      account.cachedBalance = nil
+    }
+  }
+
   // MARK: - Per-Type Batch Upsert
 
   nonisolated private static func batchUpsertAccounts(
@@ -434,7 +454,7 @@ final class ProfileSyncEngine: Sendable {
         existing.position = values.position
         existing.isHidden = values.isHidden
         existing.currencyCode = values.currencyCode
-        existing.cachedBalance = values.cachedBalance
+        // cachedBalance NOT updated from sync — computed locally from transactions
         updateCount += 1
       } else {
         context.insert(values)

@@ -73,9 +73,8 @@ extension AccountRecord: CloudKitRecordConvertible {
     record["position"] = position as CKRecordValue
     record["isHidden"] = (isHidden ? 1 : 0) as CKRecordValue
     record["currencyCode"] = currencyCode as CKRecordValue
-    if let cachedBalance {
-      record["cachedBalance"] = cachedBalance as CKRecordValue
-    }
+    // cachedBalance is NOT synced — it's derived locally from transactions.
+    // Syncing it causes conflicts when transactions change on multiple devices.
     return record
   }
 
@@ -86,8 +85,8 @@ extension AccountRecord: CloudKitRecordConvertible {
       type: ckRecord["type"] as? String ?? "bank",
       position: ckRecord["position"] as? Int ?? 0,
       isHidden: (ckRecord["isHidden"] as? Int ?? 0) != 0,
-      currencyCode: ckRecord["currencyCode"] as? String ?? "",
-      cachedBalance: ckRecord["cachedBalance"] as? Int
+      currencyCode: ckRecord["currencyCode"] as? String ?? ""
+        // cachedBalance omitted — computed locally from transactions
     )
   }
 }

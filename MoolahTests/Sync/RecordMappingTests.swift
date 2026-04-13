@@ -60,7 +60,8 @@ struct RecordMappingTests {
     #expect(ckRecord["position"] as? Int == 2)
     #expect(ckRecord["isHidden"] as? Int == 1)
     #expect(ckRecord["currencyCode"] as? String == "USD")
-    #expect(ckRecord["cachedBalance"] as? Int == 12345)
+    // cachedBalance is NOT synced — it's derived locally from transactions
+    #expect(ckRecord["cachedBalance"] == nil)
 
     let restored = AccountRecord.fieldValues(from: ckRecord)
     #expect(restored.id == account.id)
@@ -69,7 +70,7 @@ struct RecordMappingTests {
     #expect(restored.position == 2)
     #expect(restored.isHidden == true)
     #expect(restored.currencyCode == "USD")
-    #expect(restored.cachedBalance == 12345)
+    #expect(restored.cachedBalance == nil)
   }
 
   @Test func accountRecordNilCachedBalance() {
