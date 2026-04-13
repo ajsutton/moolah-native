@@ -14,8 +14,9 @@ final class ProfileSyncEngine: Sendable {
   nonisolated let modelContainer: ModelContainer
 
   /// Callback invoked after remote changes are applied to the local store.
-  /// Used by ProfileSession to trigger store reloads.
-  var onRemoteChangesApplied: (() -> Void)?
+  /// Used by ProfileSession to trigger selective store reloads.
+  /// The argument is the set of changed CloudKit record types.
+  var onRemoteChangesApplied: ((Set<String>) -> Void)?
 
   private nonisolated let logger = Logger(
     subsystem: "com.moolah.app", category: "ProfileSyncEngine")
@@ -334,7 +335,8 @@ final class ProfileSyncEngine: Sendable {
       os_signpost(.begin, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
       try context.save()
       os_signpost(.end, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
-      onRemoteChangesApplied?()
+      let changedTypes = Set(saved.map(\.recordType) + deleted.map(\.1))
+      onRemoteChangesApplied?(changedTypes)
     } catch {
       os_signpost(.end, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
       logger.error("Failed to save remote changes: \(error)")
@@ -428,7 +430,12 @@ final class ProfileSyncEngine: Sendable {
     do {
       try context.save()
       logger.info("Deleted all local data for profile \(self.profileId)")
-      onRemoteChangesApplied?()
+      onRemoteChangesApplied?(
+        Set([
+          AccountRecord.recordType, TransactionRecord.recordType,
+          CategoryRecord.recordType, EarmarkRecord.recordType,
+          EarmarkBudgetItemRecord.recordType, InvestmentValueRecord.recordType,
+        ]))
     } catch {
       logger.error("Failed to delete local data: \(error)")
     }
