@@ -184,6 +184,14 @@ final class ProfileStore {
       cloudProfiles = records.map { $0.toProfile() }
       logger.debug("Loaded \(self.cloudProfiles.count) cloud profiles")
 
+      // Auto-select a profile when none is active (e.g. new device receiving
+      // its first cloud profile from another device).
+      if activeProfileID == nil, let first = profiles.first {
+        self.activeProfileID = first.id
+        saveActiveProfileID()
+        logger.debug("Auto-selected profile: \(first.id)")
+      }
+
       // Handle active profile being deleted on another device.
       // Skip this on initial load — SwiftData with CloudKit may return empty results
       // before the store is fully ready, which would incorrectly reset the active profile.
