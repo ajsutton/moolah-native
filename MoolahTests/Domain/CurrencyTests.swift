@@ -1,47 +1,48 @@
-import XCTest
+import Testing
 
 @testable import Moolah
 
-final class CurrencyTests: XCTestCase {
-  func testFromCode_AUD() {
+@Suite("Currency")
+struct CurrencyTests {
+  @Test func fromCode_AUD() {
     let currency = Currency.from(code: "AUD")
-    XCTAssertEqual(currency.code, "AUD")
-    XCTAssertEqual(currency.decimals, 2)
-    XCTAssertFalse(currency.symbol.isEmpty)
+    #expect(currency.code == "AUD")
+    #expect(currency.decimals == 2)
+    #expect(!currency.symbol.isEmpty)
   }
 
-  func testFromCode_USD() {
+  @Test func fromCode_USD() {
     let currency = Currency.from(code: "USD")
-    XCTAssertEqual(currency.code, "USD")
-    XCTAssertEqual(currency.decimals, 2)
+    #expect(currency.code == "USD")
+    #expect(currency.decimals == 2)
   }
 
-  func testFromCode_JPY() {
+  @Test func fromCode_JPY() {
     let currency = Currency.from(code: "JPY")
-    XCTAssertEqual(currency.code, "JPY")
-    XCTAssertEqual(currency.decimals, 0)
+    #expect(currency.code == "JPY")
+    #expect(currency.decimals == 0)
   }
 
-  func testFromCode_unknownCode() {
+  @Test func fromCode_unknownCode() {
     let currency = Currency.from(code: "BTC")
-    XCTAssertEqual(currency.code, "BTC")
-    XCTAssertFalse(currency.symbol.isEmpty)
+    #expect(currency.code == "BTC")
+    #expect(!currency.symbol.isEmpty)
   }
 
-  func testFromCode_emptyCode() {
+  @Test func fromCode_emptyCode() {
     let currency = Currency.from(code: "")
-    XCTAssertEqual(currency.code, "")
+    #expect(currency.code == "")
   }
 
-  func testFromCode_sameCodeReturnsSameResult() {
+  @Test func fromCode_sameCodeReturnsSameResult() {
     let a = Currency.from(code: "AUD")
     let b = Currency.from(code: "AUD")
-    XCTAssertEqual(a, b)
+    #expect(a == b)
   }
 
-  func testFromCode_differentCodes() {
+  @Test func fromCode_differentCodes() {
     let aud = Currency.from(code: "AUD")
     let usd = Currency.from(code: "USD")
-    XCTAssertNotEqual(aud.code, usd.code)
+    #expect(aud.code != usd.code)
   }
 }
