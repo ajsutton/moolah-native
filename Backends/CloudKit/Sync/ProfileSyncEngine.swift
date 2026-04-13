@@ -36,6 +36,10 @@ final class ProfileSyncEngine: Sendable {
   /// Preserved across uploads to avoid `.serverRecordChanged` conflicts.
   private var systemFieldsCache: [String: Data] = [:]
 
+  /// Debounce task for writing the system fields cache to disk.
+  /// Coalesces rapid successive writes into a single disk operation.
+  private var systemFieldsSaveTask: Task<Void, Never>?
+
   var hasPendingChanges: Bool {
     syncEngine.map { !$0.state.pendingRecordZoneChanges.isEmpty } ?? false
   }
@@ -182,6 +186,8 @@ final class ProfileSyncEngine: Sendable {
 
   /// Stops the sync engine. Call during profile deactivation or app termination.
   func stop() {
+    systemFieldsSaveTask?.cancel()
+    flushSystemFieldsCache()
     syncEngine = nil
     isRunning = false
     logger.info("Stopped sync engine for profile \(self.profileId)")
@@ -367,6 +373,15 @@ final class ProfileSyncEngine: Sendable {
   }
 
   private func saveSystemFieldsCache() {
+    systemFieldsSaveTask?.cancel()
+    systemFieldsSaveTask = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(1))
+      guard !Task.isCancelled, let self else { return }
+      self.flushSystemFieldsCache()
+    }
+  }
+
+  private func flushSystemFieldsCache() {
     do {
       let data = try PropertyListEncoder().encode(systemFieldsCache)
       try data.write(to: systemFieldsCacheURL, options: .atomic)
