@@ -402,10 +402,7 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let ids = pairs.map(\.0)
-    let descriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate<AccountRecord> { record in ids.contains(record.id) })
-    let existing = (try? context.fetch(descriptor)) ?? []
+    let existing = (try? context.fetch(FetchDescriptor<AccountRecord>())) ?? []
     let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -430,10 +427,7 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let ids = pairs.map(\.0)
-    let descriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate<TransactionRecord> { record in ids.contains(record.id) })
-    let existing = (try? context.fetch(descriptor)) ?? []
+    let existing = (try? context.fetch(FetchDescriptor<TransactionRecord>())) ?? []
     let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -464,10 +458,7 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let ids = pairs.map(\.0)
-    let descriptor = FetchDescriptor<CategoryRecord>(
-      predicate: #Predicate<CategoryRecord> { record in ids.contains(record.id) })
-    let existing = (try? context.fetch(descriptor)) ?? []
+    let existing = (try? context.fetch(FetchDescriptor<CategoryRecord>())) ?? []
     let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -488,10 +479,7 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let ids = pairs.map(\.0)
-    let descriptor = FetchDescriptor<EarmarkRecord>(
-      predicate: #Predicate<EarmarkRecord> { record in ids.contains(record.id) })
-    let existing = (try? context.fetch(descriptor)) ?? []
+    let existing = (try? context.fetch(FetchDescriptor<EarmarkRecord>())) ?? []
     let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -517,10 +505,7 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let ids = pairs.map(\.0)
-    let descriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
-      predicate: #Predicate<EarmarkBudgetItemRecord> { record in ids.contains(record.id) })
-    let existing = (try? context.fetch(descriptor)) ?? []
+    let existing = (try? context.fetch(FetchDescriptor<EarmarkBudgetItemRecord>())) ?? []
     let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -543,10 +528,7 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let ids = pairs.map(\.0)
-    let descriptor = FetchDescriptor<InvestmentValueRecord>(
-      predicate: #Predicate<InvestmentValueRecord> { record in ids.contains(record.id) })
-    let existing = (try? context.fetch(descriptor)) ?? []
+    let existing = (try? context.fetch(FetchDescriptor<InvestmentValueRecord>())) ?? []
     let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
