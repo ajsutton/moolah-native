@@ -439,37 +439,54 @@ final class ProfileSyncEngine: Sendable {
     }
   }
 
-  /// Handles batch deletions. Per-record fetch is acceptable here (small batches).
+  /// Handles batch deletions. Groups by record type and issues one fetch per type.
   private nonisolated static func applyBatchDeletions(
     _ deletions: [(CKRecord.ID, String)], context: ModelContext
   ) {
+    var grouped: [String: [UUID]] = [:]
     for (recordID, recordType) in deletions {
-      guard let recordId = UUID(uuidString: recordID.recordName) else { continue }
+      guard let uuid = UUID(uuidString: recordID.recordName) else { continue }
+      grouped[recordType, default: []].append(uuid)
+    }
 
+    for (recordType, ids) in grouped {
       switch recordType {
       case AccountRecord.recordType:
-        let descriptor = FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == recordId })
-        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<AccountRecord>(predicate: #Predicate { ids.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
       case TransactionRecord.recordType:
-        let descriptor = FetchDescriptor<TransactionRecord>(
-          predicate: #Predicate { $0.id == recordId })
-        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<TransactionRecord>(predicate: #Predicate { ids.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
       case CategoryRecord.recordType:
-        let descriptor = FetchDescriptor<CategoryRecord>(
-          predicate: #Predicate { $0.id == recordId })
-        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<CategoryRecord>(predicate: #Predicate { ids.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
       case EarmarkRecord.recordType:
-        let descriptor = FetchDescriptor<EarmarkRecord>(
-          predicate: #Predicate { $0.id == recordId })
-        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<EarmarkRecord>(predicate: #Predicate { ids.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
       case EarmarkBudgetItemRecord.recordType:
-        let descriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
-          predicate: #Predicate { $0.id == recordId })
-        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { ids.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
       case InvestmentValueRecord.recordType:
-        let descriptor = FetchDescriptor<InvestmentValueRecord>(
-          predicate: #Predicate { $0.id == recordId })
-        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { ids.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
       default:
         batchLogger.warning(
           "applyBatchDeletions: unknown record type '\(recordType)' — skipping")
