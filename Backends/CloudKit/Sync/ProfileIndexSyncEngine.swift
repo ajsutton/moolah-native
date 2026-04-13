@@ -1,4 +1,5 @@
 import CloudKit
+import CoreData
 import Foundation
 import OSLog
 import SwiftData
@@ -19,6 +20,8 @@ final class ProfileIndexSyncEngine: Sendable {
   private var pendingDeletions: Set<CKRecord.ID> = []
   private var syncEngine: CKSyncEngine?
   private(set) var isRunning = false
+  private nonisolated(unsafe) var saveObserver: NSObjectProtocol?
+  private var isApplyingRemoteChanges = false
 
   init(modelContainer: ModelContainer) {
     self.modelContainer = modelContainer
@@ -44,9 +47,64 @@ final class ProfileIndexSyncEngine: Sendable {
   }
 
   func stop() {
+    stopTracking()
     syncEngine = nil
     isRunning = false
     logger.info("Stopped profile index sync engine")
+  }
+
+  /// Observes local SwiftData saves on the index container and queues
+  /// inserted/updated/deleted ProfileRecords for upload to CloudKit.
+  func startTracking() {
+    guard saveObserver == nil else { return }
+
+    saveObserver = NotificationCenter.default.addObserver(
+      forName: .NSManagedObjectContextDidSave,
+      object: nil,
+      queue: .main
+    ) { [weak self] notification in
+      // Only process changes to ProfileRecord entities — ignore per-profile data saves
+      let profileEntityName = "ProfileRecord"
+
+      let inserted = (notification.userInfo?[NSInsertedObjectsKey] as? Set<NSManagedObject>)?
+        .filter { $0.entity.name == profileEntityName }
+      let updated = (notification.userInfo?[NSUpdatedObjectsKey] as? Set<NSManagedObject>)?
+        .filter { $0.entity.name == profileEntityName }
+      let deleted = (notification.userInfo?[NSDeletedObjectsKey] as? Set<NSManagedObject>)?
+        .filter { $0.entity.name == profileEntityName }
+
+      let insertedIDs = inserted?.compactMap { $0.value(forKey: "id") as? UUID } ?? []
+      let updatedIDs = updated?.compactMap { $0.value(forKey: "id") as? UUID } ?? []
+      let deletedIDs = deleted?.compactMap { $0.value(forKey: "id") as? UUID } ?? []
+
+      guard !insertedIDs.isEmpty || !updatedIDs.isEmpty || !deletedIDs.isEmpty else { return }
+
+      MainActor.assumeIsolated {
+        guard self?.isApplyingRemoteChanges != true else { return }
+        self?.processLocalSave(inserted: insertedIDs, updated: updatedIDs, deleted: deletedIDs)
+      }
+    }
+  }
+
+  func stopTracking() {
+    if let saveObserver {
+      NotificationCenter.default.removeObserver(saveObserver)
+    }
+    saveObserver = nil
+  }
+
+  // MARK: - Local Change Processing
+
+  private func processLocalSave(inserted: [UUID], updated: [UUID], deleted: [UUID]) {
+    for id in inserted {
+      addPendingSave(for: id)
+    }
+    for id in updated {
+      addPendingSave(for: id)
+    }
+    for id in deleted {
+      addPendingDeletion(for: id)
+    }
   }
 
   // MARK: - Pending Changes
@@ -68,6 +126,9 @@ final class ProfileIndexSyncEngine: Sendable {
   // MARK: - Applying Remote Changes
 
   func applyRemoteChanges(saved: [CKRecord], deleted: [CKRecord.ID]) {
+    isApplyingRemoteChanges = true
+    defer { isApplyingRemoteChanges = false }
+
     let context = ModelContext(modelContainer)
 
     for ckRecord in saved {
@@ -162,6 +223,26 @@ extension ProfileIndexSyncEngine: CKSyncEngineDelegate {
     case .sentRecordZoneChanges(let sentChanges):
       for saved in sentChanges.savedRecords {
         pendingSaves.remove(saved.recordID)
+      }
+      for failed in sentChanges.failedRecordSaves {
+        logger.error(
+          "Failed to send profile record \(failed.record.recordID.recordName, privacy: .public): \(failed.error, privacy: .public)"
+        )
+
+        // If the zone doesn't exist yet, create it and re-queue the record
+        if failed.error.code == .zoneNotFound {
+          let recordID = failed.record.recordID
+          Task {
+            do {
+              let zone = CKRecordZone(zoneID: self.zoneID)
+              try await CKContainer.default().privateCloudDatabase.save(zone)
+              self.logger.info("Created profile-index zone, retrying send")
+              self.syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+            } catch {
+              self.logger.error("Failed to create profile-index zone: \(error, privacy: .public)")
+            }
+          }
+        }
       }
       for deleted in sentChanges.deletedRecordIDs {
         pendingDeletions.remove(deleted)

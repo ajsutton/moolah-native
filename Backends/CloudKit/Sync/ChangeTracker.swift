@@ -26,17 +26,31 @@ final class ChangeTracker {
       object: nil,
       queue: .main
     ) { [weak self] notification in
-      // Extract data while on the notification's thread (main queue)
-      let inserted = notification.userInfo?[NSInsertedObjectsKey] as? Set<NSManagedObject>
-      let updated = notification.userInfo?[NSUpdatedObjectsKey] as? Set<NSManagedObject>
-      let deleted = notification.userInfo?[NSDeletedObjectsKey] as? Set<NSManagedObject>
+      // Only process per-profile data entities — ignore ProfileRecord saves from
+      // the index container which are handled by ProfileIndexSyncEngine.
+      let profileDataEntities: Set<String> = [
+        "AccountRecord", "TransactionRecord", "CategoryRecord",
+        "EarmarkRecord", "EarmarkBudgetItemRecord", "InvestmentValueRecord",
+      ]
 
-      // Extract UUIDs synchronously while objects are still valid
-      let insertedIDs = inserted?.compactMap { $0.value(forKey: "id") as? UUID } ?? []
-      let updatedIDs = updated?.compactMap { $0.value(forKey: "id") as? UUID } ?? []
-      let deletedIDs = deleted?.compactMap { $0.value(forKey: "id") as? UUID } ?? []
+      func filterAndExtractIDs(_ key: String) -> [UUID] {
+        guard let objects = notification.userInfo?[key] as? Set<NSManagedObject> else { return [] }
+        return
+          objects
+          .filter { profileDataEntities.contains($0.entity.name ?? "") }
+          .compactMap { $0.value(forKey: "id") as? UUID }
+      }
+
+      let insertedIDs = filterAndExtractIDs(NSInsertedObjectsKey)
+      let updatedIDs = filterAndExtractIDs(NSUpdatedObjectsKey)
+      let deletedIDs = filterAndExtractIDs(NSDeletedObjectsKey)
+
+      guard !insertedIDs.isEmpty || !updatedIDs.isEmpty || !deletedIDs.isEmpty else { return }
 
       MainActor.assumeIsolated {
+        // Skip saves triggered by applying remote changes — those records
+        // came from CloudKit and don't need to be re-uploaded.
+        guard self?.syncEngine.isApplyingRemoteChanges != true else { return }
         self?.processSave(inserted: insertedIDs, updated: updatedIDs, deleted: deletedIDs)
       }
     }

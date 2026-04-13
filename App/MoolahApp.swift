@@ -111,6 +111,7 @@ struct MoolahApp: App {
       store?.loadCloudProfiles()
     }
     profileIndexSyncEngine.start()
+    profileIndexSyncEngine.startTracking()
 
     // Clean up the legacy CloudKit zone from SwiftData's automatic sync
     LegacyZoneCleanup.performIfNeeded()

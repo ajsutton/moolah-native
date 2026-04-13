@@ -24,6 +24,10 @@ final class ProfileSyncEngine: Sendable {
   /// Whether the underlying CKSyncEngine has been started.
   private(set) var isRunning = false
 
+  /// True while applying remote changes from CloudKit to local SwiftData.
+  /// ChangeTracker checks this to avoid re-uploading records just received.
+  private(set) var isApplyingRemoteChanges = false
+
   var hasPendingChanges: Bool {
     !pendingSaves.isEmpty || !pendingDeletions.isEmpty
   }
@@ -107,6 +111,9 @@ final class ProfileSyncEngine: Sendable {
     saved: [CKRecord],
     deleted: [(CKRecord.ID, String)]  // (recordID, recordType)
   ) {
+    isApplyingRemoteChanges = true
+    defer { isApplyingRemoteChanges = false }
+
     let context = ModelContext(modelContainer)
 
     for ckRecord in saved {
@@ -414,6 +421,22 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     for failure in sentChanges.failedRecordSaves {
       logger.error(
         "Failed to save record \(failure.record.recordID.recordName): \(failure.error)")
+
+      // If the zone doesn't exist yet, create it and re-queue the record
+      if failure.error.code == .zoneNotFound {
+        logger.info("Zone not found — creating zone and retrying")
+        let recordID = failure.record.recordID
+        Task {
+          do {
+            let zone = CKRecordZone(zoneID: self.zoneID)
+            try await CKContainer.default().privateCloudDatabase.save(zone)
+            self.logger.info("Created zone \(self.zoneID.zoneName)")
+            self.syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+          } catch {
+            self.logger.error("Failed to create zone: \(error)")
+          }
+        }
+      }
     }
     for (recordID, error) in sentChanges.failedRecordDeletes {
       logger.error(

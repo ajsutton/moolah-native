@@ -30,7 +30,7 @@ test-ios: generate
 build-mac: generate
     #!/usr/bin/env bash
     set -euo pipefail
-    args=(-scheme Moolah-macOS -destination 'platform=macOS')
+    args=(-scheme Moolah-macOS -destination 'platform=macOS' -derivedDataPath .build)
     if [ -z "${DEVELOPMENT_TEAM:-}" ]; then
         args+=(CODE_SIGN_IDENTITY="-" ENABLE_HARDENED_RUNTIME=NO)
     fi
