@@ -115,8 +115,19 @@ final class ProfileSyncEngine: Sendable {
       os_signpost(
         .end, log: Signposts.sync, name: "queueAllExistingRecords", signpostID: signpostID)
     }
-    let context = ModelContext(modelContainer)
     var total = 0
+
+    // Use a fresh ModelContext per type so fetched objects are released between types,
+    // reducing peak memory when the local store has many records.
+    func queueIDs<T: PersistentModel>(_ type: T.Type, extract: (T) -> UUID) {
+      let context = ModelContext(modelContainer)
+      if let records = try? context.fetch(FetchDescriptor<T>()) {
+        for r in records {
+          queuePendingSave(for: extract(r))
+          total += 1
+        }
+      }
+    }
 
     // Queue in dependency order (matches migration import order):
     // 1. Categories (no dependencies)
@@ -125,42 +136,12 @@ final class ProfileSyncEngine: Sendable {
     // 4. Budget items (reference earmarks + categories)
     // 5. Investment values (reference accounts)
     // 6. Transactions last (reference accounts, categories, earmarks)
-    if let records = try? context.fetch(FetchDescriptor<CategoryRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
-    if let records = try? context.fetch(FetchDescriptor<AccountRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
-    if let records = try? context.fetch(FetchDescriptor<EarmarkRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
-    if let records = try? context.fetch(FetchDescriptor<EarmarkBudgetItemRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
-    if let records = try? context.fetch(FetchDescriptor<InvestmentValueRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
-    if let records = try? context.fetch(FetchDescriptor<TransactionRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
+    queueIDs(CategoryRecord.self) { $0.id }
+    queueIDs(AccountRecord.self) { $0.id }
+    queueIDs(EarmarkRecord.self) { $0.id }
+    queueIDs(EarmarkBudgetItemRecord.self) { $0.id }
+    queueIDs(InvestmentValueRecord.self) { $0.id }
+    queueIDs(TransactionRecord.self) { $0.id }
 
     if total > 0 {
       logger.info("Queued \(total) existing records for initial upload")
