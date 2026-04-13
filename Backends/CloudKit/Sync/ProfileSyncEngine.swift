@@ -497,9 +497,11 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
+    let incomingIds = pairs.map(\.0)
     let existing: [AccountRecord]
     do {
-      existing = try context.fetch(FetchDescriptor<AccountRecord>())
+      existing = try context.fetch(
+        FetchDescriptor<AccountRecord>(predicate: #Predicate { incomingIds.contains($0.id) }))
     } catch {
       batchLogger.error("batchUpsertAccounts: fetch failed: \(error)")
       existing = []
@@ -527,7 +529,7 @@ final class ProfileSyncEngine: Sendable {
       }
     }
     batchLogger.info(
-      "batchUpsertAccounts: \(pairs.count) incoming, \(existing.count) existing in store, \(insertCount) inserted, \(updateCount) updated"
+      "batchUpsertAccounts: \(pairs.count) incoming, \(existing.count) matched, \(insertCount) inserted, \(updateCount) updated"
     )
   }
 
@@ -538,7 +540,11 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let existing = (try? context.fetch(FetchDescriptor<TransactionRecord>())) ?? []
+    let incomingIds = pairs.map(\.0)
+    let existing =
+      (try? context.fetch(
+        FetchDescriptor<TransactionRecord>(predicate: #Predicate { incomingIds.contains($0.id) })))
+      ?? []
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -570,7 +576,11 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let existing = (try? context.fetch(FetchDescriptor<CategoryRecord>())) ?? []
+    let incomingIds = pairs.map(\.0)
+    let existing =
+      (try? context.fetch(
+        FetchDescriptor<CategoryRecord>(predicate: #Predicate { incomingIds.contains($0.id) })))
+      ?? []
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -592,7 +602,11 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let existing = (try? context.fetch(FetchDescriptor<EarmarkRecord>())) ?? []
+    let incomingIds = pairs.map(\.0)
+    let existing =
+      (try? context.fetch(
+        FetchDescriptor<EarmarkRecord>(predicate: #Predicate { incomingIds.contains($0.id) })))
+      ?? []
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -619,7 +633,11 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let existing = (try? context.fetch(FetchDescriptor<EarmarkBudgetItemRecord>())) ?? []
+    let incomingIds = pairs.map(\.0)
+    let existing =
+      (try? context.fetch(
+        FetchDescriptor<EarmarkBudgetItemRecord>(
+          predicate: #Predicate { incomingIds.contains($0.id) }))) ?? []
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -643,7 +661,11 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let existing = (try? context.fetch(FetchDescriptor<InvestmentValueRecord>())) ?? []
+    let incomingIds = pairs.map(\.0)
+    let existing =
+      (try? context.fetch(
+        FetchDescriptor<InvestmentValueRecord>(
+          predicate: #Predicate { incomingIds.contains($0.id) }))) ?? []
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {

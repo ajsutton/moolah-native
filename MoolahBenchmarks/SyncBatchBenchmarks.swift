@@ -56,7 +56,10 @@ final class SyncBatchBenchmarks: XCTestCase {
               payee: "Bench Insert \(i)"
             ))
         }
-        let existing = try context.fetch(FetchDescriptor<TransactionRecord>())
+        let incomingIds = newRecords.map(\.id)
+        let existing = try context.fetch(
+          FetchDescriptor<TransactionRecord>(
+            predicate: #Predicate { incomingIds.contains($0.id) }))
         var byId = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
         for record in newRecords {
           if byId[record.id] == nil {
@@ -76,8 +79,10 @@ final class SyncBatchBenchmarks: XCTestCase {
     measure(metrics: metrics, options: options) {
       _ = try! awaitSync { @MainActor in
         let context = ModelContext(container)
-        let all = try context.fetch(FetchDescriptor<TransactionRecord>())
-        let byId = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
+        let matched = try context.fetch(
+          FetchDescriptor<TransactionRecord>(
+            predicate: #Predicate { existingIds.contains($0.id) }))
+        let byId = Dictionary(uniqueKeysWithValues: matched.map { ($0.id, $0) })
         for id in existingIds {
           byId[id]?.payee = "Updated"
         }
