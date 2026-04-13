@@ -16,6 +16,11 @@ struct MigrationProfileNamingTests {
     #expect(result == "Moolah (Remote)")
   }
 
+  @Test func sourceLabel_alreadyHasRemoteWithDedupNumber_unchanged() {
+    let result = MigrationProfileNaming.sourceLabel(for: "Moolah (Remote) 2")
+    #expect(result == "Moolah (Remote) 2")
+  }
+
   @Test func sourceLabel_hasOtherSuffix_appendsRemote() {
     let result = MigrationProfileNaming.sourceLabel(for: "Moolah (iCloud)")
     #expect(result == "Moolah (iCloud) (Remote)")

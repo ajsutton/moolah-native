@@ -10,10 +10,18 @@ enum MigrationProfileNaming {
   private static let remoteSuffix = " (Remote)"
   private static let iCloudSuffix = " (iCloud)"
 
-  /// Label for the original remote profile: appends "(Remote)" unless it already ends with it.
+  /// Label for the original remote profile: appends "(Remote)" unless it already has it
+  /// (possibly with a dedup number like "(Remote) 2").
   static func sourceLabel(for label: String) -> String {
     if label.hasSuffix(remoteSuffix) {
       return label
+    }
+    // Check for deduplicated remote names like "Foo (Remote) 2"
+    if let range = label.range(of: remoteSuffix, options: .backwards) {
+      let remainder = label[range.upperBound...]
+      if remainder.isEmpty || Int(remainder.trimmingCharacters(in: .whitespaces)) != nil {
+        return label
+      }
     }
     return label + remoteSuffix
   }
@@ -108,7 +116,10 @@ final class MigrationCoordinator {
       }
 
       // 2. Create a new iCloud profile with migration naming
-      let existingLabels = profileStore.profiles.map(\.label)
+      // Exclude the source profile from existing labels since it will be renamed in place
+      let existingLabels = profileStore.profiles
+        .filter { $0.id != sourceProfile.id }
+        .map(\.label)
       let (sourceLabel, targetLabel) = MigrationProfileNaming.migratedLabels(
         sourceLabel: sourceProfile.label,
         existingLabels: existingLabels
