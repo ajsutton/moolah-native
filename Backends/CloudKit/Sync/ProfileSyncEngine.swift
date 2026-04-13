@@ -14,7 +14,7 @@ final class ProfileSyncEngine: Sendable {
   nonisolated let modelContainer: ModelContainer
 
   /// Callback invoked after remote changes are applied to the local store.
-  /// Used by ProfileSession to trigger store reloads.
+  /// Passes the set of changed record types so ProfileSession can selectively reload stores.
   var onRemoteChangesApplied: ((Set<String>) -> Void)?
 
   private nonisolated let logger = Logger(
@@ -67,6 +67,9 @@ final class ProfileSyncEngine: Sendable {
   /// Cumulative time spent in context.save() across all batches.
   private var fetchSessionSaveDuration: Duration = .zero
 
+
+  /// Debounced task for writing system fields cache to disk.
+  private var systemFieldsSaveTask: Task<Void, Never>?
 
   var hasPendingChanges: Bool {
     syncEngine.map { !$0.state.pendingRecordZoneChanges.isEmpty } ?? false
@@ -217,8 +220,29 @@ final class ProfileSyncEngine: Sendable {
       os_signpost(
         .end, log: Signposts.sync, name: "queueAllExistingRecords", signpostID: signpostID)
     }
-    let context = ModelContext(modelContainer)
     var total = 0
+
+    // Use a fresh ModelContext per type so fetched objects are released between types,
+    // reducing peak memory when the local store has many records.
+    func queueIDs<T: PersistentModel>(_ type: T.Type, extract: (T) -> UUID) {
+      let context = ModelContext(modelContainer)
+      if let records = try? context.fetch(FetchDescriptor<T>()) {
+        for r in records {
+          queuePendingSave(for: extract(r))
+          total += 1
+        }
+      }
+    }
+
+    func queueStringIDs<T: PersistentModel>(_ type: T.Type, extract: (T) -> String) {
+      let context = ModelContext(modelContainer)
+      if let records = try? context.fetch(FetchDescriptor<T>()) {
+        for r in records {
+          queueSave(recordName: extract(r))
+          total += 1
+        }
+      }
+    }
 
     // Queue in dependency order:
     // 1. Instruments (no dependencies — must arrive before records that reference them)
@@ -229,54 +253,14 @@ final class ProfileSyncEngine: Sendable {
     // 6. Investment values (reference accounts + instruments)
     // 7. Transactions (header only, no dependencies)
     // 8. Transaction legs (reference transactions, accounts, instruments)
-    if let records = try? context.fetch(FetchDescriptor<InstrumentRecord>()) {
-      for r in records {
-        queueSave(recordName: r.id)
-        total += 1
-      }
-    }
-    if let records = try? context.fetch(FetchDescriptor<CategoryRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
-    if let records = try? context.fetch(FetchDescriptor<AccountRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
-    if let records = try? context.fetch(FetchDescriptor<EarmarkRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
-    if let records = try? context.fetch(FetchDescriptor<EarmarkBudgetItemRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
-    if let records = try? context.fetch(FetchDescriptor<InvestmentValueRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
-    if let records = try? context.fetch(FetchDescriptor<TransactionRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
-    if let records = try? context.fetch(FetchDescriptor<TransactionLegRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
+    queueStringIDs(InstrumentRecord.self) { $0.id }
+    queueIDs(CategoryRecord.self) { $0.id }
+    queueIDs(AccountRecord.self) { $0.id }
+    queueIDs(EarmarkRecord.self) { $0.id }
+    queueIDs(EarmarkBudgetItemRecord.self) { $0.id }
+    queueIDs(InvestmentValueRecord.self) { $0.id }
+    queueIDs(TransactionRecord.self) { $0.id }
+    queueIDs(TransactionLegRecord.self) { $0.id }
 
     if total > 0 {
       logger.info("Queued \(total) existing records for initial upload")
@@ -300,6 +284,8 @@ final class ProfileSyncEngine: Sendable {
 
   /// Stops the sync engine. Call during profile deactivation or app termination.
   func stop() {
+    systemFieldsSaveTask?.cancel()
+    flushSystemFieldsCache()
     syncEngine = nil
     isRunning = false
     logger.info("Stopped sync engine for profile \(self.profileId)")
@@ -596,49 +582,82 @@ final class ProfileSyncEngine: Sendable {
     }
   }
 
-  /// Handles batch deletions. Per-record fetch is acceptable here (small batches).
+  /// Handles batch deletions. Groups by record type for one IN-predicate fetch per type.
   private nonisolated static func applyBatchDeletions(
     _ deletions: [(CKRecord.ID, String)], context: ModelContext
   ) {
-    for (recordID, recordType) in deletions {
-      guard let recordId = UUID(uuidString: recordID.recordName) else { continue }
+    var uuidGrouped: [String: [UUID]] = [:]
+    var stringGrouped: [String: [String]] = [:]
 
+    for (recordID, recordType) in deletions {
+      if let uuid = UUID(uuidString: recordID.recordName) {
+        uuidGrouped[recordType, default: []].append(uuid)
+      } else {
+        stringGrouped[recordType, default: []].append(recordID.recordName)
+      }
+    }
+
+    for (recordType, ids) in uuidGrouped {
       switch recordType {
-      case InstrumentRecord.recordType:
-        let recordName = recordID.recordName
-        let descriptor = FetchDescriptor<InstrumentRecord>(
-          predicate: #Predicate { $0.id == recordName })
-        if let record = try? context.fetch(descriptor).first { context.delete(record) }
       case AccountRecord.recordType:
-        let descriptor = FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == recordId })
-        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<AccountRecord>(predicate: #Predicate { ids.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
       case TransactionRecord.recordType:
-        let descriptor = FetchDescriptor<TransactionRecord>(
-          predicate: #Predicate { $0.id == recordId })
-        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<TransactionRecord>(predicate: #Predicate { ids.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
       case TransactionLegRecord.recordType:
-        let descriptor = FetchDescriptor<TransactionLegRecord>(
-          predicate: #Predicate { $0.id == recordId })
-        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { ids.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
       case CategoryRecord.recordType:
-        let descriptor = FetchDescriptor<CategoryRecord>(
-          predicate: #Predicate { $0.id == recordId })
-        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<CategoryRecord>(predicate: #Predicate { ids.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
       case EarmarkRecord.recordType:
-        let descriptor = FetchDescriptor<EarmarkRecord>(
-          predicate: #Predicate { $0.id == recordId })
-        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<EarmarkRecord>(predicate: #Predicate { ids.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
       case EarmarkBudgetItemRecord.recordType:
-        let descriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
-          predicate: #Predicate { $0.id == recordId })
-        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { ids.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
       case InvestmentValueRecord.recordType:
-        let descriptor = FetchDescriptor<InvestmentValueRecord>(
-          predicate: #Predicate { $0.id == recordId })
-        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { ids.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
       default:
         batchLogger.warning(
           "applyBatchDeletions: unknown record type '\(recordType)' — skipping")
+      }
+    }
+
+    for (recordType, names) in stringGrouped {
+      switch recordType {
+      case InstrumentRecord.recordType:
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<InstrumentRecord>(predicate: #Predicate { names.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
+      default:
+        batchLogger.warning(
+          "applyBatchDeletions: unknown string-ID record type '\(recordType)' — skipping")
       }
     }
   }
@@ -1142,71 +1161,98 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
   }
 
   /// Looks up records by UUID for a batch of pending changes.
-  /// For small batches (≤400), does individual lookups per record.
-  /// For large batches, loads all records per type and filters.
+  /// Uses IN-predicate fetches per record type, pruning the remaining set after each type.
   private func buildBatchRecordLookup(for uuids: Set<UUID>) -> [UUID: CKRecord] {
     let context = ModelContext(modelContainer)
     var lookup: [UUID: CKRecord] = [:]
+    var remaining = uuids
 
-    // For typical batch sizes (≤400), individual lookups are fast enough
-    // and avoid loading entire tables into memory.
-    // Check the most common record types first (transactions and investment
-    // values make up the vast majority of records).
-    for uuid in uuids {
-      if let r = try? context.fetch(
-        FetchDescriptor<TransactionRecord>(
-          predicate: #Predicate { $0.id == uuid })
-      ).first {
-        lookup[uuid] = buildCKRecord(for: r)
-        continue
-      }
-      if let r = try? context.fetch(
-        FetchDescriptor<InvestmentValueRecord>(
-          predicate: #Predicate { $0.id == uuid })
-      ).first {
-        lookup[uuid] = buildCKRecord(for: r)
-        continue
-      }
-      if let r = try? context.fetch(
-        FetchDescriptor<AccountRecord>(
-          predicate: #Predicate { $0.id == uuid })
-      ).first {
-        lookup[uuid] = buildCKRecord(for: r)
-        continue
-      }
-      if let r = try? context.fetch(
-        FetchDescriptor<CategoryRecord>(
-          predicate: #Predicate { $0.id == uuid })
-      ).first {
-        lookup[uuid] = buildCKRecord(for: r)
-        continue
-      }
-      if let r = try? context.fetch(
-        FetchDescriptor<EarmarkRecord>(
-          predicate: #Predicate { $0.id == uuid })
-      ).first {
-        lookup[uuid] = buildCKRecord(for: r)
-        continue
-      }
-      if let r = try? context.fetch(
-        FetchDescriptor<EarmarkBudgetItemRecord>(
-          predicate: #Predicate { $0.id == uuid })
-      ).first {
-        lookup[uuid] = buildCKRecord(for: r)
-        continue
-      }
-      if let r = try? context.fetch(
-        FetchDescriptor<TransactionLegRecord>(
-          predicate: #Predicate { $0.id == uuid })
-      ).first {
-        lookup[uuid] = buildCKRecord(for: r)
-        continue
+    // Check most common types first (transactions and legs make up the majority)
+    let ids = Array(remaining)
+    let transactions =
+      (try? context.fetch(
+        FetchDescriptor<TransactionRecord>(predicate: #Predicate { ids.contains($0.id) })
+      )) ?? []
+    for r in transactions {
+      lookup[r.id] = buildCKRecord(for: r)
+      remaining.remove(r.id)
+    }
+
+    if !remaining.isEmpty {
+      let rIds = Array(remaining)
+      let legs =
+        (try? context.fetch(
+          FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { rIds.contains($0.id) })
+        )) ?? []
+      for r in legs {
+        lookup[r.id] = buildCKRecord(for: r)
+        remaining.remove(r.id)
       }
     }
 
-    let missing = uuids.count - lookup.count
-    if missing > 0 {
-      logger.warning("Batch lookup: \(missing) of \(uuids.count) records not found in local store")
+    if !remaining.isEmpty {
+      let rIds = Array(remaining)
+      let investmentValues =
+        (try? context.fetch(
+          FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { rIds.contains($0.id) })
+        )) ?? []
+      for r in investmentValues {
+        lookup[r.id] = buildCKRecord(for: r)
+        remaining.remove(r.id)
+      }
+    }
+
+    if !remaining.isEmpty {
+      let rIds = Array(remaining)
+      let accounts =
+        (try? context.fetch(
+          FetchDescriptor<AccountRecord>(predicate: #Predicate { rIds.contains($0.id) })
+        )) ?? []
+      for r in accounts {
+        lookup[r.id] = buildCKRecord(for: r)
+        remaining.remove(r.id)
+      }
+    }
+
+    if !remaining.isEmpty {
+      let rIds = Array(remaining)
+      let categories =
+        (try? context.fetch(
+          FetchDescriptor<CategoryRecord>(predicate: #Predicate { rIds.contains($0.id) })
+        )) ?? []
+      for r in categories {
+        lookup[r.id] = buildCKRecord(for: r)
+        remaining.remove(r.id)
+      }
+    }
+
+    if !remaining.isEmpty {
+      let rIds = Array(remaining)
+      let earmarks =
+        (try? context.fetch(
+          FetchDescriptor<EarmarkRecord>(predicate: #Predicate { rIds.contains($0.id) })
+        )) ?? []
+      for r in earmarks {
+        lookup[r.id] = buildCKRecord(for: r)
+        remaining.remove(r.id)
+      }
+    }
+
+    if !remaining.isEmpty {
+      let rIds = Array(remaining)
+      let budgetItems =
+        (try? context.fetch(
+          FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { rIds.contains($0.id) })
+        )) ?? []
+      for r in budgetItems {
+        lookup[r.id] = buildCKRecord(for: r)
+        remaining.remove(r.id)
+      }
+    }
+
+    if !remaining.isEmpty {
+      logger.warning(
+        "Batch lookup: \(remaining.count) of \(uuids.count) records not found in local store")
     }
 
     return lookup

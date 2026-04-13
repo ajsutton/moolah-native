@@ -5,9 +5,7 @@ import SwiftData
 final class TransactionRecord {
 
   #Index<TransactionRecord>(
-    [\.accountId, \.recurPeriod, \.date],
-    [\.toAccountId, \.recurPeriod, \.date],
-    [\.earmarkId],
+    [\.recurPeriod, \.date],
     [\.date],
     [\.id]
   )

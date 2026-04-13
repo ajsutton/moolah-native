@@ -165,6 +165,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     }
 
     // Apply each transaction to running balances (transactions already sorted above)
+    var lastDayDate: Date?
+    var lastDayKey: Date = .distantPast
+
     for txn in transactions {
       Self.applyTransaction(
         txn,
@@ -174,7 +177,14 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         investmentAccountIds: investmentAccountIds
       )
 
-      let dayKey = Calendar.current.startOfDay(for: txn.date)
+      let dayKey: Date
+      if let last = lastDayDate, Calendar.current.isDate(txn.date, inSameDayAs: last) {
+        dayKey = lastDayKey
+      } else {
+        dayKey = Calendar.current.startOfDay(for: txn.date)
+        lastDayKey = dayKey
+        lastDayDate = txn.date
+      }
       dailyBalances[dayKey] = DailyBalance(
         date: dayKey,
         balance: currentBalance,
@@ -256,11 +266,20 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
     // 2. Filter and group by (categoryId, financialMonth) using legs
     var breakdown: [String: [UUID?: InstrumentAmount]] = [:]
+    var lastFinancialDate: Date?
+    var lastFinancialMonth: String = ""
 
     for txn in allTransactions {
       if let after, txn.date < after { continue }
 
-      let month = Self.financialMonth(for: txn.date, monthEnd: monthEnd)
+      let month: String
+      if let last = lastFinancialDate, Calendar.current.isDate(txn.date, inSameDayAs: last) {
+        month = lastFinancialMonth
+      } else {
+        month = Self.financialMonth(for: txn.date, monthEnd: monthEnd)
+        lastFinancialMonth = month
+        lastFinancialDate = txn.date
+      }
 
       for leg in txn.legs where leg.type == .expense {
         let categoryId = leg.categoryId
@@ -303,12 +322,21 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
     // 3. Group by financial month using legs
     var monthlyData: [String: CloudKitMonthData] = [:]
+    var lastFinancialDate2: Date?
+    var lastFinancialMonth2: String = ""
 
     for txn in allTransactions {
       if let after, txn.date < after { continue }
       guard !txn.legs.isEmpty else { continue }
 
-      let month = Self.financialMonth(for: txn.date, monthEnd: monthEnd)
+      let month: String
+      if let last = lastFinancialDate2, Calendar.current.isDate(txn.date, inSameDayAs: last) {
+        month = lastFinancialMonth2
+      } else {
+        month = Self.financialMonth(for: txn.date, monthEnd: monthEnd)
+        lastFinancialMonth2 = month
+        lastFinancialDate2 = txn.date
+      }
 
       if monthlyData[month] == nil {
         monthlyData[month] = CloudKitMonthData(
@@ -346,10 +374,6 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
           }
 
         case .transfer:
-          // For transfers involving investment accounts, compute profit contribution.
-          // A transfer leg in an investment account represents money moving in/out.
-          // Positive quantity in investment = money in (expense from investment perspective),
-          // negative = money out (income from investment perspective).
           if isInvestmentAccount {
             let contribution = leg.quantity
             if contribution > 0 {
@@ -465,6 +489,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     }
 
     // Apply each transaction to running balances (transactions already sorted above)
+    var lastComputeDayDate: Date?
+    var lastComputeDayKey: Date = .distantPast
+
     for txn in transactions {
       applyTransaction(
         txn,
@@ -474,7 +501,14 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         investmentAccountIds: investmentAccountIds
       )
 
-      let dayKey = Calendar.current.startOfDay(for: txn.date)
+      let dayKey: Date
+      if let last = lastComputeDayDate, Calendar.current.isDate(txn.date, inSameDayAs: last) {
+        dayKey = lastComputeDayKey
+      } else {
+        dayKey = Calendar.current.startOfDay(for: txn.date)
+        lastComputeDayKey = dayKey
+        lastComputeDayDate = txn.date
+      }
       dailyBalances[dayKey] = DailyBalance(
         date: dayKey,
         balance: currentBalance,
@@ -533,11 +567,20 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     instrument: Instrument
   ) async -> [ExpenseBreakdown] {
     var breakdown: [String: [UUID?: InstrumentAmount]] = [:]
+    var lastFinDate: Date?
+    var lastFinMonth: String = ""
 
     for txn in nonScheduled {
       if let after, txn.date < after { continue }
 
-      let month = financialMonth(for: txn.date, monthEnd: monthEnd)
+      let month: String
+      if let last = lastFinDate, Calendar.current.isDate(txn.date, inSameDayAs: last) {
+        month = lastFinMonth
+      } else {
+        month = financialMonth(for: txn.date, monthEnd: monthEnd)
+        lastFinMonth = month
+        lastFinDate = txn.date
+      }
 
       for leg in txn.legs where leg.type == .expense {
         let categoryId = leg.categoryId
@@ -575,12 +618,21 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     let investmentAccountIds = Set(accounts.filter { $0.type == .investment }.map(\.id))
 
     var monthlyData: [String: CloudKitMonthData] = [:]
+    var lastFinDate2: Date?
+    var lastFinMonth2: String = ""
 
     for txn in nonScheduled {
       if let after, txn.date < after { continue }
       guard !txn.legs.isEmpty else { continue }
 
-      let month = financialMonth(for: txn.date, monthEnd: monthEnd)
+      let month: String
+      if let last = lastFinDate2, Calendar.current.isDate(txn.date, inSameDayAs: last) {
+        month = lastFinMonth2
+      } else {
+        month = financialMonth(for: txn.date, monthEnd: monthEnd)
+        lastFinMonth2 = month
+        lastFinDate2 = txn.date
+      }
 
       if monthlyData[month] == nil {
         monthlyData[month] = CloudKitMonthData(

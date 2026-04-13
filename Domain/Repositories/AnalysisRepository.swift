@@ -68,7 +68,7 @@ protocol AnalysisRepository: Sendable {
   func fetchCategoryBalancesByType(
     dateRange: ClosedRange<Date>,
     filters: TransactionFilter?
-  ) async throws -> (income: [UUID: MonetaryAmount], expense: [UUID: MonetaryAmount])
+  ) async throws -> (income: [UUID: InstrumentAmount], expense: [UUID: InstrumentAmount])
 
   /// Load all analysis data in a single batch, avoiding redundant fetches.
   ///
@@ -93,7 +93,7 @@ extension AnalysisRepository {
   func fetchCategoryBalancesByType(
     dateRange: ClosedRange<Date>,
     filters: TransactionFilter?
-  ) async throws -> (income: [UUID: MonetaryAmount], expense: [UUID: MonetaryAmount]) {
+  ) async throws -> (income: [UUID: InstrumentAmount], expense: [UUID: InstrumentAmount]) {
     async let incomeResult = fetchCategoryBalances(
       dateRange: dateRange, transactionType: .income, filters: filters)
     async let expenseResult = fetchCategoryBalances(

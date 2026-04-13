@@ -100,10 +100,12 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       }
 
       // --- Step 2: Fetch TransactionRecords with date/scheduled predicates ---
-      let allRecords = try fetchTransactionRecords(
+      let fetchResult = try fetchTransactionRecords(
         scheduled: scheduled,
         dateRange: filter.dateRange
       )
+      let allRecords = fetchResult.records
+      let descriptorResult = fetchResult.result
 
       // --- Step 3: Intersect with accountId filter if needed ---
       var filteredRecords: [TransactionRecord]
@@ -116,15 +118,17 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         .end, log: Signposts.repository, name: "fetch.predicateQuery", signpostID: signpostID)
 
       // --- In-memory post-filters ---
-      // scheduled and dateRange are pushed down, but re-apply as safety net
+      // Only apply filters that weren't already pushed into the SwiftData predicate.
       os_signpost(
         .begin, log: Signposts.repository, name: "fetch.postFilter", signpostID: signpostID)
-      if scheduled {
-        filteredRecords = filteredRecords.filter { $0.recurPeriod != nil }
-      } else {
-        filteredRecords = filteredRecords.filter { $0.recurPeriod == nil }
+      if !descriptorResult.pushedScheduled {
+        if scheduled {
+          filteredRecords = filteredRecords.filter { $0.recurPeriod != nil }
+        } else {
+          filteredRecords = filteredRecords.filter { $0.recurPeriod == nil }
+        }
       }
-      if let dateRange = filter.dateRange {
+      if !descriptorResult.pushedDateRange, let dateRange = filter.dateRange {
         let start = dateRange.lowerBound
         let end = dateRange.upperBound
         filteredRecords = filteredRecords.filter { $0.date >= start && $0.date <= end }
@@ -167,7 +171,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       os_signpost(.begin, log: Signposts.repository, name: "fetch.sort", signpostID: signpostID)
       filteredRecords.sort { a, b in
         if a.date != b.date { return a.date > b.date }
-        return a.id.uuidString < b.id.uuidString
+        return a.id < b.id
       }
       os_signpost(.end, log: Signposts.repository, name: "fetch.sort", signpostID: signpostID)
 
@@ -220,50 +224,64 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
 
   // MARK: - Predicate Push-Down Helpers
 
+  /// Tracks which filters were pushed into the SwiftData predicate so post-filters can skip them.
+  private struct DescriptorResult {
+    let pushedScheduled: Bool
+    let pushedDateRange: Bool
+  }
+
   /// Fetches TransactionRecords with scheduled and dateRange filters pushed into SwiftData predicates.
   @MainActor
   private func fetchTransactionRecords(
     scheduled: Bool,
     dateRange: ClosedRange<Date>?
-  ) throws -> [TransactionRecord] {
+  ) throws -> (records: [TransactionRecord], result: DescriptorResult) {
     let sortDescriptors = [SortDescriptor(\TransactionRecord.date, order: .reverse)]
 
     switch (scheduled, dateRange) {
     case (false, nil):
-      return try context.fetch(
-        FetchDescriptor<TransactionRecord>(
-          predicate: #Predicate { $0.recurPeriod == nil },
-          sortBy: sortDescriptors
-        ))
+      return (
+        try context.fetch(
+          FetchDescriptor<TransactionRecord>(
+            predicate: #Predicate { $0.recurPeriod == nil },
+            sortBy: sortDescriptors
+          )), DescriptorResult(pushedScheduled: true, pushedDateRange: false)
+      )
 
     case (true, nil):
-      return try context.fetch(
-        FetchDescriptor<TransactionRecord>(
-          predicate: #Predicate { $0.recurPeriod != nil },
-          sortBy: sortDescriptors
-        ))
+      return (
+        try context.fetch(
+          FetchDescriptor<TransactionRecord>(
+            predicate: #Predicate { $0.recurPeriod != nil },
+            sortBy: sortDescriptors
+          )), DescriptorResult(pushedScheduled: true, pushedDateRange: false)
+      )
 
     case (false, .some(let range)):
       let start = range.lowerBound
       let end = range.upperBound
-      return try context.fetch(
-        FetchDescriptor<TransactionRecord>(
-          predicate: #Predicate {
-            $0.recurPeriod == nil && $0.date >= start && $0.date <= end
-          },
-          sortBy: sortDescriptors
-        ))
+      return (
+        try context.fetch(
+          FetchDescriptor<TransactionRecord>(
+            predicate: #Predicate {
+              $0.recurPeriod == nil && $0.date >= start && $0.date <= end
+            },
+            sortBy: sortDescriptors
+          )), DescriptorResult(pushedScheduled: true, pushedDateRange: true)
+      )
 
     case (true, .some(let range)):
       let start = range.lowerBound
       let end = range.upperBound
-      return try context.fetch(
-        FetchDescriptor<TransactionRecord>(
-          predicate: #Predicate {
-            $0.recurPeriod != nil && $0.date >= start && $0.date <= end
-          },
-          sortBy: sortDescriptors
-        ))
+      return (
+        try context.fetch(
+          FetchDescriptor<TransactionRecord>(
+            predicate: #Predicate {
+              $0.recurPeriod != nil && $0.date >= start && $0.date <= end
+            },
+            sortBy: sortDescriptors
+          )), DescriptorResult(pushedScheduled: true, pushedDateRange: true)
+      )
     }
   }
 
