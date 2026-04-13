@@ -177,8 +177,9 @@ struct SidebarView: View {
       .environment(\.editMode, $editMode)
     #endif
     .refreshable {
-      await accountStore.load()
-      await earmarkStore.load()
+      async let a: Void = accountStore.load()
+      async let e: Void = earmarkStore.load()
+      _ = await (a, e)
     }
     #if os(macOS)
       .toolbar {
