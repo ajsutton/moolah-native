@@ -78,4 +78,18 @@ final class AnalysisBenchmarks: XCTestCase {
       }
     }
   }
+
+  /// fetchCategoryBalancesByType — combined income+expense in a single pass.
+  /// Should be faster than two separate fetchCategoryBalances calls.
+  func testFetchCategoryBalancesByType() {
+    let repo = self.repo
+    let end = Date()
+    let start = Calendar.current.date(byAdding: .month, value: -12, to: end)!
+    let dateRange = start...end
+    measure(metrics: metrics, options: options) {
+      _ = try! awaitSync {
+        try await repo.fetchCategoryBalancesByType(dateRange: dateRange, filters: nil)
+      }
+    }
+  }
 }
