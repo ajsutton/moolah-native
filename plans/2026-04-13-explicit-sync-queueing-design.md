@@ -99,3 +99,11 @@ The `default` case in `handleSentRecordZoneChanges` was `break` — silently dro
 5. **Notification-based change tracking is fundamentally fragile.** `NSManagedObjectContextDidSave` cannot distinguish user edits from derived-data updates, leading to re-upload loops. Explicit queueing from repository mutations is the correct pattern.
 
 6. **Shadow pending-change sets cause state inconsistency.** Maintaining a local `pendingSaves` set alongside CKSyncEngine's internal state creates opportunities for divergence. Let CKSyncEngine own its pending state and deduplicate at the batch level.
+
+## Required Optimization
+
+`nextRecordZoneChangeBatch` and `buildBatchRecordLookup` currently run on the main actor. For each batch of 400 records, up to 2400 SwiftData queries execute on the main thread. During initial upload of 21K records (~54 batches), this makes the app jittery/non-responsive.
+
+The delegate method `nextRecordZoneChangeBatch` is `async`, so the fix is to use a background `ModelContext` instead of running on `MainActor.run`. This would move all the SwiftData queries off the main thread. The current `MainActor.run` wrapper exists because the original implementation shared the main context — with a dedicated `ModelContext(modelContainer)` per batch (already the case in `buildBatchRecordLookup`), there's no need to be on the main actor.
+
+This is not critical for normal operation (single-record mutations are fast) but is needed for acceptable UX during migration and first-launch sync.
