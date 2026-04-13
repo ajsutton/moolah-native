@@ -12,6 +12,7 @@ final class TransactionLegRecord {
   var categoryId: UUID?
   var earmarkId: UUID?
   var sortOrder: Int = 0
+  var encodedSystemFields: Data?
 
   init(
     id: UUID = UUID(),

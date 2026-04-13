@@ -11,6 +11,7 @@ final class InstrumentRecord {
   var exchange: String?
   var chainId: Int?
   var contractAddress: String?
+  var encodedSystemFields: Data?
 
   init(
     id: String,

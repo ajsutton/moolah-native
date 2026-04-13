@@ -147,7 +147,7 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
       // Queue sync changes for all affected records
       onRecordDeleted(id)
       for child in children { onRecordChanged(child.id) }
-      for txn in affectedTxns { onRecordChanged(txn.id) }
+      for leg in affectedLegs { onRecordChanged(leg.id) }
       for budgetId in deletedBudgetIds { onRecordDeleted(budgetId) }
       for budgetId in updatedBudgetIds { onRecordChanged(budgetId) }
     }
