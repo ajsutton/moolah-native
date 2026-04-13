@@ -229,6 +229,19 @@ final class ProfileSyncEngine: Sendable {
     isApplyingRemoteChanges = true
     defer { isApplyingRemoteChanges = false }
 
+    let typeCounts = Dictionary(grouping: saved, by: { $0.recordType })
+      .mapValues(\.count)
+    logger.info("applyRemoteChanges: \(saved.count) saves \(typeCounts), \(deleted.count) deletes")
+
+    // Cache system fields from received records so that if the ChangeTracker
+    // later re-queues them for upload (e.g. after recomputeAllBalances updates
+    // cachedBalance), the upload uses the correct change tag instead of creating
+    // a new server record.
+    for ckRecord in saved {
+      systemFieldsCache[ckRecord.recordID.recordName] = ckRecord.encodedSystemFields
+    }
+    saveSystemFieldsCache()
+
     let context = modelContainer.mainContext
 
     Self.applyBatchSaves(saved, context: context)
@@ -402,8 +415,16 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let existing = (try? context.fetch(FetchDescriptor<AccountRecord>())) ?? []
+    let existing: [AccountRecord]
+    do {
+      existing = try context.fetch(FetchDescriptor<AccountRecord>())
+    } catch {
+      batchLogger.error("batchUpsertAccounts: fetch failed: \(error)")
+      existing = []
+    }
     let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+    var insertCount = 0
+    var updateCount = 0
 
     for (id, ckRecord) in pairs {
       let values = AccountRecord.fieldValues(from: ckRecord)
@@ -414,10 +435,15 @@ final class ProfileSyncEngine: Sendable {
         existing.isHidden = values.isHidden
         existing.currencyCode = values.currencyCode
         existing.cachedBalance = values.cachedBalance
+        updateCount += 1
       } else {
         context.insert(values)
+        insertCount += 1
       }
     }
+    batchLogger.info(
+      "batchUpsertAccounts: \(pairs.count) incoming, \(existing.count) existing in store, \(insertCount) inserted, \(updateCount) updated"
+    )
   }
 
   nonisolated private static func batchUpsertTransactions(
