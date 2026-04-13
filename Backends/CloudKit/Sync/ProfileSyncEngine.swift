@@ -182,28 +182,23 @@ final class ProfileSyncEngine: Sendable {
 
     switch recordType {
     case AccountRecord.recordType:
-      deleteRecord(AccountRecord.self, id: recordId, context: context)
+      if let record = fetchAccount(id: recordId, context: context) { context.delete(record) }
     case TransactionRecord.recordType:
-      deleteRecord(TransactionRecord.self, id: recordId, context: context)
+      if let record = fetchTransaction(id: recordId, context: context) { context.delete(record) }
     case CategoryRecord.recordType:
-      deleteRecord(CategoryRecord.self, id: recordId, context: context)
+      if let record = fetchCategory(id: recordId, context: context) { context.delete(record) }
     case EarmarkRecord.recordType:
-      deleteRecord(EarmarkRecord.self, id: recordId, context: context)
+      if let record = fetchEarmark(id: recordId, context: context) { context.delete(record) }
     case EarmarkBudgetItemRecord.recordType:
-      deleteRecord(EarmarkBudgetItemRecord.self, id: recordId, context: context)
+      if let record = fetchEarmarkBudgetItem(id: recordId, context: context) {
+        context.delete(record)
+      }
     case InvestmentValueRecord.recordType:
-      deleteRecord(InvestmentValueRecord.self, id: recordId, context: context)
+      if let record = fetchInvestmentValue(id: recordId, context: context) {
+        context.delete(record)
+      }
     default:
       logger.warning("Unknown record type for deletion: \(recordType)")
-    }
-  }
-
-  private func deleteRecord<T: PersistentModel>(
-    _ type: T.Type, id: UUID, context: ModelContext
-  ) where T: HasID {
-    let descriptor = FetchDescriptor<T>(predicate: #Predicate { $0.id == id })
-    if let existing = try? context.fetch(descriptor).first {
-      context.delete(existing)
     }
   }
 
@@ -428,53 +423,66 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
 
   // MARK: - Record Lookup for Upload
 
+  // Note: SwiftData's #Predicate macro does not work with generic type parameters —
+  // it crashes at runtime because the keypath can't be resolved to a concrete Core Data
+  // attribute. Each record type must use its own concrete FetchDescriptor.
+
   private func recordToSave(for recordID: CKRecord.ID) -> CKRecord? {
     guard let uuid = UUID(uuidString: recordID.recordName) else { return nil }
     let context = ModelContext(modelContainer)
 
     // Try each record type until we find the one with this ID
-    if let record = fetchAndConvert(AccountRecord.self, id: uuid, context: context) {
-      return record
+    if let record = fetchAccount(id: uuid, context: context) {
+      return record.toCKRecord(in: zoneID)
     }
-    if let record = fetchAndConvert(TransactionRecord.self, id: uuid, context: context) {
-      return record
+    if let record = fetchTransaction(id: uuid, context: context) {
+      return record.toCKRecord(in: zoneID)
     }
-    if let record = fetchAndConvert(CategoryRecord.self, id: uuid, context: context) {
-      return record
+    if let record = fetchCategory(id: uuid, context: context) {
+      return record.toCKRecord(in: zoneID)
     }
-    if let record = fetchAndConvert(EarmarkRecord.self, id: uuid, context: context) {
-      return record
+    if let record = fetchEarmark(id: uuid, context: context) {
+      return record.toCKRecord(in: zoneID)
     }
-    if let record = fetchAndConvert(EarmarkBudgetItemRecord.self, id: uuid, context: context) {
-      return record
+    if let record = fetchEarmarkBudgetItem(id: uuid, context: context) {
+      return record.toCKRecord(in: zoneID)
     }
-    if let record = fetchAndConvert(InvestmentValueRecord.self, id: uuid, context: context) {
-      return record
+    if let record = fetchInvestmentValue(id: uuid, context: context) {
+      return record.toCKRecord(in: zoneID)
     }
 
     logger.warning("Could not find local record for ID: \(recordID.recordName)")
     return nil
   }
 
-  private func fetchAndConvert<T: PersistentModel & CloudKitRecordConvertible & HasID>(
-    _ type: T.Type, id: UUID, context: ModelContext
-  ) -> CKRecord? {
-    let descriptor = FetchDescriptor<T>(predicate: #Predicate { $0.id == id })
-    guard let record = try? context.fetch(descriptor).first else { return nil }
-    return record.toCKRecord(in: zoneID)
+  private func fetchAccount(id: UUID, context: ModelContext) -> AccountRecord? {
+    let descriptor = FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == id })
+    return try? context.fetch(descriptor).first
+  }
+
+  private func fetchTransaction(id: UUID, context: ModelContext) -> TransactionRecord? {
+    let descriptor = FetchDescriptor<TransactionRecord>(predicate: #Predicate { $0.id == id })
+    return try? context.fetch(descriptor).first
+  }
+
+  private func fetchCategory(id: UUID, context: ModelContext) -> CategoryRecord? {
+    let descriptor = FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.id == id })
+    return try? context.fetch(descriptor).first
+  }
+
+  private func fetchEarmark(id: UUID, context: ModelContext) -> EarmarkRecord? {
+    let descriptor = FetchDescriptor<EarmarkRecord>(predicate: #Predicate { $0.id == id })
+    return try? context.fetch(descriptor).first
+  }
+
+  private func fetchEarmarkBudgetItem(id: UUID, context: ModelContext) -> EarmarkBudgetItemRecord? {
+    let descriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
+      predicate: #Predicate { $0.id == id })
+    return try? context.fetch(descriptor).first
+  }
+
+  private func fetchInvestmentValue(id: UUID, context: ModelContext) -> InvestmentValueRecord? {
+    let descriptor = FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { $0.id == id })
+    return try? context.fetch(descriptor).first
   }
 }
-
-// MARK: - HasID Protocol
-
-/// Protocol to enable generic querying by ID across all record types.
-protocol HasID {
-  var id: UUID { get }
-}
-
-extension AccountRecord: HasID {}
-extension TransactionRecord: HasID {}
-extension CategoryRecord: HasID {}
-extension EarmarkRecord: HasID {}
-extension EarmarkBudgetItemRecord: HasID {}
-extension InvestmentValueRecord: HasID {}
