@@ -33,6 +33,8 @@ final class ChangeTracker {
         "EarmarkRecord", "EarmarkBudgetItemRecord", "InvestmentValueRecord",
       ]
 
+      // Note: KVC is safe here because these are NSManagedObject instances from
+      // the Core Data notification, not SwiftData PersistentModel instances.
       func filterAndExtractIDs(_ key: String) -> [UUID] {
         guard let objects = notification.userInfo?[key] as? Set<NSManagedObject> else { return [] }
         return

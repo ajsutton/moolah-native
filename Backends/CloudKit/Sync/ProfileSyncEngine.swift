@@ -28,6 +28,14 @@ final class ProfileSyncEngine: Sendable {
   /// ChangeTracker checks this to avoid re-uploading records just received.
   private(set) var isApplyingRemoteChanges = false
 
+  /// Tracks whether this engine started without saved state (first launch).
+  /// Used to distinguish the synthetic `.signIn` event from a real one.
+  private var isFirstLaunch = false
+
+  /// Cache of CKRecord system fields (change tags) keyed by record name.
+  /// Preserved across uploads to avoid `.serverRecordChanged` conflicts.
+  private var systemFieldsCache: [String: Data] = [:]
+
   var hasPendingChanges: Bool {
     !pendingSaves.isEmpty || !pendingDeletions.isEmpty
   }
@@ -47,20 +55,22 @@ final class ProfileSyncEngine: Sendable {
   func start() {
     guard !isRunning else { return }
 
-    let hasSavedState = loadStateSerialization() != nil
+    let savedState = loadStateSerialization()
+    isFirstLaunch = savedState == nil
     let configuration = CKSyncEngine.Configuration(
       database: CKContainer.default().privateCloudDatabase,
-      stateSerialization: loadStateSerialization(),
+      stateSerialization: savedState,
       delegate: self
     )
     syncEngine = CKSyncEngine(configuration)
     isRunning = true
+    systemFieldsCache = loadSystemFieldsCache()
     logger.info("Started sync engine for profile \(self.profileId)")
 
     // On first start (no saved state), queue all existing records for upload.
     // This handles the case where data was imported before the sync engine started
     // (e.g., migration imports data, then ProfileSession creates the sync engine).
-    if !hasSavedState {
+    if isFirstLaunch {
       queueAllExistingRecords()
     }
   }
@@ -163,8 +173,26 @@ final class ProfileSyncEngine: Sendable {
   // MARK: - Building CKRecords
 
   /// Builds a CKRecord from a local SwiftData record for upload.
+  /// If cached system fields exist for this record, uses them as the base
+  /// to preserve the change tag and avoid `.serverRecordChanged` conflicts.
   func buildCKRecord<T: CloudKitRecordConvertible>(for record: T) -> CKRecord {
-    record.toCKRecord(in: zoneID)
+    let freshRecord = record.toCKRecord(in: zoneID)
+    return applySystemFieldsCache(to: freshRecord)
+  }
+
+  /// If we have cached system fields for this record, creates a CKRecord from
+  /// the cached data (preserving the change tag) and copies field values onto it.
+  private func applySystemFieldsCache(to freshRecord: CKRecord) -> CKRecord {
+    let recordName = freshRecord.recordID.recordName
+    guard let cachedData = systemFieldsCache[recordName],
+      let cachedRecord = CKRecord.fromEncodedSystemFields(cachedData)
+    else {
+      return freshRecord
+    }
+    for key in freshRecord.allKeys() {
+      cachedRecord[key] = freshRecord[key]
+    }
+    return cachedRecord
   }
 
   // MARK: - Applying Remote Changes
@@ -214,6 +242,69 @@ final class ProfileSyncEngine: Sendable {
       try data.write(to: stateFileURL, options: .atomic)
     } catch {
       logger.error("Failed to save sync state: \(error)")
+    }
+  }
+
+  private func deleteStateSerialization() {
+    try? FileManager.default.removeItem(at: stateFileURL)
+  }
+
+  // MARK: - System Fields Cache
+
+  private var systemFieldsCacheURL: URL {
+    URL.applicationSupportDirectory
+      .appending(path: "Moolah-\(profileId.uuidString).systemfields")
+  }
+
+  private func loadSystemFieldsCache() -> [String: Data] {
+    guard let data = try? Data(contentsOf: systemFieldsCacheURL),
+      let cache = try? PropertyListDecoder().decode([String: Data].self, from: data)
+    else { return [:] }
+    return cache
+  }
+
+  private func saveSystemFieldsCache() {
+    do {
+      let data = try PropertyListEncoder().encode(systemFieldsCache)
+      try data.write(to: systemFieldsCacheURL, options: .atomic)
+    } catch {
+      logger.error("Failed to save system fields cache: \(error)")
+    }
+  }
+
+  private func deleteSystemFieldsCache() {
+    systemFieldsCache = [:]
+    try? FileManager.default.removeItem(at: systemFieldsCacheURL)
+  }
+
+  // MARK: - Local Data Deletion
+
+  /// Deletes all local records for this profile's zone.
+  /// Called on account sign-out, account switch, and zone deletion.
+  private func deleteLocalData() {
+    let context = ModelContext(modelContainer)
+
+    func deleteAll<T: PersistentModel>(_ type: T.Type) {
+      if let records = try? context.fetch(FetchDescriptor<T>()) {
+        for record in records {
+          context.delete(record)
+        }
+      }
+    }
+
+    deleteAll(AccountRecord.self)
+    deleteAll(TransactionRecord.self)
+    deleteAll(CategoryRecord.self)
+    deleteAll(EarmarkRecord.self)
+    deleteAll(EarmarkBudgetItemRecord.self)
+    deleteAll(InvestmentValueRecord.self)
+
+    do {
+      try context.save()
+      logger.info("Deleted all local data for profile \(self.profileId)")
+      onRemoteChangesApplied?()
+    } catch {
+      logger.error("Failed to delete local data: \(error)")
     }
   }
 
@@ -440,10 +531,29 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
 
   private func handleAccountChange(_ change: CKSyncEngine.Event.AccountChange) {
     switch change.changeType {
-    case .signIn, .switchAccounts:
-      logger.info("Account changed, will re-sync")
+    case .signIn:
+      // CKSyncEngine fires a synthetic .signIn on first launch (no saved state).
+      // Only re-upload on a real sign-in (engine had saved state from a prior session).
+      if isFirstLaunch {
+        logger.info("Synthetic sign-in on first launch — skipping re-upload")
+        isFirstLaunch = false
+      } else {
+        logger.info("Account signed in — re-uploading all local data")
+        queueAllExistingRecords()
+      }
+
     case .signOut:
-      logger.info("Account signed out")
+      logger.info("Account signed out — deleting local data and sync state")
+      deleteLocalData()
+      deleteStateSerialization()
+      deleteSystemFieldsCache()
+
+    case .switchAccounts:
+      logger.info("Account switched — full reset")
+      deleteLocalData()
+      deleteStateSerialization()
+      deleteSystemFieldsCache()
+
     @unknown default:
       break
     }
@@ -453,7 +563,26 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     _ changes: CKSyncEngine.Event.FetchedDatabaseChanges
   ) {
     for deletion in changes.deletions where deletion.zoneID == zoneID {
-      logger.warning("Profile zone was deleted remotely")
+      switch deletion.reason {
+      case .deleted:
+        logger.warning("Profile zone was deleted remotely — removing local data")
+        deleteLocalData()
+
+      case .purged:
+        logger.warning("Profile zone was purged (user cleared iCloud data)")
+        deleteLocalData()
+        deleteStateSerialization()
+        deleteSystemFieldsCache()
+
+      case .encryptedDataReset:
+        logger.warning("Encrypted data reset — re-uploading local data")
+        deleteStateSerialization()
+        deleteSystemFieldsCache()
+        queueAllExistingRecords()
+
+      @unknown default:
+        logger.warning("Unknown zone deletion reason")
+      }
     }
   }
 
@@ -473,23 +602,28 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
   private func handleSentRecordZoneChanges(
     _ sentChanges: CKSyncEngine.Event.SentRecordZoneChanges
   ) {
-    // Remove successfully sent records from pending
+    // Cache system fields for successfully sent records (Rule 5).
+    // This preserves the change tag for subsequent uploads.
     for saved in sentChanges.savedRecords {
       pendingSaves.remove(saved.recordID)
+      systemFieldsCache[saved.recordID.recordName] = saved.encodedSystemFields
     }
+    saveSystemFieldsCache()
+
     for deleted in sentChanges.deletedRecordIDs {
       pendingDeletions.remove(deleted)
+      systemFieldsCache.removeValue(forKey: deleted.recordName)
     }
 
-    // Handle failures
+    // Handle failed saves with specific error recovery (Rules 3, 6, 9)
     for failure in sentChanges.failedRecordSaves {
+      let recordID = failure.record.recordID
       logger.error(
-        "Failed to save record \(failure.record.recordID.recordName): \(failure.error)")
+        "Failed to save record \(recordID.recordName): \(failure.error)")
 
-      // If the zone doesn't exist yet, create it and re-queue the record
-      if failure.error.code == .zoneNotFound {
+      switch failure.error.code {
+      case .zoneNotFound:
         logger.info("Zone not found — creating zone and retrying")
-        let recordID = failure.record.recordID
         Task {
           do {
             let zone = CKRecordZone(zoneID: self.zoneID)
@@ -500,11 +634,52 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
             self.logger.error("Failed to create zone: \(error)")
           }
         }
+
+      case .serverRecordChanged:
+        // Conflict: another device modified this record. Accept the server's
+        // system fields (server-wins) and re-queue with the updated change tag.
+        if let serverRecord = failure.error.serverRecord {
+          systemFieldsCache[serverRecord.recordID.recordName] = serverRecord.encodedSystemFields
+          saveSystemFieldsCache()
+          syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+        }
+
+      case .unknownItem:
+        // Record was deleted on server. Clear cached system fields and re-upload.
+        systemFieldsCache.removeValue(forKey: recordID.recordName)
+        saveSystemFieldsCache()
+        syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+
+      case .quotaExceeded:
+        // iCloud storage full. Re-queue so it can retry when space is available.
+        logger.error("iCloud quota exceeded — sync paused for record \(recordID.recordName)")
+        syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+
+      case .limitExceeded:
+        // Batch too large. Re-queue and the engine will retry with smaller batches.
+        syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+
+      default:
+        break
       }
     }
+
+    // Handle failed deletes
     for (recordID, error) in sentChanges.failedRecordDeletes {
       logger.error(
         "Failed to delete record \(recordID.recordName): \(error)")
+
+      if error.code == .zoneNotFound {
+        Task {
+          do {
+            let zone = CKRecordZone(zoneID: self.zoneID)
+            try await CKContainer.default().privateCloudDatabase.save(zone)
+            self.syncEngine?.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
+          } catch {
+            self.logger.error("Failed to create zone for delete retry: \(error)")
+          }
+        }
+      }
     }
   }
 
@@ -518,24 +693,25 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     guard let uuid = UUID(uuidString: recordID.recordName) else { return nil }
     let context = ModelContext(modelContainer)
 
-    // Try each record type until we find the one with this ID
+    // Try each record type until we find the one with this ID.
+    // buildCKRecord applies cached system fields to preserve change tags.
     if let record = fetchAccount(id: uuid, context: context) {
-      return record.toCKRecord(in: zoneID)
+      return buildCKRecord(for: record)
     }
     if let record = fetchTransaction(id: uuid, context: context) {
-      return record.toCKRecord(in: zoneID)
+      return buildCKRecord(for: record)
     }
     if let record = fetchCategory(id: uuid, context: context) {
-      return record.toCKRecord(in: zoneID)
+      return buildCKRecord(for: record)
     }
     if let record = fetchEarmark(id: uuid, context: context) {
-      return record.toCKRecord(in: zoneID)
+      return buildCKRecord(for: record)
     }
     if let record = fetchEarmarkBudgetItem(id: uuid, context: context) {
-      return record.toCKRecord(in: zoneID)
+      return buildCKRecord(for: record)
     }
     if let record = fetchInvestmentValue(id: uuid, context: context) {
-      return record.toCKRecord(in: zoneID)
+      return buildCKRecord(for: record)
     }
 
     logger.warning("Could not find local record for ID: \(recordID.recordName)")

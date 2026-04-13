@@ -13,6 +13,27 @@ protocol CloudKitRecordConvertible {
   static func fieldValues(from ckRecord: CKRecord) -> Self
 }
 
+// MARK: - CKRecord System Fields
+
+extension CKRecord {
+  /// Encodes the record's system fields (including the change tag) for caching.
+  /// Used to preserve change tags across uploads and avoid `.serverRecordChanged` conflicts.
+  var encodedSystemFields: Data {
+    let coder = NSKeyedArchiver(requiringSecureCoding: true)
+    encodeSystemFields(with: coder)
+    coder.finishEncoding()
+    return coder.encodedData
+  }
+
+  /// Creates a CKRecord from previously cached system fields.
+  /// Returns nil if the data is invalid.
+  static func fromEncodedSystemFields(_ data: Data) -> CKRecord? {
+    guard let coder = try? NSKeyedUnarchiver(forReadingFrom: data) else { return nil }
+    coder.requiresSecureCoding = true
+    return CKRecord(coder: coder)
+  }
+}
+
 // MARK: - ProfileRecord + CloudKitRecordConvertible
 
 extension ProfileRecord: CloudKitRecordConvertible {
