@@ -55,10 +55,11 @@ grep -B5 -A10 'testMethodName' .agent-tmp/test-output.txt
 - **Features:** Only talk to repository protocols via `@Environment(BackendProvider.self)`. No feature file may import `Backends/` or reference `Remote*` types directly.
 - **Currency:** All currency values are stored as `Int` (cents). Currency flows from `Profile.currency` → backend → `MonetaryAmount` on all domain objects. Views derive currency from loaded domain objects, never from a global constant. Tests use `Currency.defaultTestCurrency` (defined in `MoolahTests/Support/TestCurrency.swift`).
 - **Backend:** `BackendProvider` is the injection point. `RemoteBackend` for production, `CloudKitBackend` with in-memory SwiftData for tests (`TestBackend`) and previews (`PreviewBackend`).
-- **Concurrency:** All concurrency work MUST follow `CONCURRENCY_GUIDE.md`. This is not optional.
+- **Concurrency:** All concurrency work MUST follow `guides/CONCURRENCY_GUIDE.md`. This is not optional.
   - Mark types `@MainActor` when they own UI-bound state (e.g., Stores).
   - Use `Sendable` on all types that cross actor boundaries.
   - Prefer `async/await` over callbacks or completion handlers.
+- **Performance:** Follow `guides/BENCHMARKING_GUIDE.md` for writing and interpreting benchmarks, and for signpost instrumentation patterns.
 
 ### Thin Views, Testable Stores
 
@@ -121,13 +122,13 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
 
 ## UI Design & Style Guide
 
-- **Style Guide:** All UI work MUST follow `STYLE_GUIDE.md`. This is not optional.
+- **Style Guide:** All UI work MUST follow `guides/STYLE_GUIDE.md`. This is not optional.
 - **Apple HIG Compliance:** Follow Apple Human Interface Guidelines for macOS and iOS. When in doubt, consult the official HIG documentation.
 - **macOS-First:** Optimize for desktop patterns (keyboard navigation, context menus, pointer precision), then adapt for iOS.
 - **Semantic Colors:** Use system colors (`.green`, `.red`, `.secondary`) for automatic dark mode support. Never hardcode RGB values.
 - **Monospaced Digits:** Always apply `.monospacedDigit()` to monetary amounts and dates.
 - **Accessibility:** Every UI component must be VoiceOver-accessible with proper labels and keyboard navigation (macOS).
-- **Before Shipping UI:** Run the `ui-review` agent (see Agents section) to validate compliance with STYLE_GUIDE.md and identify accessibility issues.
+- **Before Shipping UI:** Run the `ui-review` agent (see Agents section) to validate compliance with `guides/STYLE_GUIDE.md` and identify accessibility issues.
 
 ## Planning & Documentation
 
@@ -137,6 +138,6 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
 
 This project defines specialized review agents in `.claude/agents/`. Invoke them with `@agent-name` (e.g., `@ui-review`, `@concurrency-review`).
 
-- **`ui-review`** — Reviews SwiftUI views for `STYLE_GUIDE.md` compliance, Apple HIG, and accessibility. Use after creating or modifying UI components.
-- **`concurrency-review`** — Reviews Swift code for `CONCURRENCY_GUIDE.md` compliance: actor isolation, task hygiene, Sendable, async patterns. Use after modifying stores, repositories, or backend code.
-- **`sync-review`** — Reviews CKSyncEngine sync code for `SYNC_GUIDE.md` compliance: error handling, change tracking, conflict resolution, account changes, zone management. Use after modifying sync engines, change trackers, or record mappings.
+- **`ui-review`** — Reviews SwiftUI views for `guides/STYLE_GUIDE.md` compliance, Apple HIG, and accessibility. Use after creating or modifying UI components.
+- **`concurrency-review`** — Reviews Swift code for `guides/CONCURRENCY_GUIDE.md` compliance: actor isolation, task hygiene, Sendable, async patterns. Use after modifying stores, repositories, or backend code.
+- **`sync-review`** — Reviews CKSyncEngine sync code for `guides/SYNC_GUIDE.md` compliance: error handling, change tracking, conflict resolution, account changes, zone management. Use after modifying sync engines, change trackers, or record mappings.

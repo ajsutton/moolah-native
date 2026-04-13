@@ -5,7 +5,7 @@ description: Use when analyzing benchmark results from `just benchmark`. Guides 
 
 # Interpreting Benchmark Results
 
-Follow this process when analyzing benchmark output. Read `plans/BENCHMARKING_GUIDE.md` for detailed reference.
+Follow this process when analyzing benchmark output. Read `guides/BENCHMARKING_GUIDE.md` for detailed reference.
 
 ## Step 1: Run the Benchmarks
 

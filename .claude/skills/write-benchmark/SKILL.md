@@ -5,7 +5,7 @@ description: Use when adding a new performance benchmark test to MoolahBenchmark
 
 # Writing a Benchmark
 
-Follow this checklist when adding a new benchmark. Read `plans/BENCHMARKING_GUIDE.md` for the full rationale behind each rule.
+Follow this checklist when adding a new benchmark. Read `guides/BENCHMARKING_GUIDE.md` for the full rationale behind each rule.
 
 ## Before Writing
 

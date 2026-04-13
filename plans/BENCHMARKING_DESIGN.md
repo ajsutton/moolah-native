@@ -168,7 +168,7 @@ enum Signposts {
 | `MoolahBenchmarks/BalanceBenchmarks.swift` | Balance computation and account fetch benchmarks |
 | `MoolahBenchmarks/ConversionBenchmarks.swift` | toDomain conversion benchmarks |
 | `Shared/Signposts.swift` | OSLog instances for signpost categories |
-| `plans/BENCHMARKING_GUIDE.md` | Style guide for writing and interpreting benchmarks |
+| `guides/BENCHMARKING_GUIDE.md` | Style guide for writing and interpreting benchmarks |
 | `.claude/skills/write-benchmark/SKILL.md` | Skill for writing new benchmarks |
 | `.claude/skills/interpret-benchmarks/SKILL.md` | Skill for interpreting benchmark results |
 

@@ -34,8 +34,7 @@ settings:
 fileGroups:
   - plans
   - CLAUDE.md
-  - STYLE_GUIDE.md
-  - CONCURRENCY_GUIDE.md
+  - guides
   - BUGS.md
   - justfile
   - project.yml
