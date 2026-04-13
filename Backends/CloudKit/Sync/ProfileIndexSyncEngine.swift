@@ -116,6 +116,32 @@ final class ProfileIndexSyncEngine: Sendable {
     saveObserver = nil
   }
 
+  // MARK: - Background Sync
+
+  var hasPendingChanges: Bool {
+    !pendingSaves.isEmpty || !pendingDeletions.isEmpty
+  }
+
+  /// Tells CKSyncEngine to send all pending changes now.
+  func sendChanges() async {
+    guard let syncEngine, isRunning else { return }
+    do {
+      try await syncEngine.sendChanges()
+    } catch {
+      logger.error("Failed to send changes: \(error)")
+    }
+  }
+
+  /// Tells CKSyncEngine to fetch remote changes now.
+  func fetchChanges() async {
+    guard let syncEngine, isRunning else { return }
+    do {
+      try await syncEngine.fetchChanges()
+    } catch {
+      logger.error("Failed to fetch changes: \(error)")
+    }
+  }
+
   // MARK: - Local Change Processing
 
   private func processLocalSave(inserted: [UUID], updated: [UUID], deleted: [UUID]) {

@@ -138,6 +138,28 @@ final class ProfileSyncEngine: Sendable {
     logger.info("Stopped sync engine for profile \(self.profileId)")
   }
 
+  // MARK: - Background Sync
+
+  /// Tells CKSyncEngine to send all pending changes now.
+  func sendChanges() async {
+    guard let syncEngine, isRunning else { return }
+    do {
+      try await syncEngine.sendChanges()
+    } catch {
+      logger.error("Failed to send changes: \(error)")
+    }
+  }
+
+  /// Tells CKSyncEngine to fetch remote changes now.
+  func fetchChanges() async {
+    guard let syncEngine, isRunning else { return }
+    do {
+      try await syncEngine.fetchChanges()
+    } catch {
+      logger.error("Failed to fetch changes: \(error)")
+    }
+  }
+
   // MARK: - Pending Changes
 
   enum PendingChange {

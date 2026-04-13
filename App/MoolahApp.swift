@@ -1,3 +1,5 @@
+import CloudKit
+import OSLog
 import SwiftData
 import SwiftUI
 
@@ -64,9 +66,11 @@ struct ShowHiddenCommands: Commands {
 @main
 @MainActor
 struct MoolahApp: App {
+  @Environment(\.scenePhase) private var scenePhase
   private let containerManager: ProfileContainerManager
   private let profileIndexSyncEngine: ProfileIndexSyncEngine
   @State private var profileStore: ProfileStore
+  private let logger = Logger(subsystem: "com.moolah.app", category: "BackgroundSync")
   #if os(macOS)
     private let backupManager: StoreBackupManager
     @State private var sessionManager: SessionManager
@@ -145,6 +149,9 @@ struct MoolahApp: App {
           }
       }
       .modelContainer(containerManager.indexContainer)
+      .onChange(of: scenePhase) { _, newPhase in
+        handleScenePhaseChange(newPhase)
+      }
       .commands {
         ProfileCommands(
           profileStore: profileStore, sessionManager: sessionManager,
@@ -169,12 +176,83 @@ struct MoolahApp: App {
           .environment(containerManager)
       }
       .modelContainer(containerManager.indexContainer)
+      .onChange(of: scenePhase) { _, newPhase in
+        handleScenePhaseChange(newPhase)
+      }
       .commands {
         NewTransactionCommands()
         NewEarmarkCommands()
         RefreshCommands()
         ShowHiddenCommands()
       }
+    #endif
+  }
+
+  // MARK: - Background Sync
+
+  private func handleScenePhaseChange(_ newPhase: ScenePhase) {
+    switch newPhase {
+    case .background:
+      flushPendingChanges()
+    case .active:
+      Task { await fetchRemoteChanges() }
+    default:
+      break
+    }
+  }
+
+  private func flushPendingChanges() {
+    let hasIndexChanges = profileIndexSyncEngine.hasPendingChanges
+    let profileEngines = activeProfileSyncEngines()
+    let hasProfileChanges = profileEngines.contains { $0.hasPendingChanges }
+
+    guard hasIndexChanges || hasProfileChanges else {
+      logger.debug("No pending changes to flush on background entry")
+      return
+    }
+
+    logger.info("Flushing pending sync changes on background entry")
+
+    #if os(iOS)
+      // Request extra background time on iOS to complete uploads.
+      // On macOS the app process stays alive, so no special handling is needed.
+      ProcessInfo.processInfo.performExpiringActivity(
+        withReason: "Uploading pending sync changes"
+      ) { expired in
+        guard !expired else { return }
+        Task { @MainActor in
+          await self.profileIndexSyncEngine.sendChanges()
+          for engine in profileEngines {
+            await engine.sendChanges()
+          }
+        }
+      }
+    #else
+      Task {
+        await profileIndexSyncEngine.sendChanges()
+        for engine in profileEngines {
+          await engine.sendChanges()
+        }
+      }
+    #endif
+  }
+
+  private func fetchRemoteChanges() async {
+    logger.info("Fetching remote changes on foreground entry")
+    await profileIndexSyncEngine.fetchChanges()
+    for engine in activeProfileSyncEngines() {
+      await engine.fetchChanges()
+    }
+  }
+
+  private func activeProfileSyncEngines() -> [ProfileSyncEngine] {
+    #if os(macOS)
+      return sessionManager.sessions.values.compactMap(\.profileSyncEngine)
+    #else
+      if let engine = activeSession?.profileSyncEngine {
+        return [engine]
+      }
+      return []
     #endif
   }
 }
