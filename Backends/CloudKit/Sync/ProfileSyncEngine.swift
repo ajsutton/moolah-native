@@ -310,7 +310,8 @@ final class ProfileSyncEngine: Sendable {
     if hasTransactionChanges {
       os_signpost(
         .begin, log: Signposts.balance, name: "invalidateCachedBalances", signpostID: signpostID)
-      Self.invalidateCachedBalances(context: context)
+      let affectedAccountIds = Self.extractAffectedAccountIds(saved: saved, deleted: deleted)
+      Self.invalidateCachedBalances(accountIds: affectedAccountIds, context: context)
       os_signpost(
         .end, log: Signposts.balance, name: "invalidateCachedBalances", signpostID: signpostID)
     }
@@ -496,12 +497,46 @@ final class ProfileSyncEngine: Sendable {
 
   // MARK: - Balance Cache Invalidation
 
-  /// Sets cachedBalance to nil on all accounts so it will be recomputed on next load.
+  /// Extracts the set of account IDs referenced by transaction CKRecords.
+  /// Returns an empty set when deletions are present (meaning: invalidate all accounts).
+  private nonisolated static func extractAffectedAccountIds(
+    saved: [CKRecord],
+    deleted: [(CKRecord.ID, String)]
+  ) -> Set<UUID> {
+    var ids = Set<UUID>()
+    for ckRecord in saved where ckRecord.recordType == TransactionRecord.recordType {
+      if let s = ckRecord["accountId"] as? String, let id = UUID(uuidString: s) {
+        ids.insert(id)
+      }
+      if let s = ckRecord["toAccountId"] as? String, let id = UUID(uuidString: s) {
+        ids.insert(id)
+      }
+    }
+    // For deletions we don't have the record content, so invalidate all
+    if deleted.contains(where: { $0.1 == TransactionRecord.recordType }) {
+      return []  // Empty set = invalidate all
+    }
+    return ids
+  }
+
+  /// Sets cachedBalance to nil on the specified accounts so it will be recomputed on next load.
+  /// Pass an empty set to invalidate all accounts (deletion case).
   /// Called when remote transaction changes arrive that may affect balances.
-  nonisolated private static func invalidateCachedBalances(context: ModelContext) {
-    guard let accounts = try? context.fetch(FetchDescriptor<AccountRecord>()) else { return }
-    for account in accounts {
-      account.cachedBalance = nil
+  nonisolated private static func invalidateCachedBalances(
+    accountIds: Set<UUID>, context: ModelContext
+  ) {
+    if accountIds.isEmpty {
+      // Invalidate all — deletion case
+      guard let accounts = try? context.fetch(FetchDescriptor<AccountRecord>()) else { return }
+      for account in accounts { account.cachedBalance = nil }
+    } else {
+      let ids = Array(accountIds)
+      guard
+        let accounts = try? context.fetch(
+          FetchDescriptor<AccountRecord>(predicate: #Predicate { ids.contains($0.id) })
+        )
+      else { return }
+      for account in accounts { account.cachedBalance = nil }
     }
   }
 
