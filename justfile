@@ -26,6 +26,10 @@ test-mac: generate
 test-ios: generate
     bash scripts/test.sh ios
 
+# Run performance benchmarks (macOS only)
+benchmark *FILTER: generate
+    bash scripts/benchmark.sh {{ FILTER }}
+
 # Build the app for macOS
 build-mac: generate
     #!/usr/bin/env bash
