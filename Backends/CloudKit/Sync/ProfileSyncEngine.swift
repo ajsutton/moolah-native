@@ -268,7 +268,8 @@ final class ProfileSyncEngine: Sendable {
   /// Called when the sync engine receives changes from CloudKit.
   func applyRemoteChanges(
     saved: [CKRecord],
-    deleted: [(CKRecord.ID, String)]  // (recordID, recordType)
+    deleted: [(CKRecord.ID, String)],  // (recordID, recordType)
+    preExtractedSystemFields: [(String, Data)]? = nil
   ) {
     let signpostID = OSSignpostID(log: Signposts.sync)
     os_signpost(
@@ -289,8 +290,15 @@ final class ProfileSyncEngine: Sendable {
     // later re-queues them for upload (e.g. after recomputeAllBalances updates
     // cachedBalance), the upload uses the correct change tag instead of creating
     // a new server record.
-    for ckRecord in saved {
-      systemFieldsCache[ckRecord.recordID.recordName] = ckRecord.encodedSystemFields
+    // Use pre-extracted system fields (computed off MainActor) if available.
+    if let preExtracted = preExtractedSystemFields {
+      for (recordName, data) in preExtracted {
+        systemFieldsCache[recordName] = data
+      }
+    } else {
+      for ckRecord in saved {
+        systemFieldsCache[ckRecord.recordID.recordName] = ckRecord.encodedSystemFields
+      }
     }
     saveSystemFieldsCache()
 
@@ -754,12 +762,26 @@ final class ProfileSyncEngine: Sendable {
 
 extension ProfileSyncEngine: CKSyncEngineDelegate {
   nonisolated func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
+    // Pre-extract system fields off MainActor (NSKeyedArchiver is expensive)
+    let preExtracted: [(String, Data)]?
+    if case .fetchedRecordZoneChanges(let changes) = event {
+      preExtracted = changes.modifications.map { mod in
+        (mod.record.recordID.recordName, mod.record.encodedSystemFields)
+      }
+    } else {
+      preExtracted = nil
+    }
+
     await MainActor.run {
-      handleEventOnMain(event, syncEngine: syncEngine)
+      handleEventOnMain(event, syncEngine: syncEngine, preExtractedSystemFields: preExtracted)
     }
   }
 
-  private func handleEventOnMain(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) {
+  private func handleEventOnMain(
+    _ event: CKSyncEngine.Event,
+    syncEngine: CKSyncEngine,
+    preExtractedSystemFields: [(String, Data)]? = nil
+  ) {
     switch event {
     case .stateUpdate(let stateUpdate):
       saveStateSerialization(stateUpdate.stateSerialization)
@@ -776,7 +798,11 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
         ($0.recordID, $0.recordType)
       }
       guard !saved.isEmpty || !deleted.isEmpty else { break }
-      applyRemoteChanges(saved: saved, deleted: deleted)
+      applyRemoteChanges(
+        saved: saved,
+        deleted: deleted,
+        preExtractedSystemFields: preExtractedSystemFields
+      )
 
     case .sentRecordZoneChanges(let sentChanges):
       handleSentRecordZoneChanges(sentChanges)
