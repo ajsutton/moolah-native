@@ -901,64 +901,87 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
   }
 
   /// Looks up records by UUID for a batch of pending changes.
-  /// For small batches (≤400), does individual lookups per record.
-  /// For large batches, loads all records per type and filters.
-  private func buildBatchRecordLookup(for uuids: Set<UUID>) -> [UUID: CKRecord] {
+  /// Fetches all records per type using IN predicates (6 queries total regardless of batch size).
+  /// Check most common types first (transactions, investment values) and prune remaining set
+  /// after each type to skip redundant queries.
+  func buildBatchRecordLookup(for uuids: Set<UUID>) -> [UUID: CKRecord] {
     let context = ModelContext(modelContainer)
     var lookup: [UUID: CKRecord] = [:]
+    var remaining = uuids
 
-    // For typical batch sizes (≤400), individual lookups are fast enough
-    // and avoid loading entire tables into memory.
-    // Check the most common record types first (transactions and investment
-    // values make up the vast majority of records).
-    for uuid in uuids {
-      if let r = try? context.fetch(
-        FetchDescriptor<TransactionRecord>(
-          predicate: #Predicate { $0.id == uuid })
-      ).first {
-        lookup[uuid] = buildCKRecord(for: r)
-        continue
-      }
-      if let r = try? context.fetch(
-        FetchDescriptor<InvestmentValueRecord>(
-          predicate: #Predicate { $0.id == uuid })
-      ).first {
-        lookup[uuid] = buildCKRecord(for: r)
-        continue
-      }
-      if let r = try? context.fetch(
-        FetchDescriptor<AccountRecord>(
-          predicate: #Predicate { $0.id == uuid })
-      ).first {
-        lookup[uuid] = buildCKRecord(for: r)
-        continue
-      }
-      if let r = try? context.fetch(
-        FetchDescriptor<CategoryRecord>(
-          predicate: #Predicate { $0.id == uuid })
-      ).first {
-        lookup[uuid] = buildCKRecord(for: r)
-        continue
-      }
-      if let r = try? context.fetch(
-        FetchDescriptor<EarmarkRecord>(
-          predicate: #Predicate { $0.id == uuid })
-      ).first {
-        lookup[uuid] = buildCKRecord(for: r)
-        continue
-      }
-      if let r = try? context.fetch(
-        FetchDescriptor<EarmarkBudgetItemRecord>(
-          predicate: #Predicate { $0.id == uuid })
-      ).first {
-        lookup[uuid] = buildCKRecord(for: r)
-        continue
+    let ids = Array(remaining)
+    let transactions =
+      (try? context.fetch(
+        FetchDescriptor<TransactionRecord>(predicate: #Predicate { ids.contains($0.id) })
+      )) ?? []
+    for r in transactions {
+      lookup[r.id] = buildCKRecord(for: r)
+      remaining.remove(r.id)
+    }
+
+    if !remaining.isEmpty {
+      let rIds = Array(remaining)
+      let investmentValues =
+        (try? context.fetch(
+          FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { rIds.contains($0.id) })
+        )) ?? []
+      for r in investmentValues {
+        lookup[r.id] = buildCKRecord(for: r)
+        remaining.remove(r.id)
       }
     }
 
-    let missing = uuids.count - lookup.count
-    if missing > 0 {
-      logger.warning("Batch lookup: \(missing) of \(uuids.count) records not found in local store")
+    if !remaining.isEmpty {
+      let rIds = Array(remaining)
+      let accounts =
+        (try? context.fetch(
+          FetchDescriptor<AccountRecord>(predicate: #Predicate { rIds.contains($0.id) })
+        )) ?? []
+      for r in accounts {
+        lookup[r.id] = buildCKRecord(for: r)
+        remaining.remove(r.id)
+      }
+    }
+
+    if !remaining.isEmpty {
+      let rIds = Array(remaining)
+      let categories =
+        (try? context.fetch(
+          FetchDescriptor<CategoryRecord>(predicate: #Predicate { rIds.contains($0.id) })
+        )) ?? []
+      for r in categories {
+        lookup[r.id] = buildCKRecord(for: r)
+        remaining.remove(r.id)
+      }
+    }
+
+    if !remaining.isEmpty {
+      let rIds = Array(remaining)
+      let earmarks =
+        (try? context.fetch(
+          FetchDescriptor<EarmarkRecord>(predicate: #Predicate { rIds.contains($0.id) })
+        )) ?? []
+      for r in earmarks {
+        lookup[r.id] = buildCKRecord(for: r)
+        remaining.remove(r.id)
+      }
+    }
+
+    if !remaining.isEmpty {
+      let rIds = Array(remaining)
+      let budgetItems =
+        (try? context.fetch(
+          FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { rIds.contains($0.id) })
+        )) ?? []
+      for r in budgetItems {
+        lookup[r.id] = buildCKRecord(for: r)
+        remaining.remove(r.id)
+      }
+    }
+
+    if !remaining.isEmpty {
+      logger.warning(
+        "Batch lookup: \(remaining.count) of \(uuids.count) records not found in local store")
     }
 
     return lookup
