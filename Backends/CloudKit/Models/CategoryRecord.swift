@@ -4,6 +4,8 @@ import SwiftData
 @Model
 final class CategoryRecord {
 
+  #Index<CategoryRecord>([\.id])
+
   var id: UUID = UUID()
   var name: String = ""
   var parentId: UUID?
