@@ -160,14 +160,14 @@ final class ProfileIndexSyncEngine: Sendable {
 
   func addPendingSave(for profileId: UUID) {
     let recordID = CKRecord.ID(recordName: profileId.uuidString, zoneID: zoneID)
-    pendingSaves.insert(recordID)
+    guard pendingSaves.insert(recordID).inserted else { return }
     pendingDeletions.remove(recordID)
     syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
   }
 
   func addPendingDeletion(for profileId: UUID) {
     let recordID = CKRecord.ID(recordName: profileId.uuidString, zoneID: zoneID)
-    pendingDeletions.insert(recordID)
+    guard pendingDeletions.insert(recordID).inserted else { return }
     pendingSaves.remove(recordID)
     syncEngine?.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
   }

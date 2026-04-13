@@ -169,13 +169,19 @@ final class ProfileSyncEngine: Sendable {
   }
 
   func addPendingChange(_ change: PendingChange) {
+    // Only add to CKSyncEngine's pending list if not already tracked.
+    // CKSyncEngine does NOT deduplicate — adding the same recordID multiple times
+    // causes multiple upload attempts, each potentially creating a new server record
+    // if system fields haven't been cached yet from the first upload's response.
     switch change {
     case .saveRecord(let recordID):
-      pendingSaves.insert(recordID)
+      let isNew = pendingSaves.insert(recordID).inserted
       pendingDeletions.remove(recordID)
+      guard isNew else { return }
     case .deleteRecord(let recordID):
-      pendingDeletions.insert(recordID)
+      let isNew = pendingDeletions.insert(recordID).inserted
       pendingSaves.remove(recordID)
+      guard isNew else { return }
     }
 
     // Tell the sync engine it has work to do
