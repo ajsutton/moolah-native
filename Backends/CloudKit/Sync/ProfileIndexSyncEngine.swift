@@ -41,9 +41,26 @@ final class ProfileIndexSyncEngine: Sendable {
       stateSerialization: loadStateSerialization(),
       delegate: self
     )
+    let hasSavedState = loadStateSerialization() != nil
     syncEngine = CKSyncEngine(configuration)
     isRunning = true
     logger.info("Started profile index sync engine")
+
+    // On first start, queue any existing profiles for upload
+    if !hasSavedState {
+      queueAllExistingProfiles()
+    }
+  }
+
+  /// Queues all existing ProfileRecords for upload on first start.
+  private func queueAllExistingProfiles() {
+    let context = ModelContext(modelContainer)
+    let descriptor = FetchDescriptor<ProfileRecord>()
+    guard let records = try? context.fetch(descriptor), !records.isEmpty else { return }
+    for record in records {
+      addPendingSave(for: record.id)
+    }
+    logger.info("Queued \(records.count) existing profiles for initial upload")
   }
 
   func stop() {

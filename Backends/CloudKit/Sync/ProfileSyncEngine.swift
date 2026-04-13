@@ -47,6 +47,7 @@ final class ProfileSyncEngine: Sendable {
   func start() {
     guard !isRunning else { return }
 
+    let hasSavedState = loadStateSerialization() != nil
     let configuration = CKSyncEngine.Configuration(
       database: CKContainer.default().privateCloudDatabase,
       stateSerialization: loadStateSerialization(),
@@ -55,6 +56,45 @@ final class ProfileSyncEngine: Sendable {
     syncEngine = CKSyncEngine(configuration)
     isRunning = true
     logger.info("Started sync engine for profile \(self.profileId)")
+
+    // On first start (no saved state), queue all existing records for upload.
+    // This handles the case where data was imported before the sync engine started
+    // (e.g., migration imports data, then ProfileSession creates the sync engine).
+    if !hasSavedState {
+      queueAllExistingRecords()
+    }
+  }
+
+  /// Scans all record types in the local store and queues them for upload.
+  /// Called on first start when there's no saved sync state.
+  private func queueAllExistingRecords() {
+    let context = ModelContext(modelContainer)
+
+    func queueAll<T: PersistentModel>(_ type: T.Type) -> Int {
+      let descriptor = FetchDescriptor<T>()
+      guard let records = try? context.fetch(descriptor) else { return 0 }
+      var count = 0
+      for record in records {
+        if let id = (record as AnyObject).value(forKey: "id") as? UUID {
+          let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+          addPendingChange(.saveRecord(recordID))
+          count += 1
+        }
+      }
+      return count
+    }
+
+    let total =
+      queueAll(AccountRecord.self)
+      + queueAll(TransactionRecord.self)
+      + queueAll(CategoryRecord.self)
+      + queueAll(EarmarkRecord.self)
+      + queueAll(EarmarkBudgetItemRecord.self)
+      + queueAll(InvestmentValueRecord.self)
+
+    if total > 0 {
+      logger.info("Queued \(total) existing records for initial upload")
+    }
   }
 
   /// Stops the sync engine. Call during profile deactivation or app termination.
