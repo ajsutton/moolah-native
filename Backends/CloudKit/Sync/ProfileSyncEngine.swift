@@ -231,13 +231,8 @@ final class ProfileSyncEngine: Sendable {
 
     let context = ModelContext(modelContainer)
 
-    for ckRecord in saved {
-      applyRemoteSave(ckRecord, context: context)
-    }
-
-    for (recordID, recordType) in deleted {
-      applyRemoteDeletion(recordID: recordID, recordType: recordType, context: context)
-    }
+    Self.applyBatchSaves(saved, context: context)
+    Self.applyBatchDeletions(deleted, context: context)
 
     do {
       try context.save()
@@ -331,151 +326,239 @@ final class ProfileSyncEngine: Sendable {
     }
   }
 
-  // MARK: - Private Helpers
+  // MARK: - Batch Processing (Static)
 
-  private func applyRemoteSave(_ ckRecord: CKRecord, context: ModelContext) {
-    let recordType = ckRecord.recordType
-    let recordName = ckRecord.recordID.recordName
+  private nonisolated static let batchLogger = Logger(
+    subsystem: "com.moolah.app", category: "ProfileSyncEngine")
 
-    guard let recordId = UUID(uuidString: recordName) else {
-      logger.warning("Invalid record name (not UUID): \(recordName)")
-      return
-    }
-
-    switch recordType {
-    case AccountRecord.recordType:
-      upsertAccount(from: ckRecord, id: recordId, context: context)
-    case TransactionRecord.recordType:
-      upsertTransaction(from: ckRecord, id: recordId, context: context)
-    case CategoryRecord.recordType:
-      upsertCategory(from: ckRecord, id: recordId, context: context)
-    case EarmarkRecord.recordType:
-      upsertEarmark(from: ckRecord, id: recordId, context: context)
-    case EarmarkBudgetItemRecord.recordType:
-      upsertEarmarkBudgetItem(from: ckRecord, id: recordId, context: context)
-    case InvestmentValueRecord.recordType:
-      upsertInvestmentValue(from: ckRecord, id: recordId, context: context)
-    default:
-      logger.warning("Unknown record type: \(recordType)")
+  /// Groups saved records by type and batch-upserts each group.
+  /// Uses one fetch per record type instead of one fetch per record.
+  private nonisolated static func applyBatchSaves(_ records: [CKRecord], context: ModelContext) {
+    let grouped = Dictionary(grouping: records, by: { $0.recordType })
+    for (recordType, ckRecords) in grouped {
+      switch recordType {
+      case AccountRecord.recordType:
+        batchUpsertAccounts(ckRecords, context: context)
+      case TransactionRecord.recordType:
+        batchUpsertTransactions(ckRecords, context: context)
+      case CategoryRecord.recordType:
+        batchUpsertCategories(ckRecords, context: context)
+      case EarmarkRecord.recordType:
+        batchUpsertEarmarks(ckRecords, context: context)
+      case EarmarkBudgetItemRecord.recordType:
+        batchUpsertEarmarkBudgetItems(ckRecords, context: context)
+      case InvestmentValueRecord.recordType:
+        batchUpsertInvestmentValues(ckRecords, context: context)
+      default:
+        batchLogger.warning("applyBatchSaves: unknown record type '\(recordType)' — skipping")
+      }
     }
   }
 
-  private func applyRemoteDeletion(
-    recordID: CKRecord.ID, recordType: String, context: ModelContext
+  /// Handles batch deletions. Per-record fetch is acceptable here (small batches).
+  private nonisolated static func applyBatchDeletions(
+    _ deletions: [(CKRecord.ID, String)], context: ModelContext
   ) {
-    guard let recordId = UUID(uuidString: recordID.recordName) else { return }
+    for (recordID, recordType) in deletions {
+      guard let recordId = UUID(uuidString: recordID.recordName) else { continue }
 
-    switch recordType {
-    case AccountRecord.recordType:
-      if let record = fetchAccount(id: recordId, context: context) { context.delete(record) }
-    case TransactionRecord.recordType:
-      if let record = fetchTransaction(id: recordId, context: context) { context.delete(record) }
-    case CategoryRecord.recordType:
-      if let record = fetchCategory(id: recordId, context: context) { context.delete(record) }
-    case EarmarkRecord.recordType:
-      if let record = fetchEarmark(id: recordId, context: context) { context.delete(record) }
-    case EarmarkBudgetItemRecord.recordType:
-      if let record = fetchEarmarkBudgetItem(id: recordId, context: context) {
-        context.delete(record)
+      switch recordType {
+      case AccountRecord.recordType:
+        let descriptor = FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == recordId })
+        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+      case TransactionRecord.recordType:
+        let descriptor = FetchDescriptor<TransactionRecord>(
+          predicate: #Predicate { $0.id == recordId })
+        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+      case CategoryRecord.recordType:
+        let descriptor = FetchDescriptor<CategoryRecord>(
+          predicate: #Predicate { $0.id == recordId })
+        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+      case EarmarkRecord.recordType:
+        let descriptor = FetchDescriptor<EarmarkRecord>(
+          predicate: #Predicate { $0.id == recordId })
+        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+      case EarmarkBudgetItemRecord.recordType:
+        let descriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
+          predicate: #Predicate { $0.id == recordId })
+        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+      case InvestmentValueRecord.recordType:
+        let descriptor = FetchDescriptor<InvestmentValueRecord>(
+          predicate: #Predicate { $0.id == recordId })
+        if let record = try? context.fetch(descriptor).first { context.delete(record) }
+      default:
+        batchLogger.warning(
+          "applyBatchDeletions: unknown record type '\(recordType)' — skipping")
       }
-    case InvestmentValueRecord.recordType:
-      if let record = fetchInvestmentValue(id: recordId, context: context) {
-        context.delete(record)
+    }
+  }
+
+  // MARK: - Per-Type Batch Upsert
+
+  nonisolated private static func batchUpsertAccounts(
+    _ ckRecords: [CKRecord], context: ModelContext
+  ) {
+    let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
+      guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
+      return (id, ck)
+    }
+    let ids = pairs.map(\.0)
+    let descriptor = FetchDescriptor<AccountRecord>(
+      predicate: #Predicate<AccountRecord> { record in ids.contains(record.id) })
+    let existing = (try? context.fetch(descriptor)) ?? []
+    let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+
+    for (id, ckRecord) in pairs {
+      let values = AccountRecord.fieldValues(from: ckRecord)
+      if let existing = byID[id] {
+        existing.name = values.name
+        existing.type = values.type
+        existing.position = values.position
+        existing.isHidden = values.isHidden
+        existing.currencyCode = values.currencyCode
+        existing.cachedBalance = values.cachedBalance
+      } else {
+        context.insert(values)
       }
-    default:
-      logger.warning("Unknown record type for deletion: \(recordType)")
     }
   }
 
-  // MARK: - Upsert Helpers
+  nonisolated private static func batchUpsertTransactions(
+    _ ckRecords: [CKRecord], context: ModelContext
+  ) {
+    let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
+      guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
+      return (id, ck)
+    }
+    let ids = pairs.map(\.0)
+    let descriptor = FetchDescriptor<TransactionRecord>(
+      predicate: #Predicate<TransactionRecord> { record in ids.contains(record.id) })
+    let existing = (try? context.fetch(descriptor)) ?? []
+    let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
-  private func upsertAccount(from ckRecord: CKRecord, id: UUID, context: ModelContext) {
-    let values = AccountRecord.fieldValues(from: ckRecord)
-    let descriptor = FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == id })
-    if let existing = try? context.fetch(descriptor).first {
-      existing.name = values.name
-      existing.type = values.type
-      existing.position = values.position
-      existing.isHidden = values.isHidden
-      existing.currencyCode = values.currencyCode
-      existing.cachedBalance = values.cachedBalance
-    } else {
-      context.insert(values)
+    for (id, ckRecord) in pairs {
+      let values = TransactionRecord.fieldValues(from: ckRecord)
+      if let existing = byID[id] {
+        existing.type = values.type
+        existing.date = values.date
+        existing.accountId = values.accountId
+        existing.toAccountId = values.toAccountId
+        existing.amount = values.amount
+        existing.currencyCode = values.currencyCode
+        existing.payee = values.payee
+        existing.notes = values.notes
+        existing.categoryId = values.categoryId
+        existing.earmarkId = values.earmarkId
+        existing.recurPeriod = values.recurPeriod
+        existing.recurEvery = values.recurEvery
+      } else {
+        context.insert(values)
+      }
     }
   }
 
-  private func upsertTransaction(from ckRecord: CKRecord, id: UUID, context: ModelContext) {
-    let values = TransactionRecord.fieldValues(from: ckRecord)
-    let descriptor = FetchDescriptor<TransactionRecord>(predicate: #Predicate { $0.id == id })
-    if let existing = try? context.fetch(descriptor).first {
-      existing.type = values.type
-      existing.date = values.date
-      existing.accountId = values.accountId
-      existing.toAccountId = values.toAccountId
-      existing.amount = values.amount
-      existing.currencyCode = values.currencyCode
-      existing.payee = values.payee
-      existing.notes = values.notes
-      existing.categoryId = values.categoryId
-      existing.earmarkId = values.earmarkId
-      existing.recurPeriod = values.recurPeriod
-      existing.recurEvery = values.recurEvery
-    } else {
-      context.insert(values)
+  nonisolated private static func batchUpsertCategories(
+    _ ckRecords: [CKRecord], context: ModelContext
+  ) {
+    let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
+      guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
+      return (id, ck)
+    }
+    let ids = pairs.map(\.0)
+    let descriptor = FetchDescriptor<CategoryRecord>(
+      predicate: #Predicate<CategoryRecord> { record in ids.contains(record.id) })
+    let existing = (try? context.fetch(descriptor)) ?? []
+    let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+
+    for (id, ckRecord) in pairs {
+      let values = CategoryRecord.fieldValues(from: ckRecord)
+      if let existing = byID[id] {
+        existing.name = values.name
+        existing.parentId = values.parentId
+      } else {
+        context.insert(values)
+      }
     }
   }
 
-  private func upsertCategory(from ckRecord: CKRecord, id: UUID, context: ModelContext) {
-    let values = CategoryRecord.fieldValues(from: ckRecord)
-    let descriptor = FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.id == id })
-    if let existing = try? context.fetch(descriptor).first {
-      existing.name = values.name
-      existing.parentId = values.parentId
-    } else {
-      context.insert(values)
+  nonisolated private static func batchUpsertEarmarks(
+    _ ckRecords: [CKRecord], context: ModelContext
+  ) {
+    let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
+      guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
+      return (id, ck)
+    }
+    let ids = pairs.map(\.0)
+    let descriptor = FetchDescriptor<EarmarkRecord>(
+      predicate: #Predicate<EarmarkRecord> { record in ids.contains(record.id) })
+    let existing = (try? context.fetch(descriptor)) ?? []
+    let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+
+    for (id, ckRecord) in pairs {
+      let values = EarmarkRecord.fieldValues(from: ckRecord)
+      if let existing = byID[id] {
+        existing.name = values.name
+        existing.position = values.position
+        existing.isHidden = values.isHidden
+        existing.savingsTarget = values.savingsTarget
+        existing.currencyCode = values.currencyCode
+        existing.savingsStartDate = values.savingsStartDate
+        existing.savingsEndDate = values.savingsEndDate
+      } else {
+        context.insert(values)
+      }
     }
   }
 
-  private func upsertEarmark(from ckRecord: CKRecord, id: UUID, context: ModelContext) {
-    let values = EarmarkRecord.fieldValues(from: ckRecord)
-    let descriptor = FetchDescriptor<EarmarkRecord>(predicate: #Predicate { $0.id == id })
-    if let existing = try? context.fetch(descriptor).first {
-      existing.name = values.name
-      existing.position = values.position
-      existing.isHidden = values.isHidden
-      existing.savingsTarget = values.savingsTarget
-      existing.currencyCode = values.currencyCode
-      existing.savingsStartDate = values.savingsStartDate
-      existing.savingsEndDate = values.savingsEndDate
-    } else {
-      context.insert(values)
+  nonisolated private static func batchUpsertEarmarkBudgetItems(
+    _ ckRecords: [CKRecord], context: ModelContext
+  ) {
+    let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
+      guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
+      return (id, ck)
     }
-  }
-
-  private func upsertEarmarkBudgetItem(from ckRecord: CKRecord, id: UUID, context: ModelContext) {
-    let values = EarmarkBudgetItemRecord.fieldValues(from: ckRecord)
+    let ids = pairs.map(\.0)
     let descriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
-      predicate: #Predicate { $0.id == id })
-    if let existing = try? context.fetch(descriptor).first {
-      existing.earmarkId = values.earmarkId
-      existing.categoryId = values.categoryId
-      existing.amount = values.amount
-      existing.currencyCode = values.currencyCode
-    } else {
-      context.insert(values)
+      predicate: #Predicate<EarmarkBudgetItemRecord> { record in ids.contains(record.id) })
+    let existing = (try? context.fetch(descriptor)) ?? []
+    let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+
+    for (id, ckRecord) in pairs {
+      let values = EarmarkBudgetItemRecord.fieldValues(from: ckRecord)
+      if let existing = byID[id] {
+        existing.earmarkId = values.earmarkId
+        existing.categoryId = values.categoryId
+        existing.amount = values.amount
+        existing.currencyCode = values.currencyCode
+      } else {
+        context.insert(values)
+      }
     }
   }
 
-  private func upsertInvestmentValue(from ckRecord: CKRecord, id: UUID, context: ModelContext) {
-    let values = InvestmentValueRecord.fieldValues(from: ckRecord)
-    let descriptor = FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { $0.id == id })
-    if let existing = try? context.fetch(descriptor).first {
-      existing.accountId = values.accountId
-      existing.date = values.date
-      existing.value = values.value
-      existing.currencyCode = values.currencyCode
-    } else {
-      context.insert(values)
+  nonisolated private static func batchUpsertInvestmentValues(
+    _ ckRecords: [CKRecord], context: ModelContext
+  ) {
+    let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
+      guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
+      return (id, ck)
+    }
+    let ids = pairs.map(\.0)
+    let descriptor = FetchDescriptor<InvestmentValueRecord>(
+      predicate: #Predicate<InvestmentValueRecord> { record in ids.contains(record.id) })
+    let existing = (try? context.fetch(descriptor)) ?? []
+    let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+
+    for (id, ckRecord) in pairs {
+      let values = InvestmentValueRecord.fieldValues(from: ckRecord)
+      if let existing = byID[id] {
+        existing.accountId = values.accountId
+        existing.date = values.date
+        existing.value = values.value
+        existing.currencyCode = values.currencyCode
+      } else {
+        context.insert(values)
+      }
     }
   }
 }
