@@ -139,3 +139,4 @@ This project defines specialized review agents in `.claude/agents/`. Invoke them
 
 - **`ui-review`** — Reviews SwiftUI views for `STYLE_GUIDE.md` compliance, Apple HIG, and accessibility. Use after creating or modifying UI components.
 - **`concurrency-review`** — Reviews Swift code for `CONCURRENCY_GUIDE.md` compliance: actor isolation, task hygiene, Sendable, async patterns. Use after modifying stores, repositories, or backend code.
+- **`sync-review`** — Reviews CKSyncEngine sync code for `SYNC_GUIDE.md` compliance: error handling, change tracking, conflict resolution, account changes, zone management. Use after modifying sync engines, change trackers, or record mappings.

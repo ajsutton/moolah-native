@@ -67,34 +67,58 @@ final class ProfileSyncEngine: Sendable {
 
   /// Scans all record types in the local store and queues them for upload.
   /// Called on first start when there's no saved sync state.
+  ///
+  /// Note: SwiftData models don't support KVC (`value(forKey:)`), so we must
+  /// use concrete FetchDescriptors per type — same constraint as `recordToSave`.
   private func queueAllExistingRecords() {
     let context = ModelContext(modelContainer)
+    var total = 0
 
-    func queueAll<T: PersistentModel>(_ type: T.Type) -> Int {
-      let descriptor = FetchDescriptor<T>()
-      guard let records = try? context.fetch(descriptor) else { return 0 }
-      var count = 0
-      for record in records {
-        if let id = (record as AnyObject).value(forKey: "id") as? UUID {
-          let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
-          addPendingChange(.saveRecord(recordID))
-          count += 1
-        }
+    if let records = try? context.fetch(FetchDescriptor<AccountRecord>()) {
+      for r in records {
+        queuePendingSave(for: r.id)
+        total += 1
       }
-      return count
     }
-
-    let total =
-      queueAll(AccountRecord.self)
-      + queueAll(TransactionRecord.self)
-      + queueAll(CategoryRecord.self)
-      + queueAll(EarmarkRecord.self)
-      + queueAll(EarmarkBudgetItemRecord.self)
-      + queueAll(InvestmentValueRecord.self)
+    if let records = try? context.fetch(FetchDescriptor<TransactionRecord>()) {
+      for r in records {
+        queuePendingSave(for: r.id)
+        total += 1
+      }
+    }
+    if let records = try? context.fetch(FetchDescriptor<CategoryRecord>()) {
+      for r in records {
+        queuePendingSave(for: r.id)
+        total += 1
+      }
+    }
+    if let records = try? context.fetch(FetchDescriptor<EarmarkRecord>()) {
+      for r in records {
+        queuePendingSave(for: r.id)
+        total += 1
+      }
+    }
+    if let records = try? context.fetch(FetchDescriptor<EarmarkBudgetItemRecord>()) {
+      for r in records {
+        queuePendingSave(for: r.id)
+        total += 1
+      }
+    }
+    if let records = try? context.fetch(FetchDescriptor<InvestmentValueRecord>()) {
+      for r in records {
+        queuePendingSave(for: r.id)
+        total += 1
+      }
+    }
 
     if total > 0 {
       logger.info("Queued \(total) existing records for initial upload")
     }
+  }
+
+  private func queuePendingSave(for id: UUID) {
+    let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    addPendingChange(.saveRecord(recordID))
   }
 
   /// Stops the sync engine. Call during profile deactivation or app termination.
