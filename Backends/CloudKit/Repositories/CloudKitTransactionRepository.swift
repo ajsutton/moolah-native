@@ -737,18 +737,21 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         signpostID: signpostID)
     }
     guard !prefix.isEmpty else { return [] }
-    let descriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate { $0.payee != nil }
-    )
 
     return try await MainActor.run {
+      var descriptor = FetchDescriptor<TransactionRecord>(
+        predicate: #Predicate { $0.payee != nil },
+        sortBy: [SortDescriptor(\TransactionRecord.date, order: .reverse)]
+      )
+      descriptor.fetchLimit = 5000
       let records = try context.fetch(descriptor)
       let lowered = prefix.lowercased()
-      let matching = records.compactMap(\.payee)
-        .filter { !$0.isEmpty && $0.lowercased().hasPrefix(lowered) }
 
       var counts: [String: Int] = [:]
-      for payee in matching {
+      for record in records {
+        guard let payee = record.payee, !payee.isEmpty,
+          payee.lowercased().hasPrefix(lowered)
+        else { continue }
         counts[payee, default: 0] += 1
       }
       return counts.sorted { $0.value > $1.value }.map(\.key)
