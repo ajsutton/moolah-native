@@ -8,15 +8,16 @@ import SwiftData
 /// ensuring complete data isolation between profiles.
 @MainActor
 final class ProfileSyncEngine: Sendable {
-  let profileId: UUID
-  let zoneID: CKRecordZone.ID
-  let modelContainer: ModelContainer
+  nonisolated let profileId: UUID
+  nonisolated let zoneID: CKRecordZone.ID
+  nonisolated let modelContainer: ModelContainer
 
   /// Callback invoked after remote changes are applied to the local store.
   /// Used by ProfileSession to trigger store reloads.
   var onRemoteChangesApplied: (() -> Void)?
 
-  private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileSyncEngine")
+  private nonisolated let logger = Logger(
+    subsystem: "com.moolah.app", category: "ProfileSyncEngine")
   private var pendingSaves: Set<CKRecord.ID> = []
   private var pendingDeletions: Set<CKRecord.ID> = []
   private var syncEngine: CKSyncEngine?
