@@ -29,6 +29,7 @@ final class ProfileSession: Identifiable {
   private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileSession")
   private var syncReloadTask: Task<Void, Never>?
   private var pendingChangedTypes = Set<String>()
+  private var lastSyncEventTime: ContinuousClock.Instant?
 
   init(profile: Profile, containerManager: ProfileContainerManager? = nil) {
     self.profile = profile
@@ -161,12 +162,24 @@ final class ProfileSession: Identifiable {
   /// Debounces sync reloads — cancels any pending reload and waits briefly.
   /// This avoids redundant reloads when CKSyncEngine delivers multiple change batches
   /// in quick succession. Only reloads stores affected by the changed record types.
+  /// During bulk sync (rapid consecutive batches), the debounce increases to 2s to
+  /// avoid thrashing.
   private func scheduleReloadFromSync(changedTypes: Set<String>) {
     pendingChangedTypes.formUnion(changedTypes)
 
+    let now = ContinuousClock.now
+    let isBulkSync: Bool
+    if let last = lastSyncEventTime, now - last < .seconds(1) {
+      isBulkSync = true
+    } else {
+      isBulkSync = false
+    }
+    lastSyncEventTime = now
+    let debounceMs = isBulkSync ? 2000 : 500
+
     syncReloadTask?.cancel()
     syncReloadTask = Task {
-      try? await Task.sleep(for: .milliseconds(500))
+      try? await Task.sleep(for: .milliseconds(debounceMs))
       guard !Task.isCancelled else { return }
 
       let types = self.pendingChangedTypes
