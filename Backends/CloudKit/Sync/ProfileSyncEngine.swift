@@ -1,4 +1,4 @@
-import CloudKit
+@preconcurrency import CloudKit
 import Foundation
 import OSLog
 import SwiftData
@@ -567,8 +567,13 @@ final class ProfileSyncEngine: Sendable {
 
 extension ProfileSyncEngine: CKSyncEngineDelegate {
   nonisolated func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
-    await MainActor.run {
-      handleEventOnMain(event, syncEngine: syncEngine)
+    switch event {
+    case .fetchedRecordZoneChanges(let changes):
+      await handleFetchedRecordZoneChangesInBackground(changes)
+    default:
+      await MainActor.run {
+        handleEventOnMain(event, syncEngine: syncEngine)
+      }
     }
   }
 
@@ -583,8 +588,8 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     case .fetchedDatabaseChanges(let fetchedChanges):
       handleFetchedDatabaseChanges(fetchedChanges)
 
-    case .fetchedRecordZoneChanges(let fetchedChanges):
-      handleFetchedRecordZoneChanges(fetchedChanges)
+    case .fetchedRecordZoneChanges:
+      break  // Handled in background by handleFetchedRecordZoneChangesInBackground
 
     case .sentRecordZoneChanges(let sentChanges):
       handleSentRecordZoneChanges(sentChanges)
@@ -692,17 +697,43 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     }
   }
 
-  private func handleFetchedRecordZoneChanges(
+  /// Processes fetched record zone changes on the BACKGROUND thread (CKSyncEngine's queue).
+  /// Only hops to MainActor for the isApplyingRemoteChanges flag and the reload callback.
+  nonisolated private func handleFetchedRecordZoneChangesInBackground(
     _ changes: CKSyncEngine.Event.FetchedRecordZoneChanges
-  ) {
-    let savedRecords = changes.modifications.map(\.record)
-    let deletedRecords: [(CKRecord.ID, String)] = changes.deletions.map {
+  ) async {
+    let saved = changes.modifications.map(\.record)
+    let deleted: [(CKRecord.ID, String)] = changes.deletions.map {
       ($0.recordID, $0.recordType)
     }
+    guard !saved.isEmpty || !deleted.isEmpty else { return }
 
-    guard !savedRecords.isEmpty || !deletedRecords.isEmpty else { return }
+    // Set flag BEFORE background work — ChangeTracker checks this on main queue.
+    // The flag stays true for the duration of the await, so any
+    // NSManagedObjectContextDidSave notifications delivered to the main queue
+    // during context.save() will see it as true.
+    await MainActor.run { self.isApplyingRemoteChanges = true }
 
-    applyRemoteChanges(saved: savedRecords, deleted: deletedRecords)
+    // Process on current (background) thread — no main actor involvement.
+    // modelContainer is nonisolated let, safe to access here.
+    let context = ModelContext(modelContainer)
+    Self.applyBatchSaves(saved, context: context)
+    Self.applyBatchDeletions(deleted, context: context)
+    var saveSucceeded = false
+    do {
+      try context.save()
+      saveSucceeded = true
+    } catch {
+      logger.error("Failed to save remote changes: \(error)")
+    }
+
+    // Notify on main actor (skip callback on failure, matching applyRemoteChanges behavior)
+    await MainActor.run {
+      self.isApplyingRemoteChanges = false
+      if saveSucceeded {
+        self.onRemoteChangesApplied?()
+      }
+    }
   }
 
   private func handleSentRecordZoneChanges(
