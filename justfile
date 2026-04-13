@@ -102,6 +102,10 @@ bump-version version:
     sed -i '' 's/MARKETING_VERSION: .*/MARKETING_VERSION: "{{version}}"/' project.yml
     just generate
 
+# Build, launch macOS app, and stream logs to .agent-tmp/app-logs.txt
+run-mac-with-logs *predicate: generate
+    bash scripts/run-with-logs.sh {{predicate}}
+
 # Open the project in Xcode
 open:
     open Moolah.xcodeproj
