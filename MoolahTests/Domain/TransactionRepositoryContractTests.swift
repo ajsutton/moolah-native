@@ -220,6 +220,62 @@ struct TransactionRepositoryContractTests {
       "priorBalance of page 0 should equal sum of all older transactions")
   }
 
+  @Test("priorBalance negates amounts for toAccountId matches (matches server)")
+  func testPriorBalanceNegatesTransferAmounts() async throws {
+    let accountA = UUID()
+    let accountB = UUID()
+    let calendar = Calendar.current
+    let transactions = [
+      // Income on B (primary match for B)
+      Transaction(
+        type: .income,
+        date: calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!,
+        accountId: accountB,
+        amount: MonetaryAmount(cents: 20000, currency: .defaultTestCurrency),
+        payee: "Oldest Income"
+      ),
+      // Transfer from A to B (secondary match for B — amount should be negated)
+      Transaction(
+        type: .transfer,
+        date: calendar.date(from: DateComponents(year: 2024, month: 2, day: 1))!,
+        accountId: accountA,
+        toAccountId: accountB,
+        amount: MonetaryAmount(cents: -10000, currency: .defaultTestCurrency),
+        payee: "Transfer"
+      ),
+      // Income on B (primary match for B)
+      Transaction(
+        type: .income,
+        date: calendar.date(from: DateComponents(year: 2024, month: 3, day: 1))!,
+        accountId: accountB,
+        amount: MonetaryAmount(cents: 5000, currency: .defaultTestCurrency),
+        payee: "Newest Income"
+      ),
+    ]
+    let repository = makeCloudKitTransactionRepository(
+      initialTransactions: transactions, accounts: [accountA, accountB])
+
+    // Fetch page 0 for account B with pageSize 2 (gets newest income + transfer)
+    let page0 = try await repository.fetch(
+      filter: TransactionFilter(accountId: accountB), page: 0, pageSize: 2)
+
+    // priorBalance = adjusted sum of records after the page.
+    // Only the oldest income remains (primary match): +20000
+    #expect(page0.priorBalance.cents == 20000)
+
+    // Fetch page 1 for account B (gets oldest income only)
+    let page1 = try await repository.fetch(
+      filter: TransactionFilter(accountId: accountB), page: 1, pageSize: 2)
+    #expect(page1.priorBalance.cents == 0)
+
+    // Verify cross-page consistency: page0.priorBalance == page1 adjusted sum + page1.priorBalance
+    // The transfer on page0 is a secondary match, so its adjusted amount is -(-10000) = +10000
+    // page0 adjusted head = 5000 (income, primary) + 10000 (transfer, negated) = 15000
+    // page0 prior = totalAdjustedBalance - headAdjusted = (20000 + 10000 + 5000) - 15000 = 20000 ✓
+    let page1AdjustedSum = page1.transactions.reduce(0) { $0 + $1.amount.cents }
+    #expect(page0.priorBalance.cents == page1AdjustedSum + page1.priorBalance.cents)
+  }
+
   @Test("empty page returns zero priorBalance")
   func testEmptyPagePriorBalance() async throws {
     let repository = makeCloudKitTransactionRepository(
@@ -606,14 +662,20 @@ private func makePayeeSuggestionTestTransactions() -> [Transaction] {
 
 private func makeCloudKitTransactionRepository(
   initialTransactions: [Transaction] = [],
+  accounts: [UUID] = [],
   currency: Currency = .defaultTestCurrency
 ) -> CloudKitTransactionRepository {
   let container = try! TestModelContainer.create()
   let repo = CloudKitTransactionRepository(
     modelContainer: container, currency: currency)
 
-  if !initialTransactions.isEmpty {
+  if !initialTransactions.isEmpty || !accounts.isEmpty {
     let context = ModelContext(container)
+    for accountId in accounts {
+      context.insert(
+        AccountRecord(
+          id: accountId, name: "Account", type: "bank", currencyCode: currency.code))
+    }
     for txn in initialTransactions {
       context.insert(TransactionRecord.from(txn))
     }

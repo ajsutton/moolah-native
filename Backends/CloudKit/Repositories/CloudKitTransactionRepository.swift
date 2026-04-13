@@ -31,7 +31,32 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       // transactions. The server always adds `AND recur_period IS NULL` unless scheduled=true.
       let scheduled = filter.scheduled ?? false
 
-      // --- Fetch records with predicate push-down ---
+      // Fast path: page 0 with simple accountId filter and cachedBalance available.
+      // Computes priorBalance algebraically from cachedBalance instead of loading all records.
+      if page == 0,
+        !scheduled,
+        let filterAccountId = filter.accountId,
+        filter.categoryIds == nil,
+        filter.payee == nil,
+        filter.dateRange == nil,
+        filter.earmarkId == nil
+      {
+        let accountDescriptor = FetchDescriptor<AccountRecord>(
+          predicate: #Predicate { $0.id == filterAccountId }
+        )
+        if let account = try context.fetch(accountDescriptor).first,
+          let cachedBalance = account.cachedBalance
+        {
+          return try fetchFastPath(
+            accountId: filterAccountId,
+            cachedBalance: cachedBalance,
+            pageSize: pageSize,
+            signpostID: signpostID
+          )
+        }
+      }
+
+      // --- Full fetch path (complex filters, later pages, or no cached balance) ---
       os_signpost(
         .begin, log: Signposts.repository, name: "fetch.predicateQuery", signpostID: signpostID)
       let primaryRecords: [TransactionRecord]
@@ -143,16 +168,113 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let pageTransactions = pageRecords.map { $0.toDomain() }
       os_signpost(.end, log: Signposts.repository, name: "fetch.toDomain", signpostID: signpostID)
 
-      // priorBalance = sum of amounts for all records after the current page (older transactions)
+      // priorBalance = sum of adjusted amounts for all records after the current page.
+      // Matches moolah-server: SUM(IF(to_account_id = ?, -amount, amount))
+      // Records matched via toAccountId have their amount negated.
       os_signpost(
         .begin, log: Signposts.balance, name: "fetch.priorBalance", signpostID: signpostID)
-      let priorBalanceCents = filteredRecords[end...].reduce(0) { $0 + $1.amount }
+      let filterAccountId = filter.accountId
+      let priorBalanceCents = filteredRecords[end...].reduce(0) { sum, record in
+        if let filterAccountId, record.accountId != filterAccountId {
+          return sum - record.amount
+        }
+        return sum + record.amount
+      }
       let priorBalance = MonetaryAmount(cents: priorBalanceCents, currency: self.currency)
       os_signpost(.end, log: Signposts.balance, name: "fetch.priorBalance", signpostID: signpostID)
 
       return TransactionPage(
         transactions: pageTransactions, priorBalance: priorBalance, totalCount: totalCount)
     }
+  }
+
+  // MARK: - Fast Path
+
+  /// Optimized fetch for page 0 with a simple accountId filter and non-scheduled transactions.
+  /// Instead of loading all ~14k records to sort/paginate/sum, loads only ~60 records:
+  /// - All secondary (toAccount) records (typically very few transfers to a given account)
+  /// - Top pageSize primary records via SwiftData fetchLimit
+  /// Computes priorBalance as: cachedBalance - headAdjustedSum, where headAdjustedSum
+  /// negates amounts for toAccountId matches (matching moolah-server sign convention).
+  @MainActor
+  private func fetchFastPath(
+    accountId: UUID,
+    cachedBalance: Int,
+    pageSize: Int,
+    signpostID: OSSignpostID
+  ) throws -> TransactionPage {
+    os_signpost(
+      .begin, log: Signposts.repository, name: "fetch.fastPath", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "fetch.fastPath", signpostID: signpostID)
+    }
+
+    // 1. Fetch ALL secondary records (transfers TO this account, non-scheduled).
+    //    Typically very few — e.g., ~9 for the busiest account in a 37k dataset.
+    let secondaryDescriptor = FetchDescriptor<TransactionRecord>(
+      predicate: #Predicate { $0.toAccountId == accountId && $0.recurPeriod == nil },
+      sortBy: [SortDescriptor(\TransactionRecord.date, order: .reverse)]
+    )
+    let secondaryRecords = try context.fetch(secondaryDescriptor)
+
+    // 2. Fetch top pageSize primary records (SwiftData pushes sort+limit to SQLite).
+    var primaryDescriptor = FetchDescriptor<TransactionRecord>(
+      predicate: #Predicate { $0.accountId == accountId && $0.recurPeriod == nil },
+      sortBy: [SortDescriptor(\TransactionRecord.date, order: .reverse)]
+    )
+    primaryDescriptor.fetchLimit = pageSize
+    let primaryRecords = try context.fetch(primaryDescriptor)
+
+    // 3. Merge, deduplicate, and sort the small combined set.
+    var seen = Set(primaryRecords.map(\.id))
+    var merged = primaryRecords
+    for record in secondaryRecords {
+      if seen.insert(record.id).inserted {
+        merged.append(record)
+      }
+    }
+    merged.sort { a, b in
+      if a.date != b.date { return a.date > b.date }
+      return a.id.uuidString < b.id.uuidString
+    }
+
+    // 4. Page records = first pageSize of the merged set.
+    let end = min(pageSize, merged.count)
+    let pageRecords = merged[0..<end]
+
+    os_signpost(
+      .begin, log: Signposts.repository, name: "fetch.toDomain", signpostID: signpostID)
+    let pageTransactions = pageRecords.map { $0.toDomain() }
+    os_signpost(.end, log: Signposts.repository, name: "fetch.toDomain", signpostID: signpostID)
+
+    // 5. totalCount via fetchCount (O(1) SQL COUNT per query).
+    let primaryCount = try context.fetchCount(
+      FetchDescriptor<TransactionRecord>(
+        predicate: #Predicate { $0.accountId == accountId && $0.recurPeriod == nil }
+      ))
+    let totalCount = primaryCount + secondaryRecords.count
+
+    // 6. Compute priorBalance algebraically.
+    //    cachedBalance = Σ(amount | accountId=A) - Σ(amount | toAccountId=A) for non-scheduled
+    //    This matches the server's SUM(IF(to_account_id=?, -amount, amount)).
+    //    priorBalance  = cachedBalance - headAdjustedSum
+    //    headAdjustedSum negates amounts for records matched via toAccountId.
+    os_signpost(
+      .begin, log: Signposts.balance, name: "fetch.priorBalance", signpostID: signpostID)
+    let secondaryIds = Set(secondaryRecords.map(\.id))
+    let headAdjustedSum = pageRecords.reduce(0) { sum, record in
+      if secondaryIds.contains(record.id) {
+        return sum - record.amount
+      }
+      return sum + record.amount
+    }
+    let priorBalanceCents = cachedBalance - headAdjustedSum
+    let priorBalance = MonetaryAmount(cents: priorBalanceCents, currency: self.currency)
+    os_signpost(.end, log: Signposts.balance, name: "fetch.priorBalance", signpostID: signpostID)
+
+    return TransactionPage(
+      transactions: pageTransactions, priorBalance: priorBalance, totalCount: totalCount)
   }
 
   // MARK: - Predicate Push-Down Helpers
