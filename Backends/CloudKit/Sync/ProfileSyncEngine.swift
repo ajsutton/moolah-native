@@ -662,8 +662,20 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     syncEngine: CKSyncEngine
   ) -> CKSyncEngine.RecordZoneChangeBatch? {
     let scope = context.options.scope
+    // CKSyncEngine's pending list can contain duplicate recordIDs if the same
+    // record was queued multiple times (e.g. queueAllExistingRecords + ChangeTracker).
+    // Deduplicate by recordID to avoid creating duplicate server records.
+    var seenSaves = Set<CKRecord.ID>()
+    var seenDeletes = Set<CKRecord.ID>()
     let pendingChanges = syncEngine.state.pendingRecordZoneChanges
       .filter { scope.contains($0) }
+      .filter { change in
+        switch change {
+        case .saveRecord(let id): return seenSaves.insert(id).inserted
+        case .deleteRecord(let id): return seenDeletes.insert(id).inserted
+        @unknown default: return true
+        }
+      }
 
     guard !pendingChanges.isEmpty else { return nil }
 

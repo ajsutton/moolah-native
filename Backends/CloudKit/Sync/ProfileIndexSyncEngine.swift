@@ -495,8 +495,17 @@ extension ProfileIndexSyncEngine: CKSyncEngineDelegate {
   ) async -> CKSyncEngine.RecordZoneChangeBatch? {
     await MainActor.run {
       let scope = context.options.scope
+      var seenSaves = Set<CKRecord.ID>()
+      var seenDeletes = Set<CKRecord.ID>()
       let pendingChanges = syncEngine.state.pendingRecordZoneChanges
         .filter { scope.contains($0) }
+        .filter { change in
+          switch change {
+          case .saveRecord(let id): return seenSaves.insert(id).inserted
+          case .deleteRecord(let id): return seenDeletes.insert(id).inserted
+          @unknown default: return true
+          }
+        }
 
       guard !pendingChanges.isEmpty else { return nil }
 
