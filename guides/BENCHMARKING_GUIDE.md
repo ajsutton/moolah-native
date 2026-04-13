@@ -135,26 +135,15 @@ Examples:
 
 ### Async Bridging
 
-Repository methods are `async`. XCTest `measure` blocks are synchronous. Use the `awaitSync` helper to bridge:
+Repository methods are `async`. XCTest `measure` blocks are synchronous. Use the `awaitSync` helper (defined in `MoolahBenchmarks/Support/BenchmarkHelpers.swift`) to bridge:
 
 ```swift
-func awaitSync<T>(_ work: @escaping () async throws -> T) throws -> T {
-  let semaphore = DispatchSemaphore(value: 0)
-  var result: Result<T, Error>!
-  Task { @MainActor in
-    do {
-      result = .success(try await work())
-    } catch {
-      result = .failure(error)
-    }
-    semaphore.signal()
-  }
-  semaphore.wait()
-  return try result.get()
+measure(metrics: metrics, options: options) {
+  _ = try! awaitSync { try await repo.fetch(filter: filter, page: 0, pageSize: 50) }
 }
 ```
 
-This is acceptable in benchmarks (never in production code). It blocks the test thread while the MainActor work completes, giving accurate wall-clock timing.
+The helper uses RunLoop spinning to keep the main thread responsive while async work (including `MainActor.run`) completes. **Do not use semaphores** — they deadlock because XCTest runs measure blocks on the main thread, and our repositories dispatch to `MainActor`.
 
 ## Adding Signposts
 
