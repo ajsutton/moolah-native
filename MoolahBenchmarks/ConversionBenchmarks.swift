@@ -4,32 +4,28 @@ import XCTest
 @testable import Moolah
 
 /// Benchmarks for TransactionRecord.toDomain() conversion.
-/// Isolates the per-record cost including Currency.from(code:) which allocates
-/// a NumberFormatter on every call.
+/// Measures fetch + conversion together since TransactionRecord is a managed
+/// object that can't cross isolation boundaries. The fetch cost is small
+/// relative to 5000x Currency.from(code:) calls.
 final class ConversionBenchmarks: XCTestCase {
 
-  nonisolated(unsafe) private static var _records1k: [TransactionRecord] = []
-  nonisolated(unsafe) private static var _records5k: [TransactionRecord] = []
+  nonisolated(unsafe) private static var _container: ModelContainer!
 
   override class func setUp() {
     super.setUp()
     let result = try! TestBackend.create()
+    _container = result.container
     try! awaitSync { @MainActor in
       BenchmarkFixtures.seed(scale: .x2, in: result.container)
-      let context = result.container.mainContext
-      var descriptor = FetchDescriptor<TransactionRecord>()
-      descriptor.fetchLimit = 5000
-      let all = try context.fetch(descriptor)
-      _records1k = Array(all.prefix(1000))
-      _records5k = all
     }
   }
 
   override class func tearDown() {
-    _records1k = []
-    _records5k = []
+    _container = nil
     super.tearDown()
   }
+
+  private var container: ModelContainer { Self._container }
 
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }
   private var options: XCTMeasureOptions {
@@ -39,19 +35,25 @@ final class ConversionBenchmarks: XCTestCase {
   }
 
   func testToDomain_1000records() {
-    let records = Self._records1k
+    let container = self.container
     measure(metrics: metrics, options: options) {
-      autoreleasepool {
-        _ = records.map { $0.toDomain() }
+      _ = try! awaitSync { @MainActor in
+        var descriptor = FetchDescriptor<TransactionRecord>()
+        descriptor.fetchLimit = 1000
+        let records = try container.mainContext.fetch(descriptor)
+        return records.map { $0.toDomain() }
       }
     }
   }
 
   func testToDomain_5000records() {
-    let records = Self._records5k
+    let container = self.container
     measure(metrics: metrics, options: options) {
-      autoreleasepool {
-        _ = records.map { $0.toDomain() }
+      _ = try! awaitSync { @MainActor in
+        var descriptor = FetchDescriptor<TransactionRecord>()
+        descriptor.fetchLimit = 5000
+        let records = try container.mainContext.fetch(descriptor)
+        return records.map { $0.toDomain() }
       }
     }
   }
