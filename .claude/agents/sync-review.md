@@ -1,6 +1,6 @@
 ---
 name: sync-review
-description: Reviews CKSyncEngine sync code for compliance with SYNC_GUIDE.md. Checks error handling, change tracking, conflict resolution, account changes, zone management, and record mapping. Use after creating or modifying sync engines, change trackers, or record mappings.
+description: Reviews CKSyncEngine sync code for compliance with SYNC_GUIDE.md. Checks error handling, sync queueing, conflict resolution, account changes, zone management, and record mapping. Use after creating or modifying sync engines, repositories, or record mappings.
 tools: Read, Grep, Glob
 model: sonnet
 color: cyan
@@ -14,9 +14,9 @@ This project uses CKSyncEngine (not NSPersistentCloudKitContainer) with SwiftDat
 
 1. **ProfileIndexSyncEngine** -- syncs `ProfileRecord` via the `profile-index` zone
 2. **ProfileSyncEngine** (one per active profile) -- syncs per-profile data via `profile-{profileId}` zones
-3. **ChangeTracker** -- observes SwiftData saves, queues changes for upload
+3. **CloudKit repositories** -- each mutation method calls `onRecordChanged`/`onRecordDeleted` closures wired to the sync engine
 
-Key files are in `Backends/CloudKit/Sync/`.
+Key files are in `Backends/CloudKit/Sync/` and `Backends/CloudKit/Repositories/`.
 
 ## Review Process
 
@@ -26,14 +26,16 @@ Key files are in `Backends/CloudKit/Sync/`.
 
 ## What to Check
 
-### Change Tracking
-- Notification observers filter by entity name (Rule 1) -- not processing ALL entities from all containers
-- `isApplyingRemoteChanges` guard prevents re-uploading remote changes (Rule 2)
-- Every syncable entity is included in the change tracker's entity filter set
-- New syncable record types are added to `ChangeTracker.profileDataEntities`
+### Sync Change Queueing
+- Repository mutation methods (create, update, delete) call `onRecordChanged(id)` or `onRecordDeleted(id)` after saving (Rule 2, Rule 4)
+- Derived-data updates (`recomputeAllBalances`, `invalidateCachedBalances`, `computeBalance`) do NOT call sync closures (Rule 2)
+- No use of `NSManagedObjectContextDidSave` notifications for sync queueing -- this pattern was removed (Rule 2)
+- New syncable record types have closure calls in all mutation methods
+- `queueAllExistingRecords` includes the new record type in dependency order (Rule 14)
 
 ### Zone Management
-- `.zoneNotFound` errors create the zone and re-queue the failed record (Rule 3)
+- `ensureZoneExists()` called proactively in `start()`, followed by `sendChanges()` (Rule 3)
+- `.zoneNotFound` and `.userDeletedZone` handled as fallback in error handlers (Rule 3)
 - Zone deletions distinguish between `deleted`, `purged`, and `encryptedDataReset` reasons (Rule 7)
 - Each sync engine manages only its own zone(s)
 - No multiple CKSyncEngine instances on the same database managing overlapping zones
@@ -50,11 +52,12 @@ Key files are in `Backends/CloudKit/Sync/`.
 - Cached system fields updated from server record
 
 ### Error Handling
-- `.zoneNotFound` -- create zone, retry (Rule 3)
+- `.zoneNotFound`/`.userDeletedZone` -- collected into batch, zone created once, all re-queued (Rule 3)
 - `.serverRecordChanged` -- conflict resolution (Rule 6)
 - `.unknownItem` -- clear cached system fields, re-upload (Rule 9)
 - `.quotaExceeded` -- re-queue items, notify user (Rule 9)
 - `.limitExceeded` -- re-queue, engine will use smaller batches (Rule 9)
+- `default` case -- re-queue and log error, never silently drop records (Rule 9)
 - No manual retry of transient errors (network, rate limiting, zone busy) -- CKSyncEngine handles these
 
 ### Account Changes
@@ -83,13 +86,14 @@ Key files are in `Backends/CloudKit/Sync/`.
 - No duplicate record IDs in batches (save removes from deletions, vice versa)
 
 ### Batch and Upload Patterns
-- No manual batching logic that conflicts with CKSyncEngine's automatic chunking
+- `nextRecordZoneChangeBatch` limits to ≤400 records per call (Rule 13) -- CKSyncEngine does NOT chunk
+- Pending changes deduplicated in `nextRecordZoneChangeBatch` before building batch (Rule 12)
+- `queueAllExistingRecords` queues records in dependency order (Rule 14)
 - Orphaned pending records (local record deleted but still in pending) handled gracefully (return nil)
 - `atomicByZone: true` used for atomic zone changes
 
 ## False Positives to Avoid
 
-- **`nonisolated(unsafe) var saveObserver`** in sync engines is acceptable -- `NSObjectProtocol` from `NotificationCenter.addObserver` is not `Sendable`, and the observer is only accessed from `@MainActor` methods.
 - **`nonisolated(unsafe)` on `RecordTypeRegistry.allTypes`** is acceptable -- it's a static constant dictionary initialized once.
 - **`nonisolated` on `CKSyncEngineDelegate` methods** with `await MainActor.run { }` is the correct pattern for bridging the nonisolated delegate protocol to `@MainActor` sync engines.
 - **Creating fresh `ModelContext` per operation** in sync engines is correct -- `ModelContext` is not thread-safe and should not be reused across async boundaries.
@@ -101,8 +105,8 @@ Produce a detailed report with:
 ### Issues Found
 
 Categorize by severity:
-- **Critical:** Missing conflict resolution, missing account change handling, re-uploading remote changes, unfiltered change tracking
-- **Important:** Missing error handling for specific codes, not preserving system fields, incomplete zone deletion handling
+- **Critical:** Missing conflict resolution, missing account change handling, repository mutation missing sync closure call, silently dropping records in default error case, returning >400 records from nextRecordZoneChangeBatch
+- **Important:** Missing error handling for specific codes, not preserving system fields, incomplete zone deletion handling, missing proactive zone creation
 - **Minor:** Missing logging, suboptimal patterns, missing defensive defaults in record mapping
 
 For each issue include:

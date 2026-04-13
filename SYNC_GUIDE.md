@@ -99,18 +99,31 @@ func recomputeAllBalances(records: [AccountRecord]) throws {
 
 **Do NOT use `NSManagedObjectContextDidSave` notifications** to drive sync change tracking. This pattern was removed because it is fundamentally unable to distinguish syncable changes from derived-data updates.
 
-### Rule 3: Handle Zone Creation on First Send
+### Rule 3: Create Zones Proactively on Engine Start
 
-**Bug found:** CKSyncEngine does NOT automatically create zones when sending records. The first send to a new zone fails with `CKError.zoneNotFound` (code 26/2036).
+**Bug found:** CKSyncEngine does NOT automatically create zones when sending records. If the zone doesn't exist, sends fail with inconsistent error codes: `.zoneNotFound` (26), `.limitExceeded` (27), `.userDeletedZone` (28), or `.invalidArguments` (12) depending on context. Reactive error handling is unreliable because:
+1. Error codes vary unpredictably
+2. When an entire batch fails, CKSyncEngine may stop retrying
+3. Creating the zone after failure requires re-queuing all failed records
 
-**Rule:** Handle `.zoneNotFound` errors in `sentRecordZoneChanges` by creating the zone and re-queuing the failed record.
+**Rule:** Create the zone proactively in `start()` using `ensureZoneExists()`, then explicitly call `sendChanges()` once the zone is confirmed. Error handlers should still handle `.zoneNotFound` and `.userDeletedZone` as a fallback.
 
 ```swift
-if failed.error.code == .zoneNotFound {
-    Task {
-        let zone = CKRecordZone(zoneID: self.zoneID)
-        try await CKContainer.default().privateCloudDatabase.save(zone)
-        self.syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+// In start():
+Task {
+    await ensureZoneExists()
+    if self.hasPendingChanges {
+        await self.sendChanges()
+    }
+}
+
+// ensureZoneExists:
+func ensureZoneExists() async {
+    do {
+        let zone = CKRecordZone(zoneID: zoneID)
+        _ = try await CKContainer.default().privateCloudDatabase.save(zone)
+    } catch {
+        // Zone already exists or network error — engine will retry on send
     }
 }
 ```
@@ -314,17 +327,19 @@ func handleAccountChange(_ change: CKSyncEngine.Event.AccountChange) {
 
 **Rationale:** CKSyncEngine automatically retries transient errors (network, rate limiting, zone busy). But several error codes require your intervention -- the engine drops the failed item from its queue.
 
-**Rule:** Handle these errors in `sentRecordZoneChanges`:
+**Rule:** Handle these errors in `sentRecordZoneChanges`. Collect zone-missing failures into a single batch for zone creation, and **always re-queue on unexpected errors** (the `default` case) to prevent silent data loss:
 
 ```swift
+var zoneNotFoundSaves: [CKRecord.ID] = []
+
 for failure in sentChanges.failedRecordSaves {
     let error = failure.error
     let recordID = failure.record.recordID
 
     switch error.code {
-    case .zoneNotFound:
-        // Create zone and retry (existing code)
-        createZoneAndRetry(recordID)
+    case .zoneNotFound, .userDeletedZone:
+        // Collect for batch zone creation (Rule 3 fallback)
+        zoneNotFoundSaves.append(recordID)
 
     case .serverRecordChanged:
         // Conflict -- merge and retry (see Rule 6)
@@ -332,23 +347,31 @@ for failure in sentChanges.failedRecordSaves {
 
     case .unknownItem:
         // Record was deleted on server. Clear cached system fields.
-        // If local record still exists, re-upload from scratch.
         clearSystemFields(for: recordID)
         syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
 
     case .quotaExceeded:
-        // User's iCloud is full. Engine pauses AND drops items.
-        // Re-add to pending and notify user.
-        logger.error("iCloud quota exceeded -- sync paused")
+        // User's iCloud is full. Re-add to pending and notify user.
         syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
-        notifyUserQuotaExceeded()
 
     case .limitExceeded:
         // Batch too large. Re-queue -- engine will try smaller batches.
         syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
 
     default:
-        logger.error("Unhandled save error for \(recordID.recordName): \(error)")
+        // Re-queue on unexpected errors. CKSyncEngine drops failed items
+        // from its queue, so not re-queuing means silent data loss.
+        logger.error("Save error (code=\(error.code.rawValue)): \(error) -- re-queuing")
+        syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+    }
+}
+
+// Create zone once and re-queue all affected records
+if !zoneNotFoundSaves.isEmpty {
+    Task {
+        try await createZone()
+        syncEngine?.state.add(
+            pendingRecordZoneChanges: zoneNotFoundSaves.map { .saveRecord($0) })
     }
 }
 ```
@@ -407,6 +430,23 @@ let pendingChanges = syncEngine.state.pendingRecordZoneChanges
         }
     }
 ```
+
+### Rule 13: Limit Batch Size in nextRecordZoneChangeBatch
+
+**Bug found:** CKSyncEngine does NOT chunk batches. Whatever `nextRecordZoneChangeBatch` returns is sent as a single CloudKit operation. CloudKit rejects operations with more than ~400 records (`BatchTooLarge`, internal code 1020). When this happens, the entire batch fails and CKSyncEngine may stop retrying.
+
+**Rule:** Return at most 400 records per call. CKSyncEngine calls `nextRecordZoneChangeBatch` repeatedly until it returns `nil`, so records are processed in chunks across multiple calls.
+
+```swift
+let batchLimit = 400
+let batch = Array(pendingChanges.prefix(batchLimit))
+```
+
+### Rule 14: Queue Records in Dependency Order
+
+**Rationale:** When a receiving device processes incoming records, foreign key references (e.g., a transaction's `accountId`) should point to records that already exist locally. If transactions arrive before accounts, the UI may show orphaned data until the referenced records arrive.
+
+**Rule:** In `queueAllExistingRecords()`, queue records in dependency order: independent records first (categories, accounts, earmarks), then dependent records (budget items, investment values), and transactions last.
 
 ---
 
@@ -492,7 +532,7 @@ CloudKit replays deletion tombstones indefinitely. For apps with high deletion c
 
 ### Batch Limits
 
-- Upload: ~400 records per batch, 1 MB max per batch. CKSyncEngine handles chunking.
+- Upload: ~400 records per batch. **CKSyncEngine does NOT chunk** — `nextRecordZoneChangeBatch` must self-limit to ≤400 records (Rule 13). Exceeding this causes `BatchTooLarge` (internal code 1020) and the entire batch is rejected.
 - Download: much larger (100+ MB observed). The engine handles pagination via change tokens.
 
 ---
@@ -585,13 +625,15 @@ All sync engines use `os.Logger` with the `com.moolah.app` subsystem. Filter by 
 | Symptom | Likely Cause | Diagnosis |
 |---------|-------------|-----------|
 | No delegate events after start | iCloud account not available, or corrupted sync state | Check `CKContainer.default().accountStatus()` |
-| "Zone Not Found" errors | Zone hasn't been created yet | Check `sentRecordZoneChanges` error handling (Rule 3) |
-| Thousands of pending changes | Entity filtering missing, or duplicate queueing | Check `.syncstate` file size (Rule 1) |
+| Zone-related errors (codes 12, 26, 27, 28) | Zone doesn't exist | Check `ensureZoneExists()` ran; check `com.apple.cloudkit` subsystem logs |
+| `BatchTooLarge` / internal code 1020 | `nextRecordZoneChangeBatch` returning >400 records | Verify batch limit in `nextRecordZoneChangeBatch` (Rule 13) |
+| Thousands of pending changes / large syncstate file | Duplicate queueing or failed sends not clearing | Check `.syncstate` file size; check for re-queuing errors in logs |
 | Records sent but not appearing on other devices | Change tag conflict, or second device not fetching | Check for `.serverRecordChanged` errors in logs |
 | Records appear then disappear | Derived-data save triggering sync uploads | Verify only repository mutations call onRecordChanged (Rule 2) |
 | Duplicate records across devices | Record names not derived from stable UUIDs | Check `CKRecord.ID` construction (Rule 10) |
-| Sync works once then stops | State serialization not being saved | Check `.stateUpdate` handler |
+| Sync works once then stops | State serialization not being saved, or records silently dropped | Check `.stateUpdate` handler; check `default` case re-queues (Rule 9) |
 | `.serverRecordChanged` on every upload | Not preserving CKRecord system fields | Check `toCKRecord` implementation (Rule 5) |
+| App jittery during bulk sync | `nextRecordZoneChangeBatch` runs on main actor | Move record lookup to background ModelContext (planned optimization) |
 
 ### CloudKit Dashboard
 
@@ -614,6 +656,9 @@ Use the [CloudKit Dashboard](https://icloud.developer.apple.com/) to:
 | Ignoring `.quotaExceeded` | Engine drops items; sync silently stops | Re-queue items and notify user (Rule 9) |
 | Using `NSManagedObjectContextDidSave` to drive sync | Cannot distinguish user edits from derived-data updates, causes re-upload loops | Queue sync changes explicitly from repository mutations |
 | Maintaining a shadow pending-changes set | Falls out of sync with CKSyncEngine's internal state, causes duplicates | Let CKSyncEngine own pending state; deduplicate in `nextRecordZoneChangeBatch` |
+| Returning all pending records from `nextRecordZoneChangeBatch` | CloudKit rejects batches >400 records with `BatchTooLarge`; CKSyncEngine does NOT chunk | Limit to 400 records per call (Rule 13) |
+| Relying on reactive zone creation in error handlers | Error codes for missing zones are inconsistent (26, 27, 28, 12); batch failures may not be retried | Create zones proactively on engine start (Rule 3) |
+| Silently dropping records in `default` error case | CKSyncEngine removes failed items from its queue; not re-queuing means permanent data loss | Always re-queue on unexpected errors (Rule 9) |
 | Hard-deleting high-churn records | Deletion tombstones replay on fresh devices forever | Use soft-delete flags where practical |
 | Storing enums as integers in CKRecords | Adding new cases breaks older app versions | Store as strings (Rule 11) |
 | `try?` on CloudKit operations without logging | Silent failures make debugging impossible | Log errors with `os.Logger` before discarding |
@@ -674,14 +719,18 @@ let value = ckRecord["newField"] as? String ?? defaultValue
 
 - [ ] Handle all event types in `handleEvent` (especially `.stateUpdate`, `.accountChange`, `.fetchedDatabaseChanges`, `.fetchedRecordZoneChanges`, `.sentRecordZoneChanges`)
 - [ ] Save state serialization on every `.stateUpdate`
-- [ ] Handle `.zoneNotFound` in sent changes
-- [ ] Handle `.serverRecordChanged` with conflict resolution
-- [ ] Handle `.quotaExceeded` by re-queuing and notifying user
-- [ ] Handle `.unknownItem` by clearing cached system fields
+- [ ] Create zone proactively in `start()` with `ensureZoneExists()` (Rule 3)
+- [ ] Handle `.zoneNotFound`/`.userDeletedZone` in sent changes as fallback (Rule 3)
+- [ ] Handle `.serverRecordChanged` with conflict resolution (Rule 6)
+- [ ] Handle `.quotaExceeded` by re-queuing and notifying user (Rule 9)
+- [ ] Handle `.unknownItem` by clearing cached system fields (Rule 9)
+- [ ] Re-queue on unexpected errors in `default` case (Rule 9)
 - [ ] Handle all three zone deletion reasons (deleted, purged, encryptedDataReset)
 - [ ] Handle all three account change types (signIn, signOut, switchAccounts)
 - [ ] Wire repository `onRecordChanged`/`onRecordDeleted` closures to the sync engine in `ProfileSession`
-- [ ] Deduplicate pending changes in `nextRecordZoneChangeBatch`
+- [ ] Deduplicate pending changes in `nextRecordZoneChangeBatch` (Rule 12)
+- [ ] Limit batch size to ≤400 records in `nextRecordZoneChangeBatch` (Rule 13)
+- [ ] Queue records in dependency order in `queueAllExistingRecords` (Rule 14)
 
 ### Before Shipping to Production
 
@@ -697,5 +746,6 @@ let value = ckRecord["newField"] as? String ?? defaultValue
 
 ## Version History
 
+- **1.2** (2026-04-13): Added proactive zone creation (Rule 3 rewritten), batch size limits (Rule 13), dependency ordering (Rule 14), default error re-queuing (Rule 9 updated). Updated anti-patterns, symptoms, and checklists with lessons from production debugging.
 - **1.1** (2026-04-13): Replaced ChangeTracker with explicit repository-driven sync queueing. Removed shadow pending-changes sets. Updated rules 2, 4, 4b, 12 and all checklists.
 - **1.0** (2026-04-13): Comprehensive sync guide -- architecture, rules, error handling, testing, debugging, schema evolution
