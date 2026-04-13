@@ -16,7 +16,7 @@ final class BalanceBenchmarks: XCTestCase {
     _backend = result.backend
     _container = result.container
     try! awaitSync { @MainActor in
-      BenchmarkFixtures.seed(scale: .x1, in: result.container)
+      BenchmarkFixtures.seed(scale: .x2, in: result.container)
     }
   }
 

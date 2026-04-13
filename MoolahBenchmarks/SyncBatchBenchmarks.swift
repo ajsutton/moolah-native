@@ -14,7 +14,7 @@ final class SyncBatchBenchmarks: XCTestCase {
     let result = try! TestBackend.create()
     _container = result.container
     try! awaitSync { @MainActor in
-      BenchmarkFixtures.seed(scale: .x1, in: result.container)
+      BenchmarkFixtures.seed(scale: .x2, in: result.container)
       var descriptor = FetchDescriptor<TransactionRecord>()
       descriptor.fetchLimit = 400
       _existingIds400 = try result.container.mainContext.fetch(descriptor).map(\.id)

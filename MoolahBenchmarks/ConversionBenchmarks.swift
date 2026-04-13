@@ -15,7 +15,7 @@ final class ConversionBenchmarks: XCTestCase {
     super.setUp()
     let result = try! TestBackend.create()
     try! awaitSync { @MainActor in
-      BenchmarkFixtures.seed(scale: .x1, in: result.container)
+      BenchmarkFixtures.seed(scale: .x2, in: result.container)
       let context = result.container.mainContext
       var descriptor = FetchDescriptor<TransactionRecord>()
       descriptor.fetchLimit = 5000
