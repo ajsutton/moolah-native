@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
@@ -16,6 +17,13 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
   }
 
   func fetchAll() async throws -> [Category] {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "CategoryRepo.fetchAll", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "CategoryRepo.fetchAll", signpostID: signpostID)
+    }
     let descriptor = FetchDescriptor<CategoryRecord>(
       sortBy: [SortDescriptor(\.name)]
     )
@@ -26,6 +34,13 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
   }
 
   func create(_ category: Category) async throws -> Category {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "CategoryRepo.create", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "CategoryRepo.create", signpostID: signpostID)
+    }
     let record = CategoryRecord.from(category)
     try await MainActor.run {
       context.insert(record)
@@ -36,6 +51,13 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
   }
 
   func update(_ category: Category) async throws -> Category {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "CategoryRepo.update", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "CategoryRepo.update", signpostID: signpostID)
+    }
     let categoryId = category.id
     let descriptor = FetchDescriptor<CategoryRecord>(
       predicate: #Predicate { $0.id == categoryId }
@@ -53,6 +75,13 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
   }
 
   func delete(id: UUID, withReplacement replacementId: UUID?) async throws {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "CategoryRepo.delete", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "CategoryRepo.delete", signpostID: signpostID)
+    }
     let targetId = id
 
     let descriptor = FetchDescriptor<CategoryRecord>(

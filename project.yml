@@ -34,8 +34,7 @@ settings:
 fileGroups:
   - plans
   - CLAUDE.md
-  - STYLE_GUIDE.md
-  - CONCURRENCY_GUIDE.md
+  - guides
   - BUGS.md
   - justfile
   - project.yml
@@ -112,6 +111,25 @@ targets:
     dependencies:
       - target: Moolah_macOS
 
+  MoolahBenchmarks_macOS:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: MoolahBenchmarks
+      - path: MoolahTests/Support
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: rocks.moolah.benchmarks
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: YES
+        CODE_SIGNING_ALLOWED: YES
+        ENABLE_HARDENED_RUNTIME: NO
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Moolah.app/Contents/MacOS/Moolah"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+    dependencies:
+      - target: Moolah_macOS
+
 schemes:
   Moolah:
     build:
@@ -136,3 +154,12 @@ schemes:
     test:
       targets:
         - MoolahTests_macOS
+
+  Moolah-Benchmarks:
+    build:
+      targets:
+        Moolah_macOS: all
+        MoolahBenchmarks_macOS: [test]
+    test:
+      targets:
+        - MoolahBenchmarks_macOS

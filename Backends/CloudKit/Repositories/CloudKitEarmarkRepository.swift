@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
@@ -18,6 +19,13 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   }
 
   func fetchAll() async throws -> [Earmark] {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "EarmarkRepo.fetchAll", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "EarmarkRepo.fetchAll", signpostID: signpostID)
+    }
     let descriptor = FetchDescriptor<EarmarkRecord>()
     return try await MainActor.run {
       let records = try context.fetch(descriptor)
@@ -29,6 +37,13 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   }
 
   func create(_ earmark: Earmark) async throws -> Earmark {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "EarmarkRepo.create", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "EarmarkRepo.create", signpostID: signpostID)
+    }
     let record = EarmarkRecord.from(earmark, currencyCode: currency.code)
     try await MainActor.run {
       context.insert(record)
@@ -39,6 +54,13 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   }
 
   func update(_ earmark: Earmark) async throws -> Earmark {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "EarmarkRepo.update", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "EarmarkRepo.update", signpostID: signpostID)
+    }
     let earmarkId = earmark.id
     let descriptor = FetchDescriptor<EarmarkRecord>(
       predicate: #Predicate { $0.id == earmarkId }
@@ -61,6 +83,13 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   }
 
   func fetchBudget(earmarkId: UUID) async throws -> [EarmarkBudgetItem] {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "EarmarkRepo.fetchBudget", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "EarmarkRepo.fetchBudget", signpostID: signpostID)
+    }
     let descriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
       predicate: #Predicate { $0.earmarkId == earmarkId }
     )
@@ -71,6 +100,13 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   }
 
   func setBudget(earmarkId: UUID, categoryId: UUID, amount: Int) async throws {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "EarmarkRepo.setBudget", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "EarmarkRepo.setBudget", signpostID: signpostID)
+    }
     let earmarkDescriptor = FetchDescriptor<EarmarkRecord>(
       predicate: #Predicate { $0.id == earmarkId }
     )

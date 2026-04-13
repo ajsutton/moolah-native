@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
@@ -18,12 +19,21 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
   }
 
   func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> TransactionPage {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "TransactionRepo.fetch", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "TransactionRepo.fetch", signpostID: signpostID)
+    }
     return try await MainActor.run {
       // Match moolah-server: when scheduled is not explicitly requested, exclude scheduled
       // transactions. The server always adds `AND recur_period IS NULL` unless scheduled=true.
       let scheduled = filter.scheduled ?? false
 
       // --- Fetch records with predicate push-down ---
+      os_signpost(
+        .begin, log: Signposts.repository, name: "fetch.predicateQuery", signpostID: signpostID)
       let primaryRecords: [TransactionRecord]
       let secondaryRecords: [TransactionRecord]
 
@@ -69,12 +79,16 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         }
         mergedRecords = combined
       }
+      os_signpost(
+        .end, log: Signposts.repository, name: "fetch.predicateQuery", signpostID: signpostID)
 
       // --- In-memory post-filters ---
       // categoryIds and payee can never be pushed into #Predicate, so always apply here.
       // scheduled, dateRange, and earmarkId are pushed down for common combinations,
       // but we re-apply them here as a safety net for fallback cases. When the predicate
       // already filtered these, the in-memory pass is a no-op (nothing to remove).
+      os_signpost(
+        .begin, log: Signposts.repository, name: "fetch.postFilter", signpostID: signpostID)
       var filteredRecords = mergedRecords
 
       if scheduled {
@@ -103,12 +117,15 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
           return recordPayee.lowercased().contains(lowered)
         }
       }
+      os_signpost(.end, log: Signposts.repository, name: "fetch.postFilter", signpostID: signpostID)
 
       // --- Sort by date DESC, then id for stable ordering (matches server) ---
+      os_signpost(.begin, log: Signposts.repository, name: "fetch.sort", signpostID: signpostID)
       filteredRecords.sort { a, b in
         if a.date != b.date { return a.date > b.date }
         return a.id.uuidString < b.id.uuidString
       }
+      os_signpost(.end, log: Signposts.repository, name: "fetch.sort", signpostID: signpostID)
 
       // --- Paginate ---
       let offset = page * pageSize
@@ -122,11 +139,16 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let pageRecords = filteredRecords[offset..<end]
 
       // Convert only the page slice to domain objects (avoid toDomain() on entire dataset)
+      os_signpost(.begin, log: Signposts.repository, name: "fetch.toDomain", signpostID: signpostID)
       let pageTransactions = pageRecords.map { $0.toDomain() }
+      os_signpost(.end, log: Signposts.repository, name: "fetch.toDomain", signpostID: signpostID)
 
       // priorBalance = sum of amounts for all records after the current page (older transactions)
+      os_signpost(
+        .begin, log: Signposts.balance, name: "fetch.priorBalance", signpostID: signpostID)
       let priorBalanceCents = filteredRecords[end...].reduce(0) { $0 + $1.amount }
       let priorBalance = MonetaryAmount(cents: priorBalanceCents, currency: self.currency)
+      os_signpost(.end, log: Signposts.balance, name: "fetch.priorBalance", signpostID: signpostID)
 
       return TransactionPage(
         transactions: pageTransactions, priorBalance: priorBalance, totalCount: totalCount)
@@ -403,6 +425,13 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
   }
 
   func create(_ transaction: Transaction) async throws -> Transaction {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "TransactionRepo.create", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "TransactionRepo.create", signpostID: signpostID)
+    }
     if transaction.type == .transfer {
       guard transaction.toAccountId != nil else {
         throw BackendError.validationFailed("Transfer must have a destination account")
@@ -432,6 +461,13 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
   }
 
   func update(_ transaction: Transaction) async throws -> Transaction {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "TransactionRepo.update", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "TransactionRepo.update", signpostID: signpostID)
+    }
     let txnId = transaction.id
     let descriptor = FetchDescriptor<TransactionRecord>(
       predicate: #Predicate { $0.id == txnId }
@@ -483,6 +519,13 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
   }
 
   func delete(id: UUID) async throws {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "TransactionRepo.delete", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "TransactionRepo.delete", signpostID: signpostID)
+    }
     let descriptor = FetchDescriptor<TransactionRecord>(
       predicate: #Predicate { $0.id == id }
     )
@@ -521,6 +564,15 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
   }
 
   func fetchPayeeSuggestions(prefix: String) async throws -> [String] {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "TransactionRepo.fetchPayeeSuggestions",
+      signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "TransactionRepo.fetchPayeeSuggestions",
+        signpostID: signpostID)
+    }
     guard !prefix.isEmpty else { return [] }
     let descriptor = FetchDescriptor<TransactionRecord>(
       predicate: #Predicate { $0.payee != nil }
