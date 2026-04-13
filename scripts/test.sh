@@ -22,12 +22,14 @@ PLATFORM="${1:-all}"
 # Helpers
 # ---------------------------------------------------------------------------
 
+IOS_SIMULATOR="$(bash "$REPO_ROOT/scripts/find-simulator.sh")"
+
 run_ios() {
-    echo "==> Testing iOS Simulator…"
+    echo "==> Testing iOS Simulator ($IOS_SIMULATOR)…"
     xcodebuild test "${COMMON_ARGS[@]}" \
         -derivedDataPath "$REPO_ROOT/.DerivedData-ios" \
         -scheme Moolah-iOS \
-        -destination "platform=iOS Simulator,name=iPhone 17 Pro"
+        -destination "platform=iOS Simulator,name=$IOS_SIMULATOR"
 }
 
 run_mac() {

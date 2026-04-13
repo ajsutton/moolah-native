@@ -68,9 +68,11 @@ install-mac: generate
 build-ios: generate
     #!/usr/bin/env bash
     set -euo pipefail
+    SIM="$(bash scripts/find-simulator.sh)"
+    echo "==> Building for iOS Simulator ($SIM)…"
     xcodebuild build \
         -scheme Moolah-iOS \
-        -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+        -destination "platform=iOS Simulator,name=$SIM" \
         CODE_SIGNING_ALLOWED=NO
 
 # Regenerate Moolah.xcodeproj from project.yml (run after editing project.yml)
