@@ -442,7 +442,9 @@ final class ProfileSyncEngine: Sendable {
       batchLogger.error("batchUpsertAccounts: fetch failed: \(error)")
       existing = []
     }
-    let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+    // Use a mutable dictionary so inserts within this batch are also tracked.
+    // Without this, duplicate UUIDs in the same incoming batch would all be inserted.
+    var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
     var insertCount = 0
     var updateCount = 0
 
@@ -458,6 +460,7 @@ final class ProfileSyncEngine: Sendable {
         updateCount += 1
       } else {
         context.insert(values)
+        byID[id] = values
         insertCount += 1
       }
     }
@@ -474,7 +477,7 @@ final class ProfileSyncEngine: Sendable {
       return (id, ck)
     }
     let existing = (try? context.fetch(FetchDescriptor<TransactionRecord>())) ?? []
-    let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+    var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
       let values = TransactionRecord.fieldValues(from: ckRecord)
@@ -493,6 +496,7 @@ final class ProfileSyncEngine: Sendable {
         existing.recurEvery = values.recurEvery
       } else {
         context.insert(values)
+        byID[id] = values
       }
     }
   }
@@ -505,7 +509,7 @@ final class ProfileSyncEngine: Sendable {
       return (id, ck)
     }
     let existing = (try? context.fetch(FetchDescriptor<CategoryRecord>())) ?? []
-    let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+    var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
       let values = CategoryRecord.fieldValues(from: ckRecord)
@@ -514,6 +518,7 @@ final class ProfileSyncEngine: Sendable {
         existing.parentId = values.parentId
       } else {
         context.insert(values)
+        byID[id] = values
       }
     }
   }
@@ -526,7 +531,7 @@ final class ProfileSyncEngine: Sendable {
       return (id, ck)
     }
     let existing = (try? context.fetch(FetchDescriptor<EarmarkRecord>())) ?? []
-    let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+    var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
       let values = EarmarkRecord.fieldValues(from: ckRecord)
@@ -540,6 +545,7 @@ final class ProfileSyncEngine: Sendable {
         existing.savingsEndDate = values.savingsEndDate
       } else {
         context.insert(values)
+        byID[id] = values
       }
     }
   }
@@ -552,7 +558,7 @@ final class ProfileSyncEngine: Sendable {
       return (id, ck)
     }
     let existing = (try? context.fetch(FetchDescriptor<EarmarkBudgetItemRecord>())) ?? []
-    let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+    var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
       let values = EarmarkBudgetItemRecord.fieldValues(from: ckRecord)
@@ -563,6 +569,7 @@ final class ProfileSyncEngine: Sendable {
         existing.currencyCode = values.currencyCode
       } else {
         context.insert(values)
+        byID[id] = values
       }
     }
   }
@@ -575,7 +582,7 @@ final class ProfileSyncEngine: Sendable {
       return (id, ck)
     }
     let existing = (try? context.fetch(FetchDescriptor<InvestmentValueRecord>())) ?? []
-    let byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+    var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
       let values = InvestmentValueRecord.fieldValues(from: ckRecord)
@@ -586,6 +593,7 @@ final class ProfileSyncEngine: Sendable {
         existing.currencyCode = values.currencyCode
       } else {
         context.insert(values)
+        byID[id] = values
       }
     }
   }
