@@ -23,7 +23,6 @@ final class ProfileSession: Identifiable {
 
   /// The sync engine for this profile's CloudKit zone (nil for remote profiles).
   private(set) var profileSyncEngine: ProfileSyncEngine?
-  private var changeTracker: ChangeTracker?
 
   nonisolated var id: UUID { profile.id }
 
@@ -130,9 +129,27 @@ final class ProfileSession: Identifiable {
       }
       self.profileSyncEngine = syncEngine
 
-      let tracker = ChangeTracker(syncEngine: syncEngine, modelContainer: profileContainer)
-      tracker.startTracking()
-      self.changeTracker = tracker
+      // Wire repository sync closures — only CloudKit repositories have these properties
+      if let repo = backend.accounts as? CloudKitAccountRepository {
+        repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }
+        repo.onRecordDeleted = { [weak syncEngine] id in syncEngine?.queueDeletion(id: id) }
+      }
+      if let repo = backend.transactions as? CloudKitTransactionRepository {
+        repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }
+        repo.onRecordDeleted = { [weak syncEngine] id in syncEngine?.queueDeletion(id: id) }
+      }
+      if let repo = backend.categories as? CloudKitCategoryRepository {
+        repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }
+        repo.onRecordDeleted = { [weak syncEngine] id in syncEngine?.queueDeletion(id: id) }
+      }
+      if let repo = backend.earmarks as? CloudKitEarmarkRepository {
+        repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }
+        repo.onRecordDeleted = { [weak syncEngine] id in syncEngine?.queueDeletion(id: id) }
+      }
+      if let repo = backend.investments as? CloudKitInvestmentRepository {
+        repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }
+        repo.onRecordDeleted = { [weak syncEngine] id in syncEngine?.queueDeletion(id: id) }
+      }
 
       syncEngine.start()
     }

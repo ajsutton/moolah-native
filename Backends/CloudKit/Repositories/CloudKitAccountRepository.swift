@@ -4,6 +4,8 @@ import SwiftData
 final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
   private let currency: Currency
+  var onRecordChanged: (UUID) -> Void = { _ in }
+  var onRecordDeleted: (UUID) -> Void = { _ in }
 
   init(modelContainer: ModelContainer, currency: Currency) {
     self.modelContainer = modelContainer
@@ -58,11 +60,14 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
         )
         context.insert(txn)
         record.cachedBalance = account.balance.cents
+        try context.save()
+        onRecordChanged(account.id)
+        onRecordChanged(txn.id)
       } else {
         record.cachedBalance = 0
+        try context.save()
+        onRecordChanged(account.id)
       }
-
-      try context.save()
     }
 
     return account
@@ -88,6 +93,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       record.isHidden = account.isHidden
       // Balance is NOT updated — it's computed from transactions
       try context.save()
+      onRecordChanged(account.id)
 
       let balance = try computeBalance(for: accountId)
       let investmentValue =
@@ -116,6 +122,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       // Soft delete
       record.isHidden = true
       try context.save()
+      onRecordChanged(id)
     }
   }
 

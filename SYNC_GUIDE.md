@@ -12,14 +12,14 @@ Two sync layers, each with their own CKSyncEngine instance:
 1. **ProfileIndexSyncEngine** -- syncs `ProfileRecord` metadata via the `profile-index` zone
 2. **ProfileSyncEngine** (one per active profile) -- syncs per-profile data via `profile-{profileId}` zones
 
-Each engine has a corresponding change tracker that observes `NSManagedObjectContextDidSave` notifications to queue local changes for upload.
+Each engine receives change notifications from the repository layer. Repository mutation methods explicitly call sync closures (`onRecordChanged`/`onRecordDeleted`) to queue changes for upload, ensuring only user-initiated mutations trigger sync — not derived-data updates like cached balance recomputation.
 
 **Key files:**
 - `Backends/CloudKit/Sync/ProfileSyncEngine.swift` -- per-profile sync engine
 - `Backends/CloudKit/Sync/ProfileIndexSyncEngine.swift` -- profile index sync engine
-- `Backends/CloudKit/Sync/ChangeTracker.swift` -- observes SwiftData saves, queues for upload
 - `Backends/CloudKit/Sync/RecordMapping.swift` -- CKRecord <-> SwiftData bidirectional mapping
 - `Backends/CloudKit/Sync/LegacyZoneCleanup.swift` -- one-time cleanup of old automatic sync zone
+- `Backends/CloudKit/Repositories/CloudKit*Repository.swift` -- repositories with sync closures
 
 **Key Sources:**
 - [WWDC23: Sync to iCloud with CKSyncEngine](https://developer.apple.com/videos/play/wwdc2023/10188/)
@@ -75,22 +75,29 @@ let inserted = (notification.userInfo?[NSInsertedObjectsKey] as? Set<NSManagedOb
 let inserted = notification.userInfo?[NSInsertedObjectsKey] as? Set<NSManagedObject>
 ```
 
-### Rule 2: Guard Against Re-uploading Remote Changes
+### Rule 2: Only Queue Sync Changes From Repository Mutations
 
-**Bug found:** When `applyRemoteChanges()` saves fetched records to SwiftData, the save notification triggers the change tracker, which queues those records for upload back to CloudKit -- an unnecessary round-trip.
+**Bug found (historical):** A notification-based `ChangeTracker` observed all `NSManagedObjectContextDidSave` events and queued every touched record for upload. It could not distinguish user edits from derived-data updates (e.g., `recomputeAllBalances` writing `cachedBalance`), causing infinite re-upload loops.
 
-**Rule:** Set `isApplyingRemoteChanges = true` before saving remote changes, and check it in the notification observer.
+**Rule:** Sync changes are queued explicitly from repository mutation methods via `onRecordChanged`/`onRecordDeleted` closures, not from save notifications. This ensures only user-initiated mutations trigger uploads. Derived-data writes, balance cache updates, and remote change application never trigger uploads because they don't go through the repository mutation path.
 
 ```swift
-func applyRemoteChanges(...) {
-    isApplyingRemoteChanges = true
-    defer { isApplyingRemoteChanges = false }
-    // ... save to context
+// In a CloudKit repository mutation method:
+func create(_ account: Account) async throws -> Account {
+    // ... save to SwiftData ...
+    try context.save()
+    onRecordChanged(account.id)  // Explicitly queue for sync
+    return account
 }
 
-// In observer:
-guard self?.isApplyingRemoteChanges != true else { return }
+// Derived-data updates do NOT call onRecordChanged:
+func recomputeAllBalances(records: [AccountRecord]) throws {
+    // ... update cachedBalance on records ...
+    try context.save()  // No sync queueing — cachedBalance is local-only
+}
 ```
+
+**Do NOT use `NSManagedObjectContextDidSave` notifications** to drive sync change tracking. This pattern was removed because it is fundamentally unable to distinguish syncable changes from derived-data updates.
 
 ### Rule 3: Handle Zone Creation on First Send
 
@@ -108,17 +115,17 @@ if failed.error.code == .zoneNotFound {
 }
 ```
 
-### Rule 4: Every SwiftData Write Must Be Tracked
+### Rule 4: Every Repository Mutation Must Queue Sync Changes
 
 **Bug found:** `ProfileIndexSyncEngine.addPendingSave()` existed but was never called -- profile records saved to SwiftData were never uploaded to CloudKit.
 
-**Rule:** Every ModelContainer that syncs via CKSyncEngine must have a change tracker wired up. When adding a new syncable record type or container, verify the change tracker covers it.
+**Rule:** Every repository mutation method (create, update, delete) on a CloudKit repository must call `onRecordChanged(id)` or `onRecordDeleted(id)` after saving. When adding a new syncable record type, verify all mutation paths queue sync changes. Methods that only update derived data (caches, computed values) must NOT queue sync changes.
 
 ### Rule 4b: Queue Existing Records on First Start
 
-**Bug found:** Migration imports data into a profile's ModelContainer BEFORE the ProfileSyncEngine and ChangeTracker are created. The `NSManagedObjectContextDidSave` notifications fire during import, but no observer exists yet to catch them. Result: accounts and transactions sync (because the app modifies them after load, e.g., balance recomputation), but categories, earmarks, and investment values are never queued.
+**Bug found:** Migration imports data into a profile's ModelContainer BEFORE the ProfileSyncEngine is created. The repository sync closures are not wired during import, so none of the imported records are queued for upload.
 
-**Rule:** When a sync engine starts with no saved state (`loadStateSerialization()` returns nil), scan all existing records in the local store and queue them for upload.
+**Rule:** When a sync engine starts with no saved state (`loadStateSerialization()` returns nil), scan all existing records in the local store and queue them for upload. This also serves as a recovery mechanism for account sign-in, encrypted data reset, and sync state loss.
 
 ```swift
 func start() {
@@ -380,24 +387,25 @@ record["type"] = TransactionType.expense.rawValue as CKRecordValue
 
 This project already follows this pattern in `RecordMapping.swift`.
 
-### Rule 12: Never Duplicate Record IDs in a Batch
+### Rule 12: Deduplicate Record IDs in Batches
 
-**Rationale:** CloudKit rejects requests that both save and delete the same record ID. The `addPendingChange` methods already handle this by removing from the opposite set.
+**Rationale:** CKSyncEngine's pending list does NOT deduplicate — calling `state.add(pendingRecordZoneChanges:)` multiple times with the same recordID adds multiple entries. This can happen legitimately (e.g., `queueAllExistingRecords` + a repository mutation for the same record).
 
-**Rule:** When adding a save, remove from pending deletions. When adding a deletion, remove from pending saves.
+**Rule:** Deduplicate in `nextRecordZoneChangeBatch` before building the batch. The implementation uses `seenSaves`/`seenDeletes` Sets to filter duplicates from CKSyncEngine's pending changes list.
 
 ```swift
-// Already implemented correctly in ProfileSyncEngine:
-func addPendingChange(_ change: PendingChange) {
-    switch change {
-    case .saveRecord(let recordID):
-        pendingSaves.insert(recordID)
-        pendingDeletions.remove(recordID)  // Prevent duplicate
-    case .deleteRecord(let recordID):
-        pendingDeletions.insert(recordID)
-        pendingSaves.remove(recordID)      // Prevent duplicate
+// In nextRecordZoneChangeBatch:
+var seenSaves = Set<CKRecord.ID>()
+var seenDeletes = Set<CKRecord.ID>()
+let pendingChanges = syncEngine.state.pendingRecordZoneChanges
+    .filter { scope.contains($0) }
+    .filter { change in
+        switch change {
+        case .saveRecord(let id): return seenSaves.insert(id).inserted
+        case .deleteRecord(let id): return seenDeletes.insert(id).inserted
+        @unknown default: return true
+        }
     }
-}
 ```
 
 ---
@@ -456,10 +464,11 @@ protocol CloudKitRecordConvertible {
 1. Create the SwiftData `@Model` class.
 2. Add `CloudKitRecordConvertible` conformance in `RecordMapping.swift`.
 3. Add the record type to `RecordTypeRegistry.allTypes`.
-4. Add the entity name to `ChangeTracker`'s `profileDataEntities` set.
+4. Add `onRecordChanged`/`onRecordDeleted` closure calls to every mutation method in the CloudKit repository.
 5. Add upsert and fetch methods to `ProfileSyncEngine`.
 6. Add cases to `applyRemoteSave` and `applyRemoteDeletion` switch statements.
-7. **Test:** Verify the change tracker captures saves for the new entity type.
+7. Add the new record type to `queueAllExistingRecords()` in `ProfileSyncEngine`.
+8. **Test:** Verify repository mutations trigger the sync closures.
 
 ---
 
@@ -498,7 +507,7 @@ Test the sync layer separately from the persistence layer:
 |-------|-------------|-----|
 | SwiftData repositories | CRUD, filtering, sorting | `TestBackend` with in-memory SwiftData |
 | Record mapping | CKRecord <-> SwiftData conversion | Unit tests, no CloudKit |
-| Change tracker | Correct entities tracked, remote changes skipped | In-memory SwiftData + mock sync engine |
+| Repository sync closures | Correct records queued on mutations | Mock closure that records calls |
 | Sync engine delegate | Event handling, error recovery | `automaticallySync: false` or protocol abstraction |
 
 ### Testing Record Mapping
@@ -513,23 +522,23 @@ func testAccountRecordRoundTrip() {
 }
 ```
 
-### Testing Change Tracker
+### Testing Repository Sync Closures
 
-Use in-memory SwiftData and verify the change tracker queues the right pending changes:
+Verify that repository mutations trigger the sync closures with the correct IDs:
 
 ```swift
 @MainActor
-func testLocalSaveQueuesUpload() async throws {
+func testCreateQueuesSync() async throws {
     let (backend, _, _) = try TestBackend.create()
-    let syncEngine = ProfileSyncEngine(profileId: testProfileId, modelContainer: backend.modelContainer)
-    let tracker = ChangeTracker(syncEngine: syncEngine, modelContainer: backend.modelContainer)
-    tracker.startTracking()
+    let repo = backend.accounts as! CloudKitAccountRepository
 
-    // Save a record to SwiftData
-    _ = try await backend.accounts.create(testAccount)
+    var changedIds: [UUID] = []
+    repo.onRecordChanged = { changedIds.append($0) }
 
-    // Verify it was queued for upload
-    #expect(syncEngine.hasPendingChanges)
+    let account = Account(id: UUID(), name: "Test", ...)
+    _ = try await repo.create(account)
+
+    #expect(changedIds.contains(account.id))
 }
 ```
 
@@ -569,11 +578,6 @@ All sync engines use `os.Logger` with the `com.moolah.app` subsystem. Filter by 
 /usr/bin/log stream \
   --predicate 'subsystem == "com.moolah.app" && category == "ProfileSyncEngine"' \
   --level debug --style compact --timeout 45s
-
-# Change tracker
-/usr/bin/log stream \
-  --predicate 'subsystem == "com.moolah.app" && category == "ChangeTracker"' \
-  --level debug --style compact --timeout 45s
 ```
 
 ### Common Symptoms and Diagnosis
@@ -582,9 +586,9 @@ All sync engines use `os.Logger` with the `com.moolah.app` subsystem. Filter by 
 |---------|-------------|-----------|
 | No delegate events after start | iCloud account not available, or corrupted sync state | Check `CKContainer.default().accountStatus()` |
 | "Zone Not Found" errors | Zone hasn't been created yet | Check `sentRecordZoneChanges` error handling (Rule 3) |
-| Thousands of pending changes | Entity filtering missing | Check `.syncstate` file size (Rule 1) |
+| Thousands of pending changes | Entity filtering missing, or duplicate queueing | Check `.syncstate` file size (Rule 1) |
 | Records sent but not appearing on other devices | Change tag conflict, or second device not fetching | Check for `.serverRecordChanged` errors in logs |
-| Records appear then disappear | Re-upload loop from missing `isApplyingRemoteChanges` guard | Check change tracker filtering (Rule 2) |
+| Records appear then disappear | Derived-data save triggering sync uploads | Verify only repository mutations call onRecordChanged (Rule 2) |
 | Duplicate records across devices | Record names not derived from stable UUIDs | Check `CKRecord.ID` construction (Rule 10) |
 | Sync works once then stops | State serialization not being saved | Check `.stateUpdate` handler |
 | `.serverRecordChanged` on every upload | Not preserving CKRecord system fields | Check `toCKRecord` implementation (Rule 5) |
@@ -608,6 +612,8 @@ Use the [CloudKit Dashboard](https://icloud.developer.apple.com/) to:
 | Creating fresh CKRecords without system fields | Every upload triggers `.serverRecordChanged` | Preserve and reuse `encodedSystemFields` |
 | Ignoring `.serverRecordChanged` errors | Second device's changes silently lost | Implement conflict resolution (Rule 6) |
 | Ignoring `.quotaExceeded` | Engine drops items; sync silently stops | Re-queue items and notify user (Rule 9) |
+| Using `NSManagedObjectContextDidSave` to drive sync | Cannot distinguish user edits from derived-data updates, causes re-upload loops | Queue sync changes explicitly from repository mutations |
+| Maintaining a shadow pending-changes set | Falls out of sync with CKSyncEngine's internal state, causes duplicates | Let CKSyncEngine own pending state; deduplicate in `nextRecordZoneChangeBatch` |
 | Hard-deleting high-churn records | Deletion tombstones replay on fresh devices forever | Use soft-delete flags where practical |
 | Storing enums as integers in CKRecords | Adding new cases breaks older app versions | Store as strings (Rule 11) |
 | `try?` on CloudKit operations without logging | Silent failures make debugging impossible | Log errors with `os.Logger` before discarding |
@@ -657,11 +663,12 @@ let value = ckRecord["newField"] as? String ?? defaultValue
 
 - [ ] Add `CloudKitRecordConvertible` conformance in `RecordMapping.swift`
 - [ ] Add to `RecordTypeRegistry.allTypes`
-- [ ] Add entity name to `ChangeTracker.profileDataEntities`
+- [ ] Add `onRecordChanged`/`onRecordDeleted` calls to every mutation method in the CloudKit repository
 - [ ] Add upsert/fetch methods to the sync engine
 - [ ] Add cases to `applyRemoteSave` and `applyRemoteDeletion`
+- [ ] Add the record type to `queueAllExistingRecords()` in `ProfileSyncEngine`
 - [ ] Write round-trip mapping tests
-- [ ] Verify change tracker captures saves for this entity
+- [ ] Verify repository mutations trigger sync closures with correct IDs
 
 ### For Every Sync Engine
 
@@ -673,9 +680,8 @@ let value = ckRecord["newField"] as? String ?? defaultValue
 - [ ] Handle `.unknownItem` by clearing cached system fields
 - [ ] Handle all three zone deletion reasons (deleted, purged, encryptedDataReset)
 - [ ] Handle all three account change types (signIn, signOut, switchAccounts)
-- [ ] Filter change tracker notifications by entity type
-- [ ] Guard against re-uploading remote changes (`isApplyingRemoteChanges`)
-- [ ] Prevent duplicate record IDs in batches (save removes from deletions, delete removes from saves)
+- [ ] Wire repository `onRecordChanged`/`onRecordDeleted` closures to the sync engine in `ProfileSession`
+- [ ] Deduplicate pending changes in `nextRecordZoneChangeBatch`
 
 ### Before Shipping to Production
 
@@ -691,4 +697,5 @@ let value = ckRecord["newField"] as? String ?? defaultValue
 
 ## Version History
 
+- **1.1** (2026-04-13): Replaced ChangeTracker with explicit repository-driven sync queueing. Removed shadow pending-changes sets. Updated rules 2, 4, 4b, 12 and all checklists.
 - **1.0** (2026-04-13): Comprehensive sync guide -- architecture, rules, error handling, testing, debugging, schema evolution

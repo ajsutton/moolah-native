@@ -4,6 +4,8 @@ import SwiftData
 final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
   private let currency: Currency
+  var onRecordChanged: (UUID) -> Void = { _ in }
+  var onRecordDeleted: (UUID) -> Void = { _ in }
 
   init(modelContainer: ModelContainer, currency: Currency) {
     self.modelContainer = modelContainer
@@ -47,13 +49,16 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
       if let existing = try context.fetch(descriptor).first {
         existing.value = value.cents
         existing.currencyCode = value.currency.code
+        try context.save()
+        onRecordChanged(existing.id)
       } else {
         let record = InvestmentValueRecord(
           accountId: accountId, date: date,
           value: value.cents, currencyCode: value.currency.code)
         context.insert(record)
+        try context.save()
+        onRecordChanged(record.id)
       }
-      try context.save()
     }
   }
 
@@ -68,8 +73,10 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
       guard let record = try context.fetch(descriptor).first else {
         throw BackendError.notFound("Investment value not found")
       }
+      let deletedId = record.id
       context.delete(record)
       try context.save()
+      onRecordDeleted(deletedId)
     }
   }
 

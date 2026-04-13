@@ -4,6 +4,8 @@ import SwiftData
 final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
   private let currency: Currency
+  var onRecordChanged: (UUID) -> Void = { _ in }
+  var onRecordDeleted: (UUID) -> Void = { _ in }
 
   init(modelContainer: ModelContainer, currency: Currency) {
     self.modelContainer = modelContainer
@@ -424,6 +426,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       }
 
       try context.save()
+      onRecordChanged(transaction.id)
     }
     return transaction
   }
@@ -474,6 +477,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       }
 
       try context.save()
+      onRecordChanged(transaction.id)
     }
     return transaction
   }
@@ -500,6 +504,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
 
       context.delete(record)
       try context.save()
+      onRecordDeleted(id)
     }
   }
 

@@ -3,6 +3,8 @@ import SwiftData
 
 final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
+  var onRecordChanged: (UUID) -> Void = { _ in }
+  var onRecordDeleted: (UUID) -> Void = { _ in }
 
   init(modelContainer: ModelContainer) {
     self.modelContainer = modelContainer
@@ -28,6 +30,7 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
     try await MainActor.run {
       context.insert(record)
       try context.save()
+      onRecordChanged(category.id)
     }
     return category
   }
@@ -44,6 +47,7 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
       record.name = category.name
       record.parentId = category.parentId
       try context.save()
+      onRecordChanged(category.id)
     }
     return category
   }
@@ -84,6 +88,8 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
         predicate: #Predicate { $0.categoryId == deletedId }
       )
       let affectedBudgets = try context.fetch(budgetDescriptor)
+      var deletedBudgetIds: [UUID] = []
+      var updatedBudgetIds: [UUID] = []
       for budget in affectedBudgets {
         if let replacementId {
           // If replacement already has a budget for this earmark, drop the old one
@@ -94,17 +100,27 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
             }
           )
           if try context.fetch(existingDescriptor).first != nil {
+            deletedBudgetIds.append(budget.id)
             context.delete(budget)
           } else {
+            updatedBudgetIds.append(budget.id)
             budget.categoryId = replacementId
           }
         } else {
+          deletedBudgetIds.append(budget.id)
           context.delete(budget)
         }
       }
 
       context.delete(record)
       try context.save()
+
+      // Queue sync changes for all affected records
+      onRecordDeleted(id)
+      for child in children { onRecordChanged(child.id) }
+      for txn in affectedTxns { onRecordChanged(txn.id) }
+      for budgetId in deletedBudgetIds { onRecordDeleted(budgetId) }
+      for budgetId in updatedBudgetIds { onRecordChanged(budgetId) }
     }
   }
 }

@@ -4,6 +4,8 @@ import SwiftData
 final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
   private let currency: Currency
+  var onRecordChanged: (UUID) -> Void = { _ in }
+  var onRecordDeleted: (UUID) -> Void = { _ in }
 
   init(modelContainer: ModelContainer, currency: Currency) {
     self.modelContainer = modelContainer
@@ -31,6 +33,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
     try await MainActor.run {
       context.insert(record)
       try context.save()
+      onRecordChanged(earmark.id)
     }
     return earmark
   }
@@ -52,6 +55,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       record.savingsStartDate = earmark.savingsStartDate
       record.savingsEndDate = earmark.savingsEndDate
       try context.save()
+      onRecordChanged(earmark.id)
     }
     return earmark
   }
@@ -84,10 +88,17 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       let existing = try context.fetch(budgetDescriptor).first
 
       if amount == 0 {
-        if let existing { context.delete(existing) }
+        if let existing {
+          let deletedId = existing.id
+          context.delete(existing)
+          try context.save()
+          onRecordDeleted(deletedId)
+        }
       } else if let existing {
         existing.amount = amount
         existing.currencyCode = currency.code
+        try context.save()
+        onRecordChanged(existing.id)
       } else {
         let record = EarmarkBudgetItemRecord(
           earmarkId: earmarkId,
@@ -96,8 +107,9 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
           currencyCode: currency.code
         )
         context.insert(record)
+        try context.save()
+        onRecordChanged(record.id)
       }
-      try context.save()
     }
   }
 

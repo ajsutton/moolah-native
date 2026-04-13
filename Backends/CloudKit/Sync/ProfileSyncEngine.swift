@@ -18,8 +18,6 @@ final class ProfileSyncEngine: Sendable {
 
   private nonisolated let logger = Logger(
     subsystem: "com.moolah.app", category: "ProfileSyncEngine")
-  private var pendingSaves: Set<CKRecord.ID> = []
-  private var pendingDeletions: Set<CKRecord.ID> = []
   private var syncEngine: CKSyncEngine?
 
   /// Whether the underlying CKSyncEngine has been started.
@@ -38,7 +36,7 @@ final class ProfileSyncEngine: Sendable {
   private var systemFieldsCache: [String: Data] = [:]
 
   var hasPendingChanges: Bool {
-    !pendingSaves.isEmpty || !pendingDeletions.isEmpty
+    syncEngine.map { !$0.state.pendingRecordZoneChanges.isEmpty } ?? false
   }
 
   init(profileId: UUID, modelContainer: ModelContainer) {
@@ -53,6 +51,10 @@ final class ProfileSyncEngine: Sendable {
   // MARK: - Lifecycle
 
   /// Starts the CKSyncEngine. Call this after the profile is fully set up.
+  /// Zone creation is async — the engine starts immediately but records won't
+  /// send successfully until the zone exists. On first launch this is fine because
+  /// `queueAllExistingRecords` runs synchronously and the zone creation completes
+  /// before CKSyncEngine schedules its first send.
   func start() {
     guard !isRunning else { return }
 
@@ -72,7 +74,25 @@ final class ProfileSyncEngine: Sendable {
     // This handles the case where data was imported before the sync engine started
     // (e.g., migration imports data, then ProfileSession creates the sync engine).
     if isFirstLaunch {
+      logger.info("First launch — scanning for existing records to queue")
       queueAllExistingRecords()
+    } else {
+      logger.info(
+        "Resuming with saved state — \(self.syncEngine?.state.pendingRecordZoneChanges.count ?? 0) pending changes"
+      )
+    }
+
+    // Ensure the zone exists, then trigger a send.
+    // CKSyncEngine does not create zones automatically. If it attempts to send
+    // before the zone exists, records fail with invalidArguments/zoneNotFound
+    // and the engine stops retrying. After zone creation, we explicitly send
+    // to flush any pending records.
+    Task {
+      await ensureZoneExists()
+      if self.hasPendingChanges {
+        self.logger.info("Zone ready — sending pending changes")
+        await self.sendChanges()
+      }
     }
   }
 
@@ -85,19 +105,20 @@ final class ProfileSyncEngine: Sendable {
     let context = ModelContext(modelContainer)
     var total = 0
 
-    if let records = try? context.fetch(FetchDescriptor<AccountRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
-    if let records = try? context.fetch(FetchDescriptor<TransactionRecord>()) {
-      for r in records {
-        queuePendingSave(for: r.id)
-        total += 1
-      }
-    }
+    // Queue in dependency order (matches migration import order):
+    // 1. Categories (no dependencies)
+    // 2. Accounts (no dependencies)
+    // 3. Earmarks (no dependencies)
+    // 4. Budget items (reference earmarks + categories)
+    // 5. Investment values (reference accounts)
+    // 6. Transactions last (reference accounts, categories, earmarks)
     if let records = try? context.fetch(FetchDescriptor<CategoryRecord>()) {
+      for r in records {
+        queuePendingSave(for: r.id)
+        total += 1
+      }
+    }
+    if let records = try? context.fetch(FetchDescriptor<AccountRecord>()) {
       for r in records {
         queuePendingSave(for: r.id)
         total += 1
@@ -121,6 +142,12 @@ final class ProfileSyncEngine: Sendable {
         total += 1
       }
     }
+    if let records = try? context.fetch(FetchDescriptor<TransactionRecord>()) {
+      for r in records {
+        queuePendingSave(for: r.id)
+        total += 1
+      }
+    }
 
     if total > 0 {
       logger.info("Queued \(total) existing records for initial upload")
@@ -128,8 +155,21 @@ final class ProfileSyncEngine: Sendable {
   }
 
   private func queuePendingSave(for id: UUID) {
-    let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
-    addPendingChange(.saveRecord(recordID))
+    queueSave(id: id)
+  }
+
+  /// Creates the CloudKit record zone if it doesn't already exist.
+  private func ensureZoneExists() async {
+    do {
+      let zone = CKRecordZone(zoneID: zoneID)
+      _ = try await CKContainer.default().privateCloudDatabase.save(zone)
+      logger.info("Ensured zone exists: \(self.zoneID.zoneName)")
+    } catch let error as CKError where error.code == .serverRecordChanged {
+      // Zone already exists — this is fine
+      logger.info("Zone already exists: \(self.zoneID.zoneName)")
+    } catch {
+      logger.error("Failed to ensure zone exists: \(error)")
+    }
   }
 
   /// Stops the sync engine. Call during profile deactivation or app termination.
@@ -163,40 +203,18 @@ final class ProfileSyncEngine: Sendable {
 
   // MARK: - Pending Changes
 
-  enum PendingChange {
-    case saveRecord(CKRecord.ID)
-    case deleteRecord(CKRecord.ID)
+  /// Queues a record for upload to CloudKit.
+  /// CKSyncEngine's pending list may accumulate duplicates; these are
+  /// deduplicated in `nextRecordZoneChangeBatch` before sending.
+  func queueSave(id: UUID) {
+    let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
   }
 
-  func addPendingChange(_ change: PendingChange) {
-    // Only add to CKSyncEngine's pending list if not already tracked.
-    // CKSyncEngine does NOT deduplicate — adding the same recordID multiple times
-    // causes multiple upload attempts, each potentially creating a new server record
-    // if system fields haven't been cached yet from the first upload's response.
-    switch change {
-    case .saveRecord(let recordID):
-      let isNew = pendingSaves.insert(recordID).inserted
-      pendingDeletions.remove(recordID)
-      guard isNew else { return }
-    case .deleteRecord(let recordID):
-      let isNew = pendingDeletions.insert(recordID).inserted
-      pendingSaves.remove(recordID)
-      guard isNew else { return }
-    }
-
-    // Tell the sync engine it has work to do
-    if let syncEngine {
-      switch change {
-      case .saveRecord(let recordID):
-        syncEngine.state.add(pendingRecordZoneChanges: [
-          .saveRecord(recordID)
-        ])
-      case .deleteRecord(let recordID):
-        syncEngine.state.add(pendingRecordZoneChanges: [
-          .deleteRecord(recordID)
-        ])
-      }
-    }
+  /// Queues a record for deletion from CloudKit.
+  func queueDeletion(id: UUID) {
+    let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    syncEngine?.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
   }
 
   // MARK: - Building CKRecords
@@ -663,7 +681,7 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
   ) -> CKSyncEngine.RecordZoneChangeBatch? {
     let scope = context.options.scope
     // CKSyncEngine's pending list can contain duplicate recordIDs if the same
-    // record was queued multiple times (e.g. queueAllExistingRecords + ChangeTracker).
+    // record was queued multiple times (e.g. queueAllExistingRecords + repository mutation).
     // Deduplicate by recordID to avoid creating duplicate server records.
     var seenSaves = Set<CKRecord.ID>()
     var seenDeletes = Set<CKRecord.ID>()
@@ -679,17 +697,100 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
 
     guard !pendingChanges.isEmpty else { return nil }
 
+    // CloudKit limits batches to ~400 records. CKSyncEngine calls this method
+    // repeatedly until we return nil, so we process a chunk each time.
+    let batchLimit = 400
+    let batch = Array(pendingChanges.prefix(batchLimit))
+
+    // Collect UUIDs that need saving so we can batch-load records
+    let saveRecordIDs: [(CKRecord.ID, UUID)] = batch.compactMap { change in
+      guard case .saveRecord(let recordID) = change,
+        let uuid = UUID(uuidString: recordID.recordName)
+      else { return nil }
+      return (recordID, uuid)
+    }
+
+    // Batch-load records by type (6 fetches total, not N*6)
+    let recordLookup = buildBatchRecordLookup(for: Set(saveRecordIDs.map(\.1)))
+
+    logger.info(
+      "Preparing batch: \(batch.count) changes (\(saveRecordIDs.count) saves), \(pendingChanges.count) total pending"
+    )
+
     return CKSyncEngine.RecordZoneChangeBatch(
-      recordsToSave: pendingChanges.compactMap { change -> CKRecord? in
-        guard case .saveRecord(let recordID) = change else { return nil }
-        return self.recordToSave(for: recordID)
+      recordsToSave: saveRecordIDs.compactMap { recordID, uuid in
+        recordLookup[uuid]
       },
-      recordIDsToDelete: pendingChanges.compactMap { change -> CKRecord.ID? in
+      recordIDsToDelete: batch.compactMap { change -> CKRecord.ID? in
         guard case .deleteRecord(let recordID) = change else { return nil }
         return recordID
       },
       atomicByZone: true
     )
+  }
+
+  /// Looks up records by UUID for a batch of pending changes.
+  /// For small batches (≤400), does individual lookups per record.
+  /// For large batches, loads all records per type and filters.
+  private func buildBatchRecordLookup(for uuids: Set<UUID>) -> [UUID: CKRecord] {
+    let context = ModelContext(modelContainer)
+    var lookup: [UUID: CKRecord] = [:]
+
+    // For typical batch sizes (≤400), individual lookups are fast enough
+    // and avoid loading entire tables into memory.
+    // Check the most common record types first (transactions and investment
+    // values make up the vast majority of records).
+    for uuid in uuids {
+      if let r = try? context.fetch(
+        FetchDescriptor<TransactionRecord>(
+          predicate: #Predicate { $0.id == uuid })
+      ).first {
+        lookup[uuid] = buildCKRecord(for: r)
+        continue
+      }
+      if let r = try? context.fetch(
+        FetchDescriptor<InvestmentValueRecord>(
+          predicate: #Predicate { $0.id == uuid })
+      ).first {
+        lookup[uuid] = buildCKRecord(for: r)
+        continue
+      }
+      if let r = try? context.fetch(
+        FetchDescriptor<AccountRecord>(
+          predicate: #Predicate { $0.id == uuid })
+      ).first {
+        lookup[uuid] = buildCKRecord(for: r)
+        continue
+      }
+      if let r = try? context.fetch(
+        FetchDescriptor<CategoryRecord>(
+          predicate: #Predicate { $0.id == uuid })
+      ).first {
+        lookup[uuid] = buildCKRecord(for: r)
+        continue
+      }
+      if let r = try? context.fetch(
+        FetchDescriptor<EarmarkRecord>(
+          predicate: #Predicate { $0.id == uuid })
+      ).first {
+        lookup[uuid] = buildCKRecord(for: r)
+        continue
+      }
+      if let r = try? context.fetch(
+        FetchDescriptor<EarmarkBudgetItemRecord>(
+          predicate: #Predicate { $0.id == uuid })
+      ).first {
+        lookup[uuid] = buildCKRecord(for: r)
+        continue
+      }
+    }
+
+    let missing = uuids.count - lookup.count
+    if missing > 0 {
+      logger.warning("Batch lookup: \(missing) of \(uuids.count) records not found in local store")
+    }
+
+    return lookup
   }
 
   // MARK: - Event Handlers
@@ -757,35 +858,25 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     // Cache system fields for successfully sent records (Rule 5).
     // This preserves the change tag for subsequent uploads.
     for saved in sentChanges.savedRecords {
-      pendingSaves.remove(saved.recordID)
       systemFieldsCache[saved.recordID.recordName] = saved.encodedSystemFields
     }
     saveSystemFieldsCache()
 
     for deleted in sentChanges.deletedRecordIDs {
-      pendingDeletions.remove(deleted)
       systemFieldsCache.removeValue(forKey: deleted.recordName)
     }
 
     // Handle failed saves with specific error recovery (Rules 3, 6, 9)
+    // Collect zone-missing records to handle in a single zone creation
+    var zoneNotFoundSaves: [CKRecord.ID] = []
+    var zoneNotFoundDeletes: [CKRecord.ID] = []
+
     for failure in sentChanges.failedRecordSaves {
       let recordID = failure.record.recordID
-      logger.error(
-        "Failed to save record \(recordID.recordName): \(failure.error)")
 
       switch failure.error.code {
-      case .zoneNotFound:
-        logger.info("Zone not found — creating zone and retrying")
-        Task {
-          do {
-            let zone = CKRecordZone(zoneID: self.zoneID)
-            try await CKContainer.default().privateCloudDatabase.save(zone)
-            self.logger.info("Created zone \(self.zoneID.zoneName)")
-            self.syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
-          } catch {
-            self.logger.error("Failed to create zone: \(error)")
-          }
-        }
+      case .zoneNotFound, .userDeletedZone:
+        zoneNotFoundSaves.append(recordID)
 
       case .serverRecordChanged:
         // Conflict: another device modified this record. Accept the server's
@@ -812,24 +903,45 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
         syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
 
       default:
-        break
+        // Re-queue for retry on unexpected errors. CKSyncEngine handles transient
+        // errors (network, rate limiting) automatically, but other errors drop the
+        // record from the queue. Re-queuing ensures we don't silently lose data.
+        logger.error(
+          "Save error (code=\(failure.error.code.rawValue)) for \(recordID.recordName): \(failure.error) — re-queuing"
+        )
+        syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
       }
     }
 
     // Handle failed deletes
     for (recordID, error) in sentChanges.failedRecordDeletes {
-      logger.error(
-        "Failed to delete record \(recordID.recordName): \(error)")
+      if error.code == .zoneNotFound || error.code == .userDeletedZone {
+        zoneNotFoundDeletes.append(recordID)
+      } else {
+        logger.error(
+          "Failed to delete record \(recordID.recordName): \(error)")
+      }
+    }
 
-      if error.code == .zoneNotFound {
-        Task {
-          do {
-            let zone = CKRecordZone(zoneID: self.zoneID)
-            try await CKContainer.default().privateCloudDatabase.save(zone)
-            self.syncEngine?.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
-          } catch {
-            self.logger.error("Failed to create zone for delete retry: \(error)")
-          }
+    // Create zone once and re-queue all affected records
+    if !zoneNotFoundSaves.isEmpty || !zoneNotFoundDeletes.isEmpty {
+      let saveCount = zoneNotFoundSaves.count
+      let deleteCount = zoneNotFoundDeletes.count
+      logger.info(
+        "Zone missing — creating zone and re-queuing \(saveCount) saves, \(deleteCount) deletes")
+      Task {
+        do {
+          let zone = CKRecordZone(zoneID: self.zoneID)
+          try await CKContainer.default().privateCloudDatabase.save(zone)
+          self.logger.info("Created zone \(self.zoneID.zoneName)")
+          let pendingSaves: [CKSyncEngine.PendingRecordZoneChange] =
+            zoneNotFoundSaves.map { .saveRecord($0) }
+          let pendingDeletes: [CKSyncEngine.PendingRecordZoneChange] =
+            zoneNotFoundDeletes.map { .deleteRecord($0) }
+          self.syncEngine?.state.add(
+            pendingRecordZoneChanges: pendingSaves + pendingDeletes)
+        } catch {
+          self.logger.error("Failed to create zone: \(error)")
         }
       }
     }
