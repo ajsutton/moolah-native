@@ -3,6 +3,61 @@ import OSLog
 import Observation
 import SwiftData
 
+// MARK: - Migration Profile Naming
+
+/// Pure naming logic for migration: determines labels for source (Remote) and target (iCloud) profiles.
+enum MigrationProfileNaming {
+  private static let remoteSuffix = " (Remote)"
+  private static let iCloudSuffix = " (iCloud)"
+
+  /// Label for the original remote profile: appends "(Remote)" unless it already ends with it.
+  static func sourceLabel(for label: String) -> String {
+    if label.hasSuffix(remoteSuffix) {
+      return label
+    }
+    return label + remoteSuffix
+  }
+
+  /// Label for the new iCloud profile: replaces trailing "(Remote)" with "(iCloud)", or appends "(iCloud)".
+  static func targetLabel(for label: String) -> String {
+    if label.hasSuffix(remoteSuffix) {
+      return String(label.dropLast(remoteSuffix.count)) + iCloudSuffix
+    }
+    if label.hasSuffix(iCloudSuffix) {
+      return label
+    }
+    return label + iCloudSuffix
+  }
+
+  /// Returns `name` if it is not in `existingLabels`, otherwise appends " 2", " 3", etc.
+  static func uniqueName(_ name: String, among existingLabels: [String]) -> String {
+    let existing = Set(existingLabels)
+    if !existing.contains(name) { return name }
+    var counter = 2
+    while existing.contains("\(name) \(counter)") {
+      counter += 1
+    }
+    return "\(name) \(counter)"
+  }
+
+  /// Returns `(sourceLabel, targetLabel)` with deduplication against existing profile labels.
+  static func migratedLabels(
+    sourceLabel: String,
+    existingLabels: [String]
+  ) -> (source: String, target: String) {
+    let rawSource = self.sourceLabel(for: sourceLabel)
+    let rawTarget = self.targetLabel(for: sourceLabel)
+
+    let dedupedTarget = uniqueName(rawTarget, among: existingLabels)
+    // For source dedup, also exclude the original sourceLabel since it will be renamed
+    let dedupedSource = uniqueName(rawSource, among: existingLabels)
+
+    return (dedupedSource, dedupedTarget)
+  }
+}
+
+// MARK: - Migration Coordinator
+
 @Observable
 @MainActor
 final class MigrationCoordinator {
@@ -52,11 +107,16 @@ final class MigrationCoordinator {
         }
       }
 
-      // 2. Create a new iCloud profile
+      // 2. Create a new iCloud profile with migration naming
+      let existingLabels = profileStore.profiles.map(\.label)
+      let (sourceLabel, targetLabel) = MigrationProfileNaming.migratedLabels(
+        sourceLabel: sourceProfile.label,
+        existingLabels: existingLabels
+      )
       let newProfileId = UUID()
       let newProfile = Profile(
         id: newProfileId,
-        label: sourceProfile.label,
+        label: targetLabel,
         backendType: .cloudKit,
         currencyCode: sourceProfile.currencyCode,
         financialYearStartMonth: sourceProfile.financialYearStartMonth
@@ -109,9 +169,9 @@ final class MigrationCoordinator {
         return
       }
 
-      // 5. Rename the source profile to indicate it has been migrated
+      // 5. Rename the source profile to indicate it is the remote copy
       var updatedSource = sourceProfile
-      updatedSource.label = "\(sourceProfile.label) (Migrated)"
+      updatedSource.label = sourceLabel
       profileStore.updateProfile(updatedSource)
 
       // 6. Switch to the new iCloud profile
