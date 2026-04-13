@@ -1,68 +1,47 @@
-import Foundation
-import Testing
+import XCTest
 
 @testable import Moolah
 
-@Suite("Currency")
-struct CurrencyTests {
-  @Test func audHasCorrectCode() {
+final class CurrencyTests: XCTestCase {
+  func testFromCode_AUD() {
     let currency = Currency.from(code: "AUD")
-    #expect(currency.code == "AUD")
+    XCTAssertEqual(currency.code, "AUD")
+    XCTAssertEqual(currency.decimals, 2)
+    XCTAssertFalse(currency.symbol.isEmpty)
   }
 
-  @Test func audHasTwoDecimals() {
-    let currency = Currency.from(code: "AUD")
-    #expect(currency.decimals == 2)
-  }
-
-  @Test func audHasNonEmptySymbol() {
-    let currency = Currency.from(code: "AUD")
-    #expect(!currency.symbol.isEmpty)
-  }
-
-  @Test func usdHasCorrectCode() {
+  func testFromCode_USD() {
     let currency = Currency.from(code: "USD")
-    #expect(currency.code == "USD")
+    XCTAssertEqual(currency.code, "USD")
+    XCTAssertEqual(currency.decimals, 2)
   }
 
-  @Test func usdHasTwoDecimals() {
-    let currency = Currency.from(code: "USD")
-    #expect(currency.decimals == 2)
-  }
-
-  @Test func jpyHasCorrectCode() {
+  func testFromCode_JPY() {
     let currency = Currency.from(code: "JPY")
-    #expect(currency.code == "JPY")
+    XCTAssertEqual(currency.code, "JPY")
+    XCTAssertEqual(currency.decimals, 0)
   }
 
-  @Test func jpyHasZeroDecimals() {
-    let currency = Currency.from(code: "JPY")
-    #expect(currency.decimals == 0)
-  }
-
-  @Test func unknownCodeFallsBackToCode() {
+  func testFromCode_unknownCode() {
     let currency = Currency.from(code: "BTC")
-    #expect(currency.code == "BTC")
-    // Symbol falls back to code when unknown
-    #expect(!currency.symbol.isEmpty)
+    XCTAssertEqual(currency.code, "BTC")
+    XCTAssertFalse(currency.symbol.isEmpty)
   }
 
-  @Test func emptyCodeDoesNotCrash() {
+  func testFromCode_emptyCode() {
     let currency = Currency.from(code: "")
-    #expect(currency.code == "")
+    XCTAssertEqual(currency.code, "")
   }
 
-  @Test func sameCodeReturnsSameResult() {
-    let first = Currency.from(code: "AUD")
-    let second = Currency.from(code: "AUD")
-    #expect(first.code == second.code)
-    #expect(first.symbol == second.symbol)
-    #expect(first.decimals == second.decimals)
+  func testFromCode_sameCodeReturnsSameResult() {
+    let a = Currency.from(code: "AUD")
+    let b = Currency.from(code: "AUD")
+    XCTAssertEqual(a, b)
   }
 
-  @Test func differentCodesReturnDifferentResults() {
+  func testFromCode_differentCodes() {
     let aud = Currency.from(code: "AUD")
     let usd = Currency.from(code: "USD")
-    #expect(aud.code != usd.code)
+    XCTAssertNotEqual(aud.code, usd.code)
   }
 }
