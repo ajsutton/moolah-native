@@ -148,7 +148,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       os_signpost(.begin, log: Signposts.repository, name: "fetch.sort", signpostID: signpostID)
       filteredRecords.sort { a, b in
         if a.date != b.date { return a.date > b.date }
-        return a.id.uuidString < b.id.uuidString
+        return a.id < b.id
       }
       os_signpost(.end, log: Signposts.repository, name: "fetch.sort", signpostID: signpostID)
 
@@ -236,7 +236,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
     }
     merged.sort { a, b in
       if a.date != b.date { return a.date > b.date }
-      return a.id.uuidString < b.id.uuidString
+      return a.id < b.id
     }
 
     // 4. Page records = first pageSize of the merged set.
