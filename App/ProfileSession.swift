@@ -28,6 +28,8 @@ final class ProfileSession: Identifiable {
 
   private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileSession")
   private var syncReloadTask: Task<Void, Never>?
+  private var pendingChangedTypes = Set<String>()
+  private var lastSyncEventTime: ContinuousClock.Instant?
 
   init(profile: Profile, containerManager: ProfileContainerManager? = nil) {
     self.profile = profile
@@ -124,8 +126,8 @@ final class ProfileSession: Identifiable {
     if profile.backendType == .cloudKit, let containerManager {
       let profileContainer = try! containerManager.container(for: profile.id)
       let syncEngine = ProfileSyncEngine(profileId: profile.id, modelContainer: profileContainer)
-      syncEngine.onRemoteChangesApplied = { [weak self] in
-        self?.scheduleReloadFromSync()
+      syncEngine.onRemoteChangesApplied = { [weak self] changedTypes in
+        self?.scheduleReloadFromSync(changedTypes: changedTypes)
       }
       self.profileSyncEngine = syncEngine
 
@@ -159,17 +161,42 @@ final class ProfileSession: Identifiable {
 
   /// Debounces sync reloads — cancels any pending reload and waits briefly.
   /// This avoids redundant reloads when CKSyncEngine delivers multiple change batches
-  /// in quick succession.
-  private func scheduleReloadFromSync() {
+  /// in quick succession. Only reloads stores affected by the changed record types.
+  /// During bulk sync (rapid consecutive batches), the debounce increases to 2s to
+  /// avoid thrashing.
+  private func scheduleReloadFromSync(changedTypes: Set<String>) {
+    pendingChangedTypes.formUnion(changedTypes)
+
+    let now = ContinuousClock.now
+    let isBulkSync: Bool
+    if let last = lastSyncEventTime, now - last < .seconds(1) {
+      isBulkSync = true
+    } else {
+      isBulkSync = false
+    }
+    lastSyncEventTime = now
+    let debounceMs = isBulkSync ? 2000 : 500
+
     syncReloadTask?.cancel()
     syncReloadTask = Task {
-      try? await Task.sleep(for: .milliseconds(500))
+      try? await Task.sleep(for: .milliseconds(debounceMs))
       guard !Task.isCancelled else { return }
 
-      logger.debug("Reloading stores after CloudKit sync")
-      await accountStore.reloadFromSync()
-      await categoryStore.reloadFromSync()
-      await earmarkStore.reloadFromSync()
+      let types = self.pendingChangedTypes
+      self.pendingChangedTypes.removeAll()
+
+      logger.debug("Reloading stores after CloudKit sync: \(types)")
+      if types.contains(AccountRecord.recordType) || types.contains(TransactionRecord.recordType) {
+        await accountStore.reloadFromSync()
+      }
+      if types.contains(CategoryRecord.recordType) {
+        await categoryStore.reloadFromSync()
+      }
+      if types.contains(EarmarkRecord.recordType)
+        || types.contains(EarmarkBudgetItemRecord.recordType)
+      {
+        await earmarkStore.reloadFromSync()
+      }
     }
   }
 }

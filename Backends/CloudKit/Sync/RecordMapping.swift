@@ -8,10 +8,29 @@ protocol CloudKitRecordConvertible {
   /// Converts this record to a CKRecord in the given zone.
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord
 
+  /// Applies this record's field values to an existing CKRecord.
+  /// Used to write fields directly onto a cached record that preserves system fields,
+  /// avoiding creation of a throwaway intermediate CKRecord.
+  func applyFields(to record: CKRecord)
+
   /// Extracts field values from a CKRecord. Returns a new instance with the extracted values.
   /// Note: This does not create a managed @Model instance — it returns field values only.
   static func fieldValues(from ckRecord: CKRecord) -> Self
 }
+
+/// Protocol for records that have a UUID `id` property.
+/// Used by `buildCKRecord` to look up cached system fields by record name.
+protocol IdentifiableRecord {
+  var id: UUID { get }
+}
+
+extension AccountRecord: IdentifiableRecord {}
+extension TransactionRecord: IdentifiableRecord {}
+extension CategoryRecord: IdentifiableRecord {}
+extension EarmarkRecord: IdentifiableRecord {}
+extension EarmarkBudgetItemRecord: IdentifiableRecord {}
+extension InvestmentValueRecord: IdentifiableRecord {}
+extension ProfileRecord: IdentifiableRecord {}
 
 // MARK: - CKRecord System Fields
 
@@ -42,11 +61,15 @@ extension ProfileRecord: CloudKitRecordConvertible {
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
+    applyFields(to: record)
+    return record
+  }
+
+  func applyFields(to record: CKRecord) {
     record["label"] = label as CKRecordValue
     record["currencyCode"] = currencyCode as CKRecordValue
     record["financialYearStartMonth"] = financialYearStartMonth as CKRecordValue
     record["createdAt"] = createdAt as CKRecordValue
-    return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> ProfileRecord {
@@ -68,6 +91,11 @@ extension AccountRecord: CloudKitRecordConvertible {
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
+    applyFields(to: record)
+    return record
+  }
+
+  func applyFields(to record: CKRecord) {
     record["name"] = name as CKRecordValue
     record["type"] = type as CKRecordValue
     record["position"] = position as CKRecordValue
@@ -75,7 +103,6 @@ extension AccountRecord: CloudKitRecordConvertible {
     record["currencyCode"] = currencyCode as CKRecordValue
     // cachedBalance is NOT synced — it's derived locally from transactions.
     // Syncing it causes conflicts when transactions change on multiple devices.
-    return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> AccountRecord {
@@ -99,6 +126,11 @@ extension TransactionRecord: CloudKitRecordConvertible {
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
+    applyFields(to: record)
+    return record
+  }
+
+  func applyFields(to record: CKRecord) {
     record["type"] = type as CKRecordValue
     record["date"] = date as CKRecordValue
     record["amount"] = amount as CKRecordValue
@@ -111,7 +143,6 @@ extension TransactionRecord: CloudKitRecordConvertible {
     if let earmarkId { record["earmarkId"] = earmarkId.uuidString as CKRecordValue }
     if let recurPeriod { record["recurPeriod"] = recurPeriod as CKRecordValue }
     if let recurEvery { record["recurEvery"] = recurEvery as CKRecordValue }
-    return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> TransactionRecord {
@@ -141,9 +172,13 @@ extension CategoryRecord: CloudKitRecordConvertible {
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
+    applyFields(to: record)
+    return record
+  }
+
+  func applyFields(to record: CKRecord) {
     record["name"] = name as CKRecordValue
     if let parentId { record["parentId"] = parentId.uuidString as CKRecordValue }
-    return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> CategoryRecord {
@@ -163,6 +198,11 @@ extension EarmarkRecord: CloudKitRecordConvertible {
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
+    applyFields(to: record)
+    return record
+  }
+
+  func applyFields(to record: CKRecord) {
     record["name"] = name as CKRecordValue
     record["position"] = position as CKRecordValue
     record["isHidden"] = (isHidden ? 1 : 0) as CKRecordValue
@@ -170,7 +210,6 @@ extension EarmarkRecord: CloudKitRecordConvertible {
     if let savingsTarget { record["savingsTarget"] = savingsTarget as CKRecordValue }
     if let savingsStartDate { record["savingsStartDate"] = savingsStartDate as CKRecordValue }
     if let savingsEndDate { record["savingsEndDate"] = savingsEndDate as CKRecordValue }
-    return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> EarmarkRecord {
@@ -195,11 +234,15 @@ extension EarmarkBudgetItemRecord: CloudKitRecordConvertible {
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
+    applyFields(to: record)
+    return record
+  }
+
+  func applyFields(to record: CKRecord) {
     record["earmarkId"] = earmarkId.uuidString as CKRecordValue
     record["categoryId"] = categoryId.uuidString as CKRecordValue
     record["amount"] = amount as CKRecordValue
     record["currencyCode"] = currencyCode as CKRecordValue
-    return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> EarmarkBudgetItemRecord {
@@ -221,11 +264,15 @@ extension InvestmentValueRecord: CloudKitRecordConvertible {
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
+    applyFields(to: record)
+    return record
+  }
+
+  func applyFields(to record: CKRecord) {
     record["accountId"] = accountId.uuidString as CKRecordValue
     record["date"] = date as CKRecordValue
     record["value"] = value as CKRecordValue
     record["currencyCode"] = currencyCode as CKRecordValue
-    return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> InvestmentValueRecord {

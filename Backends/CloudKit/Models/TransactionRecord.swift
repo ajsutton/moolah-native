@@ -4,6 +4,14 @@ import SwiftData
 @Model
 final class TransactionRecord {
 
+  #Index<TransactionRecord>(
+    [\.accountId, \.recurPeriod, \.date],
+    [\.toAccountId, \.recurPeriod, \.date],
+    [\.earmarkId],
+    [\.date],
+    [\.id]
+  )
+
   var id: UUID = UUID()
   var type: String = "expense"  // Raw value of TransactionType
   var date: Date = Date()

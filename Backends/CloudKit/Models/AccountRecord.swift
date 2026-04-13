@@ -4,6 +4,8 @@ import SwiftData
 @Model
 final class AccountRecord {
 
+  #Index<AccountRecord>([\.id])
+
   var id: UUID = UUID()
   var name: String = ""
   var type: String = "bank"  // Raw value of AccountType

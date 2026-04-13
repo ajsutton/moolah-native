@@ -154,18 +154,12 @@ struct ReportsView: View {
 
     do {
       let range = resolvedFrom...resolvedTo
-      async let income = analysisRepository.fetchCategoryBalances(
+      let result = try await analysisRepository.fetchCategoryBalancesByType(
         dateRange: range,
-        transactionType: .income,
         filters: TransactionFilter()
       )
-      async let expenses = analysisRepository.fetchCategoryBalances(
-        dateRange: range,
-        transactionType: .expense,
-        filters: TransactionFilter()
-      )
-
-      (incomeBalances, expenseBalances) = try await (income, expenses)
+      incomeBalances = result.income
+      expenseBalances = result.expense
     } catch {
       self.error = error
     }

@@ -4,6 +4,8 @@ import SwiftData
 @Model
 final class EarmarkBudgetItemRecord {
 
+  #Index<EarmarkBudgetItemRecord>([\.id], [\.earmarkId])
+
   var id: UUID = UUID()
   var earmarkId: UUID = UUID()
   var categoryId: UUID = UUID()

@@ -17,9 +17,10 @@ struct ContentView: View {
     NavigationSplitView {
       SidebarView(selection: $selection)
         .task {
-          await accountStore.load()
-          await categoryStore.load()
-          await earmarkStore.load()
+          async let a: Void = accountStore.load()
+          async let c: Void = categoryStore.load()
+          async let e: Void = earmarkStore.load()
+          _ = await (a, c, e)
         }
         .toolbar {
           #if os(iOS)
@@ -95,9 +96,10 @@ struct ContentView: View {
     }
     .focusedSceneValue(\.refreshAction) {
       Task {
-        await accountStore.load()
-        await categoryStore.load()
-        await earmarkStore.load()
+        async let a: Void = accountStore.load()
+        async let c: Void = categoryStore.load()
+        async let e: Void = earmarkStore.load()
+        _ = await (a, c, e)
       }
     }
     .sheet(isPresented: $showCreateEarmarkSheet) {

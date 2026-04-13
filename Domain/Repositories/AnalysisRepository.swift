@@ -55,6 +55,21 @@ protocol AnalysisRepository: Sendable {
     filters: TransactionFilter?
   ) async throws -> [UUID: MonetaryAmount]
 
+  /// Fetch category balances for both income and expense in a single pass.
+  ///
+  /// More efficient than calling `fetchCategoryBalances` twice because backends that
+  /// compute locally only need to load and filter transactions once.
+  ///
+  /// - Parameters:
+  ///   - dateRange: Date range to analyze (inclusive on both ends).
+  ///   - filters: Optional additional filters (account, earmark, payee, etc.).
+  /// - Returns: Tuple of income and expense dictionaries mapping category UUIDs to totals.
+  /// - Throws: BackendError on network/auth failure.
+  func fetchCategoryBalancesByType(
+    dateRange: ClosedRange<Date>,
+    filters: TransactionFilter?
+  ) async throws -> (income: [UUID: MonetaryAmount], expense: [UUID: MonetaryAmount])
+
   /// Load all analysis data in a single batch, avoiding redundant fetches.
   ///
   /// Backends that compute locally (CloudKit/SwiftData) should override this to fetch
@@ -75,6 +90,17 @@ struct AnalysisData: Sendable {
 }
 
 extension AnalysisRepository {
+  func fetchCategoryBalancesByType(
+    dateRange: ClosedRange<Date>,
+    filters: TransactionFilter?
+  ) async throws -> (income: [UUID: MonetaryAmount], expense: [UUID: MonetaryAmount]) {
+    async let incomeResult = fetchCategoryBalances(
+      dateRange: dateRange, transactionType: .income, filters: filters)
+    async let expenseResult = fetchCategoryBalances(
+      dateRange: dateRange, transactionType: .expense, filters: filters)
+    return try await (income: incomeResult, expense: expenseResult)
+  }
+
   func loadAll(
     historyAfter: Date?,
     forecastUntil: Date?,

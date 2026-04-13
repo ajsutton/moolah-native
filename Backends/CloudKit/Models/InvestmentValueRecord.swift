@@ -4,6 +4,8 @@ import SwiftData
 @Model
 final class InvestmentValueRecord {
 
+  #Index<InvestmentValueRecord>([\.id], [\.accountId])
+
   var id: UUID = UUID()
   var accountId: UUID = UUID()
   var date: Date = Date()
