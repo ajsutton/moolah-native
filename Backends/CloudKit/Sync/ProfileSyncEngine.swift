@@ -2,6 +2,7 @@
 import Foundation
 import OSLog
 import SwiftData
+import os
 
 /// Manages CKSyncEngine for a single profile's data zone.
 /// Each profile gets its own CloudKit record zone (`profile-{profileId}`),
@@ -102,6 +103,13 @@ final class ProfileSyncEngine: Sendable {
   /// Note: SwiftData models don't support KVC (`value(forKey:)`), so we must
   /// use concrete FetchDescriptors per type — same constraint as `recordToSave`.
   private func queueAllExistingRecords() {
+    let signpostID = OSSignpostID(log: Signposts.sync)
+    os_signpost(
+      .begin, log: Signposts.sync, name: "queueAllExistingRecords", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.sync, name: "queueAllExistingRecords", signpostID: signpostID)
+    }
     let context = ModelContext(modelContainer)
     var total = 0
 
@@ -183,6 +191,9 @@ final class ProfileSyncEngine: Sendable {
 
   /// Tells CKSyncEngine to send all pending changes now.
   func sendChanges() async {
+    let signpostID = OSSignpostID(log: Signposts.sync)
+    os_signpost(.begin, log: Signposts.sync, name: "sendChanges", signpostID: signpostID)
+    defer { os_signpost(.end, log: Signposts.sync, name: "sendChanges", signpostID: signpostID) }
     guard let syncEngine, isRunning else { return }
     do {
       try await syncEngine.sendChanges()
@@ -193,6 +204,9 @@ final class ProfileSyncEngine: Sendable {
 
   /// Tells CKSyncEngine to fetch remote changes now.
   func fetchChanges() async {
+    let signpostID = OSSignpostID(log: Signposts.sync)
+    os_signpost(.begin, log: Signposts.sync, name: "fetchChanges", signpostID: signpostID)
+    defer { os_signpost(.end, log: Signposts.sync, name: "fetchChanges", signpostID: signpostID) }
     guard let syncEngine, isRunning else { return }
     do {
       try await syncEngine.fetchChanges()
@@ -250,6 +264,14 @@ final class ProfileSyncEngine: Sendable {
     saved: [CKRecord],
     deleted: [(CKRecord.ID, String)]  // (recordID, recordType)
   ) {
+    let signpostID = OSSignpostID(log: Signposts.sync)
+    os_signpost(
+      .begin, log: Signposts.sync, name: "applyRemoteChanges", signpostID: signpostID,
+      "%{public}d saves, %{public}d deletes", saved.count, deleted.count)
+    defer {
+      os_signpost(.end, log: Signposts.sync, name: "applyRemoteChanges", signpostID: signpostID)
+    }
+
     isApplyingRemoteChanges = true
     defer { isApplyingRemoteChanges = false }
 
@@ -268,8 +290,17 @@ final class ProfileSyncEngine: Sendable {
 
     let context = modelContainer.mainContext
 
+    os_signpost(
+      .begin, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID,
+      "%{public}d records", saved.count)
     Self.applyBatchSaves(saved, context: context)
+    os_signpost(.end, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID)
+
+    os_signpost(
+      .begin, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID,
+      "%{public}d records", deleted.count)
     Self.applyBatchDeletions(deleted, context: context)
+    os_signpost(.end, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID)
 
     // Invalidate cached balances when transactions arrive from other devices.
     // The local cache is stale — it will be recomputed on next fetchAll().
@@ -277,13 +308,20 @@ final class ProfileSyncEngine: Sendable {
       saved.contains { $0.recordType == TransactionRecord.recordType }
       || deleted.contains { $0.1 == TransactionRecord.recordType }
     if hasTransactionChanges {
+      os_signpost(
+        .begin, log: Signposts.balance, name: "invalidateCachedBalances", signpostID: signpostID)
       Self.invalidateCachedBalances(context: context)
+      os_signpost(
+        .end, log: Signposts.balance, name: "invalidateCachedBalances", signpostID: signpostID)
     }
 
     do {
+      os_signpost(.begin, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
       try context.save()
+      os_signpost(.end, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
       onRemoteChangesApplied?()
     } catch {
+      os_signpost(.end, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
       logger.error("Failed to save remote changes: \(error)")
     }
   }
@@ -679,6 +717,13 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     _ context: CKSyncEngine.SendChangesContext,
     syncEngine: CKSyncEngine
   ) -> CKSyncEngine.RecordZoneChangeBatch? {
+    let signpostID = OSSignpostID(log: Signposts.sync)
+    os_signpost(
+      .begin, log: Signposts.sync, name: "nextRecordZoneChangeBatch", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.sync, name: "nextRecordZoneChangeBatch", signpostID: signpostID)
+    }
     let scope = context.options.scope
     // CKSyncEngine's pending list can contain duplicate recordIDs if the same
     // record was queued multiple times (e.g. queueAllExistingRecords + repository mutation).
@@ -711,7 +756,11 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     }
 
     // Batch-load records by type (6 fetches total, not N*6)
+    os_signpost(
+      .begin, log: Signposts.sync, name: "buildBatchRecordLookup", signpostID: signpostID,
+      "%{public}d UUIDs", saveRecordIDs.count)
     let recordLookup = buildBatchRecordLookup(for: Set(saveRecordIDs.map(\.1)))
+    os_signpost(.end, log: Signposts.sync, name: "buildBatchRecordLookup", signpostID: signpostID)
 
     logger.info(
       "Preparing batch: \(batch.count) changes (\(saveRecordIDs.count) saves), \(pendingChanges.count) total pending"

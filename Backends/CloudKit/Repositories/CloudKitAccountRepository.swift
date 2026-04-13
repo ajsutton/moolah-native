@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
@@ -18,6 +19,13 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   }
 
   func fetchAll() async throws -> [Account] {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "AccountRepo.fetchAll", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "AccountRepo.fetchAll", signpostID: signpostID)
+    }
     let descriptor = FetchDescriptor<AccountRecord>(
       sortBy: [SortDescriptor(\.position)]
     )
@@ -26,7 +34,11 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
 
       // If any record has a nil cached balance, recompute all balances in batch
       if records.contains(where: { $0.cachedBalance == nil }) {
+        os_signpost(
+          .begin, log: Signposts.balance, name: "recomputeAllBalances", signpostID: signpostID)
         try recomputeAllBalances(records: records)
+        os_signpost(
+          .end, log: Signposts.balance, name: "recomputeAllBalances", signpostID: signpostID)
       }
 
       return try records.map { record in
@@ -41,6 +53,13 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   }
 
   func create(_ account: Account) async throws -> Account {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "AccountRepo.create", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "AccountRepo.create", signpostID: signpostID)
+    }
     guard !account.name.trimmingCharacters(in: .whitespaces).isEmpty else {
       throw BackendError.validationFailed("Account name cannot be empty")
     }
@@ -74,6 +93,13 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   }
 
   func update(_ account: Account) async throws -> Account {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "AccountRepo.update", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "AccountRepo.update", signpostID: signpostID)
+    }
     let accountId = account.id
     let descriptor = FetchDescriptor<AccountRecord>(
       predicate: #Predicate { $0.id == accountId }
@@ -105,6 +131,13 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   }
 
   func delete(id: UUID) async throws {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "AccountRepo.delete", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "AccountRepo.delete", signpostID: signpostID)
+    }
     let descriptor = FetchDescriptor<AccountRecord>(
       predicate: #Predicate { $0.id == id }
     )

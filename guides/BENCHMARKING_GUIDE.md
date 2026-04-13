@@ -9,15 +9,29 @@ Never guess at performance. Don't assume what's fast or slow, don't set targets 
 ## Running Benchmarks
 
 ```bash
-# Run all benchmarks
-just benchmark
+# Ensure the temp directory exists
+mkdir -p .agent-tmp
+
+# Run all benchmarks and capture output
+just benchmark 2>&1 | tee .agent-tmp/benchmark-output.txt
 
 # Run a specific benchmark class
-just benchmark TransactionFetchBenchmarks
+just benchmark TransactionFetchBenchmarks 2>&1 | tee .agent-tmp/benchmark-output.txt
 
 # Run a specific test method
-just benchmark TransactionFetchBenchmarks/testFetchByAccount_1x
+just benchmark TransactionFetchBenchmarks/testFetchByAccount_1x 2>&1 | tee .agent-tmp/benchmark-output.txt
+
+# Check results
+grep -A2 "measured" .agent-tmp/benchmark-output.txt
+
+# Get context around a specific benchmark
+grep -B5 -A10 'testFetchByAccount' .agent-tmp/benchmark-output.txt
+
+# Clean up when done
+rm .agent-tmp/benchmark-output.txt
 ```
+
+**Always pipe output to a file** in `.agent-tmp/` so you can inspect results without re-running. Benchmarks take minutes — don't waste time re-running just to re-read output.
 
 Benchmarks run on macOS only (no simulator overhead). They use in-memory SwiftData via `TestBackend`, so they measure computation and SwiftData query cost — not disk I/O.
 
