@@ -64,29 +64,36 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
 
       // For accountId filter, we need two queries (accountId match + toAccountId match)
       // because OR across optional fields is unreliable in #Predicate.
+      // Track which filters were pushed into predicates to skip redundant post-filters.
+      let primaryResult: DescriptorResult
       if let filterAccountId = filter.accountId {
-        primaryRecords = try fetchRecords(
+        let primary = try fetchRecords(
           accountId: filterAccountId,
           accountIdField: .primary,
           scheduled: scheduled,
           dateRange: filter.dateRange,
           earmarkId: filter.earmarkId
         )
-        secondaryRecords = try fetchRecords(
+        primaryRecords = primary.records
+        primaryResult = primary.result
+        let secondary = try fetchRecords(
           accountId: filterAccountId,
           accountIdField: .toAccount,
           scheduled: scheduled,
           dateRange: filter.dateRange,
           earmarkId: filter.earmarkId
         )
+        secondaryRecords = secondary.records
       } else {
-        primaryRecords = try fetchRecords(
+        let primary = try fetchRecords(
           accountId: nil,
           accountIdField: .none,
           scheduled: scheduled,
           dateRange: filter.dateRange,
           earmarkId: filter.earmarkId
         )
+        primaryRecords = primary.records
+        primaryResult = primary.result
         secondaryRecords = []
       }
 
@@ -109,24 +116,25 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
 
       // --- In-memory post-filters ---
       // categoryIds and payee can never be pushed into #Predicate, so always apply here.
-      // scheduled, dateRange, and earmarkId are pushed down for common combinations,
-      // but we re-apply them here as a safety net for fallback cases. When the predicate
-      // already filtered these, the in-memory pass is a no-op (nothing to remove).
+      // scheduled, dateRange, and earmarkId are only applied when NOT already pushed into
+      // the predicate (tracked via DescriptorResult flags).
       os_signpost(
         .begin, log: Signposts.repository, name: "fetch.postFilter", signpostID: signpostID)
       var filteredRecords = mergedRecords
 
-      if scheduled {
-        filteredRecords = filteredRecords.filter { $0.recurPeriod != nil }
-      } else {
-        filteredRecords = filteredRecords.filter { $0.recurPeriod == nil }
+      if !primaryResult.pushedScheduled {
+        if scheduled {
+          filteredRecords = filteredRecords.filter { $0.recurPeriod != nil }
+        } else {
+          filteredRecords = filteredRecords.filter { $0.recurPeriod == nil }
+        }
       }
-      if let dateRange = filter.dateRange {
+      if !primaryResult.pushedDateRange, let dateRange = filter.dateRange {
         let start = dateRange.lowerBound
         let end = dateRange.upperBound
         filteredRecords = filteredRecords.filter { $0.date >= start && $0.date <= end }
       }
-      if let earmarkId = filter.earmarkId {
+      if !primaryResult.pushedEarmarkId, let earmarkId = filter.earmarkId {
         filteredRecords = filteredRecords.filter { $0.earmarkId == earmarkId }
       }
       if let categoryIds = filter.categoryIds, !categoryIds.isEmpty {
@@ -285,8 +293,17 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
     case none  // No account filter
   }
 
+  /// Tracks which filters were pushed into the SwiftData predicate so post-filters can skip them.
+  private struct DescriptorResult {
+    let descriptor: FetchDescriptor<TransactionRecord>
+    let pushedScheduled: Bool
+    let pushedDateRange: Bool
+    let pushedEarmarkId: Bool
+  }
+
   /// Fetches TransactionRecords with as many filters pushed into SwiftData predicates as possible.
   /// Since `#Predicate` is a macro requiring static expressions, we branch on which filters are set.
+  /// Returns the fetched records along with metadata about which filters were pushed into the predicate.
   @MainActor
   private func fetchRecords(
     accountId: UUID?,
@@ -294,21 +311,23 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
     scheduled: Bool?,
     dateRange: ClosedRange<Date>?,
     earmarkId: UUID?
-  ) throws -> [TransactionRecord] {
-    let descriptor = buildDescriptor(
+  ) throws -> (records: [TransactionRecord], result: DescriptorResult) {
+    let result = buildDescriptor(
       accountId: accountId,
       accountIdField: accountIdField,
       scheduled: scheduled,
       dateRange: dateRange,
       earmarkId: earmarkId
     )
-    return try context.fetch(descriptor)
+    let records = try context.fetch(result.descriptor)
+    return (records, result)
   }
 
   /// Builds a FetchDescriptor with the appropriate predicate based on which filters are active.
   /// We use a pragmatic approach: branch on accountId, scheduled, dateRange, and earmarkId
   /// combinations. To avoid 2^4 = 16 branches, we handle the most common combinations and fall
   /// back to fewer pushed-down filters for rare combinations.
+  /// Returns a DescriptorResult that tracks which filters were pushed into the predicate.
   @MainActor
   private func buildDescriptor(
     accountId: UUID?,
@@ -316,7 +335,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
     scheduled: Bool?,
     dateRange: ClosedRange<Date>?,
     earmarkId: UUID?
-  ) -> FetchDescriptor<TransactionRecord> {
+  ) -> DescriptorResult {
     let sortDescriptors = [SortDescriptor(\TransactionRecord.date, order: .reverse)]
 
     // Helper to determine if scheduled filter means "is scheduled" or "not scheduled"
@@ -333,21 +352,24 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let d = FetchDescriptor<TransactionRecord>(
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: false, pushedDateRange: false, pushedEarmarkId: false)
 
     case (.none, .some(_), nil, nil) where isScheduled:
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate { $0.recurPeriod != nil },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: true, pushedDateRange: false, pushedEarmarkId: false)
 
     case (.none, .some(_), nil, nil) where isNotScheduled:
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate { $0.recurPeriod == nil },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: true, pushedDateRange: false, pushedEarmarkId: false)
 
     case (.none, nil, .some(let range), nil):
       let start = range.lowerBound
@@ -356,14 +378,16 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         predicate: #Predicate { $0.date >= start && $0.date <= end },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: false, pushedDateRange: true, pushedEarmarkId: false)
 
     case (.none, nil, nil, .some(let eid)):
       let d = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate { $0.earmarkId == eid },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: false, pushedDateRange: false, pushedEarmarkId: true)
 
     case (.none, .some(_), .some(let range), nil) where isNotScheduled:
       let start = range.lowerBound
@@ -374,7 +398,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: true, pushedDateRange: true, pushedEarmarkId: false)
 
     case (.none, .some(_), .some(let range), nil) where isScheduled:
       let start = range.lowerBound
@@ -385,7 +410,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: true, pushedDateRange: true, pushedEarmarkId: false)
 
     // --- Primary account filter ---
     case (.primary, nil, nil, nil):
@@ -394,7 +420,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         predicate: #Predicate { $0.accountId == aid },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: false, pushedDateRange: false, pushedEarmarkId: false)
 
     case (.primary, .some(_), nil, nil) where isNotScheduled:
       let aid = accountId!
@@ -404,7 +431,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: true, pushedDateRange: false, pushedEarmarkId: false)
 
     case (.primary, .some(_), nil, nil) where isScheduled:
       let aid = accountId!
@@ -414,7 +442,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: true, pushedDateRange: false, pushedEarmarkId: false)
 
     case (.primary, nil, .some(let range), nil):
       let aid = accountId!
@@ -426,7 +455,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: false, pushedDateRange: true, pushedEarmarkId: false)
 
     case (.primary, nil, nil, .some(let eid)):
       let aid = accountId!
@@ -436,7 +466,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: false, pushedDateRange: false, pushedEarmarkId: true)
 
     case (.primary, .some(_), .some(let range), nil) where isNotScheduled:
       let aid = accountId!
@@ -448,7 +479,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: true, pushedDateRange: true, pushedEarmarkId: false)
 
     case (.primary, .some(_), .some(let range), nil) where isScheduled:
       let aid = accountId!
@@ -460,7 +492,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: true, pushedDateRange: true, pushedEarmarkId: false)
 
     // --- toAccount filter ---
     case (.toAccount, nil, nil, nil):
@@ -469,7 +502,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         predicate: #Predicate { $0.toAccountId == aid },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: false, pushedDateRange: false, pushedEarmarkId: false)
 
     case (.toAccount, .some(_), nil, nil) where isNotScheduled:
       let aid = accountId!
@@ -479,7 +513,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: true, pushedDateRange: false, pushedEarmarkId: false)
 
     case (.toAccount, .some(_), nil, nil) where isScheduled:
       let aid = accountId!
@@ -489,7 +524,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: true, pushedDateRange: false, pushedEarmarkId: false)
 
     case (.toAccount, nil, .some(let range), nil):
       let aid = accountId!
@@ -501,7 +537,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: false, pushedDateRange: true, pushedEarmarkId: false)
 
     case (.toAccount, nil, nil, .some(let eid)):
       let aid = accountId!
@@ -511,7 +548,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: false, pushedDateRange: false, pushedEarmarkId: true)
 
     case (.toAccount, .some(_), .some(let range), nil) where isNotScheduled:
       let aid = accountId!
@@ -523,7 +561,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: true, pushedDateRange: true, pushedEarmarkId: false)
 
     case (.toAccount, .some(_), .some(let range), nil) where isScheduled:
       let aid = accountId!
@@ -535,14 +574,16 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         },
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: true, pushedDateRange: true, pushedEarmarkId: false)
 
     // --- Fallback: no profileId filter, apply everything else in memory ---
     default:
       let d = FetchDescriptor<TransactionRecord>(
         sortBy: sortDescriptors
       )
-      return d
+      return DescriptorResult(
+        descriptor: d, pushedScheduled: false, pushedDateRange: false, pushedEarmarkId: false)
     }
   }
 
