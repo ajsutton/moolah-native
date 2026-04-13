@@ -131,6 +131,33 @@ func start() {
 }
 ```
 
+### Rule 4c: No Generics or KVC with SwiftData Models
+
+**Crashes found (twice):**
+1. `#Predicate` with generic type parameters crashes at runtime -- the keypath can't resolve to a concrete Core Data attribute.
+2. `value(forKey: "id")` (KVC) on `PersistentModel` triggers `doesNotRecognizeSelector` -- SwiftData models don't support arbitrary KVC.
+
+**Rule:** Always use concrete `FetchDescriptor<SpecificRecord>` types and access properties directly. Never use generic functions that pass SwiftData model types as type parameters to `#Predicate` or KVC.
+
+```swift
+// CORRECT: Concrete fetch per type
+if let records = try? context.fetch(FetchDescriptor<AccountRecord>()) {
+    for r in records { queuePendingSave(for: r.id) }
+}
+
+// WRONG: Generic function with KVC -- crashes at runtime
+func queueAll<T: PersistentModel>(_ type: T.Type) {
+    let records = try? context.fetch(FetchDescriptor<T>())
+    for r in records { (r as AnyObject).value(forKey: "id") }  // CRASH
+}
+
+// WRONG: Generic #Predicate -- crashes at runtime
+func fetch<T: PersistentModel>(id: UUID) -> T? {
+    let descriptor = FetchDescriptor<T>(predicate: #Predicate { $0.id == id })  // CRASH
+    return try? context.fetch(descriptor).first
+}
+```
+
 ### Rule 5: Preserve CKRecord System Fields (Change Tags)
 
 **Rationale:** When CKSyncEngine sends a record to CloudKit, the server checks the record's change tag to detect conflicts. If you create a fresh `CKRecord` every time (without the server's change tag), CloudKit treats every upload as a new record, causing `.serverRecordChanged` conflicts on multi-device sync.
