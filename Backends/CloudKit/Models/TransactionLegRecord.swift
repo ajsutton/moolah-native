@@ -5,7 +5,7 @@ import SwiftData
 final class TransactionLegRecord {
   var id: UUID = UUID()
   var transactionId: UUID = UUID()
-  var accountId: UUID = UUID()
+  var accountId: UUID?
   var instrumentId: String = ""
   var quantity: Int64 = 0  // Actual value × 10^8
   var type: String = "expense"
@@ -17,7 +17,7 @@ final class TransactionLegRecord {
   init(
     id: UUID = UUID(),
     transactionId: UUID,
-    accountId: UUID,
+    accountId: UUID?,
     instrumentId: String,
     quantity: Int64,
     type: String,

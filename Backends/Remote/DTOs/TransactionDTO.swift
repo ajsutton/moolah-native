@@ -23,10 +23,14 @@ struct TransactionDTO: Codable {
 
     if parsedType == .transfer {
       // Transfer: source leg (negative) and destination leg (positive)
+      // Earmark attaches to the source leg because the server's earmarkDao.balances uses
+      // SUM(t.amount) where t.amount is from the source account's perspective (negative for
+      // outgoing transfers). Putting earmark on source leg matches this sign convention.
       if let sourceId = accountId?.uuid {
         legs.append(
           TransactionLeg(
-            accountId: sourceId, instrument: instrument, quantity: quantity, type: .transfer
+            accountId: sourceId, instrument: instrument, quantity: quantity, type: .transfer,
+            earmarkId: earmark?.uuid
           ))
       }
       if let destId = toAccountId?.uuid {
@@ -37,13 +41,12 @@ struct TransactionDTO: Codable {
       }
     } else {
       // Income/expense/openingBalance: single leg
-      if let acctId = accountId?.uuid {
-        legs.append(
-          TransactionLeg(
-            accountId: acctId, instrument: instrument, quantity: quantity, type: parsedType,
-            categoryId: categoryId?.uuid, earmarkId: earmark?.uuid
-          ))
-      }
+      // accountId may be nil for earmark-only income transactions
+      legs.append(
+        TransactionLeg(
+          accountId: accountId?.uuid, instrument: instrument, quantity: quantity, type: parsedType,
+          categoryId: categoryId?.uuid, earmarkId: earmark?.uuid
+        ))
     }
 
     return Transaction(
@@ -81,7 +84,7 @@ struct TransactionDTO: Codable {
       type: transaction.type.rawValue,
       date: dateString,
       accountId: transaction.primaryAccountId.map(ServerUUID.init),
-      toAccountId: transferLeg.map { ServerUUID($0.accountId) },
+      toAccountId: transferLeg?.accountId.map(ServerUUID.init),
       amount: cents,
       payee: transaction.payee,
       notes: transaction.notes,
@@ -137,7 +140,7 @@ struct CreateTransactionDTO: Codable {
       type: transaction.type.rawValue,
       date: dateString,
       accountId: transaction.primaryAccountId.map(ServerUUID.init),
-      toAccountId: transferLeg.map { ServerUUID($0.accountId) },
+      toAccountId: transferLeg?.accountId.map(ServerUUID.init),
       amount: cents,
       payee: transaction.payee,
       notes: transaction.notes,

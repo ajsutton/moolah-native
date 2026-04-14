@@ -158,14 +158,16 @@ final class AccountStore {
     // Remove the old transaction's effect (skip scheduled — they don't affect balances)
     if let old, !old.isScheduled {
       for leg in old.legs {
-        result = result.adjustingBalance(of: leg.accountId, by: -leg.amount)
+        guard let accountId = leg.accountId else { continue }
+        result = result.adjustingBalance(of: accountId, by: -leg.amount)
       }
     }
 
     // Apply the new transaction's effect (skip scheduled — they don't affect balances)
     if let new, !new.isScheduled {
       for leg in new.legs {
-        result = result.adjustingBalance(of: leg.accountId, by: leg.amount)
+        guard let accountId = leg.accountId else { continue }
+        result = result.adjustingBalance(of: accountId, by: leg.amount)
       }
     }
 

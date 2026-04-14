@@ -155,7 +155,7 @@ extension TransactionLegRecord: CloudKitRecordConvertible {
     let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
     record["transactionId"] = transactionId.uuidString as CKRecordValue
-    record["accountId"] = accountId.uuidString as CKRecordValue
+    if let accountId { record["accountId"] = accountId.uuidString as CKRecordValue }
     record["instrumentId"] = instrumentId as CKRecordValue
     record["quantity"] = quantity as CKRecordValue
     record["type"] = type as CKRecordValue
@@ -170,7 +170,7 @@ extension TransactionLegRecord: CloudKitRecordConvertible {
       id: UUID(uuidString: ckRecord.recordID.recordName) ?? UUID(),
       transactionId: (ckRecord["transactionId"] as? String).flatMap { UUID(uuidString: $0) }
         ?? UUID(),
-      accountId: (ckRecord["accountId"] as? String).flatMap { UUID(uuidString: $0) } ?? UUID(),
+      accountId: (ckRecord["accountId"] as? String).flatMap { UUID(uuidString: $0) },
       instrumentId: ckRecord["instrumentId"] as? String ?? "",
       quantity: ckRecord["quantity"] as? Int64 ?? 0,
       type: ckRecord["type"] as? String ?? "expense",

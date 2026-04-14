@@ -249,6 +249,34 @@ struct RemoteTransactionRepositoryTests {
 
     #expect(queryDict["payee"] == "Woolworths")
   }
+
+  @Test func testNullAccountIdEarmarkDTO() {
+    let earmarkId = UUID()
+    let dto = TransactionDTO(
+      id: ServerUUID(UUID()),
+      type: "income",
+      date: "2026-01-15",
+      accountId: nil,
+      toAccountId: nil,
+      amount: 500,
+      payee: nil,
+      notes: nil,
+      categoryId: nil,
+      earmark: ServerUUID(earmarkId),
+      recurPeriod: nil,
+      recurEvery: nil
+    )
+
+    let txn = dto.toDomain(instrument: .defaultTestInstrument)
+
+    #expect(txn.legs.count == 1)
+    #expect(txn.legs[0].accountId == nil)
+    #expect(txn.legs[0].earmarkId == earmarkId)
+    #expect(txn.legs[0].type == .income)
+    #expect(txn.legs[0].quantity == 5)
+    #expect(txn.primaryAccountId == nil)
+    #expect(txn.earmarkId == earmarkId)
+  }
 }
 
 // URLProtocol stub for transaction tests

@@ -180,7 +180,8 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
 
     var balances: [UUID: Int64] = [:]
     for leg in allLegs {
-      balances[leg.accountId, default: 0] += leg.quantity
+      guard let accountId = leg.accountId else { continue }
+      balances[accountId, default: 0] += leg.quantity
     }
     return balances
   }
@@ -194,7 +195,8 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     // Group by (accountId, instrumentId) and sum quantities
     var totals: [UUID: [String: Int64]] = [:]
     for leg in allLegs {
-      totals[leg.accountId, default: [:]][leg.instrumentId, default: 0] += leg.quantity
+      guard let accountId = leg.accountId else { continue }
+      totals[accountId, default: [:]][leg.instrumentId, default: 0] += leg.quantity
     }
 
     // Resolve instruments and build Position arrays

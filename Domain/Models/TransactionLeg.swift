@@ -1,7 +1,7 @@
 import Foundation
 
 struct TransactionLeg: Codable, Sendable, Hashable {
-  let accountId: UUID
+  let accountId: UUID?
   let instrument: Instrument
   let quantity: Decimal
   var type: TransactionType
@@ -9,7 +9,7 @@ struct TransactionLeg: Codable, Sendable, Hashable {
   var earmarkId: UUID?
 
   init(
-    accountId: UUID,
+    accountId: UUID?,
     instrument: Instrument,
     quantity: Decimal,
     type: TransactionType,

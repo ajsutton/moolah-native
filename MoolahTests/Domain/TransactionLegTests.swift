@@ -60,4 +60,32 @@ struct TransactionLegTests {
     )
     #expect(leg.amount == InstrumentAmount(quantity: Decimal(string: "-50.23")!, instrument: aud))
   }
+
+  @Test func nilAccountId() {
+    let earId = UUID()
+    let leg = TransactionLeg(
+      accountId: nil,
+      instrument: aud,
+      quantity: 5,
+      type: .income,
+      earmarkId: earId
+    )
+    #expect(leg.accountId == nil)
+    #expect(leg.earmarkId == earId)
+    #expect(leg.quantity == 5)
+  }
+
+  @Test func nilAccountIdCodableRoundTrip() throws {
+    let leg = TransactionLeg(
+      accountId: nil,
+      instrument: aud,
+      quantity: 5,
+      type: .income,
+      earmarkId: UUID()
+    )
+    let data = try JSONEncoder().encode(leg)
+    let decoded = try JSONDecoder().decode(TransactionLeg.self, from: data)
+    #expect(decoded == leg)
+    #expect(decoded.accountId == nil)
+  }
 }

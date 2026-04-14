@@ -674,14 +674,14 @@ struct AnalysisRepositoryContractTests {
             quantity: 10, type: .income)
         ]))
 
-    // Earmarked income (with a placeholder accountId since legs require one)
+    // Earmarked income with nil accountId (matches server's null-accountId earmark transactions)
     _ = try await backend.transactions.create(
       Transaction(
         date: today,
         payee: "Gift",
         legs: [
           TransactionLeg(
-            accountId: UUID(), instrument: .defaultTestInstrument,
+            accountId: nil, instrument: .defaultTestInstrument,
             quantity: 5, type: .income,
             earmarkId: earmark.id)
         ]))
@@ -693,7 +693,7 @@ struct AnalysisRepositoryContractTests {
 
     // Regular income should only include the transaction with accountId
     #expect(month.income.quantity == 10)
-    // In leg-based model, all legs have accountIds, so earmarked income is included
+    // Earmarked income without accountId is still counted in earmark totals
     #expect(month.earmarkedIncome.quantity == 5)
   }
 

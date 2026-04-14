@@ -352,7 +352,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
       for leg in txn.legs {
         let isEarmarked = leg.earmarkId != nil
-        let isInvestmentAccount = investmentAccountIds.contains(leg.accountId)
+        let isInvestmentAccount = leg.accountId.map(investmentAccountIds.contains) ?? false
 
         switch leg.type {
         case .income, .openingBalance:
@@ -648,7 +648,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
       for leg in txn.legs {
         let isEarmarked = leg.earmarkId != nil
-        let isInvestmentAccount = investmentAccountIds.contains(leg.accountId)
+        let isInvestmentAccount = leg.accountId.map(investmentAccountIds.contains) ?? false
 
         switch leg.type {
         case .income, .openingBalance:
@@ -732,7 +732,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       let dayKey = calendar.startOfDay(for: txn.date)
 
       for leg in txn.legs {
-        let isInvestment = investmentAccountIds.contains(leg.accountId)
+        let isInvestment = leg.accountId.map(investmentAccountIds.contains) ?? false
         let key = leg.instrument.id
 
         if isInvestment {
@@ -811,7 +811,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     investmentAccountIds: Set<UUID>
   ) {
     for leg in txn.legs {
-      let isInvestmentAccount = investmentAccountIds.contains(leg.accountId)
+      let isInvestmentAccount = leg.accountId.map(investmentAccountIds.contains) ?? false
 
       switch leg.type {
       case .income, .expense, .openingBalance:
@@ -829,6 +829,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
           investments += leg.amount
         } else {
           balance += leg.amount
+        }
+        if leg.earmarkId != nil {
+          earmarks += leg.amount
         }
       }
     }
