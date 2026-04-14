@@ -17,7 +17,7 @@ struct SessionRootView: View {
       .environment(session.analysisStore)
       .environment(session.investmentStore)
       .environment(session.tradeStore)
-      .focusedValue(\.authStore, session.authStore)
-      .focusedValue(\.activeProfileSession, session)
+      .focusedSceneValue(\.authStore, session.authStore)
+      .focusedSceneValue(\.activeProfileSession, session)
   }
 }
