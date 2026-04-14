@@ -182,7 +182,7 @@ final class ProfileIndexSyncEngine: Sendable {
   // MARK: - State Persistence
 
   private var stateFileURL: URL {
-    URL.applicationSupportDirectory.appending(path: "Moolah-profile-index.syncstate")
+    URL.applicationSupportDirectory.appending(path: "Moolah-v2-profile-index.syncstate")
   }
 
   private func loadStateSerialization() -> CKSyncEngine.State.Serialization? {

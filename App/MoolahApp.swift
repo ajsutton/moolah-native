@@ -81,7 +81,7 @@ struct MoolahApp: App {
   init() {
     do {
       let profileSchema = Schema([ProfileRecord.self])
-      let profileStoreURL = URL.applicationSupportDirectory.appending(path: "Moolah.store")
+      let profileStoreURL = URL.applicationSupportDirectory.appending(path: "Moolah-v2.store")
       let profileConfig = ModelConfiguration(
         url: profileStoreURL,
         cloudKitDatabase: .none
