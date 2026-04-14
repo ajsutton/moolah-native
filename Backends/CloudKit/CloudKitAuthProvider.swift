@@ -57,11 +57,15 @@ final class CloudKitAuthProvider: AuthProvider, Sendable {
 
   /// Whether CloudKit entitlements are configured.
   /// CKContainer.default() throws an uncatchable NSException without them.
+  /// The CLOUDKIT_ENABLED flag is set by inject-entitlements.sh (local dev)
+  /// and the Fastfile (TestFlight). Without it, CloudKit calls are unsafe.
   private var isCloudKitAvailable: Bool { Self.isCloudKitAvailable }
 
   static var isCloudKitAvailable: Bool {
-    let containers =
-      Bundle.main.object(forInfoDictionaryKey: "NSUbiquitousContainers") as? [String: Any]
-    return containers != nil && !containers!.isEmpty
+    #if CLOUDKIT_ENABLED
+      return true
+    #else
+      return false
+    #endif
   }
 }

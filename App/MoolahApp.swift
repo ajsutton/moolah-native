@@ -112,6 +112,7 @@ struct MoolahApp: App {
 
     // Wire sync engine to reload profiles on remote changes (only when CloudKit is available)
     if CloudKitAuthProvider.isCloudKitAvailable {
+      logger.info("CloudKit available — starting profile index sync engine")
       profileIndexSyncEngine.onRemoteChangesApplied = { [weak store] in
         store?.loadCloudProfiles()
       }
@@ -120,6 +121,10 @@ struct MoolahApp: App {
 
       // Clean up the legacy CloudKit zone from SwiftData's automatic sync
       LegacyZoneCleanup.performIfNeeded()
+    } else {
+      logger.warning(
+        "CloudKit not available — profile sync disabled (NSUbiquitousContainers missing from Info.plist)"
+      )
     }
 
     #if os(macOS)

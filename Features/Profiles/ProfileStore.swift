@@ -217,11 +217,7 @@ final class ProfileStore {
     validationError = nil
     defer { isValidating = false }
 
-    // Check if CloudKit entitlements are configured first — CKContainer.default()
-    // throws an uncatchable NSException without them.
-    let containers =
-      Bundle.main.object(forInfoDictionaryKey: "NSUbiquitousContainers") as? [String: Any]
-    guard containers != nil, !containers!.isEmpty else {
+    guard CloudKitAuthProvider.isCloudKitAvailable else {
       // No CloudKit entitlements — allow local-only SwiftData profiles
       return true
     }

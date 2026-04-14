@@ -11,7 +11,7 @@ import re, os
 with open("project.yml") as f:
     content = f.read()
 
-block = "\n".join([
+entitlements_block = "\n".join([
     "    entitlements:",
     "      path: .build/Moolah.entitlements",
     "      properties:",
@@ -25,7 +25,15 @@ block = "\n".join([
 
 for target in ["Moolah_iOS", "Moolah_macOS"]:
     pattern = rf"(  {target}:\n    type: application\n    platform: (?:iOS|macOS)\n)"
-    content = re.sub(pattern, lambda m: m.group(0) + block + "\n", content)
+    content = re.sub(pattern, lambda m: m.group(0) + entitlements_block + "\n", content)
+
+# Add CLOUDKIT_ENABLED Swift compilation condition so isCloudKitAvailable
+# can gate CKContainer usage at compile time (prevents NSException crash
+# in builds without CloudKit entitlements).
+content = content.replace(
+    'SWIFT_TREAT_WARNINGS_AS_ERRORS: YES',
+    'SWIFT_TREAT_WARNINGS_AS_ERRORS: YES\n    SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CLOUDKIT_ENABLED"'
+)
 
 with open(os.environ["OUTFILE"], "w") as f:
     f.write(content)

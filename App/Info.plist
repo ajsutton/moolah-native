@@ -33,6 +33,18 @@
     <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
+    <key>NSUbiquitousContainers</key>
+    <dict>
+        <key>iCloud.rocks.moolah.app</key>
+        <dict>
+            <key>NSUbiquitousContainerIsDocumentScopePublic</key>
+            <false/>
+            <key>NSUbiquitousContainerSupportedFolderLevels</key>
+            <string>None</string>
+            <key>NSUbiquitousContainerName</key>
+            <string>Moolah</string>
+        </dict>
+    </dict>
     <key>UILaunchScreen</key>
     <dict/>
     <key>UIBackgroundModes</key>

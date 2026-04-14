@@ -126,6 +126,7 @@ final class ProfileSession: Identifiable {
     if profile.backendType == .cloudKit, let containerManager,
       CloudKitAuthProvider.isCloudKitAvailable
     {
+      logger.info("Starting profile sync engine for \(profile.id)")
       let profileContainer = try! containerManager.container(for: profile.id)
       let syncEngine = ProfileSyncEngine(profileId: profile.id, modelContainer: profileContainer)
       syncEngine.onRemoteChangesApplied = { [weak self] changedTypes in
@@ -156,6 +157,8 @@ final class ProfileSession: Identifiable {
       }
 
       syncEngine.start()
+    } else if profile.backendType == .cloudKit {
+      logger.warning("CloudKit not available — profile sync disabled for \(profile.id)")
     }
   }
 
