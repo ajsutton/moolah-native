@@ -3,7 +3,7 @@ import XCTest
 
 @testable import Moolah
 
-/// Benchmarks for sync batch operations — upsert (download) and balance invalidation.
+/// Benchmarks for sync batch operations — upsert (download).
 final class SyncBatchBenchmarks: XCTestCase {
 
   nonisolated(unsafe) private static var _container: ModelContainer!
@@ -36,36 +36,32 @@ final class SyncBatchBenchmarks: XCTestCase {
     return opts
   }
 
-  /// Simulates upserting 400 NEW transaction records into an 18k dataset.
+  /// Simulates upserting 400 NEW transaction records into a 37k dataset.
   func testBatchUpsert_insertHeavy() {
-    let currency = Currency.defaultTestCurrency
+    let instrument = Instrument.defaultTestInstrument
     let container = self.container
     measure(metrics: metrics, options: options) {
       _ = try! awaitSync { @MainActor in
         let context = ModelContext(container)
-        var newRecords: [TransactionRecord] = []
         for i in 0..<400 {
-          newRecords.append(
-            TransactionRecord(
-              id: UUID(),
-              type: TransactionType.expense.rawValue,
-              date: Date(),
-              accountId: BenchmarkFixtures.heavyAccountId,
-              amount: -(i + 1) * 100,
-              currencyCode: currency.code,
-              payee: "Bench Insert \(i)"
-            ))
-        }
-        let incomingIds = newRecords.map(\.id)
-        let existing = try context.fetch(
-          FetchDescriptor<TransactionRecord>(
-            predicate: #Predicate { incomingIds.contains($0.id) }))
-        var byId = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
-        for record in newRecords {
-          if byId[record.id] == nil {
-            context.insert(record)
-            byId[record.id] = record
-          }
+          let txnId = UUID()
+          let txnRecord = TransactionRecord(
+            id: txnId,
+            date: Date(),
+            payee: "Bench Insert \(i)"
+          )
+          context.insert(txnRecord)
+          let leg = TransactionLegRecord(
+            transactionId: txnId,
+            accountId: BenchmarkFixtures.heavyAccountId,
+            instrumentId: instrument.id,
+            quantity: InstrumentAmount(
+              quantity: Decimal(-(i + 1)), instrument: instrument
+            ).storageValue,
+            type: TransactionType.expense.rawValue,
+            sortOrder: 0
+          )
+          context.insert(leg)
         }
         context.rollback()
       }
@@ -86,19 +82,6 @@ final class SyncBatchBenchmarks: XCTestCase {
         for id in existingIds {
           byId[id]?.payee = "Updated"
         }
-        context.rollback()
-      }
-    }
-  }
-
-  /// Measures the balance invalidation sweep that follows a transaction sync.
-  func testBalanceInvalidation() {
-    let container = self.container
-    measure(metrics: metrics, options: options) {
-      _ = try! awaitSync { @MainActor in
-        let context = ModelContext(container)
-        let accounts = try context.fetch(FetchDescriptor<AccountRecord>())
-        for account in accounts { account.cachedBalance = nil }
         context.rollback()
       }
     }

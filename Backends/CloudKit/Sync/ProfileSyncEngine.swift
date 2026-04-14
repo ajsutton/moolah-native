@@ -1147,7 +1147,7 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
 
   /// Looks up records by UUID for a batch of pending changes.
   /// Uses IN-predicate fetches per record type, pruning the remaining set after each type.
-  private func buildBatchRecordLookup(for uuids: Set<UUID>) -> [UUID: CKRecord] {
+  func buildBatchRecordLookup(for uuids: Set<UUID>) -> [UUID: CKRecord] {
     let context = ModelContext(modelContainer)
     var lookup: [UUID: CKRecord] = [:]
     var remaining = uuids

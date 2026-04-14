@@ -18,7 +18,7 @@ final class TransactionFetchBenchmarks: XCTestCase {
     try! awaitSync { @MainActor in
       BenchmarkFixtures.seed(scale: .x2, in: result.container)
     }
-    // Trigger balance recomputation so cachedBalance is populated for the fast path.
+    // Pre-warm: load accounts so balances are computed from legs.
     _ = try! awaitSync { try await result.backend.accounts.fetchAll() }
   }
 

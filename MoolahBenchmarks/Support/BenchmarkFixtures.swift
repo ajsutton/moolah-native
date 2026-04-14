@@ -67,24 +67,28 @@ enum BenchmarkFixtures {
   @MainActor
   static func seed(scale: BenchmarkScale, in container: ModelContainer) {
     let context = container.mainContext
-    let currency = Currency.defaultTestCurrency
+    let instrument = Instrument.defaultTestInstrument
 
-    let accountIds = seedAccounts(scale: scale, in: context, currency: currency)
+    // Ensure the instrument record exists
+    let instrumentRecord = InstrumentRecord.from(instrument)
+    context.insert(instrumentRecord)
+
+    let accountIds = seedAccounts(scale: scale, in: context)
     let categoryIds = seedCategories(scale: scale, in: context)
-    let earmarkIds = seedEarmarks(scale: scale, in: context, currency: currency)
+    let earmarkIds = seedEarmarks(scale: scale, in: context, instrument: instrument)
     seedTransactions(
       scale: scale,
       accountIds: accountIds,
       categoryIds: categoryIds,
       earmarkIds: earmarkIds,
       in: context,
-      currency: currency
+      instrument: instrument
     )
     seedInvestmentValues(
       scale: scale,
       accountIds: accountIds,
       in: context,
-      currency: currency
+      instrument: instrument
     )
 
     try! context.save()
@@ -106,8 +110,7 @@ enum BenchmarkFixtures {
   @MainActor
   private static func seedAccounts(
     scale: BenchmarkScale,
-    in context: ModelContext,
-    currency: Currency
+    in context: ModelContext
   ) -> [UUID] {
     var ids: [UUID] = []
 
@@ -119,8 +122,7 @@ enum BenchmarkFixtures {
         id: id,
         name: "Heavy Account \(i)",
         type: AccountType.bank.rawValue,
-        position: i,
-        currencyCode: currency.code
+        position: i
       )
       context.insert(record)
     }
@@ -141,8 +143,7 @@ enum BenchmarkFixtures {
         id: id,
         name: "Account \(i + 3)",
         type: accountType.rawValue,
-        position: i + 3,
-        currencyCode: currency.code
+        position: i + 3
       )
       context.insert(record)
     }
@@ -155,8 +156,7 @@ enum BenchmarkFixtures {
         id: id,
         name: "Investment \(i)",
         type: AccountType.investment.rawValue,
-        position: scale.accounts - scale.investmentAccounts + i,
-        currencyCode: currency.code
+        position: scale.accounts - scale.investmentAccounts + i
       )
       context.insert(record)
     }
@@ -192,20 +192,23 @@ enum BenchmarkFixtures {
   private static func seedEarmarks(
     scale: BenchmarkScale,
     in context: ModelContext,
-    currency: Currency
+    instrument: Instrument
   ) -> [UUID] {
     var ids: [UUID] = []
     for i in 0..<scale.earmarks {
       let id = deterministicUUID(namespace: 0x04, index: i)
       ids.append(id)
       // Half have savings targets.
-      let savingsTarget: Int? = i % 2 == 0 ? (i + 1) * 100_00 : nil
+      let savingsTarget: Int64? =
+        i % 2 == 0
+        ? InstrumentAmount(quantity: Decimal((i + 1) * 100), instrument: instrument).storageValue
+        : nil
       let record = EarmarkRecord(
         id: id,
         name: "Earmark \(i)",
         position: i,
         savingsTarget: savingsTarget,
-        currencyCode: currency.code
+        savingsTargetInstrumentId: savingsTarget != nil ? instrument.id : nil
       )
       context.insert(record)
     }
@@ -219,7 +222,7 @@ enum BenchmarkFixtures {
     categoryIds: [UUID],
     earmarkIds: [UUID],
     in context: ModelContext,
-    currency: Currency
+    instrument: Instrument
   ) {
     let fiveYearsAgo = Calendar.current.date(byAdding: .year, value: -5, to: Date())!
     let timeSpan = Date().timeIntervalSince(fiveYearsAgo)
@@ -264,17 +267,26 @@ enum BenchmarkFixtures {
       let fraction = Double(i) / Double(max(1, scale.transactions - 1))
       let date = fiveYearsAgo.addingTimeInterval(fraction * timeSpan)
 
-      // Amount: vary between -500_00 and 500_00 cents.
-      let amount: Int
+      // Quantity: vary between 1 and 500 (whole units).
+      let quantity: Int64
       switch txnType {
       case .expense:
-        amount = -((i % 500 + 1) * 100)
+        quantity =
+          InstrumentAmount(
+            quantity: Decimal(-((i % 500 + 1))), instrument: instrument
+          ).storageValue
       case .income:
-        amount = (i % 800 + 1) * 100
+        quantity =
+          InstrumentAmount(
+            quantity: Decimal(i % 800 + 1), instrument: instrument
+          ).storageValue
       case .transfer:
-        amount = (i % 300 + 1) * 100
+        quantity =
+          InstrumentAmount(
+            quantity: Decimal(i % 300 + 1), instrument: instrument
+          ).storageValue
       default:
-        amount = 0
+        quantity = 0
       }
 
       // Assign category to ~70% of transactions.
@@ -296,19 +308,38 @@ enum BenchmarkFixtures {
 
       let record = TransactionRecord(
         id: id,
-        type: txnType.rawValue,
         date: date,
-        accountId: accountId,
-        toAccountId: toAccountId,
-        amount: amount,
-        currencyCode: currency.code,
         payee: "Payee \(i % 200)",
-        categoryId: categoryId,
-        earmarkId: earmarkId,
         recurPeriod: recurPeriod,
         recurEvery: recurEvery
       )
       context.insert(record)
+
+      // Create the primary leg
+      let legRecord = TransactionLegRecord(
+        transactionId: id,
+        accountId: accountId,
+        instrumentId: instrument.id,
+        quantity: quantity,
+        type: txnType.rawValue,
+        categoryId: categoryId,
+        earmarkId: earmarkId,
+        sortOrder: 0
+      )
+      context.insert(legRecord)
+
+      // For transfers, create a second leg for the destination account
+      if let toAccountId {
+        let toLegRecord = TransactionLegRecord(
+          transactionId: id,
+          accountId: toAccountId,
+          instrumentId: instrument.id,
+          quantity: -quantity,
+          type: TransactionType.transfer.rawValue,
+          sortOrder: 1
+        )
+        context.insert(toLegRecord)
+      }
     }
   }
 
@@ -317,7 +348,7 @@ enum BenchmarkFixtures {
     scale: BenchmarkScale,
     accountIds: [UUID],
     in context: ModelContext,
-    currency: Currency
+    instrument: Instrument
   ) {
     // Investment accounts are the last N in the account list.
     let investmentAccountIds = Array(accountIds.suffix(scale.investmentAccounts))
@@ -333,15 +364,17 @@ enum BenchmarkFixtures {
       let fraction = Double(i) / Double(max(1, scale.investmentValues - 1))
       let date = sixMonthsAgo.addingTimeInterval(fraction * timeSpan)
 
-      // Value between 10,000 and 500,000 cents.
-      let value = (i % 4900 + 100) * 100
+      // Value between 100 and 5000 units.
+      let value = InstrumentAmount(
+        quantity: Decimal((i % 4900 + 100)), instrument: instrument
+      ).storageValue
 
       let record = InvestmentValueRecord(
         id: id,
         accountId: investAccountId,
         date: date,
         value: value,
-        currencyCode: currency.code
+        instrumentId: instrument.id
       )
       context.insert(record)
     }
