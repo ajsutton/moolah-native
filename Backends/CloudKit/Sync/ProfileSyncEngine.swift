@@ -55,6 +55,26 @@ final class ProfileSyncEngine: Sendable {
   /// Empty set means "invalidate all" (deletion case).
   private var fetchSessionAffectedAccountIds: Set<UUID>?
 
+  // MARK: - Fetch Session Performance Tracking
+
+  /// When the current fetch session started (nil when not fetching).
+  private var fetchSessionStartTime: ContinuousClock.Instant?
+
+  /// Total records saved across all batches in the current fetch session.
+  private var fetchSessionTotalSaves = 0
+
+  /// Total records deleted across all batches in the current fetch session.
+  private var fetchSessionTotalDeletes = 0
+
+  /// Number of batches processed in the current fetch session.
+  private var fetchSessionBatchCount = 0
+
+  /// Cumulative time spent in applyRemoteChanges across all batches.
+  private var fetchSessionApplyDuration: Duration = .zero
+
+  /// Cumulative time spent in context.save() across all batches.
+  private var fetchSessionSaveDuration: Duration = .zero
+
   var hasPendingChanges: Bool {
     syncEngine.map { !$0.state.pendingRecordZoneChanges.isEmpty } ?? false
   }
@@ -125,6 +145,14 @@ final class ProfileSyncEngine: Sendable {
     isFetchingChanges = true
     fetchSessionChangedTypes.removeAll()
     fetchSessionAffectedAccountIds = nil
+
+    // Reset performance tracking
+    fetchSessionStartTime = .now
+    fetchSessionTotalSaves = 0
+    fetchSessionTotalDeletes = 0
+    fetchSessionBatchCount = 0
+    fetchSessionApplyDuration = .zero
+    fetchSessionSaveDuration = .zero
   }
 
   /// Signals that CKSyncEngine has finished delivering all change batches.
@@ -133,18 +161,45 @@ final class ProfileSyncEngine: Sendable {
   func endFetchingChanges() {
     isFetchingChanges = false
 
-    guard !fetchSessionChangedTypes.isEmpty else { return }
+    guard !fetchSessionChangedTypes.isEmpty else {
+      fetchSessionStartTime = nil
+      return
+    }
 
     // Perform deferred balance invalidation
+    var balanceInvalidationDuration: Duration = .zero
     if let affectedIds = fetchSessionAffectedAccountIds {
       let context = modelContainer.mainContext
+      let balanceStart = ContinuousClock.now
       Self.invalidateCachedBalances(accountIds: affectedIds, context: context)
       do {
         try context.save()
       } catch {
         logger.error("Failed to save deferred balance invalidation: \(error)")
       }
+      balanceInvalidationDuration = ContinuousClock.now - balanceStart
+      let balanceMs = balanceInvalidationDuration.inMilliseconds
+      if balanceMs > 16 {
+        logger.warning(
+          "⚠️ PERF: balance invalidation took \(balanceMs)ms (>\(affectedIds.count) accounts)")
+      }
     }
+
+    // Log fetch session summary
+    let sessionDuration = fetchSessionStartTime.map { ContinuousClock.now - $0 } ?? .zero
+    let sessionMs = sessionDuration.inMilliseconds
+    let applyMs = fetchSessionApplyDuration.inMilliseconds
+    let saveMs = fetchSessionSaveDuration.inMilliseconds
+    let balanceMs = balanceInvalidationDuration.inMilliseconds
+    let totalRecords = fetchSessionTotalSaves + fetchSessionTotalDeletes
+    logger.info(
+      """
+      📊 SYNC SESSION COMPLETE: \(totalRecords) records (\(self.fetchSessionTotalSaves) saves, \
+      \(self.fetchSessionTotalDeletes) deletes) in \(self.fetchSessionBatchCount) batches | \
+      total: \(sessionMs)ms | applyChanges: \(applyMs)ms | contextSave: \(saveMs)ms | \
+      balanceInvalidation: \(balanceMs)ms | types: \(self.fetchSessionChangedTypes)
+      """)
+    fetchSessionStartTime = nil
 
     // Fire the callback once with all accumulated types
     let types = fetchSessionChangedTypes
@@ -220,7 +275,13 @@ final class ProfileSyncEngine: Sendable {
   /// Stops the sync engine. Call during profile deactivation or app termination.
   func stop() {
     systemFieldsSaveTask?.cancel()
-    flushSystemFieldsCache()
+    // Flush synchronously on stop — this is a one-time cost during shutdown.
+    do {
+      let data = try JSONEncoder().encode(systemFieldsCache)
+      try data.write(to: systemFieldsCacheURL, options: .atomic)
+    } catch {
+      logger.error("Failed to save system fields cache on stop: \(error)")
+    }
     syncEngine = nil
     isRunning = false
     logger.info("Stopped sync engine for profile \(self.profileId)")
@@ -296,6 +357,8 @@ final class ProfileSyncEngine: Sendable {
     deleted: [(CKRecord.ID, String)],  // (recordID, recordType)
     preExtractedSystemFields: [(String, Data)]? = nil
   ) {
+    let batchStart = ContinuousClock.now
+
     let signpostID = OSSignpostID(log: Signposts.sync)
     os_signpost(
       .begin, log: Signposts.sync, name: "applyRemoteChanges", signpostID: signpostID,
@@ -332,7 +395,9 @@ final class ProfileSyncEngine: Sendable {
     os_signpost(
       .begin, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID,
       "%{public}d records", saved.count)
+    let upsertStart = ContinuousClock.now
     Self.applyBatchSaves(saved, context: context)
+    let upsertDuration = ContinuousClock.now - upsertStart
     os_signpost(.end, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID)
 
     os_signpost(
@@ -371,9 +436,12 @@ final class ProfileSyncEngine: Sendable {
       }
     }
 
+    var saveDuration: Duration = .zero
     do {
       os_signpost(.begin, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
+      let saveStart = ContinuousClock.now
       try context.save()
+      saveDuration = ContinuousClock.now - saveStart
       os_signpost(.end, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
       let changedTypes = Set(saved.map(\.recordType) + deleted.map(\.1))
       if isFetchingChanges {
@@ -385,6 +453,28 @@ final class ProfileSyncEngine: Sendable {
     } catch {
       os_signpost(.end, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
       logger.error("Failed to save remote changes: \(error)")
+    }
+
+    // Track batch performance
+    let batchDuration = ContinuousClock.now - batchStart
+    let batchMs = batchDuration.inMilliseconds
+    let upsertMs = upsertDuration.inMilliseconds
+    let saveMs = saveDuration.inMilliseconds
+
+    if isFetchingChanges {
+      fetchSessionTotalSaves += saved.count
+      fetchSessionTotalDeletes += deleted.count
+      fetchSessionBatchCount += 1
+      fetchSessionApplyDuration += batchDuration
+      fetchSessionSaveDuration += saveDuration
+    }
+
+    if batchMs > 16 {
+      logger.warning(
+        """
+        ⚠️ PERF: applyRemoteChanges blocked main thread for \(batchMs)ms \
+        (upsert: \(upsertMs)ms, save: \(saveMs)ms, \(saved.count) saves, \(deleted.count) deletes)
+        """)
     }
   }
 
@@ -421,10 +511,15 @@ final class ProfileSyncEngine: Sendable {
   }
 
   private func loadSystemFieldsCache() -> [String: Data] {
-    guard let data = try? Data(contentsOf: systemFieldsCacheURL),
-      let cache = try? PropertyListDecoder().decode([String: Data].self, from: data)
-    else { return [:] }
-    return cache
+    guard let data = try? Data(contentsOf: systemFieldsCacheURL) else { return [:] }
+    // Try JSON first (new format), fall back to plist (legacy format)
+    if let cache = try? JSONDecoder().decode([String: Data].self, from: data) {
+      return cache
+    }
+    if let cache = try? PropertyListDecoder().decode([String: Data].self, from: data) {
+      return cache
+    }
+    return [:]
   }
 
   private func saveSystemFieldsCache() {
@@ -432,14 +527,26 @@ final class ProfileSyncEngine: Sendable {
     systemFieldsSaveTask = Task { [weak self] in
       try? await Task.sleep(for: .seconds(1))
       guard !Task.isCancelled, let self else { return }
-      self.flushSystemFieldsCache()
+      // Snapshot the cache on MainActor, then encode and write off MainActor.
+      let snapshot = self.systemFieldsCache
+      let url = self.systemFieldsCacheURL
+      await Self.flushSystemFieldsCache(snapshot, to: url)
     }
   }
 
-  private func flushSystemFieldsCache() {
+  private nonisolated static func flushSystemFieldsCache(
+    _ cache: [String: Data], to url: URL
+  ) async {
+    let logger = Logger(subsystem: "com.moolah.app", category: "ProfileSyncEngine")
     do {
-      let data = try PropertyListEncoder().encode(systemFieldsCache)
-      try data.write(to: systemFieldsCacheURL, options: .atomic)
+      let start = ContinuousClock.now
+      let data = try JSONEncoder().encode(cache)
+      try data.write(to: url, options: .atomic)
+      let elapsed = (ContinuousClock.now - start).inMilliseconds
+      if elapsed > 100 {
+        logger.warning(
+          "⚠️ PERF: flushSystemFieldsCache took \(elapsed)ms (\(cache.count) entries)")
+      }
     } catch {
       logger.error("Failed to save system fields cache: \(error)")
     }

@@ -37,14 +37,19 @@ final class CategoryStore {
   /// Re-fetches categories without showing loading state or clearing errors.
   /// Used when CloudKit delivers remote changes — avoids UI flicker.
   func reloadFromSync() async {
+    let start = ContinuousClock.now
     do {
       let freshList = try await repository.fetchAll()
       let fresh = Categories(from: freshList)
       let freshCategories = fresh.flattenedByPath().map(\.category)
       let currentCategories = categories.flattenedByPath().map(\.category)
+      let elapsed = (ContinuousClock.now - start).inMilliseconds
       if freshCategories != currentCategories {
         categories = fresh
-        logger.debug("Sync: updated categories")
+        logger.debug("Sync: updated categories in \(elapsed)ms")
+      }
+      if elapsed > 16 {
+        logger.warning("⚠️ PERF: categoryStore.reloadFromSync took \(elapsed)ms")
       }
     } catch {
       logger.error("Sync reload failed: \(error.localizedDescription)")

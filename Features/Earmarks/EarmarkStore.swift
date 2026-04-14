@@ -41,11 +41,16 @@ final class EarmarkStore {
   /// Re-fetches earmarks without showing loading state or clearing errors.
   /// Used when CloudKit delivers remote changes — avoids UI flicker.
   func reloadFromSync() async {
+    let start = ContinuousClock.now
     do {
       let fresh = Earmarks(from: try await repository.fetchAll())
+      let elapsed = (ContinuousClock.now - start).inMilliseconds
       if fresh.ordered != earmarks.ordered {
         earmarks = fresh
-        logger.debug("Sync: updated earmarks (\(fresh.count) earmarks)")
+        logger.debug("Sync: updated earmarks (\(fresh.count) earmarks) in \(elapsed)ms")
+      }
+      if elapsed > 16 {
+        logger.warning("⚠️ PERF: earmarkStore.reloadFromSync took \(elapsed)ms")
       }
     } catch {
       logger.error("Sync reload failed: \(error.localizedDescription)")

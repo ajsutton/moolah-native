@@ -37,11 +37,16 @@ final class AccountStore {
   /// Re-fetches accounts without showing loading state or clearing errors.
   /// Used when CloudKit delivers remote changes — avoids UI flicker.
   func reloadFromSync() async {
+    let start = ContinuousClock.now
     do {
       let fresh = Accounts(from: try await repository.fetchAll())
+      let elapsed = (ContinuousClock.now - start).inMilliseconds
       if fresh.ordered != accounts.ordered {
         accounts = fresh
-        logger.debug("Sync: updated accounts (\(fresh.count) accounts)")
+        logger.debug("Sync: updated accounts (\(fresh.count) accounts) in \(elapsed)ms")
+      }
+      if elapsed > 16 {
+        logger.warning("⚠️ PERF: accountStore.reloadFromSync took \(elapsed)ms")
       }
     } catch {
       logger.error("Sync reload failed: \(error.localizedDescription)")

@@ -10,14 +10,27 @@ Build, launch the macOS app, and stream OS logs continuously to `.agent-tmp/app-
 ## Start the app
 
 ```bash
-# Default: captures all com.moolah.app logs
-just run-mac-with-logs
+# Default: captures all com.moolah.app logs (run in background)
+just run-mac-with-logs &
 
-# Custom predicate (e.g. specific category)
-just run-mac-with-logs 'category == "ProfileSyncEngine"'
+# Custom predicate — must be a single quoted string
+just run-mac-with-logs 'category == "ProfileSyncEngine"' &
 ```
 
-Run this in the background. Logs stream to `.agent-tmp/app-logs.txt` until you kill the process.
+In non-interactive mode (background), the script polls until the app exits. Kill the app to stop both the app and the log stream.
+
+## Monitor for specific events
+
+Use the Monitor tool to stream matching log lines as they arrive:
+
+```
+Monitor(
+  description: "Moolah sync performance logs",
+  command: "tail -f .agent-tmp/app-logs.txt | grep -E --line-buffered 'PERF|error|Failed'",
+  timeout_ms: 300000,
+  persistent: false
+)
+```
 
 ## Inspect logs
 
@@ -38,8 +51,11 @@ grep -B2 -A5 "zoneNotFound" .agent-tmp/app-logs.txt
 ## Stop and clean up
 
 ```bash
-# Kill the log stream and the app
+# Kill the app (log stream stops automatically in non-interactive mode)
 pkill -f "Moolah.app/Contents/MacOS/Moolah" 2>/dev/null || true
+
+# Also kill any orphaned log stream
+pkill -f "log stream.*com.moolah.app" 2>/dev/null || true
 
 # Clean up
 rm .agent-tmp/app-logs.txt
@@ -49,4 +65,4 @@ rm .agent-tmp/app-logs.txt
 
 - **Log redaction**: OSLog redacts dynamic values by default. Use `privacy: .public` in logger calls to see values. Standard string interpolation shows as `<private>`.
 - **Large logs**: If the file is large (>256KB), use `grep` or `Read` with `offset`/`limit`.
-- Use `--style ndjson` for machine-parseable JSON (edit the predicate arg or the script).
+- **Predicate quoting**: The predicate is passed as a single argument. Use single quotes around the entire predicate in `just run-mac-with-logs`. Parentheses and complex predicates work inside single quotes.

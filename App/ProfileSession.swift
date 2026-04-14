@@ -190,6 +190,7 @@ final class ProfileSession: Identifiable {
       let types = self.pendingChangedTypes
       self.pendingChangedTypes.removeAll()
 
+      let reloadStart = ContinuousClock.now
       logger.debug("Reloading stores after CloudKit sync: \(types)")
       if types.contains(AccountRecord.recordType) || types.contains(TransactionRecord.recordType) {
         await accountStore.reloadFromSync()
@@ -202,6 +203,8 @@ final class ProfileSession: Identifiable {
       {
         await earmarkStore.reloadFromSync()
       }
+      let reloadMs = (ContinuousClock.now - reloadStart).inMilliseconds
+      logger.info("📊 Store reloads after sync completed in \(reloadMs)ms for types: \(types)")
     }
   }
 }

@@ -9,7 +9,8 @@
 #   scripts/run-with-logs.sh                                    # default: subsystem == "com.moolah.app"
 #   scripts/run-with-logs.sh 'category == "ProfileSyncEngine"'  # custom predicate
 #
-# The script runs until interrupted (Ctrl-C) or the app exits.
+# The script runs until interrupted (Ctrl-C), the app exits, or (in non-interactive
+# mode) the app process is killed externally.
 
 set -euo pipefail
 
@@ -17,6 +18,7 @@ PREDICATE="${1:-subsystem == \"com.moolah.app\"}"
 LOG_DIR=".agent-tmp"
 LOG_FILE="$LOG_DIR/app-logs.txt"
 APP_PATH=".build/Build/Products/Debug/Moolah.app"
+APP_BINARY="$APP_PATH/Contents/MacOS/Moolah"
 
 cleanup() {
     echo ""
@@ -40,6 +42,7 @@ just build-mac
 
 # Start log stream before launching the app so startup logs are captured
 echo "Starting log stream (predicate: $PREDICATE)..."
+rm -f "$LOG_FILE"
 /usr/bin/log stream \
     --predicate "$PREDICATE" \
     --level debug \
@@ -53,15 +56,26 @@ echo "Launching app..."
 open "$APP_PATH"
 
 echo "App running. Logs streaming to $LOG_FILE"
+echo "Log stream PID: $LOG_PID"
 
-# If running interactively, wait for Ctrl-C. Otherwise, exit and let
-# the log stream and app continue as background processes.
 if [ -t 0 ]; then
+    # Interactive: wait for Ctrl-C
     echo "Press Ctrl-C to stop."
     wait "$LOG_PID" 2>/dev/null || true
 else
-    echo "Non-interactive mode — log stream (PID $LOG_PID) and app running in background."
-    echo "To stop: pkill -f 'Moolah.app/Contents/MacOS/Moolah'; kill $LOG_PID"
-    # Detach the cleanup trap so background processes survive script exit
-    trap - EXIT
+    # Non-interactive: wait for the app process to appear, then poll until it exits.
+    # This keeps the script (and log stream) alive for the app's lifetime.
+    echo "Non-interactive mode — waiting for app to exit..."
+    # Wait for app to start (up to 10s)
+    for i in $(seq 1 20); do
+        if pgrep -f "Moolah.app/Contents/MacOS/Moolah" > /dev/null 2>&1; then
+            break
+        fi
+        sleep 0.5
+    done
+    # Poll until app exits (check every 2s)
+    while pgrep -f "Moolah.app/Contents/MacOS/Moolah" > /dev/null 2>&1; do
+        sleep 2
+    done
+    echo "App exited."
 fi
