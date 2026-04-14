@@ -27,6 +27,63 @@ platform :ios do
     )
   end
 
+  desc "Build and validate iOS archive against App Store rules (no upload)"
+  lane :validate do
+    certificates
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+
+    profile_name = ENV["sigh_rocks.moolah.app_appstore_profile-name"]
+
+    entitlements_path = "build/Moolah.entitlements"
+    FileUtils.mkdir_p("build")
+    File.write(entitlements_path, <<~PLIST)
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      <plist version="1.0">
+      <dict>
+        <key>com.apple.developer.icloud-container-identifiers</key>
+        <array><string>iCloud.rocks.moolah.app</string></array>
+        <key>com.apple.developer.icloud-services</key>
+        <array><string>CloudKit</string></array>
+        <key>com.apple.security.app-sandbox</key>
+        <true/>
+        <key>com.apple.security.network.client</key>
+        <true/>
+      </dict>
+      </plist>
+    PLIST
+
+    build_app(
+      scheme: "Moolah-iOS",
+      export_method: "app-store",
+      output_directory: "./build",
+      output_name: "Moolah.ipa",
+      xcargs: [
+        "CODE_SIGN_ENTITLEMENTS=#{entitlements_path}",
+        "CODE_SIGN_STYLE=Manual",
+        "DEVELOPMENT_TEAM=#{ENV['DEVELOPMENT_TEAM']}",
+        "'CODE_SIGN_IDENTITY=Apple Distribution'",
+        "'PROVISIONING_PROFILE_SPECIFIER=#{profile_name}'",
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) CLOUDKIT_ENABLED'"
+      ].join(" ")
+    )
+
+    UI.message("Validating IPA against App Store rules...")
+    pilot(
+      api_key: api_key,
+      ipa: "./build/Moolah.ipa",
+      skip_submission: true,
+      skip_waiting_for_build_processing: true
+    )
+    UI.success("App Store validation passed!")
+  end
+
   desc "Build and upload iOS app to TestFlight"
   lane :beta do
     certificates

@@ -18,6 +18,9 @@ jobs:
       - name: Generate Xcode project
         run: just generate
 
+      - name: Validate App Store requirements
+        run: just validate-appstore
+
       - name: Format
         run: just lint
 

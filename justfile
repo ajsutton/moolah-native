@@ -99,6 +99,14 @@ certificates:
 # Build and install macOS app, then upload iOS app to TestFlight
 test-release: install-mac testflight
 
+# Check App Store requirements without signing (Info.plist, icons, etc.)
+validate-appstore:
+    bash scripts/validate-appstore.sh
+
+# Validate an iOS archive against App Store rules (requires signing)
+validate-ios: generate
+    bundle exec fastlane ios validate
+
 # Build and upload to TestFlight
 testflight: generate
     bundle exec fastlane ios beta
