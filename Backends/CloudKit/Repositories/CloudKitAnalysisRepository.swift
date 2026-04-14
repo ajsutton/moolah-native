@@ -159,7 +159,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
           to: &currentBalance,
           investments: &currentInvestments,
           earmarks: &currentEarmarks,
-          investmentAccountIds: investmentAccountIds
+          investmentAccountIds: investmentAccountIds,
+          investmentTransfersOnly: false
         )
       }
     }
@@ -174,7 +175,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         to: &currentBalance,
         investments: &currentInvestments,
         earmarks: &currentEarmarks,
-        investmentAccountIds: investmentAccountIds
+        investmentAccountIds: investmentAccountIds,
+        investmentTransfersOnly: true
       )
 
       let dayKey: Date
@@ -488,7 +490,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     var currentInvestments: InstrumentAmount = .zero(instrument: instrument)
     var currentEarmarks: InstrumentAmount = .zero(instrument: instrument)
 
-    // If 'after' is provided, compute starting balances up to that date
+    // If 'after' is provided, compute starting balances up to that date.
+    // Starting balance includes ALL leg types on investment accounts
+    // (matching server's selectBalance for hasInvestmentAccount).
     if let after {
       let priorTransactions = nonScheduled.filter { $0.date < after }
       for txn in priorTransactions.sorted(by: { $0.date < $1.date }) {
@@ -497,12 +501,16 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
           to: &currentBalance,
           investments: &currentInvestments,
           earmarks: &currentEarmarks,
-          investmentAccountIds: investmentAccountIds
+          investmentAccountIds: investmentAccountIds,
+          investmentTransfersOnly: false
         )
       }
     }
 
-    // Apply each transaction to running balances (transactions already sorted above)
+    // Apply each transaction to running balances (transactions already sorted above).
+    // Only TRANSFER legs change the investment running total for daily deltas
+    // (matching server's dailyProfitAndLoss which only counts transfers
+    // between investment and non-investment accounts).
     var lastComputeDayDate: Date?
     var lastComputeDayKey: Date = .distantPast
 
@@ -512,7 +520,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         to: &currentBalance,
         investments: &currentInvestments,
         earmarks: &currentEarmarks,
-        investmentAccountIds: investmentAccountIds
+        investmentAccountIds: investmentAccountIds,
+        investmentTransfersOnly: true
       )
 
       let dayKey: Date
@@ -821,12 +830,20 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
   /// Apply a transaction's legs to running balance totals.
   /// Each leg is processed independently based on its type and account.
+  /// Apply a transaction's legs to running balance totals.
+  ///
+  /// - Parameter investmentTransfersOnly: When true, only `.transfer` legs on investment
+  ///   accounts affect the `investments` total (matching server's dailyProfitAndLoss
+  ///   which only counts transfers between investment/non-investment accounts).
+  ///   When false, all leg types on investment accounts count (matching server's
+  ///   selectBalance used for starting balances).
   private static func applyTransaction(
     _ txn: Transaction,
     to balance: inout InstrumentAmount,
     investments: inout InstrumentAmount,
     earmarks: inout InstrumentAmount,
-    investmentAccountIds: Set<UUID>
+    investmentAccountIds: Set<UUID>,
+    investmentTransfersOnly: Bool = false
   ) {
     for leg in txn.legs {
       // Only legs with an accountId affect account balances
@@ -834,7 +851,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       // Earmark-only legs (nil accountId) only affect the earmarked total.
       if let accountId = leg.accountId {
         if investmentAccountIds.contains(accountId) {
-          investments += leg.amount
+          if !investmentTransfersOnly || leg.type == .transfer {
+            investments += leg.amount
+          }
         } else {
           balance += leg.amount
         }
@@ -972,7 +991,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         to: &balance,
         investments: &investments,
         earmarks: &earmarks,
-        investmentAccountIds: investmentAccountIds
+        investmentAccountIds: investmentAccountIds,
+        investmentTransfersOnly: true
       )
 
       let dayKey = Calendar.current.startOfDay(for: instance.date)
