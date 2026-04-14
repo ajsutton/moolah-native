@@ -41,6 +41,20 @@ final class ProfileSyncEngine: Sendable {
   /// Coalesces rapid successive writes into a single disk operation.
   private var systemFieldsSaveTask: Task<Void, Never>?
 
+  /// True while CKSyncEngine is fetching changes (between willFetchChanges and didFetchChanges).
+  /// During this window, balance invalidation and store reload callbacks are deferred
+  /// to avoid redundant O(N) recomputations after every batch of 200 records.
+  private(set) var isFetchingChanges = false
+
+  /// Record types accumulated across batches during a fetch session.
+  /// Flushed as a single callback on endFetchingChanges().
+  private var fetchSessionChangedTypes = Set<String>()
+
+  /// Account IDs affected by transaction changes during a fetch session.
+  /// Used for deferred balance invalidation on endFetchingChanges().
+  /// Empty set means "invalidate all" (deletion case).
+  private var fetchSessionAffectedAccountIds: Set<UUID>?
+
   var hasPendingChanges: Bool {
     syncEngine.map { !$0.state.pendingRecordZoneChanges.isEmpty } ?? false
   }
@@ -100,6 +114,43 @@ final class ProfileSyncEngine: Sendable {
         await self.sendChanges()
       }
     }
+  }
+
+  // MARK: - Fetch Session Lifecycle
+
+  /// Signals that CKSyncEngine is about to deliver change batches.
+  /// Called from handleEventOnMain for .willFetchChanges.
+  /// During this window, balance invalidation and reload callbacks are deferred.
+  func beginFetchingChanges() {
+    isFetchingChanges = true
+    fetchSessionChangedTypes.removeAll()
+    fetchSessionAffectedAccountIds = nil
+  }
+
+  /// Signals that CKSyncEngine has finished delivering all change batches.
+  /// Called from handleEventOnMain for .didFetchChanges.
+  /// Performs deferred balance invalidation and fires the reload callback once.
+  func endFetchingChanges() {
+    isFetchingChanges = false
+
+    guard !fetchSessionChangedTypes.isEmpty else { return }
+
+    // Perform deferred balance invalidation
+    if let affectedIds = fetchSessionAffectedAccountIds {
+      let context = modelContainer.mainContext
+      Self.invalidateCachedBalances(accountIds: affectedIds, context: context)
+      do {
+        try context.save()
+      } catch {
+        logger.error("Failed to save deferred balance invalidation: \(error)")
+      }
+    }
+
+    // Fire the callback once with all accumulated types
+    let types = fetchSessionChangedTypes
+    fetchSessionChangedTypes.removeAll()
+    fetchSessionAffectedAccountIds = nil
+    onRemoteChangesApplied?(types)
   }
 
   /// Scans all record types in the local store and queues them for upload.
@@ -291,17 +342,33 @@ final class ProfileSyncEngine: Sendable {
     os_signpost(.end, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID)
 
     // Invalidate cached balances when transactions arrive from other devices.
-    // The local cache is stale — it will be recomputed on next fetchAll().
+    // During a fetch session (bulk sync), defer invalidation to endFetchingChanges()
+    // to avoid O(total_transactions) recomputation after every batch.
     let hasTransactionChanges =
       saved.contains { $0.recordType == TransactionRecord.recordType }
       || deleted.contains { $0.1 == TransactionRecord.recordType }
     if hasTransactionChanges {
-      os_signpost(
-        .begin, log: Signposts.balance, name: "invalidateCachedBalances", signpostID: signpostID)
       let affectedAccountIds = Self.extractAffectedAccountIds(saved: saved, deleted: deleted)
-      Self.invalidateCachedBalances(accountIds: affectedAccountIds, context: context)
-      os_signpost(
-        .end, log: Signposts.balance, name: "invalidateCachedBalances", signpostID: signpostID)
+      if isFetchingChanges {
+        // Accumulate for deferred invalidation
+        if affectedAccountIds.isEmpty {
+          // Empty = invalidate all (deletion case) — overrides any targeted set
+          fetchSessionAffectedAccountIds = Set()
+        } else if let existing = fetchSessionAffectedAccountIds, !existing.isEmpty {
+          fetchSessionAffectedAccountIds = existing.union(affectedAccountIds)
+        } else if fetchSessionAffectedAccountIds == nil {
+          fetchSessionAffectedAccountIds = affectedAccountIds
+        }
+        // else: already set to empty (invalidate-all), leave it
+      } else {
+        os_signpost(
+          .begin, log: Signposts.balance, name: "invalidateCachedBalances",
+          signpostID: signpostID)
+        Self.invalidateCachedBalances(accountIds: affectedAccountIds, context: context)
+        os_signpost(
+          .end, log: Signposts.balance, name: "invalidateCachedBalances",
+          signpostID: signpostID)
+      }
     }
 
     do {
@@ -309,7 +376,12 @@ final class ProfileSyncEngine: Sendable {
       try context.save()
       os_signpost(.end, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
       let changedTypes = Set(saved.map(\.recordType) + deleted.map(\.1))
-      onRemoteChangesApplied?(changedTypes)
+      if isFetchingChanges {
+        // Accumulate types for deferred callback
+        fetchSessionChangedTypes.formUnion(changedTypes)
+      } else {
+        onRemoteChangesApplied?(changedTypes)
+      }
     } catch {
       os_signpost(.end, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
       logger.error("Failed to save remote changes: \(error)")
@@ -790,8 +862,14 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     case .sentDatabaseChanges:
       break
 
-    case .willFetchChanges, .willFetchRecordZoneChanges, .didFetchChanges,
-      .didFetchRecordZoneChanges, .willSendChanges, .didSendChanges:
+    case .willFetchChanges:
+      beginFetchingChanges()
+
+    case .didFetchChanges:
+      endFetchingChanges()
+
+    case .willFetchRecordZoneChanges, .didFetchRecordZoneChanges,
+      .willSendChanges, .didSendChanges:
       break
 
     @unknown default:
