@@ -1,10 +1,9 @@
 import Foundation
 
 /// A value type that captures transaction form state and encapsulates the
-/// validation and conversion logic shared between `TransactionDetailView`
-/// and `TransactionFormView`. All amount-signing and field-clearing rules
+/// validation and conversion logic used by `TransactionDetailView`.
 /// live here so they can be unit-tested without a UI host.
-struct TransactionDraft: Sendable {
+struct TransactionDraft: Sendable, Equatable {
   var type: TransactionType
   var payee: String
   var amountText: String
@@ -14,6 +13,7 @@ struct TransactionDraft: Sendable {
   var categoryId: UUID?
   var earmarkId: UUID?
   var notes: String
+  var categoryText: String
   var toAmountText: String
   var isRepeating: Bool
   var recurPeriod: RecurPeriod?
@@ -120,7 +120,7 @@ extension TransactionDraft {
     let toAmountText: String
     if let transferLeg, primaryLeg?.instrument != transferLeg.instrument {
       toAmountText = abs(transferLeg.quantity).formatted(
-        .number.precision(.fractionLength(2)))
+        .number.precision(.fractionLength(transferLeg.instrument.decimals)))
     } else {
       toAmountText = ""
     }
@@ -129,7 +129,7 @@ extension TransactionDraft {
       type: primaryLeg?.type == .transfer ? .transfer : (primaryLeg?.type ?? .expense),
       payee: transaction.payee ?? "",
       amountText: primaryLeg.map {
-        abs($0.quantity).formatted(.number.precision(.fractionLength(2)))
+        abs($0.quantity).formatted(.number.precision(.fractionLength($0.instrument.decimals)))
       } ?? "",
       date: transaction.date,
       accountId: primaryLeg?.accountId,
@@ -137,6 +137,7 @@ extension TransactionDraft {
       categoryId: primaryLeg?.categoryId,
       earmarkId: primaryLeg?.earmarkId,
       notes: transaction.notes ?? "",
+      categoryText: "",
       toAmountText: toAmountText,
       isRepeating: transaction.recurPeriod != nil && transaction.recurPeriod != .once,
       recurPeriod: transaction.recurPeriod,
@@ -156,6 +157,7 @@ extension TransactionDraft {
       categoryId: nil,
       earmarkId: nil,
       notes: "",
+      categoryText: "",
       toAmountText: "",
       isRepeating: false,
       recurPeriod: nil,
