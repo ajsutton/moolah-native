@@ -543,4 +543,39 @@ struct ProfileSyncEngineTests {
 
     #expect(callbackCount == 0)
   }
+
+  // MARK: - System Fields on Model
+
+  @Test func applyRemoteChangesStoresSystemFieldsOnModel() async {
+    let profileId = UUID()
+    let container = try! TestModelContainer.create()
+    let engine = ProfileSyncEngine(profileId: profileId, modelContainer: container)
+
+    let accountId = UUID()
+    let ckRecord = CKRecord(
+      recordType: "CD_AccountRecord",
+      recordID: CKRecord.ID(recordName: accountId.uuidString, zoneID: engine.zoneID)
+    )
+    ckRecord["name"] = "Test Account" as CKRecordValue
+    ckRecord["type"] = "bank" as CKRecordValue
+    ckRecord["position"] = 0 as CKRecordValue
+    ckRecord["isHidden"] = 0 as CKRecordValue
+    ckRecord["currencyCode"] = "AUD" as CKRecordValue
+
+    engine.applyRemoteChanges(saved: [ckRecord], deleted: [])
+
+    // Verify system fields were stored on the model
+    let context = ModelContext(container)
+    let records = try! context.fetch(
+      FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == accountId })
+    )
+    #expect(records.count == 1)
+    #expect(records.first?.encodedSystemFields != nil)
+
+    // Verify the stored system fields can reconstruct a CKRecord
+    let storedData = records.first!.encodedSystemFields!
+    let restored = CKRecord.fromEncodedSystemFields(storedData)
+    #expect(restored != nil)
+    #expect(restored?.recordID.recordName == accountId.uuidString)
+  }
 }

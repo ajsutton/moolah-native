@@ -374,19 +374,19 @@ final class ProfileSyncEngine: Sendable {
       .mapValues(\.count)
     logger.info("applyRemoteChanges: \(saved.count) saves \(typeCounts), \(deleted.count) deletes")
 
-    // Cache system fields from received records so that if the ChangeTracker
-    // later re-queues them for upload (e.g. after recomputeAllBalances updates
-    // cachedBalance), the upload uses the correct change tag instead of creating
-    // a new server record.
-    // Use pre-extracted system fields (computed off MainActor) if available.
+    // Build system fields lookup for batch upserts.
+    var systemFields: [String: Data]
     if let preExtracted = preExtractedSystemFields {
-      for (recordName, data) in preExtracted {
-        systemFieldsCache[recordName] = data
-      }
+      systemFields = Dictionary(preExtracted, uniquingKeysWith: { _, last in last })
     } else {
-      for ckRecord in saved {
-        systemFieldsCache[ckRecord.recordID.recordName] = ckRecord.encodedSystemFields
-      }
+      systemFields = Dictionary(
+        uniqueKeysWithValues: saved.map { ($0.recordID.recordName, $0.encodedSystemFields) }
+      )
+    }
+
+    // Also update the in-memory cache (still needed for buildCKRecord during uploads)
+    for (name, data) in systemFields {
+      systemFieldsCache[name] = data
     }
     saveSystemFieldsCache()
 
@@ -396,7 +396,7 @@ final class ProfileSyncEngine: Sendable {
       .begin, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID,
       "%{public}d records", saved.count)
     let upsertStart = ContinuousClock.now
-    Self.applyBatchSaves(saved, context: context)
+    Self.applyBatchSaves(saved, context: context, systemFields: systemFields)
     let upsertDuration = ContinuousClock.now - upsertStart
     os_signpost(.end, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID)
 
@@ -600,22 +600,24 @@ final class ProfileSyncEngine: Sendable {
 
   /// Groups saved records by type and batch-upserts each group.
   /// Uses one fetch per record type instead of one fetch per record.
-  private nonisolated static func applyBatchSaves(_ records: [CKRecord], context: ModelContext) {
+  private nonisolated static func applyBatchSaves(
+    _ records: [CKRecord], context: ModelContext, systemFields: [String: Data]
+  ) {
     let grouped = Dictionary(grouping: records, by: { $0.recordType })
     for (recordType, ckRecords) in grouped {
       switch recordType {
       case AccountRecord.recordType:
-        batchUpsertAccounts(ckRecords, context: context)
+        batchUpsertAccounts(ckRecords, context: context, systemFields: systemFields)
       case TransactionRecord.recordType:
-        batchUpsertTransactions(ckRecords, context: context)
+        batchUpsertTransactions(ckRecords, context: context, systemFields: systemFields)
       case CategoryRecord.recordType:
-        batchUpsertCategories(ckRecords, context: context)
+        batchUpsertCategories(ckRecords, context: context, systemFields: systemFields)
       case EarmarkRecord.recordType:
-        batchUpsertEarmarks(ckRecords, context: context)
+        batchUpsertEarmarks(ckRecords, context: context, systemFields: systemFields)
       case EarmarkBudgetItemRecord.recordType:
-        batchUpsertEarmarkBudgetItems(ckRecords, context: context)
+        batchUpsertEarmarkBudgetItems(ckRecords, context: context, systemFields: systemFields)
       case InvestmentValueRecord.recordType:
-        batchUpsertInvestmentValues(ckRecords, context: context)
+        batchUpsertInvestmentValues(ckRecords, context: context, systemFields: systemFields)
       default:
         batchLogger.warning("applyBatchSaves: unknown record type '\(recordType)' — skipping")
       }
@@ -725,7 +727,7 @@ final class ProfileSyncEngine: Sendable {
   // MARK: - Per-Type Batch Upsert
 
   nonisolated private static func batchUpsertAccounts(
-    _ ckRecords: [CKRecord], context: ModelContext
+    _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
     let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
@@ -755,8 +757,10 @@ final class ProfileSyncEngine: Sendable {
         existing.isHidden = values.isHidden
         existing.currencyCode = values.currencyCode
         // cachedBalance NOT updated from sync — computed locally from transactions
+        existing.encodedSystemFields = systemFields[id.uuidString]
         updateCount += 1
       } else {
+        values.encodedSystemFields = systemFields[id.uuidString]
         context.insert(values)
         byID[id] = values
         insertCount += 1
@@ -768,7 +772,7 @@ final class ProfileSyncEngine: Sendable {
   }
 
   nonisolated private static func batchUpsertTransactions(
-    _ ckRecords: [CKRecord], context: ModelContext
+    _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
     let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
@@ -796,7 +800,9 @@ final class ProfileSyncEngine: Sendable {
         existing.earmarkId = values.earmarkId
         existing.recurPeriod = values.recurPeriod
         existing.recurEvery = values.recurEvery
+        existing.encodedSystemFields = systemFields[id.uuidString]
       } else {
+        values.encodedSystemFields = systemFields[id.uuidString]
         context.insert(values)
         byID[id] = values
       }
@@ -804,7 +810,7 @@ final class ProfileSyncEngine: Sendable {
   }
 
   nonisolated private static func batchUpsertCategories(
-    _ ckRecords: [CKRecord], context: ModelContext
+    _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
     let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
@@ -822,7 +828,9 @@ final class ProfileSyncEngine: Sendable {
       if let existing = byID[id] {
         existing.name = values.name
         existing.parentId = values.parentId
+        existing.encodedSystemFields = systemFields[id.uuidString]
       } else {
+        values.encodedSystemFields = systemFields[id.uuidString]
         context.insert(values)
         byID[id] = values
       }
@@ -830,7 +838,7 @@ final class ProfileSyncEngine: Sendable {
   }
 
   nonisolated private static func batchUpsertEarmarks(
-    _ ckRecords: [CKRecord], context: ModelContext
+    _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
     let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
@@ -853,7 +861,9 @@ final class ProfileSyncEngine: Sendable {
         existing.currencyCode = values.currencyCode
         existing.savingsStartDate = values.savingsStartDate
         existing.savingsEndDate = values.savingsEndDate
+        existing.encodedSystemFields = systemFields[id.uuidString]
       } else {
+        values.encodedSystemFields = systemFields[id.uuidString]
         context.insert(values)
         byID[id] = values
       }
@@ -861,7 +871,7 @@ final class ProfileSyncEngine: Sendable {
   }
 
   nonisolated private static func batchUpsertEarmarkBudgetItems(
-    _ ckRecords: [CKRecord], context: ModelContext
+    _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
     let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
@@ -881,7 +891,9 @@ final class ProfileSyncEngine: Sendable {
         existing.categoryId = values.categoryId
         existing.amount = values.amount
         existing.currencyCode = values.currencyCode
+        existing.encodedSystemFields = systemFields[id.uuidString]
       } else {
+        values.encodedSystemFields = systemFields[id.uuidString]
         context.insert(values)
         byID[id] = values
       }
@@ -889,7 +901,7 @@ final class ProfileSyncEngine: Sendable {
   }
 
   nonisolated private static func batchUpsertInvestmentValues(
-    _ ckRecords: [CKRecord], context: ModelContext
+    _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
     let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
@@ -909,7 +921,9 @@ final class ProfileSyncEngine: Sendable {
         existing.date = values.date
         existing.value = values.value
         existing.currencyCode = values.currencyCode
+        existing.encodedSystemFields = systemFields[id.uuidString]
       } else {
+        values.encodedSystemFields = systemFields[id.uuidString]
         context.insert(values)
         byID[id] = values
       }
