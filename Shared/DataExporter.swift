@@ -72,12 +72,22 @@ actor DataExporter {
       throw MigrationError.exportFailed(step: "investment values", underlying: error)
     }
 
+    // Collect all unique instruments from the exported data
+    let profileInstrument = Instrument.fiat(code: currencyCode)
+    var instrumentsById: [String: Instrument] = [profileInstrument.id: profileInstrument]
+    for txn in transactions {
+      for leg in txn.legs {
+        instrumentsById[leg.instrument.id] = leg.instrument
+      }
+    }
+
     let data = ExportedData(
       version: 1,
       exportedAt: Date(),
       profileLabel: profileLabel,
       currencyCode: currencyCode,
       financialYearStartMonth: financialYearStartMonth,
+      instruments: Array(instrumentsById.values),
       accounts: accounts,
       categories: categories,
       earmarks: earmarks,

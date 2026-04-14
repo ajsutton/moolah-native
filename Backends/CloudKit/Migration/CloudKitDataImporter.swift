@@ -39,6 +39,11 @@ struct CloudKitDataImporter {
     let totalSteps = 7.0
     var step = 0.0
 
+    // 0. Instruments (must exist before records that reference them)
+    for instrument in data.instruments {
+      context.insert(InstrumentRecord.from(instrument))
+    }
+
     // 1. Categories (no dependencies)
     progress?("categories", step / totalSteps)
     for category in data.categories {
