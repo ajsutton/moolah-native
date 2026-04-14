@@ -17,7 +17,7 @@ enum SyncErrorRecovery {
     /// Conflict: server has a newer version. Caller should update system fields, then re-queue.
     var conflicts: [(recordID: CKRecord.ID, serverRecord: CKRecord)] = []
     /// Record was deleted on server — caller should clear system fields, then re-queue.
-    var unknownItems: [CKRecord.ID] = []
+    var unknownItems: [(recordID: CKRecord.ID, recordType: String)] = []
     /// All other re-queueable failures (quotaExceeded, limitExceeded, unexpected errors).
     var requeue: [CKRecord.ID] = []
   }
@@ -42,7 +42,7 @@ enum SyncErrorRecovery {
         }
 
       case .unknownItem:
-        result.unknownItems.append(recordID)
+        result.unknownItems.append((recordID: recordID, recordType: failure.record.recordType))
 
       case .quotaExceeded:
         logger.error(
@@ -89,7 +89,7 @@ enum SyncErrorRecovery {
     for (recordID, _) in failures.conflicts {
       pendingSaves.append(.saveRecord(recordID))
     }
-    for recordID in failures.unknownItems {
+    for (recordID, _) in failures.unknownItems {
       pendingSaves.append(.saveRecord(recordID))
     }
     for recordID in failures.requeue {

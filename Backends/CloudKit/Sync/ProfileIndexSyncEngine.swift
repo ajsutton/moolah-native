@@ -16,14 +16,11 @@ final class ProfileIndexSyncEngine: Sendable {
   var onRemoteChangesApplied: (() -> Void)?
 
   private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileIndexSyncEngine")
-  private var pendingSaves: Set<CKRecord.ID> = []
-  private var pendingDeletions: Set<CKRecord.ID> = []
   private var syncEngine: CKSyncEngine?
   private(set) var isRunning = false
   private nonisolated(unsafe) var saveObserver: NSObjectProtocol?
   private var isApplyingRemoteChanges = false
   private var isFirstLaunch = false
-  private var systemFieldsCache: [String: Data] = [:]
 
   init(modelContainer: ModelContainer) {
     self.modelContainer = modelContainer
@@ -47,12 +44,41 @@ final class ProfileIndexSyncEngine: Sendable {
     )
     syncEngine = CKSyncEngine(configuration)
     isRunning = true
-    systemFieldsCache = loadSystemFieldsCache()
+    // Clean up legacy system fields cache file (now stored on model records)
+    let legacyCacheURL = URL.applicationSupportDirectory
+      .appending(path: "Moolah-profile-index.systemfields")
+    try? FileManager.default.removeItem(at: legacyCacheURL)
     logger.info("Started profile index sync engine")
 
     // On first start, queue any existing profiles for upload
     if isFirstLaunch {
       queueAllExistingProfiles()
+    }
+
+    // Ensure the zone exists, then trigger a send.
+    // CKSyncEngine does not create zones automatically. If it attempts to send
+    // before the zone exists, records fail with invalidArguments/zoneNotFound
+    // and the engine stops retrying. After zone creation, we explicitly send
+    // to flush any pending records.
+    Task {
+      await ensureZoneExists()
+      if self.hasPendingChanges {
+        self.logger.info("Zone ready — sending pending changes")
+        await self.sendChanges()
+      }
+    }
+  }
+
+  private func ensureZoneExists() async {
+    do {
+      let zone = CKRecordZone(zoneID: zoneID)
+      _ = try await CKContainer.default().privateCloudDatabase.save(zone)
+      logger.info("Ensured zone exists: \(self.zoneID.zoneName)")
+    } catch let error as CKError where error.code == .serverRecordChanged {
+      // Zone already exists — this is fine
+      logger.info("Zone already exists: \(self.zoneID.zoneName)")
+    } catch {
+      logger.error("Failed to ensure zone exists: \(error)")
     }
   }
 
@@ -119,7 +145,7 @@ final class ProfileIndexSyncEngine: Sendable {
   // MARK: - Background Sync
 
   var hasPendingChanges: Bool {
-    !pendingSaves.isEmpty || !pendingDeletions.isEmpty
+    syncEngine.map { !$0.state.pendingRecordZoneChanges.isEmpty } ?? false
   }
 
   /// Tells CKSyncEngine to send all pending changes now.
@@ -160,15 +186,11 @@ final class ProfileIndexSyncEngine: Sendable {
 
   func addPendingSave(for profileId: UUID) {
     let recordID = CKRecord.ID(recordName: profileId.uuidString, zoneID: zoneID)
-    guard pendingSaves.insert(recordID).inserted else { return }
-    pendingDeletions.remove(recordID)
     syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
   }
 
   func addPendingDeletion(for profileId: UUID) {
     let recordID = CKRecord.ID(recordName: profileId.uuidString, zoneID: zoneID)
-    guard pendingDeletions.insert(recordID).inserted else { return }
-    pendingSaves.remove(recordID)
     syncEngine?.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
   }
 
@@ -184,6 +206,7 @@ final class ProfileIndexSyncEngine: Sendable {
       guard ckRecord.recordType == ProfileRecord.recordType else { continue }
       guard let profileId = UUID(uuidString: ckRecord.recordID.recordName) else { continue }
 
+      let systemFieldsData = ckRecord.encodedSystemFields
       let values = ProfileRecord.fieldValues(from: ckRecord)
       let descriptor = FetchDescriptor<ProfileRecord>(
         predicate: #Predicate { $0.id == profileId }
@@ -193,7 +216,9 @@ final class ProfileIndexSyncEngine: Sendable {
         existing.currencyCode = values.currencyCode
         existing.financialYearStartMonth = values.financialYearStartMonth
         existing.createdAt = values.createdAt
+        existing.encodedSystemFields = systemFieldsData
       } else {
+        values.encodedSystemFields = systemFieldsData
         context.insert(values)
       }
     }
@@ -240,31 +265,18 @@ final class ProfileIndexSyncEngine: Sendable {
     try? FileManager.default.removeItem(at: stateFileURL)
   }
 
-  // MARK: - System Fields Cache
+  // MARK: - System Fields Management
 
-  private var systemFieldsCacheURL: URL {
-    URL.applicationSupportDirectory.appending(path: "Moolah-profile-index.systemfields")
-  }
-
-  private func loadSystemFieldsCache() -> [String: Data] {
-    guard let data = try? Data(contentsOf: systemFieldsCacheURL),
-      let cache = try? PropertyListDecoder().decode([String: Data].self, from: data)
-    else { return [:] }
-    return cache
-  }
-
-  private func saveSystemFieldsCache() {
-    do {
-      let data = try PropertyListEncoder().encode(systemFieldsCache)
-      try data.write(to: systemFieldsCacheURL, options: .atomic)
-    } catch {
-      logger.error("Failed to save system fields cache: \(error)")
+  /// Clears encoded system fields on all ProfileRecords.
+  /// Called on encrypted data reset where we keep data but must re-upload fresh.
+  private func clearAllSystemFields() {
+    let context = ModelContext(modelContainer)
+    if let records = try? context.fetch(FetchDescriptor<ProfileRecord>()) {
+      for record in records {
+        record.encodedSystemFields = nil
+      }
+      try? context.save()
     }
-  }
-
-  private func deleteSystemFieldsCache() {
-    systemFieldsCache = [:]
-    try? FileManager.default.removeItem(at: systemFieldsCacheURL)
   }
 
   // MARK: - Local Data Deletion
@@ -296,21 +308,20 @@ final class ProfileIndexSyncEngine: Sendable {
       predicate: #Predicate { $0.id == profileId }
     )
     guard let record = try? context.fetch(descriptor).first else { return nil }
-    let freshRecord = record.toCKRecord(in: zoneID)
-    return applySystemFieldsCache(to: freshRecord)
+    return buildCKRecord(for: record)
   }
 
-  private func applySystemFieldsCache(to freshRecord: CKRecord) -> CKRecord {
-    let recordName = freshRecord.recordID.recordName
-    guard let cachedData = systemFieldsCache[recordName],
+  /// Builds a CKRecord from a local ProfileRecord for upload.
+  /// If cached system fields exist on the model, applies fields directly onto the
+  /// cached record to preserve the change tag and avoid `.serverRecordChanged` conflicts.
+  private func buildCKRecord(for record: ProfileRecord) -> CKRecord {
+    if let cachedData = record.encodedSystemFields,
       let cachedRecord = CKRecord.fromEncodedSystemFields(cachedData)
-    else {
-      return freshRecord
+    {
+      record.applyFields(to: cachedRecord)
+      return cachedRecord
     }
-    for key in freshRecord.allKeys() {
-      cachedRecord[key] = freshRecord[key]
-    }
-    return cachedRecord
+    return record.toCKRecord(in: zoneID)
   }
 }
 
@@ -370,13 +381,11 @@ extension ProfileIndexSyncEngine: CKSyncEngineDelegate {
       logger.info("Account signed out — deleting local data and sync state")
       deleteLocalData()
       deleteStateSerialization()
-      deleteSystemFieldsCache()
 
     case .switchAccounts:
       logger.info("Account switched — full reset")
       deleteLocalData()
       deleteStateSerialization()
-      deleteSystemFieldsCache()
 
     @unknown default:
       break
@@ -396,12 +405,11 @@ extension ProfileIndexSyncEngine: CKSyncEngineDelegate {
         logger.warning("Profile-index zone was purged (user cleared iCloud data)")
         deleteLocalData()
         deleteStateSerialization()
-        deleteSystemFieldsCache()
 
       case .encryptedDataReset:
         logger.warning("Encrypted data reset — re-uploading profiles")
         deleteStateSerialization()
-        deleteSystemFieldsCache()
+        clearAllSystemFields()
         queueAllExistingProfiles()
 
       @unknown default:
@@ -413,34 +421,63 @@ extension ProfileIndexSyncEngine: CKSyncEngineDelegate {
   private func handleSentRecordZoneChanges(
     _ sentChanges: CKSyncEngine.Event.SentRecordZoneChanges
   ) {
-    // Cache system fields for successfully sent records (Rule 5)
-    for saved in sentChanges.savedRecords {
-      pendingSaves.remove(saved.recordID)
-      systemFieldsCache[saved.recordID.recordName] = saved.encodedSystemFields
-    }
-    saveSystemFieldsCache()
-
-    for deleted in sentChanges.deletedRecordIDs {
-      pendingDeletions.remove(deleted)
-      systemFieldsCache.removeValue(forKey: deleted.recordName)
+    // Update system fields on model records after successful upload.
+    // This preserves the change tag for subsequent uploads.
+    if !sentChanges.savedRecords.isEmpty {
+      let context = ModelContext(modelContainer)
+      for saved in sentChanges.savedRecords {
+        updateEncodedSystemFields(
+          saved.recordID, data: saved.encodedSystemFields, context: context)
+      }
+      try? context.save()
     }
 
     // Classify and recover from failed saves/deletes
     let failures = SyncErrorRecovery.classify(sentChanges, logger: logger)
 
-    // Handle engine-specific system fields updates before re-queuing
-    for (_, serverRecord) in failures.conflicts {
-      systemFieldsCache[serverRecord.recordID.recordName] = serverRecord.encodedSystemFields
-    }
-    for recordID in failures.unknownItems {
-      systemFieldsCache.removeValue(forKey: recordID.recordName)
-    }
+    // Update system fields from server records on conflict, clear on unknownItem
     if !failures.conflicts.isEmpty || !failures.unknownItems.isEmpty {
-      saveSystemFieldsCache()
+      let context = ModelContext(modelContainer)
+      for (_, serverRecord) in failures.conflicts {
+        updateEncodedSystemFields(
+          serverRecord.recordID, data: serverRecord.encodedSystemFields, context: context)
+      }
+      for (recordID, _) in failures.unknownItems {
+        clearEncodedSystemFields(recordID, context: context)
+      }
+      try? context.save()
     }
 
     SyncErrorRecovery.recover(
       failures, syncEngine: syncEngine, zoneID: zoneID, logger: logger)
+  }
+
+  /// Updates `encodedSystemFields` on the ProfileRecord matching the given record ID.
+  private func updateEncodedSystemFields(
+    _ recordID: CKRecord.ID, data: Data, context: ModelContext
+  ) {
+    guard let profileId = UUID(uuidString: recordID.recordName) else { return }
+    let descriptor = FetchDescriptor<ProfileRecord>(
+      predicate: #Predicate { $0.id == profileId }
+    )
+    if let record = try? context.fetch(descriptor).first {
+      record.encodedSystemFields = data
+    }
+  }
+
+  /// Clears `encodedSystemFields` on the ProfileRecord matching the given record ID.
+  /// Called on `.unknownItem` — the server deleted the record, so the stale change tag
+  /// must be cleared so the next upload creates a fresh record.
+  private func clearEncodedSystemFields(
+    _ recordID: CKRecord.ID, context: ModelContext
+  ) {
+    guard let profileId = UUID(uuidString: recordID.recordName) else { return }
+    let descriptor = FetchDescriptor<ProfileRecord>(
+      predicate: #Predicate { $0.id == profileId }
+    )
+    if let record = try? context.fetch(descriptor).first {
+      record.encodedSystemFields = nil
+    }
   }
 
   nonisolated func nextRecordZoneChangeBatch(
@@ -463,12 +500,15 @@ extension ProfileIndexSyncEngine: CKSyncEngineDelegate {
 
       guard !pendingChanges.isEmpty else { return nil }
 
+      let batchLimit = 400
+      let batch = Array(pendingChanges.prefix(batchLimit))
+
       return CKSyncEngine.RecordZoneChangeBatch(
-        recordsToSave: pendingChanges.compactMap { change -> CKRecord? in
+        recordsToSave: batch.compactMap { change -> CKRecord? in
           guard case .saveRecord(let recordID) = change else { return nil }
           return self.recordToSave(for: recordID)
         },
-        recordIDsToDelete: pendingChanges.compactMap { change -> CKRecord.ID? in
+        recordIDsToDelete: batch.compactMap { change -> CKRecord.ID? in
           guard case .deleteRecord(let recordID) = change else { return nil }
           return recordID
         },

@@ -28,7 +28,13 @@ Each engine receives change notifications from the repository layer. Repository 
 
 ---
 
-## 2. Core Principles
+## 2. Dual-Engine Review Rule
+
+Any sync-related change must be reviewed against **both** `ProfileSyncEngine` and `ProfileIndexSyncEngine` and applied to both whenever applicable. These engines share the same patterns (system fields caching, error recovery, account change handling, zone deletion handling) but are maintained separately. When fixing a bug or adding a feature to one engine, always check whether the same change is needed in the other.
+
+---
+
+## 3. Core Principles
 
 ### Let CKSyncEngine Drive Scheduling
 
@@ -58,7 +64,7 @@ Create and start CKSyncEngine as early as possible in the app lifecycle. The ini
 
 ---
 
-## 3. Rules
+## 4. Rules
 
 ### Rule 1: Filter Notifications by Entity Type
 
@@ -450,7 +456,7 @@ let batch = Array(pendingChanges.prefix(batchLimit))
 
 ---
 
-## 4. State Serialization
+## 5. State Serialization
 
 ### How It Works
 
@@ -477,7 +483,7 @@ Phantom pending changes accumulate in `.syncstate` files and persist across laun
 
 ---
 
-## 5. Record Mapping
+## 6. Record Mapping
 
 ### CloudKitRecordConvertible Protocol
 
@@ -512,7 +518,7 @@ protocol CloudKitRecordConvertible {
 
 ---
 
-## 6. Initial Sync and Fresh Devices
+## 7. Initial Sync and Fresh Devices
 
 ### How It Works
 
@@ -537,7 +543,7 @@ CloudKit replays deletion tombstones indefinitely. For apps with high deletion c
 
 ---
 
-## 7. Testing Sync Code
+## 8. Testing Sync Code
 
 ### Layer Separation
 
@@ -602,7 +608,7 @@ try await deviceB.syncEngine.fetchChanges()
 
 ---
 
-## 8. Debugging Sync Issues
+## 9. Debugging Sync Issues
 
 ### Logging
 
@@ -645,7 +651,7 @@ Use the [CloudKit Dashboard](https://icloud.developer.apple.com/) to:
 
 ---
 
-## 9. Anti-Patterns
+## 10. Anti-Patterns
 
 | Anti-Pattern | Why It's Bad | Do This Instead |
 |-------------|--------------|-----------------|
@@ -666,7 +672,7 @@ Use the [CloudKit Dashboard](https://icloud.developer.apple.com/) to:
 
 ---
 
-## 10. Schema Evolution
+## 11. Schema Evolution
 
 ### CloudKit Production Constraints
 
@@ -695,7 +701,7 @@ let value = ckRecord["newField"] as? String ?? defaultValue
 
 ---
 
-## 11. Implementation Checklist
+## 12. Implementation Checklist
 
 ### Before Implementing a New Sync Engine
 

@@ -43,6 +43,7 @@ extension CategoryRecord: SystemFieldsCacheable {}
 extension EarmarkRecord: SystemFieldsCacheable {}
 extension EarmarkBudgetItemRecord: SystemFieldsCacheable {}
 extension InvestmentValueRecord: SystemFieldsCacheable {}
+extension ProfileRecord: SystemFieldsCacheable {}
 
 // MARK: - CKRecord System Fields
 

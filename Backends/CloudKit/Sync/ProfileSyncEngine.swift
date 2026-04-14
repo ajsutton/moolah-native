@@ -654,6 +654,54 @@ final class ProfileSyncEngine: Sendable {
     }
   }
 
+  /// Clears `encodedSystemFields` on the model record matching the given UUID and type.
+  /// Called on `.unknownItem` — the server deleted the record, so the stale change tag
+  /// must be cleared so the next upload creates a fresh record.
+  nonisolated private static func clearEncodedSystemFields(
+    _ id: UUID, recordType: String, context: ModelContext
+  ) {
+    switch recordType {
+    case AccountRecord.recordType:
+      if let record = try? context.fetch(
+        FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == id })
+      ).first {
+        record.encodedSystemFields = nil
+      }
+    case TransactionRecord.recordType:
+      if let record = try? context.fetch(
+        FetchDescriptor<TransactionRecord>(predicate: #Predicate { $0.id == id })
+      ).first {
+        record.encodedSystemFields = nil
+      }
+    case CategoryRecord.recordType:
+      if let record = try? context.fetch(
+        FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.id == id })
+      ).first {
+        record.encodedSystemFields = nil
+      }
+    case EarmarkRecord.recordType:
+      if let record = try? context.fetch(
+        FetchDescriptor<EarmarkRecord>(predicate: #Predicate { $0.id == id })
+      ).first {
+        record.encodedSystemFields = nil
+      }
+    case EarmarkBudgetItemRecord.recordType:
+      if let record = try? context.fetch(
+        FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { $0.id == id })
+      ).first {
+        record.encodedSystemFields = nil
+      }
+    case InvestmentValueRecord.recordType:
+      if let record = try? context.fetch(
+        FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { $0.id == id })
+      ).first {
+        record.encodedSystemFields = nil
+      }
+    default:
+      break
+    }
+  }
+
   // MARK: - Balance Cache Invalidation
 
   /// Extracts the set of account IDs referenced by transaction CKRecords.
@@ -1210,13 +1258,21 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     let failures = SyncErrorRecovery.classify(sentChanges, logger: logger)
 
     // Handle engine-specific system fields updates before re-queuing
-    if !failures.conflicts.isEmpty {
+    if !failures.conflicts.isEmpty || !failures.unknownItems.isEmpty {
       let ctx = ModelContext(modelContainer)
       for (_, serverRecord) in failures.conflicts {
         if let uuid = UUID(uuidString: serverRecord.recordID.recordName) {
           Self.updateEncodedSystemFields(
             uuid, data: serverRecord.encodedSystemFields,
             recordType: serverRecord.recordType, context: ctx)
+        }
+      }
+      // Clear stale system fields for server-deleted records so the
+      // re-queued upload creates a fresh record without a change tag.
+      for (recordID, recordType) in failures.unknownItems {
+        if let uuid = UUID(uuidString: recordID.recordName) {
+          Self.clearEncodedSystemFields(
+            uuid, recordType: recordType, context: ctx)
         }
       }
       try? ctx.save()

@@ -54,6 +54,38 @@ struct ProfileIndexSyncEngineTests {
     #expect(records.first?.currencyCode == "AUD")
     #expect(records.first?.financialYearStartMonth == 7)
     #expect(records.first?.createdAt == createdAt)
+    #expect(records.first?.encodedSystemFields != nil)
+  }
+
+  @Test func applyRemoteInsertStoresSystemFields() throws {
+    let container = try makeIndexContainer()
+    let engine = ProfileIndexSyncEngine(modelContainer: container)
+
+    let profileId = UUID()
+    let ckRecord = CKRecord(
+      recordType: "CD_ProfileRecord",
+      recordID: CKRecord.ID(recordName: profileId.uuidString, zoneID: engine.zoneID)
+    )
+    ckRecord["label"] = "Test" as CKRecordValue
+    ckRecord["currencyCode"] = "AUD" as CKRecordValue
+    ckRecord["financialYearStartMonth"] = 7 as CKRecordValue
+    ckRecord["createdAt"] = Date() as CKRecordValue
+
+    engine.applyRemoteChanges(saved: [ckRecord], deleted: [])
+
+    let context = ModelContext(container)
+    let descriptor = FetchDescriptor<ProfileRecord>(
+      predicate: #Predicate { $0.id == profileId }
+    )
+    let records = try context.fetch(descriptor)
+    #expect(records.count == 1)
+
+    // Verify system fields were stored and can reconstruct a CKRecord
+    let systemFields = records.first?.encodedSystemFields
+    #expect(systemFields != nil)
+    let restored = CKRecord.fromEncodedSystemFields(systemFields!)
+    #expect(restored != nil)
+    #expect(restored?.recordID == ckRecord.recordID)
   }
 
   @Test func applyRemoteUpdateModifiesExistingProfile() throws {
@@ -89,6 +121,7 @@ struct ProfileIndexSyncEngineTests {
     #expect(records.count == 1)
     #expect(records.first?.label == "New Label")
     #expect(records.first?.currencyCode == "AUD")
+    #expect(records.first?.encodedSystemFields != nil)
   }
 
   @Test func applyRemoteDeleteRemovesProfile() throws {

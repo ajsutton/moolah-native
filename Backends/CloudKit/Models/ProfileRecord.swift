@@ -11,6 +11,7 @@ final class ProfileRecord {
   var currencyCode: String = ""
   var financialYearStartMonth: Int = 7
   var createdAt: Date = Date()
+  var encodedSystemFields: Data?
 
   init(
     id: UUID = UUID(),
