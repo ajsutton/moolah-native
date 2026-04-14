@@ -65,7 +65,9 @@ struct ContentView: View {
             analysisRepository: analysisStore.repository)
         }
       case .allTransactions:
-        AllTransactionsView(
+        TransactionListView(
+          title: "All Transactions",
+          filter: TransactionFilter(),
           accounts: accountStore.accounts,
           categories: categoryStore.categories,
           earmarks: earmarkStore.earmarks,

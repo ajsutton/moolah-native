@@ -3,7 +3,7 @@ import SwiftUI
 
 struct TransactionListView: View {
   let title: String
-  let filter: TransactionFilter
+  let baseFilter: TransactionFilter
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
@@ -14,6 +14,17 @@ struct TransactionListView: View {
   private let _externalSelection: Binding<Transaction?>?
 
   @State private var _internalSelection: Transaction?
+  @State private var activeFilter: TransactionFilter
+  @State private var showFilterSheet = false
+
+  private var filter: TransactionFilter { activeFilter }
+
+  private var displayTitle: String {
+    if activeFilter != baseFilter {
+      return "Filtered Transactions"
+    }
+    return title
+  }
 
   private var selectedTransaction: Transaction? {
     get { _externalSelection?.wrappedValue ?? _internalSelection }
@@ -42,12 +53,13 @@ struct TransactionListView: View {
     transactionStore: TransactionStore
   ) {
     self.title = title
-    self.filter = filter
+    self.baseFilter = filter
     self.accounts = accounts
     self.categories = categories
     self.earmarks = earmarks
     self.transactionStore = transactionStore
     self._externalSelection = nil
+    self._activeFilter = State(initialValue: filter)
   }
 
   /// Embedded init — parent provides selection binding and handles the inspector.
@@ -58,12 +70,13 @@ struct TransactionListView: View {
     selectedTransaction: Binding<Transaction?>
   ) {
     self.title = title
-    self.filter = filter
+    self.baseFilter = filter
     self.accounts = accounts
     self.categories = categories
     self.earmarks = earmarks
     self.transactionStore = transactionStore
     self._externalSelection = selectedTransaction
+    self._activeFilter = State(initialValue: filter)
   }
 
   @State private var showError = false
@@ -195,8 +208,21 @@ struct TransactionListView: View {
     #else
       .listStyle(.plain)
     #endif
-    .profileNavigationTitle(title)
+    .profileNavigationTitle(displayTitle)
     .toolbar {
+      ToolbarItem(placement: .automatic) {
+        Button {
+          showFilterSheet = true
+        } label: {
+          Label(
+            "Filter",
+            systemImage: activeFilter != baseFilter
+              ? "line.3.horizontal.decrease.circle.fill"
+              : "line.3.horizontal.decrease.circle")
+        }
+        .keyboardShortcut("f", modifiers: .command)
+      }
+
       ToolbarItem(placement: .automatic) {
         Button {
           Task {
@@ -217,10 +243,29 @@ struct TransactionListView: View {
         .keyboardShortcut("n", modifiers: .command)
       }
     }
-    .task(id: filter) {
-      // Clear selection when switching accounts
+    .sheet(isPresented: $showFilterSheet) {
+      TransactionFilterView(
+        filter: activeFilter,
+        accounts: accounts,
+        categories: categories,
+        earmarks: earmarks,
+        onApply: { newFilter in
+          activeFilter = newFilter
+          showFilterSheet = false
+        }
+      )
+    }
+    .task(id: baseFilter) {
+      // Reset filter and selection when switching accounts/contexts
+      activeFilter = baseFilter
       selectedTransaction = nil
-      await transactionStore.load(filter: filter)
+      await transactionStore.load(filter: baseFilter)
+    }
+    .task(id: activeFilter) {
+      // Reload when user applies a filter
+      if activeFilter != baseFilter {
+        await transactionStore.load(filter: activeFilter)
+      }
     }
     .refreshable {
       await transactionStore.load(filter: filter)
