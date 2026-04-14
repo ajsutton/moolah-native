@@ -195,6 +195,44 @@ struct TransactionDraftTests {
     #expect(roundTripped!.recurEvery == original.recurEvery)
   }
 
+  // MARK: - Instrument Precision
+
+  @Test func initFromTransactionPreservesInstrumentPrecision() {
+    let btc = Instrument.crypto(
+      chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8)
+    let original = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: btc,
+          quantity: Decimal(string: "-0.00123456")!, type: .expense
+        )
+      ]
+    )
+    let draft = TransactionDraft(from: original)
+    #expect(draft.amountText.contains("0.00123456"))
+  }
+
+  @Test func initFromCrossCurrencyTransferPreservesToInstrumentPrecision() {
+    let btc = Instrument.crypto(
+      chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8)
+    let original = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: Instrument.AUD,
+          quantity: Decimal(string: "-100.00")!, type: .transfer
+        ),
+        TransactionLeg(
+          accountId: accountB, instrument: btc,
+          quantity: Decimal(string: "0.00456789")!, type: .transfer
+        ),
+      ]
+    )
+    let draft = TransactionDraft(from: original)
+    #expect(draft.toAmountText.contains("0.00456789"))
+  }
+
   // MARK: - Cross-Currency Transfers
 
   @Test func sameCurrencyTransferProducesTwoLegsWithSameAmount() {

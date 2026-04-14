@@ -120,7 +120,7 @@ extension TransactionDraft {
     let toAmountText: String
     if let transferLeg, primaryLeg?.instrument != transferLeg.instrument {
       toAmountText = abs(transferLeg.quantity).formatted(
-        .number.precision(.fractionLength(2)))
+        .number.precision(.fractionLength(transferLeg.instrument.decimals)))
     } else {
       toAmountText = ""
     }
@@ -129,7 +129,7 @@ extension TransactionDraft {
       type: primaryLeg?.type == .transfer ? .transfer : (primaryLeg?.type ?? .expense),
       payee: transaction.payee ?? "",
       amountText: primaryLeg.map {
-        abs($0.quantity).formatted(.number.precision(.fractionLength(2)))
+        abs($0.quantity).formatted(.number.precision(.fractionLength($0.instrument.decimals)))
       } ?? "",
       date: transaction.date,
       accountId: primaryLeg?.accountId,
