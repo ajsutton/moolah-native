@@ -547,7 +547,7 @@ final class ProfileSyncEngine: Sendable {
       case InvestmentValueRecord.recordType:
         batchUpsertInvestmentValues(ckRecords, context: context, systemFields: systemFields)
       case ProfileRecord.recordType:
-        break  // Handled by ProfileIndexSyncEngine in the profile-index zone
+        break  // Handled by ProfileIndexSyncEngine — shouldn't reach here after zone filtering
       default:
         batchLogger.warning("applyBatchSaves: unknown record type '\(recordType)' — skipping")
       }
@@ -1005,11 +1005,12 @@ final class ProfileSyncEngine: Sendable {
 extension ProfileSyncEngine: CKSyncEngineDelegate {
   nonisolated func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
     // Pre-extract system fields off the main actor to avoid serialization cost on main thread.
+    // Filter to only records in this engine's zone — CKSyncEngine delivers all zones.
     let preExtracted: [(String, Data)]?
     if case .fetchedRecordZoneChanges(let changes) = event {
-      preExtracted = changes.modifications.map { mod in
-        (mod.record.recordID.recordName, mod.record.encodedSystemFields)
-      }
+      preExtracted = changes.modifications
+        .filter { $0.record.recordID.zoneID == zoneID }
+        .map { ($0.record.recordID.recordName, $0.record.encodedSystemFields) }
     } else {
       preExtracted = nil
     }
@@ -1035,9 +1036,21 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
       handleFetchedDatabaseChanges(fetchedChanges)
 
     case .fetchedRecordZoneChanges(let changes):
+      // CKSyncEngine fetches changes from ALL zones in the database.
+      // Filter to only records in this engine's zone — ignore records from
+      // other zones (e.g. profile-index zone records arriving here).
       let saved = changes.modifications.map(\.record)
-      let deleted: [(CKRecord.ID, String)] = changes.deletions.map {
-        ($0.recordID, $0.recordType)
+        .filter { $0.recordID.zoneID == zoneID }
+      let deleted: [(CKRecord.ID, String)] = changes.deletions
+        .filter { $0.recordID.zoneID == zoneID }
+        .map { ($0.recordID, $0.recordType) }
+      let skippedCount =
+        changes.modifications.count - saved.count
+        + changes.deletions.count - deleted.count
+      if skippedCount > 0 {
+        logger.debug(
+          "Skipped \(skippedCount) records from other zones (expected zone: \(self.zoneID.zoneName, privacy: .public))"
+        )
       }
       guard !saved.isEmpty || !deleted.isEmpty else { break }
       applyRemoteChanges(

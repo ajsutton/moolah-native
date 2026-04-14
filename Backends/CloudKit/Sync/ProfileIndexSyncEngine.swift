@@ -287,8 +287,13 @@ extension ProfileIndexSyncEngine: CKSyncEngineDelegate {
       handleFetchedDatabaseChanges(changes)
 
     case .fetchedRecordZoneChanges(let changes):
+      // CKSyncEngine fetches changes from ALL zones in the database.
+      // Filter to only records in this engine's zone.
       let savedRecords = changes.modifications.map(\.record)
-      let deletedRecordIDs = changes.deletions.map(\.recordID)
+        .filter { $0.recordID.zoneID == zoneID }
+      let deletedRecordIDs = changes.deletions
+        .filter { $0.recordID.zoneID == zoneID }
+        .map(\.recordID)
       guard !savedRecords.isEmpty || !deletedRecordIDs.isEmpty else { return }
       applyRemoteChanges(saved: savedRecords, deleted: deletedRecordIDs)
 
