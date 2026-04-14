@@ -89,3 +89,9 @@ When migrating from Remote to iCloud, profile naming should be:
 - Examples: "Moolah" → rename to "Moolah (Remote)", create "Moolah (iCloud)". "Moolah (Remote)" → unchanged, create "Moolah (iCloud)"
 - If target name already exists, append " 2", " 3", etc. to find a unique name
 
+## Incorrect earmark totals after import
+
+After importing a profile exported from the remote backend, the earmarked total in the analysis view is incorrect. Needs investigation to determine whether the issue is in:
+- The export (earmark data not exported correctly from remote backend)
+- The import (earmark records not created correctly in SwiftData)
+- The analysis computation (earmark amounts accumulated differently than the remote backend)
