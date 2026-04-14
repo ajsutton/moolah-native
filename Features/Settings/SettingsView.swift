@@ -762,11 +762,13 @@ struct ProfileAuthStatusView: View {
           .accessibilityHidden(true)
         Text("\(user.givenName) \(user.familyName)")
         Spacer()
-        Button("Sign Out", role: .destructive) {
-          Task { await authStore.signOut() }
+        if authStore.requiresSignIn {
+          Button("Sign Out", role: .destructive) {
+            Task { await authStore.signOut() }
+          }
+          .buttonStyle(.bordered)
+          .controlSize(.small)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
       }
       .accessibilityElement(children: .combine)
       .accessibilityLabel("Signed in as \(user.givenName) \(user.familyName)")

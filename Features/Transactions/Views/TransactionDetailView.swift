@@ -461,8 +461,12 @@ struct TransactionDetailView: View {
         let decimal = Decimal(abs(match.amount.cents)) / 100
         amountText = "\(decimal)"
       }
-      if categoryId == nil {
-        categoryId = match.categoryId
+      if categoryId == nil, let matchCategoryId = match.categoryId {
+        categoryId = matchCategoryId
+        if let cat = categories.by(id: matchCategoryId) {
+          categoryJustSelected = true
+          categoryText = categories.path(for: cat)
+        }
       }
       if type == .expense && match.type != .expense {
         type = match.type

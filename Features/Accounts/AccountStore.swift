@@ -95,8 +95,8 @@ final class AccountStore {
   func applyTransactionDelta(old: Transaction?, new: Transaction?) {
     var result = accounts
 
-    // Remove the old transaction's effect
-    if let old {
+    // Remove the old transaction's effect (skip scheduled — they don't affect balances)
+    if let old, !old.isScheduled {
       if let accountId = old.accountId {
         result = result.adjustingBalance(of: accountId, by: -old.amount)
       }
@@ -105,8 +105,8 @@ final class AccountStore {
       }
     }
 
-    // Apply the new transaction's effect
-    if let new {
+    // Apply the new transaction's effect (skip scheduled — they don't affect balances)
+    if let new, !new.isScheduled {
       if let accountId = new.accountId {
         result = result.adjustingBalance(of: accountId, by: new.amount)
       }

@@ -43,8 +43,10 @@ struct UserMenuView: View {
 
         profileSection
 
-        Button(String(localized: "Sign Out"), role: .destructive) {
-          Task { await authStore.signOut() }
+        if authStore.requiresSignIn {
+          Button(String(localized: "Sign Out"), role: .destructive) {
+            Task { await authStore.signOut() }
+          }
         }
       } label: {
         HStack(spacing: 6) {

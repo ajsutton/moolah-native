@@ -350,6 +350,37 @@ struct EarmarkStoreTests {
     #expect(store.totalBalance.cents == 40000)
   }
 
+  @Test func testScheduledTransactionDoesNotAffectEarmarkBalance() async throws {
+    let earmarkId = UUID()
+    let accountId = UUID()
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
+    TestBackend.seedWithTransactions(
+      earmarks: [
+        Earmark(
+          id: earmarkId, name: "Holiday Fund",
+          balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+          saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
+          spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
+      ], accountId: accountId, in: container)
+    let store = EarmarkStore(repository: backend.earmarks)
+    await store.load()
+
+    let scheduledTx = Transaction(
+      type: .expense, date: Date(), accountId: accountId,
+      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
+      payee: "Scheduled Bill",
+      earmarkId: earmarkId,
+      recurPeriod: .month, recurEvery: 1
+    )
+    store.applyTransactionDelta(old: nil, new: scheduledTx)
+
+    // Scheduled transactions should not change earmark balance
+    #expect(store.earmarks.by(id: earmarkId)?.balance.cents == 50000)
+    #expect(store.earmarks.by(id: earmarkId)?.spent.cents == 0)
+  }
+
   // MARK: - reorderEarmarks
 
   @Test func testReorderEarmarksUpdatesPositions() async throws {

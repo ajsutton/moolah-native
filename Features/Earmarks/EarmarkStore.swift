@@ -76,8 +76,8 @@ final class EarmarkStore {
   func applyTransactionDelta(old: Transaction?, new: Transaction?) {
     var updated = earmarks.ordered
 
-    // Remove the old transaction's effect
-    if let old, let earmarkId = old.earmarkId {
+    // Remove the old transaction's effect (skip scheduled — they don't affect balances)
+    if let old, !old.isScheduled, let earmarkId = old.earmarkId {
       // Reverse the effect: remove from balance and reverse saved/spent
       updated = updated.map { earmark in
         guard earmark.id == earmarkId else { return earmark }
@@ -96,8 +96,8 @@ final class EarmarkStore {
       }
     }
 
-    // Apply the new transaction's effect
-    if let new, let earmarkId = new.earmarkId {
+    // Apply the new transaction's effect (skip scheduled — they don't affect balances)
+    if let new, !new.isScheduled, let earmarkId = new.earmarkId {
       updated = updated.map { earmark in
         guard earmark.id == earmarkId else { return earmark }
         var copy = earmark

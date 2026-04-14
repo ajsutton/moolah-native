@@ -31,7 +31,7 @@
             Task { await authStore.signOut() }
           }
         }
-        .disabled(authStore == nil)
+        .disabled(authStore == nil || authStore?.requiresSignIn != true)
         .keyboardShortcut("o", modifiers: [.command, .shift])
       }
     }
