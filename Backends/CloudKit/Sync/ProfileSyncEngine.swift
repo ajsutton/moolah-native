@@ -33,14 +33,6 @@ final class ProfileSyncEngine: Sendable {
   /// Used to distinguish the synthetic `.signIn` event from a real one.
   private var isFirstLaunch = false
 
-  /// Cache of CKRecord system fields (change tags) keyed by record name.
-  /// Preserved across uploads to avoid `.serverRecordChanged` conflicts.
-  private var systemFieldsCache: [String: Data] = [:]
-
-  /// Debounce task for writing the system fields cache to disk.
-  /// Coalesces rapid successive writes into a single disk operation.
-  private var systemFieldsSaveTask: Task<Void, Never>?
-
   /// True while CKSyncEngine is fetching changes (between willFetchChanges and didFetchChanges).
   /// During this window, balance invalidation and store reload callbacks are deferred
   /// to avoid redundant O(N) recomputations after every batch of 200 records.
@@ -107,7 +99,10 @@ final class ProfileSyncEngine: Sendable {
     )
     syncEngine = CKSyncEngine(configuration)
     isRunning = true
-    systemFieldsCache = loadSystemFieldsCache()
+    // Clean up legacy system fields cache file (now stored on model records)
+    let legacyCacheURL = URL.applicationSupportDirectory
+      .appending(path: "Moolah-\(profileId.uuidString).systemfields")
+    try? FileManager.default.removeItem(at: legacyCacheURL)
     logger.info("Started sync engine for profile \(self.profileId)")
 
     // On first start (no saved state), queue all existing records for upload.
@@ -274,14 +269,6 @@ final class ProfileSyncEngine: Sendable {
 
   /// Stops the sync engine. Call during profile deactivation or app termination.
   func stop() {
-    systemFieldsSaveTask?.cancel()
-    // Flush synchronously on stop — this is a one-time cost during shutdown.
-    do {
-      let data = try JSONEncoder().encode(systemFieldsCache)
-      try data.write(to: systemFieldsCacheURL, options: .atomic)
-    } catch {
-      logger.error("Failed to save system fields cache on stop: \(error)")
-    }
     syncEngine = nil
     isRunning = false
     logger.info("Stopped sync engine for profile \(self.profileId)")
@@ -384,12 +371,6 @@ final class ProfileSyncEngine: Sendable {
         uniqueKeysWithValues: saved.map { ($0.recordID.recordName, $0.encodedSystemFields) }
       )
     }
-
-    // Also update the in-memory cache (still needed for buildCKRecord during uploads)
-    for (name, data) in systemFields {
-      systemFieldsCache[name] = data
-    }
-    saveSystemFieldsCache()
 
     let context = modelContainer.mainContext
 
@@ -502,60 +483,6 @@ final class ProfileSyncEngine: Sendable {
 
   private func deleteStateSerialization() {
     try? FileManager.default.removeItem(at: stateFileURL)
-  }
-
-  // MARK: - System Fields Cache
-
-  private var systemFieldsCacheURL: URL {
-    URL.applicationSupportDirectory
-      .appending(path: "Moolah-\(profileId.uuidString).systemfields")
-  }
-
-  private func loadSystemFieldsCache() -> [String: Data] {
-    guard let data = try? Data(contentsOf: systemFieldsCacheURL) else { return [:] }
-    // Try JSON first (new format), fall back to plist (legacy format)
-    if let cache = try? JSONDecoder().decode([String: Data].self, from: data) {
-      return cache
-    }
-    if let cache = try? PropertyListDecoder().decode([String: Data].self, from: data) {
-      return cache
-    }
-    return [:]
-  }
-
-  private func saveSystemFieldsCache() {
-    systemFieldsSaveTask?.cancel()
-    systemFieldsSaveTask = Task { [weak self] in
-      try? await Task.sleep(for: .seconds(1))
-      guard !Task.isCancelled, let self else { return }
-      // Snapshot the cache on MainActor, then encode and write off MainActor.
-      let snapshot = self.systemFieldsCache
-      let url = self.systemFieldsCacheURL
-      await Self.flushSystemFieldsCache(snapshot, to: url)
-    }
-  }
-
-  private nonisolated static func flushSystemFieldsCache(
-    _ cache: [String: Data], to url: URL
-  ) async {
-    let logger = Logger(subsystem: "com.moolah.app", category: "ProfileSyncEngine")
-    do {
-      let start = ContinuousClock.now
-      let data = try JSONEncoder().encode(cache)
-      try data.write(to: url, options: .atomic)
-      let elapsed = (ContinuousClock.now - start).inMilliseconds
-      if elapsed > 100 {
-        logger.warning(
-          "⚠️ PERF: flushSystemFieldsCache took \(elapsed)ms (\(cache.count) entries)")
-      }
-    } catch {
-      logger.error("Failed to save system fields cache: \(error)")
-    }
-  }
-
-  private func deleteSystemFieldsCache() {
-    systemFieldsCache = [:]
-    try? FileManager.default.removeItem(at: systemFieldsCacheURL)
   }
 
   // MARK: - Local Data Deletion
@@ -677,6 +604,53 @@ final class ProfileSyncEngine: Sendable {
         batchLogger.warning(
           "applyBatchDeletions: unknown record type '\(recordType)' — skipping")
       }
+    }
+  }
+
+  /// Updates `encodedSystemFields` on the model record matching the given UUID and type.
+  /// Used after successful uploads and conflict resolution.
+  nonisolated private static func updateEncodedSystemFields(
+    _ id: UUID, data: Data, recordType: String, context: ModelContext
+  ) {
+    switch recordType {
+    case AccountRecord.recordType:
+      if let record = try? context.fetch(
+        FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == id })
+      ).first {
+        record.encodedSystemFields = data
+      }
+    case TransactionRecord.recordType:
+      if let record = try? context.fetch(
+        FetchDescriptor<TransactionRecord>(predicate: #Predicate { $0.id == id })
+      ).first {
+        record.encodedSystemFields = data
+      }
+    case CategoryRecord.recordType:
+      if let record = try? context.fetch(
+        FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.id == id })
+      ).first {
+        record.encodedSystemFields = data
+      }
+    case EarmarkRecord.recordType:
+      if let record = try? context.fetch(
+        FetchDescriptor<EarmarkRecord>(predicate: #Predicate { $0.id == id })
+      ).first {
+        record.encodedSystemFields = data
+      }
+    case EarmarkBudgetItemRecord.recordType:
+      if let record = try? context.fetch(
+        FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { $0.id == id })
+      ).first {
+        record.encodedSystemFields = data
+      }
+    case InvestmentValueRecord.recordType:
+      if let record = try? context.fetch(
+        FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { $0.id == id })
+      ).first {
+        record.encodedSystemFields = data
+      }
+    default:
+      break
     }
   }
 
@@ -1179,13 +1153,11 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
       logger.info("Account signed out — deleting local data and sync state")
       deleteLocalData()
       deleteStateSerialization()
-      deleteSystemFieldsCache()
 
     case .switchAccounts:
       logger.info("Account switched — full reset")
       deleteLocalData()
       deleteStateSerialization()
-      deleteSystemFieldsCache()
 
     @unknown default:
       break
@@ -1205,12 +1177,10 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
         logger.warning("Profile zone was purged (user cleared iCloud data)")
         deleteLocalData()
         deleteStateSerialization()
-        deleteSystemFieldsCache()
 
       case .encryptedDataReset:
         logger.warning("Encrypted data reset — re-uploading local data")
         deleteStateSerialization()
-        deleteSystemFieldsCache()
         queueAllExistingRecords()
 
       @unknown default:
@@ -1222,16 +1192,19 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
   private func handleSentRecordZoneChanges(
     _ sentChanges: CKSyncEngine.Event.SentRecordZoneChanges
   ) {
-    // Cache system fields for successfully sent records (Rule 5).
+    // Update system fields on model records after successful upload.
     // This preserves the change tag for subsequent uploads.
-    for saved in sentChanges.savedRecords {
-      systemFieldsCache[saved.recordID.recordName] = saved.encodedSystemFields
+    if !sentChanges.savedRecords.isEmpty {
+      let context = ModelContext(modelContainer)
+      for saved in sentChanges.savedRecords {
+        guard let uuid = UUID(uuidString: saved.recordID.recordName) else { continue }
+        Self.updateEncodedSystemFields(
+          uuid, data: saved.encodedSystemFields,
+          recordType: saved.recordType, context: context)
+      }
+      try? context.save()
     }
-    saveSystemFieldsCache()
-
-    for deleted in sentChanges.deletedRecordIDs {
-      systemFieldsCache.removeValue(forKey: deleted.recordName)
-    }
+    // Deleted records don't need cache cleanup — model is already deleted.
 
     // Handle failed saves with specific error recovery (Rules 3, 6, 9)
     // Collect zone-missing records to handle in a single zone creation
@@ -1249,15 +1222,18 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
         // Conflict: another device modified this record. Accept the server's
         // system fields (server-wins) and re-queue with the updated change tag.
         if let serverRecord = failure.error.serverRecord {
-          systemFieldsCache[serverRecord.recordID.recordName] = serverRecord.encodedSystemFields
-          saveSystemFieldsCache()
+          let ctx = ModelContext(modelContainer)
+          if let uuid = UUID(uuidString: serverRecord.recordID.recordName) {
+            Self.updateEncodedSystemFields(
+              uuid, data: serverRecord.encodedSystemFields,
+              recordType: serverRecord.recordType, context: ctx)
+            try? ctx.save()
+          }
           syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
         }
 
       case .unknownItem:
-        // Record was deleted on server. Clear cached system fields and re-upload.
-        systemFieldsCache.removeValue(forKey: recordID.recordName)
-        saveSystemFieldsCache()
+        // Record was deleted on server — re-upload as new (no system fields needed).
         syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
 
       case .quotaExceeded:
