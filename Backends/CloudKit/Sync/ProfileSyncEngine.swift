@@ -337,9 +337,10 @@ final class ProfileSyncEngine: Sendable {
   /// If cached system fields exist for this record, applies fields directly onto the
   /// cached record to preserve the change tag and avoid `.serverRecordChanged` conflicts.
   /// This avoids creating a throwaway CKRecord when cached system fields are available.
-  func buildCKRecord<T: CloudKitRecordConvertible & IdentifiableRecord>(for record: T) -> CKRecord {
-    let recordName = record.id.uuidString
-    if let cachedData = systemFieldsCache[recordName],
+  func buildCKRecord<T: CloudKitRecordConvertible & IdentifiableRecord & SystemFieldsCacheable>(
+    for record: T
+  ) -> CKRecord {
+    if let cachedData = record.encodedSystemFields,
       let cachedRecord = CKRecord.fromEncodedSystemFields(cachedData)
     {
       record.applyFields(to: cachedRecord)

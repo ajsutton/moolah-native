@@ -578,4 +578,34 @@ struct ProfileSyncEngineTests {
     #expect(restored != nil)
     #expect(restored?.recordID.recordName == accountId.uuidString)
   }
+
+  @Test func buildCKRecordUsesSystemFieldsFromModel() async {
+    let profileId = UUID()
+    let container = try! TestModelContainer.create()
+    let engine = ProfileSyncEngine(profileId: profileId, modelContainer: container)
+
+    let accountId = UUID()
+    let ckRecord = CKRecord(
+      recordType: "CD_AccountRecord",
+      recordID: CKRecord.ID(recordName: accountId.uuidString, zoneID: engine.zoneID)
+    )
+    ckRecord["name"] = "Test" as CKRecordValue
+    ckRecord["type"] = "bank" as CKRecordValue
+    ckRecord["position"] = 0 as CKRecordValue
+    ckRecord["isHidden"] = 0 as CKRecordValue
+    ckRecord["currencyCode"] = "AUD" as CKRecordValue
+
+    engine.applyRemoteChanges(saved: [ckRecord], deleted: [])
+
+    let context = ModelContext(container)
+    let records = try! context.fetch(
+      FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == accountId })
+    )
+    let account = records.first!
+
+    let built = engine.buildCKRecord(for: account)
+    #expect(built.recordID.recordName == accountId.uuidString)
+    #expect(built.recordID.zoneID == engine.zoneID)
+    #expect(built["name"] as? String == "Test")
+  }
 }
