@@ -15,6 +15,7 @@ struct EarmarkDetailView: View {
   let analysisRepository: AnalysisRepository
   @State private var showEditSheet = false
   @State private var selectedTab: DetailTab = .transactions
+  @State private var selectedTransaction: Transaction?
   @Environment(EarmarkStore.self) private var earmarkStore
 
   var body: some View {
@@ -39,7 +40,8 @@ struct EarmarkDetailView: View {
           accounts: accounts,
           categories: categories,
           earmarks: earmarks,
-          transactionStore: transactionStore
+          transactionStore: transactionStore,
+          selectedTransaction: $selectedTransaction
         )
       case .budget:
         EarmarkBudgetSectionView(
@@ -49,6 +51,13 @@ struct EarmarkDetailView: View {
         )
       }
     }
+    .transactionInspector(
+      selectedTransaction: $selectedTransaction,
+      accounts: accounts,
+      categories: categories,
+      earmarks: earmarks,
+      transactionStore: transactionStore
+    )
     .profileNavigationTitle(earmark.name)
     .toolbar {
       ToolbarItem(placement: .primaryAction) {

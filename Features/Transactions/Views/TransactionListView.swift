@@ -9,13 +9,61 @@ struct TransactionListView: View {
   let earmarks: Earmarks
   let transactionStore: TransactionStore
 
-  @State private var selectedTransaction: Transaction?
+  /// When non-nil, the parent owns the selection and handles the inspector.
+  /// When nil, TransactionListView manages its own selection and inspector.
+  private let _externalSelection: Binding<Transaction?>?
 
-  private var showInspectorBinding: Binding<Bool> {
-    Binding(
-      get: { selectedTransaction != nil },
-      set: { if !$0 { selectedTransaction = nil } }
-    )
+  @State private var _internalSelection: Transaction?
+
+  private var selectedTransaction: Transaction? {
+    get { _externalSelection?.wrappedValue ?? _internalSelection }
+    nonmutating set {
+      if let ext = _externalSelection {
+        ext.wrappedValue = newValue
+      } else {
+        _internalSelection = newValue
+      }
+    }
+  }
+
+  private var selectedTransactionBinding: Binding<Transaction?> {
+    if let ext = _externalSelection {
+      return ext
+    }
+    return $_internalSelection
+  }
+
+  private var handlesOwnInspector: Bool { _externalSelection == nil }
+
+  /// Default init — TransactionListView owns selection and shows its own inspector.
+  init(
+    title: String, filter: TransactionFilter,
+    accounts: Accounts, categories: Categories, earmarks: Earmarks,
+    transactionStore: TransactionStore
+  ) {
+    self.title = title
+    self.filter = filter
+    self.accounts = accounts
+    self.categories = categories
+    self.earmarks = earmarks
+    self.transactionStore = transactionStore
+    self._externalSelection = nil
+  }
+
+  /// Embedded init — parent provides selection binding and handles the inspector.
+  init(
+    title: String, filter: TransactionFilter,
+    accounts: Accounts, categories: Categories, earmarks: Earmarks,
+    transactionStore: TransactionStore,
+    selectedTransaction: Binding<Transaction?>
+  ) {
+    self.title = title
+    self.filter = filter
+    self.accounts = accounts
+    self.categories = categories
+    self.earmarks = earmarks
+    self.transactionStore = transactionStore
+    self._externalSelection = selectedTransaction
   }
 
   @State private var showError = false
@@ -24,55 +72,16 @@ struct TransactionListView: View {
 
   var body: some View {
     listView
-      #if os(macOS)
-        .inspector(isPresented: showInspectorBinding) {
-          if let selected = selectedTransaction {
-            TransactionDetailView(
-              transaction: selected,
-              accounts: accounts,
-              categories: categories,
-              earmarks: earmarks,
-              transactionStore: transactionStore,
-              onUpdate: { updated in
-                Task { await transactionStore.update(updated) }
-                selectedTransaction = updated
-              },
-              onDelete: { id in
-                Task { await transactionStore.delete(id: id) }
-                selectedTransaction = nil
-              }
-            )
-            .id(selected.id)
-          }
-        }
-      #else
-        .sheet(item: $selectedTransaction) { selected in
-          NavigationStack {
-            TransactionDetailView(
-              transaction: selected,
-              accounts: accounts,
-              categories: categories,
-              earmarks: earmarks,
-              transactionStore: transactionStore,
-              onUpdate: { updated in
-                Task { await transactionStore.update(updated) }
-                selectedTransaction = updated
-              },
-              onDelete: { id in
-                Task { await transactionStore.delete(id: id) }
-                selectedTransaction = nil
-              }
-            )
-            .toolbar {
-              ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
-                  selectedTransaction = nil
-                }
-              }
-            }
-          }
-        }
-      #endif
+      .modifier(
+        OptionalTransactionInspector(
+          enabled: handlesOwnInspector,
+          selectedTransaction: selectedTransactionBinding,
+          accounts: accounts,
+          categories: categories,
+          earmarks: earmarks,
+          transactionStore: transactionStore
+        )
+      )
       .focusedSceneValue(\.newTransactionAction, createNewTransaction)
       .alert("Error", isPresented: $showError) {
         Button("OK", role: .cancel) {}
@@ -124,7 +133,7 @@ struct TransactionListView: View {
   }
 
   private var listView: some View {
-    List(selection: $selectedTransaction) {
+    List(selection: selectedTransactionBinding) {
       ForEach(filteredTransactions) { entry in
         TransactionRowView(
           transaction: entry.transaction, accounts: accounts,

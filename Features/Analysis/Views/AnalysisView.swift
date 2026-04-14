@@ -10,13 +10,6 @@ struct AnalysisView: View {
   @Bindable var store: AnalysisStore
   @State private var selectedUpcomingTransaction: Transaction?
 
-  private var showInspectorBinding: Binding<Bool> {
-    Binding(
-      get: { selectedUpcomingTransaction != nil },
-      set: { if !$0 { selectedUpcomingTransaction = nil } }
-    )
-  }
-
   var body: some View {
     ScrollView {
       if store.isLoading && store.dailyBalances.isEmpty {
@@ -37,57 +30,14 @@ struct AnalysisView: View {
         contentView(store: store)
       }
     }
-    #if os(macOS)
-      .inspector(isPresented: showInspectorBinding) {
-        if let selected = selectedUpcomingTransaction {
-          TransactionDetailView(
-            transaction: selected,
-            accounts: accountStore.accounts,
-            categories: categoryStore.categories,
-            earmarks: earmarkStore.earmarks,
-            transactionStore: transactionStore,
-            showRecurrence: true,
-            onUpdate: { updated in
-              Task { await transactionStore.update(updated) }
-              selectedUpcomingTransaction = updated
-            },
-            onDelete: { id in
-              Task { await transactionStore.delete(id: id) }
-              selectedUpcomingTransaction = nil
-            }
-          )
-          .id(selected.id)
-        }
-      }
-    #else
-      .sheet(item: $selectedUpcomingTransaction) { selected in
-        NavigationStack {
-          TransactionDetailView(
-            transaction: selected,
-            accounts: accountStore.accounts,
-            categories: categoryStore.categories,
-            earmarks: earmarkStore.earmarks,
-            transactionStore: transactionStore,
-            showRecurrence: true,
-            onUpdate: { updated in
-              Task { await transactionStore.update(updated) }
-              selectedUpcomingTransaction = updated
-            },
-            onDelete: { id in
-              Task { await transactionStore.delete(id: id) }
-              selectedUpcomingTransaction = nil
-            }
-          )
-          .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-              Button("Done") {
-                selectedUpcomingTransaction = nil
-              }
-            }
-          }
-        }
-      }
-    #endif
+    .transactionInspector(
+      selectedTransaction: $selectedUpcomingTransaction,
+      accounts: accountStore.accounts,
+      categories: categoryStore.categories,
+      earmarks: earmarkStore.earmarks,
+      transactionStore: transactionStore,
+      showRecurrence: true
+    )
     .profileNavigationTitle("Analysis")
     .toolbar {
       ToolbarItem(placement: .primaryAction) {

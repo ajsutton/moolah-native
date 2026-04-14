@@ -9,7 +9,7 @@ struct CategoriesView: View {
   @State private var showDetailSheet = false
   @State private var searchText = ""
 
-  private var showInspectorBinding: Binding<Bool> {
+  private var showCategoryInspectorBinding: Binding<Bool> {
     Binding(
       get: { selectedCategory != nil },
       set: { if !$0 { selectedCategory = nil } }
@@ -19,7 +19,7 @@ struct CategoriesView: View {
   var body: some View {
     listView
       #if os(macOS)
-        .inspector(isPresented: showInspectorBinding) {
+        .inspector(isPresented: showCategoryInspectorBinding) {
           if let selected = selectedCategory {
             CategoryDetailView(
               category: selected,
@@ -40,6 +40,18 @@ struct CategoriesView: View {
               }
             )
             .id(selected.id)
+          }
+        }
+        .toolbar {
+          ToolbarItem(placement: .automatic) {
+            if selectedCategory != nil {
+              Button {
+                selectedCategory = nil
+              } label: {
+                Label("Hide Details", systemImage: "sidebar.trailing")
+              }
+              .help("Hide Details")
+            }
           }
         }
       #else

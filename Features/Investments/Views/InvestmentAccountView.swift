@@ -11,6 +11,7 @@ struct InvestmentAccountView: View {
   let transactionStore: TransactionStore
 
   @State private var showingAddValue = false
+  @State private var selectedTransaction: Transaction?
 
   var body: some View {
     VStack(spacing: 0) {
@@ -61,9 +62,17 @@ struct InvestmentAccountView: View {
         accounts: accounts,
         categories: categories,
         earmarks: earmarks,
-        transactionStore: transactionStore
+        transactionStore: transactionStore,
+        selectedTransaction: $selectedTransaction
       )
     }
+    .transactionInspector(
+      selectedTransaction: $selectedTransaction,
+      accounts: accounts,
+      categories: categories,
+      earmarks: earmarks,
+      transactionStore: transactionStore
+    )
     .profileNavigationTitle(account.name)
     .sheet(isPresented: $showingAddValue) {
       AddInvestmentValueView(

@@ -33,9 +33,9 @@ NavigationSplitView (macOS/iPad) or NavigationStack (iPhone)
 │  ├─ Accounts section
 │  ├─ Earmarks section
 │  └─ Navigation items (All Transactions, Upcoming, Categories)
-├─ Primary List (flexible width, min 300pt)
-│  └─ Transaction rows, account rows, category rows
-└─ Detail Panel (350pt, shown on selection)
+├─ Content (flexible width)
+│  └─ Transaction lists, account views, analysis dashboard
+└─ Inspector (trailing sidebar via .inspector(), shown on selection)
    └─ Forms, transaction details, category editing
 ```
 
@@ -51,9 +51,10 @@ NavigationSplitView (macOS/iPad) or NavigationStack (iPhone)
 - Always provide `.refreshable` for pull-to-refresh (iOS) or Cmd+R (macOS)
 - Support `.searchable()` for filtering lists
 
-**Detail Panel:**
-- Fixed width: `350pt` on macOS/iPad (shown in HStack with Divider)
-- Full-screen sheet on iPhone (`.sheet()` presentation)
+**Detail Panel (Inspector):**
+- macOS: Use `.inspector()` modifier — shown as a trailing sidebar at the window level
+- iOS: Use `.sheet()` presentation wrapped in `NavigationStack`
+- Must be attached at the outermost view level (see Detail Panels section below)
 - Use `Form` for editing, `VStack` for read-only details
 
 ### Spacing & Sizing
@@ -61,7 +62,7 @@ NavigationSplitView (macOS/iPad) or NavigationStack (iPhone)
 | Element | macOS | iPad | iPhone |
 |---------|-------|------|--------|
 | List row height | 44–52pt | 52–60pt | 60–68pt |
-| Detail panel width | 350pt | 350pt | Full screen |
+| Inspector width | System default (~350pt) | System default | Full screen (sheet) |
 | Sidebar width | 220pt | 220pt | N/A |
 | Form section spacing | 16pt | 20pt | 24pt |
 | Inline padding | 12pt | 16pt | 20pt |
@@ -401,40 +402,60 @@ Button("Delete Account", role: .destructive) { ... }
 - Use `Label` with `.labelStyle(.titleAndIcon)` in sheets/modals
 - Prefer SF Symbols in toolbar for space efficiency
 
-### Detail Panels
+### Detail Panels (Inspector Pattern)
 
-**Layout Pattern:**
+Detail panels (transaction detail, category detail) use SwiftUI's `.inspector()` modifier on macOS and `.sheet()` on iOS. The inspector appears as a trailing sidebar at the window level.
+
+**Critical rule:** The `.inspector()` or `.sheet()` must be attached to the **outermost view that fills the NavigationSplitView detail column** — never to a view nested inside a card, tab, or scroll view. If the inspector is attached too deep in the hierarchy, it will be constrained to that subview's bounds instead of spanning the full window height.
+
+**Use `TransactionInspectorModifier`** (via `.transactionInspector()`) for transaction detail panels. It handles both platforms and includes a toolbar close button on macOS.
+
+**When a view embeds `TransactionListView`** (e.g., `EarmarkDetailView`, `InvestmentAccountView`), the parent must:
+1. Own the `@State var selectedTransaction: Transaction?`
+2. Pass a binding to `TransactionListView` via the `selectedTransaction:` parameter
+3. Attach `.transactionInspector()` at its own level
+
 ```swift
-HStack(spacing: 0) {
-  // Primary list
-  listView
+// Parent view that embeds TransactionListView
+struct EarmarkDetailView: View {
+  @State private var selectedTransaction: Transaction?
 
-  if let selected = selection {
-    Divider()
-
-    // Detail view
-    detailView
-      .frame(width: 350)
-  }
-}
-```
-
-**Adaptive Behavior:**
-```swift
-@Environment(\.horizontalSizeClass) var sizeClass
-
-var body: some View {
-  if sizeClass == .compact {
-    // iPhone: Use sheet presentation
-    listView.sheet(item: $selection) { item in
-      detailView
+  var body: some View {
+    VStack {
+      overviewPanel
+      TransactionListView(
+        title: ..., filter: ..., accounts: ...,
+        categories: ..., earmarks: ...,
+        transactionStore: ...,
+        selectedTransaction: $selectedTransaction  // pass binding
+      )
     }
-  } else {
-    // iPad/macOS: Use split view
-    HStack { ... }
+    .transactionInspector(                         // attach at parent level
+      selectedTransaction: $selectedTransaction,
+      accounts: accounts, categories: categories,
+      earmarks: earmarks, transactionStore: transactionStore
+    )
   }
 }
 ```
+
+**When `TransactionListView` is the direct detail content** (e.g., in `ContentView`), omit the `selectedTransaction:` parameter — it manages its own state and inspector internally.
+
+**Toolbar close button:** The `TransactionInspectorModifier` automatically adds a `sidebar.trailing` toolbar button on macOS to dismiss the inspector. For non-transaction inspectors (e.g., category detail), add the button manually:
+```swift
+.toolbar {
+  ToolbarItem(placement: .automatic) {
+    if selectedCategory != nil {
+      Button { selectedCategory = nil } label: {
+        Label("Hide Details", systemImage: "sidebar.trailing")
+      }
+      .help("Hide Details")
+    }
+  }
+}
+```
+
+**iOS behavior:** On iOS, detail panels always use `.sheet(item:)` wrapped in a `NavigationStack` with a "Done" toolbar button.
 
 ---
 

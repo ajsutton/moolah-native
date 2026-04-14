@@ -13,15 +13,18 @@ struct EarmarksView: View {
   @State private var earmarkToEdit: Earmark?
   @State private var searchText = ""
 
+  private var showEarmarkInspectorBinding: Binding<Bool> {
+    Binding(
+      get: { selectedEarmark != nil },
+      set: { if !$0 { selectedEarmark = nil } }
+    )
+  }
+
   var body: some View {
-    Group {
+    listView
       #if os(macOS)
-        HStack(spacing: 0) {
-          listView
-
+        .inspector(isPresented: showEarmarkInspectorBinding) {
           if let selected = selectedEarmark {
-            Divider()
-
             EarmarkDetailView(
               earmark: selected,
               accounts: accounts,
@@ -32,52 +35,62 @@ struct EarmarksView: View {
             )
           }
         }
+        .toolbar {
+          ToolbarItem(placement: .automatic) {
+            if selectedEarmark != nil {
+              Button {
+                selectedEarmark = nil
+              } label: {
+                Label("Hide Details", systemImage: "sidebar.trailing")
+              }
+              .help("Hide Details")
+            }
+          }
+        }
       #else
-        listView
-          .sheet(item: $selectedEarmark) { selected in
-            NavigationStack {
-              EarmarkDetailView(
-                earmark: selected,
-                accounts: accounts,
-                categories: categories,
-                earmarks: earmarkStore.earmarks,
-                transactionStore: transactionStore,
-                analysisRepository: analysisRepository
-              )
-              .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                  Button("Done") {
-                    selectedEarmark = nil
-                  }
+        .sheet(item: $selectedEarmark) { selected in
+          NavigationStack {
+            EarmarkDetailView(
+              earmark: selected,
+              accounts: accounts,
+              categories: categories,
+              earmarks: earmarkStore.earmarks,
+              transactionStore: transactionStore,
+              analysisRepository: analysisRepository
+            )
+            .toolbar {
+              ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                  selectedEarmark = nil
                 }
               }
             }
           }
+        }
       #endif
-    }
-    .sheet(isPresented: $showCreateSheet) {
-      CreateEarmarkSheet(
-        currency: earmarkStore.totalBalance.currency,
-        onCreate: { newEarmark in
-          Task {
-            _ = await earmarkStore.create(newEarmark)
-            showCreateSheet = false
+      .sheet(isPresented: $showCreateSheet) {
+        CreateEarmarkSheet(
+          currency: earmarkStore.totalBalance.currency,
+          onCreate: { newEarmark in
+            Task {
+              _ = await earmarkStore.create(newEarmark)
+              showCreateSheet = false
+            }
           }
-        }
-      )
-    }
-    .sheet(item: $earmarkToEdit) { earmark in
-      EditEarmarkSheet(
-        earmark: earmark,
-        onUpdate: { updated in
-          Task {
-            _ = await earmarkStore.update(updated)
-            selectedEarmark = updated
-            earmarkToEdit = nil
+        )
+      }
+      .sheet(item: $earmarkToEdit) { earmark in
+        EditEarmarkSheet(
+          earmark: earmark,
+          onUpdate: { updated in
+            Task {
+              _ = await earmarkStore.update(updated)
+              selectedEarmark = updated
+              earmarkToEdit = nil
+            }
           }
-        }
-      )
-    }
+        )
+      }
   }
 
   private var filteredEarmarks: [Earmark] {
