@@ -43,7 +43,7 @@ struct CategoriesView: View {
           }
         }
         .toolbar {
-          ToolbarItem(placement: .automatic) {
+          ToolbarItem(placement: .primaryAction) {
             if selectedCategory != nil {
               Button {
                 selectedCategory = nil

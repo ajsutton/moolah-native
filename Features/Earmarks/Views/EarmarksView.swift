@@ -36,7 +36,7 @@ struct EarmarksView: View {
           }
         }
         .toolbar {
-          ToolbarItem(placement: .automatic) {
+          ToolbarItem(placement: .primaryAction) {
             if selectedEarmark != nil {
               Button {
                 selectedEarmark = nil

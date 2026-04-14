@@ -45,7 +45,7 @@ struct TransactionInspectorModifier: ViewModifier {
           }
         }
         .toolbar {
-          ToolbarItem(placement: .automatic) {
+          ToolbarItem(placement: .primaryAction) {
             if selectedTransaction != nil {
               Button {
                 selectedTransaction = nil
