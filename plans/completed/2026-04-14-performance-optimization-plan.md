@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** Partially implemented. Phase 0 baselines captured, Phase 1 sync download optimizations done (isFetchingChanges, targeted invalidation, debouncing, signposts, duplicate call elimination, Calendar caching). Phase 2 (upload) and Phase 3 (query/UI) not started.
+**Status:** Complete. All phases implemented. Task 7 (debounce system fields cache writes) no longer needed — system fields are stored on the record. Task 12 (optimize queueAllExistingRecords) skipped — not worth the complexity. Task 17 (push prefix into predicate) not feasible — SwiftData #Predicate doesn't support case-insensitive prefix matching; fetchLimit=5000 is the practical optimization. Task 20 (sort once and partition) deemed not worth doing.
 
 **Goal:** Eliminate UI jitter during large iCloud sync and optimize loading performance for sidebar, transaction lists, and analysis.
 
