@@ -110,15 +110,17 @@ struct MoolahApp: App {
     let store = ProfileStore(validator: RemoteServerValidator(), containerManager: containerManager)
     _profileStore = State(initialValue: store)
 
-    // Wire sync engine to reload profiles on remote changes
-    profileIndexSyncEngine.onRemoteChangesApplied = { [weak store] in
-      store?.loadCloudProfiles()
-    }
-    profileIndexSyncEngine.start()
-    profileIndexSyncEngine.startTracking()
+    // Wire sync engine to reload profiles on remote changes (only when CloudKit is available)
+    if CloudKitAuthProvider.isCloudKitAvailable {
+      profileIndexSyncEngine.onRemoteChangesApplied = { [weak store] in
+        store?.loadCloudProfiles()
+      }
+      profileIndexSyncEngine.start()
+      profileIndexSyncEngine.startTracking()
 
-    // Clean up the legacy CloudKit zone from SwiftData's automatic sync
-    LegacyZoneCleanup.performIfNeeded()
+      // Clean up the legacy CloudKit zone from SwiftData's automatic sync
+      LegacyZoneCleanup.performIfNeeded()
+    }
 
     #if os(macOS)
       backupManager = StoreBackupManager()

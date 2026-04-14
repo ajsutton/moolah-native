@@ -122,8 +122,10 @@ final class ProfileSession: Identifiable {
       earmarkStore.applyTransactionDelta(old: old, new: new)
     }
 
-    // Set up CKSyncEngine for iCloud profiles
-    if profile.backendType == .cloudKit, let containerManager {
+    // Set up CKSyncEngine for iCloud profiles (only when CloudKit entitlements are available)
+    if profile.backendType == .cloudKit, let containerManager,
+      CloudKitAuthProvider.isCloudKitAvailable
+    {
       let profileContainer = try! containerManager.container(for: profile.id)
       let syncEngine = ProfileSyncEngine(profileId: profile.id, modelContainer: profileContainer)
       syncEngine.onRemoteChangesApplied = { [weak self] changedTypes in

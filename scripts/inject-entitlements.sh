@@ -13,7 +13,7 @@ with open("project.yml") as f:
 
 block = "\n".join([
     "    entitlements:",
-    "      path: App/Moolah.entitlements",
+    "      path: .build/Moolah.entitlements",
     "      properties:",
     "        com.apple.security.app-sandbox: true",
     "        com.apple.security.network.client: true",

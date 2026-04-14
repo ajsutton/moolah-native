@@ -57,7 +57,9 @@ final class CloudKitAuthProvider: AuthProvider, Sendable {
 
   /// Whether CloudKit entitlements are configured.
   /// CKContainer.default() throws an uncatchable NSException without them.
-  private var isCloudKitAvailable: Bool {
+  private var isCloudKitAvailable: Bool { Self.isCloudKitAvailable }
+
+  static var isCloudKitAvailable: Bool {
     let containers =
       Bundle.main.object(forInfoDictionaryKey: "NSUbiquitousContainers") as? [String: Any]
     return containers != nil && !containers!.isEmpty
