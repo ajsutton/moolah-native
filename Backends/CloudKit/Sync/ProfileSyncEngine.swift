@@ -26,8 +26,9 @@ final class ProfileSyncEngine: Sendable {
   private(set) var isRunning = false
 
   /// True while applying remote changes from CloudKit to local SwiftData.
-  /// ChangeTracker checks this to avoid re-uploading records just received.
-  private(set) var isApplyingRemoteChanges = false
+  /// Repository sync closures are not called during remote change application,
+  /// so this flag is only used internally within `applyRemoteChanges`.
+  private var isApplyingRemoteChanges = false
 
   /// Tracks whether this engine started without saved state (first launch).
   /// Used to distinguish the synthetic `.signIn` event from a real one.
@@ -259,9 +260,6 @@ final class ProfileSyncEngine: Sendable {
       let zone = CKRecordZone(zoneID: zoneID)
       _ = try await CKContainer.default().privateCloudDatabase.save(zone)
       logger.info("Ensured zone exists: \(self.zoneID.zoneName)")
-    } catch let error as CKError where error.code == .serverRecordChanged {
-      // Zone already exists — this is fine
-      logger.info("Zone already exists: \(self.zoneID.zoneName)")
     } catch {
       logger.error("Failed to ensure zone exists: \(error)")
     }
@@ -518,6 +516,38 @@ final class ProfileSyncEngine: Sendable {
         ]))
     } catch {
       logger.error("Failed to delete local data: \(error)")
+    }
+  }
+
+  /// Clears encoded system fields on all local records.
+  /// Called on encrypted data reset where we keep data but must re-upload fresh.
+  private func clearAllSystemFields() {
+    let context = ModelContext(modelContainer)
+
+    for record in (try? context.fetch(FetchDescriptor<AccountRecord>())) ?? [] {
+      record.encodedSystemFields = nil
+    }
+    for record in (try? context.fetch(FetchDescriptor<TransactionRecord>())) ?? [] {
+      record.encodedSystemFields = nil
+    }
+    for record in (try? context.fetch(FetchDescriptor<CategoryRecord>())) ?? [] {
+      record.encodedSystemFields = nil
+    }
+    for record in (try? context.fetch(FetchDescriptor<EarmarkRecord>())) ?? [] {
+      record.encodedSystemFields = nil
+    }
+    for record in (try? context.fetch(FetchDescriptor<EarmarkBudgetItemRecord>())) ?? [] {
+      record.encodedSystemFields = nil
+    }
+    for record in (try? context.fetch(FetchDescriptor<InvestmentValueRecord>())) ?? [] {
+      record.encodedSystemFields = nil
+    }
+
+    do {
+      try context.save()
+      logger.info("Cleared all system fields for profile \(self.profileId)")
+    } catch {
+      logger.error("Failed to clear system fields: \(error)")
     }
   }
 
@@ -1229,6 +1259,7 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
       case .encryptedDataReset:
         logger.warning("Encrypted data reset — re-uploading local data")
         deleteStateSerialization()
+        clearAllSystemFields()
         queueAllExistingRecords()
 
       @unknown default:

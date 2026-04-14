@@ -116,8 +116,13 @@ struct MoolahApp: App {
       profileIndexSyncEngine.onRemoteChangesApplied = { [weak store] in
         store?.loadCloudProfiles()
       }
+      store.onProfileChanged = { [weak profileIndexSyncEngine] id in
+        profileIndexSyncEngine?.addPendingSave(for: id)
+      }
+      store.onProfileDeleted = { [weak profileIndexSyncEngine] id in
+        profileIndexSyncEngine?.addPendingDeletion(for: id)
+      }
       profileIndexSyncEngine.start()
-      profileIndexSyncEngine.startTracking()
 
       // Clean up the legacy CloudKit zone from SwiftData's automatic sync
       LegacyZoneCleanup.performIfNeeded()

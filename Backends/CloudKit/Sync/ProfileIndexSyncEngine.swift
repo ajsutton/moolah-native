@@ -1,5 +1,4 @@
 import CloudKit
-import CoreData
 import Foundation
 import OSLog
 import SwiftData
@@ -18,7 +17,6 @@ final class ProfileIndexSyncEngine: Sendable {
   private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileIndexSyncEngine")
   private var syncEngine: CKSyncEngine?
   private(set) var isRunning = false
-  private nonisolated(unsafe) var saveObserver: NSObjectProtocol?
   private var isApplyingRemoteChanges = false
   private var isFirstLaunch = false
 
@@ -74,9 +72,6 @@ final class ProfileIndexSyncEngine: Sendable {
       let zone = CKRecordZone(zoneID: zoneID)
       _ = try await CKContainer.default().privateCloudDatabase.save(zone)
       logger.info("Ensured zone exists: \(self.zoneID.zoneName)")
-    } catch let error as CKError where error.code == .serverRecordChanged {
-      // Zone already exists — this is fine
-      logger.info("Zone already exists: \(self.zoneID.zoneName)")
     } catch {
       logger.error("Failed to ensure zone exists: \(error)")
     }
@@ -94,52 +89,9 @@ final class ProfileIndexSyncEngine: Sendable {
   }
 
   func stop() {
-    stopTracking()
     syncEngine = nil
     isRunning = false
     logger.info("Stopped profile index sync engine")
-  }
-
-  /// Observes local SwiftData saves on the index container and queues
-  /// inserted/updated/deleted ProfileRecords for upload to CloudKit.
-  func startTracking() {
-    guard saveObserver == nil else { return }
-
-    saveObserver = NotificationCenter.default.addObserver(
-      forName: .NSManagedObjectContextDidSave,
-      object: nil,
-      queue: .main
-    ) { [weak self] notification in
-      // Only process changes to ProfileRecord entities — ignore per-profile data saves
-      let profileEntityName = "ProfileRecord"
-
-      let inserted = (notification.userInfo?[NSInsertedObjectsKey] as? Set<NSManagedObject>)?
-        .filter { $0.entity.name == profileEntityName }
-      let updated = (notification.userInfo?[NSUpdatedObjectsKey] as? Set<NSManagedObject>)?
-        .filter { $0.entity.name == profileEntityName }
-      let deleted = (notification.userInfo?[NSDeletedObjectsKey] as? Set<NSManagedObject>)?
-        .filter { $0.entity.name == profileEntityName }
-
-      // Note: KVC is safe here because these are NSManagedObject instances from
-      // the Core Data notification, not SwiftData PersistentModel instances.
-      let insertedIDs = inserted?.compactMap { $0.value(forKey: "id") as? UUID } ?? []
-      let updatedIDs = updated?.compactMap { $0.value(forKey: "id") as? UUID } ?? []
-      let deletedIDs = deleted?.compactMap { $0.value(forKey: "id") as? UUID } ?? []
-
-      guard !insertedIDs.isEmpty || !updatedIDs.isEmpty || !deletedIDs.isEmpty else { return }
-
-      MainActor.assumeIsolated {
-        guard self?.isApplyingRemoteChanges != true else { return }
-        self?.processLocalSave(inserted: insertedIDs, updated: updatedIDs, deleted: deletedIDs)
-      }
-    }
-  }
-
-  func stopTracking() {
-    if let saveObserver {
-      NotificationCenter.default.removeObserver(saveObserver)
-    }
-    saveObserver = nil
   }
 
   // MARK: - Background Sync
@@ -165,20 +117,6 @@ final class ProfileIndexSyncEngine: Sendable {
       try await syncEngine.fetchChanges()
     } catch {
       logger.error("Failed to fetch changes: \(error)")
-    }
-  }
-
-  // MARK: - Local Change Processing
-
-  private func processLocalSave(inserted: [UUID], updated: [UUID], deleted: [UUID]) {
-    for id in inserted {
-      addPendingSave(for: id)
-    }
-    for id in updated {
-      addPendingSave(for: id)
-    }
-    for id in deleted {
-      addPendingDeletion(for: id)
     }
   }
 
