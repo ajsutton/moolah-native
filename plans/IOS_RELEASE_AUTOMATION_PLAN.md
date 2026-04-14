@@ -1,15 +1,19 @@
 # iOS Release Automation Plan
 
+**Status:** Partially implemented. TestFlight infrastructure complete (Fastlane, Match, CI workflows, monthly tags). Remaining: App Store submission automation (privacy policy, support info, iPad testing, review notes, release workflow).
+
 **Goal:** Get Moolah running on iOS via TestFlight for personal use, with iCloud sync across devices. Automated monthly builds keep the 90-day TestFlight expiry at bay. Full App Store deployment is a future milestone.
 
-**Current State:**
-- GitHub Actions CI runs tests and linting only (`.github/workflows/ci.yml`)
-- XcodeGen generates `Moolah.xcodeproj` from `project.yml`
-- Code signing is environment-variable driven but not configured for distribution
-- No Fastlane, no provisioning profiles, no App Store Connect integration
-- Version is hardcoded to `1.0` (build `1`) in `App/Info.plist`
-- Bundle ID: `rocks.moolah.app` (shared across iOS and macOS targets)
-- Remote backend exists alongside CloudKit — both available for TestFlight; remote will be gated for App Store builds later
+**What's done:**
+- Fastlane configured (Appfile, Fastfile, Matchfile)
+- GitHub Actions workflows for TestFlight (`testflight.yml`) and monthly tags (`monthly-tag.yml`)
+- Code signing via Match, App Store Connect API key configured
+- Version management automated in project.yml
+- Entitlements generated at build time (removed from repo to fix CI)
+
+**What's remaining:**
+- Phase 7: App Store readiness (privacy policy, support info, iPad testing, review notes)
+- Phase 8: App Store release workflow (`release.yml`, production GitHub environment)
 
 ---
 

@@ -1,7 +1,7 @@
 # Benchmarking & Performance Instrumentation Design
 
 **Date:** 2026-04-13
-**Status:** Design
+**Status:** Partially implemented. Signposts enum created, benchmark target with 8 benchmark files operational, `just benchmark` command works. Remaining: baseline capture documentation, CI regression detection integration.
 
 ## Problem
 

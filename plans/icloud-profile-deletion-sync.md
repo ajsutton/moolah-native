@@ -1,5 +1,7 @@
 # iCloud Profile Deletion Does Not Propagate to Other Devices
 
+**Status:** Not implemented. Local deletion works (SQLite files + ProfileRecord removed), but CloudKit zone deletion is not called on profile delete. Other devices retain orphaned data. See also BUGS.md.
+
 ## Problem
 
 When a user deletes an iCloud profile, the app removes the local SQLite database files and the `ProfileRecord` from the shared index store. However, it does not delete the data from CloudKit's servers. This means:

@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** Implemented. All 7 tasks complete — Signposts enum, benchmark target, transaction fetch / balance / sync batch / conversion / sync download / sync upload / analysis benchmarks all operational. Guide written at `guides/BENCHMARKING_GUIDE.md`.
+
 **Goal:** Add performance benchmarks and os_signpost instrumentation to measure and profile data operations at realistic scale (~18k transactions).
 
 **Architecture:** XCTest performance tests in a separate macOS-only target (`MoolahBenchmarks_macOS`) using in-memory SwiftData via `TestBackend`. Signposts added inline to repository and sync engine code using a shared `Signposts` enum.
