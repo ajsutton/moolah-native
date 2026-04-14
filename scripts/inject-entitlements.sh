@@ -20,7 +20,7 @@ entitlements_block = "\n".join([
     "        com.apple.developer.icloud-services:",
     "          - CloudKit",
     "        com.apple.developer.icloud-container-identifiers:",
-    "          - iCloud.rocks.moolah.app",
+    "          - iCloud.rocks.moolah.app.v2",
 ])
 
 for target in ["Moolah_iOS", "Moolah_macOS"]:
