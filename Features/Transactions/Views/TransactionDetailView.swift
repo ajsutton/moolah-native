@@ -98,7 +98,8 @@ struct TransactionDetailView: View {
     TransactionDraft(
       type: type, payee: payee, amountText: amountText, date: date,
       accountId: accountId, toAccountId: toAccountId, categoryId: categoryId,
-      earmarkId: earmarkId, notes: notes, toAmountText: toAmountText,
+      earmarkId: earmarkId, notes: notes, categoryText: categoryText,
+      toAmountText: toAmountText,
       isRepeating: isRepeating,
       recurPeriod: recurPeriod, recurEvery: recurEvery)
   }

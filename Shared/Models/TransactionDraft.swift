@@ -13,6 +13,7 @@ struct TransactionDraft: Sendable {
   var categoryId: UUID?
   var earmarkId: UUID?
   var notes: String
+  var categoryText: String
   var toAmountText: String
   var isRepeating: Bool
   var recurPeriod: RecurPeriod?
@@ -136,6 +137,7 @@ extension TransactionDraft {
       categoryId: primaryLeg?.categoryId,
       earmarkId: primaryLeg?.earmarkId,
       notes: transaction.notes ?? "",
+      categoryText: "",
       toAmountText: toAmountText,
       isRepeating: transaction.recurPeriod != nil && transaction.recurPeriod != .once,
       recurPeriod: transaction.recurPeriod,
@@ -155,6 +157,7 @@ extension TransactionDraft {
       categoryId: nil,
       earmarkId: nil,
       notes: "",
+      categoryText: "",
       toAmountText: "",
       isRepeating: false,
       recurPeriod: nil,
