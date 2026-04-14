@@ -25,6 +25,7 @@ final class TransactionRecord {
   var earmarkId: UUID?
   var recurPeriod: String?  // Raw value of RecurPeriod
   var recurEvery: Int?
+  var encodedSystemFields: Data?
 
   init(
     id: UUID = UUID(),

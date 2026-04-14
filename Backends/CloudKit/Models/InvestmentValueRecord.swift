@@ -11,6 +11,7 @@ final class InvestmentValueRecord {
   var date: Date = Date()
   var value: Int = 0  // cents
   var currencyCode: String = ""
+  var encodedSystemFields: Data?
 
   init(
     id: UUID = UUID(),

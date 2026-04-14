@@ -13,6 +13,7 @@ final class AccountRecord {
   var isHidden: Bool = false
   var currencyCode: String = ""
   var cachedBalance: Int?
+  var encodedSystemFields: Data?
 
   init(
     id: UUID = UUID(),

@@ -11,6 +11,7 @@ final class EarmarkBudgetItemRecord {
   var categoryId: UUID = UUID()
   var amount: Int = 0  // cents
   var currencyCode: String = ""
+  var encodedSystemFields: Data?
 
   init(
     id: UUID = UUID(),

@@ -14,6 +14,7 @@ final class EarmarkRecord {
   var currencyCode: String = ""
   var savingsStartDate: Date?
   var savingsEndDate: Date?
+  var encodedSystemFields: Data?
 
   init(
     id: UUID = UUID(),
