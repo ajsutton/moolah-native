@@ -4,12 +4,12 @@ import SwiftData
 final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
   private let instrument: Instrument
-  private let conversionService: (any InstrumentConversionService)?
+  private let conversionService: any InstrumentConversionService
 
   init(
     modelContainer: ModelContainer,
     instrument: Instrument,
-    conversionService: (any InstrumentConversionService)? = nil
+    conversionService: any InstrumentConversionService
   ) {
     self.modelContainer = modelContainer
     self.instrument = instrument
@@ -199,20 +199,20 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     }
 
     // 5. Convert multi-instrument positions to profile currency if needed
-    if let conversionService {
-      try await Self.applyMultiInstrumentConversion(
-        to: &dailyBalances,
-        allTransactions: allTransactions,
-        investmentAccountIds: investmentAccountIds,
-        instrument: instrument,
-        conversionService: conversionService
-      )
-    }
+    try await Self.applyMultiInstrumentConversion(
+      to: &dailyBalances,
+      allTransactions: allTransactions,
+      investmentAccountIds: investmentAccountIds,
+      instrument: instrument,
+      conversionService: conversionService
+    )
 
     // 6. Apply investment values (overrides net worth with market values where available)
     let investmentValues = try await fetchAllInvestmentValues(
       investmentAccountIds: investmentAccountIds)
-    Self.applyInvestmentValues(investmentValues, to: &dailyBalances, instrument: instrument)
+    try await Self.applyInvestmentValues(
+      investmentValues, to: &dailyBalances, instrument: instrument,
+      conversionService: conversionService)
 
     // 6. Compute bestFit (linear regression on availableFunds)
     var actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
@@ -456,7 +456,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     after: Date?,
     forecastUntil: Date?,
     instrument: Instrument,
-    conversionService: (any InstrumentConversionService)? = nil
+    conversionService: any InstrumentConversionService
   ) async throws -> [DailyBalance] {
     let investmentAccountIds = Set(accounts.filter { $0.type == .investment }.map(\.id))
 
@@ -523,18 +523,18 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     }
 
     // Convert multi-instrument positions to profile currency if needed
-    if let conversionService {
-      try await applyMultiInstrumentConversion(
-        to: &dailyBalances,
-        allTransactions: nonScheduled,
-        investmentAccountIds: investmentAccountIds,
-        instrument: instrument,
-        conversionService: conversionService
-      )
-    }
+    try await applyMultiInstrumentConversion(
+      to: &dailyBalances,
+      allTransactions: nonScheduled,
+      investmentAccountIds: investmentAccountIds,
+      instrument: instrument,
+      conversionService: conversionService
+    )
 
     // Apply investment values (overrides net worth with market values where available)
-    applyInvestmentValues(investmentValues, to: &dailyBalances, instrument: instrument)
+    try await applyInvestmentValues(
+      investmentValues, to: &dailyBalances, instrument: instrument,
+      conversionService: conversionService)
 
     // Compute bestFit
     var actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
@@ -837,8 +837,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
   private static func applyInvestmentValues(
     _ investmentValues: [(accountId: UUID, date: Date, value: InstrumentAmount)],
     to dailyBalances: inout [Date: DailyBalance],
-    instrument: Instrument
-  ) {
+    instrument: Instrument,
+    conversionService: any InstrumentConversionService
+  ) async throws {
     guard !investmentValues.isEmpty, !dailyBalances.isEmpty else { return }
 
     var latestByAccount: [UUID: InstrumentAmount] = [:]
@@ -857,8 +858,17 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       }
 
       if !latestByAccount.isEmpty {
-        let totalValue = latestByAccount.values.reduce(
-          InstrumentAmount.zero(instrument: instrument), +)
+        // Sum values, converting to profile instrument where needed
+        var total: Decimal = 0
+        for value in latestByAccount.values {
+          if value.instrument.id == instrument.id {
+            total += value.quantity
+          } else {
+            total += try await conversionService.convert(
+              value.quantity, from: value.instrument, to: instrument, on: date)
+          }
+        }
+        let totalValue = InstrumentAmount(quantity: total, instrument: instrument)
         let balance = dailyBalances[date]!
         dailyBalances[date] = DailyBalance(
           date: balance.date,

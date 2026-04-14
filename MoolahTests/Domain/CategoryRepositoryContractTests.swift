@@ -228,8 +228,6 @@ private struct CloudKitCategoryTestBackend: BackendProvider, @unchecked Sendable
       modelContainer: container)
     self.earmarks = CloudKitEarmarkRepository(
       modelContainer: container, instrument: instrument)
-    self.analysis = CloudKitAnalysisRepository(
-      modelContainer: container, instrument: instrument)
     self.investments = CloudKitInvestmentRepository(
       modelContainer: container, instrument: instrument)
     let rateClient = FixedRateClient()
@@ -237,6 +235,9 @@ private struct CloudKitCategoryTestBackend: BackendProvider, @unchecked Sendable
       .appendingPathComponent("test-rates-\(UUID().uuidString)")
     let exchangeRates = ExchangeRateService(client: rateClient, cacheDirectory: cacheDir)
     self.conversionService = FiatConversionService(exchangeRates: exchangeRates)
+    self.analysis = CloudKitAnalysisRepository(
+      modelContainer: container, instrument: instrument,
+      conversionService: self.conversionService)
   }
 }
 

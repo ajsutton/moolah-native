@@ -9,8 +9,11 @@
 #   scripts/run-with-logs.sh                                    # default: subsystem == "com.moolah.app"
 #   scripts/run-with-logs.sh 'category == "ProfileSyncEngine"'  # custom predicate
 #
-# The script runs until interrupted (Ctrl-C), the app exits, or (in non-interactive
-# mode) the app process is killed externally.
+# Interactive mode (terminal):  Runs until Ctrl-C, then stops the app and log stream.
+# Non-interactive mode (agent): Builds, launches, starts log stream, then exits.
+#   The app and log stream keep running. Clean up with:
+#     pkill -f "Moolah.app/Contents/MacOS/Moolah" 2>/dev/null
+#     pkill -f "log stream.*com.moolah.app" 2>/dev/null
 
 set -euo pipefail
 
@@ -18,23 +21,16 @@ PREDICATE="${1:-subsystem == \"com.moolah.app\"}"
 LOG_DIR=".agent-tmp"
 LOG_FILE="$LOG_DIR/app-logs.txt"
 APP_PATH=".build/Build/Products/Debug/Moolah.app"
-APP_BINARY="$APP_PATH/Contents/MacOS/Moolah"
-
-cleanup() {
-    echo ""
-    echo "Shutting down..."
-    [ -n "${LOG_PID:-}" ] && kill "$LOG_PID" 2>/dev/null || true
-    pkill -f "Moolah.app/Contents/MacOS/Moolah" 2>/dev/null || true
-    echo "Logs saved to $LOG_FILE"
-}
-trap cleanup EXIT
-
-# Kill any existing instances
-pkill -f "Moolah.app/Contents/MacOS/Moolah" 2>/dev/null || true
-sleep 1
 
 # Ensure log directory
 mkdir -p "$LOG_DIR"
+
+# Check for existing app instance
+if pgrep -f "Moolah.app/Contents/MacOS/Moolah" > /dev/null 2>&1; then
+    echo "⚠️  Moolah is already running. Kill it first or use the running instance."
+    echo "   pkill -f 'Moolah.app/Contents/MacOS/Moolah'"
+    exit 1
+fi
 
 # Build
 echo "Building macOS app..."
@@ -55,27 +51,34 @@ sleep 1
 echo "Launching app..."
 open "$APP_PATH"
 
-echo "App running. Logs streaming to $LOG_FILE"
+# Wait for app to appear (up to 10s)
+for i in $(seq 1 20); do
+    if pgrep -f "Moolah.app/Contents/MacOS/Moolah" > /dev/null 2>&1; then
+        break
+    fi
+    sleep 0.5
+done
+
+APP_PID=$(pgrep -f "Moolah.app/Contents/MacOS/Moolah" 2>/dev/null || echo "unknown")
+echo "App running (PID: $APP_PID). Logs streaming to $LOG_FILE"
 echo "Log stream PID: $LOG_PID"
 
 if [ -t 0 ]; then
-    # Interactive: wait for Ctrl-C
+    # Interactive: wait for Ctrl-C, then clean up
+    cleanup() {
+        echo ""
+        echo "Shutting down..."
+        kill "$LOG_PID" 2>/dev/null || true
+        pkill -f "Moolah.app/Contents/MacOS/Moolah" 2>/dev/null || true
+        echo "Logs saved to $LOG_FILE"
+    }
+    trap cleanup EXIT
     echo "Press Ctrl-C to stop."
     wait "$LOG_PID" 2>/dev/null || true
 else
-    # Non-interactive: wait for the app process to appear, then poll until it exits.
-    # This keeps the script (and log stream) alive for the app's lifetime.
-    echo "Non-interactive mode — waiting for app to exit..."
-    # Wait for app to start (up to 10s)
-    for i in $(seq 1 20); do
-        if pgrep -f "Moolah.app/Contents/MacOS/Moolah" > /dev/null 2>&1; then
-            break
-        fi
-        sleep 0.5
-    done
-    # Poll until app exits (check every 2s)
-    while pgrep -f "Moolah.app/Contents/MacOS/Moolah" > /dev/null 2>&1; do
-        sleep 2
-    done
-    echo "App exited."
+    # Non-interactive (agent): exit and leave app + log stream running.
+    echo "Non-interactive mode — app and log stream will keep running."
+    echo "To stop later:"
+    echo "  pkill -f 'Moolah.app/Contents/MacOS/Moolah'"
+    echo "  kill $LOG_PID  # or: pkill -f 'log stream.*com.moolah.app'"
 fi
