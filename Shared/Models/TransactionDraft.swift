@@ -1,8 +1,7 @@
 import Foundation
 
 /// A value type that captures transaction form state and encapsulates the
-/// validation and conversion logic shared between `TransactionDetailView`
-/// and `TransactionFormView`. All amount-signing and field-clearing rules
+/// validation and conversion logic used by `TransactionDetailView`.
 /// live here so they can be unit-tested without a UI host.
 struct TransactionDraft: Sendable {
   var type: TransactionType
