@@ -51,7 +51,8 @@ struct TransactionListView: View {
   init(
     title: String, filter: TransactionFilter,
     accounts: Accounts, categories: Categories, earmarks: Earmarks,
-    transactionStore: TransactionStore
+    transactionStore: TransactionStore,
+    positions: [Position] = []
   ) {
     self.title = title
     self.baseFilter = filter
@@ -59,6 +60,7 @@ struct TransactionListView: View {
     self.categories = categories
     self.earmarks = earmarks
     self.transactionStore = transactionStore
+    self.positions = positions
     self._externalSelection = nil
     self._activeFilter = State(initialValue: filter)
   }
@@ -68,6 +70,7 @@ struct TransactionListView: View {
     title: String, filter: TransactionFilter,
     accounts: Accounts, categories: Categories, earmarks: Earmarks,
     transactionStore: TransactionStore,
+    positions: [Position] = [],
     selectedTransaction: Binding<Transaction?>
   ) {
     self.title = title
@@ -76,6 +79,7 @@ struct TransactionListView: View {
     self.categories = categories
     self.earmarks = earmarks
     self.transactionStore = transactionStore
+    self.positions = positions
     self._externalSelection = selectedTransaction
     self._activeFilter = State(initialValue: filter)
   }
