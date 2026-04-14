@@ -136,10 +136,16 @@ final class ProfileSession: Identifiable {
       if let repo = backend.accounts as? CloudKitAccountRepository {
         repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }
         repo.onRecordDeleted = { [weak syncEngine] id in syncEngine?.queueDeletion(id: id) }
+        repo.onInstrumentChanged = { [weak syncEngine] id in
+          syncEngine?.queueSave(recordName: id)
+        }
       }
       if let repo = backend.transactions as? CloudKitTransactionRepository {
         repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }
         repo.onRecordDeleted = { [weak syncEngine] id in syncEngine?.queueDeletion(id: id) }
+        repo.onInstrumentChanged = { [weak syncEngine] id in
+          syncEngine?.queueSave(recordName: id)
+        }
       }
       if let repo = backend.categories as? CloudKitCategoryRepository {
         repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }

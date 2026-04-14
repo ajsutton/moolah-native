@@ -39,6 +39,11 @@ enum SyncErrorRecovery {
       case .serverRecordChanged:
         if let serverRecord = failure.error.serverRecord {
           result.conflicts.append((recordID: recordID, serverRecord: serverRecord))
+        } else {
+          // Server record unavailable — re-queue so the record isn't silently lost
+          logger.warning(
+            "serverRecordChanged with no serverRecord for \(recordID.recordName) — re-queuing")
+          result.requeue.append(recordID)
         }
 
       case .unknownItem:

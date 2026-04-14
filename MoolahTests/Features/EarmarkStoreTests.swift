@@ -425,29 +425,33 @@ struct EarmarkStoreTests {
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
+    let instrument = Instrument.defaultTestInstrument
     TestBackend.seedWithTransactions(
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday Fund",
-          balance: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
-          saved: MonetaryAmount(cents: 50000, currency: Currency.defaultTestCurrency),
-          spent: MonetaryAmount(cents: 0, currency: Currency.defaultTestCurrency))
+          balance: InstrumentAmount(quantity: 500, instrument: instrument),
+          saved: InstrumentAmount(quantity: 500, instrument: instrument),
+          spent: InstrumentAmount(quantity: 0, instrument: instrument))
       ], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
     let scheduledTx = Transaction(
-      type: .expense, date: Date(), accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
+      date: Date(),
       payee: "Scheduled Bill",
-      earmarkId: earmarkId,
-      recurPeriod: .month, recurEvery: 1
+      recurPeriod: .month, recurEvery: 1,
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: instrument, quantity: -100,
+          type: .expense, earmarkId: earmarkId)
+      ]
     )
     store.applyTransactionDelta(old: nil, new: scheduledTx)
 
     // Scheduled transactions should not change earmark balance
-    #expect(store.earmarks.by(id: earmarkId)?.balance.cents == 50000)
-    #expect(store.earmarks.by(id: earmarkId)?.spent.cents == 0)
+    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == 500)
+    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == 0)
   }
 
   // MARK: - reorderEarmarks

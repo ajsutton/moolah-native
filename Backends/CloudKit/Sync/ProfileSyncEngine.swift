@@ -42,11 +42,6 @@ final class ProfileSyncEngine: Sendable {
   /// Flushed as a single callback on endFetchingChanges().
   private var fetchSessionChangedTypes = Set<String>()
 
-  /// Account IDs affected by transaction changes during a fetch session.
-  /// Used for deferred balance invalidation on endFetchingChanges().
-  /// Empty set means "invalidate all" (deletion case).
-  private var fetchSessionAffectedAccountIds: Set<UUID>?
-
   // MARK: - Fetch Session Performance Tracking
 
   /// When the current fetch session started (nil when not fetching).
@@ -66,10 +61,6 @@ final class ProfileSyncEngine: Sendable {
 
   /// Cumulative time spent in context.save() across all batches.
   private var fetchSessionSaveDuration: Duration = .zero
-
-
-  /// Debounced task for writing system fields cache to disk.
-  private var systemFieldsSaveTask: Task<Void, Never>?
 
   var hasPendingChanges: Bool {
     syncEngine.map { !$0.state.pendingRecordZoneChanges.isEmpty } ?? false
@@ -139,11 +130,11 @@ final class ProfileSyncEngine: Sendable {
 
   /// Signals that CKSyncEngine is about to deliver change batches.
   /// Called from handleEventOnMain for .willFetchChanges.
-  /// During this window, balance invalidation and reload callbacks are deferred.
+  /// During this window, the onRemoteChangesApplied callback is deferred
+  /// to fire once at the end of the session instead of once per batch.
   func beginFetchingChanges() {
     isFetchingChanges = true
     fetchSessionChangedTypes.removeAll()
-    fetchSessionAffectedAccountIds = nil
 
     // Reset performance tracking
     fetchSessionStartTime = .now
@@ -156,7 +147,8 @@ final class ProfileSyncEngine: Sendable {
 
   /// Signals that CKSyncEngine has finished delivering all change batches.
   /// Called from handleEventOnMain for .didFetchChanges.
-  /// Performs deferred balance invalidation and fires the reload callback once.
+  /// Fires the deferred onRemoteChangesApplied callback once with all
+  /// accumulated record types from the session.
   func endFetchingChanges() {
     isFetchingChanges = false
 
@@ -165,45 +157,24 @@ final class ProfileSyncEngine: Sendable {
       return
     }
 
-    // Perform deferred balance invalidation
-    var balanceInvalidationDuration: Duration = .zero
-    if let affectedIds = fetchSessionAffectedAccountIds {
-      let context = modelContainer.mainContext
-      let balanceStart = ContinuousClock.now
-      Self.invalidateCachedBalances(accountIds: affectedIds, context: context)
-      do {
-        try context.save()
-      } catch {
-        logger.error("Failed to save deferred balance invalidation: \(error)")
-      }
-      balanceInvalidationDuration = ContinuousClock.now - balanceStart
-      let balanceMs = balanceInvalidationDuration.inMilliseconds
-      if balanceMs > 16 {
-        logger.warning(
-          "⚠️ PERF: balance invalidation took \(balanceMs)ms (>\(affectedIds.count) accounts)")
-      }
-    }
-
     // Log fetch session summary
     let sessionDuration = fetchSessionStartTime.map { ContinuousClock.now - $0 } ?? .zero
     let sessionMs = sessionDuration.inMilliseconds
     let applyMs = fetchSessionApplyDuration.inMilliseconds
     let saveMs = fetchSessionSaveDuration.inMilliseconds
-    let balanceMs = balanceInvalidationDuration.inMilliseconds
     let totalRecords = fetchSessionTotalSaves + fetchSessionTotalDeletes
     logger.info(
       """
       📊 SYNC SESSION COMPLETE: \(totalRecords) records (\(self.fetchSessionTotalSaves) saves, \
       \(self.fetchSessionTotalDeletes) deletes) in \(self.fetchSessionBatchCount) batches | \
       total: \(sessionMs)ms | applyChanges: \(applyMs)ms | contextSave: \(saveMs)ms | \
-      balanceInvalidation: \(balanceMs)ms | types: \(self.fetchSessionChangedTypes)
+      types: \(self.fetchSessionChangedTypes)
       """)
     fetchSessionStartTime = nil
 
     // Fire the callback once with all accumulated types
     let types = fetchSessionChangedTypes
     fetchSessionChangedTypes.removeAll()
-    fetchSessionAffectedAccountIds = nil
     onRemoteChangesApplied?(types)
   }
 
@@ -284,8 +255,6 @@ final class ProfileSyncEngine: Sendable {
 
   /// Stops the sync engine. Call during profile deactivation or app termination.
   func stop() {
-    systemFieldsSaveTask?.cancel()
-    flushSystemFieldsCache()
     syncEngine = nil
     isRunning = false
     logger.info("Stopped sync engine for profile \(self.profileId)")
@@ -515,36 +484,31 @@ final class ProfileSyncEngine: Sendable {
     }
   }
 
-  /// Clears encoded system fields on all local records.
-  /// Called on encrypted data reset where we keep data but must re-upload fresh.
+  /// Clears `encodedSystemFields` on all model records in the local store.
+  /// Called before re-uploading after an `encryptedDataReset` — the server-side records
+  /// no longer exist, so stale change tags would cause `.serverRecordChanged` conflicts.
   private func clearAllSystemFields() {
     let context = ModelContext(modelContainer)
 
-    for record in (try? context.fetch(FetchDescriptor<AccountRecord>())) ?? [] {
-      record.encodedSystemFields = nil
-    }
-    for record in (try? context.fetch(FetchDescriptor<TransactionRecord>())) ?? [] {
-      record.encodedSystemFields = nil
-    }
-    for record in (try? context.fetch(FetchDescriptor<CategoryRecord>())) ?? [] {
-      record.encodedSystemFields = nil
-    }
-    for record in (try? context.fetch(FetchDescriptor<EarmarkRecord>())) ?? [] {
-      record.encodedSystemFields = nil
-    }
-    for record in (try? context.fetch(FetchDescriptor<EarmarkBudgetItemRecord>())) ?? [] {
-      record.encodedSystemFields = nil
-    }
-    for record in (try? context.fetch(FetchDescriptor<InvestmentValueRecord>())) ?? [] {
-      record.encodedSystemFields = nil
+    func clearAll<T: PersistentModel & SystemFieldsCacheable>(_ type: T.Type) {
+      if let records = try? context.fetch(FetchDescriptor<T>()) {
+        for record in records {
+          record.encodedSystemFields = nil
+        }
+      }
     }
 
-    do {
-      try context.save()
-      logger.info("Cleared all system fields for profile \(self.profileId)")
-    } catch {
-      logger.error("Failed to clear system fields: \(error)")
-    }
+    clearAll(AccountRecord.self)
+    clearAll(TransactionRecord.self)
+    clearAll(TransactionLegRecord.self)
+    clearAll(CategoryRecord.self)
+    clearAll(EarmarkRecord.self)
+    clearAll(EarmarkBudgetItemRecord.self)
+    clearAll(InvestmentValueRecord.self)
+    clearAll(InstrumentRecord.self)
+
+    try? context.save()
+    logger.info("Cleared all system fields for profile \(self.profileId)")
   }
 
   // MARK: - Batch Processing (Static)
@@ -715,6 +679,28 @@ final class ProfileSyncEngine: Sendable {
     }
   }
 
+  /// Updates `encodedSystemFields` on an InstrumentRecord matching the given string ID.
+  nonisolated private static func updateInstrumentSystemFields(
+    _ id: String, data: Data, context: ModelContext
+  ) {
+    if let record = try? context.fetch(
+      FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == id })
+    ).first {
+      record.encodedSystemFields = data
+    }
+  }
+
+  /// Clears `encodedSystemFields` on an InstrumentRecord matching the given string ID.
+  nonisolated private static func clearInstrumentSystemFields(
+    _ id: String, context: ModelContext
+  ) {
+    if let record = try? context.fetch(
+      FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == id })
+    ).first {
+      record.encodedSystemFields = nil
+    }
+  }
+
   /// Clears `encodedSystemFields` on the model record matching the given UUID and type.
   /// Called on `.unknownItem` — the server deleted the record, so the stale change tag
   /// must be cleared so the next upload creates a fresh record.
@@ -768,7 +754,6 @@ final class ProfileSyncEngine: Sendable {
       break
     }
   }
-
 
   // MARK: - Per-Type Batch Upsert
 
@@ -1322,10 +1307,16 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     if !sentChanges.savedRecords.isEmpty {
       let context = ModelContext(modelContainer)
       for saved in sentChanges.savedRecords {
-        guard let uuid = UUID(uuidString: saved.recordID.recordName) else { continue }
-        Self.updateEncodedSystemFields(
-          uuid, data: saved.encodedSystemFields,
-          recordType: saved.recordType, context: context)
+        let recordName = saved.recordID.recordName
+        if let uuid = UUID(uuidString: recordName) {
+          Self.updateEncodedSystemFields(
+            uuid, data: saved.encodedSystemFields,
+            recordType: saved.recordType, context: context)
+        } else {
+          // String-ID record (e.g. InstrumentRecord)
+          Self.updateInstrumentSystemFields(
+            recordName, data: saved.encodedSystemFields, context: context)
+        }
       }
       try? context.save()
     }
@@ -1338,18 +1329,25 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     if !failures.conflicts.isEmpty || !failures.unknownItems.isEmpty {
       let ctx = ModelContext(modelContainer)
       for (_, serverRecord) in failures.conflicts {
-        if let uuid = UUID(uuidString: serverRecord.recordID.recordName) {
+        let recordName = serverRecord.recordID.recordName
+        if let uuid = UUID(uuidString: recordName) {
           Self.updateEncodedSystemFields(
             uuid, data: serverRecord.encodedSystemFields,
             recordType: serverRecord.recordType, context: ctx)
+        } else {
+          Self.updateInstrumentSystemFields(
+            recordName, data: serverRecord.encodedSystemFields, context: ctx)
         }
       }
       // Clear stale system fields for server-deleted records so the
       // re-queued upload creates a fresh record without a change tag.
       for (recordID, recordType) in failures.unknownItems {
-        if let uuid = UUID(uuidString: recordID.recordName) {
+        let recordName = recordID.recordName
+        if let uuid = UUID(uuidString: recordName) {
           Self.clearEncodedSystemFields(
             uuid, recordType: recordType, context: ctx)
+        } else {
+          Self.clearInstrumentSystemFields(recordName, context: ctx)
         }
       }
       try? ctx.save()

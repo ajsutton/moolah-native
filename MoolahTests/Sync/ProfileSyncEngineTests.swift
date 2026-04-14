@@ -388,71 +388,6 @@ struct ProfileSyncEngineTests {
     #expect(receivedTypes?.contains("CD_CategoryRecord") == true)
   }
 
-  @Test func balancesNotInvalidatedDuringFetchSession() {
-    let container = try! TestModelContainer.create()
-    let engine = ProfileSyncEngine(profileId: UUID(), modelContainer: container)
-
-    // Pre-create an account with a cached balance
-    let accountId = UUID()
-    let context = container.mainContext
-    let account = AccountRecord(
-      id: accountId, name: "Savings", type: "bank", position: 0,
-      isHidden: false, currencyCode: "AUD", cachedBalance: 5000
-    )
-    context.insert(account)
-    try! context.save()
-
-    engine.onRemoteChangesApplied = { _ in }
-
-    // During fetch session, apply a transaction batch for this account
-    engine.beginFetchingChanges()
-
-    engine.applyRemoteChanges(
-      saved: [makeTransactionCKRecord(accountId: accountId, amount: -100, zoneID: engine.zoneID)],
-      deleted: []
-    )
-
-    // Balance should still be cached (not invalidated mid-session)
-    let descriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.id == accountId }
-    )
-    let records = try! context.fetch(descriptor)
-    #expect(records.first?.cachedBalance == 5000)
-  }
-
-  @Test func balancesInvalidatedOnEndFetchingChanges() {
-    let container = try! TestModelContainer.create()
-    let engine = ProfileSyncEngine(profileId: UUID(), modelContainer: container)
-
-    // Pre-create an account with a cached balance
-    let accountId = UUID()
-    let context = container.mainContext
-    let account = AccountRecord(
-      id: accountId, name: "Savings", type: "bank", position: 0,
-      isHidden: false, currencyCode: "AUD", cachedBalance: 5000
-    )
-    context.insert(account)
-    try! context.save()
-
-    engine.onRemoteChangesApplied = { _ in }
-
-    // During fetch session, apply a transaction batch
-    engine.beginFetchingChanges()
-    engine.applyRemoteChanges(
-      saved: [makeTransactionCKRecord(accountId: accountId, amount: -100, zoneID: engine.zoneID)],
-      deleted: []
-    )
-
-    // End the fetch session — NOW balances should be invalidated
-    engine.endFetchingChanges()
-
-    let descriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.id == accountId }
-    )
-    let records = try! context.fetch(descriptor)
-    #expect(records.first?.cachedBalance == nil)
-  }
-
   @Test func outsideFetchSessionCallbackFiredPerBatch() {
     let container = try! TestModelContainer.create()
     let engine = ProfileSyncEngine(profileId: UUID(), modelContainer: container)
@@ -473,35 +408,6 @@ struct ProfileSyncEngineTests {
     )
 
     #expect(callbackCount == 2)
-  }
-
-  @Test func outsideFetchSessionBalancesInvalidatedPerBatch() {
-    let container = try! TestModelContainer.create()
-    let engine = ProfileSyncEngine(profileId: UUID(), modelContainer: container)
-
-    // Pre-create an account with a cached balance
-    let accountId = UUID()
-    let context = container.mainContext
-    let account = AccountRecord(
-      id: accountId, name: "Savings", type: "bank", position: 0,
-      isHidden: false, currencyCode: "AUD", cachedBalance: 5000
-    )
-    context.insert(account)
-    try! context.save()
-
-    engine.onRemoteChangesApplied = { _ in }
-
-    // Without fetch session, balance should be invalidated immediately
-    engine.applyRemoteChanges(
-      saved: [makeTransactionCKRecord(accountId: accountId, amount: -100, zoneID: engine.zoneID)],
-      deleted: []
-    )
-
-    let descriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.id == accountId }
-    )
-    let records = try! context.fetch(descriptor)
-    #expect(records.first?.cachedBalance == nil)
   }
 
   @Test func endFetchingChangesWithNoChangesDoesNotFireCallback() {

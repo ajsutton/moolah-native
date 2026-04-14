@@ -29,8 +29,8 @@ extension InvestmentValueRecord: IdentifiableRecord {}
 extension ProfileRecord: IdentifiableRecord {}
 
 /// Protocol for records that can store CKRecord system fields.
-protocol SystemFieldsCacheable {
-  var encodedSystemFields: Data? { get }
+protocol SystemFieldsCacheable: AnyObject {
+  var encodedSystemFields: Data? { get set }
 }
 
 extension AccountRecord: SystemFieldsCacheable {}
@@ -42,7 +42,6 @@ extension EarmarkBudgetItemRecord: SystemFieldsCacheable {}
 extension InvestmentValueRecord: SystemFieldsCacheable {}
 extension InstrumentRecord: SystemFieldsCacheable {}
 extension ProfileRecord: SystemFieldsCacheable {}
-
 
 // MARK: - CKRecord System Fields
 

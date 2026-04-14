@@ -73,9 +73,41 @@ struct InstrumentAmountTests {
     #expect(amount.decimalValue == Decimal(string: "50.23")!)
   }
 
-  @Test func formatted() {
+  @Test func formattedFiat() {
     let amount = InstrumentAmount(quantity: Decimal(string: "50.23")!, instrument: aud)
     #expect(amount.formatted.contains("50.23"))
+  }
+
+  @Test func formattedStock() {
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let amount = InstrumentAmount(quantity: Decimal(string: "150")!, instrument: bhp)
+    #expect(amount.formatted == "150 BHP.AX")
+  }
+
+  @Test func formattedStockFractional() {
+    let aapl = Instrument.stock(ticker: "AAPL", exchange: "NASDAQ", name: "Apple", decimals: 4)
+    let amount = InstrumentAmount(quantity: Decimal(string: "3.5000")!, instrument: aapl)
+    #expect(amount.formatted == "3.5 AAPL")
+  }
+
+  @Test func formattedCrypto() {
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
+    let amount = InstrumentAmount(quantity: Decimal(string: "0.5")!, instrument: eth)
+    #expect(amount.formatted == "0.5 ETH")
+  }
+
+  @Test func formattedCryptoZero() {
+    let btc = Instrument.crypto(
+      chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8)
+    let amount = InstrumentAmount(quantity: 0, instrument: btc)
+    #expect(amount.formatted == "0 BTC")
+  }
+
+  @Test func formattedNegativeStock() {
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let amount = InstrumentAmount(quantity: Decimal(string: "-10")!, instrument: bhp)
+    #expect(amount.formatted == "-10 BHP.AX")
   }
 
   @Test func formatNoSymbol() {

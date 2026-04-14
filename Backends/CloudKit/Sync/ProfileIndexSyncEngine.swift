@@ -253,13 +253,16 @@ final class ProfileIndexSyncEngine: Sendable {
   /// If cached system fields exist on the model, applies fields directly onto the
   /// cached record to preserve the change tag and avoid `.serverRecordChanged` conflicts.
   private func buildCKRecord(for record: ProfileRecord) -> CKRecord {
+    let freshRecord = record.toCKRecord(in: zoneID)
     if let cachedData = record.encodedSystemFields,
       let cachedRecord = CKRecord.fromEncodedSystemFields(cachedData)
     {
-      record.applyFields(to: cachedRecord)
+      for key in freshRecord.allKeys() {
+        cachedRecord[key] = freshRecord[key]
+      }
       return cachedRecord
     }
-    return record.toCKRecord(in: zoneID)
+    return freshRecord
   }
 }
 

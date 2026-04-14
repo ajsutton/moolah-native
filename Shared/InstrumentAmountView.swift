@@ -9,11 +9,20 @@ struct InstrumentAmountView: View {
   var colorOverride: Color? = nil
 
   var body: some View {
-    Text(amount.quantity, format: .currency(code: amount.instrument.id))
+    text
       .foregroundStyle(effectiveColor)
       .monospacedDigit()
       .font(font)
-      .accessibilityValue(amount.quantity.formatted(.currency(code: amount.instrument.id)))
+      .accessibilityValue(amount.formatted)
+  }
+
+  private var text: Text {
+    switch amount.instrument.kind {
+    case .fiatCurrency:
+      Text(amount.quantity, format: .currency(code: amount.instrument.id))
+    case .stock, .cryptoToken:
+      Text(amount.formatted)
+    }
   }
 
   private var effectiveColor: Color {

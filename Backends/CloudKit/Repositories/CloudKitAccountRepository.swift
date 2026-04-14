@@ -7,6 +7,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   private let instrument: Instrument
   var onRecordChanged: (UUID) -> Void = { _ in }
   var onRecordDeleted: (UUID) -> Void = { _ in }
+  var onInstrumentChanged: (String) -> Void = { _ in }
 
   init(modelContainer: ModelContainer, instrument: Instrument) {
     self.modelContainer = modelContainer
@@ -87,6 +88,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
         try context.save()
         onRecordChanged(account.id)
         onRecordChanged(txnRecord.id)
+        onRecordChanged(legRecord.id)
       } else {
         try context.save()
         onRecordChanged(account.id)
@@ -252,6 +254,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     let descriptor = FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == iid })
     if try context.fetch(descriptor).isEmpty {
       context.insert(InstrumentRecord.from(instrument))
+      onInstrumentChanged(instrument.id)
     }
     instrumentCacheForAccount[instrument.id] = instrument
   }

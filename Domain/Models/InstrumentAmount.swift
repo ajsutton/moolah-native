@@ -21,7 +21,13 @@ struct InstrumentAmount: Codable, Sendable, Hashable, Comparable {
   // MARK: - Formatting
 
   var formatted: String {
-    quantity.formatted(.currency(code: instrument.id))
+    switch instrument.kind {
+    case .fiatCurrency:
+      return quantity.formatted(.currency(code: instrument.id))
+    case .stock, .cryptoToken:
+      let number = quantity.formatted(.number.precision(.fractionLength(0...instrument.decimals)))
+      return "\(number) \(instrument.displaySymbol ?? instrument.name)"
+    }
   }
 
   var formatNoSymbol: String {
@@ -48,11 +54,19 @@ struct InstrumentAmount: Codable, Sendable, Hashable, Comparable {
   // MARK: - Arithmetic
 
   static func + (lhs: InstrumentAmount, rhs: InstrumentAmount) -> InstrumentAmount {
-    InstrumentAmount(quantity: lhs.quantity + rhs.quantity, instrument: lhs.instrument)
+    precondition(
+      lhs.instrument == rhs.instrument,
+      "Cannot add amounts with different instruments: \(lhs.instrument.id) + \(rhs.instrument.id)"
+    )
+    return InstrumentAmount(quantity: lhs.quantity + rhs.quantity, instrument: lhs.instrument)
   }
 
   static func - (lhs: InstrumentAmount, rhs: InstrumentAmount) -> InstrumentAmount {
-    InstrumentAmount(quantity: lhs.quantity - rhs.quantity, instrument: lhs.instrument)
+    precondition(
+      lhs.instrument == rhs.instrument,
+      "Cannot subtract amounts with different instruments: \(lhs.instrument.id) - \(rhs.instrument.id)"
+    )
+    return InstrumentAmount(quantity: lhs.quantity - rhs.quantity, instrument: lhs.instrument)
   }
 
   static prefix func - (amount: InstrumentAmount) -> InstrumentAmount {

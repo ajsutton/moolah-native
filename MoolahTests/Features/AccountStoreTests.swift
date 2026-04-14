@@ -437,79 +437,89 @@ struct AccountStoreTests {
 
   @Test func testScheduledTransactionDoesNotAffectBalance() async throws {
     let acctId = UUID()
+    let instrument = Instrument.defaultTestInstrument
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: acctId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
+          balance: InstrumentAmount(quantity: 1000, instrument: instrument))
       ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     let scheduledTx = Transaction(
-      type: .expense, date: Date(), accountId: acctId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
-      payee: "Rent", recurPeriod: .month, recurEvery: 1
+      date: Date(), payee: "Rent",
+      recurPeriod: .month, recurEvery: 1,
+      legs: [
+        TransactionLeg(accountId: acctId, instrument: instrument, quantity: -50, type: .expense)
+      ]
     )
     store.applyTransactionDelta(old: nil, new: scheduledTx)
 
     // Scheduled transactions should not change the balance
-    #expect(store.accounts.by(id: acctId)?.balance.cents == 100000)
+    #expect(store.accounts.by(id: acctId)?.balance.quantity == 1000)
   }
 
   @Test func testDeleteScheduledTransactionDoesNotAffectBalance() async throws {
     let acctId = UUID()
+    let instrument = Instrument.defaultTestInstrument
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: acctId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
+          balance: InstrumentAmount(quantity: 1000, instrument: instrument))
       ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     let scheduledTx = Transaction(
-      type: .expense, date: Date(), accountId: acctId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
-      payee: "Rent", recurPeriod: .month, recurEvery: 1
+      date: Date(), payee: "Rent",
+      recurPeriod: .month, recurEvery: 1,
+      legs: [
+        TransactionLeg(accountId: acctId, instrument: instrument, quantity: -50, type: .expense)
+      ]
     )
     store.applyTransactionDelta(old: scheduledTx, new: nil)
 
     // Deleting a scheduled transaction should not change the balance
-    #expect(store.accounts.by(id: acctId)?.balance.cents == 100000)
+    #expect(store.accounts.by(id: acctId)?.balance.quantity == 1000)
   }
 
   @Test func testPayOneTimeScheduledTransactionUpdatesBalance() async throws {
     let acctId = UUID()
+    let instrument = Instrument.defaultTestInstrument
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: acctId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency))
+          balance: InstrumentAmount(quantity: 1000, instrument: instrument))
       ], in: container)
     let store = AccountStore(repository: backend.accounts)
     await store.load()
 
     let scheduledTx = Transaction(
-      type: .expense, date: Date(), accountId: acctId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
-      payee: "Bill", recurPeriod: .once, recurEvery: 1
+      date: Date(), payee: "Bill",
+      recurPeriod: .once, recurEvery: 1,
+      legs: [
+        TransactionLeg(accountId: acctId, instrument: instrument, quantity: -50, type: .expense)
+      ]
     )
 
     // Simulate paying: create non-scheduled copy, then delete the scheduled original
     let paidTx = Transaction(
-      id: UUID(), type: .expense, date: Date(), accountId: acctId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
-      payee: "Bill"
+      date: Date(), payee: "Bill",
+      legs: [
+        TransactionLeg(accountId: acctId, instrument: instrument, quantity: -50, type: .expense)
+      ]
     )
     store.applyTransactionDelta(old: nil, new: paidTx)
     store.applyTransactionDelta(old: scheduledTx, new: nil)
 
     // Only the paid (non-scheduled) transaction should affect the balance
-    #expect(store.accounts.by(id: acctId)?.balance.cents == 95000)
+    #expect(store.accounts.by(id: acctId)?.balance.quantity == 950)
   }
 
   // MARK: - Show Hidden

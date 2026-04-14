@@ -7,6 +7,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
   private let instrument: Instrument
   var onRecordChanged: (UUID) -> Void = { _ in }
   var onRecordDeleted: (UUID) -> Void = { _ in }
+  var onInstrumentChanged: (String) -> Void = { _ in }
 
   init(modelContainer: ModelContainer, instrument: Instrument) {
     self.modelContainer = modelContainer
@@ -43,6 +44,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
     let descriptor = FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == iid })
     if try context.fetch(descriptor).isEmpty {
       context.insert(InstrumentRecord.from(instrument))
+      onInstrumentChanged(instrument.id)
     }
     instrumentCache[instrument.id] = instrument
   }
@@ -298,15 +300,20 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       context.insert(record)
 
       // Insert leg records and ensure instruments exist
+      var legRecords: [TransactionLegRecord] = []
       for (index, leg) in transaction.legs.enumerated() {
         try ensureInstrument(leg.instrument)
         let legRecord = TransactionLegRecord.from(
           leg, transactionId: transaction.id, sortOrder: index)
         context.insert(legRecord)
+        legRecords.append(legRecord)
       }
 
       try context.save()
       onRecordChanged(transaction.id)
+      for legRecord in legRecords {
+        onRecordChanged(legRecord.id)
+      }
     }
     return transaction
   }
@@ -341,20 +348,29 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         predicate: #Predicate { $0.transactionId == txnId }
       )
       let oldLegs = try context.fetch(legDescriptor)
+      let oldLegIds = oldLegs.map(\.id)
       for oldLeg in oldLegs {
         context.delete(oldLeg)
       }
 
       // Insert new leg records
+      var newLegRecords: [TransactionLegRecord] = []
       for (index, leg) in transaction.legs.enumerated() {
         try ensureInstrument(leg.instrument)
         let legRecord = TransactionLegRecord.from(
           leg, transactionId: transaction.id, sortOrder: index)
         context.insert(legRecord)
+        newLegRecords.append(legRecord)
       }
 
       try context.save()
       onRecordChanged(transaction.id)
+      for legRecord in newLegRecords {
+        onRecordChanged(legRecord.id)
+      }
+      for oldLegId in oldLegIds {
+        onRecordDeleted(oldLegId)
+      }
     }
     return transaction
   }
@@ -381,6 +397,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         predicate: #Predicate { $0.transactionId == id }
       )
       let legs = try context.fetch(legDescriptor)
+      let legIds = legs.map(\.id)
       for leg in legs {
         context.delete(leg)
       }
@@ -388,6 +405,9 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       context.delete(record)
       try context.save()
       onRecordDeleted(id)
+      for legId in legIds {
+        onRecordDeleted(legId)
+      }
     }
   }
 

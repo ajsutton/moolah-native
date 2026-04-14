@@ -40,6 +40,7 @@ struct CryptoSettingsView: View {
           systemImage: "bitcoinsign.circle",
           description: Text("Add crypto tokens to track their prices.")
         )
+        .frame(maxWidth: .infinity)
       } else {
         ForEach(store.registrations) { registration in
           registrationRow(registration)
