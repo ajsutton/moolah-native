@@ -249,6 +249,8 @@ final class ProfileSyncEngine: Sendable {
       _ = try await CKContainer.default().privateCloudDatabase.save(zone)
       logger.info("Ensured zone exists: \(self.zoneID.zoneName)")
     } catch {
+      // Zone saves are idempotent — transient network errors are the main failure mode.
+      // The engine will retry on the next send cycle.
       logger.error("Failed to ensure zone exists: \(error)")
     }
   }
@@ -507,8 +509,12 @@ final class ProfileSyncEngine: Sendable {
     clearAll(InvestmentValueRecord.self)
     clearAll(InstrumentRecord.self)
 
-    try? context.save()
-    logger.info("Cleared all system fields for profile \(self.profileId)")
+    do {
+      try context.save()
+      logger.info("Cleared all system fields for profile \(self.profileId)")
+    } catch {
+      logger.error("Failed to save after clearing system fields: \(error)")
+    }
   }
 
   // MARK: - Batch Processing (Static)
@@ -1318,7 +1324,11 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
             recordName, data: saved.encodedSystemFields, context: context)
         }
       }
-      try? context.save()
+      do {
+        try context.save()
+      } catch {
+        logger.error("Failed to save system fields after upload: \(error)")
+      }
     }
     // Deleted records don't need cache cleanup — model is already deleted.
 
@@ -1350,7 +1360,11 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
           Self.clearInstrumentSystemFields(recordName, context: ctx)
         }
       }
-      try? ctx.save()
+      do {
+        try ctx.save()
+      } catch {
+        logger.error("Failed to save system fields after conflict resolution: \(error)")
+      }
     }
 
     SyncErrorRecovery.recover(

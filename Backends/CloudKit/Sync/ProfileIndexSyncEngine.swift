@@ -370,7 +370,11 @@ extension ProfileIndexSyncEngine: CKSyncEngineDelegate {
         updateEncodedSystemFields(
           saved.recordID, data: saved.encodedSystemFields, context: context)
       }
-      try? context.save()
+      do {
+        try context.save()
+      } catch {
+        logger.error("Failed to save system fields after upload: \(error)")
+      }
     }
 
     // Classify and recover from failed saves/deletes
@@ -386,7 +390,11 @@ extension ProfileIndexSyncEngine: CKSyncEngineDelegate {
       for (recordID, _) in failures.unknownItems {
         clearEncodedSystemFields(recordID, context: context)
       }
-      try? context.save()
+      do {
+        try context.save()
+      } catch {
+        logger.error("Failed to save system fields after conflict resolution: \(error)")
+      }
     }
 
     SyncErrorRecovery.recover(
