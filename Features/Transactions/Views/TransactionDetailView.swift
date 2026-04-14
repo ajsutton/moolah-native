@@ -10,23 +10,10 @@ struct TransactionDetailView: View {
   let onUpdate: (Transaction) -> Void
   let onDelete: (UUID) -> Void
 
-  @State private var type: TransactionType
-  @State private var payee: String
-  @State private var amountText: String
-  @State private var date: Date
-  @State private var accountId: UUID?
-  @State private var toAccountId: UUID?
-  @State private var categoryId: UUID?
-  @State private var earmarkId: UUID?
-  @State private var notes: String
-  @State private var recurPeriod: RecurPeriod?
-  @State private var recurEvery: Int
-  @State private var isRepeating: Bool
-  @State private var toAmountText: String = ""
+  @State private var draft: TransactionDraft
   @State private var showDeleteConfirmation = false
   @State private var showPayeeSuggestions = false
   @State private var payeeHighlightedIndex: Int?
-  @State private var categoryText: String = ""
   @State private var showCategorySuggestions = false
   @State private var categoryHighlightedIndex: Int?
   @State private var categoryJustSelected = false
@@ -56,57 +43,17 @@ struct TransactionDetailView: View {
     self.onUpdate = onUpdate
     self.onDelete = onDelete
 
-    _type = State(initialValue: transaction.type)
-    _payee = State(initialValue: transaction.payee ?? "")
-    _amountText = State(initialValue: transaction.primaryAmount.formatNoSymbol)
-    _date = State(initialValue: transaction.date)
-    _accountId = State(initialValue: transaction.primaryAccountId)
-    _toAccountId = State(
-      initialValue: transaction.legs.count > 1
-        ? transaction.legs.first(where: { $0.accountId != transaction.primaryAccountId })?.accountId
-        : nil)
-    _categoryId = State(initialValue: transaction.categoryId)
+    var initialDraft = TransactionDraft(from: transaction)
     if let catId = transaction.categoryId, let cat = categories.by(id: catId) {
-      _categoryText = State(initialValue: categories.path(for: cat))
+      initialDraft.categoryText = categories.path(for: cat)
     }
-    _earmarkId = State(initialValue: transaction.earmarkId)
-    _notes = State(initialValue: transaction.notes ?? "")
-    _recurPeriod = State(initialValue: transaction.recurPeriod)
-    _recurEvery = State(initialValue: transaction.recurEvery ?? 1)
-    _isRepeating = State(
-      initialValue: transaction.recurPeriod != nil && transaction.recurPeriod != .once)
-
-    // Initialize toAmountText for cross-currency transfers
-    let primaryLeg = transaction.legs.first
-    let transferLeg =
-      transaction.legs.count > 1
-      ? transaction.legs.first(where: { $0.accountId != primaryLeg?.accountId })
-      : nil
-    if let transferLeg, primaryLeg?.instrument != transferLeg.instrument {
-      _toAmountText = State(
-        initialValue: abs(transferLeg.quantity).formatted(
-          .number.precision(.fractionLength(2))))
-    }
+    _draft = State(initialValue: initialDraft)
   }
 
   private var isNewTransaction: Bool {
     // Detect if this is a new transaction by checking if it has default values
     transaction.primaryAmount.isZero && (transaction.payee?.isEmpty ?? true)
   }
-
-  private var draft: TransactionDraft {
-    TransactionDraft(
-      type: type, payee: payee, amountText: amountText, date: date,
-      accountId: accountId, toAccountId: toAccountId, categoryId: categoryId,
-      earmarkId: earmarkId, notes: notes, categoryText: categoryText,
-      toAmountText: toAmountText,
-      isRepeating: isRepeating,
-      recurPeriod: recurPeriod, recurEvery: recurEvery)
-  }
-
-  private var parsedQuantity: Decimal? { draft.parsedQuantity }
-
-  private var isValid: Bool { draft.isValid }
 
   private var sortedAccounts: [Account] {
     accounts.ordered.sorted { a, b in
@@ -136,18 +83,7 @@ struct TransactionDetailView: View {
           focusedField = .payee
         }
       }
-      .onChange(of: type) { _, _ in debouncedSave() }
-      .onChange(of: payee) { _, _ in debouncedSave() }
-      .onChange(of: amountText) { _, _ in debouncedSave() }
-      .onChange(of: date) { _, _ in debouncedSave() }
-      .onChange(of: accountId) { _, _ in debouncedSave() }
-      .onChange(of: toAccountId) { _, _ in debouncedSave() }
-      .onChange(of: categoryId) { _, _ in debouncedSave() }
-      .onChange(of: earmarkId) { _, _ in debouncedSave() }
-      .onChange(of: notes) { _, _ in debouncedSave() }
-      .onChange(of: isRepeating) { _, _ in debouncedSave() }
-      .onChange(of: recurPeriod) { _, _ in debouncedSave() }
-      .onChange(of: recurEvery) { _, _ in debouncedSave() }
+      .onChange(of: draft) { _, _ in debouncedSave() }
       .confirmationDialog(
         "Delete Transaction",
         isPresented: $showDeleteConfirmation,
@@ -181,19 +117,19 @@ struct TransactionDetailView: View {
 
   @ViewBuilder
   private func payeeOverlay(anchor: Anchor<CGRect>?) -> some View {
-    if showPayeeSuggestions, !payee.isEmpty,
+    if showPayeeSuggestions, !draft.payee.isEmpty,
       !transactionStore.payeeSuggestions.isEmpty, let anchor
     {
       GeometryReader { proxy in
         let rect = proxy[anchor]
         PayeeSuggestionDropdown(
           suggestions: transactionStore.payeeSuggestions,
-          searchText: payee,
+          searchText: draft.payee,
           highlightedIndex: $payeeHighlightedIndex,
           onSelect: { selected in
             showPayeeSuggestions = false
             payeeHighlightedIndex = nil
-            payee = selected
+            draft.payee = selected
             transactionStore.clearPayeeSuggestions()
             autofillFromPayee(selected)
           }
@@ -215,15 +151,15 @@ struct TransactionDetailView: View {
             .foregroundStyle(.secondary)
         }
       } else {
-        Picker("Type", selection: $type) {
+        Picker("Type", selection: $draft.type) {
           ForEach(TransactionType.userSelectableTypes, id: \.self) { t in
             Text(t.displayName).tag(t)
           }
         }
-        .onChange(of: type) { oldValue, newValue in
-          if newValue == .transfer && toAccountId == nil {
+        .onChange(of: draft.type) { oldValue, newValue in
+          if newValue == .transfer && draft.toAccountId == nil {
             // Set first available account (excluding current account) as default
-            toAccountId = sortedAccounts.first { $0.id != accountId }?.id
+            draft.toAccountId = sortedAccounts.first { $0.id != draft.accountId }?.id
           }
         }
       }
@@ -233,7 +169,7 @@ struct TransactionDetailView: View {
   private var detailsSection: some View {
     Section {
       PayeeAutocompleteField(
-        text: $payee,
+        text: $draft.payee,
         highlightedIndex: $payeeHighlightedIndex,
         suggestionCount: payeeVisibleSuggestionCount,
         onTextChange: { newValue in
@@ -245,7 +181,7 @@ struct TransactionDetailView: View {
       .focused($focusedField, equals: .payee)
 
       HStack {
-        TextField("Amount", text: $amountText)
+        TextField("Amount", text: $draft.amountText)
           .multilineTextAlignment(.trailing)
           #if os(iOS)
             .keyboardType(.decimalPad)
@@ -253,23 +189,23 @@ struct TransactionDetailView: View {
         Text(transaction.primaryAmount.instrument.id).foregroundStyle(.secondary)
       }
 
-      DatePicker("Date", selection: $date, displayedComponents: .date)
+      DatePicker("Date", selection: $draft.date, displayedComponents: .date)
     }
   }
 
   private var accountSection: some View {
     Section {
-      Picker("Account", selection: $accountId) {
+      Picker("Account", selection: $draft.accountId) {
         Text("None").tag(UUID?.none)
         ForEach(sortedAccounts) { account in
           Text(account.name).tag(UUID?.some(account.id))
         }
       }
 
-      if type == .transfer {
-        Picker("To Account", selection: $toAccountId) {
+      if draft.type == .transfer {
+        Picker("To Account", selection: $draft.toAccountId) {
           Text("Select...").tag(UUID?.none)
-          ForEach(sortedAccounts.filter { $0.id != accountId && !$0.isHidden }) { account in
+          ForEach(sortedAccounts.filter { $0.id != draft.accountId && !$0.isHidden }) { account in
             Text(account.name).tag(UUID?.some(account.id))
           }
         }
@@ -282,7 +218,7 @@ struct TransactionDetailView: View {
   private var categorySection: some View {
     Section {
       CategoryAutocompleteField(
-        text: $categoryText,
+        text: $draft.categoryText,
         highlightedIndex: $categoryHighlightedIndex,
         suggestionCount: categoryVisibleSuggestionCount,
         onTextChange: { _ in
@@ -301,16 +237,16 @@ struct TransactionDetailView: View {
           categoryJustSelected = true
           showCategorySuggestions = false
           categoryHighlightedIndex = nil
-          if let id = categoryId, let cat = categories.by(id: id) {
-            categoryText = categories.path(for: cat)
+          if let id = draft.categoryId, let cat = categories.by(id: id) {
+            draft.categoryText = categories.path(for: cat)
           } else {
-            categoryText = ""
-            categoryId = nil
+            draft.categoryText = ""
+            draft.categoryId = nil
           }
         }
       }
 
-      Picker("Earmark", selection: $earmarkId) {
+      Picker("Earmark", selection: $draft.earmarkId) {
         Text("None").tag(UUID?.none)
         ForEach(earmarks.ordered.filter { !$0.isHidden }) { earmark in
           Text(earmark.name).tag(UUID?.some(earmark.id))
@@ -324,23 +260,23 @@ struct TransactionDetailView: View {
 
   private var recurrenceSection: some View {
     Section("Recurrence") {
-      Toggle("Repeat", isOn: $isRepeating)
-        .onChange(of: isRepeating) { _, newValue in
+      Toggle("Repeat", isOn: $draft.isRepeating)
+        .onChange(of: draft.isRepeating) { _, newValue in
           if newValue {
             // Default to monthly recurrence when enabled
-            if recurPeriod == nil || recurPeriod == .once {
-              recurPeriod = .month
+            if draft.recurPeriod == nil || draft.recurPeriod == .once {
+              draft.recurPeriod = .month
             }
           } else {
-            recurPeriod = nil
+            draft.recurPeriod = nil
           }
         }
 
-      if isRepeating {
+      if draft.isRepeating {
         HStack {
           Text("Every")
           Spacer()
-          TextField("", value: $recurEvery, format: .number)
+          TextField("", value: $draft.recurEvery, format: .number)
             #if os(iOS)
               .keyboardType(.numberPad)
             #endif
@@ -352,12 +288,12 @@ struct TransactionDetailView: View {
         Picker(
           "Period",
           selection: Binding(
-            get: { recurPeriod ?? .month },
-            set: { recurPeriod = $0 }
+            get: { draft.recurPeriod ?? .month },
+            set: { draft.recurPeriod = $0 }
           )
         ) {
           ForEach(RecurPeriod.allCases.filter { $0 != .once }, id: \.self) { period in
-            Text(recurEvery == 1 ? period.displayName : period.pluralDisplayName)
+            Text(draft.recurEvery == 1 ? period.displayName : period.pluralDisplayName)
               .tag(period)
           }
         }
@@ -373,7 +309,7 @@ struct TransactionDetailView: View {
     Section {
       VStack(alignment: .leading) {
         Text("Notes")
-        TextEditor(text: $notes)
+        TextEditor(text: $draft.notes)
           .frame(minHeight: 60, maxHeight: 120)
           .scrollContentBackground(.hidden)
           .padding()
@@ -450,9 +386,9 @@ struct TransactionDetailView: View {
   // MARK: - Actions
 
   private var payeeVisibleSuggestions: [String] {
-    guard showPayeeSuggestions, !payee.isEmpty else { return [] }
+    guard showPayeeSuggestions, !draft.payee.isEmpty else { return [] }
     return transactionStore.payeeSuggestions
-      .filter { $0.localizedCaseInsensitiveCompare(payee) != .orderedSame }
+      .filter { $0.localizedCaseInsensitiveCompare(draft.payee) != .orderedSame }
       .prefix(8).map { $0 }
   }
 
@@ -465,7 +401,7 @@ struct TransactionDetailView: View {
     let selected = payeeVisibleSuggestions[index]
     showPayeeSuggestions = false
     payeeHighlightedIndex = nil
-    payee = selected
+    draft.payee = selected
     transactionStore.clearPayeeSuggestions()
     autofillFromPayee(selected)
   }
@@ -475,25 +411,25 @@ struct TransactionDetailView: View {
       guard let match = await transactionStore.fetchTransactionForAutofill(payee: selectedPayee)
       else { return }
       // Auto-fill fields that are still at defaults
-      if parsedQuantity == nil || parsedQuantity == 0 {
-        amountText = abs(match.primaryAmount.quantity).formatted(
+      if draft.parsedQuantity == nil || draft.parsedQuantity == 0 {
+        draft.amountText = abs(match.primaryAmount.quantity).formatted(
           .number.precision(.fractionLength(2)))
       }
-      if categoryId == nil, let matchCategoryId = match.categoryId {
-        categoryId = matchCategoryId
+      if draft.categoryId == nil, let matchCategoryId = match.categoryId {
+        draft.categoryId = matchCategoryId
         if let cat = categories.by(id: matchCategoryId) {
           categoryJustSelected = true
-          categoryText = categories.path(for: cat)
+          draft.categoryText = categories.path(for: cat)
         }
       }
-      if type == .expense && match.type != .expense {
-        type = match.type
+      if draft.type == .expense && match.type != .expense {
+        draft.type = match.type
       }
-      if type == .transfer, toAccountId == nil {
+      if draft.type == .transfer, draft.toAccountId == nil {
         let matchTransferLeg =
           match.legs.count > 1
           ? match.legs.first(where: { $0.accountId != match.primaryAccountId }) : nil
-        toAccountId = matchTransferLeg?.accountId
+        draft.toAccountId = matchTransferLeg?.accountId
       }
     }
   }
@@ -504,10 +440,10 @@ struct TransactionDetailView: View {
     guard showCategorySuggestions else { return [] }
     let allEntries = categories.flattenedByPath()
     let filtered: [Categories.FlatEntry]
-    if categoryText.trimmingCharacters(in: .whitespaces).isEmpty {
+    if draft.categoryText.trimmingCharacters(in: .whitespaces).isEmpty {
       filtered = allEntries
     } else {
-      filtered = allEntries.filter { matchesCategorySearch($0.path, query: categoryText) }
+      filtered = allEntries.filter { matchesCategorySearch($0.path, query: draft.categoryText) }
     }
     return filtered.prefix(8).map { CategorySuggestion(id: $0.category.id, path: $0.path) }
   }
@@ -522,8 +458,8 @@ struct TransactionDetailView: View {
     }
     let selected = categoryVisibleSuggestions[index]
     categoryJustSelected = true
-    categoryId = selected.id
-    categoryText = selected.path
+    draft.categoryId = selected.id
+    draft.categoryText = selected.path
     showCategorySuggestions = false
     categoryHighlightedIndex = nil
   }
@@ -535,12 +471,12 @@ struct TransactionDetailView: View {
         let rect = proxy[anchor]
         CategorySuggestionDropdown(
           suggestions: categoryVisibleSuggestions,
-          searchText: categoryText,
+          searchText: draft.categoryText,
           highlightedIndex: $categoryHighlightedIndex,
           onSelect: { selected in
             categoryJustSelected = true
-            categoryId = selected.id
-            categoryText = selected.path
+            draft.categoryId = selected.id
+            draft.categoryText = selected.path
             showCategorySuggestions = false
             categoryHighlightedIndex = nil
           }
@@ -560,7 +496,7 @@ struct TransactionDetailView: View {
   private func saveIfValid() {
     let fromInstrument = transaction.primaryAmount.instrument
     let toInstrument: Instrument?
-    if type == .transfer, let toAcctId = toAccountId {
+    if draft.type == .transfer, let toAcctId = draft.toAccountId {
       let toAccountInstrument =
         accounts.by(id: toAcctId)?.positions.first?.instrument
         ?? accounts.by(id: toAcctId)?.balance.instrument

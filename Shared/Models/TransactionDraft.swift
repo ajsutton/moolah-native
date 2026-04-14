@@ -3,7 +3,7 @@ import Foundation
 /// A value type that captures transaction form state and encapsulates the
 /// validation and conversion logic used by `TransactionDetailView`.
 /// live here so they can be unit-tested without a UI host.
-struct TransactionDraft: Sendable {
+struct TransactionDraft: Sendable, Equatable {
   var type: TransactionType
   var payee: String
   var amountText: String
