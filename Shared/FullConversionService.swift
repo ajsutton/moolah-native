@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Full conversion service supporting fiat-to-fiat, stock-to-fiat, and crypto conversions.
 /// Stock-to-fiat routes through StockPriceService for price lookup, then ExchangeRateService
@@ -9,6 +10,7 @@ actor FullConversionService: InstrumentConversionService {
   private let stockPrices: StockPriceService
   private let cryptoPrices: CryptoPriceService?
   private let providerMappingsByInstrumentId: [String: CryptoProviderMapping]
+  private let logger = Logger(subsystem: "com.moolah.app", category: "CurrencyConversion")
 
   init(
     exchangeRates: ExchangeRateService,
@@ -33,35 +35,43 @@ actor FullConversionService: InstrumentConversionService {
   ) async throws -> Decimal {
     if source == target { return quantity }
 
+    logger.info(
+      "Converting \(quantity, privacy: .public) from \(source.id, privacy: .public) (\(String(describing: source.kind), privacy: .public)) to \(target.id, privacy: .public) (\(String(describing: target.kind), privacy: .public))"
+    )
+
+    let result: Decimal
     switch (source.kind, target.kind) {
     case (.fiatCurrency, .fiatCurrency):
       let rate = try await exchangeRates.rate(from: source, to: target, on: date)
-      return quantity * rate
+      result = quantity * rate
 
     case (.stock, .fiatCurrency):
-      return try await convertStockToFiat(quantity, stock: source, fiat: target, on: date)
+      result = try await convertStockToFiat(quantity, stock: source, fiat: target, on: date)
 
     case (.cryptoToken, .fiatCurrency):
-      return try await convertCryptoToFiat(quantity, crypto: source, fiat: target, on: date)
+      result = try await convertCryptoToFiat(quantity, crypto: source, fiat: target, on: date)
 
     case (.fiatCurrency, .cryptoToken):
       let oneUnitInFiat = try await convertCryptoToFiat(
         Decimal(1), crypto: target, fiat: source, on: date)
-      return quantity / oneUnitInFiat
+      result = quantity / oneUnitInFiat
 
     case (.cryptoToken, .cryptoToken):
       let sourceUsdPrice = try await cryptoUsdPrice(for: source, on: date)
       let targetUsdPrice = try await cryptoUsdPrice(for: target, on: date)
-      return (quantity * sourceUsdPrice) / targetUsdPrice
+      result = (quantity * sourceUsdPrice) / targetUsdPrice
 
     case (.stock, .cryptoToken), (.cryptoToken, .stock):
       // Chain through USD as intermediate
       let sourceUsd = try await toUsd(quantity, instrument: source, on: date)
-      return try await fromUsd(sourceUsd, instrument: target, on: date)
+      result = try await fromUsd(sourceUsd, instrument: target, on: date)
 
     case (.fiatCurrency, .stock), (.stock, .stock):
       throw ConversionError.unsupportedConversion(from: source.id, to: target.id)
     }
+
+    logger.info("Conversion result: \(result, privacy: .public) \(target.id, privacy: .public)")
+    return result
   }
 
   func convertAmount(
