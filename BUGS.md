@@ -89,6 +89,10 @@ When migrating from Remote to iCloud, profile naming should be:
 - Examples: "Moolah" → rename to "Moolah (Remote)", create "Moolah (iCloud)". "Moolah (Remote)" → unchanged, create "Moolah (iCloud)"
 - If target name already exists, append " 2", " 3", etc. to find a unique name
 
+## Windows flash "profile removed" on app launch
+
+When the app first loads, all existing windows briefly show a "profile removed" message before updating to show the actual profile data. This happens because the profile list hasn't loaded yet when the windows render, so they can't find their profile and assume it was removed. Don't show the window content until profiles are loaded. Once profiles are loaded, if a window's profile is genuinely gone, close the window rather than showing a "removed" message.
+
 ## Transaction convenience accessors assume single-leg semantics
 
 `Transaction` has several convenience accessors that return properties from `legs.first`:

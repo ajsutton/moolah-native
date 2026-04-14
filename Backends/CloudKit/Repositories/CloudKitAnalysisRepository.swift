@@ -281,7 +281,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         lastFinancialDate = txn.date
       }
 
-      for leg in txn.legs where leg.type == .expense {
+      // Server: WHERE type = 'expense' AND category_id IS NOT NULL
+      for leg in txn.legs where leg.type == .expense && leg.categoryId != nil {
         let categoryId = leg.categoryId
         if breakdown[month] == nil {
           breakdown[month] = [:]
@@ -355,22 +356,35 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         let isInvestmentAccount = leg.accountId.map(investmentAccountIds.contains) ?? false
 
         switch leg.type {
-        case .income, .openingBalance:
-          if isEarmarked {
-            monthlyData[month]!.earmarkedIncome += leg.amount
-          } else {
+        case .income:
+          // Server: SUM(IF(type='income' AND account_id IS NOT NULL, amount, 0))
+          // Include in main total only when leg has an account (matching server).
+          // Earmark-only income (nil accountId) goes to earmarkedIncome only.
+          if leg.accountId != nil {
             monthlyData[month]!.income += leg.amount
           }
+          if isEarmarked {
+            monthlyData[month]!.earmarkedIncome += leg.amount
+          }
+
+        case .openingBalance:
+          // Server excludes openingBalance from income/expense reports.
+          break
 
         case .expense:
-          let absAmount = InstrumentAmount(
-            quantity: abs(leg.quantity),
+          // Negate quantity: normal expenses are negative (negate → positive),
+          // refunds are positive (negate → negative, reducing the total).
+          // Using abs() was wrong because it made refunds ADD to expenses.
+          let expenseAmount = InstrumentAmount(
+            quantity: -leg.quantity,
             instrument: leg.instrument
           )
+          // Server: SUM(IF(type='expense' AND account_id IS NOT NULL, amount, 0))
+          if leg.accountId != nil {
+            monthlyData[month]!.expense += expenseAmount
+          }
           if isEarmarked {
-            monthlyData[month]!.earmarkedExpense += absAmount
-          } else {
-            monthlyData[month]!.expense += absAmount
+            monthlyData[month]!.earmarkedExpense += expenseAmount
           }
 
         case .transfer:
@@ -380,7 +394,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
               monthlyData[month]!.earmarkedIncome += leg.amount
             } else if contribution < 0 {
               monthlyData[month]!.earmarkedExpense += InstrumentAmount(
-                quantity: abs(contribution), instrument: leg.instrument)
+                quantity: -contribution, instrument: leg.instrument)
             }
           }
         }
@@ -582,7 +596,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         lastFinDate = txn.date
       }
 
-      for leg in txn.legs where leg.type == .expense {
+      for leg in txn.legs where leg.type == .expense && leg.categoryId != nil {
         let categoryId = leg.categoryId
         if breakdown[month] == nil {
           breakdown[month] = [:]
@@ -591,7 +605,6 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         breakdown[month]![categoryId] = current + leg.amount
       }
     }
-
     var results: [ExpenseBreakdown] = []
     for (month, categories) in breakdown {
       for (categoryId, total) in categories {
@@ -651,22 +664,27 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         let isInvestmentAccount = leg.accountId.map(investmentAccountIds.contains) ?? false
 
         switch leg.type {
-        case .income, .openingBalance:
-          if isEarmarked {
-            monthlyData[month]!.earmarkedIncome += leg.amount
-          } else {
+        case .income:
+          if leg.accountId != nil {
             monthlyData[month]!.income += leg.amount
           }
+          if isEarmarked {
+            monthlyData[month]!.earmarkedIncome += leg.amount
+          }
+
+        case .openingBalance:
+          break
 
         case .expense:
-          let absAmount = InstrumentAmount(
-            quantity: abs(leg.quantity),
+          let expenseAmount = InstrumentAmount(
+            quantity: -leg.quantity,
             instrument: leg.instrument
           )
+          if leg.accountId != nil {
+            monthlyData[month]!.expense += expenseAmount
+          }
           if isEarmarked {
-            monthlyData[month]!.earmarkedExpense += absAmount
-          } else {
-            monthlyData[month]!.expense += absAmount
+            monthlyData[month]!.earmarkedExpense += expenseAmount
           }
 
         case .transfer:
@@ -676,7 +694,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
               monthlyData[month]!.earmarkedIncome += leg.amount
             } else if contribution < 0 {
               monthlyData[month]!.earmarkedExpense += InstrumentAmount(
-                quantity: abs(contribution), instrument: leg.instrument)
+                quantity: -contribution, instrument: leg.instrument)
             }
           }
         }
@@ -811,28 +829,18 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     investmentAccountIds: Set<UUID>
   ) {
     for leg in txn.legs {
-      let isInvestmentAccount = leg.accountId.map(investmentAccountIds.contains) ?? false
-
-      switch leg.type {
-      case .income, .expense, .openingBalance:
-        if isInvestmentAccount {
+      // Only legs with an accountId affect account balances
+      // (matching server's account_id IS NOT NULL requirement).
+      // Earmark-only legs (nil accountId) only affect the earmarked total.
+      if let accountId = leg.accountId {
+        if investmentAccountIds.contains(accountId) {
           investments += leg.amount
         } else {
           balance += leg.amount
         }
-        if leg.earmarkId != nil {
-          earmarks += leg.amount
-        }
-
-      case .transfer:
-        if isInvestmentAccount {
-          investments += leg.amount
-        } else {
-          balance += leg.amount
-        }
-        if leg.earmarkId != nil {
-          earmarks += leg.amount
-        }
+      }
+      if leg.earmarkId != nil {
+        earmarks += leg.amount
       }
     }
   }

@@ -691,10 +691,332 @@ struct AnalysisRepositoryContractTests {
     #expect(!data.isEmpty)
     let month = data[0]
 
-    // Regular income should only include the transaction with accountId
+    // Income only includes legs with accountId (matching server's account_id IS NOT NULL check).
+    // The earmarked income with nil accountId is excluded from main income.
     #expect(month.income.quantity == 10)
-    // Earmarked income without accountId is still counted in earmark totals
+    // Earmarked income is tracked separately (regardless of accountId)
     #expect(month.earmarkedIncome.quantity == 5)
+  }
+
+  @Test("expense refunds (positive quantity) reduce expense total, not increase it")
+  func expenseRefundsReduceTotal() async throws {
+    let backend = CloudKitAnalysisTestBackend()
+    let account = Account(
+      id: UUID(),
+      name: "Checking",
+      type: .bank,
+      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    // Normal expense: -100
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Purchase",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: -100, type: .expense)
+        ]))
+
+    // Refund: +30 (positive quantity with type .expense reduces expense total)
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Refund",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: 30, type: .expense)
+        ]))
+
+    let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
+
+    #expect(!data.isEmpty)
+    let month = data[0]
+
+    // Net expense = 100 - 30 = 70 (refund reduces the total)
+    // Using abs() would incorrectly give 100 + 30 = 130
+    #expect(month.expense.quantity == 70)
+    #expect(month.profit == month.income - month.expense)
+  }
+
+  // MARK: - Income/Expense Server Parity Tests
+  //
+  // These tests verify that the CloudKit analysis matches the server SQL semantics:
+  //   income  = SUM(IF(type='income'  AND account_id IS NOT NULL, amount, 0))
+  //   expense = SUM(IF(type='expense' AND account_id IS NOT NULL, amount, 0))
+  // openingBalance is excluded from income/expense reports entirely.
+
+  @Test("earmarked income/expense with accountId included in main totals")
+  func earmarkedWithAccountIdInMainTotals() async throws {
+    let backend = CloudKitAnalysisTestBackend()
+    let account = Account(
+      id: UUID(),
+      name: "Checking",
+      type: .bank,
+      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let earmark = Earmark(
+      id: UUID(),
+      name: "Holiday",
+      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+    )
+    _ = try await backend.earmarks.create(earmark)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    // Non-earmarked income: +100
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Salary",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: 100, type: .income)
+        ]))
+
+    // Earmarked income WITH accountId: +30 (in BOTH income and earmarkedIncome)
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Earmarked Income",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: 30, type: .income,
+            earmarkId: earmark.id)
+        ]))
+
+    // Non-earmarked expense: -50
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Groceries",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: -50, type: .expense)
+        ]))
+
+    // Earmarked expense WITH accountId: -20 (in BOTH expense and earmarkedExpense)
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Holiday Spend",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: -20, type: .expense,
+            earmarkId: earmark.id)
+        ]))
+
+    let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
+
+    #expect(!data.isEmpty)
+    let month = data[0]
+
+    // Main totals include earmarked legs that have an accountId (matching server)
+    #expect(month.income.quantity == 130)  // 100 + 30
+    #expect(month.expense.quantity == 70)  // 50 + 20 (abs values)
+    #expect(month.profit.quantity == 60)  // 130 - 70
+
+    // Earmarked portion tracked separately
+    #expect(month.earmarkedIncome.quantity == 30)
+    #expect(month.earmarkedExpense.quantity == 20)
+    #expect(month.earmarkedProfit.quantity == 10)
+  }
+
+  @Test("earmarked expense without accountId excluded from main expense total")
+  func earmarkedExpenseNilAccountIdExcluded() async throws {
+    let backend = CloudKitAnalysisTestBackend()
+    let account = Account(
+      id: UUID(),
+      name: "Checking",
+      type: .bank,
+      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let earmark = Earmark(
+      id: UUID(),
+      name: "Gift Fund",
+      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+    )
+    _ = try await backend.earmarks.create(earmark)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    // Regular expense with accountId: -80
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Shopping",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: -80, type: .expense)
+        ]))
+
+    // Earmarked expense with nil accountId: -25
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Gift Expense",
+        legs: [
+          TransactionLeg(
+            accountId: nil, instrument: .defaultTestInstrument,
+            quantity: -25, type: .expense,
+            earmarkId: earmark.id)
+        ]))
+
+    let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
+
+    #expect(!data.isEmpty)
+    let month = data[0]
+
+    // Main expense excludes nil-accountId leg (matching server's account_id IS NOT NULL)
+    #expect(month.expense.quantity == 80)
+    // Earmarked expense still tracks it
+    #expect(month.earmarkedExpense.quantity == 25)
+  }
+
+  @Test("openingBalance excluded from income/expense reports")
+  func openingBalanceExcluded() async throws {
+    let backend = CloudKitAnalysisTestBackend()
+    let account = Account(
+      id: UUID(),
+      name: "Checking",
+      type: .bank,
+      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    // Opening balance: +500 (should NOT appear in income)
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Opening Balance",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: 500, type: .openingBalance)
+        ]))
+
+    // Regular income: +100
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Salary",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: 100, type: .income)
+        ]))
+
+    let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
+
+    #expect(!data.isEmpty)
+    let month = data[0]
+
+    // openingBalance is excluded from income (matching server which only counts type='income')
+    #expect(month.income.quantity == 100)
+    #expect(month.expense.quantity == 0)
+    #expect(month.earmarkedIncome.quantity == 0)
+  }
+
+  @Test("mixed earmarked with and without accountId matches server semantics")
+  func mixedEarmarkedAccountIdSemantics() async throws {
+    let backend = CloudKitAnalysisTestBackend()
+    let account = Account(
+      id: UUID(),
+      name: "Checking",
+      type: .bank,
+      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let earmark = Earmark(
+      id: UUID(),
+      name: "Savings",
+      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+    )
+    _ = try await backend.earmarks.create(earmark)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    // Earmarked income WITH accountId: +200
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Earmarked Salary",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: 200, type: .income,
+            earmarkId: earmark.id)
+        ]))
+
+    // Earmarked income WITHOUT accountId: +50
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Earmarked Gift",
+        legs: [
+          TransactionLeg(
+            accountId: nil, instrument: .defaultTestInstrument,
+            quantity: 50, type: .income,
+            earmarkId: earmark.id)
+        ]))
+
+    // Earmarked expense WITH accountId: -80
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Earmarked Purchase",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: -80, type: .expense,
+            earmarkId: earmark.id)
+        ]))
+
+    // Earmarked expense WITHOUT accountId: -30
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Earmarked Deduction",
+        legs: [
+          TransactionLeg(
+            accountId: nil, instrument: .defaultTestInstrument,
+            quantity: -30, type: .expense,
+            earmarkId: earmark.id)
+        ]))
+
+    let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
+
+    #expect(!data.isEmpty)
+    let month = data[0]
+
+    // Main totals only include legs with accountId
+    #expect(month.income.quantity == 200)  // only the +200 with accountId
+    #expect(month.expense.quantity == 80)  // only the 80 with accountId
+
+    // Earmarked totals include ALL earmarked legs regardless of accountId
+    #expect(month.earmarkedIncome.quantity == 250)  // 200 + 50
+    #expect(month.earmarkedExpense.quantity == 110)  // 80 + 30
+
+    // Profit uses main totals
+    #expect(month.profit.quantity == 120)  // 200 - 80
+    #expect(month.earmarkedProfit.quantity == 140)  // 250 - 110
   }
 
   // MARK: - Category Balances Tests
@@ -1283,6 +1605,64 @@ struct AnalysisRepositoryContractTests {
     #expect(month.earmarkedProfit == month.earmarkedIncome - month.earmarkedExpense)
   }
 
+  @Test("dailyBalances excludes nil-accountId legs from balance")
+  func dailyBalancesNilAccountIdExcluded() async throws {
+    let backend = CloudKitAnalysisTestBackend()
+    let account = Account(
+      id: UUID(),
+      name: "Checking",
+      type: .bank,
+      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let earmark = Earmark(
+      id: UUID(),
+      name: "Gift Fund",
+      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+    )
+    _ = try await backend.earmarks.create(earmark)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    // Regular income with accountId: +100
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Salary",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: 100, type: .income)
+        ]))
+
+    // Earmark-only income with nil accountId: +50
+    // Should affect earmarked total but NOT balance (matching server's account_id IS NOT NULL)
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Gift",
+        legs: [
+          TransactionLeg(
+            accountId: nil, instrument: .defaultTestInstrument,
+            quantity: 50, type: .income,
+            earmarkId: earmark.id)
+        ]))
+
+    let balances = try await backend.analysis.fetchDailyBalances(after: nil, forecastUntil: nil)
+
+    #expect(!balances.isEmpty)
+    let todayBalance = balances.first { Calendar.current.isDate($0.date, inSameDayAs: today) }
+    #expect(todayBalance != nil)
+
+    // Balance should only include the leg with accountId (100), not the nil-accountId leg (50)
+    #expect(todayBalance!.balance.quantity == 100)
+    // Earmarked should include the nil-accountId leg
+    #expect(todayBalance!.earmarked.quantity == 50)
+    // Available funds = balance - earmarked
+    #expect(todayBalance!.availableFunds.quantity == 50)
+  }
+
   // MARK: - Investment Value Tests
 
   @Test("fetchDailyBalances computes investmentValue from investment values")
@@ -1455,8 +1835,8 @@ struct AnalysisRepositoryContractTests {
 
   // MARK: - Expense Breakdown Uncategorized Tests
 
-  @Test("fetchExpenseBreakdown includes uncategorized expenses")
-  func expenseBreakdownIncludesUncategorized() async throws {
+  @Test("fetchExpenseBreakdown excludes uncategorized expenses")
+  func expenseBreakdownExcludesUncategorized() async throws {
     let backend = CloudKitAnalysisTestBackend()
     let account = Account(
       id: UUID(),
@@ -1466,7 +1846,22 @@ struct AnalysisRepositoryContractTests {
     )
     _ = try await backend.accounts.create(account)
 
-    // Create an uncategorized expense (no categoryId)
+    let cat = Category(id: UUID(), name: "Food")
+    _ = try await backend.categories.create(cat)
+
+    // Categorized expense
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: Date(),
+        payee: "Grocery Store",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: -10, type: .expense,
+            categoryId: cat.id)
+        ]))
+
+    // Uncategorized expense (no categoryId) — excluded by server: category_id IS NOT NULL
     _ = try await backend.transactions.create(
       Transaction(
         date: Date(),
@@ -1479,16 +1874,10 @@ struct AnalysisRepositoryContractTests {
 
     let breakdown = try await backend.analysis.fetchExpenseBreakdown(monthEnd: 25, after: nil)
 
-    #expect(!breakdown.isEmpty, "Uncategorized expenses should appear in breakdown")
-    let uncategorized = breakdown.filter { $0.categoryId == nil }
-    #expect(
-      uncategorized.count == 1,
-      "Should have one uncategorized expense entry"
-    )
-    #expect(
-      uncategorized[0].totalExpenses.quantity == -5,
-      "Uncategorized expense total should be -5.00"
-    )
+    // Only the categorized expense should appear
+    #expect(breakdown.count == 1)
+    #expect(breakdown[0].categoryId == cat.id)
+    #expect(breakdown[0].totalExpenses.quantity == -10)
   }
 
   // MARK: - loadAll Tests
