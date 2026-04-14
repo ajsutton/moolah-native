@@ -53,7 +53,15 @@ echo "Launching app..."
 open "$APP_PATH"
 
 echo "App running. Logs streaming to $LOG_FILE"
-echo "Press Ctrl-C to stop."
 
-# Wait for the log stream process (keeps script alive until interrupted)
-wait "$LOG_PID" 2>/dev/null || true
+# If running interactively, wait for Ctrl-C. Otherwise, exit and let
+# the log stream and app continue as background processes.
+if [ -t 0 ]; then
+    echo "Press Ctrl-C to stop."
+    wait "$LOG_PID" 2>/dev/null || true
+else
+    echo "Non-interactive mode — log stream (PID $LOG_PID) and app running in background."
+    echo "To stop: pkill -f 'Moolah.app/Contents/MacOS/Moolah'; kill $LOG_PID"
+    # Detach the cleanup trap so background processes survive script exit
+    trap - EXIT
+fi
