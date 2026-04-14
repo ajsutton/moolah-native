@@ -8,10 +8,6 @@
 
 The Sign Out option is available for iCloud-backed profiles, but it shouldn't be — there's no authentication session to sign out of. iCloud profiles authenticate via the device's iCloud account, not via a server login. The Sign Out option should be hidden when the active profile uses the CloudKit backend.
 
-## Unhandled CKSyncEngine Errors Silently Drop Records
-
-**Status:** Fixed in `ProfileSyncEngine` (default case now re-queues). Still present in `ProfileIndexSyncEngine`.
-
 ## Category Not Filled When Autocompleting a Payee
 
 When selecting an autocomplete suggestion for a payee, the category field is not automatically populated. It should autofill with the category from the most recent transaction with that payee.

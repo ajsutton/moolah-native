@@ -425,68 +425,22 @@ extension ProfileIndexSyncEngine: CKSyncEngineDelegate {
       systemFieldsCache.removeValue(forKey: deleted.recordName)
     }
 
-    // Handle failed saves with specific error recovery (Rules 3, 6, 9)
-    for failed in sentChanges.failedRecordSaves {
-      let recordID = failed.record.recordID
-      logger.error(
-        "Failed to send profile record \(recordID.recordName, privacy: .public): \(failed.error, privacy: .public)"
-      )
+    // Classify and recover from failed saves/deletes
+    let failures = SyncErrorRecovery.classify(sentChanges, logger: logger)
 
-      switch failed.error.code {
-      case .zoneNotFound:
-        Task {
-          do {
-            let zone = CKRecordZone(zoneID: self.zoneID)
-            try await CKContainer.default().privateCloudDatabase.save(zone)
-            self.logger.info("Created profile-index zone, retrying send")
-            self.syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
-          } catch {
-            self.logger.error("Failed to create profile-index zone: \(error, privacy: .public)")
-          }
-        }
-
-      case .serverRecordChanged:
-        if let serverRecord = failed.error.serverRecord {
-          systemFieldsCache[serverRecord.recordID.recordName] = serverRecord.encodedSystemFields
-          saveSystemFieldsCache()
-          syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
-        }
-
-      case .unknownItem:
-        systemFieldsCache.removeValue(forKey: recordID.recordName)
-        saveSystemFieldsCache()
-        syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
-
-      case .quotaExceeded:
-        logger.error("iCloud quota exceeded — sync paused for profile \(recordID.recordName)")
-        syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
-
-      case .limitExceeded:
-        syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
-
-      default:
-        break
-      }
+    // Handle engine-specific system fields updates before re-queuing
+    for (_, serverRecord) in failures.conflicts {
+      systemFieldsCache[serverRecord.recordID.recordName] = serverRecord.encodedSystemFields
+    }
+    for recordID in failures.unknownItems {
+      systemFieldsCache.removeValue(forKey: recordID.recordName)
+    }
+    if !failures.conflicts.isEmpty || !failures.unknownItems.isEmpty {
+      saveSystemFieldsCache()
     }
 
-    // Handle failed deletes
-    for (recordID, error) in sentChanges.failedRecordDeletes {
-      logger.error(
-        "Failed to delete profile record \(recordID.recordName, privacy: .public): \(error, privacy: .public)"
-      )
-
-      if error.code == .zoneNotFound {
-        Task {
-          do {
-            let zone = CKRecordZone(zoneID: self.zoneID)
-            try await CKContainer.default().privateCloudDatabase.save(zone)
-            self.syncEngine?.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
-          } catch {
-            self.logger.error("Failed to create zone for delete retry: \(error, privacy: .public)")
-          }
-        }
-      }
-    }
+    SyncErrorRecovery.recover(
+      failures, syncEngine: syncEngine, zoneID: zoneID, logger: logger)
   }
 
   nonisolated func nextRecordZoneChangeBatch(

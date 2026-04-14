@@ -1206,88 +1206,24 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     }
     // Deleted records don't need cache cleanup — model is already deleted.
 
-    // Handle failed saves with specific error recovery (Rules 3, 6, 9)
-    // Collect zone-missing records to handle in a single zone creation
-    var zoneNotFoundSaves: [CKRecord.ID] = []
-    var zoneNotFoundDeletes: [CKRecord.ID] = []
+    // Classify and recover from failed saves/deletes
+    let failures = SyncErrorRecovery.classify(sentChanges, logger: logger)
 
-    for failure in sentChanges.failedRecordSaves {
-      let recordID = failure.record.recordID
-
-      switch failure.error.code {
-      case .zoneNotFound, .userDeletedZone:
-        zoneNotFoundSaves.append(recordID)
-
-      case .serverRecordChanged:
-        // Conflict: another device modified this record. Accept the server's
-        // system fields (server-wins) and re-queue with the updated change tag.
-        if let serverRecord = failure.error.serverRecord {
-          let ctx = ModelContext(modelContainer)
-          if let uuid = UUID(uuidString: serverRecord.recordID.recordName) {
-            Self.updateEncodedSystemFields(
-              uuid, data: serverRecord.encodedSystemFields,
-              recordType: serverRecord.recordType, context: ctx)
-            try? ctx.save()
-          }
-          syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
-        }
-
-      case .unknownItem:
-        // Record was deleted on server — re-upload as new (no system fields needed).
-        syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
-
-      case .quotaExceeded:
-        // iCloud storage full. Re-queue so it can retry when space is available.
-        logger.error("iCloud quota exceeded — sync paused for record \(recordID.recordName)")
-        syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
-
-      case .limitExceeded:
-        // Batch too large. Re-queue and the engine will retry with smaller batches.
-        syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
-
-      default:
-        // Re-queue for retry on unexpected errors. CKSyncEngine handles transient
-        // errors (network, rate limiting) automatically, but other errors drop the
-        // record from the queue. Re-queuing ensures we don't silently lose data.
-        logger.error(
-          "Save error (code=\(failure.error.code.rawValue)) for \(recordID.recordName): \(failure.error) — re-queuing"
-        )
-        syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
-      }
-    }
-
-    // Handle failed deletes
-    for (recordID, error) in sentChanges.failedRecordDeletes {
-      if error.code == .zoneNotFound || error.code == .userDeletedZone {
-        zoneNotFoundDeletes.append(recordID)
-      } else {
-        logger.error(
-          "Failed to delete record \(recordID.recordName): \(error)")
-      }
-    }
-
-    // Create zone once and re-queue all affected records
-    if !zoneNotFoundSaves.isEmpty || !zoneNotFoundDeletes.isEmpty {
-      let saveCount = zoneNotFoundSaves.count
-      let deleteCount = zoneNotFoundDeletes.count
-      logger.info(
-        "Zone missing — creating zone and re-queuing \(saveCount) saves, \(deleteCount) deletes")
-      Task {
-        do {
-          let zone = CKRecordZone(zoneID: self.zoneID)
-          try await CKContainer.default().privateCloudDatabase.save(zone)
-          self.logger.info("Created zone \(self.zoneID.zoneName)")
-          let pendingSaves: [CKSyncEngine.PendingRecordZoneChange] =
-            zoneNotFoundSaves.map { .saveRecord($0) }
-          let pendingDeletes: [CKSyncEngine.PendingRecordZoneChange] =
-            zoneNotFoundDeletes.map { .deleteRecord($0) }
-          self.syncEngine?.state.add(
-            pendingRecordZoneChanges: pendingSaves + pendingDeletes)
-        } catch {
-          self.logger.error("Failed to create zone: \(error)")
+    // Handle engine-specific system fields updates before re-queuing
+    if !failures.conflicts.isEmpty {
+      let ctx = ModelContext(modelContainer)
+      for (_, serverRecord) in failures.conflicts {
+        if let uuid = UUID(uuidString: serverRecord.recordID.recordName) {
+          Self.updateEncodedSystemFields(
+            uuid, data: serverRecord.encodedSystemFields,
+            recordType: serverRecord.recordType, context: ctx)
         }
       }
+      try? ctx.save()
     }
+
+    SyncErrorRecovery.recover(
+      failures, syncEngine: syncEngine, zoneID: zoneID, logger: logger)
   }
 
   // MARK: - Record Lookup for Upload
