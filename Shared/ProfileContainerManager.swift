@@ -39,6 +39,11 @@ final class ProfileContainerManager {
     return container
   }
 
+  /// Returns whether a cached container exists for the given profile.
+  func hasContainer(for profileId: UUID) -> Bool {
+    containers[profileId] != nil
+  }
+
   private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileContainerManager")
 
   func deleteStore(for profileId: UUID) {

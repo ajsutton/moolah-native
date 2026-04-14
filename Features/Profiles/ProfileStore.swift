@@ -19,6 +19,10 @@ final class ProfileStore {
   private(set) var isValidating = false
   private(set) var validationError: String?
 
+  /// Called when a cloud profile is removed (locally or via remote sync).
+  /// Used by SessionManager to tear down the corresponding ProfileSession.
+  var onProfileRemoved: ((UUID) -> Void)?
+
   private let defaults: UserDefaults
   private let validator: (any ServerValidator)?
   private let containerManager: ProfileContainerManager?
@@ -98,6 +102,7 @@ final class ProfileStore {
         let deleter = ProfileDataDeleter(modelContext: context)
         deleter.deleteProfileRecord(for: id)
       }
+      onProfileRemoved?(id)
     }
 
     if activeProfileID == id {
@@ -180,6 +185,7 @@ final class ProfileStore {
       sortBy: [SortDescriptor(\.createdAt)]
     )
     do {
+      let previousCloudProfiles = cloudProfiles
       let records = try context.fetch(descriptor)
       cloudProfiles = records.map { $0.toProfile() }
       logger.debug("Loaded \(self.cloudProfiles.count) cloud profiles")
@@ -192,18 +198,27 @@ final class ProfileStore {
         logger.debug("Auto-selected profile: \(first.id)")
       }
 
-      // Handle active profile being deleted on another device.
+      // Handle profiles deleted on another device.
       // Skip this on initial load — SwiftData with CloudKit may return empty results
       // before the store is fully ready, which would incorrectly reset the active profile.
-      if !isInitialLoad,
-        let activeProfileID,
-        !profiles.contains(where: { $0.id == activeProfileID })
-      {
-        self.activeProfileID = profiles.first?.id
-        saveActiveProfileID()
-        logger.debug(
-          "Active profile was removed remotely, switched to: \(self.activeProfileID?.uuidString ?? "nil")"
-        )
+      if !isInitialLoad {
+        let newIDs = Set(cloudProfiles.map(\.id))
+        for oldProfile in previousCloudProfiles where !newIDs.contains(oldProfile.id) {
+          logger.info(
+            "Cloud profile \(oldProfile.id) was removed remotely — cleaning up local store")
+          containerManager.deleteStore(for: oldProfile.id)
+          onProfileRemoved?(oldProfile.id)
+        }
+
+        if let activeProfileID,
+          !profiles.contains(where: { $0.id == activeProfileID })
+        {
+          self.activeProfileID = profiles.first?.id
+          saveActiveProfileID()
+          logger.debug(
+            "Active profile was removed remotely, switched to: \(self.activeProfileID?.uuidString ?? "nil")"
+          )
+        }
       }
     } catch {
       logger.error("Failed to load cloud profiles: \(error.localizedDescription)")

@@ -129,7 +129,13 @@ struct MoolahApp: App {
 
     #if os(macOS)
       backupManager = StoreBackupManager()
-      _sessionManager = State(initialValue: SessionManager(containerManager: containerManager))
+      let sessionManager = SessionManager(containerManager: containerManager)
+      _sessionManager = State(initialValue: sessionManager)
+
+      // Clean up cached sessions when a profile is removed (locally or via remote sync)
+      store.onProfileRemoved = { [weak sessionManager] profileID in
+        sessionManager?.removeSession(for: profileID)
+      }
     #endif
   }
 

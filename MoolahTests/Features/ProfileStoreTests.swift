@@ -350,4 +350,96 @@ struct ProfileStoreTests {
 
     #expect(store.activeProfileID == remoteProfile.id)
   }
+
+  // MARK: - Remote deletion cleanup
+
+  @Test("loadCloudProfiles calls onProfileRemoved for remotely-deleted profiles")
+  func remoteDeleteCallsOnProfileRemoved() throws {
+    let defaults = makeDefaults()
+    let containerManager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+
+    let cloudProfile = Profile(
+      label: "Cloud",
+      backendType: .cloudKit,
+      currencyCode: "AUD",
+      financialYearStartMonth: 7
+    )
+    store.addProfile(cloudProfile)
+    store.setActiveProfile(cloudProfile.id)
+
+    // Track which profiles the callback reports as removed
+    var removedIDs: [UUID] = []
+    store.onProfileRemoved = { id in removedIDs.append(id) }
+
+    // Delete the cloud profile record from SwiftData (simulates remote deletion)
+    let context = ModelContext(containerManager.indexContainer)
+    let profileId = cloudProfile.id
+    let descriptor = FetchDescriptor<ProfileRecord>(
+      predicate: #Predicate { $0.id == profileId }
+    )
+    if let record = try context.fetch(descriptor).first {
+      context.delete(record)
+      try context.save()
+    }
+
+    store.loadCloudProfiles(isInitialLoad: false)
+
+    #expect(removedIDs == [cloudProfile.id])
+  }
+
+  @Test("loadCloudProfiles cleans up local store for remotely-deleted profiles")
+  func remoteDeleteCleansUpLocalStore() throws {
+    let defaults = makeDefaults()
+    let containerManager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+
+    let cloudProfile = Profile(
+      label: "Cloud",
+      backendType: .cloudKit,
+      currencyCode: "AUD",
+      financialYearStartMonth: 7
+    )
+    store.addProfile(cloudProfile)
+
+    // Force creation of the per-profile container (simulates normal app usage)
+    _ = try containerManager.container(for: cloudProfile.id)
+
+    // Delete the cloud profile record from SwiftData (simulates remote deletion)
+    let context = ModelContext(containerManager.indexContainer)
+    let profileId = cloudProfile.id
+    let descriptor = FetchDescriptor<ProfileRecord>(
+      predicate: #Predicate { $0.id == profileId }
+    )
+    if let record = try context.fetch(descriptor).first {
+      context.delete(record)
+      try context.save()
+    }
+
+    store.loadCloudProfiles(isInitialLoad: false)
+
+    // The container cache should have been evicted
+    // Creating a new container should give a different instance
+    #expect(!containerManager.hasContainer(for: cloudProfile.id))
+  }
+
+  @Test("loadCloudProfiles does not clean up profiles on initial load")
+  func initialLoadDoesNotCleanUp() throws {
+    let defaults = makeDefaults()
+    let containerManager = try ProfileContainerManager.forTesting()
+
+    // Pre-save a cloud profile as the active one
+    let cloudProfileID = UUID()
+    defaults.set(cloudProfileID.uuidString, forKey: "com.moolah.activeProfileID")
+
+    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+
+    var removedIDs: [UUID] = []
+    store.onProfileRemoved = { id in removedIDs.append(id) }
+
+    // Initial load with empty SwiftData — should NOT trigger cleanup
+    store.loadCloudProfiles(isInitialLoad: true)
+
+    #expect(removedIDs.isEmpty)
+  }
 }

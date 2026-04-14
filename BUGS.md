@@ -1,8 +1,8 @@
 # Known Bugs
 
-## iCloud Profile Deletion Does Not Propagate to Other Devices
+## ~~iCloud Profile Deletion Does Not Propagate to Other Devices~~
 
-Deleting an iCloud profile only removes local SQLite files and the `ProfileRecord` from the index store. The CloudKit zone and its records remain on Apple's servers, so other devices keep the data indefinitely. See [plans/icloud-profile-deletion-sync.md](plans/icloud-profile-deletion-sync.md) for analysis and proposed solutions.
+**Status:** Fixed. The deleting device deletes the CloudKit zone (`ProfileContainerManager.deleteCloudKitZone`) and the `ProfileRecord` from the index. When other devices receive the `ProfileRecord` deletion via `ProfileIndexSyncEngine`, `ProfileStore.loadCloudProfiles` now detects the removed profile and calls `containerManager.deleteStore` to clean up local files. `SessionManager` is notified via `onProfileRemoved` to tear down the cached `ProfileSession`.
 
 ## Sign Out Option Shown for iCloud Backend
 
@@ -19,6 +19,10 @@ When selecting an autocomplete suggestion for a payee, the category field is not
 ## Balance Doesn't Update When a Transaction Is Added
 
 After adding a new transaction, the account balance does not update to reflect the change. The balance should refresh immediately after a transaction is created.
+
+## Transaction Side Panel Should Be Full-Window Width
+
+The transaction detail side panel currently appears only within the upcoming transactions panel. It should instead be a right-hand side panel of the whole window, using the full analysis panel size.
 
 ## Profile Index serverRecordChanged Conflict on Fresh Device
 
