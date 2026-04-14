@@ -103,3 +103,11 @@ When the app first loads, all existing windows briefly show a "profile removed" 
 - `type` → `legs.first?.type`
 
 These assume the first leg is "special", which breaks for multi-leg transactions where different legs could have different earmarks, categories, or types. Need to audit all call sites for hidden single-leg assumptions and decide on proper multi-leg semantics (e.g. should `earmarkId` return the earmark from any leg that has one?).
+
+## ProfileSyncEngine receives unknown record type from CloudKit
+
+During normal sync, `ProfileSyncEngine.applyBatchSaves` logs `unknown record type — skipping` roughly every 60 seconds. The record is fetched, processed, and discarded each sync cycle.
+
+**Root cause (likely):** `applyBatchSaves` handles 8 record types but `RecordMapping.swift` defines 9 — the missing one is `CD_ProfileRecord` (`ProfileRecord.recordType`). Profile records are managed by `ProfileIndexSyncEngine` in the `profile-index` zone, but a `CD_ProfileRecord` appears to exist in the per-profile zone too (possibly uploaded by an earlier code version). Each fetch cycle returns it and the switch falls through to the default/warning case.
+
+**Fix:** Add a `case ProfileRecord.recordType: break` to `applyBatchSaves` (and `applyBatchDeletions`) to silently skip it, since profile records in per-profile zones are handled by `ProfileIndexSyncEngine`.

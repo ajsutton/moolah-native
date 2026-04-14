@@ -546,6 +546,8 @@ final class ProfileSyncEngine: Sendable {
         batchUpsertEarmarkBudgetItems(ckRecords, context: context, systemFields: systemFields)
       case InvestmentValueRecord.recordType:
         batchUpsertInvestmentValues(ckRecords, context: context, systemFields: systemFields)
+      case ProfileRecord.recordType:
+        break  // Handled by ProfileIndexSyncEngine in the profile-index zone
       default:
         batchLogger.warning("applyBatchSaves: unknown record type '\(recordType)' — skipping")
       }
@@ -611,6 +613,8 @@ final class ProfileSyncEngine: Sendable {
             FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { ids.contains($0.id) })
           )) ?? []
         for record in records { context.delete(record) }
+      case ProfileRecord.recordType:
+        break  // Handled by ProfileIndexSyncEngine in the profile-index zone
       default:
         batchLogger.warning(
           "applyBatchDeletions: unknown record type '\(recordType)' — skipping")
