@@ -8,6 +8,14 @@ struct AnalysisView: View {
   @Environment(\.scenePhase) private var scenePhase
 
   @Bindable var store: AnalysisStore
+  @State private var selectedUpcomingTransaction: Transaction?
+
+  private var showInspectorBinding: Binding<Bool> {
+    Binding(
+      get: { selectedUpcomingTransaction != nil },
+      set: { if !$0 { selectedUpcomingTransaction = nil } }
+    )
+  }
 
   var body: some View {
     ScrollView {
@@ -29,6 +37,57 @@ struct AnalysisView: View {
         contentView(store: store)
       }
     }
+    #if os(macOS)
+      .inspector(isPresented: showInspectorBinding) {
+        if let selected = selectedUpcomingTransaction {
+          TransactionDetailView(
+            transaction: selected,
+            accounts: accountStore.accounts,
+            categories: categoryStore.categories,
+            earmarks: earmarkStore.earmarks,
+            transactionStore: transactionStore,
+            showRecurrence: true,
+            onUpdate: { updated in
+              Task { await transactionStore.update(updated) }
+              selectedUpcomingTransaction = updated
+            },
+            onDelete: { id in
+              Task { await transactionStore.delete(id: id) }
+              selectedUpcomingTransaction = nil
+            }
+          )
+          .id(selected.id)
+        }
+      }
+    #else
+      .sheet(item: $selectedUpcomingTransaction) { selected in
+        NavigationStack {
+          TransactionDetailView(
+            transaction: selected,
+            accounts: accountStore.accounts,
+            categories: categoryStore.categories,
+            earmarks: earmarkStore.earmarks,
+            transactionStore: transactionStore,
+            showRecurrence: true,
+            onUpdate: { updated in
+              Task { await transactionStore.update(updated) }
+              selectedUpcomingTransaction = updated
+            },
+            onDelete: { id in
+              Task { await transactionStore.delete(id: id) }
+              selectedUpcomingTransaction = nil
+            }
+          )
+          .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+              Button("Done") {
+                selectedUpcomingTransaction = nil
+              }
+            }
+          }
+        }
+      }
+    #endif
     .profileNavigationTitle("Analysis")
     .toolbar {
       ToolbarItem(placement: .primaryAction) {
@@ -77,7 +136,8 @@ struct AnalysisView: View {
             accounts: accountStore.accounts,
             categories: categoryStore.categories,
             earmarks: earmarkStore.earmarks,
-            transactionStore: transactionStore
+            transactionStore: transactionStore,
+            selectedTransaction: $selectedUpcomingTransaction
           )
           IncomeExpenseTableCard(data: store.incomeAndExpense)
         }
@@ -86,7 +146,8 @@ struct AnalysisView: View {
           accounts: accountStore.accounts,
           categories: categoryStore.categories,
           earmarks: earmarkStore.earmarks,
-          transactionStore: transactionStore
+          transactionStore: transactionStore,
+          selectedTransaction: $selectedUpcomingTransaction
         )
         IncomeExpenseTableCard(data: store.incomeAndExpense)
       #endif

@@ -9,15 +9,18 @@ struct CategoriesView: View {
   @State private var showDetailSheet = false
   @State private var searchText = ""
 
+  private var showInspectorBinding: Binding<Bool> {
+    Binding(
+      get: { selectedCategory != nil },
+      set: { if !$0 { selectedCategory = nil } }
+    )
+  }
+
   var body: some View {
-    Group {
+    listView
       #if os(macOS)
-        HStack(spacing: 0) {
-          listView
-
+        .inspector(isPresented: showInspectorBinding) {
           if let selected = selectedCategory {
-            Divider()
-
             CategoryDetailView(
               category: selected,
               categories: categoryStore.categories,
@@ -36,53 +39,51 @@ struct CategoriesView: View {
                 }
               }
             )
-            .frame(width: UIConstants.detailPanelWidth)
+            .id(selected.id)
           }
         }
       #else
-        listView
-          .sheet(item: $selectedCategory) { selected in
-            NavigationStack {
-              CategoryDetailView(
-                category: selected,
-                categories: categoryStore.categories,
-                onUpdate: { updated in
-                  Task {
-                    if await categoryStore.update(updated) != nil {
-                      selectedCategory = updated
-                    }
-                  }
-                },
-                onDelete: { id, replacementId in
-                  Task {
-                    if await categoryStore.delete(id: id, withReplacement: replacementId) {
-                      selectedCategory = nil
-                    }
+        .sheet(item: $selectedCategory) { selected in
+          NavigationStack {
+            CategoryDetailView(
+              category: selected,
+              categories: categoryStore.categories,
+              onUpdate: { updated in
+                Task {
+                  if await categoryStore.update(updated) != nil {
+                    selectedCategory = updated
                   }
                 }
-              )
-              .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                  Button("Done") {
+              },
+              onDelete: { id, replacementId in
+                Task {
+                  if await categoryStore.delete(id: id, withReplacement: replacementId) {
                     selectedCategory = nil
                   }
                 }
               }
+            )
+            .toolbar {
+              ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                  selectedCategory = nil
+                }
+              }
             }
           }
-      #endif
-    }
-    .sheet(isPresented: $showCreateSheet) {
-      CreateCategorySheet(
-        categories: categoryStore.categories,
-        onCreate: { newCategory in
-          Task {
-            _ = await categoryStore.create(newCategory)
-            showCreateSheet = false
-          }
         }
-      )
-    }
+      #endif
+      .sheet(isPresented: $showCreateSheet) {
+        CreateCategorySheet(
+          categories: categoryStore.categories,
+          onCreate: { newCategory in
+            Task {
+              _ = await categoryStore.create(newCategory)
+              showCreateSheet = false
+            }
+          }
+        )
+      }
   }
 
   private var filteredCategories: [Category] {

@@ -10,19 +10,23 @@ struct TransactionListView: View {
   let transactionStore: TransactionStore
 
   @State private var selectedTransaction: Transaction?
+
+  private var showInspectorBinding: Binding<Bool> {
+    Binding(
+      get: { selectedTransaction != nil },
+      set: { if !$0 { selectedTransaction = nil } }
+    )
+  }
+
   @State private var showError = false
   @State private var errorMessage = ""
   @State private var searchText = ""
 
   var body: some View {
-    Group {
+    listView
       #if os(macOS)
-        HStack(spacing: 0) {
-          listView
-
+        .inspector(isPresented: showInspectorBinding) {
           if let selected = selectedTransaction {
-            Divider()
-
             TransactionDetailView(
               transaction: selected,
               accounts: accounts,
@@ -38,52 +42,49 @@ struct TransactionListView: View {
                 selectedTransaction = nil
               }
             )
-            .frame(width: UIConstants.detailPanelWidth)
             .id(selected.id)
           }
         }
       #else
-        listView
-          .sheet(item: $selectedTransaction) { selected in
-            NavigationStack {
-              TransactionDetailView(
-                transaction: selected,
-                accounts: accounts,
-                categories: categories,
-                earmarks: earmarks,
-                transactionStore: transactionStore,
-                onUpdate: { updated in
-                  Task { await transactionStore.update(updated) }
-                  selectedTransaction = updated
-                },
-                onDelete: { id in
-                  Task { await transactionStore.delete(id: id) }
+        .sheet(item: $selectedTransaction) { selected in
+          NavigationStack {
+            TransactionDetailView(
+              transaction: selected,
+              accounts: accounts,
+              categories: categories,
+              earmarks: earmarks,
+              transactionStore: transactionStore,
+              onUpdate: { updated in
+                Task { await transactionStore.update(updated) }
+                selectedTransaction = updated
+              },
+              onDelete: { id in
+                Task { await transactionStore.delete(id: id) }
+                selectedTransaction = nil
+              }
+            )
+            .toolbar {
+              ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
                   selectedTransaction = nil
-                }
-              )
-              .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                  Button("Done") {
-                    selectedTransaction = nil
-                  }
                 }
               }
             }
           }
+        }
       #endif
-    }
-    .focusedSceneValue(\.newTransactionAction, createNewTransaction)
-    .alert("Error", isPresented: $showError) {
-      Button("OK", role: .cancel) {}
-    } message: {
-      Text(errorMessage)
-    }
-    .task(id: transactionStore.error?.localizedDescription) {
-      if let error = transactionStore.error {
-        errorMessage = error.userMessage
-        showError = true
+      .focusedSceneValue(\.newTransactionAction, createNewTransaction)
+      .alert("Error", isPresented: $showError) {
+        Button("OK", role: .cancel) {}
+      } message: {
+        Text(errorMessage)
       }
-    }
+      .task(id: transactionStore.error?.localizedDescription) {
+        if let error = transactionStore.error {
+          errorMessage = error.userMessage
+          showError = true
+        }
+      }
   }
 
   private func createNewTransaction() {

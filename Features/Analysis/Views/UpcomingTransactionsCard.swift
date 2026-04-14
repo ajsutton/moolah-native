@@ -5,8 +5,7 @@ struct UpcomingTransactionsCard: View {
   let categories: Categories
   let earmarks: Earmarks
   let transactionStore: TransactionStore
-
-  @State private var selectedTransaction: Transaction?
+  @Binding var selectedTransaction: Transaction?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -42,65 +41,7 @@ struct UpcomingTransactionsCard: View {
   }
 
   private var transactionList: some View {
-    Group {
-      #if os(macOS)
-        HStack(spacing: 0) {
-          listContent
-
-          if let selected = selectedTransaction {
-            Divider()
-
-            TransactionDetailView(
-              transaction: selected,
-              accounts: accounts,
-              categories: categories,
-              earmarks: earmarks,
-              transactionStore: transactionStore,
-              showRecurrence: true,
-              onUpdate: { updated in
-                Task { await transactionStore.update(updated) }
-                selectedTransaction = updated
-              },
-              onDelete: { id in
-                Task { await transactionStore.delete(id: id) }
-                selectedTransaction = nil
-              }
-            )
-            .frame(width: UIConstants.detailPanelWidth)
-            .id(selected.id)
-          }
-        }
-      #else
-        listContent
-          .sheet(item: $selectedTransaction) { transaction in
-            NavigationStack {
-              TransactionDetailView(
-                transaction: transaction,
-                accounts: accounts,
-                categories: categories,
-                earmarks: earmarks,
-                transactionStore: transactionStore,
-                showRecurrence: true,
-                onUpdate: { updated in
-                  Task { await transactionStore.update(updated) }
-                  selectedTransaction = updated
-                },
-                onDelete: { id in
-                  Task { await transactionStore.delete(id: id) }
-                  selectedTransaction = nil
-                }
-              )
-              .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                  Button("Done") {
-                    selectedTransaction = nil
-                  }
-                }
-              }
-            }
-          }
-      #endif
-    }
+    listContent
   }
 
   private var listContent: some View {
@@ -252,7 +193,8 @@ private struct SimpleTransactionRow: View {
     accounts: Accounts(from: []),
     categories: Categories(from: []),
     earmarks: Earmarks(from: []),
-    transactionStore: store
+    transactionStore: store,
+    selectedTransaction: .constant(nil)
   )
   .frame(width: 400)
   .padding()
