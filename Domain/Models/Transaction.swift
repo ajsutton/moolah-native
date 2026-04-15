@@ -104,7 +104,6 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
   // MARK: - Convenience Accessors
 
   var accountIds: Set<UUID> { Set(legs.compactMap(\.accountId)) }
-  var primaryAccountId: UUID? { legs.first?.accountId }
   var type: TransactionType { legs.first?.type ?? .expense }
   var categoryId: UUID? { legs.first?.categoryId }
   var earmarkId: UUID? { legs.first?.earmarkId }
