@@ -108,7 +108,6 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
   var type: TransactionType { legs.first?.type ?? .expense }
   var categoryId: UUID? { legs.first?.categoryId }
   var earmarkId: UUID? { legs.first?.earmarkId }
-  var primaryAmount: InstrumentAmount { legs.first?.amount ?? .zero(instrument: .AUD) }
   var isTransfer: Bool {
     let accounts = Set(legs.filter { $0.type == .transfer }.compactMap(\.accountId))
     let instruments = Set(legs.filter { $0.type == .transfer }.map(\.instrument))
