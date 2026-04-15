@@ -45,13 +45,16 @@ final class AccountStore {
     let start = ContinuousClock.now
     do {
       let fresh = Accounts(from: try await repository.fetchAll())
-      let elapsed = (ContinuousClock.now - start).inMilliseconds
+      let fetchMs = (ContinuousClock.now - start).inMilliseconds
       if fresh.ordered != accounts.ordered {
         accounts = fresh
-        logger.debug("Sync: updated accounts (\(fresh.count) accounts) in \(elapsed)ms")
+        logger.debug("Sync: updated accounts (\(fresh.count) accounts)")
       }
-      if elapsed > 16 {
-        logger.warning("⚠️ PERF: accountStore.reloadFromSync took \(elapsed)ms")
+      let totalMs = (ContinuousClock.now - start).inMilliseconds
+      if totalMs > 16 {
+        logger.warning(
+          "⚠️ PERF: accountStore.reloadFromSync took \(totalMs)ms (fetch: \(fetchMs)ms, diff+assign: \(totalMs - fetchMs)ms)"
+        )
       }
     } catch {
       logger.error("Sync reload failed: \(error.localizedDescription)")
