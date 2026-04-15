@@ -45,7 +45,9 @@ struct UpcomingTransactionsCard: View {
       ForEach(shortTermTransactions) { txn in
         SimpleTransactionRow(
           transaction: txn.transaction,
+          accounts: accounts,
           earmarks: earmarks,
+          displayAmount: txn.displayAmount,
           isOverdue: isOverdue(txn.transaction),
           isDueToday: isDueToday(txn.transaction)
         ) {
@@ -91,7 +93,9 @@ struct UpcomingTransactionsCard: View {
 
 private struct SimpleTransactionRow: View {
   let transaction: Transaction
+  let accounts: Accounts
   let earmarks: Earmarks
+  let displayAmount: InstrumentAmount
   let isOverdue: Bool
   let isDueToday: Bool
   let onPay: () async -> Void
@@ -139,12 +143,12 @@ private struct SimpleTransactionRow: View {
       Spacer()
 
       Text(
-        transaction.primaryAmount.quantity,
-        format: .currency(code: transaction.primaryAmount.instrument.id)
+        displayAmount.quantity,
+        format: .currency(code: displayAmount.instrument.id)
       )
       .font(.body)
       .monospacedDigit()
-      .foregroundStyle(transaction.primaryAmount.quantity >= 0 ? .green : .red)
+      .foregroundStyle(displayAmount.quantity >= 0 ? .green : .red)
 
       Button {
         Task {
@@ -173,6 +177,13 @@ private struct SimpleTransactionRow: View {
   }
 
   private var displayPayee: String {
+    if transaction.isTransfer {
+      let fromAccount = transaction.legs.first(where: { $0.quantity < 0 })?.accountId
+      let toAccount = transaction.legs.first(where: { $0.quantity >= 0 })?.accountId
+      let fromName = fromAccount.flatMap { accounts.by(id: $0)?.name } ?? "Unknown"
+      let toName = toAccount.flatMap { accounts.by(id: $0)?.name } ?? "Unknown"
+      return "Transfer from \(fromName) to \(toName)"
+    }
     if let payee = transaction.payee, !payee.isEmpty {
       return payee
     }
