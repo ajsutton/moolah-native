@@ -45,19 +45,19 @@ struct RemoteTransactionRepositoryTests {
     let transactions = page.transactions
 
     // First transaction: expense
-    #expect(transactions[0].type == .expense)
+    #expect(transactions[0].legs.first?.type == .expense)
     #expect(transactions[0].legs.first?.quantity == Decimal(string: "-50.23")!)
     #expect(transactions[0].payee == "Woolworths")
     #expect(transactions[0].notes == "Weekly groceries")
     #expect(transactions[0].legs.contains(where: { $0.categoryId != nil }))
 
     // Second transaction: income
-    #expect(transactions[1].type == .income)
+    #expect(transactions[1].legs.first?.type == .income)
     #expect(transactions[1].legs.first?.quantity == Decimal(string: "3500.00")!)
     #expect(transactions[1].payee == "Employer Pty Ltd")
 
     // Third transaction: transfer
-    #expect(transactions[2].type == .transfer)
+    #expect(transactions[2].legs.first?.type == .transfer)
     #expect(transactions[2].legs.count == 2)
     #expect(transactions[2].legs.first?.quantity == Decimal(string: "-1000.00")!)
 
