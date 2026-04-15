@@ -540,12 +540,14 @@ final class ProfileDataSyncHandler: Sendable {
   /// and handles conflict/unknownItem system fields updates.
   /// Returns classified failures for the coordinator to re-queue.
   func handleSentRecordZoneChanges(
-    _ sentChanges: CKSyncEngine.Event.SentRecordZoneChanges
+    savedRecords: [CKRecord],
+    failedSaves: [CKSyncEngine.Event.SentRecordZoneChanges.FailedRecordSave],
+    failedDeletes: [(CKRecord.ID, CKError)]
   ) -> SyncErrorRecovery.ClassifiedFailures {
     // Update system fields on model records after successful upload.
-    if !sentChanges.savedRecords.isEmpty {
+    if !savedRecords.isEmpty {
       let context = ModelContext(modelContainer)
-      for saved in sentChanges.savedRecords {
+      for saved in savedRecords {
         let recordName = saved.recordID.recordName
         if let uuid = UUID(uuidString: recordName) {
           Self.updateEncodedSystemFields(
@@ -565,8 +567,8 @@ final class ProfileDataSyncHandler: Sendable {
 
     // Classify failures
     let failures = SyncErrorRecovery.classify(
-      failedSaves: sentChanges.failedRecordSaves,
-      failedDeletes: sentChanges.failedRecordDeletes.map { ($0.key, $0.value) },
+      failedSaves: failedSaves,
+      failedDeletes: failedDeletes,
       logger: logger)
 
     // Handle system fields updates for conflicts and unknownItems

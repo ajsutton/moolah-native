@@ -644,16 +644,15 @@ final class SyncCoordinator: Sendable {
       .union(failedDeletesByZone.keys)
 
     for zoneID in allZones {
-      // Build a per-zone sentChanges-like structure by passing the full event
-      // to the handler — the handlers already handle filtering internally.
       let zoneType = Self.parseZone(zoneID)
-
-      // Create a filtered sentChanges for this zone
       let failures: SyncErrorRecovery.ClassifiedFailures
 
       switch zoneType {
       case .profileIndex:
-        failures = profileIndexHandler.handleSentRecordZoneChanges(sentChanges)
+        failures = profileIndexHandler.handleSentRecordZoneChanges(
+          savedRecords: savedByZone[zoneID] ?? [],
+          failedSaves: failedSavesByZone[zoneID] ?? [],
+          failedDeletes: failedDeletesByZone[zoneID] ?? [])
 
       case .profileData(let profileId):
         guard let handler = try? handlerForProfileZone(profileId: profileId, zoneID: zoneID)
@@ -661,7 +660,10 @@ final class SyncCoordinator: Sendable {
           logger.error("Failed to get handler for sent changes, profile \(profileId)")
           continue
         }
-        failures = handler.handleSentRecordZoneChanges(sentChanges)
+        failures = handler.handleSentRecordZoneChanges(
+          savedRecords: savedByZone[zoneID] ?? [],
+          failedSaves: failedSavesByZone[zoneID] ?? [],
+          failedDeletes: failedDeletesByZone[zoneID] ?? [])
 
       case .unknown:
         logger.warning("Sent changes for unknown zone: \(zoneID.zoneName)")
