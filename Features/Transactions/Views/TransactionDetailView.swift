@@ -7,6 +7,7 @@ struct TransactionDetailView: View {
   let earmarks: Earmarks
   let transactionStore: TransactionStore
   let showRecurrence: Bool
+  let viewingAccountId: UUID?
   let onUpdate: (Transaction) -> Void
   let onDelete: (UUID) -> Void
 
@@ -24,6 +25,21 @@ struct TransactionDetailView: View {
     case amount
   }
 
+  /// The leg relevant for display/editing in the current context.
+  private var relevantLeg: TransactionLeg? {
+    if let viewingAccountId {
+      return transaction.legs.first { $0.accountId == viewingAccountId }
+    }
+    if transaction.isTransfer {
+      return transaction.legs.first { $0.quantity < 0 }
+    }
+    return transaction.legs.first
+  }
+
+  private var isEditable: Bool {
+    transaction.isSimple
+  }
+
   init(
     transaction: Transaction,
     accounts: Accounts,
@@ -31,6 +47,7 @@ struct TransactionDetailView: View {
     earmarks: Earmarks,
     transactionStore: TransactionStore,
     showRecurrence: Bool = false,
+    viewingAccountId: UUID? = nil,
     onUpdate: @escaping (Transaction) -> Void,
     onDelete: @escaping (UUID) -> Void
   ) {
@@ -40,10 +57,11 @@ struct TransactionDetailView: View {
     self.earmarks = earmarks
     self.transactionStore = transactionStore
     self.showRecurrence = showRecurrence
+    self.viewingAccountId = viewingAccountId
     self.onUpdate = onUpdate
     self.onDelete = onDelete
 
-    var initialDraft = TransactionDraft(from: transaction)
+    var initialDraft = TransactionDraft(from: transaction, viewingAccountId: viewingAccountId)
     if let catId = transaction.categoryId, let cat = categories.by(id: catId) {
       initialDraft.categoryText = categories.path(for: cat)
     }
@@ -52,7 +70,7 @@ struct TransactionDetailView: View {
 
   private var isNewTransaction: Bool {
     // Detect if this is a new transaction by checking if it has default values
-    transaction.primaryAmount.isZero && (transaction.payee?.isEmpty ?? true)
+    (relevantLeg?.amount.isZero ?? true) && (transaction.payee?.isEmpty ?? true)
   }
 
   private var sortedAccounts: [Account] {
@@ -100,12 +118,12 @@ struct TransactionDetailView: View {
 
   private var formContent: some View {
     Form {
-      typeSection
-      detailsSection
-      accountSection
-      categorySection
+      typeSection.disabled(!isEditable)
+      detailsSection.disabled(!isEditable)
+      accountSection.disabled(!isEditable)
+      categorySection.disabled(!isEditable)
       if showRecurrence {
-        recurrenceSection
+        recurrenceSection.disabled(!isEditable)
       }
       notesSection
       if isScheduled {
@@ -186,7 +204,7 @@ struct TransactionDetailView: View {
           #if os(iOS)
             .keyboardType(.decimalPad)
           #endif
-        Text(transaction.primaryAmount.instrument.id).foregroundStyle(.secondary)
+        Text(relevantLeg?.instrument.id ?? "").foregroundStyle(.secondary)
       }
 
       DatePicker("Date", selection: $draft.date, displayedComponents: .date)
@@ -404,8 +422,14 @@ struct TransactionDetailView: View {
       else { return }
       // Auto-fill fields that are still at defaults
       if draft.parsedQuantity == nil || draft.parsedQuantity == 0 {
-        draft.amountText = abs(match.primaryAmount.quantity).formatted(
-          .number.precision(.fractionLength(2)))
+        let matchLeg =
+          draft.accountId.flatMap { acctId in
+            match.legs.first { $0.accountId == acctId }
+          } ?? match.legs.first
+        if let matchLeg {
+          draft.amountText = abs(matchLeg.quantity).formatted(
+            .number.precision(.fractionLength(matchLeg.instrument.decimals)))
+        }
       }
       if draft.categoryId == nil, let matchCategoryId = match.categoryId {
         draft.categoryId = matchCategoryId
@@ -418,10 +442,11 @@ struct TransactionDetailView: View {
         draft.type = match.type
       }
       if draft.type == .transfer, draft.toAccountId == nil {
-        let matchTransferLeg =
-          match.legs.count > 1
-          ? match.legs.first(where: { $0.accountId != match.primaryAccountId }) : nil
-        draft.toAccountId = matchTransferLeg?.accountId
+        let matchLeg = draft.accountId.flatMap { acctId in
+          match.legs.first { $0.accountId == acctId }
+        }
+        let otherLeg = match.legs.first { $0.accountId != matchLeg?.accountId }
+        draft.toAccountId = otherLeg?.accountId
       }
     }
   }
@@ -486,7 +511,7 @@ struct TransactionDetailView: View {
   }
 
   private func saveIfValid() {
-    let fromInstrument = transaction.primaryAmount.instrument
+    let fromInstrument = relevantLeg?.instrument ?? transaction.legs.first?.instrument ?? .AUD
     let toInstrument: Instrument?
     if draft.type == .transfer, let toAcctId = draft.toAccountId {
       let toAccountInstrument =
@@ -528,7 +553,15 @@ struct TransactionDetailView: View {
       earmarks: Earmarks(from: [
         Earmark(name: "Holiday Fund")
       ]),
-      transactionStore: TransactionStore(repository: PreviewBackend.create().0.transactions),
+      transactionStore: {
+        let (backend, _) = PreviewBackend.create()
+        return TransactionStore(
+          repository: backend.transactions,
+          conversionService: backend.conversionService,
+          targetInstrument: .AUD
+        )
+      }(),
+      viewingAccountId: accountId,
       onUpdate: { _ in },
       onDelete: { _ in }
     )

@@ -154,7 +154,11 @@ struct ForecastPicker: View {
   let accountStore = AccountStore(repository: backend.accounts)
   let categoryStore = CategoryStore(repository: backend.categories)
   let earmarkStore = EarmarkStore(repository: backend.earmarks)
-  let transactionStore = TransactionStore(repository: backend.transactions)
+  let transactionStore = TransactionStore(
+    repository: backend.transactions,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD
+  )
   let analysisStore = AnalysisStore(repository: backend.analysis)
 
   NavigationStack {

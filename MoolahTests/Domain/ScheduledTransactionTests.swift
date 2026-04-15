@@ -73,7 +73,7 @@ struct ScheduledTransactionTests {
     #expect(paid.recurEvery == nil)
     #expect(paid.isScheduled == false)
     #expect(paid.payee == scheduled.payee)
-    #expect(paid.primaryAmount == scheduled.primaryAmount)
+    #expect(paid.legs.first?.amount == scheduled.legs.first?.amount)
   }
 
   @Test("Filter returns only scheduled transactions")

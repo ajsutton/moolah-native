@@ -109,12 +109,22 @@ struct TransactionDraft: Sendable, Equatable {
 
 extension TransactionDraft {
   /// Create a draft pre-populated from an existing transaction (for editing).
-  init(from transaction: Transaction) {
-    let primaryLeg = transaction.legs.first
-    let transferLeg =
-      transaction.legs.count > 1
-      ? transaction.legs.first(where: { $0.accountId != primaryLeg?.accountId })
-      : nil
+  ///
+  /// - Parameters:
+  ///   - transaction: The transaction to populate from.
+  ///   - viewingAccountId: When provided, selects the leg matching this account as the
+  ///     primary leg. Useful for transfers where the "from" perspective depends on which
+  ///     account the user is currently viewing.
+  init(from transaction: Transaction, viewingAccountId: UUID? = nil) {
+    let primaryLeg: TransactionLeg?
+    if let viewingAccountId {
+      primaryLeg = transaction.legs.first { $0.accountId == viewingAccountId }
+    } else if transaction.isTransfer {
+      primaryLeg = transaction.legs.first { $0.quantity < 0 }
+    } else {
+      primaryLeg = transaction.legs.first
+    }
+    let transferLeg = transaction.legs.first { $0.accountId != primaryLeg?.accountId }
 
     // For cross-currency transfers, populate the to-amount from the inflow leg
     let toAmountText: String

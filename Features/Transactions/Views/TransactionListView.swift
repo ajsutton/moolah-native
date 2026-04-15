@@ -97,7 +97,8 @@ struct TransactionListView: View {
           accounts: accounts,
           categories: categories,
           earmarks: earmarks,
-          transactionStore: transactionStore
+          transactionStore: transactionStore,
+          viewingAccountId: filter.accountId
         )
       )
       .focusedSceneValue(\.newTransactionAction, createNewTransaction)
@@ -157,8 +158,8 @@ struct TransactionListView: View {
       ForEach(filteredTransactions) { entry in
         TransactionRowView(
           transaction: entry.transaction, accounts: accounts,
-          categories: categories, earmarks: earmarks, balance: entry.balance,
-          hideEarmark: filter.earmarkId != nil
+          categories: categories, earmarks: earmarks, displayAmount: entry.displayAmount,
+          balance: entry.balance, hideEarmark: filter.earmarkId != nil
         )
         .tag(entry.transaction)
         .contentShape(Rectangle())
@@ -303,7 +304,11 @@ struct TransactionListView: View {
       balance: InstrumentAmount(quantity: 5000, instrument: .AUD)),
   ])
   let (backend, _) = PreviewBackend.create()
-  let store = TransactionStore(repository: backend.transactions)
+  let store = TransactionStore(
+    repository: backend.transactions,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD
+  )
 
   NavigationStack {
     TransactionListView(
