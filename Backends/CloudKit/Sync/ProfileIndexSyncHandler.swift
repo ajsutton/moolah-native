@@ -30,7 +30,7 @@ final class ProfileIndexSyncHandler: Sendable {
 
   /// Applies remote changes (inserts/updates/deletions) to the local SwiftData store.
   /// Creates a fresh ModelContext per call for isolation.
-  func applyRemoteChanges(saved: [CKRecord], deleted: [CKRecord.ID]) {
+  nonisolated func applyRemoteChanges(saved: [CKRecord], deleted: [CKRecord.ID]) {
     let context = ModelContext(modelContainer)
 
     for ckRecord in saved {
