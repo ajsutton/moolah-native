@@ -11,6 +11,7 @@ struct InvestmentAccountView: View {
   let transactionStore: TransactionStore
   let tradeStore: TradeStore
 
+  @Environment(ProfileSession.self) private var session
   @State private var showingAddValue = false
   @State private var showingRecordTrade = false
   @State private var selectedTransaction: Transaction?
@@ -90,7 +91,8 @@ struct InvestmentAccountView: View {
       categories: categories,
       earmarks: earmarks,
       transactionStore: transactionStore,
-      viewingAccountId: account.id
+      viewingAccountId: account.id,
+      supportsComplexTransactions: session.profile.supportsComplexTransactions
     )
     .profileNavigationTitle(account.name)
     .sheet(isPresented: $showingAddValue) {

@@ -17,6 +17,7 @@ struct EarmarkDetailView: View {
   @State private var selectedTab: DetailTab = .transactions
   @State private var selectedTransaction: Transaction?
   @Environment(EarmarkStore.self) private var earmarkStore
+  @Environment(ProfileSession.self) private var session
 
   var body: some View {
     VStack(spacing: 0) {
@@ -56,7 +57,8 @@ struct EarmarkDetailView: View {
       accounts: accounts,
       categories: categories,
       earmarks: earmarks,
-      transactionStore: transactionStore
+      transactionStore: transactionStore,
+      supportsComplexTransactions: session.profile.supportsComplexTransactions
     )
     .profileNavigationTitle(earmark.name)
     .toolbar {

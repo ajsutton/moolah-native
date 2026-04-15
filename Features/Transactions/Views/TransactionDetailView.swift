@@ -8,6 +8,7 @@ struct TransactionDetailView: View {
   let transactionStore: TransactionStore
   let showRecurrence: Bool
   let viewingAccountId: UUID?
+  let supportsComplexTransactions: Bool
   let onUpdate: (Transaction) -> Void
   let onDelete: (UUID) -> Void
 
@@ -48,6 +49,7 @@ struct TransactionDetailView: View {
     transactionStore: TransactionStore,
     showRecurrence: Bool = false,
     viewingAccountId: UUID? = nil,
+    supportsComplexTransactions: Bool = false,
     onUpdate: @escaping (Transaction) -> Void,
     onDelete: @escaping (UUID) -> Void
   ) {
@@ -58,6 +60,7 @@ struct TransactionDetailView: View {
     self.transactionStore = transactionStore
     self.showRecurrence = showRecurrence
     self.viewingAccountId = viewingAccountId
+    self.supportsComplexTransactions = supportsComplexTransactions
     self.onUpdate = onUpdate
     self.onDelete = onDelete
 
@@ -565,6 +568,7 @@ struct TransactionDetailView: View {
         )
       }(),
       viewingAccountId: accountId,
+      supportsComplexTransactions: true,
       onUpdate: { _ in },
       onDelete: { _ in }
     )

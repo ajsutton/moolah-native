@@ -7,6 +7,7 @@ struct UpcomingView: View {
   let earmarks: Earmarks
   let transactionStore: TransactionStore
 
+  @Environment(ProfileSession.self) private var session
   @State private var selectedTransaction: Transaction?
 
   var body: some View {
@@ -17,7 +18,8 @@ struct UpcomingView: View {
         categories: categories,
         earmarks: earmarks,
         transactionStore: transactionStore,
-        showRecurrence: true
+        showRecurrence: true,
+        supportsComplexTransactions: session.profile.supportsComplexTransactions
       )
   }
 

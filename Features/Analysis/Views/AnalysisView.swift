@@ -5,6 +5,7 @@ struct AnalysisView: View {
   @Environment(CategoryStore.self) private var categoryStore
   @Environment(EarmarkStore.self) private var earmarkStore
   @Environment(TransactionStore.self) private var transactionStore
+  @Environment(ProfileSession.self) private var session
   @Environment(\.scenePhase) private var scenePhase
 
   @Bindable var store: AnalysisStore
@@ -36,7 +37,8 @@ struct AnalysisView: View {
       categories: categoryStore.categories,
       earmarks: earmarkStore.earmarks,
       transactionStore: transactionStore,
-      showRecurrence: true
+      showRecurrence: true,
+      supportsComplexTransactions: session.profile.supportsComplexTransactions
     )
     .profileNavigationTitle("Analysis")
     .toolbar {
