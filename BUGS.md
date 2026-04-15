@@ -14,3 +14,7 @@ When the app first loads, all existing windows briefly show a "profile removed" 
 - `type` → `legs.first?.type`
 
 These assume the first leg is "special", which breaks for multi-leg transactions where different legs could have different earmarks, categories, or types. Need to audit all call sites for hidden single-leg assumptions and decide on proper multi-leg semantics (e.g. should `earmarkId` return the earmark from any leg that has one?).
+
+## iOS login page should allow changing profile without logging in
+
+On iOS, the login page shows the currently selected remote profile but doesn't offer a way to switch to a different profile. The user should be able to change to another profile from the profile selector without having to log into the one that happens to be selected.
