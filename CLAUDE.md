@@ -54,6 +54,7 @@ grep -B5 -A10 'testMethodName' .agent-tmp/test-output.txt
 - **Domain Layer:** Strictly isolated. `Domain/Models/` and `Domain/Repositories/` must never import `SwiftUI`, `SwiftData`, `URLSession`, or any backend module.
 - **Features:** Only talk to repository protocols via `@Environment(BackendProvider.self)`. No feature file may import `Backends/` or reference `Remote*` types directly.
 - **Currency:** All currency values are stored as `Int` (cents). Currency flows from `Profile.currency` → backend → `MonetaryAmount` on all domain objects. Views derive currency from loaded domain objects, never from a global constant. Tests use `Currency.defaultTestCurrency` (defined in `MoolahTests/Support/TestCurrency.swift`).
+- **Monetary Sign Convention:** The sign of monetary amounts (positive or negative) is semantically important — avoid using `abs()` or otherwise discarding it. Expenses are typically negative values, but refunds are expenses with positive values. Any transaction type may have values with the opposite sign to normal. Preserve and propagate the original sign; display logic should handle both signs correctly.
 - **Backend:** `BackendProvider` is the injection point. `RemoteBackend` for production, `CloudKitBackend` with in-memory SwiftData for tests (`TestBackend`) and previews (`PreviewBackend`).
 - **Concurrency:** All concurrency work MUST follow `guides/CONCURRENCY_GUIDE.md`. This is not optional.
   - Mark types `@MainActor` when they own UI-bound state (e.g., Stores).
