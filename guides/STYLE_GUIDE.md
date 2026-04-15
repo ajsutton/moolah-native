@@ -543,6 +543,7 @@ Moolah uses SF Symbols 6 for all icons. **Never** use custom bitmap icons.
 | Income | `"arrow.up"` | Positive flow (money in) |
 | Expense | `"arrow.down"` | Negative flow (money out) |
 | Transfer | `"arrow.left.arrow.right"` | Between accounts |
+| Complex | `"arrow.trianglehead.branch"` | Multi-leg transactions with mixed types |
 | Account | `"creditcard"`, `"banknote"` | Bank accounts, cash |
 | Category | `"tag"`, `"folder"` | Transaction categories |
 | Earmark/Budget | `"bookmark.fill"` | Earmark allocations and savings goals |
@@ -552,6 +553,16 @@ Moolah uses SF Symbols 6 for all icons. **Never** use custom bitmap icons.
 | Edit | `"pencil"` | Edit existing |
 | Delete | `"trash"` | Remove item |
 | Settings | `"gearshape"` | User preferences |
+
+#### Transaction Type Icon Colors
+
+| Type | Color | Notes |
+|------|-------|-------|
+| Income | `.green` | Positive flow |
+| Expense | `.red` | Negative flow |
+| Transfer | `.blue` | Between accounts |
+| Opening Balance | `.orange` | System-generated |
+| Complex | `.purple` | Multi-leg transactions with mixed types |
 
 #### Rendering Modes
 ```swift

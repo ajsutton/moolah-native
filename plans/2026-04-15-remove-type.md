@@ -72,7 +72,7 @@ private var iconName: String {
 ```swift
 private var iconColor: Color {
     guard transaction.isSimple, let type = transaction.legs.first?.type else {
-        return .secondary
+        return .purple
     }
     switch type {
     case .income: return .green
@@ -83,7 +83,7 @@ private var iconColor: Color {
 }
 ```
 
-`.secondary` signals "mixed/uncategorised" without introducing a new semantic color into the transaction type vocabulary.
+`.purple` is visually distinct from the existing four transaction-type colors and maintains the same vibrancy. Document `.purple` as the semantic color for complex/multi-leg transactions in `guides/STYLE_GUIDE.md`.
 
 **accessibility — update `accessibilityDescription` (P3):**
 
@@ -157,7 +157,7 @@ Using `allSatisfy` is stronger than checking `legs.first` — it verifies all le
 
 ### Step 1: TransactionRowView (P1, P2, P3)
 
-Branch `iconName` and `iconColor` on `isSimple` — simple transactions use the existing type switch on `legs.first?.type`, complex transactions use `"arrow.trianglehead.branch"` icon with `.secondary` color. Remove the per-icon `.accessibilityLabel` and add type information to `accessibilityDescription` using `.displayName`. Add a complex transaction row to the `#Preview` block so the new icon path has visual coverage.
+Branch `iconName` and `iconColor` on `isSimple` — simple transactions use the existing type switch on `legs.first?.type`, complex transactions use `"arrow.trianglehead.branch"` icon with `.purple` color. Document `.purple` as the semantic color for complex transactions in `guides/STYLE_GUIDE.md`. Remove the per-icon `.accessibilityLabel` and add type information to `accessibilityDescription` using `.displayName`. Add a complex transaction row to the `#Preview` block so the new icon path has visual coverage.
 
 ### Step 2: TransactionDetailView (P4)
 
@@ -184,4 +184,4 @@ Run the `ui-review` agent on TransactionRowView and any other modified views. Fi
 
 ## Risk Assessment
 
-**Low risk.** All legs in a simple transaction share the same type, so the replacement logic produces identical results for every currently-possible transaction. The only new behavior is that complex transactions (which don't exist in production yet) will show a distinct icon instead of inheriting the first leg's type. The `.expense` fallback on empty legs is removed — empty legs would show the branching arrow icon in `.secondary`, which is a safer failure mode than silently defaulting to expense.
+**Low risk.** All legs in a simple transaction share the same type, so the replacement logic produces identical results for every currently-possible transaction. The only new behavior is that complex transactions (which don't exist in production yet) will show a distinct icon instead of inheriting the first leg's type. The `.expense` fallback on empty legs is removed — empty legs would show the branching arrow icon in `.purple`, which is a safer failure mode than silently defaulting to expense.
