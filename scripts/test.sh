@@ -33,31 +33,11 @@ run_ios() {
 }
 
 run_mac() {
-    # Build the test bundle then run it directly with xcrun xctest.
-    # This bypasses IDEInstallLocalMacService which adds ~2 minutes of
-    # unnecessary acknowledgement overhead on macOS.
     echo "==> Testing macOS…"
-
-    xcodebuild build-for-testing "${COMMON_ARGS[@]}" \
+    xcodebuild test "${COMMON_ARGS[@]}" \
         -derivedDataPath "$REPO_ROOT/.DerivedData-mac" \
         -scheme Moolah-macOS \
         -destination "platform=macOS"
-
-    PRODUCTS="$REPO_ROOT/.DerivedData-mac/Build/Products"
-    APP_BUNDLE="$PRODUCTS/Debug/Moolah.app"
-    TEST_BUNDLE="$APP_BUNDLE/Contents/PlugIns/MoolahTests_macOS.xctest"
-
-    # The test bundle's @rpath looks for the debug dylib in its own
-    # Contents/Frameworks/ — copy it there before running.
-    DYLIB="$(find "$APP_BUNDLE/Contents/MacOS" -name "*.debug.dylib" | head -1)"
-    if [[ -z "$DYLIB" ]]; then
-        echo "error: Could not find debug dylib in $APP_BUNDLE/Contents/MacOS" >&2
-        exit 1
-    fi
-    mkdir -p "$TEST_BUNDLE/Contents/Frameworks"
-    cp "$DYLIB" "$TEST_BUNDLE/Contents/Frameworks/"
-
-    xcrun xctest "$TEST_BUNDLE"
 }
 
 # ---------------------------------------------------------------------------
