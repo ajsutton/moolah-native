@@ -6,11 +6,10 @@ When the app first loads, all existing windows briefly show a "profile removed" 
 
 ## Transaction convenience accessors assume single-leg semantics
 
-`Transaction` has several convenience accessors that return properties from `legs.first`:
-- `earmarkId` → `legs.first?.earmarkId`
+`Transaction` has a convenience accessor that returns a property from `legs.first`:
 - `type` → `legs.first?.type`
 
-These assume the first leg is "special", which breaks for multi-leg transactions where different legs could have different earmarks, categories, or types. Need to audit all call sites for hidden single-leg assumptions and decide on proper multi-leg semantics (e.g. should `earmarkId` return the earmark from any leg that has one?).
+This assumes the first leg is "special", which breaks for multi-leg transactions where different legs could have different types. Need to audit all call sites for hidden single-leg assumptions and decide on proper multi-leg semantics.
 
 ## iOS login page should allow changing profile without logging in
 
