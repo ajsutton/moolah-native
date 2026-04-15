@@ -11,7 +11,7 @@ var earmarkId: UUID? { legs.first?.earmarkId }
 
 ## Problem
 
-`earmarkId` returns the first leg's earmark, hiding that earmark is a per-leg property. While in practice only the source leg carries an earmark (matching server semantics where earmark balance uses the source leg's sign convention), the accessor silently assumes the first leg is always the relevant one. When viewing a transfer from the destination account's perspective, the first leg is still the source — so the earmark shows even though the destination leg has no earmark association.
+`earmarkId` returns the first leg's earmark, hiding that earmark is a per-leg property. A complex transaction can have different earmarks on different legs. The accessor silently returns only the first leg's value regardless of which legs are relevant to the viewing context.
 
 ## Call Sites
 
@@ -53,14 +53,14 @@ var earmarkId: UUID? { legs.first?.earmarkId }
 ### Applicable Legs
 
 Throughout this plan, "applicable legs" means:
-- **Account-filtered context** (transaction list, row view): legs whose `accountId` matches the viewing account.
-- **Unfiltered context** (upcoming/scheduled views, analysis cards): all legs.
+- **Account-filtered context** (transaction list, detail view): legs whose `accountId` matches the viewing account.
+- **Unfiltered context** (upcoming/scheduled views): all legs.
 
-Unlike `categoryId` where multiple legs can have different categories, only the source leg typically carries an earmark. The replacement pattern returns a single optional earmark — not a list — but sources it from applicable legs instead of blindly using `legs.first`.
+When multiple applicable legs have different earmarks, **show all unique earmarks**.
 
-### TransactionRowView (P1, P2) — Applicable Legs
+### TransactionRowView (P1) — Show All Applicable Earmarks
 
-The current computed property returns a single optional string from the convenience accessor:
+The current computed property returns a single optional string:
 
 ```swift
 private var earmarkName: String? {
@@ -69,21 +69,50 @@ private var earmarkName: String? {
 }
 ```
 
-Replace with a computed property that finds the earmark from applicable legs:
+Replace with a computed property that returns all unique earmark names from applicable legs:
 
 ```swift
-private var earmarkName: String? {
+private var earmarkNames: [String] {
     let applicable = viewingAccountId.map { id in
         transaction.legs.filter { $0.accountId == id }
     } ?? transaction.legs
-    guard let earmarkId = applicable.first(where: { $0.earmarkId != nil })?.earmarkId else {
-        return nil
-    }
-    return earmarks.by(id: earmarkId)?.name
+
+    let uniqueIds = applicable.compactMap(\.earmarkId).uniqued()
+    return uniqueIds.compactMap { earmarks.by(id: $0)?.name }
 }
 ```
 
-The `displayPayee` fallback (P2) uses the same applicable-legs pattern:
+(`uniqueIds` preserves order of first appearance via the same `uniqued()` helper used by the categoryId change.)
+
+In the view body, replace the single-earmark block:
+
+```swift
+// Before
+if !hideEarmark, let earmarkName {
+    Text("·")
+    Label(earmarkName, systemImage: "bookmark.fill")
+        .labelStyle(.iconOnly)
+        .imageScale(.small)
+    Text(earmarkName)
+}
+
+// After
+if !hideEarmark {
+    ForEach(earmarkNames, id: \.self) { name in
+        Text("·")
+        Label(name, systemImage: "bookmark.fill")
+            .labelStyle(.iconOnly)
+            .imageScale(.small)
+        Text(name)
+    }
+}
+```
+
+Each earmark gets its own bookmark icon + name, separated by `·` from the date and from each other. This gracefully handles zero, one, or many earmarks.
+
+### TransactionRowView displayPayee (P2) — First Applicable Earmark
+
+The `displayPayee` fallback generates "Earmark funds for X" when no payee is set. Since this produces a single string used as the transaction's display name, use the first applicable earmark:
 
 ```swift
 // Before
@@ -93,35 +122,41 @@ if let earmarkId = transaction.earmarkId,
 }
 
 // After
-let applicableForPayee = viewingAccountId.map { id in
+let applicable = viewingAccountId.map { id in
     transaction.legs.filter { $0.accountId == id }
 } ?? transaction.legs
-if let earmarkId = applicableForPayee.first(where: { $0.earmarkId != nil })?.earmarkId,
+if let earmarkId = applicable.first(where: { $0.earmarkId != nil })?.earmarkId,
    let earmark = earmarks.by(id: earmarkId) {
     return "Earmark funds for \(earmark.name)"
 }
 ```
 
-To avoid duplicating the applicable-legs computation, extract a shared helper:
+To avoid duplicating the applicable-legs computation between `earmarkNames` and `displayPayee`, extract a shared helper:
 
 ```swift
-private var applicableEarmarkId: UUID? {
+private var applicableEarmarkIds: [UUID] {
     let applicable = viewingAccountId.map { id in
         transaction.legs.filter { $0.accountId == id }
     } ?? transaction.legs
-    return applicable.first(where: { $0.earmarkId != nil })?.earmarkId
+    return applicable.compactMap(\.earmarkId).uniqued()
 }
 ```
 
-Then both `earmarkName` and `displayPayee` use `applicableEarmarkId`.
+Then `earmarkNames` maps over `applicableEarmarkIds`, and `displayPayee` uses `applicableEarmarkIds.first`.
 
-### UpcomingView (P3, P4) — All Legs, No Account Filter
+### UpcomingView (P3, P4) — Same Pattern, No Account Filter
 
 Scheduled/upcoming transactions have no viewing account context. Use all legs:
 
 ```swift
-// P3 — earmark name in metadata row
-if let earmarkId = transaction.legs.first(where: { $0.earmarkId != nil })?.earmarkId,
+let earmarkIds = transaction.legs.compactMap(\.earmarkId).uniqued()
+```
+
+**P3** — Show all unique earmark names in the metadata row, same layout as TransactionRowView:
+
+```swift
+// Before
+if let earmarkId = transaction.earmarkId,
    let earmark = earmarks.by(id: earmarkId) {
     Text("•")
         .foregroundStyle(.secondary)
@@ -130,16 +165,31 @@ if let earmarkId = transaction.legs.first(where: { $0.earmarkId != nil })?.earma
         .foregroundStyle(.secondary)
 }
 
-// P4 — displayPayee fallback
+// After
+let earmarkIds = transaction.legs.compactMap(\.earmarkId).uniqued()
+ForEach(earmarkIds, id: \.self) { earmarkId in
+    if let earmark = earmarks.by(id: earmarkId) {
+        Text("•")
+            .foregroundStyle(.secondary)
+        Text(earmark.name)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+}
+```
+
+**P4** — `displayPayee` fallback uses the first earmark from all legs:
+
+```swift
 if let earmarkId = transaction.legs.first(where: { $0.earmarkId != nil })?.earmarkId,
    let earmark = earmarks.by(id: earmarkId) {
     return "Earmark funds for \(earmark.name)"
 }
 ```
 
-### UpcomingTransactionsCard (P5) — Same as UpcomingView
+### UpcomingTransactionsCard (P5) — Same as UpcomingView P4
 
-Same unfiltered context. Replace `transaction.earmarkId` with `transaction.legs.first(where: { $0.earmarkId != nil })?.earmarkId`:
+Same unfiltered context. Replace `transaction.earmarkId` with first earmark from all legs:
 
 ```swift
 // Before
@@ -167,14 +217,14 @@ This finds the first leg that carries an earmark regardless of position. (Other 
 
 ### Test Assertions — Assert on Legs
 
-All test assertions should use leg-level access instead of the convenience accessor.
+All test assertions should use leg-level access or `legs.contains(where:)` with the test's known earmarkId.
 
 **T1** (`TransactionDraftTests.swift:193`): Compare earmark structures across legs:
 ```swift
 #expect(roundTripped!.legs.compactMap(\.earmarkId) == original.legs.compactMap(\.earmarkId))
 ```
 
-**T2–T5** (`TransactionStoreTests.swift:890–1039`): onMutate earmark assertions. These test single-leg transactions, so `legs.first?.earmarkId` is correct:
+**T2–T5** (`TransactionStoreTests.swift:890–1039`): onMutate earmark assertions. These test single-leg transactions, so `legs.first?.earmarkId` is the direct replacement:
 ```swift
 // Before
 #expect(receivedOld?.earmarkId == earmarkId)
@@ -221,15 +271,15 @@ let earmarkId = earmarked[0].legs.first(where: { $0.earmarkId != nil })!.earmark
 
 ### Step 1: TransactionRowView (P1, P2)
 
-Extract `applicableEarmarkId: UUID?` helper using viewing account context. Replace `earmarkName` and `displayPayee` to use it.
+Replace `earmarkName: String?` with `earmarkNames: [String]` sourced from applicable legs. Extract `applicableEarmarkIds` helper. Update the view body to iterate with `ForEach`. Update `displayPayee` to use `applicableEarmarkIds.first`. Requires viewing account context from `TransactionWithBalance`.
 
 ### Step 2: UpcomingView (P3, P4)
 
-Replace `transaction.earmarkId` with `transaction.legs.first(where: { $0.earmarkId != nil })?.earmarkId` in both the metadata row and `displayPayee`.
+Same pattern as step 1 but using all legs (no account filter). Show all unique earmarks in the metadata row. Use first earmark for `displayPayee` fallback.
 
 ### Step 3: UpcomingTransactionsCard (P5)
 
-Same pattern as Step 2 — replace `transaction.earmarkId` in `displayPayee`.
+Same pattern as UpcomingView P4 — replace `transaction.earmarkId` in `displayPayee`.
 
 ### Step 4: TransactionDraft.init(from:)
 
@@ -253,8 +303,8 @@ Remove the `earmarkId → legs.first?.earmarkId` line from the convenience acces
 ## Risk Assessment
 
 **Low risk.** The accessor is a trivial computed property. Every production replacement either:
-- Finds the earmark from applicable legs (views) — correct for both simple and complex transactions
-- Finds the first leg with an earmark (draft init) — sufficient since only the source leg carries an earmark
+- Collects earmarks from applicable legs (views) — correct for both simple and complex transactions
+- Finds the first leg with an earmark (detail view, draft init) — sufficient for read-only complex tx display
 - Uses `sourceLeg?.earmarkId` (DTOs, already handled by #11) — correct for the source-oriented server API
 
-The only visible behavior change is that when viewing a transfer from the destination account, the earmark will no longer show in TransactionRowView (since the destination leg has no earmark). This is the correct behavior — the earmark belongs to the source account's leg.
+The only visible behavior change is that complex transactions with multiple earmarks will now show all of them instead of just the first leg's earmark. This is the correct behavior.
