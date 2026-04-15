@@ -159,7 +159,8 @@ struct TransactionListView: View {
         TransactionRowView(
           transaction: entry.transaction, accounts: accounts,
           categories: categories, earmarks: earmarks, displayAmount: entry.displayAmount,
-          balance: entry.balance, hideEarmark: filter.earmarkId != nil
+          balance: entry.balance, hideEarmark: filter.earmarkId != nil,
+          viewingAccountId: filter.accountId
         )
         .tag(entry.transaction)
         .contentShape(Rectangle())

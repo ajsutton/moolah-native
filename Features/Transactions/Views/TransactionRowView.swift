@@ -8,6 +8,7 @@ struct TransactionRowView: View {
   let displayAmount: InstrumentAmount
   let balance: InstrumentAmount
   var hideEarmark: Bool = false
+  var viewingAccountId: UUID? = nil
 
   #if os(macOS)
     @ScaledMetric private var verticalPadding: CGFloat = 8
@@ -99,18 +100,29 @@ struct TransactionRowView: View {
   }
 
   private var displayPayee: String {
-    if transaction.isTransfer,
-      let toAccountId = transaction.legs.count > 1
-        ? transaction.legs.first(where: { $0.accountId != transaction.primaryAccountId })?.accountId
-        : nil
+    if transaction.isSimple, transaction.isTransfer, let viewingAccountId,
+      let otherLeg = transaction.legs.first(where: { $0.accountId != viewingAccountId })
     {
-      let toAccountName = accounts.by(id: toAccountId)?.name ?? "Unknown Account"
-      let transferLabel = "Transfer to \(toAccountName)"
+      let otherAccountName =
+        accounts.by(id: otherLeg.accountId ?? UUID())?.name ?? "Unknown Account"
+      let viewingLeg = transaction.legs.first(where: { $0.accountId == viewingAccountId })
+      let isOutgoing = (viewingLeg?.quantity ?? 0) < 0
+      let transferLabel =
+        isOutgoing
+        ? "Transfer to \(otherAccountName)"
+        : "Transfer from \(otherAccountName)"
 
       if let payee = transaction.payee, !payee.isEmpty {
         return "\(payee) (\(transferLabel))"
       }
       return transferLabel
+    }
+
+    if !transaction.isSimple {
+      if let payee = transaction.payee, !payee.isEmpty {
+        return "\(payee) (\(transaction.legs.count) sub-transactions)"
+      }
+      return "\(transaction.legs.count) sub-transactions"
     }
 
     if let payee = transaction.payee, !payee.isEmpty {
@@ -182,7 +194,8 @@ struct TransactionRowView: View {
         ]
       ), accounts: accounts, categories: categories, earmarks: earmarks,
       displayAmount: InstrumentAmount(quantity: -1000, instrument: .AUD),
-      balance: InstrumentAmount(quantity: -2449.77, instrument: .AUD))
+      balance: InstrumentAmount(quantity: -2449.77, instrument: .AUD),
+      viewingAccountId: sourceId)
     TransactionRowView(
       transaction: Transaction(
         date: Date(), payee: "Rent Split",
@@ -192,6 +205,7 @@ struct TransactionRowView: View {
         ]
       ), accounts: accounts, categories: categories, earmarks: earmarks,
       displayAmount: InstrumentAmount(quantity: -500, instrument: .AUD),
-      balance: InstrumentAmount(quantity: -1449.77, instrument: .AUD))
+      balance: InstrumentAmount(quantity: -1449.77, instrument: .AUD),
+      viewingAccountId: sourceId)
   }
 }
