@@ -108,7 +108,7 @@ else
         fail "Missing Contents.json in AppIcon.appiconset"
     else
         # Check that a 1024px icon exists (required for App Store)
-        if ls "$ICON_DIR"/icon-1024* 1>/dev/null 2>&1; then
+        if ls "$ICON_DIR"/[Ii]con-1024* 1>/dev/null 2>&1 || ls "$ICON_DIR"/Icon-1024* 1>/dev/null 2>&1; then
             pass "1024px App Store icon present"
         else
             fail "Missing 1024px icon in AppIcon.appiconset (required for App Store)"
