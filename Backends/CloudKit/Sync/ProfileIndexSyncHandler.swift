@@ -26,11 +26,29 @@ final class ProfileIndexSyncHandler: Sendable {
     )
   }
 
+  @MainActor
+  private var mainContext: ModelContext {
+    modelContainer.mainContext
+  }
+
+  /// Fetches records using the given descriptor, logging errors instead of silently discarding them.
+  private nonisolated func fetchOrLog<T: PersistentModel>(
+    _ descriptor: FetchDescriptor<T>,
+    context: ModelContext
+  ) -> [T] {
+    do {
+      return try context.fetch(descriptor)
+    } catch {
+      logger.error("SwiftData fetch failed for \(T.self): \(error)")
+      return []
+    }
+  }
+
   // MARK: - Applying Remote Changes
 
   /// Applies remote changes (inserts/updates/deletions) to the local SwiftData store.
   /// Creates a fresh ModelContext per call for isolation.
-  nonisolated func applyRemoteChanges(saved: [CKRecord], deleted: [CKRecord.ID]) {
+  nonisolated func applyRemoteChanges(saved: [CKRecord], deleted: [CKRecord.ID]) -> ApplyResult {
     let context = ModelContext(modelContainer)
 
     for ckRecord in saved {
@@ -42,7 +60,7 @@ final class ProfileIndexSyncHandler: Sendable {
       let descriptor = FetchDescriptor<ProfileRecord>(
         predicate: #Predicate { $0.id == profileId }
       )
-      if let existing = try? context.fetch(descriptor).first {
+      if let existing = fetchOrLog(descriptor, context: context).first {
         existing.label = values.label
         existing.currencyCode = values.currencyCode
         existing.financialYearStartMonth = values.financialYearStartMonth
@@ -59,15 +77,17 @@ final class ProfileIndexSyncHandler: Sendable {
       let descriptor = FetchDescriptor<ProfileRecord>(
         predicate: #Predicate { $0.id == profileId }
       )
-      if let existing = try? context.fetch(descriptor).first {
+      if let existing = fetchOrLog(descriptor, context: context).first {
         context.delete(existing)
       }
     }
 
     do {
       try context.save()
+      return .success(changedTypes: Set(saved.map(\.recordType)))
     } catch {
       logger.error("Failed to save remote profile changes: \(error)")
+      return .saveFailed(error.localizedDescription)
     }
   }
 
@@ -94,11 +114,11 @@ final class ProfileIndexSyncHandler: Sendable {
   /// Looks up a ProfileRecord by CKRecord.ID and builds a CKRecord for upload.
   func recordToSave(for recordID: CKRecord.ID) -> CKRecord? {
     guard let profileId = UUID(uuidString: recordID.recordName) else { return nil }
-    let context = ModelContext(modelContainer)
+    let context = mainContext
     let descriptor = FetchDescriptor<ProfileRecord>(
       predicate: #Predicate { $0.id == profileId }
     )
-    guard let record = try? context.fetch(descriptor).first else { return nil }
+    guard let record = fetchOrLog(descriptor, context: context).first else { return nil }
     return buildCKRecord(for: record)
   }
 
@@ -108,9 +128,10 @@ final class ProfileIndexSyncHandler: Sendable {
   /// Called on first start when there's no saved sync state.
   /// Returns record IDs for the coordinator to queue.
   func queueAllExistingRecords() -> [CKRecord.ID] {
-    let context = ModelContext(modelContainer)
+    let context = mainContext
     let descriptor = FetchDescriptor<ProfileRecord>()
-    guard let records = try? context.fetch(descriptor), !records.isEmpty else { return [] }
+    let records = fetchOrLog(descriptor, context: context)
+    guard !records.isEmpty else { return [] }
 
     let recordIDs = records.map { record in
       CKRecord.ID(recordName: record.id.uuidString, zoneID: zoneID)
@@ -124,8 +145,9 @@ final class ProfileIndexSyncHandler: Sendable {
   /// Deletes all local ProfileRecords.
   /// Called on account sign-out, account switch, and zone deletion.
   func deleteLocalData() {
-    let context = ModelContext(modelContainer)
-    if let records = try? context.fetch(FetchDescriptor<ProfileRecord>()) {
+    let context = mainContext
+    let records = fetchOrLog(FetchDescriptor<ProfileRecord>(), context: context)
+    if !records.isEmpty {
       for record in records {
         context.delete(record)
       }
@@ -143,25 +165,34 @@ final class ProfileIndexSyncHandler: Sendable {
   /// Clears encoded system fields on all ProfileRecords.
   /// Called on encrypted data reset where we keep data but must re-upload fresh.
   func clearAllSystemFields() {
-    let context = ModelContext(modelContainer)
-    if let records = try? context.fetch(FetchDescriptor<ProfileRecord>()) {
+    let context = mainContext
+    let records = fetchOrLog(FetchDescriptor<ProfileRecord>(), context: context)
+    if !records.isEmpty {
       for record in records {
         record.encodedSystemFields = nil
       }
-      try? context.save()
+      do {
+        try context.save()
+      } catch {
+        logger.error("Failed to save cleared system fields: \(error)")
+      }
     }
   }
 
   /// Updates `encodedSystemFields` on the ProfileRecord matching the given record ID.
   func updateEncodedSystemFields(_ recordID: CKRecord.ID, data: Data) {
     guard let profileId = UUID(uuidString: recordID.recordName) else { return }
-    let context = ModelContext(modelContainer)
+    let context = mainContext
     let descriptor = FetchDescriptor<ProfileRecord>(
       predicate: #Predicate { $0.id == profileId }
     )
-    if let record = try? context.fetch(descriptor).first {
+    if let record = fetchOrLog(descriptor, context: context).first {
       record.encodedSystemFields = data
-      try? context.save()
+      do {
+        try context.save()
+      } catch {
+        logger.error("Failed to save updated system fields: \(error)")
+      }
     }
   }
 
@@ -170,13 +201,17 @@ final class ProfileIndexSyncHandler: Sendable {
   /// must be cleared so the next upload creates a fresh record.
   func clearEncodedSystemFields(_ recordID: CKRecord.ID) {
     guard let profileId = UUID(uuidString: recordID.recordName) else { return }
-    let context = ModelContext(modelContainer)
+    let context = mainContext
     let descriptor = FetchDescriptor<ProfileRecord>(
       predicate: #Predicate { $0.id == profileId }
     )
-    if let record = try? context.fetch(descriptor).first {
+    if let record = fetchOrLog(descriptor, context: context).first {
       record.encodedSystemFields = nil
-      try? context.save()
+      do {
+        try context.save()
+      } catch {
+        logger.error("Failed to save cleared system fields for record: \(error)")
+      }
     }
   }
 
@@ -187,17 +222,19 @@ final class ProfileIndexSyncHandler: Sendable {
   /// and handles conflict/unknownItem system fields updates.
   /// Returns classified failures for the coordinator to re-queue.
   func handleSentRecordZoneChanges(
-    _ sentChanges: CKSyncEngine.Event.SentRecordZoneChanges
+    savedRecords: [CKRecord],
+    failedSaves: [CKSyncEngine.Event.SentRecordZoneChanges.FailedRecordSave],
+    failedDeletes: [(CKRecord.ID, CKError)]
   ) -> SyncErrorRecovery.ClassifiedFailures {
     // Update system fields on model records after successful upload.
-    if !sentChanges.savedRecords.isEmpty {
-      let context = ModelContext(modelContainer)
-      for saved in sentChanges.savedRecords {
+    if !savedRecords.isEmpty {
+      let context = mainContext
+      for saved in savedRecords {
         guard let profileId = UUID(uuidString: saved.recordID.recordName) else { continue }
         let descriptor = FetchDescriptor<ProfileRecord>(
           predicate: #Predicate { $0.id == profileId }
         )
-        if let record = try? context.fetch(descriptor).first {
+        if let record = fetchOrLog(descriptor, context: context).first {
           record.encodedSystemFields = saved.encodedSystemFields
         }
       }
@@ -209,17 +246,20 @@ final class ProfileIndexSyncHandler: Sendable {
     }
 
     // Classify failures
-    let failures = SyncErrorRecovery.classify(sentChanges, logger: logger)
+    let failures = SyncErrorRecovery.classify(
+      failedSaves: failedSaves,
+      failedDeletes: failedDeletes,
+      logger: logger)
 
     // Update system fields from server records on conflict, clear on unknownItem
     if !failures.conflicts.isEmpty || !failures.unknownItems.isEmpty {
-      let context = ModelContext(modelContainer)
+      let context = mainContext
       for (_, serverRecord) in failures.conflicts {
         guard let profileId = UUID(uuidString: serverRecord.recordID.recordName) else { continue }
         let descriptor = FetchDescriptor<ProfileRecord>(
           predicate: #Predicate { $0.id == profileId }
         )
-        if let record = try? context.fetch(descriptor).first {
+        if let record = fetchOrLog(descriptor, context: context).first {
           record.encodedSystemFields = serverRecord.encodedSystemFields
         }
       }
@@ -228,7 +268,7 @@ final class ProfileIndexSyncHandler: Sendable {
         let descriptor = FetchDescriptor<ProfileRecord>(
           predicate: #Predicate { $0.id == profileId }
         )
-        if let record = try? context.fetch(descriptor).first {
+        if let record = fetchOrLog(descriptor, context: context).first {
           record.encodedSystemFields = nil
         }
       }

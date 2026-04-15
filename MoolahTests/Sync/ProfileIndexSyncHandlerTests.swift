@@ -32,7 +32,7 @@ struct ProfileIndexSyncHandlerTests {
     ckRecord["financialYearStartMonth"] = 7 as CKRecordValue
     ckRecord["createdAt"] = Date() as CKRecordValue
 
-    handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
+    _ = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
     let context = ModelContext(container)
     let records = try context.fetch(
@@ -67,7 +67,7 @@ struct ProfileIndexSyncHandlerTests {
     ckRecord["financialYearStartMonth"] = 1 as CKRecordValue
     ckRecord["createdAt"] = Date() as CKRecordValue
 
-    handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
+    _ = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
     let freshContext = ModelContext(container)
     let records = try freshContext.fetch(
@@ -93,7 +93,7 @@ struct ProfileIndexSyncHandlerTests {
     try context.save()
 
     let recordID = CKRecord.ID(recordName: profileId.uuidString, zoneID: handler.zoneID)
-    handler.applyRemoteChanges(saved: [], deleted: [recordID])
+    _ = handler.applyRemoteChanges(saved: [], deleted: [recordID])
 
     let freshContext = ModelContext(container)
     let records = try freshContext.fetch(
@@ -111,7 +111,7 @@ struct ProfileIndexSyncHandlerTests {
     )
     ckRecord["label"] = "Ignored" as CKRecordValue
 
-    handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
+    _ = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
     let context = ModelContext(container)
     let records = try context.fetch(FetchDescriptor<ProfileRecord>())
@@ -203,7 +203,7 @@ struct ProfileIndexSyncHandlerTests {
     originalCK["createdAt"] = Date() as CKRecordValue
 
     // Apply remote changes to store system fields
-    handler.applyRemoteChanges(saved: [originalCK], deleted: [])
+    _ = handler.applyRemoteChanges(saved: [originalCK], deleted: [])
 
     let context = ModelContext(container)
     let records = try context.fetch(
@@ -258,7 +258,7 @@ struct ProfileIndexSyncHandlerTests {
     ckRecord["financialYearStartMonth"] = 7 as CKRecordValue
     ckRecord["createdAt"] = Date() as CKRecordValue
 
-    handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
+    _ = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
     // Verify system fields are set
     let preContext = ModelContext(container)

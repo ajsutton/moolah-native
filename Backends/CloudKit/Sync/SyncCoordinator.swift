@@ -118,6 +118,10 @@ final class SyncCoordinator: Sendable {
   /// True while CKSyncEngine is fetching changes (between willFetchChanges and didFetchChanges).
   private(set) var isFetchingChanges = false
 
+  /// True when iCloud storage is full and sync uploads are failing.
+  /// Cleared when a send cycle completes without quota errors.
+  private(set) var isQuotaExceeded = false
+
   /// Record types accumulated per profile during a fetch session.
   private var fetchSessionChangedTypes: [UUID: Set<String>] = [:]
 
@@ -135,6 +139,9 @@ final class SyncCoordinator: Sendable {
 
   /// The zone setup task (creates profile-index zone on start).
   private var zoneSetupTask: Task<Void, Never>?
+
+  /// Task for coalescing re-fetch requests after save failures.
+  private var refetchTask: Task<Void, Never>?
 
   // MARK: - Init
 
@@ -203,6 +210,8 @@ final class SyncCoordinator: Sendable {
   func stop() {
     zoneSetupTask?.cancel()
     zoneSetupTask = nil
+    refetchTask?.cancel()
+    refetchTask = nil
     for (_, task) in zoneCreationTasks {
       task.cancel()
     }
@@ -210,6 +219,7 @@ final class SyncCoordinator: Sendable {
     syncEngine = nil
     isRunning = false
     isFetchingChanges = false
+    isQuotaExceeded = false
     logger.info("Stopped unified sync coordinator")
   }
 
@@ -249,6 +259,17 @@ final class SyncCoordinator: Sendable {
       try await syncEngine.fetchChanges()
     } catch {
       logger.error("Failed to fetch changes: \(error)")
+    }
+  }
+
+  /// Schedules a re-fetch after a 5-second delay. Multiple calls coalesce into one re-fetch.
+  private func scheduleRefetch() {
+    refetchTask?.cancel()
+    refetchTask = Task {
+      try? await Task.sleep(for: .seconds(5))
+      guard !Task.isCancelled else { return }
+      self.logger.info("Re-fetching changes after save failure")
+      await self.fetchChanges()
     }
   }
 
@@ -566,13 +587,19 @@ final class SyncCoordinator: Sendable {
       case .profileIndex:
         let deletedIDs = deleted.map(\.0)
         // Index upsert is fast (few records), run off-main
-        profileIndexHandler.applyRemoteChanges(saved: saved, deleted: deletedIDs)
-        await MainActor.run {
-          if isFetchingChanges {
-            fetchSessionIndexChanged = true
-          } else {
-            notifyIndexObservers()
+        let indexResult = profileIndexHandler.applyRemoteChanges(saved: saved, deleted: deletedIDs)
+        switch indexResult {
+        case .success:
+          await MainActor.run {
+            if isFetchingChanges {
+              fetchSessionIndexChanged = true
+            } else {
+              notifyIndexObservers()
+            }
           }
+        case .saveFailed(let errorDescription):
+          logger.error("Profile index save failed, scheduling re-fetch: \(errorDescription)")
+          await scheduleRefetch()
         }
 
       case .profileData(let profileId):
@@ -594,19 +621,26 @@ final class SyncCoordinator: Sendable {
         }
 
         // Heavy upsert/delete/save runs off-main via nonisolated method
-        let changedTypes = handler.applyRemoteChanges(
+        let result = handler.applyRemoteChanges(
           saved: saved, deleted: deleted, preExtractedSystemFields: zonePreExtracted)
 
         // Notify observers on main — read isFetchingChanges live to avoid
         // stale snapshot if stop() was called during applyRemoteChanges
-        if !changedTypes.isEmpty {
-          await MainActor.run {
-            if isFetchingChanges {
-              accumulateFetchSessionChanges(for: profileId, changedTypes: changedTypes)
-            } else {
-              notifyObservers(for: profileId, changedTypes: changedTypes)
+        switch result {
+        case .success(let changedTypes):
+          if !changedTypes.isEmpty {
+            await MainActor.run {
+              if isFetchingChanges {
+                accumulateFetchSessionChanges(for: profileId, changedTypes: changedTypes)
+              } else {
+                notifyObservers(for: profileId, changedTypes: changedTypes)
+              }
             }
           }
+        case .saveFailed(let errorDescription):
+          logger.error(
+            "Profile data save failed for \(profileId), scheduling re-fetch: \(errorDescription)")
+          await scheduleRefetch()
         }
 
       case .unknown:
@@ -664,16 +698,15 @@ final class SyncCoordinator: Sendable {
       .union(failedDeletesByZone.keys)
 
     for zoneID in allZones {
-      // Build a per-zone sentChanges-like structure by passing the full event
-      // to the handler — the handlers already handle filtering internally.
       let zoneType = Self.parseZone(zoneID)
-
-      // Create a filtered sentChanges for this zone
       let failures: SyncErrorRecovery.ClassifiedFailures
 
       switch zoneType {
       case .profileIndex:
-        failures = profileIndexHandler.handleSentRecordZoneChanges(sentChanges)
+        failures = profileIndexHandler.handleSentRecordZoneChanges(
+          savedRecords: savedByZone[zoneID] ?? [],
+          failedSaves: failedSavesByZone[zoneID] ?? [],
+          failedDeletes: failedDeletesByZone[zoneID] ?? [])
 
       case .profileData(let profileId):
         guard let handler = try? handlerForProfileZone(profileId: profileId, zoneID: zoneID)
@@ -681,7 +714,10 @@ final class SyncCoordinator: Sendable {
           logger.error("Failed to get handler for sent changes, profile \(profileId)")
           continue
         }
-        failures = handler.handleSentRecordZoneChanges(sentChanges)
+        failures = handler.handleSentRecordZoneChanges(
+          savedRecords: savedByZone[zoneID] ?? [],
+          failedSaves: failedSavesByZone[zoneID] ?? [],
+          failedDeletes: failedDeletesByZone[zoneID] ?? [])
 
       case .unknown:
         logger.warning("Sent changes for unknown zone: \(zoneID.zoneName)")
@@ -699,6 +735,15 @@ final class SyncCoordinator: Sendable {
         pendingChanges += zoneNotFoundDeletes.map { .deleteRecord($0) }
         ensureProfileZone(zoneID, pendingChanges: pendingChanges)
       }
+    }
+
+    // Track quota exceeded state across all zones in this send cycle
+    let hasQuotaErrors = sentChanges.failedRecordSaves.contains { $0.error.code == .quotaExceeded }
+    if hasQuotaErrors {
+      isQuotaExceeded = true
+    } else if !sentChanges.failedRecordSaves.isEmpty || !sentChanges.savedRecords.isEmpty {
+      // Only clear if we actually processed records (not an empty event)
+      isQuotaExceeded = false
     }
   }
 }

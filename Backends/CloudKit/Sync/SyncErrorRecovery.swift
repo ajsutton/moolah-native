@@ -18,18 +18,21 @@ enum SyncErrorRecovery {
     var conflicts: [(recordID: CKRecord.ID, serverRecord: CKRecord)] = []
     /// Record was deleted on server — caller should clear system fields, then re-queue.
     var unknownItems: [(recordID: CKRecord.ID, recordType: String)] = []
-    /// All other re-queueable failures (quotaExceeded, limitExceeded, unexpected errors).
+    /// Records that failed because the user's iCloud quota is exceeded.
+    var quotaExceeded: [CKRecord.ID] = []
+    /// All other re-queueable failures (limitExceeded, unexpected errors).
     var requeue: [CKRecord.ID] = []
   }
 
   /// Classifies all failed saves and deletes from a sent-changes event.
   static func classify(
-    _ sentChanges: CKSyncEngine.Event.SentRecordZoneChanges,
+    failedSaves: [CKSyncEngine.Event.SentRecordZoneChanges.FailedRecordSave],
+    failedDeletes: [(CKRecord.ID, CKError)],
     logger: Logger
   ) -> ClassifiedFailures {
     var result = ClassifiedFailures()
 
-    for failure in sentChanges.failedRecordSaves {
+    for failure in failedSaves {
       let recordID = failure.record.recordID
 
       switch failure.error.code {
@@ -52,7 +55,7 @@ enum SyncErrorRecovery {
       case .quotaExceeded:
         logger.error(
           "iCloud quota exceeded — sync paused for record \(recordID.recordName)")
-        result.requeue.append(recordID)
+        result.quotaExceeded.append(recordID)
 
       case .limitExceeded:
         result.requeue.append(recordID)
@@ -68,7 +71,7 @@ enum SyncErrorRecovery {
       }
     }
 
-    for (recordID, error) in sentChanges.failedRecordDeletes {
+    for (recordID, error) in failedDeletes {
       if error.code == .zoneNotFound || error.code == .userDeletedZone {
         result.zoneNotFoundDeletes.append(recordID)
       } else {
@@ -95,6 +98,9 @@ enum SyncErrorRecovery {
       pendingSaves.append(.saveRecord(recordID))
     }
     for recordID in failures.requeue {
+      pendingSaves.append(.saveRecord(recordID))
+    }
+    for recordID in failures.quotaExceeded {
       pendingSaves.append(.saveRecord(recordID))
     }
     if !pendingSaves.isEmpty {

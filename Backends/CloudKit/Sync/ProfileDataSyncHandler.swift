@@ -4,6 +4,14 @@ import OSLog
 import SwiftData
 import os
 
+/// Result of applying remote changes from CKSyncEngine.
+enum ApplyResult: Sendable {
+  /// Changes saved successfully. Contains the set of changed record types.
+  case success(changedTypes: Set<String>)
+  /// context.save() failed. The coordinator should schedule a re-fetch.
+  case saveFailed(String)
+}
+
 /// Stateless batch processing logic for a single profile's data zone.
 /// Contains all data transformation, upsert, deletion, and record-building
 /// logic with no CKSyncEngine dependency.
@@ -31,12 +39,11 @@ final class ProfileDataSyncHandler: Sendable {
   /// Applies remote changes (inserts/updates/deletions) to the local SwiftData store.
   /// Creates a fresh ModelContext per call for isolation.
   /// Returns the set of changed record type strings.
-  @discardableResult
   nonisolated func applyRemoteChanges(
     saved: [CKRecord],
     deleted: [(CKRecord.ID, String)],
     preExtractedSystemFields: [(String, Data)]? = nil
-  ) -> Set<String> {
+  ) -> ApplyResult {
     let batchStart = ContinuousClock.now
 
     let signpostID = OSSignpostID(log: Signposts.sync)
@@ -77,7 +84,7 @@ final class ProfileDataSyncHandler: Sendable {
     Self.applyBatchDeletions(deleted, context: context)
     os_signpost(.end, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID)
 
-    var changedTypes = Set<String>()
+    let changedTypes: Set<String>
     var saveDuration: Duration = .zero
     do {
       os_signpost(.begin, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
@@ -89,6 +96,7 @@ final class ProfileDataSyncHandler: Sendable {
     } catch {
       os_signpost(.end, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
       logger.error("Failed to save remote changes: \(error)")
+      return .saveFailed(error.localizedDescription)
     }
 
     // Log batch performance
@@ -105,7 +113,7 @@ final class ProfileDataSyncHandler: Sendable {
         """)
     }
 
-    return changedTypes
+    return .success(changedTypes: changedTypes)
   }
 
   // MARK: - Building CKRecords
@@ -130,6 +138,19 @@ final class ProfileDataSyncHandler: Sendable {
 
   // MARK: - Batch Record Lookup
 
+  /// Fetches records using the given descriptor, logging errors instead of silently discarding them.
+  private func fetchOrLog<T: PersistentModel>(
+    _ descriptor: FetchDescriptor<T>,
+    context: ModelContext
+  ) -> [T] {
+    do {
+      return try context.fetch(descriptor)
+    } catch {
+      logger.error("SwiftData fetch failed for \(T.self): \(error)")
+      return []
+    }
+  }
+
   /// Looks up records by UUID for a batch of pending changes.
   /// Uses IN-predicate fetches per record type, pruning the remaining set after each type.
   func buildBatchRecordLookup(for uuids: Set<UUID>) -> [UUID: CKRecord] {
@@ -139,10 +160,9 @@ final class ProfileDataSyncHandler: Sendable {
 
     // Check most common types first (transactions and legs make up the majority)
     let ids = Array(remaining)
-    let transactions =
-      (try? context.fetch(
-        FetchDescriptor<TransactionRecord>(predicate: #Predicate { ids.contains($0.id) })
-      )) ?? []
+    let transactions = fetchOrLog(
+      FetchDescriptor<TransactionRecord>(predicate: #Predicate { ids.contains($0.id) }),
+      context: context)
     for r in transactions {
       lookup[r.id] = buildCKRecord(for: r)
       remaining.remove(r.id)
@@ -150,10 +170,9 @@ final class ProfileDataSyncHandler: Sendable {
 
     if !remaining.isEmpty {
       let rIds = Array(remaining)
-      let legs =
-        (try? context.fetch(
-          FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { rIds.contains($0.id) })
-        )) ?? []
+      let legs = fetchOrLog(
+        FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { rIds.contains($0.id) }),
+        context: context)
       for r in legs {
         lookup[r.id] = buildCKRecord(for: r)
         remaining.remove(r.id)
@@ -162,10 +181,9 @@ final class ProfileDataSyncHandler: Sendable {
 
     if !remaining.isEmpty {
       let rIds = Array(remaining)
-      let investmentValues =
-        (try? context.fetch(
-          FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { rIds.contains($0.id) })
-        )) ?? []
+      let investmentValues = fetchOrLog(
+        FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { rIds.contains($0.id) }),
+        context: context)
       for r in investmentValues {
         lookup[r.id] = buildCKRecord(for: r)
         remaining.remove(r.id)
@@ -174,10 +192,9 @@ final class ProfileDataSyncHandler: Sendable {
 
     if !remaining.isEmpty {
       let rIds = Array(remaining)
-      let accounts =
-        (try? context.fetch(
-          FetchDescriptor<AccountRecord>(predicate: #Predicate { rIds.contains($0.id) })
-        )) ?? []
+      let accounts = fetchOrLog(
+        FetchDescriptor<AccountRecord>(predicate: #Predicate { rIds.contains($0.id) }),
+        context: context)
       for r in accounts {
         lookup[r.id] = buildCKRecord(for: r)
         remaining.remove(r.id)
@@ -186,10 +203,9 @@ final class ProfileDataSyncHandler: Sendable {
 
     if !remaining.isEmpty {
       let rIds = Array(remaining)
-      let categories =
-        (try? context.fetch(
-          FetchDescriptor<CategoryRecord>(predicate: #Predicate { rIds.contains($0.id) })
-        )) ?? []
+      let categories = fetchOrLog(
+        FetchDescriptor<CategoryRecord>(predicate: #Predicate { rIds.contains($0.id) }),
+        context: context)
       for r in categories {
         lookup[r.id] = buildCKRecord(for: r)
         remaining.remove(r.id)
@@ -198,10 +214,9 @@ final class ProfileDataSyncHandler: Sendable {
 
     if !remaining.isEmpty {
       let rIds = Array(remaining)
-      let earmarks =
-        (try? context.fetch(
-          FetchDescriptor<EarmarkRecord>(predicate: #Predicate { rIds.contains($0.id) })
-        )) ?? []
+      let earmarks = fetchOrLog(
+        FetchDescriptor<EarmarkRecord>(predicate: #Predicate { rIds.contains($0.id) }),
+        context: context)
       for r in earmarks {
         lookup[r.id] = buildCKRecord(for: r)
         remaining.remove(r.id)
@@ -210,10 +225,9 @@ final class ProfileDataSyncHandler: Sendable {
 
     if !remaining.isEmpty {
       let rIds = Array(remaining)
-      let budgetItems =
-        (try? context.fetch(
-          FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { rIds.contains($0.id) })
-        )) ?? []
+      let budgetItems = fetchOrLog(
+        FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { rIds.contains($0.id) }),
+        context: context)
       for r in budgetItems {
         lookup[r.id] = buildCKRecord(for: r)
         remaining.remove(r.id)
@@ -292,21 +306,19 @@ final class ProfileDataSyncHandler: Sendable {
 
     func collectIDs<T: PersistentModel>(_ type: T.Type, extract: (T) -> UUID) {
       let context = ModelContext(modelContainer)
-      if let records = try? context.fetch(FetchDescriptor<T>()) {
-        for r in records {
-          let id = CKRecord.ID(recordName: extract(r).uuidString, zoneID: zoneID)
-          recordIDs.append(id)
-        }
+      let records = fetchOrLog(FetchDescriptor<T>(), context: context)
+      for r in records {
+        let id = CKRecord.ID(recordName: extract(r).uuidString, zoneID: zoneID)
+        recordIDs.append(id)
       }
     }
 
     func collectStringIDs<T: PersistentModel>(_ type: T.Type, extract: (T) -> String) {
       let context = ModelContext(modelContainer)
-      if let records = try? context.fetch(FetchDescriptor<T>()) {
-        for r in records {
-          let id = CKRecord.ID(recordName: extract(r), zoneID: zoneID)
-          recordIDs.append(id)
-        }
+      let records = fetchOrLog(FetchDescriptor<T>(), context: context)
+      for r in records {
+        let id = CKRecord.ID(recordName: extract(r), zoneID: zoneID)
+        recordIDs.append(id)
       }
     }
 
@@ -343,10 +355,9 @@ final class ProfileDataSyncHandler: Sendable {
     let context = ModelContext(modelContainer)
 
     func deleteAll<T: PersistentModel>(_ type: T.Type) {
-      if let records = try? context.fetch(FetchDescriptor<T>()) {
-        for record in records {
-          context.delete(record)
-        }
+      let records = fetchOrLog(FetchDescriptor<T>(), context: context)
+      for record in records {
+        context.delete(record)
       }
     }
 
@@ -377,10 +388,9 @@ final class ProfileDataSyncHandler: Sendable {
     let context = ModelContext(modelContainer)
 
     func clearAll<T: PersistentModel & SystemFieldsCacheable>(_ type: T.Type) {
-      if let records = try? context.fetch(FetchDescriptor<T>()) {
-        for record in records {
-          record.encodedSystemFields = nil
-        }
+      let records = fetchOrLog(FetchDescriptor<T>(), context: context)
+      for record in records {
+        record.encodedSystemFields = nil
       }
     }
 
@@ -407,44 +417,51 @@ final class ProfileDataSyncHandler: Sendable {
   ) {
     switch recordType {
     case AccountRecord.recordType:
-      if let record = try? context.fetch(
-        FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == id })
+      if let record = fetchOrLog(
+        FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
       ).first {
         record.encodedSystemFields = data
       }
     case TransactionRecord.recordType:
-      if let record = try? context.fetch(
-        FetchDescriptor<TransactionRecord>(predicate: #Predicate { $0.id == id })
+      if let record = fetchOrLog(
+        FetchDescriptor<TransactionRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
       ).first {
         record.encodedSystemFields = data
       }
     case TransactionLegRecord.recordType:
-      if let record = try? context.fetch(
-        FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { $0.id == id })
+      if let record = fetchOrLog(
+        FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
       ).first {
         record.encodedSystemFields = data
       }
     case CategoryRecord.recordType:
-      if let record = try? context.fetch(
-        FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.id == id })
+      if let record = fetchOrLog(
+        FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
       ).first {
         record.encodedSystemFields = data
       }
     case EarmarkRecord.recordType:
-      if let record = try? context.fetch(
-        FetchDescriptor<EarmarkRecord>(predicate: #Predicate { $0.id == id })
+      if let record = fetchOrLog(
+        FetchDescriptor<EarmarkRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
       ).first {
         record.encodedSystemFields = data
       }
     case EarmarkBudgetItemRecord.recordType:
-      if let record = try? context.fetch(
-        FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { $0.id == id })
+      if let record = fetchOrLog(
+        FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
       ).first {
         record.encodedSystemFields = data
       }
     case InvestmentValueRecord.recordType:
-      if let record = try? context.fetch(
-        FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { $0.id == id })
+      if let record = fetchOrLog(
+        FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
       ).first {
         record.encodedSystemFields = data
       }
@@ -457,8 +474,9 @@ final class ProfileDataSyncHandler: Sendable {
   nonisolated static func updateInstrumentSystemFields(
     _ id: String, data: Data, context: ModelContext
   ) {
-    if let record = try? context.fetch(
-      FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == id })
+    if let record = fetchOrLog(
+      FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == id }),
+      context: context
     ).first {
       record.encodedSystemFields = data
     }
@@ -470,44 +488,51 @@ final class ProfileDataSyncHandler: Sendable {
   ) {
     switch recordType {
     case AccountRecord.recordType:
-      if let record = try? context.fetch(
-        FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == id })
+      if let record = fetchOrLog(
+        FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
       ).first {
         record.encodedSystemFields = nil
       }
     case TransactionRecord.recordType:
-      if let record = try? context.fetch(
-        FetchDescriptor<TransactionRecord>(predicate: #Predicate { $0.id == id })
+      if let record = fetchOrLog(
+        FetchDescriptor<TransactionRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
       ).first {
         record.encodedSystemFields = nil
       }
     case TransactionLegRecord.recordType:
-      if let record = try? context.fetch(
-        FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { $0.id == id })
+      if let record = fetchOrLog(
+        FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
       ).first {
         record.encodedSystemFields = nil
       }
     case CategoryRecord.recordType:
-      if let record = try? context.fetch(
-        FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.id == id })
+      if let record = fetchOrLog(
+        FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
       ).first {
         record.encodedSystemFields = nil
       }
     case EarmarkRecord.recordType:
-      if let record = try? context.fetch(
-        FetchDescriptor<EarmarkRecord>(predicate: #Predicate { $0.id == id })
+      if let record = fetchOrLog(
+        FetchDescriptor<EarmarkRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
       ).first {
         record.encodedSystemFields = nil
       }
     case EarmarkBudgetItemRecord.recordType:
-      if let record = try? context.fetch(
-        FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { $0.id == id })
+      if let record = fetchOrLog(
+        FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
       ).first {
         record.encodedSystemFields = nil
       }
     case InvestmentValueRecord.recordType:
-      if let record = try? context.fetch(
-        FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { $0.id == id })
+      if let record = fetchOrLog(
+        FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
       ).first {
         record.encodedSystemFields = nil
       }
@@ -520,8 +545,9 @@ final class ProfileDataSyncHandler: Sendable {
   nonisolated static func clearInstrumentSystemFields(
     _ id: String, context: ModelContext
   ) {
-    if let record = try? context.fetch(
-      FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == id })
+    if let record = fetchOrLog(
+      FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == id }),
+      context: context
     ).first {
       record.encodedSystemFields = nil
     }
@@ -534,12 +560,14 @@ final class ProfileDataSyncHandler: Sendable {
   /// and handles conflict/unknownItem system fields updates.
   /// Returns classified failures for the coordinator to re-queue.
   func handleSentRecordZoneChanges(
-    _ sentChanges: CKSyncEngine.Event.SentRecordZoneChanges
+    savedRecords: [CKRecord],
+    failedSaves: [CKSyncEngine.Event.SentRecordZoneChanges.FailedRecordSave],
+    failedDeletes: [(CKRecord.ID, CKError)]
   ) -> SyncErrorRecovery.ClassifiedFailures {
     // Update system fields on model records after successful upload.
-    if !sentChanges.savedRecords.isEmpty {
+    if !savedRecords.isEmpty {
       let context = ModelContext(modelContainer)
-      for saved in sentChanges.savedRecords {
+      for saved in savedRecords {
         let recordName = saved.recordID.recordName
         if let uuid = UUID(uuidString: recordName) {
           Self.updateEncodedSystemFields(
@@ -558,7 +586,10 @@ final class ProfileDataSyncHandler: Sendable {
     }
 
     // Classify failures
-    let failures = SyncErrorRecovery.classify(sentChanges, logger: logger)
+    let failures = SyncErrorRecovery.classify(
+      failedSaves: failedSaves,
+      failedDeletes: failedDeletes,
+      logger: logger)
 
     // Handle system fields updates for conflicts and unknownItems
     if !failures.conflicts.isEmpty || !failures.unknownItems.isEmpty {
@@ -597,6 +628,19 @@ final class ProfileDataSyncHandler: Sendable {
 
   private nonisolated static let batchLogger = Logger(
     subsystem: "com.moolah.app", category: "ProfileDataSyncHandler")
+
+  /// Static version of fetchOrLog for use in nonisolated static batch methods.
+  private nonisolated static func fetchOrLog<T: PersistentModel>(
+    _ descriptor: FetchDescriptor<T>,
+    context: ModelContext
+  ) -> [T] {
+    do {
+      return try context.fetch(descriptor)
+    } catch {
+      batchLogger.error("SwiftData fetch failed for \(T.self): \(error)")
+      return []
+    }
+  }
 
   /// Groups saved records by type and batch-upserts each group.
   nonisolated static func applyBatchSaves(
@@ -647,46 +691,39 @@ final class ProfileDataSyncHandler: Sendable {
     for (recordType, ids) in uuidGrouped {
       switch recordType {
       case AccountRecord.recordType:
-        let records =
-          (try? context.fetch(
-            FetchDescriptor<AccountRecord>(predicate: #Predicate { ids.contains($0.id) })
-          )) ?? []
+        let records = fetchOrLog(
+          FetchDescriptor<AccountRecord>(predicate: #Predicate { ids.contains($0.id) }),
+          context: context)
         for record in records { context.delete(record) }
       case TransactionRecord.recordType:
-        let records =
-          (try? context.fetch(
-            FetchDescriptor<TransactionRecord>(predicate: #Predicate { ids.contains($0.id) })
-          )) ?? []
+        let records = fetchOrLog(
+          FetchDescriptor<TransactionRecord>(predicate: #Predicate { ids.contains($0.id) }),
+          context: context)
         for record in records { context.delete(record) }
       case TransactionLegRecord.recordType:
-        let records =
-          (try? context.fetch(
-            FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { ids.contains($0.id) })
-          )) ?? []
+        let records = fetchOrLog(
+          FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { ids.contains($0.id) }),
+          context: context)
         for record in records { context.delete(record) }
       case CategoryRecord.recordType:
-        let records =
-          (try? context.fetch(
-            FetchDescriptor<CategoryRecord>(predicate: #Predicate { ids.contains($0.id) })
-          )) ?? []
+        let records = fetchOrLog(
+          FetchDescriptor<CategoryRecord>(predicate: #Predicate { ids.contains($0.id) }),
+          context: context)
         for record in records { context.delete(record) }
       case EarmarkRecord.recordType:
-        let records =
-          (try? context.fetch(
-            FetchDescriptor<EarmarkRecord>(predicate: #Predicate { ids.contains($0.id) })
-          )) ?? []
+        let records = fetchOrLog(
+          FetchDescriptor<EarmarkRecord>(predicate: #Predicate { ids.contains($0.id) }),
+          context: context)
         for record in records { context.delete(record) }
       case EarmarkBudgetItemRecord.recordType:
-        let records =
-          (try? context.fetch(
-            FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { ids.contains($0.id) })
-          )) ?? []
+        let records = fetchOrLog(
+          FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { ids.contains($0.id) }),
+          context: context)
         for record in records { context.delete(record) }
       case InvestmentValueRecord.recordType:
-        let records =
-          (try? context.fetch(
-            FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { ids.contains($0.id) })
-          )) ?? []
+        let records = fetchOrLog(
+          FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { ids.contains($0.id) }),
+          context: context)
         for record in records { context.delete(record) }
       case ProfileRecord.recordType:
         break  // Handled by ProfileIndexSyncHandler
@@ -699,10 +736,9 @@ final class ProfileDataSyncHandler: Sendable {
     for (recordType, names) in stringGrouped {
       switch recordType {
       case InstrumentRecord.recordType:
-        let records =
-          (try? context.fetch(
-            FetchDescriptor<InstrumentRecord>(predicate: #Predicate { names.contains($0.id) })
-          )) ?? []
+        let records = fetchOrLog(
+          FetchDescriptor<InstrumentRecord>(predicate: #Predicate { names.contains($0.id) }),
+          context: context)
         for record in records { context.delete(record) }
       default:
         batchLogger.warning(
@@ -719,7 +755,7 @@ final class ProfileDataSyncHandler: Sendable {
     let pairs: [(String, CKRecord)] = ckRecords.map { ck in
       (ck.recordID.recordName, ck)
     }
-    let existing = (try? context.fetch(FetchDescriptor<InstrumentRecord>())) ?? []
+    let existing = fetchOrLog(FetchDescriptor<InstrumentRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -788,7 +824,7 @@ final class ProfileDataSyncHandler: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let existing = (try? context.fetch(FetchDescriptor<TransactionRecord>())) ?? []
+    let existing = fetchOrLog(FetchDescriptor<TransactionRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -815,7 +851,7 @@ final class ProfileDataSyncHandler: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let existing = (try? context.fetch(FetchDescriptor<TransactionLegRecord>())) ?? []
+    let existing = fetchOrLog(FetchDescriptor<TransactionLegRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -845,7 +881,7 @@ final class ProfileDataSyncHandler: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let existing = (try? context.fetch(FetchDescriptor<CategoryRecord>())) ?? []
+    let existing = fetchOrLog(FetchDescriptor<CategoryRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -869,7 +905,7 @@ final class ProfileDataSyncHandler: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let existing = (try? context.fetch(FetchDescriptor<EarmarkRecord>())) ?? []
+    let existing = fetchOrLog(FetchDescriptor<EarmarkRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -898,7 +934,7 @@ final class ProfileDataSyncHandler: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let existing = (try? context.fetch(FetchDescriptor<EarmarkBudgetItemRecord>())) ?? []
+    let existing = fetchOrLog(FetchDescriptor<EarmarkBudgetItemRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -924,7 +960,7 @@ final class ProfileDataSyncHandler: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let existing = (try? context.fetch(FetchDescriptor<InvestmentValueRecord>())) ?? []
+    let existing = fetchOrLog(FetchDescriptor<InvestmentValueRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -947,42 +983,42 @@ final class ProfileDataSyncHandler: Sendable {
 
   private func fetchAccount(id: UUID, context: ModelContext) -> AccountRecord? {
     let descriptor = FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == id })
-    return try? context.fetch(descriptor).first
+    return fetchOrLog(descriptor, context: context).first
   }
 
   private func fetchTransaction(id: UUID, context: ModelContext) -> TransactionRecord? {
     let descriptor = FetchDescriptor<TransactionRecord>(predicate: #Predicate { $0.id == id })
-    return try? context.fetch(descriptor).first
+    return fetchOrLog(descriptor, context: context).first
   }
 
   private func fetchCategory(id: UUID, context: ModelContext) -> CategoryRecord? {
     let descriptor = FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.id == id })
-    return try? context.fetch(descriptor).first
+    return fetchOrLog(descriptor, context: context).first
   }
 
   private func fetchEarmark(id: UUID, context: ModelContext) -> EarmarkRecord? {
     let descriptor = FetchDescriptor<EarmarkRecord>(predicate: #Predicate { $0.id == id })
-    return try? context.fetch(descriptor).first
+    return fetchOrLog(descriptor, context: context).first
   }
 
   private func fetchEarmarkBudgetItem(id: UUID, context: ModelContext) -> EarmarkBudgetItemRecord? {
     let descriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
       predicate: #Predicate { $0.id == id })
-    return try? context.fetch(descriptor).first
+    return fetchOrLog(descriptor, context: context).first
   }
 
   private func fetchInvestmentValue(id: UUID, context: ModelContext) -> InvestmentValueRecord? {
     let descriptor = FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { $0.id == id })
-    return try? context.fetch(descriptor).first
+    return fetchOrLog(descriptor, context: context).first
   }
 
   private func fetchInstrument(id: String, context: ModelContext) -> InstrumentRecord? {
     let descriptor = FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == id })
-    return try? context.fetch(descriptor).first
+    return fetchOrLog(descriptor, context: context).first
   }
 
   private func fetchTransactionLeg(id: UUID, context: ModelContext) -> TransactionLegRecord? {
     let descriptor = FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { $0.id == id })
-    return try? context.fetch(descriptor).first
+    return fetchOrLog(descriptor, context: context).first
   }
 }
