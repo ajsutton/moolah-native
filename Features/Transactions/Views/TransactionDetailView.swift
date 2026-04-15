@@ -528,7 +528,14 @@ struct TransactionDetailView: View {
       earmarks: Earmarks(from: [
         Earmark(name: "Holiday Fund")
       ]),
-      transactionStore: TransactionStore(repository: PreviewBackend.create().0.transactions),
+      transactionStore: {
+        let (backend, _) = PreviewBackend.create()
+        return TransactionStore(
+          repository: backend.transactions,
+          conversionService: backend.conversionService,
+          targetInstrument: .AUD
+        )
+      }(),
       onUpdate: { _ in },
       onDelete: { _ in }
     )

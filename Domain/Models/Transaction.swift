@@ -170,35 +170,81 @@ struct TransactionPage: Sendable {
   let priorBalance: InstrumentAmount
   let totalCount: Int?
 
-  /// Computes the running balance after each transaction.
+  /// Computes the running balance after each transaction, converting each leg
+  /// to the target instrument and computing a display amount per transaction.
   /// Transactions must be ordered newest-first (as returned by the repository).
   /// `priorBalance` is the account balance before the oldest transaction in the list.
   static func withRunningBalances(
     transactions: [Transaction],
-    priorBalance: InstrumentAmount
-  ) -> [TransactionWithBalance] {
-    // Walk oldest-to-newest accumulating the balance
+    priorBalance: InstrumentAmount,
+    accountId: UUID?,
+    targetInstrument: Instrument,
+    conversionService: InstrumentConversionService
+  ) async throws -> [TransactionWithBalance] {
     var balance = priorBalance
     var result: [TransactionWithBalance] = []
     result.reserveCapacity(transactions.count)
 
     for transaction in transactions.reversed() {
-      balance += transaction.primaryAmount
-      result.append(TransactionWithBalance(transaction: transaction, balance: balance))
+      var convertedLegs: [ConvertedTransactionLeg] = []
+      for leg in transaction.legs {
+        if leg.instrument == targetInstrument {
+          convertedLegs.append(ConvertedTransactionLeg(leg: leg, convertedAmount: leg.amount))
+        } else {
+          let converted = try await conversionService.convertAmount(
+            leg.amount, to: targetInstrument, on: transaction.date)
+          convertedLegs.append(ConvertedTransactionLeg(leg: leg, convertedAmount: converted))
+        }
+      }
+
+      let displayAmount: InstrumentAmount
+      if let accountId {
+        displayAmount =
+          convertedLegs
+          .filter { $0.leg.accountId == accountId }
+          .reduce(InstrumentAmount.zero(instrument: targetInstrument)) { $0 + $1.convertedAmount }
+      } else {
+        // No account context (scheduled view): use negative-quantity leg for transfers,
+        // otherwise sum all legs
+        let isTransfer = transaction.legs.contains { $0.type == .transfer }
+        if isTransfer {
+          let negativeLeg = convertedLegs.first { $0.leg.quantity < 0 }
+          displayAmount = negativeLeg?.convertedAmount ?? .zero(instrument: targetInstrument)
+        } else {
+          displayAmount =
+            convertedLegs
+            .reduce(InstrumentAmount.zero(instrument: targetInstrument)) { $0 + $1.convertedAmount }
+        }
+      }
+
+      balance += displayAmount
+      result.append(
+        TransactionWithBalance(
+          transaction: transaction,
+          convertedLegs: convertedLegs,
+          displayAmount: displayAmount,
+          balance: balance
+        ))
     }
 
-    // Reverse back to newest-first display order
     result.reverse()
     return result
   }
 }
 
-/// A transaction paired with the account balance after it was applied.
+/// A transaction paired with converted leg amounts and the account balance after it was applied.
 struct TransactionWithBalance: Sendable, Identifiable {
   let transaction: Transaction
+  let convertedLegs: [ConvertedTransactionLeg]
+  let displayAmount: InstrumentAmount
   let balance: InstrumentAmount
 
   var id: UUID { transaction.id }
+
+  /// Returns converted legs belonging to the given account.
+  func legs(forAccount accountId: UUID) -> [ConvertedTransactionLeg] {
+    convertedLegs.filter { $0.leg.accountId == accountId }
+  }
 }
 
 // MARK: - Recurrence Utilities

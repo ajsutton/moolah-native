@@ -187,7 +187,11 @@ private struct SimpleTransactionRow: View {
 
 #Preview {
   let (backend, _) = PreviewBackend.create()
-  let store = TransactionStore(repository: backend.transactions)
+  let store = TransactionStore(
+    repository: backend.transactions,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD
+  )
 
   UpcomingTransactionsCard(
     accounts: Accounts(from: []),

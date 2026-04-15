@@ -303,7 +303,11 @@ struct TransactionListView: View {
       balance: InstrumentAmount(quantity: 5000, instrument: .AUD)),
   ])
   let (backend, _) = PreviewBackend.create()
-  let store = TransactionStore(repository: backend.transactions)
+  let store = TransactionStore(
+    repository: backend.transactions,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD
+  )
 
   NavigationStack {
     TransactionListView(
