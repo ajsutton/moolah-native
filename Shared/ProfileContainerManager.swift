@@ -85,6 +85,25 @@ final class ProfileContainerManager {
     }
   }
 
+  /// Returns all known profile IDs from the index container.
+  func allProfileIds() -> [UUID] {
+    let context = ModelContext(indexContainer)
+    let records = (try? context.fetch(FetchDescriptor<ProfileRecord>())) ?? []
+    return records.map(\.id)
+  }
+
+  /// Deletes old per-engine sync state files from before the unified coordinator.
+  func deleteOldSyncStateFiles() {
+    let fm = FileManager.default
+    let appSupport = URL.applicationSupportDirectory
+    // Delete profile-index state file
+    try? fm.removeItem(at: appSupport.appending(path: "Moolah-v2-profile-index.syncstate"))
+    // Delete per-profile state files
+    for profileId in allProfileIds() {
+      try? fm.removeItem(at: appSupport.appending(path: "Moolah-\(profileId.uuidString).syncstate"))
+    }
+  }
+
   /// Creates a test-only manager with in-memory stores.
   static func forTesting() throws -> ProfileContainerManager {
     let indexSchema = Schema([ProfileRecord.self])
