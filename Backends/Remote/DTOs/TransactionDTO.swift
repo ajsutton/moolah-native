@@ -1,5 +1,12 @@
 import Foundation
 
+private func centsFromQuantity(_ quantity: Decimal) -> Int {
+  var centValue = quantity * 100
+  var rounded = Decimal()
+  NSDecimalRound(&rounded, &centValue, 0, .bankers)
+  return Int(truncating: rounded as NSDecimalNumber)
+}
+
 struct TransactionDTO: Codable {
   let id: ServerUUID
   let type: String
@@ -60,36 +67,49 @@ struct TransactionDTO: Codable {
     )
   }
 
-  static func fromDomain(_ transaction: Transaction) -> TransactionDTO {
-    let dateString = BackendDateFormatter.string(from: transaction.date)
-    let primaryLeg = transaction.legs.first
-    let transferLeg =
-      transaction.legs.count > 1
-      ? transaction.legs.first(where: { $0.accountId != primaryLeg?.accountId })
-      : nil
+  enum MappingError: Error, LocalizedError {
+    case complexTransactionNotSupported
 
-    // Convert quantity back to cents
-    let cents: Int
-    if let qty = primaryLeg?.quantity {
-      var centValue = qty * 100
-      var rounded = Decimal()
-      NSDecimalRound(&rounded, &centValue, 0, .bankers)
-      cents = Int(truncating: rounded as NSDecimalNumber)
-    } else {
-      cents = 0
+    var errorDescription: String? {
+      switch self {
+      case .complexTransactionNotSupported:
+        return
+          "Transaction has complex leg structure and cannot be represented in the flat DTO format"
+      }
     }
+  }
+
+  static func fromDomain(_ transaction: Transaction) throws -> TransactionDTO {
+    guard transaction.isSimple else {
+      throw MappingError.complexTransactionNotSupported
+    }
+
+    let dateString = BackendDateFormatter.string(from: transaction.date)
+
+    let sourceLeg: TransactionLeg?
+    let destinationLeg: TransactionLeg?
+
+    if transaction.legs.count == 2 {
+      sourceLeg = transaction.legs.first(where: { $0.quantity < 0 })
+      destinationLeg = transaction.legs.first(where: { $0.quantity >= 0 })
+    } else {
+      sourceLeg = transaction.legs.first
+      destinationLeg = nil
+    }
+
+    let cents = sourceLeg.map { centsFromQuantity($0.quantity) } ?? 0
 
     return TransactionDTO(
       id: ServerUUID(transaction.id),
-      type: transaction.type.rawValue,
+      type: (sourceLeg?.type ?? .expense).rawValue,
       date: dateString,
-      accountId: transaction.primaryAccountId.map(ServerUUID.init),
-      toAccountId: transferLeg?.accountId.map(ServerUUID.init),
+      accountId: sourceLeg?.accountId.map(ServerUUID.init),
+      toAccountId: destinationLeg?.accountId.map(ServerUUID.init),
       amount: cents,
       payee: transaction.payee,
       notes: transaction.notes,
-      categoryId: transaction.categoryId.map(ServerUUID.init),
-      earmark: transaction.earmarkId.map(ServerUUID.init),
+      categoryId: sourceLeg?.categoryId.map(ServerUUID.init),
+      earmark: sourceLeg?.earmarkId.map(ServerUUID.init),
       recurPeriod: transaction.recurPeriod?.rawValue,
       recurEvery: transaction.recurEvery
     )
@@ -117,35 +137,36 @@ struct CreateTransactionDTO: Codable {
   let recurPeriod: String?
   let recurEvery: Int?
 
-  static func fromDomain(_ transaction: Transaction) -> CreateTransactionDTO {
-    let dateString = BackendDateFormatter.string(from: transaction.date)
-    let primaryLeg = transaction.legs.first
-    let transferLeg =
-      transaction.legs.count > 1
-      ? transaction.legs.first(where: { $0.accountId != primaryLeg?.accountId })
-      : nil
-
-    // Convert quantity back to cents
-    let cents: Int
-    if let qty = primaryLeg?.quantity {
-      var centValue = qty * 100
-      var rounded = Decimal()
-      NSDecimalRound(&rounded, &centValue, 0, .bankers)
-      cents = Int(truncating: rounded as NSDecimalNumber)
-    } else {
-      cents = 0
+  static func fromDomain(_ transaction: Transaction) throws -> CreateTransactionDTO {
+    guard transaction.isSimple else {
+      throw TransactionDTO.MappingError.complexTransactionNotSupported
     }
 
+    let dateString = BackendDateFormatter.string(from: transaction.date)
+
+    let sourceLeg: TransactionLeg?
+    let destinationLeg: TransactionLeg?
+
+    if transaction.legs.count == 2 {
+      sourceLeg = transaction.legs.first(where: { $0.quantity < 0 })
+      destinationLeg = transaction.legs.first(where: { $0.quantity >= 0 })
+    } else {
+      sourceLeg = transaction.legs.first
+      destinationLeg = nil
+    }
+
+    let cents = sourceLeg.map { centsFromQuantity($0.quantity) } ?? 0
+
     return CreateTransactionDTO(
-      type: transaction.type.rawValue,
+      type: (sourceLeg?.type ?? .expense).rawValue,
       date: dateString,
-      accountId: transaction.primaryAccountId.map(ServerUUID.init),
-      toAccountId: transferLeg?.accountId.map(ServerUUID.init),
+      accountId: sourceLeg?.accountId.map(ServerUUID.init),
+      toAccountId: destinationLeg?.accountId.map(ServerUUID.init),
       amount: cents,
       payee: transaction.payee,
       notes: transaction.notes,
-      categoryId: transaction.categoryId.map(ServerUUID.init),
-      earmark: transaction.earmarkId.map(ServerUUID.init),
+      categoryId: sourceLeg?.categoryId.map(ServerUUID.init),
+      earmark: sourceLeg?.earmarkId.map(ServerUUID.init),
       recurPeriod: transaction.recurPeriod?.rawValue,
       recurEvery: transaction.recurEvery
     )
