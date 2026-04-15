@@ -5,6 +5,12 @@ import SwiftUI
 /// (e.g. a future CloudKit backend that authenticates implicitly via Apple ID).
 struct WelcomeView: View {
   @Environment(AuthStore.self) private var authStore
+  @Environment(ProfileStore.self) private var profileStore
+
+  #if os(iOS)
+    @Environment(ProfileSession.self) private var session
+    @State private var showManageProfiles = false
+  #endif
 
   var body: some View {
     VStack(spacing: 32) {
@@ -14,6 +20,12 @@ struct WelcomeView: View {
         Text(String(localized: "Personal finance, your way."))
           .foregroundStyle(.secondary)
       }
+
+      #if os(iOS)
+        if profileStore.profiles.count > 1 {
+          profilePicker
+        }
+      #endif
 
       if authStore.requiresSignIn {
         Button {
@@ -38,5 +50,46 @@ struct WelcomeView: View {
       }
     }
     .padding()
+    #if os(iOS)
+      .sheet(isPresented: $showManageProfiles) {
+        NavigationStack {
+          SettingsView(activeSession: session)
+          .environment(profileStore)
+          .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+              Button("Done") { showManageProfiles = false }
+            }
+          }
+        }
+      }
+    #endif
   }
+
+  #if os(iOS)
+    private var profilePicker: some View {
+      Menu {
+        ProfileMenuItems()
+
+        Divider()
+
+        Button(String(localized: "Manage Profiles...")) {
+          showManageProfiles = true
+        }
+      } label: {
+        HStack(spacing: 6) {
+          Image(systemName: "person.crop.circle")
+            .foregroundStyle(.secondary)
+          Text(profileStore.activeProfile?.label ?? "")
+            .font(.subheadline)
+          Image(systemName: "chevron.up.chevron.down")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.fill.tertiary, in: .capsule)
+      }
+      .accessibilityLabel("Switch profile")
+    }
+  #endif
 }

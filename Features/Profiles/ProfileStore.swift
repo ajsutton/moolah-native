@@ -19,6 +19,10 @@ final class ProfileStore {
   private(set) var isValidating = false
   private(set) var validationError: String?
 
+  /// True while the initial cloud profile load may still be retrying.
+  /// SwiftData with CloudKit may not have its store ready on the first fetch.
+  private(set) var isCloudLoadPending = false
+
   /// Called when a cloud profile is removed (locally or via remote sync).
   /// Used by SessionManager to tear down the corresponding ProfileSession.
   var onProfileRemoved: ((UUID) -> Void)?
@@ -61,6 +65,9 @@ final class ProfileStore {
     if containerManager != nil {
       loadCloudProfiles(isInitialLoad: true)
       scheduleRetryIfNeeded()
+    } else {
+      // No CloudKit — nothing pending
+      isCloudLoadPending = false
     }
   }
 
@@ -297,12 +304,17 @@ final class ProfileStore {
       !remoteProfiles.contains(where: { $0.id == activeProfileID })
     else { return }
 
+    isCloudLoadPending = true
     logger.debug("Cloud profiles empty on initial load, scheduling retry")
     Task { @MainActor [weak self] in
       try? await Task.sleep(for: .seconds(1))
-      guard let self, self.cloudProfiles.isEmpty else { return }
+      guard let self, self.cloudProfiles.isEmpty else {
+        self?.isCloudLoadPending = false
+        return
+      }
       self.logger.debug("Retrying cloud profile load")
       self.loadCloudProfiles()
+      self.isCloudLoadPending = false
     }
   }
 

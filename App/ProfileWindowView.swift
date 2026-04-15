@@ -9,6 +9,8 @@
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.openWindow) private var openWindow
 
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
       Group {
         if let profileID,
@@ -30,12 +32,14 @@
                 openWindow(value: first.id)
               }
             }
+        } else if profileStore.isCloudLoadPending {
+          ProgressView()
         } else {
-          ContentUnavailableView(
-            "Profile Not Found",
-            systemImage: "person.crop.circle.badge.xmark",
-            description: Text("This profile has been removed.")
-          )
+          // Profile is genuinely gone — close this window
+          Color.clear
+            .onAppear {
+              dismiss()
+            }
         }
       }
     }
