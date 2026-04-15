@@ -24,7 +24,19 @@ Moolah is optimized for the desktop experience, where users manage their finance
 
 ---
 
-## 2. Layout & Navigation
+## 2. Brand Identity
+
+Moolah has a brand guide at `guides/BRAND_GUIDE.md` that defines voice, tone, color palette, typography, logo usage, and approved marketing copy. When making UI decisions:
+
+- **Apple HIG is primary.** This is a native Mac/iOS app. It must look and feel like a first-class citizen of the platform. SF Pro for all UI text, system colors for semantic meaning, standard controls and navigation patterns. Never sacrifice native feel for brand expression.
+- **The brand guide is supplementary.** Reference it for: language and tone in user-facing strings (empty states, onboarding, error messages), the income-blue/expense-red/balance-gold color story when choosing accent treatments, and understanding the product's personality ("Solid money. Chill vibes.").
+- **Where they conflict, HIG wins.** For example: the brand guide specifies Poppins as the brand typeface, but the app uses SF Pro because that's the system font. The brand palette defines specific hex colors, but the app uses semantic system colors (`.green`, `.red`, `.secondary`) for automatic dark mode adaptation.
+
+See `guides/BRAND_GUIDE.md` for the full brand reference.
+
+---
+
+## 3. Layout & Navigation
 
 ### Navigation Structure
 ```
@@ -69,7 +81,7 @@ NavigationSplitView (macOS/iPad) or NavigationStack (iPhone)
 
 ---
 
-## 3. Typography
+## 4. Typography
 
 ### Font Hierarchy
 Use **SF Pro** (system default) for all text. **Never** override with custom fonts for financial data.
@@ -93,7 +105,7 @@ Use **SF Pro** (system default) for all text. **Never** override with custom fon
 
 ---
 
-## 4. Color & Theming
+## 5. Color & Theming
 
 ### Semantic Color System
 Moolah uses semantic colors to communicate financial meaning at a glance.
@@ -150,7 +162,7 @@ This matches the web app's `Math.max(0, -totalExpenses)` pattern. This conventio
 
 ---
 
-## 5. Components & Patterns
+## 6. Components & Patterns
 
 ### Lists
 
@@ -459,7 +471,7 @@ struct EarmarkDetailView: View {
 
 ---
 
-## 6. Data Visualization (Charts)
+## 7. Data Visualization (Charts)
 
 ### Swift Charts Integration
 Use **Swift Charts** for spending trends, budget progress, and balance history.
@@ -519,7 +531,7 @@ Gauge(value: spent, in: 0...budgeted) {
 
 ---
 
-## 7. Iconography
+## 8. Iconography
 
 ### SF Symbols Usage
 Moolah uses SF Symbols 6 for all icons. **Never** use custom bitmap icons.
@@ -564,7 +576,7 @@ Image(systemName: "chart.pie.fill")
 
 ---
 
-## 8. Accessibility
+## 9. Accessibility
 
 ### VoiceOver Support
 - Always provide `.accessibilityLabel()` for images and custom controls
@@ -617,7 +629,7 @@ var animation: Animation? {
 
 ---
 
-## 9. Implementation Checklist
+## 10. Implementation Checklist
 
 ### Before Building a New Screen
 - [ ] Choose the appropriate navigation pattern (split view vs. stack)
@@ -644,7 +656,7 @@ var animation: Animation? {
 
 ---
 
-## 10. Anti-Patterns (Avoid These)
+## 11. Anti-Patterns (Avoid These)
 
 ### Layout
 - ❌ Fixed pixel widths on text elements (breaks Dynamic Type)
@@ -670,7 +682,7 @@ var animation: Animation? {
 
 ---
 
-## 11. Resources
+## 12. Resources
 
 - [Apple Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/)
 - [SF Symbols App](https://developer.apple.com/sf-symbols/) (browse all symbols)
