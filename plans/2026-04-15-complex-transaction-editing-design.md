@@ -74,7 +74,7 @@ Notes and Recurrence remain in their standard positions after the main content, 
 
 When "Custom" is selected, the details/account/category sections from the simple form are replaced with repeating per-leg sections. Each sub-transaction renders as its own `Form` `Section` with no visible header label (flat, unnumbered). Sections are visually separated by the standard Form section spacing. Fields within each section:
 
-- **Type** — Picker (income/expense/transfer) per leg. Transfer is selectable per-leg (the server already supports transfer legs within complex transactions).
+- **Type** — Picker (income/expense/transfer) per leg. Transfer is selectable per-leg (the server already supports transfer legs within complex transactions). When type is transfer, an additional direction picker ("Outflow"/"Inflow") appears to set the sign — outflow = money leaving (negative), inflow = money arriving (positive).
 - **Account** — Picker from sorted accounts
 - **Amount** — TextField + instrument label (derived from selected account). User enters positive values; sign is derived from type at conversion time (same convention as the existing `TransactionDraft.amountText`). Apply `.monospacedDigit()` to the amount text field and instrument label, per the style guide.
 - **Category** — Autocomplete field (same component as simple view). Each leg maintains its own category focus/selection tracking state (equivalent to the existing `categoryJustSelected` flag) to prevent blur handlers from clobbering just-selected values across legs.
@@ -129,6 +129,7 @@ struct LegDraft: Sendable, Equatable {
     var type: TransactionType
     var accountId: UUID?
     var amountText: String  // Positive values; sign derived from type at conversion time
+    var isOutflow: Bool     // For transfer legs: true = money leaving (negative), false = money arriving (positive)
     var categoryId: UUID?
     var categoryText: String
     var earmarkId: UUID?
