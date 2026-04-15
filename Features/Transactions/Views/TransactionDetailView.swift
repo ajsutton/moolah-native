@@ -441,12 +441,9 @@ struct TransactionDetailView: View {
       if draft.type == .expense && match.type != .expense {
         draft.type = match.type
       }
-      if draft.type == .transfer, draft.toAccountId == nil {
-        let matchLeg = draft.accountId.flatMap { acctId in
-          match.legs.first { $0.accountId == acctId }
-        }
-        let otherLeg = match.legs.first { $0.accountId != matchLeg?.accountId }
-        draft.toAccountId = otherLeg?.accountId
+      if match.isSimple, draft.type == .transfer, draft.toAccountId == nil {
+        let matchTransferLeg = match.legs.first(where: { $0.accountId != draft.accountId })
+        draft.toAccountId = matchTransferLeg?.accountId
       }
     }
   }
