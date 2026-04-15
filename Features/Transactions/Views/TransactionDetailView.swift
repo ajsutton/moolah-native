@@ -26,6 +26,54 @@ struct TransactionDetailView: View {
     case amount
   }
 
+  private enum TransactionMode: Hashable {
+    case income, expense, transfer, custom
+
+    var displayName: String {
+      switch self {
+      case .income: return "Income"
+      case .expense: return "Expense"
+      case .transfer: return "Transfer"
+      case .custom: return "Custom"
+      }
+    }
+  }
+
+  private var availableModes: [TransactionMode] {
+    supportsComplexTransactions
+      ? [.income, .expense, .transfer, .custom]
+      : [.income, .expense, .transfer]
+  }
+
+  private var modeBinding: Binding<TransactionMode> {
+    Binding(
+      get: {
+        if draft.isCustom { return .custom }
+        switch draft.type {
+        case .income: return .income
+        case .expense: return .expense
+        case .transfer: return .transfer
+        case .openingBalance: return .expense
+        }
+      },
+      set: { newMode in
+        switch newMode {
+        case .custom:
+          draft.isCustom = true
+        case .income:
+          draft.isCustom = false
+          draft.type = .income
+        case .expense:
+          draft.isCustom = false
+          draft.type = .expense
+        case .transfer:
+          draft.isCustom = false
+          draft.type = .transfer
+        }
+      }
+    )
+  }
+
   /// The leg relevant for display/editing in the current context.
   private var relevantLeg: TransactionLeg? {
     if let viewingAccountId {
@@ -38,7 +86,7 @@ struct TransactionDetailView: View {
   }
 
   private var isEditable: Bool {
-    transaction.isSimple
+    transaction.isSimple || draft.isCustom
   }
 
   init(
@@ -173,16 +221,83 @@ struct TransactionDetailView: View {
           Text(TransactionType.openingBalance.displayName)
             .foregroundStyle(.secondary)
         }
+      } else if !transaction.isSimple {
+        // Already-complex transactions show read-only type
+        LabeledContent("Type") {
+          Text("Custom")
+            .foregroundStyle(.secondary)
+        }
+        .accessibilityHint(
+          "This transaction has custom sub-transactions and cannot be changed to a simpler type.")
       } else {
-        Picker("Type", selection: $draft.type) {
-          ForEach(TransactionType.userSelectableTypes, id: \.self) { t in
-            Text(t.displayName).tag(t)
+        Picker("Type", selection: modeBinding) {
+          ForEach(availableModes, id: \.self) { mode in
+            Text(mode.displayName).tag(mode)
           }
         }
+        .accessibilityLabel("Transaction type")
+        #if os(iOS)
+          .pickerStyle(.segmented)
+        #endif
         .onChange(of: draft.type) { oldValue, newValue in
           if newValue == .transfer && draft.toAccountId == nil {
             // Set first available account (excluding current account) as default
             draft.toAccountId = sortedAccounts.first { $0.id != draft.accountId }?.id
+          }
+        }
+        .onChange(of: draft.isCustom) { oldValue, newValue in
+          if newValue && !oldValue {
+            // Switching to custom: build legDrafts from current simple fields
+            if draft.type == .transfer {
+              // Transfer: create two legs
+              let fromLeg = TransactionDraft.LegDraft(
+                type: .transfer,
+                accountId: draft.accountId,
+                amountText: draft.amountText,
+                isOutflow: true,
+                categoryId: draft.categoryId,
+                categoryText: draft.categoryText,
+                earmarkId: draft.earmarkId
+              )
+              let toLeg = TransactionDraft.LegDraft(
+                type: .transfer,
+                accountId: draft.toAccountId,
+                amountText: draft.amountText,
+                isOutflow: false,
+                categoryId: nil,
+                categoryText: "",
+                earmarkId: nil
+              )
+              draft.legDrafts = [fromLeg, toLeg]
+            } else {
+              // Non-transfer: create one leg
+              let isOutflow = draft.type == .expense
+              let leg = TransactionDraft.LegDraft(
+                type: draft.type,
+                accountId: draft.accountId,
+                amountText: draft.amountText,
+                isOutflow: isOutflow,
+                categoryId: draft.categoryId,
+                categoryText: draft.categoryText,
+                earmarkId: draft.earmarkId
+              )
+              draft.legDrafts = [leg]
+            }
+          } else if !newValue && oldValue {
+            // Switching to simple: populate simple fields from first legDraft
+            if let firstLeg = draft.legDrafts.first {
+              draft.type = firstLeg.type
+              draft.accountId = firstLeg.accountId
+              draft.amountText = firstLeg.amountText
+              draft.categoryId = firstLeg.categoryId
+              draft.categoryText = firstLeg.categoryText
+              draft.earmarkId = firstLeg.earmarkId
+              // For two-leg transfers: map second leg to toAccountId
+              if draft.legDrafts.count >= 2 {
+                draft.toAccountId = draft.legDrafts[1].accountId
+              }
+            }
+            draft.legDrafts = []
           }
         }
       }
