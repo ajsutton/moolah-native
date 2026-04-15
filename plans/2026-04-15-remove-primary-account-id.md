@@ -26,7 +26,7 @@ If implemented before #10 lands, the TransactionRowView changes would need an ex
 
 ## Guiding Principle
 
-No code should treat `legs.first` as semantically meaningful. Every access must identify the leg it wants by **role** (e.g., "the leg for this account", "the outgoing leg") rather than by position. This is what makes the domain model ready for complex multi-leg transactions.
+No code should treat `legs.first` as semantically meaningful. Every access must identify the leg it wants by context (e.g., "the leg for this account", "the leg that isn't this account") rather than by position. The domain model must support arbitrary multi-leg transactions (stock trades, currency conversions within one account, complex splits), even though the Remote backend is limited to simple transactions today.
 
 ## Call Sites
 
@@ -36,7 +36,7 @@ No code should treat `legs.first` as semantically meaningful. Every access must 
 |---|----------|---------------|----------------------|
 | P1 | `TransactionRowView.swift:103` | Finds "other" account for "Transfer to X" label | Use viewing account context to find the other leg |
 | P2 | `TransactionDetailView.swift:423` | Autofill: finds destination account of prior transfer | Use `draft.accountId` (already available) to find the other leg |
-| P3 | `TransactionDTO.swift:86` | Maps to `TransactionDTO.accountId` | Find source leg by role (outgoing quantity for transfers) |
+| P3 | `TransactionDTO.swift:86` | Maps to `TransactionDTO.accountId` | Guard `isSimple`, then find source leg by negative quantity |
 | P4 | `TransactionDTO.swift:142` | Maps to `CreateTransactionDTO.accountId` | Same as P3 |
 
 ### Test Code
@@ -55,23 +55,31 @@ No code should treat `legs.first` as semantically meaningful. Every access must 
 
 ## Design
 
-### Pattern 1: DTO Mapping (P3, P4) — Find Source Leg by Role
+### Pattern 1: DTO Mapping (P3, P4) — Guard Simple, Then Decompose
 
-The Remote API uses source-oriented semantics: `accountId` is the source account, `toAccountId` is the destination, `amount` is from the source's perspective. Both `fromDomain` methods currently use `let primaryLeg = transaction.legs.first` — the same positional assumption we're removing.
+The Remote backend communicates with moolah-server via a flat JSON format: `accountId` (source), `toAccountId` (destination), `amount` (source perspective). This flat format can only represent simple transactions — single-leg (income/expense/opening balance) or symmetric two-leg transfers. It cannot represent stock trades, currency conversions, or multi-leg splits.
 
-Refactor both methods to find legs by their semantic role:
+Both `fromDomain` methods currently use `let primaryLeg = transaction.legs.first` — a positional assumption. They also depend on the `type`, `categoryId`, `earmarkId`, and `primaryAccountId` convenience accessors, coupling them to multiple items being removed under #9.
+
+Refactor both methods to:
+
+1. **Guard `isSimple`** (from #10) — return a validation error if the transaction can't be represented in the flat format. This makes the limitation explicit rather than silently producing wrong output for complex transactions.
+2. **For single-leg transactions:** there's only one leg, so `legs.first` is unambiguous (it's the only leg, not a positional assumption).
+3. **For two-leg transfers:** the source leg is the one with negative quantity (outgoing), the destination leg has positive quantity (incoming). This is safe because `isSimple` guarantees exactly two legs whose quantities negate each other.
 
 ```swift
-static func fromDomain(_ transaction: Transaction) -> TransactionDTO {
+static func fromDomain(_ transaction: Transaction) throws -> TransactionDTO {
+  guard transaction.isSimple else {
+    throw ValidationError.complexTransactionNotSupported
+  }
+
   let dateString = BackendDateFormatter.string(from: transaction.date)
 
-  // Identify legs by role, not position.
-  // For transfers: source leg has outgoing (negative) quantity.
-  // For non-transfers: there's a single leg.
+  // After isSimple guard: either 1 leg, or exactly 2 legs with negating quantities.
   let sourceLeg: TransactionLeg?
   let destinationLeg: TransactionLeg?
 
-  if transaction.isTransfer && transaction.legs.count > 1 {
+  if transaction.legs.count == 2 {
     sourceLeg = transaction.legs.first(where: { $0.quantity < 0 })
     destinationLeg = transaction.legs.first(where: { $0.quantity >= 0 })
   } else {
@@ -79,20 +87,11 @@ static func fromDomain(_ transaction: Transaction) -> TransactionDTO {
     destinationLeg = nil
   }
 
-  // Convert quantity back to cents
-  let cents: Int
-  if let qty = sourceLeg?.quantity {
-    var centValue = qty * 100
-    var rounded = Decimal()
-    NSDecimalRound(&rounded, &centValue, 0, .bankers)
-    cents = Int(truncating: rounded as NSDecimalNumber)
-  } else {
-    cents = 0
-  }
+  let cents = sourceLeg.map { centValue(from: $0.quantity) } ?? 0
 
   return TransactionDTO(
     id: ServerUUID(transaction.id),
-    type: sourceLeg?.type.rawValue ?? TransactionType.expense.rawValue,
+    type: (sourceLeg?.type ?? .expense).rawValue,
     date: dateString,
     accountId: sourceLeg?.accountId.map(ServerUUID.init),
     toAccountId: destinationLeg?.accountId.map(ServerUUID.init),
@@ -107,11 +106,11 @@ static func fromDomain(_ transaction: Transaction) -> TransactionDTO {
 }
 ```
 
-This eliminates the positional assumption and also removes the `fromDomain` methods' dependence on the `type`, `categoryId`, and `earmarkId` convenience accessors — making it possible to remove those (#12, #13, #14) independently later.
+This also removes the `fromDomain` methods' dependence on the `type`, `categoryId`, `earmarkId`, and `primaryAccountId` convenience accessors — unblocking their removal (#12, #13, #14) independently.
 
 `CreateTransactionDTO.fromDomain` gets the same refactor.
 
-**Note:** The existing `transferLeg` derivation (`legs.first(where: { $0.accountId != primaryLeg?.accountId })`) is also position-dependent since it defines "transfer leg" as "not the first leg". The refactored code finds destination by role (positive quantity) instead.
+**Signature change:** `fromDomain` becomes `throws`. Callers in the Remote backend already operate in async/throwing contexts, so propagating the error is straightforward. The Remote repository's save/create methods should surface this as a user-visible validation error ("This transaction type is not supported by the remote backend").
 
 ### Pattern 2: Finding the "Other" Leg in Views (P1, P2)
 
@@ -216,7 +215,11 @@ T9 (`RemoteTransactionRepositoryTests.swift:277`): Asserts earmark-only income h
 
 **File:** `Backends/Remote/DTOs/TransactionDTO.swift`
 
-Refactor both `fromDomain` methods to find source/destination legs by role (quantity sign for transfers, single leg otherwise). Rename `primaryLeg` → `sourceLeg` and derive `transferLeg` → `destinationLeg` by positive quantity, not "first that isn't primaryLeg". This also removes the methods' dependence on the `type`, `categoryId`, and `earmarkId` convenience accessors.
+1. Add `isSimple` guard (depends on #10 landing first, or add locally).
+2. Change both `fromDomain` signatures to `throws`.
+3. Refactor leg decomposition: single leg → `sourceLeg = legs.first`; two-leg transfer → source by negative quantity, destination by positive quantity.
+4. Replace all convenience accessor usage (`type`, `categoryId`, `earmarkId`, `primaryAccountId`) with reads from `sourceLeg`.
+5. Update callers in the Remote backend to handle the thrown error.
 
 ### Step 2: TransactionDetailView Autofill (P2)
 
@@ -277,10 +280,10 @@ If implementing standalone before #10:
 ## Risk Assessment
 
 **Low risk.** Every replacement uses either:
-- Semantic leg identification (source = outgoing quantity, destination = positive quantity)
+- The `isSimple` guard + quantity-sign decomposition (DTO only — safe because `isSimple` guarantees the structure)
 - A known account ID from the calling context to find the relevant leg
 - `accountIds` set membership to check transaction involvement
 
-The DTO refactor is the largest change but is well-constrained: the Remote backend only handles simple transactions (`isSimple` guard from #10), and the source/destination roles are unambiguous for those cases.
+The DTO refactor is the largest change: `fromDomain` becomes throwing, callers must handle the error. This is well-constrained — the Remote backend already operates in throwing contexts, and the guard makes the flat-format limitation explicit instead of silently producing wrong output for complex transactions.
 
 The TransactionRowView change also fixes the existing bug where "Transfer to X" for incoming transfers shows the wrong account.
