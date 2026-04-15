@@ -233,7 +233,7 @@ struct UpcomingTransactionRow: View {
 
       Spacer()
 
-      MonetaryAmountView(amount: transaction.amount, font: .body)
+      InstrumentAmountView(amount: transaction.primaryAmount, font: .body)
 
       Button("Pay") {
         onPay()
@@ -280,7 +280,7 @@ struct UpcomingTransactionRow: View {
   let accounts = Accounts(from: [
     Account(
       id: accountId, name: "Checking", type: .bank,
-      balance: MonetaryAmount(cents: 244977, currency: Currency.AUD)
+      balance: InstrumentAmount(quantity: 2449.77, instrument: .AUD)
     )
   ])
 
@@ -307,16 +307,22 @@ struct UpcomingTransactionRow: View {
 
     _ = try? await backend.transactions.create(
       Transaction(
-        type: .expense, date: overdue, accountId: accountId,
-        amount: MonetaryAmount(cents: -200000, currency: Currency.AUD),
-        payee: "Rent", categoryId: categoryId,
-        recurPeriod: .month, recurEvery: 1))
+        date: overdue, payee: "Rent",
+        recurPeriod: .month, recurEvery: 1,
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: .AUD, quantity: -2000, type: .expense,
+            categoryId: categoryId)
+        ]))
     _ = try? await backend.transactions.create(
       Transaction(
-        type: .expense, date: upcoming, accountId: accountId,
-        amount: MonetaryAmount(cents: -15000, currency: Currency.AUD),
-        payee: "Internet", categoryId: categoryId,
-        recurPeriod: .month, recurEvery: 1))
+        date: upcoming, payee: "Internet",
+        recurPeriod: .month, recurEvery: 1,
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: .AUD, quantity: -150, type: .expense,
+            categoryId: categoryId)
+        ]))
     await store.load(filter: TransactionFilter(scheduled: true))
   }
 }

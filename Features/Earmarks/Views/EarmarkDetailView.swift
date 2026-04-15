@@ -94,8 +94,8 @@ struct EarmarkDetailView: View {
       if let goal = earmark.savingsGoal, goal.isPositive {
         VStack(spacing: 4) {
           let progress =
-            earmark.balance.cents > 0
-            ? Double(earmark.balance.cents) / Double(goal.cents)
+            earmark.balance.isPositive
+            ? Double(truncating: (earmark.balance.quantity / goal.quantity) as NSDecimalNumber)
             : 0.0
 
           ProgressView(value: min(progress, 1.0)) {
@@ -103,12 +103,12 @@ struct EarmarkDetailView: View {
               Text("Savings Goal")
                 .font(.caption)
               Spacer()
-              MonetaryAmountView(amount: earmark.balance)
+              InstrumentAmountView(amount: earmark.balance)
                 .font(.caption)
               Text("of")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-              MonetaryAmountView(amount: goal)
+              InstrumentAmountView(amount: goal)
                 .font(.caption)
             }
           }
@@ -121,12 +121,12 @@ struct EarmarkDetailView: View {
     .padding()
   }
 
-  private func summaryItem(label: String, amount: MonetaryAmount) -> some View {
+  private func summaryItem(label: String, amount: InstrumentAmount) -> some View {
     VStack(spacing: 2) {
       Text(label)
         .font(.caption)
         .foregroundStyle(.secondary)
-      MonetaryAmountView(amount: amount)
+      InstrumentAmountView(amount: amount)
         .font(.headline)
     }
     .frame(maxWidth: .infinity)
@@ -192,10 +192,10 @@ struct EarmarkDetailView: View {
   let earmark = Earmark(
     id: earmarkId,
     name: "Holiday Fund",
-    balance: MonetaryAmount(cents: 250000, currency: Currency.AUD),
-    saved: MonetaryAmount(cents: 300000, currency: Currency.AUD),
-    spent: MonetaryAmount(cents: -50000, currency: Currency.AUD),
-    savingsGoal: MonetaryAmount(cents: 500000, currency: Currency.AUD),
+    balance: InstrumentAmount(quantity: 2500, instrument: .AUD),
+    saved: InstrumentAmount(quantity: 3000, instrument: .AUD),
+    spent: InstrumentAmount(quantity: 500, instrument: .AUD),
+    savingsGoal: InstrumentAmount(quantity: 5000, instrument: .AUD),
     savingsStartDate: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1)),
     savingsEndDate: Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 31))
   )
@@ -221,14 +221,20 @@ struct EarmarkDetailView: View {
     _ = try? await backend.earmarks.create(earmark)
     _ = try? await backend.transactions.create(
       Transaction(
-        type: .expense, date: Date(), accountId: accountId,
-        amount: MonetaryAmount(cents: -5023, currency: Currency.AUD),
-        payee: "Flight Booking", earmarkId: earmarkId))
+        date: Date(), payee: "Flight Booking",
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: .AUD, quantity: -50.23, type: .expense,
+            earmarkId: earmarkId)
+        ]))
     _ = try? await backend.transactions.create(
       Transaction(
-        type: .income, date: Date().addingTimeInterval(-86400), accountId: accountId,
-        amount: MonetaryAmount(cents: 50000, currency: Currency.AUD),
-        payee: "Savings Transfer", earmarkId: earmarkId))
+        date: Date().addingTimeInterval(-86400), payee: "Savings Transfer",
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: .AUD, quantity: 500, type: .income,
+            earmarkId: earmarkId)
+        ]))
     await earmarkStore.load()
     await store.load(filter: TransactionFilter(earmarkId: earmarkId))
   }

@@ -10,10 +10,15 @@ final class AccountStore {
   private(set) var error: Error?
 
   private let repository: AccountRepository
+  private let conversionService: (any InstrumentConversionService)?
   private let logger = Logger(subsystem: "com.moolah.app", category: "AccountStore")
 
-  init(repository: AccountRepository) {
+  init(
+    repository: AccountRepository,
+    conversionService: (any InstrumentConversionService)? = nil
+  ) {
     self.repository = repository
+    self.conversionService = conversionService
   }
 
   func load() async {
@@ -63,29 +68,84 @@ final class AccountStore {
     accounts.filter { $0.type == .investment && (showHidden || !$0.isHidden) }
   }
 
-  var currentTotal: MonetaryAmount {
-    currentAccounts.reduce(.zero(currency: currentAccounts.first?.balance.currency ?? .AUD)) {
+  var currentTotal: InstrumentAmount {
+    currentAccounts.reduce(.zero(instrument: currentAccounts.first?.balance.instrument ?? .AUD)) {
       $0 + $1.balance
     }
   }
 
-  var investmentTotal: MonetaryAmount {
+  var investmentTotal: InstrumentAmount {
     investmentAccounts.reduce(
-      .zero(currency: investmentAccounts.first?.displayBalance.currency ?? .AUD)
+      .zero(instrument: investmentAccounts.first?.displayBalance.instrument ?? .AUD)
     ) { $0 + $1.displayBalance }
   }
 
   /// Total of current accounts minus the total of all positive, visible earmarked funds.
   /// Hidden earmarks and those with negative balances are excluded from the sum.
-  func availableFunds(earmarks: Earmarks) -> MonetaryAmount {
+  func availableFunds(earmarks: Earmarks) -> InstrumentAmount {
     let earmarked = earmarks.ordered
       .filter { !$0.isHidden && $0.balance.isPositive }
-      .reduce(MonetaryAmount.zero(currency: currentTotal.currency)) { $0 + $1.balance }
+      .reduce(InstrumentAmount.zero(instrument: currentTotal.instrument)) { $0 + $1.balance }
     return currentTotal - earmarked
   }
 
-  var netWorth: MonetaryAmount {
+  var netWorth: InstrumentAmount {
     currentTotal + investmentTotal
+  }
+
+  /// Positions for a given account. Returns empty array if not loaded.
+  func positions(for accountId: UUID) -> [Position] {
+    accounts.by(id: accountId)?.positions ?? []
+  }
+
+  /// Compute the total value of all current accounts in a target instrument,
+  /// converting foreign-currency positions via the conversion service.
+  func convertedTotal(for accountList: [Account], in targetInstrument: Instrument) async throws
+    -> InstrumentAmount
+  {
+    guard let conversionService else {
+      return accountList.reduce(.zero(instrument: targetInstrument)) { $0 + $1.balance }
+    }
+
+    var total = InstrumentAmount.zero(instrument: targetInstrument)
+    let date = Date()
+
+    for account in accountList {
+      let positions = account.positions
+      if positions.isEmpty {
+        // Fallback: use the single balance
+        let converted = try await conversionService.convertAmount(
+          account.balance, to: targetInstrument, on: date)
+        total += converted
+      } else {
+        for position in positions {
+          let converted = try await conversionService.convertAmount(
+            position.amount, to: targetInstrument, on: date)
+          total += converted
+        }
+      }
+    }
+    return total
+  }
+
+  /// Converted total for current accounts.
+  func convertedCurrentTotal(in targetInstrument: Instrument) async throws -> InstrumentAmount {
+    try await convertedTotal(for: currentAccounts, in: targetInstrument)
+  }
+
+  /// Converted total for investment accounts.
+  func convertedInvestmentTotal(in targetInstrument: Instrument) async throws -> InstrumentAmount {
+    guard let conversionService else {
+      return investmentTotal
+    }
+    var total = InstrumentAmount.zero(instrument: targetInstrument)
+    let date = Date()
+    for account in investmentAccounts {
+      let converted = try await conversionService.convertAmount(
+        account.displayBalance, to: targetInstrument, on: date)
+      total += converted
+    }
+    return total
   }
 
   /// Adjusts account balances locally based on a transaction change.
@@ -97,21 +157,17 @@ final class AccountStore {
 
     // Remove the old transaction's effect (skip scheduled — they don't affect balances)
     if let old, !old.isScheduled {
-      if let accountId = old.accountId {
-        result = result.adjustingBalance(of: accountId, by: -old.amount)
-      }
-      if let toAccountId = old.toAccountId {
-        result = result.adjustingBalance(of: toAccountId, by: old.amount)
+      for leg in old.legs {
+        guard let accountId = leg.accountId else { continue }
+        result = result.adjustingBalance(of: accountId, by: -leg.amount)
       }
     }
 
     // Apply the new transaction's effect (skip scheduled — they don't affect balances)
     if let new, !new.isScheduled {
-      if let accountId = new.accountId {
-        result = result.adjustingBalance(of: accountId, by: new.amount)
-      }
-      if let toAccountId = new.toAccountId {
-        result = result.adjustingBalance(of: toAccountId, by: -new.amount)
+      for leg in new.legs {
+        guard let accountId = leg.accountId else { continue }
+        result = result.adjustingBalance(of: accountId, by: leg.amount)
       }
     }
 

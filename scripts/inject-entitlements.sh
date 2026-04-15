@@ -17,10 +17,11 @@ entitlements_block = "\n".join([
     "      properties:",
     "        com.apple.security.app-sandbox: true",
     "        com.apple.security.network.client: true",
+    "        com.apple.security.files.user-selected.read-write: true",
     "        com.apple.developer.icloud-services:",
     "          - CloudKit",
     "        com.apple.developer.icloud-container-identifiers:",
-    "          - iCloud.rocks.moolah.app",
+    "          - iCloud.rocks.moolah.app.v2",
 ])
 
 for target in ["Moolah_iOS", "Moolah_macOS"]:

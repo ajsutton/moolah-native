@@ -10,14 +10,25 @@ Build, launch the macOS app, and stream OS logs continuously to `.agent-tmp/app-
 ## Start the app
 
 ```bash
-# Default: captures all com.moolah.app logs (run in background)
-just run-mac-with-logs &
+# Default: captures all com.moolah.app logs
+just run-mac-with-logs
 
 # Custom predicate — must be a single quoted string
-just run-mac-with-logs 'category == "ProfileSyncEngine"' &
+just run-mac-with-logs 'category == "ProfileSyncEngine"'
 ```
 
-In non-interactive mode (background), the script polls until the app exits. Kill the app to stop both the app and the log stream.
+In non-interactive mode (agents, background), the script builds, launches, starts the log stream, then **exits immediately** — the app and log stream keep running independently. Do NOT run with `&` or `run_in_background` — just run it directly and it will return.
+
+If the app is already running, the script will exit with an error. Stop the existing instance first (see "Stop and clean up" below).
+
+## Wait for logs to accumulate
+
+After `just run-mac-with-logs` returns, the app is running and logs are streaming. Wait a few seconds for startup logs, then inspect:
+
+```bash
+# Quick check that logs are flowing
+wc -l .agent-tmp/app-logs.txt
+```
 
 ## Monitor for specific events
 
@@ -51,14 +62,41 @@ grep -B2 -A5 "zoneNotFound" .agent-tmp/app-logs.txt
 ## Stop and clean up
 
 ```bash
-# Kill the app (log stream stops automatically in non-interactive mode)
+# Kill the app
 pkill -f "Moolah.app/Contents/MacOS/Moolah" 2>/dev/null || true
 
-# Also kill any orphaned log stream
+# Kill the log stream
 pkill -f "log stream.*com.moolah.app" 2>/dev/null || true
 
 # Clean up
 rm .agent-tmp/app-logs.txt
+```
+
+## Check for crash logs
+
+If the app exits unexpectedly, check for crash reports:
+
+```bash
+ls -lt ~/Library/Logs/DiagnosticReports/ | grep -i moolah | head -5
+```
+
+Parse a crash log for the faulting thread stack trace:
+
+```bash
+python3 -c "
+import json
+data = open('PATH_TO_IPS_FILE').read()
+lines = data.strip().split('\n')
+crash = json.loads('\n'.join(lines[1:]))
+ft = crash['faultingThread']
+thread = crash['threads'][ft]
+for f in thread.get('frames', [])[:15]:
+    sym = f.get('symbol', '?')
+    src = f.get('sourceFile', '')
+    line = f.get('sourceLine', '')
+    loc = f' {src}:{line}' if src and line else ''
+    print(f'  {sym}{loc}')
+"
 ```
 
 ## Notes

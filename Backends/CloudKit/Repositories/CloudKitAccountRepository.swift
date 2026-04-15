@@ -4,13 +4,14 @@ import os
 
 final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
-  private let currency: Currency
+  private let instrument: Instrument
   var onRecordChanged: (UUID) -> Void = { _ in }
   var onRecordDeleted: (UUID) -> Void = { _ in }
+  var onInstrumentChanged: (String) -> Void = { _ in }
 
-  init(modelContainer: ModelContainer, currency: Currency) {
+  init(modelContainer: ModelContainer, instrument: Instrument) {
     self.modelContainer = modelContainer
-    self.currency = currency
+    self.instrument = instrument
   }
 
   @MainActor
@@ -31,23 +32,19 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     )
     return try await MainActor.run {
       let records = try context.fetch(descriptor)
-
-      // If any record has a nil cached balance, recompute all balances in batch
-      if records.contains(where: { $0.cachedBalance == nil }) {
-        os_signpost(
-          .begin, log: Signposts.balance, name: "recomputeAllBalances", signpostID: signpostID)
-        try recomputeAllBalances(records: records)
-        os_signpost(
-          .end, log: Signposts.balance, name: "recomputeAllBalances", signpostID: signpostID)
-      }
+      let balances = try computeAllBalances()
+      let allPositions = try computeAllPositions()
 
       return try records.map { record in
-        let balance = MonetaryAmount(cents: record.cachedBalance ?? 0, currency: currency)
+        let storageValue = balances[record.id] ?? 0
+        let balance = InstrumentAmount(storageValue: storageValue, instrument: instrument)
         let investmentValue =
           record.type == AccountType.investment.rawValue
           ? try latestInvestmentValue(for: record.id)
           : nil
-        return record.toDomain(balance: balance, investmentValue: investmentValue)
+        let positions = allPositions[record.id] ?? []
+        return record.toDomain(
+          balance: balance, investmentValue: investmentValue, positions: positions)
       }
     }
   }
@@ -64,26 +61,35 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       throw BackendError.validationFailed("Account name cannot be empty")
     }
 
-    let record = AccountRecord.from(account, currencyCode: currency.code)
+    let record = AccountRecord.from(account)
     try await MainActor.run {
       context.insert(record)
 
-      // If account has an opening balance, create an opening balance transaction
-      if account.balance.cents != 0 {
-        let txn = TransactionRecord(
-          type: TransactionType.openingBalance.rawValue,
-          date: Date(),
-          accountId: account.id,
-          amount: account.balance.cents,
-          currencyCode: currency.code
+      // If account has an opening balance, create an opening balance transaction with a leg
+      if !account.balance.isZero {
+        let txnId = UUID()
+        let txnRecord = TransactionRecord(
+          id: txnId,
+          date: Date()
         )
-        context.insert(txn)
-        record.cachedBalance = account.balance.cents
+        context.insert(txnRecord)
+
+        try ensureInstrument(account.balance.instrument)
+
+        let legRecord = TransactionLegRecord(
+          transactionId: txnId,
+          accountId: account.id,
+          instrumentId: account.balance.instrument.id,
+          quantity: account.balance.storageValue,
+          type: TransactionType.openingBalance.rawValue,
+          sortOrder: 0
+        )
+        context.insert(legRecord)
         try context.save()
         onRecordChanged(account.id)
-        onRecordChanged(txn.id)
+        onRecordChanged(txnRecord.id)
+        onRecordChanged(legRecord.id)
       } else {
-        record.cachedBalance = 0
         try context.save()
         onRecordChanged(account.id)
       }
@@ -117,16 +123,20 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       record.type = account.type.rawValue
       record.position = account.position
       record.isHidden = account.isHidden
-      // Balance is NOT updated — it's computed from transactions
       try context.save()
       onRecordChanged(account.id)
 
-      let balance = try computeBalance(for: accountId)
+      let balances = try computeAllBalances()
+      let storageValue = balances[accountId] ?? 0
+      let balance = InstrumentAmount(storageValue: storageValue, instrument: instrument)
       let investmentValue =
         record.type == AccountType.investment.rawValue
         ? try latestInvestmentValue(for: accountId)
         : nil
-      return record.toDomain(balance: balance, investmentValue: investmentValue)
+      let allPositions = try computeAllPositions()
+      let positions = allPositions[accountId] ?? []
+      return record.toDomain(
+        balance: balance, investmentValue: investmentValue, positions: positions)
     }
   }
 
@@ -147,8 +157,9 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
         throw BackendError.notFound("Account not found")
       }
 
-      let balance = try computeBalance(for: id)
-      guard balance.cents == 0 else {
+      let balances = try computeAllBalances()
+      let storageValue = balances[id] ?? 0
+      guard storageValue == 0 else {
         throw BackendError.validationFailed("Cannot delete account with non-zero balance")
       }
 
@@ -161,78 +172,97 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
 
   // MARK: - Balance Computation
 
-  /// Batch-recompute all account balances in a single pass over transactions.
-  /// This replaces N per-account queries with 1 query for all transactions.
+  /// Compute all account balances in a single pass over leg records.
+  /// Returns a dictionary of accountId -> storageValue (Int64).
   @MainActor
-  private func recomputeAllBalances(records: [AccountRecord]) throws {
-    let txnDescriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate {
-        $0.recurPeriod == nil
+  private func computeAllBalances() throws -> [UUID: Int64] {
+    let (_, allLegs) = try fetchNonScheduledLegs()
+
+    var balances: [UUID: Int64] = [:]
+    for leg in allLegs {
+      guard let accountId = leg.accountId else { continue }
+      balances[accountId, default: 0] += leg.quantity
+    }
+    return balances
+  }
+
+  /// Compute per-instrument positions for all accounts.
+  /// Returns a dictionary of accountId -> [Position].
+  @MainActor
+  private func computeAllPositions() throws -> [UUID: [Position]] {
+    let (_, allLegs) = try fetchNonScheduledLegs()
+
+    // Group by (accountId, instrumentId) and sum quantities
+    var totals: [UUID: [String: Int64]] = [:]
+    for leg in allLegs {
+      guard let accountId = leg.accountId else { continue }
+      totals[accountId, default: [:]][leg.instrumentId, default: 0] += leg.quantity
+    }
+
+    // Resolve instruments and build Position arrays
+    let instruments = try fetchInstrumentMap()
+    var result: [UUID: [Position]] = [:]
+    for (accountId, instrumentTotals) in totals {
+      var positions: [Position] = []
+      for (instrumentId, quantity) in instrumentTotals {
+        guard quantity != 0 else { continue }
+        let inst = instruments[instrumentId] ?? Instrument.fiat(code: instrumentId)
+        let amount = InstrumentAmount(storageValue: quantity, instrument: inst)
+        positions.append(
+          Position(accountId: accountId, instrument: inst, quantity: amount.quantity))
       }
+      positions.sort { $0.instrument.id < $1.instrument.id }
+      if !positions.isEmpty {
+        result[accountId] = positions
+      }
+    }
+    return result
+  }
+
+  /// Fetches all non-scheduled legs in a single pass.
+  @MainActor
+  private func fetchNonScheduledLegs() throws -> (Set<UUID>, [TransactionLegRecord]) {
+    let scheduledDescriptor = FetchDescriptor<TransactionRecord>(
+      predicate: #Predicate { $0.recurPeriod != nil }
     )
-    let transactions = try context.fetch(txnDescriptor)
+    let scheduledIds = Set(try context.fetch(scheduledDescriptor).map(\.id))
 
-    // Accumulate per-account balances in a single pass
-    var balances: [UUID: Int] = [:]
+    let legDescriptor = FetchDescriptor<TransactionLegRecord>()
+    let allLegs = try context.fetch(legDescriptor).filter {
+      !scheduledIds.contains($0.transactionId)
+    }
+    return (scheduledIds, allLegs)
+  }
+
+  /// Fetches all known instruments as a lookup map.
+  @MainActor
+  private func fetchInstrumentMap() throws -> [String: Instrument] {
+    let descriptor = FetchDescriptor<InstrumentRecord>()
+    let records = try context.fetch(descriptor)
+    var map: [String: Instrument] = [:]
     for record in records {
-      balances[record.id] = 0
+      map[record.id] = record.toDomain()
     }
+    return map
+  }
 
-    for txn in transactions {
-      // Source account gets +amount
-      if let accountId = txn.accountId {
-        balances[accountId, default: 0] += txn.amount
-      }
-      // Destination account (transfers) gets -amount
-      if let toAccountId = txn.toAccountId {
-        balances[toAccountId, default: 0] -= txn.amount
-      }
+  // MARK: - Instrument Cache
+
+  @MainActor private var instrumentCacheForAccount: [String: Instrument] = [:]
+
+  @MainActor
+  private func ensureInstrument(_ instrument: Instrument) throws {
+    let iid = instrument.id
+    let descriptor = FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == iid })
+    if try context.fetch(descriptor).isEmpty {
+      context.insert(InstrumentRecord.from(instrument))
+      onInstrumentChanged(instrument.id)
     }
-
-    // Write cached balances to records
-    for record in records {
-      record.cachedBalance = balances[record.id] ?? 0
-    }
-
-    try context.save()
+    instrumentCacheForAccount[instrument.id] = instrument
   }
 
   @MainActor
-  private func computeBalance(for accountId: UUID) throws -> MonetaryAmount {
-    // Sum transactions where this is the source account (non-scheduled only)
-    let sourceDescriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate {
-        $0.accountId == accountId && $0.recurPeriod == nil
-      }
-    )
-    let sourceRecords = try context.fetch(sourceDescriptor)
-    let sourceSum = sourceRecords.reduce(0) { $0 + $1.amount }
-
-    // For transfers where this is the destination account
-    let destDescriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate {
-        $0.toAccountId == accountId && $0.recurPeriod == nil
-      }
-    )
-    let destRecords = try context.fetch(destDescriptor)
-    let destSum = destRecords.reduce(0) { $0 + $1.amount }
-
-    // source account gets the amount, dest account gets the negative (transfer in)
-    let balance = MonetaryAmount(cents: sourceSum - destSum, currency: currency)
-
-    // Write through to cache
-    let accountDescriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.id == accountId }
-    )
-    if let record = try context.fetch(accountDescriptor).first {
-      record.cachedBalance = balance.cents
-    }
-
-    return balance
-  }
-
-  @MainActor
-  private func latestInvestmentValue(for accountId: UUID) throws -> MonetaryAmount? {
+  private func latestInvestmentValue(for accountId: UUID) throws -> InstrumentAmount? {
     var descriptor = FetchDescriptor<InvestmentValueRecord>(
       predicate: #Predicate { $0.accountId == accountId },
       sortBy: [SortDescriptor(\.date, order: .reverse)]

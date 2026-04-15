@@ -28,75 +28,98 @@ actor CryptoPriceService {
 
   // MARK: - Token resolution
 
-  func resolveToken(
+  func resolveRegistration(
     chainId: Int, contractAddress: String?, symbol: String?, isNative: Bool
-  ) async throws -> CryptoToken {
+  ) async throws -> CryptoRegistration {
     let result = try await resolutionClient.resolve(
       chainId: chainId,
       contractAddress: contractAddress,
       symbol: symbol,
       isNative: isNative
     )
-    return CryptoToken(
+    let resolvedSymbol = result.resolvedSymbol ?? symbol ?? "???"
+    let resolvedName = result.resolvedName ?? symbol ?? "Unknown Token"
+    let resolvedDecimals = result.resolvedDecimals ?? 18
+
+    let instrument = Instrument.crypto(
       chainId: chainId,
       contractAddress: isNative ? nil : contractAddress,
-      symbol: result.resolvedSymbol ?? symbol ?? "???",
-      name: result.resolvedName ?? symbol ?? "Unknown Token",
-      decimals: result.resolvedDecimals ?? 18,
+      symbol: resolvedSymbol,
+      name: resolvedName,
+      decimals: resolvedDecimals
+    )
+    let mapping = CryptoProviderMapping(
+      instrumentId: instrument.id,
       coingeckoId: result.coingeckoId,
       cryptocompareSymbol: result.cryptocompareSymbol,
       binanceSymbol: result.binanceSymbol
     )
+    return CryptoRegistration(instrument: instrument, mapping: mapping)
   }
 
-  // MARK: - Token management
+  // MARK: - Registration management
 
-  func registeredTokens() async -> [CryptoToken] {
-    (try? await tokenRepository.loadTokens()) ?? []
+  func registeredItems() async -> [CryptoRegistration] {
+    (try? await tokenRepository.loadRegistrations()) ?? []
   }
 
-  func registerToken(_ token: CryptoToken) async throws {
-    var tokens = try await tokenRepository.loadTokens()
-    tokens.removeAll { $0.id == token.id }
-    tokens.append(token)
-    try await tokenRepository.saveTokens(tokens)
+  func register(_ registration: CryptoRegistration) async throws {
+    var registrations = try await tokenRepository.loadRegistrations()
+    registrations.removeAll { $0.id == registration.id }
+    registrations.append(registration)
+    try await tokenRepository.saveRegistrations(registrations)
   }
 
-  func removeToken(_ token: CryptoToken) async throws {
-    var tokens = try await tokenRepository.loadTokens()
-    tokens.removeAll { $0.id == token.id }
-    try await tokenRepository.saveTokens(tokens)
+  func remove(_ registration: CryptoRegistration) async throws {
+    var registrations = try await tokenRepository.loadRegistrations()
+    registrations.removeAll { $0.id == registration.id }
+    try await tokenRepository.saveRegistrations(registrations)
     // Remove cached price data
-    caches.removeValue(forKey: token.id)
-    let url = cacheFileURL(tokenId: token.id)
+    caches.removeValue(forKey: registration.id)
+    let url = cacheFileURL(tokenId: registration.id)
+    try? FileManager.default.removeItem(at: url)
+  }
+
+  func removeById(_ instrumentId: String) async throws {
+    var registrations = try await tokenRepository.loadRegistrations()
+    registrations.removeAll { $0.id == instrumentId }
+    try await tokenRepository.saveRegistrations(registrations)
+    caches.removeValue(forKey: instrumentId)
+    let url = cacheFileURL(tokenId: instrumentId)
     try? FileManager.default.removeItem(at: url)
   }
 
   // MARK: - Single price
 
-  func price(for token: CryptoToken, on date: Date) async throws -> Decimal {
+  func price(
+    for instrument: Instrument,
+    mapping: CryptoProviderMapping,
+    on date: Date
+  ) async throws -> Decimal {
+    let tokenId = instrument.id
     let dateString = dateFormatter.string(from: date)
 
-    if let cached = lookupPrice(tokenId: token.id, dateString: dateString) {
+    if let cached = lookupPrice(tokenId: tokenId, dateString: dateString) {
       return cached
     }
 
-    if caches[token.id] == nil {
-      loadCacheFromDisk(tokenId: token.id)
+    if caches[tokenId] == nil {
+      loadCacheFromDisk(tokenId: tokenId)
     }
 
-    if let cached = lookupPrice(tokenId: token.id, dateString: dateString) {
+    if let cached = lookupPrice(tokenId: tokenId, dateString: dateString) {
       return cached
     }
 
+    let symbol = instrument.ticker ?? instrument.name
     var lastError: (any Error)?
     for client in clients {
       do {
-        let fetched = try await client.dailyPrices(for: token, in: date...date)
+        let fetched = try await client.dailyPrices(for: mapping, in: date...date)
         if !fetched.isEmpty {
-          merge(tokenId: token.id, symbol: token.symbol, newPrices: fetched)
-          saveCacheToDisk(tokenId: token.id)
-          if let price = lookupPrice(tokenId: token.id, dateString: dateString) {
+          merge(tokenId: tokenId, symbol: symbol, newPrices: fetched)
+          saveCacheToDisk(tokenId: tokenId)
+          if let price = lookupPrice(tokenId: tokenId, dateString: dateString) {
             return price
           }
         }
@@ -106,42 +129,49 @@ actor CryptoPriceService {
       }
     }
 
-    if let fallback = fallbackPrice(tokenId: token.id, dateString: dateString) {
+    if let fallback = fallbackPrice(tokenId: tokenId, dateString: dateString) {
       return fallback
     }
 
-    throw lastError ?? CryptoPriceError.noPriceAvailable(tokenId: token.id, date: dateString)
+    throw lastError ?? CryptoPriceError.noPriceAvailable(tokenId: tokenId, date: dateString)
   }
 
   // MARK: - Date range
 
   func prices(
-    for token: CryptoToken, in range: ClosedRange<Date>
+    for instrument: Instrument,
+    mapping: CryptoProviderMapping,
+    in range: ClosedRange<Date>
   ) async throws -> [(date: Date, price: Decimal)] {
-    if caches[token.id] == nil {
-      loadCacheFromDisk(tokenId: token.id)
+    let tokenId = instrument.id
+
+    if caches[tokenId] == nil {
+      loadCacheFromDisk(tokenId: tokenId)
     }
 
     let rangeStart = dateFormatter.string(from: range.lowerBound)
     let rangeEnd = dateFormatter.string(from: range.upperBound)
 
-    if let cache = caches[token.id] {
+    if let cache = caches[tokenId] {
       if rangeStart < cache.earliestDate {
         let fetchEnd = Calendar(identifier: .gregorian)
           .date(
             byAdding: .day, value: -1,
             to: dateFormatter.date(from: cache.earliestDate)!)!
-        try await fetchRange(for: token, from: range.lowerBound, to: fetchEnd)
+        try await fetchRange(
+          instrument: instrument, mapping: mapping, from: range.lowerBound, to: fetchEnd)
       }
       if rangeEnd > cache.latestDate {
         let fetchStart = Calendar(identifier: .gregorian)
           .date(
             byAdding: .day, value: 1,
             to: dateFormatter.date(from: cache.latestDate)!)!
-        try await fetchRange(for: token, from: fetchStart, to: range.upperBound)
+        try await fetchRange(
+          instrument: instrument, mapping: mapping, from: fetchStart, to: range.upperBound)
       }
     } else {
-      try await fetchRange(for: token, from: range.lowerBound, to: range.upperBound)
+      try await fetchRange(
+        instrument: instrument, mapping: mapping, from: range.lowerBound, to: range.upperBound)
     }
 
     let dates = generateDateSeries(in: range)
@@ -150,7 +180,7 @@ actor CryptoPriceService {
 
     for date in dates {
       let dateString = dateFormatter.string(from: date)
-      if let price = caches[token.id]?.prices[dateString] {
+      if let price = caches[tokenId]?.prices[dateString] {
         lastKnownPrice = price
         results.append((date, price))
       } else if let fallback = lastKnownPrice {
@@ -163,15 +193,15 @@ actor CryptoPriceService {
 
   // MARK: - Batch current prices
 
-  func currentPrices(for tokens: [CryptoToken]) async throws -> [String: Decimal] {
+  func currentPrices(for mappings: [CryptoProviderMapping]) async throws -> [String: Decimal] {
     var result: [String: Decimal] = [:]
     for client in clients {
       do {
-        let prices = try await client.currentPrices(for: tokens)
+        let prices = try await client.currentPrices(for: mappings)
         for (id, price) in prices where result[id] == nil {
           result[id] = price
         }
-        if result.count == tokens.count { break }
+        if result.count == mappings.count { break }
       } catch {
         continue
       }
@@ -181,19 +211,22 @@ actor CryptoPriceService {
 
   // MARK: - Prefetch
 
-  /// Prefetch latest prices for all registered tokens.
+  /// Prefetch latest prices for all registered items.
   func prefetchLatest() async {
-    let tokens = await registeredTokens()
-    guard !tokens.isEmpty else { return }
-    await prefetchLatest(for: tokens)
+    let items = await registeredItems()
+    guard !items.isEmpty else { return }
+    await prefetchLatest(for: items)
   }
 
-  func prefetchLatest(for tokens: [CryptoToken]) async {
+  func prefetchLatest(for registrations: [CryptoRegistration]) async {
+    let mappings = registrations.map(\.mapping)
     do {
-      let prices = try await currentPrices(for: tokens)
+      let prices = try await currentPrices(for: mappings)
       let dateString = dateFormatter.string(from: Date())
       for (tokenId, price) in prices {
-        let symbol = tokens.first { $0.id == tokenId }?.symbol ?? ""
+        let symbol =
+          registrations.first { $0.id == tokenId }?.instrument.ticker
+          ?? registrations.first { $0.id == tokenId }?.instrument.name ?? ""
         merge(tokenId: tokenId, symbol: symbol, newPrices: [dateString: price])
         saveCacheToDisk(tokenId: tokenId)
       }
@@ -230,14 +263,18 @@ actor CryptoPriceService {
     return dates
   }
 
-  private func fetchRange(for token: CryptoToken, from: Date, to: Date) async throws {
+  private func fetchRange(
+    instrument: Instrument, mapping: CryptoProviderMapping, from: Date, to: Date
+  ) async throws {
+    let tokenId = instrument.id
+    let symbol = instrument.ticker ?? instrument.name
     var lastError: (any Error)?
     for client in clients {
       do {
-        let fetched = try await client.dailyPrices(for: token, in: from...to)
+        let fetched = try await client.dailyPrices(for: mapping, in: from...to)
         if !fetched.isEmpty {
-          merge(tokenId: token.id, symbol: token.symbol, newPrices: fetched)
-          saveCacheToDisk(tokenId: token.id)
+          merge(tokenId: tokenId, symbol: symbol, newPrices: fetched)
+          saveCacheToDisk(tokenId: tokenId)
           return
         }
       } catch {

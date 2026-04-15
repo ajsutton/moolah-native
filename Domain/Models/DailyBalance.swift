@@ -9,25 +9,25 @@ struct DailyBalance: Sendable, Codable, Identifiable, Hashable {
   let date: Date
 
   /// Total balance in non-investment accounts (current funds)
-  let balance: MonetaryAmount
+  let balance: InstrumentAmount
 
   /// Amount allocated to earmarks (subset of balance)
-  let earmarked: MonetaryAmount
+  let earmarked: InstrumentAmount
 
   /// Available funds = balance - earmarked
-  let availableFunds: MonetaryAmount
+  let availableFunds: InstrumentAmount
 
   /// Total amount in investment accounts (contributed amount, not market value)
-  let investments: MonetaryAmount
+  let investments: InstrumentAmount
 
   /// Market value of investments (if available from investment tracking)
-  let investmentValue: MonetaryAmount?
+  let investmentValue: InstrumentAmount?
 
   /// Net worth = balance + (investmentValue ?? investments)
-  let netWorth: MonetaryAmount
+  let netWorth: InstrumentAmount
 
   /// Linear regression best-fit value (for trend line visualization)
-  let bestFit: MonetaryAmount?
+  let bestFit: InstrumentAmount?
 
   /// True if this balance was projected from scheduled transactions
   /// (only present in scheduledBalances array from dailyBalances endpoint)
@@ -38,10 +38,10 @@ extension DailyBalance {
   /// Convenience initializer for testing (sets isForecast: false, no bestFit)
   init(
     date: Date,
-    balance: MonetaryAmount,
-    earmarked: MonetaryAmount = .zero(currency: .AUD),
-    investments: MonetaryAmount = .zero(currency: .AUD),
-    investmentValue: MonetaryAmount? = nil
+    balance: InstrumentAmount,
+    earmarked: InstrumentAmount = .zero(instrument: .AUD),
+    investments: InstrumentAmount = .zero(instrument: .AUD),
+    investmentValue: InstrumentAmount? = nil
   ) {
     self.date = date
     self.balance = balance

@@ -44,22 +44,22 @@ struct ProfileTests {
     #expect(profile.cachedUserName == nil)
     #expect(profile.currencyCode == "AUD")
     #expect(profile.financialYearStartMonth == 7)
-    #expect(profile.currency == .AUD)
+    #expect(profile.instrument == .AUD)
     #expect(profile.createdAt.timeIntervalSince1970 > 0)
   }
 
-  @Test("currency computed property maps known codes")
-  func currencyMapping() {
+  @Test("instrument computed property maps known codes")
+  func instrumentMapping() {
     var profile = Profile(label: "Test", serverURL: URL(string: "https://test.com/")!)
 
     profile.currencyCode = "AUD"
-    #expect(profile.currency == .AUD)
+    #expect(profile.instrument == .AUD)
 
     profile.currencyCode = "USD"
-    #expect(profile.currency == .USD)
+    #expect(profile.instrument == .USD)
 
     profile.currencyCode = "GBP"
-    #expect(profile.currency.code == "GBP")
+    #expect(profile.instrument.id == "GBP")
   }
 
   @Test("equality compares all fields")

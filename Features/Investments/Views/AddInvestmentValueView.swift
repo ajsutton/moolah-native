@@ -4,7 +4,7 @@ struct AddInvestmentValueView: View {
   @Environment(\.dismiss) private var dismiss
 
   let accountId: UUID
-  let currency: Currency
+  let instrument: Instrument
   let store: InvestmentStore
 
   @State private var date = Date()
@@ -12,16 +12,12 @@ struct AddInvestmentValueView: View {
   @State private var isSubmitting = false
   @FocusState private var isValueFieldFocused: Bool
 
-  private var parsedCents: Int? {
-    let cleaned = valueString.replacingOccurrences(
-      of: "[^0-9.]", with: "", options: .regularExpression)
-    guard let decimal = Decimal(string: cleaned) else { return nil }
-    let cents = Int(truncating: (decimal * 100) as NSNumber)
-    return cents >= 0 ? cents : nil
+  private var parsedQuantity: Decimal? {
+    InstrumentAmount.parseQuantity(from: valueString, decimals: instrument.decimals)
   }
 
   private var canSubmit: Bool {
-    parsedCents != nil && !isSubmitting
+    parsedQuantity != nil && !isSubmitting
   }
 
   var body: some View {
@@ -31,7 +27,7 @@ struct AddInvestmentValueView: View {
           DatePicker("Date", selection: $date, displayedComponents: .date)
 
           HStack {
-            Text(currency.code)
+            Text(instrument.id)
               .foregroundStyle(.secondary)
             TextField("Value", text: $valueString)
               .focused($isValueFieldFocused)
@@ -71,10 +67,10 @@ struct AddInvestmentValueView: View {
   }
 
   private func submitValue() async {
-    guard let cents = parsedCents else { return }
+    guard let qty = parsedQuantity else { return }
     isSubmitting = true
 
-    let amount = MonetaryAmount(cents: cents, currency: currency)
+    let amount = InstrumentAmount(quantity: qty, instrument: instrument)
     await store.setValue(accountId: accountId, date: date, value: amount)
 
     isSubmitting = false

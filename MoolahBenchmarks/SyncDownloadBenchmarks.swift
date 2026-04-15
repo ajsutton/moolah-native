@@ -50,33 +50,45 @@ final class SyncDownloadBenchmarks: XCTestCase {
   /// Builds a CKRecord for a new transaction with a fresh UUID.
   private func makeFreshTransactionCKRecord(index: Int) -> CKRecord {
     let id = UUID()
-    let currency = Currency.defaultTestCurrency
     let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
     let record = CKRecord(recordType: TransactionRecord.recordType, recordID: recordID)
-    record["type"] = TransactionType.expense.rawValue as CKRecordValue
     record["date"] = Date() as CKRecordValue
-    record["amount"] = (-(index + 1) * 100) as CKRecordValue
-    record["currencyCode"] = currency.code as CKRecordValue
-    record["accountId"] = BenchmarkFixtures.heavyAccountId.uuidString as CKRecordValue
     record["payee"] = "Sync Insert \(index)" as CKRecordValue
+    return record
+  }
+
+  /// Builds a CKRecord for a transaction leg.
+  private func makeFreshLegCKRecord(transactionId: UUID, index: Int) -> CKRecord {
+    let instrument = Instrument.defaultTestInstrument
+    let legId = UUID()
+    let recordID = CKRecord.ID(recordName: legId.uuidString, zoneID: zoneID)
+    let record = CKRecord(recordType: TransactionLegRecord.recordType, recordID: recordID)
+    record["transactionId"] = transactionId.uuidString as CKRecordValue
+    record["accountId"] = BenchmarkFixtures.heavyAccountId.uuidString as CKRecordValue
+    record["instrumentId"] = instrument.id as CKRecordValue
+    record["quantity"] =
+      InstrumentAmount(
+        quantity: Decimal(-(index + 1)), instrument: instrument
+      ).storageValue as CKRecordValue
+    record["type"] = TransactionType.expense.rawValue as CKRecordValue
+    record["sortOrder"] = 0 as CKRecordValue
     return record
   }
 
   // MARK: - Benchmarks
 
-  /// Applies 400 new transaction CKRecords (insert path) into an 18k dataset.
-  ///
-  /// Uses fresh UUIDs each iteration so every run exercises the insert code path
-  /// rather than the update path (records must not already exist in the store).
+  /// Applies 400 new transaction CKRecords with legs (insert path) into a 37k dataset.
   func testApplyRemoteChanges_400inserts() {
     let engine = syncEngine
     measure(metrics: metrics, options: options) {
-      // Generate 400 fresh CKRecords with new UUIDs for this iteration.
-      // Fresh UUIDs guarantee the insert path — no existing record to update.
       var records: [CKRecord] = []
-      records.reserveCapacity(400)
+      records.reserveCapacity(800)
       for i in 0..<400 {
-        records.append(makeFreshTransactionCKRecord(index: i))
+        let txnRecord = makeFreshTransactionCKRecord(index: i)
+        let txnId = UUID(uuidString: txnRecord.recordID.recordName)!
+        let legRecord = makeFreshLegCKRecord(transactionId: txnId, index: i)
+        records.append(txnRecord)
+        records.append(legRecord)
       }
       try! awaitSync { @MainActor in
         engine.applyRemoteChanges(saved: records, deleted: [])
@@ -84,17 +96,14 @@ final class SyncDownloadBenchmarks: XCTestCase {
     }
   }
 
-  /// Applies 400 deletion events into an 18k dataset.
+  /// Applies 400 deletion events into a 37k dataset.
   ///
   /// Re-seeds 400 transaction records before each measured iteration so the
-  /// deletions always find live records to remove. Uses only `XCTClockMetric`
-  /// with `startMeasuring`/`stopMeasuring` to exclude per-iteration setup time.
-  /// (`XCTMemoryMetric` requires full-iteration measurement and cannot be scoped.)
+  /// deletions always find live records to remove.
   func testApplyRemoteChanges_400deletions() {
     let engine = syncEngine
     let container = self.container
     let zone = zoneID
-    let currency = Currency.defaultTestCurrency
 
     let clockOptions = XCTMeasureOptions()
     clockOptions.iterationCount = 10
@@ -102,21 +111,16 @@ final class SyncDownloadBenchmarks: XCTestCase {
 
     measure(metrics: [XCTClockMetric()], options: clockOptions) {
       // --- Setup (excluded from measurement) ---
-      // Insert 400 fresh transaction records and return their CKRecord.IDs for deletion.
       let deletionTargets: [(CKRecord.ID, String)] = try! awaitSync { @MainActor in
         let context = ModelContext(container)
         var targets: [(CKRecord.ID, String)] = []
         targets.reserveCapacity(400)
-        for i in 0..<400 {
+        for _ in 0..<400 {
           let id = UUID()
           let record = TransactionRecord(
             id: id,
-            type: TransactionType.expense.rawValue,
             date: Date(),
-            accountId: BenchmarkFixtures.heavyAccountId,
-            amount: -(i + 1) * 100,
-            currencyCode: currency.code,
-            payee: "Delete Target \(i)"
+            payee: "Delete Target"
           )
           context.insert(record)
           let ckRecordID = CKRecord.ID(recordName: id.uuidString, zoneID: zone)

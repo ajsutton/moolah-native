@@ -10,8 +10,8 @@ final class EarmarkRecord {
   var name: String = ""
   var position: Int = 0
   var isHidden: Bool = false
-  var savingsTarget: Int?  // cents
-  var currencyCode: String = ""
+  var savingsTarget: Int64?  // storageValue (× 10^8)
+  var savingsTargetInstrumentId: String?
   var savingsStartDate: Date?
   var savingsEndDate: Date?
   var encodedSystemFields: Data?
@@ -21,8 +21,8 @@ final class EarmarkRecord {
     name: String,
     position: Int = 0,
     isHidden: Bool = false,
-    savingsTarget: Int? = nil,
-    currencyCode: String,
+    savingsTarget: Int64? = nil,
+    savingsTargetInstrumentId: String? = nil,
     savingsStartDate: Date? = nil,
     savingsEndDate: Date? = nil
   ) {
@@ -31,13 +31,19 @@ final class EarmarkRecord {
     self.position = position
     self.isHidden = isHidden
     self.savingsTarget = savingsTarget
-    self.currencyCode = currencyCode
+    self.savingsTargetInstrumentId = savingsTargetInstrumentId
     self.savingsStartDate = savingsStartDate
     self.savingsEndDate = savingsEndDate
   }
 
-  func toDomain(balance: MonetaryAmount, saved: MonetaryAmount, spent: MonetaryAmount) -> Earmark {
-    let currency = Currency.from(code: currencyCode)
+  func toDomain(balance: InstrumentAmount, saved: InstrumentAmount, spent: InstrumentAmount)
+    -> Earmark
+  {
+    let savingsGoal: InstrumentAmount? = savingsTarget.flatMap { target in
+      guard let instrumentId = savingsTargetInstrumentId else { return nil }
+      let instrument = Instrument.fiat(code: instrumentId)
+      return InstrumentAmount(storageValue: target, instrument: instrument)
+    }
     return Earmark(
       id: id,
       name: name,
@@ -46,20 +52,20 @@ final class EarmarkRecord {
       spent: spent,
       isHidden: isHidden,
       position: position,
-      savingsGoal: savingsTarget.map { MonetaryAmount(cents: $0, currency: currency) },
+      savingsGoal: savingsGoal,
       savingsStartDate: savingsStartDate,
       savingsEndDate: savingsEndDate
     )
   }
 
-  static func from(_ earmark: Earmark, currencyCode: String) -> EarmarkRecord {
+  static func from(_ earmark: Earmark) -> EarmarkRecord {
     EarmarkRecord(
       id: earmark.id,
       name: earmark.name,
       position: earmark.position,
       isHidden: earmark.isHidden,
-      savingsTarget: earmark.savingsGoal?.cents,
-      currencyCode: currencyCode,
+      savingsTarget: earmark.savingsGoal?.storageValue,
+      savingsTargetInstrumentId: earmark.savingsGoal?.instrument.id,
       savingsStartDate: earmark.savingsStartDate,
       savingsEndDate: earmark.savingsEndDate
     )

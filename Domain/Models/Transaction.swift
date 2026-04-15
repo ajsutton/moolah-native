@@ -67,17 +67,12 @@ extension RecurPeriod {
 
 struct Transaction: Codable, Sendable, Identifiable, Hashable {
   let id: UUID
-  var type: TransactionType
   var date: Date
-  var accountId: UUID?
-  var toAccountId: UUID?
-  var amount: MonetaryAmount
   var payee: String?
   var notes: String?
-  var categoryId: UUID?
-  var earmarkId: UUID?
   var recurPeriod: RecurPeriod?
   var recurEvery: Int?
+  var legs: [TransactionLeg]
 
   var isScheduled: Bool {
     recurPeriod != nil
@@ -90,30 +85,34 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
 
   init(
     id: UUID = UUID(),
-    type: TransactionType,
     date: Date,
-    accountId: UUID? = nil,
-    toAccountId: UUID? = nil,
-    amount: MonetaryAmount,
     payee: String? = nil,
     notes: String? = nil,
-    categoryId: UUID? = nil,
-    earmarkId: UUID? = nil,
     recurPeriod: RecurPeriod? = nil,
-    recurEvery: Int? = nil
+    recurEvery: Int? = nil,
+    legs: [TransactionLeg]
   ) {
     self.id = id
-    self.type = type
     self.date = date
-    self.accountId = accountId
-    self.toAccountId = toAccountId
-    self.amount = amount
     self.payee = payee
     self.notes = notes
-    self.categoryId = categoryId
-    self.earmarkId = earmarkId
     self.recurPeriod = recurPeriod
     self.recurEvery = recurEvery
+    self.legs = legs
+  }
+
+  // MARK: - Convenience Accessors
+
+  var accountIds: Set<UUID> { Set(legs.compactMap(\.accountId)) }
+  var primaryAccountId: UUID? { legs.first?.accountId }
+  var type: TransactionType { legs.first?.type ?? .expense }
+  var categoryId: UUID? { legs.first?.categoryId }
+  var earmarkId: UUID? { legs.first?.earmarkId }
+  var primaryAmount: InstrumentAmount { legs.first?.amount ?? .zero(instrument: .AUD) }
+  var isTransfer: Bool {
+    let accounts = Set(legs.filter { $0.type == .transfer }.compactMap(\.accountId))
+    let instruments = Set(legs.filter { $0.type == .transfer }.map(\.instrument))
+    return accounts.count > 1 || instruments.count > 1
   }
 }
 
@@ -153,7 +152,7 @@ extension TransactionFilter {
 /// balance prior to the earliest transaction in this page.
 struct TransactionPage: Sendable {
   let transactions: [Transaction]
-  let priorBalance: MonetaryAmount
+  let priorBalance: InstrumentAmount
   let totalCount: Int?
 
   /// Computes the running balance after each transaction.
@@ -161,7 +160,7 @@ struct TransactionPage: Sendable {
   /// `priorBalance` is the account balance before the oldest transaction in the list.
   static func withRunningBalances(
     transactions: [Transaction],
-    priorBalance: MonetaryAmount
+    priorBalance: InstrumentAmount
   ) -> [TransactionWithBalance] {
     // Walk oldest-to-newest accumulating the balance
     var balance = priorBalance
@@ -169,7 +168,7 @@ struct TransactionPage: Sendable {
     result.reserveCapacity(transactions.count)
 
     for transaction in transactions.reversed() {
-      balance += transaction.amount
+      balance += transaction.primaryAmount
       result.append(TransactionWithBalance(transaction: transaction, balance: balance))
     }
 
@@ -182,7 +181,7 @@ struct TransactionPage: Sendable {
 /// A transaction paired with the account balance after it was applied.
 struct TransactionWithBalance: Sendable, Identifiable {
   let transaction: Transaction
-  let balance: MonetaryAmount
+  let balance: InstrumentAmount
 
   var id: UUID { transaction.id }
 }
@@ -216,8 +215,7 @@ extension Transaction {
     return calendar.date(byAdding: components, to: date)
   }
 
-  /// Validates the transaction's recurrence fields.
-  /// Throws an error if recurrence is partially configured (only period or only every is set).
+  /// Validates the transaction's fields.
   func validate() throws {
     // If either recurPeriod or recurEvery is set, both must be set
     if (recurPeriod != nil) != (recurEvery != nil) {
@@ -228,11 +226,16 @@ extension Transaction {
     if let every = recurEvery, every < 1 {
       throw ValidationError.invalidRecurEvery
     }
+
+    if legs.isEmpty {
+      throw ValidationError.noLegs
+    }
   }
 
   enum ValidationError: LocalizedError {
     case incompleteRecurrence
     case invalidRecurEvery
+    case noLegs
 
     var errorDescription: String? {
       switch self {
@@ -240,6 +243,8 @@ extension Transaction {
         return "Recurrence must have both period and frequency set"
       case .invalidRecurEvery:
         return "Recurrence frequency must be at least 1"
+      case .noLegs:
+        return "Transaction must have at least one leg"
       }
     }
   }

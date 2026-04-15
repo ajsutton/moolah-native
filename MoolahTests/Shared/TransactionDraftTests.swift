@@ -4,7 +4,7 @@ import Testing
 @testable import Moolah
 
 struct TransactionDraftTests {
-  private let currency = Currency.defaultTestCurrency
+  private let instrument = Instrument.defaultTestInstrument
   private let accountA = UUID()
   private let accountB = UUID()
 
@@ -14,6 +14,7 @@ struct TransactionDraftTests {
     amountText: String = "10.00",
     accountId: UUID? = nil,
     toAccountId: UUID? = nil,
+    toAmountText: String = "",
     isRepeating: Bool = false,
     recurPeriod: RecurPeriod? = nil,
     recurEvery: Int = 1
@@ -28,6 +29,8 @@ struct TransactionDraftTests {
       categoryId: nil,
       earmarkId: nil,
       notes: "",
+      categoryText: "",
+      toAmountText: toAmountText,
       isRepeating: isRepeating,
       recurPeriod: recurPeriod,
       recurEvery: recurEvery
@@ -37,50 +40,50 @@ struct TransactionDraftTests {
   // MARK: - Amount Signing
 
   @Test func testExpenseAmountIsNegative() {
-    let draft = makeDraft(type: .expense, amountText: "25.00")
-    let tx = draft.toTransaction(id: UUID(), currency: currency)
+    let draft = makeDraft(type: .expense, amountText: "25.00", accountId: accountA)
+    let tx = draft.toTransaction(id: UUID(), instrument: instrument)
     #expect(tx != nil)
-    #expect(tx!.amount.cents == -2500)
+    #expect(tx!.primaryAmount.quantity == Decimal(string: "-25.00")!)
   }
 
   @Test func testIncomeAmountIsPositive() {
-    let draft = makeDraft(type: .income, amountText: "25.00")
-    let tx = draft.toTransaction(id: UUID(), currency: currency)
+    let draft = makeDraft(type: .income, amountText: "25.00", accountId: accountA)
+    let tx = draft.toTransaction(id: UUID(), instrument: instrument)
     #expect(tx != nil)
-    #expect(tx!.amount.cents == 2500)
+    #expect(tx!.primaryAmount.quantity == Decimal(string: "25.00")!)
   }
 
   @Test func testTransferAmountIsNegative() {
     let draft = makeDraft(
       type: .transfer, amountText: "25.00",
       accountId: accountA, toAccountId: accountB)
-    let tx = draft.toTransaction(id: UUID(), currency: currency)
+    let tx = draft.toTransaction(id: UUID(), instrument: instrument)
     #expect(tx != nil)
-    #expect(tx!.amount.cents == -2500)
+    #expect(tx!.primaryAmount.quantity == Decimal(string: "-25.00")!)
   }
 
   @Test func testOpeningBalanceAmountIsPositive() {
-    let draft = makeDraft(type: .openingBalance, amountText: "100.00")
-    let tx = draft.toTransaction(id: UUID(), currency: currency)
+    let draft = makeDraft(type: .openingBalance, amountText: "100.00", accountId: accountA)
+    let tx = draft.toTransaction(id: UUID(), instrument: instrument)
     #expect(tx != nil)
-    #expect(tx!.amount.cents == 10000)
+    #expect(tx!.primaryAmount.quantity == Decimal(string: "100.00")!)
   }
 
   // MARK: - Parsing
 
-  @Test func testParsedCentsFromDecimalString() {
+  @Test func testParsedQuantityFromDecimalString() {
     let draft = makeDraft(amountText: "12.50")
-    #expect(draft.parsedCents == 1250)
+    #expect(draft.parsedQuantity == Decimal(string: "12.50")!)
   }
 
-  @Test func testParsedCentsRejectsZero() {
+  @Test func testParsedQuantityRejectsZero() {
     let draft = makeDraft(amountText: "0")
-    #expect(draft.parsedCents == nil)
+    #expect(draft.parsedQuantity == nil)
   }
 
-  @Test func testParsedCentsRejectsNonNumeric() {
+  @Test func testParsedQuantityRejectsNonNumeric() {
     let draft = makeDraft(amountText: "abc")
-    #expect(draft.parsedCents == nil)
+    #expect(draft.parsedQuantity == nil)
   }
 
   // MARK: - Validation
@@ -120,13 +123,15 @@ struct TransactionDraftTests {
 
   // MARK: - Conversion Details
 
-  @Test func testToTransactionClearsToAccountForNonTransfer() {
+  @Test func testToTransactionSetsTransferLegs() {
     let draft = makeDraft(
-      type: .expense, amountText: "10.00",
+      type: .transfer, amountText: "10.00",
       accountId: accountA, toAccountId: accountB)
-    let tx = draft.toTransaction(id: UUID(), currency: currency)
+    let tx = draft.toTransaction(id: UUID(), instrument: instrument)
     #expect(tx != nil)
-    #expect(tx!.toAccountId == nil)
+    #expect(tx!.legs.count == 2)
+    #expect(tx!.legs[0].accountId == accountA)
+    #expect(tx!.legs[1].accountId == accountB)
   }
 
   @Test func testToTransactionClearsRecurrenceWhenNotRepeating() {
@@ -136,16 +141,18 @@ struct TransactionDraftTests {
       payee: "",
       amountText: "10.00",
       date: Date(),
-      accountId: nil,
+      accountId: accountA,
       toAccountId: nil,
       categoryId: nil,
       earmarkId: nil,
       notes: "",
+      categoryText: "",
+      toAmountText: "",
       isRepeating: false,
       recurPeriod: .month,
       recurEvery: 2
     )
-    let tx = draft.toTransaction(id: UUID(), currency: currency)
+    let tx = draft.toTransaction(id: UUID(), instrument: instrument)
     #expect(tx != nil)
     #expect(tx!.recurPeriod == nil)
     #expect(tx!.recurEvery == nil)
@@ -153,35 +160,127 @@ struct TransactionDraftTests {
 
   @Test func testInitFromExistingTransactionRoundTrips() {
     let id = UUID()
+    let categoryId = UUID()
+    let earmarkId = UUID()
     let original = Transaction(
       id: id,
-      type: .expense,
       date: Date(timeIntervalSince1970: 1_700_000_000),
-      accountId: accountA,
-      toAccountId: nil,
-      amount: MonetaryAmount(cents: -4250, currency: currency),
       payee: "Coffee Shop",
       notes: "Morning latte",
-      categoryId: UUID(),
-      earmarkId: UUID(),
       recurPeriod: .week,
-      recurEvery: 2
+      recurEvery: 2,
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument,
+          quantity: Decimal(string: "-42.50")!, type: .expense,
+          categoryId: categoryId, earmarkId: earmarkId
+        )
+      ]
     )
 
     let draft = TransactionDraft(from: original)
-    let roundTripped = draft.toTransaction(id: id, currency: currency)
+    let roundTripped = draft.toTransaction(id: id, instrument: instrument)
 
     #expect(roundTripped != nil)
     #expect(roundTripped!.id == original.id)
     #expect(roundTripped!.type == original.type)
     #expect(roundTripped!.date == original.date)
-    #expect(roundTripped!.accountId == original.accountId)
-    #expect(roundTripped!.amount.cents == original.amount.cents)
+    #expect(roundTripped!.primaryAccountId == original.primaryAccountId)
+    #expect(roundTripped!.primaryAmount.quantity == original.primaryAmount.quantity)
     #expect(roundTripped!.payee == original.payee)
     #expect(roundTripped!.notes == original.notes)
     #expect(roundTripped!.categoryId == original.categoryId)
     #expect(roundTripped!.earmarkId == original.earmarkId)
     #expect(roundTripped!.recurPeriod == original.recurPeriod)
     #expect(roundTripped!.recurEvery == original.recurEvery)
+  }
+
+  // MARK: - Instrument Precision
+
+  @Test func initFromTransactionPreservesInstrumentPrecision() {
+    let btc = Instrument.crypto(
+      chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8)
+    let original = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: btc,
+          quantity: Decimal(string: "-0.00123456")!, type: .expense
+        )
+      ]
+    )
+    let draft = TransactionDraft(from: original)
+    #expect(draft.amountText.contains("0.00123456"))
+  }
+
+  @Test func initFromCrossCurrencyTransferPreservesToInstrumentPrecision() {
+    let btc = Instrument.crypto(
+      chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8)
+    let original = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: Instrument.AUD,
+          quantity: Decimal(string: "-100.00")!, type: .transfer
+        ),
+        TransactionLeg(
+          accountId: accountB, instrument: btc,
+          quantity: Decimal(string: "0.00456789")!, type: .transfer
+        ),
+      ]
+    )
+    let draft = TransactionDraft(from: original)
+    #expect(draft.toAmountText.contains("0.00456789"))
+  }
+
+  // MARK: - Cross-Currency Transfers
+
+  @Test func sameCurrencyTransferProducesTwoLegsWithSameAmount() {
+    let draft = makeDraft(
+      type: .transfer, amountText: "100.00",
+      accountId: accountA, toAccountId: accountB, toAmountText: "")
+    let tx = draft.toTransaction(
+      id: UUID(), fromInstrument: .AUD, toInstrument: .AUD)
+    #expect(tx != nil)
+    #expect(tx!.legs.count == 2)
+
+    let outflow = tx!.legs.first(where: { $0.accountId == accountA })
+    #expect(outflow?.quantity == Decimal(string: "-100.00")!)
+    #expect(outflow?.instrument == .AUD)
+
+    let inflow = tx!.legs.first(where: { $0.accountId == accountB })
+    #expect(inflow?.quantity == Decimal(string: "100.00")!)
+    #expect(inflow?.instrument == .AUD)
+  }
+
+  @Test func crossCurrencyTransferProducesTwoLegsWithDifferentAmounts() {
+    let draft = makeDraft(
+      type: .transfer, amountText: "1000.00",
+      accountId: accountA, toAccountId: accountB, toAmountText: "650.00")
+    let tx = draft.toTransaction(
+      id: UUID(), fromInstrument: .AUD, toInstrument: .USD)
+    #expect(tx != nil)
+    #expect(tx!.legs.count == 2)
+
+    let outflow = tx!.legs.first(where: { $0.accountId == accountA })
+    #expect(outflow?.quantity == Decimal(string: "-1000.00")!)
+    #expect(outflow?.instrument == .AUD)
+
+    let inflow = tx!.legs.first(where: { $0.accountId == accountB })
+    #expect(inflow?.quantity == Decimal(string: "650.00")!)
+    #expect(inflow?.instrument == .USD)
+  }
+
+  @Test func crossCurrencyTransferDefaultsSameAmount() {
+    let draft = makeDraft(
+      type: .transfer, amountText: "1000.00",
+      accountId: accountA, toAccountId: accountB, toAmountText: "")
+    let tx = draft.toTransaction(
+      id: UUID(), fromInstrument: .AUD, toInstrument: .USD)
+    #expect(tx != nil)
+
+    let inflow = tx!.legs.first(where: { $0.accountId == accountB })
+    #expect(inflow?.quantity == Decimal(string: "1000.00")!)
+    #expect(inflow?.instrument == .USD)
   }
 }

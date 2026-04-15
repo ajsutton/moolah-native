@@ -3,15 +3,15 @@ import Foundation
 struct ICloudTokenRepository: CryptoTokenRepository, Sendable {
   private static let key = "crypto-tokens"
 
-  func loadTokens() async throws -> [CryptoToken] {
+  func loadRegistrations() async throws -> [CryptoRegistration] {
     guard let data = NSUbiquitousKeyValueStore.default.data(forKey: Self.key) else {
       return []
     }
-    return try JSONDecoder().decode([CryptoToken].self, from: data)
+    return try JSONDecoder().decode([CryptoRegistration].self, from: data)
   }
 
-  func saveTokens(_ tokens: [CryptoToken]) async throws {
-    let data = try JSONEncoder().encode(tokens)
+  func saveRegistrations(_ registrations: [CryptoRegistration]) async throws {
+    let data = try JSONEncoder().encode(registrations)
     NSUbiquitousKeyValueStore.default.set(data, forKey: Self.key)
     NSUbiquitousKeyValueStore.default.synchronize()
   }

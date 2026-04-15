@@ -23,6 +23,14 @@ final class ProfileStore {
   /// Used by SessionManager to tear down the corresponding ProfileSession.
   var onProfileRemoved: ((UUID) -> Void)?
 
+  /// Called after a CloudKit profile is created or updated locally.
+  /// Used by ProfileIndexSyncEngine to queue the profile for upload.
+  var onProfileChanged: ((UUID) -> Void)?
+
+  /// Called after a CloudKit profile is deleted locally.
+  /// Used by ProfileIndexSyncEngine to queue the profile for deletion.
+  var onProfileDeleted: ((UUID) -> Void)?
+
   private let defaults: UserDefaults
   private let validator: (any ServerValidator)?
   private let containerManager: ProfileContainerManager?
@@ -71,6 +79,7 @@ final class ProfileStore {
       context.insert(record)
       do {
         try context.save()
+        onProfileChanged?(profile.id)
       } catch {
         logger.error("Failed to save CloudKit profile: \(error)")
       }
@@ -102,6 +111,7 @@ final class ProfileStore {
         let deleter = ProfileDataDeleter(modelContext: context)
         deleter.deleteProfileRecord(for: id)
       }
+      onProfileDeleted?(id)
       onProfileRemoved?(id)
     }
 
@@ -139,7 +149,12 @@ final class ProfileStore {
         record.label = profile.label
         record.currencyCode = profile.currencyCode
         record.financialYearStartMonth = profile.financialYearStartMonth
-        try? context.save()
+        do {
+          try context.save()
+          onProfileChanged?(profile.id)
+        } catch {
+          logger.error("Failed to save CloudKit profile update: \(error)")
+        }
       }
     }
     logger.debug("Updated profile: \(profile.label)")

@@ -28,7 +28,7 @@ struct StockPriceServiceTests {
 
   private func bhpResponse() -> StockPriceResponse {
     StockPriceResponse(
-      currency: .AUD,
+      instrument: .AUD,
       prices: [
         "2026-04-07": Decimal(string: "38.50")!,
         "2026-04-08": Decimal(string: "38.75")!,
@@ -59,14 +59,14 @@ struct StockPriceServiceTests {
   @Test func currencyDiscoveredFromFirstFetch() async throws {
     let service = makeService(responses: ["BHP.AX": bhpResponse()])
     _ = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
-    let currency = try await service.currency(for: "BHP.AX")
-    #expect(currency == .AUD)
+    let instrument = try await service.instrument(for: "BHP.AX")
+    #expect(instrument == .AUD)
   }
 
-  @Test func currencyThrowsForUnknownTicker() async throws {
+  @Test func instrumentThrowsForUnknownTicker() async throws {
     let service = makeService()
     await #expect(throws: (any Error).self) {
-      try await service.currency(for: "UNKNOWN.AX")
+      try await service.instrument(for: "UNKNOWN.AX")
     }
   }
 
@@ -81,7 +81,7 @@ struct StockPriceServiceTests {
 
   @Test func fallbackNeverUsesFutureDate() async throws {
     let futureOnly = StockPriceResponse(
-      currency: .AUD,
+      instrument: .AUD,
       prices: [
         "2026-04-10": Decimal(string: "38.25")!
       ])
@@ -172,15 +172,15 @@ struct StockPriceServiceTests {
     let cachedPrice = try await service2.price(ticker: "BHP.AX", on: date("2026-04-07"))
     #expect(cachedPrice == Decimal(string: "38.50")!)
 
-    let currency = try await service2.currency(for: "BHP.AX")
-    #expect(currency == .AUD)
+    let instrument = try await service2.instrument(for: "BHP.AX")
+    #expect(instrument == .AUD)
   }
 
   // MARK: - Multiple tickers
 
   @Test func differentTickersAreCachedIndependently() async throws {
     let cbaResponse = StockPriceResponse(
-      currency: .AUD,
+      instrument: .AUD,
       prices: [
         "2026-04-07": Decimal(string: "115.20")!
       ])

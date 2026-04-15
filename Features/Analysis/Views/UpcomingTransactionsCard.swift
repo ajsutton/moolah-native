@@ -143,12 +143,12 @@ private struct SimpleTransactionRow: View {
       Spacer()
 
       Text(
-        transaction.amount.decimalValue,
-        format: .currency(code: transaction.amount.currency.code)
+        transaction.primaryAmount.quantity,
+        format: .currency(code: transaction.primaryAmount.instrument.id)
       )
       .font(.body)
       .monospacedDigit()
-      .foregroundStyle(transaction.amount.cents >= 0 ? .green : .red)
+      .foregroundStyle(transaction.primaryAmount.quantity >= 0 ? .green : .red)
 
       Button {
         Task {
@@ -203,32 +203,32 @@ private struct SimpleTransactionRow: View {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: MonetaryAmount(cents: 100000, currency: .AUD)
+      balance: InstrumentAmount(quantity: 1000, instrument: .AUD)
     )
     _ = try? await backend.accounts.create(account)
 
     _ = try? await backend.transactions.create(
       Transaction(
         id: UUID(),
-        type: .expense,
         date: Date().addingTimeInterval(86400 * 2),
-        accountId: account.id,
-        amount: MonetaryAmount(cents: -5000, currency: .AUD),
         payee: "Utility Bill",
         recurPeriod: .month,
-        recurEvery: 1
+        recurEvery: 1,
+        legs: [
+          TransactionLeg(accountId: account.id, instrument: .AUD, quantity: -50, type: .expense)
+        ]
       ))
 
     _ = try? await backend.transactions.create(
       Transaction(
         id: UUID(),
-        type: .income,
         date: Date().addingTimeInterval(86400 * 7),
-        accountId: account.id,
-        amount: MonetaryAmount(cents: 200000, currency: .AUD),
         payee: "Paycheck",
         recurPeriod: .week,
-        recurEvery: 2
+        recurEvery: 2,
+        legs: [
+          TransactionLeg(accountId: account.id, instrument: .AUD, quantity: 2000, type: .income)
+        ]
       ))
 
     await store.load(filter: TransactionFilter(scheduled: true))

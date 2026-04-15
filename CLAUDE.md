@@ -130,6 +130,10 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
 - **Accessibility:** Every UI component must be VoiceOver-accessible with proper labels and keyboard navigation (macOS).
 - **Before Shipping UI:** Run the `ui-review` agent (see Agents section) to validate compliance with `guides/STYLE_GUIDE.md` and identify accessibility issues.
 
+## Bug Tracking
+
+- **Known bugs** are tracked in `BUGS.md` in the project root. When fixing a bug, remove the entry entirely — don't mark it as fixed or strike it through.
+
 ## Planning & Documentation
 
 - **Plans Directory:** All planning documents, feature specifications, design specs, and gap analyses live in `plans/`. Completed plans are moved to `plans/completed/`. **This overrides any skill defaults** (e.g., the brainstorming skill's `docs/superpowers/specs/` path). Never create a `docs/` directory.

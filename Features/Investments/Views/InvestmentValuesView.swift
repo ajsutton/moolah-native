@@ -49,7 +49,7 @@ struct InvestmentValuesView: View {
     }
     .sheet(isPresented: $showingAddValue) {
       AddInvestmentValueView(
-        accountId: account.id, currency: account.balance.currency, store: store)
+        accountId: account.id, instrument: account.balance.instrument, store: store)
     }
     .task {
       await store.loadValues(accountId: account.id)
@@ -66,14 +66,14 @@ struct InvestmentValuesView: View {
       ForEach(chartValues) { value in
         LineMark(
           x: .value("Date", value.date),
-          y: .value("Value", value.value.decimalValue)
+          y: .value("Value", Double(truncating: value.value.quantity as NSDecimalNumber))
         )
         .foregroundStyle(Color.blue)
         .interpolationMethod(.catmullRom)
 
         AreaMark(
           x: .value("Date", value.date),
-          y: .value("Value", value.value.decimalValue)
+          y: .value("Value", Double(truncating: value.value.quantity as NSDecimalNumber))
         )
         .foregroundStyle(Color.blue.opacity(0.1))
         .interpolationMethod(.catmullRom)
@@ -83,7 +83,7 @@ struct InvestmentValuesView: View {
       AxisMarks(position: .leading) { axisValue in
         if let decimal = axisValue.as(Decimal.self) {
           AxisValueLabel {
-            Text(decimal, format: .currency(code: account.balance.currency.code))
+            Text(decimal, format: .currency(code: account.balance.instrument.id))
               .font(.caption)
               .monospacedDigit()
           }

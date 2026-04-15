@@ -17,7 +17,7 @@ struct CryptoSettingsView: View {
     }
     .formStyle(.grouped)
     .navigationTitle("Crypto Tokens")
-    .task { await store.loadTokens() }
+    .task { await store.loadRegistrations() }
     .sheet(isPresented: $showAddToken) {
       AddTokenSheet(store: store, isPresented: $showAddToken)
     }
@@ -28,26 +28,27 @@ struct CryptoSettingsView: View {
   @ViewBuilder
   private var tokenListSection: some View {
     Section {
-      if store.isLoading && store.tokens.isEmpty {
+      if store.isLoading && store.registrations.isEmpty {
         HStack {
           Spacer()
           ProgressView()
           Spacer()
         }
-      } else if store.tokens.isEmpty {
+      } else if store.registrations.isEmpty {
         ContentUnavailableView(
           "No Tokens",
           systemImage: "bitcoinsign.circle",
           description: Text("Add crypto tokens to track their prices.")
         )
+        .frame(maxWidth: .infinity)
       } else {
-        ForEach(store.tokens, id: \.id) { token in
-          tokenRow(token)
+        ForEach(store.registrations) { registration in
+          registrationRow(registration)
         }
         .onDelete { indexSet in
           Task {
             for index in indexSet {
-              await store.removeToken(store.tokens[index])
+              await store.removeRegistration(store.registrations[index])
             }
           }
         }
@@ -67,51 +68,53 @@ struct CryptoSettingsView: View {
     }
   }
 
-  private func tokenRow(_ token: CryptoToken) -> some View {
-    HStack {
+  private func registrationRow(_ registration: CryptoRegistration) -> some View {
+    let instrument = registration.instrument
+    let mapping = registration.mapping
+    return HStack {
       VStack(alignment: .leading, spacing: 2) {
-        Text(token.symbol)
+        Text(instrument.ticker ?? instrument.name)
           .font(.headline)
-        Text(token.name)
+        Text(instrument.name)
           .font(.caption)
           .foregroundStyle(.secondary)
       }
       Spacer()
-      Text(CryptoToken.chainName(for: token.chainId))
+      Text(Instrument.chainName(for: instrument.chainId ?? 0))
         .font(.caption)
         .foregroundStyle(.secondary)
-      providerIndicators(for: token)
+      providerIndicators(for: mapping)
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(
-      "\(token.symbol), \(token.name), \(CryptoToken.chainName(for: token.chainId))"
+      "\(instrument.ticker ?? instrument.name), \(instrument.name), \(Instrument.chainName(for: instrument.chainId ?? 0))"
     )
     .contextMenu {
       Button(role: .destructive) {
-        Task { await store.removeToken(token) }
+        Task { await store.removeRegistration(registration) }
       } label: {
         Label("Remove", systemImage: "trash")
       }
     }
   }
 
-  private func providerIndicators(for token: CryptoToken) -> some View {
+  private func providerIndicators(for mapping: CryptoProviderMapping) -> some View {
     HStack(spacing: 4) {
-      if token.coingeckoId != nil {
+      if mapping.coingeckoId != nil {
         Text("CG")
           .font(.caption2)
           .padding(.horizontal, 4)
           .padding(.vertical, 1)
           .background(.fill, in: RoundedRectangle(cornerRadius: 3))
       }
-      if token.cryptocompareSymbol != nil {
+      if mapping.cryptocompareSymbol != nil {
         Text("CC")
           .font(.caption2)
           .padding(.horizontal, 4)
           .padding(.vertical, 1)
           .background(.fill, in: RoundedRectangle(cornerRadius: 3))
       }
-      if token.binanceSymbol != nil {
+      if mapping.binanceSymbol != nil {
         Text("BN")
           .font(.caption2)
           .padding(.horizontal, 4)

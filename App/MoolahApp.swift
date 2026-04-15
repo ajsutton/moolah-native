@@ -81,7 +81,7 @@ struct MoolahApp: App {
   init() {
     do {
       let profileSchema = Schema([ProfileRecord.self])
-      let profileStoreURL = URL.applicationSupportDirectory.appending(path: "Moolah.store")
+      let profileStoreURL = URL.applicationSupportDirectory.appending(path: "Moolah-v2.store")
       let profileConfig = ModelConfiguration(
         url: profileStoreURL,
         cloudKitDatabase: .none
@@ -91,6 +91,8 @@ struct MoolahApp: App {
       let dataSchema = Schema([
         AccountRecord.self,
         TransactionRecord.self,
+        TransactionLegRecord.self,
+        InstrumentRecord.self,
         CategoryRecord.self,
         EarmarkRecord.self,
         EarmarkBudgetItemRecord.self,
@@ -116,8 +118,13 @@ struct MoolahApp: App {
       profileIndexSyncEngine.onRemoteChangesApplied = { [weak store] in
         store?.loadCloudProfiles()
       }
+      store.onProfileChanged = { [weak profileIndexSyncEngine] id in
+        profileIndexSyncEngine?.addPendingSave(for: id)
+      }
+      store.onProfileDeleted = { [weak profileIndexSyncEngine] id in
+        profileIndexSyncEngine?.addPendingDeletion(for: id)
+      }
       profileIndexSyncEngine.start()
-      profileIndexSyncEngine.startTracking()
 
       // Clean up the legacy CloudKit zone from SwiftData's automatic sync
       LegacyZoneCleanup.performIfNeeded()

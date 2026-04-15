@@ -1,15 +1,23 @@
 # Known Bugs
 
-## Balance Calculations Are Inconsistent
+## Profile remove button click target too small
 
-Multiple balance values disagree with each other:
+**Severity:** Low (UX)
+**Files:** Profile list / settings view
 
-1. The sidebar account balance differs from the running balance on the latest transaction.
-2. The same iCloud profile viewed on a different device shows yet another balance.
-3. All of these differ from the correct balance on the original remote profile that was migrated, even though no transactions have changed since migration.
+The minus (-) button to remove profiles has a very small click target. It may not be using the full row height for its tap area.
 
-This suggests the cached balance on the account record, the running balance computed from transactions, and the balance synced via CloudKit are all being calculated or propagated differently.
+## Windows flash "profile removed" on app launch
 
-## Transaction Side Panel Should Be Full-Window Width
+When the app first loads, all existing windows briefly show a "profile removed" message before updating to show the actual profile data. This happens because the profile list hasn't loaded yet when the windows render, so they can't find their profile and assume it was removed. Don't show the window content until profiles are loaded. Once profiles are loaded, if a window's profile is genuinely gone, close the window rather than showing a "removed" message.
 
-The transaction detail side panel currently appears only within the upcoming transactions panel. It should instead be a right-hand side panel of the whole window, using the full analysis panel size.
+## Transaction convenience accessors assume single-leg semantics
+
+`Transaction` has several convenience accessors that return properties from `legs.first`:
+- `earmarkId` → `legs.first?.earmarkId`
+- `categoryId` → `legs.first?.categoryId`
+- `primaryAccountId` → `legs.first?.accountId`
+- `primaryAmount` → `legs.first?.amount`
+- `type` → `legs.first?.type`
+
+These assume the first leg is "special", which breaks for multi-leg transactions where different legs could have different earmarks, categories, or types. Need to audit all call sites for hidden single-leg assumptions and decide on proper multi-leg semantics (e.g. should `earmarkId` return the earmark from any leg that has one?).

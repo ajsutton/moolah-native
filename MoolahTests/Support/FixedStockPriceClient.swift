@@ -21,7 +21,7 @@ struct FixedStockPriceClient: StockPriceClient, Sendable {
       throw URLError(.notConnectedToInternet)
     }
     guard let response = responses[ticker] else {
-      return StockPriceResponse(currency: .AUD, prices: [:])
+      return StockPriceResponse(instrument: .AUD, prices: [:])
     }
 
     let calendar = Calendar(identifier: .gregorian)
@@ -38,6 +38,6 @@ struct FixedStockPriceClient: StockPriceClient, Sendable {
       }
       current = calendar.date(byAdding: .day, value: 1, to: current)!
     }
-    return StockPriceResponse(currency: response.currency, prices: filtered)
+    return StockPriceResponse(instrument: response.instrument, prices: filtered)
   }
 }

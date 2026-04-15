@@ -16,10 +16,10 @@ final class ProfileSession: Identifiable {
   let earmarkStore: EarmarkStore
   let analysisStore: AnalysisStore
   let investmentStore: InvestmentStore
+  let tradeStore: TradeStore
   let exchangeRateService: ExchangeRateService
   let stockPriceService: StockPriceService
   let cryptoPriceService: CryptoPriceService
-  let priceConversionService: PriceConversionService
 
   /// The sync engine for this profile's CloudKit zone (nil for remote profiles).
   private(set) var profileSyncEngine: ProfileSyncEngine?
@@ -49,7 +49,7 @@ final class ProfileSession: Identifiable {
 
       backend = RemoteBackend(
         baseURL: profile.resolvedServerURL,
-        currency: profile.currency,
+        instrument: profile.instrument,
         session: session,
         cookieKeychain: cookieKeychain,
         cookieStorage: cookieStorage
@@ -62,7 +62,7 @@ final class ProfileSession: Identifiable {
       let profileContainer = try! containerManager.container(for: profile.id)
       backend = CloudKitBackend(
         modelContainer: profileContainer,
-        currency: profile.currency,
+        instrument: profile.instrument,
         profileLabel: profile.label
       )
     }
@@ -71,14 +71,12 @@ final class ProfileSession: Identifiable {
     self.stockPriceService = StockPriceService(client: YahooFinanceClient())
     let cryptoCompareClient = CryptoCompareClient()
     let binanceClient = BinanceClient { date in
-      let usdt = CryptoToken(
-        chainId: 1,
-        contractAddress: "0xdac17f958d2ee523a2206206994597c13d831ec7",
-        symbol: "USDT", name: "Tether", decimals: 6,
+      let usdtMapping = CryptoProviderMapping(
+        instrumentId: "1:0xdac17f958d2ee523a2206206994597c13d831ec7",
         coingeckoId: "tether", cryptocompareSymbol: "USDT", binanceSymbol: nil
       )
       do {
-        return try await cryptoCompareClient.dailyPrice(for: usdt, on: date)
+        return try await cryptoCompareClient.dailyPrice(for: usdtMapping, on: date)
       } catch {
         return Decimal(1)
       }
@@ -101,18 +99,18 @@ final class ProfileSession: Identifiable {
       tokenRepository: ICloudTokenRepository(),
       resolutionClient: CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey)
     )
-    self.priceConversionService = PriceConversionService(
-      cryptoPrices: self.cryptoPriceService,
-      exchangeRates: self.exchangeRateService
-    )
-
     self.authStore = AuthStore(backend: backend)
-    self.accountStore = AccountStore(repository: backend.accounts)
+    self.accountStore = AccountStore(
+      repository: backend.accounts, conversionService: backend.conversionService)
     self.transactionStore = TransactionStore(repository: backend.transactions)
     self.categoryStore = CategoryStore(repository: backend.categories)
     self.earmarkStore = EarmarkStore(repository: backend.earmarks)
     self.analysisStore = AnalysisStore(repository: backend.analysis)
-    self.investmentStore = InvestmentStore(repository: backend.investments)
+    self.investmentStore = InvestmentStore(
+      repository: backend.investments,
+      transactionRepository: backend.transactions
+    )
+    self.tradeStore = TradeStore(transactions: backend.transactions)
 
     // Wire up cross-store side effects
     let accountStore = self.accountStore
@@ -138,10 +136,16 @@ final class ProfileSession: Identifiable {
       if let repo = backend.accounts as? CloudKitAccountRepository {
         repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }
         repo.onRecordDeleted = { [weak syncEngine] id in syncEngine?.queueDeletion(id: id) }
+        repo.onInstrumentChanged = { [weak syncEngine] id in
+          syncEngine?.queueSave(recordName: id)
+        }
       }
       if let repo = backend.transactions as? CloudKitTransactionRepository {
         repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }
         repo.onRecordDeleted = { [weak syncEngine] id in syncEngine?.queueDeletion(id: id) }
+        repo.onInstrumentChanged = { [weak syncEngine] id in
+          syncEngine?.queueSave(recordName: id)
+        }
       }
       if let repo = backend.categories as? CloudKitCategoryRepository {
         repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }

@@ -15,23 +15,28 @@ struct DailyBalanceDTO: Codable {
   let netWorth: Int?  // Missing from scheduled balances
   let bestFit: Double?
 
-  func toDomain(currency: Currency, isForecast: Bool) -> DailyBalance {
-    let balanceAmount = MonetaryAmount(cents: balance, currency: currency)
-    let earmarkedAmount = MonetaryAmount(cents: earmarked ?? 0, currency: currency)
-    let investmentsAmount = MonetaryAmount(cents: investments ?? 0, currency: currency)
+  func toDomain(instrument: Instrument, isForecast: Bool) -> DailyBalance {
+    let balanceAmount = InstrumentAmount(quantity: Decimal(balance) / 100, instrument: instrument)
+    let earmarkedAmount = InstrumentAmount(
+      quantity: Decimal(earmarked ?? 0) / 100, instrument: instrument)
+    let investmentsAmount = InstrumentAmount(
+      quantity: Decimal(investments ?? 0) / 100, instrument: instrument)
     return DailyBalance(
       date: BackendDateFormatter.date(from: date) ?? Date(),
       balance: balanceAmount,
       earmarked: earmarkedAmount,
-      availableFunds: MonetaryAmount(cents: availableFunds, currency: currency),
+      availableFunds: InstrumentAmount(
+        quantity: Decimal(availableFunds) / 100, instrument: instrument),
       investments: investmentsAmount,
       investmentValue: investmentValue.map {
-        MonetaryAmount(cents: $0, currency: currency)
+        InstrumentAmount(quantity: Decimal($0) / 100, instrument: instrument)
       },
-      netWorth: MonetaryAmount(
-        cents: netWorth ?? (balance + (investmentValue ?? (investments ?? 0))),
-        currency: currency),
-      bestFit: bestFit.map { MonetaryAmount(cents: Int($0), currency: currency) },
+      netWorth: InstrumentAmount(
+        quantity: Decimal(netWorth ?? (balance + (investmentValue ?? (investments ?? 0)))) / 100,
+        instrument: instrument),
+      bestFit: bestFit.map {
+        InstrumentAmount(quantity: Decimal($0) / 100, instrument: instrument)
+      },
       isForecast: isForecast
     )
   }

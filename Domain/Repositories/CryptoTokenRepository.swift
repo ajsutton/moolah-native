@@ -2,6 +2,6 @@
 import Foundation
 
 protocol CryptoTokenRepository: Sendable {
-  func loadTokens() async throws -> [CryptoToken]
-  func saveTokens(_ tokens: [CryptoToken]) async throws
+  func loadRegistrations() async throws -> [CryptoRegistration]
+  func saveRegistrations(_ registrations: [CryptoRegistration]) async throws
 }

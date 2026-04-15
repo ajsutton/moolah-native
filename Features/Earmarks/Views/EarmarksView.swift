@@ -70,7 +70,7 @@ struct EarmarksView: View {
       #endif
       .sheet(isPresented: $showCreateSheet) {
         CreateEarmarkSheet(
-          currency: earmarkStore.totalBalance.currency,
+          instrument: earmarkStore.totalBalance.instrument,
           onCreate: { newEarmark in
             Task {
               _ = await earmarkStore.create(newEarmark)
@@ -110,12 +110,12 @@ struct EarmarksView: View {
             Text(earmark.name)
               .font(.headline)
             Spacer()
-            MonetaryAmountView(amount: earmark.balance, font: .headline)
+            InstrumentAmountView(amount: earmark.balance, font: .headline)
           }
 
           HStack(spacing: 12) {
             Label {
-              MonetaryAmountView(amount: earmark.saved, font: .caption)
+              InstrumentAmountView(amount: earmark.saved, font: .caption)
             } icon: {
               Image(systemName: "arrow.up")
                 .foregroundStyle(.green)
@@ -123,7 +123,7 @@ struct EarmarksView: View {
             .font(.caption)
 
             Label {
-              MonetaryAmountView(amount: earmark.spent, font: .caption)
+              InstrumentAmountView(amount: earmark.spent, font: .caption)
             } icon: {
               Image(systemName: "arrow.down")
                 .foregroundStyle(.red)
@@ -133,7 +133,7 @@ struct EarmarksView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-          "\(earmark.name), balance \(earmark.balance.decimalValue.formatted(.currency(code: earmark.balance.currency.code)))"
+          "\(earmark.name), balance \(earmark.balance.formatted)"
         )
         .tag(earmark)
         .contextMenu {
@@ -224,7 +224,7 @@ struct EarmarksView: View {
     _ = try? await backend.earmarks.create(
       Earmark(
         name: "Holiday Fund",
-        savingsGoal: MonetaryAmount(cents: 500000, currency: Currency.AUD)))
+        savingsGoal: InstrumentAmount(quantity: 5000, instrument: .AUD)))
     _ = try? await backend.earmarks.create(
       Earmark(name: "Emergency Fund"))
     await earmarkStore.load()

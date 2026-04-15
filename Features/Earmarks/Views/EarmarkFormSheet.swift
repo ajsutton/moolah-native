@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct CreateEarmarkSheet: View {
-  let currency: Currency
+  let instrument: Instrument
   let onCreate: (Earmark) -> Void
 
   @State private var name: String = ""
@@ -20,7 +20,7 @@ struct CreateEarmarkSheet: View {
 
         Section("Savings Goal") {
           HStack {
-            Text(currency.code)
+            Text(instrument.id)
               .foregroundStyle(.secondary)
             TextField("Amount", text: $savingsGoal)
               #if os(iOS)
@@ -59,9 +59,9 @@ struct CreateEarmarkSheet: View {
   }
 
   private func createEarmark() {
-    let goalCents = MonetaryAmount.parseCents(from: savingsGoal)
+    let goalQty = InstrumentAmount.parseQuantity(from: savingsGoal, decimals: instrument.decimals)
     let goal =
-      goalCents.flatMap { $0 > 0 ? MonetaryAmount(cents: $0, currency: currency) : nil }
+      goalQty.flatMap { $0 > 0 ? InstrumentAmount(quantity: $0, instrument: instrument) : nil }
 
     let newEarmark = Earmark(
       name: name,
@@ -109,7 +109,7 @@ struct EditEarmarkSheet: View {
 
         Section("Savings Goal") {
           HStack {
-            Text(earmark.balance.currency.code)
+            Text(earmark.balance.instrument.id)
               .foregroundStyle(.secondary)
             TextField("Amount", text: $savingsGoal)
               #if os(iOS)
@@ -127,13 +127,13 @@ struct EditEarmarkSheet: View {
 
         Section("Current Values") {
           LabeledContent("Balance") {
-            MonetaryAmountView(amount: earmark.balance)
+            InstrumentAmountView(amount: earmark.balance)
           }
           LabeledContent("Saved") {
-            MonetaryAmountView(amount: earmark.saved)
+            InstrumentAmountView(amount: earmark.saved)
           }
           LabeledContent("Spent") {
-            MonetaryAmountView(amount: earmark.spent)
+            InstrumentAmountView(amount: earmark.spent)
           }
         }
       }
@@ -160,10 +160,11 @@ struct EditEarmarkSheet: View {
   }
 
   private func saveChanges() {
-    let goalCents = MonetaryAmount.parseCents(from: savingsGoal)
+    let goalQty = InstrumentAmount.parseQuantity(
+      from: savingsGoal, decimals: earmark.balance.instrument.decimals)
     let goal =
-      goalCents.flatMap {
-        $0 > 0 ? MonetaryAmount(cents: $0, currency: earmark.balance.currency) : nil
+      goalQty.flatMap {
+        $0 > 0 ? InstrumentAmount(quantity: $0, instrument: earmark.balance.instrument) : nil
       }
 
     var updated = earmark

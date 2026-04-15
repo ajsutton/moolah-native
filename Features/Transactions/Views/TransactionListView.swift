@@ -8,6 +8,7 @@ struct TransactionListView: View {
   let categories: Categories
   let earmarks: Earmarks
   let transactionStore: TransactionStore
+  var positions: [Position] = []
 
   /// When non-nil, the parent owns the selection and handles the inspector.
   /// When nil, TransactionListView manages its own selection and inspector.
@@ -50,7 +51,8 @@ struct TransactionListView: View {
   init(
     title: String, filter: TransactionFilter,
     accounts: Accounts, categories: Categories, earmarks: Earmarks,
-    transactionStore: TransactionStore
+    transactionStore: TransactionStore,
+    positions: [Position] = []
   ) {
     self.title = title
     self.baseFilter = filter
@@ -58,6 +60,7 @@ struct TransactionListView: View {
     self.categories = categories
     self.earmarks = earmarks
     self.transactionStore = transactionStore
+    self.positions = positions
     self._externalSelection = nil
     self._activeFilter = State(initialValue: filter)
   }
@@ -67,6 +70,7 @@ struct TransactionListView: View {
     title: String, filter: TransactionFilter,
     accounts: Accounts, categories: Categories, earmarks: Earmarks,
     transactionStore: TransactionStore,
+    positions: [Position] = [],
     selectedTransaction: Binding<Transaction?>
   ) {
     self.title = title
@@ -75,6 +79,7 @@ struct TransactionListView: View {
     self.categories = categories
     self.earmarks = earmarks
     self.transactionStore = transactionStore
+    self.positions = positions
     self._externalSelection = selectedTransaction
     self._activeFilter = State(initialValue: filter)
   }
@@ -110,16 +115,17 @@ struct TransactionListView: View {
   }
 
   private func createNewTransaction() {
-    let currency = accounts.ordered.first?.balance.currency ?? .AUD
+    let instrument = accounts.ordered.first?.balance.instrument ?? .AUD
+    let acctId = filter.accountId ?? accounts.ordered.first?.id
 
     // Create a placeholder for optimistic selection while the store creates it
-    let placeholder = Transaction(
-      type: .expense,
-      date: Date(),
-      accountId: filter.accountId ?? accounts.ordered.first?.id,
-      amount: MonetaryAmount(cents: 0, currency: currency),
-      payee: ""
-    )
+    let placeholder: Transaction? = acctId.map { id in
+      Transaction(
+        date: Date(),
+        payee: "",
+        legs: [TransactionLeg(accountId: id, instrument: instrument, quantity: 0, type: .expense)]
+      )
+    }
     selectedTransaction = placeholder
 
     // Create the transaction in the store and update selection with server-confirmed version
@@ -127,9 +133,9 @@ struct TransactionListView: View {
       if let created = await transactionStore.createDefault(
         accountId: filter.accountId,
         fallbackAccountId: accounts.ordered.first?.id,
-        currency: currency
+        instrument: instrument
       ) {
-        if selectedTransaction?.id == placeholder.id {
+        if selectedTransaction?.id == placeholder?.id {
           selectedTransaction = created
         }
       }
@@ -147,6 +153,7 @@ struct TransactionListView: View {
 
   private var listView: some View {
     List(selection: selectedTransactionBinding) {
+      PositionListView(positions: positions)
       ForEach(filteredTransactions) { entry in
         TransactionRowView(
           transaction: entry.transaction, accounts: accounts,
@@ -288,12 +295,12 @@ struct TransactionListView: View {
   let savingsId = UUID()
   let account = Account(
     id: accountId, name: "Checking", type: .bank,
-    balance: MonetaryAmount(cents: 244977, currency: Currency.AUD))
+    balance: InstrumentAmount(quantity: 2449.77, instrument: .AUD))
   let accounts = Accounts(from: [
     account,
     Account(
       id: savingsId, name: "Savings", type: .bank,
-      balance: MonetaryAmount(cents: 500000, currency: Currency.AUD)),
+      balance: InstrumentAmount(quantity: 5000, instrument: .AUD)),
   ])
   let (backend, _) = PreviewBackend.create()
   let store = TransactionStore(repository: backend.transactions)
@@ -308,19 +315,23 @@ struct TransactionListView: View {
   .task {
     _ = try? await backend.transactions.create(
       Transaction(
-        type: .expense, date: Date(), accountId: accountId,
-        amount: MonetaryAmount(cents: -5023, currency: Currency.AUD),
-        payee: "Woolworths"))
+        date: Date(), payee: "Woolworths",
+        legs: [
+          TransactionLeg(accountId: accountId, instrument: .AUD, quantity: -50.23, type: .expense)
+        ]))
     _ = try? await backend.transactions.create(
       Transaction(
-        type: .income, date: Date().addingTimeInterval(-86400), accountId: accountId,
-        amount: MonetaryAmount(cents: 350000, currency: Currency.AUD),
-        payee: "Employer"))
+        date: Date().addingTimeInterval(-86400), payee: "Employer",
+        legs: [
+          TransactionLeg(accountId: accountId, instrument: .AUD, quantity: 3500, type: .income)
+        ]))
     _ = try? await backend.transactions.create(
       Transaction(
-        type: .transfer, date: Date().addingTimeInterval(-172800), accountId: accountId,
-        toAccountId: savingsId,
-        amount: MonetaryAmount(cents: -100000, currency: Currency.AUD), payee: ""))
+        date: Date().addingTimeInterval(-172800),
+        legs: [
+          TransactionLeg(accountId: accountId, instrument: .AUD, quantity: -1000, type: .transfer),
+          TransactionLeg(accountId: savingsId, instrument: .AUD, quantity: 1000, type: .transfer),
+        ]))
     await store.load(filter: TransactionFilter(accountId: accountId))
   }
 }

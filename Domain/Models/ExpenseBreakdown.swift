@@ -12,7 +12,7 @@ struct ExpenseBreakdown: Sendable, Codable, Identifiable, Hashable {
   let month: String
 
   /// Total expenses in cents (always positive, sum of transaction amounts)
-  let totalExpenses: MonetaryAmount
+  let totalExpenses: InstrumentAmount
 }
 
 extension ExpenseBreakdown {

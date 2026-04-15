@@ -12,45 +12,53 @@ struct DomainModelsTests {
   func dailyBalanceAvailableFunds() {
     let balance = DailyBalance(
       date: Date(),
-      balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency),
-      earmarked: MonetaryAmount(cents: 30000, currency: .defaultTestCurrency),
-      investments: MonetaryAmount(cents: 50000, currency: .defaultTestCurrency)
+      balance: InstrumentAmount(
+        quantity: Decimal(100000) / 100, instrument: .defaultTestInstrument),
+      earmarked: InstrumentAmount(
+        quantity: Decimal(30000) / 100, instrument: .defaultTestInstrument),
+      investments: InstrumentAmount(
+        quantity: Decimal(50000) / 100, instrument: .defaultTestInstrument)
     )
 
-    #expect(balance.availableFunds.cents == 70000)  // 100000 - 30000
+    #expect(balance.availableFunds.quantity == Decimal(70000) / 100)  // 100000 - 30000
   }
 
   @Test("DailyBalance computes netWorth with investments only")
   func dailyBalanceNetWorthInvestments() {
     let balance = DailyBalance(
       date: Date(),
-      balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency),
-      earmarked: MonetaryAmount(cents: 0, currency: .defaultTestCurrency),
-      investments: MonetaryAmount(cents: 50000, currency: .defaultTestCurrency),
+      balance: InstrumentAmount(
+        quantity: Decimal(100000) / 100, instrument: .defaultTestInstrument),
+      earmarked: InstrumentAmount(quantity: Decimal(0) / 100, instrument: .defaultTestInstrument),
+      investments: InstrumentAmount(
+        quantity: Decimal(50000) / 100, instrument: .defaultTestInstrument),
       investmentValue: nil
     )
 
-    #expect(balance.netWorth.cents == 150000)  // 100000 + 50000
+    #expect(balance.netWorth.quantity == Decimal(150000) / 100)  // 100000 + 50000
   }
 
   @Test("DailyBalance computes netWorth with investmentValue")
   func dailyBalanceNetWorthInvestmentValue() {
     let balance = DailyBalance(
       date: Date(),
-      balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency),
-      earmarked: MonetaryAmount(cents: 0, currency: .defaultTestCurrency),
-      investments: MonetaryAmount(cents: 50000, currency: .defaultTestCurrency),
-      investmentValue: MonetaryAmount(cents: 60000, currency: .defaultTestCurrency)
+      balance: InstrumentAmount(
+        quantity: Decimal(100000) / 100, instrument: .defaultTestInstrument),
+      earmarked: InstrumentAmount(quantity: Decimal(0) / 100, instrument: .defaultTestInstrument),
+      investments: InstrumentAmount(
+        quantity: Decimal(50000) / 100, instrument: .defaultTestInstrument),
+      investmentValue: InstrumentAmount(
+        quantity: Decimal(60000) / 100, instrument: .defaultTestInstrument)
     )
 
-    #expect(balance.netWorth.cents == 160000)  // 100000 + 60000 (uses investmentValue)
+    #expect(balance.netWorth.quantity == Decimal(160000) / 100)  // 100000 + 60000 (uses investmentValue)
   }
 
   @Test("DailyBalance convenience initializer sets isForecast to false")
   func dailyBalanceConvenienceInitializer() {
     let balance = DailyBalance(
       date: Date(),
-      balance: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency)
+      balance: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: .defaultTestInstrument)
     )
 
     #expect(balance.isForecast == false)
@@ -62,7 +70,7 @@ struct DomainModelsTests {
     let date = Date(timeIntervalSince1970: 1_672_531_200)  // 2023-01-01
     let balance = DailyBalance(
       date: date,
-      balance: .zero(currency: .defaultTestCurrency)
+      balance: .zero(instrument: .defaultTestInstrument)
     )
 
     #expect(balance.id == date.ISO8601Format())
@@ -76,7 +84,8 @@ struct DomainModelsTests {
     let breakdown = ExpenseBreakdown(
       categoryId: categoryId,
       month: "202604",
-      totalExpenses: MonetaryAmount(cents: 50000, currency: .defaultTestCurrency)
+      totalExpenses: InstrumentAmount(
+        quantity: Decimal(50000) / 100, instrument: .defaultTestInstrument)
     )
 
     #expect(breakdown.id == "\(categoryId.uuidString)-202604")
@@ -87,7 +96,8 @@ struct DomainModelsTests {
     let breakdown = ExpenseBreakdown(
       categoryId: nil,
       month: "202604",
-      totalExpenses: MonetaryAmount(cents: 50000, currency: .defaultTestCurrency)
+      totalExpenses: InstrumentAmount(
+        quantity: Decimal(50000) / 100, instrument: .defaultTestInstrument)
     )
 
     #expect(breakdown.id == "uncategorized-202604")
@@ -98,7 +108,7 @@ struct DomainModelsTests {
     let breakdown = ExpenseBreakdown(
       categoryId: nil,
       month: "202604",
-      totalExpenses: .zero(currency: .defaultTestCurrency)
+      totalExpenses: .zero(instrument: .defaultTestInstrument)
     )
 
     let monthDate = breakdown.monthDate
@@ -118,15 +128,18 @@ struct DomainModelsTests {
       month: "202604",
       start: Date(),
       end: Date(),
-      income: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency),
-      expense: MonetaryAmount(cents: 50000, currency: .defaultTestCurrency),
-      profit: MonetaryAmount(cents: 50000, currency: .defaultTestCurrency),
-      earmarkedIncome: MonetaryAmount(cents: 20000, currency: .defaultTestCurrency),
-      earmarkedExpense: MonetaryAmount(cents: 10000, currency: .defaultTestCurrency),
-      earmarkedProfit: MonetaryAmount(cents: 10000, currency: .defaultTestCurrency)
+      income: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: .defaultTestInstrument),
+      expense: InstrumentAmount(quantity: Decimal(50000) / 100, instrument: .defaultTestInstrument),
+      profit: InstrumentAmount(quantity: Decimal(50000) / 100, instrument: .defaultTestInstrument),
+      earmarkedIncome: InstrumentAmount(
+        quantity: Decimal(20000) / 100, instrument: .defaultTestInstrument),
+      earmarkedExpense: InstrumentAmount(
+        quantity: Decimal(10000) / 100, instrument: .defaultTestInstrument),
+      earmarkedProfit: InstrumentAmount(
+        quantity: Decimal(10000) / 100, instrument: .defaultTestInstrument)
     )
 
-    #expect(data.totalIncome.cents == 120000)  // 100000 + 20000
+    #expect(data.totalIncome.quantity == Decimal(120000) / 100)  // 100000 + 20000
   }
 
   @Test("MonthlyIncomeExpense computes totalExpense")
@@ -135,15 +148,18 @@ struct DomainModelsTests {
       month: "202604",
       start: Date(),
       end: Date(),
-      income: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency),
-      expense: MonetaryAmount(cents: 50000, currency: .defaultTestCurrency),
-      profit: MonetaryAmount(cents: 50000, currency: .defaultTestCurrency),
-      earmarkedIncome: MonetaryAmount(cents: 20000, currency: .defaultTestCurrency),
-      earmarkedExpense: MonetaryAmount(cents: 10000, currency: .defaultTestCurrency),
-      earmarkedProfit: MonetaryAmount(cents: 10000, currency: .defaultTestCurrency)
+      income: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: .defaultTestInstrument),
+      expense: InstrumentAmount(quantity: Decimal(50000) / 100, instrument: .defaultTestInstrument),
+      profit: InstrumentAmount(quantity: Decimal(50000) / 100, instrument: .defaultTestInstrument),
+      earmarkedIncome: InstrumentAmount(
+        quantity: Decimal(20000) / 100, instrument: .defaultTestInstrument),
+      earmarkedExpense: InstrumentAmount(
+        quantity: Decimal(10000) / 100, instrument: .defaultTestInstrument),
+      earmarkedProfit: InstrumentAmount(
+        quantity: Decimal(10000) / 100, instrument: .defaultTestInstrument)
     )
 
-    #expect(data.totalExpense.cents == 60000)  // 50000 + 10000
+    #expect(data.totalExpense.quantity == Decimal(60000) / 100)  // 50000 + 10000
   }
 
   @Test("MonthlyIncomeExpense computes totalProfit")
@@ -152,14 +168,17 @@ struct DomainModelsTests {
       month: "202604",
       start: Date(),
       end: Date(),
-      income: MonetaryAmount(cents: 100000, currency: .defaultTestCurrency),
-      expense: MonetaryAmount(cents: 50000, currency: .defaultTestCurrency),
-      profit: MonetaryAmount(cents: 50000, currency: .defaultTestCurrency),
-      earmarkedIncome: MonetaryAmount(cents: 20000, currency: .defaultTestCurrency),
-      earmarkedExpense: MonetaryAmount(cents: 10000, currency: .defaultTestCurrency),
-      earmarkedProfit: MonetaryAmount(cents: 10000, currency: .defaultTestCurrency)
+      income: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: .defaultTestInstrument),
+      expense: InstrumentAmount(quantity: Decimal(50000) / 100, instrument: .defaultTestInstrument),
+      profit: InstrumentAmount(quantity: Decimal(50000) / 100, instrument: .defaultTestInstrument),
+      earmarkedIncome: InstrumentAmount(
+        quantity: Decimal(20000) / 100, instrument: .defaultTestInstrument),
+      earmarkedExpense: InstrumentAmount(
+        quantity: Decimal(10000) / 100, instrument: .defaultTestInstrument),
+      earmarkedProfit: InstrumentAmount(
+        quantity: Decimal(10000) / 100, instrument: .defaultTestInstrument)
     )
 
-    #expect(data.totalProfit.cents == 60000)  // 50000 + 10000
+    #expect(data.totalProfit.quantity == Decimal(60000) / 100)  // 50000 + 10000
   }
 }

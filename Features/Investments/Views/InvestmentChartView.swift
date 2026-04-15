@@ -4,7 +4,7 @@ import SwiftUI
 /// Multi-series investment chart with value, invested amount, and profit/loss.
 struct InvestmentChartView: View {
   let dataPoints: [InvestmentChartDataPoint]
-  let currency: Currency
+  let instrument: Instrument
 
   @State private var selectedDate: Date?
 
@@ -43,7 +43,7 @@ struct InvestmentChartView: View {
           if let profitLoss = point.profitLoss {
             AreaMark(
               x: .value("Date", point.date),
-              y: .value("Profit/Loss", profitLoss)
+              y: .value("Profit/Loss", Double(truncating: profitLoss as NSDecimalNumber))
             )
             .foregroundStyle(.orange.opacity(0.2))
             .interpolationMethod(.catmullRom)
@@ -53,7 +53,7 @@ struct InvestmentChartView: View {
           if let value = point.value {
             LineMark(
               x: .value("Date", point.date),
-              y: .value("Value", value),
+              y: .value("Value", Double(truncating: value as NSDecimalNumber)),
               series: .value("Series", "Value")
             )
             .foregroundStyle(.blue)
@@ -65,7 +65,7 @@ struct InvestmentChartView: View {
           if let balance = point.balance {
             LineMark(
               x: .value("Date", point.date),
-              y: .value("Balance", balance),
+              y: .value("Balance", Double(truncating: balance as NSDecimalNumber)),
               series: .value("Series", "Balance")
             )
             .foregroundStyle(.gray)
@@ -97,10 +97,12 @@ struct InvestmentChartView: View {
         AxisMarks { value in
           AxisGridLine()
           AxisValueLabel {
-            if let cents = value.as(Int.self) {
-              Text(MonetaryAmount(cents: cents, currency: currency).formatNoSymbol)
-                .monospacedDigit()
-                .font(.caption)
+            if let amount = value.as(Double.self) {
+              Text(
+                InstrumentAmount(quantity: Decimal(amount), instrument: instrument).formatNoSymbol
+              )
+              .monospacedDigit()
+              .font(.caption)
             }
           }
         }
@@ -129,21 +131,21 @@ struct InvestmentChartView: View {
       if let value = point.value {
         detailItem(
           label: "Value",
-          amount: MonetaryAmount(cents: value, currency: currency),
+          amount: InstrumentAmount(quantity: value, instrument: instrument),
           color: .blue)
       }
 
       if let balance = point.balance {
         detailItem(
           label: "Invested",
-          amount: MonetaryAmount(cents: balance, currency: currency),
+          amount: InstrumentAmount(quantity: balance, instrument: instrument),
           color: .gray)
       }
 
       if let profitLoss = point.profitLoss {
         detailItem(
           label: "P/L",
-          amount: MonetaryAmount(cents: profitLoss, currency: currency),
+          amount: InstrumentAmount(quantity: profitLoss, instrument: instrument),
           color: .orange)
       }
     }
@@ -151,14 +153,14 @@ struct InvestmentChartView: View {
     .padding(.horizontal)
   }
 
-  private func detailItem(label: String, amount: MonetaryAmount, color: Color) -> some View {
+  private func detailItem(label: String, amount: InstrumentAmount, color: Color) -> some View {
     HStack(spacing: 4) {
       Circle()
         .fill(color)
         .frame(width: 6, height: 6)
       Text(label)
         .foregroundStyle(.secondary)
-      MonetaryAmountView(amount: amount, font: .caption)
+      InstrumentAmountView(amount: amount, font: .caption)
     }
     .accessibilityElement(children: .combine)
   }

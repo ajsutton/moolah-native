@@ -102,14 +102,14 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
         child.parentId = nil
       }
 
-      // Update transactions that reference this category
+      // Update transaction legs that reference this category
       let deletedId = id
-      let txnDescriptor = FetchDescriptor<TransactionRecord>(
+      let legDescriptor = FetchDescriptor<TransactionLegRecord>(
         predicate: #Predicate { $0.categoryId == deletedId }
       )
-      let affectedTxns = try context.fetch(txnDescriptor)
-      for txn in affectedTxns {
-        txn.categoryId = replacementId
+      let affectedLegs = try context.fetch(legDescriptor)
+      for leg in affectedLegs {
+        leg.categoryId = replacementId
       }
 
       // Update budget items that reference this category
@@ -147,7 +147,7 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
       // Queue sync changes for all affected records
       onRecordDeleted(id)
       for child in children { onRecordChanged(child.id) }
-      for txn in affectedTxns { onRecordChanged(txn.id) }
+      for leg in affectedLegs { onRecordChanged(leg.id) }
       for budgetId in deletedBudgetIds { onRecordDeleted(budgetId) }
       for budgetId in updatedBudgetIds { onRecordChanged(budgetId) }
     }

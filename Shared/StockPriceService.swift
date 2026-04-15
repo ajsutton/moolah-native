@@ -130,13 +130,13 @@ actor StockPriceService {
     return results
   }
 
-  func currency(for ticker: String) async throws -> Currency {
+  func instrument(for ticker: String) async throws -> Instrument {
     if let cache = caches[ticker] {
-      return cache.currency
+      return cache.instrument
     }
     loadCacheFromDisk(ticker: ticker)
     if let cache = caches[ticker] {
-      return cache.currency
+      return cache.instrument
     }
     throw StockPriceError.unknownTicker(ticker)
   }
@@ -184,11 +184,11 @@ actor StockPriceService {
 
   private func fetchAndMerge(ticker: String, from: Date, to: Date) async throws {
     let response = try await client.fetchDailyPrices(ticker: ticker, from: from, to: to)
-    merge(ticker: ticker, currency: response.currency, newPrices: response.prices)
+    merge(ticker: ticker, instrument: response.instrument, newPrices: response.prices)
     saveCacheToDisk(ticker: ticker)
   }
 
-  private func merge(ticker: String, currency: Currency, newPrices: [String: Decimal]) {
+  private func merge(ticker: String, instrument: Instrument, newPrices: [String: Decimal]) {
     guard !newPrices.isEmpty else { return }
     let sortedDates = newPrices.keys.sorted()
     if var existing = caches[ticker] {
@@ -205,7 +205,7 @@ actor StockPriceService {
     } else {
       caches[ticker] = StockPriceCache(
         ticker: ticker,
-        currency: currency,
+        instrument: instrument,
         earliestDate: sortedDates.first!,
         latestDate: sortedDates.last!,
         prices: newPrices

@@ -44,7 +44,7 @@ struct Profile: Identifiable, Codable, Sendable, Equatable {
     self.createdAt = createdAt
   }
 
-  var currency: Currency {
-    Currency.from(code: currencyCode)
+  var instrument: Instrument {
+    Instrument.fiat(code: currencyCode)
   }
 }

@@ -1,8 +1,10 @@
 // Backends/Frankfurter/FrankfurterClient.swift
 import Foundation
+import OSLog
 
 struct FrankfurterClient: ExchangeRateClient, Sendable {
   private static let baseURL = URL(string: "https://api.frankfurter.dev/v2/")!
+  private static let logger = Logger(subsystem: "com.moolah.app", category: "FrankfurterClient")
   private let session: URLSession
 
   init(session: URLSession = .shared) {
@@ -22,12 +24,18 @@ struct FrankfurterClient: ExchangeRateClient, Sendable {
     var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
     components.queryItems = [URLQueryItem(name: "base", value: base)]
 
-    let request = URLRequest(url: components.url!)
+    let requestURL = components.url!
+    let request = URLRequest(url: requestURL)
     let (data, response) = try await session.data(for: request)
 
     guard let httpResponse = response as? HTTPURLResponse,
       (200...299).contains(httpResponse.statusCode)
     else {
+      let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+      let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+      Self.logger.error(
+        "Exchange rate request failed: \(statusCode, privacy: .public) for \(requestURL.absoluteString, privacy: .public) — \(body, privacy: .public)"
+      )
       throw URLError(.badServerResponse)
     }
 

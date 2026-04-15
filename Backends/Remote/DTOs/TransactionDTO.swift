@@ -14,34 +14,78 @@ struct TransactionDTO: Codable {
   let recurPeriod: String?
   let recurEvery: Int?
 
-  func toDomain(currency: Currency) -> Transaction {
+  func toDomain(instrument: Instrument) -> Transaction {
     let parsedDate = BackendDateFormatter.date(from: date) ?? Date()
+    let parsedType = TransactionType(rawValue: type) ?? .expense
+    let quantity = Decimal(amount) / 100
+
+    var legs: [TransactionLeg] = []
+
+    if parsedType == .transfer {
+      // Transfer: source leg (negative) and destination leg (positive)
+      // Earmark attaches to the source leg because the server's earmarkDao.balances uses
+      // SUM(t.amount) where t.amount is from the source account's perspective (negative for
+      // outgoing transfers). Putting earmark on source leg matches this sign convention.
+      if let sourceId = accountId?.uuid {
+        legs.append(
+          TransactionLeg(
+            accountId: sourceId, instrument: instrument, quantity: quantity, type: .transfer,
+            earmarkId: earmark?.uuid
+          ))
+      }
+      if let destId = toAccountId?.uuid {
+        legs.append(
+          TransactionLeg(
+            accountId: destId, instrument: instrument, quantity: -quantity, type: .transfer
+          ))
+      }
+    } else {
+      // Income/expense/openingBalance: single leg
+      // accountId may be nil for earmark-only income transactions
+      legs.append(
+        TransactionLeg(
+          accountId: accountId?.uuid, instrument: instrument, quantity: quantity, type: parsedType,
+          categoryId: categoryId?.uuid, earmarkId: earmark?.uuid
+        ))
+    }
 
     return Transaction(
       id: id.uuid,
-      type: TransactionType(rawValue: type) ?? .expense,
       date: parsedDate,
-      accountId: accountId?.uuid,
-      toAccountId: toAccountId?.uuid,
-      amount: MonetaryAmount(cents: amount, currency: currency),
       payee: payee,
       notes: notes,
-      categoryId: categoryId?.uuid,
-      earmarkId: earmark?.uuid,
       recurPeriod: recurPeriod.flatMap { RecurPeriod(rawValue: $0) },
-      recurEvery: recurEvery
+      recurEvery: recurEvery,
+      legs: legs
     )
   }
 
   static func fromDomain(_ transaction: Transaction) -> TransactionDTO {
     let dateString = BackendDateFormatter.string(from: transaction.date)
+    let primaryLeg = transaction.legs.first
+    let transferLeg =
+      transaction.legs.count > 1
+      ? transaction.legs.first(where: { $0.accountId != primaryLeg?.accountId })
+      : nil
+
+    // Convert quantity back to cents
+    let cents: Int
+    if let qty = primaryLeg?.quantity {
+      var centValue = qty * 100
+      var rounded = Decimal()
+      NSDecimalRound(&rounded, &centValue, 0, .bankers)
+      cents = Int(truncating: rounded as NSDecimalNumber)
+    } else {
+      cents = 0
+    }
+
     return TransactionDTO(
       id: ServerUUID(transaction.id),
       type: transaction.type.rawValue,
       date: dateString,
-      accountId: transaction.accountId.map(ServerUUID.init),
-      toAccountId: transaction.toAccountId.map(ServerUUID.init),
-      amount: transaction.amount.cents,
+      accountId: transaction.primaryAccountId.map(ServerUUID.init),
+      toAccountId: transferLeg?.accountId.map(ServerUUID.init),
+      amount: cents,
       payee: transaction.payee,
       notes: transaction.notes,
       categoryId: transaction.categoryId.map(ServerUUID.init),
@@ -75,12 +119,29 @@ struct CreateTransactionDTO: Codable {
 
   static func fromDomain(_ transaction: Transaction) -> CreateTransactionDTO {
     let dateString = BackendDateFormatter.string(from: transaction.date)
+    let primaryLeg = transaction.legs.first
+    let transferLeg =
+      transaction.legs.count > 1
+      ? transaction.legs.first(where: { $0.accountId != primaryLeg?.accountId })
+      : nil
+
+    // Convert quantity back to cents
+    let cents: Int
+    if let qty = primaryLeg?.quantity {
+      var centValue = qty * 100
+      var rounded = Decimal()
+      NSDecimalRound(&rounded, &centValue, 0, .bankers)
+      cents = Int(truncating: rounded as NSDecimalNumber)
+    } else {
+      cents = 0
+    }
+
     return CreateTransactionDTO(
       type: transaction.type.rawValue,
       date: dateString,
-      accountId: transaction.accountId.map(ServerUUID.init),
-      toAccountId: transaction.toAccountId.map(ServerUUID.init),
-      amount: transaction.amount.cents,
+      accountId: transaction.primaryAccountId.map(ServerUUID.init),
+      toAccountId: transferLeg?.accountId.map(ServerUUID.init),
+      amount: cents,
       payee: transaction.payee,
       notes: transaction.notes,
       categoryId: transaction.categoryId.map(ServerUUID.init),

@@ -138,39 +138,29 @@ struct ExchangeRateServiceTests {
     let service = makeService(rates: [
       "2026-04-11": ["USD": Decimal(string: "0.632")!]
     ])
-    let amount = MonetaryAmount(cents: 10000, currency: .AUD)  // $100.00 AUD
+    let amount = InstrumentAmount(quantity: Decimal(string: "100.00")!, instrument: .AUD)
     let converted = try await service.convert(amount, to: .USD, on: date("2026-04-11"))
-    // 10000 cents * 0.632 = 6320 cents = $63.20 USD
-    #expect(converted.cents == 6320)
-    #expect(converted.currency == .USD)
+    // 100.00 * 0.632 = 63.20
+    #expect(converted.quantity == Decimal(string: "100.00")! * Decimal(string: "0.632")!)
+    #expect(converted.instrument == .USD)
   }
 
   @Test func convertSameCurrencyReturnsIdentical() async throws {
     let service = makeService()
-    let amount = MonetaryAmount(cents: 10000, currency: .AUD)
+    let amount = InstrumentAmount(quantity: Decimal(string: "100.00")!, instrument: .AUD)
     let converted = try await service.convert(amount, to: .AUD, on: date("2026-04-11"))
-    #expect(converted.cents == 10000)
-    #expect(converted.currency == .AUD)
+    #expect(converted.quantity == Decimal(string: "100.00")!)
+    #expect(converted.instrument == .AUD)
   }
 
-  @Test func convertUsesBankersRounding() async throws {
-    // 555 cents * 0.5 = 277.5 — banker's rounds to 278 (round half to even)
+  @Test func convertUsesDecimalPrecision() async throws {
     let service = makeService(rates: [
       "2026-04-11": ["USD": Decimal(string: "0.5")!]
     ])
-    let amount = MonetaryAmount(cents: 555, currency: .AUD)
+    let amount = InstrumentAmount(quantity: Decimal(string: "5.55")!, instrument: .AUD)
     let converted = try await service.convert(amount, to: .USD, on: date("2026-04-11"))
-    #expect(converted.cents == 278)
-  }
-
-  @Test func convertBankersRoundsDown() async throws {
-    // 545 cents * 0.5 = 272.5 — rounds to 272 (banker's: round half to even)
-    let service = makeService(rates: [
-      "2026-04-11": ["USD": Decimal(string: "0.5")!]
-    ])
-    let amount = MonetaryAmount(cents: 545, currency: .AUD)
-    let converted = try await service.convert(amount, to: .USD, on: date("2026-04-11"))
-    #expect(converted.cents == 272)
+    // 5.55 * 0.5 = 2.775
+    #expect(converted.quantity == Decimal(string: "5.55")! * Decimal(string: "0.5")!)
   }
 
   // MARK: - Prefetch
@@ -208,7 +198,7 @@ struct ExchangeRateServiceTests {
     #expect(cachedRate == Decimal(string: "0.632")!)
 
     let cachedEur = try await service2.rate(
-      from: .AUD, to: Currency.from(code: "EUR"), on: date("2026-04-11"))
+      from: .AUD, to: Instrument.fiat(code: "EUR"), on: date("2026-04-11"))
     #expect(cachedEur == Decimal(string: "0.581")!)
   }
 

@@ -3,12 +3,12 @@ import OSLog
 
 final class RemoteInvestmentRepository: InvestmentRepository, Sendable {
   private let client: APIClient
-  private let currency: Currency
+  private let instrument: Instrument
   private let logger = Logger(subsystem: "com.moolah.app", category: "RemoteInvestmentRepository")
 
-  init(client: APIClient, currency: Currency) {
+  init(client: APIClient, instrument: Instrument) {
     self.client = client
-    self.currency = currency
+    self.instrument = instrument
   }
 
   func fetchValues(accountId: UUID, page: Int, pageSize: Int) async throws -> InvestmentValuePage {
@@ -22,15 +22,16 @@ final class RemoteInvestmentRepository: InvestmentRepository, Sendable {
     let wrapper = try JSONDecoder().decode(InvestmentValueDTO.ListWrapper.self, from: data)
 
     return InvestmentValuePage(
-      values: wrapper.values.map { $0.toDomain(currency: currency) },
+      values: wrapper.values.map { $0.toDomain(instrument: instrument) },
       hasMore: wrapper.hasMore
     )
   }
 
-  func setValue(accountId: UUID, date: Date, value: MonetaryAmount) async throws {
+  func setValue(accountId: UUID, date: Date, value: InstrumentAmount) async throws {
     let dateString = BackendDateFormatter.string(from: date)
     let path = "accounts/\(accountId.apiString)/values/\(dateString)"
-    _ = try await client.put(path, body: value.cents)
+    let cents = Int(truncating: (value.quantity * 100) as NSDecimalNumber)
+    _ = try await client.put(path, body: cents)
   }
 
   func removeValue(accountId: UUID, date: Date) async throws {
@@ -43,6 +44,6 @@ final class RemoteInvestmentRepository: InvestmentRepository, Sendable {
     let path = "accounts/\(accountId.apiString)/balances"
     let data = try await client.get(path)
     let dtos = try JSONDecoder().decode([AccountDailyBalanceDTO].self, from: data)
-    return dtos.map { $0.toDomain(currency: currency) }
+    return dtos.map { $0.toDomain(instrument: instrument) }
   }
 }

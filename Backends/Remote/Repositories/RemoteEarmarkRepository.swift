@@ -3,12 +3,12 @@ import OSLog
 
 final class RemoteEarmarkRepository: EarmarkRepository, Sendable {
   private let client: APIClient
-  private let currency: Currency
+  private let instrument: Instrument
   private let logger = Logger(subsystem: "com.moolah.app", category: "RemoteEarmarkRepository")
 
-  init(client: APIClient, currency: Currency) {
+  init(client: APIClient, instrument: Instrument) {
     self.client = client
-    self.currency = currency
+    self.instrument = instrument
   }
 
   func fetchAll() async throws -> [Earmark] {
@@ -17,7 +17,7 @@ final class RemoteEarmarkRepository: EarmarkRepository, Sendable {
     do {
       let wrapper = try JSONDecoder().decode(EarmarkDTO.ListWrapper.self, from: data)
       logger.debug("Successfully decoded \(wrapper.earmarks.count) earmarks")
-      return wrapper.earmarks.map { $0.toDomain(currency: self.currency) }
+      return wrapper.earmarks.map { $0.toDomain(instrument: self.instrument) }
     } catch {
       logger.error("Decoding error: \(error.localizedDescription)")
       throw error
@@ -28,14 +28,14 @@ final class RemoteEarmarkRepository: EarmarkRepository, Sendable {
     let dto = CreateEarmarkDTO(from: earmark)
     let data = try await client.post("earmarks/", body: dto)
     let responseDTO = try JSONDecoder().decode(EarmarkDTO.self, from: data)
-    return responseDTO.toDomain(currency: currency)
+    return responseDTO.toDomain(instrument: instrument)
   }
 
   func update(_ earmark: Earmark) async throws -> Earmark {
     let dto = EarmarkDTO.fromDomain(earmark)
     let data = try await client.put("earmarks/\(earmark.id.apiString)/", body: dto)
     let responseDTO = try JSONDecoder().decode(EarmarkDTO.self, from: data)
-    return responseDTO.toDomain(currency: currency)
+    return responseDTO.toDomain(instrument: instrument)
   }
 
   func fetchBudget(earmarkId: UUID) async throws -> [EarmarkBudgetItem] {
@@ -49,7 +49,7 @@ final class RemoteEarmarkRepository: EarmarkRepository, Sendable {
         guard let categoryId = FlexibleUUID.parse(key) else { return nil }
         return EarmarkBudgetItem(
           categoryId: categoryId,
-          amount: MonetaryAmount(cents: value, currency: currency)
+          amount: InstrumentAmount(quantity: Decimal(value) / 100, instrument: instrument)
         )
       }
     } catch {
@@ -58,8 +58,9 @@ final class RemoteEarmarkRepository: EarmarkRepository, Sendable {
     }
   }
 
-  func setBudget(earmarkId: UUID, categoryId: UUID, amount: Int) async throws {
-    let body = SetBudgetDTO(amount: amount)
+  func setBudget(earmarkId: UUID, categoryId: UUID, amount: InstrumentAmount) async throws {
+    let cents = Int(truncating: (amount.quantity * 100) as NSDecimalNumber)
+    let body = SetBudgetDTO(amount: cents)
     _ = try await client.put(
       "earmarks/\(earmarkId.apiString)/budget/\(categoryId.apiString)/",
       body: body

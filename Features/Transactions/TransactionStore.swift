@@ -23,7 +23,7 @@ final class TransactionStore {
   private var currentFilter = TransactionFilter()
   private var currentPage = 0
   private var rawTransactions: [Transaction] = []
-  private var priorBalance: MonetaryAmount = .zero(currency: .AUD)
+  private var priorBalance: InstrumentAmount = .zero(instrument: .AUD)
 
   init(repository: TransactionRepository, pageSize: Int = 50) {
     self.repository = repository
@@ -34,7 +34,7 @@ final class TransactionStore {
     currentFilter = filter
     currentPage = 0
     rawTransactions = []
-    priorBalance = .zero(currency: priorBalance.currency)
+    priorBalance = .zero(instrument: priorBalance.instrument)
     transactions = []
     hasMore = true
     error = nil
@@ -53,14 +53,13 @@ final class TransactionStore {
   func createDefault(
     accountId: UUID?,
     fallbackAccountId: UUID?,
-    currency: Currency
+    instrument: Instrument
   ) async -> Transaction? {
+    guard let acctId = accountId ?? fallbackAccountId else { return nil }
     let tx = Transaction(
-      type: .expense,
       date: Date(),
-      accountId: accountId ?? fallbackAccountId,
-      amount: MonetaryAmount(cents: 0, currency: currency),
-      payee: ""
+      payee: "",
+      legs: [TransactionLeg(accountId: acctId, instrument: instrument, quantity: 0, type: .expense)]
     )
     return await create(tx)
   }
@@ -121,17 +120,10 @@ final class TransactionStore {
     // Create a non-scheduled copy with today's date
     let paidTransaction = Transaction(
       id: UUID(),
-      type: scheduledTransaction.type,
       date: Date(),
-      accountId: scheduledTransaction.accountId,
-      toAccountId: scheduledTransaction.toAccountId,
-      amount: scheduledTransaction.amount,
       payee: scheduledTransaction.payee,
       notes: scheduledTransaction.notes,
-      categoryId: scheduledTransaction.categoryId,
-      earmarkId: scheduledTransaction.earmarkId,
-      recurPeriod: nil,
-      recurEvery: nil
+      legs: scheduledTransaction.legs
     )
 
     guard await create(paidTransaction) != nil else {

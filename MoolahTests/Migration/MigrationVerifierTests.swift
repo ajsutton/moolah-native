@@ -8,7 +8,7 @@ import Testing
 @MainActor
 struct MigrationVerifierTests {
 
-  private let currency = Currency.defaultTestCurrency
+  private let instrument = Instrument.defaultTestInstrument
 
   @Test("verification passes when counts and balances match")
   func countsMatch() async throws {
@@ -19,7 +19,7 @@ struct MigrationVerifierTests {
       accounts: [
         Account(
           id: accountId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 5000, currency: currency)
+          balance: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
         )
       ],
       categories: [Category(name: "Food")],
@@ -27,8 +27,13 @@ struct MigrationVerifierTests {
       earmarkBudgets: [:],
       transactions: [
         Transaction(
-          type: .income, date: Date(), accountId: accountId,
-          amount: MonetaryAmount(cents: 5000, currency: currency)
+          date: Date(),
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: instrument,
+              quantity: Decimal(string: "50.00")!, type: .income
+            )
+          ]
         )
       ],
       investmentValues: [:]
@@ -37,7 +42,7 @@ struct MigrationVerifierTests {
     // Import the data
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      currencyCode: currency.code
+      currencyCode: instrument.id
     )
     _ = try await importer.importData(exported)
 
@@ -59,12 +64,12 @@ struct MigrationVerifierTests {
     let container = try TestModelContainer.create()
     let accountId = UUID()
 
-    // Export claims 2 transactions, but we only import 1
+    // Export claims 2 transactions
     let exported = ExportedData(
       accounts: [
         Account(
           id: accountId, name: "Checking", type: .bank,
-          balance: .zero(currency: currency)
+          balance: .zero(instrument: instrument)
         )
       ],
       categories: [],
@@ -72,31 +77,47 @@ struct MigrationVerifierTests {
       earmarkBudgets: [:],
       transactions: [
         Transaction(
-          type: .income, date: Date(), accountId: accountId,
-          amount: MonetaryAmount(cents: 1000, currency: currency)
+          date: Date(),
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: instrument,
+              quantity: Decimal(string: "10.00")!, type: .income
+            )
+          ]
         ),
         Transaction(
-          type: .expense, date: Date(), accountId: accountId,
-          amount: MonetaryAmount(cents: -500, currency: currency)
+          date: Date(),
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: instrument,
+              quantity: Decimal(string: "-5.00")!, type: .expense
+            )
+          ]
         ),
       ],
       investmentValues: [:]
     )
 
-    // Import only 1 transaction manually
+    // Import only 1 transaction manually via records
     let context = ModelContext(container)
     context.insert(
       AccountRecord(
-        id: accountId, name: "Checking", type: "bank",
-        currencyCode: currency.code
+        id: accountId, name: "Checking", type: "bank"
       )
     )
-    context.insert(
-      TransactionRecord(
-        type: "income", date: Date(),
-        accountId: accountId, amount: 1000, currencyCode: currency.code
-      )
+    let txnRecord = TransactionRecord(
+      id: UUID(), date: Date(), recurPeriod: nil, recurEvery: nil
     )
+    context.insert(txnRecord)
+    let legRecord = TransactionLegRecord.from(
+      TransactionLeg(
+        accountId: accountId, instrument: instrument,
+        quantity: Decimal(string: "10.00")!, type: .income
+      ),
+      transactionId: txnRecord.id,
+      sortOrder: 0
+    )
+    context.insert(legRecord)
     try context.save()
 
     let verifier = MigrationVerifier()
@@ -115,12 +136,12 @@ struct MigrationVerifierTests {
     let container = try TestModelContainer.create()
     let accountId = UUID()
 
-    // Server says balance is 5000, but imported transactions sum to 3000
+    // Server says balance is 50.00, but imported transactions sum to 30.00
     let exported = ExportedData(
       accounts: [
         Account(
           id: accountId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 5000, currency: currency)
+          balance: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
         )
       ],
       categories: [],
@@ -128,8 +149,13 @@ struct MigrationVerifierTests {
       earmarkBudgets: [:],
       transactions: [
         Transaction(
-          type: .income, date: Date(), accountId: accountId,
-          amount: MonetaryAmount(cents: 3000, currency: currency)
+          date: Date(),
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: instrument,
+              quantity: Decimal(string: "30.00")!, type: .income
+            )
+          ]
         )
       ],
       investmentValues: [:]
@@ -137,7 +163,7 @@ struct MigrationVerifierTests {
 
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      currencyCode: currency.code
+      currencyCode: instrument.id
     )
     _ = try await importer.importData(exported)
 
@@ -164,7 +190,7 @@ struct MigrationVerifierTests {
       accounts: [
         Account(
           id: accountId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 5000, currency: currency)
+          balance: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
         )
       ],
       categories: [],
@@ -172,14 +198,25 @@ struct MigrationVerifierTests {
       earmarkBudgets: [:],
       transactions: [
         Transaction(
-          type: .income, date: Date(), accountId: accountId,
-          amount: MonetaryAmount(cents: 5000, currency: currency)
+          date: Date(),
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: instrument,
+              quantity: Decimal(string: "50.00")!, type: .income
+            )
+          ]
         ),
         // Scheduled transaction should not affect balance
         Transaction(
-          type: .expense, date: Date(), accountId: accountId,
-          amount: MonetaryAmount(cents: -1000, currency: currency),
-          recurPeriod: .month, recurEvery: 1
+          date: Date(),
+          recurPeriod: .month,
+          recurEvery: 1,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: instrument,
+              quantity: Decimal(string: "-10.00")!, type: .expense
+            )
+          ]
         ),
       ],
       investmentValues: [:]
@@ -187,7 +224,7 @@ struct MigrationVerifierTests {
 
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      currencyCode: currency.code
+      currencyCode: instrument.id
     )
     _ = try await importer.importData(exported)
 

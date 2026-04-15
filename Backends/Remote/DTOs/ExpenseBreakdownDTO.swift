@@ -5,11 +5,12 @@ struct ExpenseBreakdownDTO: Codable {
   let month: Int  // YYYYMM (integer from server)
   let totalExpenses: Int
 
-  func toDomain(currency: Currency) -> ExpenseBreakdown {
+  func toDomain(instrument: Instrument) -> ExpenseBreakdown {
     ExpenseBreakdown(
       categoryId: categoryId?.uuid,
       month: String(month),
-      totalExpenses: MonetaryAmount(cents: totalExpenses, currency: currency)
+      totalExpenses: InstrumentAmount(
+        quantity: Decimal(totalExpenses) / 100, instrument: instrument)
     )
   }
 }

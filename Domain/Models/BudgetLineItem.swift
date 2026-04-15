@@ -3,15 +3,15 @@ import Foundation
 struct BudgetLineItem: Identifiable, Sendable {
   let id: UUID
   let categoryName: String
-  let actual: MonetaryAmount
-  let budgeted: MonetaryAmount
+  let actual: InstrumentAmount
+  let budgeted: InstrumentAmount
 
-  var remaining: MonetaryAmount { budgeted + actual }
+  var remaining: InstrumentAmount { budgeted + actual }
 
   /// Merges budget items with category expense balances into a sorted list of line items.
   static func buildLineItems(
     budgetItems: [EarmarkBudgetItem],
-    categoryBalances: [UUID: MonetaryAmount],
+    categoryBalances: [UUID: InstrumentAmount],
     categories: Categories
   ) -> [BudgetLineItem] {
     var seen = Set<UUID>()
@@ -21,7 +21,7 @@ struct BudgetLineItem: Identifiable, Sendable {
     for item in budgetItems {
       seen.insert(item.categoryId)
       let name = categories.by(id: item.categoryId)?.name ?? "Unknown"
-      let actual = categoryBalances[item.categoryId] ?? .zero(currency: item.amount.currency)
+      let actual = categoryBalances[item.categoryId] ?? .zero(instrument: item.amount.instrument)
       result.append(
         BudgetLineItem(
           id: item.categoryId,
@@ -39,7 +39,7 @@ struct BudgetLineItem: Identifiable, Sendable {
           id: categoryId,
           categoryName: name,
           actual: actual,
-          budgeted: .zero(currency: actual.currency)
+          budgeted: .zero(instrument: actual.instrument)
         ))
     }
 
@@ -50,10 +50,10 @@ struct BudgetLineItem: Identifiable, Sendable {
   /// Returns nil if there is no savings goal.
   static func unallocatedAmount(
     budgetItems: [EarmarkBudgetItem],
-    savingsGoal: MonetaryAmount?
-  ) -> MonetaryAmount? {
+    savingsGoal: InstrumentAmount?
+  ) -> InstrumentAmount? {
     guard let goal = savingsGoal, goal.isPositive else { return nil }
-    let totalBudget = budgetItems.reduce(MonetaryAmount.zero(currency: goal.currency)) {
+    let totalBudget = budgetItems.reduce(InstrumentAmount.zero(instrument: goal.instrument)) {
       $0 + $1.amount
     }
     return goal - totalBudget

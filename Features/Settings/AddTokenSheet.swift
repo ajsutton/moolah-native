@@ -23,7 +23,7 @@ struct AddTokenSheet: View {
   var body: some View {
     NavigationStack {
       Form {
-        if store.resolvedToken != nil {
+        if store.resolvedRegistration != nil {
           confirmationSection
         } else if store.isResolving {
           resolvingSection
@@ -47,7 +47,7 @@ struct AddTokenSheet: View {
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
           Button("Cancel") {
-            store.resolvedToken = nil
+            store.resolvedRegistration = nil
             isPresented = false
           }
         }
@@ -138,23 +138,26 @@ struct AddTokenSheet: View {
 
   @ViewBuilder
   private var confirmationSection: some View {
-    if let token = store.resolvedToken {
+    if let registration = store.resolvedRegistration {
+      let instrument = registration.instrument
+      let mapping = registration.mapping
       Section("Resolved Token") {
-        LabeledContent("Name", value: token.name)
-        LabeledContent("Symbol", value: token.symbol)
-        LabeledContent("Chain", value: CryptoToken.chainName(for: token.chainId))
+        LabeledContent("Name", value: instrument.name)
+        LabeledContent("Symbol", value: instrument.ticker ?? instrument.name)
+        LabeledContent("Chain", value: Instrument.chainName(for: instrument.chainId ?? 0))
         LabeledContent("Decimals") {
-          Text("\(token.decimals)").monospacedDigit()
+          Text("\(instrument.decimals)").monospacedDigit()
         }
       }
 
       Section("Provider Coverage") {
-        providerRow("CoinGecko", available: token.coingeckoId != nil)
-        providerRow("CryptoCompare", available: token.cryptocompareSymbol != nil)
-        providerRow("Binance", available: token.binanceSymbol != nil)
+        providerRow("CoinGecko", available: mapping.coingeckoId != nil)
+        providerRow("CryptoCompare", available: mapping.cryptocompareSymbol != nil)
+        providerRow("Binance", available: mapping.binanceSymbol != nil)
       }
 
-      if token.coingeckoId == nil && token.cryptocompareSymbol == nil && token.binanceSymbol == nil
+      if mapping.coingeckoId == nil && mapping.cryptocompareSymbol == nil
+        && mapping.binanceSymbol == nil
       {
         Section {
           Label(
@@ -168,7 +171,7 @@ struct AddTokenSheet: View {
       Section {
         HStack {
           Button("Back") {
-            store.resolvedToken = nil
+            store.resolvedRegistration = nil
           }
           Spacer()
           Button("Add Token") {

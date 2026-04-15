@@ -423,6 +423,101 @@ struct ProfileStoreTests {
     #expect(!containerManager.hasContainer(for: cloudProfile.id))
   }
 
+  // MARK: - Sync change tracking
+
+  @Test("addProfile calls onProfileChanged for CloudKit profiles")
+  func addCloudProfileCallsOnProfileChanged() throws {
+    let defaults = makeDefaults()
+    let containerManager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+
+    var changedIDs: [UUID] = []
+    store.onProfileChanged = { id in changedIDs.append(id) }
+
+    let profile = Profile(
+      label: "Cloud",
+      backendType: .cloudKit,
+      currencyCode: "AUD",
+      financialYearStartMonth: 7
+    )
+    store.addProfile(profile)
+
+    #expect(changedIDs == [profile.id])
+  }
+
+  @Test("addProfile does not call onProfileChanged for remote profiles")
+  func addRemoteProfileDoesNotCallOnProfileChanged() throws {
+    let defaults = makeDefaults()
+    let store = ProfileStore(defaults: defaults)
+
+    var changedIDs: [UUID] = []
+    store.onProfileChanged = { id in changedIDs.append(id) }
+
+    store.addProfile(makeProfile())
+
+    #expect(changedIDs.isEmpty)
+  }
+
+  @Test("updateProfile calls onProfileChanged for CloudKit profiles")
+  func updateCloudProfileCallsOnProfileChanged() throws {
+    let defaults = makeDefaults()
+    let containerManager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+
+    var profile = Profile(
+      label: "Cloud",
+      backendType: .cloudKit,
+      currencyCode: "AUD",
+      financialYearStartMonth: 7
+    )
+    store.addProfile(profile)
+
+    var changedIDs: [UUID] = []
+    store.onProfileChanged = { id in changedIDs.append(id) }
+
+    profile.label = "Updated"
+    store.updateProfile(profile)
+
+    #expect(changedIDs == [profile.id])
+  }
+
+  @Test("removeProfile calls onProfileDeleted for CloudKit profiles")
+  func removeCloudProfileCallsOnProfileDeleted() throws {
+    let defaults = makeDefaults()
+    let containerManager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+
+    let profile = Profile(
+      label: "Cloud",
+      backendType: .cloudKit,
+      currencyCode: "AUD",
+      financialYearStartMonth: 7
+    )
+    store.addProfile(profile)
+
+    var deletedIDs: [UUID] = []
+    store.onProfileDeleted = { id in deletedIDs.append(id) }
+
+    store.removeProfile(profile.id)
+
+    #expect(deletedIDs == [profile.id])
+  }
+
+  @Test("removeProfile does not call onProfileDeleted for remote profiles")
+  func removeRemoteProfileDoesNotCallOnProfileDeleted() throws {
+    let defaults = makeDefaults()
+    let store = ProfileStore(defaults: defaults)
+    let profile = makeProfile()
+    store.addProfile(profile)
+
+    var deletedIDs: [UUID] = []
+    store.onProfileDeleted = { id in deletedIDs.append(id) }
+
+    store.removeProfile(profile.id)
+
+    #expect(deletedIDs.isEmpty)
+  }
+
   @Test("loadCloudProfiles does not clean up profiles on initial load")
   func initialLoadDoesNotCleanUp() throws {
     let defaults = makeDefaults()

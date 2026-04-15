@@ -7,6 +7,7 @@ struct ExportedData: Codable, Sendable {
   let profileLabel: String
   let currencyCode: String
   let financialYearStartMonth: Int
+  let instruments: [Instrument]
   let accounts: [Account]
   let categories: [Category]
   let earmarks: [Earmark]
@@ -20,6 +21,7 @@ struct ExportedData: Codable, Sendable {
     profileLabel: String = "",
     currencyCode: String = "",
     financialYearStartMonth: Int = 1,
+    instruments: [Instrument] = [],
     accounts: [Account],
     categories: [Category],
     earmarks: [Earmark],
@@ -32,6 +34,7 @@ struct ExportedData: Codable, Sendable {
     self.profileLabel = profileLabel
     self.currencyCode = currencyCode
     self.financialYearStartMonth = financialYearStartMonth
+    self.instruments = instruments
     self.accounts = accounts
     self.categories = categories
     self.earmarks = earmarks

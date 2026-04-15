@@ -9,27 +9,28 @@ final class EarmarkBudgetItemRecord {
   var id: UUID = UUID()
   var earmarkId: UUID = UUID()
   var categoryId: UUID = UUID()
-  var amount: Int = 0  // cents
-  var currencyCode: String = ""
+  var amount: Int64 = 0  // storageValue (× 10^8)
+  var instrumentId: String = ""
   var encodedSystemFields: Data?
 
   init(
     id: UUID = UUID(),
     earmarkId: UUID,
     categoryId: UUID,
-    amount: Int,
-    currencyCode: String
+    amount: Int64,
+    instrumentId: String
   ) {
     self.id = id
     self.earmarkId = earmarkId
     self.categoryId = categoryId
     self.amount = amount
-    self.currencyCode = currencyCode
+    self.instrumentId = instrumentId
   }
 
   func toDomain() -> EarmarkBudgetItem {
-    let currency = Currency.from(code: currencyCode)
+    let instrument = Instrument.fiat(code: instrumentId)
     return EarmarkBudgetItem(
-      id: id, categoryId: categoryId, amount: MonetaryAmount(cents: amount, currency: currency))
+      id: id, categoryId: categoryId,
+      amount: InstrumentAmount(storageValue: amount, instrument: instrument))
   }
 }

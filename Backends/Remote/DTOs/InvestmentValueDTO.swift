@@ -4,11 +4,11 @@ struct InvestmentValueDTO: Codable {
   let date: String  // "yyyy-MM-dd"
   let value: Int  // Cents
 
-  func toDomain(currency: Currency) -> InvestmentValue {
+  func toDomain(instrument: Instrument) -> InvestmentValue {
     let parsedDate = BackendDateFormatter.date(from: date) ?? Date()
     return InvestmentValue(
       date: parsedDate,
-      value: MonetaryAmount(cents: value, currency: currency)
+      value: InstrumentAmount(quantity: Decimal(value) / 100, instrument: instrument)
     )
   }
 

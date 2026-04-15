@@ -8,24 +8,24 @@ import Testing
 @MainActor
 struct MigrationIntegrationTests {
 
-  private let currency = Currency.defaultTestCurrency
+  private let instrument = Instrument.defaultTestInstrument
 
   /// Seeds a CloudKitBackend with realistic data for testing.
   /// Account balances are set to match the sum of their non-scheduled transactions,
   /// matching server behavior where balances are computed from transactions.
   private func makeSeededBackend() async throws -> CloudKitBackend {
-    let (backend, _) = try TestBackend.create(currency: currency)
+    let (backend, _) = try TestBackend.create(instrument: instrument)
 
     // Accounts — set balance to match transaction totals below
-    // Checking: +100,000 - 2,500 = 97,500
+    // Checking: +1000.00 - 25.00 = 975.00
     let checking = try await backend.accounts.create(
       Account(
         name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 97_500, currency: currency)
+        balance: InstrumentAmount(quantity: Decimal(string: "975.00")!, instrument: instrument)
       )
     )
     _ = try await backend.accounts.create(
-      Account(name: "Credit Card", type: .creditCard, balance: .zero(currency: currency))
+      Account(name: "Credit Card", type: .creditCard, balance: .zero(instrument: instrument))
     )
 
     // Categories
@@ -35,31 +35,52 @@ struct MigrationIntegrationTests {
 
     // Earmarks
     let holiday = try await backend.earmarks.create(
-      Earmark(name: "Holiday", balance: .zero(currency: currency))
+      Earmark(name: "Holiday", balance: .zero(instrument: instrument))
     )
-    try await backend.earmarks.setBudget(earmarkId: holiday.id, categoryId: food.id, amount: 5000)
+    let budgetAmount = InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
+    try await backend.earmarks.setBudget(
+      earmarkId: holiday.id, categoryId: food.id, amount: budgetAmount)
 
     // Transactions (non-scheduled)
     _ = try await backend.transactions.create(
       Transaction(
-        type: .income, date: Date(), accountId: checking.id,
-        amount: MonetaryAmount(cents: 100_000, currency: currency), payee: "Employer"
+        date: Date(),
+        payee: "Employer",
+        legs: [
+          TransactionLeg(
+            accountId: checking.id, instrument: instrument,
+            quantity: Decimal(string: "1000.00")!, type: .income
+          )
+        ]
       )
     )
     _ = try await backend.transactions.create(
       Transaction(
-        type: .expense, date: Date(), accountId: checking.id,
-        amount: MonetaryAmount(cents: -2500, currency: currency),
-        payee: "Shop", categoryId: food.id, earmarkId: holiday.id
+        date: Date(),
+        payee: "Shop",
+        legs: [
+          TransactionLeg(
+            accountId: checking.id, instrument: instrument,
+            quantity: Decimal(string: "-25.00")!, type: .expense,
+            categoryId: food.id, earmarkId: holiday.id
+          )
+        ]
       )
     )
 
     // Scheduled transaction (excluded from balance computation)
     _ = try await backend.transactions.create(
       Transaction(
-        type: .expense, date: Date(), accountId: checking.id,
-        amount: MonetaryAmount(cents: -1000, currency: currency),
-        payee: "Netflix", recurPeriod: .month, recurEvery: 1
+        date: Date(),
+        payee: "Netflix",
+        recurPeriod: .month,
+        recurEvery: 1,
+        legs: [
+          TransactionLeg(
+            accountId: checking.id, instrument: instrument,
+            quantity: Decimal(string: "-10.00")!, type: .expense
+          )
+        ]
       )
     )
 
@@ -75,14 +96,14 @@ struct MigrationIntegrationTests {
     let exporter = DataExporter(backend: backend)
     let exported = try await exporter.export(
       profileLabel: "Test",
-      currencyCode: currency.code,
+      currencyCode: instrument.id,
       financialYearStartMonth: 7
     ) { _ in }
 
     // 2. Import
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      currencyCode: currency.code
+      currencyCode: instrument.id
     )
     let result = try await importer.importData(exported)
 
@@ -104,7 +125,7 @@ struct MigrationIntegrationTests {
     // 4. Read back through CloudKit repositories and compare
     let cloudBackend = CloudKitBackend(
       modelContainer: container,
-      currency: currency,
+      instrument: instrument,
       profileLabel: "Test"
     )
     let cloudAccounts = try await cloudBackend.accounts.fetchAll()
@@ -137,20 +158,20 @@ struct MigrationIntegrationTests {
     let exporter = DataExporter(backend: backend)
     let exported = try await exporter.export(
       profileLabel: "Test",
-      currencyCode: currency.code,
+      currencyCode: instrument.id,
       financialYearStartMonth: 7
     ) { _ in }
 
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      currencyCode: currency.code
+      currencyCode: instrument.id
     )
     _ = try await importer.importData(exported)
 
     // Read back and verify hierarchy
     let cloudBackend = CloudKitBackend(
       modelContainer: container,
-      currency: currency,
+      instrument: instrument,
       profileLabel: "Test"
     )
     let categories = try await cloudBackend.categories.fetchAll()
@@ -170,20 +191,20 @@ struct MigrationIntegrationTests {
     let exporter = DataExporter(backend: backend)
     let exported = try await exporter.export(
       profileLabel: "Test",
-      currencyCode: currency.code,
+      currencyCode: instrument.id,
       financialYearStartMonth: 7
     ) { _ in }
 
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      currencyCode: currency.code
+      currencyCode: instrument.id
     )
     _ = try await importer.importData(exported)
 
     // Read back and verify budgets
     let cloudBackend = CloudKitBackend(
       modelContainer: container,
-      currency: currency,
+      instrument: instrument,
       profileLabel: "Test"
     )
     let earmarks = try await cloudBackend.earmarks.fetchAll()
@@ -192,6 +213,6 @@ struct MigrationIntegrationTests {
 
     let budgetItems = try await cloudBackend.earmarks.fetchBudget(earmarkId: holiday!.id)
     #expect(budgetItems.count == 1)
-    #expect(budgetItems.first?.amount.cents == 5000)
+    #expect(budgetItems.first?.amount.quantity == Decimal(string: "50.00")!)
   }
 }

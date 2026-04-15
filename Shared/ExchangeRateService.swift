@@ -22,12 +22,12 @@ actor ExchangeRateService {
     self.dateFormatter.formatOptions = [.withFullDate]
   }
 
-  func rate(from: Currency, to: Currency, on date: Date) async throws -> Decimal {
-    if from == to { return Decimal(1) }
+  func rate(from: Instrument, to: Instrument, on date: Date) async throws -> Decimal {
+    if from.id == to.id { return Decimal(1) }
 
     let dateString = dateFormatter.string(from: date)
-    let base = from.code
-    let quote = to.code
+    let base = from.id
+    let quote = to.id
 
     // Check in-memory cache
     if let cached = lookupRate(base: base, quote: quote, dateString: dateString) {
@@ -67,14 +67,14 @@ actor ExchangeRateService {
   }
 
   func rates(
-    from: Currency, to: Currency, in range: ClosedRange<Date>
+    from: Instrument, to: Instrument, in range: ClosedRange<Date>
   ) async throws -> [(date: Date, rate: Decimal)] {
-    if from.code == to.code {
+    if from.id == to.id {
       return generateDateSeries(in: range).map { ($0, Decimal(1)) }
     }
 
-    let base = from.code
-    let quote = to.code
+    let base = from.id
+    let quote = to.id
 
     // Load cache if not already in memory
     if caches[base] == nil {
@@ -122,22 +122,18 @@ actor ExchangeRateService {
     return results
   }
 
-  func convert(_ amount: MonetaryAmount, to currency: Currency, on date: Date) async throws
-    -> MonetaryAmount
+  func convert(_ amount: InstrumentAmount, to instrument: Instrument, on date: Date) async throws
+    -> InstrumentAmount
   {
-    if amount.currency.code == currency.code { return amount }
+    if amount.instrument.id == instrument.id { return amount }
 
-    let exchangeRate = try await rate(from: amount.currency, to: currency, on: date)
-    var decimalCents = Decimal(amount.cents) * exchangeRate
-    // Banker's rounding to minimize cumulative bias
-    var rounded = Decimal()
-    NSDecimalRound(&rounded, &decimalCents, 0, .bankers)
-    let convertedCents = Int(truncating: rounded as NSDecimalNumber)
-    return MonetaryAmount(cents: convertedCents, currency: currency)
+    let exchangeRate = try await rate(from: amount.instrument, to: instrument, on: date)
+    let converted = amount.quantity * exchangeRate
+    return InstrumentAmount(quantity: converted, instrument: instrument)
   }
 
-  func prefetchLatest(base: Currency) async {
-    let code = base.code
+  func prefetchLatest(base: Instrument) async {
+    let code = base.id
 
     if caches[code] == nil {
       loadCacheFromDisk(base: code)

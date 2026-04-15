@@ -18,6 +18,9 @@ struct SidebarView: View {
   @State private var showCreateAccountSheet = false
   @State private var accountToEdit: Account?
   @AppStorage("showHiddenAccounts") private var showHidden = false
+  @State private var convertedCurrentTotal: InstrumentAmount?
+  @State private var convertedInvestmentTotal: InstrumentAmount?
+  @State private var convertedNetWorth: InstrumentAmount?
   #if os(iOS)
     @State private var editMode: EditMode = .inactive
   #endif
@@ -44,7 +47,7 @@ struct SidebarView: View {
           Task { await reorderCurrentAccounts(from: source, to: destination) }
         }
 
-        totalRow(label: "Current Total", value: accountStore.currentTotal)
+        totalRow(label: "Current Total", value: convertedCurrentTotal ?? accountStore.currentTotal)
       } header: {
         HStack {
           Text("Current Accounts")
@@ -112,25 +115,27 @@ struct SidebarView: View {
           Task { await reorderInvestmentAccounts(from: source, to: destination) }
         }
 
-        totalRow(label: "Investment Total", value: accountStore.investmentTotal)
+        totalRow(
+          label: "Investment Total",
+          value: convertedInvestmentTotal ?? accountStore.investmentTotal)
       }
 
       Section {
         LabeledContent("Available Funds") {
-          MonetaryAmountView(amount: availableFunds)
+          InstrumentAmountView(amount: availableFunds)
         }
         .font(.headline)
         .accessibilityLabel(
-          "Available Funds: \(availableFunds.decimalValue.formatted(.currency(code: availableFunds.currency.code)))"
+          "Available Funds: \(availableFunds.formatted)"
         )
 
         LabeledContent("Net Worth") {
-          MonetaryAmountView(amount: accountStore.netWorth)
+          InstrumentAmountView(amount: convertedNetWorth ?? accountStore.netWorth)
         }
         .font(.headline)
         .bold()
         .accessibilityLabel(
-          "Net Worth: \(accountStore.netWorth.decimalValue.formatted(.currency(code: accountStore.netWorth.currency.code)))"
+          "Net Worth: \((convertedNetWorth ?? accountStore.netWorth).formatted)"
         )
       }
 
@@ -181,6 +186,9 @@ struct SidebarView: View {
       async let e: Void = earmarkStore.load()
       _ = await (a, e)
     }
+    .task(id: accountStore.accounts.ordered.map(\.id)) {
+      await loadConvertedTotals()
+    }
     #if os(macOS)
       .toolbar {
         ToolbarItem(placement: .primaryAction) {
@@ -198,7 +206,7 @@ struct SidebarView: View {
     }
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
-        currency: accountStore.currentTotal.currency,
+        instrument: accountStore.currentTotal.instrument,
         onCreate: { newEarmark in
           Task {
             _ = await earmarkStore.create(newEarmark)
@@ -208,20 +216,38 @@ struct SidebarView: View {
       )
     }
     .sheet(isPresented: $showCreateAccountSheet) {
-      CreateAccountView(currency: accountStore.currentTotal.currency, accountStore: accountStore)
+      CreateAccountView(
+        instrument: accountStore.currentTotal.instrument, accountStore: accountStore)
     }
     .sheet(item: $accountToEdit) { account in
       EditAccountView(account: account, accountStore: accountStore)
     }
   }
 
-  private var availableFunds: MonetaryAmount {
-    accountStore.availableFunds(earmarks: earmarkStore.earmarks)
+  private var availableFunds: InstrumentAmount {
+    let total = convertedCurrentTotal ?? accountStore.currentTotal
+    let earmarked = earmarkStore.visibleEarmarks
+      .filter { !$0.isHidden && $0.balance.isPositive }
+      .reduce(InstrumentAmount.zero(instrument: total.instrument)) { $0 + $1.balance }
+    return total - earmarked
   }
 
-  private func totalRow(label: String, value: MonetaryAmount) -> some View {
+  private func loadConvertedTotals() async {
+    let profileInstrument = accountStore.currentTotal.instrument
+    do {
+      let currentTotal = try await accountStore.convertedCurrentTotal(in: profileInstrument)
+      let investmentTotal = try await accountStore.convertedInvestmentTotal(in: profileInstrument)
+      convertedCurrentTotal = currentTotal
+      convertedInvestmentTotal = investmentTotal
+      convertedNetWorth = currentTotal + investmentTotal
+    } catch {
+      // Fall back to non-converted totals (already displayed)
+    }
+  }
+
+  private func totalRow(label: String, value: InstrumentAmount) -> some View {
     LabeledContent(label) {
-      MonetaryAmountView(amount: value, colorOverride: .secondary)
+      InstrumentAmountView(amount: value, colorOverride: .secondary)
     }
     .foregroundStyle(.secondary)
     .font(.callout)
@@ -255,15 +281,15 @@ struct SidebarView: View {
         _ = try? await backend.accounts.create(
           Account(
             name: "Bank", type: .bank,
-            balance: MonetaryAmount(cents: 100000, currency: Currency.AUD)))
+            balance: InstrumentAmount(quantity: 1000, instrument: .AUD)))
         _ = try? await backend.accounts.create(
           Account(
             name: "Asset", type: .asset,
-            balance: MonetaryAmount(cents: 500000, currency: Currency.AUD)))
+            balance: InstrumentAmount(quantity: 5000, instrument: .AUD)))
         _ = try? await backend.earmarks.create(
           Earmark(
             name: "Holiday Fund",
-            balance: MonetaryAmount(cents: 150000, currency: Currency.AUD)))
+            balance: InstrumentAmount(quantity: 1500, instrument: .AUD)))
 
         await accountStore.load()
         await earmarkStore.load()

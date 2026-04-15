@@ -4,7 +4,7 @@ import Foundation
 /// Values are uniquely identified by (accountId, date) — one value per account per day.
 struct InvestmentValue: Codable, Sendable, Identifiable, Hashable, Comparable {
   let date: Date
-  let value: MonetaryAmount
+  let value: InstrumentAmount
 
   /// Uses date as identity since values are unique per account per day.
   var id: Date { date }

@@ -5,11 +5,11 @@ import Foundation
 struct InvestmentChartDataPoint: Identifiable, Sendable {
   let date: Date
   /// Market value at this date (from investment values)
-  let value: Int?
+  let value: Decimal?
   /// Cumulative invested amount at this date (from daily balances)
-  let balance: Int?
+  let balance: Decimal?
   /// Profit/loss = value - balance (nil if either is missing)
-  let profitLoss: Int?
+  let profitLoss: Decimal?
 
   var id: Date { date }
 }

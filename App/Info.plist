@@ -35,7 +35,7 @@
     <false/>
     <key>NSUbiquitousContainers</key>
     <dict>
-        <key>iCloud.rocks.moolah.app</key>
+        <key>iCloud.rocks.moolah.app.v2</key>
         <dict>
             <key>NSUbiquitousContainerIsDocumentScopePublic</key>
             <false/>

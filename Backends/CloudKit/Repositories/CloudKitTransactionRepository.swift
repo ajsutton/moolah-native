@@ -4,19 +4,74 @@ import os
 
 final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
-  private let currency: Currency
+  private let instrument: Instrument
   var onRecordChanged: (UUID) -> Void = { _ in }
   var onRecordDeleted: (UUID) -> Void = { _ in }
+  var onInstrumentChanged: (String) -> Void = { _ in }
 
-  init(modelContainer: ModelContainer, currency: Currency) {
+  init(modelContainer: ModelContainer, instrument: Instrument) {
     self.modelContainer = modelContainer
-    self.currency = currency
+    self.instrument = instrument
   }
 
   @MainActor
   private var context: ModelContext {
     modelContainer.mainContext
   }
+
+  // MARK: - Instrument Cache
+
+  @MainActor private var instrumentCache: [String: Instrument] = [:]
+
+  @MainActor
+  private func resolveInstrument(id: String) throws -> Instrument {
+    if let cached = instrumentCache[id] { return cached }
+    let iid = id
+    let descriptor = FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == iid })
+    if let record = try context.fetch(descriptor).first {
+      let instrument = record.toDomain()
+      instrumentCache[id] = instrument
+      return instrument
+    }
+    let instrument = Instrument.fiat(code: id)
+    instrumentCache[id] = instrument
+    return instrument
+  }
+
+  @MainActor
+  private func ensureInstrument(_ instrument: Instrument) throws {
+    let iid = instrument.id
+    let descriptor = FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == iid })
+    if try context.fetch(descriptor).isEmpty {
+      context.insert(InstrumentRecord.from(instrument))
+      onInstrumentChanged(instrument.id)
+    }
+    instrumentCache[instrument.id] = instrument
+  }
+
+  // MARK: - Fetch Legs for Transactions
+
+  @MainActor
+  private func fetchLegs(for transactionId: UUID) throws -> [TransactionLeg] {
+    let tid = transactionId
+    let descriptor = FetchDescriptor<TransactionLegRecord>(
+      predicate: #Predicate { $0.transactionId == tid },
+      sortBy: [SortDescriptor(\.sortOrder)]
+    )
+    let legRecords = try context.fetch(descriptor)
+    return try legRecords.map { record in
+      let instrument = try resolveInstrument(id: record.instrumentId)
+      return record.toDomain(instrument: instrument)
+    }
+  }
+
+  @MainActor
+  private func fetchAllLegRecords() throws -> [TransactionLegRecord] {
+    let descriptor = FetchDescriptor<TransactionLegRecord>()
+    return try context.fetch(descriptor)
+  }
+
+  // MARK: - Fetch
 
   func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> TransactionPage {
     let signpostID = OSSignpostID(log: Signposts.repository)
@@ -31,118 +86,80 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       // transactions. The server always adds `AND recur_period IS NULL` unless scheduled=true.
       let scheduled = filter.scheduled ?? false
 
-      // Fast path: page 0 with simple accountId filter and cachedBalance available.
-      // Computes priorBalance algebraically from cachedBalance instead of loading all records.
-      if page == 0,
-        !scheduled,
-        let filterAccountId = filter.accountId,
-        filter.categoryIds == nil,
-        filter.payee == nil,
-        filter.dateRange == nil,
-        filter.earmarkId == nil
-      {
-        let accountDescriptor = FetchDescriptor<AccountRecord>(
-          predicate: #Predicate { $0.id == filterAccountId }
-        )
-        if let account = try context.fetch(accountDescriptor).first,
-          let cachedBalance = account.cachedBalance
-        {
-          return try fetchFastPath(
-            accountId: filterAccountId,
-            cachedBalance: cachedBalance,
-            pageSize: pageSize,
-            signpostID: signpostID
-          )
-        }
-      }
-
-      // --- Full fetch path (complex filters, later pages, or no cached balance) ---
+      // --- Step 1: If filtering by accountId, get matching transactionIds from legs ---
       os_signpost(
         .begin, log: Signposts.repository, name: "fetch.predicateQuery", signpostID: signpostID)
-      let primaryRecords: [TransactionRecord]
-      let secondaryRecords: [TransactionRecord]
-
-      // For accountId filter, we need two queries (accountId match + toAccountId match)
-      // because OR across optional fields is unreliable in #Predicate.
-      // Track which filters were pushed into predicates to skip redundant post-filters.
-      let primaryResult: DescriptorResult
+      let accountTransactionIds: Set<UUID>?
       if let filterAccountId = filter.accountId {
-        let primary = try fetchRecords(
-          accountId: filterAccountId,
-          accountIdField: .primary,
-          scheduled: scheduled,
-          dateRange: filter.dateRange,
-          earmarkId: filter.earmarkId
+        let aid = filterAccountId
+        let legDescriptor = FetchDescriptor<TransactionLegRecord>(
+          predicate: #Predicate { $0.accountId == aid }
         )
-        primaryRecords = primary.records
-        primaryResult = primary.result
-        let secondary = try fetchRecords(
-          accountId: filterAccountId,
-          accountIdField: .toAccount,
-          scheduled: scheduled,
-          dateRange: filter.dateRange,
-          earmarkId: filter.earmarkId
-        )
-        secondaryRecords = secondary.records
+        let matchingLegs = try context.fetch(legDescriptor)
+        accountTransactionIds = Set(matchingLegs.map(\.transactionId))
       } else {
-        let primary = try fetchRecords(
-          accountId: nil,
-          accountIdField: .none,
-          scheduled: scheduled,
-          dateRange: filter.dateRange,
-          earmarkId: filter.earmarkId
-        )
-        primaryRecords = primary.records
-        primaryResult = primary.result
-        secondaryRecords = []
+        accountTransactionIds = nil
       }
 
-      // Merge and deduplicate (secondary query may overlap with primary)
-      let mergedRecords: [TransactionRecord]
-      if secondaryRecords.isEmpty {
-        mergedRecords = primaryRecords
+      // --- Step 2: Fetch TransactionRecords with date/scheduled predicates ---
+      let fetchResult = try fetchTransactionRecords(
+        scheduled: scheduled,
+        dateRange: filter.dateRange
+      )
+      let allRecords = fetchResult.records
+      let descriptorResult = fetchResult.result
+
+      // --- Step 3: Intersect with accountId filter if needed ---
+      var filteredRecords: [TransactionRecord]
+      if let accountIds = accountTransactionIds {
+        filteredRecords = allRecords.filter { accountIds.contains($0.id) }
       } else {
-        var seen = Set(primaryRecords.map(\.id))
-        var combined = primaryRecords
-        for record in secondaryRecords {
-          if seen.insert(record.id).inserted {
-            combined.append(record)
-          }
-        }
-        mergedRecords = combined
+        filteredRecords = allRecords
       }
       os_signpost(
         .end, log: Signposts.repository, name: "fetch.predicateQuery", signpostID: signpostID)
 
       // --- In-memory post-filters ---
-      // categoryIds and payee can never be pushed into #Predicate, so always apply here.
-      // scheduled, dateRange, and earmarkId are only applied when NOT already pushed into
-      // the predicate (tracked via DescriptorResult flags).
+      // Only apply filters that weren't already pushed into the SwiftData predicate.
       os_signpost(
         .begin, log: Signposts.repository, name: "fetch.postFilter", signpostID: signpostID)
-      var filteredRecords = mergedRecords
-
-      if !primaryResult.pushedScheduled {
+      if !descriptorResult.pushedScheduled {
         if scheduled {
           filteredRecords = filteredRecords.filter { $0.recurPeriod != nil }
         } else {
           filteredRecords = filteredRecords.filter { $0.recurPeriod == nil }
         }
       }
-      if !primaryResult.pushedDateRange, let dateRange = filter.dateRange {
+      if !descriptorResult.pushedDateRange, let dateRange = filter.dateRange {
         let start = dateRange.lowerBound
         let end = dateRange.upperBound
         filteredRecords = filteredRecords.filter { $0.date >= start && $0.date <= end }
       }
-      if !primaryResult.pushedEarmarkId, let earmarkId = filter.earmarkId {
-        filteredRecords = filteredRecords.filter { $0.earmarkId == earmarkId }
+
+      // earmarkId filter: need to check legs
+      if let earmarkId = filter.earmarkId {
+        let eid = earmarkId
+        let earmarkLegDescriptor = FetchDescriptor<TransactionLegRecord>(
+          predicate: #Predicate { $0.earmarkId == eid }
+        )
+        let earmarkLegTxnIds = Set(try context.fetch(earmarkLegDescriptor).map(\.transactionId))
+        filteredRecords = filteredRecords.filter { earmarkLegTxnIds.contains($0.id) }
       }
+
+      // categoryIds filter: need to check legs
       if let categoryIds = filter.categoryIds, !categoryIds.isEmpty {
+        // Fetch all leg records and find transactions with matching categories
+        let allLegs = try fetchAllLegRecords()
+        let legsByTxnId = Dictionary(grouping: allLegs, by: \.transactionId)
         filteredRecords = filteredRecords.filter { record in
-          guard let categoryId = record.categoryId else { return false }
-          return categoryIds.contains(categoryId)
+          guard let legs = legsByTxnId[record.id] else { return false }
+          return legs.contains { leg in
+            guard let catId = leg.categoryId else { return false }
+            return categoryIds.contains(catId)
+          }
         }
       }
+
       if let payee = filter.payee, !payee.isEmpty {
         let lowered = payee.lowercased()
         filteredRecords = filteredRecords.filter { record in
@@ -164,7 +181,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       let offset = page * pageSize
       guard offset < filteredRecords.count else {
         return TransactionPage(
-          transactions: [], priorBalance: MonetaryAmount(cents: 0, currency: self.currency),
+          transactions: [],
+          priorBalance: InstrumentAmount.zero(instrument: self.instrument),
           totalCount: filteredRecords.count)
       }
       let totalCount = filteredRecords.count
@@ -173,22 +191,32 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
 
       // Convert only the page slice to domain objects (avoid toDomain() on entire dataset)
       os_signpost(.begin, log: Signposts.repository, name: "fetch.toDomain", signpostID: signpostID)
-      let pageTransactions = pageRecords.map { $0.toDomain() }
+      let pageTransactions = try pageRecords.map { record in
+        let legs = try fetchLegs(for: record.id)
+        return record.toDomain(legs: legs)
+      }
       os_signpost(.end, log: Signposts.repository, name: "fetch.toDomain", signpostID: signpostID)
 
-      // priorBalance = sum of adjusted amounts for all records after the current page.
-      // Matches moolah-server: SUM(IF(to_account_id = ?, -amount, amount))
-      // Records matched via toAccountId have their amount negated.
+      // priorBalance = sum of leg quantities for the filtered account for records after the page
       os_signpost(
         .begin, log: Signposts.balance, name: "fetch.priorBalance", signpostID: signpostID)
-      let filterAccountId = filter.accountId
-      let priorBalanceCents = filteredRecords[end...].reduce(0) { sum, record in
-        if let filterAccountId, record.accountId != filterAccountId {
-          return sum - record.amount
+      let priorBalance: InstrumentAmount
+      if let filterAccountId = filter.accountId {
+        let afterPageRecordIds = Set(filteredRecords[end...].map(\.id))
+        let aid = filterAccountId
+        let legDescriptor = FetchDescriptor<TransactionLegRecord>(
+          predicate: #Predicate { $0.accountId == aid }
+        )
+        let allAccountLegs = try context.fetch(legDescriptor)
+        var totalStorageValue: Int64 = 0
+        for leg in allAccountLegs where afterPageRecordIds.contains(leg.transactionId) {
+          totalStorageValue += leg.quantity
         }
-        return sum + record.amount
+        priorBalance = InstrumentAmount(
+          storageValue: totalStorageValue, instrument: self.instrument)
+      } else {
+        priorBalance = InstrumentAmount.zero(instrument: self.instrument)
       }
-      let priorBalance = MonetaryAmount(cents: priorBalanceCents, currency: self.currency)
       os_signpost(.end, log: Signposts.balance, name: "fetch.priorBalance", signpostID: signpostID)
 
       return TransactionPage(
@@ -196,394 +224,66 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
     }
   }
 
-  // MARK: - Fast Path
-
-  /// Optimized fetch for page 0 with a simple accountId filter and non-scheduled transactions.
-  /// Instead of loading all ~14k records to sort/paginate/sum, loads only ~60 records:
-  /// - All secondary (toAccount) records (typically very few transfers to a given account)
-  /// - Top pageSize primary records via SwiftData fetchLimit
-  /// Computes priorBalance as: cachedBalance - headAdjustedSum, where headAdjustedSum
-  /// negates amounts for toAccountId matches (matching moolah-server sign convention).
-  @MainActor
-  private func fetchFastPath(
-    accountId: UUID,
-    cachedBalance: Int,
-    pageSize: Int,
-    signpostID: OSSignpostID
-  ) throws -> TransactionPage {
-    os_signpost(
-      .begin, log: Signposts.repository, name: "fetch.fastPath", signpostID: signpostID)
-    defer {
-      os_signpost(
-        .end, log: Signposts.repository, name: "fetch.fastPath", signpostID: signpostID)
-    }
-
-    // 1. Fetch ALL secondary records (transfers TO this account, non-scheduled).
-    //    Typically very few — e.g., ~9 for the busiest account in a 37k dataset.
-    let secondaryDescriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate { $0.toAccountId == accountId && $0.recurPeriod == nil },
-      sortBy: [SortDescriptor(\TransactionRecord.date, order: .reverse)]
-    )
-    let secondaryRecords = try context.fetch(secondaryDescriptor)
-
-    // 2. Fetch top pageSize primary records (SwiftData pushes sort+limit to SQLite).
-    var primaryDescriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate { $0.accountId == accountId && $0.recurPeriod == nil },
-      sortBy: [SortDescriptor(\TransactionRecord.date, order: .reverse)]
-    )
-    primaryDescriptor.fetchLimit = pageSize
-    let primaryRecords = try context.fetch(primaryDescriptor)
-
-    // 3. Merge, deduplicate, and sort the small combined set.
-    var seen = Set(primaryRecords.map(\.id))
-    var merged = primaryRecords
-    for record in secondaryRecords {
-      if seen.insert(record.id).inserted {
-        merged.append(record)
-      }
-    }
-    merged.sort { a, b in
-      if a.date != b.date { return a.date > b.date }
-      return a.id < b.id
-    }
-
-    // 4. Page records = first pageSize of the merged set.
-    let end = min(pageSize, merged.count)
-    let pageRecords = merged[0..<end]
-
-    os_signpost(
-      .begin, log: Signposts.repository, name: "fetch.toDomain", signpostID: signpostID)
-    let pageTransactions = pageRecords.map { $0.toDomain() }
-    os_signpost(.end, log: Signposts.repository, name: "fetch.toDomain", signpostID: signpostID)
-
-    // 5. totalCount via fetchCount (O(1) SQL COUNT per query).
-    let primaryCount = try context.fetchCount(
-      FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.accountId == accountId && $0.recurPeriod == nil }
-      ))
-    let totalCount = primaryCount + secondaryRecords.count
-
-    // 6. Compute priorBalance algebraically.
-    //    cachedBalance = Σ(amount | accountId=A) - Σ(amount | toAccountId=A) for non-scheduled
-    //    This matches the server's SUM(IF(to_account_id=?, -amount, amount)).
-    //    priorBalance  = cachedBalance - headAdjustedSum
-    //    headAdjustedSum negates amounts for records matched via toAccountId.
-    os_signpost(
-      .begin, log: Signposts.balance, name: "fetch.priorBalance", signpostID: signpostID)
-    let secondaryIds = Set(secondaryRecords.map(\.id))
-    let headAdjustedSum = pageRecords.reduce(0) { sum, record in
-      if secondaryIds.contains(record.id) {
-        return sum - record.amount
-      }
-      return sum + record.amount
-    }
-    let priorBalanceCents = cachedBalance - headAdjustedSum
-    let priorBalance = MonetaryAmount(cents: priorBalanceCents, currency: self.currency)
-    os_signpost(.end, log: Signposts.balance, name: "fetch.priorBalance", signpostID: signpostID)
-
-    return TransactionPage(
-      transactions: pageTransactions, priorBalance: priorBalance, totalCount: totalCount)
-  }
-
   // MARK: - Predicate Push-Down Helpers
-
-  private enum AccountIdField {
-    case primary  // Match on accountId
-    case toAccount  // Match on toAccountId
-    case none  // No account filter
-  }
 
   /// Tracks which filters were pushed into the SwiftData predicate so post-filters can skip them.
   private struct DescriptorResult {
-    let descriptor: FetchDescriptor<TransactionRecord>
     let pushedScheduled: Bool
     let pushedDateRange: Bool
-    let pushedEarmarkId: Bool
   }
 
-  /// Fetches TransactionRecords with as many filters pushed into SwiftData predicates as possible.
-  /// Since `#Predicate` is a macro requiring static expressions, we branch on which filters are set.
-  /// Returns the fetched records along with metadata about which filters were pushed into the predicate.
+  /// Fetches TransactionRecords with scheduled and dateRange filters pushed into SwiftData predicates.
   @MainActor
-  private func fetchRecords(
-    accountId: UUID?,
-    accountIdField: AccountIdField,
-    scheduled: Bool?,
-    dateRange: ClosedRange<Date>?,
-    earmarkId: UUID?
+  private func fetchTransactionRecords(
+    scheduled: Bool,
+    dateRange: ClosedRange<Date>?
   ) throws -> (records: [TransactionRecord], result: DescriptorResult) {
-    let result = buildDescriptor(
-      accountId: accountId,
-      accountIdField: accountIdField,
-      scheduled: scheduled,
-      dateRange: dateRange,
-      earmarkId: earmarkId
-    )
-    let records = try context.fetch(result.descriptor)
-    return (records, result)
-  }
-
-  /// Builds a FetchDescriptor with the appropriate predicate based on which filters are active.
-  /// We use a pragmatic approach: branch on accountId, scheduled, dateRange, and earmarkId
-  /// combinations. To avoid 2^4 = 16 branches, we handle the most common combinations and fall
-  /// back to fewer pushed-down filters for rare combinations.
-  /// Returns a DescriptorResult that tracks which filters were pushed into the predicate.
-  @MainActor
-  private func buildDescriptor(
-    accountId: UUID?,
-    accountIdField: AccountIdField,
-    scheduled: Bool?,
-    dateRange: ClosedRange<Date>?,
-    earmarkId: UUID?
-  ) -> DescriptorResult {
     let sortDescriptors = [SortDescriptor(\TransactionRecord.date, order: .reverse)]
 
-    // Helper to determine if scheduled filter means "is scheduled" or "not scheduled"
-    let isScheduled = scheduled == true
-    let isNotScheduled = scheduled == false
-
-    // Branch based on which filters are set, focusing on the most common paths.
-    // Account + scheduled is the most common combination (transaction list for an account).
-
-    switch (accountIdField, scheduled, dateRange, earmarkId) {
-
-    // --- No account filter ---
-    case (.none, nil, nil, nil):
-      let d = FetchDescriptor<TransactionRecord>(
-        sortBy: sortDescriptors
+    switch (scheduled, dateRange) {
+    case (false, nil):
+      return (
+        try context.fetch(
+          FetchDescriptor<TransactionRecord>(
+            predicate: #Predicate { $0.recurPeriod == nil },
+            sortBy: sortDescriptors
+          )), DescriptorResult(pushedScheduled: true, pushedDateRange: false)
       )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: false, pushedDateRange: false, pushedEarmarkId: false)
 
-    case (.none, .some(_), nil, nil) where isScheduled:
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.recurPeriod != nil },
-        sortBy: sortDescriptors
+    case (true, nil):
+      return (
+        try context.fetch(
+          FetchDescriptor<TransactionRecord>(
+            predicate: #Predicate { $0.recurPeriod != nil },
+            sortBy: sortDescriptors
+          )), DescriptorResult(pushedScheduled: true, pushedDateRange: false)
       )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: true, pushedDateRange: false, pushedEarmarkId: false)
 
-    case (.none, .some(_), nil, nil) where isNotScheduled:
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.recurPeriod == nil },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: true, pushedDateRange: false, pushedEarmarkId: false)
-
-    case (.none, nil, .some(let range), nil):
+    case (false, .some(let range)):
       let start = range.lowerBound
       let end = range.upperBound
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.date >= start && $0.date <= end },
-        sortBy: sortDescriptors
+      return (
+        try context.fetch(
+          FetchDescriptor<TransactionRecord>(
+            predicate: #Predicate {
+              $0.recurPeriod == nil && $0.date >= start && $0.date <= end
+            },
+            sortBy: sortDescriptors
+          )), DescriptorResult(pushedScheduled: true, pushedDateRange: true)
       )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: false, pushedDateRange: true, pushedEarmarkId: false)
 
-    case (.none, nil, nil, .some(let eid)):
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.earmarkId == eid },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: false, pushedDateRange: false, pushedEarmarkId: true)
-
-    case (.none, .some(_), .some(let range), nil) where isNotScheduled:
+    case (true, .some(let range)):
       let start = range.lowerBound
       let end = range.upperBound
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate {
-          $0.recurPeriod == nil && $0.date >= start && $0.date <= end
-        },
-        sortBy: sortDescriptors
+      return (
+        try context.fetch(
+          FetchDescriptor<TransactionRecord>(
+            predicate: #Predicate {
+              $0.recurPeriod != nil && $0.date >= start && $0.date <= end
+            },
+            sortBy: sortDescriptors
+          )), DescriptorResult(pushedScheduled: true, pushedDateRange: true)
       )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: true, pushedDateRange: true, pushedEarmarkId: false)
-
-    case (.none, .some(_), .some(let range), nil) where isScheduled:
-      let start = range.lowerBound
-      let end = range.upperBound
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate {
-          $0.recurPeriod != nil && $0.date >= start && $0.date <= end
-        },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: true, pushedDateRange: true, pushedEarmarkId: false)
-
-    // --- Primary account filter ---
-    case (.primary, nil, nil, nil):
-      let aid = accountId!
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.accountId == aid },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: false, pushedDateRange: false, pushedEarmarkId: false)
-
-    case (.primary, .some(_), nil, nil) where isNotScheduled:
-      let aid = accountId!
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate {
-          $0.accountId == aid && $0.recurPeriod == nil
-        },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: true, pushedDateRange: false, pushedEarmarkId: false)
-
-    case (.primary, .some(_), nil, nil) where isScheduled:
-      let aid = accountId!
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate {
-          $0.accountId == aid && $0.recurPeriod != nil
-        },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: true, pushedDateRange: false, pushedEarmarkId: false)
-
-    case (.primary, nil, .some(let range), nil):
-      let aid = accountId!
-      let start = range.lowerBound
-      let end = range.upperBound
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate {
-          $0.accountId == aid && $0.date >= start && $0.date <= end
-        },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: false, pushedDateRange: true, pushedEarmarkId: false)
-
-    case (.primary, nil, nil, .some(let eid)):
-      let aid = accountId!
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate {
-          $0.accountId == aid && $0.earmarkId == eid
-        },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: false, pushedDateRange: false, pushedEarmarkId: true)
-
-    case (.primary, .some(_), .some(let range), nil) where isNotScheduled:
-      let aid = accountId!
-      let start = range.lowerBound
-      let end = range.upperBound
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate {
-          $0.accountId == aid && $0.recurPeriod == nil && $0.date >= start && $0.date <= end
-        },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: true, pushedDateRange: true, pushedEarmarkId: false)
-
-    case (.primary, .some(_), .some(let range), nil) where isScheduled:
-      let aid = accountId!
-      let start = range.lowerBound
-      let end = range.upperBound
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate {
-          $0.accountId == aid && $0.recurPeriod != nil && $0.date >= start && $0.date <= end
-        },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: true, pushedDateRange: true, pushedEarmarkId: false)
-
-    // --- toAccount filter ---
-    case (.toAccount, nil, nil, nil):
-      let aid = accountId!
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.toAccountId == aid },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: false, pushedDateRange: false, pushedEarmarkId: false)
-
-    case (.toAccount, .some(_), nil, nil) where isNotScheduled:
-      let aid = accountId!
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate {
-          $0.toAccountId == aid && $0.recurPeriod == nil
-        },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: true, pushedDateRange: false, pushedEarmarkId: false)
-
-    case (.toAccount, .some(_), nil, nil) where isScheduled:
-      let aid = accountId!
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate {
-          $0.toAccountId == aid && $0.recurPeriod != nil
-        },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: true, pushedDateRange: false, pushedEarmarkId: false)
-
-    case (.toAccount, nil, .some(let range), nil):
-      let aid = accountId!
-      let start = range.lowerBound
-      let end = range.upperBound
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate {
-          $0.toAccountId == aid && $0.date >= start && $0.date <= end
-        },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: false, pushedDateRange: true, pushedEarmarkId: false)
-
-    case (.toAccount, nil, nil, .some(let eid)):
-      let aid = accountId!
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate {
-          $0.toAccountId == aid && $0.earmarkId == eid
-        },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: false, pushedDateRange: false, pushedEarmarkId: true)
-
-    case (.toAccount, .some(_), .some(let range), nil) where isNotScheduled:
-      let aid = accountId!
-      let start = range.lowerBound
-      let end = range.upperBound
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate {
-          $0.toAccountId == aid && $0.recurPeriod == nil && $0.date >= start && $0.date <= end
-        },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: true, pushedDateRange: true, pushedEarmarkId: false)
-
-    case (.toAccount, .some(_), .some(let range), nil) where isScheduled:
-      let aid = accountId!
-      let start = range.lowerBound
-      let end = range.upperBound
-      let d = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate {
-          $0.toAccountId == aid && $0.recurPeriod != nil && $0.date >= start && $0.date <= end
-        },
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: true, pushedDateRange: true, pushedEarmarkId: false)
-
-    // --- Fallback: no profileId filter, apply everything else in memory ---
-    default:
-      let d = FetchDescriptor<TransactionRecord>(
-        sortBy: sortDescriptors
-      )
-      return DescriptorResult(
-        descriptor: d, pushedScheduled: false, pushedDateRange: false, pushedEarmarkId: false)
     }
   }
 
@@ -595,30 +295,25 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       os_signpost(
         .end, log: Signposts.repository, name: "TransactionRepo.create", signpostID: signpostID)
     }
-    if transaction.type == .transfer {
-      guard transaction.toAccountId != nil else {
-        throw BackendError.validationFailed("Transfer must have a destination account")
-      }
-      guard transaction.toAccountId != transaction.accountId else {
-        throw BackendError.validationFailed("Cannot transfer to the same account")
-      }
-    }
     let record = TransactionRecord.from(transaction)
     try await MainActor.run {
       context.insert(record)
 
-      // Update cached account balances for non-scheduled transactions
-      if transaction.recurPeriod == nil {
-        if let accountId = transaction.accountId {
-          try updateAccountBalance(accountId: accountId, delta: transaction.amount.cents)
-        }
-        if let toAccountId = transaction.toAccountId {
-          try updateAccountBalance(accountId: toAccountId, delta: -transaction.amount.cents)
-        }
+      // Insert leg records and ensure instruments exist
+      var legRecords: [TransactionLegRecord] = []
+      for (index, leg) in transaction.legs.enumerated() {
+        try ensureInstrument(leg.instrument)
+        let legRecord = TransactionLegRecord.from(
+          leg, transactionId: transaction.id, sortOrder: index)
+        context.insert(legRecord)
+        legRecords.append(legRecord)
       }
 
       try context.save()
       onRecordChanged(transaction.id)
+      for legRecord in legRecords {
+        onRecordChanged(legRecord.id)
+      }
     }
     return transaction
   }
@@ -641,42 +336,41 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         throw BackendError.serverError(404)
       }
 
-      // Reverse old balance effect before applying new values (non-scheduled only)
-      let oldWasScheduled = record.recurPeriod != nil
-      if !oldWasScheduled {
-        if let oldAccountId = record.accountId {
-          try updateAccountBalance(accountId: oldAccountId, delta: -record.amount)
-        }
-        if let oldToAccountId = record.toAccountId {
-          try updateAccountBalance(accountId: oldToAccountId, delta: record.amount)
-        }
-      }
-
-      record.type = transaction.type.rawValue
+      // Update transaction metadata
       record.date = transaction.date
-      record.accountId = transaction.accountId
-      record.toAccountId = transaction.toAccountId
-      record.amount = transaction.amount.cents
-      record.currencyCode = transaction.amount.currency.code
       record.payee = transaction.payee
       record.notes = transaction.notes
-      record.categoryId = transaction.categoryId
-      record.earmarkId = transaction.earmarkId
       record.recurPeriod = transaction.recurPeriod?.rawValue
       record.recurEvery = transaction.recurEvery
 
-      // Apply new balance effect (non-scheduled only)
-      if transaction.recurPeriod == nil {
-        if let accountId = transaction.accountId {
-          try updateAccountBalance(accountId: accountId, delta: transaction.amount.cents)
-        }
-        if let toAccountId = transaction.toAccountId {
-          try updateAccountBalance(accountId: toAccountId, delta: -transaction.amount.cents)
-        }
+      // Delete old leg records
+      let legDescriptor = FetchDescriptor<TransactionLegRecord>(
+        predicate: #Predicate { $0.transactionId == txnId }
+      )
+      let oldLegs = try context.fetch(legDescriptor)
+      let oldLegIds = oldLegs.map(\.id)
+      for oldLeg in oldLegs {
+        context.delete(oldLeg)
+      }
+
+      // Insert new leg records
+      var newLegRecords: [TransactionLegRecord] = []
+      for (index, leg) in transaction.legs.enumerated() {
+        try ensureInstrument(leg.instrument)
+        let legRecord = TransactionLegRecord.from(
+          leg, transactionId: transaction.id, sortOrder: index)
+        context.insert(legRecord)
+        newLegRecords.append(legRecord)
       }
 
       try context.save()
       onRecordChanged(transaction.id)
+      for legRecord in newLegRecords {
+        onRecordChanged(legRecord.id)
+      }
+      for oldLegId in oldLegIds {
+        onRecordDeleted(oldLegId)
+      }
     }
     return transaction
   }
@@ -698,31 +392,22 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         throw BackendError.serverError(404)
       }
 
-      // Reverse balance effect before deleting (non-scheduled only)
-      if record.recurPeriod == nil {
-        if let accountId = record.accountId {
-          try updateAccountBalance(accountId: accountId, delta: -record.amount)
-        }
-        if let toAccountId = record.toAccountId {
-          try updateAccountBalance(accountId: toAccountId, delta: record.amount)
-        }
+      // Delete leg records first
+      let legDescriptor = FetchDescriptor<TransactionLegRecord>(
+        predicate: #Predicate { $0.transactionId == id }
+      )
+      let legs = try context.fetch(legDescriptor)
+      let legIds = legs.map(\.id)
+      for leg in legs {
+        context.delete(leg)
       }
 
       context.delete(record)
       try context.save()
       onRecordDeleted(id)
-    }
-  }
-
-  // MARK: - Cached Balance Maintenance
-
-  @MainActor
-  private func updateAccountBalance(accountId: UUID, delta: Int) throws {
-    let descriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.id == accountId }
-    )
-    if let record = try context.fetch(descriptor).first {
-      record.cachedBalance = (record.cachedBalance ?? 0) + delta
+      for legId in legIds {
+        onRecordDeleted(legId)
+      }
     }
   }
 
@@ -737,21 +422,18 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         signpostID: signpostID)
     }
     guard !prefix.isEmpty else { return [] }
+    let descriptor = FetchDescriptor<TransactionRecord>(
+      predicate: #Predicate { $0.payee != nil }
+    )
 
     return try await MainActor.run {
-      var descriptor = FetchDescriptor<TransactionRecord>(
-        predicate: #Predicate { $0.payee != nil },
-        sortBy: [SortDescriptor(\TransactionRecord.date, order: .reverse)]
-      )
-      descriptor.fetchLimit = 5000
       let records = try context.fetch(descriptor)
       let lowered = prefix.lowercased()
+      let matching = records.compactMap(\.payee)
+        .filter { !$0.isEmpty && $0.lowercased().hasPrefix(lowered) }
 
       var counts: [String: Int] = [:]
-      for record in records {
-        guard let payee = record.payee, !payee.isEmpty,
-          payee.lowercased().hasPrefix(lowered)
-        else { continue }
+      for payee in matching {
         counts[payee, default: 0] += 1
       }
       return counts.sorted { $0.value > $1.value }.map(\.key)

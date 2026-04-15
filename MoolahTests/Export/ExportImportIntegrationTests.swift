@@ -8,16 +8,16 @@ import Testing
 @MainActor
 struct ExportImportIntegrationTests {
 
-  private let currency = Currency.defaultTestCurrency
+  private let instrument = Instrument.defaultTestInstrument
 
   /// Seeds a CloudKitBackend with realistic data for testing.
   private func makeSeededBackend() async throws -> CloudKitBackend {
-    let (backend, _) = try TestBackend.create(currency: currency)
+    let (backend, _) = try TestBackend.create(instrument: instrument)
 
     let checking = try await backend.accounts.create(
       Account(
         name: "Checking", type: .bank,
-        balance: MonetaryAmount(cents: 50_000, currency: currency)
+        balance: InstrumentAmount(quantity: Decimal(string: "500.00")!, instrument: instrument)
       )
     )
 
@@ -25,22 +25,36 @@ struct ExportImportIntegrationTests {
     _ = try await backend.categories.create(Category(name: "Transport"))
 
     let holiday = try await backend.earmarks.create(
-      Earmark(name: "Holiday", balance: .zero(currency: currency))
+      Earmark(name: "Holiday", balance: .zero(instrument: instrument))
     )
-    try await backend.earmarks.setBudget(earmarkId: holiday.id, categoryId: food.id, amount: 3000)
+    let budgetAmount = InstrumentAmount(quantity: Decimal(string: "30.00")!, instrument: instrument)
+    try await backend.earmarks.setBudget(
+      earmarkId: holiday.id, categoryId: food.id, amount: budgetAmount)
 
     _ = try await backend.transactions.create(
       Transaction(
-        type: .income, date: Date(), accountId: checking.id,
-        amount: MonetaryAmount(cents: 50_000, currency: currency), payee: "Employer"
+        date: Date(),
+        payee: "Employer",
+        legs: [
+          TransactionLeg(
+            accountId: checking.id, instrument: instrument,
+            quantity: Decimal(string: "500.00")!, type: .income
+          )
+        ]
       )
     )
 
     _ = try await backend.transactions.create(
       Transaction(
-        type: .expense, date: Date(), accountId: checking.id,
-        amount: MonetaryAmount(cents: -1500, currency: currency),
-        payee: "Cafe", categoryId: food.id, earmarkId: holiday.id
+        date: Date(),
+        payee: "Cafe",
+        legs: [
+          TransactionLeg(
+            accountId: checking.id, instrument: instrument,
+            quantity: Decimal(string: "-15.00")!, type: .expense,
+            categoryId: food.id, earmarkId: holiday.id
+          )
+        ]
       )
     )
 
@@ -61,7 +75,7 @@ struct ExportImportIntegrationTests {
     let profile = Profile(
       label: "Test Profile",
       backendType: .cloudKit,
-      currencyCode: currency.code,
+      currencyCode: instrument.id,
       financialYearStartMonth: 7
     )
 
@@ -77,7 +91,7 @@ struct ExportImportIntegrationTests {
     let decoded = try JSONDecoder.exportDecoder.decode(ExportedData.self, from: data)
 
     #expect(decoded.profileLabel == "Test Profile")
-    #expect(decoded.currencyCode == currency.code)
+    #expect(decoded.currencyCode == instrument.id)
     #expect(decoded.financialYearStartMonth == 7)
     #expect(decoded.accounts.count == 1)
     #expect(decoded.categories.count == 2)
@@ -104,7 +118,7 @@ struct ExportImportIntegrationTests {
     let profile = Profile(
       label: "Test Profile",
       backendType: .cloudKit,
-      currencyCode: currency.code,
+      currencyCode: instrument.id,
       financialYearStartMonth: 7
     )
 
@@ -132,7 +146,7 @@ struct ExportImportIntegrationTests {
     // Verify data is readable through CloudKit repositories
     let cloudBackend = CloudKitBackend(
       modelContainer: freshContainer,
-      currency: currency,
+      instrument: instrument,
       profileLabel: "Test Profile"
     )
 
@@ -149,7 +163,7 @@ struct ExportImportIntegrationTests {
 
     let budgetItems = try await cloudBackend.earmarks.fetchBudget(earmarkId: earmarks.first!.id)
     #expect(budgetItems.count == 1)
-    #expect(budgetItems.first?.amount.cents == 3000)
+    #expect(budgetItems.first?.amount.quantity == Decimal(string: "30.00")!)
 
     let txnPage = try await cloudBackend.transactions.fetch(
       filter: TransactionFilter(), page: 0, pageSize: 100

@@ -5,8 +5,8 @@ import XCTest
 
 /// Benchmarks for TransactionRecord.toDomain() conversion.
 /// Measures fetch + conversion together since TransactionRecord is a managed
-/// object that can't cross isolation boundaries. The fetch cost is small
-/// relative to 5000x Currency.from(code:) calls.
+/// object that can't cross isolation boundaries. In the multi-instrument model,
+/// each transaction also requires fetching its associated leg records.
 final class ConversionBenchmarks: XCTestCase {
 
   nonisolated(unsafe) private static var _container: ModelContainer!
@@ -41,7 +41,19 @@ final class ConversionBenchmarks: XCTestCase {
         var descriptor = FetchDescriptor<TransactionRecord>()
         descriptor.fetchLimit = 1000
         let records = try container.mainContext.fetch(descriptor)
-        return records.map { $0.toDomain() }
+        let txnIds = records.map(\.id)
+        let legRecords = try container.mainContext.fetch(
+          FetchDescriptor<TransactionLegRecord>(
+            predicate: #Predicate { txnIds.contains($0.transactionId) }
+          )
+        )
+        let legsByTxn = Dictionary(grouping: legRecords, by: \.transactionId)
+        return records.map { record in
+          let legs = (legsByTxn[record.id] ?? [])
+            .sorted(by: { $0.sortOrder < $1.sortOrder })
+            .map { $0.toDomain(instrument: Instrument.fiat(code: $0.instrumentId)) }
+          return record.toDomain(legs: legs)
+        }
       }
     }
   }
@@ -53,7 +65,19 @@ final class ConversionBenchmarks: XCTestCase {
         var descriptor = FetchDescriptor<TransactionRecord>()
         descriptor.fetchLimit = 5000
         let records = try container.mainContext.fetch(descriptor)
-        return records.map { $0.toDomain() }
+        let txnIds = records.map(\.id)
+        let legRecords = try container.mainContext.fetch(
+          FetchDescriptor<TransactionLegRecord>(
+            predicate: #Predicate { txnIds.contains($0.transactionId) }
+          )
+        )
+        let legsByTxn = Dictionary(grouping: legRecords, by: \.transactionId)
+        return records.map { record in
+          let legs = (legsByTxn[record.id] ?? [])
+            .sorted(by: { $0.sortOrder < $1.sortOrder })
+            .map { $0.toDomain(instrument: Instrument.fiat(code: $0.instrumentId)) }
+          return record.toDomain(legs: legs)
+        }
       }
     }
   }

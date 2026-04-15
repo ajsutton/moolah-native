@@ -48,7 +48,7 @@ struct ProfileSyncEngineTests {
     // Seed an account into the store
     let account = AccountRecord(
       id: UUID(), name: "Savings", type: "bank", position: 0,
-      isHidden: false, currencyCode: "AUD", cachedBalance: nil
+      isHidden: false
     )
     let context = ModelContext(container)
     context.insert(account)
@@ -80,7 +80,7 @@ struct ProfileSyncEngineTests {
     ckRecord["type"] = "bank" as CKRecordValue
     ckRecord["position"] = 1 as CKRecordValue
     ckRecord["isHidden"] = 0 as CKRecordValue
-    ckRecord["currencyCode"] = "USD" as CKRecordValue
+    ckRecord["usesPositionTracking"] = 0 as CKRecordValue
 
     engine.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
@@ -92,7 +92,6 @@ struct ProfileSyncEngineTests {
     let records = try! context.fetch(descriptor)
     #expect(records.count == 1)
     #expect(records.first?.name == "Remote Account")
-    #expect(records.first?.currencyCode == "USD")
   }
 
   @Test func applyRemoteUpdateModifiesExistingRecord() async {
@@ -105,7 +104,7 @@ struct ProfileSyncEngineTests {
     let context = ModelContext(container)
     let existing = AccountRecord(
       id: accountId, name: "Old Name", type: "bank", position: 0,
-      isHidden: false, currencyCode: "AUD", cachedBalance: nil
+      isHidden: false
     )
     context.insert(existing)
     try! context.save()
@@ -119,7 +118,6 @@ struct ProfileSyncEngineTests {
     ckRecord["type"] = "bank" as CKRecordValue
     ckRecord["position"] = 5 as CKRecordValue
     ckRecord["isHidden"] = 1 as CKRecordValue
-    ckRecord["currencyCode"] = "AUD" as CKRecordValue
 
     engine.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
@@ -145,7 +143,7 @@ struct ProfileSyncEngineTests {
     let context = ModelContext(container)
     let existing = AccountRecord(
       id: accountId, name: "To Delete", type: "bank", position: 0,
-      isHidden: false, currencyCode: "AUD", cachedBalance: nil
+      isHidden: false
     )
     context.insert(existing)
     try! context.save()
@@ -171,18 +169,13 @@ struct ProfileSyncEngineTests {
     let engine = ProfileSyncEngine(profileId: profileId, modelContainer: container)
 
     let txnId = UUID()
-    let accountId = UUID()
     let date = Date(timeIntervalSince1970: 1_700_000_000)
 
     let ckRecord = CKRecord(
       recordType: "CD_TransactionRecord",
       recordID: CKRecord.ID(recordName: txnId.uuidString, zoneID: engine.zoneID)
     )
-    ckRecord["type"] = "expense" as CKRecordValue
     ckRecord["date"] = date as CKRecordValue
-    ckRecord["accountId"] = accountId.uuidString as CKRecordValue
-    ckRecord["amount"] = -1500 as CKRecordValue
-    ckRecord["currencyCode"] = "AUD" as CKRecordValue
     ckRecord["payee"] = "Coffee" as CKRecordValue
 
     engine.applyRemoteChanges(saved: [ckRecord], deleted: [])
@@ -194,7 +187,6 @@ struct ProfileSyncEngineTests {
     let records = try! context.fetch(descriptor)
     #expect(records.count == 1)
     #expect(records.first?.payee == "Coffee")
-    #expect(records.first?.amount == -1500)
   }
 
   @Test func applyRemoteChangesHandlesCategories() async {
@@ -231,7 +223,6 @@ struct ProfileSyncEngineTests {
     let container = try! TestModelContainer.create()
     let engine = ProfileSyncEngine(profileId: profileId, modelContainer: container)
 
-    let accountId = UUID()
     let date = Date(timeIntervalSince1970: 1_700_000_000)
 
     // Create 100 transaction CKRecords
@@ -242,11 +233,7 @@ struct ProfileSyncEngineTests {
         recordType: "CD_TransactionRecord",
         recordID: CKRecord.ID(recordName: txnId.uuidString, zoneID: engine.zoneID)
       )
-      ckRecord["type"] = "expense" as CKRecordValue
       ckRecord["date"] = date as CKRecordValue
-      ckRecord["accountId"] = accountId.uuidString as CKRecordValue
-      ckRecord["amount"] = (-100 * (i + 1)) as CKRecordValue
-      ckRecord["currencyCode"] = "AUD" as CKRecordValue
       ckRecord["payee"] = "Payee \(i)" as CKRecordValue
       ckRecords.append(ckRecord)
     }
@@ -266,16 +253,13 @@ struct ProfileSyncEngineTests {
     let engine = ProfileSyncEngine(profileId: profileId, modelContainer: container)
 
     let existingTxnId = UUID()
-    let accountId = UUID()
     let date = Date(timeIntervalSince1970: 1_700_000_000)
 
     // Pre-insert one transaction
     let preContext = ModelContext(container)
     let existing = TransactionRecord(
-      id: existingTxnId, type: "expense", date: date,
-      accountId: accountId, toAccountId: nil, amount: -500,
-      currencyCode: "AUD", payee: "Old Payee", notes: nil,
-      categoryId: nil, earmarkId: nil, recurPeriod: nil, recurEvery: nil
+      id: existingTxnId, date: date,
+      payee: "Old Payee"
     )
     preContext.insert(existing)
     try! preContext.save()
@@ -287,22 +271,14 @@ struct ProfileSyncEngineTests {
       recordType: "CD_TransactionRecord",
       recordID: CKRecord.ID(recordName: existingTxnId.uuidString, zoneID: engine.zoneID)
     )
-    updateRecord["type"] = "expense" as CKRecordValue
     updateRecord["date"] = date as CKRecordValue
-    updateRecord["accountId"] = accountId.uuidString as CKRecordValue
-    updateRecord["amount"] = -999 as CKRecordValue
-    updateRecord["currencyCode"] = "AUD" as CKRecordValue
     updateRecord["payee"] = "Updated Payee" as CKRecordValue
 
     let insertRecord = CKRecord(
       recordType: "CD_TransactionRecord",
       recordID: CKRecord.ID(recordName: newTxnId.uuidString, zoneID: engine.zoneID)
     )
-    insertRecord["type"] = "income" as CKRecordValue
     insertRecord["date"] = date as CKRecordValue
-    insertRecord["accountId"] = accountId.uuidString as CKRecordValue
-    insertRecord["amount"] = 2000 as CKRecordValue
-    insertRecord["currencyCode"] = "AUD" as CKRecordValue
     insertRecord["payee"] = "New Payee" as CKRecordValue
 
     engine.applyRemoteChanges(saved: [updateRecord, insertRecord], deleted: [])
@@ -319,7 +295,6 @@ struct ProfileSyncEngineTests {
     )
     let updated = try! context.fetch(updateDescriptor)
     #expect(updated.first?.payee == "Updated Payee")
-    #expect(updated.first?.amount == -999)
 
     // Verify the insert happened
     let insertDescriptor = FetchDescriptor<TransactionRecord>(
@@ -327,7 +302,6 @@ struct ProfileSyncEngineTests {
     )
     let inserted = try! context.fetch(insertDescriptor)
     #expect(inserted.first?.payee == "New Payee")
-    #expect(inserted.first?.amount == 2000)
   }
 
   // MARK: - Fetch Session Lifecycle (Deferred Balance Invalidation)
@@ -414,71 +388,6 @@ struct ProfileSyncEngineTests {
     #expect(receivedTypes?.contains("CD_CategoryRecord") == true)
   }
 
-  @Test func balancesNotInvalidatedDuringFetchSession() {
-    let container = try! TestModelContainer.create()
-    let engine = ProfileSyncEngine(profileId: UUID(), modelContainer: container)
-
-    // Pre-create an account with a cached balance
-    let accountId = UUID()
-    let context = container.mainContext
-    let account = AccountRecord(
-      id: accountId, name: "Savings", type: "bank", position: 0,
-      isHidden: false, currencyCode: "AUD", cachedBalance: 5000
-    )
-    context.insert(account)
-    try! context.save()
-
-    engine.onRemoteChangesApplied = { _ in }
-
-    // During fetch session, apply a transaction batch for this account
-    engine.beginFetchingChanges()
-
-    engine.applyRemoteChanges(
-      saved: [makeTransactionCKRecord(accountId: accountId, amount: -100, zoneID: engine.zoneID)],
-      deleted: []
-    )
-
-    // Balance should still be cached (not invalidated mid-session)
-    let descriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.id == accountId }
-    )
-    let records = try! context.fetch(descriptor)
-    #expect(records.first?.cachedBalance == 5000)
-  }
-
-  @Test func balancesInvalidatedOnEndFetchingChanges() {
-    let container = try! TestModelContainer.create()
-    let engine = ProfileSyncEngine(profileId: UUID(), modelContainer: container)
-
-    // Pre-create an account with a cached balance
-    let accountId = UUID()
-    let context = container.mainContext
-    let account = AccountRecord(
-      id: accountId, name: "Savings", type: "bank", position: 0,
-      isHidden: false, currencyCode: "AUD", cachedBalance: 5000
-    )
-    context.insert(account)
-    try! context.save()
-
-    engine.onRemoteChangesApplied = { _ in }
-
-    // During fetch session, apply a transaction batch
-    engine.beginFetchingChanges()
-    engine.applyRemoteChanges(
-      saved: [makeTransactionCKRecord(accountId: accountId, amount: -100, zoneID: engine.zoneID)],
-      deleted: []
-    )
-
-    // End the fetch session — NOW balances should be invalidated
-    engine.endFetchingChanges()
-
-    let descriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.id == accountId }
-    )
-    let records = try! context.fetch(descriptor)
-    #expect(records.first?.cachedBalance == nil)
-  }
-
   @Test func outsideFetchSessionCallbackFiredPerBatch() {
     let container = try! TestModelContainer.create()
     let engine = ProfileSyncEngine(profileId: UUID(), modelContainer: container)
@@ -499,35 +408,6 @@ struct ProfileSyncEngineTests {
     )
 
     #expect(callbackCount == 2)
-  }
-
-  @Test func outsideFetchSessionBalancesInvalidatedPerBatch() {
-    let container = try! TestModelContainer.create()
-    let engine = ProfileSyncEngine(profileId: UUID(), modelContainer: container)
-
-    // Pre-create an account with a cached balance
-    let accountId = UUID()
-    let context = container.mainContext
-    let account = AccountRecord(
-      id: accountId, name: "Savings", type: "bank", position: 0,
-      isHidden: false, currencyCode: "AUD", cachedBalance: 5000
-    )
-    context.insert(account)
-    try! context.save()
-
-    engine.onRemoteChangesApplied = { _ in }
-
-    // Without fetch session, balance should be invalidated immediately
-    engine.applyRemoteChanges(
-      saved: [makeTransactionCKRecord(accountId: accountId, amount: -100, zoneID: engine.zoneID)],
-      deleted: []
-    )
-
-    let descriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.id == accountId }
-    )
-    let records = try! context.fetch(descriptor)
-    #expect(records.first?.cachedBalance == nil)
   }
 
   @Test func endFetchingChangesWithNoChangesDoesNotFireCallback() {

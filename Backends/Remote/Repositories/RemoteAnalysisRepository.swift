@@ -2,11 +2,11 @@ import Foundation
 
 final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
   private let client: APIClient
-  private let currency: Currency
+  private let instrument: Instrument
 
-  init(client: APIClient, currency: Currency) {
+  init(client: APIClient, instrument: Instrument) {
     self.client = client
-    self.currency = currency
+    self.instrument = instrument
   }
 
   func fetchDailyBalances(
@@ -24,10 +24,12 @@ final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
     let data = try await client.get("analysis/dailyBalances/", queryItems: queryItems)
     let response = try JSONDecoder().decode(DailyBalancesResponseDTO.self, from: data)
 
-    var balances = response.dailyBalances.map { $0.toDomain(currency: currency, isForecast: false) }
+    var balances = response.dailyBalances.map {
+      $0.toDomain(instrument: instrument, isForecast: false)
+    }
     if let scheduled = response.scheduledBalances {
       balances.append(
-        contentsOf: scheduled.map { $0.toDomain(currency: self.currency, isForecast: true) })
+        contentsOf: scheduled.map { $0.toDomain(instrument: self.instrument, isForecast: true) })
     }
     return balances.sorted { $0.date < $1.date }
   }
@@ -46,7 +48,7 @@ final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
     let data = try await client.get("analysis/expenseBreakdown/", queryItems: queryItems)
     let response = try JSONDecoder().decode([ExpenseBreakdownDTO].self, from: data)
 
-    return response.map { $0.toDomain(currency: currency) }
+    return response.map { $0.toDomain(instrument: instrument) }
   }
 
   func fetchIncomeAndExpense(
@@ -63,14 +65,14 @@ final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
     let data = try await client.get("analysis/incomeAndExpense/", queryItems: queryItems)
     let response = try JSONDecoder().decode(IncomeAndExpenseResponseDTO.self, from: data)
 
-    return response.incomeAndExpense.map { $0.toDomain(currency: currency) }
+    return response.incomeAndExpense.map { $0.toDomain(instrument: instrument) }
   }
 
   func fetchCategoryBalances(
     dateRange: ClosedRange<Date>,
     transactionType: TransactionType,
     filters: TransactionFilter?
-  ) async throws -> [UUID: MonetaryAmount] {
+  ) async throws -> [UUID: InstrumentAmount] {
     var queryItems: [URLQueryItem] = [
       URLQueryItem(name: "from", value: BackendDateFormatter.string(from: dateRange.lowerBound)),
       URLQueryItem(name: "to", value: BackendDateFormatter.string(from: dateRange.upperBound)),
@@ -97,10 +99,10 @@ final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
     let data = try await client.get("analysis/categoryBalances/", queryItems: queryItems)
     let response = try JSONDecoder().decode([String: Int].self, from: data)
 
-    // Convert string keys to UUIDs and cents to MonetaryAmount (server doesn't specify currency)
+    // Convert string keys to UUIDs and cents to InstrumentAmount
     return response.reduce(into: [:]) { result, pair in
       if let uuid = FlexibleUUID.parse(pair.key) {
-        result[uuid] = MonetaryAmount(cents: pair.value, currency: currency)
+        result[uuid] = InstrumentAmount(quantity: Decimal(pair.value) / 100, instrument: instrument)
       }
     }
   }

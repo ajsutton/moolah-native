@@ -106,26 +106,29 @@ struct TransactionRepositoryContractTests {
 
   @Test("update preserves all transaction fields")
   func testUpdatePreservesAllFields() async throws {
-    let repository = makeCloudKitTransactionRepository(initialTransactions: [])
+    let repository = makeCloudKitTransactionRepository()
     let calendar = Calendar.current
-    let accountId = UUID()
+    let fromAccountId = UUID()
     let toAccountId = UUID()
     let categoryId = UUID()
     let earmarkId = UUID()
     let date = calendar.date(from: DateComponents(year: 2024, month: 3, day: 12))!
 
     let original = Transaction(
-      type: .transfer,
       date: date,
-      accountId: accountId,
-      toAccountId: toAccountId,
-      amount: MonetaryAmount(cents: 75000, currency: Currency.defaultTestCurrency),
       payee: "Original Payee",
       notes: "Some notes",
-      categoryId: categoryId,
-      earmarkId: earmarkId,
       recurPeriod: .month,
-      recurEvery: 2
+      recurEvery: 2,
+      legs: [
+        TransactionLeg(
+          accountId: fromAccountId, instrument: .defaultTestInstrument,
+          quantity: Decimal(string: "-750.00")!, type: .transfer,
+          categoryId: categoryId, earmarkId: earmarkId),
+        TransactionLeg(
+          accountId: toAccountId, instrument: .defaultTestInstrument,
+          quantity: Decimal(string: "750.00")!, type: .transfer),
+      ]
     )
 
     let created = try await repository.create(original)
@@ -139,9 +142,10 @@ struct TransactionRepositoryContractTests {
     #expect(result.id == created.id)
     #expect(result.type == .transfer)
     #expect(result.date == date)
-    #expect(result.accountId == accountId)
-    #expect(result.toAccountId == toAccountId)
-    #expect(result.amount == MonetaryAmount(cents: 75000, currency: Currency.defaultTestCurrency))
+    #expect(result.legs.count == 2)
+    #expect(result.legs[0].accountId == fromAccountId)
+    #expect(result.legs[1].accountId == toAccountId)
+    #expect(result.legs[0].quantity == Decimal(string: "-750.00")!)
     #expect(result.payee == "Updated Payee")
     #expect(result.notes == "Some notes")
     #expect(result.categoryId == categoryId)
@@ -160,9 +164,10 @@ struct TransactionRepositoryContractTests {
 
     #expect(fetched.type == .transfer)
     #expect(fetched.date == date)
-    #expect(fetched.accountId == accountId)
-    #expect(fetched.toAccountId == toAccountId)
-    #expect(fetched.amount == MonetaryAmount(cents: 75000, currency: Currency.defaultTestCurrency))
+    #expect(fetched.legs.count == 2)
+    #expect(fetched.legs[0].accountId == fromAccountId)
+    #expect(fetched.legs[1].accountId == toAccountId)
+    #expect(fetched.legs[0].quantity == Decimal(string: "-750.00")!)
     #expect(fetched.payee == "Updated Payee")
     #expect(fetched.notes == "Some notes")
     #expect(fetched.categoryId == categoryId)
@@ -195,85 +200,30 @@ struct TransactionRepositoryContractTests {
   func testPriorBalanceAcrossPages() async throws {
     let repository = makeCloudKitTransactionRepository(
       initialTransactions: makePaginationTestTransactions())
+    let accountFilter = TransactionFilter(accountId: paginationTestAccountId)
     let page0 = try await repository.fetch(
-      filter: TransactionFilter(),
+      filter: accountFilter,
       page: 0,
       pageSize: 2
     )
 
     let page1 = try await repository.fetch(
-      filter: TransactionFilter(),
+      filter: accountFilter,
       page: 1,
       pageSize: 2
     )
 
     // priorBalance for page 0 should be sum of transactions on page 1+
     let page1Sum = page1.transactions.reduce(
-      MonetaryAmount(cents: 0, currency: .defaultTestCurrency)
+      InstrumentAmount.zero(instrument: .defaultTestInstrument)
     ) {
-      $0 + $1.amount
+      $0 + $1.primaryAmount
     }
     let page1PriorSum = page1Sum + page1.priorBalance
 
     #expect(
       page0.priorBalance == page1PriorSum,
       "priorBalance of page 0 should equal sum of all older transactions")
-  }
-
-  @Test("priorBalance negates amounts for toAccountId matches (matches server)")
-  func testPriorBalanceNegatesTransferAmounts() async throws {
-    let accountA = UUID()
-    let accountB = UUID()
-    let calendar = Calendar.current
-    let transactions = [
-      // Income on B (primary match for B)
-      Transaction(
-        type: .income,
-        date: calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!,
-        accountId: accountB,
-        amount: MonetaryAmount(cents: 20000, currency: .defaultTestCurrency),
-        payee: "Oldest Income"
-      ),
-      // Transfer from A to B (secondary match for B — amount should be negated)
-      Transaction(
-        type: .transfer,
-        date: calendar.date(from: DateComponents(year: 2024, month: 2, day: 1))!,
-        accountId: accountA,
-        toAccountId: accountB,
-        amount: MonetaryAmount(cents: -10000, currency: .defaultTestCurrency),
-        payee: "Transfer"
-      ),
-      // Income on B (primary match for B)
-      Transaction(
-        type: .income,
-        date: calendar.date(from: DateComponents(year: 2024, month: 3, day: 1))!,
-        accountId: accountB,
-        amount: MonetaryAmount(cents: 5000, currency: .defaultTestCurrency),
-        payee: "Newest Income"
-      ),
-    ]
-    let repository = makeCloudKitTransactionRepository(
-      initialTransactions: transactions, accounts: [accountA, accountB])
-
-    // Fetch page 0 for account B with pageSize 2 (gets newest income + transfer)
-    let page0 = try await repository.fetch(
-      filter: TransactionFilter(accountId: accountB), page: 0, pageSize: 2)
-
-    // priorBalance = adjusted sum of records after the page.
-    // Only the oldest income remains (primary match): +20000
-    #expect(page0.priorBalance.cents == 20000)
-
-    // Fetch page 1 for account B (gets oldest income only)
-    let page1 = try await repository.fetch(
-      filter: TransactionFilter(accountId: accountB), page: 1, pageSize: 2)
-    #expect(page1.priorBalance.cents == 0)
-
-    // Verify cross-page consistency: page0.priorBalance == page1 adjusted sum + page1.priorBalance
-    // The transfer on page0 is a secondary match, so its adjusted amount is -(-10000) = +10000
-    // page0 adjusted head = 5000 (income, primary) + 10000 (transfer, negated) = 15000
-    // page0 prior = totalAdjustedBalance - headAdjusted = (20000 + 10000 + 5000) - 15000 = 20000 ✓
-    let page1AdjustedSum = page1.transactions.reduce(0) { $0 + $1.amount.cents }
-    #expect(page0.priorBalance.cents == page1AdjustedSum + page1.priorBalance.cents)
   }
 
   @Test("empty page returns zero priorBalance")
@@ -287,42 +237,30 @@ struct TransactionRepositoryContractTests {
     )
 
     #expect(page.transactions.isEmpty)
-    #expect(page.priorBalance.cents == 0)
+    #expect(page.priorBalance.isZero)
   }
 
-  @Test("transfer requires toAccountId")
-  func testTransferRequiresToAccountId() async throws {
+  @Test("transfer creates with two legs")
+  func testTransferCreatesTwoLegs() async throws {
     let repository = makeCloudKitTransactionRepository()
+    let fromAccount = UUID()
+    let toAccount = UUID()
     let transfer = Transaction(
-      type: .transfer,
       date: Date(),
-      accountId: UUID(),
-      toAccountId: nil,
-      amount: MonetaryAmount(cents: -500, currency: .defaultTestCurrency),
-      payee: "Transfer"
+      payee: "Transfer",
+      legs: [
+        TransactionLeg(
+          accountId: fromAccount, instrument: .defaultTestInstrument,
+          quantity: Decimal(string: "-5.00")!, type: .transfer),
+        TransactionLeg(
+          accountId: toAccount, instrument: .defaultTestInstrument,
+          quantity: Decimal(string: "5.00")!, type: .transfer),
+      ]
     )
 
-    await #expect(throws: BackendError.self) {
-      _ = try await repository.create(transfer)
-    }
-  }
-
-  @Test("transfer rejects same-account transfer")
-  func testTransferRejectsSameAccount() async throws {
-    let repository = makeCloudKitTransactionRepository()
-    let accountId = UUID()
-    let transfer = Transaction(
-      type: .transfer,
-      date: Date(),
-      accountId: accountId,
-      toAccountId: accountId,
-      amount: MonetaryAmount(cents: -500, currency: .defaultTestCurrency),
-      payee: "Transfer"
-    )
-
-    await #expect(throws: BackendError.self) {
-      _ = try await repository.create(transfer)
-    }
+    let created = try await repository.create(transfer)
+    #expect(created.legs.count == 2)
+    #expect(created.isTransfer)
   }
 
   @Test("transactions are sorted by date descending")
@@ -462,6 +400,25 @@ struct TransactionRepositoryContractTests {
   }
 }
 
+// MARK: - Test Data Helpers
+
+private func makeLeg(
+  accountId: UUID,
+  quantity: Decimal,
+  type: TransactionType,
+  categoryId: UUID? = nil,
+  earmarkId: UUID? = nil
+) -> TransactionLeg {
+  TransactionLeg(
+    accountId: accountId,
+    instrument: .defaultTestInstrument,
+    quantity: quantity,
+    type: type,
+    categoryId: categoryId,
+    earmarkId: earmarkId
+  )
+}
+
 // Helper function to create test transactions with various attributes
 private func makeTestTransactions() -> [Transaction] {
   let accountId = UUID()
@@ -473,85 +430,80 @@ private func makeTestTransactions() -> [Transaction] {
   let transactions: [Transaction] = [
     // Grocery expense in June
     Transaction(
-      type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 15))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -5023, currency: Currency.defaultTestCurrency),
       payee: "Woolworths",
-      categoryId: groceryCategoryId
+      legs: [
+        makeLeg(
+          accountId: accountId, quantity: Decimal(string: "-50.23")!, type: .expense,
+          categoryId: groceryCategoryId)
+      ]
     ),
     // Transport expense in July
     Transaction(
-      type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 7, day: 10))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -3500, currency: Currency.defaultTestCurrency),
       payee: "Metro Transport",
-      categoryId: transportCategoryId
+      legs: [
+        makeLeg(
+          accountId: accountId, quantity: Decimal(string: "-35.00")!, type: .expense,
+          categoryId: transportCategoryId)
+      ]
     ),
     // Income in May
     Transaction(
-      type: .income,
       date: calendar.date(from: DateComponents(year: 2024, month: 5, day: 30))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: 350000, currency: Currency.defaultTestCurrency),
-      payee: "Employer Pty Ltd"
+      payee: "Employer Pty Ltd",
+      legs: [makeLeg(accountId: accountId, quantity: Decimal(string: "3500.00")!, type: .income)]
     ),
     // Grocery expense in April (older, different payee)
     Transaction(
-      type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 4, day: 20))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -4200, currency: Currency.defaultTestCurrency),
       payee: "Coles",
-      categoryId: groceryCategoryId
+      legs: [
+        makeLeg(
+          accountId: accountId, quantity: Decimal(string: "-42.00")!, type: .expense,
+          categoryId: groceryCategoryId)
+      ]
     ),
     // Earmarked expense in June
     Transaction(
-      type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 20))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
       payee: "Electronics Store",
-      categoryId: transportCategoryId,
-      earmarkId: earmarkId
+      legs: [
+        makeLeg(
+          accountId: accountId, quantity: Decimal(string: "-100.00")!, type: .expense,
+          categoryId: transportCategoryId, earmarkId: earmarkId)
+      ]
     ),
   ]
 
   return transactions
 }
 
+private let paginationTestAccountId = UUID()
+
 private func makePaginationTestTransactions() -> [Transaction] {
-  let accountId = UUID()
+  let accountId = paginationTestAccountId
   let calendar = Calendar.current
   return [
     Transaction(
-      type: .income,
       date: calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: 1000, currency: .defaultTestCurrency),
-      payee: "Jan Income"
+      payee: "Jan Income",
+      legs: [makeLeg(accountId: accountId, quantity: Decimal(string: "10.00")!, type: .income)]
     ),
     Transaction(
-      type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 2, day: 1))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -300, currency: .defaultTestCurrency),
-      payee: "Feb Expense"
+      payee: "Feb Expense",
+      legs: [makeLeg(accountId: accountId, quantity: Decimal(string: "-3.00")!, type: .expense)]
     ),
     Transaction(
-      type: .income,
       date: calendar.date(from: DateComponents(year: 2024, month: 3, day: 1))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: 2000, currency: .defaultTestCurrency),
-      payee: "Mar Income"
+      payee: "Mar Income",
+      legs: [makeLeg(accountId: accountId, quantity: Decimal(string: "20.00")!, type: .income)]
     ),
     Transaction(
-      type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 4, day: 1))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -500, currency: .defaultTestCurrency),
-      payee: "Apr Expense"
+      payee: "Apr Expense",
+      legs: [makeLeg(accountId: accountId, quantity: Decimal(string: "-5.00")!, type: .expense)]
     ),
   ]
 }
@@ -562,29 +514,23 @@ private func makeScheduledTestTransactions() -> [Transaction] {
   return [
     // Non-scheduled expense
     Transaction(
-      type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 15))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
-      payee: "Store"
+      payee: "Store",
+      legs: [makeLeg(accountId: accountId, quantity: Decimal(string: "-50.00")!, type: .expense)]
     ),
     // Non-scheduled income
     Transaction(
-      type: .income,
       date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 1))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: 100000, currency: Currency.defaultTestCurrency),
-      payee: "Salary"
+      payee: "Salary",
+      legs: [makeLeg(accountId: accountId, quantity: Decimal(string: "1000.00")!, type: .income)]
     ),
     // Scheduled (recurring) transaction
     Transaction(
-      type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 7, day: 1))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -2000, currency: Currency.defaultTestCurrency),
       payee: "Netflix",
       recurPeriod: .month,
-      recurEvery: 1
+      recurEvery: 1,
+      legs: [makeLeg(accountId: accountId, quantity: Decimal(string: "-20.00")!, type: .expense)]
     ),
   ]
 }
@@ -600,20 +546,20 @@ private func makeTransferTestTransactions() -> [Transaction] {
   return [
     // Transfer from source to dest
     Transaction(
-      type: .transfer,
       date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 15))!,
-      accountId: sourceAccountId,
-      toAccountId: destAccountId,
-      amount: MonetaryAmount(cents: -10000, currency: Currency.defaultTestCurrency),
-      payee: "Transfer"
+      payee: "Transfer",
+      legs: [
+        makeLeg(accountId: sourceAccountId, quantity: Decimal(string: "-100.00")!, type: .transfer),
+        makeLeg(accountId: destAccountId, quantity: Decimal(string: "100.00")!, type: .transfer),
+      ]
     ),
     // Expense on source account only
     Transaction(
-      type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 10))!,
-      accountId: sourceAccountId,
-      amount: MonetaryAmount(cents: -5000, currency: Currency.defaultTestCurrency),
-      payee: "Coffee"
+      payee: "Coffee",
+      legs: [
+        makeLeg(accountId: sourceAccountId, quantity: Decimal(string: "-50.00")!, type: .expense)
+      ]
     ),
   ]
 }
@@ -623,61 +569,48 @@ private func makePayeeSuggestionTestTransactions() -> [Transaction] {
   let calendar = Calendar.current
   return [
     Transaction(
-      type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 1))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -1000, currency: Currency.defaultTestCurrency),
-      payee: "Woolworths"
+      payee: "Woolworths",
+      legs: [makeLeg(accountId: accountId, quantity: Decimal(string: "-10.00")!, type: .expense)]
     ),
     Transaction(
-      type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 2))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -2000, currency: Currency.defaultTestCurrency),
-      payee: "Coles"
+      payee: "Coles",
+      legs: [makeLeg(accountId: accountId, quantity: Decimal(string: "-20.00")!, type: .expense)]
     ),
     Transaction(
-      type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 3))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -3000, currency: Currency.defaultTestCurrency),
-      payee: "Coles"
+      payee: "Coles",
+      legs: [makeLeg(accountId: accountId, quantity: Decimal(string: "-30.00")!, type: .expense)]
     ),
     Transaction(
-      type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 4))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -1500, currency: Currency.defaultTestCurrency),
-      payee: "Coles"
+      payee: "Coles",
+      legs: [makeLeg(accountId: accountId, quantity: Decimal(string: "-15.00")!, type: .expense)]
     ),
     Transaction(
-      type: .expense,
       date: calendar.date(from: DateComponents(year: 2024, month: 6, day: 5))!,
-      accountId: accountId,
-      amount: MonetaryAmount(cents: -500, currency: Currency.defaultTestCurrency),
-      payee: "Coffee Shop"
+      payee: "Coffee Shop",
+      legs: [makeLeg(accountId: accountId, quantity: Decimal(string: "-5.00")!, type: .expense)]
     ),
   ]
 }
 
 private func makeCloudKitTransactionRepository(
   initialTransactions: [Transaction] = [],
-  accounts: [UUID] = [],
-  currency: Currency = .defaultTestCurrency
+  instrument: Instrument = .defaultTestInstrument
 ) -> CloudKitTransactionRepository {
   let container = try! TestModelContainer.create()
   let repo = CloudKitTransactionRepository(
-    modelContainer: container, currency: currency)
+    modelContainer: container, instrument: instrument)
 
-  if !initialTransactions.isEmpty || !accounts.isEmpty {
+  if !initialTransactions.isEmpty {
     let context = ModelContext(container)
-    for accountId in accounts {
-      context.insert(
-        AccountRecord(
-          id: accountId, name: "Account", type: "bank", currencyCode: currency.code))
-    }
     for txn in initialTransactions {
       context.insert(TransactionRecord.from(txn))
+      for (index, leg) in txn.legs.enumerated() {
+        context.insert(TransactionLegRecord.from(leg, transactionId: txn.id, sortOrder: index))
+      }
     }
     try! context.save()
   }

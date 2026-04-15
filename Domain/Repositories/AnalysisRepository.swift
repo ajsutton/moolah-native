@@ -47,13 +47,13 @@ protocol AnalysisRepository: Sendable {
   ///   - dateRange: Date range to analyze (inclusive on both ends).
   ///   - transactionType: Filter to 'income' or 'expense' transactions.
   ///   - filters: Optional additional filters (account, earmark, payee, etc.).
-  /// - Returns: Dictionary where keys are category UUIDs and values are total MonetaryAmounts.
+  /// - Returns: Dictionary where keys are category UUIDs and values are total InstrumentAmounts.
   /// - Throws: BackendError on network/auth failure.
   func fetchCategoryBalances(
     dateRange: ClosedRange<Date>,
     transactionType: TransactionType,
     filters: TransactionFilter?
-  ) async throws -> [UUID: MonetaryAmount]
+  ) async throws -> [UUID: InstrumentAmount]
 
   /// Fetch category balances for both income and expense in a single pass.
   ///
@@ -68,7 +68,7 @@ protocol AnalysisRepository: Sendable {
   func fetchCategoryBalancesByType(
     dateRange: ClosedRange<Date>,
     filters: TransactionFilter?
-  ) async throws -> (income: [UUID: MonetaryAmount], expense: [UUID: MonetaryAmount])
+  ) async throws -> (income: [UUID: InstrumentAmount], expense: [UUID: InstrumentAmount])
 
   /// Load all analysis data in a single batch, avoiding redundant fetches.
   ///
@@ -93,7 +93,7 @@ extension AnalysisRepository {
   func fetchCategoryBalancesByType(
     dateRange: ClosedRange<Date>,
     filters: TransactionFilter?
-  ) async throws -> (income: [UUID: MonetaryAmount], expense: [UUID: MonetaryAmount]) {
+  ) async throws -> (income: [UUID: InstrumentAmount], expense: [UUID: InstrumentAmount]) {
     async let incomeResult = fetchCategoryBalances(
       dateRange: dateRange, transactionType: .income, filters: filters)
     async let expenseResult = fetchCategoryBalances(

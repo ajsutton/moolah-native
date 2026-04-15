@@ -9,13 +9,20 @@ enum TestBackend {
   /// Creates a CloudKitBackend backed by an in-memory ModelContainer.
   /// Each call creates a fresh, isolated container — no cross-test contamination.
   static func create(
-    currency: Currency = .defaultTestCurrency
+    instrument: Instrument = .defaultTestInstrument,
+    exchangeRates: [String: [String: Decimal]] = [:]
   ) throws -> (backend: CloudKitBackend, container: ModelContainer) {
     let container = try TestModelContainer.create()
+    let rateClient = FixedRateClient(rates: exchangeRates)
+    let cacheDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("test-rates-\(UUID().uuidString)")
+    let exchangeRateService = ExchangeRateService(client: rateClient, cacheDirectory: cacheDir)
+    let conversionService = FiatConversionService(exchangeRates: exchangeRateService)
     let backend = CloudKitBackend(
       modelContainer: container,
-      currency: currency,
-      profileLabel: "Test"
+      instrument: instrument,
+      profileLabel: "Test",
+      conversionService: conversionService
     )
     return (backend, container)
   }
@@ -29,20 +36,29 @@ enum TestBackend {
   static func seed(
     accounts: [Account],
     in container: ModelContainer,
-    currency: Currency = .defaultTestCurrency
+    instrument: Instrument = .defaultTestInstrument
   ) -> [Account] {
     let context = ModelContext(container)
     for account in accounts {
-      context.insert(AccountRecord.from(account, currencyCode: currency.code))
-      if account.balance.cents != 0 {
+      context.insert(AccountRecord.from(account))
+      if !account.balance.isZero {
+        let txnId = UUID()
         let txn = TransactionRecord(
-          type: TransactionType.openingBalance.rawValue,
+          id: txnId,
           date: Date(),
-          accountId: account.id,
-          amount: account.balance.cents,
-          currencyCode: currency.code
+          recurPeriod: nil,
+          recurEvery: nil
         )
         context.insert(txn)
+        let leg = TransactionLegRecord(
+          transactionId: txnId,
+          accountId: account.id,
+          instrumentId: instrument.id,
+          quantity: account.balance.storageValue,
+          type: TransactionType.openingBalance.rawValue,
+          sortOrder: 0
+        )
+        context.insert(leg)
       }
     }
     try! context.save()
@@ -50,14 +66,24 @@ enum TestBackend {
   }
 
   /// Seeds transactions into the in-memory store.
+  /// Also creates InstrumentRecord entries for non-fiat instruments so they resolve correctly on fetch.
   @discardableResult
   static func seed(
     transactions: [Transaction],
     in container: ModelContainer
   ) -> [Transaction] {
     let context = ModelContext(container)
+    var seenInstruments: Set<String> = []
     for txn in transactions {
       context.insert(TransactionRecord.from(txn))
+      for (index, leg) in txn.legs.enumerated() {
+        // Ensure non-fiat instruments have InstrumentRecord entries
+        if leg.instrument.kind != .fiatCurrency && !seenInstruments.contains(leg.instrument.id) {
+          seenInstruments.insert(leg.instrument.id)
+          context.insert(InstrumentRecord.from(leg.instrument))
+        }
+        context.insert(TransactionLegRecord.from(leg, transactionId: txn.id, sortOrder: index))
+      }
     }
     try! context.save()
     return transactions
@@ -70,12 +96,12 @@ enum TestBackend {
   static func seed(
     earmarks: [Earmark],
     in container: ModelContainer,
-    currency: Currency = .defaultTestCurrency
+    instrument: Instrument = .defaultTestInstrument
   ) -> [Earmark] {
     let context = ModelContext(container)
     for earmark in earmarks {
       context.insert(
-        EarmarkRecord.from(earmark, currencyCode: currency.code))
+        EarmarkRecord.from(earmark))
     }
     try! context.save()
     return earmarks
@@ -88,46 +114,61 @@ enum TestBackend {
     earmarks: [Earmark],
     accountId: UUID,
     in container: ModelContainer,
-    currency: Currency = .defaultTestCurrency
+    instrument: Instrument = .defaultTestInstrument
   ) -> [Earmark] {
     let context = ModelContext(container)
     for earmark in earmarks {
       context.insert(
-        EarmarkRecord.from(earmark, currencyCode: currency.code))
+        EarmarkRecord.from(earmark))
 
       // Determine what transactions to create.
       // If saved/spent are explicitly set, use those.
       // If only balance is set (saved=0, spent=0), treat balance as the saved amount.
-      let savedCents =
-        earmark.saved.cents > 0
-        ? earmark.saved.cents
-        : (earmark.spent.cents == 0 && earmark.balance.cents > 0 ? earmark.balance.cents : 0)
-      let spentCents = earmark.spent.cents
+      let savedAmount =
+        !earmark.saved.isZero
+        ? earmark.saved
+        : (earmark.spent.isZero && !earmark.balance.isZero
+          ? earmark.balance : .zero(instrument: instrument))
+      let spentAmount = earmark.spent
 
       // Create income transaction for saved amount
-      if savedCents > 0 {
+      if !savedAmount.isZero {
+        let txnId = UUID()
         let txn = TransactionRecord(
-          type: TransactionType.income.rawValue,
-          date: Date(),
-          accountId: accountId,
-          amount: savedCents,
-          currencyCode: currency.code,
-          earmarkId: earmark.id
+          id: txnId,
+          date: Date()
         )
         context.insert(txn)
+        let leg = TransactionLegRecord(
+          transactionId: txnId,
+          accountId: accountId,
+          instrumentId: instrument.id,
+          quantity: savedAmount.storageValue,
+          type: TransactionType.income.rawValue,
+          earmarkId: earmark.id,
+          sortOrder: 0
+        )
+        context.insert(leg)
       }
 
       // Create expense transaction for spent amount
-      if spentCents > 0 {
+      if !spentAmount.isZero {
+        let txnId = UUID()
         let txn = TransactionRecord(
-          type: TransactionType.expense.rawValue,
-          date: Date(),
-          accountId: accountId,
-          amount: -spentCents,
-          currencyCode: currency.code,
-          earmarkId: earmark.id
+          id: txnId,
+          date: Date()
         )
         context.insert(txn)
+        let leg = TransactionLegRecord(
+          transactionId: txnId,
+          accountId: accountId,
+          instrumentId: instrument.id,
+          quantity: (-spentAmount).storageValue,
+          type: TransactionType.expense.rawValue,
+          earmarkId: earmark.id,
+          sortOrder: 0
+        )
+        context.insert(leg)
       }
     }
     try! context.save()
@@ -153,7 +194,7 @@ enum TestBackend {
   static func seed(
     investmentValues: [UUID: [InvestmentValue]],
     in container: ModelContainer,
-    currency: Currency = .defaultTestCurrency
+    instrument: Instrument = .defaultTestInstrument
   ) -> [UUID: [InvestmentValue]] {
     let context = ModelContext(container)
     for (accountId, values) in investmentValues {
@@ -161,8 +202,8 @@ enum TestBackend {
         let record = InvestmentValueRecord(
           accountId: accountId,
           date: value.date,
-          value: value.value.cents,
-          currencyCode: currency.code
+          value: value.value.storageValue,
+          instrumentId: instrument.id
         )
         context.insert(record)
       }
@@ -176,15 +217,15 @@ enum TestBackend {
     earmarkId: UUID,
     items: [EarmarkBudgetItem],
     in container: ModelContainer,
-    currency: Currency = .defaultTestCurrency
+    instrument: Instrument = .defaultTestInstrument
   ) {
     let context = ModelContext(container)
     for item in items {
       let record = EarmarkBudgetItemRecord(
         earmarkId: earmarkId,
         categoryId: item.categoryId,
-        amount: item.amount.cents,
-        currencyCode: currency.code
+        amount: item.amount.storageValue,
+        instrumentId: instrument.id
       )
       context.insert(record)
     }

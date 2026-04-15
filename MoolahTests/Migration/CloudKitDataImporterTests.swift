@@ -22,7 +22,7 @@ private final class ProgressTracker: Sendable {
 @MainActor
 struct CloudKitDataImporterTests {
 
-  private let currency = Currency.defaultTestCurrency
+  private let instrument = Instrument.defaultTestInstrument
 
   private func makeExportedData() -> ExportedData {
     let accountId = UUID()
@@ -34,11 +34,11 @@ struct CloudKitDataImporterTests {
       accounts: [
         Account(
           id: accountId, name: "Checking", type: .bank,
-          balance: MonetaryAmount(cents: 5000, currency: currency)
+          balance: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
         ),
         Account(
           id: UUID(), name: "Savings", type: .bank,
-          balance: MonetaryAmount(cents: 10000, currency: currency)
+          balance: InstrumentAmount(quantity: Decimal(string: "100.00")!, instrument: instrument)
         ),
       ],
       categories: [
@@ -48,28 +48,44 @@ struct CloudKitDataImporterTests {
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday",
-          balance: .zero(currency: currency),
-          saved: .zero(currency: currency),
-          spent: .zero(currency: currency)
+          balance: .zero(instrument: instrument),
+          saved: .zero(instrument: instrument),
+          spent: .zero(instrument: instrument)
         )
       ],
       earmarkBudgets: [
         earmarkId: [
           EarmarkBudgetItem(
             id: budgetItemId, categoryId: categoryId,
-            amount: MonetaryAmount(cents: 5000, currency: currency)
+            amount: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
           )
         ]
       ],
       transactions: [
         Transaction(
-          type: .income, date: Date(), accountId: accountId,
-          amount: MonetaryAmount(cents: 5000, currency: currency), payee: "Test"
+          date: Date(),
+          payee: "Test",
+          legs: [
+            TransactionLeg(
+              accountId: accountId,
+              instrument: instrument,
+              quantity: Decimal(string: "50.00")!,
+              type: .income
+            )
+          ]
         ),
         Transaction(
-          type: .expense, date: Date(), accountId: accountId,
-          amount: MonetaryAmount(cents: -1000, currency: currency),
-          categoryId: categoryId, earmarkId: earmarkId
+          date: Date(),
+          legs: [
+            TransactionLeg(
+              accountId: accountId,
+              instrument: instrument,
+              quantity: Decimal(string: "-10.00")!,
+              type: .expense,
+              categoryId: categoryId,
+              earmarkId: earmarkId
+            )
+          ]
         ),
       ],
       investmentValues: [:]
@@ -82,7 +98,7 @@ struct CloudKitDataImporterTests {
     let exported = makeExportedData()
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      currencyCode: currency.code
+      currencyCode: instrument.id
     )
 
     let result = try await importer.importData(exported)
@@ -108,8 +124,8 @@ struct CloudKitDataImporterTests {
     #expect(child?.parentId == exported.categories.first?.id)
   }
 
-  @Test("stamps currencyCode on all monetary records")
-  func importStampsCurrency() async throws {
+  @Test("stamps instrumentId on transaction leg records")
+  func importStampsInstrument() async throws {
     let container = try TestModelContainer.create()
     let exported = makeExportedData()
     let importer = CloudKitDataImporter(
@@ -120,9 +136,10 @@ struct CloudKitDataImporterTests {
     _ = try await importer.importData(exported)
 
     let context = ModelContext(container)
-    let accounts = try context.fetch(FetchDescriptor<AccountRecord>())
-    for account in accounts {
-      #expect(account.currencyCode == "USD")
+    let legs = try context.fetch(FetchDescriptor<TransactionLegRecord>())
+    #expect(!legs.isEmpty)
+    for leg in legs {
+      #expect(leg.instrumentId == instrument.id)
     }
   }
 
@@ -139,7 +156,7 @@ struct CloudKitDataImporterTests {
     )
     let importer = CloudKitDataImporter(
       modelContainer: container,
-      currencyCode: currency.code
+      currencyCode: instrument.id
     )
 
     let result = try await importer.importData(exported)

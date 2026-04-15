@@ -5,7 +5,7 @@ struct TransactionRowView: View {
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
-  let balance: MonetaryAmount
+  let balance: InstrumentAmount
   var hideEarmark: Bool = false
 
   #if os(macOS)
@@ -52,9 +52,9 @@ struct TransactionRowView: View {
       Spacer()
 
       VStack(alignment: .trailing, spacing: 2) {
-        MonetaryAmountView(amount: transaction.amount, font: .body)
+        InstrumentAmountView(amount: transaction.primaryAmount, font: .body)
 
-        MonetaryAmountView(amount: balance, font: .caption)
+        InstrumentAmountView(amount: balance, font: .caption)
       }
     }
     .padding(.vertical, verticalPadding)
@@ -64,9 +64,8 @@ struct TransactionRowView: View {
 
   private var accessibilityDescription: String {
     let dateStr = transaction.date.formatted(date: .abbreviated, time: .omitted)
-    let amountStr = transaction.amount.decimalValue.formatted(
-      .currency(code: transaction.amount.currency.code))
-    let balanceStr = balance.decimalValue.formatted(.currency(code: balance.currency.code))
+    let amountStr = transaction.primaryAmount.formatted
+    let balanceStr = balance.formatted
     return "\(displayPayee), \(amountStr), \(dateStr), balance \(balanceStr)"
   }
 
@@ -99,7 +98,11 @@ struct TransactionRowView: View {
   }
 
   private var displayPayee: String {
-    if let toAccountId = transaction.toAccountId {
+    if transaction.isTransfer,
+      let toAccountId = transaction.legs.count > 1
+        ? transaction.legs.first(where: { $0.accountId != transaction.primaryAccountId })?.accountId
+        : nil
+    {
       let toAccountName = accounts.by(id: toAccountId)?.name ?? "Unknown Account"
       let transferLabel = "Transfer to \(toAccountName)"
 
@@ -128,10 +131,11 @@ struct TransactionRowView: View {
   let savingsId = UUID()
   let groceriesId = UUID()
   let holidayFundId = UUID()
+  let sourceId = UUID()
   let accounts = Accounts(from: [
     Account(
       id: savingsId, name: "Savings", type: .bank,
-      balance: MonetaryAmount(cents: 500000, currency: Currency.AUD))
+      balance: InstrumentAmount(quantity: 5000, instrument: .AUD))
   ])
   let categories = Categories(from: [
     Category(id: groceriesId, name: "Groceries"),
@@ -141,50 +145,48 @@ struct TransactionRowView: View {
     Earmark(
       id: holidayFundId,
       name: "Holiday Fund",
-      balance: MonetaryAmount(cents: 50000, currency: Currency.AUD)
+      balance: InstrumentAmount(quantity: 500, instrument: .AUD)
     )
   ])
 
   List {
     TransactionRowView(
       transaction: Transaction(
-        type: .expense,
-        date: Date(),
-        accountId: UUID(),
-        amount: MonetaryAmount(cents: -5023, currency: Currency.AUD),
-        payee: "Woolworths",
-        categoryId: groceriesId
+        date: Date(), payee: "Woolworths",
+        legs: [
+          TransactionLeg(
+            accountId: sourceId, instrument: .AUD, quantity: -50.23, type: .expense,
+            categoryId: groceriesId)
+        ]
       ), accounts: accounts, categories: categories, earmarks: earmarks,
-      balance: MonetaryAmount(cents: 100000, currency: Currency.AUD))
+      balance: InstrumentAmount(quantity: 1000, instrument: .AUD))
     TransactionRowView(
       transaction: Transaction(
-        type: .income,
-        date: Date(),
-        accountId: UUID(),
-        amount: MonetaryAmount(cents: 350000, currency: Currency.AUD),
-        payee: "Employer Pty Ltd",
-        earmarkId: holidayFundId
+        date: Date(), payee: "Employer Pty Ltd",
+        legs: [
+          TransactionLeg(
+            accountId: sourceId, instrument: .AUD, quantity: 3500, type: .income,
+            earmarkId: holidayFundId)
+        ]
       ), accounts: accounts, categories: categories, earmarks: earmarks,
-      balance: MonetaryAmount(cents: 105023, currency: Currency.AUD))
+      balance: InstrumentAmount(quantity: 1050.23, instrument: .AUD))
     TransactionRowView(
       transaction: Transaction(
-        type: .transfer,
         date: Date(),
-        accountId: UUID(),
-        toAccountId: savingsId,
-        amount: MonetaryAmount(cents: -100000, currency: Currency.AUD),
-        payee: ""
+        legs: [
+          TransactionLeg(accountId: sourceId, instrument: .AUD, quantity: -1000, type: .transfer),
+          TransactionLeg(accountId: savingsId, instrument: .AUD, quantity: 1000, type: .transfer),
+        ]
       ), accounts: accounts, categories: categories, earmarks: earmarks,
-      balance: MonetaryAmount(cents: -244977, currency: Currency.AUD))
+      balance: InstrumentAmount(quantity: -2449.77, instrument: .AUD))
     TransactionRowView(
       transaction: Transaction(
-        type: .transfer,
-        date: Date(),
-        accountId: UUID(),
-        toAccountId: savingsId,
-        amount: MonetaryAmount(cents: -50000, currency: Currency.AUD),
-        payee: "Rent Split"
+        date: Date(), payee: "Rent Split",
+        legs: [
+          TransactionLeg(accountId: sourceId, instrument: .AUD, quantity: -500, type: .transfer),
+          TransactionLeg(accountId: savingsId, instrument: .AUD, quantity: 500, type: .transfer),
+        ]
       ), accounts: accounts, categories: categories, earmarks: earmarks,
-      balance: MonetaryAmount(cents: -144977, currency: Currency.AUD))
+      balance: InstrumentAmount(quantity: -1449.77, instrument: .AUD))
   }
 }

@@ -9,20 +9,21 @@ struct CryptoCompareClient: CryptoPriceClient, Sendable {
     self.session = session
   }
 
-  func dailyPrice(for token: CryptoToken, on date: Date) async throws -> Decimal {
-    let prices = try await dailyPrices(for: token, in: date...date)
+  func dailyPrice(for mapping: CryptoProviderMapping, on date: Date) async throws -> Decimal {
+    let prices = try await dailyPrices(for: mapping, in: date...date)
     let dateString = Self.dateString(from: date)
     guard let price = prices[dateString] else {
-      throw CryptoPriceError.noPriceAvailable(tokenId: token.id, date: dateString)
+      throw CryptoPriceError.noPriceAvailable(tokenId: mapping.instrumentId, date: dateString)
     }
     return price
   }
 
   func dailyPrices(
-    for token: CryptoToken, in range: ClosedRange<Date>
+    for mapping: CryptoProviderMapping, in range: ClosedRange<Date>
   ) async throws -> [String: Decimal] {
-    guard let symbol = token.cryptocompareSymbol else {
-      throw CryptoPriceError.noProviderMapping(tokenId: token.id, provider: "CryptoCompare")
+    guard let symbol = mapping.cryptocompareSymbol else {
+      throw CryptoPriceError.noProviderMapping(
+        tokenId: mapping.instrumentId, provider: "CryptoCompare")
     }
     let url = Self.histodayURL(symbol: symbol, from: range.lowerBound, to: range.upperBound)
     let (data, response) = try await session.data(for: URLRequest(url: url))
@@ -32,17 +33,17 @@ struct CryptoCompareClient: CryptoPriceClient, Sendable {
     return try Self.parseHistodayResponse(data)
   }
 
-  func currentPrices(for tokens: [CryptoToken]) async throws -> [String: Decimal] {
-    let symbolToToken = Dictionary(
-      tokens.compactMap { token -> (String, CryptoToken)? in
-        guard let sym = token.cryptocompareSymbol else { return nil }
-        return (sym, token)
+  func currentPrices(for mappings: [CryptoProviderMapping]) async throws -> [String: Decimal] {
+    let symbolToMapping = Dictionary(
+      mappings.compactMap { mapping -> (String, CryptoProviderMapping)? in
+        guard let sym = mapping.cryptocompareSymbol else { return nil }
+        return (sym, mapping)
       },
       uniquingKeysWith: { first, _ in first }
     )
-    guard !symbolToToken.isEmpty else { return [:] }
+    guard !symbolToMapping.isEmpty else { return [:] }
 
-    let url = Self.priceMultiURL(symbols: Array(symbolToToken.keys))
+    let url = Self.priceMultiURL(symbols: Array(symbolToMapping.keys))
     let (data, response) = try await session.data(for: URLRequest(url: url))
     guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
       throw URLError(.badServerResponse)
@@ -51,8 +52,8 @@ struct CryptoCompareClient: CryptoPriceClient, Sendable {
 
     var result: [String: Decimal] = [:]
     for (symbol, price) in symbolPrices {
-      if let token = symbolToToken[symbol] {
-        result[token.id] = price
+      if let mapping = symbolToMapping[symbol] {
+        result[mapping.instrumentId] = price
       }
     }
     return result

@@ -9,49 +9,67 @@ struct InvestmentAccountView: View {
   let earmarks: Earmarks
   let investmentStore: InvestmentStore
   let transactionStore: TransactionStore
+  let tradeStore: TradeStore
 
   @State private var showingAddValue = false
+  @State private var showingRecordTrade = false
   @State private var selectedTransaction: Transaction?
+
+  /// The profile's fiat currency instrument, derived from the account's balance.
+  private var profileCurrencyInstrument: Instrument {
+    account.balance.instrument
+  }
 
   var body: some View {
     VStack(spacing: 0) {
-      // Summary panels at top
-      if account.investmentValue != nil {
-        InvestmentSummaryView(account: account, store: investmentStore)
-          .padding(.horizontal)
-          .padding(.top)
+      if account.usesPositionTracking {
+        // Position-tracked: show positions and trade button
+        StockPositionsView(
+          valuedPositions: investmentStore.valuedPositions,
+          totalValue: investmentStore.totalPortfolioValue,
+          profileCurrency: profileCurrencyInstrument
+        )
+      } else {
+        // Legacy: show manual valuations
+        if account.investmentValue != nil {
+          InvestmentSummaryView(account: account, store: investmentStore)
+            .padding(.horizontal)
+            .padding(.top)
+        }
+
+        // Chart + valuations: side by side on macOS, stacked on iOS
+        #if os(macOS)
+          HStack(alignment: .top, spacing: 0) {
+            VStack(spacing: 16) {
+              timePeriodPicker
+              InvestmentChartView(
+                dataPoints: investmentStore.chartDataPoints,
+                instrument: account.balance.instrument)
+            }
+            .padding()
+
+            Divider()
+
+            valuationsList
+              .frame(width: 240)
+          }
+        #else
+          VStack(spacing: 0) {
+            VStack(spacing: 16) {
+              timePeriodPicker
+              InvestmentChartView(
+                dataPoints: investmentStore.chartDataPoints,
+                instrument: account.balance.instrument)
+            }
+            .padding()
+
+            Divider()
+
+            valuationsList
+              .frame(maxHeight: 300)
+          }
+        #endif
       }
-
-      // Chart + valuations: side by side on macOS, stacked on iOS
-      #if os(macOS)
-        HStack(alignment: .top, spacing: 0) {
-          VStack(spacing: 16) {
-            timePeriodPicker
-            InvestmentChartView(
-              dataPoints: investmentStore.chartDataPoints, currency: account.balance.currency)
-          }
-          .padding()
-
-          Divider()
-
-          valuationsList
-            .frame(width: 240)
-        }
-      #else
-        VStack(spacing: 0) {
-          VStack(spacing: 16) {
-            timePeriodPicker
-            InvestmentChartView(
-              dataPoints: investmentStore.chartDataPoints, currency: account.balance.currency)
-          }
-          .padding()
-
-          Divider()
-
-          valuationsList
-            .frame(maxHeight: 300)
-        }
-      #endif
 
       Divider()
 
@@ -76,13 +94,54 @@ struct InvestmentAccountView: View {
     .profileNavigationTitle(account.name)
     .sheet(isPresented: $showingAddValue) {
       AddInvestmentValueView(
-        accountId: account.id, currency: account.balance.currency, store: investmentStore)
+        accountId: account.id, instrument: account.balance.instrument, store: investmentStore)
+    }
+    .sheet(isPresented: $showingRecordTrade) {
+      RecordTradeView(
+        accountId: account.id,
+        profileCurrency: profileCurrencyInstrument,
+        categories: categories,
+        tradeStore: tradeStore
+      )
+    }
+    .toolbar {
+      if account.usesPositionTracking {
+        ToolbarItem {
+          Button {
+            showingRecordTrade = true
+          } label: {
+            Label("Record Trade", systemImage: "arrow.left.arrow.right")
+          }
+          .help("Record Trade")
+        }
+      }
     }
     .task(id: account.id) {
-      await investmentStore.loadAll(accountId: account.id)
+      if account.usesPositionTracking {
+        await investmentStore.loadPositions(accountId: account.id)
+        await investmentStore.valuatePositions(
+          profileCurrency: profileCurrencyInstrument, on: Date())
+      } else {
+        await investmentStore.loadAll(accountId: account.id)
+      }
+    }
+    .onChange(of: showingRecordTrade) { _, showing in
+      if !showing && account.usesPositionTracking {
+        Task {
+          await investmentStore.loadPositions(accountId: account.id)
+          await investmentStore.valuatePositions(
+            profileCurrency: profileCurrencyInstrument, on: Date())
+        }
+      }
     }
     .refreshable {
-      await investmentStore.loadAll(accountId: account.id)
+      if account.usesPositionTracking {
+        await investmentStore.loadPositions(accountId: account.id)
+        await investmentStore.valuatePositions(
+          profileCurrency: profileCurrencyInstrument, on: Date())
+      } else {
+        await investmentStore.loadAll(accountId: account.id)
+      }
     }
   }
 

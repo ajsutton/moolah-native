@@ -91,16 +91,15 @@ struct BinanceClientTests {
     #expect(!pairs.contains("OLDUSDT"))
   }
 
-  // MARK: - Token without Binance mapping
+  // MARK: - Mapping without Binance symbol
 
-  @Test func tokenWithoutBinanceSymbolThrows() async {
-    let token = CryptoToken(
-      chainId: 1, contractAddress: "0xabc", symbol: "OBSCURE", name: "Obscure",
-      decimals: 18, coingeckoId: nil, cryptocompareSymbol: nil, binanceSymbol: nil
+  @Test func mappingWithoutBinanceSymbolThrows() async {
+    let mapping = CryptoProviderMapping(
+      instrumentId: "1:0xabc", coingeckoId: nil, cryptocompareSymbol: nil, binanceSymbol: nil
     )
     let client = BinanceClient(session: URLSession.shared)
     await #expect(throws: CryptoPriceError.self) {
-      try await client.dailyPrice(for: token, on: Date())
+      try await client.dailyPrice(for: mapping, on: Date())
     }
   }
 }

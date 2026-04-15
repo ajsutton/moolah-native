@@ -10,4 +10,5 @@ protocol BackendProvider: Sendable {
   var earmarks: any EarmarkRepository { get }
   var analysis: any AnalysisRepository { get }
   var investments: any InvestmentRepository { get }
+  var conversionService: any InstrumentConversionService { get }
 }

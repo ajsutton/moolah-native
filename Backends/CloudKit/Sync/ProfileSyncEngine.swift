@@ -14,8 +14,7 @@ final class ProfileSyncEngine: Sendable {
   nonisolated let modelContainer: ModelContainer
 
   /// Callback invoked after remote changes are applied to the local store.
-  /// Used by ProfileSession to trigger selective store reloads.
-  /// The argument is the set of changed CloudKit record types.
+  /// Passes the set of changed record types so ProfileSession can selectively reload stores.
   var onRemoteChangesApplied: ((Set<String>) -> Void)?
 
   private nonisolated let logger = Logger(
@@ -26,8 +25,9 @@ final class ProfileSyncEngine: Sendable {
   private(set) var isRunning = false
 
   /// True while applying remote changes from CloudKit to local SwiftData.
-  /// ChangeTracker checks this to avoid re-uploading records just received.
-  private(set) var isApplyingRemoteChanges = false
+  /// Repository sync closures are not called during remote change application,
+  /// so this flag is only used internally within `applyRemoteChanges`.
+  private var isApplyingRemoteChanges = false
 
   /// Tracks whether this engine started without saved state (first launch).
   /// Used to distinguish the synthetic `.signIn` event from a real one.
@@ -41,11 +41,6 @@ final class ProfileSyncEngine: Sendable {
   /// Record types accumulated across batches during a fetch session.
   /// Flushed as a single callback on endFetchingChanges().
   private var fetchSessionChangedTypes = Set<String>()
-
-  /// Account IDs affected by transaction changes during a fetch session.
-  /// Used for deferred balance invalidation on endFetchingChanges().
-  /// Empty set means "invalidate all" (deletion case).
-  private var fetchSessionAffectedAccountIds: Set<UUID>?
 
   // MARK: - Fetch Session Performance Tracking
 
@@ -135,11 +130,11 @@ final class ProfileSyncEngine: Sendable {
 
   /// Signals that CKSyncEngine is about to deliver change batches.
   /// Called from handleEventOnMain for .willFetchChanges.
-  /// During this window, balance invalidation and reload callbacks are deferred.
+  /// During this window, the onRemoteChangesApplied callback is deferred
+  /// to fire once at the end of the session instead of once per batch.
   func beginFetchingChanges() {
     isFetchingChanges = true
     fetchSessionChangedTypes.removeAll()
-    fetchSessionAffectedAccountIds = nil
 
     // Reset performance tracking
     fetchSessionStartTime = .now
@@ -152,7 +147,8 @@ final class ProfileSyncEngine: Sendable {
 
   /// Signals that CKSyncEngine has finished delivering all change batches.
   /// Called from handleEventOnMain for .didFetchChanges.
-  /// Performs deferred balance invalidation and fires the reload callback once.
+  /// Fires the deferred onRemoteChangesApplied callback once with all
+  /// accumulated record types from the session.
   func endFetchingChanges() {
     isFetchingChanges = false
 
@@ -161,45 +157,24 @@ final class ProfileSyncEngine: Sendable {
       return
     }
 
-    // Perform deferred balance invalidation
-    var balanceInvalidationDuration: Duration = .zero
-    if let affectedIds = fetchSessionAffectedAccountIds {
-      let context = modelContainer.mainContext
-      let balanceStart = ContinuousClock.now
-      Self.invalidateCachedBalances(accountIds: affectedIds, context: context)
-      do {
-        try context.save()
-      } catch {
-        logger.error("Failed to save deferred balance invalidation: \(error)")
-      }
-      balanceInvalidationDuration = ContinuousClock.now - balanceStart
-      let balanceMs = balanceInvalidationDuration.inMilliseconds
-      if balanceMs > 16 {
-        logger.warning(
-          "⚠️ PERF: balance invalidation took \(balanceMs)ms (>\(affectedIds.count) accounts)")
-      }
-    }
-
     // Log fetch session summary
     let sessionDuration = fetchSessionStartTime.map { ContinuousClock.now - $0 } ?? .zero
     let sessionMs = sessionDuration.inMilliseconds
     let applyMs = fetchSessionApplyDuration.inMilliseconds
     let saveMs = fetchSessionSaveDuration.inMilliseconds
-    let balanceMs = balanceInvalidationDuration.inMilliseconds
     let totalRecords = fetchSessionTotalSaves + fetchSessionTotalDeletes
     logger.info(
       """
       📊 SYNC SESSION COMPLETE: \(totalRecords) records (\(self.fetchSessionTotalSaves) saves, \
       \(self.fetchSessionTotalDeletes) deletes) in \(self.fetchSessionBatchCount) batches | \
       total: \(sessionMs)ms | applyChanges: \(applyMs)ms | contextSave: \(saveMs)ms | \
-      balanceInvalidation: \(balanceMs)ms | types: \(self.fetchSessionChangedTypes)
+      types: \(self.fetchSessionChangedTypes)
       """)
     fetchSessionStartTime = nil
 
     // Fire the callback once with all accumulated types
     let types = fetchSessionChangedTypes
     fetchSessionChangedTypes.removeAll()
-    fetchSessionAffectedAccountIds = nil
     onRemoteChangesApplied?(types)
   }
 
@@ -230,19 +205,33 @@ final class ProfileSyncEngine: Sendable {
       }
     }
 
-    // Queue in dependency order (matches migration import order):
-    // 1. Categories (no dependencies)
-    // 2. Accounts (no dependencies)
-    // 3. Earmarks (no dependencies)
-    // 4. Budget items (reference earmarks + categories)
-    // 5. Investment values (reference accounts)
-    // 6. Transactions last (reference accounts, categories, earmarks)
+    func queueStringIDs<T: PersistentModel>(_ type: T.Type, extract: (T) -> String) {
+      let context = ModelContext(modelContainer)
+      if let records = try? context.fetch(FetchDescriptor<T>()) {
+        for r in records {
+          queueSave(recordName: extract(r))
+          total += 1
+        }
+      }
+    }
+
+    // Queue in dependency order:
+    // 1. Instruments (no dependencies — must arrive before records that reference them)
+    // 2. Categories (no dependencies)
+    // 3. Accounts (no dependencies)
+    // 4. Earmarks (reference instruments)
+    // 5. Budget items (reference earmarks + categories + instruments)
+    // 6. Investment values (reference accounts + instruments)
+    // 7. Transactions (header only, no dependencies)
+    // 8. Transaction legs (reference transactions, accounts, instruments)
+    queueStringIDs(InstrumentRecord.self) { $0.id }
     queueIDs(CategoryRecord.self) { $0.id }
     queueIDs(AccountRecord.self) { $0.id }
     queueIDs(EarmarkRecord.self) { $0.id }
     queueIDs(EarmarkBudgetItemRecord.self) { $0.id }
     queueIDs(InvestmentValueRecord.self) { $0.id }
     queueIDs(TransactionRecord.self) { $0.id }
+    queueIDs(TransactionLegRecord.self) { $0.id }
 
     if total > 0 {
       logger.info("Queued \(total) existing records for initial upload")
@@ -259,10 +248,9 @@ final class ProfileSyncEngine: Sendable {
       let zone = CKRecordZone(zoneID: zoneID)
       _ = try await CKContainer.default().privateCloudDatabase.save(zone)
       logger.info("Ensured zone exists: \(self.zoneID.zoneName)")
-    } catch let error as CKError where error.code == .serverRecordChanged {
-      // Zone already exists — this is fine
-      logger.info("Zone already exists: \(self.zoneID.zoneName)")
     } catch {
+      // Zone saves are idempotent — transient network errors are the main failure mode.
+      // The engine will retry on the next send cycle.
       logger.error("Failed to ensure zone exists: \(error)")
     }
   }
@@ -312,6 +300,12 @@ final class ProfileSyncEngine: Sendable {
     syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
   }
 
+  /// Queues a record for save using a string record name (for non-UUID IDs like InstrumentRecord).
+  func queueSave(recordName: String) {
+    let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID)
+    syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+  }
+
   /// Queues a record for deletion from CloudKit.
   func queueDeletion(id: UUID) {
     let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
@@ -324,16 +318,19 @@ final class ProfileSyncEngine: Sendable {
   /// If cached system fields exist for this record, applies fields directly onto the
   /// cached record to preserve the change tag and avoid `.serverRecordChanged` conflicts.
   /// This avoids creating a throwaway CKRecord when cached system fields are available.
-  func buildCKRecord<T: CloudKitRecordConvertible & IdentifiableRecord & SystemFieldsCacheable>(
+  func buildCKRecord<T: CloudKitRecordConvertible & SystemFieldsCacheable>(
     for record: T
   ) -> CKRecord {
+    let freshRecord = record.toCKRecord(in: zoneID)
     if let cachedData = record.encodedSystemFields,
       let cachedRecord = CKRecord.fromEncodedSystemFields(cachedData)
     {
-      record.applyFields(to: cachedRecord)
+      for key in freshRecord.allKeys() {
+        cachedRecord[key] = freshRecord[key]
+      }
       return cachedRecord
     }
-    return record.toCKRecord(in: zoneID)
+    return freshRecord
   }
 
   // MARK: - Applying Remote Changes
@@ -387,36 +384,6 @@ final class ProfileSyncEngine: Sendable {
       "%{public}d records", deleted.count)
     Self.applyBatchDeletions(deleted, context: context)
     os_signpost(.end, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID)
-
-    // Invalidate cached balances when transactions arrive from other devices.
-    // During a fetch session (bulk sync), defer invalidation to endFetchingChanges()
-    // to avoid O(total_transactions) recomputation after every batch.
-    let hasTransactionChanges =
-      saved.contains { $0.recordType == TransactionRecord.recordType }
-      || deleted.contains { $0.1 == TransactionRecord.recordType }
-    if hasTransactionChanges {
-      let affectedAccountIds = Self.extractAffectedAccountIds(saved: saved, deleted: deleted)
-      if isFetchingChanges {
-        // Accumulate for deferred invalidation
-        if affectedAccountIds.isEmpty {
-          // Empty = invalidate all (deletion case) — overrides any targeted set
-          fetchSessionAffectedAccountIds = Set()
-        } else if let existing = fetchSessionAffectedAccountIds, !existing.isEmpty {
-          fetchSessionAffectedAccountIds = existing.union(affectedAccountIds)
-        } else if fetchSessionAffectedAccountIds == nil {
-          fetchSessionAffectedAccountIds = affectedAccountIds
-        }
-        // else: already set to empty (invalidate-all), leave it
-      } else {
-        os_signpost(
-          .begin, log: Signposts.balance, name: "invalidateCachedBalances",
-          signpostID: signpostID)
-        Self.invalidateCachedBalances(accountIds: affectedAccountIds, context: context)
-        os_signpost(
-          .end, log: Signposts.balance, name: "invalidateCachedBalances",
-          signpostID: signpostID)
-      }
-    }
 
     var saveDuration: Duration = .zero
     do {
@@ -500,8 +467,10 @@ final class ProfileSyncEngine: Sendable {
       }
     }
 
+    deleteAll(InstrumentRecord.self)
     deleteAll(AccountRecord.self)
     deleteAll(TransactionRecord.self)
+    deleteAll(TransactionLegRecord.self)
     deleteAll(CategoryRecord.self)
     deleteAll(EarmarkRecord.self)
     deleteAll(EarmarkBudgetItemRecord.self)
@@ -510,14 +479,41 @@ final class ProfileSyncEngine: Sendable {
     do {
       try context.save()
       logger.info("Deleted all local data for profile \(self.profileId)")
-      onRemoteChangesApplied?(
-        Set([
-          AccountRecord.recordType, TransactionRecord.recordType,
-          CategoryRecord.recordType, EarmarkRecord.recordType,
-          EarmarkBudgetItemRecord.recordType, InvestmentValueRecord.recordType,
-        ]))
+      let allTypes = Set(RecordTypeRegistry.allTypes.keys)
+      onRemoteChangesApplied?(allTypes)
     } catch {
       logger.error("Failed to delete local data: \(error)")
+    }
+  }
+
+  /// Clears `encodedSystemFields` on all model records in the local store.
+  /// Called before re-uploading after an `encryptedDataReset` — the server-side records
+  /// no longer exist, so stale change tags would cause `.serverRecordChanged` conflicts.
+  private func clearAllSystemFields() {
+    let context = ModelContext(modelContainer)
+
+    func clearAll<T: PersistentModel & SystemFieldsCacheable>(_ type: T.Type) {
+      if let records = try? context.fetch(FetchDescriptor<T>()) {
+        for record in records {
+          record.encodedSystemFields = nil
+        }
+      }
+    }
+
+    clearAll(AccountRecord.self)
+    clearAll(TransactionRecord.self)
+    clearAll(TransactionLegRecord.self)
+    clearAll(CategoryRecord.self)
+    clearAll(EarmarkRecord.self)
+    clearAll(EarmarkBudgetItemRecord.self)
+    clearAll(InvestmentValueRecord.self)
+    clearAll(InstrumentRecord.self)
+
+    do {
+      try context.save()
+      logger.info("Cleared all system fields for profile \(self.profileId)")
+    } catch {
+      logger.error("Failed to save after clearing system fields: \(error)")
     }
   }
 
@@ -534,10 +530,14 @@ final class ProfileSyncEngine: Sendable {
     let grouped = Dictionary(grouping: records, by: { $0.recordType })
     for (recordType, ckRecords) in grouped {
       switch recordType {
+      case InstrumentRecord.recordType:
+        batchUpsertInstruments(ckRecords, context: context, systemFields: systemFields)
       case AccountRecord.recordType:
         batchUpsertAccounts(ckRecords, context: context, systemFields: systemFields)
       case TransactionRecord.recordType:
         batchUpsertTransactions(ckRecords, context: context, systemFields: systemFields)
+      case TransactionLegRecord.recordType:
+        batchUpsertTransactionLegs(ckRecords, context: context, systemFields: systemFields)
       case CategoryRecord.recordType:
         batchUpsertCategories(ckRecords, context: context, systemFields: systemFields)
       case EarmarkRecord.recordType:
@@ -546,23 +546,30 @@ final class ProfileSyncEngine: Sendable {
         batchUpsertEarmarkBudgetItems(ckRecords, context: context, systemFields: systemFields)
       case InvestmentValueRecord.recordType:
         batchUpsertInvestmentValues(ckRecords, context: context, systemFields: systemFields)
+      case ProfileRecord.recordType:
+        break  // Handled by ProfileIndexSyncEngine — shouldn't reach here after zone filtering
       default:
         batchLogger.warning("applyBatchSaves: unknown record type '\(recordType)' — skipping")
       }
     }
   }
 
-  /// Handles batch deletions. Groups by record type and issues one fetch per type.
+  /// Handles batch deletions. Groups by record type for one IN-predicate fetch per type.
   private nonisolated static func applyBatchDeletions(
     _ deletions: [(CKRecord.ID, String)], context: ModelContext
   ) {
-    var grouped: [String: [UUID]] = [:]
+    var uuidGrouped: [String: [UUID]] = [:]
+    var stringGrouped: [String: [String]] = [:]
+
     for (recordID, recordType) in deletions {
-      guard let uuid = UUID(uuidString: recordID.recordName) else { continue }
-      grouped[recordType, default: []].append(uuid)
+      if let uuid = UUID(uuidString: recordID.recordName) {
+        uuidGrouped[recordType, default: []].append(uuid)
+      } else {
+        stringGrouped[recordType, default: []].append(recordID.recordName)
+      }
     }
 
-    for (recordType, ids) in grouped {
+    for (recordType, ids) in uuidGrouped {
       switch recordType {
       case AccountRecord.recordType:
         let records =
@@ -574,6 +581,12 @@ final class ProfileSyncEngine: Sendable {
         let records =
           (try? context.fetch(
             FetchDescriptor<TransactionRecord>(predicate: #Predicate { ids.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
+      case TransactionLegRecord.recordType:
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { ids.contains($0.id) })
           )) ?? []
         for record in records { context.delete(record) }
       case CategoryRecord.recordType:
@@ -600,9 +613,25 @@ final class ProfileSyncEngine: Sendable {
             FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { ids.contains($0.id) })
           )) ?? []
         for record in records { context.delete(record) }
+      case ProfileRecord.recordType:
+        break  // Handled by ProfileIndexSyncEngine in the profile-index zone
       default:
         batchLogger.warning(
           "applyBatchDeletions: unknown record type '\(recordType)' — skipping")
+      }
+    }
+
+    for (recordType, names) in stringGrouped {
+      switch recordType {
+      case InstrumentRecord.recordType:
+        let records =
+          (try? context.fetch(
+            FetchDescriptor<InstrumentRecord>(predicate: #Predicate { names.contains($0.id) })
+          )) ?? []
+        for record in records { context.delete(record) }
+      default:
+        batchLogger.warning(
+          "applyBatchDeletions: unknown string-ID record type '\(recordType)' — skipping")
       }
     }
   }
@@ -625,6 +654,12 @@ final class ProfileSyncEngine: Sendable {
       ).first {
         record.encodedSystemFields = data
       }
+    case TransactionLegRecord.recordType:
+      if let record = try? context.fetch(
+        FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { $0.id == id })
+      ).first {
+        record.encodedSystemFields = data
+      }
     case CategoryRecord.recordType:
       if let record = try? context.fetch(
         FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.id == id })
@@ -651,6 +686,28 @@ final class ProfileSyncEngine: Sendable {
       }
     default:
       break
+    }
+  }
+
+  /// Updates `encodedSystemFields` on an InstrumentRecord matching the given string ID.
+  nonisolated private static func updateInstrumentSystemFields(
+    _ id: String, data: Data, context: ModelContext
+  ) {
+    if let record = try? context.fetch(
+      FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == id })
+    ).first {
+      record.encodedSystemFields = data
+    }
+  }
+
+  /// Clears `encodedSystemFields` on an InstrumentRecord matching the given string ID.
+  nonisolated private static func clearInstrumentSystemFields(
+    _ id: String, context: ModelContext
+  ) {
+    if let record = try? context.fetch(
+      FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == id })
+    ).first {
+      record.encodedSystemFields = nil
     }
   }
 
@@ -673,6 +730,12 @@ final class ProfileSyncEngine: Sendable {
       ).first {
         record.encodedSystemFields = nil
       }
+    case TransactionLegRecord.recordType:
+      if let record = try? context.fetch(
+        FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { $0.id == id })
+      ).first {
+        record.encodedSystemFields = nil
+      }
     case CategoryRecord.recordType:
       if let record = try? context.fetch(
         FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.id == id })
@@ -702,52 +765,35 @@ final class ProfileSyncEngine: Sendable {
     }
   }
 
-  // MARK: - Balance Cache Invalidation
-
-  /// Extracts the set of account IDs referenced by transaction CKRecords.
-  /// Returns an empty set when deletions are present (meaning: invalidate all accounts).
-  private nonisolated static func extractAffectedAccountIds(
-    saved: [CKRecord],
-    deleted: [(CKRecord.ID, String)]
-  ) -> Set<UUID> {
-    var ids = Set<UUID>()
-    for ckRecord in saved where ckRecord.recordType == TransactionRecord.recordType {
-      if let s = ckRecord["accountId"] as? String, let id = UUID(uuidString: s) {
-        ids.insert(id)
-      }
-      if let s = ckRecord["toAccountId"] as? String, let id = UUID(uuidString: s) {
-        ids.insert(id)
-      }
-    }
-    // For deletions we don't have the record content, so invalidate all
-    if deleted.contains(where: { $0.1 == TransactionRecord.recordType }) {
-      return []  // Empty set = invalidate all
-    }
-    return ids
-  }
-
-  /// Sets cachedBalance to nil on the specified accounts so it will be recomputed on next load.
-  /// Pass an empty set to invalidate all accounts (deletion case).
-  /// Called when remote transaction changes arrive that may affect balances.
-  nonisolated private static func invalidateCachedBalances(
-    accountIds: Set<UUID>, context: ModelContext
-  ) {
-    if accountIds.isEmpty {
-      // Invalidate all — deletion case
-      guard let accounts = try? context.fetch(FetchDescriptor<AccountRecord>()) else { return }
-      for account in accounts { account.cachedBalance = nil }
-    } else {
-      let ids = Array(accountIds)
-      guard
-        let accounts = try? context.fetch(
-          FetchDescriptor<AccountRecord>(predicate: #Predicate { ids.contains($0.id) })
-        )
-      else { return }
-      for account in accounts { account.cachedBalance = nil }
-    }
-  }
-
   // MARK: - Per-Type Batch Upsert
+
+  nonisolated private static func batchUpsertInstruments(
+    _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
+  ) {
+    let pairs: [(String, CKRecord)] = ckRecords.map { ck in
+      (ck.recordID.recordName, ck)
+    }
+    let existing = (try? context.fetch(FetchDescriptor<InstrumentRecord>())) ?? []
+    var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+
+    for (id, ckRecord) in pairs {
+      let values = InstrumentRecord.fieldValues(from: ckRecord)
+      if let existing = byID[id] {
+        existing.kind = values.kind
+        existing.name = values.name
+        existing.decimals = values.decimals
+        existing.ticker = values.ticker
+        existing.exchange = values.exchange
+        existing.chainId = values.chainId
+        existing.contractAddress = values.contractAddress
+        existing.encodedSystemFields = systemFields[id]
+      } else {
+        values.encodedSystemFields = systemFields[id]
+        context.insert(values)
+        byID[id] = values
+      }
+    }
+  }
 
   nonisolated private static func batchUpsertAccounts(
     _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
@@ -756,11 +802,9 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let incomingIds = pairs.map(\.0)
     let existing: [AccountRecord]
     do {
-      existing = try context.fetch(
-        FetchDescriptor<AccountRecord>(predicate: #Predicate { incomingIds.contains($0.id) }))
+      existing = try context.fetch(FetchDescriptor<AccountRecord>())
     } catch {
       batchLogger.error("batchUpsertAccounts: fetch failed: \(error)")
       existing = []
@@ -778,8 +822,7 @@ final class ProfileSyncEngine: Sendable {
         existing.type = values.type
         existing.position = values.position
         existing.isHidden = values.isHidden
-        existing.currencyCode = values.currencyCode
-        // cachedBalance NOT updated from sync — computed locally from transactions
+        existing.usesPositionTracking = values.usesPositionTracking
         existing.encodedSystemFields = systemFields[id.uuidString]
         updateCount += 1
       } else {
@@ -790,7 +833,7 @@ final class ProfileSyncEngine: Sendable {
       }
     }
     batchLogger.info(
-      "batchUpsertAccounts: \(pairs.count) incoming, \(existing.count) matched, \(insertCount) inserted, \(updateCount) updated"
+      "batchUpsertAccounts: \(pairs.count) incoming, \(existing.count) existing in store, \(insertCount) inserted, \(updateCount) updated"
     )
   }
 
@@ -801,28 +844,47 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let incomingIds = pairs.map(\.0)
-    let existing =
-      (try? context.fetch(
-        FetchDescriptor<TransactionRecord>(predicate: #Predicate { incomingIds.contains($0.id) })))
-      ?? []
+    let existing = (try? context.fetch(FetchDescriptor<TransactionRecord>())) ?? []
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
       let values = TransactionRecord.fieldValues(from: ckRecord)
       if let existing = byID[id] {
-        existing.type = values.type
         existing.date = values.date
-        existing.accountId = values.accountId
-        existing.toAccountId = values.toAccountId
-        existing.amount = values.amount
-        existing.currencyCode = values.currencyCode
         existing.payee = values.payee
         existing.notes = values.notes
-        existing.categoryId = values.categoryId
-        existing.earmarkId = values.earmarkId
         existing.recurPeriod = values.recurPeriod
         existing.recurEvery = values.recurEvery
+        existing.encodedSystemFields = systemFields[id.uuidString]
+      } else {
+        values.encodedSystemFields = systemFields[id.uuidString]
+        context.insert(values)
+        byID[id] = values
+      }
+    }
+  }
+
+  nonisolated private static func batchUpsertTransactionLegs(
+    _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
+  ) {
+    let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
+      guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
+      return (id, ck)
+    }
+    let existing = (try? context.fetch(FetchDescriptor<TransactionLegRecord>())) ?? []
+    var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+
+    for (id, ckRecord) in pairs {
+      let values = TransactionLegRecord.fieldValues(from: ckRecord)
+      if let existing = byID[id] {
+        existing.transactionId = values.transactionId
+        existing.accountId = values.accountId
+        existing.instrumentId = values.instrumentId
+        existing.quantity = values.quantity
+        existing.type = values.type
+        existing.categoryId = values.categoryId
+        existing.earmarkId = values.earmarkId
+        existing.sortOrder = values.sortOrder
         existing.encodedSystemFields = systemFields[id.uuidString]
       } else {
         values.encodedSystemFields = systemFields[id.uuidString]
@@ -839,11 +901,7 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let incomingIds = pairs.map(\.0)
-    let existing =
-      (try? context.fetch(
-        FetchDescriptor<CategoryRecord>(predicate: #Predicate { incomingIds.contains($0.id) })))
-      ?? []
+    let existing = (try? context.fetch(FetchDescriptor<CategoryRecord>())) ?? []
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -867,11 +925,7 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let incomingIds = pairs.map(\.0)
-    let existing =
-      (try? context.fetch(
-        FetchDescriptor<EarmarkRecord>(predicate: #Predicate { incomingIds.contains($0.id) })))
-      ?? []
+    let existing = (try? context.fetch(FetchDescriptor<EarmarkRecord>())) ?? []
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -881,7 +935,7 @@ final class ProfileSyncEngine: Sendable {
         existing.position = values.position
         existing.isHidden = values.isHidden
         existing.savingsTarget = values.savingsTarget
-        existing.currencyCode = values.currencyCode
+        existing.savingsTargetInstrumentId = values.savingsTargetInstrumentId
         existing.savingsStartDate = values.savingsStartDate
         existing.savingsEndDate = values.savingsEndDate
         existing.encodedSystemFields = systemFields[id.uuidString]
@@ -900,11 +954,7 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let incomingIds = pairs.map(\.0)
-    let existing =
-      (try? context.fetch(
-        FetchDescriptor<EarmarkBudgetItemRecord>(
-          predicate: #Predicate { incomingIds.contains($0.id) }))) ?? []
+    let existing = (try? context.fetch(FetchDescriptor<EarmarkBudgetItemRecord>())) ?? []
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -913,7 +963,7 @@ final class ProfileSyncEngine: Sendable {
         existing.earmarkId = values.earmarkId
         existing.categoryId = values.categoryId
         existing.amount = values.amount
-        existing.currencyCode = values.currencyCode
+        existing.instrumentId = values.instrumentId
         existing.encodedSystemFields = systemFields[id.uuidString]
       } else {
         values.encodedSystemFields = systemFields[id.uuidString]
@@ -930,11 +980,7 @@ final class ProfileSyncEngine: Sendable {
       guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
       return (id, ck)
     }
-    let incomingIds = pairs.map(\.0)
-    let existing =
-      (try? context.fetch(
-        FetchDescriptor<InvestmentValueRecord>(
-          predicate: #Predicate { incomingIds.contains($0.id) }))) ?? []
+    let existing = (try? context.fetch(FetchDescriptor<InvestmentValueRecord>())) ?? []
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
     for (id, ckRecord) in pairs {
@@ -943,7 +989,7 @@ final class ProfileSyncEngine: Sendable {
         existing.accountId = values.accountId
         existing.date = values.date
         existing.value = values.value
-        existing.currencyCode = values.currencyCode
+        existing.instrumentId = values.instrumentId
         existing.encodedSystemFields = systemFields[id.uuidString]
       } else {
         values.encodedSystemFields = systemFields[id.uuidString]
@@ -958,12 +1004,13 @@ final class ProfileSyncEngine: Sendable {
 
 extension ProfileSyncEngine: CKSyncEngineDelegate {
   nonisolated func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
-    // Pre-extract system fields off MainActor (NSKeyedArchiver is expensive)
+    // Pre-extract system fields off the main actor to avoid serialization cost on main thread.
+    // Filter to only records in this engine's zone — CKSyncEngine delivers all zones.
     let preExtracted: [(String, Data)]?
     if case .fetchedRecordZoneChanges(let changes) = event {
-      preExtracted = changes.modifications.map { mod in
-        (mod.record.recordID.recordName, mod.record.encodedSystemFields)
-      }
+      preExtracted = changes.modifications
+        .filter { $0.record.recordID.zoneID == zoneID }
+        .map { ($0.record.recordID.recordName, $0.record.encodedSystemFields) }
     } else {
       preExtracted = nil
     }
@@ -989,9 +1036,21 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
       handleFetchedDatabaseChanges(fetchedChanges)
 
     case .fetchedRecordZoneChanges(let changes):
+      // CKSyncEngine fetches changes from ALL zones in the database.
+      // Filter to only records in this engine's zone — ignore records from
+      // other zones (e.g. profile-index zone records arriving here).
       let saved = changes.modifications.map(\.record)
-      let deleted: [(CKRecord.ID, String)] = changes.deletions.map {
-        ($0.recordID, $0.recordType)
+        .filter { $0.recordID.zoneID == zoneID }
+      let deleted: [(CKRecord.ID, String)] = changes.deletions
+        .filter { $0.recordID.zoneID == zoneID }
+        .map { ($0.recordID, $0.recordType) }
+      let skippedCount =
+        changes.modifications.count - saved.count
+        + changes.deletions.count - deleted.count
+      if skippedCount > 0 {
+        logger.debug(
+          "Skipped \(skippedCount) records from other zones (expected zone: \(self.zoneID.zoneName, privacy: .public))"
+        )
       }
       guard !saved.isEmpty || !deleted.isEmpty else { break }
       applyRemoteChanges(
@@ -1064,29 +1123,43 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     let batchLimit = 400
     let batch = Array(pendingChanges.prefix(batchLimit))
 
-    // Collect UUIDs that need saving so we can batch-load records
-    let saveRecordIDs: [(CKRecord.ID, UUID)] = batch.compactMap { change in
-      guard case .saveRecord(let recordID) = change,
-        let uuid = UUID(uuidString: recordID.recordName)
-      else { return nil }
-      return (recordID, uuid)
+    // Collect record IDs that need saving
+    let saveRecordIDs: [CKRecord.ID] = batch.compactMap { change in
+      guard case .saveRecord(let recordID) = change else { return nil }
+      return recordID
     }
 
-    // Batch-load records by type (6 fetches total, not N*6)
+    // Separate UUID-based and string-based record names
+    var uuidRecordNames: [(CKRecord.ID, UUID)] = []
+    var stringRecordIDs: [CKRecord.ID] = []
+    for recordID in saveRecordIDs {
+      if let uuid = UUID(uuidString: recordID.recordName) {
+        uuidRecordNames.append((recordID, uuid))
+      } else {
+        stringRecordIDs.append(recordID)
+      }
+    }
+
+    // Batch-load UUID-based records by type
     os_signpost(
       .begin, log: Signposts.sync, name: "buildBatchRecordLookup", signpostID: signpostID,
-      "%{public}d UUIDs", saveRecordIDs.count)
-    let recordLookup = buildBatchRecordLookup(for: Set(saveRecordIDs.map(\.1)))
+      "%{public}d UUIDs", uuidRecordNames.count)
+    let recordLookup = buildBatchRecordLookup(for: Set(uuidRecordNames.map(\.1)))
     os_signpost(.end, log: Signposts.sync, name: "buildBatchRecordLookup", signpostID: signpostID)
+
+    // Look up string-based records individually (InstrumentRecord)
+    let stringRecords: [CKRecord] = stringRecordIDs.compactMap { recordID in
+      recordToSave(for: recordID)
+    }
 
     logger.info(
       "Preparing batch: \(batch.count) changes (\(saveRecordIDs.count) saves), \(pendingChanges.count) total pending"
     )
 
     return CKSyncEngine.RecordZoneChangeBatch(
-      recordsToSave: saveRecordIDs.compactMap { recordID, uuid in
+      recordsToSave: uuidRecordNames.compactMap { _, uuid in
         recordLookup[uuid]
-      },
+      } + stringRecords,
       recordIDsToDelete: batch.compactMap { change -> CKRecord.ID? in
         guard case .deleteRecord(let recordID) = change else { return nil }
         return recordID
@@ -1096,14 +1169,13 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
   }
 
   /// Looks up records by UUID for a batch of pending changes.
-  /// Fetches all records per type using IN predicates (6 queries total regardless of batch size).
-  /// Check most common types first (transactions, investment values) and prune remaining set
-  /// after each type to skip redundant queries.
+  /// Uses IN-predicate fetches per record type, pruning the remaining set after each type.
   func buildBatchRecordLookup(for uuids: Set<UUID>) -> [UUID: CKRecord] {
     let context = ModelContext(modelContainer)
     var lookup: [UUID: CKRecord] = [:]
     var remaining = uuids
 
+    // Check most common types first (transactions and legs make up the majority)
     let ids = Array(remaining)
     let transactions =
       (try? context.fetch(
@@ -1112,6 +1184,18 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     for r in transactions {
       lookup[r.id] = buildCKRecord(for: r)
       remaining.remove(r.id)
+    }
+
+    if !remaining.isEmpty {
+      let rIds = Array(remaining)
+      let legs =
+        (try? context.fetch(
+          FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { rIds.contains($0.id) })
+        )) ?? []
+      for r in legs {
+        lookup[r.id] = buildCKRecord(for: r)
+        remaining.remove(r.id)
+      }
     }
 
     if !remaining.isEmpty {
@@ -1229,6 +1313,7 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
       case .encryptedDataReset:
         logger.warning("Encrypted data reset — re-uploading local data")
         deleteStateSerialization()
+        clearAllSystemFields()
         queueAllExistingRecords()
 
       @unknown default:
@@ -1245,12 +1330,22 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     if !sentChanges.savedRecords.isEmpty {
       let context = ModelContext(modelContainer)
       for saved in sentChanges.savedRecords {
-        guard let uuid = UUID(uuidString: saved.recordID.recordName) else { continue }
-        Self.updateEncodedSystemFields(
-          uuid, data: saved.encodedSystemFields,
-          recordType: saved.recordType, context: context)
+        let recordName = saved.recordID.recordName
+        if let uuid = UUID(uuidString: recordName) {
+          Self.updateEncodedSystemFields(
+            uuid, data: saved.encodedSystemFields,
+            recordType: saved.recordType, context: context)
+        } else {
+          // String-ID record (e.g. InstrumentRecord)
+          Self.updateInstrumentSystemFields(
+            recordName, data: saved.encodedSystemFields, context: context)
+        }
       }
-      try? context.save()
+      do {
+        try context.save()
+      } catch {
+        logger.error("Failed to save system fields after upload: \(error)")
+      }
     }
     // Deleted records don't need cache cleanup — model is already deleted.
 
@@ -1261,21 +1356,32 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
     if !failures.conflicts.isEmpty || !failures.unknownItems.isEmpty {
       let ctx = ModelContext(modelContainer)
       for (_, serverRecord) in failures.conflicts {
-        if let uuid = UUID(uuidString: serverRecord.recordID.recordName) {
+        let recordName = serverRecord.recordID.recordName
+        if let uuid = UUID(uuidString: recordName) {
           Self.updateEncodedSystemFields(
             uuid, data: serverRecord.encodedSystemFields,
             recordType: serverRecord.recordType, context: ctx)
+        } else {
+          Self.updateInstrumentSystemFields(
+            recordName, data: serverRecord.encodedSystemFields, context: ctx)
         }
       }
       // Clear stale system fields for server-deleted records so the
       // re-queued upload creates a fresh record without a change tag.
       for (recordID, recordType) in failures.unknownItems {
-        if let uuid = UUID(uuidString: recordID.recordName) {
+        let recordName = recordID.recordName
+        if let uuid = UUID(uuidString: recordName) {
           Self.clearEncodedSystemFields(
             uuid, recordType: recordType, context: ctx)
+        } else {
+          Self.clearInstrumentSystemFields(recordName, context: ctx)
         }
       }
-      try? ctx.save()
+      do {
+        try ctx.save()
+      } catch {
+        logger.error("Failed to save system fields after conflict resolution: \(error)")
+      }
     }
 
     SyncErrorRecovery.recover(
@@ -1289,15 +1395,29 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
   // attribute. Each record type must use its own concrete FetchDescriptor.
 
   private func recordToSave(for recordID: CKRecord.ID) -> CKRecord? {
-    guard let uuid = UUID(uuidString: recordID.recordName) else { return nil }
     let context = ModelContext(modelContainer)
+    let recordName = recordID.recordName
 
-    // Try each record type until we find the one with this ID.
+    // InstrumentRecord uses String IDs (e.g. "AUD", "ASX:BHP"), not UUIDs.
+    // Try it first before UUID-based lookups.
+    if let record = fetchInstrument(id: recordName, context: context) {
+      return buildCKRecord(for: record)
+    }
+
+    guard let uuid = UUID(uuidString: recordName) else {
+      logger.warning("Could not find local record for non-UUID ID: \(recordName)")
+      return nil
+    }
+
+    // Try each UUID-based record type until we find the one with this ID.
     // buildCKRecord applies cached system fields to preserve change tags.
     if let record = fetchAccount(id: uuid, context: context) {
       return buildCKRecord(for: record)
     }
     if let record = fetchTransaction(id: uuid, context: context) {
+      return buildCKRecord(for: record)
+    }
+    if let record = fetchTransactionLeg(id: uuid, context: context) {
       return buildCKRecord(for: record)
     }
     if let record = fetchCategory(id: uuid, context: context) {
@@ -1313,7 +1433,7 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
       return buildCKRecord(for: record)
     }
 
-    logger.warning("Could not find local record for ID: \(recordID.recordName)")
+    logger.warning("Could not find local record for ID: \(recordName)")
     return nil
   }
 
@@ -1345,6 +1465,16 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
 
   private func fetchInvestmentValue(id: UUID, context: ModelContext) -> InvestmentValueRecord? {
     let descriptor = FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { $0.id == id })
+    return try? context.fetch(descriptor).first
+  }
+
+  private func fetchInstrument(id: String, context: ModelContext) -> InstrumentRecord? {
+    let descriptor = FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == id })
+    return try? context.fetch(descriptor).first
+  }
+
+  private func fetchTransactionLeg(id: UUID, context: ModelContext) -> TransactionLegRecord? {
+    let descriptor = FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { $0.id == id })
     return try? context.fetch(descriptor).first
   }
 }
