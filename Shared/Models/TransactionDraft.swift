@@ -28,8 +28,6 @@ struct TransactionDraft: Sendable, Equatable {
     var type: TransactionType
     var accountId: UUID?
     var amountText: String
-    /// For transfer legs: true = money leaving (negative), false = money arriving (positive).
-    var isOutflow: Bool
     var categoryId: UUID?
     var categoryText: String
     var earmarkId: UUID?
@@ -159,10 +157,8 @@ struct TransactionDraft: Sendable, Equatable {
       switch leg.type {
       case .income, .openingBalance:
         signedQty = abs(qty)
-      case .expense:
+      case .expense, .transfer:
         signedQty = -abs(qty)
-      case .transfer:
-        signedQty = leg.isOutflow ? -abs(qty) : abs(qty)
       }
 
       legs.append(
@@ -267,7 +263,6 @@ struct TransactionDraft: Sendable, Equatable {
               accountId: leg.accountId,
               amountText: abs(leg.quantity).formatted(
                 .number.precision(.fractionLength(leg.instrument.decimals))),
-              isOutflow: leg.quantity < 0,
               categoryId: leg.categoryId,
               categoryText: "",
               earmarkId: leg.earmarkId
@@ -319,7 +314,6 @@ extension TransactionDraft {
           accountId: leg.accountId,
           amountText: abs(leg.quantity).formatted(
             .number.precision(.fractionLength(leg.instrument.decimals))),
-          isOutflow: leg.quantity < 0,
           categoryId: leg.categoryId,
           categoryText: "",
           earmarkId: leg.earmarkId

@@ -329,7 +329,6 @@ struct TransactionDetailView: View {
                 type: .transfer,
                 accountId: draft.accountId,
                 amountText: draft.amountText,
-                isOutflow: true,
                 categoryId: draft.categoryId,
                 categoryText: draft.categoryText,
                 earmarkId: draft.earmarkId
@@ -338,7 +337,6 @@ struct TransactionDetailView: View {
                 type: .transfer,
                 accountId: draft.toAccountId,
                 amountText: draft.amountText,
-                isOutflow: false,
                 categoryId: nil,
                 categoryText: "",
                 earmarkId: nil
@@ -346,12 +344,10 @@ struct TransactionDetailView: View {
               draft.legDrafts = [fromLeg, toLeg]
             } else {
               // Non-transfer: create one leg
-              let isOutflow = draft.type == .expense
               let leg = TransactionDraft.LegDraft(
                 type: draft.type,
                 accountId: draft.accountId,
                 amountText: draft.amountText,
-                isOutflow: isOutflow,
                 categoryId: draft.categoryId,
                 categoryText: draft.categoryText,
                 earmarkId: draft.earmarkId
@@ -499,13 +495,6 @@ struct TransactionDetailView: View {
         Text(TransactionType.transfer.displayName).tag(TransactionType.transfer)
       }
 
-      if draft.legDrafts[index].type == .transfer {
-        Picker("Direction", selection: $draft.legDrafts[index].isOutflow) {
-          Text("Outflow").tag(true)
-          Text("Inflow").tag(false)
-        }
-      }
-
       Picker("Account", selection: $draft.legDrafts[index].accountId) {
         Text("None").tag(UUID?.none)
         ForEach(sortedAccounts) { account in
@@ -580,7 +569,6 @@ struct TransactionDetailView: View {
             type: .expense,
             accountId: sortedAccounts.first?.id,
             amountText: "",
-            isOutflow: true,
             categoryId: nil,
             categoryText: "",
             earmarkId: nil
