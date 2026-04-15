@@ -188,7 +188,7 @@ struct SidebarView: View {
       async let e: Void = earmarkStore.load()
       _ = await (a, e)
     }
-    .task(id: accountStore.accounts.ordered.map(\.id)) {
+    .task(id: [accountStore.currentTotal, accountStore.investmentTotal]) {
       await loadConvertedTotals()
     }
     #if os(macOS)
@@ -235,6 +235,9 @@ struct SidebarView: View {
   }
 
   private func loadConvertedTotals() async {
+    convertedCurrentTotal = nil
+    convertedInvestmentTotal = nil
+    convertedNetWorth = nil
     let profileInstrument = accountStore.currentTotal.instrument
     do {
       let currentTotal = try await accountStore.convertedCurrentTotal(in: profileInstrument)
