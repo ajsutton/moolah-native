@@ -130,6 +130,19 @@ final class ProfileDataSyncHandler: Sendable {
 
   // MARK: - Batch Record Lookup
 
+  /// Fetches records using the given descriptor, logging errors instead of silently discarding them.
+  private func fetchOrLog<T: PersistentModel>(
+    _ descriptor: FetchDescriptor<T>,
+    context: ModelContext
+  ) -> [T] {
+    do {
+      return try context.fetch(descriptor)
+    } catch {
+      logger.error("SwiftData fetch failed for \(T.self): \(error)")
+      return []
+    }
+  }
+
   /// Looks up records by UUID for a batch of pending changes.
   /// Uses IN-predicate fetches per record type, pruning the remaining set after each type.
   func buildBatchRecordLookup(for uuids: Set<UUID>) -> [UUID: CKRecord] {
@@ -139,10 +152,9 @@ final class ProfileDataSyncHandler: Sendable {
 
     // Check most common types first (transactions and legs make up the majority)
     let ids = Array(remaining)
-    let transactions =
-      (try? context.fetch(
-        FetchDescriptor<TransactionRecord>(predicate: #Predicate { ids.contains($0.id) })
-      )) ?? []
+    let transactions = fetchOrLog(
+      FetchDescriptor<TransactionRecord>(predicate: #Predicate { ids.contains($0.id) }),
+      context: context)
     for r in transactions {
       lookup[r.id] = buildCKRecord(for: r)
       remaining.remove(r.id)
@@ -150,10 +162,9 @@ final class ProfileDataSyncHandler: Sendable {
 
     if !remaining.isEmpty {
       let rIds = Array(remaining)
-      let legs =
-        (try? context.fetch(
-          FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { rIds.contains($0.id) })
-        )) ?? []
+      let legs = fetchOrLog(
+        FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { rIds.contains($0.id) }),
+        context: context)
       for r in legs {
         lookup[r.id] = buildCKRecord(for: r)
         remaining.remove(r.id)
@@ -162,10 +173,9 @@ final class ProfileDataSyncHandler: Sendable {
 
     if !remaining.isEmpty {
       let rIds = Array(remaining)
-      let investmentValues =
-        (try? context.fetch(
-          FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { rIds.contains($0.id) })
-        )) ?? []
+      let investmentValues = fetchOrLog(
+        FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { rIds.contains($0.id) }),
+        context: context)
       for r in investmentValues {
         lookup[r.id] = buildCKRecord(for: r)
         remaining.remove(r.id)
@@ -174,10 +184,9 @@ final class ProfileDataSyncHandler: Sendable {
 
     if !remaining.isEmpty {
       let rIds = Array(remaining)
-      let accounts =
-        (try? context.fetch(
-          FetchDescriptor<AccountRecord>(predicate: #Predicate { rIds.contains($0.id) })
-        )) ?? []
+      let accounts = fetchOrLog(
+        FetchDescriptor<AccountRecord>(predicate: #Predicate { rIds.contains($0.id) }),
+        context: context)
       for r in accounts {
         lookup[r.id] = buildCKRecord(for: r)
         remaining.remove(r.id)
@@ -186,10 +195,9 @@ final class ProfileDataSyncHandler: Sendable {
 
     if !remaining.isEmpty {
       let rIds = Array(remaining)
-      let categories =
-        (try? context.fetch(
-          FetchDescriptor<CategoryRecord>(predicate: #Predicate { rIds.contains($0.id) })
-        )) ?? []
+      let categories = fetchOrLog(
+        FetchDescriptor<CategoryRecord>(predicate: #Predicate { rIds.contains($0.id) }),
+        context: context)
       for r in categories {
         lookup[r.id] = buildCKRecord(for: r)
         remaining.remove(r.id)
@@ -198,10 +206,9 @@ final class ProfileDataSyncHandler: Sendable {
 
     if !remaining.isEmpty {
       let rIds = Array(remaining)
-      let earmarks =
-        (try? context.fetch(
-          FetchDescriptor<EarmarkRecord>(predicate: #Predicate { rIds.contains($0.id) })
-        )) ?? []
+      let earmarks = fetchOrLog(
+        FetchDescriptor<EarmarkRecord>(predicate: #Predicate { rIds.contains($0.id) }),
+        context: context)
       for r in earmarks {
         lookup[r.id] = buildCKRecord(for: r)
         remaining.remove(r.id)
@@ -210,10 +217,9 @@ final class ProfileDataSyncHandler: Sendable {
 
     if !remaining.isEmpty {
       let rIds = Array(remaining)
-      let budgetItems =
-        (try? context.fetch(
-          FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { rIds.contains($0.id) })
-        )) ?? []
+      let budgetItems = fetchOrLog(
+        FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { rIds.contains($0.id) }),
+        context: context)
       for r in budgetItems {
         lookup[r.id] = buildCKRecord(for: r)
         remaining.remove(r.id)
