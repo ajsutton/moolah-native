@@ -52,26 +52,6 @@ struct TransactionFilterView: View {
     NavigationStack {
       Form {
         Section("Date Range") {
-          DatePicker(
-            "Start Date",
-            selection: Binding(
-              get: { dateRangeLowerBound ?? Date() },
-              set: { dateRangeLowerBound = $0 }
-            ),
-            displayedComponents: .date
-          )
-          .disabled(dateRangeLowerBound == nil)
-
-          DatePicker(
-            "End Date",
-            selection: Binding(
-              get: { dateRangeUpperBound ?? Date() },
-              set: { dateRangeUpperBound = $0 }
-            ),
-            displayedComponents: .date
-          )
-          .disabled(dateRangeUpperBound == nil)
-
           Toggle(
             "Filter by date",
             isOn: Binding(
@@ -88,6 +68,26 @@ struct TransactionFilterView: View {
                 }
               }
             ))
+
+          if dateRangeLowerBound != nil && dateRangeUpperBound != nil {
+            DatePicker(
+              "Start Date",
+              selection: Binding(
+                get: { dateRangeLowerBound ?? Date() },
+                set: { dateRangeLowerBound = $0 }
+              ),
+              displayedComponents: .date
+            )
+
+            DatePicker(
+              "End Date",
+              selection: Binding(
+                get: { dateRangeUpperBound ?? Date() },
+                set: { dateRangeUpperBound = $0 }
+              ),
+              displayedComponents: .date
+            )
+          }
         }
 
         Section("Account") {

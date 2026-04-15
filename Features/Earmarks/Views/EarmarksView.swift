@@ -175,7 +175,7 @@ struct EarmarksView: View {
     #else
       .listStyle(.plain)
     #endif
-    .navigationTitle("Earmarks")
+    .profileNavigationTitle("Earmarks")
     .toolbar {
       ToolbarItem(placement: .primaryAction) {
         Button {

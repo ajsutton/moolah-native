@@ -15,7 +15,7 @@ struct InvestmentValueRow: View {
       InstrumentAmountView(amount: value.value)
         .font(.headline)
     }
-    .accessibilityElement(children: .combine)
+    .accessibilityElement(children: .combine)  // Date + amount combine naturally: "15 Apr 2026, $5,000.00"
     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
       Button(role: .destructive) {
         onDelete()

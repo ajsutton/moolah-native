@@ -98,37 +98,35 @@ struct AutocompleteSuggestionDropdown<Item: Identifiable>: View {
     }
     .overlay(
       RoundedRectangle(cornerRadius: 8)
-        #if os(macOS)
-          .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
-        #else
-          .stroke(Color(uiColor: .separator), lineWidth: 0.5)
-        #endif
+        .stroke(.separator, lineWidth: 0.5)
     )
     .compositingGroup()
     .accessibilityLabel("\(min(items.count, 8)) suggestions")
   }
 
   private func suggestionRow(item: Item, index: Int) -> some View {
-    HStack(spacing: 8) {
-      if let icon {
-        icon
-          .font(.caption)
-          .foregroundStyle(.tertiary)
+    Button {
+      onSelect(item)
+    } label: {
+      HStack(spacing: 8) {
+        if let icon {
+          icon
+            .font(.caption)
+            .foregroundStyle(.tertiary)
+        }
+        highlightedText(label(item), matching: searchText)
+        Spacer()
       }
-      highlightedText(label(item), matching: searchText)
-      Spacer()
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+      .contentShape(Rectangle())
     }
-    .padding(.horizontal, 12)
-    .padding(.vertical, 8)
+    .buttonStyle(.plain)
     .background(
       highlightedIndex == index
         ? Color.accentColor.opacity(0.12)
         : Color.clear
     )
-    .contentShape(Rectangle())
-    .onTapGesture {
-      onSelect(item)
-    }
     #if os(macOS)
       .onHover { hovering in
         if hovering {
@@ -137,7 +135,6 @@ struct AutocompleteSuggestionDropdown<Item: Identifiable>: View {
       }
     #endif
     .accessibilityLabel("Suggestion: \(label(item))")
-    .accessibilityAddTraits(.isButton)
   }
 
   private func highlightedText(_ text: String, matching search: String) -> Text {

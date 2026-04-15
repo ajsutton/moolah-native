@@ -106,7 +106,7 @@ struct InvestmentAccountView: View {
     }
     .toolbar {
       if account.usesPositionTracking {
-        ToolbarItem {
+        ToolbarItem(placement: .primaryAction) {
           Button {
             showingRecordTrade = true
           } label: {

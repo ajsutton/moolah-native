@@ -24,11 +24,7 @@ struct ExpenseBreakdownCard: View {
       }
     }
     .padding()
-    #if os(macOS)
-      .background(Color(nsColor: .controlBackgroundColor))
-    #else
-      .background(Color(uiColor: .systemBackground))
-    #endif
+    .background(.background)
     .cornerRadius(12)
   }
 
@@ -53,6 +49,7 @@ struct ExpenseBreakdownCard: View {
             .font(.caption)
             .fontWeight(.semibold)
             .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 1)
         }
       }
     }

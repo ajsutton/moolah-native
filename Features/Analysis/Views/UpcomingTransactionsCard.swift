@@ -20,11 +20,7 @@ struct UpcomingTransactionsCard: View {
       }
     }
     .padding()
-    #if os(macOS)
-      .background(Color(nsColor: .controlBackgroundColor))
-    #else
-      .background(Color(uiColor: .systemBackground))
-    #endif
+    .background(.background)
     .cornerRadius(12)
     #if os(macOS)
       .frame(maxHeight: .infinity, alignment: .top)
@@ -164,7 +160,11 @@ private struct SimpleTransactionRow: View {
           Text("Pay")
         }
       }
-      .buttonStyle(.borderedProminent)
+      #if os(macOS)
+        .buttonStyle(.bordered)
+      #else
+        .buttonStyle(.borderedProminent)
+      #endif
       .controlSize(.small)
       .disabled(isPaying)
       .accessibilityLabel("Pay \(displayPayee)")

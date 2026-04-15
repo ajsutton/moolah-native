@@ -13,8 +13,8 @@ struct SidebarRowView: View {
   @Environment(\.backgroundProminence) private var backgroundProminence
 
   /// Bright green/red that contrast well against the blue selection highlight.
-  private static let selectedPositiveColor = Color(red: 0.55, green: 1.0, blue: 0.65)
-  private static let selectedNegativeColor = Color(red: 1.0, green: 0.6, blue: 0.6)
+  private static let selectedPositiveColor = Color.mint
+  private static let selectedNegativeColor = Color.pink
 
   private var amountColorOverride: Color? {
     // Only use bright overrides when the row has a prominent (blue) selection
@@ -31,6 +31,7 @@ struct SidebarRowView: View {
       Image(systemName: icon)
         .foregroundStyle(.secondary)
         .frame(width: UIConstants.IconSize.listIcon, height: UIConstants.IconSize.listIcon)
+        .accessibilityHidden(true)
 
       Text(name)
 

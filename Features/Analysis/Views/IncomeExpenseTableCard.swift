@@ -29,11 +29,7 @@ struct IncomeExpenseTableCard: View {
       }
     }
     .padding()
-    #if os(macOS)
-      .background(Color(nsColor: .controlBackgroundColor))
-    #else
-      .background(Color(uiColor: .systemBackground))
-    #endif
+    .background(.background)
     .cornerRadius(12)
     .onChange(of: data.count) { _, _ in
       visibleCount = Self.initialVisibleCount
@@ -57,7 +53,7 @@ struct IncomeExpenseTableCard: View {
         // Header row
         HStack(spacing: 12) {
           Text("Month")
-            .frame(width: 120, alignment: .leading)
+            .frame(minWidth: 120, alignment: .leading)
           Text("Income")
             .frame(minWidth: 100, alignment: .trailing)
           Text("Expense")
@@ -86,28 +82,18 @@ struct IncomeExpenseTableCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
-                .frame(width: 120, alignment: .leading)
+                .frame(minWidth: 120, alignment: .leading)
 
-                Text(income(for: item).formatted)
-                  .monospacedDigit()
-                  .foregroundStyle(.green)
+                InstrumentAmountView(amount: income(for: item))
                   .frame(minWidth: 100, alignment: .trailing)
 
-                Text(expense(for: item).formatted)
-                  .monospacedDigit()
-                  .foregroundStyle(.red)
+                InstrumentAmountView(amount: expense(for: item))
                   .frame(minWidth: 100, alignment: .trailing)
 
-                let savings = profit(for: item)
-                Text(savings.formatted)
-                  .monospacedDigit()
-                  .foregroundStyle(!savings.isNegative ? .green : .red)
+                InstrumentAmountView(amount: profit(for: item))
                   .frame(minWidth: 100, alignment: .trailing)
 
-                let totalSavings = cumulativeSavings(upTo: item)
-                Text(totalSavings.formatted)
-                  .monospacedDigit()
-                  .foregroundStyle(!totalSavings.isNegative ? .green : .red)
+                InstrumentAmountView(amount: cumulativeSavings(upTo: item))
                   .frame(minWidth: 110, alignment: .trailing)
               }
               .padding(.horizontal, 12)

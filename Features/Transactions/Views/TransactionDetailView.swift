@@ -313,18 +313,10 @@ struct TransactionDetailView: View {
           .frame(minHeight: 60, maxHeight: 120)
           .scrollContentBackground(.hidden)
           .padding()
-          #if os(macOS)
-            .background(Color(nsColor: .textBackgroundColor))
-          #else
-            .background(Color(uiColor: .systemBackground))
-          #endif
+          .background(.background)
           .overlay(
             RoundedRectangle(cornerRadius: 4)
-              #if os(macOS)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-              #else
-                .stroke(Color(uiColor: .separator), lineWidth: 1)
-              #endif
+              .stroke(.separator, lineWidth: 1)
           )
       }
     }
@@ -333,7 +325,7 @@ struct TransactionDetailView: View {
   @State private var isPaying = false
 
   private var isScheduled: Bool {
-    showRecurrence && (transaction.recurPeriod != nil || transaction.recurPeriod == .once)
+    showRecurrence && transaction.recurPeriod != nil
   }
 
   private var paySection: some View {

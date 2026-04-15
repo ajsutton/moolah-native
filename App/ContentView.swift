@@ -17,6 +17,7 @@ struct ContentView: View {
   var body: some View {
     NavigationSplitView {
       SidebarView(selection: $selection)
+        .navigationSplitViewColumnWidth(min: 200, ideal: 280)
         .task {
           async let a: Void = accountStore.load()
           async let c: Void = categoryStore.load()
@@ -93,9 +94,12 @@ struct ContentView: View {
       case .analysis:
         AnalysisView(store: analysisStore)
       case nil:
-        Text("Select an account")
+        ContentUnavailableView(
+          "Select an Account", systemImage: "sidebar.left",
+          description: Text("Choose an account from the sidebar to view transactions."))
       }
     }
+    .navigationSplitViewStyle(.balanced)
     .focusedSceneValue(\.newEarmarkAction) {
       showCreateEarmarkSheet = true
     }

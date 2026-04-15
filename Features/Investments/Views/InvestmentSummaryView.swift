@@ -35,11 +35,7 @@ struct InvestmentSummaryView: View {
       )
     }
     .padding()
-    #if os(macOS)
-      .background(Color(nsColor: .controlBackgroundColor))
-    #else
-      .background(Color(uiColor: .systemBackground))
-    #endif
+    .background(.background)
     .cornerRadius(12)
   }
 
