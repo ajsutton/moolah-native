@@ -18,6 +18,22 @@ struct TransactionDraft: Sendable, Equatable {
   var isRepeating: Bool
   var recurPeriod: RecurPeriod?
   var recurEvery: Int
+  var isCustom: Bool
+  var legDrafts: [LegDraft]
+
+  // MARK: - LegDraft
+
+  /// A draft for a single leg in a custom (multi-leg) transaction.
+  struct LegDraft: Sendable, Equatable {
+    var type: TransactionType
+    var accountId: UUID?
+    var amountText: String
+    /// For transfer legs: true = money leaving (negative), false = money arriving (positive).
+    var isOutflow: Bool
+    var categoryId: UUID?
+    var categoryText: String
+    var earmarkId: UUID?
+  }
 
   // MARK: - Parsing & Validation
 
@@ -41,6 +57,16 @@ struct TransactionDraft: Sendable, Equatable {
 
   /// Whether the draft represents a valid, saveable transaction.
   var isValid: Bool {
+    if isCustom {
+      guard !legDrafts.isEmpty else { return false }
+      return legDrafts.allSatisfy { leg in
+        guard leg.accountId != nil else { return false }
+        guard let qty = InstrumentAmount.parseQuantity(from: leg.amountText, decimals: 2),
+          qty > 0
+        else { return false }
+        return true
+      }
+    }
     guard parsedQuantity != nil else { return false }
     if type == .transfer {
       guard toAccountId != nil, toAccountId != accountId else { return false }
@@ -103,6 +129,155 @@ struct TransactionDraft: Sendable, Equatable {
       recurPeriod: isRepeating ? recurPeriod : nil,
       recurEvery: isRepeating ? recurEvery : nil, legs: legs)
   }
+
+  /// Build a `Transaction` from the draft in custom mode, looking up instruments
+  /// from the provided `accounts` collection.
+  ///
+  /// Returns `nil` when the draft is not valid or `isCustom` is false.
+  func toTransaction(id: UUID, accounts: Accounts) -> Transaction? {
+    if !isCustom {
+      guard let acctId = accountId,
+        let account = accounts.by(id: acctId)
+      else { return nil }
+      let toInstrument = toAccountId.flatMap { accounts.by(id: $0)?.balance.instrument }
+      return toTransaction(
+        id: id, fromInstrument: account.balance.instrument, toInstrument: toInstrument)
+    }
+
+    guard isValid else { return nil }
+
+    var legs: [TransactionLeg] = []
+    for leg in legDrafts {
+      guard let acctId = leg.accountId,
+        let account = accounts.by(id: acctId),
+        let qty = InstrumentAmount.parseQuantity(from: leg.amountText, decimals: 2),
+        qty > 0
+      else { return nil }
+
+      let instrument = account.balance.instrument
+      let signedQty: Decimal
+      switch leg.type {
+      case .income, .openingBalance:
+        signedQty = abs(qty)
+      case .expense:
+        signedQty = -abs(qty)
+      case .transfer:
+        signedQty = leg.isOutflow ? -abs(qty) : abs(qty)
+      }
+
+      legs.append(
+        TransactionLeg(
+          accountId: acctId,
+          instrument: instrument,
+          quantity: signedQty,
+          type: leg.type,
+          categoryId: leg.categoryId,
+          earmarkId: leg.earmarkId
+        ))
+    }
+
+    return Transaction(
+      id: id,
+      date: date,
+      payee: payee.isEmpty ? nil : payee,
+      notes: notes.isEmpty ? nil : notes,
+      recurPeriod: isRepeating ? recurPeriod : nil,
+      recurEvery: isRepeating ? recurEvery : nil,
+      legs: legs
+    )
+  }
+
+  // MARK: - Autofill
+
+  /// Apply autofill from a matching transaction, preserving any values already entered by the user.
+  ///
+  /// - Parameters:
+  ///   - match: The transaction to autofill from.
+  ///   - categories: Category lookup for populating `categoryText`.
+  ///   - supportsComplexTransactions: Whether the current context supports multi-leg editing.
+  mutating func applyAutofill(
+    from match: Transaction,
+    categories: Categories,
+    supportsComplexTransactions: Bool
+  ) {
+    // Always preserve date — never set it from the match.
+
+    // Copy payee if not already set
+    if payee.isEmpty {
+      payee = match.payee ?? ""
+    }
+
+    // Copy notes if not already set
+    if notes.isEmpty {
+      notes = match.notes ?? ""
+    }
+
+    if match.isSimple {
+      let primaryLeg: TransactionLeg?
+      if match.isTransfer {
+        primaryLeg = match.legs.first { $0.quantity < 0 }
+      } else {
+        primaryLeg = match.legs.first
+      }
+
+      // Type: only override if still at the default (.expense)
+      if type == .expense, let legType = primaryLeg?.type {
+        type = legType == .transfer ? .transfer : legType
+      }
+
+      // Amount: only fill if empty/zero
+      if parsedQuantity == nil, let leg = primaryLeg {
+        amountText = abs(leg.quantity).formatted(
+          .number.precision(.fractionLength(leg.instrument.decimals)))
+      }
+
+      // Account: always set from match (autofill populates the account)
+      if accountId == nil {
+        accountId = primaryLeg?.accountId
+      }
+
+      // Category: only fill if not yet set
+      if categoryId == nil {
+        let matchCategory = match.legs.first(where: { $0.categoryId != nil })?.categoryId
+        categoryId = matchCategory
+        if let catId = matchCategory, let category = categories.by(id: catId) {
+          categoryText = categories.path(for: category)
+        }
+      }
+
+      // Earmark: only fill if not yet set
+      if earmarkId == nil {
+        earmarkId = match.legs.first(where: { $0.earmarkId != nil })?.earmarkId
+      }
+
+      // Transfer target: only fill if not yet set
+      if type == .transfer, toAccountId == nil {
+        let transferLeg = match.legs.first { $0.accountId != primaryLeg?.accountId }
+        toAccountId = transferLeg?.accountId
+      }
+    } else {
+      // Complex (non-simple) transaction
+      if supportsComplexTransactions {
+        // Only apply complex autofill if user hasn't made edits (legDrafts is empty)
+        if legDrafts.isEmpty {
+          isCustom = true
+          legDrafts = match.legs.map { leg in
+            LegDraft(
+              type: leg.type,
+              accountId: leg.accountId,
+              amountText: abs(leg.quantity).formatted(
+                .number.precision(.fractionLength(leg.instrument.decimals))),
+              isOutflow: leg.quantity < 0,
+              categoryId: leg.categoryId,
+              categoryText: "",
+              earmarkId: leg.earmarkId
+            )
+          }
+        }
+      }
+      // For complex match without support: payee and notes already handled above
+    }
+  }
 }
 
 // MARK: - Convenience Initialisers
@@ -135,6 +310,25 @@ extension TransactionDraft {
       toAmountText = ""
     }
 
+    let isCustom = !transaction.isSimple
+    let legDrafts: [LegDraft]
+    if isCustom {
+      legDrafts = transaction.legs.map { leg in
+        LegDraft(
+          type: leg.type,
+          accountId: leg.accountId,
+          amountText: abs(leg.quantity).formatted(
+            .number.precision(.fractionLength(leg.instrument.decimals))),
+          isOutflow: leg.quantity < 0,
+          categoryId: leg.categoryId,
+          categoryText: "",
+          earmarkId: leg.earmarkId
+        )
+      }
+    } else {
+      legDrafts = []
+    }
+
     self.init(
       type: primaryLeg?.type == .transfer ? .transfer : (primaryLeg?.type ?? .expense),
       payee: transaction.payee ?? "",
@@ -151,7 +345,9 @@ extension TransactionDraft {
       toAmountText: toAmountText,
       isRepeating: transaction.recurPeriod != nil && transaction.recurPeriod != .once,
       recurPeriod: transaction.recurPeriod,
-      recurEvery: transaction.recurEvery ?? 1
+      recurEvery: transaction.recurEvery ?? 1,
+      isCustom: isCustom,
+      legDrafts: legDrafts
     )
   }
 
@@ -171,7 +367,9 @@ extension TransactionDraft {
       toAmountText: "",
       isRepeating: false,
       recurPeriod: nil,
-      recurEvery: 1
+      recurEvery: 1,
+      isCustom: false,
+      legDrafts: []
     )
   }
 }
