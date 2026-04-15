@@ -15,7 +15,7 @@ struct TransactionRowView: View {
   #endif
 
   var body: some View {
-    HStack {
+    HStack(alignment: .firstTextBaseline) {
       Image(systemName: iconName)
         .foregroundStyle(iconColor)
         .frame(width: UIConstants.IconSize.listIcon, height: UIConstants.IconSize.listIcon)

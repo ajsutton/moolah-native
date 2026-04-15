@@ -288,7 +288,7 @@ struct LegendItem: View {
         .foregroundStyle(.primary)
     }
     .accessibilityElement(children: .combine)
-    .accessibilityLabel("\(label) series")
+    .accessibilityLabel(label)
   }
 }
 

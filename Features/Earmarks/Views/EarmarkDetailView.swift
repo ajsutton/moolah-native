@@ -130,6 +130,7 @@ struct EarmarkDetailView: View {
         .font(.headline)
     }
     .frame(maxWidth: .infinity)
+    .accessibilityElement(children: .combine)
   }
 
   @ViewBuilder
