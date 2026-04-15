@@ -23,6 +23,12 @@ final class InvestmentStore {
 
   var selectedPeriod: TimePeriod = .all
 
+  /// Callback fired after an investment value is set or removed, so other stores
+  /// can update the account's displayed investment value.
+  /// Parameters: (accountId, latest value or nil if all values removed).
+  var onInvestmentValueChanged:
+    (@MainActor (_ accountId: UUID, _ latestValue: InstrumentAmount?) -> Void)?
+
   private let repository: InvestmentRepository
   private let transactionRepository: TransactionRepository?
   private let conversionService: (any InstrumentConversionService)?
@@ -85,6 +91,8 @@ final class InvestmentStore {
       values.removeAll { $0.date == date }
       values.append(newValue)
       values.sort()
+      // The latest value is the first one (values sorted descending by date)
+      onInvestmentValueChanged?(accountId, values.first?.value)
     } catch {
       logger.error("Failed to set investment value: \(error.localizedDescription)")
       self.error = error
@@ -96,6 +104,7 @@ final class InvestmentStore {
     do {
       try await repository.removeValue(accountId: accountId, date: date)
       values.removeAll { $0.date == date }
+      onInvestmentValueChanged?(accountId, values.first?.value)
     } catch {
       logger.error("Failed to remove investment value: \(error.localizedDescription)")
       self.error = error

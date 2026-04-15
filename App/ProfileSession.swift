@@ -123,6 +123,9 @@ final class ProfileSession: Identifiable {
       accountStore.applyTransactionDelta(old: old, new: new)
       earmarkStore.applyTransactionDelta(old: old, new: new)
     }
+    self.investmentStore.onInvestmentValueChanged = { accountId, latestValue in
+      accountStore.updateInvestmentValue(accountId: accountId, value: latestValue)
+    }
 
     // Register with SyncCoordinator for iCloud profiles
     if profile.backendType == .cloudKit, let syncCoordinator {

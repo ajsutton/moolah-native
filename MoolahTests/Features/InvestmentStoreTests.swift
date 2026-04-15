@@ -133,6 +133,126 @@ struct InvestmentStoreTests {
     #expect(store.error != nil)
   }
 
+  // MARK: - onInvestmentValueChanged callback
+
+  @Test("Set value fires onInvestmentValueChanged with latest value")
+  func testSetValueFiresCallback() async throws {
+    let accountId = UUID()
+    let (backend, _) = try TestBackend.create()
+    let store = InvestmentStore(repository: backend.investments)
+
+    var receivedAccountId: UUID?
+    var receivedValue: InstrumentAmount?
+    store.onInvestmentValueChanged = { acctId, value in
+      receivedAccountId = acctId
+      receivedValue = value
+    }
+
+    let date = makeDate(year: 2024, month: 3, day: 15)
+    let amount = InstrumentAmount(
+      quantity: Decimal(string: "125000.00")!, instrument: .defaultTestInstrument)
+
+    await store.setValue(accountId: accountId, date: date, value: amount)
+
+    #expect(receivedAccountId == accountId)
+    #expect(receivedValue == amount)
+  }
+
+  @Test("Set value fires callback with latest value when multiple values exist")
+  func testSetValueFiresCallbackWithLatest() async throws {
+    let accountId = UUID()
+    let earlierDate = makeDate(year: 2024, month: 1, day: 1)
+    let laterDate = makeDate(year: 2024, month: 6, day: 1)
+    let initialValues: [UUID: [InvestmentValue]] = [
+      accountId: [
+        InvestmentValue(
+          date: laterDate,
+          value: InstrumentAmount(
+            quantity: Decimal(string: "2000.00")!, instrument: .defaultTestInstrument))
+      ]
+    ]
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(investmentValues: initialValues, in: container)
+    let store = InvestmentStore(repository: backend.investments)
+    await store.loadValues(accountId: accountId)
+
+    var receivedValue: InstrumentAmount?
+    store.onInvestmentValueChanged = { _, value in
+      receivedValue = value
+    }
+
+    // Add an earlier value — the latest should still be the June value
+    let earlierAmount = InstrumentAmount(
+      quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)
+    await store.setValue(accountId: accountId, date: earlierDate, value: earlierAmount)
+
+    let expectedLatest = InstrumentAmount(
+      quantity: Decimal(string: "2000.00")!, instrument: .defaultTestInstrument)
+    #expect(receivedValue == expectedLatest)
+  }
+
+  @Test("Remove value fires onInvestmentValueChanged")
+  func testRemoveValueFiresCallback() async throws {
+    let accountId = UUID()
+    let date1 = makeDate(year: 2024, month: 1, day: 1)
+    let date2 = makeDate(year: 2024, month: 6, day: 1)
+    let initialValues: [UUID: [InvestmentValue]] = [
+      accountId: [
+        InvestmentValue(
+          date: date1,
+          value: InstrumentAmount(
+            quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)),
+        InvestmentValue(
+          date: date2,
+          value: InstrumentAmount(
+            quantity: Decimal(string: "2000.00")!, instrument: .defaultTestInstrument)),
+      ]
+    ]
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(investmentValues: initialValues, in: container)
+    let store = InvestmentStore(repository: backend.investments)
+    await store.loadValues(accountId: accountId)
+
+    var receivedValue: InstrumentAmount?? = .none
+    store.onInvestmentValueChanged = { _, value in
+      receivedValue = value
+    }
+
+    // Remove the latest value — callback should fire with the remaining value
+    await store.removeValue(accountId: accountId, date: date2)
+
+    let expectedLatest = InstrumentAmount(
+      quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)
+    #expect(receivedValue == .some(expectedLatest))
+  }
+
+  @Test("Remove last value fires callback with nil")
+  func testRemoveLastValueFiresCallbackWithNil() async throws {
+    let accountId = UUID()
+    let date = makeDate(year: 2024, month: 3, day: 15)
+    let initialValues: [UUID: [InvestmentValue]] = [
+      accountId: [
+        InvestmentValue(
+          date: date,
+          value: InstrumentAmount(
+            quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument))
+      ]
+    ]
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(investmentValues: initialValues, in: container)
+    let store = InvestmentStore(repository: backend.investments)
+    await store.loadValues(accountId: accountId)
+
+    var receivedValue: InstrumentAmount?? = .none
+    store.onInvestmentValueChanged = { _, value in
+      receivedValue = value
+    }
+
+    await store.removeValue(accountId: accountId, date: date)
+
+    #expect(receivedValue == .some(nil))
+  }
+
   // MARK: - Daily Balances
 
   @Test("Load daily balances populates dailyBalances array")

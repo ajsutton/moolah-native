@@ -276,6 +276,8 @@ struct SettingsView: View {
             showAddProfile = true
           } label: {
             Image(systemName: "plus")
+              .frame(minWidth: 24, minHeight: 24)
+              .contentShape(Rectangle())
           }
           .buttonStyle(.borderless)
           .accessibilityLabel("Add profile")
@@ -290,6 +292,8 @@ struct SettingsView: View {
             }
           } label: {
             Image(systemName: "minus")
+              .frame(minWidth: 24, minHeight: 24)
+              .contentShape(Rectangle())
           }
           .buttonStyle(.borderless)
           .disabled(selectedProfileID == nil)

@@ -148,6 +148,19 @@ final class AccountStore {
     return total
   }
 
+  /// Updates the investment value for a specific account locally.
+  /// Called when InvestmentStore sets or removes a value.
+  func updateInvestmentValue(accountId: UUID, value: InstrumentAmount?) {
+    guard accounts.by(id: accountId) != nil else { return }
+    let updated = accounts.ordered.map { account in
+      guard account.id == accountId else { return account }
+      var copy = account
+      copy.investmentValue = value
+      return copy
+    }
+    accounts = Accounts(from: updated)
+  }
+
   /// Adjusts account balances locally based on a transaction change.
   /// - Parameters:
   ///   - old: The previous transaction (nil for creates).

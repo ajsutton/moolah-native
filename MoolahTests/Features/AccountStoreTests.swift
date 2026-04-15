@@ -210,6 +210,82 @@ struct AccountStoreTests {
           quantity: Decimal(80000) / 100, instrument: Instrument.defaultTestInstrument))
   }
 
+  // MARK: - updateInvestmentValue
+
+  @Test func testUpdateInvestmentValueSetsValue() async throws {
+    let acctId = UUID()
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          name: "Invest", type: .investment,
+          balance: InstrumentAmount(
+            quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
+      ], in: container)
+    let store = AccountStore(repository: backend.accounts)
+    await store.load()
+
+    let newValue = InstrumentAmount(
+      quantity: Decimal(150000) / 100, instrument: Instrument.defaultTestInstrument)
+    store.updateInvestmentValue(accountId: acctId, value: newValue)
+
+    // Uses seed account ID, but accounts from seed get new IDs. Use first account.
+    let account = store.accounts.first
+    #expect(account != nil)
+    // Since seed creates new UUIDs, update using the actual ID
+    let actualId = account!.id
+    store.updateInvestmentValue(accountId: actualId, value: newValue)
+    #expect(store.accounts.by(id: actualId)?.investmentValue == newValue)
+    #expect(store.accounts.by(id: actualId)?.displayBalance == newValue)
+  }
+
+  @Test func testUpdateInvestmentValueClearsValue() async throws {
+    let (backend, container) = try TestBackend.create()
+    let investmentValue = InstrumentAmount(
+      quantity: Decimal(200000) / 100, instrument: Instrument.defaultTestInstrument)
+    TestBackend.seed(
+      accounts: [
+        Account(
+          name: "Invest", type: .investment,
+          balance: InstrumentAmount(
+            quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument),
+          investmentValue: investmentValue)
+      ], in: container)
+    let store = AccountStore(repository: backend.accounts)
+    await store.load()
+
+    let account = store.accounts.first!
+    store.updateInvestmentValue(accountId: account.id, value: nil)
+
+    #expect(store.accounts.by(id: account.id)?.investmentValue == nil)
+    // displayBalance falls back to balance when investmentValue is nil
+    #expect(
+      store.accounts.by(id: account.id)?.displayBalance
+        == InstrumentAmount(
+          quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
+  }
+
+  @Test func testUpdateInvestmentValueIgnoresUnknownAccount() async throws {
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          name: "Invest", type: .investment,
+          balance: InstrumentAmount(
+            quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
+      ], in: container)
+    let store = AccountStore(repository: backend.accounts)
+    await store.load()
+
+    let newValue = InstrumentAmount(
+      quantity: Decimal(150000) / 100, instrument: Instrument.defaultTestInstrument)
+    store.updateInvestmentValue(accountId: UUID(), value: newValue)
+
+    // Should not affect existing accounts
+    #expect(store.accounts.count == 1)
+    #expect(store.accounts.first?.investmentValue == nil)
+  }
+
   // MARK: - applyTransactionDelta
 
   @Test func testCreateExpenseReducesAccountBalance() async throws {

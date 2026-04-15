@@ -1,12 +1,5 @@
 # Known Bugs
 
-## Profile remove button click target too small
-
-**Severity:** Low (UX)
-**Files:** Profile list / settings view
-
-The minus (-) button to remove profiles has a very small click target. It may not be using the full row height for its tap area.
-
 ## Windows flash "profile removed" on app launch
 
 When the app first loads, all existing windows briefly show a "profile removed" message before updating to show the actual profile data. This happens because the profile list hasn't loaded yet when the windows render, so they can't find their profile and assume it was removed. Don't show the window content until profiles are loaded. Once profiles are loaded, if a window's profile is genuinely gone, close the window rather than showing a "removed" message.
@@ -21,9 +14,3 @@ When the app first loads, all existing windows briefly show a "profile removed" 
 - `type` → `legs.first?.type`
 
 These assume the first leg is "special", which breaks for multi-leg transactions where different legs could have different earmarks, categories, or types. Need to audit all call sites for hidden single-leg assumptions and decide on proper multi-leg semantics (e.g. should `earmarkId` return the earmark from any leg that has one?).
-
-## Investment account balances don't update when a new investment value is added
-
-**Severity:** Medium (Data)
-
-When a new investment value is added for an investment account, the account balance displayed in the UI does not update to reflect the new value. The balance remains stale until some other action triggers a refresh.

@@ -50,4 +50,11 @@ struct ProfileSessionTests {
     // The onMutate callback should be set
     #expect(session.transactionStore.onMutate != nil)
   }
+
+  @Test("onInvestmentValueChanged wiring connects investment store to account store")
+  func onInvestmentValueChangedWiring() {
+    let session = ProfileSession(profile: makeProfile())
+
+    #expect(session.investmentStore.onInvestmentValueChanged != nil)
+  }
 }
