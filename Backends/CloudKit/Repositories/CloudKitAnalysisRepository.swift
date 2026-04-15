@@ -374,19 +374,14 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
           break
 
         case .expense:
-          // Negate quantity: normal expenses are negative (negate → positive),
-          // refunds are positive (negate → negative, reducing the total).
-          // Using abs() was wrong because it made refunds ADD to expenses.
-          let expenseAmount = InstrumentAmount(
-            quantity: -leg.quantity,
-            instrument: leg.instrument
-          )
           // Server: SUM(IF(type='expense' AND account_id IS NOT NULL, amount, 0))
+          // Expenses are negative, refunds are positive — pass through as-is
+          // to match the server convention.
           if leg.accountId != nil {
-            monthlyData[month]!.expense += expenseAmount
+            monthlyData[month]!.expense += leg.amount
           }
           if isEarmarked {
-            monthlyData[month]!.earmarkedExpense += expenseAmount
+            monthlyData[month]!.earmarkedExpense += leg.amount
           }
 
         case .transfer:
@@ -400,6 +395,23 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
             }
           }
         }
+
+        // Server: profit = SUM(IF(account_id IS NOT NULL AND type IN ('income','expense'), amount, 0))
+        // Server: earmarkedProfit = SUM(earmarked income/expense amounts) + SUM(transfer adjustments)
+        // Accumulate profit directly rather than deriving from income/expense,
+        // because transfer contributions to earmarkedExpense use a different sign convention.
+        if leg.type == .income || leg.type == .expense {
+          if leg.accountId != nil {
+            monthlyData[month]!.profit += leg.amount
+          }
+          if isEarmarked {
+            monthlyData[month]!.earmarkedProfit += leg.amount
+          }
+        } else if leg.type == .transfer, isInvestmentAccount {
+          // Investment transfer profit = raw contribution amount.
+          // Deposits (positive) add to earmarked profit; withdrawals (negative) subtract.
+          monthlyData[month]!.earmarkedProfit += leg.amount
+        }
       }
     }
 
@@ -411,10 +423,10 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         end: data.end,
         income: data.income,
         expense: data.expense,
-        profit: data.income - data.expense,
+        profit: data.profit,
         earmarkedIncome: data.earmarkedIncome,
         earmarkedExpense: data.earmarkedExpense,
-        earmarkedProfit: data.earmarkedIncome - data.earmarkedExpense
+        earmarkedProfit: data.earmarkedProfit
       )
     }.sorted { $0.month > $1.month }
   }
@@ -685,15 +697,11 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
           break
 
         case .expense:
-          let expenseAmount = InstrumentAmount(
-            quantity: -leg.quantity,
-            instrument: leg.instrument
-          )
           if leg.accountId != nil {
-            monthlyData[month]!.expense += expenseAmount
+            monthlyData[month]!.expense += leg.amount
           }
           if isEarmarked {
-            monthlyData[month]!.earmarkedExpense += expenseAmount
+            monthlyData[month]!.earmarkedExpense += leg.amount
           }
 
         case .transfer:
@@ -707,6 +715,17 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
             }
           }
         }
+
+        if leg.type == .income || leg.type == .expense {
+          if leg.accountId != nil {
+            monthlyData[month]!.profit += leg.amount
+          }
+          if isEarmarked {
+            monthlyData[month]!.earmarkedProfit += leg.amount
+          }
+        } else if leg.type == .transfer, isInvestmentAccount {
+          monthlyData[month]!.earmarkedProfit += leg.amount
+        }
       }
     }
 
@@ -717,10 +736,10 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         end: data.end,
         income: data.income,
         expense: data.expense,
-        profit: data.income - data.expense,
+        profit: data.profit,
         earmarkedIncome: data.earmarkedIncome,
         earmarkedExpense: data.earmarkedExpense,
-        earmarkedProfit: data.earmarkedIncome - data.earmarkedExpense
+        earmarkedProfit: data.earmarkedProfit
       )
     }.sorted { $0.month > $1.month }
   }
@@ -1081,8 +1100,10 @@ private struct CloudKitMonthData {
   let instrument: Instrument
   var income: InstrumentAmount
   var expense: InstrumentAmount
+  var profit: InstrumentAmount
   var earmarkedIncome: InstrumentAmount
   var earmarkedExpense: InstrumentAmount
+  var earmarkedProfit: InstrumentAmount
 
   init(start: Date, end: Date, instrument: Instrument) {
     self.start = start
@@ -1090,7 +1111,9 @@ private struct CloudKitMonthData {
     self.instrument = instrument
     self.income = .zero(instrument: instrument)
     self.expense = .zero(instrument: instrument)
+    self.profit = .zero(instrument: instrument)
     self.earmarkedIncome = .zero(instrument: instrument)
     self.earmarkedExpense = .zero(instrument: instrument)
+    self.earmarkedProfit = .zero(instrument: instrument)
   }
 }
