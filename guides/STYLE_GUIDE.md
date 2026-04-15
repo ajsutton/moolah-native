@@ -606,14 +606,15 @@ HStack {
 ```
 
 ### Keyboard Navigation (macOS)
-- **Tab order:** Ensure logical tab order through forms
-- **Keyboard shortcuts:**
-  - `Cmd+N`: New transaction
-  - `Cmd+F`: Focus search field
-  - `Cmd+R`: Refresh current view
-  - `Delete`: Delete selected item (with confirmation)
-  - `Cmd+,`: Open settings (if applicable)
-- Use `.keyboardShortcut()` modifier
+
+See **Section 13: Focus, Tab Order & Selection** for full implementation patterns covering focus management, tab order, list selection, and menu command wiring.
+
+**App-level keyboard shortcuts:**
+- `Cmd+N`: New transaction
+- `Cmd+F`: Focus search field
+- `Cmd+R`: Refresh current view
+- `Delete`: Delete selected item (with confirmation)
+- `Cmd+,`: Open settings (if applicable)
 
 ```swift
 Button("New Transaction") { ... }
@@ -703,5 +704,180 @@ var animation: Animation? {
 
 ---
 
+## 13. Focus, Tab Order & Selection
+
+macOS users expect full keyboard-driven workflows. Focus management, tab order, and selection behavior are first-class interaction concerns — not accessibility afterthoughts. This section covers the patterns and rules for making Moolah feel like a native Mac app under the keyboard.
+
+### Form Focus Management
+
+Use a single **optional enum** `@FocusState` per form, with one case per focusable field:
+
+```swift
+enum TransactionField: Hashable {
+    case payee
+    case amount
+    case date
+    case notes
+}
+
+@FocusState private var focusedField: TransactionField?
+
+// Bind each field
+TextField("Payee", text: $payee)
+    .focused($focusedField, equals: .payee)
+
+AmountTextField(cents: $cents)
+    .focused($focusedField, equals: .amount)
+
+DatePicker("Date", selection: $date)
+    .focused($focusedField, equals: .date)
+
+TextField("Notes", text: $notes, axis: .vertical)
+    .focused($focusedField, equals: .notes)
+```
+
+**Rules:**
+- One enum per form, one case per focusable field. Never use multiple boolean `@FocusState` properties — they don't compose.
+- Set initial focus with `defaultFocus` on the form container (macOS):
+  ```swift
+  Form { ... }
+      .defaultFocus($focusedField, .payee)
+  ```
+- Advance focus on submit — when Return is pressed in a text field, move to the next logical field:
+  ```swift
+  TextField("Payee", text: $payee)
+      .focused($focusedField, equals: .payee)
+      .onSubmit { focusedField = .amount }
+  ```
+- Dismiss focus explicitly when the form is complete: `focusedField = nil`
+- **Don't** apply `.focusable()` to standard controls (`TextField`, `Picker`, `Toggle`, `DatePicker`) — they're already focusable. Adding it produces double focus rings and requires two Tab presses to advance.
+
+### List & Table Selection
+
+Use `List(_:selection:rowContent:)` to get native keyboard selection for free:
+
+```swift
+// Single selection
+@State private var selectedTransaction: Transaction.ID?
+
+List(transactions, selection: $selectedTransaction) { transaction in
+    TransactionRow(transaction: transaction)
+        .contentShape(.rect)  // Entire row is clickable
+}
+.contextMenu(forSelectionType: Transaction.ID.self) { selection in
+    Button("Edit", systemImage: "pencil") { editTransaction(selection) }
+    Button("Delete", systemImage: "trash", role: .destructive) {
+        deleteTransactions(selection)
+    }
+} primaryAction: { selection in
+    // Double-click (macOS) / Return key — open detail
+    openDetail(for: selection)
+}
+```
+
+**Rules:**
+- Always use `List(_:selection:rowContent:)` — this gives you arrow key navigation, Shift+click extend selection, and Cmd+click toggle selection for free.
+- Always apply `.contentShape(.rect)` to rows so the entire row area is clickable, not just the text content.
+- Wire `primaryAction` for double-click and Return — this is the standard macOS pattern for "open" or "drill in."
+- Arrow keys move selection; Return triggers primary action; Escape clears selection — these are built-in behaviours, don't override them.
+- For multi-selection, use `Set<Transaction.ID>` instead of an optional single ID:
+  ```swift
+  @State private var selectedTransactions: Set<Transaction.ID> = []
+  ```
+- Context menus via `contextMenu(forSelectionType:menu:primaryAction:)` automatically receive the current selection set — they work for both single and multi-selection.
+- **Don't** build custom keyboard handlers for arrow navigation in lists — `List(selection:)` handles this natively.
+
+### Tab Order & Focus Sections
+
+**Default behaviour:** Tab moves focus in reading order — leading to trailing, then top to bottom. This works well for simple forms but breaks down in multi-column layouts.
+
+**Use `focusSection()` to group columns** so Tab completes one column before moving to the next:
+
+```swift
+HStack {
+    // Tab through all fields in the sidebar before moving to content
+    SidebarForm(...)
+        .focusSection()
+
+    ContentArea(...)
+        .focusSection()
+}
+```
+
+**Rules:**
+- `focusSection()` only organises existing focusable views into groups — it doesn't make non-focusable views focusable.
+- In `NavigationSplitView`, the sidebar and detail are already separate focus sections — Tab within the sidebar stays in the sidebar.
+- Inspector panels are separate focus sections. Users Tab within them independently. Escape or the close button dismisses them.
+- **Don't** try to control exact tab order between individual fields — SwiftUI doesn't support explicit ordering. Instead, arrange the view hierarchy so reading order matches the desired tab order.
+- If reading order doesn't match the desired flow, restructure the view hierarchy rather than fighting the framework.
+
+### Focused Values & Menu Commands
+
+Wire selection state to menu bar commands using `@FocusedValue` so that menu items respond to the active view's selection:
+
+```swift
+// 1. Define the key
+struct SelectedTransactionKey: FocusedValueKey {
+    typealias Value = Binding<Transaction?>
+}
+
+extension FocusedValues {
+    var selectedTransaction: Binding<Transaction?>? {
+        get { self[SelectedTransactionKey.self] }
+        set { self[SelectedTransactionKey.self] = newValue }
+    }
+}
+
+// 2. Publish from the view that owns the selection
+TransactionListView(...)
+    .focusedSceneValue(\.selectedTransaction, $selectedTransaction)
+
+// 3. Consume in menu commands
+struct MoolahCommands: Commands {
+    @FocusedValue(\.selectedTransaction) var selectedTransaction
+
+    var body: some Commands {
+        CommandGroup(after: .pasteboard) {
+            Button("Duplicate Transaction") {
+                // Use selectedTransaction binding
+            }
+            .keyboardShortcut("d", modifiers: .command)
+            .disabled(selectedTransaction?.wrappedValue == nil)
+        }
+    }
+}
+```
+
+**Rules:**
+- Use `focusedSceneValue` (not `focusedValue`) when the value should be available scene-wide — this is almost always what you want for menu commands.
+- Use `focusedValue` only when visibility should be limited to the focused view subtree.
+- Disable menu items when no selection exists — don't hide them. Users expect to see the full menu structure.
+- Menu commands that operate on a selection should accept `Set<ID>` to work with both single and multi-selection.
+
+### Standard Keyboard Expectations
+
+These are macOS conventions that users expect. Violating them makes the app feel foreign.
+
+| Key | Expected Behaviour |
+|-----|---------------------|
+| **Tab / Shift+Tab** | Move focus forward/backward through controls |
+| **Arrow keys** | Move selection within a list, table, or segmented control |
+| **Return** | Activate the default button; trigger primary action on selected list item |
+| **Space** | Activate the focused control (button, checkbox, toggle) |
+| **Escape** | Dismiss the current sheet, popover, or inspector; cancel current operation; clear selection in a list |
+| **Cmd+.** | Cancel (equivalent to Escape in dialogs — works even when Escape is intercepted) |
+| **Delete** | Delete selected item(s) with confirmation |
+| **Cmd+A** | Select all (in lists that support multi-selection, and in text fields) |
+
+**Rules:**
+- Sheets and inspectors **must** dismiss on Escape. Use `.keyboardShortcut(.escape)` on cancel/close buttons, or rely on SwiftUI's built-in sheet dismissal.
+- Confirmation dialogs should have the destructive action as **non-default** — Return should trigger the safe action (Cancel), not Delete.
+- In dialogs with Cancel/Save, Cancel has the focus ring (activated by Space), Save is the default button (activated by Return).
+- Support full keyboard access: every interactive control must be reachable via Tab. Test with System Settings > Keyboard > Keyboard Navigation enabled.
+- **Don't** intercept Escape for custom behaviour when a sheet or popover is visible — the system dismissal must take priority.
+
+---
+
 ## Version History
+- **1.1** (2026-04-15): Add Section 13 — Focus, Tab Order & Selection (form focus, list selection, focus sections, focused values, keyboard expectations)
 - **1.0** (2026-04-08): Initial style guide for Moolah native app (macOS-first, adaptive density, semantic colors, charts)
