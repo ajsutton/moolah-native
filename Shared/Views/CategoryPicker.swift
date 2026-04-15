@@ -56,3 +56,36 @@ struct CategorySuggestionDropdown: View {
     )
   }
 }
+
+/// Preference key for positioning per-leg category dropdowns.
+/// Stores anchors keyed by leg index so multiple fields can coexist.
+struct LegCategoryPickerAnchorKey: PreferenceKey {
+  static let defaultValue: [Int: Anchor<CGRect>] = [:]
+  static func reduce(value: inout [Int: Anchor<CGRect>], nextValue: () -> [Int: Anchor<CGRect>]) {
+    value.merge(nextValue()) { _, new in new }
+  }
+}
+
+/// A category autocomplete field for a specific leg index in custom mode.
+struct LegCategoryAutocompleteField: View {
+  let legIndex: Int
+  @Binding var text: String
+  @Binding var highlightedIndex: Int?
+  let suggestionCount: Int
+  let onTextChange: (String) -> Void
+  let onAcceptHighlighted: () -> Void
+
+  var body: some View {
+    AutocompleteField(
+      placeholder: "Category",
+      text: $text,
+      highlightedIndex: $highlightedIndex,
+      suggestionCount: suggestionCount,
+      onTextChange: onTextChange,
+      onAcceptHighlighted: onAcceptHighlighted
+    )
+    .anchorPreference(key: LegCategoryPickerAnchorKey.self, value: .bounds) { anchor in
+      [legIndex: anchor]
+    }
+  }
+}
