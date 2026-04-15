@@ -18,3 +18,11 @@ These assume the first leg is "special", which breaks for multi-leg transactions
 ## iOS login page should allow changing profile without logging in
 
 On iOS, the login page shows the currently selected remote profile but doesn't offer a way to switch to a different profile. The user should be able to change to another profile from the profile selector without having to log into the one that happens to be selected.
+
+## macOS sidebar: account balance lacks contrast against selection highlight
+
+During recent UI review fixes, the fix ensuring sufficient contrast between the account balance text and the sidebar selection colour on macOS was lost. The balance text becomes hard to read when its row is selected.
+
+## Upcoming transactions analysis panel flashes on pay
+
+When paying a transaction, the upcoming transactions analysis panel flashes its content as if doing a full reload. It should update incrementally without a visible flash.
