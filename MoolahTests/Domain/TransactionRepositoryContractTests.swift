@@ -31,7 +31,7 @@ struct TransactionRepositoryContractTests {
   func testFiltersByCategoryIds() async throws {
     let repository = makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
     let transactions = makeTestTransactions()
-    let groceryCategory = transactions[0].categoryId!
+    let groceryCategory = transactions[0].legs.first(where: { $0.categoryId != nil })!.categoryId!
     let categoryIds: Set<UUID> = [groceryCategory]
 
     let page = try await repository.fetch(
@@ -42,7 +42,7 @@ struct TransactionRepositoryContractTests {
 
     // Should only include transactions with the specified category
     for transaction in page.transactions {
-      #expect(categoryIds.contains(transaction.categoryId!))
+      #expect(transaction.legs.contains(where: { categoryIds.contains($0.categoryId ?? UUID()) }))
     }
   }
 
@@ -67,7 +67,7 @@ struct TransactionRepositoryContractTests {
   func testCombinesMultipleFilters() async throws {
     let repository = makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
     let transactions = makeTestTransactions()
-    let groceryCategory = transactions[0].categoryId!
+    let groceryCategory = transactions[0].legs.first(where: { $0.categoryId != nil })!.categoryId!
     let calendar = Calendar.current
     let middleDate = calendar.date(from: DateComponents(year: 2024, month: 6, day: 15))!
     let startDate = calendar.date(byAdding: .day, value: -30, to: middleDate)!
@@ -85,7 +85,7 @@ struct TransactionRepositoryContractTests {
 
     // Should satisfy all filter criteria
     for transaction in page.transactions {
-      #expect(transaction.categoryId == groceryCategory)
+      #expect(transaction.legs.contains(where: { $0.categoryId == groceryCategory }))
       #expect((startDate...endDate).contains(transaction.date))
       let payee = transaction.payee?.lowercased() ?? ""
       #expect(payee.contains("wool"))
@@ -148,8 +148,8 @@ struct TransactionRepositoryContractTests {
     #expect(result.legs[0].quantity == Decimal(string: "-750.00")!)
     #expect(result.payee == "Updated Payee")
     #expect(result.notes == "Some notes")
-    #expect(result.categoryId == categoryId)
-    #expect(result.earmarkId == earmarkId)
+    #expect(result.legs.contains(where: { $0.categoryId == categoryId }))
+    #expect(result.legs.contains(where: { $0.earmarkId == earmarkId }))
     #expect(result.recurPeriod == .month)
     #expect(result.recurEvery == 2)
 
@@ -170,8 +170,8 @@ struct TransactionRepositoryContractTests {
     #expect(fetched.legs[0].quantity == Decimal(string: "-750.00")!)
     #expect(fetched.payee == "Updated Payee")
     #expect(fetched.notes == "Some notes")
-    #expect(fetched.categoryId == categoryId)
-    #expect(fetched.earmarkId == earmarkId)
+    #expect(fetched.legs.contains(where: { $0.categoryId == categoryId }))
+    #expect(fetched.legs.contains(where: { $0.earmarkId == earmarkId }))
     #expect(fetched.recurPeriod == .month)
     #expect(fetched.recurEvery == 2)
   }
@@ -319,10 +319,10 @@ struct TransactionRepositoryContractTests {
       page: 0,
       pageSize: 50
     )
-    let earmarked = allPage.transactions.filter { $0.earmarkId != nil }
+    let earmarked = allPage.transactions.filter { $0.legs.contains(where: { $0.earmarkId != nil }) }
     #expect(earmarked.count == 1, "Test data should have one earmarked transaction")
 
-    let earmarkId = earmarked[0].earmarkId!
+    let earmarkId = earmarked[0].legs.first(where: { $0.earmarkId != nil })!.earmarkId!
     let filteredPage = try await repository.fetch(
       filter: TransactionFilter(earmarkId: earmarkId),
       page: 0,
@@ -330,7 +330,7 @@ struct TransactionRepositoryContractTests {
     )
 
     #expect(filteredPage.transactions.count == 1)
-    #expect(filteredPage.transactions[0].earmarkId == earmarkId)
+    #expect(filteredPage.transactions[0].legs.contains(where: { $0.earmarkId == earmarkId }))
   }
 
   // MARK: - Account Filter

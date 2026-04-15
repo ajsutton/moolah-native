@@ -288,6 +288,7 @@ final class TransactionStore {
         transactions: rawTransactions,
         priorBalance: priorBalance,
         accountId: currentFilter.accountId,
+        earmarkId: currentFilter.earmarkId,
         targetInstrument: targetInstrument,
         conversionService: conversionService
       )

@@ -62,7 +62,9 @@ struct TransactionDetailView: View {
     self.onDelete = onDelete
 
     var initialDraft = TransactionDraft(from: transaction, viewingAccountId: viewingAccountId)
-    if let catId = transaction.categoryId, let cat = categories.by(id: catId) {
+    if let catId = transaction.legs.first(where: { $0.categoryId != nil })?.categoryId,
+      let cat = categories.by(id: catId)
+    {
       initialDraft.categoryText = categories.path(for: cat)
     }
     _draft = State(initialValue: initialDraft)
@@ -431,7 +433,9 @@ struct TransactionDetailView: View {
             .number.precision(.fractionLength(matchLeg.instrument.decimals)))
         }
       }
-      if draft.categoryId == nil, let matchCategoryId = match.categoryId {
+      if draft.categoryId == nil, match.isSimple,
+        let matchCategoryId = match.legs.first(where: { $0.categoryId != nil })?.categoryId
+      {
         draft.categoryId = matchCategoryId
         if let cat = categories.by(id: matchCategoryId) {
           categoryJustSelected = true

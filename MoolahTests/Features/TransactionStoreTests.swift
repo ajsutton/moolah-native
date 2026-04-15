@@ -887,9 +887,9 @@ struct TransactionStoreTests {
     ]
     await store.update(updated)
 
-    #expect(receivedOld?.earmarkId == earmarkId)
+    #expect(receivedOld?.legs.first?.earmarkId == earmarkId)
     #expect(receivedOld?.legs.first?.quantity == Decimal(-5000) / 100)
-    #expect(receivedNew?.earmarkId == earmarkId)
+    #expect(receivedNew?.legs.first?.earmarkId == earmarkId)
     #expect(receivedNew?.legs.first?.quantity == Decimal(-7500) / 100)
   }
 
@@ -939,8 +939,8 @@ struct TransactionStoreTests {
     ]
     await store.update(updated)
 
-    #expect(receivedOld?.earmarkId == earmarkId1)
-    #expect(receivedNew?.earmarkId == earmarkId2)
+    #expect(receivedOld?.legs.first?.earmarkId == earmarkId1)
+    #expect(receivedNew?.legs.first?.earmarkId == earmarkId2)
   }
 
   @Test func testOnMutateAddingEarmark() async throws {
@@ -987,8 +987,8 @@ struct TransactionStoreTests {
     ]
     await store.update(updated)
 
-    #expect(receivedOld?.earmarkId == nil)
-    #expect(receivedNew?.earmarkId == earmarkId)
+    #expect(receivedOld?.legs.first?.earmarkId == nil)
+    #expect(receivedNew?.legs.first?.earmarkId == earmarkId)
   }
 
   @Test func testOnMutateRemovingEarmark() async throws {
@@ -1035,8 +1035,8 @@ struct TransactionStoreTests {
     ]
     await store.update(updated)
 
-    #expect(receivedOld?.earmarkId == earmarkId)
-    #expect(receivedNew?.earmarkId == nil)
+    #expect(receivedOld?.legs.first?.earmarkId == earmarkId)
+    #expect(receivedNew?.legs.first?.earmarkId == nil)
   }
 
   // MARK: - Balance Updates with Type Changes
@@ -1507,8 +1507,8 @@ struct TransactionStoreTests {
     #expect(paidTx?.legs.first?.quantity == Decimal(-100000) / 100)
     #expect(paidTx?.payee == "Savings Transfer")
     #expect(paidTx?.notes == "Monthly savings")
-    #expect(paidTx?.categoryId == categoryId)
-    #expect(paidTx?.earmarkId == earmarkId)
+    #expect(paidTx?.legs.contains(where: { $0.categoryId == categoryId }) == true)
+    #expect(paidTx?.legs.contains(where: { $0.earmarkId == earmarkId }) == true)
     #expect(paidTx?.recurPeriod == nil)
     #expect(paidTx?.recurEvery == nil)
   }
@@ -1754,7 +1754,7 @@ struct TransactionStoreTests {
     let match = await store.fetchTransactionForAutofill(payee: "Woolworths")
     #expect(match != nil)
     // Most recent (newest first from server) should have the category
-    #expect(match?.categoryId == categoryId)
+    #expect(match?.legs.contains(where: { $0.categoryId == categoryId }) == true)
     #expect(match?.legs.first?.quantity == Decimal(-7500) / 100)
   }
 
