@@ -78,19 +78,7 @@ struct UserMenuView: View {
   #if os(iOS)
     @ViewBuilder
     private var profileSection: some View {
-      ForEach(profileStore.profiles) { profile in
-        Button {
-          profileStore.setActiveProfile(profile.id)
-        } label: {
-          HStack {
-            if profile.id == profileStore.activeProfileID {
-              Image(systemName: "checkmark")
-                .accessibilityHidden(true)
-            }
-            Text(profile.label)
-          }
-        }
-      }
+      ProfileMenuItems()
 
       Button(String(localized: "Manage Profiles...")) {
         showManageProfiles = true

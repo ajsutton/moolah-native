@@ -147,7 +147,10 @@ final class TransactionStore {
       await delete(id: scheduledTransaction.id)
     }
 
-    await load(filter: TransactionFilter(scheduled: true))
+    // Remove the non-scheduled paid transaction from the local list
+    // (it was added by create() but doesn't belong in the scheduled view).
+    rawTransactions.removeAll { $0.id == paidTransaction.id }
+    await recomputeBalances()
 
     if scheduledTransaction.isRecurring {
       let updated = transactions.first { $0.transaction.id == scheduledTransaction.id }?.transaction
