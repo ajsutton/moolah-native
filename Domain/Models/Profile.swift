@@ -47,4 +47,8 @@ struct Profile: Identifiable, Codable, Sendable, Equatable {
   var instrument: Instrument {
     Instrument.fiat(code: currencyCode)
   }
+
+  var supportsComplexTransactions: Bool {
+    backendType == .cloudKit
+  }
 }

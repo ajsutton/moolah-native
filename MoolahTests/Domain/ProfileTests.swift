@@ -106,4 +106,22 @@ struct ProfileTests {
     let decoded = try JSONDecoder().decode(BackendType.self, from: data)
     #expect(decoded == .moolah)
   }
+
+  @Test("supportsComplexTransactions is false for remote backend")
+  func supportsComplexTransactionsRemote() {
+    let profile = Profile(label: "Remote", backendType: .remote)
+    #expect(!profile.supportsComplexTransactions)
+  }
+
+  @Test("supportsComplexTransactions is false for moolah backend")
+  func supportsComplexTransactionsMoolah() {
+    let profile = Profile(label: "Moolah", backendType: .moolah)
+    #expect(!profile.supportsComplexTransactions)
+  }
+
+  @Test("supportsComplexTransactions is true for cloudKit backend")
+  func supportsComplexTransactionsCloudKit() {
+    let profile = Profile(label: "iCloud", backendType: .cloudKit)
+    #expect(profile.supportsComplexTransactions)
+  }
 }

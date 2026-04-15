@@ -74,7 +74,7 @@ struct TransactionRowView: View {
     if transaction.isSimple, let type = transaction.legs.first?.type {
       typeStr = type.displayName
     } else {
-      typeStr = "Complex transaction"
+      typeStr = "Custom transaction"
     }
     return "\(typeStr), \(displayPayee), \(amountStr), \(dateStr), balance \(balanceStr)"
   }

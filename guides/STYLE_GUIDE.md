@@ -289,6 +289,23 @@ Follow this standard order for transaction forms:
 - Use `TextEditor` with `.frame(height:)` for longer content (>6 lines)
 - Always set bounds to prevent layout issues
 
+#### Custom Transaction Form
+
+When a profile supports custom (multi-leg) transactions, the form uses a different section order to accommodate sub-transaction sections:
+
+1. Type (picker label: "Custom"; displays `"arrow.trianglehead.branch"` icon in `.purple`)
+2. Details (payee, date)
+3. Sub-transaction sections (one section per leg; header/button labels use "Sub-transaction")
+4. Recurrence
+5. Notes
+6. Pay (for scheduled transactions)
+7. Delete (destructive)
+
+**Terminology conventions:**
+- Use "Custom" as the type picker label shown to users
+- Use "Sub-transaction" for section headers and add/remove button labels shown to users
+- Use `leg` / `legs` in code (model types, variable names, function parameters)
+
 ### Scheduled Transactions
 
 #### Recurrence UI Pattern
@@ -543,7 +560,7 @@ Moolah uses SF Symbols 6 for all icons. **Never** use custom bitmap icons.
 | Income | `"arrow.up"` | Positive flow (money in) |
 | Expense | `"arrow.down"` | Negative flow (money out) |
 | Transfer | `"arrow.left.arrow.right"` | Between accounts |
-| Complex | `"arrow.trianglehead.branch"` | Multi-leg transactions with mixed types |
+| Custom | `"arrow.trianglehead.branch"` | Multi-leg transactions with mixed types |
 | Account | `"creditcard"`, `"banknote"` | Bank accounts, cash |
 | Category | `"tag"`, `"folder"` | Transaction categories |
 | Earmark/Budget | `"bookmark.fill"` | Earmark allocations and savings goals |
@@ -562,7 +579,7 @@ Moolah uses SF Symbols 6 for all icons. **Never** use custom bitmap icons.
 | Expense | `.red` | Negative flow |
 | Transfer | `.blue` | Between accounts |
 | Opening Balance | `.orange` | System-generated |
-| Complex | `.purple` | Multi-leg transactions with mixed types |
+| Custom | `.purple` | Multi-leg transactions with mixed types |
 
 #### Rendering Modes
 ```swift
