@@ -332,7 +332,6 @@ struct TransactionDraftTests {
       type: .expense,
       accountId: id,
       amountText: "42.00",
-      isOutflow: true,
       categoryId: catId,
       categoryText: "Food",
       earmarkId: earmarkId
@@ -341,7 +340,6 @@ struct TransactionDraftTests {
       type: .expense,
       accountId: id,
       amountText: "42.00",
-      isOutflow: true,
       categoryId: catId,
       categoryText: "Food",
       earmarkId: earmarkId
@@ -372,11 +370,9 @@ struct TransactionDraftTests {
     #expect(draft.legDrafts.count == 3)
     #expect(draft.legDrafts[0].accountId == accountA)
     #expect(draft.legDrafts[0].amountText == "100.00")
-    #expect(draft.legDrafts[0].isOutflow == true)
     #expect(draft.legDrafts[0].categoryId == legA.categoryId)
     #expect(draft.legDrafts[1].accountId == accountB)
     #expect(draft.legDrafts[1].amountText == "50.00")
-    #expect(draft.legDrafts[2].isOutflow == false)
   }
 
   @Test func initFromSimpleTransactionIsNotCustom() {
@@ -412,13 +408,13 @@ struct TransactionDraftTests {
     draft.legDrafts = [
       TransactionDraft.LegDraft(
         type: .expense, accountId: acctIdA, amountText: "100.00",
-        isOutflow: true, categoryId: catId, categoryText: "", earmarkId: nil),
+        categoryId: catId, categoryText: "", earmarkId: nil),
       TransactionDraft.LegDraft(
         type: .income, accountId: acctIdB, amountText: "50.00",
-        isOutflow: false, categoryId: nil, categoryText: "", earmarkId: earmarkId),
+        categoryId: nil, categoryText: "", earmarkId: earmarkId),
       TransactionDraft.LegDraft(
         type: .transfer, accountId: acctIdC, amountText: "25.00",
-        isOutflow: false, categoryId: nil, categoryText: "", earmarkId: nil),
+        categoryId: nil, categoryText: "", earmarkId: nil),
     ]
 
     let tx = draft.toTransaction(id: UUID(), accounts: accounts)
@@ -434,10 +430,10 @@ struct TransactionDraftTests {
     #expect(incomeLeg?.earmarkId == earmarkId)
 
     let transferLeg = tx!.legs.first { $0.accountId == acctIdC }
-    #expect(transferLeg?.quantity == Decimal(string: "25.00")!)  // isOutflow=false → positive
+    #expect(transferLeg?.quantity == Decimal(string: "-25.00")!)  // transfer always negative
   }
 
-  @Test func toTransactionCustomModeOutflowTransferIsNegative() {
+  @Test func toTransactionCustomModeTransferIsAlwaysNegative() {
     let acctId = UUID()
     let accounts = makeAccounts([makeAccount(id: acctId)])
 
@@ -446,7 +442,7 @@ struct TransactionDraftTests {
     draft.legDrafts = [
       TransactionDraft.LegDraft(
         type: .transfer, accountId: acctId, amountText: "200.00",
-        isOutflow: true, categoryId: nil, categoryText: "", earmarkId: nil)
+        categoryId: nil, categoryText: "", earmarkId: nil)
     ]
 
     let tx = draft.toTransaction(id: UUID(), accounts: accounts)
@@ -484,7 +480,7 @@ struct TransactionDraftTests {
     draft.legDrafts = [
       TransactionDraft.LegDraft(
         type: .expense, accountId: nil, amountText: "10.00",
-        isOutflow: true, categoryId: nil, categoryText: "", earmarkId: nil)
+        categoryId: nil, categoryText: "", earmarkId: nil)
     ]
     #expect(draft.isValid == false)
   }
@@ -495,7 +491,7 @@ struct TransactionDraftTests {
     draft.legDrafts = [
       TransactionDraft.LegDraft(
         type: .expense, accountId: accountA, amountText: "0",
-        isOutflow: true, categoryId: nil, categoryText: "", earmarkId: nil)
+        categoryId: nil, categoryText: "", earmarkId: nil)
     ]
     #expect(draft.isValid == false)
   }
@@ -506,10 +502,10 @@ struct TransactionDraftTests {
     draft.legDrafts = [
       TransactionDraft.LegDraft(
         type: .expense, accountId: accountA, amountText: "10.00",
-        isOutflow: true, categoryId: nil, categoryText: "", earmarkId: nil),
+        categoryId: nil, categoryText: "", earmarkId: nil),
       TransactionDraft.LegDraft(
         type: .income, accountId: accountB, amountText: "5.00",
-        isOutflow: false, categoryId: nil, categoryText: "", earmarkId: nil),
+        categoryId: nil, categoryText: "", earmarkId: nil),
     ]
     #expect(draft.isValid == true)
   }
@@ -521,10 +517,10 @@ struct TransactionDraftTests {
     draft.legDrafts = [
       TransactionDraft.LegDraft(
         type: .expense, accountId: accountA, amountText: "10.00",
-        isOutflow: true, categoryId: nil, categoryText: "", earmarkId: nil),
+        categoryId: nil, categoryText: "", earmarkId: nil),
       TransactionDraft.LegDraft(
         type: .income, accountId: nil, amountText: "10.00",
-        isOutflow: false, categoryId: nil, categoryText: "", earmarkId: nil),
+        categoryId: nil, categoryText: "", earmarkId: nil),
     ]
     #expect(draft.isValid == false)
   }
@@ -620,7 +616,6 @@ struct TransactionDraftTests {
     #expect(draft.payee == "Split")
     #expect(draft.legDrafts[0].accountId == accountA)
     #expect(draft.legDrafts[0].amountText == "100.00")
-    #expect(draft.legDrafts[0].isOutflow == true)
     #expect(draft.legDrafts[0].categoryId == catId)
   }
 
@@ -690,7 +685,7 @@ struct TransactionDraftTests {
     draft.legDrafts = [
       TransactionDraft.LegDraft(
         type: .expense, accountId: accountA, amountText: "999.00",
-        isOutflow: true, categoryId: nil, categoryText: "", earmarkId: nil)
+        categoryId: nil, categoryText: "", earmarkId: nil)
     ]
     let categories = Categories(from: [])
     draft.applyAutofill(from: matchTx, categories: categories, supportsComplexTransactions: true)
