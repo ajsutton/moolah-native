@@ -163,7 +163,7 @@ extension Transaction {
 
       // No account context (scheduled/upcoming): show "Transfer from A to B"
       let fromAccount = legs.first(where: { $0.quantity < 0 })?.accountId
-      let toAccount = legs.first(where: { $0.quantity >= 0 })?.accountId
+      let toAccount = legs.first(where: { $0.quantity > 0 })?.accountId
       let fromName = fromAccount.flatMap { accounts.by(id: $0)?.name } ?? "Unknown"
       let toName = toAccount.flatMap { accounts.by(id: $0)?.name } ?? "Unknown"
       return "Transfer from \(fromName) to \(toName)"
