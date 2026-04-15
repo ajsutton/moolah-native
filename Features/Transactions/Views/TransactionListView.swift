@@ -157,8 +157,8 @@ struct TransactionListView: View {
       ForEach(filteredTransactions) { entry in
         TransactionRowView(
           transaction: entry.transaction, accounts: accounts,
-          categories: categories, earmarks: earmarks, balance: entry.balance,
-          hideEarmark: filter.earmarkId != nil
+          categories: categories, earmarks: earmarks, displayAmount: entry.displayAmount,
+          balance: entry.balance, hideEarmark: filter.earmarkId != nil
         )
         .tag(entry.transaction)
         .contentShape(Rectangle())
