@@ -32,38 +32,39 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     let descriptor = FetchDescriptor<AccountRecord>(
       sortBy: [SortDescriptor(\.position)]
     )
-    return try await MainActor.run {
-      let fetchStart = ContinuousClock.now
-      let records = try context.fetch(descriptor)
-      let fetchMs = (ContinuousClock.now - fetchStart).inMilliseconds
+    // Use a background context for read-only fetches to avoid blocking the main thread.
+    let bgContext = ModelContext(modelContainer)
+    let fetchStart = ContinuousClock.now
+    let records = try bgContext.fetch(descriptor)
+    let fetchMs = (ContinuousClock.now - fetchStart).inMilliseconds
 
-      let balanceStart = ContinuousClock.now
-      let balances = try computeAllBalances()
-      let balanceMs = (ContinuousClock.now - balanceStart).inMilliseconds
+    let balanceStart = ContinuousClock.now
+    let (_, allLegs) = try fetchNonScheduledLegs(context: bgContext)
+    let balances = computeBalances(from: allLegs)
+    let balanceMs = (ContinuousClock.now - balanceStart).inMilliseconds
 
-      let positionStart = ContinuousClock.now
-      let allPositions = try computeAllPositions()
-      let positionMs = (ContinuousClock.now - positionStart).inMilliseconds
+    let positionStart = ContinuousClock.now
+    let allPositions = try computePositions(from: allLegs, context: bgContext)
+    let positionMs = (ContinuousClock.now - positionStart).inMilliseconds
 
-      let result = try records.map { record in
-        let storageValue = balances[record.id] ?? 0
-        let balance = InstrumentAmount(storageValue: storageValue, instrument: instrument)
-        let investmentValue =
-          record.type == AccountType.investment.rawValue
-          ? try latestInvestmentValue(for: record.id)
-          : nil
-        let positions = allPositions[record.id] ?? []
-        return record.toDomain(
-          balance: balance, investmentValue: investmentValue, positions: positions)
-      }
-      let totalMs = fetchMs + balanceMs + positionMs
-      if totalMs > 16 {
-        logger.warning(
-          "⚠️ PERF: AccountRepo.fetchAll took \(totalMs)ms on main (records: \(fetchMs)ms, balances: \(balanceMs)ms, positions: \(positionMs)ms, \(records.count) accounts)"
-        )
-      }
-      return result
+    let result = try records.map { record in
+      let storageValue = balances[record.id] ?? 0
+      let balance = InstrumentAmount(storageValue: storageValue, instrument: instrument)
+      let investmentValue =
+        record.type == AccountType.investment.rawValue
+        ? try latestInvestmentValue(for: record.id, context: bgContext)
+        : nil
+      let positions = allPositions[record.id] ?? []
+      return record.toDomain(
+        balance: balance, investmentValue: investmentValue, positions: positions)
     }
+    let totalMs = fetchMs + balanceMs + positionMs
+    if totalMs > 16 {
+      logger.warning(
+        "⚠️ PERF: AccountRepo.fetchAll took \(totalMs)ms (records: \(fetchMs)ms, balances: \(balanceMs)ms, positions: \(positionMs)ms, \(records.count) accounts)"
+      )
+    }
+    return result
   }
 
   func create(_ account: Account) async throws -> Account {
@@ -261,6 +262,89 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       map[record.id] = record.toDomain()
     }
     return map
+  }
+
+  // MARK: - Background Context Helpers (used by fetchAll)
+
+  /// Fetches all non-scheduled legs using the provided context.
+  private func fetchNonScheduledLegs(context: ModelContext) throws -> (
+    Set<UUID>, [TransactionLegRecord]
+  ) {
+    let scheduledDescriptor = FetchDescriptor<TransactionRecord>(
+      predicate: #Predicate { $0.recurPeriod != nil }
+    )
+    let scheduledIds = Set(try context.fetch(scheduledDescriptor).map(\.id))
+
+    let legDescriptor = FetchDescriptor<TransactionLegRecord>()
+    let allLegs = try context.fetch(legDescriptor).filter {
+      !scheduledIds.contains($0.transactionId)
+    }
+    return (scheduledIds, allLegs)
+  }
+
+  /// Compute all account balances from pre-fetched legs.
+  private func computeBalances(from allLegs: [TransactionLegRecord]) -> [UUID: Int64] {
+    var balances: [UUID: Int64] = [:]
+    for leg in allLegs {
+      guard let accountId = leg.accountId else { continue }
+      balances[accountId, default: 0] += leg.quantity
+    }
+    return balances
+  }
+
+  /// Compute per-instrument positions from pre-fetched legs.
+  private func computePositions(from allLegs: [TransactionLegRecord], context: ModelContext) throws
+    -> [UUID: [Position]]
+  {
+    // Group by (accountId, instrumentId) and sum quantities
+    var totals: [UUID: [String: Int64]] = [:]
+    for leg in allLegs {
+      guard let accountId = leg.accountId else { continue }
+      totals[accountId, default: [:]][leg.instrumentId, default: 0] += leg.quantity
+    }
+
+    // Resolve instruments and build Position arrays
+    let instruments = try fetchInstrumentMap(context: context)
+    var result: [UUID: [Position]] = [:]
+    for (accountId, instrumentTotals) in totals {
+      var positions: [Position] = []
+      for (instrumentId, quantity) in instrumentTotals {
+        guard quantity != 0 else { continue }
+        let inst = instruments[instrumentId] ?? Instrument.fiat(code: instrumentId)
+        let amount = InstrumentAmount(storageValue: quantity, instrument: inst)
+        positions.append(
+          Position(accountId: accountId, instrument: inst, quantity: amount.quantity))
+      }
+      positions.sort { $0.instrument.id < $1.instrument.id }
+      if !positions.isEmpty {
+        result[accountId] = positions
+      }
+    }
+    return result
+  }
+
+  /// Fetches all known instruments as a lookup map using the provided context.
+  private func fetchInstrumentMap(context: ModelContext) throws -> [String: Instrument] {
+    let descriptor = FetchDescriptor<InstrumentRecord>()
+    let records = try context.fetch(descriptor)
+    var map: [String: Instrument] = [:]
+    for record in records {
+      map[record.id] = record.toDomain()
+    }
+    return map
+  }
+
+  /// Fetches the latest investment value for an account using the provided context.
+  private func latestInvestmentValue(for accountId: UUID, context: ModelContext) throws
+    -> InstrumentAmount?
+  {
+    var descriptor = FetchDescriptor<InvestmentValueRecord>(
+      predicate: #Predicate { $0.accountId == accountId },
+      sortBy: [SortDescriptor(\.date, order: .reverse)]
+    )
+    descriptor.fetchLimit = 1
+    let records = try context.fetch(descriptor)
+    return records.first?.toDomain().value
   }
 
   // MARK: - Instrument Cache
