@@ -269,7 +269,7 @@ final class SyncCoordinator: Sendable {
       try? await Task.sleep(for: .seconds(5))
       guard !Task.isCancelled else { return }
       self.logger.info("Re-fetching changes after save failure")
-      try? await self.syncEngine?.fetchChanges()
+      await self.fetchChanges()
     }
   }
 
