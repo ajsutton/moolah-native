@@ -56,7 +56,7 @@ Replace the switch on `transaction.type` with a branch on `isSimple`:
 ```swift
 private var iconName: String {
     guard transaction.isSimple, let type = transaction.legs.first?.type else {
-        return "arrow.triangle.branch"
+        return "arrow.trianglehead.branch"
     }
     switch type {
     case .income: return "arrow.up"
@@ -72,7 +72,7 @@ private var iconName: String {
 ```swift
 private var iconColor: Color {
     guard transaction.isSimple, let type = transaction.legs.first?.type else {
-        return .purple
+        return .secondary
     }
     switch type {
     case .income: return .green
@@ -83,14 +83,25 @@ private var iconColor: Color {
 }
 ```
 
-**accessibility label (P3):**
+`.secondary` signals "mixed/uncategorised" without introducing a new semantic color into the transaction type vocabulary.
+
+**accessibility — update `accessibilityDescription` (P3):**
+
+The icon's `.accessibilityLabel` is consumed by `.accessibilityElement(children: .combine)` on the parent `HStack` and is never read by VoiceOver independently. The fix belongs in `accessibilityDescription`, which is the actual VoiceOver label for the row. Remove the per-icon `.accessibilityLabel` and add type information to the combined label using `TransactionType.displayName` (not `.rawValue.capitalized`, which produces "Openingbalance" for `.openingBalance`):
 
 ```swift
-.accessibilityLabel(
-    transaction.isSimple
-        ? (transaction.legs.first?.type.rawValue.capitalized ?? "Transaction")
-        : "Complex transaction"
-)
+private var accessibilityDescription: String {
+    let dateStr = transaction.date.formatted(date: .abbreviated, time: .omitted)
+    let amountStr = displayAmount.formatted
+    let balanceStr = balance.formatted
+    let typeStr: String
+    if transaction.isSimple, let type = transaction.legs.first?.type {
+        typeStr = type.displayName
+    } else {
+        typeStr = "Complex transaction"
+    }
+    return "\(typeStr), \(displayPayee), \(amountStr), \(dateStr), balance \(balanceStr)"
+}
 ```
 
 ### TransactionDetailView (P4) — Opening Balance Guard
@@ -146,7 +157,7 @@ Using `allSatisfy` is stronger than checking `legs.first` — it verifies all le
 
 ### Step 1: TransactionRowView (P1, P2, P3)
 
-Branch `iconName` and `iconColor` on `isSimple` — simple transactions use the existing type switch on `legs.first?.type`, complex transactions use `"arrow.triangle.branch"` icon with `.purple` color. Update accessibility label similarly.
+Branch `iconName` and `iconColor` on `isSimple` — simple transactions use the existing type switch on `legs.first?.type`, complex transactions use `"arrow.trianglehead.branch"` icon with `.secondary` color. Remove the per-icon `.accessibilityLabel` and add type information to `accessibilityDescription` using `.displayName`. Add a complex transaction row to the `#Preview` block so the new icon path has visual coverage.
 
 ### Step 2: TransactionDetailView (P4)
 
@@ -167,6 +178,10 @@ var type: TransactionType { legs.first?.type ?? .expense }
 
 Remove the `type → legs.first?.type` line from the convenience accessor bug entry.
 
+### Step 6: UI Review
+
+Run the `ui-review` agent on TransactionRowView and any other modified views. Fix all issues before merging.
+
 ## Risk Assessment
 
-**Low risk.** All legs in a simple transaction share the same type, so the replacement logic produces identical results for every currently-possible transaction. The only new behavior is that complex transactions (which don't exist in production yet) will show a distinct icon instead of inheriting the first leg's type. The `.expense` fallback on empty legs is removed — empty legs would show the branching arrow icon, which is a safer failure mode than silently defaulting to expense.
+**Low risk.** All legs in a simple transaction share the same type, so the replacement logic produces identical results for every currently-possible transaction. The only new behavior is that complex transactions (which don't exist in production yet) will show a distinct icon instead of inheriting the first leg's type. The `.expense` fallback on empty legs is removed — empty legs would show the branching arrow icon in `.secondary`, which is a safer failure mode than silently defaulting to expense.
