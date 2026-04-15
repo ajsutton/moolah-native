@@ -10,3 +10,6 @@ Aggregate view across multiple accounts. Primary use cases:
 
 ## Import Transactions from Online Banking (Share Sheet)
 Allow users to share a banking webpage to Moolah via the iOS/macOS share sheet. Moolah receives the HTML, parses and interprets the transaction table, and imports the transactions into the selected account. Avoids the need for bank API integrations or CSV wrangling.
+
+## Sync Progress Indicator
+Show sync status in the UI — progress during bulk sync, error states (e.g., iCloud storage full), and last-synced timestamp. Would replace the current invisible sync behaviour with visible feedback. Could be a persistent status bar, toolbar item, or sidebar footer element.
