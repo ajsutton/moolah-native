@@ -8,7 +8,6 @@ When the app first loads, all existing windows briefly show a "profile removed" 
 
 `Transaction` has several convenience accessors that return properties from `legs.first`:
 - `earmarkId` → `legs.first?.earmarkId`
-- `categoryId` → `legs.first?.categoryId`
 - `type` → `legs.first?.type`
 
 These assume the first leg is "special", which breaks for multi-leg transactions where different legs could have different earmarks, categories, or types. Need to audit all call sites for hidden single-leg assumptions and decide on proper multi-leg semantics (e.g. should `earmarkId` return the earmark from any leg that has one?).
