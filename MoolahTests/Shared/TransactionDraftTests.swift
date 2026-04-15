@@ -195,6 +195,30 @@ struct TransactionDraftTests {
     #expect(roundTripped!.recurEvery == original.recurEvery)
   }
 
+  // MARK: - Viewing Account Perspective
+
+  @Test func roundTripTransferFromDestinationPerspective() {
+    let sourceId = UUID()
+    let destId = UUID()
+
+    let original = Transaction(
+      id: UUID(),
+      date: Date(),
+      payee: "Transfer",
+      legs: [
+        TransactionLeg(
+          accountId: sourceId, instrument: instrument, quantity: -100, type: .transfer),
+        TransactionLeg(accountId: destId, instrument: instrument, quantity: 100, type: .transfer),
+      ]
+    )
+
+    // When viewing from the destination account, the draft should orient to that leg
+    let draft = TransactionDraft(from: original, viewingAccountId: destId)
+    #expect(draft.accountId == destId)
+    #expect(draft.toAccountId == sourceId)
+    #expect(draft.amountText == "100.00")
+  }
+
   // MARK: - Instrument Precision
 
   @Test func initFromTransactionPreservesInstrumentPrecision() {

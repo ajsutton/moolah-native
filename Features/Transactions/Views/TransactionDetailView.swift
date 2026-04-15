@@ -61,7 +61,7 @@ struct TransactionDetailView: View {
     self.onUpdate = onUpdate
     self.onDelete = onDelete
 
-    var initialDraft = TransactionDraft(from: transaction)
+    var initialDraft = TransactionDraft(from: transaction, viewingAccountId: viewingAccountId)
     if let catId = transaction.categoryId, let cat = categories.by(id: catId) {
       initialDraft.categoryText = categories.path(for: cat)
     }
