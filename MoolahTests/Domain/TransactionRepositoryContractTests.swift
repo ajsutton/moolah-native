@@ -140,7 +140,7 @@ struct TransactionRepositoryContractTests {
 
     // Verify all fields match the updated transaction
     #expect(result.id == created.id)
-    #expect(result.type == .transfer)
+    #expect(result.legs.allSatisfy { $0.type == .transfer })
     #expect(result.date == date)
     #expect(result.legs.count == 2)
     #expect(result.legs[0].accountId == fromAccountId)
@@ -162,7 +162,7 @@ struct TransactionRepositoryContractTests {
     )
     let fetched = try #require(page.transactions.first(where: { $0.id == created.id }))
 
-    #expect(fetched.type == .transfer)
+    #expect(fetched.legs.allSatisfy { $0.type == .transfer })
     #expect(fetched.date == date)
     #expect(fetched.legs.count == 2)
     #expect(fetched.legs[0].accountId == fromAccountId)
@@ -357,7 +357,7 @@ struct TransactionRepositoryContractTests {
       pageSize: 50
     )
     #expect(destPage.transactions.count == 1)
-    #expect(destPage.transactions[0].type == .transfer)
+    #expect(destPage.transactions[0].legs.allSatisfy { $0.type == .transfer })
   }
 
   // MARK: - Payee Suggestions

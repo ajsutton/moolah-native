@@ -164,7 +164,7 @@ struct TransactionDetailView: View {
 
   private var typeSection: some View {
     Section {
-      if transaction.type == .openingBalance {
+      if transaction.legs.contains(where: { $0.type == .openingBalance }) {
         // Opening balance transactions cannot be edited
         LabeledContent("Type") {
           Text(TransactionType.openingBalance.displayName)
@@ -442,8 +442,10 @@ struct TransactionDetailView: View {
           draft.categoryText = categories.path(for: cat)
         }
       }
-      if draft.type == .expense && match.type != .expense {
-        draft.type = match.type
+      if draft.type == .expense, match.isSimple, let matchType = match.legs.first?.type,
+        matchType != .expense
+      {
+        draft.type = matchType
       }
       if match.isSimple, draft.type == .transfer, draft.toAccountId == nil {
         let matchTransferLeg = match.legs.first(where: { $0.accountId != draft.accountId })

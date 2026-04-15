@@ -183,7 +183,7 @@ struct TransactionDraftTests {
 
     #expect(roundTripped != nil)
     #expect(roundTripped!.id == original.id)
-    #expect(roundTripped!.type == original.type)
+    #expect(roundTripped!.legs.map(\.type) == original.legs.map(\.type))
     #expect(roundTripped!.date == original.date)
     #expect(roundTripped!.legs.map(\.accountId) == original.legs.map(\.accountId))
     #expect(roundTripped!.legs.first?.quantity == original.legs.first?.quantity)
