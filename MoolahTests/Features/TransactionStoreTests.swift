@@ -50,7 +50,7 @@ struct TransactionStoreTests {
 
     // Each entry should have a running balance
     for entry in store.transactions {
-      #expect(entry.transaction.primaryAccountId == accountId)
+      #expect(entry.transaction.accountIds.contains(accountId))
     }
   }
 
@@ -721,11 +721,11 @@ struct TransactionStoreTests {
     #expect(receivedOld?.id == tx.id)
     #expect(receivedOld?.legs.first?.quantity == Decimal(-10000) / 100)
     #expect(
-      receivedOld?.legs.first(where: { $0.accountId != receivedOld?.primaryAccountId })?.accountId
+      receivedOld?.legs.first(where: { $0.accountId != accountId })?.accountId
         == savingsId)
     #expect(receivedNew?.legs.first?.quantity == Decimal(-15000) / 100)
     #expect(
-      receivedNew?.legs.first(where: { $0.accountId != receivedNew?.primaryAccountId })?.accountId
+      receivedNew?.legs.first(where: { $0.accountId != accountId })?.accountId
         == savingsId)
   }
 
@@ -786,10 +786,10 @@ struct TransactionStoreTests {
     await store.update(updated)
 
     #expect(
-      receivedOld?.legs.first(where: { $0.accountId != receivedOld?.primaryAccountId })?.accountId
+      receivedOld?.legs.first(where: { $0.accountId != accountId })?.accountId
         == savingsId)
     #expect(
-      receivedNew?.legs.first(where: { $0.accountId != receivedNew?.primaryAccountId })?.accountId
+      receivedNew?.legs.first(where: { $0.accountId != accountId })?.accountId
         == investmentId)
   }
 
@@ -836,8 +836,8 @@ struct TransactionStoreTests {
     ]
     await store.update(updated)
 
-    #expect(receivedOld?.primaryAccountId == accountId)
-    #expect(receivedNew?.primaryAccountId == newAccountId)
+    #expect(receivedOld?.accountIds.contains(accountId) == true)
+    #expect(receivedNew?.accountIds.contains(newAccountId) == true)
   }
 
   // MARK: - Balance Updates with Earmarks
@@ -1140,11 +1140,11 @@ struct TransactionStoreTests {
 
     #expect(receivedOld?.legs.first?.type ?? .expense == .expense)
     #expect(
-      receivedOld?.legs.first(where: { $0.accountId != receivedOld?.primaryAccountId })?.accountId
+      receivedOld?.legs.first(where: { $0.accountId != accountId })?.accountId
         == nil)
     #expect(receivedNew?.legs.first?.type ?? .expense == .transfer)
     #expect(
-      receivedNew?.legs.first(where: { $0.accountId != receivedNew?.primaryAccountId })?.accountId
+      receivedNew?.legs.first(where: { $0.accountId != accountId })?.accountId
         == savingsId)
   }
 
@@ -1200,11 +1200,11 @@ struct TransactionStoreTests {
 
     #expect(receivedOld?.legs.first?.type ?? .expense == .transfer)
     #expect(
-      receivedOld?.legs.first(where: { $0.accountId != receivedOld?.primaryAccountId })?.accountId
+      receivedOld?.legs.first(where: { $0.accountId != accountId })?.accountId
         == savingsId)
     #expect(receivedNew?.legs.first?.type ?? .expense == .expense)
     #expect(
-      receivedNew?.legs.first(where: { $0.accountId != receivedNew?.primaryAccountId })?.accountId
+      receivedNew?.legs.first(where: { $0.accountId != accountId })?.accountId
         == nil)
   }
 
@@ -1500,9 +1500,9 @@ struct TransactionStoreTests {
     let paidTx = allPage.transactions.first { $0.id != scheduled.id }
     #expect(paidTx != nil)
     #expect(paidTx?.legs.first?.type ?? .expense == .transfer)
-    #expect(paidTx?.primaryAccountId == accountId)
+    #expect(paidTx?.accountIds.contains(accountId) == true)
     #expect(
-      paidTx?.legs.first(where: { $0.accountId != paidTx?.primaryAccountId })?.accountId
+      paidTx?.legs.first(where: { $0.accountId != accountId })?.accountId
         == toAccountId)
     #expect(paidTx?.legs.first?.quantity == Decimal(-100000) / 100)
     #expect(paidTx?.payee == "Savings Transfer")
@@ -1811,7 +1811,7 @@ struct TransactionStoreTests {
     )
 
     #expect(created != nil)
-    #expect(created?.primaryAccountId == filterAccountId)
+    #expect(created?.accountIds.contains(filterAccountId) == true)
   }
 
   @Test func testCreateDefaultFallsBackToFirstAccount() async throws {
@@ -1832,7 +1832,7 @@ struct TransactionStoreTests {
     )
 
     #expect(created != nil)
-    #expect(created?.primaryAccountId == fallbackAccountId)
+    #expect(created?.accountIds.contains(fallbackAccountId) == true)
   }
 
   @Test func testCreateDefaultSetsExpenseTypeAndZeroAmount() async throws {
