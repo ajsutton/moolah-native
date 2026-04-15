@@ -21,7 +21,7 @@ struct TransactionRowView: View {
       Image(systemName: iconName)
         .foregroundStyle(iconColor)
         .frame(width: UIConstants.IconSize.listIcon, height: UIConstants.IconSize.listIcon)
-        .accessibilityLabel(transaction.type.rawValue.capitalized)
+        .accessibilityHidden(true)
 
       VStack(alignment: .leading, spacing: 2) {
         Text(displayPayee)
@@ -70,11 +70,20 @@ struct TransactionRowView: View {
     let dateStr = transaction.date.formatted(date: .abbreviated, time: .omitted)
     let amountStr = displayAmount.formatted
     let balanceStr = balance.formatted
-    return "\(displayPayee), \(amountStr), \(dateStr), balance \(balanceStr)"
+    let typeStr: String
+    if transaction.isSimple, let type = transaction.legs.first?.type {
+      typeStr = type.displayName
+    } else {
+      typeStr = "Complex transaction"
+    }
+    return "\(typeStr), \(displayPayee), \(amountStr), \(dateStr), balance \(balanceStr)"
   }
 
   private var iconName: String {
-    switch transaction.type {
+    guard transaction.isSimple, let type = transaction.legs.first?.type else {
+      return "arrow.trianglehead.branch"
+    }
+    switch type {
     case .income: return "arrow.up"
     case .expense: return "arrow.down"
     case .transfer: return "arrow.left.arrow.right"
@@ -83,7 +92,10 @@ struct TransactionRowView: View {
   }
 
   private var iconColor: Color {
-    switch transaction.type {
+    guard transaction.isSimple, let type = transaction.legs.first?.type else {
+      return .purple
+    }
+    switch type {
     case .income: return .green
     case .expense: return .red
     case .transfer: return .blue
@@ -181,6 +193,20 @@ struct TransactionRowView: View {
       ), accounts: accounts, categories: categories, earmarks: earmarks,
       displayAmount: InstrumentAmount(quantity: -500, instrument: .AUD),
       balance: InstrumentAmount(quantity: -1449.77, instrument: .AUD),
+      viewingAccountId: sourceId)
+    TransactionRowView(
+      transaction: Transaction(
+        date: Date(), payee: "Stock Trade",
+        legs: [
+          TransactionLeg(
+            accountId: sourceId, instrument: .AUD, quantity: -1000, type: .transfer),
+          TransactionLeg(
+            accountId: savingsId, instrument: .AUD, quantity: 950, type: .transfer),
+          TransactionLeg(accountId: sourceId, instrument: .AUD, quantity: -50, type: .expense),
+        ]
+      ), accounts: accounts, categories: categories, earmarks: earmarks,
+      displayAmount: InstrumentAmount(quantity: -1050, instrument: .AUD),
+      balance: InstrumentAmount(quantity: -2499.77, instrument: .AUD),
       viewingAccountId: sourceId)
   }
 }

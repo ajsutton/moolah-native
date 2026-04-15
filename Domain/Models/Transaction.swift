@@ -104,7 +104,6 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
   // MARK: - Convenience Accessors
 
   var accountIds: Set<UUID> { Set(legs.compactMap(\.accountId)) }
-  var type: TransactionType { legs.first?.type ?? .expense }
   var isTransfer: Bool {
     let accounts = Set(legs.filter { $0.type == .transfer }.compactMap(\.accountId))
     let instruments = Set(legs.filter { $0.type == .transfer }.map(\.instrument))
