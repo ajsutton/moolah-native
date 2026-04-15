@@ -24,7 +24,7 @@ final class SyncCoordinator: Sendable {
     case unknown
   }
 
-  static func parseZone(_ zoneID: CKRecordZone.ID) -> ZoneType {
+  nonisolated static func parseZone(_ zoneID: CKRecordZone.ID) -> ZoneType {
     let name = zoneID.zoneName
     if name == "profile-index" {
       return .profileIndex
@@ -528,25 +528,27 @@ final class SyncCoordinator: Sendable {
 
   // MARK: - Fetched Record Zone Changes
 
-  private func handleFetchedRecordZoneChanges(
-    _ changes: CKSyncEngine.Event.FetchedRecordZoneChanges,
-    preExtractedSystemFields: [(String, Data)]?
-  ) {
-    // Group saved records by zone
+  /// Processes fetched record zone changes with heavy SwiftData work off the main actor.
+  /// Resolves handlers and manages state on @MainActor; upsert/delete/save runs off-main.
+  nonisolated private func handleFetchedRecordZoneChangesAsync(
+    _ changes: CKSyncEngine.Event.FetchedRecordZoneChanges
+  ) async {
+    // Group records by zone off-main
     var savedByZone: [CKRecordZone.ID: [CKRecord]] = [:]
     for modification in changes.modifications {
       let record = modification.record
       savedByZone[record.recordID.zoneID, default: []].append(record)
     }
-
-    // Group deletions by zone
     var deletedByZone: [CKRecordZone.ID: [(CKRecord.ID, String)]] = [:]
     for deletion in changes.deletions {
       deletedByZone[deletion.recordID.zoneID, default: []]
         .append((deletion.recordID, deletion.recordType))
     }
 
-    // Process each zone
+    // Pre-extract system fields off-main
+    let preExtractedSystemFields: [(String, Data)] = changes.modifications
+      .map { ($0.record.recordID.recordName, $0.record.encodedSystemFields) }
+
     let allZones = Set(savedByZone.keys).union(deletedByZone.keys)
     for zoneID in allZones {
       let saved = savedByZone[zoneID] ?? []
@@ -562,31 +564,48 @@ final class SyncCoordinator: Sendable {
 
       switch zoneType {
       case .profileIndex:
-        // Profile index only has saves and simple deletions (no recordType needed)
         let deletedIDs = deleted.map(\.0)
+        // Index upsert is fast (few records), run off-main
         profileIndexHandler.applyRemoteChanges(saved: saved, deleted: deletedIDs)
-        if isFetchingChanges {
-          fetchSessionIndexChanged = true
-        } else {
-          notifyIndexObservers()
+        await MainActor.run {
+          if isFetchingChanges {
+            fetchSessionIndexChanged = true
+          } else {
+            notifyIndexObservers()
+          }
         }
 
       case .profileData(let profileId):
-        do {
-          let handler = try handlerForProfileZone(profileId: profileId, zoneID: zoneID)
-          // Filter pre-extracted system fields to this zone
-          let zonePreExtracted = preExtractedSystemFields?.filter { (recordName, _) in
-            saved.contains { $0.recordID.recordName == recordName }
+        // Resolve handler on main (accesses @MainActor-isolated state)
+        let result: (handler: ProfileDataSyncHandler, isFetching: Bool)? = await MainActor.run {
+          do {
+            let handler = try handlerForProfileZone(profileId: profileId, zoneID: zoneID)
+            return (handler, isFetchingChanges)
+          } catch {
+            logger.error("Failed to get handler for profile \(profileId): \(error)")
+            return nil
           }
-          let changedTypes = handler.applyRemoteChanges(
-            saved: saved, deleted: deleted, preExtractedSystemFields: zonePreExtracted)
-          if isFetchingChanges {
-            accumulateFetchSessionChanges(for: profileId, changedTypes: changedTypes)
-          } else if !changedTypes.isEmpty {
-            notifyObservers(for: profileId, changedTypes: changedTypes)
+        }
+        guard let result else { continue }
+
+        // Filter pre-extracted system fields to this zone (off-main)
+        let zonePreExtracted = preExtractedSystemFields.filter { (recordName, _) in
+          saved.contains { $0.recordID.recordName == recordName }
+        }
+
+        // Heavy upsert/delete/save runs off-main via nonisolated method
+        let changedTypes = result.handler.applyRemoteChanges(
+          saved: saved, deleted: deleted, preExtractedSystemFields: zonePreExtracted)
+
+        // Notify observers on main
+        if !changedTypes.isEmpty {
+          await MainActor.run {
+            if result.isFetching {
+              accumulateFetchSessionChanges(for: profileId, changedTypes: changedTypes)
+            } else {
+              notifyObservers(for: profileId, changedTypes: changedTypes)
+            }
           }
-        } catch {
-          logger.error("Failed to get handler for profile \(profileId): \(error)")
         }
 
       case .unknown:
@@ -595,9 +614,9 @@ final class SyncCoordinator: Sendable {
 
       os_signpost(.end, log: Signposts.sync, name: "applyFetchedChanges", signpostID: signpostID)
       let zoneMs = (ContinuousClock.now - zoneStart).inMilliseconds
-      if zoneMs > 16 {
-        logger.warning(
-          "PERF: applyFetchedChanges blocked main thread for \(zoneMs)ms (\(zoneID.zoneName), \(saved.count) saves, \(deleted.count) deletes)"
+      if zoneMs > 100 {
+        logger.info(
+          "applyFetchedChanges took \(zoneMs)ms (\(zoneID.zoneName), \(saved.count) saves, \(deleted.count) deletes)"
         )
       }
     }
@@ -687,24 +706,16 @@ final class SyncCoordinator: Sendable {
 
 extension SyncCoordinator: CKSyncEngineDelegate {
   nonisolated func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
-    // Pre-extract system fields off the main actor
-    let preExtracted: [(String, Data)]?
     if case .fetchedRecordZoneChanges(let changes) = event {
-      preExtracted = changes.modifications
-        .map { ($0.record.recordID.recordName, $0.record.encodedSystemFields) }
+      await handleFetchedRecordZoneChangesAsync(changes)
     } else {
-      preExtracted = nil
-    }
-
-    await MainActor.run {
-      handleEventOnMain(event, preExtractedSystemFields: preExtracted)
+      await MainActor.run {
+        handleEventOnMain(event)
+      }
     }
   }
 
-  private func handleEventOnMain(
-    _ event: CKSyncEngine.Event,
-    preExtractedSystemFields: [(String, Data)]? = nil
-  ) {
+  private func handleEventOnMain(_ event: CKSyncEngine.Event) {
     switch event {
     case .stateUpdate(let stateUpdate):
       saveStateSerialization(stateUpdate.stateSerialization)
@@ -715,8 +726,9 @@ extension SyncCoordinator: CKSyncEngineDelegate {
     case .fetchedDatabaseChanges(let changes):
       handleFetchedDatabaseChanges(changes)
 
-    case .fetchedRecordZoneChanges(let changes):
-      handleFetchedRecordZoneChanges(changes, preExtractedSystemFields: preExtractedSystemFields)
+    case .fetchedRecordZoneChanges:
+      // Handled by handleFetchedRecordZoneChangesAsync
+      break
 
     case .sentRecordZoneChanges(let sentChanges):
       handleSentRecordZoneChanges(sentChanges)

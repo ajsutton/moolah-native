@@ -32,7 +32,7 @@ final class ProfileDataSyncHandler: Sendable {
   /// Creates a fresh ModelContext per call for isolation.
   /// Returns the set of changed record type strings.
   @discardableResult
-  func applyRemoteChanges(
+  nonisolated func applyRemoteChanges(
     saved: [CKRecord],
     deleted: [(CKRecord.ID, String)],
     preExtractedSystemFields: [(String, Data)]? = nil
@@ -97,10 +97,10 @@ final class ProfileDataSyncHandler: Sendable {
     let upsertMs = upsertDuration.inMilliseconds
     let saveMs = saveDuration.inMilliseconds
 
-    if batchMs > 16 {
-      logger.warning(
+    if batchMs > 100 {
+      logger.info(
         """
-        PERF: applyRemoteChanges blocked main thread for \(batchMs)ms \
+        applyRemoteChanges took \(batchMs)ms \
         (upsert: \(upsertMs)ms, save: \(saveMs)ms, \(saved.count) saves, \(deleted.count) deletes)
         """)
     }
