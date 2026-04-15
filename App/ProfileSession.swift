@@ -1,3 +1,4 @@
+import CloudKit
 import Foundation
 import OSLog
 import SwiftData
@@ -21,8 +22,8 @@ final class ProfileSession: Identifiable {
   let stockPriceService: StockPriceService
   let cryptoPriceService: CryptoPriceService
 
-  /// The sync engine for this profile's CloudKit zone (nil for remote profiles).
-  private(set) var profileSyncEngine: ProfileSyncEngine?
+  /// Observer token for sync coordinator notifications (nil for remote profiles).
+  private var syncObserverToken: SyncCoordinator.ObserverToken?
 
   nonisolated var id: UUID { profile.id }
 
@@ -31,7 +32,10 @@ final class ProfileSession: Identifiable {
   private var pendingChangedTypes = Set<String>()
   private var lastSyncEventTime: ContinuousClock.Instant?
 
-  init(profile: Profile, containerManager: ProfileContainerManager? = nil) {
+  init(
+    profile: Profile, containerManager: ProfileContainerManager? = nil,
+    syncCoordinator: SyncCoordinator? = nil
+  ) {
     self.profile = profile
 
     let backend: BackendProvider
@@ -120,47 +124,65 @@ final class ProfileSession: Identifiable {
       earmarkStore.applyTransactionDelta(old: old, new: new)
     }
 
-    // Set up CKSyncEngine for iCloud profiles (only when CloudKit entitlements are available)
-    if profile.backendType == .cloudKit, let containerManager,
-      CloudKitAuthProvider.isCloudKitAvailable
-    {
-      logger.info("Starting profile sync engine for \(profile.id)")
-      let profileContainer = try! containerManager.container(for: profile.id)
-      let syncEngine = ProfileSyncEngine(profileId: profile.id, modelContainer: profileContainer)
-      syncEngine.onRemoteChangesApplied = { [weak self] changedTypes in
+    // Register with SyncCoordinator for iCloud profiles
+    if profile.backendType == .cloudKit, let syncCoordinator {
+      let zoneID = CKRecordZone.ID(
+        zoneName: "profile-\(profile.id.uuidString)",
+        ownerName: CKCurrentUserDefaultName)
+
+      logger.info("Registering profile \(profile.id) with sync coordinator")
+      self.syncObserverToken = syncCoordinator.addObserver(for: profile.id) {
+        [weak self] changedTypes in
         self?.scheduleReloadFromSync(changedTypes: changedTypes)
       }
-      self.profileSyncEngine = syncEngine
 
-      // Wire repository sync closures — only CloudKit repositories have these properties
+      // Wire repository sync closures to coordinator
       if let repo = backend.accounts as? CloudKitAccountRepository {
-        repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }
-        repo.onRecordDeleted = { [weak syncEngine] id in syncEngine?.queueDeletion(id: id) }
-        repo.onInstrumentChanged = { [weak syncEngine] id in
-          syncEngine?.queueSave(recordName: id)
+        repo.onRecordChanged = { [weak syncCoordinator] id in
+          syncCoordinator?.queueSave(id: id, zoneID: zoneID)
+        }
+        repo.onRecordDeleted = { [weak syncCoordinator] id in
+          syncCoordinator?.queueDeletion(id: id, zoneID: zoneID)
+        }
+        repo.onInstrumentChanged = { [weak syncCoordinator] id in
+          syncCoordinator?.queueSave(recordName: id, zoneID: zoneID)
         }
       }
       if let repo = backend.transactions as? CloudKitTransactionRepository {
-        repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }
-        repo.onRecordDeleted = { [weak syncEngine] id in syncEngine?.queueDeletion(id: id) }
-        repo.onInstrumentChanged = { [weak syncEngine] id in
-          syncEngine?.queueSave(recordName: id)
+        repo.onRecordChanged = { [weak syncCoordinator] id in
+          syncCoordinator?.queueSave(id: id, zoneID: zoneID)
+        }
+        repo.onRecordDeleted = { [weak syncCoordinator] id in
+          syncCoordinator?.queueDeletion(id: id, zoneID: zoneID)
+        }
+        repo.onInstrumentChanged = { [weak syncCoordinator] id in
+          syncCoordinator?.queueSave(recordName: id, zoneID: zoneID)
         }
       }
       if let repo = backend.categories as? CloudKitCategoryRepository {
-        repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }
-        repo.onRecordDeleted = { [weak syncEngine] id in syncEngine?.queueDeletion(id: id) }
+        repo.onRecordChanged = { [weak syncCoordinator] id in
+          syncCoordinator?.queueSave(id: id, zoneID: zoneID)
+        }
+        repo.onRecordDeleted = { [weak syncCoordinator] id in
+          syncCoordinator?.queueDeletion(id: id, zoneID: zoneID)
+        }
       }
       if let repo = backend.earmarks as? CloudKitEarmarkRepository {
-        repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }
-        repo.onRecordDeleted = { [weak syncEngine] id in syncEngine?.queueDeletion(id: id) }
+        repo.onRecordChanged = { [weak syncCoordinator] id in
+          syncCoordinator?.queueSave(id: id, zoneID: zoneID)
+        }
+        repo.onRecordDeleted = { [weak syncCoordinator] id in
+          syncCoordinator?.queueDeletion(id: id, zoneID: zoneID)
+        }
       }
       if let repo = backend.investments as? CloudKitInvestmentRepository {
-        repo.onRecordChanged = { [weak syncEngine] id in syncEngine?.queueSave(id: id) }
-        repo.onRecordDeleted = { [weak syncEngine] id in syncEngine?.queueDeletion(id: id) }
+        repo.onRecordChanged = { [weak syncCoordinator] id in
+          syncCoordinator?.queueSave(id: id, zoneID: zoneID)
+        }
+        repo.onRecordDeleted = { [weak syncCoordinator] id in
+          syncCoordinator?.queueDeletion(id: id, zoneID: zoneID)
+        }
       }
-
-      syncEngine.start()
     } else if profile.backendType == .cloudKit {
       logger.warning("CloudKit not available — profile sync disabled for \(profile.id)")
     }
@@ -210,5 +232,17 @@ final class ProfileSession: Identifiable {
       let reloadMs = (ContinuousClock.now - reloadStart).inMilliseconds
       logger.info("📊 Store reloads after sync completed in \(reloadMs)ms for types: \(types)")
     }
+  }
+
+  // MARK: - Sync Cleanup
+
+  /// Removes the sync observer from the coordinator. Call when the session is being torn down.
+  func cleanupSync(coordinator: SyncCoordinator) {
+    if let token = syncObserverToken {
+      coordinator.removeObserver(token: token)
+      syncObserverToken = nil
+    }
+    syncReloadTask?.cancel()
+    syncReloadTask = nil
   }
 }

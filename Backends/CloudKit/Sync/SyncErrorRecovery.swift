@@ -3,9 +3,9 @@ import os
 
 /// Shared error classification and recovery for CKSyncEngine send failures.
 ///
-/// Both `ProfileSyncEngine` and `ProfileIndexSyncEngine` use identical error
-/// classification logic — only the system-fields storage differs. This helper
-/// extracts the common dispatch so bug fixes apply everywhere.
+/// Classifies failed record saves and deletes into categories (conflicts,
+/// zone-not-found, unknown items, etc.) and provides recovery helpers.
+/// Used by `SyncCoordinator` to handle send failures across all zones.
 enum SyncErrorRecovery {
 
   /// Categorized results from classifying failed record saves and deletes.
@@ -79,17 +79,14 @@ enum SyncErrorRecovery {
     return result
   }
 
-  /// Re-queues all classified failures and creates the zone if needed.
-  ///
-  /// Call this **after** handling engine-specific work (e.g., updating system fields
-  /// for conflicts and unknownItems).
-  static func recover(
+  /// Re-queues all classified failures except zone-not-found records.
+  /// Returns zone-not-found save and delete IDs for the caller to handle zone creation.
+  static func requeueFailures(
     _ failures: ClassifiedFailures,
     syncEngine: CKSyncEngine?,
-    zoneID: CKRecordZone.ID,
     logger: Logger
-  ) {
-    // Re-queue conflicts, unknownItems, and other failures
+  ) -> (zoneNotFoundSaves: [CKRecord.ID], zoneNotFoundDeletes: [CKRecord.ID]) {
+    // Re-queue conflicts, unknownItems, and other failures (same logic as current recover())
     var pendingSaves: [CKSyncEngine.PendingRecordZoneChange] = []
     for (recordID, _) in failures.conflicts {
       pendingSaves.append(.saveRecord(recordID))
@@ -104,26 +101,7 @@ enum SyncErrorRecovery {
       syncEngine?.state.add(pendingRecordZoneChanges: pendingSaves)
     }
 
-    // Handle zone-not-found: create zone once and re-queue all affected records
-    if !failures.zoneNotFoundSaves.isEmpty || !failures.zoneNotFoundDeletes.isEmpty {
-      let saveCount = failures.zoneNotFoundSaves.count
-      let deleteCount = failures.zoneNotFoundDeletes.count
-      logger.info(
-        "Zone missing — creating zone and re-queuing \(saveCount) saves, \(deleteCount) deletes"
-      )
-      Task {
-        do {
-          let zone = CKRecordZone(zoneID: zoneID)
-          try await CKContainer.default().privateCloudDatabase.save(zone)
-          logger.info("Created zone \(zoneID.zoneName)")
-          var zoneChanges: [CKSyncEngine.PendingRecordZoneChange] =
-            failures.zoneNotFoundSaves.map { .saveRecord($0) }
-          zoneChanges += failures.zoneNotFoundDeletes.map { .deleteRecord($0) }
-          syncEngine?.state.add(pendingRecordZoneChanges: zoneChanges)
-        } catch {
-          logger.error("Failed to create zone: \(error)")
-        }
-      }
-    }
+    return (failures.zoneNotFoundSaves, failures.zoneNotFoundDeletes)
   }
+
 }

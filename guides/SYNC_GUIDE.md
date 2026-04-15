@@ -7,16 +7,17 @@
 
 ## 1. Architecture Overview
 
-Two sync layers, each with their own CKSyncEngine instance:
+A single `SyncCoordinator` owns one `CKSyncEngine` instance and routes events to zone-specific handlers:
 
-1. **ProfileIndexSyncEngine** -- syncs `ProfileRecord` metadata via the `profile-index` zone
-2. **ProfileSyncEngine** (one per active profile) -- syncs per-profile data via `profile-{profileId}` zones
+1. **ProfileIndexSyncHandler** -- handles `ProfileRecord` metadata for the `profile-index` zone
+2. **ProfileDataSyncHandler** (one per active profile) -- handles per-profile data for `profile-{profileId}` zones
 
-Each engine receives change notifications from the repository layer. Repository mutation methods explicitly call sync closures (`onRecordChanged`/`onRecordDeleted`) to queue changes for upload, ensuring only user-initiated mutations trigger sync — not derived-data updates like cached balance recomputation.
+The coordinator receives all `CKSyncEngine` delegate events and dispatches them to the appropriate handler based on zone ID. Repository mutation methods explicitly call sync closures (`onRecordChanged`/`onRecordDeleted`) to queue changes for upload, ensuring only user-initiated mutations trigger sync — not derived-data updates like cached balance recomputation.
 
 **Key files:**
-- `Backends/CloudKit/Sync/ProfileSyncEngine.swift` -- per-profile sync engine
-- `Backends/CloudKit/Sync/ProfileIndexSyncEngine.swift` -- profile index sync engine
+- `Backends/CloudKit/Sync/SyncCoordinator.swift` -- single CKSyncEngine owner; routes events by zone ID
+- `Backends/CloudKit/Sync/ProfileDataSyncHandler.swift` -- per-profile zone handler
+- `Backends/CloudKit/Sync/ProfileIndexSyncHandler.swift` -- profile index zone handler
 - `Backends/CloudKit/Sync/RecordMapping.swift` -- CKRecord <-> SwiftData bidirectional mapping
 - `Backends/CloudKit/Sync/LegacyZoneCleanup.swift` -- one-time cleanup of old automatic sync zone
 - `Backends/CloudKit/Repositories/CloudKit*Repository.swift` -- repositories with sync closures
@@ -28,9 +29,9 @@ Each engine receives change notifications from the repository layer. Repository 
 
 ---
 
-## 2. Dual-Engine Review Rule
+## 2. Cross-Handler Review Rule
 
-Any sync-related change must be reviewed against **both** `ProfileSyncEngine` and `ProfileIndexSyncEngine` and applied to both whenever applicable. These engines share the same patterns (system fields caching, error recovery, account change handling, zone deletion handling) but are maintained separately. When fixing a bug or adding a feature to one engine, always check whether the same change is needed in the other.
+Any sync-related change must be reviewed against `SyncCoordinator`, `ProfileDataSyncHandler`, and `ProfileIndexSyncHandler` and applied wherever applicable. The handlers share the same patterns (system fields caching, error recovery, account change handling, zone deletion handling) but are maintained separately. When fixing a bug or adding a feature to one handler, always check whether the same change is needed in the other.
 
 ---
 
@@ -56,7 +57,7 @@ func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
 
 Never run multiple CKSyncEngine instances against the same CloudKit database. They interfere with each other's change tokens and event routing.
 
-Since this project uses two engines (ProfileIndex and ProfileSync), they must manage non-overlapping zones. This is safe because each engine is responsible for its own distinct zone(s).
+This project uses a single `CKSyncEngine` instance (owned by `SyncCoordinator`) that manages all zones. Zone-specific logic is delegated to `ProfileDataSyncHandler` and `ProfileIndexSyncHandler`, which handle non-overlapping zones.
 
 ### Initialize Early
 
@@ -136,7 +137,7 @@ func ensureZoneExists() async {
 
 ### Rule 4: Every Repository Mutation Must Queue Sync Changes
 
-**Bug found:** `ProfileIndexSyncEngine.addPendingSave()` existed but was never called -- profile records saved to SwiftData were never uploaded to CloudKit.
+**Bug found (historical):** `ProfileIndexSyncEngine.addPendingSave()` existed but was never called -- profile records saved to SwiftData were never uploaded to CloudKit.
 
 **Rule:** Every repository mutation method (create, update, delete) on a CloudKit repository must call `onRecordChanged(id)` or `onRecordDeleted(id)` after saving. When adding a new syncable record type, verify all mutation paths queue sync changes. Methods that only update derived data (caches, computed values) must NOT queue sync changes.
 
@@ -511,9 +512,9 @@ protocol CloudKitRecordConvertible {
 2. Add `CloudKitRecordConvertible` conformance in `RecordMapping.swift`.
 3. Add the record type to `RecordTypeRegistry.allTypes`.
 4. Add `onRecordChanged`/`onRecordDeleted` closure calls to every mutation method in the CloudKit repository.
-5. Add upsert and fetch methods to `ProfileSyncEngine`.
+5. Add upsert and fetch methods to `ProfileDataSyncHandler`.
 6. Add cases to `applyRemoteSave` and `applyRemoteDeletion` switch statements.
-7. Add the new record type to `queueAllExistingRecords()` in `ProfileSyncEngine`.
+7. Add the new record type to `queueAllExistingRecords()` in `ProfileDataSyncHandler`.
 8. **Test:** Verify repository mutations trigger the sync closures.
 
 ---
@@ -612,17 +613,22 @@ try await deviceB.syncEngine.fetchChanges()
 
 ### Logging
 
-All sync engines use `os.Logger` with the `com.moolah.app` subsystem. Filter by category:
+All sync components use `os.Logger` with the `com.moolah.app` subsystem. Filter by category:
 
 ```bash
+# Sync coordinator
+/usr/bin/log stream \
+  --predicate 'subsystem == "com.moolah.app" && category == "SyncCoordinator"' \
+  --level debug --style compact --timeout 45s
+
 # Profile index sync
 /usr/bin/log stream \
-  --predicate 'subsystem == "com.moolah.app" && category == "ProfileIndexSyncEngine"' \
+  --predicate 'subsystem == "com.moolah.app" && category == "ProfileIndexSyncHandler"' \
   --level debug --style compact --timeout 45s
 
 # Per-profile sync
 /usr/bin/log stream \
-  --predicate 'subsystem == "com.moolah.app" && category == "ProfileSyncEngine"' \
+  --predicate 'subsystem == "com.moolah.app" && category == "ProfileDataSyncHandler"' \
   --level debug --style compact --timeout 45s
 ```
 
@@ -656,7 +662,7 @@ Use the [CloudKit Dashboard](https://icloud.developer.apple.com/) to:
 | Anti-Pattern | Why It's Bad | Do This Instead |
 |-------------|--------------|-----------------|
 | Calling `fetchChanges()`/`sendChanges()` in delegate callbacks | Causes infinite loops -- engine re-enters your delegate | Add to pending queue; engine schedules sends |
-| Multiple CKSyncEngine instances on one database | They conflict on change tokens and event routing | One engine per database, managing distinct zones |
+| Multiple CKSyncEngine instances on one database | They conflict on change tokens and event routing | One engine per database (owned by `SyncCoordinator`); delegate zone-specific logic to handlers |
 | Creating fresh CKRecords without system fields | Every upload triggers `.serverRecordChanged` | Preserve and reuse `encodedSystemFields` |
 | Ignoring `.serverRecordChanged` errors | Second device's changes silently lost | Implement conflict resolution (Rule 6) |
 | Ignoring `.quotaExceeded` | Engine drops items; sync silently stops | Re-queue items and notify user (Rule 9) |
@@ -715,9 +721,9 @@ let value = ckRecord["newField"] as? String ?? defaultValue
 - [ ] Add `CloudKitRecordConvertible` conformance in `RecordMapping.swift`
 - [ ] Add to `RecordTypeRegistry.allTypes`
 - [ ] Add `onRecordChanged`/`onRecordDeleted` calls to every mutation method in the CloudKit repository
-- [ ] Add upsert/fetch methods to the sync engine
+- [ ] Add upsert/fetch methods to `ProfileDataSyncHandler`
 - [ ] Add cases to `applyRemoteSave` and `applyRemoteDeletion`
-- [ ] Add the record type to `queueAllExistingRecords()` in `ProfileSyncEngine`
+- [ ] Add the record type to `queueAllExistingRecords()` in `ProfileDataSyncHandler`
 - [ ] Write round-trip mapping tests
 - [ ] Verify repository mutations trigger sync closures with correct IDs
 
@@ -752,6 +758,7 @@ let value = ckRecord["newField"] as? String ?? defaultValue
 
 ## Version History
 
+- **1.3** (2026-04-15): Updated for unified SyncCoordinator architecture. Replaced dual-engine model with SyncCoordinator + ProfileDataSyncHandler + ProfileIndexSyncHandler. Updated all references, logging categories, checklists, and anti-patterns accordingly.
 - **1.2** (2026-04-13): Added proactive zone creation (Rule 3 rewritten), batch size limits (Rule 13), dependency ordering (Rule 14), default error re-queuing (Rule 9 updated). Updated anti-patterns, symptoms, and checklists with lessons from production debugging.
 - **1.1** (2026-04-13): Replaced ChangeTracker with explicit repository-driven sync queueing. Removed shadow pending-changes sets. Updated rules 2, 4, 4b, 12 and all checklists.
 - **1.0** (2026-04-13): Comprehensive sync guide -- architecture, rules, error handling, testing, debugging, schema evolution

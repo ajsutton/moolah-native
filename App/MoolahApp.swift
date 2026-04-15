@@ -68,7 +68,7 @@ struct ShowHiddenCommands: Commands {
 struct MoolahApp: App {
   @Environment(\.scenePhase) private var scenePhase
   private let containerManager: ProfileContainerManager
-  private let profileIndexSyncEngine: ProfileIndexSyncEngine
+  private let syncCoordinator: SyncCoordinator
   @State private var profileStore: ProfileStore
   private let logger = Logger(subsystem: "com.moolah.app", category: "BackgroundSync")
   #if os(macOS)
@@ -104,7 +104,7 @@ struct MoolahApp: App {
         dataSchema: dataSchema
       )
       containerManager = manager
-      profileIndexSyncEngine = ProfileIndexSyncEngine(modelContainer: indexContainer)
+      syncCoordinator = SyncCoordinator(containerManager: manager)
     } catch {
       fatalError("Failed to initialize ModelContainer: \(error)")
     }
@@ -112,19 +112,25 @@ struct MoolahApp: App {
     let store = ProfileStore(validator: RemoteServerValidator(), containerManager: containerManager)
     _profileStore = State(initialValue: store)
 
-    // Wire sync engine to reload profiles on remote changes (only when CloudKit is available)
+    let coordinator = syncCoordinator
+
+    // Wire sync coordinator to reload profiles on remote changes (only when CloudKit is available)
     if CloudKitAuthProvider.isCloudKitAvailable {
-      logger.info("CloudKit available — starting profile index sync engine")
-      profileIndexSyncEngine.onRemoteChangesApplied = { [weak store] in
+      logger.info("CloudKit available — starting sync coordinator")
+      _ = coordinator.addIndexObserver { [weak store] in
         store?.loadCloudProfiles()
       }
-      store.onProfileChanged = { [weak profileIndexSyncEngine] id in
-        profileIndexSyncEngine?.addPendingSave(for: id)
+      store.onProfileChanged = { [weak coordinator] id in
+        let zoneID = CKRecordZone.ID(
+          zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
+        coordinator?.queueSave(id: id, zoneID: zoneID)
       }
-      store.onProfileDeleted = { [weak profileIndexSyncEngine] id in
-        profileIndexSyncEngine?.addPendingDeletion(for: id)
+      store.onProfileDeleted = { [weak coordinator] id in
+        let zoneID = CKRecordZone.ID(
+          zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
+        coordinator?.queueDeletion(id: id, zoneID: zoneID)
       }
-      profileIndexSyncEngine.start()
+      coordinator.start()
 
       // Clean up the legacy CloudKit zone from SwiftData's automatic sync
       LegacyZoneCleanup.performIfNeeded()
@@ -136,7 +142,8 @@ struct MoolahApp: App {
 
     #if os(macOS)
       backupManager = StoreBackupManager()
-      let sessionManager = SessionManager(containerManager: containerManager)
+      let sessionManager = SessionManager(
+        containerManager: containerManager, syncCoordinator: coordinator)
       _sessionManager = State(initialValue: sessionManager)
 
       // Clean up cached sessions when a profile is removed (locally or via remote sync)
@@ -194,6 +201,7 @@ struct MoolahApp: App {
         ProfileRootView(activeSession: $activeSession)
           .environment(profileStore)
           .environment(containerManager)
+          .environment(syncCoordinator)
       }
       .modelContainer(containerManager.indexContainer)
       .onChange(of: scenePhase) { _, newPhase in
@@ -222,11 +230,7 @@ struct MoolahApp: App {
   }
 
   private func flushPendingChanges() {
-    let hasIndexChanges = profileIndexSyncEngine.hasPendingChanges
-    let profileEngines = activeProfileSyncEngines()
-    let hasProfileChanges = profileEngines.contains { $0.hasPendingChanges }
-
-    guard hasIndexChanges || hasProfileChanges else {
+    guard syncCoordinator.hasPendingChanges else {
       logger.debug("No pending changes to flush on background entry")
       return
     }
@@ -241,38 +245,18 @@ struct MoolahApp: App {
       ) { expired in
         guard !expired else { return }
         Task { @MainActor in
-          await self.profileIndexSyncEngine.sendChanges()
-          for engine in profileEngines {
-            await engine.sendChanges()
-          }
+          await self.syncCoordinator.sendChanges()
         }
       }
     #else
       Task {
-        await profileIndexSyncEngine.sendChanges()
-        for engine in profileEngines {
-          await engine.sendChanges()
-        }
+        await syncCoordinator.sendChanges()
       }
     #endif
   }
 
   private func fetchRemoteChanges() async {
     logger.info("Fetching remote changes on foreground entry")
-    await profileIndexSyncEngine.fetchChanges()
-    for engine in activeProfileSyncEngines() {
-      await engine.fetchChanges()
-    }
-  }
-
-  private func activeProfileSyncEngines() -> [ProfileSyncEngine] {
-    #if os(macOS)
-      return sessionManager.sessions.values.compactMap(\.profileSyncEngine)
-    #else
-      if let engine = activeSession?.profileSyncEngine {
-        return [engine]
-      }
-      return []
-    #endif
+    await syncCoordinator.fetchChanges()
   }
 }

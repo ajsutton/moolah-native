@@ -1,3 +1,4 @@
+@preconcurrency import CloudKit
 import SwiftData
 import XCTest
 
@@ -5,13 +6,13 @@ import XCTest
 
 /// Benchmarks for the sync upload path — `buildBatchRecordLookup` record resolution.
 ///
-/// These measure the cost of building the UUID → CKRecord lookup table that drives
+/// These measure the cost of building the UUID -> CKRecord lookup table that drives
 /// outbound CKSyncEngine saves, which is the hot path when uploading a large batch
 /// of local changes to CloudKit.
 final class SyncUploadBenchmarks: XCTestCase {
 
   nonisolated(unsafe) private static var _container: ModelContainer!
-  nonisolated(unsafe) private static var _syncEngine: ProfileSyncEngine!
+  nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler!
   nonisolated(unsafe) private static var _transactionUUIDs400: Set<UUID> = []
 
   override class func setUp() {
@@ -21,7 +22,11 @@ final class SyncUploadBenchmarks: XCTestCase {
     try! awaitSync { @MainActor in
       BenchmarkFixtures.seed(scale: .x2, in: result.container)
       let profileId = UUID()
-      _syncEngine = ProfileSyncEngine(profileId: profileId, modelContainer: result.container)
+      let zoneID = CKRecordZone.ID(
+        zoneName: "profile-\(profileId.uuidString)",
+        ownerName: CKCurrentUserDefaultName)
+      _handler = ProfileDataSyncHandler(
+        profileId: profileId, zoneID: zoneID, modelContainer: result.container)
       var descriptor = FetchDescriptor<TransactionRecord>()
       descriptor.fetchLimit = 400
       let records = try result.container.mainContext.fetch(descriptor)
@@ -30,13 +35,13 @@ final class SyncUploadBenchmarks: XCTestCase {
   }
 
   override class func tearDown() {
-    _syncEngine = nil
+    _handler = nil
     _container = nil
     _transactionUUIDs400 = []
     super.tearDown()
   }
 
-  private var syncEngine: ProfileSyncEngine { Self._syncEngine }
+  private var handler: ProfileDataSyncHandler { Self._handler }
   private var transactionUUIDs400: Set<UUID> { Self._transactionUUIDs400 }
 
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }
@@ -54,11 +59,11 @@ final class SyncUploadBenchmarks: XCTestCase {
   /// lookups (up to 2400 queries). All 400 UUIDs are existing transactions so the
   /// first fetch resolves all of them and the remaining 5 type queries are skipped.
   func testBuildBatchRecordLookup_400transactions() {
-    let engine = syncEngine
+    let handler = handler
     let uuids = transactionUUIDs400
     measure(metrics: metrics, options: options) {
       _ = try! awaitSync { @MainActor in
-        engine.buildBatchRecordLookup(for: uuids)
+        handler.buildBatchRecordLookup(for: uuids)
       }
     }
   }
