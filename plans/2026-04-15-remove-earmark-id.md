@@ -203,9 +203,9 @@ if !hideEarmark {
 
 Each earmark gets its own bookmark icon + name, separated by `·` from the date and from each other. This gracefully handles zero, one, or many earmarks.
 
-### TransactionRowView displayPayee (P2) — First Applicable Earmark
+### TransactionRowView displayPayee (P2) — All Applicable Earmarks
 
-The `displayPayee` fallback generates "Earmark funds for X" when no payee is set. Since this produces a single string used as the transaction's display name, use the first applicable earmark:
+The `displayPayee` fallback generates "Earmark funds for X" when no payee is set. Show all unique applicable earmark names, joined with commas:
 
 ```swift
 // Before
@@ -215,12 +215,9 @@ if let earmarkId = transaction.earmarkId,
 }
 
 // After
-let applicable = viewingAccountId.map { id in
-    transaction.legs.filter { $0.accountId == id }
-} ?? transaction.legs
-if let earmarkId = applicable.first(where: { $0.earmarkId != nil })?.earmarkId,
-   let earmark = earmarks.by(id: earmarkId) {
-    return "Earmark funds for \(earmark.name)"
+let names = earmarkNames  // reuse the same computed property from P1
+if !names.isEmpty {
+    return "Earmark funds for \(names.joined(separator: ", "))"
 }
 ```
 
@@ -235,7 +232,7 @@ private var applicableEarmarkIds: [UUID] {
 }
 ```
 
-Then `earmarkNames` maps over `applicableEarmarkIds`, and `displayPayee` uses `applicableEarmarkIds.first`.
+Then `earmarkNames` maps over `applicableEarmarkIds`, and `displayPayee` joins all `earmarkNames`.
 
 ### UpcomingView (P3, P4) — Same Pattern, No Account Filter
 
@@ -271,18 +268,18 @@ ForEach(earmarkIds, id: \.self) { earmarkId in
 }
 ```
 
-**P4** — `displayPayee` fallback uses the first earmark from all legs:
+**P4** — `displayPayee` fallback shows all unique earmark names from all legs:
 
 ```swift
-if let earmarkId = transaction.legs.first(where: { $0.earmarkId != nil })?.earmarkId,
-   let earmark = earmarks.by(id: earmarkId) {
-    return "Earmark funds for \(earmark.name)"
+let allEarmarkNames = earmarkIds.compactMap { earmarks.by(id: $0)?.name }
+if !allEarmarkNames.isEmpty {
+    return "Earmark funds for \(allEarmarkNames.joined(separator: ", "))"
 }
 ```
 
 ### UpcomingTransactionsCard (P5) — Same as UpcomingView P4
 
-Same unfiltered context. Replace `transaction.earmarkId` with first earmark from all legs:
+Same unfiltered context. Show all unique earmark names from all legs:
 
 ```swift
 // Before
@@ -292,9 +289,10 @@ if let earmarkId = transaction.earmarkId,
 }
 
 // After
-if let earmarkId = transaction.legs.first(where: { $0.earmarkId != nil })?.earmarkId,
-   let earmark = earmarks.by(id: earmarkId) {
-    return "Earmark funds for \(earmark.name)"
+let earmarkIds = transaction.legs.compactMap(\.earmarkId).uniqued()
+let earmarkNames = earmarkIds.compactMap { earmarks.by(id: $0)?.name }
+if !earmarkNames.isEmpty {
+    return "Earmark funds for \(earmarkNames.joined(separator: ", "))"
 }
 ```
 
