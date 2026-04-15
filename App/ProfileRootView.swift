@@ -10,6 +10,7 @@
   struct ProfileRootView: View {
     @Environment(ProfileStore.self) private var profileStore
     @Environment(ProfileContainerManager.self) private var containerManager
+    @Environment(SyncCoordinator.self) private var syncCoordinator
     @Binding var activeSession: ProfileSession?
 
     var body: some View {
@@ -62,7 +63,8 @@
       if activeSession?.profile.id != profileID {
         activeSession = ProfileSession(
           profile: profile,
-          containerManager: containerManager
+          containerManager: containerManager,
+          syncCoordinator: syncCoordinator
         )
       }
     }
@@ -76,7 +78,8 @@
       {
         activeSession = ProfileSession(
           profile: profile,
-          containerManager: containerManager
+          containerManager: containerManager,
+          syncCoordinator: syncCoordinator
         )
       }
     }

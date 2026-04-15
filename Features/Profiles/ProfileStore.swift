@@ -24,11 +24,11 @@ final class ProfileStore {
   var onProfileRemoved: ((UUID) -> Void)?
 
   /// Called after a CloudKit profile is created or updated locally.
-  /// Used by ProfileIndexSyncEngine to queue the profile for upload.
+  /// Used by SyncCoordinator to queue the profile for upload.
   var onProfileChanged: ((UUID) -> Void)?
 
   /// Called after a CloudKit profile is deleted locally.
-  /// Used by ProfileIndexSyncEngine to queue the profile for deletion.
+  /// Used by SyncCoordinator to queue the profile for deletion.
   var onProfileDeleted: ((UUID) -> Void)?
 
   private let defaults: UserDefaults

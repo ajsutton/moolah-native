@@ -5,8 +5,8 @@ import SwiftData
 import os
 
 /// Stateless batch processing logic for a single profile's data zone.
-/// Extracted from ProfileSyncEngine — contains all data transformation,
-/// upsert, deletion, and record-building logic with no CKSyncEngine dependency.
+/// Contains all data transformation, upsert, deletion, and record-building
+/// logic with no CKSyncEngine dependency.
 ///
 /// The coordinator owns the CKSyncEngine instance and delegates data processing
 /// to this handler. Methods return results (changed types, record IDs, failures)
@@ -622,7 +622,7 @@ final class ProfileDataSyncHandler: Sendable {
       case InvestmentValueRecord.recordType:
         batchUpsertInvestmentValues(ckRecords, context: context, systemFields: systemFields)
       case ProfileRecord.recordType:
-        break  // Handled by ProfileIndexSyncEngine
+        break  // Handled by ProfileIndexSyncHandler
       default:
         batchLogger.warning("applyBatchSaves: unknown record type '\(recordType)' — skipping")
       }
@@ -689,7 +689,7 @@ final class ProfileDataSyncHandler: Sendable {
           )) ?? []
         for record in records { context.delete(record) }
       case ProfileRecord.recordType:
-        break  // Handled by ProfileIndexSyncEngine
+        break  // Handled by ProfileIndexSyncHandler
       default:
         batchLogger.warning(
           "applyBatchDeletions: unknown record type '\(recordType)' — skipping")

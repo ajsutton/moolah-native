@@ -11,7 +11,7 @@ import XCTest
 final class SyncDownloadBenchmarks: XCTestCase {
 
   nonisolated(unsafe) private static var _container: ModelContainer!
-  nonisolated(unsafe) private static var _syncEngine: ProfileSyncEngine!
+  nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler!
   nonisolated(unsafe) private static var _zoneID: CKRecordZone.ID!
 
   override class func setUp() {
@@ -21,21 +21,25 @@ final class SyncDownloadBenchmarks: XCTestCase {
     try! awaitSync { @MainActor in
       BenchmarkFixtures.seed(scale: .x2, in: result.container)
       let profileId = UUID()
-      let engine = ProfileSyncEngine(profileId: profileId, modelContainer: result.container)
-      _syncEngine = engine
-      _zoneID = engine.zoneID
+      let zoneID = CKRecordZone.ID(
+        zoneName: "profile-\(profileId.uuidString)",
+        ownerName: CKCurrentUserDefaultName)
+      let handler = ProfileDataSyncHandler(
+        profileId: profileId, zoneID: zoneID, modelContainer: result.container)
+      _handler = handler
+      _zoneID = zoneID
     }
   }
 
   override class func tearDown() {
-    _syncEngine = nil
+    _handler = nil
     _zoneID = nil
     _container = nil
     super.tearDown()
   }
 
   private var container: ModelContainer { Self._container }
-  private var syncEngine: ProfileSyncEngine { Self._syncEngine }
+  private var handler: ProfileDataSyncHandler { Self._handler }
   private var zoneID: CKRecordZone.ID { Self._zoneID }
 
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }
@@ -79,7 +83,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
 
   /// Applies 400 new transaction CKRecords with legs (insert path) into a 37k dataset.
   func testApplyRemoteChanges_400inserts() {
-    let engine = syncEngine
+    let handler = handler
     measure(metrics: metrics, options: options) {
       var records: [CKRecord] = []
       records.reserveCapacity(800)
@@ -91,7 +95,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
         records.append(legRecord)
       }
       try! awaitSync { @MainActor in
-        engine.applyRemoteChanges(saved: records, deleted: [])
+        handler.applyRemoteChanges(saved: records, deleted: [])
       }
     }
   }
@@ -101,7 +105,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
   /// Re-seeds 400 transaction records before each measured iteration so the
   /// deletions always find live records to remove.
   func testApplyRemoteChanges_400deletions() {
-    let engine = syncEngine
+    let handler = handler
     let container = self.container
     let zone = zoneID
 
@@ -133,7 +137,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
       // --- Measurement ---
       self.startMeasuring()
       try! awaitSync { @MainActor in
-        engine.applyRemoteChanges(saved: [], deleted: deletionTargets)
+        handler.applyRemoteChanges(saved: [], deleted: deletionTargets)
       }
       self.stopMeasuring()
     }

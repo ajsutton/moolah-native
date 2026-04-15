@@ -4,8 +4,8 @@ import OSLog
 import SwiftData
 
 /// Stateless batch processing logic for the profile-index zone.
-/// Extracted from ProfileIndexSyncEngine — contains all data transformation,
-/// upsert, deletion, and record-building logic with no CKSyncEngine dependency.
+/// Contains all data transformation, upsert, deletion, and record-building
+/// logic with no CKSyncEngine dependency.
 ///
 /// The coordinator owns the CKSyncEngine instance and delegates data processing
 /// to this handler. Methods return results (record IDs, failures) instead of

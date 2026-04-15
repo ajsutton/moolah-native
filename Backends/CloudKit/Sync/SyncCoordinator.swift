@@ -12,6 +12,7 @@ import os
 /// Zone routing:
 /// - `profile-index` → `ProfileIndexSyncHandler`
 /// - `profile-<uuid>` → `ProfileDataSyncHandler` (via `ProfileContainerManager`)
+@Observable
 @MainActor
 final class SyncCoordinator: Sendable {
 
