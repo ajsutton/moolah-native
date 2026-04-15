@@ -105,7 +105,6 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
 
   var accountIds: Set<UUID> { Set(legs.compactMap(\.accountId)) }
   var type: TransactionType { legs.first?.type ?? .expense }
-  var earmarkId: UUID? { legs.first?.earmarkId }
   var isTransfer: Bool {
     let accounts = Set(legs.filter { $0.type == .transfer }.compactMap(\.accountId))
     let instruments = Set(legs.filter { $0.type == .transfer }.map(\.instrument))
@@ -187,10 +186,10 @@ extension Transaction {
       return payee
     }
 
-    if let earmarkId,
-      let earmark = earmarks.by(id: earmarkId)
-    {
-      return "Earmark funds for \(earmark.name)"
+    let earmarkIds = legs.compactMap(\.earmarkId).uniqued()
+    let earmarkNames = earmarkIds.compactMap { earmarks.by(id: $0)?.name }
+    if !earmarkNames.isEmpty {
+      return "Earmark funds for \(earmarkNames.joined(separator: ", "))"
     }
 
     return ""
@@ -244,6 +243,7 @@ struct TransactionPage: Sendable {
     transactions: [Transaction],
     priorBalance: InstrumentAmount,
     accountId: UUID?,
+    earmarkId: UUID? = nil,
     targetInstrument: Instrument,
     conversionService: InstrumentConversionService
   ) async throws -> [TransactionWithBalance] {
@@ -268,6 +268,12 @@ struct TransactionPage: Sendable {
         displayAmount =
           convertedLegs
           .filter { $0.leg.accountId == accountId }
+          .reduce(InstrumentAmount.zero(instrument: targetInstrument)) { $0 + $1.convertedAmount }
+      } else if let earmarkId {
+        // Earmark context (no account): sum legs matching the viewing earmark
+        displayAmount =
+          convertedLegs
+          .filter { $0.leg.earmarkId == earmarkId }
           .reduce(InstrumentAmount.zero(instrument: targetInstrument)) { $0 + $1.convertedAmount }
       } else {
         // No account context (scheduled view): use negative-quantity leg for transfers,
@@ -310,6 +316,11 @@ struct TransactionWithBalance: Sendable, Identifiable {
   /// Returns converted legs belonging to the given account.
   func legs(forAccount accountId: UUID) -> [ConvertedTransactionLeg] {
     convertedLegs.filter { $0.leg.accountId == accountId }
+  }
+
+  /// Returns converted legs belonging to the given earmark.
+  func legs(forEarmark earmarkId: UUID) -> [ConvertedTransactionLeg] {
+    convertedLegs.filter { $0.leg.earmarkId == earmarkId }
   }
 }
 
