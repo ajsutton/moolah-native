@@ -165,6 +165,12 @@ final class SyncCoordinator: Sendable {
   func start() {
     guard !isRunning else { return }
 
+    let signpostID = OSSignpostID(log: Signposts.sync)
+    os_signpost(.begin, log: Signposts.sync, name: "coordinatorStart", signpostID: signpostID)
+    defer {
+      os_signpost(.end, log: Signposts.sync, name: "coordinatorStart", signpostID: signpostID)
+    }
+
     // Migration: delete old per-engine state files
     containerManager.deleteOldSyncStateFiles()
 
@@ -261,6 +267,13 @@ final class SyncCoordinator: Sendable {
 
   func endFetchingChanges() {
     isFetchingChanges = false
+    let profileCount = fetchSessionChangedTypes.filter { !$0.value.isEmpty }.count
+    let totalTypes = fetchSessionChangedTypes.values.reduce(into: Set<String>()) {
+      $0.formUnion($1)
+    }
+    logger.info(
+      "Fetch session complete: \(profileCount) profiles changed, types: \(totalTypes), indexChanged: \(self.fetchSessionIndexChanged)"
+    )
     flushFetchSessionChanges()
   }
 
@@ -540,6 +553,13 @@ final class SyncCoordinator: Sendable {
       let deleted = deletedByZone[zoneID] ?? []
       let zoneType = Self.parseZone(zoneID)
 
+      let signpostID = OSSignpostID(log: Signposts.sync)
+      os_signpost(
+        .begin, log: Signposts.sync, name: "applyFetchedChanges", signpostID: signpostID,
+        "%{public}@ %{public}d saves %{public}d deletes", zoneID.zoneName, saved.count,
+        deleted.count)
+      let zoneStart = ContinuousClock.now
+
       switch zoneType {
       case .profileIndex:
         // Profile index only has saves and simple deletions (no recordType needed)
@@ -572,6 +592,14 @@ final class SyncCoordinator: Sendable {
       case .unknown:
         logger.warning("Received changes for unknown zone: \(zoneID.zoneName)")
       }
+
+      os_signpost(.end, log: Signposts.sync, name: "applyFetchedChanges", signpostID: signpostID)
+      let zoneMs = (ContinuousClock.now - zoneStart).inMilliseconds
+      if zoneMs > 16 {
+        logger.warning(
+          "PERF: applyFetchedChanges blocked main thread for \(zoneMs)ms (\(zoneID.zoneName), \(saved.count) saves, \(deleted.count) deletes)"
+        )
+      }
     }
   }
 
@@ -580,6 +608,16 @@ final class SyncCoordinator: Sendable {
   private func handleSentRecordZoneChanges(
     _ sentChanges: CKSyncEngine.Event.SentRecordZoneChanges
   ) {
+    let signpostID = OSSignpostID(log: Signposts.sync)
+    os_signpost(
+      .begin, log: Signposts.sync, name: "handleSentChanges", signpostID: signpostID,
+      "%{public}d saved %{public}d failedSaves %{public}d failedDeletes",
+      sentChanges.savedRecords.count, sentChanges.failedRecordSaves.count,
+      sentChanges.failedRecordDeletes.count)
+    defer {
+      os_signpost(.end, log: Signposts.sync, name: "handleSentChanges", signpostID: signpostID)
+    }
+
     // Group saved records by zone
     var savedByZone: [CKRecordZone.ID: [CKRecord]] = [:]
     for record in sentChanges.savedRecords {
