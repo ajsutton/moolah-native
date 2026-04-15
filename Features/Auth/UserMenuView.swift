@@ -113,11 +113,7 @@ struct UserMenuView: View {
 
   private var placeholder: some View {
     ZStack {
-      #if os(macOS)
-        Color(nsColor: .quaternaryLabelColor)
-      #else
-        Color(uiColor: .quaternaryLabel)
-      #endif
+      Color.secondary.opacity(0.15)
       Image(systemName: "person.fill")
         .font(.system(size: 12))
         .foregroundStyle(.white)

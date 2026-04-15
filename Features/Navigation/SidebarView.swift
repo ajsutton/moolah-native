@@ -60,6 +60,7 @@ struct SidebarView: View {
                 .font(.caption)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Add account")
           #endif
         }
       }
@@ -90,6 +91,7 @@ struct SidebarView: View {
                   .font(.caption)
               }
               .buttonStyle(.plain)
+              .accessibilityLabel("Add earmark")
             #endif
           }
         }

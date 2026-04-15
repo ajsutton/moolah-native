@@ -106,6 +106,7 @@ struct CryptoSettingsView: View {
           .padding(.horizontal, 4)
           .padding(.vertical, 1)
           .background(.fill, in: RoundedRectangle(cornerRadius: 3))
+          .accessibilityLabel("CoinGecko")
       }
       if mapping.cryptocompareSymbol != nil {
         Text("CC")
@@ -113,6 +114,7 @@ struct CryptoSettingsView: View {
           .padding(.horizontal, 4)
           .padding(.vertical, 1)
           .background(.fill, in: RoundedRectangle(cornerRadius: 3))
+          .accessibilityLabel("CryptoCompare")
       }
       if mapping.binanceSymbol != nil {
         Text("BN")
@@ -120,6 +122,7 @@ struct CryptoSettingsView: View {
           .padding(.horizontal, 4)
           .padding(.vertical, 1)
           .background(.fill, in: RoundedRectangle(cornerRadius: 3))
+          .accessibilityLabel("Binance")
       }
     }
   }

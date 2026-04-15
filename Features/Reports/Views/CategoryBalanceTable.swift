@@ -100,6 +100,7 @@ struct CategoryBalanceTable: View {
                       InstrumentAmountView(amount: child.amount)
                     }
                   }
+                  .accessibilityLabel("\(child.name), \(child.amount.formatted)")
                 }
               }
             } header: {

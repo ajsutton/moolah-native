@@ -8,23 +8,7 @@ Issues identified by a full-codebase UI review that have not yet been addressed.
 **File:** `Features/Categories/Views/CategoryDetailView.swift:60-82`
 "Delete and Reassign" button is offered but `selectedReplacementId` is never set by any UI element — the replacement category picker is missing. Tapping "Delete and Reassign" calls `onDelete(category.id, nil)`.
 
-### 21. SidebarView iOS "+" buttons missing accessibility labels
-**File:** `Features/Navigation/SidebarView.swift:54-64, 83-94`
-The icon-only "+" buttons in the Current Accounts and Earmarks section headers on iOS have no `.accessibilityLabel`. VoiceOver can't describe what the buttons do.
-
-### 22. ExpandableChart dismiss button placement
-**File:** `Shared/ExpandableChart.swift:33`
-The full-screen chart "Done" dismiss button uses `.confirmationAction` placement — should be `.cancellationAction` since it dismisses rather than confirms.
-
-### 23. UserMenuView hardcoded platform colors
-**File:** `Features/Auth/UserMenuView.swift:117-119`
-Uses `Color(nsColor: .quaternaryLabelColor)` / `Color(uiColor: .quaternaryLabel)` — should use a cross-platform semantic equivalent.
-
 ## Suggestions
-
-### S1. TransactionRowView alignment
-**File:** `Features/Transactions/Views/TransactionRowView.swift:18`
-`HStack` uses default `.center` alignment instead of `.firstTextBaseline` per style guide.
 
 ### S2. TransactionRowView metadata font
 **File:** `Features/Transactions/Views/TransactionRowView.swift:28-47`
@@ -38,14 +22,6 @@ Metadata row uses `.caption` instead of `.subheadline` per style guide.
 **File:** `Features/Analysis/Views/NetWorthGraphCard.swift`
 Chart Y-axis labels have no currency unit indicator.
 
-### S5. CategoryBalanceTable row accessibility
-**File:** `Features/Reports/Views/CategoryBalanceTable.swift:96-103`
-NavigationLink row has no combined accessibility label for category + amount.
-
-### S6. EarmarkDetailView summary accessibility
-**File:** `Features/Earmarks/Views/EarmarkDetailView.swift:129`
-Summary items ("Balance", "Saved", "Spent") lack `.accessibilityElement(children: .combine)` — label and amount read as separate elements.
-
 ### S7. InvestmentAccountView time period picker accessibility
 **File:** `Features/Investments/Views/InvestmentAccountView.swift:193-217`
 Time period picker buttons lack `.accessibilityValue("Selected")`.
@@ -53,14 +29,6 @@ Time period picker buttons lack `.accessibilityValue("Selected")`.
 ### S8. TransactionListView punctuation inconsistency
 **File:** `Features/Transactions/Views/TransactionListView.swift:282`
 Empty state description punctuation style differs from other views.
-
-### S9. InvestmentChartView legend labels
-**File:** `Features/Investments/Views/InvestmentChartView.swift:170`
-Legend accessibility labels say "X series" — "series" is unnecessarily technical.
-
-### S10. CryptoSettingsView provider badge accessibility
-**File:** `Features/Settings/CryptoSettingsView.swift:103-116`
-Provider badges ("CG", "CC", "BN") lack accessibility labels for full names (CoinGecko, CryptoCompare, Binance).
 
 ### S11. EarmarksView duplicate row layout
 **File:** `Features/Earmarks/Views/EarmarksView.swift:108-133`

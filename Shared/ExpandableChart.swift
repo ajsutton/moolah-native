@@ -30,7 +30,7 @@ struct ExpandableChart<Content: View>: View {
               .navigationTitle(title)
               .navigationBarTitleDisplayMode(.inline)
               .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .cancellationAction) {
                   Button("Done") {
                     isExpanded = false
                   }
