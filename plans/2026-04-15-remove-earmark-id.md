@@ -54,9 +54,102 @@ var earmarkId: UUID? { legs.first?.earmarkId }
 
 Throughout this plan, "applicable legs" means:
 - **Account-filtered context** (transaction list, detail view): legs whose `accountId` matches the viewing account.
+- **Earmark-filtered context** (earmark detail, no account filter): legs whose `earmarkId` matches the viewing earmark.
 - **Unfiltered context** (upcoming/scheduled views): all legs.
 
 When multiple applicable legs have different earmarks, **show all unique earmarks**.
+
+### Balance Computation — Earmark-Aware displayAmount
+
+`TransactionPage.withRunningBalances` currently filters legs by `accountId` to compute `displayAmount` and running balance. When the viewing context is an earmark (not an account), the same per-leg filtering must happen by `earmarkId` — otherwise `displayAmount` sums all legs regardless of earmark, producing incorrect totals.
+
+**Current signature:**
+
+```swift
+static func withRunningBalances(
+    transactions: [Transaction],
+    priorBalance: InstrumentAmount,
+    accountId: UUID?,
+    targetInstrument: Instrument,
+    conversionService: InstrumentConversionService
+) async throws -> [TransactionWithBalance]
+```
+
+**New signature:**
+
+```swift
+static func withRunningBalances(
+    transactions: [Transaction],
+    priorBalance: InstrumentAmount,
+    accountId: UUID?,
+    earmarkId: UUID?,
+    targetInstrument: Instrument,
+    conversionService: InstrumentConversionService
+) async throws -> [TransactionWithBalance]
+```
+
+**New displayAmount logic:**
+
+```swift
+let displayAmount: InstrumentAmount
+if let accountId {
+    // Account context: sum legs matching the viewing account
+    displayAmount = convertedLegs
+        .filter { $0.leg.accountId == accountId }
+        .reduce(.zero(instrument: targetInstrument)) { $0 + $1.convertedAmount }
+} else if let earmarkId {
+    // Earmark context (no account): sum legs matching the viewing earmark
+    displayAmount = convertedLegs
+        .filter { $0.leg.earmarkId == earmarkId }
+        .reduce(.zero(instrument: targetInstrument)) { $0 + $1.convertedAmount }
+} else {
+    // No context (scheduled view): existing transfer/sum-all logic
+    let isTransfer = transaction.legs.contains { $0.type == .transfer }
+    if isTransfer {
+        let negativeLeg = convertedLegs.first { $0.leg.quantity < 0 }
+        displayAmount = negativeLeg?.convertedAmount ?? .zero(instrument: targetInstrument)
+    } else {
+        displayAmount = convertedLegs
+            .reduce(.zero(instrument: targetInstrument)) { $0 + $1.convertedAmount }
+    }
+}
+```
+
+When both `accountId` and `earmarkId` are set, `accountId` takes precedence — the account is the viewing perspective, and the earmark filter only narrows which transactions appear (handled by the repository).
+
+**TransactionStore call site** (`TransactionStore.swift:287`):
+
+```swift
+// Before
+transactions = try await TransactionPage.withRunningBalances(
+    transactions: rawTransactions,
+    priorBalance: priorBalance,
+    accountId: currentFilter.accountId,
+    targetInstrument: targetInstrument,
+    conversionService: conversionService
+)
+
+// After
+transactions = try await TransactionPage.withRunningBalances(
+    transactions: rawTransactions,
+    priorBalance: priorBalance,
+    accountId: currentFilter.accountId,
+    earmarkId: currentFilter.earmarkId,
+    targetInstrument: targetInstrument,
+    conversionService: conversionService
+)
+```
+
+**TransactionWithBalance helper:**
+
+Add a `legs(forEarmark:)` method parallel to the existing `legs(forAccount:)`:
+
+```swift
+/// Returns converted legs belonging to the given earmark.
+func legs(forEarmark earmarkId: UUID) -> [ConvertedTransactionLeg] {
+    convertedLegs.filter { $0.leg.earmarkId == earmarkId }
+}
+```
 
 ### TransactionRowView (P1) — Show All Applicable Earmarks
 
@@ -269,42 +362,50 @@ let earmarkId = earmarked[0].legs.first(where: { $0.earmarkId != nil })!.earmark
 
 ## Implementation Steps
 
-### Step 1: TransactionRowView (P1, P2)
+### Step 1: Balance Computation
+
+Add `earmarkId: UUID?` parameter to `TransactionPage.withRunningBalances`. Add earmark leg filtering in the `displayAmount` computation. Add `TransactionWithBalance.legs(forEarmark:)` helper. Update `TransactionStore.recomputeBalances()` to pass `currentFilter.earmarkId`. This step is foundational — it makes earmark-filtered transaction lists show correct per-transaction amounts and running balances.
+
+### Step 2: TransactionRowView (P1, P2)
 
 Replace `earmarkName: String?` with `earmarkNames: [String]` sourced from applicable legs. Extract `applicableEarmarkIds` helper. Update the view body to iterate with `ForEach`. Update `displayPayee` to use `applicableEarmarkIds.first`. Requires viewing account context from `TransactionWithBalance`.
 
-### Step 2: UpcomingView (P3, P4)
+### Step 3: UpcomingView (P3, P4)
 
-Same pattern as step 1 but using all legs (no account filter). Show all unique earmarks in the metadata row. Use first earmark for `displayPayee` fallback.
+Same pattern as step 2 but using all legs (no account filter). Show all unique earmarks in the metadata row. Use first earmark for `displayPayee` fallback.
 
-### Step 3: UpcomingTransactionsCard (P5)
+### Step 4: UpcomingTransactionsCard (P5)
 
 Same pattern as UpcomingView P4 — replace `transaction.earmarkId` in `displayPayee`.
 
-### Step 4: TransactionDraft.init(from:)
+### Step 5: TransactionDraft.init(from:)
 
 Replace `primaryLeg?.earmarkId` with `transaction.legs.first(where: { $0.earmarkId != nil })?.earmarkId`.
 
-### Step 5: Test Updates (T1–T10)
+### Step 6: Test Updates (T1–T10)
 
-Update all assertions to use leg-level access as described above.
+Update all assertions to use leg-level access as described above. Add tests for earmark-aware `withRunningBalances` — verify that `displayAmount` sums only earmark-matching legs when `earmarkId` is passed, with instrument conversion.
 
-### Step 6: Delete the Accessor
+### Step 7: Delete the Accessor
 
 Remove from `Domain/Models/Transaction.swift`:
 ```swift
 var earmarkId: UUID? { legs.first?.earmarkId }
 ```
 
-### Step 7: Update BUGS.md
+### Step 8: Update BUGS.md
 
 Remove the `earmarkId → legs.first?.earmarkId` line from the convenience accessor bug entry.
 
 ## Risk Assessment
 
-**Low risk.** The accessor is a trivial computed property. Every production replacement either:
+**Low–medium risk.** The accessor removal itself is low risk — every production replacement either:
 - Collects earmarks from applicable legs (views) — correct for both simple and complex transactions
 - Finds the first leg with an earmark (detail view, draft init) — sufficient for read-only complex tx display
 - Uses `sourceLeg?.earmarkId` (DTOs, already handled by #11) — correct for the source-oriented server API
 
-The only visible behavior change is that complex transactions with multiple earmarks will now show all of them instead of just the first leg's earmark. This is the correct behavior.
+The balance computation change (Step 1) carries slightly more risk because it changes `displayAmount` and running balance values for earmark-filtered views. However, the pattern is identical to the existing `accountId` filtering — the only difference is which leg field is matched. The existing `accountId` path is unaffected.
+
+Visible behavior changes:
+- Complex transactions with multiple earmarks will show all of them instead of just the first leg's earmark.
+- Earmark-filtered transaction lists will show per-earmark amounts instead of whole-transaction amounts. Both are the correct behavior.
