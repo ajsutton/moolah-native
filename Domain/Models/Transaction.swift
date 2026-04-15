@@ -114,6 +114,21 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
     let instruments = Set(legs.filter { $0.type == .transfer }.map(\.instrument))
     return accounts.count > 1 || instruments.count > 1
   }
+
+  // MARK: - Structure Queries
+
+  /// Whether this transaction has simple structure: a single leg, or exactly
+  /// two legs forming a basic transfer (amounts negate, all other fields match).
+  var isSimple: Bool {
+    if legs.count <= 1 { return true }
+    guard legs.count == 2 else { return false }
+    let a = legs[0]
+    let b = legs[1]
+    return a.quantity == -b.quantity
+      && a.type == b.type
+      && a.categoryId == b.categoryId
+      && a.earmarkId == b.earmarkId
+  }
 }
 
 struct TransactionFilter: Sendable, Equatable {
