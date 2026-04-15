@@ -5,6 +5,7 @@ struct TransactionRowView: View {
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
+  let displayAmount: InstrumentAmount
   let balance: InstrumentAmount
   var hideEarmark: Bool = false
 
@@ -52,7 +53,7 @@ struct TransactionRowView: View {
       Spacer()
 
       VStack(alignment: .trailing, spacing: 2) {
-        InstrumentAmountView(amount: transaction.primaryAmount, font: .body)
+        InstrumentAmountView(amount: displayAmount, font: .body)
 
         InstrumentAmountView(amount: balance, font: .caption)
       }
@@ -64,7 +65,7 @@ struct TransactionRowView: View {
 
   private var accessibilityDescription: String {
     let dateStr = transaction.date.formatted(date: .abbreviated, time: .omitted)
-    let amountStr = transaction.primaryAmount.formatted
+    let amountStr = displayAmount.formatted
     let balanceStr = balance.formatted
     return "\(displayPayee), \(amountStr), \(dateStr), balance \(balanceStr)"
   }
@@ -159,6 +160,7 @@ struct TransactionRowView: View {
             categoryId: groceriesId)
         ]
       ), accounts: accounts, categories: categories, earmarks: earmarks,
+      displayAmount: InstrumentAmount(quantity: -50.23, instrument: .AUD),
       balance: InstrumentAmount(quantity: 1000, instrument: .AUD))
     TransactionRowView(
       transaction: Transaction(
@@ -169,6 +171,7 @@ struct TransactionRowView: View {
             earmarkId: holidayFundId)
         ]
       ), accounts: accounts, categories: categories, earmarks: earmarks,
+      displayAmount: InstrumentAmount(quantity: 3500, instrument: .AUD),
       balance: InstrumentAmount(quantity: 1050.23, instrument: .AUD))
     TransactionRowView(
       transaction: Transaction(
@@ -178,6 +181,7 @@ struct TransactionRowView: View {
           TransactionLeg(accountId: savingsId, instrument: .AUD, quantity: 1000, type: .transfer),
         ]
       ), accounts: accounts, categories: categories, earmarks: earmarks,
+      displayAmount: InstrumentAmount(quantity: -1000, instrument: .AUD),
       balance: InstrumentAmount(quantity: -2449.77, instrument: .AUD))
     TransactionRowView(
       transaction: Transaction(
@@ -187,6 +191,7 @@ struct TransactionRowView: View {
           TransactionLeg(accountId: savingsId, instrument: .AUD, quantity: 500, type: .transfer),
         ]
       ), accounts: accounts, categories: categories, earmarks: earmarks,
+      displayAmount: InstrumentAmount(quantity: -500, instrument: .AUD),
       balance: InstrumentAmount(quantity: -1449.77, instrument: .AUD))
   }
 }

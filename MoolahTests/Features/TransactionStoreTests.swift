@@ -37,7 +37,11 @@ struct TransactionStoreTests {
     let transactions = seedTransactions(count: 3, accountId: accountId)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: transactions, in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
@@ -55,7 +59,12 @@ struct TransactionStoreTests {
     let transactions = seedTransactions(count: 5, accountId: accountId)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: transactions, in: container)
-    let store = TransactionStore(repository: backend.transactions, pageSize: 3)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument,
+      pageSize: 3
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
     #expect(store.transactions.count == 3)
@@ -70,7 +79,12 @@ struct TransactionStoreTests {
     let transactions = seedTransactions(count: 2, accountId: accountId)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: transactions, in: container)
-    let store = TransactionStore(repository: backend.transactions, pageSize: 10)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument,
+      pageSize: 10
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
@@ -82,7 +96,12 @@ struct TransactionStoreTests {
     let transactions = seedTransactions(count: 2, accountId: accountId)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: transactions, in: container)
-    let store = TransactionStore(repository: backend.transactions, pageSize: 10)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument,
+      pageSize: 10
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
     #expect(store.hasMore == false)
@@ -139,7 +158,11 @@ struct TransactionStoreTests {
     ]
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: transactions, in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
@@ -190,7 +213,11 @@ struct TransactionStoreTests {
     ]
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: transactions, in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
@@ -240,7 +267,11 @@ struct TransactionStoreTests {
     ]
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: transactions, in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
@@ -269,7 +300,12 @@ struct TransactionStoreTests {
     let transactions = seedTransactions(count: 5, accountId: accountId)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: transactions, in: container)
-    let store = TransactionStore(repository: backend.transactions, pageSize: 3)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument,
+      pageSize: 3
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
     #expect(store.transactions.count == 3)
@@ -283,7 +319,11 @@ struct TransactionStoreTests {
 
   @Test func testCreateAddsTransaction() async throws {
     let (backend, _) = try TestBackend.create()
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
     #expect(store.transactions.isEmpty)
@@ -322,7 +362,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
     #expect(store.transactions.count == 1)
@@ -341,7 +385,7 @@ struct TransactionStoreTests {
 
     #expect(store.transactions.count == 1)
     #expect(store.transactions[0].transaction.payee == "Fancy Coffee")
-    #expect(store.transactions[0].transaction.primaryAmount.quantity == Decimal(-7500) / 100)
+    #expect(store.transactions[0].displayAmount.quantity == Decimal(-7500) / 100)
     #expect(store.error == nil)
   }
 
@@ -360,7 +404,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
     #expect(store.transactions.count == 1)
@@ -373,7 +421,11 @@ struct TransactionStoreTests {
 
   @Test func testCreateUpdateDeleteCycle() async throws {
     let (backend, _) = try TestBackend.create()
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
@@ -405,7 +457,7 @@ struct TransactionStoreTests {
     ]
     await store.update(modified)
     #expect(store.transactions.count == 1)
-    #expect(store.transactions[0].transaction.primaryAmount.quantity == Decimal(110000) / 100)
+    #expect(store.transactions[0].displayAmount.quantity == Decimal(110000) / 100)
 
     // Delete
     await store.delete(id: tx.id)
@@ -427,7 +479,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [existing], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
     #expect(store.transactions[0].balance.quantity == Decimal(100000) / 100)
@@ -482,7 +538,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx1, tx2], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
     #expect(store.transactions.count == 2)
@@ -496,7 +556,11 @@ struct TransactionStoreTests {
 
   @Test func testOnMutatePassesNilOldOnCreate() async throws {
     let (backend, _) = try TestBackend.create()
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var receivedOld: Transaction?? = .none  // .none = not called, .some(nil) = called with nil
     var receivedNew: Transaction?
@@ -539,7 +603,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var receivedOld: Transaction?
     var receivedNew: Transaction?
@@ -573,7 +641,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var receivedOld: Transaction?
     var receivedNew: Transaction?? = .some(nil)  // sentinel
@@ -613,7 +685,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var receivedOld: Transaction?
     var receivedNew: Transaction?
@@ -643,11 +719,11 @@ struct TransactionStoreTests {
     await store.update(updated)
 
     #expect(receivedOld?.id == tx.id)
-    #expect(receivedOld?.primaryAmount.quantity == Decimal(-10000) / 100)
+    #expect(receivedOld?.legs.first?.quantity == Decimal(-10000) / 100)
     #expect(
       receivedOld?.legs.first(where: { $0.accountId != receivedOld?.primaryAccountId })?.accountId
         == savingsId)
-    #expect(receivedNew?.primaryAmount.quantity == Decimal(-15000) / 100)
+    #expect(receivedNew?.legs.first?.quantity == Decimal(-15000) / 100)
     #expect(
       receivedNew?.legs.first(where: { $0.accountId != receivedNew?.primaryAccountId })?.accountId
         == savingsId)
@@ -676,7 +752,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var receivedOld: Transaction?
     var receivedNew: Transaction?
@@ -729,7 +809,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var receivedOld: Transaction?
     var receivedNew: Transaction?
@@ -775,7 +859,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var receivedOld: Transaction?
     var receivedNew: Transaction?
@@ -800,9 +888,9 @@ struct TransactionStoreTests {
     await store.update(updated)
 
     #expect(receivedOld?.earmarkId == earmarkId)
-    #expect(receivedOld?.primaryAmount.quantity == Decimal(-5000) / 100)
+    #expect(receivedOld?.legs.first?.quantity == Decimal(-5000) / 100)
     #expect(receivedNew?.earmarkId == earmarkId)
-    #expect(receivedNew?.primaryAmount.quantity == Decimal(-7500) / 100)
+    #expect(receivedNew?.legs.first?.quantity == Decimal(-7500) / 100)
   }
 
   @Test func testOnMutateChangingEarmarkId() async throws {
@@ -823,7 +911,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var receivedOld: Transaction?
     var receivedNew: Transaction?
@@ -867,7 +959,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var receivedOld: Transaction?
     var receivedNew: Transaction?
@@ -912,7 +1008,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var receivedOld: Transaction?
     var receivedNew: Transaction?
@@ -956,7 +1056,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var receivedOld: Transaction?
     var receivedNew: Transaction?
@@ -980,9 +1084,9 @@ struct TransactionStoreTests {
     await store.update(updated)
 
     #expect(receivedOld?.legs.first?.type ?? .expense == .expense)
-    #expect(receivedOld?.primaryAmount.quantity == Decimal(-5000) / 100)
+    #expect(receivedOld?.legs.first?.quantity == Decimal(-5000) / 100)
     #expect(receivedNew?.legs.first?.type ?? .expense == .income)
-    #expect(receivedNew?.primaryAmount.quantity == Decimal(5000) / 100)
+    #expect(receivedNew?.legs.first?.quantity == Decimal(5000) / 100)
   }
 
   @Test func testOnMutateChangingTypeExpenseToTransfer() async throws {
@@ -1001,7 +1105,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var receivedOld: Transaction?
     var receivedNew: Transaction?
@@ -1062,7 +1170,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var receivedOld: Transaction?
     var receivedNew: Transaction?
@@ -1113,7 +1225,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var receivedOld: Transaction?
     var receivedNew: Transaction?
@@ -1136,8 +1252,8 @@ struct TransactionStoreTests {
     ]
     await store.update(updated)
 
-    #expect(receivedOld?.primaryAmount.quantity == Decimal(-5000) / 100)
-    #expect(receivedNew?.primaryAmount.quantity == Decimal(-7500) / 100)
+    #expect(receivedOld?.legs.first?.quantity == Decimal(-5000) / 100)
+    #expect(receivedNew?.legs.first?.quantity == Decimal(-7500) / 100)
   }
 
   @Test func testRunningBalancesUpdateAfterAmountChange() async throws {
@@ -1167,7 +1283,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx1, tx2], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
     #expect(store.transactions.count == 2)
@@ -1211,7 +1331,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [scheduled], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(scheduled: true))
     #expect(store.transactions.count == 1)
@@ -1242,7 +1366,7 @@ struct TransactionStoreTests {
     #expect(paidTx?.recurPeriod == nil)
     #expect(paidTx?.recurEvery == nil)
     #expect(paidTx?.payee == "Rent")
-    #expect(paidTx?.primaryAmount.quantity == Decimal(-200000) / 100)
+    #expect(paidTx?.legs.first?.quantity == Decimal(-200000) / 100)
 
     // Backend should still have the scheduled transaction with advanced date
     let scheduledPage = try await backend.transactions.fetch(
@@ -1268,7 +1392,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [scheduled], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(scheduled: true))
     let result = await store.payScheduledTransaction(scheduled)
@@ -1300,7 +1428,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [scheduled], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(scheduled: true))
     #expect(store.transactions.count == 1)
@@ -1353,7 +1485,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [scheduled], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(scheduled: true))
     _ = await store.payScheduledTransaction(scheduled)
@@ -1368,7 +1504,7 @@ struct TransactionStoreTests {
     #expect(
       paidTx?.legs.first(where: { $0.accountId != paidTx?.primaryAccountId })?.accountId
         == toAccountId)
-    #expect(paidTx?.primaryAmount.quantity == Decimal(-100000) / 100)
+    #expect(paidTx?.legs.first?.quantity == Decimal(-100000) / 100)
     #expect(paidTx?.payee == "Savings Transfer")
     #expect(paidTx?.notes == "Monthly savings")
     #expect(paidTx?.categoryId == categoryId)
@@ -1394,7 +1530,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [scheduled], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var mutations: [(old: Transaction?, new: Transaction?)] = []
     store.onMutate = { old, new in
@@ -1436,7 +1576,11 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [scheduled], in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var mutations: [(old: Transaction?, new: Transaction?)] = []
     store.onMutate = { old, new in
@@ -1601,18 +1745,26 @@ struct TransactionStoreTests {
     ]
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: transactions, in: container)
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     let match = await store.fetchTransactionForAutofill(payee: "Woolworths")
     #expect(match != nil)
     // Most recent (newest first from server) should have the category
     #expect(match?.categoryId == categoryId)
-    #expect(match?.primaryAmount.quantity == Decimal(-7500) / 100)
+    #expect(match?.legs.first?.quantity == Decimal(-7500) / 100)
   }
 
   @Test func testDebouncedSaveOnlyCallsLastAction() async throws {
     let (backend, _) = try TestBackend.create()
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     var callCount = 0
     var lastValue = ""
@@ -1644,7 +1796,11 @@ struct TransactionStoreTests {
     let filterAccountId = UUID()
     let fallbackAccountId = UUID()
     let (backend, _) = try TestBackend.create()
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter(accountId: filterAccountId))
 
@@ -1661,7 +1817,11 @@ struct TransactionStoreTests {
   @Test func testCreateDefaultFallsBackToFirstAccount() async throws {
     let fallbackAccountId = UUID()
     let (backend, _) = try TestBackend.create()
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter())
 
@@ -1677,7 +1837,11 @@ struct TransactionStoreTests {
 
   @Test func testCreateDefaultSetsExpenseTypeAndZeroAmount() async throws {
     let (backend, _) = try TestBackend.create()
-    let store = TransactionStore(repository: backend.transactions)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     await store.load(filter: TransactionFilter())
 
@@ -1689,14 +1853,18 @@ struct TransactionStoreTests {
 
     #expect(created != nil)
     #expect(created?.legs.first?.type ?? .expense == .expense)
-    #expect(created?.primaryAmount.quantity == 0)
-    #expect(created?.primaryAmount.instrument == Instrument.defaultTestInstrument)
+    #expect(created?.legs.first?.quantity == 0)
+    #expect(created?.legs.first?.instrument == Instrument.defaultTestInstrument)
     #expect(created?.payee == "")
   }
 
   @Test func testCreateDefaultReturnsNilOnFailure() async throws {
     // Use an error-injecting repository to force a failure
-    let failingStore = TransactionStore(repository: FailingTransactionRepository())
+    let failingStore = TransactionStore(
+      repository: FailingTransactionRepository(),
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
 
     let result = await failingStore.createDefault(
       accountId: accountId,

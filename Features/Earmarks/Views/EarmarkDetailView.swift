@@ -202,7 +202,11 @@ struct EarmarkDetailView: View {
   )
   let (backend, _) = PreviewBackend.create()
   let earmarkStore = EarmarkStore(repository: backend.earmarks)
-  let store = TransactionStore(repository: backend.transactions)
+  let store = TransactionStore(
+    repository: backend.transactions,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD
+  )
 
   NavigationStack {
     EarmarkDetailView(

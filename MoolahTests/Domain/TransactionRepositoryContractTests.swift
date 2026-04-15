@@ -217,7 +217,10 @@ struct TransactionRepositoryContractTests {
     let page1Sum = page1.transactions.reduce(
       InstrumentAmount.zero(instrument: .defaultTestInstrument)
     ) {
-      $0 + $1.primaryAmount
+      $0
+        + $1.legs.reduce(InstrumentAmount.zero(instrument: .defaultTestInstrument)) {
+          $0 + $1.amount
+        }
     }
     let page1PriorSum = page1Sum + page1.priorBalance
 

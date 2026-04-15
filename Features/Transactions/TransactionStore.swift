@@ -18,6 +18,8 @@ final class TransactionStore {
   var onMutate: (@MainActor (_ old: Transaction?, _ new: Transaction?) -> Void)?
 
   private let repository: TransactionRepository
+  private let conversionService: InstrumentConversionService
+  private(set) var targetInstrument: Instrument
   private let pageSize: Int
   private let logger = Logger(subsystem: "com.moolah.app", category: "TransactionStore")
   private var currentFilter = TransactionFilter()
@@ -25,8 +27,15 @@ final class TransactionStore {
   private var rawTransactions: [Transaction] = []
   private var priorBalance: InstrumentAmount = .zero(instrument: .AUD)
 
-  init(repository: TransactionRepository, pageSize: Int = 50) {
+  init(
+    repository: TransactionRepository,
+    conversionService: InstrumentConversionService,
+    targetInstrument: Instrument,
+    pageSize: Int = 50
+  ) {
     self.repository = repository
+    self.conversionService = conversionService
+    self.targetInstrument = targetInstrument
     self.pageSize = pageSize
   }
 
@@ -34,7 +43,7 @@ final class TransactionStore {
     currentFilter = filter
     currentPage = 0
     rawTransactions = []
-    priorBalance = .zero(instrument: priorBalance.instrument)
+    priorBalance = .zero(instrument: targetInstrument)
     transactions = []
     hasMore = true
     error = nil
@@ -68,7 +77,7 @@ final class TransactionStore {
     // Optimistic: insert into local state
     let snapshot = rawTransactions
     rawTransactions.append(transaction)
-    recomputeBalances()
+    await recomputeBalances()
 
     do {
       let created = try await repository.create(transaction)
@@ -76,13 +85,13 @@ final class TransactionStore {
       if let index = rawTransactions.firstIndex(where: { $0.id == transaction.id }) {
         rawTransactions[index] = created
       }
-      recomputeBalances()
+      await recomputeBalances()
       onMutate?(nil, created)
       return created
     } catch {
       logger.error("Failed to create transaction: \(error.localizedDescription)")
       rawTransactions = snapshot
-      recomputeBalances()
+      await recomputeBalances()
       self.error = error
       return nil
     }
@@ -94,7 +103,7 @@ final class TransactionStore {
     let old = rawTransactions.first { $0.id == transaction.id }
     if let index = rawTransactions.firstIndex(where: { $0.id == transaction.id }) {
       rawTransactions[index] = transaction
-      recomputeBalances()
+      await recomputeBalances()
     }
 
     do {
@@ -102,12 +111,12 @@ final class TransactionStore {
       if let index = rawTransactions.firstIndex(where: { $0.id == transaction.id }) {
         rawTransactions[index] = updated
       }
-      recomputeBalances()
+      await recomputeBalances()
       onMutate?(old, updated)
     } catch {
       logger.error("Failed to update transaction: \(error.localizedDescription)")
       rawTransactions = snapshot
-      recomputeBalances()
+      await recomputeBalances()
       self.error = error
     }
   }
@@ -159,7 +168,7 @@ final class TransactionStore {
     let snapshot = rawTransactions
     let removed = rawTransactions.first { $0.id == id }
     rawTransactions.removeAll { $0.id == id }
-    recomputeBalances()
+    await recomputeBalances()
 
     do {
       try await repository.delete(id: id)
@@ -167,7 +176,7 @@ final class TransactionStore {
     } catch {
       logger.error("Failed to delete transaction: \(error.localizedDescription)")
       rawTransactions = snapshot
-      recomputeBalances()
+      await recomputeBalances()
       self.error = error
     }
   }
@@ -190,7 +199,7 @@ final class TransactionStore {
       if let total = page.totalCount {
         totalCount = total
       }
-      recomputeBalances()
+      await recomputeBalances()
       logger.debug(
         "Loaded \(page.transactions.count) transactions (total: \(self.rawTransactions.count))")
     } catch {
@@ -268,15 +277,22 @@ final class TransactionStore {
 
   // MARK: - Balance Computation
 
-  private func recomputeBalances() {
+  private func recomputeBalances() async {
     // Re-sort newest-first to account for newly inserted/updated transactions
     rawTransactions.sort { a, b in
       if a.date != b.date { return a.date > b.date }
       return a.id.uuidString < b.id.uuidString
     }
-    transactions = TransactionPage.withRunningBalances(
-      transactions: rawTransactions,
-      priorBalance: priorBalance
-    )
+    do {
+      transactions = try await TransactionPage.withRunningBalances(
+        transactions: rawTransactions,
+        priorBalance: priorBalance,
+        accountId: currentFilter.accountId,
+        targetInstrument: targetInstrument,
+        conversionService: conversionService
+      )
+    } catch {
+      logger.error("Failed to compute balances: \(error.localizedDescription)")
+    }
   }
 }

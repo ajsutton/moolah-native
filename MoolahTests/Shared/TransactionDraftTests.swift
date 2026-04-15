@@ -43,14 +43,14 @@ struct TransactionDraftTests {
     let draft = makeDraft(type: .expense, amountText: "25.00", accountId: accountA)
     let tx = draft.toTransaction(id: UUID(), instrument: instrument)
     #expect(tx != nil)
-    #expect(tx!.primaryAmount.quantity == Decimal(string: "-25.00")!)
+    #expect(tx!.legs.first?.quantity == Decimal(string: "-25.00")!)
   }
 
   @Test func testIncomeAmountIsPositive() {
     let draft = makeDraft(type: .income, amountText: "25.00", accountId: accountA)
     let tx = draft.toTransaction(id: UUID(), instrument: instrument)
     #expect(tx != nil)
-    #expect(tx!.primaryAmount.quantity == Decimal(string: "25.00")!)
+    #expect(tx!.legs.first?.quantity == Decimal(string: "25.00")!)
   }
 
   @Test func testTransferAmountIsNegative() {
@@ -59,14 +59,14 @@ struct TransactionDraftTests {
       accountId: accountA, toAccountId: accountB)
     let tx = draft.toTransaction(id: UUID(), instrument: instrument)
     #expect(tx != nil)
-    #expect(tx!.primaryAmount.quantity == Decimal(string: "-25.00")!)
+    #expect(tx!.legs.first?.quantity == Decimal(string: "-25.00")!)
   }
 
   @Test func testOpeningBalanceAmountIsPositive() {
     let draft = makeDraft(type: .openingBalance, amountText: "100.00", accountId: accountA)
     let tx = draft.toTransaction(id: UUID(), instrument: instrument)
     #expect(tx != nil)
-    #expect(tx!.primaryAmount.quantity == Decimal(string: "100.00")!)
+    #expect(tx!.legs.first?.quantity == Decimal(string: "100.00")!)
   }
 
   // MARK: - Parsing
@@ -186,13 +186,37 @@ struct TransactionDraftTests {
     #expect(roundTripped!.type == original.type)
     #expect(roundTripped!.date == original.date)
     #expect(roundTripped!.primaryAccountId == original.primaryAccountId)
-    #expect(roundTripped!.primaryAmount.quantity == original.primaryAmount.quantity)
+    #expect(roundTripped!.legs.first?.quantity == original.legs.first?.quantity)
     #expect(roundTripped!.payee == original.payee)
     #expect(roundTripped!.notes == original.notes)
     #expect(roundTripped!.categoryId == original.categoryId)
     #expect(roundTripped!.earmarkId == original.earmarkId)
     #expect(roundTripped!.recurPeriod == original.recurPeriod)
     #expect(roundTripped!.recurEvery == original.recurEvery)
+  }
+
+  // MARK: - Viewing Account Perspective
+
+  @Test func roundTripTransferFromDestinationPerspective() {
+    let sourceId = UUID()
+    let destId = UUID()
+
+    let original = Transaction(
+      id: UUID(),
+      date: Date(),
+      payee: "Transfer",
+      legs: [
+        TransactionLeg(
+          accountId: sourceId, instrument: instrument, quantity: -100, type: .transfer),
+        TransactionLeg(accountId: destId, instrument: instrument, quantity: 100, type: .transfer),
+      ]
+    )
+
+    // When viewing from the destination account, the draft should orient to that leg
+    let draft = TransactionDraft(from: original, viewingAccountId: destId)
+    #expect(draft.accountId == destId)
+    #expect(draft.toAccountId == sourceId)
+    #expect(draft.amountText == "100.00")
   }
 
   // MARK: - Instrument Precision

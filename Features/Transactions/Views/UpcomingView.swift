@@ -31,6 +31,7 @@ struct UpcomingView: View {
               accounts: accounts,
               categories: categories,
               earmarks: earmarks,
+              displayAmount: entry.displayAmount,
               isOverdue: true,
               onPay: {
                 Task {
@@ -78,6 +79,7 @@ struct UpcomingView: View {
               accounts: accounts,
               categories: categories,
               earmarks: earmarks,
+              displayAmount: entry.displayAmount,
               isOverdue: false,
               isDueToday: isDueToday(entry.transaction),
               onPay: {
@@ -174,6 +176,7 @@ struct UpcomingTransactionRow: View {
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
+  let displayAmount: InstrumentAmount
   let isOverdue: Bool
   var isDueToday: Bool = false
   let onPay: () -> Void
@@ -233,7 +236,7 @@ struct UpcomingTransactionRow: View {
 
       Spacer()
 
-      InstrumentAmountView(amount: transaction.primaryAmount, font: .body)
+      InstrumentAmountView(amount: displayAmount, font: .body)
 
       Button("Pay") {
         onPay()
@@ -251,6 +254,13 @@ struct UpcomingTransactionRow: View {
   }
 
   private var displayPayee: String {
+    if transaction.isTransfer {
+      let fromAccount = transaction.legs.first(where: { $0.quantity < 0 })?.accountId
+      let toAccount = transaction.legs.first(where: { $0.quantity >= 0 })?.accountId
+      let fromName = fromAccount.flatMap { accounts.by(id: $0)?.name } ?? "Unknown"
+      let toName = toAccount.flatMap { accounts.by(id: $0)?.name } ?? "Unknown"
+      return "Transfer from \(fromName) to \(toName)"
+    }
     if let payee = transaction.payee, !payee.isEmpty {
       return payee
     }
@@ -289,7 +299,11 @@ struct UpcomingTransactionRow: View {
   ])
 
   let (backend, _) = PreviewBackend.create()
-  let store = TransactionStore(repository: backend.transactions)
+  let store = TransactionStore(
+    repository: backend.transactions,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD
+  )
 
   NavigationStack {
     UpcomingView(
