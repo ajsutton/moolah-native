@@ -1,8 +1,10 @@
 import Foundation
+import OSLog
 import SwiftData
 import os
 
 final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
+  private let logger = Logger(subsystem: "com.moolah.app", category: "AccountRepository")
   private let modelContainer: ModelContainer
   private let instrument: Instrument
   var onRecordChanged: (UUID) -> Void = { _ in }
@@ -31,11 +33,19 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       sortBy: [SortDescriptor(\.position)]
     )
     return try await MainActor.run {
+      let fetchStart = ContinuousClock.now
       let records = try context.fetch(descriptor)
-      let balances = try computeAllBalances()
-      let allPositions = try computeAllPositions()
+      let fetchMs = (ContinuousClock.now - fetchStart).inMilliseconds
 
-      return try records.map { record in
+      let balanceStart = ContinuousClock.now
+      let balances = try computeAllBalances()
+      let balanceMs = (ContinuousClock.now - balanceStart).inMilliseconds
+
+      let positionStart = ContinuousClock.now
+      let allPositions = try computeAllPositions()
+      let positionMs = (ContinuousClock.now - positionStart).inMilliseconds
+
+      let result = try records.map { record in
         let storageValue = balances[record.id] ?? 0
         let balance = InstrumentAmount(storageValue: storageValue, instrument: instrument)
         let investmentValue =
@@ -46,6 +56,13 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
         return record.toDomain(
           balance: balance, investmentValue: investmentValue, positions: positions)
       }
+      let totalMs = fetchMs + balanceMs + positionMs
+      if totalMs > 16 {
+        logger.warning(
+          "⚠️ PERF: AccountRepo.fetchAll took \(totalMs)ms on main (records: \(fetchMs)ms, balances: \(balanceMs)ms, positions: \(positionMs)ms, \(records.count) accounts)"
+        )
+      }
+      return result
     }
   }
 
