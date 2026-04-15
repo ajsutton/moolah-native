@@ -21,3 +21,9 @@ When the app first loads, all existing windows briefly show a "profile removed" 
 - `type` → `legs.first?.type`
 
 These assume the first leg is "special", which breaks for multi-leg transactions where different legs could have different earmarks, categories, or types. Need to audit all call sites for hidden single-leg assumptions and decide on proper multi-leg semantics (e.g. should `earmarkId` return the earmark from any leg that has one?).
+
+## Investment account balances don't update when a new investment value is added
+
+**Severity:** Medium (Data)
+
+When a new investment value is added for an investment account, the account balance displayed in the UI does not update to reflect the new value. The balance remains stale until some other action triggers a refresh.
