@@ -160,6 +160,7 @@ struct MoolahApp: App {
           .environment(profileStore)
           .environment(sessionManager)
           .environment(containerManager)
+          .environment(syncCoordinator)
           .task {
             backupManager.performDailyBackup(
               profiles: profileStore.profiles,

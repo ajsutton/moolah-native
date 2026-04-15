@@ -100,6 +100,9 @@ struct ContentView: View {
       }
     }
     .navigationSplitViewStyle(.balanced)
+    .safeAreaInset(edge: .top, spacing: 0) {
+      SyncStatusBanner()
+    }
     .focusedSceneValue(\.newEarmarkAction) {
       showCreateEarmarkSheet = true
     }
