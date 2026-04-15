@@ -56,7 +56,7 @@ Replace the switch on `transaction.type` with a branch on `isSimple`:
 ```swift
 private var iconName: String {
     guard transaction.isSimple, let type = transaction.legs.first?.type else {
-        return "rectangle.stack"
+        return "arrow.triangle.branch"
     }
     switch type {
     case .income: return "arrow.up"
@@ -146,7 +146,7 @@ Using `allSatisfy` is stronger than checking `legs.first` — it verifies all le
 
 ### Step 1: TransactionRowView (P1, P2, P3)
 
-Branch `iconName` and `iconColor` on `isSimple` — simple transactions use the existing type switch on `legs.first?.type`, complex transactions use `"rectangle.stack"` icon with `.purple` color. Update accessibility label similarly.
+Branch `iconName` and `iconColor` on `isSimple` — simple transactions use the existing type switch on `legs.first?.type`, complex transactions use `"arrow.triangle.branch"` icon with `.purple` color. Update accessibility label similarly.
 
 ### Step 2: TransactionDetailView (P4)
 
@@ -169,4 +169,4 @@ Remove the `type → legs.first?.type` line from the convenience accessor bug en
 
 ## Risk Assessment
 
-**Low risk.** All legs in a simple transaction share the same type, so the replacement logic produces identical results for every currently-possible transaction. The only new behavior is that complex transactions (which don't exist in production yet) will show a distinct icon instead of inheriting the first leg's type. The `.expense` fallback on empty legs is removed — empty legs would show the complex icon, which is a safer failure mode than silently defaulting to expense.
+**Low risk.** All legs in a simple transaction share the same type, so the replacement logic produces identical results for every currently-possible transaction. The only new behavior is that complex transactions (which don't exist in production yet) will show a distinct icon instead of inheriting the first leg's type. The `.expense` fallback on empty legs is removed — empty legs would show the branching arrow icon, which is a safer failure mode than silently defaulting to expense.
