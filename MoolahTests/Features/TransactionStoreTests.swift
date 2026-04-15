@@ -385,7 +385,7 @@ struct TransactionStoreTests {
 
     #expect(store.transactions.count == 1)
     #expect(store.transactions[0].transaction.payee == "Fancy Coffee")
-    #expect(store.transactions[0].transaction.primaryAmount.quantity == Decimal(-7500) / 100)
+    #expect(store.transactions[0].displayAmount.quantity == Decimal(-7500) / 100)
     #expect(store.error == nil)
   }
 
@@ -457,7 +457,7 @@ struct TransactionStoreTests {
     ]
     await store.update(modified)
     #expect(store.transactions.count == 1)
-    #expect(store.transactions[0].transaction.primaryAmount.quantity == Decimal(110000) / 100)
+    #expect(store.transactions[0].displayAmount.quantity == Decimal(110000) / 100)
 
     // Delete
     await store.delete(id: tx.id)
@@ -719,11 +719,11 @@ struct TransactionStoreTests {
     await store.update(updated)
 
     #expect(receivedOld?.id == tx.id)
-    #expect(receivedOld?.primaryAmount.quantity == Decimal(-10000) / 100)
+    #expect(receivedOld?.legs.first?.quantity == Decimal(-10000) / 100)
     #expect(
       receivedOld?.legs.first(where: { $0.accountId != receivedOld?.primaryAccountId })?.accountId
         == savingsId)
-    #expect(receivedNew?.primaryAmount.quantity == Decimal(-15000) / 100)
+    #expect(receivedNew?.legs.first?.quantity == Decimal(-15000) / 100)
     #expect(
       receivedNew?.legs.first(where: { $0.accountId != receivedNew?.primaryAccountId })?.accountId
         == savingsId)
@@ -888,9 +888,9 @@ struct TransactionStoreTests {
     await store.update(updated)
 
     #expect(receivedOld?.earmarkId == earmarkId)
-    #expect(receivedOld?.primaryAmount.quantity == Decimal(-5000) / 100)
+    #expect(receivedOld?.legs.first?.quantity == Decimal(-5000) / 100)
     #expect(receivedNew?.earmarkId == earmarkId)
-    #expect(receivedNew?.primaryAmount.quantity == Decimal(-7500) / 100)
+    #expect(receivedNew?.legs.first?.quantity == Decimal(-7500) / 100)
   }
 
   @Test func testOnMutateChangingEarmarkId() async throws {
@@ -1084,9 +1084,9 @@ struct TransactionStoreTests {
     await store.update(updated)
 
     #expect(receivedOld?.legs.first?.type ?? .expense == .expense)
-    #expect(receivedOld?.primaryAmount.quantity == Decimal(-5000) / 100)
+    #expect(receivedOld?.legs.first?.quantity == Decimal(-5000) / 100)
     #expect(receivedNew?.legs.first?.type ?? .expense == .income)
-    #expect(receivedNew?.primaryAmount.quantity == Decimal(5000) / 100)
+    #expect(receivedNew?.legs.first?.quantity == Decimal(5000) / 100)
   }
 
   @Test func testOnMutateChangingTypeExpenseToTransfer() async throws {
@@ -1252,8 +1252,8 @@ struct TransactionStoreTests {
     ]
     await store.update(updated)
 
-    #expect(receivedOld?.primaryAmount.quantity == Decimal(-5000) / 100)
-    #expect(receivedNew?.primaryAmount.quantity == Decimal(-7500) / 100)
+    #expect(receivedOld?.legs.first?.quantity == Decimal(-5000) / 100)
+    #expect(receivedNew?.legs.first?.quantity == Decimal(-7500) / 100)
   }
 
   @Test func testRunningBalancesUpdateAfterAmountChange() async throws {
@@ -1366,7 +1366,7 @@ struct TransactionStoreTests {
     #expect(paidTx?.recurPeriod == nil)
     #expect(paidTx?.recurEvery == nil)
     #expect(paidTx?.payee == "Rent")
-    #expect(paidTx?.primaryAmount.quantity == Decimal(-200000) / 100)
+    #expect(paidTx?.legs.first?.quantity == Decimal(-200000) / 100)
 
     // Backend should still have the scheduled transaction with advanced date
     let scheduledPage = try await backend.transactions.fetch(
@@ -1504,7 +1504,7 @@ struct TransactionStoreTests {
     #expect(
       paidTx?.legs.first(where: { $0.accountId != paidTx?.primaryAccountId })?.accountId
         == toAccountId)
-    #expect(paidTx?.primaryAmount.quantity == Decimal(-100000) / 100)
+    #expect(paidTx?.legs.first?.quantity == Decimal(-100000) / 100)
     #expect(paidTx?.payee == "Savings Transfer")
     #expect(paidTx?.notes == "Monthly savings")
     #expect(paidTx?.categoryId == categoryId)
@@ -1755,7 +1755,7 @@ struct TransactionStoreTests {
     #expect(match != nil)
     // Most recent (newest first from server) should have the category
     #expect(match?.categoryId == categoryId)
-    #expect(match?.primaryAmount.quantity == Decimal(-7500) / 100)
+    #expect(match?.legs.first?.quantity == Decimal(-7500) / 100)
   }
 
   @Test func testDebouncedSaveOnlyCallsLastAction() async throws {
@@ -1853,8 +1853,8 @@ struct TransactionStoreTests {
 
     #expect(created != nil)
     #expect(created?.legs.first?.type ?? .expense == .expense)
-    #expect(created?.primaryAmount.quantity == 0)
-    #expect(created?.primaryAmount.instrument == Instrument.defaultTestInstrument)
+    #expect(created?.legs.first?.quantity == 0)
+    #expect(created?.legs.first?.instrument == Instrument.defaultTestInstrument)
     #expect(created?.payee == "")
   }
 
