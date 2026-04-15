@@ -1507,7 +1507,7 @@ struct TransactionStoreTests {
     #expect(paidTx?.legs.first?.quantity == Decimal(-100000) / 100)
     #expect(paidTx?.payee == "Savings Transfer")
     #expect(paidTx?.notes == "Monthly savings")
-    #expect(paidTx?.categoryId == categoryId)
+    #expect(paidTx?.legs.contains(where: { $0.categoryId == categoryId }) == true)
     #expect(paidTx?.earmarkId == earmarkId)
     #expect(paidTx?.recurPeriod == nil)
     #expect(paidTx?.recurEvery == nil)
@@ -1754,7 +1754,7 @@ struct TransactionStoreTests {
     let match = await store.fetchTransactionForAutofill(payee: "Woolworths")
     #expect(match != nil)
     // Most recent (newest first from server) should have the category
-    #expect(match?.categoryId == categoryId)
+    #expect(match?.legs.contains(where: { $0.categoryId == categoryId }) == true)
     #expect(match?.legs.first?.quantity == Decimal(-7500) / 100)
   }
 

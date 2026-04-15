@@ -189,7 +189,7 @@ struct TransactionDraftTests {
     #expect(roundTripped!.legs.first?.quantity == original.legs.first?.quantity)
     #expect(roundTripped!.payee == original.payee)
     #expect(roundTripped!.notes == original.notes)
-    #expect(roundTripped!.categoryId == original.categoryId)
+    #expect(roundTripped!.legs.compactMap(\.categoryId) == original.legs.compactMap(\.categoryId))
     #expect(roundTripped!.earmarkId == original.earmarkId)
     #expect(roundTripped!.recurPeriod == original.recurPeriod)
     #expect(roundTripped!.recurEvery == original.recurEvery)

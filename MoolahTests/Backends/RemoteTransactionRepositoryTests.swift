@@ -49,7 +49,7 @@ struct RemoteTransactionRepositoryTests {
     #expect(transactions[0].legs.first?.quantity == Decimal(string: "-50.23")!)
     #expect(transactions[0].payee == "Woolworths")
     #expect(transactions[0].notes == "Weekly groceries")
-    #expect(transactions[0].categoryId != nil)
+    #expect(transactions[0].legs.contains(where: { $0.categoryId != nil }))
 
     // Second transaction: income
     #expect(transactions[1].type == .income)

@@ -147,7 +147,9 @@ struct CategoryRepositoryContractTests {
     )
     let updated = page.transactions.first { $0.id == created.id }
     #expect(updated != nil, "Transaction should still exist")
-    #expect(updated?.categoryId == nil, "categoryId should be nulled after category deletion")
+    #expect(
+      updated?.legs.allSatisfy { $0.categoryId == nil } == true,
+      "categoryId should be nulled after category deletion")
   }
 
   @Test("deleting category cascades to budget items")
