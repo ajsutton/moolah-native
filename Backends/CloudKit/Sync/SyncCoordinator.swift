@@ -577,30 +577,31 @@ final class SyncCoordinator: Sendable {
 
       case .profileData(let profileId):
         // Resolve handler on main (accesses @MainActor-isolated state)
-        let result: (handler: ProfileDataSyncHandler, isFetching: Bool)? = await MainActor.run {
+        let handler: ProfileDataSyncHandler? = await MainActor.run {
           do {
-            let handler = try handlerForProfileZone(profileId: profileId, zoneID: zoneID)
-            return (handler, isFetchingChanges)
+            return try handlerForProfileZone(profileId: profileId, zoneID: zoneID)
           } catch {
             logger.error("Failed to get handler for profile \(profileId): \(error)")
             return nil
           }
         }
-        guard let result else { continue }
+        guard let handler else { continue }
 
         // Filter pre-extracted system fields to this zone (off-main)
+        let savedNames = Set(saved.map { $0.recordID.recordName })
         let zonePreExtracted = preExtractedSystemFields.filter { (recordName, _) in
-          saved.contains { $0.recordID.recordName == recordName }
+          savedNames.contains(recordName)
         }
 
         // Heavy upsert/delete/save runs off-main via nonisolated method
-        let changedTypes = result.handler.applyRemoteChanges(
+        let changedTypes = handler.applyRemoteChanges(
           saved: saved, deleted: deleted, preExtractedSystemFields: zonePreExtracted)
 
-        // Notify observers on main
+        // Notify observers on main — read isFetchingChanges live to avoid
+        // stale snapshot if stop() was called during applyRemoteChanges
         if !changedTypes.isEmpty {
           await MainActor.run {
-            if result.isFetching {
+            if isFetchingChanges {
               accumulateFetchSessionChanges(for: profileId, changedTypes: changedTypes)
             } else {
               notifyObservers(for: profileId, changedTypes: changedTypes)
