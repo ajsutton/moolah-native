@@ -160,7 +160,7 @@ if match.isSimple, draft.type == .transfer, draft.toAccountId == nil {
 }
 ```
 
-`draft.accountId` is already available and represents the account the user is editing from. The `isSimple` guard ensures we only autofill when the structure is unambiguous.
+`draft.accountId` is already available and represents the account the user is editing from. The `isSimple` guard ensures we only autofill when the structure is unambiguous. The real fix — populating the draft with the full leg structure from the source transaction — is tracked in #16.
 
 ### Pattern 3: Test Assertions (T1-T9) — Assert by Known Account ID
 
