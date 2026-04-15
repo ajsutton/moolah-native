@@ -37,7 +37,7 @@ struct ProfileDataSyncHandlerTests {
     ckRecord["isHidden"] = 0 as CKRecordValue
     ckRecord["usesPositionTracking"] = 0 as CKRecordValue
 
-    let changedTypes = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
+    let result = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
     let context = ModelContext(container)
     let records = try context.fetch(
@@ -45,6 +45,10 @@ struct ProfileDataSyncHandlerTests {
     )
     #expect(records.count == 1)
     #expect(records.first?.name == "Remote Account")
+    guard case .success(let changedTypes) = result else {
+      Issue.record("Expected .success but got \(result)")
+      return
+    }
     #expect(changedTypes.contains("CD_AccountRecord"))
   }
 
@@ -98,7 +102,7 @@ struct ProfileDataSyncHandlerTests {
     try context.save()
 
     let recordID = CKRecord.ID(recordName: accountId.uuidString, zoneID: handler.zoneID)
-    let changedTypes = handler.applyRemoteChanges(
+    let result = handler.applyRemoteChanges(
       saved: [], deleted: [(recordID, "CD_AccountRecord")])
 
     let freshContext = ModelContext(container)
@@ -106,6 +110,10 @@ struct ProfileDataSyncHandlerTests {
       FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == accountId })
     )
     #expect(records.isEmpty)
+    guard case .success(let changedTypes) = result else {
+      Issue.record("Expected .success but got \(result)")
+      return
+    }
     #expect(changedTypes.contains("CD_AccountRecord"))
   }
 

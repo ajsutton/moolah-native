@@ -4,6 +4,14 @@ import OSLog
 import SwiftData
 import os
 
+/// Result of applying remote changes from CKSyncEngine.
+enum ApplyResult: Sendable {
+  /// Changes saved successfully. Contains the set of changed record types.
+  case success(changedTypes: Set<String>)
+  /// context.save() failed. The coordinator should schedule a re-fetch.
+  case saveFailed(String)
+}
+
 /// Stateless batch processing logic for a single profile's data zone.
 /// Contains all data transformation, upsert, deletion, and record-building
 /// logic with no CKSyncEngine dependency.
@@ -31,12 +39,11 @@ final class ProfileDataSyncHandler: Sendable {
   /// Applies remote changes (inserts/updates/deletions) to the local SwiftData store.
   /// Creates a fresh ModelContext per call for isolation.
   /// Returns the set of changed record type strings.
-  @discardableResult
   func applyRemoteChanges(
     saved: [CKRecord],
     deleted: [(CKRecord.ID, String)],
     preExtractedSystemFields: [(String, Data)]? = nil
-  ) -> Set<String> {
+  ) -> ApplyResult {
     let batchStart = ContinuousClock.now
 
     let signpostID = OSSignpostID(log: Signposts.sync)
@@ -77,7 +84,7 @@ final class ProfileDataSyncHandler: Sendable {
     Self.applyBatchDeletions(deleted, context: context)
     os_signpost(.end, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID)
 
-    var changedTypes = Set<String>()
+    let changedTypes: Set<String>
     var saveDuration: Duration = .zero
     do {
       os_signpost(.begin, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
@@ -89,6 +96,7 @@ final class ProfileDataSyncHandler: Sendable {
     } catch {
       os_signpost(.end, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
       logger.error("Failed to save remote changes: \(error)")
+      return .saveFailed(error.localizedDescription)
     }
 
     // Log batch performance
@@ -105,7 +113,7 @@ final class ProfileDataSyncHandler: Sendable {
         """)
     }
 
-    return changedTypes
+    return .success(changedTypes: changedTypes)
   }
 
   // MARK: - Building CKRecords

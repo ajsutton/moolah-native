@@ -95,7 +95,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
         records.append(legRecord)
       }
       try! awaitSync { @MainActor in
-        handler.applyRemoteChanges(saved: records, deleted: [])
+        _ = handler.applyRemoteChanges(saved: records, deleted: [])
       }
     }
   }
@@ -137,7 +137,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
       // --- Measurement ---
       self.startMeasuring()
       try! awaitSync { @MainActor in
-        handler.applyRemoteChanges(saved: [], deleted: deletionTargets)
+        _ = handler.applyRemoteChanges(saved: [], deleted: deletionTargets)
       }
       self.stopMeasuring()
     }

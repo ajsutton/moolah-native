@@ -48,7 +48,7 @@ final class ProfileIndexSyncHandler: Sendable {
 
   /// Applies remote changes (inserts/updates/deletions) to the local SwiftData store.
   /// Creates a fresh ModelContext per call for isolation.
-  func applyRemoteChanges(saved: [CKRecord], deleted: [CKRecord.ID]) {
+  func applyRemoteChanges(saved: [CKRecord], deleted: [CKRecord.ID]) -> ApplyResult {
     let context = ModelContext(modelContainer)
 
     for ckRecord in saved {
@@ -84,8 +84,10 @@ final class ProfileIndexSyncHandler: Sendable {
 
     do {
       try context.save()
+      return .success(changedTypes: Set(saved.map(\.recordType)))
     } catch {
       logger.error("Failed to save remote profile changes: \(error)")
+      return .saveFailed(error.localizedDescription)
     }
   }
 

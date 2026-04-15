@@ -136,6 +136,9 @@ final class SyncCoordinator: Sendable {
   /// The zone setup task (creates profile-index zone on start).
   private var zoneSetupTask: Task<Void, Never>?
 
+  /// Task for coalescing re-fetch requests after save failures.
+  private var refetchTask: Task<Void, Never>?
+
   // MARK: - Init
 
   init(containerManager: ProfileContainerManager) {
@@ -203,6 +206,8 @@ final class SyncCoordinator: Sendable {
   func stop() {
     zoneSetupTask?.cancel()
     zoneSetupTask = nil
+    refetchTask?.cancel()
+    refetchTask = nil
     for (_, task) in zoneCreationTasks {
       task.cancel()
     }
@@ -249,6 +254,17 @@ final class SyncCoordinator: Sendable {
       try await syncEngine.fetchChanges()
     } catch {
       logger.error("Failed to fetch changes: \(error)")
+    }
+  }
+
+  /// Schedules a re-fetch after a 5-second delay. Multiple calls coalesce into one re-fetch.
+  private func scheduleRefetch() {
+    refetchTask?.cancel()
+    refetchTask = Task {
+      try? await Task.sleep(for: .seconds(5))
+      guard !Task.isCancelled else { return }
+      self.logger.info("Re-fetching changes after save failure")
+      try? await self.syncEngine?.fetchChanges()
     }
   }
 
@@ -564,11 +580,17 @@ final class SyncCoordinator: Sendable {
       case .profileIndex:
         // Profile index only has saves and simple deletions (no recordType needed)
         let deletedIDs = deleted.map(\.0)
-        profileIndexHandler.applyRemoteChanges(saved: saved, deleted: deletedIDs)
-        if isFetchingChanges {
-          fetchSessionIndexChanged = true
-        } else {
-          notifyIndexObservers()
+        let indexResult = profileIndexHandler.applyRemoteChanges(saved: saved, deleted: deletedIDs)
+        switch indexResult {
+        case .success:
+          if isFetchingChanges {
+            fetchSessionIndexChanged = true
+          } else {
+            notifyIndexObservers()
+          }
+        case .saveFailed(let errorDescription):
+          logger.error("Profile index save failed, scheduling re-fetch: \(errorDescription)")
+          scheduleRefetch()
         }
 
       case .profileData(let profileId):
@@ -578,12 +600,21 @@ final class SyncCoordinator: Sendable {
           let zonePreExtracted = preExtractedSystemFields?.filter { (recordName, _) in
             saved.contains { $0.recordID.recordName == recordName }
           }
-          let changedTypes = handler.applyRemoteChanges(
+          let result = handler.applyRemoteChanges(
             saved: saved, deleted: deleted, preExtractedSystemFields: zonePreExtracted)
-          if isFetchingChanges {
-            accumulateFetchSessionChanges(for: profileId, changedTypes: changedTypes)
-          } else if !changedTypes.isEmpty {
-            notifyObservers(for: profileId, changedTypes: changedTypes)
+          switch result {
+          case .success(let changedTypes):
+            if !changedTypes.isEmpty {
+              if isFetchingChanges {
+                accumulateFetchSessionChanges(for: profileId, changedTypes: changedTypes)
+              } else {
+                notifyObservers(for: profileId, changedTypes: changedTypes)
+              }
+            }
+          case .saveFailed(let errorDescription):
+            logger.error(
+              "Profile data save failed for \(profileId), scheduling re-fetch: \(errorDescription)")
+            scheduleRefetch()
           }
         } catch {
           logger.error("Failed to get handler for profile \(profileId): \(error)")
