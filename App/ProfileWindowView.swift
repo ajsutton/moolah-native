@@ -1,5 +1,8 @@
 #if os(macOS)
+  import OSLog
   import SwiftUI
+
+  private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileWindowView")
 
   /// macOS window content for a single profile.
   /// Each window receives a Profile.ID from `WindowGroup(for:)` and resolves it to a session.
@@ -11,11 +14,25 @@
 
     @Environment(\.dismiss) private var dismiss
 
+    /// Resolve the profile to display: the window's profileID if it matches a known profile,
+    /// otherwise the active profile, otherwise the first profile.
+    private var resolvedProfile: Profile? {
+      if let profileID,
+        let profile = profileStore.profiles.first(where: { $0.id == profileID })
+      {
+        return profile
+      }
+      if let activeID = profileStore.activeProfileID,
+        let profile = profileStore.profiles.first(where: { $0.id == activeID })
+      {
+        return profile
+      }
+      return profileStore.profiles.first
+    }
+
     var body: some View {
       Group {
-        if let profileID,
-          let profile = profileStore.profiles.first(where: { $0.id == profileID })
-        {
+        if let profile = resolvedProfile {
           let session = sessionManager.session(for: profile)
           SessionRootView(session: session)
             .environment(profileStore)
@@ -36,6 +53,9 @@
           ProgressView()
         } else {
           // Profile is genuinely gone — close this window
+          let _ = logger.warning(
+            "Dismissing window — profile not found. profileID=\(profileID?.uuidString ?? "nil", privacy: .public), profileCount=\(profileStore.profiles.count), profileIDs=\(profileStore.profiles.map(\.id).map(\.uuidString).joined(separator: ","), privacy: .public)"
+          )
           Color.clear
             .onAppear {
               dismiss()
