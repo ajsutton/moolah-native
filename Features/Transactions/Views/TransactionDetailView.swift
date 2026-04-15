@@ -21,6 +21,8 @@ struct TransactionDetailView: View {
   @State private var categoryJustSelected = false
   @State private var legPendingDeletion: Int?
   @State private var legCategoryJustSelected: [Int: Bool] = [:]
+  @State private var showLegCategorySuggestions: [Int: Bool] = [:]
+  @State private var legCategoryHighlightedIndex: [Int: Int?] = [:]
   @FocusState private var focusedField: Field?
 
   private enum Field: Hashable {
@@ -121,6 +123,13 @@ struct TransactionDetailView: View {
     {
       initialDraft.categoryText = categories.path(for: cat)
     }
+    for i in initialDraft.legDrafts.indices {
+      if let catId = initialDraft.legDrafts[i].categoryId,
+        let cat = categories.by(id: catId)
+      {
+        initialDraft.legDrafts[i].categoryText = categories.path(for: cat)
+      }
+    }
     _draft = State(initialValue: initialDraft)
   }
 
@@ -151,6 +160,9 @@ struct TransactionDetailView: View {
       .overlayPreferenceValue(CategoryPickerAnchorKey.self) { anchor in
         categoryOverlay(anchor: anchor)
       }
+      .overlayPreferenceValue(LegCategoryPickerAnchorKey.self) { anchors in
+        legCategoryOverlay(anchors: anchors)
+      }
       .navigationTitle("Transaction Details")
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -161,6 +173,24 @@ struct TransactionDetailView: View {
         }
       }
       .onChange(of: draft) { _, _ in debouncedSave() }
+      .onChange(of: legCategoryFieldFocused) { _, focused in
+        for i in draft.legDrafts.indices {
+          if i != focused {
+            showLegCategorySuggestions[i] = false
+            legCategoryHighlightedIndex[i] = nil
+            if let catId = draft.legDrafts[i].categoryId, let cat = categories.by(id: catId) {
+              if draft.legDrafts[i].categoryText != categories.path(for: cat) {
+                legCategoryJustSelected[i] = true
+                draft.legDrafts[i].categoryText = categories.path(for: cat)
+              }
+            } else if !draft.legDrafts[i].categoryText.isEmpty {
+              legCategoryJustSelected[i] = true
+              draft.legDrafts[i].categoryText = ""
+              draft.legDrafts[i].categoryId = nil
+            }
+          }
+        }
+      }
       .confirmationDialog(
         "Delete Transaction",
         isPresented: $showDeleteConfirmation,
@@ -397,6 +427,7 @@ struct TransactionDetailView: View {
   }
 
   @FocusState private var categoryFieldFocused: Bool
+  @FocusState private var legCategoryFieldFocused: Int?
 
   private var categorySection: some View {
     Section {
@@ -499,15 +530,24 @@ struct TransactionDetailView: View {
         .monospacedDigit()
       }
 
-      Picker("Category", selection: $draft.legDrafts[index].categoryId) {
-        Text("None").tag(UUID?.none)
-        ForEach(categories.flattenedByPath(), id: \.category.id) { entry in
-          Text(entry.path).tag(UUID?.some(entry.category.id))
-        }
-      }
-      #if os(macOS)
-        .pickerStyle(.menu)
-      #endif
+      LegCategoryAutocompleteField(
+        legIndex: index,
+        text: $draft.legDrafts[index].categoryText,
+        highlightedIndex: Binding(
+          get: { legCategoryHighlightedIndex[index] ?? nil },
+          set: { legCategoryHighlightedIndex[index] = $0 }
+        ),
+        suggestionCount: legCategoryVisibleSuggestions(for: index).count,
+        onTextChange: { _ in
+          if legCategoryJustSelected[index] == true {
+            legCategoryJustSelected[index] = false
+          } else {
+            showLegCategorySuggestions[index] = true
+          }
+        },
+        onAcceptHighlighted: { acceptHighlightedLegCategory(at: index) }
+      )
+      .focused($legCategoryFieldFocused, equals: index)
 
       Picker("Earmark", selection: $draft.legDrafts[index].earmarkId) {
         Text("None").tag(UUID?.none)
@@ -748,6 +788,63 @@ struct TransactionDetailView: View {
             draft.categoryText = selected.path
             showCategorySuggestions = false
             categoryHighlightedIndex = nil
+          }
+        )
+        .frame(width: rect.width)
+        .offset(x: rect.minX, y: rect.maxY + 4)
+      }
+    }
+  }
+
+  // MARK: - Leg Category Suggestions
+
+  private func legCategoryVisibleSuggestions(for index: Int) -> [CategorySuggestion] {
+    guard showLegCategorySuggestions[index] == true else { return [] }
+    let text = draft.legDrafts[index].categoryText
+    let allEntries = categories.flattenedByPath()
+    let filtered: [Categories.FlatEntry]
+    if text.trimmingCharacters(in: .whitespaces).isEmpty {
+      filtered = allEntries
+    } else {
+      filtered = allEntries.filter { matchesCategorySearch($0.path, query: text) }
+    }
+    return filtered.prefix(8).map { CategorySuggestion(id: $0.category.id, path: $0.path) }
+  }
+
+  private func acceptHighlightedLegCategory(at index: Int) {
+    let suggestions = legCategoryVisibleSuggestions(for: index)
+    guard let highlighted = legCategoryHighlightedIndex[index] ?? nil,
+      highlighted < suggestions.count
+    else { return }
+    let selected = suggestions[highlighted]
+    legCategoryJustSelected[index] = true
+    draft.legDrafts[index].categoryId = selected.id
+    draft.legDrafts[index].categoryText = selected.path
+    showLegCategorySuggestions[index] = false
+    legCategoryHighlightedIndex[index] = nil
+  }
+
+  @ViewBuilder
+  private func legCategoryOverlay(anchors: [Int: Anchor<CGRect>]) -> some View {
+    if let activeIndex = anchors.keys.sorted().first(where: { index in
+      showLegCategorySuggestions[index] == true
+        && !legCategoryVisibleSuggestions(for: index).isEmpty
+    }), let anchor = anchors[activeIndex] {
+      GeometryReader { proxy in
+        let rect = proxy[anchor]
+        CategorySuggestionDropdown(
+          suggestions: legCategoryVisibleSuggestions(for: activeIndex),
+          searchText: draft.legDrafts[activeIndex].categoryText,
+          highlightedIndex: Binding(
+            get: { legCategoryHighlightedIndex[activeIndex] ?? nil },
+            set: { legCategoryHighlightedIndex[activeIndex] = $0 }
+          ),
+          onSelect: { selected in
+            legCategoryJustSelected[activeIndex] = true
+            draft.legDrafts[activeIndex].categoryId = selected.id
+            draft.legDrafts[activeIndex].categoryText = selected.path
+            showLegCategorySuggestions[activeIndex] = false
+            legCategoryHighlightedIndex[activeIndex] = nil
           }
         )
         .frame(width: rect.width)
