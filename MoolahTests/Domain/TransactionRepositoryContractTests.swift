@@ -149,7 +149,7 @@ struct TransactionRepositoryContractTests {
     #expect(result.payee == "Updated Payee")
     #expect(result.notes == "Some notes")
     #expect(result.legs.contains(where: { $0.categoryId == categoryId }))
-    #expect(result.earmarkId == earmarkId)
+    #expect(result.legs.contains(where: { $0.earmarkId == earmarkId }))
     #expect(result.recurPeriod == .month)
     #expect(result.recurEvery == 2)
 
@@ -171,7 +171,7 @@ struct TransactionRepositoryContractTests {
     #expect(fetched.payee == "Updated Payee")
     #expect(fetched.notes == "Some notes")
     #expect(fetched.legs.contains(where: { $0.categoryId == categoryId }))
-    #expect(fetched.earmarkId == earmarkId)
+    #expect(fetched.legs.contains(where: { $0.earmarkId == earmarkId }))
     #expect(fetched.recurPeriod == .month)
     #expect(fetched.recurEvery == 2)
   }
@@ -319,10 +319,10 @@ struct TransactionRepositoryContractTests {
       page: 0,
       pageSize: 50
     )
-    let earmarked = allPage.transactions.filter { $0.earmarkId != nil }
+    let earmarked = allPage.transactions.filter { $0.legs.contains(where: { $0.earmarkId != nil }) }
     #expect(earmarked.count == 1, "Test data should have one earmarked transaction")
 
-    let earmarkId = earmarked[0].earmarkId!
+    let earmarkId = earmarked[0].legs.first(where: { $0.earmarkId != nil })!.earmarkId!
     let filteredPage = try await repository.fetch(
       filter: TransactionFilter(earmarkId: earmarkId),
       page: 0,
@@ -330,7 +330,7 @@ struct TransactionRepositoryContractTests {
     )
 
     #expect(filteredPage.transactions.count == 1)
-    #expect(filteredPage.transactions[0].earmarkId == earmarkId)
+    #expect(filteredPage.transactions[0].legs.contains(where: { $0.earmarkId == earmarkId }))
   }
 
   // MARK: - Account Filter

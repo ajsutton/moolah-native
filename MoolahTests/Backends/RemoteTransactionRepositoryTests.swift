@@ -274,7 +274,7 @@ struct RemoteTransactionRepositoryTests {
     #expect(txn.legs[0].earmarkId == earmarkId)
     #expect(txn.legs[0].type == .income)
     #expect(txn.legs[0].quantity == 5)
-    #expect(txn.earmarkId == earmarkId)
+    #expect(txn.legs.contains(where: { $0.earmarkId == earmarkId }))
   }
 }
 
