@@ -31,12 +31,12 @@ struct TransactionRowView: View {
           Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
             .monospacedDigit()
 
-          if let categoryName {
+          ForEach(categoryNames, id: \.self) { name in
             Text("·")
-            Label(categoryName, systemImage: "tag")
+            Label(name, systemImage: "tag")
               .labelStyle(.iconOnly)
               .imageScale(.small)
-            Text(categoryName)
+            Text(name)
           }
 
           if !hideEarmark, let earmarkName {
@@ -89,9 +89,13 @@ struct TransactionRowView: View {
     }
   }
 
-  private var categoryName: String? {
-    guard let categoryId = transaction.categoryId else { return nil }
-    return categories.by(id: categoryId)?.name
+  private var categoryNames: [String] {
+    let applicable =
+      viewingAccountId.map { id in
+        transaction.legs.filter { $0.accountId == id }
+      } ?? transaction.legs
+    let uniqueIds = applicable.compactMap(\.categoryId).uniqued()
+    return uniqueIds.compactMap { categories.by(id: $0)?.name }
   }
 
   private var earmarkName: String? {

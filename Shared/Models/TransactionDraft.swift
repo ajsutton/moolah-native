@@ -144,7 +144,7 @@ extension TransactionDraft {
       date: transaction.date,
       accountId: primaryLeg?.accountId,
       toAccountId: transferLeg?.accountId,
-      categoryId: primaryLeg?.categoryId,
+      categoryId: transaction.legs.first(where: { $0.categoryId != nil })?.categoryId,
       earmarkId: primaryLeg?.earmarkId,
       notes: transaction.notes ?? "",
       categoryText: "",

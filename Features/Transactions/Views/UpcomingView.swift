@@ -212,14 +212,14 @@ struct UpcomingTransactionRow: View {
               .accessibilityLabel("Repeats \(recurrence)")
           }
 
-          if let categoryId = transaction.categoryId,
-            let category = categories.by(id: categoryId)
-          {
-            Text("•")
-              .foregroundStyle(.secondary)
-            Text(category.name)
-              .font(.caption)
-              .foregroundStyle(.secondary)
+          ForEach(transaction.legs.compactMap(\.categoryId).uniqued(), id: \.self) { catId in
+            if let category = categories.by(id: catId) {
+              Text("•")
+                .foregroundStyle(.secondary)
+              Text(category.name)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
           }
 
           if let earmarkId = transaction.earmarkId,

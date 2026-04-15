@@ -105,7 +105,6 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
 
   var accountIds: Set<UUID> { Set(legs.compactMap(\.accountId)) }
   var type: TransactionType { legs.first?.type ?? .expense }
-  var categoryId: UUID? { legs.first?.categoryId }
   var earmarkId: UUID? { legs.first?.earmarkId }
   var isTransfer: Bool {
     let accounts = Set(legs.filter { $0.type == .transfer }.compactMap(\.accountId))
@@ -126,6 +125,14 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
       && a.type == b.type
       && a.categoryId == b.categoryId
       && a.earmarkId == b.earmarkId
+  }
+}
+
+extension Array where Element: Hashable {
+  /// Returns elements in order of first appearance, removing duplicates.
+  func uniqued() -> [Element] {
+    var seen = Set<Element>()
+    return filter { seen.insert($0).inserted }
   }
 }
 
