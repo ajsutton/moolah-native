@@ -26,3 +26,7 @@ During recent UI review fixes, the fix ensuring sufficient contrast between the 
 ## Upcoming transactions analysis panel flashes on pay
 
 When paying a transaction, the upcoming transactions analysis panel flashes its content as if doing a full reload. It should update incrementally without a visible flash.
+
+## iCloud profile: transfers show incorrect balance in transaction list
+
+In an iCloud profile, transfers cause the balance shown in the transaction list to be wildly inaccurate — transactions into an account are displayed as negative amounts. The sidebar shows the correct balance; only the transaction list running balance is wrong.
