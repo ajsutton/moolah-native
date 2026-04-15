@@ -40,19 +40,16 @@ final class CategoryStore {
     let start = ContinuousClock.now
     do {
       let freshList = try await repository.fetchAll()
-      let fetchMs = (ContinuousClock.now - start).inMilliseconds
       let fresh = Categories(from: freshList)
       let freshCategories = fresh.flattenedByPath().map(\.category)
       let currentCategories = categories.flattenedByPath().map(\.category)
+      let elapsed = (ContinuousClock.now - start).inMilliseconds
       if freshCategories != currentCategories {
         categories = fresh
-        logger.debug("Sync: updated categories")
+        logger.debug("Sync: updated categories in \(elapsed)ms")
       }
-      let totalMs = (ContinuousClock.now - start).inMilliseconds
-      if totalMs > 16 {
-        logger.warning(
-          "⚠️ PERF: categoryStore.reloadFromSync took \(totalMs)ms (fetch: \(fetchMs)ms, diff+assign: \(totalMs - fetchMs)ms)"
-        )
+      if elapsed > 16 {
+        logger.warning("⚠️ PERF: categoryStore.reloadFromSync took \(elapsed)ms")
       }
     } catch {
       logger.error("Sync reload failed: \(error.localizedDescription)")

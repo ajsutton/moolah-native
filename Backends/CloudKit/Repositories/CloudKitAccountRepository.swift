@@ -59,9 +59,9 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
         balance: balance, investmentValue: investmentValue, positions: positions)
     }
     let totalMs = fetchMs + balanceMs + positionMs
-    if totalMs > 16 {
-      logger.warning(
-        "⚠️ PERF: AccountRepo.fetchAll took \(totalMs)ms (records: \(fetchMs)ms, balances: \(balanceMs)ms, positions: \(positionMs)ms, \(records.count) accounts)"
+    if totalMs > 100 {
+      logger.info(
+        "AccountRepo.fetchAll took \(totalMs)ms off-main (records: \(fetchMs)ms, balances: \(balanceMs)ms, positions: \(positionMs)ms, \(records.count) accounts)"
       )
     }
     return result

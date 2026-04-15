@@ -44,16 +44,13 @@ final class EarmarkStore {
     let start = ContinuousClock.now
     do {
       let fresh = Earmarks(from: try await repository.fetchAll())
-      let fetchMs = (ContinuousClock.now - start).inMilliseconds
+      let elapsed = (ContinuousClock.now - start).inMilliseconds
       if fresh.ordered != earmarks.ordered {
         earmarks = fresh
-        logger.debug("Sync: updated earmarks (\(fresh.count) earmarks)")
+        logger.debug("Sync: updated earmarks (\(fresh.count) earmarks) in \(elapsed)ms")
       }
-      let totalMs = (ContinuousClock.now - start).inMilliseconds
-      if totalMs > 16 {
-        logger.warning(
-          "⚠️ PERF: earmarkStore.reloadFromSync took \(totalMs)ms (fetch: \(fetchMs)ms, diff+assign: \(totalMs - fetchMs)ms)"
-        )
+      if elapsed > 16 {
+        logger.warning("⚠️ PERF: earmarkStore.reloadFromSync took \(elapsed)ms")
       }
     } catch {
       logger.error("Sync reload failed: \(error.localizedDescription)")
