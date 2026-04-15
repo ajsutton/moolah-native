@@ -15,115 +15,112 @@ struct ContentView: View {
   @State private var showCreateEarmarkSheet = false
 
   var body: some View {
-    VStack(spacing: 0) {
-      SyncStatusBanner()
-      NavigationSplitView {
-        SidebarView(selection: $selection)
-          .navigationSplitViewColumnWidth(min: 200, ideal: 280)
-          .task {
-            async let a: Void = accountStore.load()
-            async let c: Void = categoryStore.load()
-            async let e: Void = earmarkStore.load()
-            _ = await (a, c, e)
-          }
-          .toolbar {
-            #if os(iOS)
-              ToolbarItem(placement: .automatic) {
-                if case .signedIn(let user) = authStore.state {
-                  UserMenuView(user: user)
-                    .environment(authStore)
-                }
-              }
-            #endif
-          }
-      } detail: {
-        switch selection {
-        case .account(let id):
-          if let account = accountStore.accounts.by(id: id) {
-            if account.type == .investment {
-              InvestmentAccountView(
-                account: account,
-                accounts: accountStore.accounts,
-                categories: categoryStore.categories,
-                earmarks: earmarkStore.earmarks,
-                investmentStore: investmentStore,
-                transactionStore: transactionStore,
-                tradeStore: tradeStore)
-            } else {
-              TransactionListView(
-                title: account.name,
-                filter: TransactionFilter(accountId: account.id),
-                accounts: accountStore.accounts,
-                categories: categoryStore.categories,
-                earmarks: earmarkStore.earmarks,
-                transactionStore: transactionStore,
-                positions: accountStore.positions(for: account.id))
-            }
-          }
-        case .earmark(let id):
-          if let earmark = earmarkStore.earmarks.by(id: id) {
-            EarmarkDetailView(
-              earmark: earmark,
-              accounts: accountStore.accounts,
-              categories: categoryStore.categories,
-              earmarks: earmarkStore.earmarks,
-              transactionStore: transactionStore,
-              analysisRepository: analysisStore.repository)
-          }
-        case .allTransactions:
-          TransactionListView(
-            title: "All Transactions",
-            filter: TransactionFilter(),
-            accounts: accountStore.accounts,
-            categories: categoryStore.categories,
-            earmarks: earmarkStore.earmarks,
-            transactionStore: transactionStore)
-        case .upcomingTransactions:
-          UpcomingView(
-            accounts: accountStore.accounts,
-            categories: categoryStore.categories,
-            earmarks: earmarkStore.earmarks,
-            transactionStore: transactionStore)
-        case .categories:
-          CategoriesView(categoryStore: categoryStore)
-        case .reports:
-          ReportsView(
-            analysisRepository: analysisStore.repository,
-            categories: categoryStore.categories,
-            accounts: accountStore.accounts,
-            earmarks: earmarkStore.earmarks,
-            transactionStore: transactionStore)
-        case .analysis:
-          AnalysisView(store: analysisStore)
-        case nil:
-          ContentUnavailableView(
-            "Select an Account", systemImage: "sidebar.left",
-            description: Text("Choose an account from the sidebar to view transactions."))
-        }
-      }
-      .navigationSplitViewStyle(.balanced)
-      .focusedSceneValue(\.newEarmarkAction) {
-        showCreateEarmarkSheet = true
-      }
-      .focusedSceneValue(\.refreshAction) {
-        Task {
+    NavigationSplitView {
+      SidebarView(selection: $selection)
+        .navigationSplitViewColumnWidth(min: 200, ideal: 280)
+        .task {
           async let a: Void = accountStore.load()
           async let c: Void = categoryStore.load()
           async let e: Void = earmarkStore.load()
           _ = await (a, c, e)
         }
-      }
-      .sheet(isPresented: $showCreateEarmarkSheet) {
-        CreateEarmarkSheet(
-          instrument: accountStore.currentTotal.instrument,
-          onCreate: { newEarmark in
-            Task {
-              _ = await earmarkStore.create(newEarmark)
-              showCreateEarmarkSheet = false
+        .toolbar {
+          #if os(iOS)
+            ToolbarItem(placement: .automatic) {
+              if case .signedIn(let user) = authStore.state {
+                UserMenuView(user: user)
+                  .environment(authStore)
+              }
             }
+          #endif
+        }
+    } detail: {
+      switch selection {
+      case .account(let id):
+        if let account = accountStore.accounts.by(id: id) {
+          if account.type == .investment {
+            InvestmentAccountView(
+              account: account,
+              accounts: accountStore.accounts,
+              categories: categoryStore.categories,
+              earmarks: earmarkStore.earmarks,
+              investmentStore: investmentStore,
+              transactionStore: transactionStore,
+              tradeStore: tradeStore)
+          } else {
+            TransactionListView(
+              title: account.name,
+              filter: TransactionFilter(accountId: account.id),
+              accounts: accountStore.accounts,
+              categories: categoryStore.categories,
+              earmarks: earmarkStore.earmarks,
+              transactionStore: transactionStore,
+              positions: accountStore.positions(for: account.id))
           }
-        )
+        }
+      case .earmark(let id):
+        if let earmark = earmarkStore.earmarks.by(id: id) {
+          EarmarkDetailView(
+            earmark: earmark,
+            accounts: accountStore.accounts,
+            categories: categoryStore.categories,
+            earmarks: earmarkStore.earmarks,
+            transactionStore: transactionStore,
+            analysisRepository: analysisStore.repository)
+        }
+      case .allTransactions:
+        TransactionListView(
+          title: "All Transactions",
+          filter: TransactionFilter(),
+          accounts: accountStore.accounts,
+          categories: categoryStore.categories,
+          earmarks: earmarkStore.earmarks,
+          transactionStore: transactionStore)
+      case .upcomingTransactions:
+        UpcomingView(
+          accounts: accountStore.accounts,
+          categories: categoryStore.categories,
+          earmarks: earmarkStore.earmarks,
+          transactionStore: transactionStore)
+      case .categories:
+        CategoriesView(categoryStore: categoryStore)
+      case .reports:
+        ReportsView(
+          analysisRepository: analysisStore.repository,
+          categories: categoryStore.categories,
+          accounts: accountStore.accounts,
+          earmarks: earmarkStore.earmarks,
+          transactionStore: transactionStore)
+      case .analysis:
+        AnalysisView(store: analysisStore)
+      case nil:
+        ContentUnavailableView(
+          "Select an Account", systemImage: "sidebar.left",
+          description: Text("Choose an account from the sidebar to view transactions."))
       }
+    }
+    .navigationSplitViewStyle(.balanced)
+    .focusedSceneValue(\.newEarmarkAction) {
+      showCreateEarmarkSheet = true
+    }
+    .focusedSceneValue(\.refreshAction) {
+      Task {
+        async let a: Void = accountStore.load()
+        async let c: Void = categoryStore.load()
+        async let e: Void = earmarkStore.load()
+        _ = await (a, c, e)
+      }
+    }
+    .sheet(isPresented: $showCreateEarmarkSheet) {
+      CreateEarmarkSheet(
+        instrument: accountStore.currentTotal.instrument,
+        onCreate: { newEarmark in
+          Task {
+            _ = await earmarkStore.create(newEarmark)
+            showCreateEarmarkSheet = false
+          }
+        }
+      )
     }
   }
 }
