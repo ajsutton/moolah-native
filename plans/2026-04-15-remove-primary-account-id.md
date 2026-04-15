@@ -34,8 +34,8 @@ No code should treat `legs.first` as semantically meaningful. Every access must 
 
 | # | Location | Current Usage | Replacement Strategy |
 |---|----------|---------------|----------------------|
-| P1 | `TransactionRowView.swift:103` | Finds "other" account for "Transfer to X" label | Use viewing account context to find the other leg |
-| P2 | `TransactionDetailView.swift:423` | Autofill: finds destination account of prior transfer | Use `draft.accountId` (already available) to find the other leg |
+| P1 | `TransactionRowView.swift:103` | Finds "other" account for "Transfer to X" label | Simple: show "Transfer to/from X" using viewing account; Complex: show sub-transaction count |
+| P2 | `TransactionDetailView.swift:423` | Autofill: finds destination account of prior transfer | Guard `isSimple`, then use `draft.accountId` to find the other leg |
 | P3 | `TransactionDTO.swift:86` | Maps to `TransactionDTO.accountId` | Guard `isSimple`, then find source leg by negative quantity |
 | P4 | `TransactionDTO.swift:142` | Maps to `CreateTransactionDTO.accountId` | Same as P3 |
 
@@ -112,26 +112,25 @@ This also removes the `fromDomain` methods' dependence on the `type`, `categoryI
 
 **Signature change:** `fromDomain` becomes `throws`. Callers in the Remote backend already operate in async/throwing contexts, so propagating the error is straightforward. The Remote repository's save/create methods should surface this as a user-visible validation error ("This transaction type is not supported by the remote backend").
 
-### Pattern 2: Finding the "Other" Leg in Views (P1, P2)
+### Pattern 2: Display Labels in Views (P1, P2)
 
-The pattern `legs.first(where: { $0.accountId != transaction.primaryAccountId })` finds the transfer destination by excluding the source. This is subtly wrong for incoming transfers where the viewing account IS the destination — it labels them "Transfer to [source]".
+These call sites use `primaryAccountId` to find the "other" leg and build a "Transfer to X" label. They assume exactly two legs. Complex transactions (stock trades, currency conversions, multi-leg splits) need a different display path.
 
-**P1 — TransactionRowView.swift:103:**
+**P1 — TransactionRowView.swift:103 (`displayPayee`):**
 
-After #10 lands, TransactionRowView will receive `TransactionWithBalance` which carries the viewing account context. Replace the pattern with:
+The current logic: if transfer, find the leg whose account isn't `primaryAccountId`, show "Transfer to [that account]". This breaks for:
+- Incoming transfers (shows wrong direction)
+- Multi-leg transactions (more than one "other" leg)
+- Same-account transactions like currency conversions (both legs have the same account)
 
-```swift
-// Given viewingAccountId from TransactionWithBalance context
-let otherLeg = transaction.legs.first(where: { $0.accountId != viewingAccountId })
-```
-
-This finds the "other" account relative to the viewer, not relative to position. The label text should also change from always saying "Transfer to" to saying "Transfer from" when appropriate:
+Replace with a three-branch approach using `isSimple` (from #10) and the viewing account context:
 
 ```swift
-if transaction.isTransfer,
+if transaction.isSimple, transaction.isTransfer,
   let viewingAccountId,
   let otherLeg = transaction.legs.first(where: { $0.accountId != viewingAccountId })
 {
+  // Simple transfer: show direction relative to the viewer
   let otherAccountName = accounts.by(id: otherLeg.accountId ?? UUID())?.name ?? "Unknown Account"
   let viewingLeg = transaction.legs.first(where: { $0.accountId == viewingAccountId })
   let isOutgoing = (viewingLeg?.quantity ?? 0) < 0
@@ -139,31 +138,37 @@ if transaction.isTransfer,
     ? "Transfer to \(otherAccountName)"
     : "Transfer from \(otherAccountName)"
   // ...
+} else if !transaction.isSimple {
+  // Complex transaction: show sub-transaction count
+  let label = "\(transaction.legs.count) sub-transactions"
+  // ...
 }
 ```
 
-**Dependency on #10:** If implemented before #10, TransactionRowView would need a new `viewingAccountId: UUID?` parameter threaded from the parent. After #10, this comes from the `TransactionWithBalance` context naturally.
+For complex transactions the payee (if set) is still shown as the primary label, with the sub-transaction count as supplementary context. If no payee, the sub-transaction count becomes the primary label.
 
-**P2 — TransactionDetailView.swift:423:**
+**Dependency on #10:** Requires `isSimple` and the viewing account context from `TransactionWithBalance`.
 
-The autofill copies a prior transfer's destination account. `draft.accountId` is already available and represents the account the user is editing from:
+**P2 — TransactionDetailView.swift:423 (autofill):**
+
+The autofill copies a prior transfer's destination account. This only makes sense for simple transfers — if the matched transaction is complex, autofill should skip the `toAccountId` field rather than guessing.
 
 ```swift
-let matchTransferLeg =
-  match.legs.count > 1
-  ? match.legs.first(where: { $0.accountId != draft.accountId }) : nil
-draft.toAccountId = matchTransferLeg?.accountId
+if match.isSimple, draft.type == .transfer, draft.toAccountId == nil {
+  let matchTransferLeg = match.legs.first(where: { $0.accountId != draft.accountId })
+  draft.toAccountId = matchTransferLeg?.accountId
+}
 ```
 
-This is a self-contained change with no dependency on #10. It finds the "other" leg relative to the editing account, not relative to position.
+`draft.accountId` is already available and represents the account the user is editing from. The `isSimple` guard ensures we only autofill when the structure is unambiguous.
 
-### Pattern 3: Test Assertions (T1-T9) — Assert by Role, Not Position
+### Pattern 3: Test Assertions (T1-T9) — Assert by Known Account ID
 
-Tests should assert that a transaction **involves** a specific account, or find a leg **by its known account ID**, never by assuming position.
+Tests should assert that a transaction involves a specific account using the account ID the test already knows, never by assuming leg position.
 
 **Sub-pattern A — "Does this transaction involve account X?"** (T2, T5, T7 partial, T8):
 
-Use the existing `accountIds` computed property (already on `Transaction`):
+Use the existing `accountIds` computed property:
 
 ```swift
 // Before
@@ -173,20 +178,15 @@ Use the existing `accountIds` computed property (already on `Transaction`):
 #expect(entry.transaction.accountIds.contains(accountId))
 ```
 
-For T5 (changing from-account), assert that the old transaction involved the old account and the new transaction involves the new account:
+For T5 (changing from-account on a single-leg expense), the test creates a one-leg transaction and changes its account. Assert the old transaction involved the old account and the new one involves the new account:
 ```swift
-// Before
-#expect(receivedOld?.primaryAccountId == accountId)
-#expect(receivedNew?.primaryAccountId == newAccountId)
-
-// After
 #expect(receivedOld?.accountIds.contains(accountId) == true)
 #expect(receivedNew?.accountIds.contains(newAccountId) == true)
 ```
 
 **Sub-pattern B — "What is the other leg's account?"** (T3, T4, T6, T7 partial):
 
-Replace `primaryAccountId` with the test's known `accountId` variable (already in scope). This finds the other leg by excluding a known account, not by position:
+These tests create simple transfers with known account IDs, then verify the "other" account after mutations. Replace `primaryAccountId` with the test's known `accountId` variable:
 
 ```swift
 // Before
@@ -196,9 +196,11 @@ receivedOld?.legs.first(where: { $0.accountId != receivedOld?.primaryAccountId }
 receivedOld?.legs.first(where: { $0.accountId != accountId })?.accountId
 ```
 
+This works because these tests construct simple two-leg transfers where `accountId` is one of the two accounts. The filter finds the other one by exclusion from the known value, not from position.
+
 **Sub-pattern C — Round-trip and structural assertions** (T1, T9):
 
-T1 (`TransactionDraftTests.swift:188`): The round-trip test currently asserts `primaryAccountId` matches. Replace with a structural assertion on the legs themselves:
+T1 (`TransactionDraftTests.swift:188`): The round-trip test currently asserts `primaryAccountId` matches. Replace with a structural assertion on the legs:
 ```swift
 // Before
 #expect(roundTripped!.primaryAccountId == original.primaryAccountId)
@@ -207,7 +209,7 @@ T1 (`TransactionDraftTests.swift:188`): The round-trip test currently asserts `p
 #expect(roundTripped!.legs.map(\.accountId) == original.legs.map(\.accountId))
 ```
 
-T9 (`RemoteTransactionRepositoryTests.swift:277`): Asserts earmark-only income has no account. The test already asserts `legs[0].accountId == nil` on line 273. The `primaryAccountId == nil` assertion on line 277 is redundant — just delete it. The earlier line-by-line leg assertion is the correct approach.
+T9 (`RemoteTransactionRepositoryTests.swift:277`): Asserts earmark-only income has no account. The test already asserts `legs[0].accountId == nil` on line 273. The `primaryAccountId == nil` assertion on line 277 is redundant — delete it.
 
 ## Implementation Steps
 
@@ -225,24 +227,31 @@ T9 (`RemoteTransactionRepositoryTests.swift:277`): Asserts earmark-only income h
 
 **File:** `Features/Transactions/Views/TransactionDetailView.swift`
 
-Replace line 423:
+Guard `isSimple` before autofilling `toAccountId`. Use `draft.accountId` to find the other leg:
 ```swift
 // Before
-? match.legs.first(where: { $0.accountId != match.primaryAccountId }) : nil
+let matchTransferLeg =
+  match.legs.count > 1
+  ? match.legs.first(where: { $0.accountId != match.primaryAccountId }) : nil
+draft.toAccountId = matchTransferLeg?.accountId
 
 // After
-? match.legs.first(where: { $0.accountId != draft.accountId }) : nil
+if match.isSimple, draft.type == .transfer, draft.toAccountId == nil {
+  let matchTransferLeg = match.legs.first(where: { $0.accountId != draft.accountId })
+  draft.toAccountId = matchTransferLeg?.accountId
+}
 ```
-
-No new parameters needed. `draft.accountId` is the account the user is editing from.
 
 ### Step 3: TransactionRowView (P1) — After #10
 
 **File:** `Features/Transactions/Views/TransactionRowView.swift`
 
-After #10 refactors TransactionRowView to accept `TransactionWithBalance`, the viewing account ID will be available. Update the "Transfer to X" label to use the viewing account context instead of `primaryAccountId`. Also improve the label to say "Transfer from X" for incoming transfers.
+Rewrite the `displayPayee` transfer label logic with three branches:
+1. **Simple transfer:** Use viewing account context to find the other account, show "Transfer to/from X" based on quantity direction.
+2. **Complex transaction:** Show "\(legs.count) sub-transactions" as the label. If payee is set, show payee with sub-transaction count as supplementary; if no payee, sub-transaction count is the primary label.
+3. **Non-transfer (unchanged):** Show payee or earmark label as today.
 
-If implementing before #10 lands, add a `viewingAccountId: UUID?` parameter to TransactionRowView and thread it from parent views.
+Requires `isSimple` (from #10) and the viewing account context from `TransactionWithBalance`.
 
 ### Step 4: Test Updates (T1-T9)
 
@@ -268,14 +277,13 @@ Remove the `primaryAccountId → legs.first?.accountId` line from the "Transacti
 
 ## Ordering Recommendation
 
-Steps 1, 2, 4, and most test updates can be done **immediately** — they have no dependency on #10.
+All steps depend on `isSimple` from #10. Implement after #10 lands, or add `isSimple` locally as a first step.
 
-Step 3 (TransactionRowView) is best done **after #10 lands**, since the row view will already be refactored to receive account context via `TransactionWithBalance`.
-
-If implementing standalone before #10:
-1. Add `viewingAccountId: UUID?` parameter to `TransactionRowView`
-2. Thread it from `TransactionListView` (the parent that has `filter.accountId`)
-3. After #10 lands, the parameter gets replaced by `TransactionWithBalance` context
+**Step order:**
+1. Steps 1 (DTO) and 2 (autofill) can be done first — they only need `isSimple`.
+2. Step 3 (TransactionRowView) needs both `isSimple` and the viewing account context from `TransactionWithBalance` (also from #10).
+3. Step 4 (tests) can be done at any point — the test changes are independent of #10.
+4. Steps 5 and 6 (delete accessor, update BUGS.md) go last, after all call sites are migrated.
 
 ## Risk Assessment
 
