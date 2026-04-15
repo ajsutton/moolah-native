@@ -26,6 +26,11 @@ final class ProfileIndexSyncHandler: Sendable {
     )
   }
 
+  @MainActor
+  private var mainContext: ModelContext {
+    modelContainer.mainContext
+  }
+
   /// Fetches records using the given descriptor, logging errors instead of silently discarding them.
   private func fetchOrLog<T: PersistentModel>(
     _ descriptor: FetchDescriptor<T>,
@@ -107,7 +112,7 @@ final class ProfileIndexSyncHandler: Sendable {
   /// Looks up a ProfileRecord by CKRecord.ID and builds a CKRecord for upload.
   func recordToSave(for recordID: CKRecord.ID) -> CKRecord? {
     guard let profileId = UUID(uuidString: recordID.recordName) else { return nil }
-    let context = ModelContext(modelContainer)
+    let context = mainContext
     let descriptor = FetchDescriptor<ProfileRecord>(
       predicate: #Predicate { $0.id == profileId }
     )
@@ -121,7 +126,7 @@ final class ProfileIndexSyncHandler: Sendable {
   /// Called on first start when there's no saved sync state.
   /// Returns record IDs for the coordinator to queue.
   func queueAllExistingRecords() -> [CKRecord.ID] {
-    let context = ModelContext(modelContainer)
+    let context = mainContext
     let descriptor = FetchDescriptor<ProfileRecord>()
     let records = fetchOrLog(descriptor, context: context)
     guard !records.isEmpty else { return [] }
@@ -138,7 +143,7 @@ final class ProfileIndexSyncHandler: Sendable {
   /// Deletes all local ProfileRecords.
   /// Called on account sign-out, account switch, and zone deletion.
   func deleteLocalData() {
-    let context = ModelContext(modelContainer)
+    let context = mainContext
     let records = fetchOrLog(FetchDescriptor<ProfileRecord>(), context: context)
     if !records.isEmpty {
       for record in records {
@@ -158,7 +163,7 @@ final class ProfileIndexSyncHandler: Sendable {
   /// Clears encoded system fields on all ProfileRecords.
   /// Called on encrypted data reset where we keep data but must re-upload fresh.
   func clearAllSystemFields() {
-    let context = ModelContext(modelContainer)
+    let context = mainContext
     let records = fetchOrLog(FetchDescriptor<ProfileRecord>(), context: context)
     if !records.isEmpty {
       for record in records {
@@ -175,7 +180,7 @@ final class ProfileIndexSyncHandler: Sendable {
   /// Updates `encodedSystemFields` on the ProfileRecord matching the given record ID.
   func updateEncodedSystemFields(_ recordID: CKRecord.ID, data: Data) {
     guard let profileId = UUID(uuidString: recordID.recordName) else { return }
-    let context = ModelContext(modelContainer)
+    let context = mainContext
     let descriptor = FetchDescriptor<ProfileRecord>(
       predicate: #Predicate { $0.id == profileId }
     )
@@ -194,7 +199,7 @@ final class ProfileIndexSyncHandler: Sendable {
   /// must be cleared so the next upload creates a fresh record.
   func clearEncodedSystemFields(_ recordID: CKRecord.ID) {
     guard let profileId = UUID(uuidString: recordID.recordName) else { return }
-    let context = ModelContext(modelContainer)
+    let context = mainContext
     let descriptor = FetchDescriptor<ProfileRecord>(
       predicate: #Predicate { $0.id == profileId }
     )
@@ -219,7 +224,7 @@ final class ProfileIndexSyncHandler: Sendable {
   ) -> SyncErrorRecovery.ClassifiedFailures {
     // Update system fields on model records after successful upload.
     if !sentChanges.savedRecords.isEmpty {
-      let context = ModelContext(modelContainer)
+      let context = mainContext
       for saved in sentChanges.savedRecords {
         guard let profileId = UUID(uuidString: saved.recordID.recordName) else { continue }
         let descriptor = FetchDescriptor<ProfileRecord>(
@@ -241,7 +246,7 @@ final class ProfileIndexSyncHandler: Sendable {
 
     // Update system fields from server records on conflict, clear on unknownItem
     if !failures.conflicts.isEmpty || !failures.unknownItems.isEmpty {
-      let context = ModelContext(modelContainer)
+      let context = mainContext
       for (_, serverRecord) in failures.conflicts {
         guard let profileId = UUID(uuidString: serverRecord.recordID.recordName) else { continue }
         let descriptor = FetchDescriptor<ProfileRecord>(
