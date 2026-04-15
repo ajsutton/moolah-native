@@ -12,6 +12,7 @@ struct TransactionInspectorModifier: ViewModifier {
   let earmarks: Earmarks
   let transactionStore: TransactionStore
   var showRecurrence: Bool = false
+  var viewingAccountId: UUID? = nil
 
   private var isPresented: Binding<Bool> {
     Binding(
@@ -32,6 +33,7 @@ struct TransactionInspectorModifier: ViewModifier {
               earmarks: earmarks,
               transactionStore: transactionStore,
               showRecurrence: showRecurrence,
+              viewingAccountId: viewingAccountId,
               onUpdate: { updated in
                 Task { await transactionStore.update(updated) }
                 selectedTransaction = updated
@@ -66,6 +68,7 @@ struct TransactionInspectorModifier: ViewModifier {
               earmarks: earmarks,
               transactionStore: transactionStore,
               showRecurrence: showRecurrence,
+              viewingAccountId: viewingAccountId,
               onUpdate: { updated in
                 Task { await transactionStore.update(updated) }
                 selectedTransaction = updated
@@ -98,6 +101,7 @@ struct OptionalTransactionInspector: ViewModifier {
   let earmarks: Earmarks
   let transactionStore: TransactionStore
   var showRecurrence: Bool = false
+  var viewingAccountId: UUID? = nil
 
   func body(content: Content) -> some View {
     if enabled {
@@ -107,7 +111,8 @@ struct OptionalTransactionInspector: ViewModifier {
         categories: categories,
         earmarks: earmarks,
         transactionStore: transactionStore,
-        showRecurrence: showRecurrence
+        showRecurrence: showRecurrence,
+        viewingAccountId: viewingAccountId
       )
     } else {
       content
@@ -122,7 +127,8 @@ extension View {
     categories: Categories,
     earmarks: Earmarks,
     transactionStore: TransactionStore,
-    showRecurrence: Bool = false
+    showRecurrence: Bool = false,
+    viewingAccountId: UUID? = nil
   ) -> some View {
     modifier(
       TransactionInspectorModifier(
@@ -131,7 +137,8 @@ extension View {
         categories: categories,
         earmarks: earmarks,
         transactionStore: transactionStore,
-        showRecurrence: showRecurrence
+        showRecurrence: showRecurrence,
+        viewingAccountId: viewingAccountId
       )
     )
   }

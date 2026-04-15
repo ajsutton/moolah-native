@@ -97,7 +97,8 @@ struct TransactionListView: View {
           accounts: accounts,
           categories: categories,
           earmarks: earmarks,
-          transactionStore: transactionStore
+          transactionStore: transactionStore,
+          viewingAccountId: filter.accountId
         )
       )
       .focusedSceneValue(\.newTransactionAction, createNewTransaction)
