@@ -100,43 +100,8 @@ struct TransactionRowView: View {
   }
 
   private var displayPayee: String {
-    if transaction.isSimple, transaction.isTransfer, let viewingAccountId,
-      let otherLeg = transaction.legs.first(where: { $0.accountId != viewingAccountId })
-    {
-      let otherAccountName =
-        otherLeg.accountId.flatMap { accounts.by(id: $0) }?.name ?? "Unknown Account"
-      let viewingLeg = transaction.legs.first(where: { $0.accountId == viewingAccountId })
-      let isOutgoing = (viewingLeg?.quantity ?? 0) < 0
-      let transferLabel =
-        isOutgoing
-        ? "Transfer to \(otherAccountName)"
-        : "Transfer from \(otherAccountName)"
-
-      if let payee = transaction.payee, !payee.isEmpty {
-        return "\(payee) (\(transferLabel))"
-      }
-      return transferLabel
-    }
-
-    if !transaction.isSimple {
-      if let payee = transaction.payee, !payee.isEmpty {
-        return "\(payee) (\(transaction.legs.count) sub-transactions)"
-      }
-      return "\(transaction.legs.count) sub-transactions"
-    }
-
-    if let payee = transaction.payee, !payee.isEmpty {
-      return payee
-    }
-
-    // Earmark transactions with no payee show a descriptive label
-    if let earmarkId = transaction.earmarkId,
-      let earmark = earmarks.by(id: earmarkId)
-    {
-      return "Earmark funds for \(earmark.name)"
-    }
-
-    return ""
+    transaction.displayPayee(
+      viewingAccountId: viewingAccountId, accounts: accounts, earmarks: earmarks)
   }
 }
 

@@ -254,22 +254,9 @@ struct UpcomingTransactionRow: View {
   }
 
   private var displayPayee: String {
-    if transaction.isTransfer {
-      let fromAccount = transaction.legs.first(where: { $0.quantity < 0 })?.accountId
-      let toAccount = transaction.legs.first(where: { $0.quantity >= 0 })?.accountId
-      let fromName = fromAccount.flatMap { accounts.by(id: $0)?.name } ?? "Unknown"
-      let toName = toAccount.flatMap { accounts.by(id: $0)?.name } ?? "Unknown"
-      return "Transfer from \(fromName) to \(toName)"
-    }
-    if let payee = transaction.payee, !payee.isEmpty {
-      return payee
-    }
-    if let earmarkId = transaction.earmarkId,
-      let earmark = earmarks.by(id: earmarkId)
-    {
-      return "Earmark funds for \(earmark.name)"
-    }
-    return "Untitled"
+    let label = transaction.displayPayee(
+      viewingAccountId: nil, accounts: accounts, earmarks: earmarks)
+    return label.isEmpty ? "Untitled" : label
   }
 
   private var recurrenceDescription: String? {
