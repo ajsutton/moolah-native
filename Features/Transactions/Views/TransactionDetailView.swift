@@ -125,8 +125,11 @@ struct TransactionDetailView: View {
   }
 
   private var isNewTransaction: Bool {
-    // Detect if this is a new transaction by checking if it has default values
-    (relevantLeg?.amount.isZero ?? true) && (transaction.payee?.isEmpty ?? true)
+    if draft.isCustom {
+      let allLegsEmpty = draft.legDrafts.allSatisfy { $0.amountText.isEmpty }
+      return allLegsEmpty && (transaction.payee?.isEmpty ?? true)
+    }
+    return (relevantLeg?.amount.isZero ?? true) && (transaction.payee?.isEmpty ?? true)
   }
 
   private var sortedAccounts: [Account] {
@@ -275,6 +278,16 @@ struct TransactionDetailView: View {
           if newValue == .transfer && draft.toAccountId == nil {
             // Set first available account (excluding current account) as default
             draft.toAccountId = sortedAccounts.first { $0.id != draft.accountId }?.id
+          }
+        }
+        .onChange(of: draft.toAccountId) { _, newToAccountId in
+          // Auto-promote to custom mode when transferring between different currencies
+          if draft.type == .transfer && !draft.isCustom {
+            let fromInstrument = draft.accountId.flatMap { accounts.by(id: $0) }?.balance.instrument
+            let toInstrument = newToAccountId.flatMap { accounts.by(id: $0) }?.balance.instrument
+            if let fromInstrument, let toInstrument, fromInstrument != toInstrument {
+              draft.isCustom = true
+            }
           }
         }
         .onChange(of: draft.isCustom) { oldValue, newValue in
@@ -682,35 +695,11 @@ struct TransactionDetailView: View {
     Task {
       guard let match = await transactionStore.fetchTransactionForAutofill(payee: selectedPayee)
       else { return }
-      // Auto-fill fields that are still at defaults
-      if draft.parsedQuantity == nil || draft.parsedQuantity == 0 {
-        let matchLeg =
-          draft.accountId.flatMap { acctId in
-            match.legs.first { $0.accountId == acctId }
-          } ?? match.legs.first
-        if let matchLeg {
-          draft.amountText = abs(matchLeg.quantity).formatted(
-            .number.precision(.fractionLength(matchLeg.instrument.decimals)))
-        }
-      }
-      if draft.categoryId == nil, match.isSimple,
-        let matchCategoryId = match.legs.first(where: { $0.categoryId != nil })?.categoryId
-      {
-        draft.categoryId = matchCategoryId
-        if let cat = categories.by(id: matchCategoryId) {
-          categoryJustSelected = true
-          draft.categoryText = categories.path(for: cat)
-        }
-      }
-      if draft.type == .expense, match.isSimple, let matchType = match.legs.first?.type,
-        matchType != .expense
-      {
-        draft.type = matchType
-      }
-      if match.isSimple, draft.type == .transfer, draft.toAccountId == nil {
-        let matchTransferLeg = match.legs.first(where: { $0.accountId != draft.accountId })
-        draft.toAccountId = matchTransferLeg?.accountId
-      }
+      draft.applyAutofill(
+        from: match,
+        categories: categories,
+        supportsComplexTransactions: supportsComplexTransactions
+      )
     }
   }
 
@@ -831,6 +820,49 @@ struct TransactionDetailView: View {
         )
       }(),
       viewingAccountId: accountId,
+      supportsComplexTransactions: true,
+      onUpdate: { _ in },
+      onDelete: { _ in }
+    )
+  }
+}
+
+#Preview("Custom Transaction") {
+  let accountId1 = UUID()
+  let accountId2 = UUID()
+  NavigationStack {
+    TransactionDetailView(
+      transaction: Transaction(
+        date: Date(),
+        payee: "Split Purchase",
+        legs: [
+          TransactionLeg(
+            accountId: accountId1, instrument: .AUD, quantity: -30.00, type: .expense,
+            categoryId: nil),
+          TransactionLeg(
+            accountId: accountId2, instrument: .AUD, quantity: -20.00, type: .expense,
+            categoryId: nil),
+        ]
+      ),
+      accounts: Accounts(from: [
+        Account(id: accountId1, name: "Checking", type: .bank),
+        Account(id: accountId2, name: "Credit Card", type: .creditCard),
+      ]),
+      categories: Categories(from: [
+        Category(name: "Groceries"),
+        Category(name: "Transport"),
+      ]),
+      earmarks: Earmarks(from: [
+        Earmark(name: "Holiday Fund")
+      ]),
+      transactionStore: {
+        let (backend, _) = PreviewBackend.create()
+        return TransactionStore(
+          repository: backend.transactions,
+          conversionService: backend.conversionService,
+          targetInstrument: .AUD
+        )
+      }(),
       supportsComplexTransactions: true,
       onUpdate: { _ in },
       onDelete: { _ in }
