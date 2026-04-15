@@ -118,6 +118,10 @@ final class SyncCoordinator: Sendable {
   /// True while CKSyncEngine is fetching changes (between willFetchChanges and didFetchChanges).
   private(set) var isFetchingChanges = false
 
+  /// True when iCloud storage is full and sync uploads are failing.
+  /// Cleared when a send cycle completes without quota errors.
+  private(set) var isQuotaExceeded = false
+
   /// Record types accumulated per profile during a fetch session.
   private var fetchSessionChangedTypes: [UUID: Set<String>] = [:]
 
@@ -215,6 +219,7 @@ final class SyncCoordinator: Sendable {
     syncEngine = nil
     isRunning = false
     isFetchingChanges = false
+    isQuotaExceeded = false
     logger.info("Stopped unified sync coordinator")
   }
 
@@ -712,6 +717,15 @@ final class SyncCoordinator: Sendable {
         pendingChanges += zoneNotFoundDeletes.map { .deleteRecord($0) }
         ensureProfileZone(zoneID, pendingChanges: pendingChanges)
       }
+    }
+
+    // Track quota exceeded state across all zones in this send cycle
+    let hasQuotaErrors = sentChanges.failedRecordSaves.contains { $0.error.code == .quotaExceeded }
+    if hasQuotaErrors {
+      isQuotaExceeded = true
+    } else if !sentChanges.failedRecordSaves.isEmpty || !sentChanges.savedRecords.isEmpty {
+      // Only clear if we actually processed records (not an empty event)
+      isQuotaExceeded = false
     }
   }
 }
