@@ -104,7 +104,7 @@ struct TransactionRowView: View {
       let otherLeg = transaction.legs.first(where: { $0.accountId != viewingAccountId })
     {
       let otherAccountName =
-        accounts.by(id: otherLeg.accountId ?? UUID())?.name ?? "Unknown Account"
+        otherLeg.accountId.flatMap { accounts.by(id: $0) }?.name ?? "Unknown Account"
       let viewingLeg = transaction.legs.first(where: { $0.accountId == viewingAccountId })
       let isOutgoing = (viewingLeg?.quantity ?? 0) < 0
       let transferLabel =
