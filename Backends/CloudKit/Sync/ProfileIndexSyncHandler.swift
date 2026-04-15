@@ -242,7 +242,10 @@ final class ProfileIndexSyncHandler: Sendable {
     }
 
     // Classify failures
-    let failures = SyncErrorRecovery.classify(sentChanges, logger: logger)
+    let failures = SyncErrorRecovery.classify(
+      failedSaves: sentChanges.failedRecordSaves,
+      failedDeletes: sentChanges.failedRecordDeletes.map { ($0.key, $0.value) },
+      logger: logger)
 
     // Update system fields from server records on conflict, clear on unknownItem
     if !failures.conflicts.isEmpty || !failures.unknownItems.isEmpty {

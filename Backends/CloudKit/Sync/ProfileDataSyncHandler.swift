@@ -564,7 +564,10 @@ final class ProfileDataSyncHandler: Sendable {
     }
 
     // Classify failures
-    let failures = SyncErrorRecovery.classify(sentChanges, logger: logger)
+    let failures = SyncErrorRecovery.classify(
+      failedSaves: sentChanges.failedRecordSaves,
+      failedDeletes: sentChanges.failedRecordDeletes.map { ($0.key, $0.value) },
+      logger: logger)
 
     // Handle system fields updates for conflicts and unknownItems
     if !failures.conflicts.isEmpty || !failures.unknownItems.isEmpty {
