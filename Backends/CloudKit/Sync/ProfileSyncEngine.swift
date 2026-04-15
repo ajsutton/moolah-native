@@ -1384,7 +1384,8 @@ extension ProfileSyncEngine: CKSyncEngineDelegate {
       }
     }
 
-    SyncErrorRecovery.recover(
+    // Use _recoverImpl to avoid deprecation warning — ProfileSyncEngine is removed in Task 10
+    SyncErrorRecovery._recoverImpl(
       failures, syncEngine: syncEngine, zoneID: zoneID, logger: logger)
   }
 

@@ -79,11 +79,56 @@ enum SyncErrorRecovery {
     return result
   }
 
+  /// Re-queues all classified failures except zone-not-found records.
+  /// Returns zone-not-found save and delete IDs for the caller to handle zone creation.
+  static func requeueFailures(
+    _ failures: ClassifiedFailures,
+    syncEngine: CKSyncEngine?,
+    logger: Logger
+  ) -> (zoneNotFoundSaves: [CKRecord.ID], zoneNotFoundDeletes: [CKRecord.ID]) {
+    // Re-queue conflicts, unknownItems, and other failures (same logic as current recover())
+    var pendingSaves: [CKSyncEngine.PendingRecordZoneChange] = []
+    for (recordID, _) in failures.conflicts {
+      pendingSaves.append(.saveRecord(recordID))
+    }
+    for (recordID, _) in failures.unknownItems {
+      pendingSaves.append(.saveRecord(recordID))
+    }
+    for recordID in failures.requeue {
+      pendingSaves.append(.saveRecord(recordID))
+    }
+    if !pendingSaves.isEmpty {
+      syncEngine?.state.add(pendingRecordZoneChanges: pendingSaves)
+    }
+
+    return (failures.zoneNotFoundSaves, failures.zoneNotFoundDeletes)
+  }
+
   /// Re-queues all classified failures and creates the zone if needed.
   ///
   /// Call this **after** handling engine-specific work (e.g., updating system fields
   /// for conflicts and unknownItems).
+  ///
+  /// - Note: Deprecated. Use `requeueFailures()` — zone creation is now managed by
+  ///   `SyncCoordinator`. This method remains for `ProfileSyncEngine` and
+  ///   `ProfileIndexSyncEngine` until they are removed in Task 10.
+  @available(
+    *, deprecated,
+    message: "Use requeueFailures() — zone creation is now managed by SyncCoordinator"
+  )
   static func recover(
+    _ failures: ClassifiedFailures,
+    syncEngine: CKSyncEngine?,
+    zoneID: CKRecordZone.ID,
+    logger: Logger
+  ) {
+    _recoverImpl(failures, syncEngine: syncEngine, zoneID: zoneID, logger: logger)
+  }
+
+  /// Internal implementation for `recover()`. Called by the deprecated `recover()` and
+  /// by `ProfileSyncEngine`/`ProfileIndexSyncEngine` to suppress deprecation warnings
+  /// while those engines remain during the transition (Task 10 removes them).
+  static func _recoverImpl(
     _ failures: ClassifiedFailures,
     syncEngine: CKSyncEngine?,
     zoneID: CKRecordZone.ID,
