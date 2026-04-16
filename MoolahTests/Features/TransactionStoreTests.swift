@@ -9,6 +9,17 @@ import Testing
 struct TransactionStoreTests {
   private let accountId = UUID()
 
+  /// Helper to create an Account + opening balance tuple for seeding.
+  private func acct(
+    id: UUID, name: String, type: AccountType = .bank,
+    balance: Decimal
+  ) -> (account: Account, openingBalance: InstrumentAmount) {
+    (
+      account: Account(id: id, name: name, type: type),
+      openingBalance: InstrumentAmount(quantity: balance, instrument: .defaultTestInstrument)
+    )
+  }
+
   private func makeDate(_ string: String) -> Date {
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyy-MM-dd"
@@ -559,7 +570,7 @@ struct TransactionStoreTests {
   private func makeStores(
     backend: CloudKitBackend,
     container: ModelContainer,
-    accounts: [Account] = [],
+    accounts: [(account: Account, openingBalance: InstrumentAmount)] = [],
     earmarks: [Earmark] = []
   ) async -> (TransactionStore, AccountStore, EarmarkStore) {
     if !accounts.isEmpty {
@@ -591,9 +602,7 @@ struct TransactionStoreTests {
   }
 
   @Test func testCreateUpdatesAccountBalance() async throws {
-    let account = Account(
-      id: accountId, name: "Bank", type: .bank,
-      balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument))
+    let account = acct(id: accountId, name: "Bank", balance: 1000)
     let (backend, container) = try TestBackend.create()
     let (store, accountStore, _) = await makeStores(
       backend: backend, container: container, accounts: [account])
@@ -615,14 +624,11 @@ struct TransactionStoreTests {
     _ = await store.create(tx)
 
     // Seeded balance is 1000 (from OB tx), create adds -50 expense -> 950
-    let updatedAccount = accountStore.accounts.by(id: accountId)
-    #expect(updatedAccount?.balance.quantity == Decimal(950))
+    #expect(accountStore.balance(for: accountId).quantity == Decimal(950))
   }
 
   @Test func testUpdateUpdatesAccountBalance() async throws {
-    let account = Account(
-      id: accountId, name: "Bank", type: .bank,
-      balance: InstrumentAmount(quantity: 950, instrument: .defaultTestInstrument))
+    let account = acct(id: accountId, name: "Bank", balance: 950)
     let tx = Transaction(
       date: makeDate("2024-01-15"),
       payee: "Test",
@@ -656,14 +662,11 @@ struct TransactionStoreTests {
 
     // Seeded account OB=950 + seeded tx=-50 gives loaded balance=900
     // Update delta: (-75)-(-50)=-25, so 900-25=875
-    let updatedAccount = accountStore.accounts.by(id: accountId)
-    #expect(updatedAccount?.balance.quantity == Decimal(875))
+    #expect(accountStore.balance(for: accountId).quantity == Decimal(875))
   }
 
   @Test func testDeleteUpdatesAccountBalance() async throws {
-    let account = Account(
-      id: accountId, name: "Bank", type: .bank,
-      balance: InstrumentAmount(quantity: 950, instrument: .defaultTestInstrument))
+    let account = acct(id: accountId, name: "Bank", balance: 950)
     let tx = Transaction(
       date: makeDate("2024-01-15"),
       payee: "Test",
@@ -687,20 +690,15 @@ struct TransactionStoreTests {
 
     // Seeded account OB=950 + seeded tx=-50 gives loaded balance=900
     // Deleting the -50 expense adds 50 back: 900+50=950
-    let updatedAccount = accountStore.accounts.by(id: accountId)
-    #expect(updatedAccount?.balance.quantity == Decimal(950))
+    #expect(accountStore.balance(for: accountId).quantity == Decimal(950))
   }
 
   // MARK: - Cross-Store Balance Updates with Transfers
 
   @Test func testTransferUpdateAffectsBothAccounts() async throws {
     let savingsId = UUID()
-    let checking = Account(
-      id: accountId, name: "Checking", type: .bank,
-      balance: InstrumentAmount(quantity: 900, instrument: .defaultTestInstrument))
-    let savings = Account(
-      id: savingsId, name: "Savings", type: .bank,
-      balance: InstrumentAmount(quantity: 1100, instrument: .defaultTestInstrument))
+    let checking = acct(id: accountId, name: "Checking", balance: 900)
+    let savings = acct(id: savingsId, name: "Savings", balance: 1100)
     let tx = Transaction(
       date: makeDate("2024-01-15"),
       payee: "",
@@ -747,22 +745,16 @@ struct TransactionStoreTests {
     // Loaded: checking=900+(-100)=800, savings=1100+100=1200
     // Update delta: checking: -150-(-100)=-50, savings: +150-100=+50
     // Final: checking=800-50=750, savings=1200+50=1250
-    #expect(accountStore.accounts.by(id: accountId)?.balance.quantity == Decimal(750))
-    #expect(accountStore.accounts.by(id: savingsId)?.balance.quantity == Decimal(1250))
+    #expect(accountStore.balance(for: accountId).quantity == Decimal(750))
+    #expect(accountStore.balance(for: savingsId).quantity == Decimal(1250))
   }
 
   @Test func testChangingTransferToAccount() async throws {
     let savingsId = UUID()
     let investmentId = UUID()
-    let checking = Account(
-      id: accountId, name: "Checking", type: .bank,
-      balance: InstrumentAmount(quantity: 900, instrument: .defaultTestInstrument))
-    let savings = Account(
-      id: savingsId, name: "Savings", type: .bank,
-      balance: InstrumentAmount(quantity: 1100, instrument: .defaultTestInstrument))
-    let investment = Account(
-      id: investmentId, name: "Investment", type: .investment,
-      balance: InstrumentAmount(quantity: 500, instrument: .defaultTestInstrument))
+    let checking = acct(id: accountId, name: "Checking", balance: 900)
+    let savings = acct(id: savingsId, name: "Savings", balance: 1100)
+    let investment = acct(id: investmentId, name: "Investment", type: .investment, balance: 500)
     let tx = Transaction(
       date: makeDate("2024-01-15"),
       payee: "",
@@ -810,18 +802,16 @@ struct TransactionStoreTests {
     // Change dest from savings to investment:
     // checking delta: -100-(-100)=0, savings delta: 0-100=-100, investment delta: +100-0=+100
     // Final: checking=800, savings=1200-100=1100, investment=500+100=600
-    #expect(accountStore.accounts.by(id: accountId)?.balance.quantity == Decimal(800))
-    #expect(accountStore.accounts.by(id: savingsId)?.balance.quantity == Decimal(1100))
-    #expect(accountStore.accounts.by(id: investmentId)?.balance.quantity == Decimal(600))
+    #expect(accountStore.balance(for: accountId).quantity == Decimal(800))
+    #expect(accountStore.balance(for: savingsId).quantity == Decimal(1100))
+    #expect(accountStore.balance(for: investmentId).quantity == Decimal(600))
   }
 
   // MARK: - Cross-Store Balance Updates with Earmarks
 
   @Test func testCreateWithEarmarkUpdatesEarmarkBalance() async throws {
     let earmarkId = UUID()
-    let account = Account(
-      id: accountId, name: "Bank", type: .bank,
-      balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument))
+    let account = acct(id: accountId, name: "Bank", balance: 1000)
     let earmark = Earmark(
       id: earmarkId, name: "Holiday",
       balance: InstrumentAmount(quantity: 200, instrument: .defaultTestInstrument))
@@ -856,9 +846,7 @@ struct TransactionStoreTests {
   @Test func testUpdateChangingEarmarkId() async throws {
     let earmarkId1 = UUID()
     let earmarkId2 = UUID()
-    let account = Account(
-      id: accountId, name: "Bank", type: .bank,
-      balance: InstrumentAmount(quantity: 950, instrument: .defaultTestInstrument))
+    let account = acct(id: accountId, name: "Bank", balance: 950)
     let earmark1 = Earmark(
       id: earmarkId1, name: "Holiday",
       balance: InstrumentAmount(quantity: 150, instrument: .defaultTestInstrument),
@@ -909,9 +897,7 @@ struct TransactionStoreTests {
   }
 
   @Test func testTypeChangeExpenseToIncomeUpdatesAccountBalance() async throws {
-    let account = Account(
-      id: accountId, name: "Bank", type: .bank,
-      balance: InstrumentAmount(quantity: 950, instrument: .defaultTestInstrument))
+    let account = acct(id: accountId, name: "Bank", balance: 950)
     let tx = Transaction(
       date: makeDate("2024-01-15"),
       payee: "Test",
@@ -944,14 +930,11 @@ struct TransactionStoreTests {
     await store.update(updated)
 
     // Loaded: 950+(-50)=900. Update delta: +50-(-50)=+100. Final: 900+100=1000
-    let updatedAccount = accountStore.accounts.by(id: accountId)
-    #expect(updatedAccount?.balance.quantity == Decimal(1000))
+    #expect(accountStore.balance(for: accountId).quantity == Decimal(1000))
   }
 
   @Test func testPayScheduledTransactionUpdatesAccountBalance() async throws {
-    let account = Account(
-      id: accountId, name: "Bank", type: .bank,
-      balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument))
+    let account = acct(id: accountId, name: "Bank", balance: 1000)
     let scheduled = Transaction(
       date: makeDate("2024-01-15"),
       payee: "Rent",
@@ -975,14 +958,11 @@ struct TransactionStoreTests {
     _ = await store.payScheduledTransaction(scheduled)
 
     // Paying a -2000 expense should decrease balance by 2000
-    let updatedAccount = accountStore.accounts.by(id: accountId)
-    #expect(updatedAccount?.balance.quantity == Decimal(-1000))
+    #expect(accountStore.balance(for: accountId).quantity == Decimal(-1000))
   }
 
   @Test func testPayOneTimeScheduledTransactionUpdatesAccountBalance() async throws {
-    let account = Account(
-      id: accountId, name: "Bank", type: .bank,
-      balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument))
+    let account = acct(id: accountId, name: "Bank", balance: 1000)
     let scheduled = Transaction(
       date: makeDate("2024-01-15"),
       payee: "Annual Fee",
@@ -1006,8 +986,7 @@ struct TransactionStoreTests {
     _ = await store.payScheduledTransaction(scheduled)
 
     // Paying a -500 expense should decrease balance by 500
-    let updatedAccount = accountStore.accounts.by(id: accountId)
-    #expect(updatedAccount?.balance.quantity == Decimal(500))
+    #expect(accountStore.balance(for: accountId).quantity == Decimal(500))
   }
 
   @Test func testRunningBalancesUpdateAfterAmountChange() async throws {

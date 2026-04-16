@@ -15,17 +15,22 @@ struct AccountRepositoryContractTests {
     let newAccount = Account(
       name: "Savings",
       type: .bank,
-      balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument)
+      instrument: .defaultTestInstrument
     )
+    let openingBalance = InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument)
 
-    let created = try await repository.create(newAccount)
+    let created = try await repository.create(newAccount, openingBalance: openingBalance)
 
     #expect(created.id == newAccount.id)
     #expect(created.name == "Savings")
-    #expect(created.balance.quantity == 1000)
 
     let all = try await repository.fetchAll()
     #expect(all.count == 1)
+    // Balance is reflected in positions after fetch
+    let primaryPosition = all[0].positions.first(where: {
+      $0.instrument == .defaultTestInstrument
+    })
+    #expect(primaryPosition?.quantity == 1000)
   }
 
   @Test("rejects empty name")
@@ -34,11 +39,11 @@ struct AccountRepositoryContractTests {
     let invalidAccount = Account(
       name: "   ",  // Whitespace only
       type: .bank,
-      balance: .zero(instrument: .defaultTestInstrument)
+      instrument: .defaultTestInstrument
     )
 
     await #expect(throws: BackendError.self) {
-      try await repository.create(invalidAccount)
+      try await repository.create(invalidAccount, openingBalance: nil)
     }
   }
 
@@ -48,11 +53,17 @@ struct AccountRepositoryContractTests {
     let creditCard = Account(
       name: "Credit Card",
       type: .creditCard,
-      balance: InstrumentAmount(quantity: -500, instrument: .defaultTestInstrument)
+      instrument: .defaultTestInstrument
     )
+    let openingBalance = InstrumentAmount(quantity: -500, instrument: .defaultTestInstrument)
 
-    let created = try await repository.create(creditCard)
-    #expect(created.balance.quantity == -500)
+    _ = try await repository.create(creditCard, openingBalance: openingBalance)
+
+    let all = try await repository.fetchAll()
+    let primaryPosition = all[0].positions.first(where: {
+      $0.instrument == .defaultTestInstrument
+    })
+    #expect(primaryPosition?.quantity == -500)
   }
 
   // MARK: - UPDATE TESTS
@@ -62,7 +73,7 @@ struct AccountRepositoryContractTests {
     let repository = makeCloudKitAccountRepository(initialAccounts: [
       Account(
         id: UUID(), name: "Checking", type: .bank,
-        balance: .zero(instrument: .defaultTestInstrument))
+        instrument: .defaultTestInstrument)
     ])
     let accounts = try await repository.fetchAll()
     var toUpdate = accounts[0]
@@ -77,24 +88,28 @@ struct AccountRepositoryContractTests {
 
   @Test("preserves balance on update")
   func testPreservesBalance() async throws {
-    let repository = makeCloudKitAccountRepository(initialAccounts: [
-      Account(
-        id: UUID(),
-        name: "Savings",
-        type: .bank,
-        balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument)
-      )
-    ])
+    let repository = makeCloudKitAccountRepository(
+      initialAccounts: [
+        Account(
+          id: UUID(),
+          name: "Savings",
+          type: .bank,
+          instrument: .defaultTestInstrument
+        )
+      ],
+      openingBalances: [InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument)]
+    )
     let accounts = try await repository.fetchAll()
     var toUpdate = accounts[0]
     toUpdate.name = "Updated Savings"
-    toUpdate.balance = InstrumentAmount(
-      quantity: Decimal(string: "9999.99")!, instrument: .defaultTestInstrument)  // Try to change
 
     let updated = try await repository.update(toUpdate)
 
     // Balance should be unchanged (server-authoritative)
-    #expect(updated.balance.quantity == 1000)
+    let primaryPosition = updated.positions.first(where: {
+      $0.instrument == .defaultTestInstrument
+    })
+    #expect(primaryPosition?.quantity == 1000)
   }
 
   @Test("throws on update non-existent")
@@ -114,7 +129,7 @@ struct AccountRepositoryContractTests {
     let repository = makeCloudKitAccountRepository(initialAccounts: [
       Account(
         id: UUID(), name: "Old Account", type: .bank,
-        balance: .zero(instrument: .defaultTestInstrument))
+        instrument: .defaultTestInstrument)
     ])
     let accounts = try await repository.fetchAll()
     let toDelete = accounts[0]
@@ -130,14 +145,17 @@ struct AccountRepositoryContractTests {
 
   @Test("rejects delete with non-zero balance")
   func testRejectsDeleteWithBalance() async throws {
-    let repository = makeCloudKitAccountRepository(initialAccounts: [
-      Account(
-        id: UUID(),
-        name: "Active Account",
-        type: .bank,
-        balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument)
-      )
-    ])
+    let repository = makeCloudKitAccountRepository(
+      initialAccounts: [
+        Account(
+          id: UUID(),
+          name: "Active Account",
+          type: .bank,
+          instrument: .defaultTestInstrument
+        )
+      ],
+      openingBalances: [InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument)]
+    )
     let accounts = try await repository.fetchAll()
     let toDelete = accounts[0]
 
@@ -182,7 +200,8 @@ struct AccountRepositoryContractTests {
 // MARK: - Factory Helpers
 
 private func makeCloudKitAccountRepository(
-  initialAccounts: [Account] = []
+  initialAccounts: [Account] = [],
+  openingBalances: [InstrumentAmount] = []
 ) -> CloudKitAccountRepository {
   let container = try! TestModelContainer.create()
   let instrument = Instrument.defaultTestInstrument
@@ -191,18 +210,19 @@ private func makeCloudKitAccountRepository(
 
   if !initialAccounts.isEmpty {
     let context = ModelContext(container)
-    for account in initialAccounts {
+    for (index, account) in initialAccounts.enumerated() {
       let record = AccountRecord.from(account)
       context.insert(record)
-      // If account has a non-zero balance, create an opening balance transaction
-      if !account.balance.isZero {
+      // If an opening balance is provided for this account, create an opening balance transaction
+      let balance = index < openingBalances.count ? openingBalances[index] : nil
+      if let balance, !balance.isZero {
         let txnId = UUID()
         let txn = TransactionRecord(id: txnId, date: Date())
         context.insert(txn)
         let leg = TransactionLegRecord.from(
           TransactionLeg(
             accountId: account.id, instrument: instrument,
-            quantity: account.balance.quantity, type: .openingBalance
+            quantity: balance.quantity, type: .openingBalance
           ),
           transactionId: txnId, sortOrder: 0
         )

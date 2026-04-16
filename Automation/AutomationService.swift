@@ -76,10 +76,6 @@ final class AutomationService {
       name: name,
       type: type,
       instrument: instrument,
-      balance: .zero(instrument: instrument),
-      investmentValue: nil,
-      positions: [],
-      usesPositionTracking: false,
       position: session.accountStore.accounts.count,
       isHidden: isHidden
     )

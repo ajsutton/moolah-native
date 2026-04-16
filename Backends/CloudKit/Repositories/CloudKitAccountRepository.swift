@@ -38,37 +38,27 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     let records = try bgContext.fetch(descriptor)
     let fetchMs = (ContinuousClock.now - fetchStart).inMilliseconds
 
-    let balanceStart = ContinuousClock.now
-    let (_, allLegs) = try fetchNonScheduledLegs(context: bgContext)
-    let balances = computeBalances(from: allLegs)
-    let balanceMs = (ContinuousClock.now - balanceStart).inMilliseconds
-
     let positionStart = ContinuousClock.now
+    let (_, allLegs) = try fetchNonScheduledLegs(context: bgContext)
     let allPositions = try computePositions(from: allLegs, context: bgContext)
     let positionMs = (ContinuousClock.now - positionStart).inMilliseconds
 
-    let result = try records.map { record in
-      let storageValue = balances[record.id] ?? 0
-      let balance = InstrumentAmount(storageValue: storageValue, instrument: instrument)
-      let investmentValue =
-        record.type == AccountType.investment.rawValue
-        ? try latestInvestmentValue(for: record.id, context: bgContext)
-        : nil
+    let result = records.map { record in
       let positions = allPositions[record.id] ?? []
       return record.toDomain(
-        instrument: instrument, balance: balance, investmentValue: investmentValue,
+        instrument: instrument,
         positions: positions)
     }
-    let totalMs = fetchMs + balanceMs + positionMs
+    let totalMs = fetchMs + positionMs
     if totalMs > 100 {
       logger.info(
-        "AccountRepo.fetchAll took \(totalMs)ms off-main (records: \(fetchMs)ms, balances: \(balanceMs)ms, positions: \(positionMs)ms, \(records.count) accounts)"
+        "AccountRepo.fetchAll took \(totalMs)ms off-main (records: \(fetchMs)ms, positions: \(positionMs)ms, \(records.count) accounts)"
       )
     }
     return result
   }
 
-  func create(_ account: Account) async throws -> Account {
+  func create(_ account: Account, openingBalance: InstrumentAmount? = nil) async throws -> Account {
     let signpostID = OSSignpostID(log: Signposts.repository)
     os_signpost(
       .begin, log: Signposts.repository, name: "AccountRepo.create", signpostID: signpostID)
@@ -84,8 +74,8 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     try await MainActor.run {
       context.insert(record)
 
-      // If account has an opening balance, create an opening balance transaction with a leg
-      if !account.balance.isZero {
+      // If an opening balance is provided, create an opening balance transaction with a leg
+      if let openingBalance, !openingBalance.isZero {
         let txnId = UUID()
         let txnRecord = TransactionRecord(
           id: txnId,
@@ -99,7 +89,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
           transactionId: txnId,
           accountId: account.id,
           instrumentId: account.instrument.id,
-          quantity: account.balance.storageValue,
+          quantity: openingBalance.storageValue,
           type: TransactionType.openingBalance.rawValue,
           sortOrder: 0
         )
@@ -146,17 +136,10 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       try context.save()
       onRecordChanged(account.id)
 
-      let balances = try computeAllBalances()
-      let storageValue = balances[accountId] ?? 0
-      let balance = InstrumentAmount(storageValue: storageValue, instrument: instrument)
-      let investmentValue =
-        record.type == AccountType.investment.rawValue
-        ? try latestInvestmentValue(for: accountId)
-        : nil
       let allPositions = try computeAllPositions()
       let positions = allPositions[accountId] ?? []
       return record.toDomain(
-        instrument: instrument, balance: balance, investmentValue: investmentValue,
+        instrument: instrument,
         positions: positions)
     }
   }
@@ -178,9 +161,10 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
         throw BackendError.notFound("Account not found")
       }
 
-      let balances = try computeAllBalances()
-      let storageValue = balances[id] ?? 0
-      guard storageValue == 0 else {
+      let allPositions = try computeAllPositions()
+      let positions = allPositions[id] ?? []
+      let hasNonZeroPosition = positions.contains { $0.quantity != 0 }
+      guard !hasNonZeroPosition else {
         throw BackendError.validationFailed("Cannot delete account with non-zero balance")
       }
 
@@ -191,21 +175,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     }
   }
 
-  // MARK: - Balance Computation
-
-  /// Compute all account balances in a single pass over leg records.
-  /// Returns a dictionary of accountId -> storageValue (Int64).
-  @MainActor
-  private func computeAllBalances() throws -> [UUID: Int64] {
-    let (_, allLegs) = try fetchNonScheduledLegs()
-
-    var balances: [UUID: Int64] = [:]
-    for leg in allLegs {
-      guard let accountId = leg.accountId else { continue }
-      balances[accountId, default: 0] += leg.quantity
-    }
-    return balances
-  }
+  // MARK: - Position Computation
 
   /// Compute per-instrument positions for all accounts.
   /// Returns a dictionary of accountId -> [Position].
@@ -283,16 +253,6 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       !scheduledIds.contains($0.transactionId)
     }
     return (scheduledIds, allLegs)
-  }
-
-  /// Compute all account balances from pre-fetched legs.
-  private func computeBalances(from allLegs: [TransactionLegRecord]) -> [UUID: Int64] {
-    var balances: [UUID: Int64] = [:]
-    for leg in allLegs {
-      guard let accountId = leg.accountId else { continue }
-      balances[accountId, default: 0] += leg.quantity
-    }
-    return balances
   }
 
   /// Compute per-instrument positions from pre-fetched legs.

@@ -10,8 +10,7 @@ struct ReportingStoreTests {
   @Test @MainActor func loadProfitLoss_populatesState() async throws {
     let (backend, container) = try TestBackend.create()
     let account = Account(
-      id: UUID(), name: "Brokerage", type: .bank,
-      balance: .zero(instrument: aud)
+      id: UUID(), name: "Brokerage", type: .bank
     )
     TestBackend.seed(accounts: [account], in: container)
 
@@ -52,8 +51,7 @@ struct ReportingStoreTests {
   @Test @MainActor func loadCapitalGains_forFinancialYear() async throws {
     let (backend, container) = try TestBackend.create()
     let account = Account(
-      id: UUID(), name: "Brokerage", type: .bank,
-      balance: .zero(instrument: aud)
+      id: UUID(), name: "Brokerage", type: .bank
     )
     TestBackend.seed(accounts: [account], in: container)
 
@@ -109,8 +107,7 @@ struct ReportingStoreTests {
   @Test @MainActor func capitalGainsSummary_separatesShortAndLongTerm() async throws {
     let (backend, container) = try TestBackend.create()
     let account = Account(
-      id: UUID(), name: "Brokerage", type: .bank,
-      balance: .zero(instrument: aud)
+      id: UUID(), name: "Brokerage", type: .bank
     )
     TestBackend.seed(accounts: [account], in: container)
 

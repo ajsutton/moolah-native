@@ -30,8 +30,6 @@ enum TestBackend {
   // MARK: - Data Seeding
 
   /// Seeds accounts into the in-memory store.
-  /// Also creates opening balance transactions for accounts with non-zero balances,
-  /// matching the pattern used by CloudKit contract tests.
   @discardableResult
   static func seed(
     accounts: [Account],
@@ -41,7 +39,23 @@ enum TestBackend {
     let context = ModelContext(container)
     for account in accounts {
       context.insert(AccountRecord.from(account))
-      if !account.balance.isZero {
+    }
+    try! context.save()
+    return accounts
+  }
+
+  /// Seeds accounts with opening balances into the in-memory store.
+  /// Creates opening balance transactions for accounts with the provided balances.
+  @discardableResult
+  static func seed(
+    accounts: [(account: Account, openingBalance: InstrumentAmount)],
+    in container: ModelContainer,
+    instrument: Instrument = .defaultTestInstrument
+  ) -> [Account] {
+    let context = ModelContext(container)
+    for (account, openingBalance) in accounts {
+      context.insert(AccountRecord.from(account))
+      if !openingBalance.isZero {
         let txnId = UUID()
         let txn = TransactionRecord(
           id: txnId,
@@ -54,7 +68,7 @@ enum TestBackend {
           transactionId: txnId,
           accountId: account.id,
           instrumentId: instrument.id,
-          quantity: account.balance.storageValue,
+          quantity: openingBalance.storageValue,
           type: TransactionType.openingBalance.rawValue,
           sortOrder: 0
         )
@@ -62,7 +76,7 @@ enum TestBackend {
       }
     }
     try! context.save()
-    return accounts
+    return accounts.map(\.account)
   }
 
   /// Seeds transactions into the in-memory store.

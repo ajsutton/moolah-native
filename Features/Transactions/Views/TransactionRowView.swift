@@ -135,7 +135,7 @@ struct TransactionRowView: View {
   let accounts = Accounts(from: [
     Account(
       id: savingsId, name: "Savings", type: .bank,
-      balance: InstrumentAmount(quantity: 5000, instrument: .AUD))
+      positions: [Position(instrument: .AUD, quantity: 5000)])
   ])
   let categories = Categories(from: [
     Category(id: groceriesId, name: "Groceries"),

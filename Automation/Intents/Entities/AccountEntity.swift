@@ -19,7 +19,9 @@ struct AccountEntity: AppEntity {
     self.id = account.id
     self.name = account.name
     self.accountType = account.type.displayName
-    self.balance = account.displayBalance.doubleValue
+    // Compute display balance from positions
+    let primaryPosition = account.positions.first(where: { $0.instrument == account.instrument })
+    self.balance = primaryPosition?.amount.doubleValue ?? 0
   }
 }
 

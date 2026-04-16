@@ -21,11 +21,13 @@ struct MigrationIntegrationTests {
     let checking = try await backend.accounts.create(
       Account(
         name: "Checking", type: .bank,
-        balance: InstrumentAmount(quantity: Decimal(string: "975.00")!, instrument: instrument)
-      )
+        instrument: instrument
+      ),
+      openingBalance: InstrumentAmount(quantity: Decimal(string: "975.00")!, instrument: instrument)
     )
     _ = try await backend.accounts.create(
-      Account(name: "Credit Card", type: .creditCard, balance: .zero(instrument: instrument))
+      Account(name: "Credit Card", type: .creditCard, instrument: instrument),
+      openingBalance: nil
     )
 
     // Categories

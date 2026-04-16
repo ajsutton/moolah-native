@@ -34,7 +34,7 @@ final class AccountRecord {
   }
 
   func toDomain(
-    instrument: Instrument, balance: InstrumentAmount, investmentValue: InstrumentAmount?,
+    instrument: Instrument,
     positions: [Position] = []
   ) -> Account {
     Account(
@@ -42,8 +42,6 @@ final class AccountRecord {
       name: name,
       type: AccountType(rawValue: type) ?? .bank,
       instrument: instrument,
-      balance: balance,
-      investmentValue: investmentValue,
       positions: positions,
       usesPositionTracking: usesPositionTracking,
       position: position,

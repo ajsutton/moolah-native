@@ -27,7 +27,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -72,14 +71,12 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
     let earmark = Earmark(
       id: UUID(),
       name: "Savings",
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -121,7 +118,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -155,14 +151,12 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
     let earmark = Earmark(
       id: UUID(),
       name: "Holiday",
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -224,7 +218,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(checking)
 
@@ -232,7 +225,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Savings",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(savings)
 
@@ -240,7 +232,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Shares",
       type: .investment,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(investment)
 
@@ -304,7 +295,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -355,7 +345,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -385,7 +374,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -438,7 +426,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -484,7 +471,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -522,16 +508,17 @@ struct AnalysisRepositoryContractTests {
     let currentAccount = Account(
       id: UUID(),
       name: "Checking",
-      type: .bank,
-      balance: InstrumentAmount(quantity: 10, instrument: .defaultTestInstrument)
+      type: .bank
     )
-    _ = try await backend.accounts.create(currentAccount)
+    _ = try await backend.accounts.create(
+      currentAccount,
+      openingBalance: InstrumentAmount(quantity: 10, instrument: .defaultTestInstrument)
+    )
 
     let investmentAccount = Account(
       id: UUID(),
       name: "Investment",
       type: .investment,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(investmentAccount)
 
@@ -562,7 +549,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(bankAccount)
 
@@ -570,7 +556,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Shares",
       type: .investment,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(investmentA)
 
@@ -578,7 +563,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Bonds",
       type: .investment,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(investmentB)
 
@@ -649,14 +633,12 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
     let earmark = Earmark(
       id: UUID(),
       name: "Gift Fund",
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -704,7 +686,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -757,14 +738,12 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
     let earmark = Earmark(
       id: UUID(),
       name: "Holiday",
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -839,14 +818,12 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
     let earmark = Earmark(
       id: UUID(),
       name: "Gift Fund",
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -893,7 +870,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -939,14 +915,12 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
     let earmark = Earmark(
       id: UUID(),
       name: "Savings",
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -1027,7 +1001,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -1094,7 +1067,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -1150,7 +1122,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -1213,7 +1184,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -1266,7 +1236,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account1)
 
@@ -1274,7 +1243,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Credit Card",
       type: .creditCard,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account2)
 
@@ -1326,7 +1294,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -1393,7 +1360,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -1440,12 +1406,12 @@ struct AnalysisRepositoryContractTests {
     let backend = CloudKitAnalysisTestBackend()
     let checking = Account(
       id: UUID(), name: "Checking", type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument))
+    )
     _ = try await backend.accounts.create(checking)
 
     let investment = Account(
       id: UUID(), name: "Trust Shares", type: .investment,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument))
+    )
     _ = try await backend.accounts.create(investment)
 
     let today = Calendar.current.startOfDay(for: Date())
@@ -1497,12 +1463,12 @@ struct AnalysisRepositoryContractTests {
     let backend = CloudKitAnalysisTestBackend()
     let checking = Account(
       id: UUID(), name: "Checking", type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument))
+    )
     _ = try await backend.accounts.create(checking)
 
     let investment = Account(
       id: UUID(), name: "Trust Shares", type: .investment,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument))
+    )
     _ = try await backend.accounts.create(investment)
 
     let today = Calendar.current.startOfDay(for: Date())
@@ -1537,12 +1503,12 @@ struct AnalysisRepositoryContractTests {
     let backend = CloudKitAnalysisTestBackend()
     let checking = Account(
       id: UUID(), name: "Checking", type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument))
+    )
     _ = try await backend.accounts.create(checking)
 
     let investment = Account(
       id: UUID(), name: "Shares", type: .investment,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument))
+    )
     _ = try await backend.accounts.create(investment)
 
     let today = Calendar.current.startOfDay(for: Date())
@@ -1612,14 +1578,12 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
     let earmark = Earmark(
       id: UUID(),
       name: "Gift Fund",
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -1673,7 +1637,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Portfolio",
       type: .investment,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(investmentAccount)
 
@@ -1681,7 +1644,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Bank",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(bankAccount)
 
@@ -1745,7 +1707,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -1814,7 +1775,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -1842,7 +1802,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 
@@ -1890,7 +1849,6 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
     )
     _ = try await backend.accounts.create(account)
 

@@ -28,13 +28,16 @@ struct DataExporterTests {
 
     // Create accounts
     _ = try await backend.accounts.create(
-      Account(name: "Checking", type: .bank, balance: .zero(instrument: instrument))
+      Account(name: "Checking", type: .bank, instrument: instrument),
+      openingBalance: nil
     )
     _ = try await backend.accounts.create(
-      Account(name: "Savings", type: .bank, balance: .zero(instrument: instrument))
+      Account(name: "Savings", type: .bank, instrument: instrument),
+      openingBalance: nil
     )
     let investmentAccount = try await backend.accounts.create(
-      Account(name: "Portfolio", type: .investment, balance: .zero(instrument: instrument))
+      Account(name: "Portfolio", type: .investment, instrument: instrument),
+      openingBalance: nil
     )
 
     // Create categories

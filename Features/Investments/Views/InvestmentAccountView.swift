@@ -16,9 +16,20 @@ struct InvestmentAccountView: View {
   @State private var showingRecordTrade = false
   @State private var selectedTransaction: Transaction?
 
-  /// The profile's fiat currency instrument, derived from the account's balance.
+  /// The profile's fiat currency instrument, derived from the account's instrument.
   private var profileCurrencyInstrument: Instrument {
     account.instrument
+  }
+
+  /// The invested amount (balance from positions in the account's primary instrument).
+  private var investedAmount: InstrumentAmount {
+    let primaryPosition = account.positions.first(where: { $0.instrument == account.instrument })
+    return primaryPosition?.amount ?? .zero(instrument: account.instrument)
+  }
+
+  /// The latest investment value, or nil if no values have been recorded.
+  private var latestInvestmentValue: InstrumentAmount? {
+    investmentStore.values.first?.value
   }
 
   var body: some View {
@@ -32,10 +43,14 @@ struct InvestmentAccountView: View {
         )
       } else {
         // Legacy: show manual valuations
-        if account.investmentValue != nil {
-          InvestmentSummaryView(account: account, store: investmentStore)
-            .padding(.horizontal)
-            .padding(.top)
+        if !investmentStore.values.isEmpty {
+          InvestmentSummaryView(
+            investedAmount: investedAmount,
+            currentValue: latestInvestmentValue,
+            store: investmentStore
+          )
+          .padding(.horizontal)
+          .padding(.top)
         }
 
         // Chart + valuations: side by side on macOS, stacked on iOS

@@ -13,6 +13,9 @@ final class AccountStore {
   private(set) var convertedInvestmentTotal: InstrumentAmount?
   private(set) var convertedNetWorth: InstrumentAmount?
 
+  /// Investment values keyed by account ID, updated by InvestmentStore.
+  private(set) var investmentValues: [UUID: InstrumentAmount] = [:]
+
   private let repository: AccountRepository
   private let conversionService: (any InstrumentConversionService)?
   private let targetInstrument: Instrument
@@ -78,16 +81,44 @@ final class AccountStore {
     accounts.filter { $0.type == .investment && (showHidden || !$0.isHidden) }
   }
 
+  /// Get the balance for an account in its own instrument, computed from positions.
+  func balance(for accountId: UUID) -> InstrumentAmount {
+    guard let account = accounts.by(id: accountId) else {
+      return .zero(instrument: targetInstrument)
+    }
+    let primaryPosition = account.positions.first(where: { $0.instrument == account.instrument })
+    return primaryPosition?.amount ?? .zero(instrument: account.instrument)
+  }
+
+  /// The display balance for an account: investment value if available for investment accounts,
+  /// otherwise the primary position amount.
+  func displayBalance(for accountId: UUID) -> InstrumentAmount {
+    guard let account = accounts.by(id: accountId) else {
+      return .zero(instrument: targetInstrument)
+    }
+    if account.type == .investment, let value = investmentValues[accountId] {
+      return value
+    }
+    let primaryPosition = account.positions.first(where: { $0.instrument == account.instrument })
+    return primaryPosition?.amount ?? .zero(instrument: account.instrument)
+  }
+
+  /// Whether an account can be deleted (all positions are zero or empty).
+  func canDelete(_ accountId: UUID) -> Bool {
+    guard let account = accounts.by(id: accountId) else { return false }
+    return account.positions.isEmpty || account.positions.allSatisfy { $0.quantity == 0 }
+  }
+
   var currentTotal: InstrumentAmount {
     currentAccounts.reduce(.zero(instrument: targetInstrument)) {
-      $0 + $1.balance
+      $0 + balance(for: $1.id)
     }
   }
 
   var investmentTotal: InstrumentAmount {
     investmentAccounts.reduce(
       .zero(instrument: targetInstrument)
-    ) { $0 + $1.displayBalance }
+    ) { $0 + displayBalance(for: $1.id) }
   }
 
   var netWorth: InstrumentAmount {
@@ -105,25 +136,17 @@ final class AccountStore {
     -> InstrumentAmount
   {
     guard let conversionService else {
-      return accountList.reduce(.zero(instrument: target)) { $0 + $1.balance }
+      return accountList.reduce(.zero(instrument: target)) { $0 + balance(for: $1.id) }
     }
 
     var total = InstrumentAmount.zero(instrument: target)
     let date = Date()
 
     for account in accountList {
-      let positions = account.positions
-      if positions.isEmpty {
-        // Fallback: use the single balance
+      for position in account.positions {
         let converted = try await conversionService.convertAmount(
-          account.balance, to: target, on: date)
+          position.amount, to: target, on: date)
         total += converted
-      } else {
-        for position in positions {
-          let converted = try await conversionService.convertAmount(
-            position.amount, to: target, on: date)
-          total += converted
-        }
       }
     }
     return total
@@ -143,7 +166,7 @@ final class AccountStore {
     let date = Date()
     for account in investmentAccounts {
       let converted = try await conversionService.convertAmount(
-        account.displayBalance, to: target, on: date)
+        displayBalance(for: account.id), to: target, on: date)
       total += converted
     }
     return total
@@ -171,13 +194,11 @@ final class AccountStore {
   /// Called when InvestmentStore sets or removes a value.
   func updateInvestmentValue(accountId: UUID, value: InstrumentAmount?) {
     guard accounts.by(id: accountId) != nil else { return }
-    let updated = accounts.ordered.map { account in
-      guard account.id == accountId else { return account }
-      var copy = account
-      copy.investmentValue = value
-      return copy
+    if let value {
+      investmentValues[accountId] = value
+    } else {
+      investmentValues.removeValue(forKey: accountId)
     }
-    accounts = Accounts(from: updated)
     recomputeConvertedTotals()
   }
 
@@ -193,12 +214,12 @@ final class AccountStore {
 
   // MARK: - Mutations
 
-  func create(_ account: Account) async throws -> Account {
+  func create(_ account: Account, openingBalance: InstrumentAmount? = nil) async throws -> Account {
     isLoading = true
     error = nil
 
     do {
-      let created = try await repository.create(account)
+      let created = try await repository.create(account, openingBalance: openingBalance)
 
       // Optimistically add to local state
       accounts = Accounts(from: accounts.ordered + [created])
