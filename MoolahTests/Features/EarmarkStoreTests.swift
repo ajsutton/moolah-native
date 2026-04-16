@@ -52,8 +52,7 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [
         Account(
-          id: accountId, name: "Test", type: .bank,
-          balance: .zero(instrument: .defaultTestInstrument))
+          id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
       ], in: container)
     TestBackend.seedWithTransactions(
       earmarks: [e1, e2],
@@ -81,8 +80,7 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [
         Account(
-          id: accountId, name: "Test", type: .bank,
-          balance: .zero(instrument: .defaultTestInstrument))
+          id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
       ], in: container)
     TestBackend.seedWithTransactions(
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
@@ -110,8 +108,7 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [
         Account(
-          id: accountId, name: "Test", type: .bank,
-          balance: .zero(instrument: .defaultTestInstrument))
+          id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
       ], in: container)
     TestBackend.seedWithTransactions(
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
@@ -139,8 +136,7 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [
         Account(
-          id: accountId, name: "Test", type: .bank,
-          balance: .zero(instrument: .defaultTestInstrument))
+          id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
       ], in: container)
     TestBackend.seedWithTransactions(
       earmarks: [
@@ -187,8 +183,7 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [
         Account(
-          id: accountId, name: "Test", type: .bank,
-          balance: .zero(instrument: .defaultTestInstrument))
+          id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
       ], in: container)
     TestBackend.seedWithTransactions(
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
@@ -212,8 +207,7 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [
         Account(
-          id: accountId, name: "Test", type: .bank,
-          balance: .zero(instrument: .defaultTestInstrument))
+          id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
       ], in: container)
     TestBackend.seedWithTransactions(
       earmarks: [
@@ -246,8 +240,7 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [
         Account(
-          id: accountId, name: "Test", type: .bank,
-          balance: .zero(instrument: .defaultTestInstrument))
+          id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
       ], in: container)
     TestBackend.seedWithTransactions(
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
@@ -278,8 +271,7 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [
         Account(
-          id: accountId, name: "Test", type: .bank,
-          balance: .zero(instrument: .defaultTestInstrument))
+          id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
       ], in: container)
     TestBackend.seedWithTransactions(
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
@@ -303,8 +295,7 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [
         Account(
-          id: accountId, name: "Test", type: .bank,
-          balance: .zero(instrument: .defaultTestInstrument))
+          id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
       ], in: container)
     TestBackend.seedWithTransactions(
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
@@ -485,8 +476,7 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [
         Account(
-          id: accountId, name: "Test", type: .bank,
-          balance: .zero(instrument: .defaultTestInstrument))
+          id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
       ], in: container)
     TestBackend.seedWithTransactions(
       earmarks: [visible, hidden],
@@ -513,8 +503,7 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [
         Account(
-          id: accountId, name: "Test", type: .bank,
-          balance: .zero(instrument: .defaultTestInstrument))
+          id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
       ], in: container)
     TestBackend.seedWithTransactions(
       earmarks: [visible, hidden],

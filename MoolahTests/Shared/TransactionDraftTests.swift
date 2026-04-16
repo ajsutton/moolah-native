@@ -1210,8 +1210,7 @@ struct TransactionDraftTests {
     )
     let accounts = Accounts(from: [
       Account(
-        id: acctId, name: "Checking", type: .bank,
-        balance: .zero(instrument: .defaultTestInstrument))
+        id: acctId, name: "Checking", type: .bank, instrument: .defaultTestInstrument)
     ])
     let earmarks = Earmarks(from: [
       Earmark(

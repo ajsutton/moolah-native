@@ -11,7 +11,7 @@ struct AccountStoreConversionTests {
   @Test func singleCurrencyAccountPositions() async throws {
     let accountId = UUID()
     let account = Account(
-      id: accountId, name: "Bank", type: .bank, balance: .zero(instrument: .defaultTestInstrument))
+      id: accountId, name: "Bank", type: .bank, instrument: .defaultTestInstrument)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [account], in: container)
 
@@ -46,7 +46,7 @@ struct AccountStoreConversionTests {
     let accountId = UUID()
     let account = Account(
       id: accountId, name: "Revolut", type: .bank,
-      balance: .zero(instrument: .defaultTestInstrument))
+      instrument: .defaultTestInstrument)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [account], in: container)
 
@@ -97,7 +97,7 @@ struct AccountStoreConversionTests {
     let accountId = UUID()
     let account = Account(
       id: accountId, name: "Revolut", type: .bank,
-      balance: .zero(instrument: .defaultTestInstrument))
+      instrument: .defaultTestInstrument)
     let todayString = ISO8601DateFormatter.dateOnly.string(from: Date())
     let rates: [String: [String: Decimal]] = [
       todayString: [

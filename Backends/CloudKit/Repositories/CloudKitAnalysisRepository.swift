@@ -397,12 +397,11 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
         case .transfer:
           if isInvestmentAccount {
-            let contribution = amount.quantity
-            if contribution > 0 {
+            if amount.quantity > 0 {
               monthlyData[month]!.earmarkedIncome += amount
-            } else if contribution < 0 {
+            } else if amount.quantity < 0 {
               monthlyData[month]!.earmarkedExpense += InstrumentAmount(
-                quantity: -contribution, instrument: instrument)
+                quantity: -amount.quantity, instrument: instrument)
             }
           }
         }
@@ -488,6 +487,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
   // MARK: - Currency Conversion Helper
 
+  /// Convert a transaction leg's amount to the profile instrument, using the conversion service
+  /// when the leg's instrument differs from the target.
   private static func convertedAmount(
     _ leg: TransactionLeg,
     to instrument: Instrument,
@@ -744,12 +745,11 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
         case .transfer:
           if isInvestmentAccount {
-            let contribution = amount.quantity
-            if contribution > 0 {
+            if amount.quantity > 0 {
               monthlyData[month]!.earmarkedIncome += amount
-            } else if contribution < 0 {
+            } else if amount.quantity < 0 {
               monthlyData[month]!.earmarkedExpense += InstrumentAmount(
-                quantity: -contribution, instrument: instrument)
+                quantity: -amount.quantity, instrument: instrument)
             }
           }
         }

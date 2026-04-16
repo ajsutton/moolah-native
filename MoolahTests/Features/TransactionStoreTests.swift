@@ -15,7 +15,7 @@ struct TransactionStoreTests {
     balance: Decimal
   ) -> (account: Account, openingBalance: InstrumentAmount) {
     (
-      account: Account(id: id, name: name, type: type),
+      account: Account(id: id, name: name, type: type, instrument: .defaultTestInstrument),
       openingBalance: InstrumentAmount(quantity: balance, instrument: .defaultTestInstrument)
     )
   }

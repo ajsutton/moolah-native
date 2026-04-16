@@ -79,6 +79,7 @@ struct AnalysisRepositoryContractTests {
     let earmark = Earmark(
       id: UUID(),
       name: "Savings",
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -161,6 +162,7 @@ struct AnalysisRepositoryContractTests {
     let earmark = Earmark(
       id: UUID(),
       name: "Holiday",
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -238,6 +240,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Shares",
       type: .investment,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(investment)
 
@@ -519,7 +522,8 @@ struct AnalysisRepositoryContractTests {
     let currentAccount = Account(
       id: UUID(),
       name: "Checking",
-      type: .bank
+      type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(
       currentAccount,
@@ -530,6 +534,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Investment",
       type: .investment,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(investmentAccount)
 
@@ -568,6 +573,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Shares",
       type: .investment,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(investmentA)
 
@@ -575,6 +581,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Bonds",
       type: .investment,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(investmentB)
 
@@ -652,6 +659,7 @@ struct AnalysisRepositoryContractTests {
     let earmark = Earmark(
       id: UUID(),
       name: "Gift Fund",
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -759,6 +767,7 @@ struct AnalysisRepositoryContractTests {
     let earmark = Earmark(
       id: UUID(),
       name: "Holiday",
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -840,6 +849,7 @@ struct AnalysisRepositoryContractTests {
     let earmark = Earmark(
       id: UUID(),
       name: "Gift Fund",
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -939,6 +949,7 @@ struct AnalysisRepositoryContractTests {
     let earmark = Earmark(
       id: UUID(),
       name: "Savings",
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -1266,6 +1277,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Credit Card",
       type: .creditCard,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account2)
 
@@ -1430,12 +1442,12 @@ struct AnalysisRepositoryContractTests {
   func positiveAmountTransferFromInvestment() async throws {
     let backend = CloudKitAnalysisTestBackend()
     let checking = Account(
-      id: UUID(), name: "Checking", type: .bank,
+      id: UUID(), name: "Checking", type: .bank, instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(checking)
 
     let investment = Account(
-      id: UUID(), name: "Trust Shares", type: .investment,
+      id: UUID(), name: "Trust Shares", type: .investment, instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(investment)
 
@@ -1487,12 +1499,12 @@ struct AnalysisRepositoryContractTests {
   func positiveAmountTransferIncomeExpense() async throws {
     let backend = CloudKitAnalysisTestBackend()
     let checking = Account(
-      id: UUID(), name: "Checking", type: .bank,
+      id: UUID(), name: "Checking", type: .bank, instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(checking)
 
     let investment = Account(
-      id: UUID(), name: "Trust Shares", type: .investment,
+      id: UUID(), name: "Trust Shares", type: .investment, instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(investment)
 
@@ -1527,12 +1539,12 @@ struct AnalysisRepositoryContractTests {
   func earmarkedProfitMatchesServer() async throws {
     let backend = CloudKitAnalysisTestBackend()
     let checking = Account(
-      id: UUID(), name: "Checking", type: .bank,
+      id: UUID(), name: "Checking", type: .bank, instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(checking)
 
     let investment = Account(
-      id: UUID(), name: "Shares", type: .investment,
+      id: UUID(), name: "Shares", type: .investment, instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(investment)
 
@@ -1610,6 +1622,7 @@ struct AnalysisRepositoryContractTests {
     let earmark = Earmark(
       id: UUID(),
       name: "Gift Fund",
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -1663,6 +1676,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Portfolio",
       type: .investment,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(investmentAccount)
 
@@ -1878,7 +1892,8 @@ struct AnalysisRepositoryContractTests {
     // USD -> AUD at 1.5x rate
     let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
     let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
-    let account = Account(id: UUID(), name: "USD Account", type: .bank)
+    let account = Account(
+      id: UUID(), name: "USD Account", type: .bank, instrument: .defaultTestInstrument)
     _ = try await backend.accounts.create(account)
 
     let category = Category(id: UUID(), name: "Groceries")
@@ -1923,7 +1938,8 @@ struct AnalysisRepositoryContractTests {
   func incomeExpenseConvertsForeignCurrency() async throws {
     let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
     let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
-    let account = Account(id: UUID(), name: "Account", type: .bank)
+    let account = Account(
+      id: UUID(), name: "Account", type: .bank, instrument: .defaultTestInstrument)
     _ = try await backend.accounts.create(account)
 
     let today = Calendar.current.startOfDay(for: Date())
@@ -1965,7 +1981,8 @@ struct AnalysisRepositoryContractTests {
   func categoryBalancesConvertsForeignCurrency() async throws {
     let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
     let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
-    let account = Account(id: UUID(), name: "Account", type: .bank)
+    let account = Account(
+      id: UUID(), name: "Account", type: .bank, instrument: .defaultTestInstrument)
     _ = try await backend.accounts.create(account)
 
     let category = Category(id: UUID(), name: "Food")
@@ -2000,7 +2017,8 @@ struct AnalysisRepositoryContractTests {
   func singleCurrencyNoConversion() async throws {
     // Default backend has no conversion rates configured — single currency should work fine
     let backend = CloudKitAnalysisTestBackend()
-    let account = Account(id: UUID(), name: "Account", type: .bank)
+    let account = Account(
+      id: UUID(), name: "Account", type: .bank, instrument: .defaultTestInstrument)
     _ = try await backend.accounts.create(account)
 
     let category = Category(id: UUID(), name: "Food")

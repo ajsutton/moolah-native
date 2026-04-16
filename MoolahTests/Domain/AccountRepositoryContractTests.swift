@@ -116,7 +116,7 @@ struct AccountRepositoryContractTests {
   func testThrowsOnUpdateNonExistent() async throws {
     let repository = makeCloudKitAccountRepository()
     let nonExistent = Account(
-      name: "DoesNotExist", type: .bank, balance: .zero(instrument: .defaultTestInstrument))
+      name: "DoesNotExist", type: .bank, instrument: .defaultTestInstrument)
 
     await #expect(throws: BackendError.self) {
       try await repository.update(nonExistent)
@@ -238,13 +238,13 @@ private func makeCloudKitAccountRepository(
 
 private func makeCloudKitWithPositionedAccounts() -> CloudKitAccountRepository {
   let account1 = Account(
-    id: UUID(), name: "First", type: .bank, balance: .zero(instrument: .defaultTestInstrument),
+    id: UUID(), name: "First", type: .bank, instrument: .defaultTestInstrument,
     position: 0)
   let account2 = Account(
-    id: UUID(), name: "Second", type: .bank, balance: .zero(instrument: .defaultTestInstrument),
+    id: UUID(), name: "Second", type: .bank, instrument: .defaultTestInstrument,
     position: 1)
   let account3 = Account(
-    id: UUID(), name: "Third", type: .bank, balance: .zero(instrument: .defaultTestInstrument),
+    id: UUID(), name: "Third", type: .bank, instrument: .defaultTestInstrument,
     position: 2)
   return makeCloudKitAccountRepository(initialAccounts: [account1, account2, account3])
 }
