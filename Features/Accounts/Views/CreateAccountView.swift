@@ -10,10 +10,16 @@ struct CreateAccountView: View {
   @State private var date = Date()
   @State private var isSubmitting = false
   @State private var errorMessage: String?
+  @FocusState private var focusedField: Field?
 
   let instrument: Instrument
   let accountStore: AccountStore
   let supportsComplexTransactions: Bool
+
+  private enum Field: Hashable {
+    case name
+    case balance
+  }
 
   init(
     instrument: Instrument, accountStore: AccountStore,
@@ -30,6 +36,8 @@ struct CreateAccountView: View {
       Form {
         Section {
           TextField("Name", text: $name)
+            .focused($focusedField, equals: .name)
+            .onSubmit { focusedField = .balance }
             .accessibilityLabel("Account name")
 
           Picker("Account Type", selection: $type) {
@@ -48,6 +56,8 @@ struct CreateAccountView: View {
               value: $balanceDecimal,
               format: .currency(code: currencyCode)
             )
+            .monospacedDigit()
+            .focused($focusedField, equals: .balance)
             #if os(iOS)
               .keyboardType(.decimalPad)
               .multilineTextAlignment(.trailing)
@@ -60,7 +70,7 @@ struct CreateAccountView: View {
 
         if let errorMessage {
           Section {
-            Text(errorMessage)
+            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
               .foregroundStyle(.red)
               .font(.caption)
           }
@@ -69,6 +79,9 @@ struct CreateAccountView: View {
       .navigationTitle("Create Account")
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+      #endif
+      #if os(macOS)
+        .defaultFocus($focusedField, .name)
       #endif
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
@@ -112,4 +125,13 @@ struct CreateAccountView: View {
       isSubmitting = false
     }
   }
+}
+
+#Preview {
+  let (backend, _) = PreviewBackend.create()
+  let accountStore = AccountStore(repository: backend.accounts, targetInstrument: .AUD)
+
+  CreateAccountView(
+    instrument: .AUD, accountStore: accountStore,
+    supportsComplexTransactions: true)
 }

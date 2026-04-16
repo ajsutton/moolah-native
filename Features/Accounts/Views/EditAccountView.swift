@@ -8,11 +8,16 @@ struct EditAccountView: View {
   @State private var isHidden: Bool
   @State private var isSubmitting = false
   @State private var errorMessage: String?
-  @State private var showingDeleteConfirmation = false
+  @State private var showingHideConfirmation = false
+  @FocusState private var focusedField: Field?
 
   let account: Account
   let accountStore: AccountStore
   let supportsComplexTransactions: Bool
+
+  private enum Field: Hashable {
+    case name
+  }
 
   init(account: Account, accountStore: AccountStore, supportsComplexTransactions: Bool = false) {
     self.account = account
@@ -29,6 +34,7 @@ struct EditAccountView: View {
       Form {
         Section {
           TextField("Name", text: $name)
+            .focused($focusedField, equals: .name)
             .accessibilityLabel("Account name")
 
           Picker("Account Type", selection: $type) {
@@ -60,20 +66,20 @@ struct EditAccountView: View {
 
         if let errorMessage {
           Section {
-            Text(errorMessage)
+            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
               .foregroundStyle(.red)
               .font(.caption)
           }
         }
 
         Section {
-          Button("Delete Account", role: .destructive) {
-            showingDeleteConfirmation = true
+          Button("Hide Account", role: .destructive) {
+            showingHideConfirmation = true
           }
           .disabled(!accountStore.canDelete(account.id))
           .accessibilityHint(
             !accountStore.canDelete(account.id)
-              ? "Account must have zero balance to delete"
+              ? "Account must have zero balance to hide"
               : ""
           )
         }
@@ -81,6 +87,9 @@ struct EditAccountView: View {
       .navigationTitle("Edit Account")
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+      #endif
+      #if os(macOS)
+        .defaultFocus($focusedField, .name)
       #endif
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
@@ -92,16 +101,16 @@ struct EditAccountView: View {
         }
       }
       .confirmationDialog(
-        "Delete Account",
-        isPresented: $showingDeleteConfirmation,
+        "Hide Account",
+        isPresented: $showingHideConfirmation,
         titleVisibility: .visible
       ) {
-        Button("Delete", role: .destructive) {
+        Button("Hide", role: .destructive) {
           Task { await delete() }
         }
         Button("Cancel", role: .cancel) {}
       } message: {
-        Text("This account will be hidden. You can unhide it later if needed.")
+        Text("This account will be hidden. You can show it again later from the View menu.")
       }
     }
   }
@@ -145,4 +154,14 @@ struct EditAccountView: View {
       isSubmitting = false
     }
   }
+}
+
+#Preview {
+  let (backend, _) = PreviewBackend.create()
+  let accountStore = AccountStore(repository: backend.accounts, targetInstrument: .AUD)
+
+  EditAccountView(
+    account: Account(name: "Checking", type: .bank, instrument: .AUD),
+    accountStore: accountStore,
+    supportsComplexTransactions: true)
 }
