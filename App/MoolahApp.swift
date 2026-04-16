@@ -71,11 +71,15 @@ struct MoolahApp: App {
   private let syncCoordinator: SyncCoordinator
   @State private var profileStore: ProfileStore
   private let logger = Logger(subsystem: "com.moolah.app", category: "BackgroundSync")
+  @State private var pendingNavigation: PendingNavigation?
   #if os(macOS)
+    @NSApplicationDelegateAdaptor(ScriptingBridge.self) var scriptingBridge
+    @Environment(\.openWindow) private var openWindow
     private let backupManager: StoreBackupManager
     @State private var sessionManager: SessionManager
   #else
     @State private var activeSession: ProfileSession?
+    @State private var sessionManager: SessionManager
   #endif
 
   init() {
@@ -150,6 +154,25 @@ struct MoolahApp: App {
       store.onProfileRemoved = { [weak sessionManager] profileID in
         sessionManager?.removeSession(for: profileID)
       }
+
+      // Configure AppleScript scripting context and App Intents service locator
+      let automationService = AutomationService(sessionManager: sessionManager)
+      ScriptingContext.automationService = automationService
+      ScriptingContext.sessionManager = sessionManager
+      AutomationServiceLocator.shared.service = automationService
+    #else
+      let sessionManager = SessionManager(
+        containerManager: containerManager, syncCoordinator: coordinator)
+      _sessionManager = State(initialValue: sessionManager)
+
+      // Clean up cached sessions when a profile is removed (locally or via remote sync)
+      store.onProfileRemoved = { [weak sessionManager] profileID in
+        sessionManager?.removeSession(for: profileID)
+      }
+
+      // Configure App Intents service locator
+      let automationService = AutomationService(sessionManager: sessionManager)
+      AutomationServiceLocator.shared.service = automationService
     #endif
   }
 
@@ -161,6 +184,8 @@ struct MoolahApp: App {
           .environment(sessionManager)
           .environment(containerManager)
           .environment(syncCoordinator)
+          .environment(\.pendingNavigation, $pendingNavigation)
+          .onOpenURL { url in handleURL(url) }
           .task {
             backupManager.performDailyBackup(
               profiles: profileStore.profiles,
@@ -201,8 +226,11 @@ struct MoolahApp: App {
       WindowGroup {
         ProfileRootView(activeSession: $activeSession)
           .environment(profileStore)
+          .environment(sessionManager)
           .environment(containerManager)
           .environment(syncCoordinator)
+          .environment(\.pendingNavigation, $pendingNavigation)
+          .onOpenURL { url in handleURL(url) }
       }
       .modelContainer(containerManager.indexContainer)
       .onChange(of: scenePhase) { _, newPhase in
@@ -259,5 +287,36 @@ struct MoolahApp: App {
   private func fetchRemoteChanges() async {
     logger.info("Fetching remote changes on foreground entry")
     await syncCoordinator.fetchChanges()
+  }
+
+  // MARK: - URL Scheme Handling
+
+  private func handleURL(_ url: URL) {
+    do {
+      let route = try URLSchemeHandler.parse(url)
+      // Find profile by name (case-insensitive) then by UUID
+      if let profile = profileStore.profiles.first(where: {
+        $0.label.lowercased() == route.profileIdentifier.lowercased()
+      })
+        ?? profileStore.profiles.first(where: {
+          $0.id.uuidString.lowercased() == route.profileIdentifier.lowercased()
+        })
+      {
+        #if os(macOS)
+          openWindow(value: profile.id)
+        #else
+          profileStore.setActiveProfile(profile.id)
+        #endif
+        if let destination = route.destination {
+          pendingNavigation = PendingNavigation(
+            profileId: profile.id, destination: destination)
+        }
+      } else {
+        logger.warning(
+          "No profile found matching '\(route.profileIdentifier, privacy: .public)'")
+      }
+    } catch {
+      logger.error("Failed to parse URL: \(error.localizedDescription, privacy: .public)")
+    }
   }
 }

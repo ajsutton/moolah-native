@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var selection: SidebarSelection?
   #endif
 
+  @Environment(\.pendingNavigation) private var pendingNavigationBinding
   @State private var showCreateEarmarkSheet = false
 
   var body: some View {
@@ -128,6 +129,22 @@ struct ContentView: View {
           }
         }
       )
+    }
+    .onChange(of: pendingNavigationBinding?.wrappedValue) { _, newValue in
+      if let navigation = newValue {
+        applyNavigation(navigation.destination)
+        pendingNavigationBinding?.wrappedValue = nil
+      }
+    }
+  }
+
+  private func applyNavigation(_ destination: URLSchemeHandler.Destination) {
+    if let sidebarSelection = URLSchemeHandler.toSidebarSelection(destination) {
+      selection = sidebarSelection
+    }
+    if case .analysis(let history, let forecast) = destination {
+      if let history { analysisStore.historyMonths = history }
+      if let forecast { analysisStore.forecastMonths = forecast }
     }
   }
 }

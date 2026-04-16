@@ -9,6 +9,7 @@
   /// On macOS, ProfileWindowView handles this role.
   struct ProfileRootView: View {
     @Environment(ProfileStore.self) private var profileStore
+    @Environment(SessionManager.self) private var sessionManager
     @Environment(ProfileContainerManager.self) private var containerManager
     @Environment(SyncCoordinator.self) private var syncCoordinator
     @Binding var activeSession: ProfileSession?
@@ -61,11 +62,7 @@
 
       // Only create a new session if profile changed
       if activeSession?.profile.id != profileID {
-        activeSession = ProfileSession(
-          profile: profile,
-          containerManager: containerManager,
-          syncCoordinator: syncCoordinator
-        )
+        activeSession = sessionManager.session(for: profile)
       }
     }
 
@@ -76,11 +73,8 @@
       if let session = activeSession,
         session.profile.resolvedServerURL != profile.resolvedServerURL
       {
-        activeSession = ProfileSession(
-          profile: profile,
-          containerManager: containerManager,
-          syncCoordinator: syncCoordinator
-        )
+        sessionManager.rebuildSession(for: profile)
+        activeSession = sessionManager.session(for: profile)
       }
     }
 

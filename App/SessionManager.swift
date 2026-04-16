@@ -32,6 +32,24 @@ final class SessionManager {
     }
   }
 
+  // MARK: - Automation Lookup
+
+  /// Find an open session by profile name (case-insensitive).
+  func session(named name: String) -> ProfileSession? {
+    let lowered = name.lowercased()
+    return sessions.values.first { $0.profile.label.lowercased() == lowered }
+  }
+
+  /// Find an open session by profile UUID.
+  func session(forID id: UUID) -> ProfileSession? {
+    sessions[id]
+  }
+
+  /// All currently open profile sessions.
+  var openProfiles: [ProfileSession] {
+    Array(sessions.values)
+  }
+
   /// Replaces the session for a profile with a fresh instance
   /// (e.g. when the profile's server URL changes).
   func rebuildSession(for profile: Profile) {

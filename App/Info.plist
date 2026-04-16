@@ -29,6 +29,10 @@
             </array>
         </dict>
     </array>
+    <key>NSAppleScriptEnabled</key>
+    <true/>
+    <key>OSAScriptingDefinition</key>
+    <string>Moolah.sdef</string>
     <key>LSMinimumSystemVersion</key>
     <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
     <key>ITSAppUsesNonExemptEncryption</key>
