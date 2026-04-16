@@ -12,8 +12,8 @@ struct GetMonthlySummaryIntent: AppIntent {
   @Parameter(title: "Month", default: 1)
   var month: Int
 
-  @Parameter(title: "Year", default: 2026)
-  var year: Int
+  @Parameter(title: "Year")
+  var year: Int?
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
@@ -21,7 +21,8 @@ struct GetMonthlySummaryIntent: AppIntent {
       throw AutomationError.operationFailed("App not ready")
     }
 
-    let targetMonth = String(format: "%04d%02d", year, month)
+    let resolvedYear = year ?? Calendar.current.component(.year, from: Date())
+    let targetMonth = String(format: "%04d%02d", resolvedYear, month)
     let analysisData = try await service.loadAnalysis(
       profileIdentifier: profile.id.uuidString,
       historyMonths: 13
@@ -30,12 +31,12 @@ struct GetMonthlySummaryIntent: AppIntent {
     guard let summary = analysisData.incomeAndExpense.first(where: { $0.month == targetMonth })
     else {
       return .result(
-        value: "No data found for \(monthName(month)) \(year).")
+        value: "No data found for \(monthName(month)) \(resolvedYear).")
     }
 
     return .result(
       value: """
-        \(monthName(month)) \(year) Summary:
+        \(monthName(month)) \(resolvedYear) Summary:
         Income: \(summary.totalIncome.formatted)
         Expenses: \(summary.totalExpense.formatted)
         Net: \(summary.totalProfit.formatted)
@@ -48,7 +49,7 @@ struct GetMonthlySummaryIntent: AppIntent {
     var components = DateComponents()
     components.month = month
     components.day = 1
-    components.year = 2026
+    components.year = Calendar.current.component(.year, from: Date())
     guard let date = Calendar.current.date(from: components) else { return "Unknown" }
     return formatter.string(from: date)
   }

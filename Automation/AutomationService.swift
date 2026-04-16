@@ -165,12 +165,7 @@ final class AutomationService {
           nil
         }
 
-      let legType: TransactionType
-      if accountIds.count > 1 {
-        legType = .expense  // Transfer legs use expense sign convention
-      } else {
-        legType = spec.amount >= 0 ? .income : .expense
-      }
+      let legType: TransactionType = spec.amount >= 0 ? .income : .expense
 
       resolvedLegs.append(
         TransactionLeg(

@@ -28,7 +28,7 @@ struct OpenAccountIntent: AppIntent {
 
     let profileEncoded =
       profile.name.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? profile.name
-    let urlString = "moolah://\(profileEncoded)/accounts/\(account.id.uuidString)"
+    let urlString = "moolah://\(profileEncoded)/account/\(account.id.uuidString)"
     if let url = URL(string: urlString) {
       #if os(macOS)
         NSWorkspace.shared.open(url)

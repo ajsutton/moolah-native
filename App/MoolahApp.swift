@@ -79,6 +79,7 @@ struct MoolahApp: App {
     @State private var sessionManager: SessionManager
   #else
     @State private var activeSession: ProfileSession?
+    @State private var sessionManager: SessionManager
   #endif
 
   init() {
@@ -159,6 +160,19 @@ struct MoolahApp: App {
       ScriptingContext.automationService = automationService
       ScriptingContext.sessionManager = sessionManager
       AutomationServiceLocator.shared.service = automationService
+    #else
+      let sessionManager = SessionManager(
+        containerManager: containerManager, syncCoordinator: coordinator)
+      _sessionManager = State(initialValue: sessionManager)
+
+      // Clean up cached sessions when a profile is removed (locally or via remote sync)
+      store.onProfileRemoved = { [weak sessionManager] profileID in
+        sessionManager?.removeSession(for: profileID)
+      }
+
+      // Configure App Intents service locator
+      let automationService = AutomationService(sessionManager: sessionManager)
+      AutomationServiceLocator.shared.service = automationService
     #endif
   }
 
@@ -212,6 +226,7 @@ struct MoolahApp: App {
       WindowGroup {
         ProfileRootView(activeSession: $activeSession)
           .environment(profileStore)
+          .environment(sessionManager)
           .environment(containerManager)
           .environment(syncCoordinator)
           .environment(\.pendingNavigation, $pendingNavigation)
