@@ -18,9 +18,6 @@ struct SidebarView: View {
   @State private var showCreateAccountSheet = false
   @State private var accountToEdit: Account?
   @AppStorage("showHiddenAccounts") private var showHidden = false
-  @State private var convertedCurrentTotal: InstrumentAmount?
-  @State private var convertedInvestmentTotal: InstrumentAmount?
-  @State private var convertedNetWorth: InstrumentAmount?
   #if os(iOS)
     @State private var editMode: EditMode = .inactive
   #endif
@@ -47,7 +44,7 @@ struct SidebarView: View {
           Task { await reorderCurrentAccounts(from: source, to: destination) }
         }
 
-        totalRow(label: "Current Total", value: convertedCurrentTotal ?? accountStore.currentTotal)
+        totalRow(label: "Current Total", value: accountStore.convertedCurrentTotal)
       } header: {
         HStack {
           Text("Current Accounts")
@@ -78,7 +75,7 @@ struct SidebarView: View {
             Task { await earmarkStore.reorderEarmarks(from: source, to: destination) }
           }
 
-          totalRow(label: "Earmarked Total", value: earmarkStore.totalBalance)
+          totalRow(label: "Earmarked Total", value: earmarkStore.convertedTotalBalance)
         } header: {
           HStack {
             Text("Earmarks")
@@ -117,28 +114,33 @@ struct SidebarView: View {
           Task { await reorderInvestmentAccounts(from: source, to: destination) }
         }
 
-        totalRow(
-          label: "Investment Total",
-          value: convertedInvestmentTotal ?? accountStore.investmentTotal)
+        totalRow(label: "Investment Total", value: accountStore.convertedInvestmentTotal)
       }
 
       Section {
-        LabeledContent("Available Funds") {
-          InstrumentAmountView(amount: availableFunds)
+        if let currentTotal = accountStore.convertedCurrentTotal,
+          let earmarkedTotal = earmarkStore.convertedTotalBalance,
+          earmarkedTotal.isPositive
+        {
+          LabeledContent("Available Funds") {
+            InstrumentAmountView(amount: currentTotal - earmarkedTotal)
+          }
+          .font(.headline)
+          .accessibilityLabel(
+            "Available Funds: \((currentTotal - earmarkedTotal).formatted)"
+          )
         }
-        .font(.headline)
-        .accessibilityLabel(
-          "Available Funds: \(availableFunds.formatted)"
-        )
 
-        LabeledContent("Net Worth") {
-          InstrumentAmountView(amount: convertedNetWorth ?? accountStore.netWorth)
+        if let netWorth = accountStore.convertedNetWorth {
+          LabeledContent("Net Worth") {
+            InstrumentAmountView(amount: netWorth)
+          }
+          .font(.headline)
+          .bold()
+          .accessibilityLabel(
+            "Net Worth: \(netWorth.formatted)"
+          )
         }
-        .font(.headline)
-        .bold()
-        .accessibilityLabel(
-          "Net Worth: \((convertedNetWorth ?? accountStore.netWorth).formatted)"
-        )
       }
 
       Section {
@@ -188,9 +190,6 @@ struct SidebarView: View {
       async let e: Void = earmarkStore.load()
       _ = await (a, e)
     }
-    .task(id: [accountStore.currentTotal, accountStore.investmentTotal]) {
-      await loadConvertedTotals()
-    }
     #if os(macOS)
       .toolbar {
         ToolbarItem(placement: .primaryAction) {
@@ -226,34 +225,14 @@ struct SidebarView: View {
     }
   }
 
-  private var availableFunds: InstrumentAmount {
-    let total = convertedCurrentTotal ?? accountStore.currentTotal
-    let earmarked = earmarkStore.visibleEarmarks
-      .filter { !$0.isHidden && $0.balance.isPositive }
-      .reduce(InstrumentAmount.zero(instrument: total.instrument)) { $0 + $1.balance }
-    return total - earmarked
-  }
-
-  private func loadConvertedTotals() async {
-    convertedCurrentTotal = nil
-    convertedInvestmentTotal = nil
-    convertedNetWorth = nil
-    let profileInstrument = accountStore.currentTotal.instrument
-    do {
-      let currentTotal = try await accountStore.computeConvertedCurrentTotal(in: profileInstrument)
-      let investmentTotal = try await accountStore.computeConvertedInvestmentTotal(
-        in: profileInstrument)
-      convertedCurrentTotal = currentTotal
-      convertedInvestmentTotal = investmentTotal
-      convertedNetWorth = currentTotal + investmentTotal
-    } catch {
-      // Fall back to non-converted totals (already displayed)
-    }
-  }
-
-  private func totalRow(label: String, value: InstrumentAmount) -> some View {
+  private func totalRow(label: String, value: InstrumentAmount?) -> some View {
     LabeledContent(label) {
-      InstrumentAmountView(amount: value, colorOverride: .secondary)
+      if let value {
+        InstrumentAmountView(amount: value, colorOverride: .secondary)
+      } else {
+        ProgressView()
+          .controlSize(.small)
+      }
     }
     .foregroundStyle(.secondary)
     .font(.callout)

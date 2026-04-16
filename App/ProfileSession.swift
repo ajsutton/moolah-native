@@ -107,15 +107,17 @@ final class ProfileSession: Identifiable {
     self.accountStore = AccountStore(
       repository: backend.accounts, conversionService: backend.conversionService,
       targetInstrument: profile.instrument)
-    self.transactionStore = TransactionStore(
-      repository: backend.transactions,
-      conversionService: backend.conversionService,
-      targetInstrument: profile.instrument
-    )
     self.categoryStore = CategoryStore(repository: backend.categories)
     self.earmarkStore = EarmarkStore(
       repository: backend.earmarks, conversionService: backend.conversionService,
       targetInstrument: profile.instrument)
+    self.transactionStore = TransactionStore(
+      repository: backend.transactions,
+      conversionService: backend.conversionService,
+      targetInstrument: profile.instrument,
+      accountStore: self.accountStore,
+      earmarkStore: self.earmarkStore
+    )
     self.analysisStore = AnalysisStore(repository: backend.analysis)
     self.investmentStore = InvestmentStore(
       repository: backend.investments,
@@ -125,16 +127,6 @@ final class ProfileSession: Identifiable {
 
     // Wire up cross-store side effects
     let accountStore = self.accountStore
-    let earmarkStore = self.earmarkStore
-    self.transactionStore.onMutate = { old, new in
-      let delta = BalanceDeltaCalculator.deltas(old: old, new: new)
-      accountStore.applyDelta(delta.accountDeltas)
-      earmarkStore.applyDelta(
-        earmarkDeltas: delta.earmarkDeltas,
-        savedDeltas: delta.earmarkSavedDeltas,
-        spentDeltas: delta.earmarkSpentDeltas
-      )
-    }
     self.investmentStore.onInvestmentValueChanged = { accountId, latestValue in
       accountStore.updateInvestmentValue(accountId: accountId, value: latestValue)
     }
