@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// On macOS: static label showing avatar, name, and profile label (sign out is in File menu).
+/// On macOS: static label showing profile name (sign out is in File menu).
 /// On iOS: dropdown menu with profile switcher, manage profiles, and sign out.
 struct UserMenuView: View {
-  let user: UserProfile
   @Environment(AuthStore.self) private var authStore
   @Environment(ProfileStore.self) private var profileStore
   @Environment(ProfileSession.self) private var session
@@ -36,7 +35,7 @@ struct UserMenuView: View {
   #if os(iOS)
     private var iOSUserMenu: some View {
       Menu {
-        Text("\(user.givenName) \(user.familyName)")
+        Text(session.profile.label)
           .font(.headline)
 
         Divider()
@@ -51,13 +50,13 @@ struct UserMenuView: View {
       } label: {
         HStack(spacing: 6) {
           avatarView
-          Text(user.givenName)
+          Text(session.profile.label)
             .font(.subheadline)
         }
         .frame(height: avatarSize)
       }
       .accessibilityLabel(
-        String(localized: "User menu for \(user.givenName) \(user.familyName)")
+        String(localized: "User menu for \(session.profile.label)")
       )
       .sheet(isPresented: $showManageProfiles) {
         NavigationStack {

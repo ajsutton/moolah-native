@@ -13,7 +13,6 @@ struct Profile: Identifiable, Codable, Sendable, Equatable {
   var label: String
   var backendType: BackendType
   var serverURL: URL?
-  var cachedUserName: String?
   var currencyCode: String
   var financialYearStartMonth: Int
   let createdAt: Date
@@ -29,7 +28,6 @@ struct Profile: Identifiable, Codable, Sendable, Equatable {
     label: String,
     backendType: BackendType = .remote,
     serverURL: URL? = nil,
-    cachedUserName: String? = nil,
     currencyCode: String = "AUD",
     financialYearStartMonth: Int = 7,
     createdAt: Date = Date()
@@ -38,7 +36,6 @@ struct Profile: Identifiable, Codable, Sendable, Equatable {
     self.label = label
     self.backendType = backendType
     self.serverURL = serverURL
-    self.cachedUserName = cachedUserName
     self.currencyCode = currencyCode
     self.financialYearStartMonth = financialYearStartMonth
     self.createdAt = createdAt

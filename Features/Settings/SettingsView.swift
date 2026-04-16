@@ -759,12 +759,12 @@ struct ProfileAuthStatusView: View {
           .controlSize(.small)
       }
       .accessibilityElement(children: .combine)
-    case .signedIn(let user):
+    case .signedIn:
       HStack {
         Image(systemName: "person.crop.circle.fill")
           .foregroundStyle(.secondary)
           .accessibilityHidden(true)
-        Text("\(user.givenName) \(user.familyName)")
+        Text("Signed in")
         Spacer()
         if authStore.requiresSignIn {
           Button("Sign Out", role: .destructive) {
@@ -775,7 +775,7 @@ struct ProfileAuthStatusView: View {
         }
       }
       .accessibilityElement(children: .combine)
-      .accessibilityLabel("Signed in as \(user.givenName) \(user.familyName)")
+      .accessibilityLabel("Signed in")
     case .signedOut:
       HStack {
         Text("Not signed in")
@@ -797,15 +797,8 @@ struct ProfileAuthStatusView: View {
 
   private var offlineAuthStatus: some View {
     HStack {
-      if let name = profile.cachedUserName {
-        Image(systemName: "person.crop.circle.fill")
-          .foregroundStyle(.secondary)
-          .accessibilityHidden(true)
-        Text(name)
-      } else {
-        Text("Not signed in")
-          .foregroundStyle(.secondary)
-      }
+      Text("Not signed in")
+        .foregroundStyle(.secondary)
       Spacer()
       #if os(macOS)
         Text("Open this profile to sign in")

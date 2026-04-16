@@ -26,8 +26,6 @@ actor InMemoryAuthProvider: AuthProvider {
       profile
       ?? UserProfile(
         id: "fixture-user",
-        givenName: "Ada",
-        familyName: "Lovelace",
         pictureURL: nil
       )
     profile = user

@@ -32,8 +32,8 @@ struct ContentView: View {
         .toolbar {
           #if os(iOS)
             ToolbarItem(placement: .automatic) {
-              if case .signedIn(let user) = authStore.state {
-                UserMenuView(user: user)
+              if case .signedIn = authStore.state {
+                UserMenuView()
                   .environment(authStore)
               }
             }

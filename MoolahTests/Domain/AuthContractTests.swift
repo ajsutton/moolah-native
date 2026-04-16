@@ -20,7 +20,7 @@ struct AuthContractTests {
 
     @Test("starts signed in when seeded with a profile")
     func startsSignedIn() async throws {
-      let profile = UserProfile(id: "u1", givenName: "Ada", familyName: "Lovelace", pictureURL: nil)
+      let profile = UserProfile(id: "u1", pictureURL: nil)
       let provider = InMemoryAuthProvider(signedIn: profile)
       let user = try await provider.currentUser()
       #expect(user == profile)
@@ -38,7 +38,7 @@ struct AuthContractTests {
     @Test("signOut clears the current user")
     func signOut() async throws {
       let provider = InMemoryAuthProvider(
-        signedIn: UserProfile(id: "u1", givenName: "Ada", familyName: "Lovelace", pictureURL: nil))
+        signedIn: UserProfile(id: "u1", pictureURL: nil))
       try await provider.signOut()
       let user = try await provider.currentUser()
       #expect(user == nil)

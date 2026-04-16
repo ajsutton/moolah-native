@@ -15,8 +15,6 @@ final class CloudKitAuthProvider: AuthProvider, Sendable {
       // CloudKit not configured — still allow local-only SwiftData access
       return UserProfile(
         id: "local-user",
-        givenName: profileLabel,
-        familyName: "",
         pictureURL: nil
       )
     }
@@ -24,8 +22,6 @@ final class CloudKitAuthProvider: AuthProvider, Sendable {
     guard status == .available else { return nil }
     return UserProfile(
       id: "icloud-user",
-      givenName: profileLabel,
-      familyName: "",
       pictureURL: nil
     )
   }
@@ -34,8 +30,6 @@ final class CloudKitAuthProvider: AuthProvider, Sendable {
     guard isCloudKitAvailable else {
       return UserProfile(
         id: "local-user",
-        givenName: profileLabel,
-        familyName: "",
         pictureURL: nil
       )
     }
@@ -45,8 +39,6 @@ final class CloudKitAuthProvider: AuthProvider, Sendable {
     }
     return UserProfile(
       id: "icloud-user",
-      givenName: profileLabel,
-      familyName: "",
       pictureURL: nil
     )
   }

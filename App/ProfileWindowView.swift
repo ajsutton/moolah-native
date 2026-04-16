@@ -36,9 +36,6 @@
           let session = sessionManager.session(for: profile)
           SessionRootView(session: session)
             .environment(profileStore)
-            .onChange(of: session.authStore.state) { _, newState in
-              cacheUserNameIfNeeded(newState, session: session)
-            }
             .onChange(of: profile.resolvedServerURL) { _, _ in
               sessionManager.rebuildSession(for: profile)
             }
@@ -64,18 +61,6 @@
       }
     }
 
-    private func cacheUserNameIfNeeded(_ state: AuthStore.State, session: ProfileSession) {
-      guard case .signedIn(let user) = state,
-        session.profile.backendType != .cloudKit
-      else { return }
-
-      let displayName = "\(user.givenName) \(user.familyName)"
-      if session.profile.cachedUserName != displayName {
-        var updated = session.profile
-        updated.cachedUserName = displayName
-        profileStore.updateProfile(updated)
-      }
-    }
   }
 
 #endif
