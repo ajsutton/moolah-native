@@ -14,6 +14,9 @@ final class EarmarkStore {
   private(set) var budgetError: Error?
 
   private(set) var convertedTotalBalance: InstrumentAmount?
+  private(set) var convertedBalances: [UUID: InstrumentAmount] = [:]
+  private(set) var convertedSavedAmounts: [UUID: InstrumentAmount] = [:]
+  private(set) var convertedSpentAmounts: [UUID: InstrumentAmount] = [:]
 
   private let repository: EarmarkRepository
   private let conversionService: (any InstrumentConversionService)?
@@ -29,6 +32,18 @@ final class EarmarkStore {
     self.repository = repository
     self.conversionService = conversionService
     self.targetInstrument = targetInstrument
+  }
+
+  func convertedBalance(for earmarkId: UUID) -> InstrumentAmount? {
+    convertedBalances[earmarkId]
+  }
+
+  func convertedSaved(for earmarkId: UUID) -> InstrumentAmount? {
+    convertedSavedAmounts[earmarkId]
+  }
+
+  func convertedSpent(for earmarkId: UUID) -> InstrumentAmount? {
+    convertedSpentAmounts[earmarkId]
   }
 
   func load() async {
@@ -100,20 +115,66 @@ final class EarmarkStore {
     conversionTask?.cancel()
     conversionTask = Task {
       do {
-        var total = InstrumentAmount.zero(instrument: targetInstrument)
+        var grandTotal = InstrumentAmount.zero(instrument: targetInstrument)
+        var balances: [UUID: InstrumentAmount] = [:]
+        var saved: [UUID: InstrumentAmount] = [:]
+        var spent: [UUID: InstrumentAmount] = [:]
+
         for earmark in visibleEarmarks {
+          var earmarkBalance = InstrumentAmount.zero(instrument: earmark.instrument)
+          var earmarkSaved = InstrumentAmount.zero(instrument: earmark.instrument)
+          var earmarkSpent = InstrumentAmount.zero(instrument: earmark.instrument)
+
           for position in earmark.positions {
             guard let conversionService else {
-              total += position.amount
+              earmarkBalance += position.amount
               continue
             }
             let converted = try await conversionService.convertAmount(
-              position.amount, to: targetInstrument, on: Date())
+              position.amount, to: earmark.instrument, on: Date())
             guard !Task.isCancelled else { return }
-            total += converted
+            earmarkBalance += converted
+          }
+          for position in earmark.savedPositions {
+            guard let conversionService else {
+              earmarkSaved += position.amount
+              continue
+            }
+            let converted = try await conversionService.convertAmount(
+              position.amount, to: earmark.instrument, on: Date())
+            guard !Task.isCancelled else { return }
+            earmarkSaved += converted
+          }
+          for position in earmark.spentPositions {
+            guard let conversionService else {
+              earmarkSpent += position.amount
+              continue
+            }
+            let converted = try await conversionService.convertAmount(
+              position.amount, to: earmark.instrument, on: Date())
+            guard !Task.isCancelled else { return }
+            earmarkSpent += converted
+          }
+
+          balances[earmark.id] = earmarkBalance
+          saved[earmark.id] = earmarkSaved
+          spent[earmark.id] = earmarkSpent
+
+          // Convert earmark balance to target instrument for grand total
+          if let conversionService {
+            let convertedToTarget = try await conversionService.convertAmount(
+              earmarkBalance, to: targetInstrument, on: Date())
+            guard !Task.isCancelled else { return }
+            grandTotal += convertedToTarget
+          } else {
+            grandTotal += earmarkBalance
           }
         }
-        convertedTotalBalance = total
+
+        convertedBalances = balances
+        convertedSavedAmounts = saved
+        convertedSpentAmounts = spent
+        convertedTotalBalance = grandTotal
       } catch {
         guard !Task.isCancelled else { return }
         logger.error("Failed to compute converted earmark totals: \(error.localizedDescription)")
