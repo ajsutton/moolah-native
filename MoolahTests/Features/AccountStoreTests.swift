@@ -413,13 +413,13 @@ struct AccountStoreTests {
 
   @Test func testCreatePersistsInstrument() async throws {
     let (backend, _) = try TestBackend.create()
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     let usdInstrument = Instrument.fiat(code: "USD")
     let account = Account(
       id: UUID(), name: "USD Checking", type: .bank, instrument: usdInstrument, position: 0,
       isHidden: false)
 
-    let created = try await store.create(account, openingBalance: nil)
+    let created = try await store.create(account)
 
     #expect(created.instrument.id == usdInstrument.id)
     #expect(store.accounts.first?.instrument.id == usdInstrument.id)
@@ -431,7 +431,7 @@ struct AccountStoreTests {
   @Test func testUpdatePersistsChangedInstrument() async throws {
     let (backend, container) = try TestBackend.create()
     let original = seedAccount(name: "Savings", in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
 
     let eurInstrument = Instrument.fiat(code: "EUR")
     var modified = original
