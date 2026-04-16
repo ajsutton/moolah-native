@@ -83,25 +83,17 @@ Full per-account currency support, building on the exchange rate infrastructure 
 
 ### Done
 
-Infrastructure built across Phases 4 and 8:
-- `Instrument` model — full multi-asset type (fiat, stock, crypto) with `InstrumentAmount` value type
-- `Position` type — aggregates transaction legs by instrument per account
-- `TransactionLeg` — each leg carries its own `Instrument`
+- `Instrument` model, `Position` type, `TransactionLeg` with per-leg instruments
 - `ExchangeRateService` — Frankfurter API with caching, offline fallback, date-range queries
-- `InstrumentConversionService` protocol — with `FiatConversionService` and `FullConversionService` implementations
-- `AccountStore.computeConvertedTotal()` — conversion logic exists (currently uses current-date rates only)
-
-### In Progress
-
-- Per-account instrument field: adding `instrument` to `AccountRecord` and `CloudKitAccountRepository` so accounts can use a currency different from the profile default (currently all accounts hardcode profile currency)
+- `InstrumentConversionService` protocol with `FiatConversionService` and `FullConversionService`
+- `Account.instrument` field and `AccountRecord.instrumentId` storage — persisted and read back from SwiftData. Legacy `balance`/`investmentValue` fields removed; accounts are fully position-based.
+- Aggregation — `AccountStore` converts foreign-currency accounts to profile currency for sidebar totals, net worth, and available funds
 
 ### Remaining
 
 - Per-account currency picker in create/edit account UI
-- Aggregation: wire converted totals into sidebar, net worth, available funds (AccountStore conversion logic exists but is never triggered since all accounts currently share profile currency)
-- Analysis views: net worth graph and expense breakdown need date-appropriate rate lookups (currently use raw balances with no conversion)
 - Cross-currency transfers: UI for exchange rate input or market rate selection when transferring between accounts with different currencies
-- UI: account currency badges, converted totals with rate disclosure in sidebar
+- Analysis views: net worth graph and expense breakdown need date-appropriate rate lookups (currently use raw balances with no conversion)
 
 ---
 
