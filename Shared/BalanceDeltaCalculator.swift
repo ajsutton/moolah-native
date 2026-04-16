@@ -103,13 +103,11 @@ enum BalanceDeltaCalculator {
         earmarkSavedDeltas[earmarkId, default: [:]][leg.instrument, default: 0] += sign * quantity
 
       case .expense, .transfer:
-        // Spent delta tracks the change to the spent total.
-        // Expense/transfer quantities are negative (outflows), so we use abs to get the positive
-        // spent amount, then apply sign for add/reverse direction.
+        // Spent delta tracks the change to the spent total (stored as positive quantities).
+        // Negate the quantity: expenses are typically negative (outflows), so negating gives
+        // a positive spent amount. Refunds (positive expense quantity) correctly reduce spent.
         earmarkSpentDeltas[earmarkId, default: [:]][leg.instrument, default: 0] +=
-          sign
-          * abs(
-            quantity)
+          sign * (-quantity)
       }
     }
   }

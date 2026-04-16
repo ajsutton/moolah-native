@@ -204,8 +204,8 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
         saved += legacyAmount
         savedTotals[inst, default: 0] += amount.quantity
       case .expense, .transfer:
-        spent += InstrumentAmount(storageValue: abs(leg.quantity), instrument: instrument)
-        spentTotals[inst, default: 0] += amount.quantity
+        spent += InstrumentAmount(storageValue: -leg.quantity, instrument: instrument)
+        spentTotals[inst, default: 0] += -amount.quantity
       }
     }
 
