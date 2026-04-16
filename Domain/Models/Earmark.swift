@@ -16,9 +16,6 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
   let id: UUID
   var name: String
   var instrument: Instrument
-  var balance: InstrumentAmount
-  var saved: InstrumentAmount
-  var spent: InstrumentAmount
   var positions: [Position]
   var savedPositions: [Position]
   var spentPositions: [Position]
@@ -32,9 +29,6 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
     id: UUID = UUID(),
     name: String,
     instrument: Instrument = .AUD,
-    balance: InstrumentAmount = .zero(instrument: .AUD),
-    saved: InstrumentAmount = .zero(instrument: .AUD),
-    spent: InstrumentAmount = .zero(instrument: .AUD),
     positions: [Position] = [],
     savedPositions: [Position] = [],
     spentPositions: [Position] = [],
@@ -47,9 +41,6 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
     self.id = id
     self.name = name
     self.instrument = instrument
-    self.balance = balance
-    self.saved = saved
-    self.spent = spent
     self.positions = positions
     self.savedPositions = savedPositions
     self.spentPositions = spentPositions
@@ -64,9 +55,6 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
     case id
     case name
     case instrument
-    case balance
-    case saved
-    case spent
     case isHidden = "hidden"
     case position
     case savingsGoal = "savingsTarget"
@@ -78,11 +66,8 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decode(UUID.self, forKey: .id)
     name = try container.decode(String.self, forKey: .name)
-    balance = try container.decode(InstrumentAmount.self, forKey: .balance)
     instrument =
-      try container.decodeIfPresent(Instrument.self, forKey: .instrument) ?? balance.instrument
-    saved = try container.decode(InstrumentAmount.self, forKey: .saved)
-    spent = try container.decode(InstrumentAmount.self, forKey: .spent)
+      try container.decodeIfPresent(Instrument.self, forKey: .instrument) ?? .AUD
     positions = []
     savedPositions = []
     spentPositions = []
@@ -98,9 +83,6 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
     try container.encode(id, forKey: .id)
     try container.encode(name, forKey: .name)
     try container.encode(instrument, forKey: .instrument)
-    try container.encode(balance, forKey: .balance)
-    try container.encode(saved, forKey: .saved)
-    try container.encode(spent, forKey: .spent)
     try container.encode(isHidden, forKey: .isHidden)
     try container.encode(position, forKey: .position)
     try container.encodeIfPresent(savingsGoal, forKey: .savingsGoal)
@@ -111,7 +93,6 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
   static func == (lhs: Earmark, rhs: Earmark) -> Bool {
     lhs.id == rhs.id && lhs.name == rhs.name
       && lhs.instrument == rhs.instrument
-      && lhs.balance == rhs.balance && lhs.saved == rhs.saved && lhs.spent == rhs.spent
       && lhs.positions == rhs.positions
       && lhs.savedPositions == rhs.savedPositions
       && lhs.spentPositions == rhs.spentPositions
@@ -125,9 +106,6 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
     hasher.combine(id)
     hasher.combine(name)
     hasher.combine(instrument)
-    hasher.combine(balance)
-    hasher.combine(saved)
-    hasher.combine(spent)
     hasher.combine(positions)
     hasher.combine(savedPositions)
     hasher.combine(spentPositions)
@@ -159,7 +137,6 @@ struct Earmarks: RandomAccessCollection, Sendable {
   }
 
   /// Returns a new Earmarks collection with positions, savedPositions, and spentPositions adjusted.
-  /// Also updates legacy balance/saved/spent fields for single-instrument compatibility.
   func adjustingPositions(
     of earmarkId: UUID,
     positionDeltas: [Instrument: Decimal],
@@ -173,29 +150,6 @@ struct Earmarks: RandomAccessCollection, Sendable {
       copy.positions = copy.positions.applying(deltas: positionDeltas)
       copy.savedPositions = copy.savedPositions.applying(deltas: savedDeltas)
       copy.spentPositions = copy.spentPositions.applying(deltas: spentDeltas)
-
-      // Update legacy balance/saved/spent fields for single-instrument earmarks
-      if let primaryPosition = copy.positions.first(where: {
-        $0.instrument == copy.balance.instrument
-      }) {
-        copy.balance = primaryPosition.amount
-      } else if copy.positions.isEmpty {
-        copy.balance = .zero(instrument: copy.balance.instrument)
-      }
-      if let primarySaved = copy.savedPositions.first(where: {
-        $0.instrument == copy.saved.instrument
-      }) {
-        copy.saved = primarySaved.amount
-      } else if copy.savedPositions.isEmpty {
-        copy.saved = .zero(instrument: copy.saved.instrument)
-      }
-      if let primarySpent = copy.spentPositions.first(where: {
-        $0.instrument == copy.spent.instrument
-      }) {
-        copy.spent = primarySpent.amount
-      } else if copy.spentPositions.isEmpty {
-        copy.spent = .zero(instrument: copy.spent.instrument)
-      }
       return copy
     }
     return Earmarks(from: adjusted)

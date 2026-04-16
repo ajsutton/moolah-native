@@ -34,7 +34,6 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
         let totals = try computeEarmarkPositions(for: record.id, instruments: instruments)
         return record.toDomain(
           defaultInstrument: instrument,
-          balance: totals.balance, saved: totals.saved, spent: totals.spent,
           positions: totals.positions, savedPositions: totals.savedPositions,
           spentPositions: totals.spentPositions
         )
@@ -161,7 +160,6 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
     for earmarkId: UUID,
     instruments: [String: Instrument]
   ) throws -> (
-    balance: InstrumentAmount, saved: InstrumentAmount, spent: InstrumentAmount,
     positions: [Position], savedPositions: [Position], spentPositions: [Position]
   ) {
     // Get scheduled transaction IDs to exclude
@@ -177,11 +175,6 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
     )
     let legRecords = try context.fetch(descriptor)
 
-    let zero = InstrumentAmount.zero(instrument: instrument)
-    var balance = zero
-    var saved = zero
-    var spent = zero
-
     var positionTotals: [Instrument: Decimal] = [:]
     var savedTotals: [Instrument: Decimal] = [:]
     var spentTotals: [Instrument: Decimal] = [:]
@@ -191,10 +184,6 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       let inst = instruments[leg.instrumentId] ?? Instrument.fiat(code: leg.instrumentId)
       let amount = InstrumentAmount(storageValue: leg.quantity, instrument: inst)
 
-      // Legacy single-instrument totals (using profile instrument)
-      let legacyAmount = InstrumentAmount(storageValue: leg.quantity, instrument: instrument)
-      balance += legacyAmount
-
       // Multi-instrument positions
       positionTotals[inst, default: 0] += amount.quantity
 
@@ -202,10 +191,8 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       let legType = TransactionType(rawValue: leg.type) ?? .expense
       switch legType {
       case .income, .openingBalance:
-        saved += legacyAmount
         savedTotals[inst, default: 0] += amount.quantity
       case .expense, .transfer:
-        spent += InstrumentAmount(storageValue: -leg.quantity, instrument: instrument)
         spentTotals[inst, default: 0] += -amount.quantity
       }
     }
@@ -225,7 +212,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       return Position(instrument: inst, quantity: qty)
     }.sorted { $0.instrument.id < $1.instrument.id }
 
-    return (balance, saved, spent, positions, savedPositions, spentPositions)
+    return (positions, savedPositions, spentPositions)
   }
 
   /// Fetches all known instruments as a lookup map.

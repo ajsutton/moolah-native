@@ -41,22 +41,18 @@ final class EarmarkRecord {
 
   func toDomain(
     defaultInstrument: Instrument,
-    balance: InstrumentAmount, saved: InstrumentAmount, spent: InstrumentAmount,
     positions: [Position] = [], savedPositions: [Position] = [], spentPositions: [Position] = []
   ) -> Earmark {
     let instrument = instrumentId.map { Instrument.fiat(code: $0) } ?? defaultInstrument
     let savingsGoal: InstrumentAmount? = savingsTarget.flatMap { target in
       guard let instrumentId = savingsTargetInstrumentId else { return nil }
-      let instrument = Instrument.fiat(code: instrumentId)
-      return InstrumentAmount(storageValue: target, instrument: instrument)
+      let inst = Instrument.fiat(code: instrumentId)
+      return InstrumentAmount(storageValue: target, instrument: inst)
     }
     return Earmark(
       id: id,
       name: name,
       instrument: instrument,
-      balance: balance,
-      saved: saved,
-      spent: spent,
       positions: positions,
       savedPositions: savedPositions,
       spentPositions: spentPositions,

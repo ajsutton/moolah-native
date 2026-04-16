@@ -13,13 +13,20 @@ struct EarmarkDTO: Codable {
   let spent: Int
 
   func toDomain(instrument: Instrument) -> Earmark {
-    Earmark(
+    let balanceAmount = InstrumentAmount(quantity: Decimal(balance) / 100, instrument: instrument)
+    let savedAmount = InstrumentAmount(quantity: Decimal(saved) / 100, instrument: instrument)
+    let spentAmount = InstrumentAmount(quantity: Decimal(spent) / 100, instrument: instrument)
+
+    return Earmark(
       id: id.uuid,
       name: name,
       instrument: instrument,
-      balance: InstrumentAmount(quantity: Decimal(balance) / 100, instrument: instrument),
-      saved: InstrumentAmount(quantity: Decimal(saved) / 100, instrument: instrument),
-      spent: InstrumentAmount(quantity: Decimal(spent) / 100, instrument: instrument),
+      positions: balanceAmount.isZero
+        ? [] : [Position(instrument: instrument, quantity: balanceAmount.quantity)],
+      savedPositions: savedAmount.isZero
+        ? [] : [Position(instrument: instrument, quantity: savedAmount.quantity)],
+      spentPositions: spentAmount.isZero
+        ? [] : [Position(instrument: instrument, quantity: spentAmount.quantity)],
       isHidden: hidden,
       position: position ?? 0,
       savingsGoal: savingsTarget.map {
@@ -31,7 +38,11 @@ struct EarmarkDTO: Codable {
   }
 
   static func fromDomain(_ earmark: Earmark) -> EarmarkDTO {
-    EarmarkDTO(
+    let balanceQty = earmark.positions.reduce(Decimal.zero) { $0 + $1.quantity }
+    let savedQty = earmark.savedPositions.reduce(Decimal.zero) { $0 + $1.quantity }
+    let spentQty = earmark.spentPositions.reduce(Decimal.zero) { $0 + $1.quantity }
+
+    return EarmarkDTO(
       id: ServerUUID(earmark.id),
       name: earmark.name,
       position: earmark.position,
@@ -41,9 +52,9 @@ struct EarmarkDTO: Codable {
       },
       savingsStartDate: earmark.savingsStartDate.map { BackendDateFormatter.string(from: $0) },
       savingsEndDate: earmark.savingsEndDate.map { BackendDateFormatter.string(from: $0) },
-      balance: Int(truncating: (earmark.balance.quantity * 100) as NSDecimalNumber),
-      saved: Int(truncating: (earmark.saved.quantity * 100) as NSDecimalNumber),
-      spent: Int(truncating: (earmark.spent.quantity * 100) as NSDecimalNumber)
+      balance: Int(truncating: (balanceQty * 100) as NSDecimalNumber),
+      saved: Int(truncating: (savedQty * 100) as NSDecimalNumber),
+      spent: Int(truncating: (spentQty * 100) as NSDecimalNumber)
     )
   }
 
