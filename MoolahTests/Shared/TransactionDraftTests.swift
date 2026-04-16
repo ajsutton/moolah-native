@@ -1260,4 +1260,22 @@ struct TransactionDraftTests {
     #expect(draft.legDrafts[0].type == .expense)
     #expect(draft.legDrafts[0].categoryId == originalCategoryId)
   }
+
+  @Test func cannotSwitchToSimpleWhenTransferHasEarmarkOnlyLeg() {
+    let draft = TransactionDraft(
+      payee: "", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: true,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .transfer, accountId: UUID(), amountText: "100",
+          categoryId: nil, categoryText: "", earmarkId: nil),
+        TransactionDraft.LegDraft(
+          type: .transfer, accountId: nil, amountText: "-100",
+          categoryId: nil, categoryText: "", earmarkId: UUID()),
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    #expect(draft.canSwitchToSimple == false)
+  }
 }

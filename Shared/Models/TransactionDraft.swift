@@ -329,6 +329,8 @@ extension TransactionDraft {
     let b = legDrafts[1]
     guard a.type == b.type && a.type == .transfer else { return false }
     guard b.categoryId == nil && b.earmarkId == nil else { return false }
+    // Simple transfers require both legs to have accounts
+    guard a.accountId != nil && b.accountId != nil else { return false }
     guard a.accountId != b.accountId else { return false }
     // Check amounts negate: parse both and compare
     guard let aVal = InstrumentAmount.parseQuantity(from: a.amountText, decimals: 10),
