@@ -88,7 +88,7 @@ final class InvestmentStore {
     do {
       try await repository.setValue(accountId: accountId, date: date, value: value)
       let newValue = InvestmentValue(date: date, value: value)
-      values.removeAll { $0.date == date }
+      values.removeAll { $0.date.isSameDay(as: date) }
       values.append(newValue)
       values.sort()
       // The latest value is the first one (values sorted descending by date)
@@ -103,7 +103,7 @@ final class InvestmentStore {
     error = nil
     do {
       try await repository.removeValue(accountId: accountId, date: date)
-      values.removeAll { $0.date == date }
+      values.removeAll { $0.date.isSameDay(as: date) }
       onInvestmentValueChanged?(accountId, values.first?.value)
     } catch {
       logger.error("Failed to remove investment value: \(error.localizedDescription)")

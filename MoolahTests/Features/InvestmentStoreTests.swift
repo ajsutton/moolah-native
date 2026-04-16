@@ -100,6 +100,36 @@ struct InvestmentStoreTests {
     #expect(store.values[0].value.quantity == Decimal(string: "2000.00")!)
   }
 
+  @Test("Set value upserts in-memory when dates have different times on same day")
+  func testSetValueUpsertsInMemoryWithDifferentTimes() async throws {
+    let accountId = UUID()
+    let morning = Calendar.current.date(
+      from: DateComponents(year: 2024, month: 3, day: 15, hour: 9, minute: 0))!
+    let initialValues: [UUID: [InvestmentValue]] = [
+      accountId: [
+        InvestmentValue(
+          date: morning,
+          value: InstrumentAmount(
+            quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument))
+      ]
+    ]
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(investmentValues: initialValues, in: container)
+    let store = InvestmentStore(repository: backend.investments)
+
+    await store.loadValues(accountId: accountId)
+    #expect(store.values.count == 1)
+
+    let evening = Calendar.current.date(
+      from: DateComponents(year: 2024, month: 3, day: 15, hour: 18, minute: 30))!
+    let newAmount = InstrumentAmount(
+      quantity: Decimal(string: "2000.00")!, instrument: .defaultTestInstrument)
+    await store.setValue(accountId: accountId, date: evening, value: newAmount)
+
+    #expect(store.values.count == 1, "Expected upsert but got duplicate entries in store")
+    #expect(store.values[0].value.quantity == Decimal(string: "2000.00")!)
+  }
+
   @Test("Remove value removes from list")
   func testRemoveValue() async throws {
     let accountId = UUID()

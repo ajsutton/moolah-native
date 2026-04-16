@@ -39,9 +39,10 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
   }
 
   func setValue(accountId: UUID, date: Date, value: InstrumentAmount) async throws {
+    let normalizedDate = Calendar.current.startOfDay(for: date)
     let descriptor = FetchDescriptor<InvestmentValueRecord>(
       predicate: #Predicate {
-        $0.accountId == accountId && $0.date == date
+        $0.accountId == accountId && $0.date == normalizedDate
       }
     )
 
@@ -53,7 +54,7 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
         onRecordChanged(existing.id)
       } else {
         let record = InvestmentValueRecord(
-          accountId: accountId, date: date,
+          accountId: accountId, date: normalizedDate,
           value: value.storageValue, instrumentId: value.instrument.id)
         context.insert(record)
         try context.save()
@@ -63,9 +64,10 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
   }
 
   func removeValue(accountId: UUID, date: Date) async throws {
+    let normalizedDate = Calendar.current.startOfDay(for: date)
     let descriptor = FetchDescriptor<InvestmentValueRecord>(
       predicate: #Predicate {
-        $0.accountId == accountId && $0.date == date
+        $0.accountId == accountId && $0.date == normalizedDate
       }
     )
 
@@ -123,7 +125,7 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
         let dayKey = calendar.startOfDay(for: entry.date)
         // Upsert: if same day, overwrite with latest cumulative value
         if let lastIndex = dailyBalances.lastIndex(where: {
-          calendar.isDate($0.date, inSameDayAs: dayKey)
+          $0.date.isSameDay(as: dayKey)
         }) {
           dailyBalances[lastIndex] = (date: dayKey, storageValue: runningStorageValue)
         } else {

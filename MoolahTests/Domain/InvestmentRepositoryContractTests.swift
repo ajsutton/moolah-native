@@ -122,6 +122,29 @@ struct InvestmentRepositoryContractTests {
     #expect(page.values[0].value.quantity == Decimal(string: "2000.00")!)
   }
 
+  @Test("Set value upserts when dates have different times on same day")
+  func testSetValueUpsertsWithDifferentTimes() async throws {
+    let accountId = UUID()
+    let repo = makeCloudKitInvestmentRepository()
+
+    let morning = Calendar.current.date(
+      from: DateComponents(year: 2024, month: 3, day: 15, hour: 9, minute: 0))!
+    let evening = Calendar.current.date(
+      from: DateComponents(year: 2024, month: 3, day: 15, hour: 18, minute: 30))!
+
+    let firstAmount = InstrumentAmount(
+      quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)
+    let secondAmount = InstrumentAmount(
+      quantity: Decimal(string: "2000.00")!, instrument: .defaultTestInstrument)
+
+    try await repo.setValue(accountId: accountId, date: morning, value: firstAmount)
+    try await repo.setValue(accountId: accountId, date: evening, value: secondAmount)
+
+    let page = try await repo.fetchValues(accountId: accountId, page: 0, pageSize: 50)
+    #expect(page.values.count == 1, "Expected upsert but got duplicate entries")
+    #expect(page.values[0].value.quantity == Decimal(string: "2000.00")!)
+  }
+
   // MARK: - removeValue
 
   @Test("Remove value deletes entry")

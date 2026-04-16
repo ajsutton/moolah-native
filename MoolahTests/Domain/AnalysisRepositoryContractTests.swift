@@ -206,7 +206,7 @@ struct AnalysisRepositoryContractTests {
     let balances = try await backend.analysis.fetchDailyBalances(after: nil, forecastUntil: nil)
 
     #expect(!balances.isEmpty)
-    let todayBalance = balances.first { Calendar.current.isDate($0.date, inSameDayAs: today) }
+    let todayBalance = balances.first { $0.date.isSameDay(as: today) }
     #expect(todayBalance != nil)
 
     // Total balance = 500 - 200 + 1000 = 1300 cents = 13.00
@@ -281,7 +281,7 @@ struct AnalysisRepositoryContractTests {
 
     let balances = try await backend.analysis.fetchDailyBalances(after: nil, forecastUntil: nil)
 
-    let todayBalance = balances.first { Calendar.current.isDate($0.date, inSameDayAs: today) }
+    let todayBalance = balances.first { $0.date.isSameDay(as: today) }
     #expect(todayBalance != nil)
 
     // Total balance = 5.00 - 189.50 + 10.00 = -174.50
@@ -1727,7 +1727,7 @@ struct AnalysisRepositoryContractTests {
     let balances = try await backend.analysis.fetchDailyBalances(after: nil, forecastUntil: nil)
 
     #expect(!balances.isEmpty)
-    let todayBalance = balances.first { Calendar.current.isDate($0.date, inSameDayAs: today) }
+    let todayBalance = balances.first { $0.date.isSameDay(as: today) }
     #expect(todayBalance != nil)
 
     // Balance should only include the leg with accountId (100), not the nil-accountId leg (50)

@@ -155,7 +155,7 @@ struct ScheduledTransactionTests {
 
     let nextDate = transaction.nextDueDate()!
     let expectedDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 16))!
-    #expect(calendar.isDate(nextDate, inSameDayAs: expectedDate))
+    #expect(nextDate.isSameDay(as: expectedDate))
   }
 
   @Test("nextDueDate calculates weekly recurrence")
@@ -166,7 +166,7 @@ struct ScheduledTransactionTests {
 
     let nextDate = transaction.nextDueDate()!
     let expectedDate = calendar.date(from: DateComponents(year: 2026, month: 1, day: 29))!
-    #expect(calendar.isDate(nextDate, inSameDayAs: expectedDate))
+    #expect(nextDate.isSameDay(as: expectedDate))
   }
 
   @Test("nextDueDate calculates monthly recurrence")
@@ -177,7 +177,7 @@ struct ScheduledTransactionTests {
 
     let nextDate = transaction.nextDueDate()!
     let expectedDate = calendar.date(from: DateComponents(year: 2026, month: 2, day: 15))!
-    #expect(calendar.isDate(nextDate, inSameDayAs: expectedDate))
+    #expect(nextDate.isSameDay(as: expectedDate))
   }
 
   @Test("nextDueDate calculates yearly recurrence")
@@ -188,7 +188,7 @@ struct ScheduledTransactionTests {
 
     let nextDate = transaction.nextDueDate()!
     let expectedDate = calendar.date(from: DateComponents(year: 2027, month: 1, day: 15))!
-    #expect(calendar.isDate(nextDate, inSameDayAs: expectedDate))
+    #expect(nextDate.isSameDay(as: expectedDate))
   }
 
   @Test("isRecurring distinguishes between once and recurring")
@@ -290,7 +290,7 @@ struct ScheduledTransactionTests {
     #expect(page.transactions[0].isScheduled == true)
 
     let expectedDate = calendar.date(from: DateComponents(year: 2026, month: 2, day: 1))!
-    #expect(calendar.isDate(page.transactions[0].date, inSameDayAs: expectedDate))
+    #expect(page.transactions[0].date.isSameDay(as: expectedDate))
   }
 
   @Test("Validation passes for valid transactions")

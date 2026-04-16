@@ -77,18 +77,31 @@ CloudKit compatibility required: removing `#Unique` constraints, adding default 
 
 ## Phase 6: Multi-Currency Support
 
-Full per-account currency support, building on the exchange rate infrastructure from Phase 4. Accounts can have a currency different from the profile's base currency, and all aggregation (totals, net worth, available funds) converts to the profile currency using ExchangeRateService.
+Full per-account currency support, building on the exchange rate infrastructure from Phase 4 and multi-instrument foundation from Phase 8. Accounts can have a currency different from the profile's base currency, and all aggregation (totals, net worth, available funds) converts to the profile currency.
 
-**Why now:** Phases 7 and 8 (crypto prices, stock import) are only useful if the app can aggregate values across currencies. The exchange rate infrastructure is already done — this phase wires it into the data layer and UI.
+**Why now:** Phases 7 and 9 (tax reporting, stock import) are only useful if the app can aggregate values across currencies. The infrastructure is already done — this phase wires it into the data layer and UI.
 
-**Scope:**
-- Per-account currency: currency picker in create/edit account, stored via existing `currencyCode` field in CloudKit
-- Fix CloudKitAccountRepository to use `record.currencyCode` instead of always using profile currency
-- Aggregation with conversion: AccountStore totals, net worth, available funds convert foreign accounts to profile currency
-- Analysis views: net worth graph and expense breakdown use date-appropriate rates
-- Transaction currency derived from account currency (no independent transaction currency picker)
-- Transfers between accounts of different currencies: prompt for exchange rate or use market rate
-- UI: show account currency badges, converted totals with rate disclosure
+### Done
+
+Infrastructure built across Phases 4 and 8:
+- `Instrument` model — full multi-asset type (fiat, stock, crypto) with `InstrumentAmount` value type
+- `Position` type — aggregates transaction legs by instrument per account
+- `TransactionLeg` — each leg carries its own `Instrument`
+- `ExchangeRateService` — Frankfurter API with caching, offline fallback, date-range queries
+- `InstrumentConversionService` protocol — with `FiatConversionService` and `FullConversionService` implementations
+- `AccountStore.computeConvertedTotal()` — conversion logic exists (currently uses current-date rates only)
+
+### In Progress
+
+- Per-account instrument field: adding `instrument` to `AccountRecord` and `CloudKitAccountRepository` so accounts can use a currency different from the profile default (currently all accounts hardcode profile currency)
+
+### Remaining
+
+- Per-account currency picker in create/edit account UI
+- Aggregation: wire converted totals into sidebar, net worth, available funds (AccountStore conversion logic exists but is never triggered since all accounts currently share profile currency)
+- Analysis views: net worth graph and expense breakdown need date-appropriate rate lookups (currently use raw balances with no conversion)
+- Cross-currency transfers: UI for exchange rate input or market rate selection when transferring between accounts with different currencies
+- UI: account currency badges, converted totals with rate disclosure in sidebar
 
 ---
 

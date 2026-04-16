@@ -182,7 +182,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       )
 
       let dayKey: Date
-      if let last = lastDayDate, Calendar.current.isDate(txn.date, inSameDayAs: last) {
+      if let last = lastDayDate, txn.date.isSameDay(as: last) {
         dayKey = lastDayKey
       } else {
         dayKey = Calendar.current.startOfDay(for: txn.date)
@@ -278,7 +278,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       if let after, txn.date < after { continue }
 
       let month: String
-      if let last = lastFinancialDate, Calendar.current.isDate(txn.date, inSameDayAs: last) {
+      if let last = lastFinancialDate, txn.date.isSameDay(as: last) {
         month = lastFinancialMonth
       } else {
         month = Self.financialMonth(for: txn.date, monthEnd: monthEnd)
@@ -336,7 +336,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       guard !txn.legs.isEmpty else { continue }
 
       let month: String
-      if let last = lastFinancialDate2, Calendar.current.isDate(txn.date, inSameDayAs: last) {
+      if let last = lastFinancialDate2, txn.date.isSameDay(as: last) {
         month = lastFinancialMonth2
       } else {
         month = Self.financialMonth(for: txn.date, monthEnd: monthEnd)
@@ -542,7 +542,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       )
 
       let dayKey: Date
-      if let last = lastComputeDayDate, Calendar.current.isDate(txn.date, inSameDayAs: last) {
+      if let last = lastComputeDayDate, txn.date.isSameDay(as: last) {
         dayKey = lastComputeDayKey
       } else {
         dayKey = Calendar.current.startOfDay(for: txn.date)
@@ -615,7 +615,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       if let after, txn.date < after { continue }
 
       let month: String
-      if let last = lastFinDate, Calendar.current.isDate(txn.date, inSameDayAs: last) {
+      if let last = lastFinDate, txn.date.isSameDay(as: last) {
         month = lastFinMonth
       } else {
         month = financialMonth(for: txn.date, monthEnd: monthEnd)
@@ -666,7 +666,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       guard !txn.legs.isEmpty else { continue }
 
       let month: String
-      if let last = lastFinDate2, Calendar.current.isDate(txn.date, inSameDayAs: last) {
+      if let last = lastFinDate2, txn.date.isSameDay(as: last) {
         month = lastFinMonth2
       } else {
         month = financialMonth(for: txn.date, monthEnd: monthEnd)
