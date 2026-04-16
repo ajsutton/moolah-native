@@ -79,14 +79,14 @@ final class AccountStore {
   }
 
   var currentTotal: InstrumentAmount {
-    currentAccounts.reduce(.zero(instrument: currentAccounts.first?.balance.instrument ?? .AUD)) {
+    currentAccounts.reduce(.zero(instrument: targetInstrument)) {
       $0 + $1.balance
     }
   }
 
   var investmentTotal: InstrumentAmount {
     investmentAccounts.reduce(
-      .zero(instrument: investmentAccounts.first?.displayBalance.instrument ?? .AUD)
+      .zero(instrument: targetInstrument)
     ) { $0 + $1.displayBalance }
   }
 

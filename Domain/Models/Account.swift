@@ -24,6 +24,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
   let id: UUID
   var name: String
   var type: AccountType
+  var instrument: Instrument
   var balance: InstrumentAmount
   /// Market value for investment accounts. Nil for non-investment accounts.
   var investmentValue: InstrumentAmount?
@@ -48,6 +49,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     id: UUID = UUID(),
     name: String,
     type: AccountType,
+    instrument: Instrument = .AUD,
     balance: InstrumentAmount = .zero(instrument: .AUD),
     investmentValue: InstrumentAmount? = nil,
     positions: [Position] = [],
@@ -58,6 +60,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     self.id = id
     self.name = name
     self.type = type
+    self.instrument = instrument
     self.balance = balance
     self.investmentValue = investmentValue
     self.positions = positions
@@ -70,6 +73,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     case id
     case name
     case type
+    case instrument
     case balance
     case investmentValue
     case usesPositionTracking
@@ -83,6 +87,9 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     name = try container.decode(String.self, forKey: .name)
     type = try container.decode(AccountType.self, forKey: .type)
     balance = try container.decode(InstrumentAmount.self, forKey: .balance)
+    // Backwards compat: fall back to balance.instrument if instrument key is missing
+    instrument =
+      try container.decodeIfPresent(Instrument.self, forKey: .instrument) ?? balance.instrument
     investmentValue = try container.decodeIfPresent(InstrumentAmount.self, forKey: .investmentValue)
     positions = []
     usesPositionTracking =
@@ -96,6 +103,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     try container.encode(id, forKey: .id)
     try container.encode(name, forKey: .name)
     try container.encode(type, forKey: .type)
+    try container.encode(instrument, forKey: .instrument)
     try container.encode(balance, forKey: .balance)
     try container.encodeIfPresent(investmentValue, forKey: .investmentValue)
     try container.encode(usesPositionTracking, forKey: .usesPositionTracking)
@@ -105,6 +113,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
 
   static func == (lhs: Account, rhs: Account) -> Bool {
     lhs.id == rhs.id && lhs.name == rhs.name && lhs.type == rhs.type
+      && lhs.instrument == rhs.instrument
       && lhs.balance == rhs.balance && lhs.investmentValue == rhs.investmentValue
       && lhs.usesPositionTracking == rhs.usesPositionTracking
       && lhs.position == rhs.position && lhs.isHidden == rhs.isHidden
@@ -114,6 +123,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     hasher.combine(id)
     hasher.combine(name)
     hasher.combine(type)
+    hasher.combine(instrument)
     hasher.combine(balance)
     hasher.combine(investmentValue)
     hasher.combine(usesPositionTracking)
@@ -150,11 +160,11 @@ struct Accounts: RandomAccessCollection, Sendable {
       copy.positions = copy.positions.applying(deltas: deltas)
       // Update legacy balance field for single-instrument accounts
       if let primaryPosition = copy.positions.first(where: {
-        $0.instrument == copy.balance.instrument
+        $0.instrument == copy.instrument
       }) {
         copy.balance = primaryPosition.amount
       } else if copy.positions.isEmpty {
-        copy.balance = .zero(instrument: copy.balance.instrument)
+        copy.balance = .zero(instrument: copy.instrument)
       }
       return copy
     }

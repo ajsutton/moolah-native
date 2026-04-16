@@ -116,7 +116,7 @@ struct TransactionListView: View {
   }
 
   private func createNewTransaction() {
-    let instrument = accounts.ordered.first?.balance.instrument ?? .AUD
+    let instrument = accounts.ordered.first?.instrument ?? .AUD
 
     // When viewing from an earmark (no account in filter), create an earmark-only transaction
     if let earmarkId = filter.earmarkId, filter.accountId == nil {

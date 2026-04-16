@@ -21,6 +21,7 @@ struct AccountDTO: Codable {
       id: FlexibleUUID.parse(id) ?? UUID(),
       name: name,
       type: AccountType(rawValue: type) ?? .asset,
+      instrument: instrument,
       balance: InstrumentAmount(quantity: Decimal(balance) / 100, instrument: instrument),
       investmentValue: investmentValue,
       position: position,

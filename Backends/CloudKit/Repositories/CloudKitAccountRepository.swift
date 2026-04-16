@@ -56,7 +56,8 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
         : nil
       let positions = allPositions[record.id] ?? []
       return record.toDomain(
-        balance: balance, investmentValue: investmentValue, positions: positions)
+        instrument: instrument, balance: balance, investmentValue: investmentValue,
+        positions: positions)
     }
     let totalMs = fetchMs + balanceMs + positionMs
     if totalMs > 100 {
@@ -92,12 +93,12 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
         )
         context.insert(txnRecord)
 
-        try ensureInstrument(account.balance.instrument)
+        try ensureInstrument(account.instrument)
 
         let legRecord = TransactionLegRecord(
           transactionId: txnId,
           accountId: account.id,
-          instrumentId: account.balance.instrument.id,
+          instrumentId: account.instrument.id,
           quantity: account.balance.storageValue,
           type: TransactionType.openingBalance.rawValue,
           sortOrder: 0
@@ -139,6 +140,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       }
       record.name = account.name
       record.type = account.type.rawValue
+      record.instrumentId = account.instrument.id
       record.position = account.position
       record.isHidden = account.isHidden
       try context.save()
@@ -154,7 +156,8 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       let allPositions = try computeAllPositions()
       let positions = allPositions[accountId] ?? []
       return record.toDomain(
-        balance: balance, investmentValue: investmentValue, positions: positions)
+        instrument: instrument, balance: balance, investmentValue: investmentValue,
+        positions: positions)
     }
   }
 

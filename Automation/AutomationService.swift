@@ -75,6 +75,7 @@ final class AutomationService {
       id: UUID(),
       name: name,
       type: type,
+      instrument: instrument,
       balance: .zero(instrument: instrument),
       investmentValue: nil,
       positions: [],

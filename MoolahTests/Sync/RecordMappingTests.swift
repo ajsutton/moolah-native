@@ -45,6 +45,7 @@ struct RecordMappingTests {
       id: UUID(),
       name: "Savings",
       type: "bank",
+      instrumentId: "USD",
       position: 2,
       isHidden: true,
       usesPositionTracking: true
@@ -56,6 +57,7 @@ struct RecordMappingTests {
     #expect(ckRecord.recordID.recordName == account.id.uuidString)
     #expect(ckRecord["name"] as? String == "Savings")
     #expect(ckRecord["type"] as? String == "bank")
+    #expect(ckRecord["instrumentId"] as? String == "USD")
     #expect(ckRecord["position"] as? Int == 2)
     #expect(ckRecord["isHidden"] as? Int == 1)
     #expect(ckRecord["usesPositionTracking"] as? Int == 1)
@@ -64,9 +66,22 @@ struct RecordMappingTests {
     #expect(restored.id == account.id)
     #expect(restored.name == "Savings")
     #expect(restored.type == "bank")
+    #expect(restored.instrumentId == "USD")
     #expect(restored.position == 2)
     #expect(restored.isHidden == true)
     #expect(restored.usesPositionTracking == true)
+  }
+
+  @Test func accountRecordFieldValuesDefaultsInstrumentId() {
+    // When instrumentId is missing from CKRecord, default to "AUD"
+    let recordID = CKRecord.ID(recordName: UUID().uuidString, zoneID: zoneID)
+    let ckRecord = CKRecord(recordType: "CD_AccountRecord", recordID: recordID)
+    ckRecord["name"] = "Test" as CKRecordValue
+    ckRecord["type"] = "bank" as CKRecordValue
+    // No instrumentId set
+
+    let restored = AccountRecord.fieldValues(from: ckRecord)
+    #expect(restored.instrumentId == "AUD")
   }
 
   // MARK: - TransactionRecord

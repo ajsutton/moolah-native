@@ -18,7 +18,7 @@ struct InvestmentAccountView: View {
 
   /// The profile's fiat currency instrument, derived from the account's balance.
   private var profileCurrencyInstrument: Instrument {
-    account.balance.instrument
+    account.instrument
   }
 
   var body: some View {
@@ -45,7 +45,7 @@ struct InvestmentAccountView: View {
               timePeriodPicker
               InvestmentChartView(
                 dataPoints: investmentStore.chartDataPoints,
-                instrument: account.balance.instrument)
+                instrument: account.instrument)
             }
             .padding()
 
@@ -60,7 +60,7 @@ struct InvestmentAccountView: View {
               timePeriodPicker
               InvestmentChartView(
                 dataPoints: investmentStore.chartDataPoints,
-                instrument: account.balance.instrument)
+                instrument: account.instrument)
             }
             .padding()
 
@@ -97,7 +97,7 @@ struct InvestmentAccountView: View {
     .profileNavigationTitle(account.name)
     .sheet(isPresented: $showingAddValue) {
       AddInvestmentValueView(
-        accountId: account.id, instrument: account.balance.instrument, store: investmentStore)
+        accountId: account.id, instrument: account.instrument, store: investmentStore)
     }
     .sheet(isPresented: $showingRecordTrade) {
       RecordTradeView(

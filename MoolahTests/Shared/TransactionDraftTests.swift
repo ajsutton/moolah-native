@@ -40,7 +40,9 @@ struct TransactionDraftTests {
 
   /// Build a simple Account with given id and instrument.
   private func makeAccount(id: UUID, instrument: Instrument = .defaultTestInstrument) -> Account {
-    Account(id: id, name: "Test Account", type: .bank, balance: .zero(instrument: instrument))
+    Account(
+      id: id, name: "Test Account", type: .bank, instrument: instrument,
+      balance: .zero(instrument: instrument))
   }
 
   // MARK: - Init from Transaction: Simple Expense

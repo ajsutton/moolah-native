@@ -800,6 +800,7 @@ final class ProfileDataSyncHandler: Sendable {
       if let existing = byID[id] {
         existing.name = values.name
         existing.type = values.type
+        existing.instrumentId = values.instrumentId
         existing.position = values.position
         existing.isHidden = values.isHidden
         existing.usesPositionTracking = values.usesPositionTracking
