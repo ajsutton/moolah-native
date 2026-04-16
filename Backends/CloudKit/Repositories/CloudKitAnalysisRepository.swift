@@ -233,14 +233,15 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       let scheduledTransactions = try await fetchTransactions(scheduled: true)
       // transactions is sorted chronologically, so .last is the most recent date
       let lastDate = transactions.last?.date ?? Date()
-      scheduledBalances = Self.generateForecast(
+      scheduledBalances = try await Self.generateForecast(
         scheduled: scheduledTransactions,
         startDate: lastDate,
         endDate: forecastUntil,
         startingBalance: currentBalance,
         startingPerEarmarkAmounts: perEarmarkAmounts,
         startingInvestments: currentInvestments,
-        investmentAccountIds: investmentAccountIds
+        investmentAccountIds: investmentAccountIds,
+        conversionService: conversionService
       )
     }
 
@@ -503,6 +504,48 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     return InstrumentAmount(quantity: converted, instrument: instrument)
   }
 
+  /// Return a copy of the transaction with every leg's quantity/instrument rewritten
+  /// into the profile instrument. Used before feeding scheduled-transaction instances
+  /// into the forecast accumulator so the synchronous `applyTransaction` can assume
+  /// all legs share the profile instrument.
+  ///
+  /// - Parameter date: date passed to the conversion service. For forecast use, this
+  ///   is `Date()` — the current rate — because scheduled transactions have future
+  ///   dates and no exchange-rate source has future rates. Same-instrument legs are
+  ///   returned untouched.
+  private static func convertLegsToProfileInstrument(
+    _ txn: Transaction,
+    to instrument: Instrument,
+    on date: Date,
+    conversionService: any InstrumentConversionService
+  ) async throws -> Transaction {
+    guard txn.legs.contains(where: { $0.instrument.id != instrument.id }) else {
+      return txn
+    }
+    var convertedLegs: [TransactionLeg] = []
+    convertedLegs.reserveCapacity(txn.legs.count)
+    for leg in txn.legs {
+      if leg.instrument.id == instrument.id {
+        convertedLegs.append(leg)
+        continue
+      }
+      let convertedQty = try await conversionService.convert(
+        leg.quantity, from: leg.instrument, to: instrument, on: date)
+      convertedLegs.append(
+        TransactionLeg(
+          accountId: leg.accountId,
+          instrument: instrument,
+          quantity: convertedQty,
+          type: leg.type,
+          categoryId: leg.categoryId,
+          earmarkId: leg.earmarkId
+        ))
+    }
+    var result = txn
+    result.legs = convertedLegs
+    return result
+  }
+
   // MARK: - Static Computation Methods (for off-main-thread use)
 
   @concurrent
@@ -613,14 +656,15 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     if let forecastUntil {
       // transactions is sorted chronologically, so .last is the most recent date
       let lastDate = transactions.last?.date ?? Date()
-      forecastBalances = generateForecast(
+      forecastBalances = try await generateForecast(
         scheduled: scheduled,
         startDate: lastDate,
         endDate: forecastUntil,
         startingBalance: currentBalance,
         startingPerEarmarkAmounts: perEarmarkAmounts,
         startingInvestments: currentInvestments,
-        investmentAccountIds: investmentAccountIds
+        investmentAccountIds: investmentAccountIds,
+        conversionService: conversionService
       )
     }
 
@@ -1048,8 +1092,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     startingBalance: InstrumentAmount,
     startingPerEarmarkAmounts: [UUID: InstrumentAmount],
     startingInvestments: InstrumentAmount,
-    investmentAccountIds: Set<UUID>
-  ) -> [DailyBalance] {
+    investmentAccountIds: Set<UUID>,
+    conversionService: any InstrumentConversionService
+  ) async throws -> [DailyBalance] {
     // Extrapolate instances up to endDate
     var instances: [Transaction] = []
     for scheduledTxn in scheduled {
@@ -1063,8 +1108,38 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     var investments = startingInvestments
     let instrument = startingBalance.instrument
 
+    // Scheduled transactions live in the future; exchange-rate sources can't return
+    // future rates. Use today's rate as the best available estimate for forecast
+    // conversion. Captured once so every instance uses the same snapshot.
+    let conversionDate = Date()
+
+    // Pre-convert all instances concurrently — each conversion is independent.
+    // The accumulator that follows is inherently sequential (each iteration
+    // depends on the previous running totals), so we can't parallelise it.
+    // See guides/CONCURRENCY_GUIDE.md: dynamic count → TaskGroup.
+    let converted: [Transaction]
+    if instances.isEmpty {
+      converted = []
+    } else {
+      converted = try await withThrowingTaskGroup(
+        of: (Int, Transaction).self
+      ) { group in
+        for (i, instance) in instances.enumerated() {
+          group.addTask {
+            let txn = try await convertLegsToProfileInstrument(
+              instance, to: instrument, on: conversionDate,
+              conversionService: conversionService)
+            return (i, txn)
+          }
+        }
+        var out = Array(repeating: instances[0], count: instances.count)
+        for try await (i, txn) in group { out[i] = txn }
+        return out
+      }
+    }
+
     var forecastBalances: [Date: DailyBalance] = [:]
-    for instance in instances {
+    for instance in converted {
       applyTransaction(
         instance,
         to: &balance,
