@@ -151,10 +151,10 @@ Two faceted crystal peaks forming an "M" with a split blue/red hexagonal gem at 
 
 | Lockup | Use case | Path |
 |---|---|---|
-| Horizontal | Default — nav bars, headers, wide placements | `Logo/horizontal-lockup/` |
-| Stacked | Square placements, social avatars | `Logo/stacked-lockup/` |
-| Icon only | App icons, favicons, small spaces | `Logo/icon-only/` |
-| Wordmark only | When the icon is already visible nearby | `Logo/wordmark-only/` |
+| Horizontal | Default — nav bars, headers, wide placements | `Brand/Logo/horizontal-lockup/` |
+| Stacked | Square placements, social avatars | `Brand/Logo/stacked-lockup/` |
+| Icon only | App icons, favicons, small spaces | `Brand/Logo/icon-only/` |
+| Wordmark only | When the icon is already visible nearby | `Brand/Logo/wordmark-only/` |
 
 Each lockup is provided in four variants: transparent on dark, transparent on light, solid dark background, solid light background.
 
@@ -180,29 +180,25 @@ Maintain clearspace equal to **1/4 of the icon height** on all sides. Never plac
 
 ## 6. App Icons
 
-### iOS
+The iOS and macOS app icons live in `App/Assets.xcassets/AppIcon.appiconset/` and are already wired into the Xcode project. Don't drag new copies in — edit in place when regenerating.
 
-`AppStore/iOS/AppIcon.appiconset/` — drag into Xcode Assets.xcassets.
+Contents:
 
-Includes all required sizes (20/29/40/60/76/83.5pt at @1x/@2x/@3x) plus the 1024px App Store marketing icon and iOS 18+ appearance variants:
+- **iOS:** all required sizes (20/29/40/60/76/83.5pt at @1x/@2x/@3x) plus the 1024px App Store marketing icon and iOS 18+ appearance variants (`Icon-1024-any/dark/light/tinted.png`).
+- **macOS:** 16–512 at @1x and @2x (`mac_16x16.png` … `mac_512x512@2x.png`).
+
+iOS 18+ appearance variants:
 
 - **Any (default):** dark crystalline peaks on navy
 - **Dark:** same as Any
 - **Light:** peaks on light gradient background
 - **Tinted:** grayscale version for system tinting
 
-### macOS
-
-- `AppStore/macOS/AppIcon.appiconset/` — for Xcode
-- `AppStore/macOS/AppIcon.iconset/` — raw PNGs for `iconutil -c icns AppIcon.iconset`
-
-Sizes: 16–512 at @1x and @2x (16, 32, 64, 128, 256, 512, 1024px).
-
 ---
 
 ## 7. Web Assets
 
-All in `Web/`:
+All in `Brand/Web/`:
 
 | File | Size | Use |
 |---|---|---|
@@ -227,7 +223,7 @@ All in `Web/`:
 
 ## 8. Social & Marketing Banners
 
-All in `Social/`:
+All in `Brand/Social/`:
 
 | File | Dimensions | Platform |
 |---|---|---|
