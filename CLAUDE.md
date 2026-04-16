@@ -11,6 +11,12 @@ just
 # Run the full test suite on iOS Simulator and macOS
 just test
 
+# Run a subset of tests (class or class/method); prefix is added per platform.
+# Works for `just test`, `just test-mac`, and `just test-ios`.
+just test TransactionStoreTests
+just test TransactionStoreTests/testPayScheduledTransaction
+just test-mac TransactionStoreTests AccountStoreTests  # multiple filters
+
 # Build the app for macOS
 just build-mac
 
@@ -34,6 +40,9 @@ mkdir -p .agent-tmp
 
 # Run tests and capture output
 just test 2>&1 | tee .agent-tmp/test-output.txt
+
+# Re-run only the failing class to iterate faster
+just test TransactionStoreTests 2>&1 | tee .agent-tmp/test-output.txt
 
 # Check for failures
 grep -i 'failed\|error:' .agent-tmp/test-output.txt
