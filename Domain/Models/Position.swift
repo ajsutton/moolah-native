@@ -1,9 +1,8 @@
 import Foundation
 
-/// A computed position for a specific instrument within an account.
+/// A computed position for a specific instrument within an account or earmark.
 /// Derived from leg aggregation -- not persisted.
 struct Position: Hashable, Sendable {
-  let accountId: UUID
   let instrument: Instrument
   let quantity: Decimal
 
@@ -14,14 +13,44 @@ struct Position: Hashable, Sendable {
 
   /// Compute positions for a given account from a flat list of legs.
   /// Groups by instrument, sums quantities, excludes zero-quantity results.
-  static func compute(for accountId: UUID, from legs: [TransactionLeg]) -> [Position] {
+  static func computeForAccount(_ accountId: UUID, from legs: [TransactionLeg]) -> [Position] {
+    computePositions(from: legs.filter { $0.accountId == accountId })
+  }
+
+  /// Compute positions for a given earmark from a flat list of legs.
+  /// Groups by instrument, sums quantities, excludes zero-quantity results.
+  static func computeForEarmark(_ earmarkId: UUID, from legs: [TransactionLeg]) -> [Position] {
+    computePositions(from: legs.filter { $0.earmarkId == earmarkId })
+  }
+
+  /// Shared implementation: aggregate filtered legs into positions.
+  private static func computePositions(from legs: [TransactionLeg]) -> [Position] {
     var totals: [Instrument: Decimal] = [:]
-    for leg in legs where leg.accountId == accountId {
+    for leg in legs {
       totals[leg.instrument, default: 0] += leg.quantity
     }
     return totals.compactMap { instrument, quantity in
       guard quantity != 0 else { return nil }
-      return Position(accountId: accountId, instrument: instrument, quantity: quantity)
+      return Position(instrument: instrument, quantity: quantity)
+    }.sorted { $0.instrument.id < $1.instrument.id }
+  }
+}
+
+extension Array where Element == Position {
+  /// Returns a new array with the given per-instrument deltas applied.
+  /// Positions reaching zero quantity are removed. New instruments are added.
+  /// Result is sorted by instrument ID.
+  func applying(deltas: [Instrument: Decimal]) -> [Position] {
+    var totals: [Instrument: Decimal] = [:]
+    for position in self {
+      totals[position.instrument, default: 0] += position.quantity
+    }
+    for (instrument, delta) in deltas {
+      totals[instrument, default: 0] += delta
+    }
+    return totals.compactMap { instrument, quantity in
+      guard quantity != 0 else { return nil }
+      return Position(instrument: instrument, quantity: quantity)
     }.sorted { $0.instrument.id < $1.instrument.id }
   }
 }

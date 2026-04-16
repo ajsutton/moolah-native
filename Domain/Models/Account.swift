@@ -141,13 +141,21 @@ struct Accounts: RandomAccessCollection, Sendable {
     byId[id]
   }
 
-  /// Returns a new Accounts collection with the balance of the given account adjusted by `delta`.
-  func adjustingBalance(of accountId: UUID, by delta: InstrumentAmount) -> Accounts {
+  /// Returns a new Accounts collection with positions adjusted by instrument deltas.
+  func adjustingPositions(of accountId: UUID, by deltas: [Instrument: Decimal]) -> Accounts {
     guard byId[accountId] != nil else { return self }
     let adjusted = ordered.map { account in
       guard account.id == accountId else { return account }
       var copy = account
-      copy.balance = copy.balance + delta
+      copy.positions = copy.positions.applying(deltas: deltas)
+      // Update legacy balance field for single-instrument accounts
+      if let primaryPosition = copy.positions.first(where: {
+        $0.instrument == copy.balance.instrument
+      }) {
+        copy.balance = primaryPosition.amount
+      } else if copy.positions.isEmpty {
+        copy.balance = .zero(instrument: copy.balance.instrument)
+      }
       return copy
     }
     return Accounts(from: adjusted)

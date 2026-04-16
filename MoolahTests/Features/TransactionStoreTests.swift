@@ -554,20 +554,49 @@ struct TransactionStoreTests {
     #expect(store.transactions[0].balance.quantity == Decimal(100000) / 100)  // Only Salary remains
   }
 
-  @Test func testOnMutatePassesNilOldOnCreate() async throws {
-    let (backend, _) = try TestBackend.create()
-    let store = TransactionStore(
-      repository: backend.transactions,
+  // MARK: - Cross-Store Balance Updates
+
+  private func makeStores(
+    backend: CloudKitBackend,
+    container: ModelContainer,
+    accounts: [Account] = [],
+    earmarks: [Earmark] = []
+  ) async -> (TransactionStore, AccountStore, EarmarkStore) {
+    if !accounts.isEmpty {
+      TestBackend.seed(accounts: accounts, in: container)
+    }
+    if !earmarks.isEmpty {
+      TestBackend.seed(earmarks: earmarks, in: container)
+    }
+    let accountStore = AccountStore(
+      repository: backend.accounts,
       conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument
     )
+    let earmarkStore = EarmarkStore(
+      repository: backend.earmarks,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
+    await accountStore.load()
+    await earmarkStore.load()
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument,
+      accountStore: accountStore,
+      earmarkStore: earmarkStore
+    )
+    return (store, accountStore, earmarkStore)
+  }
 
-    var receivedOld: Transaction?? = .none  // .none = not called, .some(nil) = called with nil
-    var receivedNew: Transaction?
-    store.onMutate = { old, new in
-      receivedOld = old
-      receivedNew = new
-    }
+  @Test func testCreateUpdatesAccountBalance() async throws {
+    let account = Account(
+      id: accountId, name: "Bank", type: .bank,
+      balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument))
+    let (backend, container) = try TestBackend.create()
+    let (store, accountStore, _) = await makeStores(
+      backend: backend, container: container, accounts: [account])
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
@@ -584,11 +613,16 @@ struct TransactionStoreTests {
       ]
     )
     _ = await store.create(tx)
-    #expect(receivedOld == .some(nil))
-    #expect(receivedNew?.id == tx.id)
+
+    // Seeded balance is 1000 (from OB tx), create adds -50 expense -> 950
+    let updatedAccount = accountStore.accounts.by(id: accountId)
+    #expect(updatedAccount?.balance.quantity == Decimal(950))
   }
 
-  @Test func testOnMutatePassesBothOnUpdate() async throws {
+  @Test func testUpdateUpdatesAccountBalance() async throws {
+    let account = Account(
+      id: accountId, name: "Bank", type: .bank,
+      balance: InstrumentAmount(quantity: 950, instrument: .defaultTestInstrument))
     let tx = Transaction(
       date: makeDate("2024-01-15"),
       payee: "Test",
@@ -603,30 +637,33 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    var receivedOld: Transaction?
-    var receivedNew: Transaction?
-    store.onMutate = { old, new in
-      receivedOld = old
-      receivedNew = new
-    }
+    let (store, accountStore, _) = await makeStores(
+      backend: backend, container: container, accounts: [account])
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
+    // Change amount from -50 to -75
     var updated = tx
-    updated.payee = "Updated"
+    updated.legs = [
+      TransactionLeg(
+        accountId: accountId,
+        instrument: Instrument.defaultTestInstrument,
+        quantity: Decimal(-7500) / 100,
+        type: .expense
+      )
+    ]
     await store.update(updated)
-    #expect(receivedOld?.id == tx.id)
-    #expect(receivedOld?.payee == "Test")
-    #expect(receivedNew?.payee == "Updated")
+
+    // Seeded account OB=950 + seeded tx=-50 gives loaded balance=900
+    // Update delta: (-75)-(-50)=-25, so 900-25=875
+    let updatedAccount = accountStore.accounts.by(id: accountId)
+    #expect(updatedAccount?.balance.quantity == Decimal(875))
   }
 
-  @Test func testOnMutatePassesNilNewOnDelete() async throws {
+  @Test func testDeleteUpdatesAccountBalance() async throws {
+    let account = Account(
+      id: accountId, name: "Bank", type: .bank,
+      balance: InstrumentAmount(quantity: 950, instrument: .defaultTestInstrument))
     let tx = Transaction(
       date: makeDate("2024-01-15"),
       payee: "Test",
@@ -641,30 +678,29 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    var receivedOld: Transaction?
-    var receivedNew: Transaction?? = .some(nil)  // sentinel
-    store.onMutate = { old, new in
-      receivedOld = old
-      receivedNew = new
-    }
+    let (store, accountStore, _) = await makeStores(
+      backend: backend, container: container, accounts: [account])
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
     await store.delete(id: tx.id)
-    #expect(receivedOld?.id == tx.id)
-    #expect(receivedNew == .some(nil))
+
+    // Seeded account OB=950 + seeded tx=-50 gives loaded balance=900
+    // Deleting the -50 expense adds 50 back: 900+50=950
+    let updatedAccount = accountStore.accounts.by(id: accountId)
+    #expect(updatedAccount?.balance.quantity == Decimal(950))
   }
 
-  // MARK: - Balance Updates with Transfers
+  // MARK: - Cross-Store Balance Updates with Transfers
 
-  @Test func testOnMutateWithTransfer() async throws {
+  @Test func testTransferUpdateAffectsBothAccounts() async throws {
     let savingsId = UUID()
+    let checking = Account(
+      id: accountId, name: "Checking", type: .bank,
+      balance: InstrumentAmount(quantity: 900, instrument: .defaultTestInstrument))
+    let savings = Account(
+      id: savingsId, name: "Savings", type: .bank,
+      balance: InstrumentAmount(quantity: 1100, instrument: .defaultTestInstrument))
     let tx = Transaction(
       date: makeDate("2024-01-15"),
       payee: "",
@@ -685,22 +721,12 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    var receivedOld: Transaction?
-    var receivedNew: Transaction?
-    store.onMutate = { old, new in
-      receivedOld = old
-      receivedNew = new
-    }
+    let (store, accountStore, _) = await makeStores(
+      backend: backend, container: container, accounts: [checking, savings])
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
-    // Update the transfer amount
+    // Update transfer amount from 100 to 150
     var updated = tx
     updated.legs = [
       TransactionLeg(
@@ -718,20 +744,25 @@ struct TransactionStoreTests {
     ]
     await store.update(updated)
 
-    #expect(receivedOld?.id == tx.id)
-    #expect(receivedOld?.legs.first?.quantity == Decimal(-10000) / 100)
-    #expect(
-      receivedOld?.legs.first(where: { $0.accountId != accountId })?.accountId
-        == savingsId)
-    #expect(receivedNew?.legs.first?.quantity == Decimal(-15000) / 100)
-    #expect(
-      receivedNew?.legs.first(where: { $0.accountId != accountId })?.accountId
-        == savingsId)
+    // Loaded: checking=900+(-100)=800, savings=1100+100=1200
+    // Update delta: checking: -150-(-100)=-50, savings: +150-100=+50
+    // Final: checking=800-50=750, savings=1200+50=1250
+    #expect(accountStore.accounts.by(id: accountId)?.balance.quantity == Decimal(750))
+    #expect(accountStore.accounts.by(id: savingsId)?.balance.quantity == Decimal(1250))
   }
 
-  @Test func testOnMutateChangingTransferToAccount() async throws {
+  @Test func testChangingTransferToAccount() async throws {
     let savingsId = UUID()
     let investmentId = UUID()
+    let checking = Account(
+      id: accountId, name: "Checking", type: .bank,
+      balance: InstrumentAmount(quantity: 900, instrument: .defaultTestInstrument))
+    let savings = Account(
+      id: savingsId, name: "Savings", type: .bank,
+      balance: InstrumentAmount(quantity: 1100, instrument: .defaultTestInstrument))
+    let investment = Account(
+      id: investmentId, name: "Investment", type: .investment,
+      balance: InstrumentAmount(quantity: 500, instrument: .defaultTestInstrument))
     let tx = Transaction(
       date: makeDate("2024-01-15"),
       payee: "",
@@ -752,22 +783,12 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    var receivedOld: Transaction?
-    var receivedNew: Transaction?
-    store.onMutate = { old, new in
-      receivedOld = old
-      receivedNew = new
-    }
+    let (store, accountStore, _) = await makeStores(
+      backend: backend, container: container, accounts: [checking, savings, investment])
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
-    // Change the toAccountId
+    // Change destination from savings to investment
     var updated = tx
     updated.legs = [
       TransactionLeg(
@@ -785,65 +806,31 @@ struct TransactionStoreTests {
     ]
     await store.update(updated)
 
-    #expect(
-      receivedOld?.legs.first(where: { $0.accountId != accountId })?.accountId
-        == savingsId)
-    #expect(
-      receivedNew?.legs.first(where: { $0.accountId != accountId })?.accountId
-        == investmentId)
+    // Loaded: checking=900+(-100)=800, savings=1100+100=1200, investment=500
+    // Change dest from savings to investment:
+    // checking delta: -100-(-100)=0, savings delta: 0-100=-100, investment delta: +100-0=+100
+    // Final: checking=800, savings=1200-100=1100, investment=500+100=600
+    #expect(accountStore.accounts.by(id: accountId)?.balance.quantity == Decimal(800))
+    #expect(accountStore.accounts.by(id: savingsId)?.balance.quantity == Decimal(1100))
+    #expect(accountStore.accounts.by(id: investmentId)?.balance.quantity == Decimal(600))
   }
 
-  @Test func testOnMutateChangingFromAccountId() async throws {
-    let newAccountId = UUID()
-    let tx = Transaction(
-      date: makeDate("2024-01-15"),
-      payee: "Test",
-      legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-5000) / 100,
-          type: .expense
-        )
-      ]
-    )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
+  // MARK: - Cross-Store Balance Updates with Earmarks
 
-    var receivedOld: Transaction?
-    var receivedNew: Transaction?
-    store.onMutate = { old, new in
-      receivedOld = old
-      receivedNew = new
-    }
+  @Test func testCreateWithEarmarkUpdatesEarmarkBalance() async throws {
+    let earmarkId = UUID()
+    let account = Account(
+      id: accountId, name: "Bank", type: .bank,
+      balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument))
+    let earmark = Earmark(
+      id: earmarkId, name: "Holiday",
+      balance: InstrumentAmount(quantity: 200, instrument: .defaultTestInstrument))
+    let (backend, container) = try TestBackend.create()
+    let (store, _, earmarkStore) = await makeStores(
+      backend: backend, container: container, accounts: [account], earmarks: [earmark])
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
-    // Change the accountId
-    var updated = tx
-    updated.legs = [
-      TransactionLeg(
-        accountId: newAccountId,
-        instrument: Instrument.defaultTestInstrument,
-        quantity: Decimal(-5000) / 100,
-        type: .expense
-      )
-    ]
-    await store.update(updated)
-
-    #expect(receivedOld?.accountIds.contains(accountId) == true)
-    #expect(receivedNew?.accountIds.contains(newAccountId) == true)
-  }
-
-  // MARK: - Balance Updates with Earmarks
-
-  @Test func testOnMutateWithEarmark() async throws {
-    let earmarkId = UUID()
     let tx = Transaction(
       date: makeDate("2024-01-15"),
       payee: "Test",
@@ -857,45 +844,28 @@ struct TransactionStoreTests {
         )
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
+    _ = await store.create(tx)
 
-    var receivedOld: Transaction?
-    var receivedNew: Transaction?
-    store.onMutate = { old, new in
-      receivedOld = old
-      receivedNew = new
-    }
-
-    await store.load(filter: TransactionFilter(accountId: accountId))
-
-    // Update the amount
-    var updated = tx
-    updated.legs = [
-      TransactionLeg(
-        accountId: accountId,
-        instrument: Instrument.defaultTestInstrument,
-        quantity: Decimal(-7500) / 100,
-        type: .expense,
-        earmarkId: earmarkId
-      )
-    ]
-    await store.update(updated)
-
-    #expect(receivedOld?.legs.first?.earmarkId == earmarkId)
-    #expect(receivedOld?.legs.first?.quantity == Decimal(-5000) / 100)
-    #expect(receivedNew?.legs.first?.earmarkId == earmarkId)
-    #expect(receivedNew?.legs.first?.quantity == Decimal(-7500) / 100)
+    // Earmark spent should increase (balance decreases for expense)
+    let updatedEarmark = earmarkStore.earmarks.by(id: earmarkId)
+    #expect(updatedEarmark != nil)
+    // Expense of -50 against earmark: spent increases by 50
+    #expect(updatedEarmark?.spent.quantity == Decimal(50))
   }
 
-  @Test func testOnMutateChangingEarmarkId() async throws {
+  @Test func testUpdateChangingEarmarkId() async throws {
     let earmarkId1 = UUID()
     let earmarkId2 = UUID()
+    let account = Account(
+      id: accountId, name: "Bank", type: .bank,
+      balance: InstrumentAmount(quantity: 950, instrument: .defaultTestInstrument))
+    let earmark1 = Earmark(
+      id: earmarkId1, name: "Holiday",
+      balance: InstrumentAmount(quantity: 150, instrument: .defaultTestInstrument),
+      spent: InstrumentAmount(quantity: 50, instrument: .defaultTestInstrument))
+    let earmark2 = Earmark(
+      id: earmarkId2, name: "Emergency",
+      balance: InstrumentAmount(quantity: 300, instrument: .defaultTestInstrument))
     let tx = Transaction(
       date: makeDate("2024-01-15"),
       payee: "Test",
@@ -911,22 +881,13 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    var receivedOld: Transaction?
-    var receivedNew: Transaction?
-    store.onMutate = { old, new in
-      receivedOld = old
-      receivedNew = new
-    }
+    let (store, _, earmarkStore) = await makeStores(
+      backend: backend, container: container, accounts: [account],
+      earmarks: [earmark1, earmark2])
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
-    // Change the earmarkId
+    // Change earmark from 1 to 2
     var updated = tx
     updated.legs = [
       TransactionLeg(
@@ -939,12 +900,18 @@ struct TransactionStoreTests {
     ]
     await store.update(updated)
 
-    #expect(receivedOld?.legs.first?.earmarkId == earmarkId1)
-    #expect(receivedNew?.legs.first?.earmarkId == earmarkId2)
+    // Earmark 1 should have spent reversed (50 - 50 = 0)
+    let updatedEarmark1 = earmarkStore.earmarks.by(id: earmarkId1)
+    #expect(updatedEarmark1?.spent.quantity == Decimal(0))
+    // Earmark 2 should have spent increased (0 + 50 = 50)
+    let updatedEarmark2 = earmarkStore.earmarks.by(id: earmarkId2)
+    #expect(updatedEarmark2?.spent.quantity == Decimal(50))
   }
 
-  @Test func testOnMutateAddingEarmark() async throws {
-    let earmarkId = UUID()
+  @Test func testTypeChangeExpenseToIncomeUpdatesAccountBalance() async throws {
+    let account = Account(
+      id: accountId, name: "Bank", type: .bank,
+      balance: InstrumentAmount(quantity: 950, instrument: .defaultTestInstrument))
     let tx = Transaction(
       date: makeDate("2024-01-15"),
       payee: "Test",
@@ -959,119 +926,12 @@ struct TransactionStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    var receivedOld: Transaction?
-    var receivedNew: Transaction?
-    store.onMutate = { old, new in
-      receivedOld = old
-      receivedNew = new
-    }
+    let (store, accountStore, _) = await makeStores(
+      backend: backend, container: container, accounts: [account])
 
     await store.load(filter: TransactionFilter(accountId: accountId))
 
-    // Add an earmarkId
-    var updated = tx
-    updated.legs = [
-      TransactionLeg(
-        accountId: accountId,
-        instrument: Instrument.defaultTestInstrument,
-        quantity: Decimal(-5000) / 100,
-        type: .expense,
-        earmarkId: earmarkId
-      )
-    ]
-    await store.update(updated)
-
-    #expect(receivedOld?.legs.first?.earmarkId == nil)
-    #expect(receivedNew?.legs.first?.earmarkId == earmarkId)
-  }
-
-  @Test func testOnMutateRemovingEarmark() async throws {
-    let earmarkId = UUID()
-    let tx = Transaction(
-      date: makeDate("2024-01-15"),
-      payee: "Test",
-      legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-5000) / 100,
-          type: .expense,
-          earmarkId: earmarkId
-        )
-      ]
-    )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    var receivedOld: Transaction?
-    var receivedNew: Transaction?
-    store.onMutate = { old, new in
-      receivedOld = old
-      receivedNew = new
-    }
-
-    await store.load(filter: TransactionFilter(accountId: accountId))
-
-    // Remove the earmarkId
-    var updated = tx
-    updated.legs = [
-      TransactionLeg(
-        accountId: accountId,
-        instrument: Instrument.defaultTestInstrument,
-        quantity: Decimal(-5000) / 100,
-        type: .expense
-      )
-    ]
-    await store.update(updated)
-
-    #expect(receivedOld?.legs.first?.earmarkId == earmarkId)
-    #expect(receivedNew?.legs.first?.earmarkId == nil)
-  }
-
-  // MARK: - Balance Updates with Type Changes
-
-  @Test func testOnMutateChangingTypeExpenseToIncome() async throws {
-    let tx = Transaction(
-      date: makeDate("2024-01-15"),
-      payee: "Test",
-      legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-5000) / 100,
-          type: .expense
-        )
-      ]
-    )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    var receivedOld: Transaction?
-    var receivedNew: Transaction?
-    store.onMutate = { old, new in
-      receivedOld = old
-      receivedNew = new
-    }
-
-    await store.load(filter: TransactionFilter(accountId: accountId))
-
-    // Change type to income (amount sign should flip)
+    // Change from expense (-50) to income (+50)
     var updated = tx
     updated.legs = [
       TransactionLeg(
@@ -1083,177 +943,71 @@ struct TransactionStoreTests {
     ]
     await store.update(updated)
 
-    #expect(receivedOld?.legs.first?.type ?? .expense == .expense)
-    #expect(receivedOld?.legs.first?.quantity == Decimal(-5000) / 100)
-    #expect(receivedNew?.legs.first?.type ?? .expense == .income)
-    #expect(receivedNew?.legs.first?.quantity == Decimal(5000) / 100)
+    // Loaded: 950+(-50)=900. Update delta: +50-(-50)=+100. Final: 900+100=1000
+    let updatedAccount = accountStore.accounts.by(id: accountId)
+    #expect(updatedAccount?.balance.quantity == Decimal(1000))
   }
 
-  @Test func testOnMutateChangingTypeExpenseToTransfer() async throws {
-    let savingsId = UUID()
-    let tx = Transaction(
+  @Test func testPayScheduledTransactionUpdatesAccountBalance() async throws {
+    let account = Account(
+      id: accountId, name: "Bank", type: .bank,
+      balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument))
+    let scheduled = Transaction(
       date: makeDate("2024-01-15"),
-      payee: "Test",
+      payee: "Rent",
+      recurPeriod: .month,
+      recurEvery: 1,
       legs: [
         TransactionLeg(
           accountId: accountId,
           instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-5000) / 100,
+          quantity: Decimal(-200000) / 100,
           type: .expense
         )
       ]
     )
     let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
+    TestBackend.seed(transactions: [scheduled], in: container)
+    let (store, accountStore, _) = await makeStores(
+      backend: backend, container: container, accounts: [account])
 
-    var receivedOld: Transaction?
-    var receivedNew: Transaction?
-    store.onMutate = { old, new in
-      receivedOld = old
-      receivedNew = new
-    }
+    await store.load(filter: TransactionFilter(scheduled: true))
+    _ = await store.payScheduledTransaction(scheduled)
 
-    await store.load(filter: TransactionFilter(accountId: accountId))
-
-    // Change type to transfer
-    var updated = tx
-    updated.legs = [
-      TransactionLeg(
-        accountId: accountId,
-        instrument: Instrument.defaultTestInstrument,
-        quantity: Decimal(-5000) / 100,
-        type: .transfer
-      ),
-      TransactionLeg(
-        accountId: savingsId,
-        instrument: Instrument.defaultTestInstrument,
-        quantity: Decimal(5000) / 100,
-        type: .transfer
-      ),
-    ]
-    await store.update(updated)
-
-    #expect(receivedOld?.legs.first?.type ?? .expense == .expense)
-    #expect(
-      receivedOld?.legs.first(where: { $0.accountId != accountId })?.accountId
-        == nil)
-    #expect(receivedNew?.legs.first?.type ?? .expense == .transfer)
-    #expect(
-      receivedNew?.legs.first(where: { $0.accountId != accountId })?.accountId
-        == savingsId)
+    // Paying a -2000 expense should decrease balance by 2000
+    let updatedAccount = accountStore.accounts.by(id: accountId)
+    #expect(updatedAccount?.balance.quantity == Decimal(-1000))
   }
 
-  @Test func testOnMutateChangingTypeTransferToExpense() async throws {
-    let savingsId = UUID()
-    let tx = Transaction(
+  @Test func testPayOneTimeScheduledTransactionUpdatesAccountBalance() async throws {
+    let account = Account(
+      id: accountId, name: "Bank", type: .bank,
+      balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument))
+    let scheduled = Transaction(
       date: makeDate("2024-01-15"),
-      payee: "",
+      payee: "Annual Fee",
+      recurPeriod: .once,
+      recurEvery: 1,
       legs: [
         TransactionLeg(
           accountId: accountId,
           instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-5000) / 100,
-          type: .transfer
-        ),
-        TransactionLeg(
-          accountId: savingsId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(5000) / 100,
-          type: .transfer
-        ),
-      ]
-    )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    var receivedOld: Transaction?
-    var receivedNew: Transaction?
-    store.onMutate = { old, new in
-      receivedOld = old
-      receivedNew = new
-    }
-
-    await store.load(filter: TransactionFilter(accountId: accountId))
-
-    // Change type to expense (toAccountId should be nil)
-    var updated = tx
-    updated.legs = [
-      TransactionLeg(
-        accountId: accountId,
-        instrument: Instrument.defaultTestInstrument,
-        quantity: Decimal(-5000) / 100,
-        type: .expense
-      )
-    ]
-    updated.payee = "Test"
-    await store.update(updated)
-
-    #expect(receivedOld?.legs.first?.type ?? .expense == .transfer)
-    #expect(
-      receivedOld?.legs.first(where: { $0.accountId != accountId })?.accountId
-        == savingsId)
-    #expect(receivedNew?.legs.first?.type ?? .expense == .expense)
-    #expect(
-      receivedNew?.legs.first(where: { $0.accountId != accountId })?.accountId
-        == nil)
-  }
-
-  // MARK: - Balance Updates with Amount Changes
-
-  @Test func testOnMutateChangingAmount() async throws {
-    let tx = Transaction(
-      date: makeDate("2024-01-15"),
-      payee: "Test",
-      legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-5000) / 100,
+          quantity: Decimal(-50000) / 100,
           type: .expense
         )
       ]
     )
     let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [tx], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
+    TestBackend.seed(transactions: [scheduled], in: container)
+    let (store, accountStore, _) = await makeStores(
+      backend: backend, container: container, accounts: [account])
 
-    var receivedOld: Transaction?
-    var receivedNew: Transaction?
-    store.onMutate = { old, new in
-      receivedOld = old
-      receivedNew = new
-    }
+    await store.load(filter: TransactionFilter(scheduled: true))
+    _ = await store.payScheduledTransaction(scheduled)
 
-    await store.load(filter: TransactionFilter(accountId: accountId))
-
-    // Change the amount
-    var updated = tx
-    updated.legs = [
-      TransactionLeg(
-        accountId: accountId,
-        instrument: Instrument.defaultTestInstrument,
-        quantity: Decimal(-7500) / 100,
-        type: .expense
-      )
-    ]
-    await store.update(updated)
-
-    #expect(receivedOld?.legs.first?.quantity == Decimal(-5000) / 100)
-    #expect(receivedNew?.legs.first?.quantity == Decimal(-7500) / 100)
+    // Paying a -500 expense should decrease balance by 500
+    let updatedAccount = accountStore.accounts.by(id: accountId)
+    #expect(updatedAccount?.balance.quantity == Decimal(500))
   }
 
   @Test func testRunningBalancesUpdateAfterAmountChange() async throws {
@@ -1511,95 +1265,6 @@ struct TransactionStoreTests {
     #expect(paidTx?.legs.contains(where: { $0.earmarkId == earmarkId }) == true)
     #expect(paidTx?.recurPeriod == nil)
     #expect(paidTx?.recurEvery == nil)
-  }
-
-  @Test func testPayFiresOnMutateForCreateAndUpdate() async throws {
-    let scheduled = Transaction(
-      date: makeDate("2024-01-15"),
-      payee: "Rent",
-      recurPeriod: .month,
-      recurEvery: 1,
-      legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-200000) / 100,
-          type: .expense
-        )
-      ]
-    )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    var mutations: [(old: Transaction?, new: Transaction?)] = []
-    store.onMutate = { old, new in
-      mutations.append((old: old, new: new))
-    }
-
-    await store.load(filter: TransactionFilter(scheduled: true))
-    _ = await store.payScheduledTransaction(scheduled)
-
-    // Should have fired twice: once for create (paid tx), once for update (advance date)
-    #expect(mutations.count == 2)
-
-    // First mutation: create paid transaction (old=nil, new=paid)
-    #expect(mutations[0].old == nil)
-    #expect(mutations[0].new?.recurPeriod == nil)
-    #expect(mutations[0].new?.payee == "Rent")
-
-    // Second mutation: update scheduled transaction date (old=original, new=advanced)
-    #expect(mutations[1].old?.id == scheduled.id)
-    #expect(mutations[1].old?.date == makeDate("2024-01-15"))
-    #expect(mutations[1].new?.id == scheduled.id)
-    #expect(mutations[1].new?.date == makeDate("2024-02-15"))
-  }
-
-  @Test func testPayOneTimeFiresOnMutateForCreateAndDelete() async throws {
-    let scheduled = Transaction(
-      date: makeDate("2024-01-15"),
-      payee: "Annual Fee",
-      recurPeriod: .once,
-      recurEvery: 1,
-      legs: [
-        TransactionLeg(
-          accountId: accountId,
-          instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-50000) / 100,
-          type: .expense
-        )
-      ]
-    )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container)
-    let store = TransactionStore(
-      repository: backend.transactions,
-      conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument
-    )
-
-    var mutations: [(old: Transaction?, new: Transaction?)] = []
-    store.onMutate = { old, new in
-      mutations.append((old: old, new: new))
-    }
-
-    await store.load(filter: TransactionFilter(scheduled: true))
-    _ = await store.payScheduledTransaction(scheduled)
-
-    // Should have fired twice: once for create, once for delete
-    #expect(mutations.count == 2)
-
-    // First: create (old=nil)
-    #expect(mutations[0].old == nil)
-    #expect(mutations[0].new?.recurPeriod == nil)
-
-    // Second: delete (new=nil)
-    #expect(mutations[1].old?.id == scheduled.id)
-    #expect(mutations[1].new == nil)
   }
 
   // MARK: - Payee Suggestions

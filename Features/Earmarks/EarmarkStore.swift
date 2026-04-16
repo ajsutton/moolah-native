@@ -13,11 +13,22 @@ final class EarmarkStore {
   private(set) var isBudgetLoading = false
   private(set) var budgetError: Error?
 
-  private let repository: EarmarkRepository
-  private let logger = Logger(subsystem: "com.moolah.app", category: "EarmarkStore")
+  private(set) var convertedTotalBalance: InstrumentAmount?
 
-  init(repository: EarmarkRepository) {
+  private let repository: EarmarkRepository
+  private let conversionService: (any InstrumentConversionService)?
+  private let targetInstrument: Instrument
+  private let logger = Logger(subsystem: "com.moolah.app", category: "EarmarkStore")
+  private var conversionTask: Task<Void, Never>?
+
+  init(
+    repository: EarmarkRepository,
+    conversionService: (any InstrumentConversionService)? = nil,
+    targetInstrument: Instrument = .AUD
+  ) {
     self.repository = repository
+    self.conversionService = conversionService
+    self.targetInstrument = targetInstrument
   }
 
   func load() async {
@@ -30,6 +41,7 @@ final class EarmarkStore {
     do {
       earmarks = Earmarks(from: try await repository.fetchAll())
       logger.debug("Loaded \(self.earmarks.count) earmarks")
+      recomputeConvertedTotals()
     } catch {
       logger.error("Failed to load earmarks: \(error.localizedDescription)")
       self.error = error
@@ -48,6 +60,7 @@ final class EarmarkStore {
       if fresh.ordered != earmarks.ordered {
         earmarks = fresh
         logger.debug("Sync: updated earmarks (\(fresh.count) earmarks) in \(elapsed)ms")
+        recomputeConvertedTotals()
       }
       if elapsed > 16 {
         logger.warning("⚠️ PERF: earmarkStore.reloadFromSync took \(elapsed)ms")
@@ -69,32 +82,49 @@ final class EarmarkStore {
     }
   }
 
-  /// Adjusts earmark balances locally based on a transaction change.
-  /// - Parameters:
-  ///   - old: The previous transaction (nil for creates).
-  ///   - new: The new transaction (nil for deletes).
-  func applyTransactionDelta(old: Transaction?, new: Transaction?) {
+  /// Applies position deltas to earmark balances, saved, and spent.
+  func applyDelta(
+    earmarkDeltas: PositionDeltas,
+    savedDeltas: PositionDeltas,
+    spentDeltas: PositionDeltas
+  ) {
     var result = earmarks
-
-    // Remove the old transaction's effect (skip scheduled — they don't affect balances)
-    if let old, !old.isScheduled {
-      for leg in old.legs {
-        if let earmarkId = leg.earmarkId {
-          result = result.adjustingBalance(of: earmarkId, by: -leg.amount)
-        }
-      }
+    let allIds = Set(earmarkDeltas.keys).union(savedDeltas.keys).union(spentDeltas.keys)
+    for earmarkId in allIds {
+      result = result.adjustingPositions(
+        of: earmarkId,
+        positionDeltas: earmarkDeltas[earmarkId] ?? [:],
+        savedDeltas: savedDeltas[earmarkId] ?? [:],
+        spentDeltas: spentDeltas[earmarkId] ?? [:]
+      )
     }
-
-    // Apply the new transaction's effect (skip scheduled — they don't affect balances)
-    if let new, !new.isScheduled {
-      for leg in new.legs {
-        if let earmarkId = leg.earmarkId {
-          result = result.adjustingBalance(of: earmarkId, by: leg.amount)
-        }
-      }
-    }
-
     earmarks = result
+    recomputeConvertedTotals()
+  }
+
+  private func recomputeConvertedTotals() {
+    conversionTask?.cancel()
+    conversionTask = Task {
+      do {
+        var total = InstrumentAmount.zero(instrument: targetInstrument)
+        for earmark in visibleEarmarks {
+          for position in earmark.positions {
+            guard let conversionService else {
+              total += position.amount
+              continue
+            }
+            let converted = try await conversionService.convertAmount(
+              position.amount, to: targetInstrument, on: Date())
+            guard !Task.isCancelled else { return }
+            total += converted
+          }
+        }
+        convertedTotalBalance = total
+      } catch {
+        guard !Task.isCancelled else { return }
+        logger.error("Failed to compute converted earmark totals: \(error.localizedDescription)")
+      }
+    }
   }
 
   func reorderEarmarks(from source: IndexSet, to destination: Int) async {

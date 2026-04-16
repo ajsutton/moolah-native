@@ -81,351 +81,15 @@ struct EarmarkStoreTests {
     )
   }
 
-  // MARK: - applyTransactionDelta
+  // MARK: - applyDelta (position-based)
 
-  @Test func testCreateExpenseToEarmarkIncreasesSpentAndDecreasesBalance() async throws {
+  @Test func testApplyDeltaAdjustsPositionsAndBalance() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(
-      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-    )
-    TestBackend.seedWithTransactions(
-      earmarks: [
-        Earmark(
-          id: earmarkId, name: "Holiday Fund",
-          balance: InstrumentAmount(
-            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
-          saved: InstrumentAmount(
-            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
-          spent: InstrumentAmount(
-            quantity: Decimal(0) / 100, instrument: Instrument.defaultTestInstrument))
-      ], accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks)
-    await store.load()
-
-    // Spend $100 from the earmark
-    let tx = Transaction(
-      date: Date(), payee: "Flight Tickets",
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmarkId)
-      ])
-    store.applyTransactionDelta(old: nil, new: tx)
-
-    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == Decimal(40000) / 100)  // 500 - 100
-    #expect(store.earmarks.by(id: earmarkId)?.saved.quantity == Decimal(50000) / 100)  // Unchanged
-    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == Decimal(10000) / 100)  // 0 + 100
-  }
-
-  @Test func testCreateIncomeToEarmarkIncreasesSavedAndBalance() async throws {
-    let earmarkId = UUID()
-    let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(
-      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-    )
-    TestBackend.seedWithTransactions(
-      earmarks: [
-        Earmark(
-          id: earmarkId, name: "Holiday Fund",
-          balance: InstrumentAmount(
-            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
-          saved: InstrumentAmount(
-            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
-          spent: InstrumentAmount(
-            quantity: Decimal(0) / 100, instrument: Instrument.defaultTestInstrument))
-      ], accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks)
-    await store.load()
-
-    // Add $200 to the earmark
-    let tx = Transaction(
-      date: Date(), payee: "Bonus",
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(20000) / 100, type: .income, earmarkId: earmarkId)
-      ])
-    store.applyTransactionDelta(old: nil, new: tx)
-
-    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == Decimal(70000) / 100)  // 500 + 200
-    #expect(store.earmarks.by(id: earmarkId)?.saved.quantity == Decimal(70000) / 100)  // 500 + 200
-    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == Decimal(0) / 100)  // Unchanged
-  }
-
-  @Test func testDeleteRevertsEarmarkBalance() async throws {
-    let earmarkId = UUID()
-    let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(
-      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-    )
-    TestBackend.seedWithTransactions(
-      earmarks: [
-        Earmark(
-          id: earmarkId, name: "Holiday Fund",
-          balance: InstrumentAmount(
-            quantity: Decimal(40000) / 100, instrument: Instrument.defaultTestInstrument),
-          saved: InstrumentAmount(
-            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
-          spent: InstrumentAmount(
-            quantity: Decimal(10000) / 100, instrument: Instrument.defaultTestInstrument))
-      ], accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks)
-    await store.load()
-
-    // Remove a $100 expense from the earmark
-    let tx = Transaction(
-      date: Date(), payee: "Flight Tickets",
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmarkId)
-      ])
-    store.applyTransactionDelta(old: tx, new: nil)
-
-    // Removing -100 expense adds 100 back to balance.
-    // adjustingBalance treats positive delta as saving (increases saved).
-    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == Decimal(50000) / 100)  // 400 + 100
-    #expect(store.earmarks.by(id: earmarkId)?.saved.quantity == Decimal(60000) / 100)  // 500 + 100
-    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == Decimal(10000) / 100)  // Unchanged
-  }
-
-  @Test func testUpdateAdjustsEarmarkBalance() async throws {
-    let earmarkId = UUID()
-    let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(
-      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-    )
-    TestBackend.seedWithTransactions(
-      earmarks: [
-        Earmark(
-          id: earmarkId, name: "Holiday Fund",
-          balance: InstrumentAmount(
-            quantity: Decimal(40000) / 100, instrument: Instrument.defaultTestInstrument),
-          saved: InstrumentAmount(
-            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
-          spent: InstrumentAmount(
-            quantity: Decimal(10000) / 100, instrument: Instrument.defaultTestInstrument))
-      ], accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks)
-    await store.load()
-
-    let oldTx = Transaction(
-      date: Date(), payee: "Flight Tickets",
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmarkId)
-      ])
-    // New transaction with updated amount (-150 instead of -100)
-    let newTx = Transaction(
-      id: oldTx.id, date: oldTx.date, payee: oldTx.payee,
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-15000) / 100, type: .expense, earmarkId: earmarkId)
-      ])
-
-    store.applyTransactionDelta(old: oldTx, new: newTx)
-
-    // Was 400 (after -100 expense). Remove old (+100 -> 500), apply new (-150 -> 350)
-    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == Decimal(35000) / 100)
-    #expect(store.earmarks.by(id: earmarkId)?.saved.quantity == Decimal(60000) / 100)  // 500 + 100 (reverting old)
-    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == Decimal(25000) / 100)  // 100 + 150 (new expense)
-  }
-
-  @Test func testChangingEarmarkIdUpdatesBothEarmarks() async throws {
-    let earmark1Id = UUID()
-    let earmark2Id = UUID()
-    let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(
-      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-    )
-    TestBackend.seedWithTransactions(
-      earmarks: [
-        Earmark(
-          id: earmark1Id, name: "Holiday Fund",
-          balance: InstrumentAmount(
-            quantity: Decimal(40000) / 100, instrument: Instrument.defaultTestInstrument),
-          saved: InstrumentAmount(
-            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
-          spent: InstrumentAmount(
-            quantity: Decimal(10000) / 100, instrument: Instrument.defaultTestInstrument)),
-        Earmark(
-          id: earmark2Id, name: "Car Repair",
-          balance: InstrumentAmount(
-            quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument),
-          saved: InstrumentAmount(
-            quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument),
-          spent: InstrumentAmount(
-            quantity: Decimal(0) / 100, instrument: Instrument.defaultTestInstrument)),
-      ], accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks)
-    await store.load()
-
-    // Original transaction was to earmark1
-    let oldTx = Transaction(
-      date: Date(), payee: "Flight Tickets",
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmark1Id)
-      ])
-    // Change to earmark2
-    let newTx = Transaction(
-      id: oldTx.id, date: oldTx.date, payee: oldTx.payee,
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmark2Id)
-      ])
-
-    store.applyTransactionDelta(old: oldTx, new: newTx)
-
-    // Earmark1 should have the expense removed (+100) — adjustingBalance treats positive as saving
-    #expect(store.earmarks.by(id: earmark1Id)?.balance.quantity == Decimal(50000) / 100)
-    #expect(store.earmarks.by(id: earmark1Id)?.spent.quantity == Decimal(10000) / 100)  // Unchanged (positive delta adds to saved)
-
-    // Earmark2 should have the expense added (-100)
-    #expect(store.earmarks.by(id: earmark2Id)?.balance.quantity == Decimal(20000) / 100)
-    #expect(store.earmarks.by(id: earmark2Id)?.spent.quantity == Decimal(10000) / 100)
-  }
-
-  @Test func testAddingEarmarkToTransaction() async throws {
-    let earmarkId = UUID()
-    let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(
-      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-    )
-    TestBackend.seedWithTransactions(
-      earmarks: [
-        Earmark(
-          id: earmarkId, name: "Holiday Fund",
-          balance: InstrumentAmount(
-            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
-          saved: InstrumentAmount(
-            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
-          spent: InstrumentAmount(
-            quantity: Decimal(0) / 100, instrument: Instrument.defaultTestInstrument))
-      ], accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks)
-    await store.load()
-
-    // Original transaction had no earmark
-    let oldTx = Transaction(
-      date: Date(), payee: "Flight Tickets",
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-10000) / 100, type: .expense)
-      ])
-    // Add earmark to it
-    let newTx = Transaction(
-      id: oldTx.id, date: oldTx.date, payee: oldTx.payee,
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmarkId)
-      ])
-
-    store.applyTransactionDelta(old: oldTx, new: newTx)
-
-    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == Decimal(40000) / 100)
-    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == Decimal(10000) / 100)
-  }
-
-  @Test func testRemovingEarmarkFromTransaction() async throws {
-    let earmarkId = UUID()
-    let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(
-      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-    )
-    TestBackend.seedWithTransactions(
-      earmarks: [
-        Earmark(
-          id: earmarkId, name: "Holiday Fund",
-          balance: InstrumentAmount(
-            quantity: Decimal(40000) / 100, instrument: Instrument.defaultTestInstrument),
-          saved: InstrumentAmount(
-            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
-          spent: InstrumentAmount(
-            quantity: Decimal(10000) / 100, instrument: Instrument.defaultTestInstrument))
-      ], accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks)
-    await store.load()
-
-    // Original transaction had an earmark
-    let oldTx = Transaction(
-      date: Date(), payee: "Flight Tickets",
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmarkId)
-      ])
-    // Remove the earmark
-    let newTx = Transaction(
-      id: oldTx.id, date: oldTx.date, payee: oldTx.payee,
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-10000) / 100, type: .expense)
-      ])
-
-    store.applyTransactionDelta(old: oldTx, new: newTx)
-
-    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == Decimal(50000) / 100)
-    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == Decimal(10000) / 100)  // Unchanged (positive delta adds to saved)
-  }
-
-  @Test func testTotalBalanceUpdatesAfterDelta() async throws {
-    let earmarkId = UUID()
-    let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(
-      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-    )
-    TestBackend.seedWithTransactions(
-      earmarks: [
-        Earmark(
-          id: earmarkId, name: "Holiday Fund",
-          balance: InstrumentAmount(
-            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
-          saved: InstrumentAmount(
-            quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument),
-          spent: InstrumentAmount(
-            quantity: Decimal(0) / 100, instrument: Instrument.defaultTestInstrument))
-      ], accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks)
-    await store.load()
-
-    #expect(store.totalBalance.quantity == Decimal(50000) / 100)
-
-    let tx = Transaction(
-      date: Date(), payee: "Flight Tickets",
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: Instrument.defaultTestInstrument,
-          quantity: Decimal(-10000) / 100, type: .expense, earmarkId: earmarkId)
-      ])
-    store.applyTransactionDelta(old: nil, new: tx)
-
-    #expect(store.totalBalance.quantity == Decimal(40000) / 100)
-  }
-
-  @Test func testScheduledTransactionDoesNotAffectEarmarkBalance() async throws {
-    let earmarkId = UUID()
-    let accountId = UUID()
+    let instrument = Instrument.defaultTestInstrument
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
-    let instrument = Instrument.defaultTestInstrument
     TestBackend.seedWithTransactions(
       earmarks: [
         Earmark(
@@ -437,21 +101,151 @@ struct EarmarkStoreTests {
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
-    let scheduledTx = Transaction(
-      date: Date(),
-      payee: "Scheduled Bill",
-      recurPeriod: .month, recurEvery: 1,
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: instrument, quantity: -100,
-          type: .expense, earmarkId: earmarkId)
-      ]
+    // Apply a -100 expense delta
+    store.applyDelta(
+      earmarkDeltas: [earmarkId: [instrument: -100]],
+      savedDeltas: [:],
+      spentDeltas: [earmarkId: [instrument: 100]]
     )
-    store.applyTransactionDelta(old: nil, new: scheduledTx)
 
-    // Scheduled transactions should not change earmark balance
-    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == 500)
+    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == 400)
+    #expect(store.earmarks.by(id: earmarkId)?.saved.quantity == 500)
+    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == 100)
+  }
+
+  @Test func testApplyDeltaWithSavedIncreasesBalance() async throws {
+    let earmarkId = UUID()
+    let accountId = UUID()
+    let instrument = Instrument.defaultTestInstrument
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
+    TestBackend.seedWithTransactions(
+      earmarks: [
+        Earmark(
+          id: earmarkId, name: "Holiday Fund",
+          balance: InstrumentAmount(quantity: 500, instrument: instrument),
+          saved: InstrumentAmount(quantity: 500, instrument: instrument),
+          spent: InstrumentAmount(quantity: 0, instrument: instrument))
+      ], accountId: accountId, in: container)
+    let store = EarmarkStore(repository: backend.earmarks)
+    await store.load()
+
+    // Apply a +200 income delta
+    store.applyDelta(
+      earmarkDeltas: [earmarkId: [instrument: 200]],
+      savedDeltas: [earmarkId: [instrument: 200]],
+      spentDeltas: [:]
+    )
+
+    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == 700)
+    #expect(store.earmarks.by(id: earmarkId)?.saved.quantity == 700)
     #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == 0)
+  }
+
+  @Test func testApplyDeltaAffectsMultipleEarmarks() async throws {
+    let earmark1Id = UUID()
+    let earmark2Id = UUID()
+    let accountId = UUID()
+    let instrument = Instrument.defaultTestInstrument
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
+    TestBackend.seedWithTransactions(
+      earmarks: [
+        Earmark(
+          id: earmark1Id, name: "Holiday",
+          balance: InstrumentAmount(quantity: 500, instrument: instrument),
+          saved: InstrumentAmount(quantity: 500, instrument: instrument),
+          spent: InstrumentAmount(quantity: 0, instrument: instrument)),
+        Earmark(
+          id: earmark2Id, name: "Car",
+          balance: InstrumentAmount(quantity: 300, instrument: instrument),
+          saved: InstrumentAmount(quantity: 300, instrument: instrument),
+          spent: InstrumentAmount(quantity: 0, instrument: instrument)),
+      ], accountId: accountId, in: container)
+    let store = EarmarkStore(repository: backend.earmarks)
+    await store.load()
+
+    // Apply deltas to both earmarks
+    store.applyDelta(
+      earmarkDeltas: [
+        earmark1Id: [instrument: -100],
+        earmark2Id: [instrument: 50],
+      ],
+      savedDeltas: [earmark2Id: [instrument: 50]],
+      spentDeltas: [earmark1Id: [instrument: 100]]
+    )
+
+    #expect(store.earmarks.by(id: earmark1Id)?.balance.quantity == 400)
+    #expect(store.earmarks.by(id: earmark1Id)?.spent.quantity == 100)
+    #expect(store.earmarks.by(id: earmark2Id)?.balance.quantity == 350)
+    #expect(store.earmarks.by(id: earmark2Id)?.saved.quantity == 350)
+  }
+
+  // MARK: - convertedTotalBalance
+
+  @Test func testConvertedTotalBalanceNilBeforeLoad() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = EarmarkStore(repository: backend.earmarks)
+
+    #expect(store.convertedTotalBalance == nil)
+  }
+
+  @Test func testConvertedTotalBalancePopulatedAfterLoad() async throws {
+    let earmarkId = UUID()
+    let accountId = UUID()
+    let instrument = Instrument.defaultTestInstrument
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
+    TestBackend.seedWithTransactions(
+      earmarks: [
+        Earmark(
+          id: earmarkId, name: "Holiday Fund",
+          balance: InstrumentAmount(quantity: 500, instrument: instrument),
+          saved: InstrumentAmount(quantity: 500, instrument: instrument),
+          spent: InstrumentAmount(quantity: 0, instrument: instrument))
+      ], accountId: accountId, in: container)
+    let store = EarmarkStore(repository: backend.earmarks)
+
+    await store.load()
+
+    // Wait for async conversion task
+    try await Task.sleep(for: .milliseconds(50))
+
+    #expect(store.convertedTotalBalance != nil)
+    #expect(store.convertedTotalBalance?.quantity == 500)
+  }
+
+  @Test func testConvertedTotalBalanceUpdatesAfterApplyDelta() async throws {
+    let earmarkId = UUID()
+    let accountId = UUID()
+    let instrument = Instrument.defaultTestInstrument
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
+    TestBackend.seedWithTransactions(
+      earmarks: [
+        Earmark(
+          id: earmarkId, name: "Holiday Fund",
+          balance: InstrumentAmount(quantity: 500, instrument: instrument),
+          saved: InstrumentAmount(quantity: 500, instrument: instrument),
+          spent: InstrumentAmount(quantity: 0, instrument: instrument))
+      ], accountId: accountId, in: container)
+    let store = EarmarkStore(repository: backend.earmarks)
+    await store.load()
+    try await Task.sleep(for: .milliseconds(50))
+    #expect(store.convertedTotalBalance?.quantity == 500)
+
+    store.applyDelta(
+      earmarkDeltas: [earmarkId: [instrument: -100]],
+      savedDeltas: [:],
+      spentDeltas: [earmarkId: [instrument: 100]]
+    )
+    try await Task.sleep(for: .milliseconds(50))
+
+    #expect(store.convertedTotalBalance?.quantity == 400)
   }
 
   // MARK: - reorderEarmarks

@@ -12,15 +12,12 @@ final class TransactionStore {
   private(set) var loadedCount = 0
   private(set) var totalCount: Int?
 
-  /// Called after a successful create, update, or delete so the caller
-  /// can adjust account balances locally.
-  /// Parameters: (old transaction or nil, new transaction or nil).
-  var onMutate: (@MainActor (_ old: Transaction?, _ new: Transaction?) -> Void)?
-
   private let repository: TransactionRepository
   private let conversionService: InstrumentConversionService
   private(set) var targetInstrument: Instrument
   private let pageSize: Int
+  private let accountStore: AccountStore?
+  private let earmarkStore: EarmarkStore?
   private let logger = Logger(subsystem: "com.moolah.app", category: "TransactionStore")
   private var currentFilter = TransactionFilter()
   private var currentPage = 0
@@ -31,12 +28,16 @@ final class TransactionStore {
     repository: TransactionRepository,
     conversionService: InstrumentConversionService,
     targetInstrument: Instrument,
-    pageSize: Int = 50
+    pageSize: Int = 50,
+    accountStore: AccountStore? = nil,
+    earmarkStore: EarmarkStore? = nil
   ) {
     self.repository = repository
     self.conversionService = conversionService
     self.targetInstrument = targetInstrument
     self.pageSize = pageSize
+    self.accountStore = accountStore
+    self.earmarkStore = earmarkStore
   }
 
   func load(filter: TransactionFilter) async {
@@ -103,7 +104,7 @@ final class TransactionStore {
         rawTransactions[index] = created
       }
       await recomputeBalances()
-      onMutate?(nil, created)
+      applyBalanceDeltas(old: nil, new: created)
       return created
     } catch {
       logger.error("Failed to create transaction: \(error.localizedDescription)")
@@ -129,7 +130,7 @@ final class TransactionStore {
         rawTransactions[index] = updated
       }
       await recomputeBalances()
-      onMutate?(old, updated)
+      applyBalanceDeltas(old: old, new: updated)
     } catch {
       logger.error("Failed to update transaction: \(error.localizedDescription)")
       rawTransactions = snapshot
@@ -192,12 +193,28 @@ final class TransactionStore {
 
     do {
       try await repository.delete(id: id)
-      onMutate?(removed, nil)
+      applyBalanceDeltas(old: removed, new: nil)
     } catch {
       logger.error("Failed to delete transaction: \(error.localizedDescription)")
       rawTransactions = snapshot
       await recomputeBalances()
       self.error = error
+    }
+  }
+
+  private func applyBalanceDeltas(old: Transaction?, new: Transaction?) {
+    let delta = BalanceDeltaCalculator.deltas(old: old, new: new)
+    if !delta.accountDeltas.isEmpty {
+      accountStore?.applyDelta(delta.accountDeltas)
+    }
+    if !delta.earmarkDeltas.isEmpty || !delta.earmarkSavedDeltas.isEmpty
+      || !delta.earmarkSpentDeltas.isEmpty
+    {
+      earmarkStore?.applyDelta(
+        earmarkDeltas: delta.earmarkDeltas,
+        savedDeltas: delta.earmarkSavedDeltas,
+        spentDeltas: delta.earmarkSpentDeltas
+      )
     }
   }
 

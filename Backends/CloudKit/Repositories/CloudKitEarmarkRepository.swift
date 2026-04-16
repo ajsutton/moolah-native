@@ -28,10 +28,15 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
     }
     let descriptor = FetchDescriptor<EarmarkRecord>()
     return try await MainActor.run {
+      let instruments = try fetchInstrumentMap()
       let records = try context.fetch(descriptor)
       return try records.map { record in
-        let (balance, saved, spent) = try computeEarmarkTotals(for: record.id)
-        return record.toDomain(balance: balance, saved: saved, spent: spent)
+        let totals = try computeEarmarkPositions(for: record.id, instruments: instruments)
+        return record.toDomain(
+          balance: totals.balance, saved: totals.saved, spent: totals.spent,
+          positions: totals.positions, savedPositions: totals.savedPositions,
+          spentPositions: totals.spentPositions
+        )
       }.sorted()
     }
   }
@@ -151,8 +156,12 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   }
 
   @MainActor
-  private func computeEarmarkTotals(for earmarkId: UUID) throws -> (
-    balance: InstrumentAmount, saved: InstrumentAmount, spent: InstrumentAmount
+  private func computeEarmarkPositions(
+    for earmarkId: UUID,
+    instruments: [String: Instrument]
+  ) throws -> (
+    balance: InstrumentAmount, saved: InstrumentAmount, spent: InstrumentAmount,
+    positions: [Position], savedPositions: [Position], spentPositions: [Position]
   ) {
     // Get scheduled transaction IDs to exclude
     let scheduledDescriptor = FetchDescriptor<TransactionRecord>(
@@ -172,17 +181,61 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
     var saved = zero
     var spent = zero
 
+    var positionTotals: [Instrument: Decimal] = [:]
+    var savedTotals: [Instrument: Decimal] = [:]
+    var spentTotals: [Instrument: Decimal] = [:]
+
     for leg in legRecords {
       guard !scheduledIds.contains(leg.transactionId) else { continue }
-      let amount = InstrumentAmount(storageValue: leg.quantity, instrument: instrument)
-      balance += amount
-      if leg.quantity > 0 {
-        saved += amount
-      } else if leg.quantity < 0 {
-        spent += InstrumentAmount(storageValue: abs(leg.quantity), instrument: instrument)
+      let inst = instruments[leg.instrumentId] ?? Instrument.fiat(code: leg.instrumentId)
+      let amount = InstrumentAmount(storageValue: leg.quantity, instrument: inst)
+
+      // Legacy single-instrument totals (using profile instrument)
+      let legacyAmount = InstrumentAmount(storageValue: leg.quantity, instrument: instrument)
+      balance += legacyAmount
+
+      // Multi-instrument positions
+      positionTotals[inst, default: 0] += amount.quantity
+
+      // Type-based saved/spent classification
+      let legType = TransactionType(rawValue: leg.type) ?? .expense
+      switch legType {
+      case .income, .openingBalance:
+        saved += legacyAmount
+        savedTotals[inst, default: 0] += amount.quantity
+      case .expense, .transfer:
+        spent += InstrumentAmount(storageValue: -leg.quantity, instrument: instrument)
+        spentTotals[inst, default: 0] += -amount.quantity
       }
     }
 
-    return (balance, saved, spent)
+    let positions = positionTotals.compactMap { inst, qty -> Position? in
+      guard qty != 0 else { return nil }
+      return Position(instrument: inst, quantity: qty)
+    }.sorted { $0.instrument.id < $1.instrument.id }
+
+    let savedPositions = savedTotals.compactMap { inst, qty -> Position? in
+      guard qty != 0 else { return nil }
+      return Position(instrument: inst, quantity: qty)
+    }.sorted { $0.instrument.id < $1.instrument.id }
+
+    let spentPositions = spentTotals.compactMap { inst, qty -> Position? in
+      guard qty != 0 else { return nil }
+      return Position(instrument: inst, quantity: qty)
+    }.sorted { $0.instrument.id < $1.instrument.id }
+
+    return (balance, saved, spent, positions, savedPositions, spentPositions)
+  }
+
+  /// Fetches all known instruments as a lookup map.
+  @MainActor
+  private func fetchInstrumentMap() throws -> [String: Instrument] {
+    let descriptor = FetchDescriptor<InstrumentRecord>()
+    let records = try context.fetch(descriptor)
+    var map: [String: Instrument] = [:]
+    for record in records {
+      map[record.id] = record.toDomain()
+    }
+    return map
   }
 }

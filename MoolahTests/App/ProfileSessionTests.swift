@@ -43,14 +43,6 @@ struct ProfileSessionTests {
     #expect(session1.profile.resolvedServerURL != session2.profile.resolvedServerURL)
   }
 
-  @Test("onMutate wiring connects transaction store to account and earmark stores")
-  func onMutateWiring() {
-    let session = ProfileSession(profile: makeProfile())
-
-    // The onMutate callback should be set
-    #expect(session.transactionStore.onMutate != nil)
-  }
-
   @Test("onInvestmentValueChanged wiring connects investment store to account store")
   func onInvestmentValueChangedWiring() {
     let session = ProfileSession(profile: makeProfile())

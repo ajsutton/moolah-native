@@ -131,7 +131,7 @@ struct AccountStoreConversionTests {
     await store.load()
 
     // 1000 AUD + 500 USD converted to AUD (500 * 1.5385 = 769.25)
-    let total = try await store.convertedCurrentTotal(in: .AUD)
+    let total = try await store.computeConvertedCurrentTotal(in: .AUD)
     let expectedUsdInAud = Decimal(string: "500.00")! * Decimal(string: "1.5385")!
     let expected = Decimal(string: "1000.00")! + expectedUsdInAud
     #expect(total.quantity == expected)
