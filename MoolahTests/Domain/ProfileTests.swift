@@ -12,7 +12,6 @@ struct ProfileTests {
       label: "Work Server",
       backendType: .remote,
       serverURL: URL(string: "https://moolah.rocks/api/")!,
-      cachedUserName: "Ada Lovelace",
       currencyCode: "USD",
       financialYearStartMonth: 1,
       createdAt: Date(timeIntervalSince1970: 1_700_000_000)
@@ -26,7 +25,6 @@ struct ProfileTests {
     #expect(decoded.label == "Work Server")
     #expect(decoded.backendType == .remote)
     #expect(decoded.serverURL == URL(string: "https://moolah.rocks/api/")!)
-    #expect(decoded.cachedUserName == "Ada Lovelace")
     #expect(decoded.currencyCode == "USD")
     #expect(decoded.financialYearStartMonth == 1)
     #expect(decoded.createdAt == Date(timeIntervalSince1970: 1_700_000_000))
@@ -41,7 +39,6 @@ struct ProfileTests {
 
     #expect(!profile.id.uuidString.isEmpty)
     #expect(profile.backendType == .remote)
-    #expect(profile.cachedUserName == nil)
     #expect(profile.currencyCode == "AUD")
     #expect(profile.financialYearStartMonth == 7)
     #expect(profile.instrument == .AUD)

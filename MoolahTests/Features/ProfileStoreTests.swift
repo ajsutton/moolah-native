@@ -140,11 +140,9 @@ struct ProfileStoreTests {
     store.addProfile(profile)
 
     profile.label = "New"
-    profile.cachedUserName = "Ada Lovelace"
     store.updateProfile(profile)
 
     #expect(store.profiles[0].label == "New")
-    #expect(store.profiles[0].cachedUserName == "Ada Lovelace")
   }
 
   @Test("updateProfile ignores unknown profile")

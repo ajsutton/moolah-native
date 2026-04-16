@@ -42,8 +42,6 @@ final class RemoteAuthProvider: AuthProvider {
       guard response.loggedIn, let profile = response.profile else { return nil }
       return UserProfile(
         id: profile.userId,
-        givenName: profile.givenName,
-        familyName: profile.familyName,
         pictureURL: profile.picture.flatMap { URL(string: $0) }
       )
     } catch BackendError.unauthenticated {
@@ -82,8 +80,6 @@ final class RemoteAuthProvider: AuthProvider {
         saveCookies()
         return UserProfile(
           id: profile.userId,
-          givenName: profile.givenName,
-          familyName: profile.familyName,
           pictureURL: profile.picture.flatMap { URL(string: $0) }
         )
       }
@@ -185,8 +181,6 @@ private struct LoginStateResponse: Decodable {
 
   struct ProfilePayload: Decodable {
     let userId: String
-    let givenName: String
-    let familyName: String
     let picture: String?
   }
 }

@@ -42,9 +42,6 @@
           updateSession(for: id)
         }
       }
-      .onChange(of: activeSession?.authStore.state) { _, newState in
-        cacheUserNameIfNeeded(newState)
-      }
       .onAppear {
         if activeSession == nil, let id = profileStore.activeProfileID {
           updateSession(for: id)
@@ -78,17 +75,5 @@
       }
     }
 
-    private func cacheUserNameIfNeeded(_ state: AuthStore.State?) {
-      guard let state, case .signedIn(let user) = state,
-        let session = activeSession
-      else { return }
-
-      let displayName = "\(user.givenName) \(user.familyName)"
-      if session.profile.cachedUserName != displayName {
-        var updated = session.profile
-        updated.cachedUserName = displayName
-        profileStore.updateProfile(updated)
-      }
-    }
   }
 #endif

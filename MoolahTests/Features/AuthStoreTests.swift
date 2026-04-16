@@ -10,7 +10,7 @@ struct AuthStoreTests {
 
   @Test("transitions loading → signedIn when currentUser returns a profile")
   func loadSignedIn() async throws {
-    let profile = UserProfile(id: "u1", givenName: "Ada", familyName: "Lovelace", pictureURL: nil)
+    let profile = UserProfile(id: "u1", pictureURL: nil)
     let store = AuthStore(
       backend: try TestAuthBackend(auth: InMemoryAuthProvider(signedIn: profile)))
     await store.load()
@@ -30,7 +30,7 @@ struct AuthStoreTests {
 
   @Test("transitions signedIn → signedOut on signOut()")
   func signOut() async throws {
-    let profile = UserProfile(id: "u1", givenName: "Ada", familyName: "Lovelace", pictureURL: nil)
+    let profile = UserProfile(id: "u1", pictureURL: nil)
     let store = AuthStore(
       backend: try TestAuthBackend(auth: InMemoryAuthProvider(signedIn: profile)))
     await store.load()
@@ -60,7 +60,7 @@ struct AuthStoreTests {
       Issue.record("Expected .signedIn, got \(store.state)")
       return
     }
-    #expect(user.givenName == "Ada")
+    #expect(user.id == "fixture-user")
   }
 
   @Test("signIn clears previous errorMessage")
