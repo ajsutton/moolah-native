@@ -214,7 +214,6 @@ struct TransactionDetailView: View {
         Button("Delete", role: .destructive) {
           onDelete(transaction.id)
         }
-        .keyboardShortcut(.delete, modifiers: [])
       } message: {
         Text("Are you sure you want to delete this transaction? This cannot be undone.")
       }
@@ -338,10 +337,12 @@ struct TransactionDetailView: View {
       HStack {
         TextField("Amount", text: amountBinding)
           .multilineTextAlignment(.trailing)
+          .monospacedDigit()
           #if os(iOS)
             .keyboardType(.decimalPad)
           #endif
         Text(relevantInstrument?.id ?? "").foregroundStyle(.secondary)
+          .monospacedDigit()
       }
 
       DatePicker("Date", selection: $draft.date, displayedComponents: .date)
@@ -438,7 +439,7 @@ struct TransactionDetailView: View {
 
   @ViewBuilder
   private func subTransactionSection(index: Int) -> some View {
-    Section {
+    Section("Sub-transaction \(index + 1) of \(draft.legDrafts.count)") {
       Picker("Type", selection: $draft.legDrafts[index].type) {
         Text(TransactionType.income.displayName).tag(TransactionType.income)
         Text(TransactionType.expense.displayName).tag(TransactionType.expense)
@@ -505,10 +506,9 @@ struct TransactionDetailView: View {
           Text("Delete Sub-transaction")
             .frame(maxWidth: .infinity)
         }
-        .accessibilityLabel("Delete sub-transaction")
+        .accessibilityLabel("Delete Sub-transaction")
       }
     }
-    .accessibilityLabel("Sub-transaction \(index + 1) of \(draft.legDrafts.count)")
   }
 
   private var addSubTransactionSection: some View {
@@ -516,7 +516,7 @@ struct TransactionDetailView: View {
       Button("Add Sub-transaction") {
         draft.addLeg()
       }
-      .accessibilityLabel("Add sub-transaction")
+      .accessibilityLabel("Add Sub-transaction")
     }
   }
 
@@ -567,19 +567,10 @@ struct TransactionDetailView: View {
   }
 
   private var notesSection: some View {
-    Section {
-      VStack(alignment: .leading) {
-        Text("Notes")
-        TextEditor(text: $draft.notes)
-          .frame(minHeight: 60, maxHeight: 120)
-          .scrollContentBackground(.hidden)
-          .padding()
-          .background(.background)
-          .overlay(
-            RoundedRectangle(cornerRadius: 4)
-              .stroke(.separator, lineWidth: 1)
-          )
-      }
+    Section("Notes") {
+      TextEditor(text: $draft.notes)
+        .accessibilityLabel("Notes")
+        .frame(minHeight: 60, maxHeight: 120)
     }
   }
 
@@ -622,6 +613,7 @@ struct TransactionDetailView: View {
         }
       }
       .disabled(isPaying)
+      .accessibilityLabel("Pay \(transaction.payee ?? "transaction") now")
     }
   }
 
