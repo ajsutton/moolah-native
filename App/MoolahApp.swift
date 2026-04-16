@@ -154,10 +154,11 @@ struct MoolahApp: App {
         sessionManager?.removeSession(for: profileID)
       }
 
-      // Configure AppleScript scripting context
+      // Configure AppleScript scripting context and App Intents service locator
       let automationService = AutomationService(sessionManager: sessionManager)
       ScriptingContext.automationService = automationService
       ScriptingContext.sessionManager = sessionManager
+      AutomationServiceLocator.shared.service = automationService
     #endif
   }
 

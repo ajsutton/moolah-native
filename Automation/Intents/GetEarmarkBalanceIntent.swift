@@ -1,0 +1,24 @@
+import AppIntents
+import Foundation
+
+struct GetEarmarkBalanceIntent: AppIntent {
+  nonisolated(unsafe) static var title: LocalizedStringResource = "Get Earmark Balance"
+  nonisolated(unsafe) static var description = IntentDescription(
+    "Returns the balance of a specific earmark.")
+
+  @Parameter(title: "Profile")
+  var profile: ProfileEntity
+
+  @Parameter(title: "Earmark")
+  var earmark: EarmarkEntity
+
+  @MainActor
+  func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    guard let service = AutomationServiceLocator.shared.service else {
+      throw AutomationError.operationFailed("App not ready")
+    }
+    let resolved = try service.resolveEarmark(
+      named: earmark.name, profileIdentifier: profile.id.uuidString)
+    return .result(value: resolved.balance.formatted)
+  }
+}
