@@ -233,14 +233,33 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       let scheduledTransactions = try await fetchTransactions(scheduled: true)
       // transactions is sorted chronologically, so .last is the most recent date
       let lastDate = transactions.last?.date ?? Date()
+
+      // Build the starting PositionBook from the same transactions that fed
+      // the legacy accumulator (currentBalance/currentInvestments/perEarmarkAmounts).
+      // PositionBook.apply tracks per-instrument positions correctly without
+      // needing to be told which rule will be used at read time — the rule
+      // controls READS via dailyBalance, not WRITES via apply.
+      var startingBook = PositionBook.empty
+      if let after {
+        let priorTransactions =
+          allTransactions
+          .filter { $0.date < after }
+          .sorted(by: { $0.date < $1.date })
+        for txn in priorTransactions {
+          startingBook.apply(txn, investmentAccountIds: investmentAccountIds)
+        }
+      }
+      for txn in transactions {
+        startingBook.apply(txn, investmentAccountIds: investmentAccountIds)
+      }
+
       scheduledBalances = try await Self.generateForecast(
         scheduled: scheduledTransactions,
+        startingBook: startingBook,
         startDate: lastDate,
         endDate: forecastUntil,
-        startingBalance: currentBalance,
-        startingPerEarmarkAmounts: perEarmarkAmounts,
-        startingInvestments: currentInvestments,
         investmentAccountIds: investmentAccountIds,
+        profileInstrument: instrument,
         conversionService: conversionService
       )
     }
@@ -656,14 +675,33 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     if let forecastUntil {
       // transactions is sorted chronologically, so .last is the most recent date
       let lastDate = transactions.last?.date ?? Date()
+
+      // Build the starting PositionBook from the same transactions that fed
+      // the legacy accumulator (currentBalance/currentInvestments/perEarmarkAmounts).
+      // PositionBook.apply tracks per-instrument positions correctly without
+      // needing to be told which rule will be used at read time — the rule
+      // controls READS via dailyBalance, not WRITES via apply.
+      var startingBook = PositionBook.empty
+      if let after {
+        let priorTransactions =
+          nonScheduled
+          .filter { $0.date < after }
+          .sorted(by: { $0.date < $1.date })
+        for txn in priorTransactions {
+          startingBook.apply(txn, investmentAccountIds: investmentAccountIds)
+        }
+      }
+      for txn in transactions {
+        startingBook.apply(txn, investmentAccountIds: investmentAccountIds)
+      }
+
       forecastBalances = try await generateForecast(
         scheduled: scheduled,
+        startingBook: startingBook,
         startDate: lastDate,
         endDate: forecastUntil,
-        startingBalance: currentBalance,
-        startingPerEarmarkAmounts: perEarmarkAmounts,
-        startingInvestments: currentInvestments,
         investmentAccountIds: investmentAccountIds,
+        profileInstrument: instrument,
         conversionService: conversionService
       )
     }
@@ -1087,12 +1125,11 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
   private static func generateForecast(
     scheduled: [Transaction],
+    startingBook: PositionBook,
     startDate: Date,
     endDate: Date,
-    startingBalance: InstrumentAmount,
-    startingPerEarmarkAmounts: [UUID: InstrumentAmount],
-    startingInvestments: InstrumentAmount,
     investmentAccountIds: Set<UUID>,
+    profileInstrument: Instrument,
     conversionService: any InstrumentConversionService
   ) async throws -> [DailyBalance] {
     // Extrapolate instances up to endDate
@@ -1103,10 +1140,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
     // Sort by date and apply to running balances
     instances.sort { $0.date < $1.date }
-    var balance = startingBalance
-    var perEarmarkAmounts = startingPerEarmarkAmounts
-    var investments = startingInvestments
-    let instrument = startingBalance.instrument
+    var book = startingBook
+    let instrument = profileInstrument
 
     // Scheduled transactions live in the future; exchange-rate sources can't return
     // future rates. Use today's rate as the best available estimate for forecast
@@ -1117,6 +1152,11 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     // The accumulator that follows is inherently sequential (each iteration
     // depends on the previous running totals), so we can't parallelise it.
     // See guides/CONCURRENCY_GUIDE.md: dynamic count → TaskGroup.
+    //
+    // After pre-conversion, every leg's instrument == profileInstrument, so
+    // `book.dailyBalance` will hit the single-instrument fast path on every
+    // call below — no extra conversion cost from the multi-instrument
+    // accumulator.
     let converted: [Transaction]
     if instances.isEmpty {
       converted = []
@@ -1140,27 +1180,15 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
     var forecastBalances: [Date: DailyBalance] = [:]
     for instance in converted {
-      applyTransaction(
-        instance,
-        to: &balance,
-        investments: &investments,
-        perEarmarkAmounts: &perEarmarkAmounts,
-        instrument: instrument,
-        investmentAccountIds: investmentAccountIds,
-        investmentTransfersOnly: true
-      )
+      book.apply(instance, investmentAccountIds: investmentAccountIds)
 
       let dayKey = Calendar.current.startOfDay(for: instance.date)
-      let earmarks = clampedEarmarkTotal(perEarmarkAmounts, instrument: instrument)
-      forecastBalances[dayKey] = DailyBalance(
-        date: dayKey,
-        balance: balance,
-        earmarked: earmarks,
-        availableFunds: balance - earmarks,
-        investments: investments,
-        investmentValue: nil,
-        netWorth: balance + investments,
-        bestFit: nil,
+      forecastBalances[dayKey] = try await book.dailyBalance(
+        on: instance.date,
+        investmentAccountIds: investmentAccountIds,
+        profileInstrument: instrument,
+        rule: .investmentTransfersOnly,
+        conversionService: conversionService,
         isForecast: true
       )
     }
