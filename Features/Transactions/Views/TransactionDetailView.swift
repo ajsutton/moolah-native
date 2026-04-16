@@ -936,3 +936,39 @@ struct TransactionDetailView: View {
     )
   }
 }
+
+#Preview("Earmark-Only Transaction") {
+  let earmarkId = UUID()
+  NavigationStack {
+    TransactionDetailView(
+      transaction: Transaction(
+        date: Date(),
+        legs: [
+          TransactionLeg(
+            accountId: nil, instrument: .AUD, quantity: 500, type: .income,
+            earmarkId: earmarkId)
+        ]
+      ),
+      accounts: Accounts(from: [
+        Account(name: "Checking", type: .bank),
+        Account(name: "Savings", type: .bank),
+      ]),
+      categories: Categories(from: []),
+      earmarks: Earmarks(from: [
+        Earmark(id: earmarkId, name: "Income Tax FY2025"),
+        Earmark(name: "Holiday Fund"),
+      ]),
+      transactionStore: {
+        let (backend, _) = PreviewBackend.create()
+        return TransactionStore(
+          repository: backend.transactions,
+          conversionService: backend.conversionService,
+          targetInstrument: .AUD
+        )
+      }(),
+      supportsComplexTransactions: true,
+      onUpdate: { _ in },
+      onDelete: { _ in }
+    )
+  }
+}
