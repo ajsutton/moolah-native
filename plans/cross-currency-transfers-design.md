@@ -83,6 +83,15 @@ The "Received" amount field and derived exchange rate appear in the account sect
 
 **Derived rate:** Shown as a subtle label (e.g. "≈ 1 USD = 1.55 AUD") when both amounts parse to non-zero values. Hidden otherwise.
 
+**"Received" field layout:** Use an `HStack { Text("Received") Spacer() TextField(...).multilineTextAlignment(.trailing) Text(currencyCode) }` pattern matching the recurrence "Every" field, so the label aligns with adjacent `Picker` row labels in the account section.
+
+**Focus management:** Add a `.counterpartAmount` case to the `Field` enum. Wire focus so the primary amount field's `.onSubmit` advances to `.counterpartAmount` (when visible), and `.counterpartAmount` advances to the date picker.
+
+**Accessibility:**
+- The "Received"/"Sent" field must have `.accessibilityLabel(draft.showFromAccount ? "Sent amount" : "Received amount")` set explicitly.
+- The derived rate label must have `.accessibilityLabel("Approximate exchange rate: 1 USD equals 1.55 AUD")` (computed with actual values, replacing the `≈` and `=` symbols with natural language).
+- Both the "Received" field and the derived rate label must apply `.monospacedDigit()` to numeric content and trailing currency codes.
+
 ### Account Picker
 
 The "To Account" picker removes the same-currency filter. All non-hidden accounts are eligible, excluding the from account. This replaces the current `eligibleTransferAccounts(excluding:)` filtering which restricts to same-currency.
@@ -93,6 +102,11 @@ The "To Account" picker removes the same-currency filter. All non-hidden account
 - **Switch To Account from same-currency to cross-currency:** "Received" field appears with the counterpart's current amount (which was the mirrored value). User edits to the correct received amount.
 - **Both amounts zero:** Derived rate is hidden (avoid division by zero).
 - **Autofill from payee:** Works as today — `applyAutofill` replaces the whole draft. If the autofilled transaction is cross-currency, both amounts populate correctly.
+- **Type change from transfer while cross-currency:** When the user changes the type away from transfer (to income/expense), `setType(_:accounts:)` removes the counterpart leg as it does today. The cross-currency state is naturally cleared since only one leg remains.
+
+### Previews
+
+Add a `#Preview("Cross-Currency Transfer")` block showing a simple transfer between accounts with different instruments (e.g., USD checking → AUD savings). This enables visual validation of the "Received" field, derived rate label, and label flipping.
 
 ### `canSwitchToSimple`
 
@@ -114,11 +128,13 @@ var instrumentId: String?  // nil = derive from account/earmark (current behavio
 
 ### UI
 
-A `Picker` row labeled "Instrument" appears on each sub-transaction in custom mode, between the Account and Amount rows. It lists all available instruments (initially the 17 fiat currencies from `CurrencyPicker`, expanding to stocks and crypto later).
+A `Picker` row labeled "Currency" appears on each sub-transaction in custom mode, between the Account and Amount rows. It lists all available instruments (initially the 17 fiat currencies from `CurrencyPicker`, expanding to stocks and crypto later). The label should be revisited when non-fiat instruments are added — "Currency" is clearer for the initial fiat-only implementation, but "Instrument" may be more appropriate when stocks/crypto are supported.
 
 The picker defaults to the account's instrument when an account is selected. When the user changes the account, the instrument resets to the new account's instrument (simple approach — no tracking of manual overrides).
 
 The currency label next to the Amount field reflects the current instrument selection.
+
+**Accessibility:** Add `.accessibilityHint("Overrides the currency derived from the account")` to the Currency picker row.
 
 ### Available Instruments
 
