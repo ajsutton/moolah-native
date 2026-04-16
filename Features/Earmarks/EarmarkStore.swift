@@ -160,14 +160,16 @@ final class EarmarkStore {
           saved[earmark.id] = earmarkSaved
           spent[earmark.id] = earmarkSpent
 
-          // Convert earmark balance to target instrument for grand total
+          // Convert earmark balance to target instrument for grand total.
+          // Clamp negative balances to zero so they don't reduce the total.
+          let zeroInTarget = InstrumentAmount.zero(instrument: targetInstrument)
           if let conversionService {
             let convertedToTarget = try await conversionService.convertAmount(
               earmarkBalance, to: targetInstrument, on: Date())
             guard !Task.isCancelled else { return }
-            grandTotal += convertedToTarget
+            grandTotal += max(convertedToTarget, zeroInTarget)
           } else {
-            grandTotal += earmarkBalance
+            grandTotal += max(earmarkBalance, zeroInTarget)
           }
         }
 
