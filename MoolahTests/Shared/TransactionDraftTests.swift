@@ -1274,6 +1274,263 @@ struct TransactionDraftTests {
     #expect(draft.legDrafts[0].categoryId == nil)
   }
 
+  // MARK: - Cross-Currency Transfers
+
+  @Test func initFromCrossCurrencyTransferUsesSimpleMode() {
+    let tx = Transaction(
+      date: Date(),
+      payee: "FX",
+      legs: [
+        TransactionLeg(accountId: accountA, instrument: .AUD, quantity: -100, type: .transfer),
+        TransactionLeg(accountId: accountB, instrument: .USD, quantity: 65, type: .transfer),
+      ]
+    )
+    let accounts = makeAccounts([
+      makeAccount(id: accountA, instrument: .AUD),
+      makeAccount(id: accountB, instrument: .USD),
+    ])
+    let draft = TransactionDraft(from: tx, viewingAccountId: accountA, accounts: accounts)
+    #expect(draft.isCustom == false)
+    #expect(draft.relevantLegIndex == 0)
+    #expect(draft.legDrafts.count == 2)
+    #expect(draft.legDrafts[0].amountText == "100.00")
+    #expect(draft.legDrafts[1].amountText == "-65.00")
+  }
+
+  @Test func initFromCrossCurrencyTransferFallsToCustomWhenInstrumentMismatchesAccount() {
+    let tx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(accountId: accountA, instrument: .USD, quantity: -100, type: .transfer),
+        TransactionLeg(accountId: accountB, instrument: .AUD, quantity: 155, type: .transfer),
+      ]
+    )
+    let accounts = makeAccounts([
+      makeAccount(id: accountA, instrument: .AUD),
+      makeAccount(id: accountB, instrument: .AUD),
+    ])
+    let draft = TransactionDraft(from: tx, viewingAccountId: accountA, accounts: accounts)
+    #expect(draft.isCustom == true)
+  }
+
+  @Test func isCrossCurrencyTransferTrueWhenDifferentCurrencies() {
+    let accounts = makeAccounts([
+      makeAccount(id: accountA, instrument: .AUD),
+      makeAccount(id: accountB, instrument: .USD),
+    ])
+    var draft = makeExpenseDraft(amountText: "100.00", accountId: accountA)
+    draft.setType(.transfer, accounts: accounts)
+    draft.toAccountId = accountB
+    #expect(draft.isCrossCurrencyTransfer(accounts: accounts) == true)
+  }
+
+  @Test func isCrossCurrencyTransferFalseWhenSameCurrency() {
+    let accounts = makeAccounts([
+      makeAccount(id: accountA, instrument: .AUD),
+      makeAccount(id: accountB, instrument: .AUD),
+    ])
+    var draft = makeExpenseDraft(amountText: "100.00", accountId: accountA)
+    draft.setType(.transfer, accounts: accounts)
+    draft.toAccountId = accountB
+    #expect(draft.isCrossCurrencyTransfer(accounts: accounts) == false)
+  }
+
+  @Test func isCrossCurrencyTransferFalseWhenNotTransfer() {
+    let accounts = makeAccounts([makeAccount(id: accountA, instrument: .AUD)])
+    let draft = makeExpenseDraft(amountText: "100.00", accountId: accountA)
+    #expect(draft.isCrossCurrencyTransfer(accounts: accounts) == false)
+  }
+
+  @Test func setCounterpartAmountSetsCounterpartLeg() {
+    let accounts = makeAccounts([
+      makeAccount(id: accountA, instrument: .AUD),
+      makeAccount(id: accountB, instrument: .USD),
+    ])
+    var draft = makeExpenseDraft(amountText: "100.00", accountId: accountA)
+    draft.setType(.transfer, accounts: accounts)
+    draft.toAccountId = accountB
+    draft.setCounterpartAmount("65.00")
+    let counterIdx = draft.relevantLegIndex == 0 ? 1 : 0
+    #expect(draft.legDrafts[counterIdx].amountText == "65.00")
+  }
+
+  @Test func setAmountDoesNotMirrorWhenCrossCurrency() {
+    let accounts = makeAccounts([
+      makeAccount(id: accountA, instrument: .AUD),
+      makeAccount(id: accountB, instrument: .USD),
+    ])
+    var draft = makeExpenseDraft(amountText: "100.00", accountId: accountA)
+    draft.setType(.transfer, accounts: accounts)
+    draft.toAccountId = accountB
+    draft.setCounterpartAmount("65.00")
+    draft.setAmount("200.00", accounts: accounts)
+    let counterIdx = draft.relevantLegIndex == 0 ? 1 : 0
+    #expect(draft.legDrafts[counterIdx].amountText == "65.00")  // unchanged
+  }
+
+  @Test func setAmountStillMirrorsWhenSameCurrency() {
+    let accounts = makeAccounts([
+      makeAccount(id: accountA, instrument: .AUD),
+      makeAccount(id: accountB, instrument: .AUD),
+    ])
+    var draft = makeExpenseDraft(amountText: "100.00", accountId: accountA)
+    draft.setType(.transfer, accounts: accounts)
+    draft.toAccountId = accountB
+    draft.setAmount("200.00", accounts: accounts)
+    let counterIdx = draft.relevantLegIndex == 0 ? 1 : 0
+    #expect(draft.legDrafts[counterIdx].amountText == "-200.00")
+  }
+
+  @Test func canSwitchToSimpleAllowsCrossCurrencyAmounts() {
+    let draft = TransactionDraft(
+      payee: "", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: true,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .transfer, accountId: UUID(), amountText: "100.00",
+          categoryId: nil, categoryText: "", earmarkId: nil),
+        TransactionDraft.LegDraft(
+          type: .transfer, accountId: UUID(), amountText: "-65.00",
+          categoryId: nil, categoryText: "", earmarkId: nil),
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    #expect(draft.canSwitchToSimple == true)
+  }
+
+  @Test func switchToAccountFromCrossCurrencyToSameCurrencySnapsMirror() {
+    let accounts = makeAccounts([
+      makeAccount(id: accountA, instrument: .AUD),
+      makeAccount(id: accountB, instrument: .USD),
+    ])
+    var draft = makeExpenseDraft(amountText: "100.00", accountId: accountA)
+    draft.setType(.transfer, accounts: accounts)
+    draft.toAccountId = accountB
+    draft.setCounterpartAmount("65.00")
+
+    // Create a third AUD account and switch to it
+    let acctC = UUID()
+    let updatedAccounts = makeAccounts([
+      makeAccount(id: accountA, instrument: .AUD),
+      makeAccount(id: accountB, instrument: .USD),
+      makeAccount(id: acctC, instrument: .AUD),
+    ])
+    draft.toAccountId = acctC
+    draft.snapToSameCurrencyIfNeeded(accounts: updatedAccounts)
+
+    let counterIdx = draft.relevantLegIndex == 0 ? 1 : 0
+    #expect(draft.legDrafts[counterIdx].amountText == "-100.00")
+  }
+
+  // MARK: - LegDraft instrumentId
+
+  @Test func legDraftInstrumentIdOverridesToTransaction() {
+    let acctId = UUID()
+    let accounts = makeAccounts([makeAccount(id: acctId, instrument: .AUD)])
+    let availableInstruments = ["AUD", "USD", "EUR", "GBP"].map { Instrument.fiat(code: $0) }
+    let draft = TransactionDraft(
+      payee: "", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: true,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .expense, accountId: acctId, amountText: "100.00",
+          categoryId: nil, categoryText: "", earmarkId: nil,
+          instrumentId: "USD")
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    let tx = draft.toTransaction(
+      id: UUID(), accounts: accounts, availableInstruments: availableInstruments)
+    #expect(tx != nil)
+    #expect(tx!.legs[0].instrument.id == "USD")
+  }
+
+  @Test func legDraftNilInstrumentIdDerivesFromAccount() {
+    let acctId = UUID()
+    let accounts = makeAccounts([makeAccount(id: acctId, instrument: .AUD)])
+    let draft = TransactionDraft(
+      payee: "", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: true,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .expense, accountId: acctId, amountText: "100.00",
+          categoryId: nil, categoryText: "", earmarkId: nil)
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
+    #expect(tx != nil)
+    #expect(tx!.legs[0].instrument.id == "AUD")
+  }
+
+  @Test func legDraftInvalidInstrumentIdReturnsNil() {
+    let acctId = UUID()
+    let accounts = makeAccounts([makeAccount(id: acctId, instrument: .AUD)])
+    let draft = TransactionDraft(
+      payee: "", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: true,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .expense, accountId: acctId, amountText: "100.00",
+          categoryId: nil, categoryText: "", earmarkId: nil,
+          instrumentId: "FAKE_CURRENCY")
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    let tx = draft.toTransaction(
+      id: UUID(), accounts: accounts, availableInstruments: [Instrument.fiat(code: "AUD")])
+    #expect(tx == nil)
+  }
+
+  // MARK: - Cross-Currency Round-Trip
+
+  @Test func toTransactionRoundTripsCrossCurrencyTransfer() {
+    let id = UUID()
+    let original = Transaction(
+      id: id,
+      date: Date(),
+      payee: "FX",
+      legs: [
+        TransactionLeg(accountId: accountA, instrument: .AUD, quantity: -100, type: .transfer),
+        TransactionLeg(accountId: accountB, instrument: .USD, quantity: 65, type: .transfer),
+      ]
+    )
+    let accounts = makeAccounts([
+      makeAccount(id: accountA, instrument: .AUD),
+      makeAccount(id: accountB, instrument: .USD),
+    ])
+    let draft = TransactionDraft(from: original, viewingAccountId: accountA, accounts: accounts)
+    let roundTripped = draft.toTransaction(id: id, accounts: accounts)
+    #expect(roundTripped != nil)
+    #expect(roundTripped!.legs.count == 2)
+    #expect(roundTripped!.legs[0].quantity == Decimal(string: "-100"))
+    #expect(roundTripped!.legs[0].instrument == .AUD)
+    #expect(roundTripped!.legs[1].quantity == Decimal(string: "65"))
+    #expect(roundTripped!.legs[1].instrument == .USD)
+  }
+
+  @Test func crossCurrencyTransferFromDestinationPerspective() {
+    let accounts = makeAccounts([
+      makeAccount(id: accountA, instrument: .AUD),
+      makeAccount(id: accountB, instrument: .USD),
+    ])
+    let tx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(accountId: accountA, instrument: .AUD, quantity: -100, type: .transfer),
+        TransactionLeg(accountId: accountB, instrument: .USD, quantity: 65, type: .transfer),
+      ]
+    )
+    let draft = TransactionDraft(from: tx, viewingAccountId: accountB, accounts: accounts)
+    #expect(draft.relevantLegIndex == 1)
+    #expect(draft.showFromAccount == true)
+    #expect(draft.legDrafts[1].amountText == "-65.00")
+  }
+
   @Test func cannotSwitchToSimpleWhenTransferHasEarmarkOnlyLeg() {
     let draft = TransactionDraft(
       payee: "", date: Date(), notes: "",

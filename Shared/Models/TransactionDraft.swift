@@ -41,6 +41,26 @@ struct TransactionDraft: Sendable, Equatable {
     var categoryId: UUID?
     var categoryText: String
     var earmarkId: UUID?
+    /// Optional instrument override for custom mode (e.g. cross-currency legs).
+    var instrumentId: String?
+
+    init(
+      type: TransactionType,
+      accountId: UUID?,
+      amountText: String,
+      categoryId: UUID?,
+      categoryText: String,
+      earmarkId: UUID?,
+      instrumentId: String? = nil
+    ) {
+      self.type = type
+      self.accountId = accountId
+      self.amountText = amountText
+      self.categoryId = categoryId
+      self.categoryText = categoryText
+      self.earmarkId = earmarkId
+      self.instrumentId = instrumentId
+    }
 
     /// True when this leg represents an earmark-only entry (no account).
     var isEarmarkOnly: Bool {
@@ -148,13 +168,25 @@ extension TransactionDraft {
   var showFromAccount: Bool {
     relevantLegIndex != 0
   }
+
+  /// Whether the current draft is a cross-currency transfer: both legs have accounts with different instruments.
+  func isCrossCurrencyTransfer(accounts: Accounts) -> Bool {
+    guard legDrafts.count == 2, type == .transfer else { return false }
+    guard let acctIdA = legDrafts[0].accountId, let acctIdB = legDrafts[1].accountId,
+      let accountA = accounts.by(id: acctIdA), let accountB = accounts.by(id: acctIdB)
+    else { return false }
+    return accountA.instrument != accountB.instrument
+  }
 }
 
 // MARK: - Convenience Initialisers
 
 extension TransactionDraft {
   /// Create a draft pre-populated from an existing transaction (for editing).
-  init(from transaction: Transaction, viewingAccountId: UUID? = nil) {
+  init(
+    from transaction: Transaction, viewingAccountId: UUID? = nil,
+    accounts: Accounts = Accounts(from: [])
+  ) {
     // Build legDrafts from all legs, applying the negation rule for display
     let drafts = transaction.legs.map { leg in
       LegDraft(
@@ -168,7 +200,15 @@ extension TransactionDraft {
       )
     }
 
-    let isCustom = !transaction.isSimple
+    let isCrossCurrency =
+      transaction.isSimpleCrossCurrencyTransfer
+      && transaction.legs.allSatisfy { leg in
+        guard let acctId = leg.accountId,
+          let account = accounts.by(id: acctId)
+        else { return false }
+        return leg.instrument == account.instrument
+      }
+    let isCustom = !(transaction.isSimple || isCrossCurrency)
 
     // Pin relevantLegIndex for simple transactions
     let relevantIndex: Int
@@ -307,18 +347,30 @@ extension TransactionDraft {
   }
 
   /// Change the display amount on the relevant leg, mirroring to counterpart for transfers.
-  mutating func setAmount(_ text: String) {
+  /// When `accounts` is provided and the draft is a cross-currency transfer, the counterpart
+  /// amount is left unchanged (independent editing).
+  mutating func setAmount(_ text: String, accounts: Accounts? = nil) {
     legDrafts[relevantLegIndex].amountText = text
 
     // Mirror to counterpart for simple transfers
     if let idx = counterpartLegIndex {
-      legDrafts[idx].amountText = negatedAmountText(text)
+      let isCrossCurrency = accounts.map { isCrossCurrencyTransfer(accounts: $0) } ?? false
+      if !isCrossCurrency {
+        legDrafts[idx].amountText = negatedAmountText(text)
+      }
+    }
+  }
+
+  /// Set the counterpart leg's display amount directly (for cross-currency transfers).
+  mutating func setCounterpartAmount(_ text: String) {
+    if let idx = counterpartLegIndex {
+      legDrafts[idx].amountText = text
     }
   }
 
   /// Parse display text, negate, and format. Returns "" if unparseable.
   /// Preserves the decimal precision from the input text.
-  private func negatedAmountText(_ text: String) -> String {
+  func negatedAmountText(_ text: String) -> String {
     // Use a dummy decimals value — we just need to parse and negate
     guard let value = InstrumentAmount.parseQuantity(from: text, decimals: 10) else {
       return ""
@@ -341,7 +393,8 @@ extension TransactionDraft {
 // MARK: - Mode Switching
 
 extension TransactionDraft {
-  /// Whether the current legs satisfy `isSimple` rules, allowing a switch to simple mode.
+  /// Whether the current legs satisfy simple-mode rules, allowing a switch to simple mode.
+  /// Cross-currency transfers are allowed (amounts need not negate).
   var canSwitchToSimple: Bool {
     if legDrafts.count <= 1 { return true }
     guard legDrafts.count == 2 else { return false }
@@ -349,14 +402,8 @@ extension TransactionDraft {
     let b = legDrafts[1]
     guard a.type == b.type && a.type == .transfer else { return false }
     guard b.categoryId == nil && b.earmarkId == nil else { return false }
-    // Simple transfers require both legs to have accounts
     guard a.accountId != nil && b.accountId != nil else { return false }
     guard a.accountId != b.accountId else { return false }
-    // Check amounts negate: parse both and compare
-    guard let aVal = InstrumentAmount.parseQuantity(from: a.amountText, decimals: 10),
-      let bVal = InstrumentAmount.parseQuantity(from: b.amountText, decimals: 10),
-      aVal == -bVal
-    else { return false }
     return true
   }
 
@@ -364,6 +411,15 @@ extension TransactionDraft {
   mutating func switchToSimple() {
     isCustom = false
     repinRelevantLeg()
+  }
+
+  /// When switching from cross-currency to same-currency, snap the counterpart amount
+  /// to the negated primary amount (resume standard mirroring).
+  mutating func snapToSameCurrencyIfNeeded(accounts: Accounts) {
+    guard let idx = counterpartLegIndex, !isCrossCurrencyTransfer(accounts: accounts) else {
+      return
+    }
+    legDrafts[idx].amountText = negatedAmountText(legDrafts[relevantLegIndex].amountText)
   }
 }
 
@@ -392,15 +448,23 @@ extension TransactionDraft {
 extension TransactionDraft {
   /// Build a `Transaction` from the draft, looking up instruments from `accounts`.
   /// Returns nil when the draft is not valid.
-  func toTransaction(id: UUID, accounts: Accounts, earmarks: Earmarks = Earmarks(from: []))
-    -> Transaction?
-  {
+  func toTransaction(
+    id: UUID,
+    accounts: Accounts,
+    earmarks: Earmarks = Earmarks(from: []),
+    availableInstruments: [Instrument] = []
+  ) -> Transaction? {
     guard isValid else { return nil }
 
     var legs: [TransactionLeg] = []
     for legDraft in legDrafts {
       let instrument: Instrument
-      if let acctId = legDraft.accountId, let account = accounts.by(id: acctId) {
+      if let overrideId = legDraft.instrumentId {
+        guard let resolved = availableInstruments.first(where: { $0.id == overrideId }) else {
+          return nil
+        }
+        instrument = resolved
+      } else if let acctId = legDraft.accountId, let account = accounts.by(id: acctId) {
         instrument = account.instrument
       } else if let emId = legDraft.earmarkId, let earmark = earmarks.by(id: emId) {
         instrument = earmark.instrument
