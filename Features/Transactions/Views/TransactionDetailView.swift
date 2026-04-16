@@ -164,6 +164,18 @@ struct TransactionDetailView: View {
       }
   }
 
+  /// Resolve the instrument ID for a leg, checking account first then earmark.
+  private func legInstrumentId(at index: Int) -> String {
+    let leg = draft.legDrafts[index]
+    if let acctId = leg.accountId, let account = accounts.by(id: acctId) {
+      return account.balance.instrument.id
+    }
+    if let emId = leg.earmarkId, let earmark = earmarks.by(id: emId) {
+      return earmark.balance.instrument.id
+    }
+    return ""
+  }
+
   /// The instrument for the relevant leg's account (for displaying currency symbol).
   private var relevantInstrument: Instrument? {
     draft.legDrafts[draft.relevantLegIndex].accountId
@@ -451,11 +463,14 @@ struct TransactionDetailView: View {
 
   @ViewBuilder
   private func subTransactionSection(index: Int) -> some View {
+    let isLegEarmarkOnly = draft.legDrafts[index].isEarmarkOnly
     Section("Sub-transaction \(index + 1) of \(draft.legDrafts.count)") {
-      Picker("Type", selection: $draft.legDrafts[index].type) {
-        Text(TransactionType.income.displayName).tag(TransactionType.income)
-        Text(TransactionType.expense.displayName).tag(TransactionType.expense)
-        Text(TransactionType.transfer.displayName).tag(TransactionType.transfer)
+      if !isLegEarmarkOnly {
+        Picker("Type", selection: $draft.legDrafts[index].type) {
+          Text(TransactionType.income.displayName).tag(TransactionType.income)
+          Text(TransactionType.expense.displayName).tag(TransactionType.expense)
+          Text(TransactionType.transfer.displayName).tag(TransactionType.transfer)
+        }
       }
 
       Picker("Account", selection: $draft.legDrafts[index].accountId) {
@@ -463,6 +478,9 @@ struct TransactionDetailView: View {
         ForEach(sortedAccounts) { account in
           Text(account.name).tag(UUID?.some(account.id))
         }
+      }
+      .onChange(of: draft.legDrafts[index].accountId) { _, _ in
+        draft.enforceEarmarkOnlyInvariants(at: index)
       }
 
       HStack {
@@ -474,35 +492,37 @@ struct TransactionDetailView: View {
           #endif
           .focused($focusedField, equals: .legAmount(index))
         Text(
-          draft.legDrafts[index].accountId
-            .flatMap { accounts.by(id: $0) }?
-            .balance.instrument.id ?? ""
+          legInstrumentId(at: index)
         )
         .foregroundStyle(.secondary)
         .monospacedDigit()
       }
 
-      LegCategoryAutocompleteField(
-        legIndex: index,
-        text: $draft.legDrafts[index].categoryText,
-        highlightedIndex: Binding(
-          get: { legCategoryHighlightedIndex[index] ?? nil },
-          set: { legCategoryHighlightedIndex[index] = $0 }
-        ),
-        suggestionCount: legCategoryVisibleSuggestions(for: index).count,
-        onTextChange: { _ in
-          if legCategoryJustSelected[index] == true {
-            legCategoryJustSelected[index] = false
-          } else {
-            showLegCategorySuggestions[index] = true
-          }
-        },
-        onAcceptHighlighted: { acceptHighlightedLegCategory(at: index) }
-      )
-      .focused($legCategoryFieldFocused, equals: index)
+      if !isLegEarmarkOnly {
+        LegCategoryAutocompleteField(
+          legIndex: index,
+          text: $draft.legDrafts[index].categoryText,
+          highlightedIndex: Binding(
+            get: { legCategoryHighlightedIndex[index] ?? nil },
+            set: { legCategoryHighlightedIndex[index] = $0 }
+          ),
+          suggestionCount: legCategoryVisibleSuggestions(for: index).count,
+          onTextChange: { _ in
+            if legCategoryJustSelected[index] == true {
+              legCategoryJustSelected[index] = false
+            } else {
+              showLegCategorySuggestions[index] = true
+            }
+          },
+          onAcceptHighlighted: { acceptHighlightedLegCategory(at: index) }
+        )
+        .focused($legCategoryFieldFocused, equals: index)
+      }
 
       Picker("Earmark", selection: $draft.legDrafts[index].earmarkId) {
-        Text("None").tag(UUID?.none)
+        if !isLegEarmarkOnly {
+          Text("None").tag(UUID?.none)
+        }
         ForEach(earmarks.ordered.filter { !$0.isHidden }) { earmark in
           Text(earmark.name).tag(UUID?.some(earmark.id))
         }
@@ -510,6 +530,9 @@ struct TransactionDetailView: View {
       #if os(macOS)
         .pickerStyle(.menu)
       #endif
+      .onChange(of: draft.legDrafts[index].earmarkId) { _, _ in
+        draft.enforceEarmarkOnlyInvariants(at: index)
+      }
 
       if draft.legDrafts.count > 1 {
         Button(role: .destructive) {
