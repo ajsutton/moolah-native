@@ -113,7 +113,9 @@ final class ProfileSession: Identifiable {
       targetInstrument: profile.instrument
     )
     self.categoryStore = CategoryStore(repository: backend.categories)
-    self.earmarkStore = EarmarkStore(repository: backend.earmarks)
+    self.earmarkStore = EarmarkStore(
+      repository: backend.earmarks, conversionService: backend.conversionService,
+      targetInstrument: profile.instrument)
     self.analysisStore = AnalysisStore(repository: backend.analysis)
     self.investmentStore = InvestmentStore(
       repository: backend.investments,
@@ -127,7 +129,11 @@ final class ProfileSession: Identifiable {
     self.transactionStore.onMutate = { old, new in
       let delta = BalanceDeltaCalculator.deltas(old: old, new: new)
       accountStore.applyDelta(delta.accountDeltas)
-      earmarkStore.applyTransactionDelta(old: old, new: new)
+      earmarkStore.applyDelta(
+        earmarkDeltas: delta.earmarkDeltas,
+        savedDeltas: delta.earmarkSavedDeltas,
+        spentDeltas: delta.earmarkSpentDeltas
+      )
     }
     self.investmentStore.onInvestmentValueChanged = { accountId, latestValue in
       accountStore.updateInvestmentValue(accountId: accountId, value: latestValue)

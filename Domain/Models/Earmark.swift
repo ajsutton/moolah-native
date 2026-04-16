@@ -171,6 +171,7 @@ struct Earmarks: RandomAccessCollection, Sendable {
   }
 
   /// Returns a new Earmarks collection with positions, savedPositions, and spentPositions adjusted.
+  /// Also updates legacy balance/saved/spent fields for single-instrument compatibility.
   func adjustingPositions(
     of earmarkId: UUID,
     positionDeltas: [Instrument: Decimal],
@@ -184,6 +185,29 @@ struct Earmarks: RandomAccessCollection, Sendable {
       copy.positions = copy.positions.applying(deltas: positionDeltas)
       copy.savedPositions = copy.savedPositions.applying(deltas: savedDeltas)
       copy.spentPositions = copy.spentPositions.applying(deltas: spentDeltas)
+
+      // Update legacy balance/saved/spent fields for single-instrument earmarks
+      if let primaryPosition = copy.positions.first(where: {
+        $0.instrument == copy.balance.instrument
+      }) {
+        copy.balance = primaryPosition.amount
+      } else if copy.positions.isEmpty {
+        copy.balance = .zero(instrument: copy.balance.instrument)
+      }
+      if let primarySaved = copy.savedPositions.first(where: {
+        $0.instrument == copy.saved.instrument
+      }) {
+        copy.saved = primarySaved.amount
+      } else if copy.savedPositions.isEmpty {
+        copy.saved = .zero(instrument: copy.saved.instrument)
+      }
+      if let primarySpent = copy.spentPositions.first(where: {
+        $0.instrument == copy.spent.instrument
+      }) {
+        copy.spent = primarySpent.amount
+      } else if copy.spentPositions.isEmpty {
+        copy.spent = .zero(instrument: copy.spent.instrument)
+      }
       return copy
     }
     return Earmarks(from: adjusted)
