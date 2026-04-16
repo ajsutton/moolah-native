@@ -2013,6 +2013,112 @@ struct AnalysisRepositoryContractTests {
       balances[category.id] == InstrumentAmount(quantity: -60, instrument: .defaultTestInstrument))
   }
 
+  @Test("forecast converts foreign-currency scheduled transactions to profile currency")
+  func forecastConvertsForeignCurrencyScheduled() async throws {
+    // USD -> AUD at 1.5x rate. FixedConversionService ignores the conversion date,
+    // so "current rate" is irrelevant to test outcome — the test just verifies we
+    // don't crash and that the converted amount lands in the forecast balance.
+    let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let audAccount = Account(
+      id: UUID(), name: "AUD Account", type: .bank, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(audAccount)
+
+    let calendar = Calendar(identifier: .gregorian)
+    let today = calendar.startOfDay(for: Date())
+    let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+    let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+    let nextWeek = calendar.date(byAdding: .day, value: 7, to: today)!
+    let usd = Instrument.fiat(code: "USD")
+
+    // Opening AUD balance so forecast has a starting value.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: yesterday,
+        payee: "Opening",
+        legs: [
+          TransactionLeg(
+            accountId: audAccount.id, instrument: .defaultTestInstrument,
+            quantity: 1000, type: .openingBalance)
+        ]))
+
+    // Scheduled USD expense -100 USD (one-off, future-dated).
+    // Expected: pre-converted to -150 AUD before entering the forecast accumulator.
+    _ = try await backend.transactions.create(
+      Transaction(
+        id: UUID(),
+        date: tomorrow,
+        payee: "US Subscription",
+        recurPeriod: .once,
+        legs: [
+          TransactionLeg(
+            accountId: audAccount.id, instrument: usd,
+            quantity: -100, type: .expense)
+        ]))
+
+    // Fetch balances with forecast enabled.
+    let balances = try await backend.analysis.fetchDailyBalances(
+      after: nil, forecastUntil: nextWeek)
+
+    // There must be a forecast entry for tomorrow.
+    let forecastEntry = balances.first { $0.date == tomorrow && $0.isForecast }
+    #expect(forecastEntry != nil, "expected a forecast entry for tomorrow")
+
+    // Starting balance was 1000 AUD; forecast leg is -100 USD * 1.5 = -150 AUD.
+    // Running balance after the scheduled expense = 850 AUD.
+    #expect(forecastEntry?.balance.quantity == 850)
+    #expect(forecastEntry?.balance.instrument == .defaultTestInstrument)
+  }
+
+  @Test("forecast leaves profile-currency scheduled transactions unchanged")
+  func forecastLeavesProfileCurrencyUnchanged() async throws {
+    // Rate dict intentionally empty — if the code path tried to convert AUD legs
+    // it would take the 1:1 fallback, but the intent is that same-currency legs
+    // skip the conversion call entirely.
+    let conversion = FixedConversionService(rates: [:])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let account = Account(
+      id: UUID(), name: "AUD Account", type: .bank, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(account)
+
+    let calendar = Calendar(identifier: .gregorian)
+    let today = calendar.startOfDay(for: Date())
+    let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+    let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+    let nextWeek = calendar.date(byAdding: .day, value: 7, to: today)!
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: yesterday,
+        payee: "Opening",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: 500, type: .openingBalance)
+        ]))
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        id: UUID(),
+        date: tomorrow,
+        payee: "Rent",
+        recurPeriod: .once,
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: -200, type: .expense)
+        ]))
+
+    let balances = try await backend.analysis.fetchDailyBalances(
+      after: nil, forecastUntil: nextWeek)
+
+    let forecastEntry = balances.first { $0.date == tomorrow && $0.isForecast }
+    #expect(forecastEntry != nil)
+    #expect(forecastEntry?.balance.quantity == 300)
+  }
+
   @Test("single-currency profiles work without conversion")
   func singleCurrencyNoConversion() async throws {
     // Default backend has no conversion rates configured — single currency should work fine
