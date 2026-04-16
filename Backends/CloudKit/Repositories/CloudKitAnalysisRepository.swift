@@ -397,11 +397,12 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
         case .transfer:
           if isInvestmentAccount {
-            if amount.quantity > 0 {
+            let contribution = amount.quantity
+            if contribution > 0 {
               monthlyData[month]!.earmarkedIncome += amount
-            } else if amount.quantity < 0 {
+            } else if contribution < 0 {
               monthlyData[month]!.earmarkedExpense += InstrumentAmount(
-                quantity: -amount.quantity, instrument: instrument)
+                quantity: -contribution, instrument: instrument)
             }
           }
         }
@@ -483,6 +484,22 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     }
 
     return balances
+  }
+
+  // MARK: - Currency Conversion Helper
+
+  private static func convertedAmount(
+    _ leg: TransactionLeg,
+    to instrument: Instrument,
+    on date: Date,
+    conversionService: any InstrumentConversionService
+  ) async throws -> InstrumentAmount {
+    if leg.instrument.id == instrument.id {
+      return leg.amount
+    }
+    let converted = try await conversionService.convert(
+      leg.quantity, from: leg.instrument, to: instrument, on: date)
+    return InstrumentAmount(quantity: converted, instrument: instrument)
   }
 
   // MARK: - Static Computation Methods (for off-main-thread use)
@@ -727,11 +744,12 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
         case .transfer:
           if isInvestmentAccount {
-            if amount.quantity > 0 {
+            let contribution = amount.quantity
+            if contribution > 0 {
               monthlyData[month]!.earmarkedIncome += amount
-            } else if amount.quantity < 0 {
+            } else if contribution < 0 {
               monthlyData[month]!.earmarkedExpense += InstrumentAmount(
-                quantity: -amount.quantity, instrument: instrument)
+                quantity: -contribution, instrument: instrument)
             }
           }
         }
@@ -868,24 +886,6 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         isForecast: existing.isForecast
       )
     }
-  }
-
-  // MARK: - Currency Conversion Helper
-
-  /// Convert a transaction leg's amount to the profile instrument, using the conversion service
-  /// when the leg's instrument differs from the target.
-  private static func convertedAmount(
-    _ leg: TransactionLeg,
-    to instrument: Instrument,
-    on date: Date,
-    conversionService: any InstrumentConversionService
-  ) async throws -> InstrumentAmount {
-    if leg.instrument.id == instrument.id {
-      return leg.amount
-    }
-    let converted = try await conversionService.convert(
-      leg.quantity, from: leg.instrument, to: instrument, on: date)
-    return InstrumentAmount(quantity: converted, instrument: instrument)
   }
 
   // MARK: - Static Helper Methods

@@ -27,6 +27,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -71,6 +72,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -118,6 +120,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -151,6 +154,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -218,6 +222,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(checking)
 
@@ -225,6 +230,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Savings",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(savings)
 
@@ -295,6 +301,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -345,6 +352,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -374,6 +382,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -426,6 +435,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -471,6 +481,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -549,6 +560,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(bankAccount)
 
@@ -633,6 +645,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -686,6 +699,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -738,6 +752,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -818,6 +833,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -870,6 +886,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -915,6 +932,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -1001,6 +1019,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -1067,6 +1086,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -1122,6 +1142,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -1184,6 +1205,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -1236,6 +1258,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account1)
 
@@ -1294,6 +1317,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -1360,6 +1384,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -1578,6 +1603,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Checking",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -1644,6 +1670,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Bank",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(bankAccount)
 
@@ -1707,6 +1734,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -1775,6 +1803,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -1802,6 +1831,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -1841,6 +1871,165 @@ struct AnalysisRepositoryContractTests {
 
   // MARK: - loadAll Tests
 
+  // MARK: - Multi-Currency Conversion Tests
+
+  @Test("expense breakdown converts foreign-currency legs to profile currency")
+  func expenseBreakdownConvertsForeignCurrency() async throws {
+    // USD -> AUD at 1.5x rate
+    let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+    let account = Account(id: UUID(), name: "USD Account", type: .bank)
+    _ = try await backend.accounts.create(account)
+
+    let category = Category(id: UUID(), name: "Groceries")
+    _ = try await backend.categories.create(category)
+
+    let today = Calendar.current.startOfDay(for: Date())
+    let usd = Instrument.fiat(code: "USD")
+
+    // USD expense: -100 USD should become -150 AUD
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "US Store",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: usd,
+            quantity: -100, type: .expense,
+            categoryId: category.id)
+        ]))
+
+    // AUD expense: -50 AUD stays as-is
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "AU Store",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: -50, type: .expense,
+            categoryId: category.id)
+        ]))
+
+    let breakdown = try await backend.analysis.fetchExpenseBreakdown(monthEnd: 25, after: nil)
+
+    #expect(breakdown.count == 1)
+    // -100 USD * 1.5 = -150 AUD, plus -50 AUD = -200 AUD
+    #expect(breakdown[0].totalExpenses.quantity == -200)
+    #expect(breakdown[0].totalExpenses.instrument == .defaultTestInstrument)
+  }
+
+  @Test("income/expense converts foreign-currency legs to profile currency")
+  func incomeExpenseConvertsForeignCurrency() async throws {
+    let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+    let account = Account(id: UUID(), name: "Account", type: .bank)
+    _ = try await backend.accounts.create(account)
+
+    let today = Calendar.current.startOfDay(for: Date())
+    let usd = Instrument.fiat(code: "USD")
+
+    // USD income: +200 USD should become +300 AUD
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "US Employer",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: usd,
+            quantity: 200, type: .income)
+        ]))
+
+    // USD expense: -80 USD should become -120 AUD
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "US Store",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: usd,
+            quantity: -80, type: .expense)
+        ]))
+
+    let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
+
+    #expect(!data.isEmpty)
+    let month = data[0]
+    #expect(month.income.quantity == 300)  // 200 USD * 1.5
+    #expect(month.expense.quantity == -120)  // -80 USD * 1.5
+    #expect(month.profit.quantity == 180)  // 300 + (-120)
+    #expect(month.income.instrument == .defaultTestInstrument)
+  }
+
+  @Test("category balances converts foreign-currency legs to profile currency")
+  func categoryBalancesConvertsForeignCurrency() async throws {
+    let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+    let account = Account(id: UUID(), name: "Account", type: .bank)
+    _ = try await backend.accounts.create(account)
+
+    let category = Category(id: UUID(), name: "Food")
+    _ = try await backend.categories.create(category)
+
+    let today = Calendar.current.startOfDay(for: Date())
+    let usd = Instrument.fiat(code: "USD")
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "US Store",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: usd,
+            quantity: -40, type: .expense,
+            categoryId: category.id)
+        ]))
+
+    let balances = try await backend.analysis.fetchCategoryBalances(
+      dateRange: today...today,
+      transactionType: .expense,
+      filters: nil
+    )
+
+    // -40 USD * 1.5 = -60 AUD
+    #expect(
+      balances[category.id] == InstrumentAmount(quantity: -60, instrument: .defaultTestInstrument))
+  }
+
+  @Test("single-currency profiles work without conversion")
+  func singleCurrencyNoConversion() async throws {
+    // Default backend has no conversion rates configured — single currency should work fine
+    let backend = CloudKitAnalysisTestBackend()
+    let account = Account(id: UUID(), name: "Account", type: .bank)
+    _ = try await backend.accounts.create(account)
+
+    let category = Category(id: UUID(), name: "Food")
+    _ = try await backend.categories.create(category)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Store",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: -25, type: .expense,
+            categoryId: category.id)
+        ]))
+
+    let breakdown = try await backend.analysis.fetchExpenseBreakdown(monthEnd: 25, after: nil)
+    #expect(breakdown.count == 1)
+    #expect(breakdown[0].totalExpenses.quantity == -25)
+
+    let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
+    #expect(!data.isEmpty)
+    #expect(data[0].expense.quantity == -25)
+  }
+
+  // MARK: - loadAll Tests
+
   @Test("loadAll returns combined results matching individual methods")
   func loadAllReturnsCombinedResults() async throws {
     let backend = CloudKitAnalysisTestBackend()
@@ -1849,6 +2038,7 @@ struct AnalysisRepositoryContractTests {
       id: UUID(),
       name: "Test Account",
       type: .bank,
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.accounts.create(account)
 
@@ -1912,7 +2102,7 @@ private struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable
   let investments: any InvestmentRepository
   let conversionService: any InstrumentConversionService
 
-  init() {
+  init(conversionService customConversion: (any InstrumentConversionService)? = nil) {
     let container = try! TestModelContainer.create()
     let currency = Instrument.defaultTestInstrument
     self.auth = InMemoryAuthProvider()
@@ -1924,11 +2114,16 @@ private struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable
       modelContainer: container)
     self.earmarks = CloudKitEarmarkRepository(
       modelContainer: container, instrument: currency)
-    let rateClient = FixedRateClient()
-    let cacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("test-rates-\(UUID().uuidString)")
-    let exchangeRates = ExchangeRateService(client: rateClient, cacheDirectory: cacheDir)
-    let conversion = FiatConversionService(exchangeRates: exchangeRates)
+    let conversion: any InstrumentConversionService
+    if let customConversion {
+      conversion = customConversion
+    } else {
+      let rateClient = FixedRateClient()
+      let cacheDir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("test-rates-\(UUID().uuidString)")
+      let exchangeRates = ExchangeRateService(client: rateClient, cacheDirectory: cacheDir)
+      conversion = FiatConversionService(exchangeRates: exchangeRates)
+    }
     self.conversionService = conversion
     self.analysis = CloudKitAnalysisRepository(
       modelContainer: container, instrument: currency, conversionService: conversion)
