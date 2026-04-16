@@ -109,7 +109,7 @@ struct EditEarmarkSheet: View {
 
         Section("Savings Goal") {
           HStack {
-            Text(earmark.balance.instrument.id)
+            Text(earmark.instrument.id)
               .foregroundStyle(.secondary)
             TextField("Amount", text: $savingsGoal)
               #if os(iOS)
@@ -161,10 +161,10 @@ struct EditEarmarkSheet: View {
 
   private func saveChanges() {
     let goalQty = InstrumentAmount.parseQuantity(
-      from: savingsGoal, decimals: earmark.balance.instrument.decimals)
+      from: savingsGoal, decimals: earmark.instrument.decimals)
     let goal =
       goalQty.flatMap {
-        $0 > 0 ? InstrumentAmount(quantity: $0, instrument: earmark.balance.instrument) : nil
+        $0 > 0 ? InstrumentAmount(quantity: $0, instrument: earmark.instrument) : nil
       }
 
     var updated = earmark

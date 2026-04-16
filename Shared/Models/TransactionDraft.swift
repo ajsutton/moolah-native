@@ -403,7 +403,7 @@ extension TransactionDraft {
       if let acctId = legDraft.accountId, let account = accounts.by(id: acctId) {
         instrument = account.balance.instrument
       } else if let emId = legDraft.earmarkId, let earmark = earmarks.by(id: emId) {
-        instrument = earmark.balance.instrument
+        instrument = earmark.instrument
       } else {
         return nil
       }

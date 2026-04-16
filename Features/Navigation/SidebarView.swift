@@ -207,7 +207,7 @@ struct SidebarView: View {
     }
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
-        instrument: accountStore.currentTotal.instrument,
+        instrument: earmarkStore.targetInstrument,
         onCreate: { newEarmark in
           Task {
             _ = await earmarkStore.create(newEarmark)

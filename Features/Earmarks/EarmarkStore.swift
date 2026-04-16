@@ -17,7 +17,7 @@ final class EarmarkStore {
 
   private let repository: EarmarkRepository
   private let conversionService: (any InstrumentConversionService)?
-  private let targetInstrument: Instrument
+  let targetInstrument: Instrument
   private let logger = Logger(subsystem: "com.moolah.app", category: "EarmarkStore")
   private var conversionTask: Task<Void, Never>?
 
@@ -74,12 +74,6 @@ final class EarmarkStore {
 
   var visibleEarmarks: [Earmark] {
     earmarks.filter { showHidden || !$0.isHidden }
-  }
-
-  var totalBalance: InstrumentAmount {
-    visibleEarmarks.reduce(.zero(instrument: visibleEarmarks.first?.balance.instrument ?? .AUD)) {
-      $0 + $1.balance
-    }
   }
 
   /// Applies position deltas to earmark balances, saved, and spent.

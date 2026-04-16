@@ -171,7 +171,7 @@ struct TransactionDetailView: View {
       return account.balance.instrument.id
     }
     if let emId = leg.earmarkId, let earmark = earmarks.by(id: emId) {
-      return earmark.balance.instrument.id
+      return earmark.instrument.id
     }
     return ""
   }

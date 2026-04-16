@@ -70,7 +70,7 @@ struct EarmarksView: View {
       #endif
       .sheet(isPresented: $showCreateSheet) {
         CreateEarmarkSheet(
-          instrument: earmarkStore.totalBalance.instrument,
+          instrument: earmarkStore.targetInstrument,
           onCreate: { newEarmark in
             Task {
               _ = await earmarkStore.create(newEarmark)
