@@ -38,13 +38,13 @@ struct PositionBookTests {
     #expect(book == PositionBook())
   }
 
-  @Test("applying a single leg records the position")
+  @Test("applying a single-leg transaction records the position")
   func applySingleLegRecordsPosition() {
     var book = PositionBook.empty
     let leg = TransactionLeg(
       accountId: bankAccount, instrument: aud, quantity: -50, type: .expense,
       earmarkId: earmarkA)
-    book.apply(leg)
+    book.apply(transaction(legs: [leg]))
 
     #expect(book.accounts[bankAccount]?[aud] == -50)
     #expect(book.earmarks[earmarkA]?[aud] == -50)
@@ -69,11 +69,13 @@ struct PositionBookTests {
   @Test("sign = -1 reverses an application")
   func signMinusOneReverses() {
     var book = PositionBook.empty
-    let leg = TransactionLeg(
-      accountId: bankAccount, instrument: aud, quantity: 100, type: .income,
-      earmarkId: earmarkA)
-    book.apply(leg, sign: 1)
-    book.apply(leg, sign: -1)
+    let txn = transaction(legs: [
+      TransactionLeg(
+        accountId: bankAccount, instrument: aud, quantity: 100, type: .income,
+        earmarkId: earmarkA)
+    ])
+    book.apply(txn, sign: 1)
+    book.apply(txn, sign: -1)
     book.cleanZeros()
 
     #expect(book == PositionBook.empty)
@@ -118,10 +120,11 @@ struct PositionBookTests {
   @Test("cleanZeros removes zero-valued instruments and empty entities")
   func cleanZerosRemovesEmpty() {
     var book = PositionBook.empty
-    let leg = TransactionLeg(
-      accountId: bankAccount, instrument: aud, quantity: 100, type: .income)
-    book.apply(leg, sign: 1)
-    book.apply(leg, sign: -1)
+    let txn = transaction(legs: [
+      TransactionLeg(accountId: bankAccount, instrument: aud, quantity: 100, type: .income)
+    ])
+    book.apply(txn, sign: 1)
+    book.apply(txn, sign: -1)
 
     // Pre-clean: zero entry exists.
     #expect(book.accounts[bankAccount]?[aud] == 0)
@@ -137,9 +140,13 @@ struct PositionBookTests {
   func singleInstrumentDailyBalanceSkipsConversion() async throws {
     var book = PositionBook.empty
     book.apply(
-      TransactionLeg(accountId: bankAccount, instrument: aud, quantity: 1_000, type: .income))
+      transaction(legs: [
+        TransactionLeg(accountId: bankAccount, instrument: aud, quantity: 1_000, type: .income)
+      ]))
     book.apply(
-      TransactionLeg(accountId: bankAccount, instrument: aud, quantity: -150, type: .expense))
+      transaction(legs: [
+        TransactionLeg(accountId: bankAccount, instrument: aud, quantity: -150, type: .expense)
+      ]))
 
     // Tuned with a non-1 USD rate to prove the fast path is taken: if the
     // conversion service were called, totals would change.
@@ -172,10 +179,14 @@ struct PositionBookTests {
     var book = PositionBook.empty
     // 100 AUD in bank account.
     book.apply(
-      TransactionLeg(accountId: bankAccount, instrument: aud, quantity: 100, type: .income))
+      transaction(legs: [
+        TransactionLeg(accountId: bankAccount, instrument: aud, quantity: 100, type: .income)
+      ]))
     // 50 USD in another bank account — should be converted at 1.5 AUD/USD = 75 AUD.
     book.apply(
-      TransactionLeg(accountId: bankAccount2, instrument: usd, quantity: 50, type: .income))
+      transaction(legs: [
+        TransactionLeg(accountId: bankAccount2, instrument: usd, quantity: 50, type: .income)
+      ]))
 
     let conversion = FixedConversionService(rates: ["USD": 1.5])
 
@@ -200,14 +211,18 @@ struct PositionBookTests {
     var book = PositionBook.empty
     // earmarkA: -200 (negative — should be clamped to 0).
     book.apply(
-      TransactionLeg(
-        accountId: bankAccount, instrument: aud, quantity: -200, type: .expense,
-        earmarkId: earmarkA))
+      transaction(legs: [
+        TransactionLeg(
+          accountId: bankAccount, instrument: aud, quantity: -200, type: .expense,
+          earmarkId: earmarkA)
+      ]))
     // earmarkB: +500 (positive — counted in full).
     book.apply(
-      TransactionLeg(
-        accountId: bankAccount, instrument: aud, quantity: 500, type: .income,
-        earmarkId: earmarkB))
+      transaction(legs: [
+        TransactionLeg(
+          accountId: bankAccount, instrument: aud, quantity: 500, type: .income,
+          earmarkId: earmarkB)
+      ]))
 
     let conversion = FixedConversionService()
 
@@ -232,14 +247,18 @@ struct PositionBookTests {
     var book = PositionBook.empty
     // Transfer into investment account.
     book.apply(
-      TransactionLeg(
-        accountId: investmentAccount, instrument: aud, quantity: 1_000, type: .transfer),
-      isInvestmentAccount: true)
+      transaction(legs: [
+        TransactionLeg(
+          accountId: investmentAccount, instrument: aud, quantity: 1_000, type: .transfer)
+      ]),
+      investmentAccountIds: [investmentAccount])
     // Expense (e.g. capital loss / fee) on investment account.
     book.apply(
-      TransactionLeg(
-        accountId: investmentAccount, instrument: aud, quantity: -50, type: .expense),
-      isInvestmentAccount: true)
+      transaction(legs: [
+        TransactionLeg(
+          accountId: investmentAccount, instrument: aud, quantity: -50, type: .expense)
+      ]),
+      investmentAccountIds: [investmentAccount])
 
     let conversion = FixedConversionService()
 
@@ -262,14 +281,18 @@ struct PositionBookTests {
     var book = PositionBook.empty
     // Transfer into investment account: contributes to both dicts.
     book.apply(
-      TransactionLeg(
-        accountId: investmentAccount, instrument: aud, quantity: 1_000, type: .transfer),
-      isInvestmentAccount: true)
+      transaction(legs: [
+        TransactionLeg(
+          accountId: investmentAccount, instrument: aud, quantity: 1_000, type: .transfer)
+      ]),
+      investmentAccountIds: [investmentAccount])
     // Income on investment account: contributes only to `accounts`.
     book.apply(
-      TransactionLeg(
-        accountId: investmentAccount, instrument: aud, quantity: 200, type: .income),
-      isInvestmentAccount: true)
+      transaction(legs: [
+        TransactionLeg(
+          accountId: investmentAccount, instrument: aud, quantity: 200, type: .income)
+      ]),
+      investmentAccountIds: [investmentAccount])
 
     let conversion = FixedConversionService()
 
@@ -291,9 +314,11 @@ struct PositionBookTests {
     var book = PositionBook.empty
     // No transfers — only an expense on the investment account.
     book.apply(
-      TransactionLeg(
-        accountId: investmentAccount, instrument: aud, quantity: -100, type: .expense),
-      isInvestmentAccount: true)
+      transaction(legs: [
+        TransactionLeg(
+          accountId: investmentAccount, instrument: aud, quantity: -100, type: .expense)
+      ]),
+      investmentAccountIds: [investmentAccount])
 
     let conversion = FixedConversionService()
 
@@ -315,9 +340,11 @@ struct PositionBookTests {
   func transferAppearsInBothRules() async throws {
     var book = PositionBook.empty
     book.apply(
-      TransactionLeg(
-        accountId: investmentAccount, instrument: aud, quantity: 500, type: .transfer),
-      isInvestmentAccount: true)
+      transaction(legs: [
+        TransactionLeg(
+          accountId: investmentAccount, instrument: aud, quantity: 500, type: .transfer)
+      ]),
+      investmentAccountIds: [investmentAccount])
 
     let conversion = FixedConversionService()
 

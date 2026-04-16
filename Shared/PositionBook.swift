@@ -45,13 +45,18 @@ struct PositionBook: Equatable, Sendable {
   /// leg's account/earmark membership and type, plus `accountsFromTransfers`
   /// when the leg targets an investment account via a `.transfer`.
   ///
+  /// Private — callers should drive position math through the txn-level
+  /// `apply(_ txn:sign:investmentAccountIds:)` overload, which decides
+  /// investment-account membership once per transaction and avoids leaking
+  /// accumulator policy into the per-leg primitive.
+  ///
   /// - Parameters:
   ///   - leg: The leg to apply.
   ///   - sign: +1 to apply the leg, -1 to reverse it (used by delta math).
   ///   - isInvestmentAccount: Whether `leg.accountId` corresponds to an
   ///     investment account. When true and the leg is a transfer, the leg also
   ///     contributes to `accountsFromTransfers`.
-  mutating func apply(
+  private mutating func apply(
     _ leg: TransactionLeg,
     sign: Decimal = 1,
     isInvestmentAccount: Bool = false

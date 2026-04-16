@@ -19,6 +19,28 @@ struct BalanceDelta: Equatable, Sendable {
     accountDeltas.isEmpty && earmarkDeltas.isEmpty && earmarkSavedDeltas.isEmpty
       && earmarkSpentDeltas.isEmpty
   }
+
+  /// Project a `PositionBook` into the four delta dicts consumed by stores.
+  /// `accountsFromTransfers` is intentionally ignored — it's only used by the
+  /// analysis pipeline, never by delta consumers.
+  init(from book: PositionBook) {
+    self.accountDeltas = book.accounts
+    self.earmarkDeltas = book.earmarks
+    self.earmarkSavedDeltas = book.earmarksSaved
+    self.earmarkSpentDeltas = book.earmarksSpent
+  }
+
+  init(
+    accountDeltas: PositionDeltas,
+    earmarkDeltas: PositionDeltas,
+    earmarkSavedDeltas: PositionDeltas,
+    earmarkSpentDeltas: PositionDeltas
+  ) {
+    self.accountDeltas = accountDeltas
+    self.earmarkDeltas = earmarkDeltas
+    self.earmarkSavedDeltas = earmarkSavedDeltas
+    self.earmarkSpentDeltas = earmarkSpentDeltas
+  }
 }
 
 /// Computes all balance deltas from a transaction create, update, or delete in a single pass.
@@ -27,102 +49,17 @@ struct BalanceDelta: Equatable, Sendable {
 /// - `deltas(old: tx, new: nil)` — transaction deleted
 /// - `deltas(old: oldTx, new: newTx)` — transaction updated
 /// - `deltas(old: nil, new: nil)` — no-op, returns `.empty`
+///
+/// Thin wrapper over `PositionBook`: reverses the old transaction's legs,
+/// applies the new transaction's legs, and projects the resulting book into
+/// the delta shape. Scheduled transactions are skipped (they don't move money).
 enum BalanceDeltaCalculator {
 
   static func deltas(old: Transaction?, new: Transaction?) -> BalanceDelta {
-    var accountDeltas: [UUID: [Instrument: Decimal]] = [:]
-    var earmarkDeltas: [UUID: [Instrument: Decimal]] = [:]
-    var earmarkSavedDeltas: [UUID: [Instrument: Decimal]] = [:]
-    var earmarkSpentDeltas: [UUID: [Instrument: Decimal]] = [:]
-
-    // Reverse old legs (skip scheduled transactions)
-    if let old, !old.isScheduled {
-      for leg in old.legs {
-        applyLeg(
-          leg,
-          sign: -1,
-          accountDeltas: &accountDeltas,
-          earmarkDeltas: &earmarkDeltas,
-          earmarkSavedDeltas: &earmarkSavedDeltas,
-          earmarkSpentDeltas: &earmarkSpentDeltas
-        )
-      }
-    }
-
-    // Apply new legs (skip scheduled transactions)
-    if let new, !new.isScheduled {
-      for leg in new.legs {
-        applyLeg(
-          leg,
-          sign: 1,
-          accountDeltas: &accountDeltas,
-          earmarkDeltas: &earmarkDeltas,
-          earmarkSavedDeltas: &earmarkSavedDeltas,
-          earmarkSpentDeltas: &earmarkSpentDeltas
-        )
-      }
-    }
-
-    // Clean up zero entries
-    cleanZeros(&accountDeltas)
-    cleanZeros(&earmarkDeltas)
-    cleanZeros(&earmarkSavedDeltas)
-    cleanZeros(&earmarkSpentDeltas)
-
-    return BalanceDelta(
-      accountDeltas: accountDeltas,
-      earmarkDeltas: earmarkDeltas,
-      earmarkSavedDeltas: earmarkSavedDeltas,
-      earmarkSpentDeltas: earmarkSpentDeltas
-    )
-  }
-
-  // MARK: - Private
-
-  private static func applyLeg(
-    _ leg: TransactionLeg,
-    sign: Decimal,
-    accountDeltas: inout [UUID: [Instrument: Decimal]],
-    earmarkDeltas: inout [UUID: [Instrument: Decimal]],
-    earmarkSavedDeltas: inout [UUID: [Instrument: Decimal]],
-    earmarkSpentDeltas: inout [UUID: [Instrument: Decimal]]
-  ) {
-    let quantity = leg.quantity
-
-    if let accountId = leg.accountId {
-      accountDeltas[accountId, default: [:]][leg.instrument, default: 0] += sign * quantity
-    }
-
-    if let earmarkId = leg.earmarkId {
-      earmarkDeltas[earmarkId, default: [:]][leg.instrument, default: 0] += sign * quantity
-
-      switch leg.type {
-      case .income, .openingBalance:
-        // Saved delta tracks the change to the saved total.
-        // Income/openingBalance quantities are positive, so sign * quantity gives the right direction.
-        earmarkSavedDeltas[earmarkId, default: [:]][leg.instrument, default: 0] += sign * quantity
-
-      case .expense, .transfer:
-        // Spent delta tracks the change to the spent total (stored as positive quantities).
-        // Negate the quantity: expenses are typically negative (outflows), so negating gives
-        // a positive spent amount. Refunds (positive expense quantity) correctly reduce spent.
-        earmarkSpentDeltas[earmarkId, default: [:]][leg.instrument, default: 0] +=
-          sign * (-quantity)
-      }
-    }
-  }
-
-  private static func cleanZeros(_ deltas: inout [UUID: [Instrument: Decimal]]) {
-    for (entityId, instruments) in deltas {
-      var cleaned = instruments
-      for (instrument, value) in cleaned where value == 0 {
-        cleaned.removeValue(forKey: instrument)
-      }
-      if cleaned.isEmpty {
-        deltas.removeValue(forKey: entityId)
-      } else {
-        deltas[entityId] = cleaned
-      }
-    }
+    var book = PositionBook.empty
+    if let old, !old.isScheduled { book.apply(old, sign: -1) }
+    if let new, !new.isScheduled { book.apply(new, sign: 1) }
+    book.cleanZeros()
+    return BalanceDelta(from: book)
   }
 }
