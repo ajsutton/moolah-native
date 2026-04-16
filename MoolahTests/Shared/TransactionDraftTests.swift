@@ -1114,6 +1114,54 @@ struct TransactionDraftTests {
     #expect(leg.isEarmarkOnly == false)
   }
 
+  @Test func validEarmarkOnlyLeg() {
+    let draft = TransactionDraft(
+      payee: "", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: false,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .income, accountId: nil, amountText: "100",
+          categoryId: nil, categoryText: "", earmarkId: UUID())
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    #expect(draft.isValid == true)
+  }
+
+  @Test func invalidLegWithNeitherAccountNorEarmark() {
+    let draft = TransactionDraft(
+      payee: "", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: false,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .expense, accountId: nil, amountText: "100",
+          categoryId: nil, categoryText: "", earmarkId: nil)
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    #expect(draft.isValid == false)
+  }
+
+  @Test func validCustomWithMixedAccountAndEarmarkOnlyLegs() {
+    let draft = TransactionDraft(
+      payee: "", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: true,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .expense, accountId: UUID(), amountText: "50",
+          categoryId: nil, categoryText: "", earmarkId: nil),
+        TransactionDraft.LegDraft(
+          type: .income, accountId: nil, amountText: "50",
+          categoryId: nil, categoryText: "", earmarkId: UUID()),
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    #expect(draft.isValid == true)
+  }
+
   @Test func earmarkOnlyLegEnforcesIncomeType() {
     var draft = TransactionDraft(
       payee: "", date: Date(), notes: "",
