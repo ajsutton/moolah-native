@@ -32,7 +32,8 @@
       }
       let profName = profileSpec.name
 
-      return runBlockingWithError { @MainActor () async throws -> ScriptableTransaction in
+      let result: ScriptableTransaction? = runBlockingWithError {
+        @MainActor () async throws -> ScriptableTransaction in
         guard let service = ScriptingContext.automationService else {
           throw AutomationError.operationFailed("Scripting not configured")
         }
@@ -59,6 +60,7 @@
           throw AutomationError.operationFailed("Failed to pay scheduled transaction")
         }
       }
+      return result
     }
   }
 #endif

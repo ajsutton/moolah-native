@@ -28,7 +28,8 @@
       let notes = args["notes"] as? String
       let profName = profileName
 
-      return runBlockingWithError { @MainActor in
+      let result: ScriptableTransaction? = runBlockingWithError {
+        @MainActor () async throws -> ScriptableTransaction in
         guard let service = ScriptingContext.automationService else {
           throw AutomationError.operationFailed("Scripting not configured")
         }
@@ -55,6 +56,7 @@
           categoryStore: session.categoryStore
         )
       }
+      return result
     }
   }
 #endif

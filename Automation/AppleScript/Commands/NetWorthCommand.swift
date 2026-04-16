@@ -14,13 +14,14 @@
         return nil
       }
 
-      return runBlockingWithError { @MainActor in
+      let result: NSNumber? = runBlockingWithError { @MainActor () async throws -> NSNumber in
         guard let service = ScriptingContext.automationService else {
           throw AutomationError.operationFailed("Scripting not configured")
         }
         let netWorth = try service.getNetWorth(profileIdentifier: profileName)
         return netWorth.doubleValue as NSNumber
       }
+      return result
     }
   }
 #endif

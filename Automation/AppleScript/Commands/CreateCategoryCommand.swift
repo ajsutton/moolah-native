@@ -24,7 +24,8 @@
       let parentName = args["parent"] as? String
       let profName = profileName
 
-      return runBlockingWithError { @MainActor in
+      let result: ScriptableCategory? = runBlockingWithError {
+        @MainActor () async throws -> ScriptableCategory in
         guard let service = ScriptingContext.automationService else {
           throw AutomationError.operationFailed("Scripting not configured")
         }
@@ -45,6 +46,7 @@
         return ScriptableCategory(
           category: category, parentName: parentDisplay, profileName: profName)
       }
+      return result
     }
   }
 #endif

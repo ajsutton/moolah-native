@@ -30,7 +30,8 @@
       }
 
       let profName = profileName
-      return runBlockingWithError { @MainActor in
+      let result: ScriptableAccount? = runBlockingWithError {
+        @MainActor () async throws -> ScriptableAccount in
         guard let service = ScriptingContext.automationService else {
           throw AutomationError.operationFailed("Scripting not configured")
         }
@@ -41,6 +42,7 @@
         )
         return ScriptableAccount(account: account, profileName: profName)
       }
+      return result
     }
   }
 #endif

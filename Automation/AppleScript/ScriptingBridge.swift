@@ -27,27 +27,28 @@
     @objc var scriptableProfiles: [ScriptableProfile] {
       // This is called from the Apple Events thread. We need to hop to MainActor
       // to access the session manager safely.
-      nonisolated(unsafe) var result: [ScriptableProfile] = []
+      guard !Thread.isMainThread else {
+        logger.warning("scriptableProfiles accessed on main thread - returning empty")
+        return []
+      }
+
+      final class ResultBox: @unchecked Sendable {
+        var profiles: [ScriptableProfile] = []
+      }
+      let box = ResultBox()
       let semaphore = DispatchSemaphore(value: 0)
 
       Task { @MainActor in
         if let sessionManager = ScriptingContext.sessionManager {
-          result = sessionManager.openProfiles.map { ScriptableProfile(session: $0) }
+          box.profiles = sessionManager.openProfiles.map { ScriptableProfile(session: $0) }
         } else {
           logger.warning("ScriptingBridge accessed before configuration")
         }
         semaphore.signal()
       }
 
-      if Thread.isMainThread {
-        // If somehow called on main thread, we can't wait on the semaphore.
-        // Return empty and log a warning.
-        logger.warning("scriptableProfiles accessed on main thread - returning empty")
-        return []
-      }
-
       semaphore.wait()
-      return result
+      return box.profiles
     }
   }
 #endif

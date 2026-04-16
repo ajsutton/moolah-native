@@ -5,6 +5,13 @@
 
   private let logger = Logger(subsystem: "com.moolah.app", category: "ScriptCommand")
 
+  /// Thread-safe box for transferring results across actor boundaries via semaphore.
+  /// The semaphore ensures happens-before ordering between write (in Task) and read (after wait).
+  final class ScriptResultBox<T: Sendable>: @unchecked Sendable {
+    var value: T?
+    var error: String?
+  }
+
   extension NSScriptCommand {
 
     /// Resolves the profile name from the direct parameter (an object specifier).
@@ -26,9 +33,9 @@
     /// Runs an async MainActor block synchronously, suitable for NSScriptCommand handlers.
     /// Uses a semaphore to bridge async/sync. This is safe because NSScriptCommand handlers
     /// run on a dedicated Apple Events thread, not the main thread.
-    func runBlockingWithError<T>(_ operation: @escaping @MainActor @Sendable () async throws -> T)
-      -> T?
-    {
+    func runBlockingWithError<T: Sendable>(
+      _ operation: @escaping @MainActor @Sendable () async throws -> sending T
+    ) -> T? {
       guard !Thread.isMainThread else {
         logger.error("runBlockingWithError called on main thread - would deadlock")
         scriptErrorNumber = errOSAGeneralError
@@ -36,29 +43,28 @@
         return nil
       }
 
-      nonisolated(unsafe) var result: T?
-      nonisolated(unsafe) var caughtError: String?
+      let box = ScriptResultBox<T>()
       let semaphore = DispatchSemaphore(value: 0)
 
       Task { @MainActor in
         do {
-          result = try await operation()
+          box.value = try await operation()
         } catch {
-          caughtError = error.localizedDescription
+          box.error = error.localizedDescription
         }
         semaphore.signal()
       }
 
       semaphore.wait()
 
-      if let errorMessage = caughtError {
+      if let errorMessage = box.error {
         logger.error("Script command failed: \(errorMessage)")
         scriptErrorNumber = errOSAGeneralError
         scriptErrorString = errorMessage
         return nil
       }
 
-      return result
+      return box.value
     }
   }
 

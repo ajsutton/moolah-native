@@ -24,7 +24,8 @@
       let target = args["target"] as? Double
       let profName = profileName
 
-      return runBlockingWithError { @MainActor in
+      let result: ScriptableEarmark? = runBlockingWithError {
+        @MainActor () async throws -> ScriptableEarmark in
         guard let service = ScriptingContext.automationService else {
           throw AutomationError.operationFailed("Scripting not configured")
         }
@@ -35,6 +36,7 @@
         )
         return ScriptableEarmark(earmark: earmark, profileName: profName)
       }
+      return result
     }
   }
 #endif

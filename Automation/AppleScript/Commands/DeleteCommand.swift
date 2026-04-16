@@ -45,7 +45,7 @@
         return nil
       }
 
-      return runBlockingWithError { @MainActor in
+      let result: Bool? = runBlockingWithError { @MainActor () async throws -> Bool in
         guard let service = ScriptingContext.automationService else {
           throw AutomationError.operationFailed("Scripting not configured")
         }
@@ -93,6 +93,7 @@
 
         return true
       }
+      return result
     }
   }
 #endif
