@@ -80,7 +80,8 @@
 
     private func cacheUserNameIfNeeded(_ state: AuthStore.State?) {
       guard let state, case .signedIn(let user) = state,
-        let session = activeSession
+        let session = activeSession,
+        session.profile.backendType != .cloudKit
       else { return }
 
       let displayName = "\(user.givenName) \(user.familyName)"

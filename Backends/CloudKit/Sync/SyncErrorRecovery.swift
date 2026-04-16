@@ -57,7 +57,7 @@ enum SyncErrorRecovery {
           "iCloud quota exceeded — sync paused for record \(recordID.recordName)")
         result.quotaExceeded.append(recordID)
 
-      case .limitExceeded:
+      case .limitExceeded, .batchRequestFailed:
         result.requeue.append(recordID)
 
       default:

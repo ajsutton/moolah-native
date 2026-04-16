@@ -928,7 +928,7 @@ extension SyncCoordinator: CKSyncEngineDelegate {
     return CKSyncEngine.RecordZoneChangeBatch(
       recordsToSave: recordsToSave,
       recordIDsToDelete: deletesByBatch,
-      atomicByZone: true
+      atomicByZone: false
     )
   }
 
