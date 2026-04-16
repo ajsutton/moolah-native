@@ -7,9 +7,7 @@
   /// Do not replicate this pattern elsewhere.
   struct AboutView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var increaseContrast: Bool {
-      NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
-    }
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @State private var glowActive = false
 
     // MARK: - Brand Colors
@@ -37,15 +35,8 @@
 
     var body: some View {
       ZStack {
-        // Background gradient
-        LinearGradient(
-          colors: [Self.brandSpace, Self.deepVoid, Self.inkNavy],
-          startPoint: .top,
-          endPoint: .bottom
-        )
-
         // Starfield (hidden for Increase Contrast)
-        if !increaseContrast {
+        if colorSchemeContrast != .increased {
           starfield
         }
 
@@ -95,7 +86,7 @@
     private var iconWithGlow: some View {
       ZStack {
         // Breathing glow (hidden for Increase Contrast)
-        if !increaseContrast {
+        if colorSchemeContrast != .increased {
           RoundedRectangle(cornerRadius: 36)
             .fill(
               RadialGradient(
@@ -142,8 +133,9 @@
     }
 
     private var tagline: some View {
-      Text("YOUR MONEY, ROCK SOLID.")
+      Text("Your money, rock solid.")
         .font(.system(size: 11, weight: .medium))
+        .textCase(.uppercase)
         .tracking(1.3)
         .foregroundStyle(Self.balanceGold)
     }
