@@ -44,13 +44,18 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
     }
   }
 
-  func create(_ account: Account) async throws -> Account {
+  func create(_ account: Account, openingBalance: InstrumentAmount? = nil) async throws -> Account {
     // Validation
     guard !account.name.trimmingCharacters(in: .whitespaces).isEmpty else {
       throw BackendError.validationFailed("Account name cannot be empty")
     }
 
-    let cents = Int(truncating: (account.balance.quantity * 100) as NSDecimalNumber)
+    let cents: Int
+    if let openingBalance {
+      cents = Int(truncating: (openingBalance.quantity * 100) as NSDecimalNumber)
+    } else {
+      cents = 0
+    }
     let dto = CreateAccountDTO(
       name: account.name,
       type: account.type.rawValue,
@@ -108,7 +113,8 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
       throw BackendError.notFound("Account not found")
     }
 
-    guard account.balance.isZero else {
+    let hasNonZeroPosition = account.positions.contains { $0.quantity != 0 }
+    guard !hasNonZeroPosition else {
       throw BackendError.validationFailed("Cannot delete account with non-zero balance")
     }
 

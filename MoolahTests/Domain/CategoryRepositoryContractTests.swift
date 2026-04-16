@@ -115,8 +115,7 @@ struct CategoryRepositoryContractTests {
     let account = Account(
       id: UUID(),
       name: "Test Account",
-      type: .bank,
-      balance: .zero(instrument: .defaultTestInstrument)
+      type: .bank
     )
     _ = try await backend.accounts.create(account)
 

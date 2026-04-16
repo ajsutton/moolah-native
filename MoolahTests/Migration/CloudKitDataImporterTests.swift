@@ -34,11 +34,11 @@ struct CloudKitDataImporterTests {
       accounts: [
         Account(
           id: accountId, name: "Checking", type: .bank,
-          balance: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
+          instrument: instrument
         ),
         Account(
           id: UUID(), name: "Savings", type: .bank,
-          balance: InstrumentAmount(quantity: Decimal(string: "100.00")!, instrument: instrument)
+          instrument: instrument
         ),
       ],
       categories: [

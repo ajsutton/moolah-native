@@ -19,8 +19,10 @@
       _uniqueID = account.id.uuidString
       _name = account.name
       _accountType = account.type.rawValue
-      _balance = account.balance.doubleValue
-      _investmentValue = account.investmentValue?.doubleValue ?? 0
+      // Compute balance from positions
+      let primaryPosition = account.positions.first(where: { $0.instrument == account.instrument })
+      _balance = primaryPosition?.amount.doubleValue ?? 0
+      _investmentValue = 0
       _isHidden = account.isHidden
       _profileName = profileName
       super.init()

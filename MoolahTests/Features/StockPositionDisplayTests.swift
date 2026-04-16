@@ -22,7 +22,7 @@ struct StockPositionDisplayTests {
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
-        Account(id: accountId, name: "Invest", type: .investment, usesPositionTracking: true)
+        Account(id: accountId, name: "Invest", type: .investment)
       ], in: container)
 
     // Seed a buy trade: -6345 AUD, +150 BHP
@@ -85,7 +85,7 @@ struct StockPositionDisplayTests {
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
-        Account(id: accountId, name: "Invest", type: .investment, usesPositionTracking: true)
+        Account(id: accountId, name: "Invest", type: .investment)
       ], in: container)
     TestBackend.seed(
       transactions: [
@@ -142,7 +142,7 @@ struct StockPositionDisplayTests {
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
-        Account(id: accountId, name: "Invest", type: .investment, usesPositionTracking: true)
+        Account(id: accountId, name: "Invest", type: .investment)
       ], in: container)
     TestBackend.seed(
       transactions: [

@@ -204,10 +204,12 @@ private struct SimpleTransactionRow: View {
     let account = Account(
       id: UUID(),
       name: "Test Account",
-      type: .bank,
-      balance: InstrumentAmount(quantity: 1000, instrument: .AUD)
+      type: .bank
     )
-    _ = try? await backend.accounts.create(account)
+    _ = try? await backend.accounts.create(
+      account,
+      openingBalance: InstrumentAmount(quantity: 1000, instrument: .AUD)
+    )
 
     _ = try? await backend.transactions.create(
       Transaction(

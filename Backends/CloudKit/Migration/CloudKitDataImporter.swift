@@ -64,6 +64,7 @@ struct CloudKitDataImporter {
         id: account.id,
         name: account.name,
         type: account.type.rawValue,
+        instrumentId: account.instrument.id,
         position: account.position,
         isHidden: account.isHidden
       )

@@ -28,8 +28,10 @@ struct ListAccountsIntent: AppIntent {
       return .result(value: "No accounts found.")
     }
 
+    let session = try service.resolveSession(for: profile.id.uuidString)
     let lines = accounts.map { account in
-      "\(account.name): \(account.displayBalance.formatted) (\(account.type.displayName))"
+      let displayBalance = session.accountStore.displayBalance(for: account.id)
+      return "\(account.name): \(displayBalance.formatted) (\(account.type.displayName))"
     }
     return .result(value: lines.joined(separator: "\n"))
   }

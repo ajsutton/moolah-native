@@ -34,7 +34,7 @@ struct EditAccountView: View {
           }
 
           LabeledContent("Current Balance") {
-            InstrumentAmountView(amount: account.displayBalance)
+            InstrumentAmountView(amount: accountStore.displayBalance(for: account.id))
               .foregroundStyle(.secondary)
           }
           .accessibilityLabel("Current balance, read-only")
@@ -42,9 +42,9 @@ struct EditAccountView: View {
 
         Section {
           Toggle("Hide Account", isOn: $isHidden)
-            .disabled(!account.balance.isZero)
+            .disabled(!accountStore.canDelete(account.id))
             .accessibilityHint(
-              !account.balance.isZero
+              !accountStore.canDelete(account.id)
                 ? "Account must have zero balance to hide"
                 : ""
             )
@@ -62,9 +62,9 @@ struct EditAccountView: View {
           Button("Delete Account", role: .destructive) {
             showingDeleteConfirmation = true
           }
-          .disabled(!account.balance.isZero)
+          .disabled(!accountStore.canDelete(account.id))
           .accessibilityHint(
-            !account.balance.isZero
+            !accountStore.canDelete(account.id)
               ? "Account must have zero balance to delete"
               : ""
           )

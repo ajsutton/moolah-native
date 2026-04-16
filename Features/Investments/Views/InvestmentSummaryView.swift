@@ -2,14 +2,15 @@ import SwiftUI
 
 /// Three-panel summary showing Current Value, Invested Amount, and ROI.
 struct InvestmentSummaryView: View {
-  let account: Account
+  let investedAmount: InstrumentAmount
+  let currentValue: InstrumentAmount?
   let store: InvestmentStore
 
   var body: some View {
     HStack(spacing: 16) {
       SummaryPanel(
         label: "Current Value",
-        amount: account.investmentValue ?? account.balance,
+        amount: currentValue ?? investedAmount,
         subtitle: profitLossPercentText,
         subtitleColor: profitLossColor
       )
@@ -19,7 +20,7 @@ struct InvestmentSummaryView: View {
 
       SummaryPanel(
         label: "Invested Amount",
-        amount: account.balance,
+        amount: investedAmount,
         subtitle: nil,
         subtitleColor: nil
       )
@@ -41,23 +42,23 @@ struct InvestmentSummaryView: View {
 
   // MARK: - Computed
 
-  private var currentValue: InstrumentAmount {
-    account.investmentValue ?? account.balance
+  private var effectiveCurrentValue: InstrumentAmount {
+    currentValue ?? investedAmount
   }
 
   private var profitLoss: InstrumentAmount {
-    currentValue - account.balance
+    effectiveCurrentValue - investedAmount
   }
 
   private var profitLossPercent: Double {
-    guard !account.balance.isZero else { return 0 }
-    let balanceValue = Double(truncating: account.balance.quantity as NSDecimalNumber)
+    guard !investedAmount.isZero else { return 0 }
+    let balanceValue = Double(truncating: investedAmount.quantity as NSDecimalNumber)
     guard balanceValue != 0 else { return 0 }
     return Double(truncating: profitLoss.quantity as NSDecimalNumber) / balanceValue * 100
   }
 
   private var profitLossPercentText: String? {
-    guard account.investmentValue != nil else { return nil }
+    guard currentValue != nil else { return nil }
     let sign = profitLossPercent >= 0 ? "+" : ""
     return "\(sign)\(String(format: "%.1f", profitLossPercent))%"
   }
@@ -69,8 +70,8 @@ struct InvestmentSummaryView: View {
   }
 
   private var annualizedReturnText: String? {
-    guard account.investmentValue != nil else { return nil }
-    let rate = store.annualizedReturnRate(currentValue: currentValue)
+    guard currentValue != nil else { return nil }
+    let rate = store.annualizedReturnRate(currentValue: effectiveCurrentValue)
     guard rate.isFinite else { return nil }
     let sign = rate >= 0 ? "+" : ""
     return "\(sign)\(String(format: "%.1f", rate))% p.a."

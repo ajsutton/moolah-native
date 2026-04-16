@@ -16,26 +16,34 @@ struct InvestmentAccountView: View {
   @State private var showingRecordTrade = false
   @State private var selectedTransaction: Transaction?
 
-  /// The profile's fiat currency instrument, derived from the account's balance.
+  /// The profile's fiat currency instrument, derived from the account's instrument.
   private var profileCurrencyInstrument: Instrument {
-    account.balance.instrument
+    account.instrument
+  }
+
+  /// The invested amount (balance from positions in the account's primary instrument).
+  private var investedAmount: InstrumentAmount {
+    let primaryPosition = account.positions.first(where: { $0.instrument == account.instrument })
+    return primaryPosition?.amount ?? .zero(instrument: account.instrument)
+  }
+
+  /// The latest investment value, or nil if no values have been recorded.
+  private var latestInvestmentValue: InstrumentAmount? {
+    investmentStore.values.first?.value
   }
 
   var body: some View {
     VStack(spacing: 0) {
-      if account.usesPositionTracking {
-        // Position-tracked: show positions and trade button
-        StockPositionsView(
-          valuedPositions: investmentStore.valuedPositions,
-          totalValue: investmentStore.totalPortfolioValue,
-          profileCurrency: profileCurrencyInstrument
-        )
-      } else {
+      if investmentStore.hasLegacyValuations {
         // Legacy: show manual valuations
-        if account.investmentValue != nil {
-          InvestmentSummaryView(account: account, store: investmentStore)
-            .padding(.horizontal)
-            .padding(.top)
+        if !investmentStore.values.isEmpty {
+          InvestmentSummaryView(
+            investedAmount: investedAmount,
+            currentValue: latestInvestmentValue,
+            store: investmentStore
+          )
+          .padding(.horizontal)
+          .padding(.top)
         }
 
         // Chart + valuations: side by side on macOS, stacked on iOS
@@ -45,7 +53,7 @@ struct InvestmentAccountView: View {
               timePeriodPicker
               InvestmentChartView(
                 dataPoints: investmentStore.chartDataPoints,
-                instrument: account.balance.instrument)
+                instrument: account.instrument)
             }
             .padding()
 
@@ -60,7 +68,7 @@ struct InvestmentAccountView: View {
               timePeriodPicker
               InvestmentChartView(
                 dataPoints: investmentStore.chartDataPoints,
-                instrument: account.balance.instrument)
+                instrument: account.instrument)
             }
             .padding()
 
@@ -70,6 +78,13 @@ struct InvestmentAccountView: View {
               .frame(maxHeight: 300)
           }
         #endif
+      } else {
+        // Position-tracked: show positions and trade button
+        StockPositionsView(
+          valuedPositions: investmentStore.valuedPositions,
+          totalValue: investmentStore.totalPortfolioValue,
+          profileCurrency: profileCurrencyInstrument
+        )
       }
 
       Divider()
@@ -97,7 +112,7 @@ struct InvestmentAccountView: View {
     .profileNavigationTitle(account.name)
     .sheet(isPresented: $showingAddValue) {
       AddInvestmentValueView(
-        accountId: account.id, instrument: account.balance.instrument, store: investmentStore)
+        accountId: account.id, instrument: account.instrument, store: investmentStore)
     }
     .sheet(isPresented: $showingRecordTrade) {
       RecordTradeView(
@@ -108,7 +123,7 @@ struct InvestmentAccountView: View {
       )
     }
     .toolbar {
-      if account.usesPositionTracking {
+      if !investmentStore.hasLegacyValuations {
         ToolbarItem(placement: .primaryAction) {
           Button {
             showingRecordTrade = true
@@ -120,16 +135,18 @@ struct InvestmentAccountView: View {
       }
     }
     .task(id: account.id) {
-      if account.usesPositionTracking {
+      // Always load values first to determine which mode to use
+      await investmentStore.loadValues(accountId: account.id)
+      if investmentStore.hasLegacyValuations {
+        await investmentStore.loadDailyBalances(accountId: account.id)
+      } else {
         await investmentStore.loadPositions(accountId: account.id)
         await investmentStore.valuatePositions(
           profileCurrency: profileCurrencyInstrument, on: Date())
-      } else {
-        await investmentStore.loadAll(accountId: account.id)
       }
     }
     .onChange(of: showingRecordTrade) { _, showing in
-      if !showing && account.usesPositionTracking {
+      if !showing && !investmentStore.hasLegacyValuations {
         Task {
           await investmentStore.loadPositions(accountId: account.id)
           await investmentStore.valuatePositions(
@@ -138,12 +155,13 @@ struct InvestmentAccountView: View {
       }
     }
     .refreshable {
-      if account.usesPositionTracking {
+      await investmentStore.loadValues(accountId: account.id)
+      if investmentStore.hasLegacyValuations {
+        await investmentStore.loadDailyBalances(accountId: account.id)
+      } else {
         await investmentStore.loadPositions(accountId: account.id)
         await investmentStore.valuatePositions(
           profileCurrency: profileCurrencyInstrument, on: Date())
-      } else {
-        await investmentStore.loadAll(accountId: account.id)
       }
     }
   }

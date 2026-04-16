@@ -192,7 +192,7 @@ struct AutomationServiceAccountTests {
 
     #expect(account.name == "Savings")
     #expect(account.type == .bank)
-    #expect(account.balance.quantity == 0)
+    #expect(account.positions.isEmpty)
 
     let accounts = try service.listAccounts(profileIdentifier: "Test")
     #expect(accounts.count == 1)
@@ -243,10 +243,14 @@ struct AutomationServiceAccountTests {
     let bankAccount = Account(
       name: "Bank",
       type: .bank,
-      balance: InstrumentAmount(quantity: 1000, instrument: instrument),
+      instrument: instrument,
       position: 0
     )
-    _ = try await session.accountStore.create(bankAccount)
+    let openingBalance = InstrumentAmount(quantity: 1000, instrument: instrument)
+    _ = try await session.accountStore.create(bankAccount, openingBalance: openingBalance)
+
+    // Reload to pick up positions computed from the opening balance transaction
+    await session.accountStore.load()
 
     let netWorth = try service.getNetWorth(profileIdentifier: "Test")
     #expect(netWorth.quantity == 1000)

@@ -76,16 +76,17 @@ struct CreateAccountView: View {
     isSubmitting = true
     errorMessage = nil
 
+    let openingBalance = InstrumentAmount(quantity: balanceDecimal, instrument: instrument)
     let newAccount = Account(
       id: UUID(),
       name: name.trimmingCharacters(in: .whitespaces),
       type: type,
-      balance: InstrumentAmount(quantity: balanceDecimal, instrument: instrument),
+      instrument: instrument,
       position: 0  // Server will set appropriate position
     )
 
     do {
-      _ = try await accountStore.create(newAccount)
+      _ = try await accountStore.create(newAccount, openingBalance: openingBalance)
       dismiss()
     } catch {
       errorMessage = error.localizedDescription

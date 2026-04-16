@@ -75,10 +75,7 @@ final class AutomationService {
       id: UUID(),
       name: name,
       type: type,
-      balance: .zero(instrument: instrument),
-      investmentValue: nil,
-      positions: [],
-      usesPositionTracking: false,
+      instrument: instrument,
       position: session.accountStore.accounts.count,
       isHidden: isHidden
     )

@@ -28,7 +28,8 @@ struct SidebarView: View {
         ForEach(accountStore.currentAccounts) { account in
           NavigationLink(value: SidebarSelection.account(account.id)) {
             SidebarRowView(
-              icon: account.sidebarIcon, name: account.name, amount: account.displayBalance,
+              icon: account.sidebarIcon, name: account.name,
+              amount: accountStore.displayBalance(for: account.id),
               isSelected: selection == .account(account.id))
           }
           .contextMenu {
@@ -100,7 +101,8 @@ struct SidebarView: View {
         ForEach(accountStore.investmentAccounts) { account in
           NavigationLink(value: SidebarSelection.account(account.id)) {
             SidebarRowView(
-              icon: account.sidebarIcon, name: account.name, amount: account.displayBalance,
+              icon: account.sidebarIcon, name: account.name,
+              amount: accountStore.displayBalance(for: account.id),
               isSelected: selection == .account(account.id))
           }
           .contextMenu {
@@ -267,12 +269,12 @@ struct SidebarView: View {
         // Add some preview data
         _ = try? await backend.accounts.create(
           Account(
-            name: "Bank", type: .bank,
-            balance: InstrumentAmount(quantity: 1000, instrument: .AUD)))
+            name: "Bank", type: .bank),
+          openingBalance: InstrumentAmount(quantity: 1000, instrument: .AUD))
         _ = try? await backend.accounts.create(
           Account(
-            name: "Asset", type: .asset,
-            balance: InstrumentAmount(quantity: 5000, instrument: .AUD)))
+            name: "Asset", type: .asset),
+          openingBalance: InstrumentAmount(quantity: 5000, instrument: .AUD))
         _ = try? await backend.earmarks.create(
           Earmark(name: "Holiday Fund"))
 

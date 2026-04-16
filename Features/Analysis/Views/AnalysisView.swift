@@ -174,8 +174,7 @@ struct ForecastPicker: View {
         let account = Account(
           id: UUID(),
           name: "Checking",
-          type: .bank,
-          balance: InstrumentAmount(quantity: 0, instrument: .AUD)
+          type: .bank
         )
         _ = try? await backend.accounts.create(account)
 

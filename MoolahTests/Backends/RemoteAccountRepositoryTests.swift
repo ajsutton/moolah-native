@@ -36,25 +36,18 @@ struct RemoteAccountRepositoryTests {
     #expect(accounts.count == 5)
     #expect(accounts[0].name == "Checking Account")
     #expect(accounts[0].type == .bank)
-    #expect(
-      accounts[0].balance
-        == InstrumentAmount(
-          quantity: Decimal(string: "1234.56")!, instrument: .defaultTestInstrument))
+    // Balance is now in positions
+    let checkingPosition = accounts[0].positions.first(where: {
+      $0.instrument == .defaultTestInstrument
+    })
+    #expect(checkingPosition?.quantity == Decimal(string: "1234.56")!)
     #expect(accounts[3].name == "Investment Portfolio")
     #expect(accounts[3].type == .investment)
-    // balance is the transaction-based invested amount
-    #expect(
-      accounts[3].balance
-        == InstrumentAmount(
-          quantity: Decimal(string: "15000.00")!, instrument: .defaultTestInstrument))
-    // investmentValue is the market value from the server's 'value' field
-    #expect(accounts[3].investmentValue != nil)
-    #expect(
-      accounts[3].investmentValue
-        == InstrumentAmount(
-          quantity: Decimal(string: "15500.00")!, instrument: .defaultTestInstrument))
-    // displayBalance prefers investmentValue for investment accounts
-    #expect(accounts[3].displayBalance.quantity == Decimal(string: "15500.00")!)
+    // balance is the transaction-based invested amount, now in positions
+    let investmentPosition = accounts[3].positions.first(where: {
+      $0.instrument == .defaultTestInstrument
+    })
+    #expect(investmentPosition?.quantity == Decimal(string: "15000.00")!)
   }
 
   @Test func testCreateAccountCallsCorrectEndpoint() async throws {
@@ -86,18 +79,22 @@ struct RemoteAccountRepositoryTests {
     let newAccount = Account(
       name: "Savings Account",
       type: .bank,
-      balance: InstrumentAmount(
-        quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)
+      instrument: .defaultTestInstrument
     )
+    let openingBalance = InstrumentAmount(
+      quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)
 
     // When
-    let created = try await repository.create(newAccount)
+    let created = try await repository.create(newAccount, openingBalance: openingBalance)
 
     // Then
     #expect(capturedRequest?.httpMethod == "POST")
     #expect(capturedRequest?.url?.absoluteString == "https://api.example.com/accounts/")
     #expect(created.name == "Savings Account")
-    #expect(created.balance.quantity == Decimal(string: "1000.00")!)
+    let createdPosition = created.positions.first(where: {
+      $0.instrument == .defaultTestInstrument
+    })
+    #expect(createdPosition?.quantity == Decimal(string: "1000.00")!)
   }
 
   @Test func testUpdateAccountCallsCorrectEndpoint() async throws {
@@ -131,8 +128,7 @@ struct RemoteAccountRepositoryTests {
       id: accountId,
       name: "Updated Savings",
       type: .bank,
-      balance: InstrumentAmount(
-        quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument),
+      instrument: .defaultTestInstrument,
       position: 2,
       isHidden: true
     )
@@ -146,7 +142,11 @@ struct RemoteAccountRepositoryTests {
       capturedRequest?.url?.absoluteString
         == "https://api.example.com/accounts/550e8400-e29b-41d4-a716-446655440000/")
     #expect(updated.name == "Updated Savings")
-    #expect(updated.balance.quantity == Decimal(string: "1234.56")!)  // Server's balance, not client's
+    // Server's balance, not client's - now reflected in positions
+    let updatedPosition = updated.positions.first(where: {
+      $0.instrument == .defaultTestInstrument
+    })
+    #expect(updatedPosition?.quantity == Decimal(string: "1234.56")!)
     #expect(updated.isHidden == true)
   }
 }

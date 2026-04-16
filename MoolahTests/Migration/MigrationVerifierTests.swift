@@ -19,7 +19,8 @@ struct MigrationVerifierTests {
       accounts: [
         Account(
           id: accountId, name: "Checking", type: .bank,
-          balance: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
+          instrument: instrument,
+          positions: [Position(instrument: instrument, quantity: Decimal(string: "50.00")!)]
         )
       ],
       categories: [Category(name: "Food")],
@@ -69,7 +70,7 @@ struct MigrationVerifierTests {
       accounts: [
         Account(
           id: accountId, name: "Checking", type: .bank,
-          balance: .zero(instrument: instrument)
+          instrument: instrument
         )
       ],
       categories: [],
@@ -136,12 +137,13 @@ struct MigrationVerifierTests {
     let container = try TestModelContainer.create()
     let accountId = UUID()
 
-    // Server says balance is 50.00, but imported transactions sum to 30.00
+    // Account position says 50.00, but transactions sum to 30.00
     let exported = ExportedData(
       accounts: [
         Account(
           id: accountId, name: "Checking", type: .bank,
-          balance: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
+          instrument: instrument,
+          positions: [Position(instrument: instrument, quantity: Decimal(string: "50.00")!)]
         )
       ],
       categories: [],
@@ -190,7 +192,8 @@ struct MigrationVerifierTests {
       accounts: [
         Account(
           id: accountId, name: "Checking", type: .bank,
-          balance: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
+          instrument: instrument,
+          positions: [Position(instrument: instrument, quantity: Decimal(string: "50.00")!)]
         )
       ],
       categories: [],

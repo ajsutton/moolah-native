@@ -152,7 +152,7 @@ struct TransactionDetailView: View {
   /// Filter to-account options to same-currency accounts, excluding the current account.
   private func eligibleTransferAccounts(excluding currentAccountId: UUID?) -> [Account] {
     guard let currentAccountId,
-      let currency = accounts.by(id: currentAccountId)?.balance.instrument
+      let currency = accounts.by(id: currentAccountId)?.instrument
     else {
       return sortedAccounts.filter { $0.id != currentAccountId && !$0.isHidden }
     }
@@ -168,7 +168,7 @@ struct TransactionDetailView: View {
   private func legInstrumentId(at index: Int) -> String {
     let leg = draft.legDrafts[index]
     if let acctId = leg.accountId, let account = accounts.by(id: acctId) {
-      return account.balance.instrument.id
+      return account.instrument.id
     }
     if let emId = leg.earmarkId, let earmark = earmarks.by(id: emId) {
       return earmark.instrument.id
@@ -180,7 +180,7 @@ struct TransactionDetailView: View {
   private var relevantInstrument: Instrument? {
     draft.legDrafts[draft.relevantLegIndex].accountId
       .flatMap { accounts.by(id: $0) }?
-      .balance.instrument
+      .instrument
   }
 
   var body: some View {

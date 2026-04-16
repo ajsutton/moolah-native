@@ -279,7 +279,7 @@ struct UpcomingTransactionRow: View {
   let accounts = Accounts(from: [
     Account(
       id: accountId, name: "Checking", type: .bank,
-      balance: InstrumentAmount(quantity: 2449.77, instrument: .AUD)
+      positions: [Position(instrument: .AUD, quantity: 2449.77)]
     )
   ])
 

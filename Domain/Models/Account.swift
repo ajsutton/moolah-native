@@ -24,44 +24,25 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
   let id: UUID
   var name: String
   var type: AccountType
-  var balance: InstrumentAmount
-  /// Market value for investment accounts. Nil for non-investment accounts.
-  var investmentValue: InstrumentAmount?
+  var instrument: Instrument
   var positions: [Position]
-  /// Whether this account tracks per-instrument positions from transaction legs.
-  /// When true, the account's value is derived from positions rather than manual investmentValue entries.
-  /// When false (default), investment accounts use the legacy investmentValue approach.
-  var usesPositionTracking: Bool
   var position: Int
   var isHidden: Bool
-
-  /// The display value for this account. For investment accounts, prefers
-  /// `investmentValue` (market value) over `balance` (invested amount).
-  var displayBalance: InstrumentAmount {
-    if type == .investment, let investmentValue {
-      return investmentValue
-    }
-    return balance
-  }
 
   init(
     id: UUID = UUID(),
     name: String,
     type: AccountType,
-    balance: InstrumentAmount = .zero(instrument: .AUD),
-    investmentValue: InstrumentAmount? = nil,
+    instrument: Instrument = .AUD,
     positions: [Position] = [],
-    usesPositionTracking: Bool = false,
     position: Int = 0,
     isHidden: Bool = false
   ) {
     self.id = id
     self.name = name
     self.type = type
-    self.balance = balance
-    self.investmentValue = investmentValue
+    self.instrument = instrument
     self.positions = positions
-    self.usesPositionTracking = usesPositionTracking
     self.position = position
     self.isHidden = isHidden
   }
@@ -70,9 +51,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     case id
     case name
     case type
-    case balance
-    case investmentValue
-    case usesPositionTracking
+    case instrument
     case position
     case isHidden = "hidden"
   }
@@ -82,11 +61,8 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     id = try container.decode(UUID.self, forKey: .id)
     name = try container.decode(String.self, forKey: .name)
     type = try container.decode(AccountType.self, forKey: .type)
-    balance = try container.decode(InstrumentAmount.self, forKey: .balance)
-    investmentValue = try container.decodeIfPresent(InstrumentAmount.self, forKey: .investmentValue)
+    instrument = try container.decodeIfPresent(Instrument.self, forKey: .instrument) ?? .AUD
     positions = []
-    usesPositionTracking =
-      try container.decodeIfPresent(Bool.self, forKey: .usesPositionTracking) ?? false
     position = try container.decode(Int.self, forKey: .position)
     isHidden = try container.decode(Bool.self, forKey: .isHidden)
   }
@@ -96,17 +72,14 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     try container.encode(id, forKey: .id)
     try container.encode(name, forKey: .name)
     try container.encode(type, forKey: .type)
-    try container.encode(balance, forKey: .balance)
-    try container.encodeIfPresent(investmentValue, forKey: .investmentValue)
-    try container.encode(usesPositionTracking, forKey: .usesPositionTracking)
+    try container.encode(instrument, forKey: .instrument)
     try container.encode(position, forKey: .position)
     try container.encode(isHidden, forKey: .isHidden)
   }
 
   static func == (lhs: Account, rhs: Account) -> Bool {
     lhs.id == rhs.id && lhs.name == rhs.name && lhs.type == rhs.type
-      && lhs.balance == rhs.balance && lhs.investmentValue == rhs.investmentValue
-      && lhs.usesPositionTracking == rhs.usesPositionTracking
+      && lhs.instrument == rhs.instrument
       && lhs.position == rhs.position && lhs.isHidden == rhs.isHidden
   }
 
@@ -114,9 +87,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     hasher.combine(id)
     hasher.combine(name)
     hasher.combine(type)
-    hasher.combine(balance)
-    hasher.combine(investmentValue)
-    hasher.combine(usesPositionTracking)
+    hasher.combine(instrument)
     hasher.combine(position)
     hasher.combine(isHidden)
   }
@@ -148,14 +119,6 @@ struct Accounts: RandomAccessCollection, Sendable {
       guard account.id == accountId else { return account }
       var copy = account
       copy.positions = copy.positions.applying(deltas: deltas)
-      // Update legacy balance field for single-instrument accounts
-      if let primaryPosition = copy.positions.first(where: {
-        $0.instrument == copy.balance.instrument
-      }) {
-        copy.balance = primaryPosition.amount
-      } else if copy.positions.isEmpty {
-        copy.balance = .zero(instrument: copy.balance.instrument)
-      }
       return copy
     }
     return Accounts(from: adjusted)

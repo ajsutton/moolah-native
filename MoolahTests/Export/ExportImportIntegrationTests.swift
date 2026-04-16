@@ -17,8 +17,9 @@ struct ExportImportIntegrationTests {
     let checking = try await backend.accounts.create(
       Account(
         name: "Checking", type: .bank,
-        balance: InstrumentAmount(quantity: Decimal(string: "500.00")!, instrument: instrument)
-      )
+        instrument: instrument
+      ),
+      openingBalance: InstrumentAmount(quantity: Decimal(string: "500.00")!, instrument: instrument)
     )
 
     let food = try await backend.categories.create(Category(name: "Food"))
