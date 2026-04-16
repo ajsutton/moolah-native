@@ -803,7 +803,6 @@ final class ProfileDataSyncHandler: Sendable {
         existing.instrumentId = values.instrumentId
         existing.position = values.position
         existing.isHidden = values.isHidden
-        existing.usesPositionTracking = values.usesPositionTracking
         existing.encodedSystemFields = systemFields[id.uuidString]
         updateCount += 1
       } else {

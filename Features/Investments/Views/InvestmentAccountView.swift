@@ -34,14 +34,7 @@ struct InvestmentAccountView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      if account.usesPositionTracking {
-        // Position-tracked: show positions and trade button
-        StockPositionsView(
-          valuedPositions: investmentStore.valuedPositions,
-          totalValue: investmentStore.totalPortfolioValue,
-          profileCurrency: profileCurrencyInstrument
-        )
-      } else {
+      if investmentStore.hasLegacyValuations {
         // Legacy: show manual valuations
         if !investmentStore.values.isEmpty {
           InvestmentSummaryView(
@@ -85,6 +78,13 @@ struct InvestmentAccountView: View {
               .frame(maxHeight: 300)
           }
         #endif
+      } else {
+        // Position-tracked: show positions and trade button
+        StockPositionsView(
+          valuedPositions: investmentStore.valuedPositions,
+          totalValue: investmentStore.totalPortfolioValue,
+          profileCurrency: profileCurrencyInstrument
+        )
       }
 
       Divider()
@@ -123,7 +123,7 @@ struct InvestmentAccountView: View {
       )
     }
     .toolbar {
-      if account.usesPositionTracking {
+      if !investmentStore.hasLegacyValuations {
         ToolbarItem(placement: .primaryAction) {
           Button {
             showingRecordTrade = true
@@ -135,16 +135,18 @@ struct InvestmentAccountView: View {
       }
     }
     .task(id: account.id) {
-      if account.usesPositionTracking {
+      // Always load values first to determine which mode to use
+      await investmentStore.loadValues(accountId: account.id)
+      if investmentStore.hasLegacyValuations {
+        await investmentStore.loadDailyBalances(accountId: account.id)
+      } else {
         await investmentStore.loadPositions(accountId: account.id)
         await investmentStore.valuatePositions(
           profileCurrency: profileCurrencyInstrument, on: Date())
-      } else {
-        await investmentStore.loadAll(accountId: account.id)
       }
     }
     .onChange(of: showingRecordTrade) { _, showing in
-      if !showing && account.usesPositionTracking {
+      if !showing && !investmentStore.hasLegacyValuations {
         Task {
           await investmentStore.loadPositions(accountId: account.id)
           await investmentStore.valuatePositions(
@@ -153,12 +155,13 @@ struct InvestmentAccountView: View {
       }
     }
     .refreshable {
-      if account.usesPositionTracking {
+      await investmentStore.loadValues(accountId: account.id)
+      if investmentStore.hasLegacyValuations {
+        await investmentStore.loadDailyBalances(accountId: account.id)
+      } else {
         await investmentStore.loadPositions(accountId: account.id)
         await investmentStore.valuatePositions(
           profileCurrency: profileCurrencyInstrument, on: Date())
-      } else {
-        await investmentStore.loadAll(accountId: account.id)
       }
     }
   }

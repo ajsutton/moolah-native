@@ -35,7 +35,6 @@ struct ProfileDataSyncHandlerTests {
     ckRecord["type"] = "bank" as CKRecordValue
     ckRecord["position"] = 1 as CKRecordValue
     ckRecord["isHidden"] = 0 as CKRecordValue
-    ckRecord["usesPositionTracking"] = 0 as CKRecordValue
 
     let result = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 

@@ -111,6 +111,11 @@ final class InvestmentStore {
     }
   }
 
+  /// Whether the account has legacy manual valuations (InvestmentValueRecords).
+  /// When true, the UI shows the legacy chart + valuations list.
+  /// When false, the UI shows position tracking from transaction legs.
+  var hasLegacyValuations: Bool { !values.isEmpty }
+
   // MARK: - Position Tracking
 
   /// Load positions for a position-tracked account by computing them from transaction legs.

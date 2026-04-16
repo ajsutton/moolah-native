@@ -19,7 +19,7 @@ struct TradeStoreTests {
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
-        Account(id: accountId, name: "Sharesight", type: .investment, usesPositionTracking: true)
+        Account(id: accountId, name: "Sharesight", type: .investment)
       ], in: container)
 
     let store = TradeStore(transactions: backend.transactions)
@@ -50,7 +50,7 @@ struct TradeStoreTests {
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
-        Account(id: accountId, name: "Sharesight", type: .investment, usesPositionTracking: true)
+        Account(id: accountId, name: "Sharesight", type: .investment)
       ], in: container)
 
     let store = TradeStore(transactions: backend.transactions)

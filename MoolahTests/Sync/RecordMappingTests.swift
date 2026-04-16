@@ -47,8 +47,7 @@ struct RecordMappingTests {
       type: "bank",
       instrumentId: "USD",
       position: 2,
-      isHidden: true,
-      usesPositionTracking: true
+      isHidden: true
     )
 
     let ckRecord = account.toCKRecord(in: zoneID)
@@ -60,7 +59,6 @@ struct RecordMappingTests {
     #expect(ckRecord["instrumentId"] as? String == "USD")
     #expect(ckRecord["position"] as? Int == 2)
     #expect(ckRecord["isHidden"] as? Int == 1)
-    #expect(ckRecord["usesPositionTracking"] as? Int == 1)
 
     let restored = AccountRecord.fieldValues(from: ckRecord)
     #expect(restored.id == account.id)
@@ -69,7 +67,6 @@ struct RecordMappingTests {
     #expect(restored.instrumentId == "USD")
     #expect(restored.position == 2)
     #expect(restored.isHidden == true)
-    #expect(restored.usesPositionTracking == true)
   }
 
   @Test func accountRecordFieldValuesDefaultsInstrumentId() {

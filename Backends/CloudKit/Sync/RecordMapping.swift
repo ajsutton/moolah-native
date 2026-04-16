@@ -103,7 +103,6 @@ extension AccountRecord: CloudKitRecordConvertible {
     record["instrumentId"] = instrumentId as CKRecordValue
     record["position"] = position as CKRecordValue
     record["isHidden"] = (isHidden ? 1 : 0) as CKRecordValue
-    record["usesPositionTracking"] = (usesPositionTracking ? 1 : 0) as CKRecordValue
     return record
   }
 
@@ -114,8 +113,7 @@ extension AccountRecord: CloudKitRecordConvertible {
       type: ckRecord["type"] as? String ?? "bank",
       instrumentId: ckRecord["instrumentId"] as? String ?? "AUD",
       position: ckRecord["position"] as? Int ?? 0,
-      isHidden: (ckRecord["isHidden"] as? Int ?? 0) != 0,
-      usesPositionTracking: (ckRecord["usesPositionTracking"] as? Int ?? 0) != 0
+      isHidden: (ckRecord["isHidden"] as? Int ?? 0) != 0
     )
   }
 }
