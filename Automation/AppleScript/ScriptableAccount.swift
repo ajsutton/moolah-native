@@ -5,7 +5,7 @@
   /// AppleScript wrapper for an Account domain model.
   /// Data captured at construction time; all properties are nonisolated.
   @objc(ScriptableAccount)
-  class ScriptableAccount: NSObject {
+  class ScriptableAccount: NSObject, @unchecked Sendable {
     private let _uniqueID: String
     private let _name: String
     private let _accountType: String

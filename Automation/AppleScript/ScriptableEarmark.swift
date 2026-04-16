@@ -5,7 +5,7 @@
   /// AppleScript wrapper for an Earmark domain model.
   /// Data captured at construction time; all properties are nonisolated.
   @objc(ScriptableEarmark)
-  class ScriptableEarmark: NSObject {
+  class ScriptableEarmark: NSObject, @unchecked Sendable {
     private let _uniqueID: String
     private let _name: String
     private let _balance: Double

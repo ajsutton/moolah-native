@@ -5,7 +5,7 @@
   /// AppleScript wrapper for a Transaction domain model.
   /// Data captured at construction time; all properties are nonisolated.
   @objc(ScriptableTransaction)
-  class ScriptableTransaction: NSObject {
+  class ScriptableTransaction: NSObject, @unchecked Sendable {
     private let _uniqueID: String
     private let _date: Date
     private let _payee: String
@@ -94,7 +94,7 @@
   /// AppleScript wrapper for a TransactionLeg.
   /// Data captured at construction time; all properties are nonisolated.
   @objc(ScriptableLeg)
-  class ScriptableLeg: NSObject {
+  class ScriptableLeg: NSObject, @unchecked Sendable {
     private let _accountName: String
     private let _amount: Double
     private let _categoryName: String

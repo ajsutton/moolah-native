@@ -5,7 +5,7 @@
   /// AppleScript wrapper for a Category domain model.
   /// Data captured at construction time; all properties are nonisolated.
   @objc(ScriptableCategory)
-  class ScriptableCategory: NSObject {
+  class ScriptableCategory: NSObject, @unchecked Sendable {
     private let _uniqueID: String
     private let _name: String
     private let _parentName: String
