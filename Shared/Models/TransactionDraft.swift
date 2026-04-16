@@ -41,6 +41,11 @@ struct TransactionDraft: Sendable, Equatable {
     var categoryId: UUID?
     var categoryText: String
     var earmarkId: UUID?
+
+    /// True when this leg represents an earmark-only entry (no account).
+    var isEarmarkOnly: Bool {
+      accountId == nil && earmarkId != nil
+    }
   }
 
   // MARK: - Negation Helpers
@@ -425,6 +430,19 @@ extension TransactionDraft {
     }
 
     self = newDraft
+  }
+}
+
+// MARK: - Earmark-Only Invariants
+
+extension TransactionDraft {
+  /// Enforce earmark-only invariants on a leg: force income type, clear category.
+  /// No-op if the leg is not earmark-only.
+  mutating func enforceEarmarkOnlyInvariants(at index: Int) {
+    guard legDrafts[index].isEarmarkOnly else { return }
+    legDrafts[index].type = .income
+    legDrafts[index].categoryId = nil
+    legDrafts[index].categoryText = ""
   }
 }
 

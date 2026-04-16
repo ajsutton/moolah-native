@@ -1083,4 +1083,72 @@ struct TransactionDraftTests {
     let tx = draft.toTransaction(id: UUID(), accounts: accounts)
     #expect(tx!.legs[0].quantity == Decimal(string: "50.00"))  // income: as-is
   }
+
+  // MARK: - Earmark-Only Legs
+
+  @Test func isEarmarkOnlyWithEarmarkAndNoAccount() {
+    let leg = TransactionDraft.LegDraft(
+      type: .income, accountId: nil, amountText: "100",
+      categoryId: nil, categoryText: "", earmarkId: UUID())
+    #expect(leg.isEarmarkOnly == true)
+  }
+
+  @Test func isEarmarkOnlyWithAccountAndEarmark() {
+    let leg = TransactionDraft.LegDraft(
+      type: .income, accountId: UUID(), amountText: "100",
+      categoryId: nil, categoryText: "", earmarkId: UUID())
+    #expect(leg.isEarmarkOnly == false)
+  }
+
+  @Test func isEarmarkOnlyWithAccountNoEarmark() {
+    let leg = TransactionDraft.LegDraft(
+      type: .expense, accountId: UUID(), amountText: "100",
+      categoryId: nil, categoryText: "", earmarkId: nil)
+    #expect(leg.isEarmarkOnly == false)
+  }
+
+  @Test func isEarmarkOnlyWithNeitherAccountNorEarmark() {
+    let leg = TransactionDraft.LegDraft(
+      type: .expense, accountId: nil, amountText: "100",
+      categoryId: nil, categoryText: "", earmarkId: nil)
+    #expect(leg.isEarmarkOnly == false)
+  }
+
+  @Test func earmarkOnlyLegEnforcesIncomeType() {
+    var draft = TransactionDraft(
+      payee: "", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: false,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .expense, accountId: UUID(), amountText: "100",
+          categoryId: UUID(), categoryText: "Food", earmarkId: UUID())
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    // Clear the account — should enforce earmark-only invariants
+    draft.legDrafts[0].accountId = nil
+    draft.enforceEarmarkOnlyInvariants(at: 0)
+    #expect(draft.legDrafts[0].type == .income)
+    #expect(draft.legDrafts[0].categoryId == nil)
+    #expect(draft.legDrafts[0].categoryText == "")
+  }
+
+  @Test func earmarkOnlyInvariantsNoOpWhenNotEarmarkOnly() {
+    var draft = TransactionDraft(
+      payee: "", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: false,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .expense, accountId: UUID(), amountText: "100",
+          categoryId: UUID(), categoryText: "Food", earmarkId: nil)
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    let originalCategoryId = draft.legDrafts[0].categoryId
+    draft.enforceEarmarkOnlyInvariants(at: 0)
+    #expect(draft.legDrafts[0].type == .expense)
+    #expect(draft.legDrafts[0].categoryId == originalCategoryId)
+  }
 }
