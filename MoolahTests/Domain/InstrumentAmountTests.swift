@@ -190,4 +190,34 @@ struct InstrumentAmountTests {
   @Test func parseQuantityMultipleDecimals() {
     #expect(InstrumentAmount.parseQuantity(from: "1.2.3", decimals: 2) == nil)
   }
+
+  @Test func parseQuantityHandlesNegativeValues() {
+    let result = InstrumentAmount.parseQuantity(from: "-25.50", decimals: 2)
+    #expect(result == Decimal(string: "-25.50"))
+  }
+
+  @Test func parseQuantityHandlesZero() {
+    let result = InstrumentAmount.parseQuantity(from: "0", decimals: 2)
+    #expect(result == Decimal.zero)
+  }
+
+  @Test func parseQuantityHandlesNegativeZero() {
+    let result = InstrumentAmount.parseQuantity(from: "-0", decimals: 2)
+    #expect(result == Decimal.zero)
+  }
+
+  @Test func parseQuantityHandlesNegativeWithoutLeadingDigit() {
+    let result = InstrumentAmount.parseQuantity(from: "-.50", decimals: 2)
+    #expect(result == Decimal(string: "-0.5"))
+  }
+
+  @Test func parseQuantityStillRejectsNonNumeric() {
+    let result = InstrumentAmount.parseQuantity(from: "abc", decimals: 2)
+    #expect(result == nil)
+  }
+
+  @Test func parseQuantityStillRejectsEmpty() {
+    let result = InstrumentAmount.parseQuantity(from: "", decimals: 2)
+    #expect(result == nil)
+  }
 }

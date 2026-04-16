@@ -88,9 +88,12 @@ struct InstrumentAmount: Codable, Sendable, Hashable, Comparable {
   // MARK: - Parsing
 
   static func parseQuantity(from text: String, decimals: Int) -> Decimal? {
-    let cleaned = text.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
+    let cleaned = text.replacingOccurrences(of: "[^0-9.\\-]", with: "", options: .regularExpression)
     guard !cleaned.isEmpty,
       cleaned.filter({ $0 == "." }).count <= 1,
+      // Allow at most one minus sign, and only at the start
+      cleaned.filter({ $0 == "-" }).count <= 1,
+      !cleaned.dropFirst().contains("-"),
       let decimal = Decimal(string: cleaned)
     else { return nil }
     return decimal
