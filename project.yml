@@ -49,6 +49,9 @@ targets:
       - path: Backends
       - path: Features
       - path: Shared
+      - path: Automation
+    dependencies:
+      - sdk: AppIntents.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: rocks.moolah.app
@@ -66,6 +69,9 @@ targets:
       - path: Backends
       - path: Features
       - path: Shared
+      - path: Automation
+    dependencies:
+      - sdk: AppIntents.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: rocks.moolah.app
