@@ -663,4 +663,210 @@ struct AccountStoreTests {
     store.showHidden = true
     #expect(store.investmentAccounts.count == 2)
   }
+
+  // MARK: - applyDelta
+
+  @Test func testApplyDeltaReducesAccountBalance() async throws {
+    let acctId = UUID()
+    let instrument = Instrument.defaultTestInstrument
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: acctId, name: "Checking", type: .bank,
+          balance: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: instrument))
+      ], in: container)
+    let store = AccountStore(repository: backend.accounts)
+    await store.load()
+
+    let deltas: PositionDeltas = [acctId: [instrument: Decimal(-5000) / 100]]
+    store.applyDelta(deltas)
+
+    #expect(store.accounts.by(id: acctId)?.balance.quantity == Decimal(95000) / 100)
+  }
+
+  @Test func testApplyDeltaIncreasesAccountBalance() async throws {
+    let acctId = UUID()
+    let instrument = Instrument.defaultTestInstrument
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: acctId, name: "Checking", type: .bank,
+          balance: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: instrument))
+      ], in: container)
+    let store = AccountStore(repository: backend.accounts)
+    await store.load()
+
+    let deltas: PositionDeltas = [acctId: [instrument: Decimal(50000) / 100]]
+    store.applyDelta(deltas)
+
+    #expect(store.accounts.by(id: acctId)?.balance.quantity == Decimal(150000) / 100)
+  }
+
+  @Test func testApplyDeltaUpdatesBothAccounts() async throws {
+    let checkingId = UUID()
+    let savingsId = UUID()
+    let instrument = Instrument.defaultTestInstrument
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: checkingId, name: "Checking", type: .bank,
+          balance: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: instrument)),
+        Account(
+          id: savingsId, name: "Savings", type: .bank,
+          balance: InstrumentAmount(quantity: Decimal(200000) / 100, instrument: instrument)),
+      ], in: container)
+    let store = AccountStore(repository: backend.accounts)
+    await store.load()
+
+    let deltas: PositionDeltas = [
+      checkingId: [instrument: Decimal(-10000) / 100],
+      savingsId: [instrument: Decimal(10000) / 100],
+    ]
+    store.applyDelta(deltas)
+
+    #expect(store.accounts.by(id: checkingId)?.balance.quantity == Decimal(90000) / 100)
+    #expect(store.accounts.by(id: savingsId)?.balance.quantity == Decimal(210000) / 100)
+  }
+
+  @Test func testApplyDeltaUpdatesTotals() async throws {
+    let checkingId = UUID()
+    let instrument = Instrument.defaultTestInstrument
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: checkingId, name: "Checking", type: .bank,
+          balance: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: instrument))
+      ], in: container)
+    let store = AccountStore(repository: backend.accounts)
+    await store.load()
+
+    #expect(store.currentTotal.quantity == Decimal(100000) / 100)
+
+    let deltas: PositionDeltas = [checkingId: [instrument: Decimal(-5000) / 100]]
+    store.applyDelta(deltas)
+
+    #expect(store.currentTotal.quantity == Decimal(95000) / 100)
+    #expect(store.netWorth.quantity == Decimal(95000) / 100)
+  }
+
+  @Test func testApplyDeltaViaBalanceDeltaCalculator() async throws {
+    let acctId = UUID()
+    let instrument = Instrument.defaultTestInstrument
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: acctId, name: "Checking", type: .bank,
+          balance: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: instrument))
+      ], in: container)
+    let store = AccountStore(repository: backend.accounts)
+    await store.load()
+
+    let tx = Transaction(
+      date: Date(),
+      payee: "Coffee",
+      legs: [
+        TransactionLeg(
+          accountId: acctId, instrument: instrument,
+          quantity: Decimal(-5000) / 100, type: .expense)
+      ]
+    )
+    let delta = BalanceDeltaCalculator.deltas(old: nil, new: tx)
+    store.applyDelta(delta.accountDeltas)
+
+    #expect(store.accounts.by(id: acctId)?.balance.quantity == Decimal(95000) / 100)
+  }
+
+  @Test func testApplyDeltaIgnoresUnknownAccount() async throws {
+    let acctId = UUID()
+    let unknownId = UUID()
+    let instrument = Instrument.defaultTestInstrument
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: acctId, name: "Checking", type: .bank,
+          balance: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: instrument))
+      ], in: container)
+    let store = AccountStore(repository: backend.accounts)
+    await store.load()
+
+    let deltas: PositionDeltas = [unknownId: [instrument: Decimal(-5000) / 100]]
+    store.applyDelta(deltas)
+
+    // Balance should be unchanged
+    #expect(store.accounts.by(id: acctId)?.balance.quantity == Decimal(100000) / 100)
+  }
+
+  // MARK: - Converted Totals
+
+  @Test func testConvertedTotalsAreNilBeforeLoad() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: backend.conversionService,
+      targetInstrument: Instrument.defaultTestInstrument
+    )
+
+    #expect(store.convertedCurrentTotal == nil)
+    #expect(store.convertedInvestmentTotal == nil)
+    #expect(store.convertedNetWorth == nil)
+  }
+
+  @Test func testConvertedTotalsPopulatedAfterLoad() async throws {
+    let instrument = Instrument.defaultTestInstrument
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          name: "Checking", type: .bank,
+          balance: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: instrument))
+      ], in: container)
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: backend.conversionService,
+      targetInstrument: instrument
+    )
+
+    await store.load()
+    // Wait for async conversion task to complete
+    try await Task.sleep(for: .milliseconds(100))
+
+    #expect(store.convertedCurrentTotal != nil)
+    #expect(store.convertedCurrentTotal?.quantity == Decimal(100000) / 100)
+    #expect(store.convertedNetWorth != nil)
+  }
+
+  @Test func testConvertedTotalsUpdateAfterApplyDelta() async throws {
+    let acctId = UUID()
+    let instrument = Instrument.defaultTestInstrument
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: acctId, name: "Checking", type: .bank,
+          balance: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: instrument))
+      ], in: container)
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: backend.conversionService,
+      targetInstrument: instrument
+    )
+
+    await store.load()
+    try await Task.sleep(for: .milliseconds(100))
+
+    #expect(store.convertedCurrentTotal?.quantity == Decimal(100000) / 100)
+
+    let deltas: PositionDeltas = [acctId: [instrument: Decimal(-5000) / 100]]
+    store.applyDelta(deltas)
+    try await Task.sleep(for: .milliseconds(100))
+
+    #expect(store.convertedCurrentTotal?.quantity == Decimal(95000) / 100)
+    #expect(store.convertedNetWorth?.quantity == Decimal(95000) / 100)
+  }
 }

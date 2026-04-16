@@ -9,16 +9,24 @@ final class AccountStore {
   private(set) var isLoading = false
   private(set) var error: Error?
 
+  private(set) var convertedCurrentTotal: InstrumentAmount?
+  private(set) var convertedInvestmentTotal: InstrumentAmount?
+  private(set) var convertedNetWorth: InstrumentAmount?
+
   private let repository: AccountRepository
   private let conversionService: (any InstrumentConversionService)?
+  private let targetInstrument: Instrument
   private let logger = Logger(subsystem: "com.moolah.app", category: "AccountStore")
+  private var conversionTask: Task<Void, Never>?
 
   init(
     repository: AccountRepository,
-    conversionService: (any InstrumentConversionService)? = nil
+    conversionService: (any InstrumentConversionService)? = nil,
+    targetInstrument: Instrument = .AUD
   ) {
     self.repository = repository
     self.conversionService = conversionService
+    self.targetInstrument = targetInstrument
   }
 
   func load() async {
@@ -31,6 +39,7 @@ final class AccountStore {
     do {
       accounts = Accounts(from: try await repository.fetchAll())
       logger.debug("Loaded \(self.accounts.count) accounts")
+      recomputeConvertedTotals()
     } catch {
       logger.error("❌ Failed to load accounts: \(error.localizedDescription)")
       self.error = error
@@ -49,6 +58,7 @@ final class AccountStore {
       if fresh.ordered != accounts.ordered {
         accounts = fresh
         logger.debug("Sync: updated accounts (\(fresh.count) accounts) in \(elapsed)ms")
+        recomputeConvertedTotals()
       }
       if elapsed > 16 {
         logger.warning("⚠️ PERF: accountStore.reloadFromSync took \(elapsed)ms")
@@ -100,14 +110,14 @@ final class AccountStore {
 
   /// Compute the total value of all current accounts in a target instrument,
   /// converting foreign-currency positions via the conversion service.
-  func convertedTotal(for accountList: [Account], in targetInstrument: Instrument) async throws
+  func computeConvertedTotal(for accountList: [Account], in target: Instrument) async throws
     -> InstrumentAmount
   {
     guard let conversionService else {
-      return accountList.reduce(.zero(instrument: targetInstrument)) { $0 + $1.balance }
+      return accountList.reduce(.zero(instrument: target)) { $0 + $1.balance }
     }
 
-    var total = InstrumentAmount.zero(instrument: targetInstrument)
+    var total = InstrumentAmount.zero(instrument: target)
     let date = Date()
 
     for account in accountList {
@@ -115,12 +125,12 @@ final class AccountStore {
       if positions.isEmpty {
         // Fallback: use the single balance
         let converted = try await conversionService.convertAmount(
-          account.balance, to: targetInstrument, on: date)
+          account.balance, to: target, on: date)
         total += converted
       } else {
         for position in positions {
           let converted = try await conversionService.convertAmount(
-            position.amount, to: targetInstrument, on: date)
+            position.amount, to: target, on: date)
           total += converted
         }
       }
@@ -128,24 +138,42 @@ final class AccountStore {
     return total
   }
 
-  /// Converted total for current accounts.
-  func convertedCurrentTotal(in targetInstrument: Instrument) async throws -> InstrumentAmount {
-    try await convertedTotal(for: currentAccounts, in: targetInstrument)
+  /// Compute converted total for current accounts.
+  func computeConvertedCurrentTotal(in target: Instrument) async throws -> InstrumentAmount {
+    try await computeConvertedTotal(for: currentAccounts, in: target)
   }
 
-  /// Converted total for investment accounts.
-  func convertedInvestmentTotal(in targetInstrument: Instrument) async throws -> InstrumentAmount {
+  /// Compute converted total for investment accounts.
+  func computeConvertedInvestmentTotal(in target: Instrument) async throws -> InstrumentAmount {
     guard let conversionService else {
       return investmentTotal
     }
-    var total = InstrumentAmount.zero(instrument: targetInstrument)
+    var total = InstrumentAmount.zero(instrument: target)
     let date = Date()
     for account in investmentAccounts {
       let converted = try await conversionService.convertAmount(
-        account.displayBalance, to: targetInstrument, on: date)
+        account.displayBalance, to: target, on: date)
       total += converted
     }
     return total
+  }
+
+  private func recomputeConvertedTotals() {
+    conversionTask?.cancel()
+    conversionTask = Task {
+      do {
+        let current = try await computeConvertedCurrentTotal(in: targetInstrument)
+        guard !Task.isCancelled else { return }
+        let investment = try await computeConvertedInvestmentTotal(in: targetInstrument)
+        guard !Task.isCancelled else { return }
+        convertedCurrentTotal = current
+        convertedInvestmentTotal = investment
+        convertedNetWorth = current + investment
+      } catch {
+        guard !Task.isCancelled else { return }
+        logger.error("Failed to compute converted totals: \(error.localizedDescription)")
+      }
+    }
   }
 
   /// Updates the investment value for a specific account locally.
@@ -159,32 +187,27 @@ final class AccountStore {
       return copy
     }
     accounts = Accounts(from: updated)
+    recomputeConvertedTotals()
+  }
+
+  /// Applies position deltas to account balances.
+  func applyDelta(_ accountDeltas: PositionDeltas) {
+    var result = accounts
+    for (accountId, instrumentDeltas) in accountDeltas {
+      result = result.adjustingPositions(of: accountId, by: instrumentDeltas)
+    }
+    accounts = result
+    recomputeConvertedTotals()
   }
 
   /// Adjusts account balances locally based on a transaction change.
+  /// Prefer `applyDelta` with `BalanceDeltaCalculator` for new code.
   /// - Parameters:
   ///   - old: The previous transaction (nil for creates).
   ///   - new: The new transaction (nil for deletes).
   func applyTransactionDelta(old: Transaction?, new: Transaction?) {
-    var result = accounts
-
-    // Remove the old transaction's effect (skip scheduled — they don't affect balances)
-    if let old, !old.isScheduled {
-      for leg in old.legs {
-        guard let accountId = leg.accountId else { continue }
-        result = result.adjustingBalance(of: accountId, by: -leg.amount)
-      }
-    }
-
-    // Apply the new transaction's effect (skip scheduled — they don't affect balances)
-    if let new, !new.isScheduled {
-      for leg in new.legs {
-        guard let accountId = leg.accountId else { continue }
-        result = result.adjustingBalance(of: accountId, by: leg.amount)
-      }
-    }
-
-    accounts = result
+    let delta = BalanceDeltaCalculator.deltas(old: old, new: new)
+    applyDelta(delta.accountDeltas)
   }
 
   // MARK: - Mutations

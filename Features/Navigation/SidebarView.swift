@@ -240,8 +240,9 @@ struct SidebarView: View {
     convertedNetWorth = nil
     let profileInstrument = accountStore.currentTotal.instrument
     do {
-      let currentTotal = try await accountStore.convertedCurrentTotal(in: profileInstrument)
-      let investmentTotal = try await accountStore.convertedInvestmentTotal(in: profileInstrument)
+      let currentTotal = try await accountStore.computeConvertedCurrentTotal(in: profileInstrument)
+      let investmentTotal = try await accountStore.computeConvertedInvestmentTotal(
+        in: profileInstrument)
       convertedCurrentTotal = currentTotal
       convertedInvestmentTotal = investmentTotal
       convertedNetWorth = currentTotal + investmentTotal
