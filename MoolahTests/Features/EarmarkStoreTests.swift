@@ -183,6 +183,37 @@ struct EarmarkStoreTests {
     #expect(store.convertedTotalBalance?.quantity == 500)
   }
 
+  @Test func testConvertedTotalBalanceExcludesNegativeEarmarks() async throws {
+    let positiveId = UUID()
+    let negativeId = UUID()
+    let accountId = UUID()
+    let instrument = Instrument.defaultTestInstrument
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
+    TestBackend.seedWithTransactions(
+      earmarks: [
+        Earmark(id: positiveId, name: "Holiday Fund", instrument: instrument),
+        Earmark(id: negativeId, name: "Investments", instrument: instrument),
+      ],
+      amounts: [
+        positiveId: (saved: 500, spent: 0),
+        negativeId: (saved: -18950, spent: 0),
+      ],
+      accountId: accountId, in: container)
+    let store = EarmarkStore(repository: backend.earmarks)
+
+    await store.load()
+    try await Task.sleep(for: .milliseconds(50))
+
+    // Individual balances should reflect true values
+    #expect(store.convertedBalance(for: positiveId)?.quantity == 500)
+    #expect(store.convertedBalance(for: negativeId)?.quantity == -18950)
+
+    // Total should clamp negative earmarks to 0, so total = 500 (not 500 - 18950)
+    #expect(store.convertedTotalBalance?.quantity == 500)
+  }
+
   @Test func testConvertedTotalBalanceUpdatesAfterApplyDelta() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
