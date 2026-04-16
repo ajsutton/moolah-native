@@ -8,474 +8,612 @@ struct TransactionDraftTests {
   private let accountA = UUID()
   private let accountB = UUID()
 
-  /// Helper that builds a minimal valid draft with the given type and amount.
-  private func makeDraft(
-    type: TransactionType = .expense,
+  // MARK: - Helpers
+
+  /// Build a simple one-leg draft for testing.
+  private func makeExpenseDraft(
     amountText: String = "10.00",
-    accountId: UUID? = nil,
-    toAccountId: UUID? = nil,
-    toAmountText: String = "",
-    isRepeating: Bool = false,
-    recurPeriod: RecurPeriod? = nil,
-    recurEvery: Int = 1
+    accountId: UUID? = nil
   ) -> TransactionDraft {
     TransactionDraft(
-      type: type,
-      payee: "Test Payee",
-      amountText: amountText,
+      payee: "Test",
       date: Date(),
-      accountId: accountId,
-      toAccountId: toAccountId,
-      categoryId: nil,
-      earmarkId: nil,
       notes: "",
-      categoryText: "",
-      toAmountText: toAmountText,
-      isRepeating: isRepeating,
-      recurPeriod: recurPeriod,
-      recurEvery: recurEvery,
+      isRepeating: false,
+      recurPeriod: nil,
+      recurEvery: 1,
       isCustom: false,
-      legDrafts: []
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .expense, accountId: accountId ?? accountA,
+          amountText: amountText, categoryId: nil, categoryText: "", earmarkId: nil)
+      ],
+      relevantLegIndex: 0,
+      viewingAccountId: nil
     )
   }
 
-  /// Helper: builds an `Accounts` collection containing the given accounts.
+  /// Build Accounts collection from a list of accounts.
   private func makeAccounts(_ accounts: [Account]) -> Accounts {
     Accounts(from: accounts)
   }
 
-  /// Helper: builds a simple `Account` with the given id and instrument.
+  /// Build a simple Account with given id and instrument.
   private func makeAccount(id: UUID, instrument: Instrument = .defaultTestInstrument) -> Account {
     Account(id: id, name: "Test Account", type: .bank, balance: .zero(instrument: instrument))
   }
 
-  // MARK: - Amount Signing
+  // MARK: - Init from Transaction: Simple Expense
 
-  @Test func testExpenseAmountIsNegative() {
-    let draft = makeDraft(type: .expense, amountText: "25.00", accountId: accountA)
-    let tx = draft.toTransaction(id: UUID(), instrument: instrument)
-    #expect(tx != nil)
-    #expect(tx!.legs.first?.quantity == Decimal(string: "-25.00")!)
-  }
-
-  @Test func testIncomeAmountIsPositive() {
-    let draft = makeDraft(type: .income, amountText: "25.00", accountId: accountA)
-    let tx = draft.toTransaction(id: UUID(), instrument: instrument)
-    #expect(tx != nil)
-    #expect(tx!.legs.first?.quantity == Decimal(string: "25.00")!)
-  }
-
-  @Test func testTransferAmountIsNegative() {
-    let draft = makeDraft(
-      type: .transfer, amountText: "25.00",
-      accountId: accountA, toAccountId: accountB)
-    let tx = draft.toTransaction(id: UUID(), instrument: instrument)
-    #expect(tx != nil)
-    #expect(tx!.legs.first?.quantity == Decimal(string: "-25.00")!)
-  }
-
-  @Test func testOpeningBalanceAmountIsPositive() {
-    let draft = makeDraft(type: .openingBalance, amountText: "100.00", accountId: accountA)
-    let tx = draft.toTransaction(id: UUID(), instrument: instrument)
-    #expect(tx != nil)
-    #expect(tx!.legs.first?.quantity == Decimal(string: "100.00")!)
-  }
-
-  // MARK: - Parsing
-
-  @Test func testParsedQuantityFromDecimalString() {
-    let draft = makeDraft(amountText: "12.50")
-    #expect(draft.parsedQuantity == Decimal(string: "12.50")!)
-  }
-
-  @Test func testParsedQuantityRejectsZero() {
-    let draft = makeDraft(amountText: "0")
-    #expect(draft.parsedQuantity == nil)
-  }
-
-  @Test func testParsedQuantityRejectsNonNumeric() {
-    let draft = makeDraft(amountText: "abc")
-    #expect(draft.parsedQuantity == nil)
-  }
-
-  // MARK: - Validation
-
-  @Test func testIsValidRequiresAmount() {
-    let draft = makeDraft(amountText: "")
-    #expect(draft.isValid == false)
-  }
-
-  @Test func testIsValidRequiresTransferToAccount() {
-    let draft = makeDraft(
-      type: .transfer, amountText: "10.00",
-      accountId: accountA, toAccountId: nil)
-    #expect(draft.isValid == false)
-  }
-
-  @Test func testIsValidRejectsTransferToSameAccount() {
-    let draft = makeDraft(
-      type: .transfer, amountText: "10.00",
-      accountId: accountA, toAccountId: accountA)
-    #expect(draft.isValid == false)
-  }
-
-  @Test func testIsValidRequiresRecurrenceConfig() {
-    // Repeating but no period set
-    let draft = makeDraft(
-      amountText: "10.00",
-      isRepeating: true, recurPeriod: nil, recurEvery: 1)
-    #expect(draft.isValid == false)
-
-    // Repeating with period set — valid
-    let validDraft = makeDraft(
-      amountText: "10.00",
-      isRepeating: true, recurPeriod: .month, recurEvery: 1)
-    #expect(validDraft.isValid == true)
-  }
-
-  // MARK: - Conversion Details
-
-  @Test func testToTransactionSetsTransferLegs() {
-    let draft = makeDraft(
-      type: .transfer, amountText: "10.00",
-      accountId: accountA, toAccountId: accountB)
-    let tx = draft.toTransaction(id: UUID(), instrument: instrument)
-    #expect(tx != nil)
-    #expect(tx!.legs.count == 2)
-    #expect(tx!.legs[0].accountId == accountA)
-    #expect(tx!.legs[1].accountId == accountB)
-  }
-
-  @Test func testToTransactionClearsRecurrenceWhenNotRepeating() {
-    // Draft has recurPeriod set but isRepeating is false
-    let draft = TransactionDraft(
-      type: .expense,
-      payee: "",
-      amountText: "10.00",
-      date: Date(),
-      accountId: accountA,
-      toAccountId: nil,
-      categoryId: nil,
-      earmarkId: nil,
-      notes: "",
-      categoryText: "",
-      toAmountText: "",
-      isRepeating: false,
-      recurPeriod: .month,
-      recurEvery: 2,
-      isCustom: false,
-      legDrafts: []
-    )
-    let tx = draft.toTransaction(id: UUID(), instrument: instrument)
-    #expect(tx != nil)
-    #expect(tx!.recurPeriod == nil)
-    #expect(tx!.recurEvery == nil)
-  }
-
-  @Test func testInitFromExistingTransactionRoundTrips() {
-    let id = UUID()
+  @Test func initFromSimpleExpense() {
     let categoryId = UUID()
     let earmarkId = UUID()
-    let original = Transaction(
-      id: id,
+    let tx = Transaction(
       date: Date(timeIntervalSince1970: 1_700_000_000),
-      payee: "Coffee Shop",
-      notes: "Morning latte",
+      payee: "Coffee",
+      notes: "Latte",
       recurPeriod: .week,
       recurEvery: 2,
       legs: [
         TransactionLeg(
           accountId: accountA, instrument: instrument,
           quantity: Decimal(string: "-42.50")!, type: .expense,
-          categoryId: categoryId, earmarkId: earmarkId
-        )
+          categoryId: categoryId, earmarkId: earmarkId)
       ]
     )
 
-    let draft = TransactionDraft(from: original)
-    let roundTripped = draft.toTransaction(id: id, instrument: instrument)
+    let draft = TransactionDraft(from: tx)
 
-    #expect(roundTripped != nil)
-    #expect(roundTripped!.id == original.id)
-    #expect(roundTripped!.legs.map(\.type) == original.legs.map(\.type))
-    #expect(roundTripped!.date == original.date)
-    #expect(roundTripped!.legs.map(\.accountId) == original.legs.map(\.accountId))
-    #expect(roundTripped!.legs.first?.quantity == original.legs.first?.quantity)
-    #expect(roundTripped!.payee == original.payee)
-    #expect(roundTripped!.notes == original.notes)
-    #expect(roundTripped!.legs.compactMap(\.categoryId) == original.legs.compactMap(\.categoryId))
-    #expect(roundTripped!.legs.compactMap(\.earmarkId) == original.legs.compactMap(\.earmarkId))
-    #expect(roundTripped!.recurPeriod == original.recurPeriod)
-    #expect(roundTripped!.recurEvery == original.recurEvery)
+    #expect(draft.isCustom == false)
+    #expect(draft.legDrafts.count == 1)
+    #expect(draft.relevantLegIndex == 0)
+    #expect(draft.payee == "Coffee")
+    #expect(draft.notes == "Latte")
+    #expect(draft.date == tx.date)
+    #expect(draft.isRepeating == true)
+    #expect(draft.recurPeriod == .week)
+    #expect(draft.recurEvery == 2)
+
+    // Leg data: amount is negated for display (expense -42.50 → display "42.50")
+    #expect(draft.legDrafts[0].type == .expense)
+    #expect(draft.legDrafts[0].accountId == accountA)
+    #expect(draft.legDrafts[0].amountText == "42.50")
+    #expect(draft.legDrafts[0].categoryId == categoryId)
+    #expect(draft.legDrafts[0].earmarkId == earmarkId)
   }
 
-  // MARK: - Viewing Account Perspective
+  @Test func initFromSimpleIncome() {
+    let tx = Transaction(
+      date: Date(),
+      payee: "Salary",
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument,
+          quantity: Decimal(string: "3000.00")!, type: .income)
+      ]
+    )
 
-  @Test func roundTripTransferFromDestinationPerspective() {
-    let sourceId = UUID()
-    let destId = UUID()
+    let draft = TransactionDraft(from: tx)
 
-    let original = Transaction(
-      id: UUID(),
+    // Income: display = quantity as-is (positive stays positive)
+    #expect(draft.legDrafts[0].type == .income)
+    #expect(draft.legDrafts[0].amountText == "3000.00")
+  }
+
+  @Test func initFromRefundExpense() {
+    // Refund: expense with positive quantity
+    let tx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument,
+          quantity: Decimal(string: "10.00")!, type: .expense)
+      ]
+    )
+
+    let draft = TransactionDraft(from: tx)
+
+    // Expense display is negated: -(+10) = -10
+    #expect(draft.legDrafts[0].amountText == "-10.00")
+  }
+
+  @Test func initFromZeroAmount() {
+    let tx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument,
+          quantity: Decimal.zero, type: .expense)
+      ]
+    )
+
+    let draft = TransactionDraft(from: tx)
+    #expect(draft.legDrafts[0].amountText == "0")
+  }
+
+  // MARK: - Init from Transaction: Simple Transfer
+
+  @Test func initFromSimpleTransferNoContext() {
+    let tx = Transaction(
       date: Date(),
       payee: "Transfer",
       legs: [
         TransactionLeg(
-          accountId: sourceId, instrument: instrument, quantity: -100, type: .transfer),
-        TransactionLeg(accountId: destId, instrument: instrument, quantity: 100, type: .transfer),
+          accountId: accountA, instrument: instrument, quantity: -100, type: .transfer),
+        TransactionLeg(accountId: accountB, instrument: instrument, quantity: 100, type: .transfer),
       ]
     )
 
-    // When viewing from the destination account, the draft should orient to that leg
-    let draft = TransactionDraft(from: original, viewingAccountId: destId)
-    #expect(draft.accountId == destId)
-    #expect(draft.toAccountId == sourceId)
-    #expect(draft.amountText == "100.00")
+    let draft = TransactionDraft(from: tx)
+
+    #expect(draft.isCustom == false)
+    #expect(draft.legDrafts.count == 2)
+    // No context: relevant leg is index 0 (the primary leg)
+    #expect(draft.relevantLegIndex == 0)
+    // Both legs populated
+    #expect(draft.legDrafts[0].accountId == accountA)
+    #expect(draft.legDrafts[0].amountText == "100.00")  // -(-100) = 100
+    #expect(draft.legDrafts[1].accountId == accountB)
+    #expect(draft.legDrafts[1].amountText == "-100.00")  // -(+100) = -100
   }
 
-  // MARK: - Instrument Precision
-
-  @Test func initFromTransactionPreservesInstrumentPrecision() {
-    let btc = Instrument.crypto(
-      chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8)
-    let original = Transaction(
+  @Test func initFromSimpleTransferViewingFromSource() {
+    let tx = Transaction(
       date: Date(),
       legs: [
         TransactionLeg(
-          accountId: accountA, instrument: btc,
-          quantity: Decimal(string: "-0.00123456")!, type: .expense
-        )
+          accountId: accountA, instrument: instrument, quantity: -100, type: .transfer),
+        TransactionLeg(accountId: accountB, instrument: instrument, quantity: 100, type: .transfer),
       ]
     )
-    let draft = TransactionDraft(from: original)
-    #expect(draft.amountText.contains("0.00123456"))
+
+    let draft = TransactionDraft(from: tx, viewingAccountId: accountA)
+
+    // Source account is at index 0, so relevant leg = 0
+    #expect(draft.relevantLegIndex == 0)
+    #expect(draft.legDrafts[0].amountText == "100.00")
   }
 
-  @Test func initFromCrossCurrencyTransferPreservesToInstrumentPrecision() {
-    let btc = Instrument.crypto(
-      chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8)
-    let original = Transaction(
+  @Test func initFromSimpleTransferViewingFromDestination() {
+    let tx = Transaction(
       date: Date(),
       legs: [
         TransactionLeg(
-          accountId: accountA, instrument: Instrument.AUD,
-          quantity: Decimal(string: "-100.00")!, type: .transfer
-        ),
-        TransactionLeg(
-          accountId: accountB, instrument: btc,
-          quantity: Decimal(string: "0.00456789")!, type: .transfer
-        ),
+          accountId: accountA, instrument: instrument, quantity: -100, type: .transfer),
+        TransactionLeg(accountId: accountB, instrument: instrument, quantity: 100, type: .transfer),
       ]
     )
-    let draft = TransactionDraft(from: original)
-    #expect(draft.toAmountText.contains("0.00456789"))
+
+    let draft = TransactionDraft(from: tx, viewingAccountId: accountB)
+
+    // Destination account is at index 1, so relevant leg = 1
+    #expect(draft.relevantLegIndex == 1)
+    // Display: -(+100) = -100
+    #expect(draft.legDrafts[draft.relevantLegIndex].amountText == "-100.00")
   }
 
-  // MARK: - Cross-Currency Transfers
-
-  @Test func sameCurrencyTransferProducesTwoLegsWithSameAmount() {
-    let draft = makeDraft(
-      type: .transfer, amountText: "100.00",
-      accountId: accountA, toAccountId: accountB, toAmountText: "")
-    let tx = draft.toTransaction(
-      id: UUID(), fromInstrument: .AUD, toInstrument: .AUD)
-    #expect(tx != nil)
-    #expect(tx!.legs.count == 2)
-
-    let outflow = tx!.legs.first(where: { $0.accountId == accountA })
-    #expect(outflow?.quantity == Decimal(string: "-100.00")!)
-    #expect(outflow?.instrument == .AUD)
-
-    let inflow = tx!.legs.first(where: { $0.accountId == accountB })
-    #expect(inflow?.quantity == Decimal(string: "100.00")!)
-    #expect(inflow?.instrument == .AUD)
-  }
-
-  @Test func crossCurrencyTransferProducesTwoLegsWithDifferentAmounts() {
-    let draft = makeDraft(
-      type: .transfer, amountText: "1000.00",
-      accountId: accountA, toAccountId: accountB, toAmountText: "650.00")
-    let tx = draft.toTransaction(
-      id: UUID(), fromInstrument: .AUD, toInstrument: .USD)
-    #expect(tx != nil)
-    #expect(tx!.legs.count == 2)
-
-    let outflow = tx!.legs.first(where: { $0.accountId == accountA })
-    #expect(outflow?.quantity == Decimal(string: "-1000.00")!)
-    #expect(outflow?.instrument == .AUD)
-
-    let inflow = tx!.legs.first(where: { $0.accountId == accountB })
-    #expect(inflow?.quantity == Decimal(string: "650.00")!)
-    #expect(inflow?.instrument == .USD)
-  }
-
-  @Test func crossCurrencyTransferDefaultsSameAmount() {
-    let draft = makeDraft(
-      type: .transfer, amountText: "1000.00",
-      accountId: accountA, toAccountId: accountB, toAmountText: "")
-    let tx = draft.toTransaction(
-      id: UUID(), fromInstrument: .AUD, toInstrument: .USD)
-    #expect(tx != nil)
-
-    let inflow = tx!.legs.first(where: { $0.accountId == accountB })
-    #expect(inflow?.quantity == Decimal(string: "1000.00")!)
-    #expect(inflow?.instrument == .USD)
-  }
-
-  // MARK: - LegDraft
-
-  @Test func legDraftConstructionAndEquality() {
-    let id = UUID()
-    let catId = UUID()
+  @Test func initFromSimpleTransferWithCategoryOnFirstLeg() {
+    let categoryId = UUID()
     let earmarkId = UUID()
-    let leg = TransactionDraft.LegDraft(
-      type: .expense,
-      accountId: id,
-      amountText: "42.00",
-      categoryId: catId,
-      categoryText: "Food",
-      earmarkId: earmarkId
+    let tx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -100, type: .transfer,
+          categoryId: categoryId, earmarkId: earmarkId),
+        TransactionLeg(accountId: accountB, instrument: instrument, quantity: 100, type: .transfer),
+      ]
     )
-    let leg2 = TransactionDraft.LegDraft(
-      type: .expense,
-      accountId: id,
-      amountText: "42.00",
-      categoryId: catId,
-      categoryText: "Food",
-      earmarkId: earmarkId
-    )
-    #expect(leg == leg2)
 
-    var leg3 = leg
-    leg3.amountText = "99.00"
-    #expect(leg != leg3)
+    #expect(tx.isSimple == true)
+    let draft = TransactionDraft(from: tx)
+    #expect(draft.isCustom == false)
+    // Category/earmark on primary leg (index 0)
+    #expect(draft.legDrafts[0].categoryId == categoryId)
+    #expect(draft.legDrafts[0].earmarkId == earmarkId)
+    // Counterpart has nil
+    #expect(draft.legDrafts[1].categoryId == nil)
+    #expect(draft.legDrafts[1].earmarkId == nil)
   }
 
-  // MARK: - isCustom Round-Trip
+  // MARK: - Init from Transaction: Complex
 
-  @Test func initFromNonSimpleTransactionSetsIsCustom() {
-    // Three-leg transaction: not simple
-    let legA = TransactionLeg(
-      accountId: accountA, instrument: instrument, quantity: -100, type: .expense,
-      categoryId: UUID())
-    let legB = TransactionLeg(
-      accountId: accountB, instrument: instrument, quantity: -50, type: .expense)
-    let legC = TransactionLeg(
-      accountId: UUID(), instrument: instrument, quantity: 150, type: .income)
-    let tx = Transaction(date: Date(), legs: [legA, legB, legC])
+  @Test func initFromComplexTransaction() {
+    let catId = UUID()
+    let tx = Transaction(
+      date: Date(),
+      payee: "Split",
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -100, type: .expense,
+          categoryId: catId),
+        TransactionLeg(accountId: accountB, instrument: instrument, quantity: -50, type: .expense),
+        TransactionLeg(accountId: UUID(), instrument: instrument, quantity: 150, type: .income),
+      ]
+    )
     #expect(!tx.isSimple)
 
     let draft = TransactionDraft(from: tx)
     #expect(draft.isCustom == true)
     #expect(draft.legDrafts.count == 3)
-    #expect(draft.legDrafts[0].accountId == accountA)
+    // Expense legs: display is negated
     #expect(draft.legDrafts[0].amountText == "100.00")
-    #expect(draft.legDrafts[0].categoryId == legA.categoryId)
-    #expect(draft.legDrafts[1].accountId == accountB)
+    #expect(draft.legDrafts[0].categoryId == catId)
     #expect(draft.legDrafts[1].amountText == "50.00")
+    // Income leg: display is as-is
+    #expect(draft.legDrafts[2].amountText == "150.00")
   }
 
-  @Test func initFromSimpleTransactionIsNotCustom() {
+  // MARK: - Init Blank
+
+  @Test func initBlankTransaction() {
+    let draft = TransactionDraft(accountId: accountA)
+
+    #expect(draft.isCustom == false)
+    #expect(draft.legDrafts.count == 1)
+    #expect(draft.relevantLegIndex == 0)
+    #expect(draft.legDrafts[0].type == .expense)
+    #expect(draft.legDrafts[0].accountId == accountA)
+    #expect(draft.legDrafts[0].amountText == "0")
+    #expect(draft.payee == "")
+    #expect(draft.notes == "")
+    #expect(draft.isRepeating == false)
+  }
+
+  // MARK: - Init with Instrument Precision
+
+  @Test func initPreservesCryptoPrecision() {
+    let btc = Instrument.crypto(
+      chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8)
     let tx = Transaction(
       date: Date(),
       legs: [
-        TransactionLeg(accountId: accountA, instrument: instrument, quantity: -50, type: .expense)
+        TransactionLeg(
+          accountId: accountA, instrument: btc,
+          quantity: Decimal(string: "-0.00123456")!, type: .expense)
       ]
     )
-    #expect(tx.isSimple)
-
     let draft = TransactionDraft(from: tx)
-    #expect(draft.isCustom == false)
-    #expect(draft.legDrafts.isEmpty)
+    #expect(draft.legDrafts[0].amountText.contains("0.00123456"))
   }
 
-  // MARK: - toTransaction(id:accounts:) Custom Mode
+  // MARK: - setType
 
-  @Test func toTransactionCustomModeBuildsLegsWithCorrectSigns() {
-    let acctIdA = UUID()
-    let acctIdB = UUID()
-    let acctIdC = UUID()
+  @Test func setTypeExpenseToIncome() {
+    var draft = makeExpenseDraft(amountText: "50.00")
+    draft.setType(.income, accounts: makeAccounts([makeAccount(id: accountA)]))
+
+    #expect(draft.legDrafts.count == 1)
+    #expect(draft.legDrafts[0].type == .income)
+    // Display text stays the same
+    #expect(draft.legDrafts[0].amountText == "50.00")
+  }
+
+  @Test func setTypeExpenseToTransfer() {
     let accounts = makeAccounts([
-      makeAccount(id: acctIdA),
-      makeAccount(id: acctIdB),
-      makeAccount(id: acctIdC),
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
     ])
+    var draft = makeExpenseDraft(amountText: "50.00", accountId: accountA)
+    draft.setType(.transfer, accounts: accounts)
 
-    let catId = UUID()
+    #expect(draft.legDrafts.count == 2)
+    #expect(draft.legDrafts[0].type == .transfer)
+    #expect(draft.legDrafts[0].amountText == "50.00")
+    // Counterpart added with negated display amount and default account
+    #expect(draft.legDrafts[1].type == .transfer)
+    #expect(draft.legDrafts[1].amountText == "-50.00")
+    #expect(draft.legDrafts[1].accountId == accountB)
+  }
+
+  @Test func setTypeTransferToExpense() {
+    let accounts = makeAccounts([
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
+    ])
+    var draft = makeExpenseDraft(amountText: "50.00", accountId: accountA)
+    draft.setType(.transfer, accounts: accounts)
+    // Now switch back to expense
+    draft.setType(.expense, accounts: accounts)
+
+    #expect(draft.legDrafts.count == 1)
+    #expect(draft.legDrafts[0].type == .expense)
+    #expect(draft.legDrafts[0].amountText == "50.00")
+  }
+
+  @Test func setTypeIncomeToTransfer() {
+    let accounts = makeAccounts([
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
+    ])
+    var draft = TransactionDraft(
+      payee: "Test", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: false,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .income, accountId: accountA, amountText: "50.00",
+          categoryId: nil, categoryText: "", earmarkId: nil)
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    draft.setType(.transfer, accounts: accounts)
+
+    #expect(draft.legDrafts.count == 2)
+    #expect(draft.legDrafts[0].type == .transfer)
+    #expect(draft.legDrafts[0].amountText == "50.00")
+    #expect(draft.legDrafts[1].amountText == "-50.00")
+  }
+
+  @Test func setTypeTransferDefaultAccountExcludesCurrentAccount() {
+    let accountC = UUID()
+    let accounts = makeAccounts([
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
+      makeAccount(id: accountC),
+    ])
+    var draft = makeExpenseDraft(amountText: "50.00", accountId: accountA)
+    draft.setType(.transfer, accounts: accounts)
+
+    // Counterpart should not be accountA
+    #expect(draft.legDrafts[1].accountId != accountA)
+  }
+
+  @Test func setTypeClearsCounterpartCategoryAndEarmark() {
+    let categoryId = UUID()
     let earmarkId = UUID()
-    var draft = TransactionDraft(accountId: acctIdA)
+    let accounts = makeAccounts([
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
+    ])
+    var draft = TransactionDraft(
+      payee: "Test", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: false,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .expense, accountId: accountA, amountText: "50.00",
+          categoryId: categoryId, categoryText: "Food", earmarkId: earmarkId)
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    draft.setType(.transfer, accounts: accounts)
+
+    // Primary leg (0) keeps category/earmark
+    #expect(draft.legDrafts[0].categoryId == categoryId)
+    #expect(draft.legDrafts[0].earmarkId == earmarkId)
+    // Counterpart has nil
+    #expect(draft.legDrafts[1].categoryId == nil)
+    #expect(draft.legDrafts[1].earmarkId == nil)
+  }
+
+  // MARK: - setAmount
+
+  @Test func setAmountSimpleExpense() {
+    var draft = makeExpenseDraft(amountText: "10.00")
+    draft.setAmount("75.00")
+    #expect(draft.legDrafts[0].amountText == "75.00")
+  }
+
+  @Test func setAmountSimpleTransferMirrorsToCounterpart() {
+    let accounts = makeAccounts([
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
+    ])
+    var draft = makeExpenseDraft(amountText: "50.00", accountId: accountA)
+    draft.setType(.transfer, accounts: accounts)
+
+    draft.setAmount("75.00")
+    #expect(draft.legDrafts[draft.relevantLegIndex].amountText == "75.00")
+    // Counterpart gets parse-negate-format
+    let counterIdx = draft.relevantLegIndex == 0 ? 1 : 0
+    #expect(draft.legDrafts[counterIdx].amountText == "-75.00")
+  }
+
+  @Test func setAmountNegativeDisplayMirrorsPositiveToCounterpart() {
+    let accounts = makeAccounts([
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
+    ])
+    var draft = makeExpenseDraft(amountText: "50.00", accountId: accountA)
+    draft.setType(.transfer, accounts: accounts)
+
+    // Negative display value (reversed transfer)
+    draft.setAmount("-10.00")
+    #expect(draft.legDrafts[draft.relevantLegIndex].amountText == "-10.00")
+    let counterIdx = draft.relevantLegIndex == 0 ? 1 : 0
+    #expect(draft.legDrafts[counterIdx].amountText == "10.00")
+  }
+
+  @Test func setAmountUnparseableCascadesToInvalidCounterpart() {
+    let accounts = makeAccounts([
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
+    ])
+    var draft = makeExpenseDraft(amountText: "50.00", accountId: accountA)
+    draft.setType(.transfer, accounts: accounts)
+
+    draft.setAmount("abc")
+    #expect(draft.legDrafts[draft.relevantLegIndex].amountText == "abc")
+    let counterIdx = draft.relevantLegIndex == 0 ? 1 : 0
+    #expect(draft.legDrafts[counterIdx].amountText == "")
+  }
+
+  @Test func setAmountZeroIsValid() {
+    var draft = makeExpenseDraft(amountText: "10.00")
+    draft.setAmount("0")
+    #expect(draft.legDrafts[0].amountText == "0")
+  }
+
+  @Test func setAmountFromDestinationPerspectiveMirrorsCorrectly() {
+    // Transfer where relevant leg is index 1 (viewing from destination)
+    let tx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -100, type: .transfer),
+        TransactionLeg(
+          accountId: accountB, instrument: instrument, quantity: 100, type: .transfer),
+      ]
+    )
+    var draft = TransactionDraft(from: tx, viewingAccountId: accountB)
+    #expect(draft.relevantLegIndex == 1)
+
+    // User changes amount to 200 (from their perspective)
+    draft.setAmount("200.00")
+    #expect(draft.legDrafts[1].amountText == "200.00")
+    // Primary leg (index 0) gets negated
+    #expect(draft.legDrafts[0].amountText == "-200.00")
+  }
+
+  // MARK: - Relevant Leg Stability
+
+  @Test func relevantLegStableWhenAmountSignChanges() {
+    let tx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -100, type: .transfer),
+        TransactionLeg(
+          accountId: accountB, instrument: instrument, quantity: 100, type: .transfer),
+      ]
+    )
+    var draft = TransactionDraft(from: tx, viewingAccountId: accountA)
+    let originalIndex = draft.relevantLegIndex
+
+    // Change amount to negative (would flip which leg is "outflow")
+    draft.setAmount("-50.00")
+
+    // Relevant leg index must NOT change
+    #expect(draft.relevantLegIndex == originalIndex)
+    #expect(draft.legDrafts[originalIndex].accountId == accountA)
+  }
+
+  // MARK: - Mode Switching
+
+  @Test func switchToCustomPreservesLegs() {
+    var draft = makeExpenseDraft(amountText: "50.00", accountId: accountA)
     draft.isCustom = true
-    draft.legDrafts = [
-      TransactionDraft.LegDraft(
-        type: .expense, accountId: acctIdA, amountText: "100.00",
-        categoryId: catId, categoryText: "", earmarkId: nil),
-      TransactionDraft.LegDraft(
-        type: .income, accountId: acctIdB, amountText: "50.00",
-        categoryId: nil, categoryText: "", earmarkId: earmarkId),
-      TransactionDraft.LegDraft(
-        type: .transfer, accountId: acctIdC, amountText: "25.00",
-        categoryId: nil, categoryText: "", earmarkId: nil),
-    ]
-
-    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
-    #expect(tx != nil)
-    #expect(tx!.legs.count == 3)
-
-    let expenseLeg = tx!.legs.first { $0.accountId == acctIdA }
-    #expect(expenseLeg?.quantity == Decimal(string: "-100.00")!)
-    #expect(expenseLeg?.categoryId == catId)
-
-    let incomeLeg = tx!.legs.first { $0.accountId == acctIdB }
-    #expect(incomeLeg?.quantity == Decimal(string: "50.00")!)
-    #expect(incomeLeg?.earmarkId == earmarkId)
-
-    let transferLeg = tx!.legs.first { $0.accountId == acctIdC }
-    #expect(transferLeg?.quantity == Decimal(string: "-25.00")!)  // transfer always negative
+    #expect(draft.legDrafts.count == 1)
+    #expect(draft.legDrafts[0].amountText == "50.00")
   }
 
-  @Test func toTransactionCustomModeTransferIsAlwaysNegative() {
-    let acctId = UUID()
-    let accounts = makeAccounts([makeAccount(id: acctId)])
-
-    var draft = TransactionDraft(accountId: acctId)
+  @Test func switchToSimpleRepinsRelevantLeg() {
+    let tx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -100, type: .transfer),
+        TransactionLeg(
+          accountId: accountB, instrument: instrument, quantity: 100, type: .transfer),
+      ]
+    )
+    var draft = TransactionDraft(from: tx, viewingAccountId: accountB)
     draft.isCustom = true
-    draft.legDrafts = [
+    // Switch back to simple
+    draft.switchToSimple()
+    #expect(draft.isCustom == false)
+    #expect(draft.relevantLegIndex == 1)  // re-pinned to accountB
+  }
+
+  @Test func switchToSimpleNoContextPinsToZero() {
+    let tx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -100, type: .transfer),
+        TransactionLeg(
+          accountId: accountB, instrument: instrument, quantity: 100, type: .transfer),
+      ]
+    )
+    var draft = TransactionDraft(from: tx)
+    draft.isCustom = true
+    draft.switchToSimple()
+    #expect(draft.relevantLegIndex == 0)
+  }
+
+  @Test func canSwitchToSimpleWhenLegsAreSimple() {
+    var draft = makeExpenseDraft()
+    draft.isCustom = true
+    #expect(draft.canSwitchToSimple == true)
+  }
+
+  @Test func cannotSwitchToSimpleWithThreeLegs() {
+    var draft = makeExpenseDraft()
+    draft.isCustom = true
+    draft.legDrafts.append(
       TransactionDraft.LegDraft(
-        type: .transfer, accountId: acctId, amountText: "200.00",
-        categoryId: nil, categoryText: "", earmarkId: nil)
-    ]
-
-    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
-    #expect(tx != nil)
-    #expect(tx!.legs.first?.quantity == Decimal(string: "-200.00")!)
+        type: .expense, accountId: accountB, amountText: "5.00",
+        categoryId: nil, categoryText: "", earmarkId: nil))
+    draft.legDrafts.append(
+      TransactionDraft.LegDraft(
+        type: .income, accountId: UUID(), amountText: "15.00",
+        categoryId: nil, categoryText: "", earmarkId: nil))
+    #expect(draft.canSwitchToSimple == false)
   }
 
-  @Test func toTransactionCustomModeDelegatesToSimpleWhenNotCustom() {
-    let acctId = UUID()
-    let accounts = makeAccounts([makeAccount(id: acctId)])
+  // MARK: - Validation
 
-    var draft = TransactionDraft(accountId: acctId)
-    draft.isCustom = false
-    draft.amountText = "75.00"
-    draft.type = .income
-
-    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
-    #expect(tx != nil)
-    #expect(tx!.legs.count == 1)
-    #expect(tx!.legs.first?.quantity == Decimal(string: "75.00")!)
+  @Test func validSimpleExpense() {
+    let draft = makeExpenseDraft(amountText: "10.00", accountId: accountA)
+    #expect(draft.isValid == true)
   }
 
-  // MARK: - isValid Custom Mode
+  @Test func invalidEmptyAmount() {
+    let draft = makeExpenseDraft(amountText: "")
+    #expect(draft.isValid == false)
+  }
 
-  @Test func isValidCustomRequiresAtLeastOneLeg() {
-    var draft = TransactionDraft(accountId: accountA)
+  @Test func validZeroAmount() {
+    let draft = makeExpenseDraft(amountText: "0")
+    #expect(draft.isValid == true)
+  }
+
+  @Test func validNegativeDisplayAmount() {
+    // Refund: user types -10 for an expense
+    let draft = makeExpenseDraft(amountText: "-10.00")
+    #expect(draft.isValid == true)
+  }
+
+  @Test func invalidMissingAccount() {
+    let draft = TransactionDraft(
+      payee: "Test", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: false,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .expense, accountId: nil, amountText: "10.00",
+          categoryId: nil, categoryText: "", earmarkId: nil)
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    #expect(draft.isValid == false)
+  }
+
+  @Test func invalidRecurrenceWithoutPeriod() {
+    var draft = makeExpenseDraft(amountText: "10.00")
+    draft.isRepeating = true
+    draft.recurPeriod = nil
+    #expect(draft.isValid == false)
+  }
+
+  @Test func validRecurrence() {
+    var draft = makeExpenseDraft(amountText: "10.00")
+    draft.isRepeating = true
+    draft.recurPeriod = .month
+    draft.recurEvery = 1
+    #expect(draft.isValid == true)
+  }
+
+  @Test func invalidCustomEmptyLegs() {
+    var draft = makeExpenseDraft()
     draft.isCustom = true
     draft.legDrafts = []
     #expect(draft.isValid == false)
   }
 
-  @Test func isValidCustomRequiresAllLegsHaveAccount() {
-    var draft = TransactionDraft(accountId: accountA)
+  @Test func invalidCustomLegMissingAccount() {
+    var draft = makeExpenseDraft()
     draft.isCustom = true
     draft.legDrafts = [
       TransactionDraft.LegDraft(
@@ -485,19 +623,19 @@ struct TransactionDraftTests {
     #expect(draft.isValid == false)
   }
 
-  @Test func isValidCustomRequiresAllLegsHavePositiveAmount() {
-    var draft = TransactionDraft(accountId: accountA)
+  @Test func invalidCustomLegEmptyAmount() {
+    var draft = makeExpenseDraft()
     draft.isCustom = true
     draft.legDrafts = [
       TransactionDraft.LegDraft(
-        type: .expense, accountId: accountA, amountText: "0",
+        type: .expense, accountId: accountA, amountText: "",
         categoryId: nil, categoryText: "", earmarkId: nil)
     ]
     #expect(draft.isValid == false)
   }
 
-  @Test func isValidCustomPassesWhenAllLegsValid() {
-    var draft = TransactionDraft(accountId: accountA)
+  @Test func validCustomLegs() {
+    var draft = makeExpenseDraft()
     draft.isCustom = true
     draft.legDrafts = [
       TransactionDraft.LegDraft(
@@ -510,188 +648,439 @@ struct TransactionDraftTests {
     #expect(draft.isValid == true)
   }
 
-  @Test func isValidCustomPartialLegsAreInvalid() {
-    var draft = TransactionDraft(accountId: accountA)
-    draft.isCustom = true
-    // First leg valid, second has no account
-    draft.legDrafts = [
-      TransactionDraft.LegDraft(
-        type: .expense, accountId: accountA, amountText: "10.00",
-        categoryId: nil, categoryText: "", earmarkId: nil),
-      TransactionDraft.LegDraft(
-        type: .income, accountId: nil, amountText: "10.00",
-        categoryId: nil, categoryText: "", earmarkId: nil),
-    ]
-    #expect(draft.isValid == false)
+  // MARK: - Conversion: toTransaction
+
+  @Test func toTransactionSimpleExpense() {
+    let draft = makeExpenseDraft(amountText: "25.00", accountId: accountA)
+    let accounts = makeAccounts([makeAccount(id: accountA)])
+    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
+
+    #expect(tx != nil)
+    #expect(tx!.legs.count == 1)
+    #expect(tx!.legs[0].quantity == Decimal(string: "-25.00"))  // expense: negated back
+    #expect(tx!.legs[0].type == .expense)
+    #expect(tx!.legs[0].accountId == accountA)
   }
 
-  // MARK: - applyAutofill
+  @Test func toTransactionSimpleIncome() {
+    let draft = TransactionDraft(
+      payee: "Salary", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: false,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .income, accountId: accountA, amountText: "3000.00",
+          categoryId: nil, categoryText: "", earmarkId: nil)
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    let accounts = makeAccounts([makeAccount(id: accountA)])
+    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
 
-  @Test func applyAutofillSimpleMatchFillsDefaults() {
+    #expect(tx != nil)
+    #expect(tx!.legs[0].quantity == Decimal(string: "3000.00"))  // income: as-is
+  }
+
+  @Test func toTransactionRefundExpense() {
+    // Display value "-10" for expense → quantity = -(-10) = +10
+    let draft = makeExpenseDraft(amountText: "-10.00", accountId: accountA)
+    let accounts = makeAccounts([makeAccount(id: accountA)])
+    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
+
+    #expect(tx != nil)
+    #expect(tx!.legs[0].quantity == Decimal(string: "10.00"))
+  }
+
+  @Test func toTransactionSimpleTransfer() {
+    let accounts = makeAccounts([
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
+    ])
+    var draft = makeExpenseDraft(amountText: "100.00", accountId: accountA)
+    draft.setType(.transfer, accounts: accounts)
+
+    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
+    #expect(tx != nil)
+    #expect(tx!.legs.count == 2)
+    #expect(tx!.legs[0].quantity == Decimal(string: "-100.00"))
+    #expect(tx!.legs[1].quantity == Decimal(string: "100.00"))
+  }
+
+  @Test func toTransactionRoundTripsExpense() {
+    let id = UUID()
     let categoryId = UUID()
     let earmarkId = UUID()
+    let original = Transaction(
+      id: id,
+      date: Date(timeIntervalSince1970: 1_700_000_000),
+      payee: "Coffee",
+      notes: "Latte",
+      recurPeriod: .week,
+      recurEvery: 2,
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument,
+          quantity: Decimal(string: "-42.50")!, type: .expense,
+          categoryId: categoryId, earmarkId: earmarkId)
+      ]
+    )
+
+    let draft = TransactionDraft(from: original)
+    let accounts = makeAccounts([makeAccount(id: accountA)])
+    let roundTripped = draft.toTransaction(id: id, accounts: accounts)
+
+    #expect(roundTripped != nil)
+    #expect(roundTripped!.id == original.id)
+    #expect(roundTripped!.date == original.date)
+    #expect(roundTripped!.payee == original.payee)
+    #expect(roundTripped!.notes == original.notes)
+    #expect(roundTripped!.recurPeriod == original.recurPeriod)
+    #expect(roundTripped!.recurEvery == original.recurEvery)
+    #expect(roundTripped!.legs.count == original.legs.count)
+    #expect(roundTripped!.legs[0].quantity == original.legs[0].quantity)
+    #expect(roundTripped!.legs[0].type == original.legs[0].type)
+    #expect(roundTripped!.legs[0].categoryId == original.legs[0].categoryId)
+    #expect(roundTripped!.legs[0].earmarkId == original.legs[0].earmarkId)
+  }
+
+  @Test func toTransactionRoundTripsTransfer() {
+    let id = UUID()
+    let categoryId = UUID()
+    let original = Transaction(
+      id: id,
+      date: Date(),
+      payee: "Transfer",
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -100, type: .transfer,
+          categoryId: categoryId),
+        TransactionLeg(
+          accountId: accountB, instrument: instrument, quantity: 100, type: .transfer),
+      ]
+    )
+
+    let draft = TransactionDraft(from: original)
+    let accounts = makeAccounts([
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
+    ])
+    let roundTripped = draft.toTransaction(id: id, accounts: accounts)
+
+    #expect(roundTripped != nil)
+    #expect(roundTripped!.legs.count == 2)
+    #expect(roundTripped!.legs[0].quantity == original.legs[0].quantity)
+    #expect(roundTripped!.legs[1].quantity == original.legs[1].quantity)
+    #expect(roundTripped!.legs[0].categoryId == categoryId)
+    #expect(roundTripped!.legs[1].categoryId == nil)
+  }
+
+  @Test func toTransactionRoundTripsTransferFromDestination() {
+    let id = UUID()
+    let original = Transaction(
+      id: id,
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -100, type: .transfer),
+        TransactionLeg(
+          accountId: accountB, instrument: instrument, quantity: 100, type: .transfer),
+      ]
+    )
+
+    // Edit from destination perspective
+    let draft = TransactionDraft(from: original, viewingAccountId: accountB)
+    let accounts = makeAccounts([
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
+    ])
+    let roundTripped = draft.toTransaction(id: id, accounts: accounts)
+
+    #expect(roundTripped != nil)
+    // Quantities must be preserved regardless of which leg is "relevant"
+    #expect(roundTripped!.legs[0].quantity == Decimal(string: "-100"))
+    #expect(roundTripped!.legs[1].quantity == Decimal(string: "100"))
+  }
+
+  @Test func toTransactionCustomModeMultiLeg() {
+    let catId = UUID()
+    let earmarkId = UUID()
+    let accounts = makeAccounts([
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
+    ])
+    let draft = TransactionDraft(
+      payee: "Split", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: true,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .expense, accountId: accountA, amountText: "100.00",
+          categoryId: catId, categoryText: "", earmarkId: nil),
+        TransactionDraft.LegDraft(
+          type: .income, accountId: accountB, amountText: "50.00",
+          categoryId: nil, categoryText: "", earmarkId: earmarkId),
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+
+    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
+    #expect(tx != nil)
+    #expect(tx!.legs.count == 2)
+    #expect(tx!.legs[0].quantity == Decimal(string: "-100.00"))  // expense negated
+    #expect(tx!.legs[0].categoryId == catId)
+    #expect(tx!.legs[1].quantity == Decimal(string: "50.00"))  // income as-is
+    #expect(tx!.legs[1].earmarkId == earmarkId)
+  }
+
+  @Test func toTransactionReturnsNilWhenInvalid() {
+    let draft = makeExpenseDraft(amountText: "")
+    let accounts = makeAccounts([makeAccount(id: accountA)])
+    #expect(draft.toTransaction(id: UUID(), accounts: accounts) == nil)
+  }
+
+  @Test func toTransactionClearsRecurrenceWhenNotRepeating() {
+    var draft = makeExpenseDraft(amountText: "10.00", accountId: accountA)
+    draft.recurPeriod = .month
+    draft.recurEvery = 2
+    draft.isRepeating = false
+
+    let accounts = makeAccounts([makeAccount(id: accountA)])
+    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
+    #expect(tx != nil)
+    #expect(tx!.recurPeriod == nil)
+    #expect(tx!.recurEvery == nil)
+  }
+
+  // MARK: - Autofill
+
+  @Test func autofillCopiesEverythingExceptDate() {
+    let categoryId = UUID()
+    let earmarkId = UUID()
+    let matchDate = Date(timeIntervalSince1970: 999_999)
     let matchTx = Transaction(
-      date: Date(timeIntervalSince1970: 999_999),
+      date: matchDate,
       payee: "Coffee",
       notes: "Morning",
       legs: [
         TransactionLeg(
-          accountId: accountA, instrument: instrument, quantity: Decimal(string: "-5.50")!,
-          type: .expense, categoryId: categoryId, earmarkId: earmarkId)
+          accountId: accountA, instrument: instrument,
+          quantity: Decimal(string: "-5.50")!, type: .expense,
+          categoryId: categoryId, earmarkId: earmarkId)
       ]
     )
 
-    var draft = TransactionDraft(accountId: nil)
-    let categories = Categories(from: [Category(id: categoryId, name: "Food")])
-    draft.applyAutofill(from: matchTx, categories: categories, supportsComplexTransactions: false)
+    let originalDate = Date()
+    var draft = TransactionDraft(accountId: accountA, viewingAccountId: accountA)
+    draft.date = originalDate
+
+    draft.applyAutofill(from: matchTx, categories: Categories(from: []))
 
     #expect(draft.payee == "Coffee")
     #expect(draft.notes == "Morning")
-    #expect(draft.type == .expense)
-    #expect(draft.amountText == "5.50")
-    #expect(draft.accountId == accountA)
-    #expect(draft.categoryId == categoryId)
-    #expect(draft.earmarkId == earmarkId)
-    // Date must NOT be set from the match
-    #expect(draft.date != matchTx.date)
+    #expect(draft.legDrafts[0].type == .expense)
+    #expect(draft.legDrafts[0].amountText == "5.50")
+    #expect(draft.legDrafts[0].accountId == accountA)
+    #expect(draft.legDrafts[0].categoryId == categoryId)
+    #expect(draft.legDrafts[0].earmarkId == earmarkId)
+    // Date preserved from original draft
+    #expect(draft.date == originalDate)
+    #expect(draft.date != matchDate)
   }
 
-  @Test func applyAutofillSimpleMatchPreservesUserEnteredValues() {
-    let originalAccountId = UUID()
-    let originalCategoryId = UUID()
-    let matchCategoryId = UUID()
-    let matchTx = Transaction(
-      date: Date(),
-      payee: "Coffee",
-      notes: "From match",
-      legs: [
-        TransactionLeg(
-          accountId: accountA, instrument: instrument, quantity: Decimal(string: "-5.50")!,
-          type: .expense, categoryId: matchCategoryId, earmarkId: nil)
-      ]
-    )
-
-    var draft = TransactionDraft(accountId: originalAccountId)
-    draft.amountText = "20.00"
-    draft.payee = "User Payee"
-    draft.notes = "User notes"
-    draft.categoryId = originalCategoryId
-    draft.type = .income
-
-    let categories = Categories(from: [])
-    draft.applyAutofill(from: matchTx, categories: categories, supportsComplexTransactions: false)
-
-    // All user-entered values preserved
-    #expect(draft.payee == "User Payee")
-    #expect(draft.notes == "User notes")
-    #expect(draft.amountText == "20.00")
-    #expect(draft.accountId == originalAccountId)
-    #expect(draft.categoryId == originalCategoryId)
-    #expect(draft.type == .income)
-  }
-
-  @Test func applyAutofillComplexMatchWithSupportSetsCustomMode() {
-    let catId = UUID()
+  @Test func autofillFromComplexTransactionSetsCustomMode() {
     let matchTx = Transaction(
       date: Date(),
       payee: "Split",
       legs: [
         TransactionLeg(
-          accountId: accountA, instrument: instrument, quantity: -100, type: .expense,
-          categoryId: catId),
+          accountId: accountA, instrument: instrument, quantity: -100, type: .expense),
         TransactionLeg(
           accountId: accountB, instrument: instrument, quantity: -50, type: .expense),
-        TransactionLeg(
-          accountId: UUID(), instrument: instrument, quantity: 150, type: .income),
+        TransactionLeg(accountId: UUID(), instrument: instrument, quantity: 150, type: .income),
       ]
     )
-    #expect(!matchTx.isSimple)
 
-    var draft = TransactionDraft(accountId: nil)
-    let categories = Categories(from: [])
-    draft.applyAutofill(from: matchTx, categories: categories, supportsComplexTransactions: true)
+    var draft = TransactionDraft(accountId: accountA, viewingAccountId: accountA)
+    draft.applyAutofill(from: matchTx, categories: Categories(from: []))
 
     #expect(draft.isCustom == true)
     #expect(draft.legDrafts.count == 3)
     #expect(draft.payee == "Split")
-    #expect(draft.legDrafts[0].accountId == accountA)
-    #expect(draft.legDrafts[0].amountText == "100.00")
-    #expect(draft.legDrafts[0].categoryId == catId)
   }
 
-  @Test func applyAutofillComplexMatchWithoutSupportCopiesOnlyPayeeAndNotes() {
-    let matchTx = Transaction(
-      date: Date(),
-      payee: "Split Bill",
-      notes: "Dinner",
-      legs: [
-        TransactionLeg(
-          accountId: accountA, instrument: instrument, quantity: -100, type: .expense),
-        TransactionLeg(
-          accountId: accountB, instrument: instrument, quantity: -50, type: .expense),
-        TransactionLeg(
-          accountId: UUID(), instrument: instrument, quantity: 150, type: .income),
-      ]
-    )
-    #expect(!matchTx.isSimple)
-
-    var draft = TransactionDraft(accountId: nil)
-    let categories = Categories(from: [])
-    draft.applyAutofill(from: matchTx, categories: categories, supportsComplexTransactions: false)
-
-    #expect(draft.payee == "Split Bill")
-    #expect(draft.notes == "Dinner")
-    #expect(draft.isCustom == false)
-    #expect(draft.legDrafts.isEmpty)
-  }
-
-  @Test func applyAutofillPreservesNotesWhenAlreadyFilled() {
+  @Test func autofillPopulatesCategoryText() {
+    let categoryId = UUID()
     let matchTx = Transaction(
       date: Date(),
       payee: "Shop",
-      notes: "Match notes",
       legs: [
         TransactionLeg(
-          accountId: accountA, instrument: instrument, quantity: -10, type: .expense)
+          accountId: accountA, instrument: instrument,
+          quantity: -10, type: .expense, categoryId: categoryId)
       ]
     )
+    let categories = Categories(from: [Category(id: categoryId, name: "Groceries")])
 
-    var draft = TransactionDraft(accountId: nil)
-    draft.notes = "My existing notes"
-    let categories = Categories(from: [])
-    draft.applyAutofill(from: matchTx, categories: categories, supportsComplexTransactions: false)
+    var draft = TransactionDraft(accountId: accountA, viewingAccountId: accountA)
+    draft.applyAutofill(from: matchTx, categories: categories)
 
-    #expect(draft.notes == "My existing notes")
+    #expect(draft.legDrafts[0].categoryId == categoryId)
+    #expect(draft.legDrafts[0].categoryText == "Groceries")
   }
 
-  @Test func applyAutofillComplexMatchDoesNotOverrideExistingLegDrafts() {
-    let matchTx = Transaction(
+  // MARK: - showFromAccount
+
+  @Test func showFromAccountFalseWhenViewingPrimaryLeg() {
+    let tx = Transaction(
       date: Date(),
-      payee: "Split",
       legs: [
         TransactionLeg(
-          accountId: accountA, instrument: instrument, quantity: -100, type: .expense),
+          accountId: accountA, instrument: instrument, quantity: -100, type: .transfer),
         TransactionLeg(
-          accountId: accountB, instrument: instrument, quantity: -50, type: .expense),
-        TransactionLeg(
-          accountId: UUID(), instrument: instrument, quantity: 150, type: .income),
+          accountId: accountB, instrument: instrument, quantity: 100, type: .transfer),
       ]
     )
-    #expect(!matchTx.isSimple)
+    let draft = TransactionDraft(from: tx, viewingAccountId: accountA)
+    // accountA is at index 0 (primary), so "To Account" label
+    #expect(draft.showFromAccount == false)
+  }
 
-    var draft = TransactionDraft(accountId: nil)
+  @Test func showFromAccountTrueWhenViewingCounterpartLeg() {
+    let tx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -100, type: .transfer),
+        TransactionLeg(
+          accountId: accountB, instrument: instrument, quantity: 100, type: .transfer),
+      ]
+    )
+    let draft = TransactionDraft(from: tx, viewingAccountId: accountB)
+    // accountB is at index 1, so relevantLegIndex = 1, not primary → "From Account"
+    #expect(draft.showFromAccount == true)
+  }
+
+  @Test func showFromAccountFalseWhenNoContext() {
+    let tx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -100, type: .transfer),
+        TransactionLeg(
+          accountId: accountB, instrument: instrument, quantity: 100, type: .transfer),
+      ]
+    )
+    let draft = TransactionDraft(from: tx)
+    // No context: relevantLegIndex = 0 → "To Account"
+    #expect(draft.showFromAccount == false)
+  }
+
+  // MARK: - eligibleToAccounts
+
+  @Test func eligibleToAccountsFiltersByCurrency() {
+    let aud = Instrument.AUD
+    let usd = Instrument.USD
+    let audAccount1 = makeAccount(id: accountA, instrument: aud)
+    let audAccount2 = makeAccount(id: accountB, instrument: aud)
+    let usdAccount = makeAccount(id: UUID(), instrument: usd)
+    let accounts = makeAccounts([audAccount1, audAccount2, usdAccount])
+
+    let eligible = TransactionDraftHelpers.eligibleToAccounts(from: accounts, currency: aud)
+    let eligibleIds = eligible.map(\.id)
+    #expect(eligibleIds.contains(accountA))
+    #expect(eligibleIds.contains(accountB))
+    #expect(!eligibleIds.contains(usdAccount.id))
+  }
+
+  // MARK: - Custom Mode Operations
+
+  @Test func addLegAppendsBlankLeg() {
+    var draft = makeExpenseDraft()
     draft.isCustom = true
-    // User already has one leg draft
-    draft.legDrafts = [
-      TransactionDraft.LegDraft(
-        type: .expense, accountId: accountA, amountText: "999.00",
-        categoryId: nil, categoryText: "", earmarkId: nil)
-    ]
-    let categories = Categories(from: [])
-    draft.applyAutofill(from: matchTx, categories: categories, supportsComplexTransactions: true)
+    let initialCount = draft.legDrafts.count
+    draft.addLeg()
+    #expect(draft.legDrafts.count == initialCount + 1)
+    let newLeg = draft.legDrafts.last!
+    #expect(newLeg.type == .expense)
+    #expect(newLeg.accountId == nil)
+    #expect(newLeg.amountText == "0")
+    #expect(newLeg.categoryId == nil)
+    #expect(newLeg.earmarkId == nil)
+  }
 
-    // Existing leg drafts preserved
+  @Test func removeLegRemovesCorrectIndex() {
+    var draft = makeExpenseDraft()
+    draft.isCustom = true
+    draft.legDrafts.append(
+      TransactionDraft.LegDraft(
+        type: .income, accountId: accountB, amountText: "20.00",
+        categoryId: nil, categoryText: "", earmarkId: nil))
+    #expect(draft.legDrafts.count == 2)
+
+    draft.removeLeg(at: 0)
     #expect(draft.legDrafts.count == 1)
-    #expect(draft.legDrafts[0].amountText == "999.00")
+    #expect(draft.legDrafts[0].accountId == accountB)
+  }
+
+  // MARK: - Edge Cases
+
+  @Test func displayTextForZeroQuantity() {
+    let text = TransactionDraft.displayText(quantity: .zero, type: .expense, decimals: 2)
+    #expect(text == "0")
+  }
+
+  @Test func displayTextForNegativeExpense() {
+    // Normal expense: quantity -50, display = -(-50) = 50
+    let text = TransactionDraft.displayText(
+      quantity: Decimal(string: "-50")!, type: .expense, decimals: 2)
+    #expect(text == "50.00")
+  }
+
+  @Test func displayTextForRefundExpense() {
+    // Refund: quantity +10, display = -(+10) = -10
+    let text = TransactionDraft.displayText(
+      quantity: Decimal(string: "10")!, type: .expense, decimals: 2)
+    #expect(text == "-10.00")
+  }
+
+  @Test func displayTextForIncome() {
+    let text = TransactionDraft.displayText(
+      quantity: Decimal(string: "100")!, type: .income, decimals: 2)
+    #expect(text == "100.00")
+  }
+
+  @Test func parseDisplayTextRoundTrips() {
+    let original: Decimal = Decimal(string: "-42.50")!
+    let display = TransactionDraft.displayText(quantity: original, type: .expense, decimals: 2)
+    let parsed = TransactionDraft.parseDisplayText(display, type: .expense, decimals: 2)
+    #expect(parsed == original)
+  }
+
+  @Test func parseDisplayTextRefundRoundTrips() {
+    let original: Decimal = Decimal(string: "10.00")!  // refund expense
+    let display = TransactionDraft.displayText(quantity: original, type: .expense, decimals: 2)
+    #expect(display == "-10.00")
+    let parsed = TransactionDraft.parseDisplayText(display, type: .expense, decimals: 2)
+    #expect(parsed == original)
+  }
+
+  @Test func parseDisplayTextIncomeRoundTrips() {
+    let original: Decimal = Decimal(string: "3000.00")!
+    let display = TransactionDraft.displayText(quantity: original, type: .income, decimals: 2)
+    let parsed = TransactionDraft.parseDisplayText(display, type: .income, decimals: 2)
+    #expect(parsed == original)
+  }
+
+  @Test func customModeLegTypeChangePreservesDisplayAmount() {
+    var draft = makeExpenseDraft()
+    draft.isCustom = true
+    draft.legDrafts[0].amountText = "50.00"
+    draft.legDrafts[0].type = .income
+    // Display text unchanged
+    #expect(draft.legDrafts[0].amountText == "50.00")
+    // But conversion would produce different quantity
+    let accounts = makeAccounts([makeAccount(id: accountA)])
+    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
+    #expect(tx!.legs[0].quantity == Decimal(string: "50.00"))  // income: as-is
   }
 }

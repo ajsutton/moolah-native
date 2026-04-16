@@ -66,28 +66,24 @@ struct TransactionDetailView: View {
         case .custom:
           draft.isCustom = true
         case .income:
-          draft.isCustom = false
-          draft.type = .income
+          if draft.isCustom { draft.switchToSimple() }
+          draft.setType(.income, accounts: accounts)
         case .expense:
-          draft.isCustom = false
-          draft.type = .expense
+          if draft.isCustom { draft.switchToSimple() }
+          draft.setType(.expense, accounts: accounts)
         case .transfer:
-          draft.isCustom = false
-          draft.type = .transfer
+          if draft.isCustom { draft.switchToSimple() }
+          draft.setType(.transfer, accounts: accounts)
         }
       }
     )
   }
 
-  /// The leg relevant for display/editing in the current context.
-  private var relevantLeg: TransactionLeg? {
-    if let viewingAccountId {
-      return transaction.legs.first { $0.accountId == viewingAccountId }
-    }
-    if transaction.isTransfer {
-      return transaction.legs.first { $0.quantity < 0 }
-    }
-    return transaction.legs.first
+  private var amountBinding: Binding<String> {
+    Binding(
+      get: { draft.amountText },
+      set: { draft.setAmount($0) }
+    )
   }
 
   private var isEditable: Bool {
@@ -118,11 +114,6 @@ struct TransactionDetailView: View {
     self.onDelete = onDelete
 
     var initialDraft = TransactionDraft(from: transaction, viewingAccountId: viewingAccountId)
-    if let catId = transaction.legs.first(where: { $0.categoryId != nil })?.categoryId,
-      let cat = categories.by(id: catId)
-    {
-      initialDraft.categoryText = categories.path(for: cat)
-    }
     for i in initialDraft.legDrafts.indices {
       if let catId = initialDraft.legDrafts[i].categoryId,
         let cat = categories.by(id: catId)
@@ -135,20 +126,44 @@ struct TransactionDetailView: View {
 
   private var isNewTransaction: Bool {
     if draft.isCustom {
-      let allLegsEmpty = draft.legDrafts.allSatisfy { $0.amountText.isEmpty }
+      let allLegsEmpty = draft.legDrafts.allSatisfy {
+        $0.amountText.isEmpty || $0.amountText == "0"
+      }
       return allLegsEmpty && (transaction.payee?.isEmpty ?? true)
     }
-    return (relevantLeg?.amount.isZero ?? true) && (transaction.payee?.isEmpty ?? true)
+    return (draft.amountText == "0" || draft.amountText.isEmpty)
+      && (transaction.payee?.isEmpty ?? true)
   }
 
   private var sortedAccounts: [Account] {
     accounts.ordered.sorted { a, b in
-      // Current accounts (bank, asset, creditCard) before investment accounts
       if a.type.isCurrent != b.type.isCurrent {
         return a.type.isCurrent
       }
       return a.position < b.position
     }
+  }
+
+  /// Filter to-account options to same-currency accounts, excluding the current account.
+  private func eligibleTransferAccounts(excluding currentAccountId: UUID?) -> [Account] {
+    guard let currentAccountId,
+      let currency = accounts.by(id: currentAccountId)?.balance.instrument
+    else {
+      return sortedAccounts.filter { $0.id != currentAccountId && !$0.isHidden }
+    }
+    return TransactionDraftHelpers.eligibleToAccounts(from: accounts, currency: currency)
+      .filter { $0.id != currentAccountId && !$0.isHidden }
+      .sorted { a, b in
+        if a.type.isCurrent != b.type.isCurrent { return a.type.isCurrent }
+        return a.position < b.position
+      }
+  }
+
+  /// The instrument for the relevant leg's account (for displaying currency symbol).
+  private var relevantInstrument: Instrument? {
+    draft.legDrafts[draft.relevantLegIndex].accountId
+      .flatMap { accounts.by(id: $0) }?
+      .balance.instrument
   }
 
   var body: some View {
@@ -199,7 +214,6 @@ struct TransactionDetailView: View {
         Button("Delete", role: .destructive) {
           onDelete(transaction.id)
         }
-        .keyboardShortcut(.delete, modifiers: [])
       } message: {
         Text("Are you sure you want to delete this transaction? This cannot be undone.")
       }
@@ -213,7 +227,7 @@ struct TransactionDetailView: View {
       ) {
         Button("Delete", role: .destructive) {
           if let index = legPendingDeletion {
-            draft.legDrafts.remove(at: index)
+            draft.removeLeg(at: index)
             legPendingDeletion = nil
           }
         }
@@ -281,13 +295,11 @@ struct TransactionDetailView: View {
   private var typeSection: some View {
     Section {
       if transaction.legs.contains(where: { $0.type == .openingBalance }) {
-        // Opening balance transactions cannot be edited
         LabeledContent("Type") {
           Text(TransactionType.openingBalance.displayName)
             .foregroundStyle(.secondary)
         }
       } else if !transaction.isSimple {
-        // Already-complex transactions show read-only type
         LabeledContent("Type") {
           Text("Custom")
             .foregroundStyle(.secondary)
@@ -304,73 +316,6 @@ struct TransactionDetailView: View {
         #if os(iOS)
           .pickerStyle(.segmented)
         #endif
-        .onChange(of: draft.type) { oldValue, newValue in
-          if newValue == .transfer && draft.toAccountId == nil {
-            // Set first available account (excluding current account) as default
-            draft.toAccountId = sortedAccounts.first { $0.id != draft.accountId }?.id
-          }
-        }
-        .onChange(of: draft.toAccountId) { _, newToAccountId in
-          // Auto-promote to custom mode when transferring between different currencies
-          if draft.type == .transfer && !draft.isCustom {
-            let fromInstrument = draft.accountId.flatMap { accounts.by(id: $0) }?.balance.instrument
-            let toInstrument = newToAccountId.flatMap { accounts.by(id: $0) }?.balance.instrument
-            if let fromInstrument, let toInstrument, fromInstrument != toInstrument {
-              draft.isCustom = true
-            }
-          }
-        }
-        .onChange(of: draft.isCustom) { oldValue, newValue in
-          if newValue && !oldValue {
-            // Switching to custom: build legDrafts from current simple fields
-            if draft.type == .transfer {
-              // Transfer: create two legs
-              let fromLeg = TransactionDraft.LegDraft(
-                type: .transfer,
-                accountId: draft.accountId,
-                amountText: draft.amountText,
-                categoryId: draft.categoryId,
-                categoryText: draft.categoryText,
-                earmarkId: draft.earmarkId
-              )
-              let toLeg = TransactionDraft.LegDraft(
-                type: .transfer,
-                accountId: draft.toAccountId,
-                amountText: draft.amountText,
-                categoryId: nil,
-                categoryText: "",
-                earmarkId: nil
-              )
-              draft.legDrafts = [fromLeg, toLeg]
-            } else {
-              // Non-transfer: create one leg
-              let leg = TransactionDraft.LegDraft(
-                type: draft.type,
-                accountId: draft.accountId,
-                amountText: draft.amountText,
-                categoryId: draft.categoryId,
-                categoryText: draft.categoryText,
-                earmarkId: draft.earmarkId
-              )
-              draft.legDrafts = [leg]
-            }
-          } else if !newValue && oldValue {
-            // Switching to simple: populate simple fields from first legDraft
-            if let firstLeg = draft.legDrafts.first {
-              draft.type = firstLeg.type
-              draft.accountId = firstLeg.accountId
-              draft.amountText = firstLeg.amountText
-              draft.categoryId = firstLeg.categoryId
-              draft.categoryText = firstLeg.categoryText
-              draft.earmarkId = firstLeg.earmarkId
-              // For two-leg transfers: map second leg to toAccountId
-              if draft.legDrafts.count >= 2 {
-                draft.toAccountId = draft.legDrafts[1].accountId
-              }
-            }
-            draft.legDrafts = []
-          }
-        }
       }
     }
   }
@@ -390,12 +335,14 @@ struct TransactionDetailView: View {
       .focused($focusedField, equals: .payee)
 
       HStack {
-        TextField("Amount", text: $draft.amountText)
+        TextField("Amount", text: amountBinding)
           .multilineTextAlignment(.trailing)
+          .monospacedDigit()
           #if os(iOS)
             .keyboardType(.decimalPad)
           #endif
-        Text(relevantLeg?.instrument.id ?? "").foregroundStyle(.secondary)
+        Text(relevantInstrument?.id ?? "").foregroundStyle(.secondary)
+          .monospacedDigit()
       }
 
       DatePicker("Date", selection: $draft.date, displayedComponents: .date)
@@ -404,7 +351,7 @@ struct TransactionDetailView: View {
 
   private var accountSection: some View {
     Section {
-      Picker("Account", selection: $draft.accountId) {
+      Picker("Account", selection: $draft.legDrafts[draft.relevantLegIndex].accountId) {
         Text("None").tag(UUID?.none)
         ForEach(sortedAccounts) { account in
           Text(account.name).tag(UUID?.some(account.id))
@@ -412,9 +359,14 @@ struct TransactionDetailView: View {
       }
 
       if draft.type == .transfer {
-        Picker("To Account", selection: $draft.toAccountId) {
+        let counterpartIndex = draft.relevantLegIndex == 0 ? 1 : 0
+        let toAccountLabel = draft.showFromAccount ? "From Account" : "To Account"
+        let currentAccountId = draft.legDrafts[draft.relevantLegIndex].accountId
+        let eligibleAccounts = eligibleTransferAccounts(excluding: currentAccountId)
+
+        Picker(toAccountLabel, selection: $draft.legDrafts[counterpartIndex].accountId) {
           Text("Select...").tag(UUID?.none)
-          ForEach(sortedAccounts.filter { $0.id != draft.accountId && !$0.isHidden }) { account in
+          ForEach(eligibleAccounts) { account in
             Text(account.name).tag(UUID?.some(account.id))
           }
         }
@@ -443,7 +395,6 @@ struct TransactionDetailView: View {
       .focused($categoryFieldFocused)
       .onChange(of: categoryFieldFocused) { _, focused in
         if !focused {
-          // Revert to the valid category path when focus leaves
           categoryJustSelected = true
           showCategorySuggestions = false
           categoryHighlightedIndex = nil
@@ -488,7 +439,7 @@ struct TransactionDetailView: View {
 
   @ViewBuilder
   private func subTransactionSection(index: Int) -> some View {
-    Section {
+    Section("Sub-transaction \(index + 1) of \(draft.legDrafts.count)") {
       Picker("Type", selection: $draft.legDrafts[index].type) {
         Text(TransactionType.income.displayName).tag(TransactionType.income)
         Text(TransactionType.expense.displayName).tag(TransactionType.expense)
@@ -555,27 +506,17 @@ struct TransactionDetailView: View {
           Text("Delete Sub-transaction")
             .frame(maxWidth: .infinity)
         }
-        .accessibilityLabel("Delete sub-transaction")
+        .accessibilityLabel("Delete Sub-transaction")
       }
     }
-    .accessibilityLabel("Sub-transaction \(index + 1) of \(draft.legDrafts.count)")
   }
 
   private var addSubTransactionSection: some View {
     Section {
       Button("Add Sub-transaction") {
-        draft.legDrafts.append(
-          TransactionDraft.LegDraft(
-            type: .expense,
-            accountId: sortedAccounts.first?.id,
-            amountText: "",
-            categoryId: nil,
-            categoryText: "",
-            earmarkId: nil
-          )
-        )
+        draft.addLeg()
       }
-      .accessibilityLabel("Add sub-transaction")
+      .accessibilityLabel("Add Sub-transaction")
     }
   }
 
@@ -584,7 +525,6 @@ struct TransactionDetailView: View {
       Toggle("Repeat", isOn: $draft.isRepeating)
         .onChange(of: draft.isRepeating) { _, newValue in
           if newValue {
-            // Default to monthly recurrence when enabled
             if draft.recurPeriod == nil || draft.recurPeriod == .once {
               draft.recurPeriod = .month
             }
@@ -627,19 +567,10 @@ struct TransactionDetailView: View {
   }
 
   private var notesSection: some View {
-    Section {
-      VStack(alignment: .leading) {
-        Text("Notes")
-        TextEditor(text: $draft.notes)
-          .frame(minHeight: 60, maxHeight: 120)
-          .scrollContentBackground(.hidden)
-          .padding()
-          .background(.background)
-          .overlay(
-            RoundedRectangle(cornerRadius: 4)
-              .stroke(.separator, lineWidth: 1)
-          )
-      }
+    Section("Notes") {
+      TextEditor(text: $draft.notes)
+        .accessibilityLabel("Notes")
+        .frame(minHeight: 60, maxHeight: 120)
     }
   }
 
@@ -682,6 +613,7 @@ struct TransactionDetailView: View {
         }
       }
       .disabled(isPaying)
+      .accessibilityLabel("Pay \(transaction.payee ?? "transaction") now")
     }
   }
 
@@ -723,11 +655,7 @@ struct TransactionDetailView: View {
     Task {
       guard let match = await transactionStore.fetchTransactionForAutofill(payee: selectedPayee)
       else { return }
-      draft.applyAutofill(
-        from: match,
-        categories: categories,
-        supportsComplexTransactions: supportsComplexTransactions
-      )
+      draft.applyAutofill(from: match, categories: categories)
     }
   }
 
@@ -848,29 +776,8 @@ struct TransactionDetailView: View {
   }
 
   private func saveIfValid() {
-    if draft.isCustom {
-      guard let updated = draft.toTransaction(id: transaction.id, accounts: accounts)
-      else { return }
-      onUpdate(updated)
-    } else {
-      let fromInstrument = relevantLeg?.instrument ?? transaction.legs.first?.instrument ?? .AUD
-      let toInstrument: Instrument?
-      if draft.type == .transfer, let toAcctId = draft.toAccountId {
-        let toAccountInstrument =
-          accounts.by(id: toAcctId)?.positions.first?.instrument
-          ?? accounts.by(id: toAcctId)?.balance.instrument
-        toInstrument = toAccountInstrument
-      } else {
-        toInstrument = nil
-      }
-      guard
-        let updated = draft.toTransaction(
-          id: transaction.id,
-          fromInstrument: fromInstrument,
-          toInstrument: toInstrument)
-      else { return }
-      onUpdate(updated)
-    }
+    guard let updated = draft.toTransaction(id: transaction.id, accounts: accounts) else { return }
+    onUpdate(updated)
   }
 }
 

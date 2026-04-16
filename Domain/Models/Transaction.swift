@@ -113,7 +113,8 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
   // MARK: - Structure Queries
 
   /// Whether this transaction has simple structure: a single leg, or exactly
-  /// two legs forming a basic transfer (amounts negate, all other fields match).
+  /// two legs forming a basic transfer (amounts negate, same type, second leg
+  /// has no category/earmark, and legs reference different accounts).
   var isSimple: Bool {
     if legs.count <= 1 { return true }
     guard legs.count == 2 else { return false }
@@ -121,8 +122,9 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
     let b = legs[1]
     return a.quantity == -b.quantity
       && a.type == b.type
-      && a.categoryId == b.categoryId
-      && a.earmarkId == b.earmarkId
+      && b.categoryId == nil
+      && b.earmarkId == nil
+      && a.accountId != b.accountId
   }
 }
 
