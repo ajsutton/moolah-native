@@ -5,10 +5,10 @@ import Testing
 
 @Suite("Transaction.isSimple")
 struct TransactionIsSimpleTests {
-  let accountId = UUID()
   let aud = Instrument.defaultTestInstrument
 
   func makeLeg(
+    accountId: UUID = UUID(),
     quantity: Decimal,
     type: TransactionType = .expense,
     categoryId: UUID? = nil,
@@ -42,70 +42,87 @@ struct TransactionIsSimpleTests {
     #expect(tx.isSimple == true)
   }
 
-  @Test("Two-leg transfer with negated amounts and matching fields is simple")
-  func twoLegTransferIsSimple() {
-    let catId = UUID()
-    let earId = UUID()
+  @Test("Two-leg transfer with negated amounts and nil optional fields is simple")
+  func twoLegTransferNilFieldsIsSimple() {
     let tx = makeTransaction(legs: [
-      makeLeg(quantity: -50, type: .transfer, categoryId: catId, earmarkId: earId),
-      makeLeg(quantity: 50, type: .transfer, categoryId: catId, earmarkId: earId),
+      makeLeg(quantity: -100, type: .transfer),
+      makeLeg(quantity: 100, type: .transfer),
     ])
     #expect(tx.isSimple == true)
   }
 
-  @Test("Two-leg transfer with nil optional fields is simple")
-  func twoLegTransferNilFieldsIsSimple() {
+  @Test("Category on first leg only is simple")
+  func isSimpleAllowsCategoryOnFirstLegOnly() {
     let tx = makeTransaction(legs: [
-      makeLeg(quantity: -100, type: .expense),
-      makeLeg(quantity: 100, type: .expense),
+      makeLeg(quantity: -100, type: .transfer, categoryId: UUID()),
+      makeLeg(quantity: 100, type: .transfer),
+    ])
+    #expect(tx.isSimple == true)
+  }
+
+  @Test("Earmark on first leg only is simple")
+  func isSimpleAllowsEarmarkOnFirstLegOnly() {
+    let tx = makeTransaction(legs: [
+      makeLeg(quantity: -100, type: .transfer, earmarkId: UUID()),
+      makeLeg(quantity: 100, type: .transfer),
     ])
     #expect(tx.isSimple == true)
   }
 
   // MARK: - Non-simple cases
 
+  @Test("Category on second leg is NOT simple")
+  func isSimpleRejectsCategoryOnSecondLeg() {
+    let tx = makeTransaction(legs: [
+      makeLeg(quantity: -100, type: .transfer),
+      makeLeg(quantity: 100, type: .transfer, categoryId: UUID()),
+    ])
+    #expect(tx.isSimple == false)
+  }
+
+  @Test("Earmark on second leg is NOT simple")
+  func isSimpleRejectsEarmarkOnSecondLeg() {
+    let tx = makeTransaction(legs: [
+      makeLeg(quantity: -100, type: .transfer),
+      makeLeg(quantity: 100, type: .transfer, earmarkId: UUID()),
+    ])
+    #expect(tx.isSimple == false)
+  }
+
+  @Test("Same-account transfer is NOT simple")
+  func isSimpleRejectsSameAccountTransfer() {
+    let acctId = UUID()
+    let tx = makeTransaction(legs: [
+      makeLeg(accountId: acctId, quantity: -100, type: .transfer),
+      makeLeg(accountId: acctId, quantity: 100, type: .transfer),
+    ])
+    #expect(tx.isSimple == false)
+  }
+
   @Test("Two-leg transfer with different amounts is NOT simple")
-  func twoLegDifferentAmountsNotSimple() {
+  func isSimpleRejectsNonNegatedAmounts() {
     let tx = makeTransaction(legs: [
-      makeLeg(quantity: -50),
-      makeLeg(quantity: 60),
-    ])
-    #expect(tx.isSimple == false)
-  }
-
-  @Test("Two-leg transfer with different categories is NOT simple")
-  func twoLegDifferentCategoriesNotSimple() {
-    let tx = makeTransaction(legs: [
-      makeLeg(quantity: -50, categoryId: UUID()),
-      makeLeg(quantity: 50, categoryId: UUID()),
-    ])
-    #expect(tx.isSimple == false)
-  }
-
-  @Test("Two-leg transfer with different earmarks is NOT simple")
-  func twoLegDifferentEarmarksNotSimple() {
-    let tx = makeTransaction(legs: [
-      makeLeg(quantity: -50, earmarkId: UUID()),
-      makeLeg(quantity: 50, earmarkId: UUID()),
+      makeLeg(quantity: -100, type: .transfer),
+      makeLeg(quantity: 50, type: .transfer),
     ])
     #expect(tx.isSimple == false)
   }
 
   @Test("Two-leg transfer with different types is NOT simple")
-  func twoLegDifferentTypesNotSimple() {
+  func isSimpleRejectsMixedTypes() {
     let tx = makeTransaction(legs: [
-      makeLeg(quantity: -50, type: .expense),
-      makeLeg(quantity: 50, type: .income),
+      makeLeg(quantity: -100, type: .expense),
+      makeLeg(quantity: 100, type: .income),
     ])
     #expect(tx.isSimple == false)
   }
 
   @Test("Three-leg transaction is NOT simple")
-  func threeLegNotSimple() {
+  func isSimpleRejectsThreeLegs() {
     let tx = makeTransaction(legs: [
-      makeLeg(quantity: -50),
-      makeLeg(quantity: 30),
-      makeLeg(quantity: 20),
+      makeLeg(quantity: -50, type: .expense),
+      makeLeg(quantity: -30, type: .expense),
+      makeLeg(quantity: 80, type: .income),
     ])
     #expect(tx.isSimple == false)
   }
