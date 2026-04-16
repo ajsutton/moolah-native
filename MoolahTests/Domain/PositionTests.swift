@@ -116,4 +116,49 @@ struct PositionTests {
     #expect(a == b)
     #expect(a.hashValue == b.hashValue)
   }
+
+  // MARK: - applying(deltas:)
+
+  @Test func applyingDeltasToEmptyPositionsCreatesNewPosition() {
+    let positions: [Position] = []
+    let result = positions.applying(deltas: [aud: Decimal(string: "100.00")!])
+    #expect(result.count == 1)
+    #expect(result.first?.instrument == aud)
+    #expect(result.first?.quantity == Decimal(string: "100.00")!)
+  }
+
+  @Test func applyingDeltasToExistingPositionAdjustsQuantity() {
+    let positions = [Position(instrument: aud, quantity: Decimal(string: "100.00")!)]
+    let result = positions.applying(deltas: [aud: Decimal(string: "50.00")!])
+    #expect(result.count == 1)
+    #expect(result.first?.quantity == Decimal(string: "150.00")!)
+  }
+
+  @Test func applyingDeltaForNewInstrumentAddsIt() {
+    let positions = [Position(instrument: aud, quantity: Decimal(string: "100.00")!)]
+    let result = positions.applying(deltas: [usd: Decimal(string: "50.00")!])
+    #expect(result.count == 2)
+    let audPos = result.first(where: { $0.instrument == aud })
+    let usdPos = result.first(where: { $0.instrument == usd })
+    #expect(audPos?.quantity == Decimal(string: "100.00")!)
+    #expect(usdPos?.quantity == Decimal(string: "50.00")!)
+  }
+
+  @Test func applyingDeltaThatZeroesOutRemovesPosition() {
+    let positions = [Position(instrument: aud, quantity: Decimal(string: "100.00")!)]
+    let result = positions.applying(deltas: [aud: Decimal(string: "-100.00")!])
+    #expect(result.isEmpty)
+  }
+
+  @Test func applyingDeltasResultsSortedByInstrumentId() {
+    let positions: [Position] = []
+    let result = positions.applying(deltas: [
+      usd: Decimal(string: "50.00")!,
+      aud: Decimal(string: "100.00")!,
+    ])
+    #expect(result.count == 2)
+    // AUD sorts before USD alphabetically
+    #expect(result[0].instrument == aud)
+    #expect(result[1].instrument == usd)
+  }
 }

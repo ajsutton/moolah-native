@@ -35,3 +35,22 @@ struct Position: Hashable, Sendable {
     }.sorted { $0.instrument.id < $1.instrument.id }
   }
 }
+
+extension Array where Element == Position {
+  /// Returns a new array with the given per-instrument deltas applied.
+  /// Positions reaching zero quantity are removed. New instruments are added.
+  /// Result is sorted by instrument ID.
+  func applying(deltas: [Instrument: Decimal]) -> [Position] {
+    var totals: [Instrument: Decimal] = [:]
+    for position in self {
+      totals[position.instrument, default: 0] += position.quantity
+    }
+    for (instrument, delta) in deltas {
+      totals[instrument, default: 0] += delta
+    }
+    return totals.compactMap { instrument, quantity in
+      guard quantity != 0 else { return nil }
+      return Position(instrument: instrument, quantity: quantity)
+    }.sorted { $0.instrument.id < $1.instrument.id }
+  }
+}
