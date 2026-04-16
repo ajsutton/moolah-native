@@ -121,12 +121,7 @@ struct ProfileSetupView: View {
         TextField("Profile Name", text: $cloudName)
           .textFieldStyle(.roundedBorder)
 
-        Picker("Currency", selection: $cloudCurrencyCode) {
-          ForEach(ProfileFormView.commonCurrencyCodes, id: \.self) { code in
-            Text("\(code) — \(ProfileFormView.currencyName(for: code))")
-              .tag(code)
-          }
-        }
+        CurrencyPicker(selection: $cloudCurrencyCode)
 
         Picker("Financial Year Starts", selection: $cloudFinancialYearStartMonth) {
           ForEach(1...12, id: \.self) { month in

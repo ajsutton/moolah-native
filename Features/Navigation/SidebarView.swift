@@ -13,6 +13,7 @@ enum SidebarSelection: Hashable {
 struct SidebarView: View {
   @Environment(AccountStore.self) private var accountStore
   @Environment(EarmarkStore.self) private var earmarkStore
+  @Environment(ProfileSession.self) private var session
   @Binding var selection: SidebarSelection?
   @State private var showCreateEarmarkSheet = false
   @State private var showCreateAccountSheet = false
@@ -222,10 +223,13 @@ struct SidebarView: View {
     }
     .sheet(isPresented: $showCreateAccountSheet) {
       CreateAccountView(
-        instrument: accountStore.currentTotal.instrument, accountStore: accountStore)
+        instrument: accountStore.currentTotal.instrument, accountStore: accountStore,
+        supportsComplexTransactions: session.profile.supportsComplexTransactions)
     }
     .sheet(item: $accountToEdit) { account in
-      EditAccountView(account: account, accountStore: accountStore)
+      EditAccountView(
+        account: account, accountStore: accountStore,
+        supportsComplexTransactions: session.profile.supportsComplexTransactions)
     }
   }
 

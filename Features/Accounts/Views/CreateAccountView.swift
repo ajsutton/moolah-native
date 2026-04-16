@@ -5,6 +5,7 @@ struct CreateAccountView: View {
 
   @State private var name = ""
   @State private var type: AccountType = .bank
+  @State private var currencyCode: String
   @State private var balanceDecimal: Decimal = 0
   @State private var date = Date()
   @State private var isSubmitting = false
@@ -12,6 +13,17 @@ struct CreateAccountView: View {
 
   let instrument: Instrument
   let accountStore: AccountStore
+  let supportsComplexTransactions: Bool
+
+  init(
+    instrument: Instrument, accountStore: AccountStore,
+    supportsComplexTransactions: Bool = false
+  ) {
+    self.instrument = instrument
+    self.accountStore = accountStore
+    self.supportsComplexTransactions = supportsComplexTransactions
+    _currencyCode = State(initialValue: instrument.id)
+  }
 
   var body: some View {
     NavigationStack {
@@ -26,11 +38,15 @@ struct CreateAccountView: View {
             }
           }
 
+          if supportsComplexTransactions {
+            CurrencyPicker(selection: $currencyCode)
+          }
+
           LabeledContent("Initial Balance") {
             TextField(
               "Amount",
               value: $balanceDecimal,
-              format: .currency(code: instrument.id)
+              format: .currency(code: currencyCode)
             )
             #if os(iOS)
               .keyboardType(.decimalPad)
@@ -76,12 +92,13 @@ struct CreateAccountView: View {
     isSubmitting = true
     errorMessage = nil
 
-    let openingBalance = InstrumentAmount(quantity: balanceDecimal, instrument: instrument)
+    let selectedInstrument = Instrument.fiat(code: currencyCode)
+    let openingBalance = InstrumentAmount(quantity: balanceDecimal, instrument: selectedInstrument)
     let newAccount = Account(
       id: UUID(),
       name: name.trimmingCharacters(in: .whitespaces),
       type: type,
-      instrument: instrument,
+      instrument: selectedInstrument,
       position: 0  // Server will set appropriate position
     )
 
