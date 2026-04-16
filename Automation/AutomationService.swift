@@ -314,6 +314,7 @@ final class AutomationService {
     let earmark = Earmark(
       id: UUID(),
       name: name,
+      instrument: instrument,
       isHidden: false,
       position: session.earmarkStore.earmarks.count,
       savingsGoal: targetAmount.map { InstrumentAmount(quantity: $0, instrument: instrument) },

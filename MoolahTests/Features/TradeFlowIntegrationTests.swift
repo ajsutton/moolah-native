@@ -24,7 +24,8 @@ struct TradeFlowIntegrationTests {
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
-        Account(id: accountId, name: "Invest", type: .investment)
+        Account(
+          id: accountId, name: "Invest", type: .investment, instrument: .defaultTestInstrument)
       ], in: container)
 
     let stockClient = FixedStockPriceClient(responses: [
@@ -97,7 +98,8 @@ struct TradeFlowIntegrationTests {
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
-        Account(id: accountId, name: "Invest", type: .investment)
+        Account(
+          id: accountId, name: "Invest", type: .investment, instrument: .defaultTestInstrument)
       ], in: container)
     TestBackend.seed(
       categories: [

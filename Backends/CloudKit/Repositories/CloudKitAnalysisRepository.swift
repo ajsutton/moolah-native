@@ -56,14 +56,16 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       nonScheduled: nonScheduled,
       monthEnd: monthEnd,
       after: historyAfter,
-      instrument: instrument
+      instrument: instrument,
+      conversionService: conversionService
     )
     async let income = Self.computeIncomeAndExpense(
       nonScheduled: nonScheduled,
       accounts: accounts,
       monthEnd: monthEnd,
       after: historyAfter,
-      instrument: instrument
+      instrument: instrument,
+      conversionService: conversionService
     )
 
     return try await AnalysisData(
@@ -116,9 +118,11 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     let descriptor = FetchDescriptor<AccountRecord>()
     return try await MainActor.run {
       let records = try context.fetch(descriptor)
+      let instrument = self.instrument
       return records.map {
         Account(
           id: $0.id, name: $0.name, type: AccountType(rawValue: $0.type) ?? .bank,
+          instrument: instrument,
           position: $0.position, isHidden: $0.isHidden)
       }
     }
@@ -292,8 +296,10 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         if breakdown[month] == nil {
           breakdown[month] = [:]
         }
+        let amount = try await Self.convertedAmount(
+          leg, to: instrument, on: txn.date, conversionService: conversionService)
         let current = breakdown[month]![categoryId] ?? .zero(instrument: instrument)
-        breakdown[month]![categoryId] = current + leg.amount
+        breakdown[month]![categoryId] = current + amount
       }
     }
 
@@ -359,6 +365,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       for leg in txn.legs {
         let isEarmarked = leg.earmarkId != nil
         let isInvestmentAccount = leg.accountId.map(investmentAccountIds.contains) ?? false
+        let amount = try await Self.convertedAmount(
+          leg, to: instrument, on: txn.date, conversionService: conversionService)
 
         switch leg.type {
         case .income:
@@ -366,10 +374,10 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
           // Include in main total only when leg has an account (matching server).
           // Earmark-only income (nil accountId) goes to earmarkedIncome only.
           if leg.accountId != nil {
-            monthlyData[month]!.income += leg.amount
+            monthlyData[month]!.income += amount
           }
           if isEarmarked {
-            monthlyData[month]!.earmarkedIncome += leg.amount
+            monthlyData[month]!.earmarkedIncome += amount
           }
 
         case .openingBalance:
@@ -381,20 +389,19 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
           // Expenses are negative, refunds are positive — pass through as-is
           // to match the server convention.
           if leg.accountId != nil {
-            monthlyData[month]!.expense += leg.amount
+            monthlyData[month]!.expense += amount
           }
           if isEarmarked {
-            monthlyData[month]!.earmarkedExpense += leg.amount
+            monthlyData[month]!.earmarkedExpense += amount
           }
 
         case .transfer:
           if isInvestmentAccount {
-            let contribution = leg.quantity
-            if contribution > 0 {
-              monthlyData[month]!.earmarkedIncome += leg.amount
-            } else if contribution < 0 {
+            if amount.quantity > 0 {
+              monthlyData[month]!.earmarkedIncome += amount
+            } else if amount.quantity < 0 {
               monthlyData[month]!.earmarkedExpense += InstrumentAmount(
-                quantity: -contribution, instrument: leg.instrument)
+                quantity: -amount.quantity, instrument: instrument)
             }
           }
         }
@@ -405,15 +412,15 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         // because transfer contributions to earmarkedExpense use a different sign convention.
         if leg.type == .income || leg.type == .expense {
           if leg.accountId != nil {
-            monthlyData[month]!.profit += leg.amount
+            monthlyData[month]!.profit += amount
           }
           if isEarmarked {
-            monthlyData[month]!.earmarkedProfit += leg.amount
+            monthlyData[month]!.earmarkedProfit += amount
           }
         } else if leg.type == .transfer, isInvestmentAccount {
           // Investment transfer profit = raw contribution amount.
           // Deposits (positive) add to earmarked profit; withdrawals (negative) subtract.
-          monthlyData[month]!.earmarkedProfit += leg.amount
+          monthlyData[month]!.earmarkedProfit += amount
         }
       }
     }
@@ -469,7 +476,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
           continue
         }
 
-        balances[categoryId, default: .zero(instrument: leg.instrument)] += leg.amount
+        let amount = try await Self.convertedAmount(
+          leg, to: instrument, on: tx.date, conversionService: conversionService)
+        balances[categoryId, default: .zero(instrument: instrument)] += amount
       }
     }
 
@@ -605,8 +614,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     nonScheduled: [Transaction],
     monthEnd: Int,
     after: Date?,
-    instrument: Instrument
-  ) async -> [ExpenseBreakdown] {
+    instrument: Instrument,
+    conversionService: any InstrumentConversionService
+  ) async throws -> [ExpenseBreakdown] {
     var breakdown: [String: [UUID?: InstrumentAmount]] = [:]
     var lastFinDate: Date?
     var lastFinMonth: String = ""
@@ -628,8 +638,10 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         if breakdown[month] == nil {
           breakdown[month] = [:]
         }
+        let amount = try await convertedAmount(
+          leg, to: instrument, on: txn.date, conversionService: conversionService)
         let current = breakdown[month]![categoryId] ?? .zero(instrument: instrument)
-        breakdown[month]![categoryId] = current + leg.amount
+        breakdown[month]![categoryId] = current + amount
       }
     }
     var results: [ExpenseBreakdown] = []
@@ -653,8 +665,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     accounts: [Account],
     monthEnd: Int,
     after: Date?,
-    instrument: Instrument
-  ) async -> [MonthlyIncomeExpense] {
+    instrument: Instrument,
+    conversionService: any InstrumentConversionService
+  ) async throws -> [MonthlyIncomeExpense] {
     let investmentAccountIds = Set(accounts.filter { $0.type == .investment }.map(\.id))
 
     var monthlyData: [String: CloudKitMonthData] = [:]
@@ -689,14 +702,16 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       for leg in txn.legs {
         let isEarmarked = leg.earmarkId != nil
         let isInvestmentAccount = leg.accountId.map(investmentAccountIds.contains) ?? false
+        let amount = try await convertedAmount(
+          leg, to: instrument, on: txn.date, conversionService: conversionService)
 
         switch leg.type {
         case .income:
           if leg.accountId != nil {
-            monthlyData[month]!.income += leg.amount
+            monthlyData[month]!.income += amount
           }
           if isEarmarked {
-            monthlyData[month]!.earmarkedIncome += leg.amount
+            monthlyData[month]!.earmarkedIncome += amount
           }
 
         case .openingBalance:
@@ -704,33 +719,32 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
         case .expense:
           if leg.accountId != nil {
-            monthlyData[month]!.expense += leg.amount
+            monthlyData[month]!.expense += amount
           }
           if isEarmarked {
-            monthlyData[month]!.earmarkedExpense += leg.amount
+            monthlyData[month]!.earmarkedExpense += amount
           }
 
         case .transfer:
           if isInvestmentAccount {
-            let contribution = leg.quantity
-            if contribution > 0 {
-              monthlyData[month]!.earmarkedIncome += leg.amount
-            } else if contribution < 0 {
+            if amount.quantity > 0 {
+              monthlyData[month]!.earmarkedIncome += amount
+            } else if amount.quantity < 0 {
               monthlyData[month]!.earmarkedExpense += InstrumentAmount(
-                quantity: -contribution, instrument: leg.instrument)
+                quantity: -amount.quantity, instrument: instrument)
             }
           }
         }
 
         if leg.type == .income || leg.type == .expense {
           if leg.accountId != nil {
-            monthlyData[month]!.profit += leg.amount
+            monthlyData[month]!.profit += amount
           }
           if isEarmarked {
-            monthlyData[month]!.earmarkedProfit += leg.amount
+            monthlyData[month]!.earmarkedProfit += amount
           }
         } else if leg.type == .transfer, isInvestmentAccount {
-          monthlyData[month]!.earmarkedProfit += leg.amount
+          monthlyData[month]!.earmarkedProfit += amount
         }
       }
     }
@@ -854,6 +868,24 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         isForecast: existing.isForecast
       )
     }
+  }
+
+  // MARK: - Currency Conversion Helper
+
+  /// Convert a transaction leg's amount to the profile instrument, using the conversion service
+  /// when the leg's instrument differs from the target.
+  private static func convertedAmount(
+    _ leg: TransactionLeg,
+    to instrument: Instrument,
+    on date: Date,
+    conversionService: any InstrumentConversionService
+  ) async throws -> InstrumentAmount {
+    if leg.instrument.id == instrument.id {
+      return leg.amount
+    }
+    let converted = try await conversionService.convert(
+      leg.quantity, from: leg.instrument, to: instrument, on: date)
+    return InstrumentAmount(quantity: converted, instrument: instrument)
   }
 
   // MARK: - Static Helper Methods

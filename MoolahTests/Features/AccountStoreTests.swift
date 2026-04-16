@@ -32,7 +32,7 @@ struct AccountStoreTests {
   @Test func testPopulatesFromRepository() async throws {
     let (backend, container) = try TestBackend.create()
     _ = seedAccount(name: "Checking", balance: Decimal(100000) / 100, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
 
     await store.load()
 
@@ -45,7 +45,7 @@ struct AccountStoreTests {
     _ = seedAccount(name: "A1", balance: Decimal(10000) / 100, position: 2, in: container)
     _ = seedAccount(
       name: "A2", type: .asset, balance: Decimal(20000) / 100, position: 1, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
 
     await store.load()
 
@@ -66,7 +66,7 @@ struct AccountStoreTests {
       name: "Hidden", type: .asset, balance: Decimal(100_000_000) / 100, isHidden: true,
       in: container)
 
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
 
     await store.load()
 
@@ -91,7 +91,7 @@ struct AccountStoreTests {
     let (backend, container) = try TestBackend.create()
     _ = seedAccount(
       name: "Invest", type: .investment, balance: Decimal(100000) / 100, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let newValue = InstrumentAmount(
@@ -107,7 +107,7 @@ struct AccountStoreTests {
     let (backend, container) = try TestBackend.create()
     _ = seedAccount(
       name: "Invest", type: .investment, balance: Decimal(100000) / 100, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let account = store.accounts.first!
@@ -128,7 +128,7 @@ struct AccountStoreTests {
     let (backend, container) = try TestBackend.create()
     _ = seedAccount(
       name: "Invest", type: .investment, balance: Decimal(100000) / 100, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let newValue = InstrumentAmount(
@@ -148,7 +148,7 @@ struct AccountStoreTests {
     _ = seedAccount(name: "Visible", balance: Decimal(100000) / 100, in: container)
     _ = seedAccount(
       name: "Hidden", balance: Decimal(50000) / 100, isHidden: true, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
 
     await store.load()
 
@@ -162,7 +162,7 @@ struct AccountStoreTests {
     _ = seedAccount(name: "Visible", balance: Decimal(100000) / 100, in: container)
     _ = seedAccount(
       name: "Hidden", balance: Decimal(50000) / 100, isHidden: true, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
 
     await store.load()
     store.showHidden = true
@@ -178,7 +178,7 @@ struct AccountStoreTests {
     _ = seedAccount(
       name: "Hidden", type: .investment, balance: Decimal(50000) / 100, isHidden: true,
       in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
 
     await store.load()
 
@@ -195,7 +195,7 @@ struct AccountStoreTests {
     let (backend, container) = try TestBackend.create()
     _ = seedAccount(
       id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let deltas: PositionDeltas = [acctId: [instrument: Decimal(-5000) / 100]]
@@ -210,7 +210,7 @@ struct AccountStoreTests {
     let (backend, container) = try TestBackend.create()
     _ = seedAccount(
       id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let deltas: PositionDeltas = [acctId: [instrument: Decimal(50000) / 100]]
@@ -228,7 +228,7 @@ struct AccountStoreTests {
       id: checkingId, name: "Checking", balance: Decimal(100000) / 100, in: container)
     _ = seedAccount(
       id: savingsId, name: "Savings", balance: Decimal(200000) / 100, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let deltas: PositionDeltas = [
@@ -247,7 +247,7 @@ struct AccountStoreTests {
     let (backend, container) = try TestBackend.create()
     _ = seedAccount(
       id: checkingId, name: "Checking", balance: Decimal(100000) / 100, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     #expect(store.currentTotal.quantity == Decimal(100000) / 100)
@@ -265,7 +265,7 @@ struct AccountStoreTests {
     let (backend, container) = try TestBackend.create()
     _ = seedAccount(
       id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let tx = Transaction(
@@ -290,7 +290,7 @@ struct AccountStoreTests {
     let (backend, container) = try TestBackend.create()
     _ = seedAccount(
       id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let deltas: PositionDeltas = [unknownId: [instrument: Decimal(-5000) / 100]]
@@ -366,7 +366,7 @@ struct AccountStoreTests {
     let (backend, container) = try TestBackend.create()
     _ = seedAccount(
       id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     #expect(store.balance(for: acctId).quantity == Decimal(100000) / 100)
@@ -378,7 +378,7 @@ struct AccountStoreTests {
     _ = seedAccount(
       id: acctId, name: "Invest", type: .investment, balance: Decimal(100000) / 100,
       in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let investmentValue = InstrumentAmount(
@@ -392,7 +392,7 @@ struct AccountStoreTests {
     let acctId = UUID()
     let (backend, container) = try TestBackend.create()
     _ = seedAccount(id: acctId, name: "Empty", in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     #expect(store.canDelete(acctId))
@@ -403,7 +403,7 @@ struct AccountStoreTests {
     let (backend, container) = try TestBackend.create()
     _ = seedAccount(
       id: acctId, name: "Active", balance: Decimal(100000) / 100, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     #expect(!store.canDelete(acctId))

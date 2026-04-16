@@ -65,6 +65,7 @@ struct CreateEarmarkSheet: View {
 
     let newEarmark = Earmark(
       name: name,
+      instrument: instrument,
       savingsGoal: goal,
       savingsStartDate: useDateRange ? startDate : nil,
       savingsEndDate: useDateRange ? endDate : nil

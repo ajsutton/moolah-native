@@ -1,0 +1,91 @@
+<h2>Simple Cross-Currency Transfer: UI Approaches</h2>
+<p class="subtitle">How should the transfer form look when accounts have different currencies?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Inline Dual Amounts</h3>
+      <p>Replace the single Amount row with two rows when a cross-currency transfer is detected. The existing amount field becomes "From Amount" with the source currency, and a new "To Amount" field appears below with the destination currency. Derived exchange rate shown as a subtle label below.</p>
+      <div class="mockup" style="margin-top: 12px;">
+        <div class="mockup-header">Transfer from USD Account → AUD Account</div>
+        <div class="mockup-body" style="font-family: -apple-system, system-ui; font-size: 14px;">
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Payee</span>
+            <span>Currency Exchange</span>
+          </div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">From Amount</span>
+            <span><span style="font-variant-numeric: tabular-nums;">100.00</span> <span style="color: #888;">USD</span></span>
+          </div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">To Amount</span>
+            <span><span style="font-variant-numeric: tabular-nums;">155.00</span> <span style="color: #888;">AUD</span></span>
+          </div>
+          <div style="padding: 4px 12px 8px; border-bottom: 1px solid #333;">
+            <span style="color: #666; font-size: 12px;">≈ 1 USD = 1.55 AUD</span>
+          </div>
+          <div style="padding: 8px 12px; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Date</span>
+            <span>16 Apr 2026</span>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons" style="margin-top: 8px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Minimal UI change — extends existing layout</li><li>Both amounts visible at once</li><li>Exchange rate is contextual</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>"From Amount" / "To Amount" labels only make sense for transfers</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Amount Stays in Details, Second Amount in Account Section</h3>
+      <p>Keep the primary amount field where it is (in the details section). Add a second amount field in the account section, next to the "To Account" picker. This groups each amount with its respective account.</p>
+      <div class="mockup" style="margin-top: 12px;">
+        <div class="mockup-header">Transfer from USD Account → AUD Account</div>
+        <div class="mockup-body" style="font-family: -apple-system, system-ui; font-size: 14px;">
+          <div style="padding: 4px 12px; color: #888; font-size: 12px; text-transform: uppercase;">Details</div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Payee</span>
+            <span>Currency Exchange</span>
+          </div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Amount</span>
+            <span><span style="font-variant-numeric: tabular-nums;">100.00</span> <span style="color: #888;">USD</span></span>
+          </div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Date</span>
+            <span>16 Apr 2026</span>
+          </div>
+          <div style="padding: 12px 0;"></div>
+          <div style="padding: 4px 12px; color: #888; font-size: 12px; text-transform: uppercase;">Accounts</div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Account</span>
+            <span>US Checking</span>
+          </div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">To Account</span>
+            <span>AU Savings</span>
+          </div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Received</span>
+            <span><span style="font-variant-numeric: tabular-nums;">155.00</span> <span style="color: #888;">AUD</span></span>
+          </div>
+          <div style="padding: 4px 12px;">
+            <span style="color: #666; font-size: 12px;">≈ 1 USD = 1.55 AUD</span>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons" style="margin-top: 8px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Each amount sits near its account — clear ownership</li><li>"Received" label reads naturally</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Amounts are visually separated — harder to compare</li><li>More structural change to the form sections</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top: 16px; color: #ccc;">
+  <strong>Recommendation:</strong> Option A — keeps the form compact, both amounts are adjacent for easy comparison, and it's a smaller code change (just conditionally showing a second amount row in the existing details section).
+</p>

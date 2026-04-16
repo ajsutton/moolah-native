@@ -322,12 +322,12 @@ struct TransactionListView: View {
   let accountId = UUID()
   let savingsId = UUID()
   let account = Account(
-    id: accountId, name: "Checking", type: .bank,
+    id: accountId, name: "Checking", type: .bank, instrument: .AUD,
     positions: [Position(instrument: .AUD, quantity: 2449.77)])
   let accounts = Accounts(from: [
     account,
     Account(
-      id: savingsId, name: "Savings", type: .bank,
+      id: savingsId, name: "Savings", type: .bank, instrument: .AUD,
       positions: [Position(instrument: .AUD, quantity: 5000)]),
   ])
   let (backend, _) = PreviewBackend.create()

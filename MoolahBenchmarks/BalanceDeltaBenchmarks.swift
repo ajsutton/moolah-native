@@ -124,7 +124,7 @@ final class BalanceDeltaBenchmarks: XCTestCase {
   /// Applies a single-account, single-instrument delta 100 times per iteration.
   func testAccountStoreApplyDelta() {
     let accountStore = try! awaitSync { @MainActor in
-      let store = AccountStore(repository: Self._backend.accounts)
+      let store = AccountStore(repository: Self._backend.accounts, targetInstrument: .AUD)
       await store.load()
       return store
     }
@@ -145,7 +145,7 @@ final class BalanceDeltaBenchmarks: XCTestCase {
   /// re-fetches everything. This is the baseline we're trying to avoid.
   func testAccountReloadFromSync() {
     let accountStore = try! awaitSync { @MainActor in
-      let store = AccountStore(repository: Self._backend.accounts)
+      let store = AccountStore(repository: Self._backend.accounts, targetInstrument: .AUD)
       await store.load()
       return store
     }
@@ -161,7 +161,7 @@ final class BalanceDeltaBenchmarks: XCTestCase {
   /// Measures reloadFromSync on EarmarkStore — how expensive the earmark reload is.
   func testEarmarkReloadFromSync() {
     let earmarkStore = try! awaitSync { @MainActor in
-      let store = EarmarkStore(repository: Self._backend.earmarks)
+      let store = EarmarkStore(repository: Self._backend.earmarks, targetInstrument: .AUD)
       await store.load()
       return store
     }

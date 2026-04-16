@@ -1,0 +1,81 @@
+<h2>Custom Leg Instrument Picker: UI Approaches</h2>
+<p class="subtitle">How should the instrument picker appear on each sub-transaction leg?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Inline Currency Picker (replace label)</h3>
+      <p>The static currency label next to the amount (e.g. "AUD") becomes a tappable picker. Selecting an account pre-fills it, but the user can override. Compact — no extra rows.</p>
+      <div class="mockup" style="margin-top: 12px;">
+        <div class="mockup-header">Sub-transaction 1 of 2</div>
+        <div class="mockup-body" style="font-family: -apple-system, system-ui; font-size: 14px;">
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Type</span>
+            <span>Transfer</span>
+          </div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Account</span>
+            <span>US Checking</span>
+          </div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Amount</span>
+            <span>
+              <span style="font-variant-numeric: tabular-nums;">100.00</span>
+              <span style="color: #4dabf7; border-bottom: 1px dashed #4dabf7; cursor: pointer;">USD ▾</span>
+            </span>
+          </div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Category</span>
+            <span style="color: #888;">None</span>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons" style="margin-top: 8px;">
+        <div class="pros"><h4>Pros</h4><ul><li>No extra row — compact</li><li>Visually obvious that currency is editable</li><li>Amount and currency stay together</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Tap target is small on iOS</li><li>Less discoverable — user might not realize it's tappable</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Separate Instrument Row</h3>
+      <p>Add a dedicated "Instrument" picker row to each sub-transaction, between Account and Amount. It defaults to the account's instrument and can be overridden. Standard Picker control — familiar pattern.</p>
+      <div class="mockup" style="margin-top: 12px;">
+        <div class="mockup-header">Sub-transaction 1 of 2</div>
+        <div class="mockup-body" style="font-family: -apple-system, system-ui; font-size: 14px;">
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Type</span>
+            <span>Transfer</span>
+          </div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Account</span>
+            <span>US Checking</span>
+          </div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Instrument</span>
+            <span>USD ▾</span>
+          </div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Amount</span>
+            <span><span style="font-variant-numeric: tabular-nums;">100.00</span> <span style="color: #888;">USD</span></span>
+          </div>
+          <div style="padding: 8px 12px; border-bottom: 1px solid #333; display: flex; justify-content: space-between;">
+            <span style="color: #aaa;">Category</span>
+            <span style="color: #888;">None</span>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons" style="margin-top: 8px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Full-size tap target, standard Picker widget</li><li>Highly discoverable</li><li>Consistent with other picker rows (Account, Type, etc.)</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Adds a row to every sub-transaction — more vertical space</li><li>Redundant with the currency shown next to Amount</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top: 16px; color: #ccc;">
+  <strong>Recommendation:</strong> Option B — it's consistent with the form's existing picker-row pattern (Type, Account, Category, Earmark are all separate rows). The added vertical space is acceptable since custom mode is already the "power user" view.
+</p>

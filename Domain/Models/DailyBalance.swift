@@ -39,10 +39,12 @@ extension DailyBalance {
   init(
     date: Date,
     balance: InstrumentAmount,
-    earmarked: InstrumentAmount = .zero(instrument: .AUD),
-    investments: InstrumentAmount = .zero(instrument: .AUD),
+    earmarked: InstrumentAmount? = nil,
+    investments: InstrumentAmount? = nil,
     investmentValue: InstrumentAmount? = nil
   ) {
+    let earmarked = earmarked ?? .zero(instrument: balance.instrument)
+    let investments = investments ?? .zero(instrument: balance.instrument)
     self.date = date
     self.balance = balance
     self.earmarked = earmarked

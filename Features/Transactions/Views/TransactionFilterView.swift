@@ -213,7 +213,7 @@ struct TransactionFilterView: View {
 
   let accounts = Accounts(from: [
     Account(
-      id: accountId, name: "Checking", type: .bank,
+      id: accountId, name: "Checking", type: .bank, instrument: .AUD,
       positions: [Position(instrument: .AUD, quantity: 2449.77)]
     )
   ])
@@ -225,7 +225,7 @@ struct TransactionFilterView: View {
 
   let earmarks = Earmarks(from: [
     Earmark(
-      id: earmarkId, name: "Emergency Fund"
+      id: earmarkId, name: "Emergency Fund", instrument: .AUD
     )
   ])
 

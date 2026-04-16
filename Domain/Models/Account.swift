@@ -33,7 +33,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     id: UUID = UUID(),
     name: String,
     type: AccountType,
-    instrument: Instrument = .AUD,
+    instrument: Instrument,
     positions: [Position] = [],
     position: Int = 0,
     isHidden: Bool = false

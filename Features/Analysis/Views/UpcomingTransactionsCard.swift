@@ -204,7 +204,8 @@ private struct SimpleTransactionRow: View {
     let account = Account(
       id: UUID(),
       name: "Test Account",
-      type: .bank
+      type: .bank,
+      instrument: .AUD
     )
     _ = try? await backend.accounts.create(
       account,

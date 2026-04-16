@@ -27,7 +27,7 @@ final class EarmarkStore {
   init(
     repository: EarmarkRepository,
     conversionService: (any InstrumentConversionService)? = nil,
-    targetInstrument: Instrument = .AUD
+    targetInstrument: Instrument
   ) {
     self.repository = repository
     self.conversionService = conversionService
@@ -284,7 +284,7 @@ final class EarmarkStore {
     do {
       // Setting amount to 0 removes the budget entry on the server
       try await repository.setBudget(
-        earmarkId: earmarkId, categoryId: categoryId, amount: .zero(instrument: .AUD))
+        earmarkId: earmarkId, categoryId: categoryId, amount: .zero(instrument: targetInstrument))
     } catch {
       logger.error("Failed to remove budget item: \(error.localizedDescription)")
       budgetItems = oldItems

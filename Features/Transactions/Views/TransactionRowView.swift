@@ -134,7 +134,7 @@ struct TransactionRowView: View {
   let sourceId = UUID()
   let accounts = Accounts(from: [
     Account(
-      id: savingsId, name: "Savings", type: .bank,
+      id: savingsId, name: "Savings", type: .bank, instrument: .AUD,
       positions: [Position(instrument: .AUD, quantity: 5000)])
   ])
   let categories = Categories(from: [
@@ -144,7 +144,8 @@ struct TransactionRowView: View {
   let earmarks = Earmarks(from: [
     Earmark(
       id: holidayFundId,
-      name: "Holiday Fund"
+      name: "Holiday Fund",
+      instrument: .AUD
     )
   ])
 

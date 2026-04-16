@@ -17,7 +17,7 @@ struct EarmarkBudgetTests {
       TestBackend.seedBudget(
         earmarkId: earmarkId, items: items, in: container)
     }
-    let store = EarmarkStore(repository: backend.earmarks)
+    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
     await store.load()
     return (store, backend)
   }
@@ -34,7 +34,7 @@ struct EarmarkBudgetTests {
           quantity: Decimal(80000) / 100, instrument: Instrument.defaultTestInstrument))
     ]
     let (store, _) = try await makeStore(
-      earmarks: [Earmark(id: earmarkId, name: "Holiday")],
+      earmarks: [Earmark(id: earmarkId, name: "Holiday", instrument: .defaultTestInstrument)],
       budgetItems: [earmarkId: items]
     )
 
@@ -47,7 +47,7 @@ struct EarmarkBudgetTests {
 
   @Test func testLoadBudgetHandlesError() async throws {
     let (backend, _) = try TestBackend.create()
-    let store = EarmarkStore(repository: backend.earmarks)
+    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
     // Loading budget for nonexistent earmark still returns empty
     await store.loadBudget(earmarkId: UUID())
     #expect(store.budgetItems.isEmpty)
@@ -60,8 +60,8 @@ struct EarmarkBudgetTests {
     let cat2Id = UUID()
     let (store, _) = try await makeStore(
       earmarks: [
-        Earmark(id: earmark1Id, name: "Holiday"),
-        Earmark(id: earmark2Id, name: "Car"),
+        Earmark(id: earmark1Id, name: "Holiday", instrument: .defaultTestInstrument),
+        Earmark(id: earmark2Id, name: "Car", instrument: .defaultTestInstrument),
       ],
       budgetItems: [
         earmark1Id: [
@@ -100,7 +100,7 @@ struct EarmarkBudgetTests {
           quantity: Decimal(80000) / 100, instrument: Instrument.defaultTestInstrument))
     ]
     let (store, backend) = try await makeStore(
-      earmarks: [Earmark(id: earmarkId, name: "Holiday")],
+      earmarks: [Earmark(id: earmarkId, name: "Holiday", instrument: .defaultTestInstrument)],
       budgetItems: [earmarkId: items]
     )
     await store.loadBudget(earmarkId: earmarkId)
@@ -125,7 +125,7 @@ struct EarmarkBudgetTests {
     let earmarkId = UUID()
     let catId = UUID()
     let (store, _) = try await makeStore(
-      earmarks: [Earmark(id: earmarkId, name: "Holiday")]
+      earmarks: [Earmark(id: earmarkId, name: "Holiday", instrument: .defaultTestInstrument)]
     )
     await store.loadBudget(earmarkId: earmarkId)
 
@@ -145,7 +145,7 @@ struct EarmarkBudgetTests {
     let cat1Id = UUID()
     let cat2Id = UUID()
     let (store, backend) = try await makeStore(
-      earmarks: [Earmark(id: earmarkId, name: "Holiday")],
+      earmarks: [Earmark(id: earmarkId, name: "Holiday", instrument: .defaultTestInstrument)],
       budgetItems: [
         earmarkId: [
           EarmarkBudgetItem(
@@ -174,7 +174,7 @@ struct EarmarkBudgetTests {
     let earmarkId = UUID()
     let catId = UUID()
     let (store, backend) = try await makeStore(
-      earmarks: [Earmark(id: earmarkId, name: "Holiday")],
+      earmarks: [Earmark(id: earmarkId, name: "Holiday", instrument: .defaultTestInstrument)],
       budgetItems: [
         earmarkId: [
           EarmarkBudgetItem(
