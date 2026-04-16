@@ -79,7 +79,7 @@ struct AnalysisRepositoryContractTests {
     let earmark = Earmark(
       id: UUID(),
       name: "Savings",
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -162,7 +162,7 @@ struct AnalysisRepositoryContractTests {
     let earmark = Earmark(
       id: UUID(),
       name: "Holiday",
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -656,7 +656,7 @@ struct AnalysisRepositoryContractTests {
     let earmark = Earmark(
       id: UUID(),
       name: "Gift Fund",
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -764,7 +764,7 @@ struct AnalysisRepositoryContractTests {
     let earmark = Earmark(
       id: UUID(),
       name: "Holiday",
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -846,7 +846,7 @@ struct AnalysisRepositoryContractTests {
     let earmark = Earmark(
       id: UUID(),
       name: "Gift Fund",
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -946,7 +946,7 @@ struct AnalysisRepositoryContractTests {
     let earmark = Earmark(
       id: UUID(),
       name: "Savings",
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.earmarks.create(earmark)
 
@@ -1619,7 +1619,7 @@ struct AnalysisRepositoryContractTests {
     let earmark = Earmark(
       id: UUID(),
       name: "Gift Fund",
-      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+      instrument: .defaultTestInstrument
     )
     _ = try await backend.earmarks.create(earmark)
 

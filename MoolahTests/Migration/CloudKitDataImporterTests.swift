@@ -48,9 +48,7 @@ struct CloudKitDataImporterTests {
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday",
-          balance: .zero(instrument: instrument),
-          saved: .zero(instrument: instrument),
-          spent: .zero(instrument: instrument)
+          instrument: instrument
         )
       ],
       earmarkBudgets: [

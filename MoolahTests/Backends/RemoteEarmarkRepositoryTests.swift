@@ -37,18 +37,9 @@ struct RemoteEarmarkRepositoryTests {
     #expect(earmarks[0].name == "Holiday Fund")
     #expect(earmarks[0].position == 1)
     #expect(earmarks[0].isHidden == false)
-    #expect(
-      earmarks[0].balance
-        == InstrumentAmount(
-          quantity: Decimal(string: "2500.00")!, instrument: .defaultTestInstrument))
-    #expect(
-      earmarks[0].saved
-        == InstrumentAmount(
-          quantity: Decimal(string: "3000.00")!, instrument: .defaultTestInstrument))
-    #expect(
-      earmarks[0].spent
-        == InstrumentAmount(
-          quantity: Decimal(string: "-500.00")!, instrument: .defaultTestInstrument))
+    #expect(earmarks[0].positions.first?.quantity == Decimal(string: "2500.00")!)
+    #expect(earmarks[0].savedPositions.first?.quantity == Decimal(string: "3000.00")!)
+    #expect(earmarks[0].spentPositions.first?.quantity == Decimal(string: "-500.00")!)
     #expect(
       earmarks[0].savingsGoal
         == InstrumentAmount(

@@ -824,7 +824,7 @@ struct TransactionStoreTests {
       balance: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument))
     let earmark = Earmark(
       id: earmarkId, name: "Holiday",
-      balance: InstrumentAmount(quantity: 200, instrument: .defaultTestInstrument))
+      instrument: .defaultTestInstrument)
     let (backend, container) = try TestBackend.create()
     let (store, _, earmarkStore) = await makeStores(
       backend: backend, container: container, accounts: [account], earmarks: [earmark])
@@ -850,7 +850,7 @@ struct TransactionStoreTests {
     let updatedEarmark = earmarkStore.earmarks.by(id: earmarkId)
     #expect(updatedEarmark != nil)
     // Expense of -50 against earmark: spent increases by 50
-    #expect(updatedEarmark?.spent.quantity == Decimal(50))
+    #expect(updatedEarmark?.spentPositions.first?.quantity == Decimal(50))
   }
 
   @Test func testUpdateChangingEarmarkId() async throws {
@@ -861,11 +861,10 @@ struct TransactionStoreTests {
       balance: InstrumentAmount(quantity: 950, instrument: .defaultTestInstrument))
     let earmark1 = Earmark(
       id: earmarkId1, name: "Holiday",
-      balance: InstrumentAmount(quantity: 150, instrument: .defaultTestInstrument),
-      spent: InstrumentAmount(quantity: 50, instrument: .defaultTestInstrument))
+      instrument: .defaultTestInstrument)
     let earmark2 = Earmark(
       id: earmarkId2, name: "Emergency",
-      balance: InstrumentAmount(quantity: 300, instrument: .defaultTestInstrument))
+      instrument: .defaultTestInstrument)
     let tx = Transaction(
       date: makeDate("2024-01-15"),
       payee: "Test",
@@ -902,10 +901,10 @@ struct TransactionStoreTests {
 
     // Earmark 1 should have spent reversed (50 - 50 = 0)
     let updatedEarmark1 = earmarkStore.earmarks.by(id: earmarkId1)
-    #expect(updatedEarmark1?.spent.quantity == Decimal(0))
+    #expect(updatedEarmark1?.spentPositions.first?.quantity ?? 0 == Decimal(0))
     // Earmark 2 should have spent increased (0 + 50 = 50)
     let updatedEarmark2 = earmarkStore.earmarks.by(id: earmarkId2)
-    #expect(updatedEarmark2?.spent.quantity == Decimal(50))
+    #expect(updatedEarmark2?.spentPositions.first?.quantity == Decimal(50))
   }
 
   @Test func testTypeChangeExpenseToIncomeUpdatesAccountBalance() async throws {

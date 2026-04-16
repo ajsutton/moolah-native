@@ -1178,7 +1178,7 @@ struct TransactionDraftTests {
     let earmarks = Earmarks(from: [
       Earmark(
         id: emId, name: "Holiday",
-        balance: .zero(instrument: .defaultTestInstrument))
+        instrument: .defaultTestInstrument)
     ])
     let tx = draft.toTransaction(id: UUID(), accounts: Accounts(from: []), earmarks: earmarks)
     #expect(tx != nil)
@@ -1213,7 +1213,7 @@ struct TransactionDraftTests {
     let earmarks = Earmarks(from: [
       Earmark(
         id: emId, name: "Holiday",
-        balance: .zero(instrument: .defaultTestInstrument))
+        instrument: .defaultTestInstrument)
     ])
     let tx = draft.toTransaction(id: UUID(), accounts: accounts, earmarks: earmarks)
     #expect(tx != nil)

@@ -25,7 +25,7 @@ struct ExportImportIntegrationTests {
     _ = try await backend.categories.create(Category(name: "Transport"))
 
     let holiday = try await backend.earmarks.create(
-      Earmark(name: "Holiday", balance: .zero(instrument: instrument))
+      Earmark(name: "Holiday", instrument: instrument)
     )
     let budgetAmount = InstrumentAmount(quantity: Decimal(string: "30.00")!, instrument: instrument)
     try await backend.earmarks.setBudget(

@@ -8,14 +8,13 @@ import Testing
 @MainActor
 struct EarmarkStoreTests {
   @Test func testPopulatesFromRepository() async throws {
-    let earmark = Earmark(
-      name: "Holiday Fund",
-      instrument: Instrument.defaultTestInstrument,
-      balance: InstrumentAmount(
-        quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
+    let earmark = Earmark(name: "Holiday Fund", instrument: Instrument.defaultTestInstrument)
+    let accountId = UUID()
     let (backend, container) = try TestBackend.create()
     TestBackend.seedWithTransactions(
-      earmarks: [earmark], accountId: UUID(), in: container)
+      earmarks: [earmark],
+      amounts: [earmark.id: (saved: 500, spent: 0)],
+      accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
@@ -25,21 +24,17 @@ struct EarmarkStoreTests {
   }
 
   @Test func testSortingByPosition() async throws {
-    let e1 = Earmark(
-      name: "E1",
-      instrument: Instrument.defaultTestInstrument,
-      balance: InstrumentAmount(
-        quantity: Decimal(10000) / 100, instrument: Instrument.defaultTestInstrument), position: 2
-    )
-    let e2 = Earmark(
-      name: "E2",
-      instrument: Instrument.defaultTestInstrument,
-      balance: InstrumentAmount(
-        quantity: Decimal(20000) / 100, instrument: Instrument.defaultTestInstrument), position: 1
-    )
+    let e1 = Earmark(name: "E1", instrument: Instrument.defaultTestInstrument, position: 2)
+    let e2 = Earmark(name: "E2", instrument: Instrument.defaultTestInstrument, position: 1)
+    let accountId = UUID()
     let (backend, container) = try TestBackend.create()
     TestBackend.seedWithTransactions(
-      earmarks: [e1, e2], accountId: UUID(), in: container)
+      earmarks: [e1, e2],
+      amounts: [
+        e1.id: (saved: 100, spent: 0),
+        e2.id: (saved: 200, spent: 0),
+      ],
+      accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
@@ -50,22 +45,19 @@ struct EarmarkStoreTests {
   }
 
   @Test func testEarmarkInstrumentSetCorrectly() async throws {
-    let e1 = Earmark(
-      name: "Holiday",
-      instrument: Instrument.defaultTestInstrument,
-      balance: InstrumentAmount(
-        quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
-    let e2 = Earmark(
-      name: "Car Repair",
-      instrument: Instrument.defaultTestInstrument,
-      balance: InstrumentAmount(
-        quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument))
+    let e1 = Earmark(name: "Holiday", instrument: Instrument.defaultTestInstrument)
+    let e2 = Earmark(name: "Car Repair", instrument: Instrument.defaultTestInstrument)
     let accountId = UUID()
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
     TestBackend.seedWithTransactions(
-      earmarks: [e1, e2], accountId: accountId, in: container)
+      earmarks: [e1, e2],
+      amounts: [
+        e1.id: (saved: 500, spent: 0),
+        e2.id: (saved: 300, spent: 0),
+      ],
+      accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
@@ -85,27 +77,21 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
     TestBackend.seedWithTransactions(
-      earmarks: [
-        Earmark(
-          id: earmarkId, name: "Holiday Fund",
-          instrument: instrument,
-          balance: InstrumentAmount(quantity: 500, instrument: instrument),
-          saved: InstrumentAmount(quantity: 500, instrument: instrument),
-          spent: InstrumentAmount(quantity: 0, instrument: instrument))
-      ], accountId: accountId, in: container)
+      earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
+      amounts: [earmarkId: (saved: 500, spent: 0)],
+      accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
-    // Apply a -100 expense delta
     store.applyDelta(
       earmarkDeltas: [earmarkId: [instrument: -100]],
       savedDeltas: [:],
       spentDeltas: [earmarkId: [instrument: 100]]
     )
 
-    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == 400)
-    #expect(store.earmarks.by(id: earmarkId)?.saved.quantity == 500)
-    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == 100)
+    #expect(store.earmarks.by(id: earmarkId)?.positions.first?.quantity == 400)
+    #expect(store.earmarks.by(id: earmarkId)?.savedPositions.first?.quantity == 500)
+    #expect(store.earmarks.by(id: earmarkId)?.spentPositions.first?.quantity == 100)
   }
 
   @Test func testApplyDeltaWithSavedIncreasesBalance() async throws {
@@ -116,27 +102,20 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
     TestBackend.seedWithTransactions(
-      earmarks: [
-        Earmark(
-          id: earmarkId, name: "Holiday Fund",
-          instrument: instrument,
-          balance: InstrumentAmount(quantity: 500, instrument: instrument),
-          saved: InstrumentAmount(quantity: 500, instrument: instrument),
-          spent: InstrumentAmount(quantity: 0, instrument: instrument))
-      ], accountId: accountId, in: container)
+      earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
+      amounts: [earmarkId: (saved: 500, spent: 0)],
+      accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
-    // Apply a +200 income delta
     store.applyDelta(
       earmarkDeltas: [earmarkId: [instrument: 200]],
       savedDeltas: [earmarkId: [instrument: 200]],
       spentDeltas: [:]
     )
 
-    #expect(store.earmarks.by(id: earmarkId)?.balance.quantity == 700)
-    #expect(store.earmarks.by(id: earmarkId)?.saved.quantity == 700)
-    #expect(store.earmarks.by(id: earmarkId)?.spent.quantity == 0)
+    #expect(store.earmarks.by(id: earmarkId)?.positions.first?.quantity == 700)
+    #expect(store.earmarks.by(id: earmarkId)?.savedPositions.first?.quantity == 700)
   }
 
   @Test func testApplyDeltaAffectsMultipleEarmarks() async throws {
@@ -149,23 +128,17 @@ struct EarmarkStoreTests {
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
     TestBackend.seedWithTransactions(
       earmarks: [
-        Earmark(
-          id: earmark1Id, name: "Holiday",
-          instrument: instrument,
-          balance: InstrumentAmount(quantity: 500, instrument: instrument),
-          saved: InstrumentAmount(quantity: 500, instrument: instrument),
-          spent: InstrumentAmount(quantity: 0, instrument: instrument)),
-        Earmark(
-          id: earmark2Id, name: "Car",
-          instrument: instrument,
-          balance: InstrumentAmount(quantity: 300, instrument: instrument),
-          saved: InstrumentAmount(quantity: 300, instrument: instrument),
-          spent: InstrumentAmount(quantity: 0, instrument: instrument)),
-      ], accountId: accountId, in: container)
+        Earmark(id: earmark1Id, name: "Holiday", instrument: instrument),
+        Earmark(id: earmark2Id, name: "Car", instrument: instrument),
+      ],
+      amounts: [
+        earmark1Id: (saved: 500, spent: 0),
+        earmark2Id: (saved: 300, spent: 0),
+      ],
+      accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
-    // Apply deltas to both earmarks
     store.applyDelta(
       earmarkDeltas: [
         earmark1Id: [instrument: -100],
@@ -175,10 +148,10 @@ struct EarmarkStoreTests {
       spentDeltas: [earmark1Id: [instrument: 100]]
     )
 
-    #expect(store.earmarks.by(id: earmark1Id)?.balance.quantity == 400)
-    #expect(store.earmarks.by(id: earmark1Id)?.spent.quantity == 100)
-    #expect(store.earmarks.by(id: earmark2Id)?.balance.quantity == 350)
-    #expect(store.earmarks.by(id: earmark2Id)?.saved.quantity == 350)
+    #expect(store.earmarks.by(id: earmark1Id)?.positions.first?.quantity == 400)
+    #expect(store.earmarks.by(id: earmark1Id)?.spentPositions.first?.quantity == 100)
+    #expect(store.earmarks.by(id: earmark2Id)?.positions.first?.quantity == 350)
+    #expect(store.earmarks.by(id: earmark2Id)?.savedPositions.first?.quantity == 350)
   }
 
   // MARK: - convertedTotalBalance
@@ -198,19 +171,12 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
     TestBackend.seedWithTransactions(
-      earmarks: [
-        Earmark(
-          id: earmarkId, name: "Holiday Fund",
-          instrument: instrument,
-          balance: InstrumentAmount(quantity: 500, instrument: instrument),
-          saved: InstrumentAmount(quantity: 500, instrument: instrument),
-          spent: InstrumentAmount(quantity: 0, instrument: instrument))
-      ], accountId: accountId, in: container)
+      earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
+      amounts: [earmarkId: (saved: 500, spent: 0)],
+      accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
-
-    // Wait for async conversion task
     try await Task.sleep(for: .milliseconds(50))
 
     #expect(store.convertedTotalBalance != nil)
@@ -225,14 +191,9 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
     TestBackend.seedWithTransactions(
-      earmarks: [
-        Earmark(
-          id: earmarkId, name: "Holiday Fund",
-          instrument: instrument,
-          balance: InstrumentAmount(quantity: 500, instrument: instrument),
-          saved: InstrumentAmount(quantity: 500, instrument: instrument),
-          spent: InstrumentAmount(quantity: 0, instrument: instrument))
-      ], accountId: accountId, in: container)
+      earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
+      amounts: [earmarkId: (saved: 500, spent: 0)],
+      accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
     try await Task.sleep(for: .milliseconds(50))
@@ -258,25 +219,17 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
     TestBackend.seedWithTransactions(
-      earmarks: [
-        Earmark(
-          id: earmarkId, name: "Holiday Fund",
-          instrument: instrument,
-          balance: InstrumentAmount(quantity: 500, instrument: instrument),
-          saved: InstrumentAmount(quantity: 500, instrument: instrument),
-          spent: InstrumentAmount(quantity: 0, instrument: instrument))
-      ], accountId: accountId, in: container)
+      earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
+      amounts: [earmarkId: (saved: 500, spent: 0)],
+      accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
     try await Task.sleep(for: .milliseconds(50))
 
-    let convertedBalance = store.convertedBalance(for: earmarkId)
-    #expect(convertedBalance?.quantity == 500)
-    let convertedSaved = store.convertedSaved(for: earmarkId)
-    #expect(convertedSaved?.quantity == 500)
-    let convertedSpent = store.convertedSpent(for: earmarkId)
-    #expect(convertedSpent?.quantity == 0)
+    #expect(store.convertedBalance(for: earmarkId)?.quantity == 500)
+    #expect(store.convertedSaved(for: earmarkId)?.quantity == 500)
+    #expect(store.convertedSpent(for: earmarkId)?.quantity == 0)
   }
 
   @Test func testConvertedBalancePerEarmarkUpdatesAfterDelta() async throws {
@@ -287,14 +240,9 @@ struct EarmarkStoreTests {
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
     TestBackend.seedWithTransactions(
-      earmarks: [
-        Earmark(
-          id: earmarkId, name: "Holiday Fund",
-          instrument: instrument,
-          balance: InstrumentAmount(quantity: 500, instrument: instrument),
-          saved: InstrumentAmount(quantity: 500, instrument: instrument),
-          spent: InstrumentAmount(quantity: 0, instrument: instrument))
-      ], accountId: accountId, in: container)
+      earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
+      amounts: [earmarkId: (saved: 500, spent: 0)],
+      accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
     try await Task.sleep(for: .milliseconds(50))
@@ -321,7 +269,6 @@ struct EarmarkStoreTests {
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
-    // Move last to first
     await store.reorderEarmarks(from: IndexSet(integer: 2), to: 0)
 
     #expect(store.visibleEarmarks[0].name == "Third")
@@ -341,12 +288,10 @@ struct EarmarkStoreTests {
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
-    // Swap the two visible earmarks
     await store.reorderEarmarks(from: IndexSet(integer: 1), to: 0)
 
     #expect(store.visibleEarmarks[0].name == "Visible2")
     #expect(store.visibleEarmarks[1].name == "Visible1")
-    // Hidden earmark position unchanged
     let hidden = store.earmarks.ordered.first { $0.isHidden }
     #expect(hidden?.position == 1)
   }
@@ -384,10 +329,8 @@ struct EarmarkStoreTests {
     let store = EarmarkStore(repository: backend.earmarks)
     await store.load()
 
-    // Move last to first
     await store.reorderEarmarks(from: IndexSet(integer: 2), to: 0)
 
-    // Verify repository has updated positions
     let persisted = try await backend.earmarks.fetchAll().sorted { $0.position < $1.position }
     #expect(persisted[0].name == "Third")
     #expect(persisted[1].name == "First")
@@ -396,8 +339,6 @@ struct EarmarkStoreTests {
     #expect(persisted[1].position == 1)
     #expect(persisted[2].position == 2)
   }
-
-  // MARK: - Show Hidden
 
   // MARK: - create / update
 
@@ -466,24 +407,20 @@ struct EarmarkStoreTests {
 
   @Test("visibleEarmarks excludes hidden earmarks by default")
   func hiddenEarmarksExcluded() async throws {
-    let visible = Earmark(
-      name: "Visible",
-      instrument: Instrument.defaultTestInstrument,
-      balance: InstrumentAmount(
-        quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
+    let visible = Earmark(name: "Visible", instrument: Instrument.defaultTestInstrument)
     let hidden = Earmark(
-      name: "Hidden",
-      instrument: Instrument.defaultTestInstrument,
-      balance: InstrumentAmount(
-        quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument),
-      isHidden: true)
+      name: "Hidden", instrument: Instrument.defaultTestInstrument, isHidden: true)
     let accountId = UUID()
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
-      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-    )
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
     TestBackend.seedWithTransactions(
-      earmarks: [visible, hidden], accountId: accountId, in: container)
+      earmarks: [visible, hidden],
+      amounts: [
+        visible.id: (saved: 500, spent: 0),
+        hidden.id: (saved: 300, spent: 0),
+      ],
+      accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
@@ -494,24 +431,20 @@ struct EarmarkStoreTests {
 
   @Test("visibleEarmarks includes hidden earmarks when showHidden is true")
   func hiddenEarmarksIncluded() async throws {
-    let visible = Earmark(
-      name: "Visible",
-      instrument: Instrument.defaultTestInstrument,
-      balance: InstrumentAmount(
-        quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
+    let visible = Earmark(name: "Visible", instrument: Instrument.defaultTestInstrument)
     let hidden = Earmark(
-      name: "Hidden",
-      instrument: Instrument.defaultTestInstrument,
-      balance: InstrumentAmount(
-        quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument),
-      isHidden: true)
+      name: "Hidden", instrument: Instrument.defaultTestInstrument, isHidden: true)
     let accountId = UUID()
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
-      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-    )
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
     TestBackend.seedWithTransactions(
-      earmarks: [visible, hidden], accountId: accountId, in: container)
+      earmarks: [visible, hidden],
+      amounts: [
+        visible.id: (saved: 500, spent: 0),
+        hidden.id: (saved: 300, spent: 0),
+      ],
+      accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()

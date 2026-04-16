@@ -107,43 +107,34 @@ enum TestBackend {
     return earmarks
   }
 
-  /// Seeds earmarks along with transactions that produce the desired saved/spent/balance values.
-  /// This is the preferred way to seed earmarks with specific financial state.
+  /// Seeds earmarks along with transactions that produce the desired saved/spent values.
+  /// `amounts` maps earmark ID to (saved, spent) quantities as Decimals.
+  /// If an earmark has no entry in amounts, no transactions are created.
   @discardableResult
   static func seedWithTransactions(
     earmarks: [Earmark],
+    amounts: [UUID: (saved: Decimal, spent: Decimal)] = [:],
     accountId: UUID,
     in container: ModelContainer,
     instrument: Instrument = .defaultTestInstrument
   ) -> [Earmark] {
     let context = ModelContext(container)
     for earmark in earmarks {
-      context.insert(
-        EarmarkRecord.from(earmark))
+      context.insert(EarmarkRecord.from(earmark))
 
-      // Determine what transactions to create.
-      // If saved/spent are explicitly set, use those.
-      // If only balance is set (saved=0, spent=0), treat balance as the saved amount.
-      let savedAmount =
-        !earmark.saved.isZero
-        ? earmark.saved
-        : (earmark.spent.isZero && !earmark.balance.isZero
-          ? earmark.balance : .zero(instrument: instrument))
-      let spentAmount = earmark.spent
+      let earmarkAmounts = amounts[earmark.id]
+      let savedQty = earmarkAmounts?.saved ?? 0
+      let spentQty = earmarkAmounts?.spent ?? 0
 
-      // Create income transaction for saved amount
-      if !savedAmount.isZero {
+      if savedQty != 0 {
         let txnId = UUID()
-        let txn = TransactionRecord(
-          id: txnId,
-          date: Date()
-        )
+        let txn = TransactionRecord(id: txnId, date: Date())
         context.insert(txn)
         let leg = TransactionLegRecord(
           transactionId: txnId,
           accountId: accountId,
           instrumentId: instrument.id,
-          quantity: savedAmount.storageValue,
+          quantity: InstrumentAmount(quantity: savedQty, instrument: instrument).storageValue,
           type: TransactionType.income.rawValue,
           earmarkId: earmark.id,
           sortOrder: 0
@@ -151,19 +142,15 @@ enum TestBackend {
         context.insert(leg)
       }
 
-      // Create expense transaction for spent amount
-      if !spentAmount.isZero {
+      if spentQty != 0 {
         let txnId = UUID()
-        let txn = TransactionRecord(
-          id: txnId,
-          date: Date()
-        )
+        let txn = TransactionRecord(id: txnId, date: Date())
         context.insert(txn)
         let leg = TransactionLegRecord(
           transactionId: txnId,
           accountId: accountId,
           instrumentId: instrument.id,
-          quantity: (-spentAmount).storageValue,
+          quantity: InstrumentAmount(quantity: -spentQty, instrument: instrument).storageValue,
           type: TransactionType.expense.rawValue,
           earmarkId: earmark.id,
           sortOrder: 0
