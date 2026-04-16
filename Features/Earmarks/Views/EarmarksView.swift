@@ -214,7 +214,10 @@ struct EarmarksView: View {
 
 #Preview {
   let (backend, _) = PreviewBackend.create()
-  let earmarkStore = EarmarkStore(repository: backend.earmarks, targetInstrument: .AUD)
+  let earmarkStore = EarmarkStore(
+    repository: backend.earmarks,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD)
   let transactionStore = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,

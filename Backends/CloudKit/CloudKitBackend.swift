@@ -15,17 +15,8 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
     modelContainer: ModelContainer,
     instrument: Instrument,
     profileLabel: String,
-    conversionService: (any InstrumentConversionService)? = nil
+    conversionService: any InstrumentConversionService
   ) {
-    let resolvedConversion: any InstrumentConversionService
-    if let conversionService {
-      resolvedConversion = conversionService
-    } else {
-      let client = FrankfurterClient()
-      let exchangeRates = ExchangeRateService(client: client)
-      resolvedConversion = FiatConversionService(exchangeRates: exchangeRates)
-    }
-
     self.auth = CloudKitAuthProvider(profileLabel: profileLabel)
     self.accounts = CloudKitAccountRepository(
       modelContainer: modelContainer)
@@ -36,9 +27,9 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
       modelContainer: modelContainer, instrument: instrument)
     self.analysis = CloudKitAnalysisRepository(
       modelContainer: modelContainer, instrument: instrument,
-      conversionService: resolvedConversion)
+      conversionService: conversionService)
     self.investments = CloudKitInvestmentRepository(
       modelContainer: modelContainer, instrument: instrument)
-    self.conversionService = resolvedConversion
+    self.conversionService = conversionService
   }
 }

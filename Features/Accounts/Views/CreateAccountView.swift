@@ -129,7 +129,10 @@ struct CreateAccountView: View {
 
 #Preview {
   let (backend, _) = PreviewBackend.create()
-  let accountStore = AccountStore(repository: backend.accounts, targetInstrument: .AUD)
+  let accountStore = AccountStore(
+    repository: backend.accounts,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD)
 
   CreateAccountView(
     instrument: .AUD, accountStore: accountStore,

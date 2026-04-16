@@ -128,7 +128,8 @@ struct MigrationIntegrationTests {
     let cloudBackend = CloudKitBackend(
       modelContainer: container,
       instrument: instrument,
-      profileLabel: "Test"
+      profileLabel: "Test",
+      conversionService: FixedConversionService()
     )
     let cloudAccounts = try await cloudBackend.accounts.fetchAll()
     #expect(cloudAccounts.count == exported.accounts.count)
@@ -174,7 +175,8 @@ struct MigrationIntegrationTests {
     let cloudBackend = CloudKitBackend(
       modelContainer: container,
       instrument: instrument,
-      profileLabel: "Test"
+      profileLabel: "Test",
+      conversionService: FixedConversionService()
     )
     let categories = try await cloudBackend.categories.fetchAll()
     let groceries = categories.first { $0.name == "Groceries" }
@@ -207,7 +209,8 @@ struct MigrationIntegrationTests {
     let cloudBackend = CloudKitBackend(
       modelContainer: container,
       instrument: instrument,
-      profileLabel: "Test"
+      profileLabel: "Test",
+      conversionService: FixedConversionService()
     )
     let earmarks = try await cloudBackend.earmarks.fetchAll()
     let holiday = earmarks.first { $0.name == "Holiday" }

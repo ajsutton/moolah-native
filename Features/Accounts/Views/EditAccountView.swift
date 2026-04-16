@@ -158,7 +158,10 @@ struct EditAccountView: View {
 
 #Preview {
   let (backend, _) = PreviewBackend.create()
-  let accountStore = AccountStore(repository: backend.accounts, targetInstrument: .AUD)
+  let accountStore = AccountStore(
+    repository: backend.accounts,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD)
 
   EditAccountView(
     account: Account(name: "Checking", type: .bank, instrument: .AUD),

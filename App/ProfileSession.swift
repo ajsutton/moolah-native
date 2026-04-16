@@ -38,6 +38,9 @@ final class ProfileSession: Identifiable {
   ) {
     self.profile = profile
 
+    let exchangeRateService = ExchangeRateService(client: FrankfurterClient())
+    self.exchangeRateService = exchangeRateService
+
     let backend: BackendProvider
     switch profile.backendType {
     case .remote, .moolah:
@@ -67,11 +70,11 @@ final class ProfileSession: Identifiable {
       backend = CloudKitBackend(
         modelContainer: profileContainer,
         instrument: profile.instrument,
-        profileLabel: profile.label
+        profileLabel: profile.label,
+        conversionService: FiatConversionService(exchangeRates: exchangeRateService)
       )
     }
     self.backend = backend
-    self.exchangeRateService = ExchangeRateService(client: FrankfurterClient())
     self.stockPriceService = StockPriceService(client: YahooFinanceClient())
     let cryptoCompareClient = CryptoCompareClient()
     let binanceClient = BinanceClient { date in
@@ -121,7 +124,8 @@ final class ProfileSession: Identifiable {
     self.analysisStore = AnalysisStore(repository: backend.analysis)
     self.investmentStore = InvestmentStore(
       repository: backend.investments,
-      transactionRepository: backend.transactions
+      transactionRepository: backend.transactions,
+      conversionService: backend.conversionService
     )
     self.tradeStore = TradeStore(transactions: backend.transactions)
 

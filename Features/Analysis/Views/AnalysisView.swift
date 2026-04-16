@@ -153,9 +153,15 @@ struct ForecastPicker: View {
 
 #Preview {
   let (backend, _) = PreviewBackend.create()
-  let accountStore = AccountStore(repository: backend.accounts, targetInstrument: .AUD)
+  let accountStore = AccountStore(
+    repository: backend.accounts,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD)
   let categoryStore = CategoryStore(repository: backend.categories)
-  let earmarkStore = EarmarkStore(repository: backend.earmarks, targetInstrument: .AUD)
+  let earmarkStore = EarmarkStore(
+    repository: backend.earmarks,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD)
   let transactionStore = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,

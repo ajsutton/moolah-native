@@ -19,14 +19,14 @@ final class EarmarkStore {
   private(set) var convertedSpentAmounts: [UUID: InstrumentAmount] = [:]
 
   private let repository: EarmarkRepository
-  private let conversionService: (any InstrumentConversionService)?
+  private let conversionService: any InstrumentConversionService
   let targetInstrument: Instrument
   private let logger = Logger(subsystem: "com.moolah.app", category: "EarmarkStore")
   private var conversionTask: Task<Void, Never>?
 
   init(
     repository: EarmarkRepository,
-    conversionService: (any InstrumentConversionService)? = nil,
+    conversionService: any InstrumentConversionService,
     targetInstrument: Instrument
   ) {
     self.repository = repository
@@ -126,30 +126,18 @@ final class EarmarkStore {
           var earmarkSpent = InstrumentAmount.zero(instrument: earmark.instrument)
 
           for position in earmark.positions {
-            guard let conversionService else {
-              earmarkBalance += position.amount
-              continue
-            }
             let converted = try await conversionService.convertAmount(
               position.amount, to: earmark.instrument, on: Date())
             guard !Task.isCancelled else { return }
             earmarkBalance += converted
           }
           for position in earmark.savedPositions {
-            guard let conversionService else {
-              earmarkSaved += position.amount
-              continue
-            }
             let converted = try await conversionService.convertAmount(
               position.amount, to: earmark.instrument, on: Date())
             guard !Task.isCancelled else { return }
             earmarkSaved += converted
           }
           for position in earmark.spentPositions {
-            guard let conversionService else {
-              earmarkSpent += position.amount
-              continue
-            }
             let converted = try await conversionService.convertAmount(
               position.amount, to: earmark.instrument, on: Date())
             guard !Task.isCancelled else { return }
@@ -163,14 +151,10 @@ final class EarmarkStore {
           // Convert earmark balance to target instrument for grand total.
           // Clamp negative balances to zero so they don't reduce the total.
           let zeroInTarget = InstrumentAmount.zero(instrument: targetInstrument)
-          if let conversionService {
-            let convertedToTarget = try await conversionService.convertAmount(
-              earmarkBalance, to: targetInstrument, on: Date())
-            guard !Task.isCancelled else { return }
-            grandTotal += max(convertedToTarget, zeroInTarget)
-          } else {
-            grandTotal += max(earmarkBalance, zeroInTarget)
-          }
+          let convertedToTarget = try await conversionService.convertAmount(
+            earmarkBalance, to: targetInstrument, on: Date())
+          guard !Task.isCancelled else { return }
+          grandTotal += max(convertedToTarget, zeroInTarget)
         }
 
         convertedBalances = balances

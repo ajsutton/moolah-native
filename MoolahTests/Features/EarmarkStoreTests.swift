@@ -15,7 +15,9 @@ struct EarmarkStoreTests {
       earmarks: [earmark],
       amounts: [earmark.id: (saved: 500, spent: 0)],
       accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
 
     await store.load()
 
@@ -35,7 +37,9 @@ struct EarmarkStoreTests {
         e2.id: (saved: 200, spent: 0),
       ],
       accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
 
     await store.load()
 
@@ -61,7 +65,9 @@ struct EarmarkStoreTests {
         e2.id: (saved: 300, spent: 0),
       ],
       accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
 
     await store.load()
 
@@ -86,7 +92,9 @@ struct EarmarkStoreTests {
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
       amounts: [earmarkId: (saved: 500, spent: 0)],
       accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
     await store.load()
 
     store.applyDelta(
@@ -114,7 +122,9 @@ struct EarmarkStoreTests {
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
       amounts: [earmarkId: (saved: 500, spent: 0)],
       accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
     await store.load()
 
     store.applyDelta(
@@ -148,7 +158,9 @@ struct EarmarkStoreTests {
         earmark2Id: (saved: 300, spent: 0),
       ],
       accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
     await store.load()
 
     store.applyDelta(
@@ -170,7 +182,9 @@ struct EarmarkStoreTests {
 
   @Test func testConvertedTotalBalanceNilBeforeLoad() async throws {
     let (backend, _) = try TestBackend.create()
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
 
     #expect(store.convertedTotalBalance == nil)
   }
@@ -189,7 +203,9 @@ struct EarmarkStoreTests {
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
       amounts: [earmarkId: (saved: 500, spent: 0)],
       accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
 
     await store.load()
     try await Task.sleep(for: .milliseconds(50))
@@ -219,7 +235,9 @@ struct EarmarkStoreTests {
         negativeId: (saved: -18950, spent: 0),
       ],
       accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
 
     await store.load()
     try await Task.sleep(for: .milliseconds(50))
@@ -246,7 +264,9 @@ struct EarmarkStoreTests {
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
       amounts: [earmarkId: (saved: 500, spent: 0)],
       accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
     await store.load()
     try await Task.sleep(for: .milliseconds(50))
     #expect(store.convertedTotalBalance?.quantity == 500)
@@ -277,7 +297,9 @@ struct EarmarkStoreTests {
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
       amounts: [earmarkId: (saved: 500, spent: 0)],
       accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
 
     await store.load()
     try await Task.sleep(for: .milliseconds(50))
@@ -301,7 +323,9 @@ struct EarmarkStoreTests {
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
       amounts: [earmarkId: (saved: 500, spent: 0)],
       accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
     await store.load()
     try await Task.sleep(for: .milliseconds(50))
 
@@ -324,7 +348,9 @@ struct EarmarkStoreTests {
     let e2 = Earmark(name: "Third", instrument: .defaultTestInstrument, position: 2)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(earmarks: [e0, e1, e2], in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
     await store.load()
 
     await store.reorderEarmarks(from: IndexSet(integer: 2), to: 0)
@@ -344,7 +370,9 @@ struct EarmarkStoreTests {
     let e2 = Earmark(name: "Visible2", instrument: .defaultTestInstrument, position: 2)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(earmarks: [e0, e1, e2], in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
     await store.load()
 
     await store.reorderEarmarks(from: IndexSet(integer: 1), to: 0)
@@ -359,7 +387,9 @@ struct EarmarkStoreTests {
     let e0 = Earmark(name: "Only", instrument: .defaultTestInstrument, position: 0)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(earmarks: [e0], in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
     await store.load()
 
     await store.reorderEarmarks(from: IndexSet(integer: 0), to: 0)
@@ -371,7 +401,9 @@ struct EarmarkStoreTests {
   @Test func testReorderEmptyListIsNoOp() async throws {
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(earmarks: [], in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
     await store.load()
 
     await store.reorderEarmarks(from: IndexSet(integer: 0), to: 0)
@@ -385,7 +417,9 @@ struct EarmarkStoreTests {
     let e2 = Earmark(name: "Third", instrument: .defaultTestInstrument, position: 2)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(earmarks: [e0, e1, e2], in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
     await store.load()
 
     await store.reorderEarmarks(from: IndexSet(integer: 2), to: 0)
@@ -403,7 +437,9 @@ struct EarmarkStoreTests {
 
   @Test func testCreateAddsEarmark() async throws {
     let (backend, _) = try TestBackend.create()
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
 
     let earmark = Earmark(name: "New Fund", instrument: .defaultTestInstrument)
     let created = await store.create(earmark)
@@ -416,7 +452,9 @@ struct EarmarkStoreTests {
 
   @Test func testCreateReturnsNilOnFailure() async throws {
     let store = EarmarkStore(
-      repository: FailingEarmarkRepository(), targetInstrument: .defaultTestInstrument)
+      repository: FailingEarmarkRepository(),
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
 
     let result = await store.create(Earmark(name: "Fails", instrument: .defaultTestInstrument))
 
@@ -426,7 +464,9 @@ struct EarmarkStoreTests {
 
   @Test func testCreateReloadsAfterSuccess() async throws {
     let (backend, _) = try TestBackend.create()
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
 
     let e1 = Earmark(name: "First", instrument: .defaultTestInstrument)
     _ = await store.create(e1)
@@ -442,7 +482,9 @@ struct EarmarkStoreTests {
     let earmark = Earmark(name: "Holiday Fund", instrument: .defaultTestInstrument)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(earmarks: [earmark], in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
     await store.load()
 
     var modified = earmark
@@ -456,7 +498,9 @@ struct EarmarkStoreTests {
 
   @Test func testUpdateReturnsNilOnFailure() async throws {
     let store = EarmarkStore(
-      repository: FailingEarmarkRepository(), targetInstrument: .defaultTestInstrument)
+      repository: FailingEarmarkRepository(),
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
 
     let result = await store.update(Earmark(name: "Fails", instrument: .defaultTestInstrument))
 
@@ -485,7 +529,9 @@ struct EarmarkStoreTests {
         hidden.id: (saved: 300, spent: 0),
       ],
       accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
 
     await store.load()
 
@@ -512,7 +558,9 @@ struct EarmarkStoreTests {
         hidden.id: (saved: 300, spent: 0),
       ],
       accountId: accountId, in: container)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
 
     await store.load()
     store.showHidden = true
@@ -535,7 +583,9 @@ struct EarmarkStoreTests {
       earmarks: [usdEarmark],
       amounts: [usdEarmark.id: (saved: 500, spent: 0)],
       accountId: accountId, in: container, instrument: .USD)
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .USD)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .USD)
 
     await store.load()
     #expect(store.earmarks.count == 1)

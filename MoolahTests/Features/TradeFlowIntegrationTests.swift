@@ -110,7 +110,7 @@ struct TradeFlowIntegrationTests {
     let investmentStore = InvestmentStore(
       repository: backend.investments,
       transactionRepository: backend.transactions,
-      conversionService: nil
+      conversionService: FixedConversionService()
     )
 
     var draft = TradeDraft(accountId: accountId)

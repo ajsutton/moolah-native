@@ -46,7 +46,7 @@ struct StockPositionDisplayTests {
     let store = InvestmentStore(
       repository: backend.investments,
       transactionRepository: backend.transactions,
-      conversionService: nil
+      conversionService: FixedConversionService()
     )
     await store.loadPositions(accountId: accountId)
 
