@@ -36,9 +36,10 @@ final class EarmarkRecord {
     self.savingsEndDate = savingsEndDate
   }
 
-  func toDomain(balance: InstrumentAmount, saved: InstrumentAmount, spent: InstrumentAmount)
-    -> Earmark
-  {
+  func toDomain(
+    balance: InstrumentAmount, saved: InstrumentAmount, spent: InstrumentAmount,
+    positions: [Position] = [], savedPositions: [Position] = [], spentPositions: [Position] = []
+  ) -> Earmark {
     let savingsGoal: InstrumentAmount? = savingsTarget.flatMap { target in
       guard let instrumentId = savingsTargetInstrumentId else { return nil }
       let instrument = Instrument.fiat(code: instrumentId)
@@ -50,6 +51,9 @@ final class EarmarkRecord {
       balance: balance,
       saved: saved,
       spent: spent,
+      positions: positions,
+      savedPositions: savedPositions,
+      spentPositions: spentPositions,
       isHidden: isHidden,
       position: position,
       savingsGoal: savingsGoal,
