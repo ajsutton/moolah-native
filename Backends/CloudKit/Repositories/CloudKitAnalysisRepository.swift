@@ -1113,14 +1113,35 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     // conversion. Captured once so every instance uses the same snapshot.
     let conversionDate = Date()
 
-    var forecastBalances: [Date: DailyBalance] = [:]
-    for instance in instances {
-      let converted = try await convertLegsToProfileInstrument(
-        instance, to: instrument, on: conversionDate,
-        conversionService: conversionService)
+    // Pre-convert all instances concurrently — each conversion is independent.
+    // The accumulator that follows is inherently sequential (each iteration
+    // depends on the previous running totals), so we can't parallelise it.
+    // See guides/CONCURRENCY_GUIDE.md: dynamic count → TaskGroup.
+    let converted: [Transaction]
+    if instances.isEmpty {
+      converted = []
+    } else {
+      converted = try await withThrowingTaskGroup(
+        of: (Int, Transaction).self
+      ) { group in
+        for (i, instance) in instances.enumerated() {
+          group.addTask {
+            let txn = try await convertLegsToProfileInstrument(
+              instance, to: instrument, on: conversionDate,
+              conversionService: conversionService)
+            return (i, txn)
+          }
+        }
+        var out = Array(repeating: instances[0], count: instances.count)
+        for try await (i, txn) in group { out[i] = txn }
+        return out
+      }
+    }
 
+    var forecastBalances: [Date: DailyBalance] = [:]
+    for instance in converted {
       applyTransaction(
-        converted,
+        instance,
         to: &balance,
         investments: &investments,
         perEarmarkAmounts: &perEarmarkAmounts,

@@ -2073,10 +2073,11 @@ struct AnalysisRepositoryContractTests {
 
   @Test("forecast leaves profile-currency scheduled transactions unchanged")
   func forecastLeavesProfileCurrencyUnchanged() async throws {
-    // Rate dict intentionally empty — if the code path tried to convert AUD legs
-    // it would take the 1:1 fallback, but the intent is that same-currency legs
-    // skip the conversion call entirely.
-    let conversion = FixedConversionService(rates: [:])
+    // Inject a service that throws on any invocation. If the short-circuit in
+    // `convertLegsToProfileInstrument` is removed, this test fails because the
+    // throwing service propagates. (A 1:1 fallback service like
+    // `FixedConversionService(rates: [:])` wouldn't detect that regression.)
+    let conversion = ThrowingConversionService()
     let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
 
     let account = Account(
@@ -2210,6 +2211,24 @@ struct AnalysisRepositoryContractTests {
     #expect(result.dailyBalances.count == individualBalances.count)
     #expect(result.expenseBreakdown.count == individualBreakdown.count)
     #expect(result.incomeAndExpense.count == individualIncome.count)
+  }
+}
+
+// MARK: - Test Helpers
+
+/// Conversion service that throws on any invocation. Used to assert that a code
+/// path does not call into conversion at all (e.g., same-currency short-circuits).
+private struct ThrowingConversionService: InstrumentConversionService {
+  struct Invoked: Error {}
+  func convert(
+    _ quantity: Decimal, from: Instrument, to: Instrument, on date: Date
+  ) async throws -> Decimal {
+    throw Invoked()
+  }
+  func convertAmount(
+    _ amount: InstrumentAmount, to instrument: Instrument, on date: Date
+  ) async throws -> InstrumentAmount {
+    throw Invoked()
   }
 }
 
