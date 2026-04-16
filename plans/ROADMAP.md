@@ -93,7 +93,7 @@ Full per-account currency support, building on the exchange rate infrastructure 
 
 - Per-account currency picker in create/edit account UI
 - Cross-currency transfers: UI for exchange rate input or market rate selection when transferring between accounts with different currencies
-- Analysis views: net worth graph and expense breakdown need date-appropriate rate lookups (currently use raw balances with no conversion)
+- Analysis views: expense breakdown and income/expense tables sum foreign-currency legs without converting to profile currency (net worth graph already handles this via `applyMultiInstrumentConversion`)
 
 ---
 
