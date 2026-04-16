@@ -31,10 +31,11 @@ final class AccountRecord {
   }
 
   func toDomain(
-    instrument: Instrument,
+    instruments: [String: Instrument] = [:],
     positions: [Position] = []
   ) -> Account {
-    Account(
+    let instrument = instruments[instrumentId] ?? Instrument.fiat(code: instrumentId)
+    return Account(
       id: id,
       name: name,
       type: AccountType(rawValue: type) ?? .bank,

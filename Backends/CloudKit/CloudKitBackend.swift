@@ -28,7 +28,7 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
 
     self.auth = CloudKitAuthProvider(profileLabel: profileLabel)
     self.accounts = CloudKitAccountRepository(
-      modelContainer: modelContainer, instrument: instrument)
+      modelContainer: modelContainer)
     self.transactions = CloudKitTransactionRepository(
       modelContainer: modelContainer, instrument: instrument)
     self.categories = CloudKitCategoryRepository(modelContainer: modelContainer)

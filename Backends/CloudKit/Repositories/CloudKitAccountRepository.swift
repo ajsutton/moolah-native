@@ -6,14 +6,12 @@ import os
 final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   private let logger = Logger(subsystem: "com.moolah.app", category: "AccountRepository")
   private let modelContainer: ModelContainer
-  private let instrument: Instrument
   var onRecordChanged: (UUID) -> Void = { _ in }
   var onRecordDeleted: (UUID) -> Void = { _ in }
   var onInstrumentChanged: (String) -> Void = { _ in }
 
-  init(modelContainer: ModelContainer, instrument: Instrument) {
+  init(modelContainer: ModelContainer) {
     self.modelContainer = modelContainer
-    self.instrument = instrument
   }
 
   @MainActor
@@ -40,13 +38,14 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
 
     let positionStart = ContinuousClock.now
     let (_, allLegs) = try fetchNonScheduledLegs(context: bgContext)
-    let allPositions = try computePositions(from: allLegs, context: bgContext)
+    let instruments = try fetchInstrumentMap(context: bgContext)
+    let allPositions = computePositions(from: allLegs, instruments: instruments)
     let positionMs = (ContinuousClock.now - positionStart).inMilliseconds
 
     let result = records.map { record in
       let positions = allPositions[record.id] ?? []
       return record.toDomain(
-        instrument: instrument,
+        instruments: instruments,
         positions: positions)
     }
     let totalMs = fetchMs + positionMs
@@ -136,10 +135,11 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       try context.save()
       onRecordChanged(account.id)
 
-      let allPositions = try computeAllPositions()
+      let instruments = try fetchInstrumentMap()
+      let allPositions = try computeAllPositions(instruments: instruments)
       let positions = allPositions[accountId] ?? []
       return record.toDomain(
-        instrument: instrument,
+        instruments: instruments,
         positions: positions)
     }
   }
@@ -161,7 +161,8 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
         throw BackendError.notFound("Account not found")
       }
 
-      let allPositions = try computeAllPositions()
+      let instruments = try fetchInstrumentMap()
+      let allPositions = try computeAllPositions(instruments: instruments)
       let positions = allPositions[id] ?? []
       let hasNonZeroPosition = positions.contains { $0.quantity != 0 }
       guard !hasNonZeroPosition else {
@@ -180,7 +181,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   /// Compute per-instrument positions for all accounts.
   /// Returns a dictionary of accountId -> [Position].
   @MainActor
-  private func computeAllPositions() throws -> [UUID: [Position]] {
+  private func computeAllPositions(instruments: [String: Instrument]) throws -> [UUID: [Position]] {
     let (_, allLegs) = try fetchNonScheduledLegs()
 
     // Group by (accountId, instrumentId) and sum quantities
@@ -191,7 +192,6 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     }
 
     // Resolve instruments and build Position arrays
-    let instruments = try fetchInstrumentMap()
     var result: [UUID: [Position]] = [:]
     for (accountId, instrumentTotals) in totals {
       var positions: [Position] = []
@@ -256,7 +256,9 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   }
 
   /// Compute per-instrument positions from pre-fetched legs.
-  private func computePositions(from allLegs: [TransactionLegRecord], context: ModelContext) throws
+  private func computePositions(
+    from allLegs: [TransactionLegRecord], instruments: [String: Instrument]
+  )
     -> [UUID: [Position]]
   {
     // Group by (accountId, instrumentId) and sum quantities
@@ -267,7 +269,6 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     }
 
     // Resolve instruments and build Position arrays
-    let instruments = try fetchInstrumentMap(context: context)
     var result: [UUID: [Position]] = [:]
     for (accountId, instrumentTotals) in totals {
       var positions: [Position] = []

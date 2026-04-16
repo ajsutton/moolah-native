@@ -206,7 +206,7 @@ private func makeCloudKitAccountRepository(
   let container = try! TestModelContainer.create()
   let instrument = Instrument.defaultTestInstrument
   let repo = CloudKitAccountRepository(
-    modelContainer: container, instrument: instrument)
+    modelContainer: container)
 
   if !initialAccounts.isEmpty {
     let context = ModelContext(container)

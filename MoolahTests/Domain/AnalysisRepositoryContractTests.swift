@@ -1917,7 +1917,7 @@ private struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable
     let currency = Instrument.defaultTestInstrument
     self.auth = InMemoryAuthProvider()
     self.accounts = CloudKitAccountRepository(
-      modelContainer: container, instrument: currency)
+      modelContainer: container)
     self.transactions = CloudKitTransactionRepository(
       modelContainer: container, instrument: currency)
     self.categories = CloudKitCategoryRepository(
