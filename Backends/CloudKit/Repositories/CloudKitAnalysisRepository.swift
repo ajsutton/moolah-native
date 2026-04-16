@@ -116,9 +116,11 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     let descriptor = FetchDescriptor<AccountRecord>()
     return try await MainActor.run {
       let records = try context.fetch(descriptor)
+      let instrument = self.instrument
       return records.map {
         Account(
           id: $0.id, name: $0.name, type: AccountType(rawValue: $0.type) ?? .bank,
+          balance: .zero(instrument: instrument),
           position: $0.position, isHidden: $0.isHidden)
       }
     }

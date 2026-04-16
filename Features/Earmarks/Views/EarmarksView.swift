@@ -214,7 +214,7 @@ struct EarmarksView: View {
 
 #Preview {
   let (backend, _) = PreviewBackend.create()
-  let earmarkStore = EarmarkStore(repository: backend.earmarks)
+  let earmarkStore = EarmarkStore(repository: backend.earmarks, targetInstrument: .AUD)
   let transactionStore = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,
@@ -234,9 +234,10 @@ struct EarmarksView: View {
     _ = try? await backend.earmarks.create(
       Earmark(
         name: "Holiday Fund",
+        instrument: .AUD,
         savingsGoal: InstrumentAmount(quantity: 5000, instrument: .AUD)))
     _ = try? await backend.earmarks.create(
-      Earmark(name: "Emergency Fund"))
+      Earmark(name: "Emergency Fund", instrument: .AUD))
     await earmarkStore.load()
   }
 }

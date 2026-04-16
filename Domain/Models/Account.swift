@@ -48,7 +48,7 @@ struct Account: Codable, Sendable, Identifiable, Hashable, Comparable {
     id: UUID = UUID(),
     name: String,
     type: AccountType,
-    balance: InstrumentAmount = .zero(instrument: .AUD),
+    balance: InstrumentAmount,
     investmentValue: InstrumentAmount? = nil,
     positions: [Position] = [],
     usesPositionTracking: Bool = false,

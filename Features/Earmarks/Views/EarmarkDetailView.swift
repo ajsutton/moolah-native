@@ -206,12 +206,13 @@ struct EarmarkDetailView: View {
   let earmark = Earmark(
     id: earmarkId,
     name: "Holiday Fund",
+    instrument: .AUD,
     savingsGoal: InstrumentAmount(quantity: 5000, instrument: .AUD),
     savingsStartDate: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1)),
     savingsEndDate: Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 31))
   )
   let (backend, _) = PreviewBackend.create()
-  let earmarkStore = EarmarkStore(repository: backend.earmarks)
+  let earmarkStore = EarmarkStore(repository: backend.earmarks, targetInstrument: .AUD)
   let store = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,
@@ -232,7 +233,7 @@ struct EarmarkDetailView: View {
   .task {
     let accountId = UUID()
     _ = try? await backend.accounts.create(
-      Account(id: accountId, name: "Test", type: .bank))
+      Account(id: accountId, name: "Test", type: .bank, balance: .zero(instrument: .AUD)))
     _ = try? await backend.earmarks.create(earmark)
     _ = try? await backend.transactions.create(
       Transaction(

@@ -22,7 +22,7 @@ final class AccountStore {
   init(
     repository: AccountRepository,
     conversionService: (any InstrumentConversionService)? = nil,
-    targetInstrument: Instrument = .AUD
+    targetInstrument: Instrument
   ) {
     self.repository = repository
     self.conversionService = conversionService

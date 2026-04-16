@@ -14,7 +14,7 @@ struct AccountStoreTests {
         quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [account], in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
 
     await store.load()
 
@@ -37,7 +37,7 @@ struct AccountStoreTests {
     )
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [a1, a2], in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
 
     await store.load()
 
@@ -72,7 +72,7 @@ struct AccountStoreTests {
     ]
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: accounts, in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
 
     await store.load()
 
@@ -103,7 +103,7 @@ struct AccountStoreTests {
           balance: InstrumentAmount(
             quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
       ], in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let newValue = InstrumentAmount(
@@ -132,7 +132,7 @@ struct AccountStoreTests {
             quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument),
           investmentValue: investmentValue)
       ], in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let account = store.accounts.first!
@@ -155,7 +155,7 @@ struct AccountStoreTests {
           balance: InstrumentAmount(
             quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
       ], in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let newValue = InstrumentAmount(
@@ -182,7 +182,7 @@ struct AccountStoreTests {
       isHidden: true)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [visible, hidden], in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
 
     await store.load()
 
@@ -203,7 +203,7 @@ struct AccountStoreTests {
       isHidden: true)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [visible, hidden], in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
 
     await store.load()
     store.showHidden = true
@@ -224,7 +224,7 @@ struct AccountStoreTests {
       isHidden: true)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [visible, hidden], in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
 
     await store.load()
 
@@ -245,7 +245,7 @@ struct AccountStoreTests {
           id: acctId, name: "Checking", type: .bank,
           balance: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: instrument))
       ], in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let deltas: PositionDeltas = [acctId: [instrument: Decimal(-5000) / 100]]
@@ -264,7 +264,7 @@ struct AccountStoreTests {
           id: acctId, name: "Checking", type: .bank,
           balance: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: instrument))
       ], in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let deltas: PositionDeltas = [acctId: [instrument: Decimal(50000) / 100]]
@@ -287,7 +287,7 @@ struct AccountStoreTests {
           id: savingsId, name: "Savings", type: .bank,
           balance: InstrumentAmount(quantity: Decimal(200000) / 100, instrument: instrument)),
       ], in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let deltas: PositionDeltas = [
@@ -310,7 +310,7 @@ struct AccountStoreTests {
           id: checkingId, name: "Checking", type: .bank,
           balance: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: instrument))
       ], in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     #expect(store.currentTotal.quantity == Decimal(100000) / 100)
@@ -332,7 +332,7 @@ struct AccountStoreTests {
           id: acctId, name: "Checking", type: .bank,
           balance: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: instrument))
       ], in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let tx = Transaction(
@@ -361,7 +361,7 @@ struct AccountStoreTests {
           id: acctId, name: "Checking", type: .bank,
           balance: InstrumentAmount(quantity: Decimal(100000) / 100, instrument: instrument))
       ], in: container)
-    let store = AccountStore(repository: backend.accounts)
+    let store = AccountStore(repository: backend.accounts, targetInstrument: .defaultTestInstrument)
     await store.load()
 
     let deltas: PositionDeltas = [unknownId: [instrument: Decimal(-5000) / 100]]

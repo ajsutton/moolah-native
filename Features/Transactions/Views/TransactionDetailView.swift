@@ -868,15 +868,15 @@ struct TransactionDetailView: View {
         ]
       ),
       accounts: Accounts(from: [
-        Account(id: accountId, name: "Checking", type: .bank),
-        Account(name: "Savings", type: .bank),
+        Account(id: accountId, name: "Checking", type: .bank, balance: .zero(instrument: .AUD)),
+        Account(name: "Savings", type: .bank, balance: .zero(instrument: .AUD)),
       ]),
       categories: Categories(from: [
         Category(name: "Groceries"),
         Category(name: "Transport"),
       ]),
       earmarks: Earmarks(from: [
-        Earmark(name: "Holiday Fund")
+        Earmark(name: "Holiday Fund", instrument: .AUD)
       ]),
       transactionStore: {
         let (backend, _) = PreviewBackend.create()
@@ -912,15 +912,16 @@ struct TransactionDetailView: View {
         ]
       ),
       accounts: Accounts(from: [
-        Account(id: accountId1, name: "Checking", type: .bank),
-        Account(id: accountId2, name: "Credit Card", type: .creditCard),
+        Account(id: accountId1, name: "Checking", type: .bank, balance: .zero(instrument: .AUD)),
+        Account(
+          id: accountId2, name: "Credit Card", type: .creditCard, balance: .zero(instrument: .AUD)),
       ]),
       categories: Categories(from: [
         Category(name: "Groceries"),
         Category(name: "Transport"),
       ]),
       earmarks: Earmarks(from: [
-        Earmark(name: "Holiday Fund")
+        Earmark(name: "Holiday Fund", instrument: .AUD)
       ]),
       transactionStore: {
         let (backend, _) = PreviewBackend.create()
@@ -950,13 +951,13 @@ struct TransactionDetailView: View {
         ]
       ),
       accounts: Accounts(from: [
-        Account(name: "Checking", type: .bank),
-        Account(name: "Savings", type: .bank),
+        Account(name: "Checking", type: .bank, balance: .zero(instrument: .AUD)),
+        Account(name: "Savings", type: .bank, balance: .zero(instrument: .AUD)),
       ]),
       categories: Categories(from: []),
       earmarks: Earmarks(from: [
-        Earmark(id: earmarkId, name: "Income Tax FY2025"),
-        Earmark(name: "Holiday Fund"),
+        Earmark(id: earmarkId, name: "Income Tax FY2025", instrument: .AUD),
+        Earmark(name: "Holiday Fund", instrument: .AUD),
       ]),
       transactionStore: {
         let (backend, _) = PreviewBackend.create()

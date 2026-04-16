@@ -28,7 +28,7 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
   init(
     id: UUID = UUID(),
     name: String,
-    instrument: Instrument = .AUD,
+    instrument: Instrument,
     positions: [Position] = [],
     savedPositions: [Position] = [],
     spentPositions: [Position] = [],

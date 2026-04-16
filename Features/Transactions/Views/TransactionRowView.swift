@@ -144,7 +144,8 @@ struct TransactionRowView: View {
   let earmarks = Earmarks(from: [
     Earmark(
       id: holidayFundId,
-      name: "Holiday Fund"
+      name: "Holiday Fund",
+      instrument: .AUD
     )
   ])
 

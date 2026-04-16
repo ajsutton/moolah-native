@@ -256,8 +256,8 @@ struct SidebarView: View {
 
 #Preview {
   let (backend, _) = PreviewBackend.create()
-  let accountStore = AccountStore(repository: backend.accounts)
-  let earmarkStore = EarmarkStore(repository: backend.earmarks)
+  let accountStore = AccountStore(repository: backend.accounts, targetInstrument: .AUD)
+  let earmarkStore = EarmarkStore(repository: backend.earmarks, targetInstrument: .AUD)
 
   NavigationSplitView {
     SidebarView(selection: .constant(nil))
@@ -274,7 +274,7 @@ struct SidebarView: View {
             name: "Asset", type: .asset,
             balance: InstrumentAmount(quantity: 5000, instrument: .AUD)))
         _ = try? await backend.earmarks.create(
-          Earmark(name: "Holiday Fund"))
+          Earmark(name: "Holiday Fund", instrument: .AUD))
 
         await accountStore.load()
         await earmarkStore.load()

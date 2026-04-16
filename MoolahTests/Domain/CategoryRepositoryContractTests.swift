@@ -158,7 +158,7 @@ struct CategoryRepositoryContractTests {
     let category = Category(id: UUID(), name: "Groceries")
     _ = try await backend.categories.create(category)
 
-    let earmark = Earmark(id: UUID(), name: "Savings")
+    let earmark = Earmark(id: UUID(), name: "Savings", instrument: .defaultTestInstrument)
     _ = try await backend.earmarks.create(earmark)
 
     // Set a budget for the category
@@ -186,7 +186,7 @@ struct CategoryRepositoryContractTests {
     _ = try await backend.categories.create(groceries)
     _ = try await backend.categories.create(food)
 
-    let earmark = Earmark(id: UUID(), name: "Savings")
+    let earmark = Earmark(id: UUID(), name: "Savings", instrument: .defaultTestInstrument)
     _ = try await backend.earmarks.create(earmark)
 
     // Set a budget for groceries

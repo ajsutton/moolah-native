@@ -9,7 +9,7 @@ struct EarmarkRepositoryContractTests {
   @Test("creates earmark")
   func testCreatesEarmark() async throws {
     let repository = makeCloudKitEarmarkRepository()
-    let newEarmark = Earmark(name: "Emergency Fund")
+    let newEarmark = Earmark(name: "Emergency Fund", instrument: .defaultTestInstrument)
 
     let created = try await repository.create(newEarmark)
 
@@ -24,7 +24,7 @@ struct EarmarkRepositoryContractTests {
   @Test("updates earmark")
   func testUpdatesEarmark() async throws {
     let repository = makeCloudKitEarmarkRepository(initialEarmarks: [
-      Earmark(name: "Emergency Fund")
+      Earmark(name: "Emergency Fund", instrument: .defaultTestInstrument)
     ])
     let earmarks = try await repository.fetchAll()
     var toUpdate = earmarks[0]
@@ -41,7 +41,7 @@ struct EarmarkRepositoryContractTests {
   @Test("fetches empty budget for new earmark")
   func testFetchesEmptyBudget() async throws {
     let repository = makeCloudKitEarmarkRepository(initialEarmarks: [
-      Earmark(name: "Emergency Fund")
+      Earmark(name: "Emergency Fund", instrument: .defaultTestInstrument)
     ])
     let earmarks = try await repository.fetchAll()
     let budget = try await repository.fetchBudget(earmarkId: earmarks[0].id)
@@ -52,7 +52,7 @@ struct EarmarkRepositoryContractTests {
   @Test("updates and fetches budget")
   func testUpdatesFetchesBudget() async throws {
     let repository = makeCloudKitEarmarkRepository(initialEarmarks: [
-      Earmark(name: "Emergency Fund")
+      Earmark(name: "Emergency Fund", instrument: .defaultTestInstrument)
     ])
     let earmarks = try await repository.fetchAll()
     let earmarkId = earmarks[0].id
@@ -83,7 +83,7 @@ struct EarmarkRepositoryContractTests {
   @Test("throws on update non-existent")
   func testThrowsOnUpdateNonExistent() async throws {
     let repository = makeCloudKitEarmarkRepository()
-    let nonExistent = Earmark(name: "DoesNotExist")
+    let nonExistent = Earmark(name: "DoesNotExist", instrument: .defaultTestInstrument)
 
     await #expect(throws: BackendError.serverError(404)) {
       _ = try await repository.update(nonExistent)
@@ -103,7 +103,7 @@ struct EarmarkRepositoryContractTests {
   @Test("setBudget twice updates existing entry, not creates duplicate")
   func testBudgetUpsertSemantics() async throws {
     let repository = makeCloudKitEarmarkRepository(initialEarmarks: [
-      Earmark(name: "Savings")
+      Earmark(name: "Savings", instrument: .defaultTestInstrument)
     ])
     let earmarks = try await repository.fetchAll()
     let earmarkId = earmarks[0].id

@@ -225,7 +225,7 @@ struct TransactionFilterView: View {
 
   let earmarks = Earmarks(from: [
     Earmark(
-      id: earmarkId, name: "Emergency Fund"
+      id: earmarkId, name: "Emergency Fund", instrument: .AUD
     )
   ])
 

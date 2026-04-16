@@ -10,7 +10,8 @@ struct AccountStoreConversionTests {
 
   @Test func singleCurrencyAccountPositions() async throws {
     let accountId = UUID()
-    let account = Account(id: accountId, name: "Bank", type: .bank)
+    let account = Account(
+      id: accountId, name: "Bank", type: .bank, balance: .zero(instrument: .defaultTestInstrument))
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [account], in: container)
 
@@ -29,7 +30,8 @@ struct AccountStoreConversionTests {
 
     let store = AccountStore(
       repository: backend.accounts,
-      conversionService: backend.conversionService
+      conversionService: backend.conversionService,
+      targetInstrument: .defaultTestInstrument
     )
     await store.load()
 
@@ -42,7 +44,9 @@ struct AccountStoreConversionTests {
 
   @Test func multiCurrencyAccountShowsMultiplePositions() async throws {
     let accountId = UUID()
-    let account = Account(id: accountId, name: "Revolut", type: .bank)
+    let account = Account(
+      id: accountId, name: "Revolut", type: .bank,
+      balance: .zero(instrument: .defaultTestInstrument))
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [account], in: container)
 
@@ -72,7 +76,8 @@ struct AccountStoreConversionTests {
 
     let store = AccountStore(
       repository: backend.accounts,
-      conversionService: backend.conversionService
+      conversionService: backend.conversionService,
+      targetInstrument: .defaultTestInstrument
     )
     await store.load()
 
@@ -90,7 +95,9 @@ struct AccountStoreConversionTests {
 
   @Test func convertedTotalSumsAllPositionsInProfileCurrency() async throws {
     let accountId = UUID()
-    let account = Account(id: accountId, name: "Revolut", type: .bank)
+    let account = Account(
+      id: accountId, name: "Revolut", type: .bank,
+      balance: .zero(instrument: .defaultTestInstrument))
     let todayString = ISO8601DateFormatter.dateOnly.string(from: Date())
     let rates: [String: [String: Decimal]] = [
       todayString: [
@@ -126,7 +133,8 @@ struct AccountStoreConversionTests {
 
     let store = AccountStore(
       repository: backend.accounts,
-      conversionService: backend.conversionService
+      conversionService: backend.conversionService,
+      targetInstrument: .defaultTestInstrument
     )
     await store.load()
 
@@ -142,7 +150,8 @@ struct AccountStoreConversionTests {
     let (backend, _) = try TestBackend.create()
     let store = AccountStore(
       repository: backend.accounts,
-      conversionService: backend.conversionService
+      conversionService: backend.conversionService,
+      targetInstrument: .defaultTestInstrument
     )
     await store.load()
     #expect(store.positions(for: UUID()).isEmpty)

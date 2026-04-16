@@ -1208,7 +1208,9 @@ struct TransactionDraftTests {
       relevantLegIndex: 0, viewingAccountId: nil
     )
     let accounts = Accounts(from: [
-      Account(id: acctId, name: "Checking", type: .bank)
+      Account(
+        id: acctId, name: "Checking", type: .bank,
+        balance: .zero(instrument: .defaultTestInstrument))
     ])
     let earmarks = Earmarks(from: [
       Earmark(
