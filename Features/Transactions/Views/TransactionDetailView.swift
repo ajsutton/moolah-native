@@ -200,8 +200,8 @@ struct TransactionDetailView: View {
     )
   }
 
-  /// Derived exchange rate string (e.g., "≈ 1 USD = 1.55 AUD"), or nil when not computable.
-  private var derivedRateText: String? {
+  /// Derived exchange rate (display text + accessibility label), or nil when not computable.
+  private var derivedRate: (displayText: String, accessibilityText: String)? {
     guard let relevantInst = relevantInstrument,
       let counterpartInst = counterpartInstrument,
       let primaryQty = InstrumentAmount.parseQuantity(
@@ -216,27 +216,11 @@ struct TransactionDetailView: View {
     let rate = absCounter / absPrimary
     let rateFormatted = rate.formatted(
       .number.precision(.significantDigits(2...4)).grouping(.never))
-    return "≈ 1 \(relevantInst.id) = \(rateFormatted) \(counterpartInst.id)"
-  }
-
-  /// Accessibility label for the derived rate.
-  private var derivedRateAccessibilityLabel: String? {
-    guard let relevantInst = relevantInstrument,
-      let counterpartInst = counterpartInstrument,
-      let primaryQty = InstrumentAmount.parseQuantity(
-        from: draft.amountText, decimals: relevantInst.decimals),
-      let counterQty = InstrumentAmount.parseQuantity(
-        from: draft.counterpartLeg?.amountText ?? "", decimals: counterpartInst.decimals),
-      primaryQty != .zero && counterQty != .zero
-    else { return nil }
-    // abs() used only for display rate computation — stored amounts preserve their signs
-    let absPrimary = abs(primaryQty)
-    let absCounter = abs(counterQty)
-    let rate = absCounter / absPrimary
-    let rateFormatted = rate.formatted(
-      .number.precision(.significantDigits(2...4)).grouping(.never))
-    return
-      "Approximate exchange rate: 1 \(relevantInst.id) equals \(rateFormatted) \(counterpartInst.id)"
+    return (
+      displayText: "≈ 1 \(relevantInst.id) = \(rateFormatted) \(counterpartInst.id)",
+      accessibilityText:
+        "Approximate exchange rate: 1 \(relevantInst.id) equals \(rateFormatted) \(counterpartInst.id)"
+    )
   }
 
   var body: some View {
@@ -465,25 +449,26 @@ struct TransactionDetailView: View {
           HStack {
             Text(fieldLabel)
             Spacer()
-            TextField("", text: counterpartAmountBinding)
+            TextField(fieldLabel, text: counterpartAmountBinding)
               .multilineTextAlignment(.trailing)
               .monospacedDigit()
+              .accessibilityLabel(draft.showFromAccount ? "Sent amount" : "Received amount")
               #if os(iOS)
                 .keyboardType(.decimalPad)
               #endif
               .focused($focusedField, equals: .counterpartAmount)
+              .onSubmit { focusedField = nil }
             Text(counterpartInstrument?.id ?? "")
               .foregroundStyle(.secondary)
               .monospacedDigit()
           }
-          .accessibilityLabel(draft.showFromAccount ? "Sent amount" : "Received amount")
 
-          if let rateText = derivedRateText {
-            Text(rateText)
-              .font(.footnote)
+          if let rate = derivedRate {
+            Text(rate.displayText)
+              .font(.caption)
               .foregroundStyle(.secondary)
               .monospacedDigit()
-              .accessibilityLabel(derivedRateAccessibilityLabel ?? "")
+              .accessibilityLabel(rate.accessibilityText)
           }
         }
       }
@@ -588,6 +573,7 @@ struct TransactionDetailView: View {
             .tag(instrument.id)
         }
       }
+      .accessibilityLabel("Currency for sub-transaction \(index + 1)")
       .accessibilityHint("Overrides the currency derived from the account")
 
       HStack {
@@ -1110,6 +1096,41 @@ struct TransactionDetailView: View {
         )
       }(),
       viewingAccountId: accountId1,
+      supportsComplexTransactions: true,
+      onUpdate: { _ in },
+      onDelete: { _ in }
+    )
+  }
+}
+
+#Preview("Cross-Currency Transfer (Sent)") {
+  let accountId1 = UUID()
+  let accountId2 = UUID()
+  NavigationStack {
+    TransactionDetailView(
+      transaction: Transaction(
+        date: Date(),
+        payee: "Currency Exchange",
+        legs: [
+          TransactionLeg(accountId: accountId1, instrument: .USD, quantity: -100, type: .transfer),
+          TransactionLeg(accountId: accountId2, instrument: .AUD, quantity: 155, type: .transfer),
+        ]
+      ),
+      accounts: Accounts(from: [
+        Account(id: accountId1, name: "US Checking", type: .bank, instrument: .USD),
+        Account(id: accountId2, name: "AU Savings", type: .bank, instrument: .AUD),
+      ]),
+      categories: Categories(from: []),
+      earmarks: Earmarks(from: []),
+      transactionStore: {
+        let (backend, _) = PreviewBackend.create()
+        return TransactionStore(
+          repository: backend.transactions,
+          conversionService: backend.conversionService,
+          targetInstrument: .AUD
+        )
+      }(),
+      viewingAccountId: accountId2,
       supportsComplexTransactions: true,
       onUpdate: { _ in },
       onDelete: { _ in }
