@@ -432,10 +432,10 @@ extension TransactionDraft {
 
 extension TransactionDraft {
   /// Append a blank leg for custom mode editing.
-  mutating func addLeg() {
+  mutating func addLeg(defaultAccountId: UUID? = nil) {
     legDrafts.append(
       LegDraft(
-        type: .expense, accountId: nil, amountText: "0",
+        type: .expense, accountId: defaultAccountId, amountText: "0",
         categoryId: nil, categoryText: "", earmarkId: nil
       ))
   }

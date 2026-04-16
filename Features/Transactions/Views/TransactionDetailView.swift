@@ -514,7 +514,7 @@ struct TransactionDetailView: View {
   private var addSubTransactionSection: some View {
     Section {
       Button("Add Sub-transaction") {
-        draft.addLeg()
+        draft.addLeg(defaultAccountId: sortedAccounts.first?.id)
       }
       .accessibilityLabel("Add Sub-transaction")
     }
