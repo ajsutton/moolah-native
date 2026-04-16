@@ -370,16 +370,22 @@ extension TransactionDraft {
 extension TransactionDraft {
   /// Build a `Transaction` from the draft, looking up instruments from `accounts`.
   /// Returns nil when the draft is not valid.
-  func toTransaction(id: UUID, accounts: Accounts) -> Transaction? {
+  func toTransaction(id: UUID, accounts: Accounts, earmarks: Earmarks = Earmarks(from: []))
+    -> Transaction?
+  {
     guard isValid else { return nil }
 
     var legs: [TransactionLeg] = []
     for legDraft in legDrafts {
-      guard let acctId = legDraft.accountId,
-        let account = accounts.by(id: acctId)
-      else { return nil }
+      let instrument: Instrument
+      if let acctId = legDraft.accountId, let account = accounts.by(id: acctId) {
+        instrument = account.balance.instrument
+      } else if let emId = legDraft.earmarkId, let earmark = earmarks.by(id: emId) {
+        instrument = earmark.balance.instrument
+      } else {
+        return nil
+      }
 
-      let instrument = account.balance.instrument
       guard
         let quantity = Self.parseDisplayText(
           legDraft.amountText, type: legDraft.type, decimals: instrument.decimals)
@@ -387,7 +393,7 @@ extension TransactionDraft {
 
       legs.append(
         TransactionLeg(
-          accountId: acctId,
+          accountId: legDraft.accountId,
           instrument: instrument,
           quantity: quantity,
           type: legDraft.type,

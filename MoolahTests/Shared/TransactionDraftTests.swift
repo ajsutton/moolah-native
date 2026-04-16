@@ -1162,6 +1162,67 @@ struct TransactionDraftTests {
     #expect(draft.isValid == true)
   }
 
+  @Test func toTransactionEarmarkOnlyLeg() {
+    let emId = UUID()
+    let draft = TransactionDraft(
+      payee: "", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: false,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .income, accountId: nil, amountText: "500",
+          categoryId: nil, categoryText: "", earmarkId: emId)
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    let earmarks = Earmarks(from: [
+      Earmark(
+        id: emId, name: "Holiday",
+        balance: .zero(instrument: .defaultTestInstrument))
+    ])
+    let tx = draft.toTransaction(id: UUID(), accounts: Accounts(from: []), earmarks: earmarks)
+    #expect(tx != nil)
+    #expect(tx!.legs.count == 1)
+    #expect(tx!.legs[0].accountId == nil)
+    #expect(tx!.legs[0].earmarkId == emId)
+    #expect(tx!.legs[0].quantity == Decimal(string: "500"))
+    #expect(tx!.legs[0].type == .income)
+    #expect(tx!.legs[0].instrument == .defaultTestInstrument)
+  }
+
+  @Test func toTransactionMixedAccountAndEarmarkOnlyLegs() {
+    let emId = UUID()
+    let acctId = UUID()
+    let draft = TransactionDraft(
+      payee: "", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1,
+      isCustom: true,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .expense, accountId: acctId, amountText: "50",
+          categoryId: nil, categoryText: "", earmarkId: nil),
+        TransactionDraft.LegDraft(
+          type: .income, accountId: nil, amountText: "50",
+          categoryId: nil, categoryText: "", earmarkId: emId),
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+    let accounts = Accounts(from: [
+      Account(id: acctId, name: "Checking", type: .bank)
+    ])
+    let earmarks = Earmarks(from: [
+      Earmark(
+        id: emId, name: "Holiday",
+        balance: .zero(instrument: .defaultTestInstrument))
+    ])
+    let tx = draft.toTransaction(id: UUID(), accounts: accounts, earmarks: earmarks)
+    #expect(tx != nil)
+    #expect(tx!.legs.count == 2)
+    #expect(tx!.legs[0].accountId == acctId)
+    #expect(tx!.legs[1].accountId == nil)
+    #expect(tx!.legs[1].earmarkId == emId)
+  }
+
   @Test func earmarkOnlyLegEnforcesIncomeType() {
     var draft = TransactionDraft(
       payee: "", date: Date(), notes: "",

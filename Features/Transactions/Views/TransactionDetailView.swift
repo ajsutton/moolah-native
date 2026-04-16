@@ -776,7 +776,9 @@ struct TransactionDetailView: View {
   }
 
   private func saveIfValid() {
-    guard let updated = draft.toTransaction(id: transaction.id, accounts: accounts) else { return }
+    guard
+      let updated = draft.toTransaction(id: transaction.id, accounts: accounts, earmarks: earmarks)
+    else { return }
     onUpdate(updated)
   }
 }
