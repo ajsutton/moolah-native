@@ -2,7 +2,7 @@
 
 ## Overview
 
-A custom About window for the macOS app that replaces the default system About panel. It showcases the brand identity with a dark crystalline aesthetic, breathing icon glow, and the "Solid money. Chill vibes." tagline — turning a standard utility dialog into a small brand moment.
+A custom About window for the macOS app that replaces the default system About panel. It showcases the brand identity with a dark crystalline aesthetic, breathing icon glow, and the "Your money, rock solid." tagline — turning a standard utility dialog into a small brand moment.
 
 macOS only. No iOS equivalent is needed.
 
@@ -46,7 +46,7 @@ All content is center-aligned.
    - System font, 22pt, bold (weight 700), letter-spacing -0.5px
    - Bottom margin: 4pt
 
-3. **Tagline** — "Solid money. Chill vibes."
+3. **Tagline** — "Your money, rock solid."
    - Balance Gold (#FFD56B)
    - 11pt, medium weight (500), uppercase, letter-spacing 0.12em
    - Bottom margin: 18pt
