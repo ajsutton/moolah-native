@@ -99,4 +99,60 @@ struct InstrumentCryptoTests {
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
     #expect(eth.displaySymbol == "ETH")
   }
+
+  // MARK: - Cross-chain / multi-chain edge cases
+
+  @Test func sameSymbolOnDifferentChainsAreDistinctInstruments() {
+    // USDC on Ethereum (chainId 1) vs USDC on Polygon (chainId 137) — different ids.
+    let ethUsdc = Instrument.crypto(
+      chainId: 1,
+      contractAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      symbol: "USDC", name: "USD Coin", decimals: 6
+    )
+    let polyUsdc = Instrument.crypto(
+      chainId: 137,
+      contractAddress: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+      symbol: "USDC", name: "USD Coin", decimals: 6
+    )
+    #expect(ethUsdc.id != polyUsdc.id)
+    #expect(ethUsdc != polyUsdc)
+  }
+
+  @Test func nativeAndErc20OnSameChainAreDistinct() {
+    // Native ETH on chain 1 vs a ERC20 on chain 1 must be different.
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil,
+      symbol: "ETH", name: "Ethereum", decimals: 18
+    )
+    let weth = Instrument.crypto(
+      chainId: 1,
+      contractAddress: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      symbol: "WETH", name: "Wrapped Ether", decimals: 18
+    )
+    #expect(eth.id == "1:native")
+    #expect(weth.id == "1:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2")
+    #expect(eth != weth)
+  }
+
+  @Test func optimismChainIdPersistedInInstrumentId() {
+    let op = Instrument.crypto(
+      chainId: 10,
+      contractAddress: "0x4200000000000000000000000000000000000042",
+      symbol: "OP", name: "Optimism", decimals: 18
+    )
+    #expect(op.id.hasPrefix("10:"))
+    #expect(op.chainId == 10)
+  }
+
+  @Test func cryptoDecimalsDifferenceMakesInstrumentsNotEqual() {
+    // Two instruments with the same id+address but different stated decimals must still
+    // be considered unequal under Hashable/Equatable (all fields matter).
+    let a = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
+    )
+    let b = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 8
+    )
+    #expect(a != b)
+  }
 }

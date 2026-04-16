@@ -519,6 +519,46 @@ struct EarmarkStoreTests {
 
     #expect(store.visibleEarmarks.count == 2)
   }
+
+  // MARK: - Multi-instrument earmarks
+
+  @Test("USD earmark is loaded with USD instrument intact")
+  func loadEarmarkWithUSDInstrument() async throws {
+    let usdEarmark = Earmark(name: "US Travel", instrument: .USD)
+    let accountId = UUID()
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(id: accountId, name: "Test", type: .bank, instrument: .USD)
+      ], in: container)
+    TestBackend.seedWithTransactions(
+      earmarks: [usdEarmark],
+      amounts: [usdEarmark.id: (saved: 500, spent: 0)],
+      accountId: accountId, in: container, instrument: .USD)
+    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .USD)
+
+    await store.load()
+    #expect(store.earmarks.count == 1)
+    #expect(store.earmarks.first?.instrument == .USD)
+  }
+
+  @Test("Earmarks created with different instruments round-trip through repository")
+  func multipleEarmarksWithDifferentInstruments() async throws {
+    // Direct repository check — avoids triggering store-level aggregation that presumes
+    // a single profile currency.
+    let audEm = Earmark(name: "AUD Fund", instrument: .AUD)
+    let usdEm = Earmark(name: "USD Fund", instrument: .USD)
+    let (backend, _) = try TestBackend.create()
+    _ = try await backend.earmarks.create(audEm)
+    _ = try await backend.earmarks.create(usdEm)
+
+    let all = try await backend.earmarks.fetchAll()
+    #expect(all.count == 2)
+    let aud = try #require(all.first { $0.id == audEm.id })
+    let usd = try #require(all.first { $0.id == usdEm.id })
+    #expect(aud.instrument == .AUD)
+    #expect(usd.instrument == .USD)
+  }
 }
 
 // MARK: - Test helpers

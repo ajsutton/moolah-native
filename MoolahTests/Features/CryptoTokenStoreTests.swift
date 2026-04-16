@@ -143,4 +143,30 @@ struct CryptoTokenStoreTests {
     #expect(store.instruments.count == 1)
     #expect(store.resolvedRegistration == nil)
   }
+
+  // MARK: - Multi-instrument / cross-chain
+
+  @Test func loadRegistrations_preservesMultipleChainsWithSamePrefix() async {
+    // All presets should load — presets include Bitcoin (chainId 0), Ethereum (1),
+    // Optimism (10), and ERC20s on Ethereum. Store keeps them distinct.
+    let store = await makeStore(registrations: CryptoRegistration.builtInPresets)
+    await store.loadRegistrations()
+    #expect(store.registrations.count == CryptoRegistration.builtInPresets.count)
+    let chainIds = Set(store.instruments.compactMap(\.chainId))
+    // Presets span at least chain 0 (BTC), 1 (ETH/UNI/ENS), 10 (OP).
+    #expect(chainIds.contains(0))
+    #expect(chainIds.contains(1))
+    #expect(chainIds.contains(10))
+  }
+
+  @Test func loadRegistrations_keepsNativeAndErc20OnSameChainDistinct() async {
+    // builtInPresets contains ETH (chainId 1, native) and UNI/ENS (chainId 1, ERC20).
+    let store = await makeStore(registrations: CryptoRegistration.builtInPresets)
+    await store.loadRegistrations()
+    let chain1 = store.instruments.filter { $0.chainId == 1 }
+    let natives = chain1.filter { $0.contractAddress == nil }
+    let erc20s = chain1.filter { $0.contractAddress != nil }
+    #expect(!natives.isEmpty)
+    #expect(!erc20s.isEmpty)
+  }
 }

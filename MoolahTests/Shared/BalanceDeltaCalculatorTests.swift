@@ -134,6 +134,57 @@ struct BalanceDeltaCalculatorTests {
     #expect(result.accountDeltas[accountA]?[usd] == -30)
   }
 
+  @Test("Three-kind transaction tracks fiat, stock, and crypto deltas separately")
+  func threeKindTransactionSeparateDeltas() {
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
+    )
+    // Single transaction spanning three instrument kinds.
+    let tx = transaction(legs: [
+      TransactionLeg(accountId: accountA, instrument: aud, quantity: -1000, type: .transfer),
+      TransactionLeg(accountId: accountA, instrument: bhp, quantity: 100, type: .transfer),
+      TransactionLeg(
+        accountId: accountA, instrument: eth,
+        quantity: Decimal(string: "-0.005")!, type: .expense),
+    ])
+    let result = BalanceDeltaCalculator.deltas(old: nil, new: tx)
+    #expect(result.accountDeltas[accountA]?[aud] == -1000)
+    #expect(result.accountDeltas[accountA]?[bhp] == 100)
+    #expect(result.accountDeltas[accountA]?[eth] == Decimal(string: "-0.005")!)
+  }
+
+  @Test("Cross-currency transfer produces deltas in different instruments on different accounts")
+  func crossCurrencyTransferDeltasAcrossAccounts() {
+    let tx = transaction(legs: [
+      TransactionLeg(accountId: accountA, instrument: aud, quantity: -1000, type: .transfer),
+      TransactionLeg(accountId: accountB, instrument: usd, quantity: 650, type: .transfer),
+    ])
+    let result = BalanceDeltaCalculator.deltas(old: nil, new: tx)
+    #expect(result.accountDeltas[accountA]?[aud] == -1000)
+    #expect(result.accountDeltas[accountB]?[usd] == 650)
+    #expect(result.accountDeltas[accountA]?[usd] == nil)
+    #expect(result.accountDeltas[accountB]?[aud] == nil)
+  }
+
+  @Test("Updating leg instrument reverses old instrument and applies new instrument")
+  func updateChangesInstrument() {
+    let txId = UUID()
+    let oldTx = transaction(
+      id: txId,
+      legs: [
+        TransactionLeg(accountId: accountA, instrument: aud, quantity: -50, type: .expense)
+      ])
+    let newTx = transaction(
+      id: txId,
+      legs: [
+        TransactionLeg(accountId: accountA, instrument: usd, quantity: -50, type: .expense)
+      ])
+    let result = BalanceDeltaCalculator.deltas(old: oldTx, new: newTx)
+    #expect(result.accountDeltas[accountA]?[aud] == 50)
+    #expect(result.accountDeltas[accountA]?[usd] == -50)
+  }
+
   // MARK: - Earmark Deltas
 
   @Test("Expense with earmark produces earmark delta and spent delta")

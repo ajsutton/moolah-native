@@ -1540,6 +1540,83 @@ struct TransactionStoreTests {
     let suggestions = try await backend.transactions.fetchPayeeSuggestions(prefix: "")
     #expect(suggestions.isEmpty)
   }
+
+  // MARK: - Multi-instrument loading
+
+  @Test func testLoadsUSDAccountTransactionsInUSDInstrument() async throws {
+    // A USD-denominated account should load expense/income legs with USD instrument intact.
+    let usdAccountId = UUID()
+    let transactions = [
+      Transaction(
+        date: makeDate("2024-06-15"),
+        payee: "Starbucks",
+        legs: [
+          TransactionLeg(
+            accountId: usdAccountId,
+            instrument: .USD,
+            quantity: Decimal(string: "-4.50")!,
+            type: .expense)
+        ]
+      )
+    ]
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(id: usdAccountId, name: "US Checking", type: .bank, instrument: .USD)
+      ], in: container)
+    TestBackend.seed(transactions: transactions, in: container)
+
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
+    await store.load(filter: TransactionFilter(accountId: usdAccountId))
+
+    #expect(store.transactions.count == 1)
+    let tx = store.transactions[0].transaction
+    #expect(tx.legs[0].instrument == .USD)
+    #expect(tx.legs[0].quantity == Decimal(string: "-4.50")!)
+  }
+
+  @Test func testLoadsTransactionSpanningMultipleInstruments() async throws {
+    // Currency conversion transaction on the same account — leg instruments must be preserved.
+    let revolutId = UUID()
+    let tx = Transaction(
+      date: makeDate("2024-06-15"),
+      payee: "FX",
+      legs: [
+        TransactionLeg(
+          accountId: revolutId, instrument: .AUD,
+          quantity: Decimal(string: "-1000.00")!, type: .transfer),
+        TransactionLeg(
+          accountId: revolutId, instrument: .USD,
+          quantity: Decimal(string: "650.00")!, type: .transfer),
+      ]
+    )
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(id: revolutId, name: "Revolut", type: .bank, instrument: .AUD)
+      ], in: container)
+    TestBackend.seed(transactions: [tx], in: container)
+
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
+    await store.load(filter: TransactionFilter(accountId: revolutId))
+
+    #expect(store.transactions.count == 1)
+    let fetched = store.transactions[0].transaction
+    #expect(fetched.legs.count == 2)
+    let audLeg = try #require(fetched.legs.first(where: { $0.instrument == .AUD }))
+    let usdLeg = try #require(fetched.legs.first(where: { $0.instrument == .USD }))
+    #expect(audLeg.quantity == Decimal(string: "-1000.00")!)
+    #expect(usdLeg.quantity == Decimal(string: "650.00")!)
+    #expect(fetched.isTransfer)
+  }
 }
 
 // MARK: - Test helpers

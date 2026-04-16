@@ -60,4 +60,34 @@ struct InstrumentStockTests {
     let b = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
     #expect(a.hashValue == b.hashValue)
   }
+
+  // MARK: - Edge-case ticker formats
+
+  @Test func stockWithDottedTicker() {
+    // Berkshire Hathaway Class B — ticker contains dot.
+    let brkB = Instrument.stock(ticker: "BRK.B", exchange: "NYSE", name: "BRK-B")
+    #expect(brkB.ticker == "BRK.B")
+    #expect(brkB.id == "NYSE:BRK-B")
+  }
+
+  @Test func stockWithHyphenatedTicker() {
+    // BRK-A on some feeds uses hyphen.
+    let brkA = Instrument.stock(ticker: "BRK-A", exchange: "NYSE", name: "BRK-A")
+    #expect(brkA.ticker == "BRK-A")
+  }
+
+  @Test func stocksOnSameExchangeDifferByName() {
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let cba = Instrument.stock(ticker: "CBA.AX", exchange: "ASX", name: "CBA")
+    #expect(bhp.id != cba.id)
+    #expect(bhp != cba)
+  }
+
+  @Test func stockOnDifferentExchangesWithSameNameAreDistinct() {
+    // Same name on two exchanges must have distinct ids — the exchange is part of identity.
+    let aud = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let lon = Instrument.stock(ticker: "BHP.L", exchange: "LSE", name: "BHP")
+    #expect(aud.id != lon.id)
+    #expect(aud != lon)
+  }
 }

@@ -154,6 +154,115 @@ struct CapitalGainsCalculatorTests {
     #expect(earlyResult.events.isEmpty)
   }
 
+  // MARK: - Multi-instrument scenarios
+
+  @Test func multipleStocks_produceIndependentGainEvents() {
+    let bhp = stockInstrument("BHP")
+    let cba = stockInstrument("CBA")
+    let accountId = UUID()
+
+    let buyBHP = LegTransaction(
+      date: date(0),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -4000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+    let sellBHP = LegTransaction(
+      date: date(400),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: -100, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: 5000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+    let buyCBA = LegTransaction(
+      date: date(50),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -5000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: cba, quantity: 50, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+    let sellCBA = LegTransaction(
+      date: date(500),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: cba, quantity: -50, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: 7000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+
+    let result = CapitalGainsCalculator.compute(
+      transactions: [buyBHP, buyCBA, sellBHP, sellCBA],
+      profileCurrency: aud
+    )
+
+    #expect(result.events.count == 2)
+    let bhpGain = result.events.first { $0.instrument.id == "ASX:BHP" }?.gain
+    let cbaGain = result.events.first { $0.instrument.id == "ASX:CBA" }?.gain
+    #expect(bhpGain == 1000)
+    #expect(cbaGain == 2000)
+    #expect(result.totalRealizedGain == 3000)
+  }
+
+  @Test func sellingOneInstrumentDoesNotTouchCostBasisOfAnother() {
+    // If a user sells BHP, CBA cost basis must not change.
+    let bhp = stockInstrument("BHP")
+    let cba = stockInstrument("CBA")
+    let accountId = UUID()
+
+    let buyBHP = LegTransaction(
+      date: date(0),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -4000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+    let buyCBA = LegTransaction(
+      date: date(50),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -5000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: cba, quantity: 50, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+    let sellAllBHP = LegTransaction(
+      date: date(400),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: -100, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: 5000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+
+    let result = CapitalGainsCalculator.compute(
+      transactions: [buyBHP, buyCBA, sellAllBHP],
+      profileCurrency: aud
+    )
+
+    // Only BHP sale produces an event; CBA is still held.
+    #expect(result.events.count == 1)
+    #expect(result.events[0].instrument.id == "ASX:BHP")
+    #expect(result.events[0].gain == 1000)
+  }
+
   // MARK: - Helpers
 
   private func stockInstrument(_ name: String) -> Instrument {

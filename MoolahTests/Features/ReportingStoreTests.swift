@@ -225,4 +225,112 @@ struct ReportingStoreTests {
     #expect(summary.discountedLongTermGain == 500)
     #expect(summary.netCapitalGain == 500)
   }
+
+  // MARK: - Multi-instrument profit/loss
+
+  @Test @MainActor func loadProfitLoss_aggregatesMultipleStockInstruments() async throws {
+    let (backend, container) = try TestBackend.create()
+    let account = Account(
+      id: UUID(), name: "Brokerage", type: .bank, instrument: .defaultTestInstrument
+    )
+    TestBackend.seed(accounts: [account], in: container)
+
+    let bhp = Instrument(
+      id: "ASX:BHP", kind: .stock, name: "BHP", decimals: 0,
+      ticker: "BHP.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
+    let cba = Instrument(
+      id: "ASX:CBA", kind: .stock, name: "CBA", decimals: 0,
+      ticker: "CBA.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
+
+    let buyBHP = Transaction(
+      date: Date(),
+      payee: "Buy BHP",
+      legs: [
+        TransactionLeg(
+          accountId: account.id, instrument: aud, quantity: -4000, type: .transfer),
+        TransactionLeg(
+          accountId: account.id, instrument: bhp, quantity: 100, type: .transfer),
+      ]
+    )
+    let buyCBA = Transaction(
+      date: Date(),
+      payee: "Buy CBA",
+      legs: [
+        TransactionLeg(
+          accountId: account.id, instrument: aud, quantity: -5000, type: .transfer),
+        TransactionLeg(
+          accountId: account.id, instrument: cba, quantity: 50, type: .transfer),
+      ]
+    )
+    TestBackend.seed(transactions: [buyBHP, buyCBA], in: container)
+
+    // BHP worth $50/share → 5000, CBA worth $120/share → 6000
+    let service = FixedConversionService(rates: ["ASX:BHP": 50, "ASX:CBA": 120])
+    let store = ReportingStore(
+      transactionRepository: backend.transactions,
+      conversionService: service,
+      profileCurrency: aud
+    )
+
+    await store.loadProfitLoss()
+
+    #expect(store.profitLoss.count == 2)
+    let bhpPL = try #require(store.profitLoss.first { $0.instrument.id == "ASX:BHP" })
+    let cbaPL = try #require(store.profitLoss.first { $0.instrument.id == "ASX:CBA" })
+    #expect(bhpPL.totalInvested == 4000)
+    #expect(bhpPL.currentValue == 5000)
+    #expect(cbaPL.totalInvested == 5000)
+    #expect(cbaPL.currentValue == 6000)
+  }
+
+  @Test @MainActor func loadProfitLoss_tracksStockAndCryptoInSamePortfolio() async throws {
+    let (backend, container) = try TestBackend.create()
+    let account = Account(
+      id: UUID(), name: "Hybrid", type: .bank, instrument: .defaultTestInstrument
+    )
+    TestBackend.seed(accounts: [account], in: container)
+
+    let bhp = Instrument(
+      id: "ASX:BHP", kind: .stock, name: "BHP", decimals: 0,
+      ticker: "BHP.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
+    )
+
+    let txns = [
+      Transaction(
+        date: Date(),
+        payee: "Buy BHP",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: aud, quantity: -4000, type: .transfer),
+          TransactionLeg(
+            accountId: account.id, instrument: bhp, quantity: 100, type: .transfer),
+        ]),
+      Transaction(
+        date: Date(),
+        payee: "Buy ETH",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: aud, quantity: -2000, type: .transfer),
+          TransactionLeg(
+            accountId: account.id, instrument: eth,
+            quantity: Decimal(string: "1.0")!, type: .transfer),
+        ]),
+    ]
+    TestBackend.seed(transactions: txns, in: container)
+
+    let service = FixedConversionService(rates: ["ASX:BHP": 50, eth.id: 2500])
+    let store = ReportingStore(
+      transactionRepository: backend.transactions,
+      conversionService: service,
+      profileCurrency: aud
+    )
+
+    await store.loadProfitLoss()
+
+    #expect(store.profitLoss.count == 2)
+    let kinds = Set(store.profitLoss.map { $0.instrument.kind })
+    #expect(kinds == [.stock, .cryptoToken])
+  }
 }

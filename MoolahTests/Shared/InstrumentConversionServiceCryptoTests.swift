@@ -143,4 +143,59 @@ struct InstrumentConversionServiceCryptoTests {
     #expect(result == expected)
   }
 
+  // MARK: - Precision across kinds
+
+  @Test func cryptoToFiatPreservesHighPrecisionMultiplication() async throws {
+    // Verify that high-decimal crypto quantities preserve precision through conversion.
+    let service = makeService(
+      cryptoPrices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]],
+      providerMappings: [
+        CryptoProviderMapping(
+          instrumentId: "1:native", coingeckoId: "ethereum",
+          cryptocompareSymbol: "ETH", binanceSymbol: "ETHUSDT"
+        )
+      ]
+    )
+    let result = try await service.convert(
+      Decimal(string: "0.00012345")!, from: eth, to: usd, on: date("2026-04-10")
+    )
+    let expected = Decimal(string: "0.00012345")! * Decimal(string: "1623.45")!
+    #expect(result == expected)
+  }
+
+  @Test func zeroDecimalFiatToCryptoGoesThroughUsd() async throws {
+    // JPY has 0 decimals; route JPY → USD → ETH should not throw for fiat bridging.
+    let jpy = Instrument.fiat(code: "JPY")
+    let service = makeService(
+      cryptoPrices: ["1:native": ["2026-04-10": Decimal(string: "2000.00")!]],
+      exchangeRates: ["2026-04-10": ["JPY": Decimal(string: "150.00")!]],
+      providerMappings: [
+        CryptoProviderMapping(
+          instrumentId: "1:native", coingeckoId: "ethereum",
+          cryptocompareSymbol: "ETH", binanceSymbol: "ETHUSDT"
+        )
+      ]
+    )
+    // 300000 JPY → USD → ETH. 1 USD = 150 JPY, so 300000 JPY = 2000 USD; 1 ETH = 2000 USD → 1 ETH.
+    let result = try await service.convert(
+      Decimal(300_000), from: jpy, to: eth, on: date("2026-04-10")
+    )
+    #expect(result == Decimal(1))
+  }
+
+  @Test func missingCryptoPriceThrows() async throws {
+    let service = makeService(
+      cryptoPrices: [:],
+      providerMappings: [
+        CryptoProviderMapping(
+          instrumentId: "1:native", coingeckoId: "ethereum",
+          cryptocompareSymbol: "ETH", binanceSymbol: "ETHUSDT"
+        )
+      ]
+    )
+    await #expect(throws: (any Error).self) {
+      _ = try await service.convert(Decimal(1), from: eth, to: usd, on: date("2026-04-10"))
+    }
+  }
+
 }

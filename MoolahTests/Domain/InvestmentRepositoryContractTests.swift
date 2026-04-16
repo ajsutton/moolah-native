@@ -407,6 +407,43 @@ struct InvestmentRepositoryContractTests {
     #expect(result.count == 1)
     #expect(result[0].balance.quantity == Decimal(string: "1500.00")!)
   }
+
+  // MARK: - Multi-instrument investment values
+
+  @Test("Investment values preserve USD instrument through round-trip")
+  func testSetAndFetchValueInUSD() async throws {
+    let repo = makeCloudKitInvestmentRepository(instrument: .USD)
+    let date = makeDate(year: 2024, month: 3, day: 15)
+    let accountId = UUID()
+    let amount = InstrumentAmount(quantity: Decimal(5000), instrument: .USD)
+    try await repo.setValue(accountId: accountId, date: date, value: amount)
+
+    let page = try await repo.fetchValues(accountId: accountId, page: 0, pageSize: 10)
+    #expect(page.values.count == 1)
+    #expect(page.values[0].value.instrument == .USD)
+    #expect(page.values[0].value.quantity == Decimal(5000))
+  }
+
+  @Test("Setting values on separate repositories with different instruments does not conflate them")
+  func testDistinctInstrumentsAcrossRepositories() async throws {
+    let audRepo = makeCloudKitInvestmentRepository(instrument: .AUD)
+    let usdRepo = makeCloudKitInvestmentRepository(instrument: .USD)
+    let date = makeDate(year: 2024, month: 3, day: 15)
+    let audAccount = UUID()
+    let usdAccount = UUID()
+
+    try await audRepo.setValue(
+      accountId: audAccount, date: date,
+      value: InstrumentAmount(quantity: Decimal(1000), instrument: .AUD))
+    try await usdRepo.setValue(
+      accountId: usdAccount, date: date,
+      value: InstrumentAmount(quantity: Decimal(650), instrument: .USD))
+
+    let audPage = try await audRepo.fetchValues(accountId: audAccount, page: 0, pageSize: 10)
+    let usdPage = try await usdRepo.fetchValues(accountId: usdAccount, page: 0, pageSize: 10)
+    #expect(audPage.values.first?.value.instrument == .AUD)
+    #expect(usdPage.values.first?.value.instrument == .USD)
+  }
 }
 
 // MARK: - Factory Helpers

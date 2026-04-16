@@ -976,6 +976,86 @@ struct TransactionDraftTests {
     #expect(draft.showFromAccount == false)
   }
 
+  // MARK: - Multi-instrument toTransaction
+
+  @Test func toTransactionExpenseUsesAccountInstrument() throws {
+    let usdAccount = makeAccount(id: accountA, instrument: .USD)
+    let accounts = makeAccounts([usdAccount])
+    let draft = TransactionDraft(
+      payee: "Coffee", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1, isCustom: false,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .expense, accountId: accountA, amountText: "4.50",
+          categoryId: nil, categoryText: "", earmarkId: nil)
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+
+    let tx = try #require(draft.toTransaction(id: UUID(), accounts: accounts))
+    #expect(tx.legs.count == 1)
+    #expect(tx.legs[0].instrument == .USD)
+    #expect(tx.legs[0].quantity == Decimal(string: "-4.50")!)
+  }
+
+  @Test func toTransactionCrossCurrencyTransferProducesMixedInstrumentLegs() throws {
+    // Transfer from AUD account to USD account — leg 0 is AUD, leg 1 is USD.
+    // Display convention negates transfer legs, so amountText is the negated quantity.
+    let audAccount = makeAccount(id: accountA, instrument: .AUD)
+    let usdAccount = makeAccount(id: accountB, instrument: .USD)
+    let accounts = makeAccounts([audAccount, usdAccount])
+    let draft = TransactionDraft(
+      payee: "FX", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1, isCustom: false,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .transfer, accountId: accountA, amountText: "1000.00",
+          categoryId: nil, categoryText: "", earmarkId: nil),
+        TransactionDraft.LegDraft(
+          type: .transfer, accountId: accountB, amountText: "-650.00",
+          categoryId: nil, categoryText: "", earmarkId: nil),
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+
+    let tx = try #require(draft.toTransaction(id: UUID(), accounts: accounts))
+    #expect(tx.legs.count == 2)
+    #expect(tx.legs[0].instrument == .AUD)
+    #expect(tx.legs[0].quantity == Decimal(string: "-1000.00")!)
+    #expect(tx.legs[1].instrument == .USD)
+    #expect(tx.legs[1].quantity == Decimal(string: "650.00")!)
+    #expect(tx.isTransfer)
+    // Cross-currency transfer quantities don't negate, so NOT isSimple.
+    #expect(!tx.isSimple)
+  }
+
+  @Test func toTransactionStockTradeLegHasStockInstrument() throws {
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let audAccount = makeAccount(id: accountA, instrument: .AUD)
+    let stockAccount = makeAccount(id: accountB, instrument: bhp)
+    let accounts = makeAccounts([audAccount, stockAccount])
+    let draft = TransactionDraft(
+      payee: "Buy BHP", date: Date(), notes: "",
+      isRepeating: false, recurPeriod: nil, recurEvery: 1, isCustom: true,
+      legDrafts: [
+        TransactionDraft.LegDraft(
+          type: .transfer, accountId: accountA, amountText: "6345.00",
+          categoryId: nil, categoryText: "", earmarkId: nil),
+        TransactionDraft.LegDraft(
+          type: .transfer, accountId: accountB, amountText: "-150",
+          categoryId: nil, categoryText: "", earmarkId: nil),
+      ],
+      relevantLegIndex: 0, viewingAccountId: nil
+    )
+
+    let tx = try #require(draft.toTransaction(id: UUID(), accounts: accounts))
+    #expect(tx.legs.count == 2)
+    #expect(tx.legs[0].instrument == .AUD)
+    #expect(tx.legs[0].quantity == Decimal(string: "-6345.00")!)
+    #expect(tx.legs[1].instrument == bhp)
+    #expect(tx.legs[1].quantity == Decimal(150))
+  }
+
   // MARK: - eligibleToAccounts
 
   @Test func eligibleToAccountsFiltersByCurrency() {

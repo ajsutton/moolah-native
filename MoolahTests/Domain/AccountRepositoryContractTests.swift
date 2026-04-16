@@ -167,6 +167,119 @@ struct AccountRepositoryContractTests {
 
   // MARK: - REORDERING TESTS
 
+  // MARK: - Multi-instrument persistence
+
+  @Test("round-trips a USD fiat account with USD opening balance")
+  func testRoundTripUSDFiatAccount() async throws {
+    let repository = makeCloudKitAccountRepository()
+    let account = Account(name: "US Checking", type: .bank, instrument: .USD)
+    let openingBalance = InstrumentAmount(
+      quantity: Decimal(string: "750.00")!, instrument: .USD)
+
+    _ = try await repository.create(account, openingBalance: openingBalance)
+
+    let all = try await repository.fetchAll()
+    let fetched = try #require(all.first { $0.id == account.id })
+    #expect(fetched.instrument == .USD)
+    #expect(fetched.instrument.id == "USD")
+    #expect(fetched.instrument.kind == .fiatCurrency)
+    let usdPosition = fetched.positions.first { $0.instrument == .USD }
+    #expect(usdPosition?.quantity == Decimal(string: "750.00")!)
+  }
+
+  @Test("round-trips a stock account preserving exchange and ticker")
+  func testRoundTripStockAccount() async throws {
+    let repository = makeCloudKitAccountRepository()
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let account = Account(name: "BHP Shares", type: .investment, instrument: bhp)
+    let openingBalance = InstrumentAmount(quantity: Decimal(150), instrument: bhp)
+
+    _ = try await repository.create(account, openingBalance: openingBalance)
+
+    let all = try await repository.fetchAll()
+    let fetched = try #require(all.first { $0.id == account.id })
+    #expect(fetched.instrument == bhp)
+    #expect(fetched.instrument.id == "ASX:BHP")
+    #expect(fetched.instrument.kind == .stock)
+    #expect(fetched.instrument.ticker == "BHP.AX")
+    #expect(fetched.instrument.exchange == "ASX")
+    let bhpPosition = fetched.positions.first { $0.instrument == bhp }
+    #expect(bhpPosition?.quantity == Decimal(150))
+  }
+
+  @Test("round-trips a crypto account preserving chainId and contractAddress")
+  func testRoundTripCryptoAccount() async throws {
+    let repository = makeCloudKitAccountRepository()
+    let usdc = Instrument.crypto(
+      chainId: 1,
+      contractAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      symbol: "USDC", name: "USD Coin", decimals: 6
+    )
+    let account = Account(name: "Wallet", type: .investment, instrument: usdc)
+    let openingBalance = InstrumentAmount(
+      quantity: Decimal(string: "2500.000000")!, instrument: usdc)
+
+    _ = try await repository.create(account, openingBalance: openingBalance)
+
+    let all = try await repository.fetchAll()
+    let fetched = try #require(all.first { $0.id == account.id })
+    #expect(fetched.instrument == usdc)
+    #expect(fetched.instrument.kind == .cryptoToken)
+    #expect(fetched.instrument.chainId == 1)
+    #expect(fetched.instrument.contractAddress == "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+    #expect(fetched.instrument.decimals == 6)
+    let position = fetched.positions.first { $0.instrument == usdc }
+    #expect(position?.quantity == Decimal(string: "2500.000000")!)
+  }
+
+  @Test("accounts with distinct instruments coexist and keep their own instrument")
+  func testMultipleAccountsWithDifferentInstruments() async throws {
+    let repository = makeCloudKitAccountRepository()
+    let audAccount = Account(
+      id: UUID(), name: "AUD Bank", type: .bank, instrument: .AUD)
+    let usdAccount = Account(
+      id: UUID(), name: "USD Bank", type: .bank, instrument: .USD)
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let stockAccount = Account(
+      id: UUID(), name: "Brokerage", type: .investment, instrument: bhp)
+
+    _ = try await repository.create(
+      audAccount, openingBalance: InstrumentAmount(quantity: Decimal(1), instrument: .AUD))
+    _ = try await repository.create(
+      usdAccount, openingBalance: InstrumentAmount(quantity: Decimal(1), instrument: .USD))
+    _ = try await repository.create(
+      stockAccount, openingBalance: InstrumentAmount(quantity: Decimal(1), instrument: bhp))
+
+    let all = try await repository.fetchAll()
+    let aud = try #require(all.first { $0.id == audAccount.id })
+    let usd = try #require(all.first { $0.id == usdAccount.id })
+    let stock = try #require(all.first { $0.id == stockAccount.id })
+    #expect(aud.instrument == .AUD)
+    #expect(usd.instrument == .USD)
+    #expect(stock.instrument == bhp)
+    // Distinct instrument ids ensure records didn't collapse together.
+    #expect(Set([aud.instrument.id, usd.instrument.id, stock.instrument.id]).count == 3)
+  }
+
+  @Test("updates preserve non-default instrument")
+  func testUpdatePreservesNonDefaultInstrument() async throws {
+    let repository = makeCloudKitAccountRepository()
+    let account = Account(name: "EUR Wallet", type: .bank, instrument: .fiat(code: "EUR"))
+    _ = try await repository.create(account, openingBalance: nil)
+
+    let accounts = try await repository.fetchAll()
+    var toUpdate = try #require(accounts.first { $0.id == account.id })
+    toUpdate.name = "Renamed EUR Wallet"
+    let updated = try await repository.update(toUpdate)
+
+    #expect(updated.instrument.id == "EUR")
+    #expect(updated.instrument.kind == .fiatCurrency)
+    let refetched = try await repository.fetchAll()
+    let final = try #require(refetched.first { $0.id == account.id })
+    #expect(final.instrument.id == "EUR")
+    #expect(final.name == "Renamed EUR Wallet")
+  }
+
   @Test("updates positions")
   func testUpdatesPositions() async throws {
     let repository = makeCloudKitWithPositionedAccounts()

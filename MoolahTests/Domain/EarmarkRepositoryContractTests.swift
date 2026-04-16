@@ -100,6 +100,78 @@ struct EarmarkRepositoryContractTests {
     }
   }
 
+  // MARK: - Multi-instrument persistence
+
+  @Test("round-trips earmark with USD savings goal")
+  func testRoundTripEarmarkWithUSDSavingsGoal() async throws {
+    let repository = makeCloudKitEarmarkRepository()
+    var earmark = Earmark(name: "US Travel Fund", instrument: .USD)
+    earmark.savingsGoal = InstrumentAmount(
+      quantity: Decimal(string: "5000.00")!, instrument: .USD)
+
+    _ = try await repository.create(earmark)
+
+    let all = try await repository.fetchAll()
+    let fetched = try #require(all.first { $0.id == earmark.id })
+    #expect(fetched.instrument == .USD)
+    #expect(fetched.savingsGoal?.instrument == .USD)
+    #expect(fetched.savingsGoal?.quantity == Decimal(string: "5000.00")!)
+  }
+
+  @Test("budget items preserve their own instrument distinct from earmark instrument")
+  func testBudgetItemsPreserveInstrumentDistinctFromEarmark() async throws {
+    let repository = makeCloudKitEarmarkRepository(initialEarmarks: [
+      Earmark(name: "Mixed Fund", instrument: .AUD)
+    ])
+    let earmarks = try await repository.fetchAll()
+    let earmarkId = earmarks[0].id
+    let audCategory = UUID()
+    let usdCategory = UUID()
+
+    let audAmount = InstrumentAmount(
+      quantity: Decimal(string: "100.00")!, instrument: .AUD)
+    let usdAmount = InstrumentAmount(
+      quantity: Decimal(string: "80.00")!, instrument: .USD)
+
+    try await repository.setBudget(
+      earmarkId: earmarkId, categoryId: audCategory, amount: audAmount)
+    try await repository.setBudget(
+      earmarkId: earmarkId, categoryId: usdCategory, amount: usdAmount)
+
+    let fetched = try await repository.fetchBudget(earmarkId: earmarkId)
+    #expect(fetched.count == 2)
+    let audItem = try #require(fetched.first { $0.categoryId == audCategory })
+    let usdItem = try #require(fetched.first { $0.categoryId == usdCategory })
+    #expect(audItem.amount.instrument == .AUD)
+    #expect(audItem.amount.quantity == Decimal(string: "100.00")!)
+    #expect(usdItem.amount.instrument == .USD)
+    #expect(usdItem.amount.quantity == Decimal(string: "80.00")!)
+  }
+
+  @Test("updating budget item changes amount without changing instrument")
+  func testUpdatingBudgetItemPreservesInstrument() async throws {
+    let repository = makeCloudKitEarmarkRepository(initialEarmarks: [
+      Earmark(name: "Travel", instrument: .AUD)
+    ])
+    let earmarks = try await repository.fetchAll()
+    let earmarkId = earmarks[0].id
+    let categoryId = UUID()
+
+    let usdFirst = InstrumentAmount(
+      quantity: Decimal(string: "100.00")!, instrument: .USD)
+    let usdSecond = InstrumentAmount(
+      quantity: Decimal(string: "250.00")!, instrument: .USD)
+
+    try await repository.setBudget(earmarkId: earmarkId, categoryId: categoryId, amount: usdFirst)
+    try await repository.setBudget(earmarkId: earmarkId, categoryId: categoryId, amount: usdSecond)
+
+    let fetched = try await repository.fetchBudget(earmarkId: earmarkId)
+    let entries = fetched.filter { $0.categoryId == categoryId }
+    #expect(entries.count == 1)
+    #expect(entries[0].amount.instrument == .USD)
+    #expect(entries[0].amount.quantity == Decimal(string: "250.00")!)
+  }
+
   @Test("setBudget twice updates existing entry, not creates duplicate")
   func testBudgetUpsertSemantics() async throws {
     let repository = makeCloudKitEarmarkRepository(initialEarmarks: [

@@ -156,4 +156,94 @@ struct AccountStoreConversionTests {
     await store.load()
     #expect(store.positions(for: UUID()).isEmpty)
   }
+
+  @Test func mixedKindAccountShowsFiatAndStockPositions() async throws {
+    let accountId = UUID()
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let account = Account(
+      id: accountId, name: "Sharesight", type: .investment,
+      instrument: .defaultTestInstrument)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: container)
+
+    let audTx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD,
+          quantity: Decimal(string: "5000.00")!, type: .openingBalance)
+      ]
+    )
+    let stockTx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: Decimal(100),
+          type: .transfer)
+      ]
+    )
+    TestBackend.seed(transactions: [audTx, stockTx], in: container)
+
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: backend.conversionService,
+      targetInstrument: .defaultTestInstrument
+    )
+    await store.load()
+
+    let positions = store.positions(for: accountId)
+    #expect(positions.count == 2)
+    #expect(positions.contains { $0.instrument == .AUD })
+    #expect(positions.contains { $0.instrument == bhp })
+  }
+
+  @Test func mixedKindAccountShowsFiatStockAndCryptoPositions() async throws {
+    let accountId = UUID()
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
+    )
+    let account = Account(
+      id: accountId, name: "Portfolio", type: .investment,
+      instrument: .defaultTestInstrument)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: container)
+
+    let txns = [
+      Transaction(
+        date: Date(),
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: .AUD,
+            quantity: Decimal(string: "1000.00")!, type: .openingBalance)
+        ]),
+      Transaction(
+        date: Date(),
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: bhp, quantity: Decimal(100),
+            type: .transfer)
+        ]),
+      Transaction(
+        date: Date(),
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: eth,
+            quantity: Decimal(string: "0.5")!, type: .transfer)
+        ]),
+    ]
+    TestBackend.seed(transactions: txns, in: container)
+
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: backend.conversionService,
+      targetInstrument: .defaultTestInstrument
+    )
+    await store.load()
+
+    let positions = store.positions(for: accountId)
+    #expect(positions.count == 3)
+    let kinds = Set(positions.map(\.instrument.kind))
+    #expect(kinds == [.fiatCurrency, .stock, .cryptoToken])
+  }
 }
