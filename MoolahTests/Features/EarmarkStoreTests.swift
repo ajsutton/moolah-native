@@ -10,6 +10,7 @@ struct EarmarkStoreTests {
   @Test func testPopulatesFromRepository() async throws {
     let earmark = Earmark(
       name: "Holiday Fund",
+      instrument: Instrument.defaultTestInstrument,
       balance: InstrumentAmount(
         quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
     let (backend, container) = try TestBackend.create()
@@ -26,11 +27,13 @@ struct EarmarkStoreTests {
   @Test func testSortingByPosition() async throws {
     let e1 = Earmark(
       name: "E1",
+      instrument: Instrument.defaultTestInstrument,
       balance: InstrumentAmount(
         quantity: Decimal(10000) / 100, instrument: Instrument.defaultTestInstrument), position: 2
     )
     let e2 = Earmark(
       name: "E2",
+      instrument: Instrument.defaultTestInstrument,
       balance: InstrumentAmount(
         quantity: Decimal(20000) / 100, instrument: Instrument.defaultTestInstrument), position: 1
     )
@@ -46,39 +49,30 @@ struct EarmarkStoreTests {
     #expect(store.earmarks[1].name == "E1")
   }
 
-  @Test func testCalculatesTotalBalance() async throws {
-    let earmarks = [
-      Earmark(
-        name: "Holiday",
-        balance: InstrumentAmount(
-          quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument)),
-      Earmark(
-        name: "Car Repair",
-        balance: InstrumentAmount(
-          quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument)),
-      Earmark(
-        name: "Hidden",
-        balance: InstrumentAmount(
-          quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument),
-        isHidden: true),
-    ]
+  @Test func testEarmarkInstrumentSetCorrectly() async throws {
+    let e1 = Earmark(
+      name: "Holiday",
+      instrument: Instrument.defaultTestInstrument,
+      balance: InstrumentAmount(
+        quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
+    let e2 = Earmark(
+      name: "Car Repair",
+      instrument: Instrument.defaultTestInstrument,
+      balance: InstrumentAmount(
+        quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument))
     let accountId = UUID()
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
-      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container,
-    )
+      accounts: [Account(id: accountId, name: "Test", type: .bank)], in: container)
     TestBackend.seedWithTransactions(
-      earmarks: earmarks, accountId: accountId, in: container)
+      earmarks: [e1, e2], accountId: accountId, in: container)
     let store = EarmarkStore(repository: backend.earmarks)
 
     await store.load()
 
-    // Total should only include visible earmarks
-    #expect(
-      store.totalBalance
-        == InstrumentAmount(
-          quantity: Decimal(80000) / 100, instrument: Instrument.defaultTestInstrument)
-    )
+    #expect(store.earmarks.count == 2)
+    #expect(store.earmarks[0].instrument == Instrument.defaultTestInstrument)
+    #expect(store.earmarks[1].instrument == Instrument.defaultTestInstrument)
   }
 
   // MARK: - applyDelta (position-based)
@@ -94,6 +88,7 @@ struct EarmarkStoreTests {
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday Fund",
+          instrument: instrument,
           balance: InstrumentAmount(quantity: 500, instrument: instrument),
           saved: InstrumentAmount(quantity: 500, instrument: instrument),
           spent: InstrumentAmount(quantity: 0, instrument: instrument))
@@ -124,6 +119,7 @@ struct EarmarkStoreTests {
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday Fund",
+          instrument: instrument,
           balance: InstrumentAmount(quantity: 500, instrument: instrument),
           saved: InstrumentAmount(quantity: 500, instrument: instrument),
           spent: InstrumentAmount(quantity: 0, instrument: instrument))
@@ -155,11 +151,13 @@ struct EarmarkStoreTests {
       earmarks: [
         Earmark(
           id: earmark1Id, name: "Holiday",
+          instrument: instrument,
           balance: InstrumentAmount(quantity: 500, instrument: instrument),
           saved: InstrumentAmount(quantity: 500, instrument: instrument),
           spent: InstrumentAmount(quantity: 0, instrument: instrument)),
         Earmark(
           id: earmark2Id, name: "Car",
+          instrument: instrument,
           balance: InstrumentAmount(quantity: 300, instrument: instrument),
           saved: InstrumentAmount(quantity: 300, instrument: instrument),
           spent: InstrumentAmount(quantity: 0, instrument: instrument)),
@@ -203,6 +201,7 @@ struct EarmarkStoreTests {
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday Fund",
+          instrument: instrument,
           balance: InstrumentAmount(quantity: 500, instrument: instrument),
           saved: InstrumentAmount(quantity: 500, instrument: instrument),
           spent: InstrumentAmount(quantity: 0, instrument: instrument))
@@ -229,6 +228,7 @@ struct EarmarkStoreTests {
       earmarks: [
         Earmark(
           id: earmarkId, name: "Holiday Fund",
+          instrument: instrument,
           balance: InstrumentAmount(quantity: 500, instrument: instrument),
           saved: InstrumentAmount(quantity: 500, instrument: instrument),
           spent: InstrumentAmount(quantity: 0, instrument: instrument))
@@ -406,10 +406,12 @@ struct EarmarkStoreTests {
   func hiddenEarmarksExcluded() async throws {
     let visible = Earmark(
       name: "Visible",
+      instrument: Instrument.defaultTestInstrument,
       balance: InstrumentAmount(
         quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
     let hidden = Earmark(
       name: "Hidden",
+      instrument: Instrument.defaultTestInstrument,
       balance: InstrumentAmount(
         quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument),
       isHidden: true)
@@ -432,10 +434,12 @@ struct EarmarkStoreTests {
   func hiddenEarmarksIncluded() async throws {
     let visible = Earmark(
       name: "Visible",
+      instrument: Instrument.defaultTestInstrument,
       balance: InstrumentAmount(
         quantity: Decimal(50000) / 100, instrument: Instrument.defaultTestInstrument))
     let hidden = Earmark(
       name: "Hidden",
+      instrument: Instrument.defaultTestInstrument,
       balance: InstrumentAmount(
         quantity: Decimal(30000) / 100, instrument: Instrument.defaultTestInstrument),
       isHidden: true)
