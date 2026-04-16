@@ -147,7 +147,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     var dailyBalances: [Date: DailyBalance] = [:]
     var currentBalance: InstrumentAmount = .zero(instrument: instrument)
     var currentInvestments: InstrumentAmount = .zero(instrument: instrument)
-    var currentEarmarks: InstrumentAmount = .zero(instrument: instrument)
+    var perEarmarkAmounts: [UUID: InstrumentAmount] = [:]
 
     // If 'after' is provided, compute starting balances up to that date
     if let after {
@@ -158,7 +158,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
           txn,
           to: &currentBalance,
           investments: &currentInvestments,
-          earmarks: &currentEarmarks,
+          perEarmarkAmounts: &perEarmarkAmounts,
+          instrument: instrument,
           investmentAccountIds: investmentAccountIds,
           investmentTransfersOnly: false
         )
@@ -174,7 +175,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         txn,
         to: &currentBalance,
         investments: &currentInvestments,
-        earmarks: &currentEarmarks,
+        perEarmarkAmounts: &perEarmarkAmounts,
+        instrument: instrument,
         investmentAccountIds: investmentAccountIds,
         investmentTransfersOnly: true
       )
@@ -187,6 +189,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         lastDayKey = dayKey
         lastDayDate = txn.date
       }
+      let currentEarmarks = Self.clampedEarmarkTotal(perEarmarkAmounts, instrument: instrument)
       dailyBalances[dayKey] = DailyBalance(
         date: dayKey,
         balance: currentBalance,
@@ -231,7 +234,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         startDate: lastDate,
         endDate: forecastUntil,
         startingBalance: currentBalance,
-        startingEarmarks: currentEarmarks,
+        startingPerEarmarkAmounts: perEarmarkAmounts,
         startingInvestments: currentInvestments,
         investmentAccountIds: investmentAccountIds
       )
@@ -500,7 +503,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     var dailyBalances: [Date: DailyBalance] = [:]
     var currentBalance: InstrumentAmount = .zero(instrument: instrument)
     var currentInvestments: InstrumentAmount = .zero(instrument: instrument)
-    var currentEarmarks: InstrumentAmount = .zero(instrument: instrument)
+    var perEarmarkAmounts: [UUID: InstrumentAmount] = [:]
 
     // If 'after' is provided, compute starting balances up to that date.
     // Starting balance includes ALL leg types on investment accounts
@@ -512,7 +515,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
           txn,
           to: &currentBalance,
           investments: &currentInvestments,
-          earmarks: &currentEarmarks,
+          perEarmarkAmounts: &perEarmarkAmounts,
+          instrument: instrument,
           investmentAccountIds: investmentAccountIds,
           investmentTransfersOnly: false
         )
@@ -531,7 +535,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         txn,
         to: &currentBalance,
         investments: &currentInvestments,
-        earmarks: &currentEarmarks,
+        perEarmarkAmounts: &perEarmarkAmounts,
+        instrument: instrument,
         investmentAccountIds: investmentAccountIds,
         investmentTransfersOnly: true
       )
@@ -544,6 +549,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         lastComputeDayKey = dayKey
         lastComputeDayDate = txn.date
       }
+      let currentEarmarks = clampedEarmarkTotal(perEarmarkAmounts, instrument: instrument)
       dailyBalances[dayKey] = DailyBalance(
         date: dayKey,
         balance: currentBalance,
@@ -585,7 +591,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         startDate: lastDate,
         endDate: forecastUntil,
         startingBalance: currentBalance,
-        startingEarmarks: currentEarmarks,
+        startingPerEarmarkAmounts: perEarmarkAmounts,
         startingInvestments: currentInvestments,
         investmentAccountIds: investmentAccountIds
       )
@@ -772,7 +778,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     // Track positions by instrument, split by bank vs investment
     var bankPositions: [String: (quantity: Decimal, instrument: Instrument)] = [:]
     var investmentPositions: [String: (quantity: Decimal, instrument: Instrument)] = [:]
-    var earmarkPositions: [String: (quantity: Decimal, instrument: Instrument)] = [:]
+    var earmarkPositions: [UUID: [String: (quantity: Decimal, instrument: Instrument)]] = [:]
 
     for txn in sorted {
       let dayKey = calendar.startOfDay(for: txn.date)
@@ -787,8 +793,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
           bankPositions[key, default: (0, leg.instrument)].quantity += leg.quantity
         }
 
-        if leg.earmarkId != nil {
-          earmarkPositions[key, default: (0, leg.instrument)].quantity += leg.quantity
+        if let earmarkId = leg.earmarkId {
+          earmarkPositions[earmarkId, default: [:]][key, default: (0, leg.instrument)].quantity +=
+            leg.quantity
         }
       }
 
@@ -817,13 +824,17 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       }
 
       var earmarkTotal: Decimal = 0
-      for (_, pos) in earmarkPositions where pos.quantity != 0 {
-        if pos.instrument.id == instrument.id {
-          earmarkTotal += pos.quantity
-        } else {
-          earmarkTotal += try await conversionService.convert(
-            pos.quantity, from: pos.instrument, to: instrument, on: txn.date)
+      for (_, positions) in earmarkPositions {
+        var perEarmarkTotal: Decimal = 0
+        for (_, pos) in positions where pos.quantity != 0 {
+          if pos.instrument.id == instrument.id {
+            perEarmarkTotal += pos.quantity
+          } else {
+            perEarmarkTotal += try await conversionService.convert(
+              pos.quantity, from: pos.instrument, to: instrument, on: txn.date)
+          }
         }
+        earmarkTotal += max(perEarmarkTotal, 0)
       }
 
       let balance = InstrumentAmount(quantity: bankTotal, instrument: instrument)
@@ -860,10 +871,12 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     _ txn: Transaction,
     to balance: inout InstrumentAmount,
     investments: inout InstrumentAmount,
-    earmarks: inout InstrumentAmount,
+    perEarmarkAmounts: inout [UUID: InstrumentAmount],
+    instrument: Instrument,
     investmentAccountIds: Set<UUID>,
     investmentTransfersOnly: Bool = false
   ) {
+    let zero = InstrumentAmount.zero(instrument: instrument)
     for leg in txn.legs {
       // Only legs with an accountId affect account balances
       // (matching server's account_id IS NOT NULL requirement).
@@ -877,10 +890,24 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
           balance += leg.amount
         }
       }
-      if leg.earmarkId != nil {
-        earmarks += leg.amount
+      if let earmarkId = leg.earmarkId {
+        perEarmarkAmounts[earmarkId, default: zero] += leg.amount
       }
     }
+  }
+
+  /// Computes the earmarked total by clamping each earmark's balance to max(0).
+  /// Negative earmarks (e.g., investments) should not reduce the total.
+  private static func clampedEarmarkTotal(
+    _ perEarmark: [UUID: InstrumentAmount],
+    instrument: Instrument
+  ) -> InstrumentAmount {
+    var total = InstrumentAmount.zero(instrument: instrument)
+    let zero = InstrumentAmount.zero(instrument: instrument)
+    for (_, amount) in perEarmark {
+      total += max(amount, zero)
+    }
+    return total
   }
 
   private static func applyInvestmentValues(
@@ -987,7 +1014,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     startDate: Date,
     endDate: Date,
     startingBalance: InstrumentAmount,
-    startingEarmarks: InstrumentAmount,
+    startingPerEarmarkAmounts: [UUID: InstrumentAmount],
     startingInvestments: InstrumentAmount,
     investmentAccountIds: Set<UUID>
   ) -> [DailyBalance] {
@@ -1000,8 +1027,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     // Sort by date and apply to running balances
     instances.sort { $0.date < $1.date }
     var balance = startingBalance
-    var earmarks = startingEarmarks
+    var perEarmarkAmounts = startingPerEarmarkAmounts
     var investments = startingInvestments
+    let instrument = startingBalance.instrument
 
     var forecastBalances: [Date: DailyBalance] = [:]
     for instance in instances {
@@ -1009,12 +1037,14 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         instance,
         to: &balance,
         investments: &investments,
-        earmarks: &earmarks,
+        perEarmarkAmounts: &perEarmarkAmounts,
+        instrument: instrument,
         investmentAccountIds: investmentAccountIds,
         investmentTransfersOnly: true
       )
 
       let dayKey = Calendar.current.startOfDay(for: instance.date)
+      let earmarks = clampedEarmarkTotal(perEarmarkAmounts, instrument: instrument)
       forecastBalances[dayKey] = DailyBalance(
         date: dayKey,
         balance: balance,
