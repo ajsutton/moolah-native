@@ -244,6 +244,7 @@ extension EarmarkRecord: CloudKitRecordConvertible {
     let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
     record["name"] = name as CKRecordValue
+    if let instrumentId { record["instrumentId"] = instrumentId as CKRecordValue }
     record["position"] = position as CKRecordValue
     record["isHidden"] = (isHidden ? 1 : 0) as CKRecordValue
     if let savingsTarget { record["savingsTarget"] = savingsTarget as CKRecordValue }
@@ -260,6 +261,7 @@ extension EarmarkRecord: CloudKitRecordConvertible {
       id: UUID(uuidString: ckRecord.recordID.recordName) ?? UUID(),
       name: ckRecord["name"] as? String ?? "",
       position: ckRecord["position"] as? Int ?? 0,
+      instrumentId: ckRecord["instrumentId"] as? String,
       isHidden: (ckRecord["isHidden"] as? Int ?? 0) != 0,
       savingsTarget: ckRecord["savingsTarget"] as? Int64,
       savingsTargetInstrumentId: ckRecord["savingsTargetInstrumentId"] as? String,

@@ -15,6 +15,7 @@ struct EarmarkBudgetItem: Codable, Sendable, Identifiable, Hashable {
 struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
   let id: UUID
   var name: String
+  var instrument: Instrument
   var balance: InstrumentAmount
   var saved: InstrumentAmount
   var spent: InstrumentAmount
@@ -30,6 +31,7 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
   init(
     id: UUID = UUID(),
     name: String,
+    instrument: Instrument = .AUD,
     balance: InstrumentAmount = .zero(instrument: .AUD),
     saved: InstrumentAmount = .zero(instrument: .AUD),
     spent: InstrumentAmount = .zero(instrument: .AUD),
@@ -44,6 +46,7 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
   ) {
     self.id = id
     self.name = name
+    self.instrument = instrument
     self.balance = balance
     self.saved = saved
     self.spent = spent
@@ -60,6 +63,7 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
   private enum CodingKeys: String, CodingKey {
     case id
     case name
+    case instrument
     case balance
     case saved
     case spent
@@ -75,6 +79,8 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
     id = try container.decode(UUID.self, forKey: .id)
     name = try container.decode(String.self, forKey: .name)
     balance = try container.decode(InstrumentAmount.self, forKey: .balance)
+    instrument =
+      try container.decodeIfPresent(Instrument.self, forKey: .instrument) ?? balance.instrument
     saved = try container.decode(InstrumentAmount.self, forKey: .saved)
     spent = try container.decode(InstrumentAmount.self, forKey: .spent)
     positions = []
@@ -91,6 +97,7 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encode(id, forKey: .id)
     try container.encode(name, forKey: .name)
+    try container.encode(instrument, forKey: .instrument)
     try container.encode(balance, forKey: .balance)
     try container.encode(saved, forKey: .saved)
     try container.encode(spent, forKey: .spent)
@@ -103,6 +110,7 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
 
   static func == (lhs: Earmark, rhs: Earmark) -> Bool {
     lhs.id == rhs.id && lhs.name == rhs.name
+      && lhs.instrument == rhs.instrument
       && lhs.balance == rhs.balance && lhs.saved == rhs.saved && lhs.spent == rhs.spent
       && lhs.positions == rhs.positions
       && lhs.savedPositions == rhs.savedPositions
@@ -116,6 +124,7 @@ struct Earmark: Codable, Sendable, Identifiable, Hashable, Comparable {
   func hash(into hasher: inout Hasher) {
     hasher.combine(id)
     hasher.combine(name)
+    hasher.combine(instrument)
     hasher.combine(balance)
     hasher.combine(saved)
     hasher.combine(spent)
