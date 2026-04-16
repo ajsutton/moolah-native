@@ -217,6 +217,81 @@ struct AnalysisRepositoryContractTests {
     #expect(todayBalance?.availableFunds.quantity == 10)
   }
 
+  @Test("earmarked total in dailyBalances clamps negative earmarks to zero")
+  func earmarkedTotalClampsNegativeEarmarks() async throws {
+    let backend = CloudKitAnalysisTestBackend()
+    let account = Account(
+      id: UUID(),
+      name: "Checking",
+      type: .bank,
+      balance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+    )
+    _ = try await backend.accounts.create(account)
+
+    let positiveEarmark = Earmark(
+      id: UUID(),
+      name: "Holiday",
+      instrument: .defaultTestInstrument
+    )
+    _ = try await backend.earmarks.create(positiveEarmark)
+
+    let negativeEarmark = Earmark(
+      id: UUID(),
+      name: "Investments",
+      instrument: .defaultTestInstrument
+    )
+    _ = try await backend.earmarks.create(negativeEarmark)
+
+    let today = Calendar.current.startOfDay(for: Date())
+
+    // Positive earmark: +500 (5.00)
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Save for Holiday",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: 5, type: .income,
+            earmarkId: positiveEarmark.id)
+        ]))
+
+    // Negative earmark: -18950 (-189.50)
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Investment Loss",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: -189.50, type: .expense,
+            earmarkId: negativeEarmark.id)
+        ]))
+
+    // Non-earmarked income: +1000 (10.00)
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today,
+        payee: "Regular Income",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: 10, type: .income)
+        ]))
+
+    let balances = try await backend.analysis.fetchDailyBalances(after: nil, forecastUntil: nil)
+
+    let todayBalance = balances.first { Calendar.current.isDate($0.date, inSameDayAs: today) }
+    #expect(todayBalance != nil)
+
+    // Total balance = 5.00 - 189.50 + 10.00 = -174.50
+    #expect(todayBalance?.balance.quantity == -174.50)
+    // Earmarked should clamp negative earmark to 0: max(5, 0) + max(-189.50, 0) = 5.00
+    #expect(todayBalance?.earmarked.quantity == 5)
+    // Available = balance - earmarked = -174.50 - 5.00 = -179.50
+    #expect(todayBalance?.availableFunds.quantity == -179.50)
+  }
+
   @Test("daily balance + investments equals sum of current + investment account balances")
   func balanceInvariantCrossCheck() async throws {
     let backend = CloudKitAnalysisTestBackend()
