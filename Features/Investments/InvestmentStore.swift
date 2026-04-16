@@ -7,7 +7,7 @@ struct ValuedPosition: Identifiable, Sendable {
   let position: Position
   var marketValue: Decimal?  // nil if price lookup failed
 
-  var id: String { "\(position.accountId)-\(position.instrument.id)" }
+  var id: String { position.instrument.id }
 }
 
 @Observable
@@ -142,7 +142,7 @@ final class InvestmentStore {
 
       positions = quantityByInstrument.compactMap { instrument, quantity in
         guard quantity != 0 else { return nil }
-        return Position(accountId: accountId, instrument: instrument, quantity: quantity)
+        return Position(instrument: instrument, quantity: quantity)
       }.sorted { $0.instrument.name < $1.instrument.name }
     } catch {
       logger.error("Failed to load positions: \(error.localizedDescription)")

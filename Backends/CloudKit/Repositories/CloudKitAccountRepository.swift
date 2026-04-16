@@ -227,7 +227,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
         let inst = instruments[instrumentId] ?? Instrument.fiat(code: instrumentId)
         let amount = InstrumentAmount(storageValue: quantity, instrument: inst)
         positions.append(
-          Position(accountId: accountId, instrument: inst, quantity: amount.quantity))
+          Position(instrument: inst, quantity: amount.quantity))
       }
       positions.sort { $0.instrument.id < $1.instrument.id }
       if !positions.isEmpty {
@@ -313,7 +313,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
         let inst = instruments[instrumentId] ?? Instrument.fiat(code: instrumentId)
         let amount = InstrumentAmount(storageValue: quantity, instrument: inst)
         positions.append(
-          Position(accountId: accountId, instrument: inst, quantity: amount.quantity))
+          Position(instrument: inst, quantity: amount.quantity))
       }
       positions.sort { $0.instrument.id < $1.instrument.id }
       if !positions.isEmpty {
