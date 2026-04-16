@@ -148,6 +148,97 @@ struct ProfitLossCalculatorTests {
     #expect(results.isEmpty)
   }
 
+  // MARK: - Multi-instrument portfolios
+
+  @Test func multipleStocks_eachGetsOwnRow() async throws {
+    let bhp = stockInstrument("BHP")
+    let cba = stockInstrument("CBA")
+    let accountId = UUID()
+
+    let buyBHP = LegTransaction(
+      date: date(0),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -4000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+    let buyCBA = LegTransaction(
+      date: date(0),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -5000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: cba, quantity: 50, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+
+    // BHP $50/share (100 * 50 = 5000). CBA $120/share (50 * 120 = 6000).
+    let service = FixedConversionService(rates: ["ASX:BHP": 50, "ASX:CBA": 120])
+    let results = try await ProfitLossCalculator.compute(
+      transactions: [buyBHP, buyCBA],
+      profileCurrency: aud,
+      conversionService: service,
+      asOfDate: date(365)
+    )
+
+    #expect(results.count == 2)
+    let bhpPL = results.first { $0.instrument.id == "ASX:BHP" }
+    let cbaPL = results.first { $0.instrument.id == "ASX:CBA" }
+    #expect(bhpPL?.unrealizedGain == 1000)
+    #expect(cbaPL?.unrealizedGain == 1000)
+  }
+
+  @Test func portfolioMixesStockAndCrypto() async throws {
+    let bhp = stockInstrument("BHP")
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
+    )
+    let accountId = UUID()
+
+    let buyBHP = LegTransaction(
+      date: date(0),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -4000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+    let buyETH = LegTransaction(
+      date: date(0),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -2000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: eth,
+          quantity: Decimal(string: "1.0")!, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+
+    let service = FixedConversionService(rates: ["ASX:BHP": 50, eth.id: 2500])
+    let results = try await ProfitLossCalculator.compute(
+      transactions: [buyBHP, buyETH],
+      profileCurrency: aud,
+      conversionService: service,
+      asOfDate: date(365)
+    )
+
+    #expect(results.count == 2)
+    let kinds = Set(results.map { $0.instrument.kind })
+    #expect(kinds == [.stock, .cryptoToken])
+    // Each row is independent; gains aggregate separately.
+    let bhpPL = results.first { $0.instrument.kind == .stock }
+    let ethPL = results.first { $0.instrument.kind == .cryptoToken }
+    #expect(bhpPL?.unrealizedGain == 1000)
+    #expect(ethPL?.unrealizedGain == 500)
+  }
+
   // MARK: - Helpers
 
   private func stockInstrument(_ name: String) -> Instrument {

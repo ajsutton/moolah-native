@@ -466,4 +466,60 @@ struct InvestmentStoreTests {
     let result = mergeChartData(values: [], balances: [], period: .all)
     #expect(result.isEmpty)
   }
+
+  // MARK: - Multi-instrument manual investment values
+
+  @Test("Set value preserves USD instrument through store round-trip")
+  func testSetValueWithUSDInstrument() async throws {
+    let accountId = UUID()
+    let (backend, _) = try TestBackend.create()
+    let store = InvestmentStore(repository: backend.investments)
+    let date = makeDate(year: 2024, month: 3, day: 15)
+    let amount = InstrumentAmount(quantity: Decimal(5000), instrument: .USD)
+
+    await store.setValue(accountId: accountId, date: date, value: amount)
+
+    #expect(store.values.count == 1)
+    #expect(store.values[0].value.instrument == .USD)
+    #expect(store.values[0].value.quantity == Decimal(5000))
+  }
+
+  @Test("Different accounts can have values in different instruments")
+  func testValuesWithDifferentInstrumentsPerAccount() async throws {
+    let audAccount = UUID()
+    let usdAccount = UUID()
+    let (backend, container) = try TestBackend.create()
+    let date = makeDate(year: 2024, month: 3, day: 15)
+    // seed(investmentValues:) uses a single instrument per call, so seed each account separately
+    // with its own instrument so the stored records retain the account's real currency.
+    TestBackend.seed(
+      investmentValues: [
+        audAccount: [
+          InvestmentValue(
+            date: date,
+            value: InstrumentAmount(quantity: Decimal(1000), instrument: .AUD))
+        ]
+      ],
+      in: container,
+      instrument: .AUD)
+    TestBackend.seed(
+      investmentValues: [
+        usdAccount: [
+          InvestmentValue(
+            date: date,
+            value: InstrumentAmount(quantity: Decimal(650), instrument: .USD))
+        ]
+      ],
+      in: container,
+      instrument: .USD)
+    let store = InvestmentStore(repository: backend.investments)
+
+    await store.loadValues(accountId: audAccount)
+    #expect(store.values.count == 1)
+    #expect(store.values[0].value.instrument == .AUD)
+
+    await store.loadValues(accountId: usdAccount)
+    #expect(store.values.count == 1)
+    #expect(store.values[0].value.instrument == .USD)
+  }
 }

@@ -387,4 +387,55 @@ struct BudgetLineItemMergeTests {
 
     #expect(result.first?.categoryName == "Unknown")
   }
+
+  // MARK: - Multi-instrument budget items
+
+  @Test func budgetItemInForeignInstrumentPreservesInstrumentInLineItem() {
+    let catId = UUID()
+    let categories = Categories(from: [Category(id: catId, name: "Travel")])
+    let budgetItems = [
+      EarmarkBudgetItem(
+        categoryId: catId,
+        amount: InstrumentAmount(quantity: Decimal(500), instrument: .USD))
+    ]
+
+    let result = BudgetLineItem.buildLineItems(
+      budgetItems: budgetItems,
+      categoryBalances: [:],
+      categories: categories
+    )
+
+    #expect(result.count == 1)
+    #expect(result[0].budgeted.instrument == .USD)
+    #expect(result[0].budgeted.quantity == Decimal(500))
+  }
+
+  @Test func multipleBudgetItemsAcrossInstrumentsEachRetainTheirOwnInstrument() {
+    let audCat = UUID()
+    let usdCat = UUID()
+    let categories = Categories(from: [
+      Category(id: audCat, name: "Groceries"),
+      Category(id: usdCat, name: "Subscriptions"),
+    ])
+    let budgetItems = [
+      EarmarkBudgetItem(
+        categoryId: audCat,
+        amount: InstrumentAmount(quantity: Decimal(200), instrument: .AUD)),
+      EarmarkBudgetItem(
+        categoryId: usdCat,
+        amount: InstrumentAmount(quantity: Decimal(50), instrument: .USD)),
+    ]
+
+    let result = BudgetLineItem.buildLineItems(
+      budgetItems: budgetItems,
+      categoryBalances: [:],
+      categories: categories
+    )
+
+    #expect(result.count == 2)
+    let audLine = result.first { $0.id == audCat }
+    let usdLine = result.first { $0.id == usdCat }
+    #expect(audLine?.budgeted.instrument == .AUD)
+    #expect(usdLine?.budgeted.instrument == .USD)
+  }
 }

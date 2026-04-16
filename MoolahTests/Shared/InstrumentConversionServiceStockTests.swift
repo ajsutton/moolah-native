@@ -87,6 +87,41 @@ struct InstrumentConversionServiceStockTests {
     }
   }
 
+  @Test func foreignFiatToStockListedInDifferentFiatThrowsSymmetrically() async throws {
+    // fiatToStock is not a supported conversion direction regardless of source fiat.
+    let today = Date()
+    let service = makeService()
+
+    await #expect(throws: (any Error).self) {
+      _ = try await service.convert(Decimal(1000), from: usd, to: bhp, on: today)
+    }
+  }
+
+  @Test func stockInNonPrimaryFiatConvertsViaIntermediate() async throws {
+    // Simulate a USD-listed stock converting to USD directly (no FX required).
+    let today = Date()
+    let ds = dateString(today)
+    let service = makeService(
+      stockPrices: [
+        "AAPL": StockPriceResponse(instrument: .USD, prices: [ds: Decimal(string: "185.50")!])
+      ]
+    )
+
+    let result = try await service.convert(Decimal(10), from: aapl, to: usd, on: today)
+    #expect(result == Decimal(string: "1855.00")!)
+  }
+
+  @Test func zeroDecimalFiatToStockAlsoRejected() async throws {
+    // JPY has 0 decimals; request still throws (direction not supported) without crashing.
+    let today = Date()
+    let jpy = Instrument.fiat(code: "JPY")
+    let service = makeService()
+
+    await #expect(throws: (any Error).self) {
+      _ = try await service.convert(Decimal(100000), from: jpy, to: bhp, on: today)
+    }
+  }
+
   @Test func stockPriceFetchFailureThrows() async throws {
     let today = Date()
     let stockClient = FixedStockPriceClient(shouldFail: true)

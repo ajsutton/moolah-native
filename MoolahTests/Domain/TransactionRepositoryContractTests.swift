@@ -266,6 +266,165 @@ struct TransactionRepositoryContractTests {
     #expect(created.isTransfer)
   }
 
+  // MARK: - Multi-instrument persistence
+
+  @Test("currency conversion transfer persists legs in distinct instruments")
+  func testCurrencyConversionPersistsLegsInDistinctInstruments() async throws {
+    let repository = makeCloudKitTransactionRepository()
+    let accountId = UUID()
+    let date = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 15))!
+    let conversion = Transaction(
+      date: date,
+      payee: "FX",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD,
+          quantity: Decimal(string: "-1000.00")!, type: .transfer),
+        TransactionLeg(
+          accountId: accountId, instrument: .USD,
+          quantity: Decimal(string: "650.00")!, type: .transfer),
+      ]
+    )
+
+    let created = try await repository.create(conversion)
+    #expect(created.legs.count == 2)
+
+    let page = try await repository.fetch(
+      filter: TransactionFilter(accountId: accountId),
+      page: 0,
+      pageSize: 10
+    )
+    let fetched = try #require(page.transactions.first(where: { $0.id == created.id }))
+    #expect(fetched.legs.count == 2)
+    let audLeg = try #require(fetched.legs.first(where: { $0.instrument == .AUD }))
+    let usdLeg = try #require(fetched.legs.first(where: { $0.instrument == .USD }))
+    #expect(audLeg.quantity == Decimal(string: "-1000.00")!)
+    #expect(usdLeg.quantity == Decimal(string: "650.00")!)
+  }
+
+  @Test("stock trade transaction persists fiat and stock legs")
+  func testStockTradePersistsFiatAndStockLegs() async throws {
+    let repository = makeCloudKitTransactionRepository()
+    let accountId = UUID()
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let trade = Transaction(
+      date: Date(),
+      payee: "Buy 150 BHP",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD,
+          quantity: Decimal(string: "-6345.00")!, type: .transfer),
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: Decimal(150), type: .transfer),
+      ]
+    )
+
+    let created = try await repository.create(trade)
+    #expect(created.legs.count == 2)
+
+    let page = try await repository.fetch(
+      filter: TransactionFilter(accountId: accountId),
+      page: 0,
+      pageSize: 10
+    )
+    let fetched = try #require(page.transactions.first(where: { $0.id == created.id }))
+    let audLeg = try #require(fetched.legs.first(where: { $0.instrument == .AUD }))
+    let stockLeg = try #require(fetched.legs.first(where: { $0.instrument.kind == .stock }))
+    #expect(audLeg.quantity == Decimal(string: "-6345.00")!)
+    #expect(stockLeg.instrument == bhp)
+    #expect(stockLeg.quantity == Decimal(150))
+  }
+
+  @Test("three-leg trade with fee in third instrument persists each leg")
+  func testThreeLegTradeWithForeignFeePersistsAllLegs() async throws {
+    let repository = makeCloudKitTransactionRepository()
+    let accountId = UUID()
+    let feeCategoryId = UUID()
+    let aapl = Instrument.stock(ticker: "AAPL", exchange: "NASDAQ", name: "Apple")
+    // Sell USD, buy AAPL, fee in AUD — three distinct instruments across legs.
+    let trade = Transaction(
+      date: Date(),
+      payee: "Buy 10 Apple",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .USD,
+          quantity: Decimal(string: "-1855.00")!, type: .transfer),
+        TransactionLeg(
+          accountId: accountId, instrument: aapl, quantity: Decimal(10), type: .transfer),
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD,
+          quantity: Decimal(string: "-7.50")!, type: .expense,
+          categoryId: feeCategoryId),
+      ]
+    )
+
+    let created = try await repository.create(trade)
+    #expect(created.legs.count == 3)
+
+    let page = try await repository.fetch(
+      filter: TransactionFilter(accountId: accountId),
+      page: 0,
+      pageSize: 10
+    )
+    let fetched = try #require(page.transactions.first(where: { $0.id == created.id }))
+    #expect(fetched.legs.count == 3)
+    let instrumentIds = Set(fetched.legs.map { $0.instrument.id })
+    #expect(instrumentIds == [Instrument.USD.id, aapl.id, Instrument.AUD.id])
+    let feeLeg = try #require(fetched.legs.first(where: { $0.type == .expense }))
+    #expect(feeLeg.instrument == .AUD)
+    #expect(feeLeg.categoryId == feeCategoryId)
+  }
+
+  @Test("filter by accountId returns transactions regardless of leg instrument")
+  func testFilterByAccountReturnsMultiInstrumentTransactions() async throws {
+    let accountId = UUID()
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let initial: [Transaction] = [
+      Transaction(
+        date: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 5))!,
+        payee: "Opening AUD",
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: .AUD,
+            quantity: Decimal(string: "10000.00")!, type: .openingBalance)
+        ]),
+      Transaction(
+        date: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 10))!,
+        payee: "FX",
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: .AUD,
+            quantity: Decimal(string: "-1000.00")!, type: .transfer),
+          TransactionLeg(
+            accountId: accountId, instrument: .USD,
+            quantity: Decimal(string: "650.00")!, type: .transfer),
+        ]),
+      Transaction(
+        date: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 15))!,
+        payee: "Buy 100 BHP",
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: .AUD,
+            quantity: Decimal(string: "-4230.00")!, type: .transfer),
+          TransactionLeg(
+            accountId: accountId, instrument: bhp, quantity: Decimal(100), type: .transfer),
+        ]),
+    ]
+    let repository = makeCloudKitTransactionRepository(initialTransactions: initial)
+
+    let page = try await repository.fetch(
+      filter: TransactionFilter(accountId: accountId),
+      page: 0,
+      pageSize: 50
+    )
+    #expect(page.transactions.count == 3)
+    // Union of instruments across all legs on this account must include fiat + stock.
+    let allInstruments = Set(page.transactions.flatMap { $0.legs.map(\.instrument.id) })
+    #expect(allInstruments.contains(Instrument.AUD.id))
+    #expect(allInstruments.contains(Instrument.USD.id))
+    #expect(allInstruments.contains(bhp.id))
+  }
+
   @Test("transactions are sorted by date descending")
   func testTransactionsSortedByDateDesc() async throws {
     let repository = makeCloudKitTransactionRepository(initialTransactions: makeTestTransactions())
