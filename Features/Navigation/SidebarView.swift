@@ -170,7 +170,7 @@ struct SidebarView: View {
       }
     }
     .listStyle(.sidebar)
-    .navigationTitle("Moolah")
+    .navigationTitle("")
     .focusedSceneValue(\.showHiddenAccounts, $showHidden)
     .onChange(of: showHidden) { _, newValue in
       accountStore.showHidden = newValue
