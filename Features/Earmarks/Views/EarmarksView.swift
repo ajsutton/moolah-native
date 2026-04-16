@@ -110,12 +110,16 @@ struct EarmarksView: View {
             Text(earmark.name)
               .font(.headline)
             Spacer()
-            InstrumentAmountView(amount: earmark.balance, font: .headline)
+            InstrumentAmountView(
+              amount: earmarkStore.convertedBalance(for: earmark.id)
+                ?? .zero(instrument: earmark.instrument), font: .headline)
           }
 
           HStack(spacing: 12) {
             Label {
-              InstrumentAmountView(amount: earmark.saved, font: .caption)
+              InstrumentAmountView(
+                amount: earmarkStore.convertedSaved(for: earmark.id)
+                  ?? .zero(instrument: earmark.instrument), font: .caption)
             } icon: {
               Image(systemName: "arrow.up")
                 .foregroundStyle(.green)
@@ -123,7 +127,9 @@ struct EarmarksView: View {
             .font(.caption)
 
             Label {
-              InstrumentAmountView(amount: earmark.spent, font: .caption)
+              InstrumentAmountView(
+                amount: earmarkStore.convertedSpent(for: earmark.id)
+                  ?? .zero(instrument: earmark.instrument), font: .caption)
             } icon: {
               Image(systemName: "arrow.down")
                 .foregroundStyle(.red)
@@ -133,7 +139,7 @@ struct EarmarksView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-          "\(earmark.name), balance \(earmark.balance.formatted)"
+          "\(earmark.name), balance \(earmarkStore.convertedBalance(for: earmark.id)?.formatted ?? "loading")"
         )
         .tag(earmark)
         .contextMenu {

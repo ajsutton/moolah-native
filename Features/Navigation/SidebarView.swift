@@ -67,7 +67,9 @@ struct SidebarView: View {
           ForEach(earmarkStore.visibleEarmarks) { earmark in
             NavigationLink(value: SidebarSelection.earmark(earmark.id)) {
               SidebarRowView(
-                icon: "bookmark.fill", name: earmark.name, amount: earmark.balance,
+                icon: "bookmark.fill", name: earmark.name,
+                amount: earmarkStore.convertedBalance(for: earmark.id)
+                  ?? .zero(instrument: earmark.instrument),
                 isSelected: selection == .earmark(earmark.id))
             }
           }
@@ -272,9 +274,7 @@ struct SidebarView: View {
             name: "Asset", type: .asset,
             balance: InstrumentAmount(quantity: 5000, instrument: .AUD)))
         _ = try? await backend.earmarks.create(
-          Earmark(
-            name: "Holiday Fund",
-            balance: InstrumentAmount(quantity: 1500, instrument: .AUD)))
+          Earmark(name: "Holiday Fund"))
 
         await accountStore.load()
         await earmarkStore.load()

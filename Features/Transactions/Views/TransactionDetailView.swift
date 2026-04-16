@@ -698,7 +698,7 @@ struct TransactionDetailView: View {
   private var earmarkInstrumentId: String? {
     draft.relevantLeg.earmarkId
       .flatMap { earmarks.by(id: $0) }?
-      .balance.instrument.id
+      .instrument.id
   }
 
   // MARK: - Actions

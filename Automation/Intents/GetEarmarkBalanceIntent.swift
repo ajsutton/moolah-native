@@ -19,6 +19,6 @@ struct GetEarmarkBalanceIntent: AppIntent {
     }
     let resolved = try service.resolveEarmark(
       named: earmark.name, profileIdentifier: profile.id.uuidString)
-    return .result(value: resolved.balance.formatted)
+    return .result(value: InstrumentAmount.zero(instrument: resolved.instrument).formatted)
   }
 }

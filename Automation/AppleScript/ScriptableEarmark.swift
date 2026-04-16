@@ -16,7 +16,7 @@
     init(earmark: Earmark, profileName: String) {
       _uniqueID = earmark.id.uuidString
       _name = earmark.name
-      _balance = earmark.balance.doubleValue
+      _balance = 0
       _targetAmount = earmark.savingsGoal?.doubleValue ?? 0
       _profileName = profileName
       super.init()

@@ -86,18 +86,29 @@ struct EarmarkDetailView: View {
   private var overviewPanel: some View {
     VStack(spacing: 12) {
       HStack(spacing: 24) {
-        summaryItem(label: "Balance", amount: earmark.balance)
+        summaryItem(
+          label: "Balance",
+          amount: earmarkStore.convertedBalance(for: earmark.id)
+            ?? .zero(instrument: earmark.instrument))
         Divider().frame(maxHeight: 32)
-        summaryItem(label: "Saved", amount: earmark.saved)
+        summaryItem(
+          label: "Saved",
+          amount: earmarkStore.convertedSaved(for: earmark.id)
+            ?? .zero(instrument: earmark.instrument))
         Divider().frame(maxHeight: 32)
-        summaryItem(label: "Spent", amount: earmark.spent)
+        summaryItem(
+          label: "Spent",
+          amount: earmarkStore.convertedSpent(for: earmark.id)
+            ?? .zero(instrument: earmark.instrument))
       }
 
       if let goal = earmark.savingsGoal, goal.isPositive {
         VStack(spacing: 4) {
+          let balance =
+            earmarkStore.convertedBalance(for: earmark.id) ?? .zero(instrument: earmark.instrument)
           let progress =
-            earmark.balance.isPositive
-            ? Double(truncating: (earmark.balance.quantity / goal.quantity) as NSDecimalNumber)
+            balance.isPositive
+            ? Double(truncating: (balance.quantity / goal.quantity) as NSDecimalNumber)
             : 0.0
 
           ProgressView(value: min(progress, 1.0)) {
@@ -105,7 +116,7 @@ struct EarmarkDetailView: View {
               Text("Savings Goal")
                 .font(.caption)
               Spacer()
-              InstrumentAmountView(amount: earmark.balance)
+              InstrumentAmountView(amount: balance)
                 .font(.caption)
               Text("of")
                 .font(.caption)
@@ -195,9 +206,6 @@ struct EarmarkDetailView: View {
   let earmark = Earmark(
     id: earmarkId,
     name: "Holiday Fund",
-    balance: InstrumentAmount(quantity: 2500, instrument: .AUD),
-    saved: InstrumentAmount(quantity: 3000, instrument: .AUD),
-    spent: InstrumentAmount(quantity: 500, instrument: .AUD),
     savingsGoal: InstrumentAmount(quantity: 5000, instrument: .AUD),
     savingsStartDate: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1)),
     savingsEndDate: Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 31))

@@ -17,7 +17,7 @@ struct EarmarkEntity: AppEntity {
   init(from earmark: Earmark) {
     self.id = earmark.id
     self.name = earmark.name
-    self.balance = earmark.balance.doubleValue
+    self.balance = 0
   }
 }
 

@@ -125,17 +125,6 @@ struct EditEarmarkSheet: View {
           }
         }
 
-        Section("Current Values") {
-          LabeledContent("Balance") {
-            InstrumentAmountView(amount: earmark.balance)
-          }
-          LabeledContent("Saved") {
-            InstrumentAmountView(amount: earmark.saved)
-          }
-          LabeledContent("Spent") {
-            InstrumentAmountView(amount: earmark.spent)
-          }
-        }
       }
       .formStyle(.grouped)
       .navigationTitle("Edit Earmark")
