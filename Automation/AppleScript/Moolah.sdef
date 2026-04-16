@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
+<dictionary title="Moolah Terminology">
+
+  <suite name="Standard Suite" code="????" description="Common classes and commands for all applications.">
+
+    <command name="count" code="corecnte" description="Return the number of elements of a particular type within an object.">
+      <cocoa class="NSCountCommand"/>
+      <access-group identifier="*"/>
+      <direct-parameter type="specifier" description="The objects to be counted."/>
+      <parameter name="each" code="kocl" type="type" optional="yes" description="The type of object to count.">
+        <cocoa key="ObjectClass"/>
+      </parameter>
+      <result type="integer" description="The count."/>
+    </command>
+
+    <command name="exists" code="coredoex" description="Verify that an object exists.">
+      <cocoa class="NSExistsCommand"/>
+      <access-group identifier="*"/>
+      <direct-parameter type="any" description="The object(s) to check."/>
+      <result type="boolean" description="Did the object(s) exist?"/>
+    </command>
+
+    <class name="application" code="capp" description="The Moolah application.">
+      <cocoa class="NSApplication"/>
+      <element type="profile" access="r">
+        <cocoa key="scriptableProfiles"/>
+      </element>
+    </class>
+
+  </suite>
+
+  <suite name="Moolah Suite" code="Mool" description="Moolah-specific classes and commands.">
+
+    <!-- MARK: - Classes -->
+
+    <class name="profile" code="Prof" description="A financial profile." plural="profiles">
+      <cocoa class="Moolah.ScriptableProfile"/>
+      <property name="id" code="ID  " type="text" access="r" description="The unique identifier of the profile.">
+        <cocoa key="uniqueID"/>
+      </property>
+      <property name="name" code="pnam" type="text" access="r" description="The name of the profile.">
+        <cocoa key="name"/>
+      </property>
+      <property name="currency" code="Mcur" type="text" access="r" description="The currency code of the profile.">
+        <cocoa key="currencyCode"/>
+      </property>
+      <element type="account" access="r">
+        <cocoa key="scriptableAccounts"/>
+      </element>
+      <element type="transaction" access="r">
+        <cocoa key="scriptableTransactions"/>
+      </element>
+      <element type="earmark" access="r">
+        <cocoa key="scriptableEarmarks"/>
+      </element>
+      <element type="category" access="r">
+        <cocoa key="scriptableCategories"/>
+      </element>
+    </class>
+
+    <class name="account" code="Acct" description="A financial account." plural="accounts">
+      <cocoa class="Moolah.ScriptableAccount"/>
+      <property name="id" code="ID  " type="text" access="r" description="The unique identifier of the account.">
+        <cocoa key="uniqueID"/>
+      </property>
+      <property name="name" code="pnam" type="text" access="r" description="The name of the account.">
+        <cocoa key="name"/>
+      </property>
+      <property name="account type" code="Maty" type="text" access="r" description="The type of account (bank, cc, asset, investment).">
+        <cocoa key="accountType"/>
+      </property>
+      <property name="balance" code="Mbal" type="real" access="r" description="The current balance of the account.">
+        <cocoa key="balance"/>
+      </property>
+      <property name="investment value" code="Mivl" type="real" access="r" description="The investment value of the account (0 if not an investment account).">
+        <cocoa key="investmentValue"/>
+      </property>
+      <property name="hidden" code="Mhid" type="boolean" access="r" description="Whether the account is hidden.">
+        <cocoa key="isHidden"/>
+      </property>
+    </class>
+
+    <class name="transaction" code="Txn " description="A financial transaction." plural="transactions">
+      <cocoa class="Moolah.ScriptableTransaction"/>
+      <property name="id" code="ID  " type="text" access="r" description="The unique identifier of the transaction.">
+        <cocoa key="uniqueID"/>
+      </property>
+      <property name="date" code="Mdat" type="date" access="r" description="The date of the transaction.">
+        <cocoa key="date"/>
+      </property>
+      <property name="payee" code="Mpay" type="text" access="r" description="The payee of the transaction.">
+        <cocoa key="payee"/>
+      </property>
+      <property name="notes" code="Mnot" type="text" access="r" description="Notes for the transaction.">
+        <cocoa key="notes"/>
+      </property>
+      <property name="transaction type" code="Mtty" type="text" access="r" description="The type of transaction (income, expense, transfer, openingBalance).">
+        <cocoa key="transactionType"/>
+      </property>
+      <property name="amount" code="Mamt" type="real" access="r" description="The total amount of the transaction.">
+        <cocoa key="amount"/>
+      </property>
+      <property name="scheduled" code="Msch" type="boolean" access="r" description="Whether the transaction is scheduled.">
+        <cocoa key="isScheduled"/>
+      </property>
+      <element type="leg" access="r">
+        <cocoa key="scriptableLegs"/>
+      </element>
+    </class>
+
+    <class name="leg" code="TLeg" description="A transaction leg." plural="legs">
+      <cocoa class="Moolah.ScriptableLeg"/>
+      <property name="account name" code="Mlan" type="text" access="r" description="The name of the account for this leg.">
+        <cocoa key="accountName"/>
+      </property>
+      <property name="amount" code="Mamt" type="real" access="r" description="The amount of this leg.">
+        <cocoa key="amount"/>
+      </property>
+      <property name="category name" code="Mlcn" type="text" access="r" description="The name of the category for this leg.">
+        <cocoa key="categoryName"/>
+      </property>
+      <property name="type" code="Mltp" type="text" access="r" description="The type of this leg (income, expense, transfer, openingBalance).">
+        <cocoa key="legType"/>
+      </property>
+    </class>
+
+    <class name="earmark" code="Emrk" description="An earmarked fund." plural="earmarks">
+      <cocoa class="Moolah.ScriptableEarmark"/>
+      <property name="id" code="ID  " type="text" access="r" description="The unique identifier of the earmark.">
+        <cocoa key="uniqueID"/>
+      </property>
+      <property name="name" code="pnam" type="text" access="r" description="The name of the earmark.">
+        <cocoa key="name"/>
+      </property>
+      <property name="balance" code="Mbal" type="real" access="r" description="The current balance of the earmark.">
+        <cocoa key="balance"/>
+      </property>
+      <property name="target amount" code="Mtgt" type="real" access="r" description="The savings target amount.">
+        <cocoa key="targetAmount"/>
+      </property>
+    </class>
+
+    <class name="category" code="Catg" description="A transaction category." plural="categories">
+      <cocoa class="Moolah.ScriptableCategory"/>
+      <property name="id" code="ID  " type="text" access="r" description="The unique identifier of the category.">
+        <cocoa key="uniqueID"/>
+      </property>
+      <property name="name" code="pnam" type="text" access="r" description="The name of the category.">
+        <cocoa key="name"/>
+      </property>
+      <property name="parent name" code="Mprn" type="text" access="r" description="The name of the parent category, or empty string if top-level.">
+        <cocoa key="parentName"/>
+      </property>
+    </class>
+
+    <!-- MARK: - Commands -->
+
+    <command name="create account" code="Moolcrac" description="Create a new account in a profile.">
+      <cocoa class="Moolah.CreateAccountCommand"/>
+      <direct-parameter type="specifier" description="The profile to create the account in."/>
+      <parameter name="name" code="Cnam" type="text" description="The name of the account.">
+        <cocoa key="name"/>
+      </parameter>
+      <parameter name="type" code="Ctyp" type="text" description="The account type (bank, cc, asset, investment).">
+        <cocoa key="type"/>
+      </parameter>
+      <result type="account" description="The created account."/>
+    </command>
+
+    <command name="create transaction" code="Moolcrtx" description="Create a new transaction in a profile.">
+      <cocoa class="Moolah.CreateTransactionCommand"/>
+      <direct-parameter type="specifier" description="The profile to create the transaction in."/>
+      <parameter name="with payee" code="Cpay" type="text" description="The payee for the transaction.">
+        <cocoa key="withPayee"/>
+      </parameter>
+      <parameter name="amount" code="Camt" type="real" description="The amount in the profile's currency.">
+        <cocoa key="amount"/>
+      </parameter>
+      <parameter name="account" code="Cacc" type="text" description="The account name for the transaction.">
+        <cocoa key="account"/>
+      </parameter>
+      <parameter name="category" code="Ccat" type="text" optional="yes" description="The category name for the transaction.">
+        <cocoa key="category"/>
+      </parameter>
+      <parameter name="on date" code="Cdte" type="date" optional="yes" description="The date of the transaction (defaults to today).">
+        <cocoa key="onDate"/>
+      </parameter>
+      <parameter name="notes" code="Cnts" type="text" optional="yes" description="Notes for the transaction.">
+        <cocoa key="notes"/>
+      </parameter>
+      <result type="transaction" description="The created transaction."/>
+    </command>
+
+    <command name="create earmark" code="Moolcrem" description="Create a new earmark in a profile.">
+      <cocoa class="Moolah.CreateEarmarkCommand"/>
+      <direct-parameter type="specifier" description="The profile to create the earmark in."/>
+      <parameter name="name" code="Cnam" type="text" description="The name of the earmark.">
+        <cocoa key="name"/>
+      </parameter>
+      <parameter name="target" code="Ctgt" type="real" optional="yes" description="The savings target amount.">
+        <cocoa key="target"/>
+      </parameter>
+      <result type="earmark" description="The created earmark."/>
+    </command>
+
+    <command name="create category" code="Moolcrca" description="Create a new category in a profile.">
+      <cocoa class="Moolah.CreateCategoryCommand"/>
+      <direct-parameter type="specifier" description="The profile to create the category in."/>
+      <parameter name="name" code="Cnam" type="text" description="The name of the category.">
+        <cocoa key="name"/>
+      </parameter>
+      <parameter name="parent" code="Cpar" type="text" optional="yes" description="The name of the parent category.">
+        <cocoa key="parent"/>
+      </parameter>
+      <result type="category" description="The created category."/>
+    </command>
+
+    <command name="delete" code="Mooldelt" description="Delete an account, transaction, earmark, or category.">
+      <cocoa class="Moolah.DeleteCommand"/>
+      <direct-parameter type="specifier" description="The object to delete."/>
+    </command>
+
+    <command name="pay" code="Moolpays" description="Pay a scheduled transaction.">
+      <cocoa class="Moolah.PayScheduledCommand"/>
+      <direct-parameter type="specifier" description="The scheduled transaction to pay."/>
+      <result type="transaction" description="The paid transaction."/>
+    </command>
+
+    <command name="refresh" code="Moolrefr" description="Refresh all data for a profile.">
+      <cocoa class="Moolah.RefreshCommand"/>
+      <direct-parameter type="specifier" optional="yes" description="The profile to refresh."/>
+    </command>
+
+    <command name="navigate to" code="Moolnavt" description="Navigate to an object in the UI.">
+      <cocoa class="Moolah.NavigateCommand"/>
+      <direct-parameter type="specifier" description="The object to navigate to."/>
+    </command>
+
+    <command name="net worth" code="Moolnetw" description="Get the net worth for a profile.">
+      <cocoa class="Moolah.NetWorthCommand"/>
+      <direct-parameter type="specifier" description="The profile."/>
+      <result type="real" description="The net worth value."/>
+    </command>
+
+  </suite>
+
+</dictionary>

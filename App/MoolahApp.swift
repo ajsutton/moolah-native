@@ -73,6 +73,7 @@ struct MoolahApp: App {
   private let logger = Logger(subsystem: "com.moolah.app", category: "BackgroundSync")
   @State private var pendingNavigation: PendingNavigation?
   #if os(macOS)
+    @NSApplicationDelegateAdaptor(ScriptingBridge.self) var scriptingBridge
     @Environment(\.openWindow) private var openWindow
     private let backupManager: StoreBackupManager
     @State private var sessionManager: SessionManager
@@ -152,6 +153,11 @@ struct MoolahApp: App {
       store.onProfileRemoved = { [weak sessionManager] profileID in
         sessionManager?.removeSession(for: profileID)
       }
+
+      // Configure AppleScript scripting context
+      let automationService = AutomationService(sessionManager: sessionManager)
+      ScriptingContext.automationService = automationService
+      ScriptingContext.sessionManager = sessionManager
     #endif
   }
 
