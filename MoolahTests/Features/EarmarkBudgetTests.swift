@@ -17,7 +17,9 @@ struct EarmarkBudgetTests {
       TestBackend.seedBudget(
         earmarkId: earmarkId, items: items, in: container)
     }
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
     await store.load()
     return (store, backend)
   }
@@ -47,7 +49,9 @@ struct EarmarkBudgetTests {
 
   @Test func testLoadBudgetHandlesError() async throws {
     let (backend, _) = try TestBackend.create()
-    let store = EarmarkStore(repository: backend.earmarks, targetInstrument: .defaultTestInstrument)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
     // Loading budget for nonexistent earmark still returns empty
     await store.loadBudget(earmarkId: UUID())
     #expect(store.budgetItems.isEmpty)

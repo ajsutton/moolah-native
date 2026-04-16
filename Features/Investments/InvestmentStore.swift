@@ -31,13 +31,13 @@ final class InvestmentStore {
 
   private let repository: InvestmentRepository
   private let transactionRepository: TransactionRepository?
-  private let conversionService: (any InstrumentConversionService)?
+  private let conversionService: any InstrumentConversionService
   private let logger = Logger(subsystem: "com.moolah.app", category: "InvestmentStore")
 
   init(
     repository: InvestmentRepository,
     transactionRepository: TransactionRepository? = nil,
-    conversionService: (any InstrumentConversionService)? = nil
+    conversionService: any InstrumentConversionService
   ) {
     self.repository = repository
     self.transactionRepository = transactionRepository
@@ -157,11 +157,6 @@ final class InvestmentStore {
 
   /// Valuate all loaded positions using current market prices.
   func valuatePositions(profileCurrency: Instrument, on date: Date) async {
-    guard let conversionService else {
-      valuedPositions = positions.map { ValuedPosition(position: $0, marketValue: nil) }
-      return
-    }
-
     var valued: [ValuedPosition] = []
     var total: Decimal = 0
 

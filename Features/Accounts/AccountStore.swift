@@ -17,14 +17,14 @@ final class AccountStore {
   private(set) var investmentValues: [UUID: InstrumentAmount] = [:]
 
   private let repository: AccountRepository
-  private let conversionService: (any InstrumentConversionService)?
+  private let conversionService: any InstrumentConversionService
   private let targetInstrument: Instrument
   private let logger = Logger(subsystem: "com.moolah.app", category: "AccountStore")
   private var conversionTask: Task<Void, Never>?
 
   init(
     repository: AccountRepository,
-    conversionService: (any InstrumentConversionService)? = nil,
+    conversionService: any InstrumentConversionService,
     targetInstrument: Instrument
   ) {
     self.repository = repository
@@ -135,10 +135,6 @@ final class AccountStore {
   func computeConvertedTotal(for accountList: [Account], in target: Instrument) async throws
     -> InstrumentAmount
   {
-    guard let conversionService else {
-      return accountList.reduce(.zero(instrument: target)) { $0 + balance(for: $1.id) }
-    }
-
     var total = InstrumentAmount.zero(instrument: target)
     let date = Date()
 
@@ -159,9 +155,6 @@ final class AccountStore {
 
   /// Compute converted total for investment accounts.
   func computeConvertedInvestmentTotal(in target: Instrument) async throws -> InstrumentAmount {
-    guard let conversionService else {
-      return investmentTotal
-    }
     var total = InstrumentAmount.zero(instrument: target)
     let date = Date()
     for account in investmentAccounts {

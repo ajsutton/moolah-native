@@ -16,7 +16,10 @@ struct EarmarkRowView: View {
 
 #Preview {
   let (backend, _) = PreviewBackend.create()
-  let earmarkStore = EarmarkStore(repository: backend.earmarks, targetInstrument: .AUD)
+  let earmarkStore = EarmarkStore(
+    repository: backend.earmarks,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD)
 
   List {
     EarmarkRowView(

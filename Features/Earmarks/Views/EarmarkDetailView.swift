@@ -212,7 +212,10 @@ struct EarmarkDetailView: View {
     savingsEndDate: Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 31))
   )
   let (backend, _) = PreviewBackend.create()
-  let earmarkStore = EarmarkStore(repository: backend.earmarks, targetInstrument: .AUD)
+  let earmarkStore = EarmarkStore(
+    repository: backend.earmarks,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD)
   let store = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,

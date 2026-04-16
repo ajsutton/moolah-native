@@ -148,7 +148,8 @@ struct ExportImportIntegrationTests {
     let cloudBackend = CloudKitBackend(
       modelContainer: freshContainer,
       instrument: instrument,
-      profileLabel: "Test Profile"
+      profileLabel: "Test Profile",
+      conversionService: FixedConversionService()
     )
 
     let accounts = try await cloudBackend.accounts.fetchAll()
