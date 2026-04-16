@@ -16,6 +16,7 @@ struct EarmarkDTO: Codable {
     Earmark(
       id: id.uuid,
       name: name,
+      instrument: instrument,
       balance: InstrumentAmount(quantity: Decimal(balance) / 100, instrument: instrument),
       saved: InstrumentAmount(quantity: Decimal(saved) / 100, instrument: instrument),
       spent: InstrumentAmount(quantity: Decimal(spent) / 100, instrument: instrument),

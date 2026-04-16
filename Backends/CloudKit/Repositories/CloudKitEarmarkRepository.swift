@@ -33,6 +33,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       return try records.map { record in
         let totals = try computeEarmarkPositions(for: record.id, instruments: instruments)
         return record.toDomain(
+          defaultInstrument: instrument,
           balance: totals.balance, saved: totals.saved, spent: totals.spent,
           positions: totals.positions, savedPositions: totals.savedPositions,
           spentPositions: totals.spentPositions
