@@ -126,6 +126,20 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
       && b.earmarkId == nil
       && a.accountId != b.accountId
   }
+
+  /// Whether this transaction is a simple cross-currency transfer: exactly two
+  /// transfer legs with different accounts and different instruments. Unlike
+  /// `isSimple`, this does not require amounts to negate (since exchange rates
+  /// mean the quantities will differ).
+  var isSimpleCrossCurrencyTransfer: Bool {
+    guard legs.count == 2 else { return false }
+    let a = legs[0]
+    let b = legs[1]
+    guard a.type == .transfer && b.type == .transfer else { return false }
+    guard let aAcct = a.accountId, let bAcct = b.accountId, aAcct != bAcct else { return false }
+    guard b.categoryId == nil && b.earmarkId == nil else { return false }
+    return a.instrument != b.instrument
+  }
 }
 
 extension Array where Element: Hashable {
