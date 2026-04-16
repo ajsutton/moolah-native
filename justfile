@@ -14,17 +14,22 @@ lint:
 lint-fix:
     swift-format format -i -r . --configuration .swift-format
 
-# Run the full test suite on iOS Simulator and macOS (in parallel)
-test: generate
-    bash scripts/test.sh
+# FILTERS restrict the run to specific tests: each is a class (e.g.
+# TransactionStoreTests) or class/method (e.g. TransactionStoreTests/testFoo);
+# the platform's test target prefix (MoolahTests_iOS or MoolahTests_macOS) is
+# added automatically. Pass a fully-qualified TestTarget/Class form to pin a
+# filter to one platform's target.
+# Run the test suite on iOS Simulator and macOS in parallel (optional FILTERS).
+test *FILTERS: generate
+    bash scripts/test.sh all {{ FILTERS }}
 
-# Run tests on macOS only
-test-mac: generate
-    bash scripts/test.sh mac
+# Run tests on macOS only. See `test` for FILTERS syntax.
+test-mac *FILTERS: generate
+    bash scripts/test.sh mac {{ FILTERS }}
 
-# Run tests on iOS Simulator only
-test-ios: generate
-    bash scripts/test.sh ios
+# Run tests on iOS Simulator only. See `test` for FILTERS syntax.
+test-ios *FILTERS: generate
+    bash scripts/test.sh ios {{ FILTERS }}
 
 # Run performance benchmarks (macOS only)
 benchmark *FILTER: generate

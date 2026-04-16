@@ -15,8 +15,17 @@ COMMON_ARGS=(
     'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox'
 )
 
-# Which platforms to test: "all" (default), "ios", or "mac"
+# Usage: test.sh [all|ios|mac] [FILTER ...]
+# FILTERs are passed to xcodebuild as -only-testing: flags. Each filter may be:
+#   - A class name or class/method, e.g. "TransactionStoreTests" or
+#     "TransactionStoreTests/testFoo". The platform's test target prefix
+#     ("MoolahTests_iOS" or "MoolahTests_macOS") is added automatically.
+#   - A fully-qualified "TestTarget/Class[/method]" form (starting with
+#     "MoolahTests_"), which is passed through unchanged. Use this to pin a
+#     filter to a specific platform's target when running both platforms.
 PLATFORM="${1:-all}"
+shift || true
+FILTERS=("$@")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -24,20 +33,44 @@ PLATFORM="${1:-all}"
 
 IOS_SIMULATOR="$(bash "$REPO_ROOT/scripts/find-simulator.sh")"
 
+# Print the -only-testing: flags for the given platform's test target, one per
+# line, honouring the global FILTERS array. Prints nothing when FILTERS is empty.
+print_filter_flags() {
+    local target="$1"
+    local f
+    for f in ${FILTERS[@]+"${FILTERS[@]}"}; do
+        if [[ "$f" == MoolahTests_* ]]; then
+            printf -- '-only-testing:%s\n' "$f"
+        else
+            printf -- '-only-testing:%s/%s\n' "$target" "$f"
+        fi
+    done
+}
+
 run_ios() {
     echo "==> Testing iOS Simulator ($IOS_SIMULATOR)…"
+    local filter_flags=()
+    while IFS= read -r line; do
+        filter_flags+=("$line")
+    done < <(print_filter_flags "MoolahTests_iOS")
     xcodebuild test "${COMMON_ARGS[@]}" \
         -derivedDataPath "$REPO_ROOT/.DerivedData-ios" \
         -scheme Moolah-iOS \
-        -destination "platform=iOS Simulator,name=$IOS_SIMULATOR"
+        -destination "platform=iOS Simulator,name=$IOS_SIMULATOR" \
+        ${filter_flags[@]+"${filter_flags[@]}"}
 }
 
 run_mac() {
     echo "==> Testing macOS…"
+    local filter_flags=()
+    while IFS= read -r line; do
+        filter_flags+=("$line")
+    done < <(print_filter_flags "MoolahTests_macOS")
     xcodebuild test "${COMMON_ARGS[@]}" \
         -derivedDataPath "$REPO_ROOT/.DerivedData-mac" \
         -scheme Moolah-macOS \
-        -destination "platform=macOS"
+        -destination "platform=macOS" \
+        ${filter_flags[@]+"${filter_flags[@]}"}
 }
 
 # ---------------------------------------------------------------------------
@@ -87,7 +120,7 @@ case "$PLATFORM" in
         fi
         ;;
     *)
-        echo "Usage: $0 [all|ios|mac]" >&2
+        echo "Usage: $0 [all|ios|mac] [FILTER ...]" >&2
         exit 1
         ;;
 esac
