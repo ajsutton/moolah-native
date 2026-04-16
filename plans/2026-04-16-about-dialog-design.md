@@ -30,6 +30,7 @@ Dark branded gradient background evoking the app's "space" aesthetic:
     - Scale: 0.95x → 1.15x → 0.95x
     - Opacity: 0.35 → 1.0 → 0.35
   - **Reduce Motion:** Animation disabled; static glow at opacity 0.7 and scale 1.05x
+  - **Note:** The brand guide discourages looping animations on static elements like the icon. This is an intentional exception — the About window is a one-off brand moment, not a persistent UI surface. The animation is slow enough (5s cycle) to feel ambient rather than attention-seeking, and Reduce Motion disables it entirely.
 - **Permanent base shadow** on the icon: `0 4px 20px rgba(30,100,238,0.3)` so there is always some luminance even at the glow's dimmest point
 
 ### Content Layout (top to bottom)
@@ -53,6 +54,7 @@ All content is center-aligned.
 4. **Version string** — e.g. "1.0.0 · Build 42"
    - Monospaced font (SF Mono / `ui-monospace`)
    - 11pt, Muted color (#AAB4C8), letter-spacing 0.02em
+   - Separator is a middle dot (U+00B7: `·`)
    - Format: `{CFBundleShortVersionString} · Build {CFBundleVersion}`
    - Bottom margin: 22pt
 
@@ -64,11 +66,11 @@ All content is center-aligned.
 6. **Website link** — "moolah.rocks"
    - Light Blue (#7ABDFF), 12pt
    - Opens https://moolah.rocks in the default browser on click
-   - Underline on hover (if applicable in SwiftUI)
+   - Uses SwiftUI `Link` view with standard system link styling
 
 7. **Copyright**
    - "© 2026 Adrian Sutton. All rights reserved."
-   - Subtle color (#6A7388), 10pt
+   - Muted color (#AAB4C8), 11pt, `.monospacedDigit()` on the year
    - Top margin: 18pt
 
 ### Spacing Summary
@@ -80,7 +82,7 @@ All content is center-aligned.
 
 - **Size:** Fixed, approximately 340pt wide. Not resizable.
 - **Positioning:** Centered on screen when opened (standard macOS About window behavior).
-- **Dismissal:** Closes on Escape key, clicking the close button, or clicking outside the window.
+- **Dismissal:** Closes on Escape key or clicking the close button.
 - **Menu item:** Standard "About Moolah" in the app menu (replaces the default About panel).
 - **Single instance:** Only one About window can be open at a time.
 
@@ -112,15 +114,19 @@ AboutView
 - Use `NSApp.orderFrontStandardAboutPanel` replacement: declare a `Window(id: "about")` scene and replace the About menu item via `CommandGroup(replacing: .appInfo)` to open it with `openWindow(id: "about")`.
 - The breathing glow uses a SwiftUI `.animation(.easeInOut(duration: 5).repeatForever(autoreverses: true))` on opacity and scaleEffect state.
 - Check `@Environment(\.accessibilityReduceMotion)` to disable animation.
+- Check `@Environment(\.accessibilityIncreaseContrast)` — when enabled, hide decorative starfield and glow, ensure all text meets enhanced contrast ratios.
+- Pin Dynamic Type to a controlled range with `.dynamicTypeSize(.large)` on the window root view to prevent text overflow in the fixed-width layout.
 - Use `.fixedSize()` or `.frame(width: 340)` with `WindowResizability(.contentSize)` to prevent resizing.
 - Load version/build from `Bundle.main.infoDictionary`.
+- This window intentionally uses hardcoded brand colors rather than semantic system colors. This is an explicit exception for a brand-surface panel — do not replicate this pattern in data-display views.
 
 ## Accessibility
 
 - **Reduce Motion:** Glow animation disabled; static glow shown instead (opacity 0.7, scale 1.05x).
+- **Increase Contrast:** When enabled, hide decorative starfield dots and icon glow. All text already meets enhanced contrast ratios with the Muted (#AAB4C8) minimum.
 - **VoiceOver:** All text elements are readable. The website link has a proper accessibility label ("Open moolah.rocks website"). The icon has an accessibility label ("Moolah app icon").
 - **Keyboard:** Escape dismisses the window. The website link is focusable via Tab and activatable via Return/Space.
-- **Dynamic Type:** Not applicable — this is a fixed-layout branded panel with small, specific font sizes. Content does not need to reflow for accessibility text sizes.
+- **Dynamic Type:** Pinned to `.large` via `.dynamicTypeSize(.large)` on the window root to prevent text overflow in the fixed-width layout.
 
 ## Out of Scope
 
