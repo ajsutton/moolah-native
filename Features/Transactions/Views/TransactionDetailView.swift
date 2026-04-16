@@ -90,6 +90,11 @@ struct TransactionDetailView: View {
     transaction.isSimple || draft.isCustom
   }
 
+  /// Whether the current draft is a simple earmark-only transaction.
+  private var isSimpleEarmarkOnly: Bool {
+    !draft.isCustom && draft.relevantLeg.isEarmarkOnly
+  }
+
   init(
     transaction: Transaction,
     accounts: Accounts,
@@ -184,7 +189,7 @@ struct TransactionDetailView: View {
       #endif
       .onAppear {
         if isNewTransaction {
-          focusedField = .payee
+          focusedField = isSimpleEarmarkOnly ? .amount : .payee
         }
       }
       .onChange(of: draft) { _, _ in debouncedSave() }
@@ -238,8 +243,14 @@ struct TransactionDetailView: View {
 
   private var formContent: some View {
     Form {
-      typeSection.disabled(!isEditable)
-      if draft.isCustom {
+      if isSimpleEarmarkOnly {
+        earmarkOnlyDetailsSection
+        if showRecurrence {
+          recurrenceSection
+        }
+        notesSection
+      } else if draft.isCustom {
+        typeSection.disabled(!isEditable)
         customDetailsSection
         ForEach(draft.legDrafts.indices, id: \.self) { index in
           subTransactionSection(index: index)
@@ -250,6 +261,7 @@ struct TransactionDetailView: View {
         }
         notesSection
       } else {
+        typeSection.disabled(!isEditable)
         detailsSection.disabled(!isEditable)
         accountSection.disabled(!isEditable)
         categorySection.disabled(!isEditable)
@@ -626,6 +638,44 @@ struct TransactionDetailView: View {
           .frame(maxWidth: .infinity)
       }
     }
+  }
+
+  private var earmarkOnlyDetailsSection: some View {
+    Section {
+      LabeledContent("Type") {
+        Text("Earmark funds")
+          .foregroundStyle(.secondary)
+      }
+
+      Picker("Earmark", selection: $draft.earmarkId) {
+        ForEach(earmarks.ordered.filter { !$0.isHidden }) { earmark in
+          Text(earmark.name).tag(UUID?.some(earmark.id))
+        }
+      }
+      #if os(macOS)
+        .pickerStyle(.menu)
+      #endif
+
+      HStack {
+        TextField("Amount", text: amountBinding)
+          .multilineTextAlignment(.trailing)
+          .monospacedDigit()
+          #if os(iOS)
+            .keyboardType(.decimalPad)
+          #endif
+        Text(earmarkInstrumentId ?? "").foregroundStyle(.secondary)
+          .monospacedDigit()
+      }
+
+      DatePicker("Date", selection: $draft.date, displayedComponents: .date)
+    }
+  }
+
+  /// The instrument ID for the earmark on the relevant leg.
+  private var earmarkInstrumentId: String? {
+    draft.relevantLeg.earmarkId
+      .flatMap { earmarks.by(id: $0) }?
+      .balance.instrument.id
   }
 
   // MARK: - Actions
