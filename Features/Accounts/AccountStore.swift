@@ -90,15 +90,6 @@ final class AccountStore {
     ) { $0 + $1.displayBalance }
   }
 
-  /// Total of current accounts minus the total of all positive, visible earmarked funds.
-  /// Hidden earmarks and those with negative balances are excluded from the sum.
-  func availableFunds(earmarks: Earmarks) -> InstrumentAmount {
-    let earmarked = earmarks.ordered
-      .filter { !$0.isHidden && $0.balance.isPositive }
-      .reduce(InstrumentAmount.zero(instrument: currentTotal.instrument)) { $0 + $1.balance }
-    return currentTotal - earmarked
-  }
-
   var netWorth: InstrumentAmount {
     currentTotal + investmentTotal
   }
@@ -198,16 +189,6 @@ final class AccountStore {
     }
     accounts = result
     recomputeConvertedTotals()
-  }
-
-  /// Adjusts account balances locally based on a transaction change.
-  /// Prefer `applyDelta` with `BalanceDeltaCalculator` for new code.
-  /// - Parameters:
-  ///   - old: The previous transaction (nil for creates).
-  ///   - new: The new transaction (nil for deletes).
-  func applyTransactionDelta(old: Transaction?, new: Transaction?) {
-    let delta = BalanceDeltaCalculator.deltas(old: old, new: new)
-    applyDelta(delta.accountDeltas)
   }
 
   // MARK: - Mutations

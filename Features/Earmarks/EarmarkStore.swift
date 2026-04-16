@@ -102,20 +102,6 @@ final class EarmarkStore {
     recomputeConvertedTotals()
   }
 
-  /// Adjusts earmark balances locally based on a transaction change.
-  /// Prefer `applyDelta` with `BalanceDeltaCalculator` for new code.
-  /// - Parameters:
-  ///   - old: The previous transaction (nil for creates).
-  ///   - new: The new transaction (nil for deletes).
-  func applyTransactionDelta(old: Transaction?, new: Transaction?) {
-    let delta = BalanceDeltaCalculator.deltas(old: old, new: new)
-    applyDelta(
-      earmarkDeltas: delta.earmarkDeltas,
-      savedDeltas: delta.earmarkSavedDeltas,
-      spentDeltas: delta.earmarkSpentDeltas
-    )
-  }
-
   private func recomputeConvertedTotals() {
     conversionTask?.cancel()
     conversionTask = Task {
