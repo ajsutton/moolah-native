@@ -297,19 +297,6 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     return map
   }
 
-  /// Fetches the latest investment value for an account using the provided context.
-  private func latestInvestmentValue(for accountId: UUID, context: ModelContext) throws
-    -> InstrumentAmount?
-  {
-    var descriptor = FetchDescriptor<InvestmentValueRecord>(
-      predicate: #Predicate { $0.accountId == accountId },
-      sortBy: [SortDescriptor(\.date, order: .reverse)]
-    )
-    descriptor.fetchLimit = 1
-    let records = try context.fetch(descriptor)
-    return records.first?.toDomain().value
-  }
-
   // MARK: - Instrument Cache
 
   @MainActor private var instrumentCacheForAccount: [String: Instrument] = [:]
@@ -323,16 +310,5 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       onInstrumentChanged(instrument.id)
     }
     instrumentCacheForAccount[instrument.id] = instrument
-  }
-
-  @MainActor
-  private func latestInvestmentValue(for accountId: UUID) throws -> InstrumentAmount? {
-    var descriptor = FetchDescriptor<InvestmentValueRecord>(
-      predicate: #Predicate { $0.accountId == accountId },
-      sortBy: [SortDescriptor(\.date, order: .reverse)]
-    )
-    descriptor.fetchLimit = 1
-    let records = try context.fetch(descriptor)
-    return records.first?.toDomain().value
   }
 }
