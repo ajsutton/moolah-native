@@ -7,7 +7,9 @@
   /// Do not replicate this pattern elsewhere.
   struct AboutView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    private var increaseContrast: Bool {
+      NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+    }
     @State private var glowActive = false
 
     // MARK: - Brand Colors
@@ -43,7 +45,7 @@
         )
 
         // Starfield (hidden for Increase Contrast)
-        if colorSchemeContrast != .increased {
+        if !increaseContrast {
           starfield
         }
 
@@ -93,7 +95,7 @@
     private var iconWithGlow: some View {
       ZStack {
         // Breathing glow (hidden for Increase Contrast)
-        if colorSchemeContrast != .increased {
+        if !increaseContrast {
           RoundedRectangle(cornerRadius: 36)
             .fill(
               RadialGradient(
