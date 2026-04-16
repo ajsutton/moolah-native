@@ -89,12 +89,7 @@ struct ProfileFormView: View {
           Section("Profile") {
             TextField("Name", text: $cloudName)
 
-            Picker("Currency", selection: $cloudCurrencyCode) {
-              ForEach(Self.commonCurrencyCodes, id: \.self) { code in
-                Text("\(code) — \(Self.currencyName(for: code))")
-                  .tag(code)
-              }
-            }
+            CurrencyPicker(selection: $cloudCurrencyCode)
 
             Picker("Financial Year Starts", selection: $cloudFinancialYearStartMonth) {
               ForEach(1...12, id: \.self) { month in
@@ -205,14 +200,4 @@ struct ProfileFormView: View {
     }
   }
 
-  // MARK: - Currency Helpers
-
-  static let commonCurrencyCodes: [String] = [
-    "AUD", "CAD", "CHF", "CNY", "EUR", "GBP", "HKD", "INR", "JPY", "KRW",
-    "MXN", "NOK", "NZD", "SEK", "SGD", "USD", "ZAR",
-  ]
-
-  static func currencyName(for code: String) -> String {
-    Locale.current.localizedString(forCurrencyCode: code) ?? code
-  }
 }

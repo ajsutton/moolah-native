@@ -538,13 +538,8 @@ struct MoolahProfileDetailView: View {
       }
 
       Section("Settings") {
-        Picker("Currency", selection: $currencyCode) {
-          ForEach(ProfileFormView.commonCurrencyCodes, id: \.self) { code in
-            Text("\(code) — \(ProfileFormView.currencyName(for: code))")
-              .tag(code)
-          }
-        }
-        .onChange(of: currencyCode) { _, _ in saveChanges() }
+        CurrencyPicker(selection: $currencyCode)
+          .onChange(of: currencyCode) { _, _ in saveChanges() }
 
         Picker("Financial Year Starts", selection: $financialYearStartMonth) {
           ForEach(1...12, id: \.self) { month in
@@ -646,13 +641,8 @@ struct CustomServerProfileDetailView: View {
       }
 
       Section("Settings") {
-        Picker("Currency", selection: $currencyCode) {
-          ForEach(ProfileFormView.commonCurrencyCodes, id: \.self) { code in
-            Text("\(code) — \(ProfileFormView.currencyName(for: code))")
-              .tag(code)
-          }
-        }
-        .onChange(of: currencyCode) { _, _ in saveChanges() }
+        CurrencyPicker(selection: $currencyCode)
+          .onChange(of: currencyCode) { _, _ in saveChanges() }
 
         Picker("Financial Year Starts", selection: $financialYearStartMonth) {
           ForEach(1...12, id: \.self) { month in
@@ -853,13 +843,8 @@ struct CloudKitProfileDetailView: View {
       }
 
       Section("Settings") {
-        Picker("Currency", selection: $currencyCode) {
-          ForEach(ProfileFormView.commonCurrencyCodes, id: \.self) { code in
-            Text("\(code) — \(ProfileFormView.currencyName(for: code))")
-              .tag(code)
-          }
-        }
-        .onChange(of: currencyCode) { _, _ in saveChanges() }
+        CurrencyPicker(selection: $currencyCode)
+          .onChange(of: currencyCode) { _, _ in saveChanges() }
 
         Picker("Financial Year Starts", selection: $financialYearStartMonth) {
           ForEach(1...12, id: \.self) { month in

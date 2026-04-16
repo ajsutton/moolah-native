@@ -408,4 +408,40 @@ struct AccountStoreTests {
 
     #expect(!store.canDelete(acctId))
   }
+
+  // MARK: - Instrument Persistence
+
+  @Test func testCreatePersistsInstrument() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = AccountStore(repository: backend.accounts)
+    let usdInstrument = Instrument.fiat(code: "USD")
+    let account = Account(
+      id: UUID(), name: "USD Checking", type: .bank, instrument: usdInstrument, position: 0,
+      isHidden: false)
+
+    let created = try await store.create(account, openingBalance: nil)
+
+    #expect(created.instrument.id == usdInstrument.id)
+    #expect(store.accounts.first?.instrument.id == usdInstrument.id)
+
+    let fetched = try await backend.accounts.fetchAll()
+    #expect(fetched.first?.instrument.id == usdInstrument.id)
+  }
+
+  @Test func testUpdatePersistsChangedInstrument() async throws {
+    let (backend, container) = try TestBackend.create()
+    let original = seedAccount(name: "Savings", in: container)
+    let store = AccountStore(repository: backend.accounts)
+
+    let eurInstrument = Instrument.fiat(code: "EUR")
+    var modified = original
+    modified.instrument = eurInstrument
+
+    let updated = try await store.update(modified)
+
+    #expect(updated.instrument.id == eurInstrument.id)
+
+    let fetched = try await backend.accounts.fetchAll()
+    #expect(fetched.first?.instrument.id == eurInstrument.id)
+  }
 }

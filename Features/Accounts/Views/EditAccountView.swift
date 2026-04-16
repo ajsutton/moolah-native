@@ -4,6 +4,7 @@ struct EditAccountView: View {
   @Environment(\.dismiss) private var dismiss
   @State private var name: String
   @State private var type: AccountType
+  @State private var currencyCode: String
   @State private var isHidden: Bool
   @State private var isSubmitting = false
   @State private var errorMessage: String?
@@ -11,12 +12,15 @@ struct EditAccountView: View {
 
   let account: Account
   let accountStore: AccountStore
+  let supportsComplexTransactions: Bool
 
-  init(account: Account, accountStore: AccountStore) {
+  init(account: Account, accountStore: AccountStore, supportsComplexTransactions: Bool = false) {
     self.account = account
     self.accountStore = accountStore
+    self.supportsComplexTransactions = supportsComplexTransactions
     _name = State(initialValue: account.name)
     _type = State(initialValue: account.type)
+    _currencyCode = State(initialValue: account.instrument.id)
     _isHidden = State(initialValue: account.isHidden)
   }
 
@@ -31,6 +35,10 @@ struct EditAccountView: View {
             ForEach(AccountType.allCases, id: \.self) { type in
               Text(type.displayName).tag(type)
             }
+          }
+
+          if supportsComplexTransactions {
+            CurrencyPicker(selection: $currencyCode)
           }
 
           LabeledContent("Current Balance") {
@@ -111,6 +119,9 @@ struct EditAccountView: View {
     var updated = account
     updated.name = name.trimmingCharacters(in: .whitespaces)
     updated.type = type
+    if supportsComplexTransactions {
+      updated.instrument = Instrument.fiat(code: currencyCode)
+    }
     updated.isHidden = isHidden
 
     do {
