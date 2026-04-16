@@ -66,13 +66,13 @@ struct TransactionDetailView: View {
         case .custom:
           draft.isCustom = true
         case .income:
-          draft.isCustom = false
+          if draft.isCustom { draft.switchToSimple() }
           draft.setType(.income, accounts: accounts)
         case .expense:
-          draft.isCustom = false
+          if draft.isCustom { draft.switchToSimple() }
           draft.setType(.expense, accounts: accounts)
         case .transfer:
-          draft.isCustom = false
+          if draft.isCustom { draft.switchToSimple() }
           draft.setType(.transfer, accounts: accounts)
         }
       }
@@ -142,6 +142,21 @@ struct TransactionDetailView: View {
       }
       return a.position < b.position
     }
+  }
+
+  /// Filter to-account options to same-currency accounts, excluding the current account.
+  private func eligibleTransferAccounts(excluding currentAccountId: UUID?) -> [Account] {
+    guard let currentAccountId,
+      let currency = accounts.by(id: currentAccountId)?.balance.instrument
+    else {
+      return sortedAccounts.filter { $0.id != currentAccountId && !$0.isHidden }
+    }
+    return TransactionDraftHelpers.eligibleToAccounts(from: accounts, currency: currency)
+      .filter { $0.id != currentAccountId && !$0.isHidden }
+      .sorted { a, b in
+        if a.type.isCurrent != b.type.isCurrent { return a.type.isCurrent }
+        return a.position < b.position
+      }
   }
 
   /// The instrument for the relevant leg's account (for displaying currency symbol).
@@ -346,7 +361,7 @@ struct TransactionDetailView: View {
         let counterpartIndex = draft.relevantLegIndex == 0 ? 1 : 0
         let toAccountLabel = draft.showFromAccount ? "From Account" : "To Account"
         let currentAccountId = draft.legDrafts[draft.relevantLegIndex].accountId
-        let eligibleAccounts = sortedAccounts.filter { $0.id != currentAccountId && !$0.isHidden }
+        let eligibleAccounts = eligibleTransferAccounts(excluding: currentAccountId)
 
         Picker(toAccountLabel, selection: $draft.legDrafts[counterpartIndex].accountId) {
           Text("Select...").tag(UUID?.none)
