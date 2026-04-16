@@ -73,6 +73,23 @@ final class TransactionStore {
     return await create(tx)
   }
 
+  /// Creates a default earmark-only transaction (income type, zero amount, today's date).
+  func createDefaultEarmark(
+    earmarkId: UUID,
+    instrument: Instrument
+  ) async -> Transaction? {
+    let tx = Transaction(
+      date: Date(),
+      payee: "",
+      legs: [
+        TransactionLeg(
+          accountId: nil, instrument: instrument, quantity: 0, type: .income,
+          earmarkId: earmarkId)
+      ]
+    )
+    return await create(tx)
+  }
+
   func create(_ transaction: Transaction) async -> Transaction? {
     // Optimistic: insert into local state
     let snapshot = rawTransactions

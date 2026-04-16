@@ -1261,6 +1261,17 @@ struct TransactionDraftTests {
     #expect(draft.legDrafts[0].categoryId == originalCategoryId)
   }
 
+  @Test func initBlankEarmarkOnlyDraft() {
+    let emId = UUID()
+    let draft = TransactionDraft(earmarkId: emId)
+    #expect(draft.legDrafts.count == 1)
+    #expect(draft.legDrafts[0].earmarkId == emId)
+    #expect(draft.legDrafts[0].accountId == nil)
+    #expect(draft.legDrafts[0].type == .income)
+    #expect(draft.legDrafts[0].amountText == "0")
+    #expect(draft.legDrafts[0].categoryId == nil)
+  }
+
   @Test func cannotSwitchToSimpleWhenTransferHasEarmarkOnlyLeg() {
     let draft = TransactionDraft(
       payee: "", date: Date(), notes: "",

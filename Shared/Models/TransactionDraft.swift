@@ -193,6 +193,26 @@ extension TransactionDraft {
     )
   }
 
+  /// Create a blank earmark-only draft for a new earmark transaction.
+  init(earmarkId: UUID, viewingAccountId: UUID? = nil) {
+    self.init(
+      payee: "",
+      date: Date(),
+      notes: "",
+      isRepeating: false,
+      recurPeriod: nil,
+      recurEvery: 1,
+      isCustom: false,
+      legDrafts: [
+        LegDraft(
+          type: .income, accountId: nil, amountText: "0",
+          categoryId: nil, categoryText: "", earmarkId: earmarkId)
+      ],
+      relevantLegIndex: 0,
+      viewingAccountId: viewingAccountId
+    )
+  }
+
   /// Create a blank draft for a new transaction.
   init(accountId: UUID? = nil, viewingAccountId: UUID? = nil) {
     self.init(

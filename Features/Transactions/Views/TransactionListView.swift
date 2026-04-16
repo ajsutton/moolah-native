@@ -117,6 +117,32 @@ struct TransactionListView: View {
 
   private func createNewTransaction() {
     let instrument = accounts.ordered.first?.balance.instrument ?? .AUD
+
+    // When viewing from an earmark (no account in filter), create an earmark-only transaction
+    if let earmarkId = filter.earmarkId, filter.accountId == nil {
+      let placeholder = Transaction(
+        date: Date(),
+        payee: "",
+        legs: [
+          TransactionLeg(
+            accountId: nil, instrument: instrument, quantity: 0, type: .income,
+            earmarkId: earmarkId)
+        ]
+      )
+      selectedTransaction = placeholder
+      Task {
+        if let created = await transactionStore.createDefaultEarmark(
+          earmarkId: earmarkId,
+          instrument: instrument
+        ) {
+          if selectedTransaction?.id == placeholder.id {
+            selectedTransaction = created
+          }
+        }
+      }
+      return
+    }
+
     let acctId = filter.accountId ?? accounts.ordered.first?.id
 
     // Create a placeholder for optimistic selection while the store creates it
