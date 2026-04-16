@@ -264,11 +264,13 @@ struct SidebarView: View {
   let (backend, _) = PreviewBackend.create()
   let accountStore = AccountStore(repository: backend.accounts)
   let earmarkStore = EarmarkStore(repository: backend.earmarks)
+  let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
 
   NavigationSplitView {
     SidebarView(selection: .constant(nil))
       .environment(accountStore)
       .environment(earmarkStore)
+      .environment(session)
       .task {
         // Add some preview data
         _ = try? await backend.accounts.create(

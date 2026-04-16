@@ -119,7 +119,9 @@ struct EditAccountView: View {
     var updated = account
     updated.name = name.trimmingCharacters(in: .whitespaces)
     updated.type = type
-    updated.instrument = Instrument.fiat(code: currencyCode)
+    if supportsComplexTransactions {
+      updated.instrument = Instrument.fiat(code: currencyCode)
+    }
     updated.isHidden = isHidden
 
     do {

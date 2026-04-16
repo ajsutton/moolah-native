@@ -92,7 +92,9 @@ struct CreateAccountView: View {
     isSubmitting = true
     errorMessage = nil
 
-    let selectedInstrument = Instrument.fiat(code: currencyCode)
+    let selectedInstrument =
+      supportsComplexTransactions
+      ? Instrument.fiat(code: currencyCode) : instrument
     let openingBalance = InstrumentAmount(quantity: balanceDecimal, instrument: selectedInstrument)
     let newAccount = Account(
       id: UUID(),
