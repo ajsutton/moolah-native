@@ -206,6 +206,7 @@ struct MoolahApp: App {
         handleScenePhaseChange(newPhase)
       }
       .commands {
+        AboutCommands()
         ProfileCommands(
           profileStore: profileStore, sessionManager: sessionManager,
           containerManager: containerManager)
@@ -214,6 +215,12 @@ struct MoolahApp: App {
         RefreshCommands()
         ShowHiddenCommands()
       }
+
+      Window("About Moolah", id: "about") {
+        AboutView()
+      }
+      .windowResizability(.contentSize)
+      .windowStyle(.hiddenTitleBar)
 
       Settings {
         SettingsView()
