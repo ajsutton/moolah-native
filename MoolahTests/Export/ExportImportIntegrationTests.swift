@@ -221,4 +221,175 @@ struct ExportImportIntegrationTests {
       _ = try await coordinator.importFromFile(url: fakeURL, modelContainer: container)
     }
   }
+
+  @Test("round-trip preserves fiat, stock, and crypto instruments across accounts, legs, earmarks")
+  func multiCurrencyRoundTrip() async throws {
+    let aud = Instrument.AUD
+    let usd = Instrument.USD
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
+
+    let (backend, _) = try TestBackend.create(instrument: aud)
+
+    let audAccount = try await backend.accounts.create(
+      Account(name: "Checking AUD", type: .bank, instrument: aud),
+      openingBalance: InstrumentAmount(quantity: Decimal(string: "1000.00")!, instrument: aud)
+    )
+    let usdAccount = try await backend.accounts.create(
+      Account(name: "USD Travel", type: .bank, instrument: usd),
+      openingBalance: InstrumentAmount(quantity: Decimal(string: "200.00")!, instrument: usd)
+    )
+    let stockAccount = try await backend.accounts.create(
+      Account(name: "Brokerage", type: .investment, instrument: bhp),
+      openingBalance: InstrumentAmount(quantity: Decimal(string: "10")!, instrument: bhp)
+    )
+    let cryptoAccount = try await backend.accounts.create(
+      Account(name: "Crypto Wallet", type: .asset, instrument: eth),
+      openingBalance: InstrumentAmount(quantity: Decimal(string: "0.5")!, instrument: eth)
+    )
+
+    let food = try await backend.categories.create(Category(name: "Food"))
+
+    let usdEarmark = try await backend.earmarks.create(
+      Earmark(
+        name: "US Trip", instrument: usd,
+        savingsGoal: InstrumentAmount(quantity: Decimal(string: "500.00")!, instrument: usd)
+      )
+    )
+    try await backend.earmarks.setBudget(
+      earmarkId: usdEarmark.id,
+      categoryId: food.id,
+      amount: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: usd)
+    )
+
+    // Expense in USD, tagged to the USD earmark
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: Date(),
+        payee: "NYC coffee",
+        legs: [
+          TransactionLeg(
+            accountId: usdAccount.id, instrument: usd,
+            quantity: Decimal(string: "-4.50")!, type: .expense,
+            categoryId: food.id, earmarkId: usdEarmark.id
+          )
+        ]
+      )
+    )
+
+    // Cross-instrument investment transfer (AUD -> BHP.AX)
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: Date(),
+        payee: "Stock purchase",
+        legs: [
+          TransactionLeg(
+            accountId: audAccount.id, instrument: aud,
+            quantity: Decimal(string: "-500.00")!, type: .transfer
+          ),
+          TransactionLeg(
+            accountId: stockAccount.id, instrument: bhp,
+            quantity: Decimal(string: "5")!, type: .transfer
+          ),
+        ]
+      )
+    )
+
+    // Crypto income
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: Date(),
+        payee: "Staking reward",
+        legs: [
+          TransactionLeg(
+            accountId: cryptoAccount.id, instrument: eth,
+            quantity: Decimal(string: "0.05")!, type: .income
+          )
+        ]
+      )
+    )
+
+    // Export via coordinator to a temporary JSON file
+    let tempURL = makeTempFileURL()
+    defer { try? FileManager.default.removeItem(at: tempURL) }
+
+    let profile = Profile(
+      label: "Multi-Currency Profile",
+      backendType: .cloudKit,
+      currencyCode: aud.id,
+      financialYearStartMonth: 7
+    )
+    let coordinator = MigrationCoordinator()
+    try await coordinator.exportToFile(url: tempURL, backend: backend, profile: profile)
+
+    // Serialized JSON must list all four instruments for the importer to rehydrate them
+    let exportedJSON = try Data(contentsOf: tempURL)
+    let decoded = try JSONDecoder.exportDecoder.decode(ExportedData.self, from: exportedJSON)
+    let exportedInstrumentIds = Set(decoded.instruments.map(\.id))
+    #expect(exportedInstrumentIds == [aud.id, usd.id, bhp.id, eth.id])
+
+    // Import into a fresh container and fetch everything back
+    let freshContainer = try TestModelContainer.create()
+    _ = try await coordinator.importFromFile(url: tempURL, modelContainer: freshContainer)
+
+    let freshBackend = CloudKitBackend(
+      modelContainer: freshContainer,
+      instrument: aud,
+      profileLabel: profile.label,
+      conversionService: FixedConversionService()
+    )
+
+    // Accounts: each should come back on its original instrument, with its primary position
+    let accounts = try await freshBackend.accounts.fetchAll()
+    let accountById = Dictionary(uniqueKeysWithValues: accounts.map { ($0.id, $0) })
+
+    let fetchedAud = try #require(accountById[audAccount.id])
+    #expect(fetchedAud.instrument == aud)
+    #expect(fetchedAud.positions.contains { $0.instrument == aud })
+
+    let fetchedUsd = try #require(accountById[usdAccount.id])
+    #expect(fetchedUsd.instrument == usd)
+    #expect(fetchedUsd.positions.contains { $0.instrument == usd })
+
+    let fetchedStock = try #require(accountById[stockAccount.id])
+    #expect(fetchedStock.instrument == bhp)
+    let bhpPosition = fetchedStock.positions.first { $0.instrument == bhp }
+    #expect(bhpPosition?.instrument.kind == .stock)
+    #expect(bhpPosition?.instrument.exchange == "ASX")
+    #expect(bhpPosition?.instrument.ticker == "BHP.AX")
+
+    let fetchedCrypto = try #require(accountById[cryptoAccount.id])
+    #expect(fetchedCrypto.instrument == eth)
+    let ethPosition = fetchedCrypto.positions.first { $0.instrument == eth }
+    #expect(ethPosition?.instrument.kind == .cryptoToken)
+    #expect(ethPosition?.instrument.chainId == 1)
+    #expect(ethPosition?.instrument.decimals == 18)
+
+    // Earmarks: USD earmark must stay on USD, not collapse to profile AUD
+    let earmarks = try await freshBackend.earmarks.fetchAll()
+    let fetchedEarmark = try #require(earmarks.first { $0.id == usdEarmark.id })
+    #expect(fetchedEarmark.instrument == usd)
+    #expect(fetchedEarmark.savingsGoal?.instrument == usd)
+
+    let budgetItems = try await freshBackend.earmarks.fetchBudget(earmarkId: usdEarmark.id)
+    #expect(budgetItems.first?.amount.instrument == usd)
+
+    // Transaction legs: each leg must retain its own instrument (fiat, stock, or crypto)
+    let txnPage = try await freshBackend.transactions.fetch(
+      filter: TransactionFilter(), page: 0, pageSize: 100)
+    let legInstruments = Set(txnPage.transactions.flatMap { $0.legs.map(\.instrument) })
+    #expect(legInstruments == [aud, usd, bhp, eth])
+
+    let stockLeg = txnPage.transactions
+      .flatMap(\.legs)
+      .first { $0.instrument.kind == .stock }
+    #expect(stockLeg?.instrument.ticker == "BHP.AX")
+
+    let cryptoLeg = txnPage.transactions
+      .flatMap(\.legs)
+      .first { $0.instrument.kind == .cryptoToken }
+    #expect(cryptoLeg?.instrument.chainId == 1)
+    #expect(cryptoLeg?.instrument.decimals == 18)
+  }
 }

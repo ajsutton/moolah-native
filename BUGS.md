@@ -12,7 +12,3 @@ In `CloudKitAnalysisRepository.fetchDailyBalances` / `computeDailyBalances`, the
 
 `AccountStore.balance(for:)` (`Features/Accounts/AccountStore.swift:102-103`) returns only the position whose instrument matches `account.instrument`. If an account accumulates a position in any other instrument (e.g. a cross-currency transfer into it, or a stray crypto position), that value is invisible in the per-account sidebar row and in `canDelete` (line 109), even though the converted sidebar totals still include it. Show the full position list, or at least surface a badge / warning when an account holds off-primary positions.
 
-## No test round-trip for multi-currency export/import
-
-`ExportedData` serialises `instruments` alongside accounts, earmarks, and legs, but no test asserts that a profile containing mixed-currency accounts and earmarks survives an export → import cycle with instruments intact. Add a JSON round-trip test (ideally covering fiat, stock, and crypto instruments on both accounts and legs) to lock this in before Phase 9's CSV importer starts producing more multi-currency data.
-

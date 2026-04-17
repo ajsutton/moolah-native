@@ -76,17 +76,7 @@ struct CloudKitDataImporter {
     // 3. Earmarks (no dependencies)
     progress?("earmarks", step / totalSteps)
     for earmark in data.earmarks {
-      let record = EarmarkRecord(
-        id: earmark.id,
-        name: earmark.name,
-        position: earmark.position,
-        isHidden: earmark.isHidden,
-        savingsTarget: earmark.savingsGoal?.storageValue,
-        savingsTargetInstrumentId: earmark.savingsGoal?.instrument.id,
-        savingsStartDate: earmark.savingsStartDate,
-        savingsEndDate: earmark.savingsEndDate
-      )
-      context.insert(record)
+      context.insert(EarmarkRecord.from(earmark))
     }
     step += 1
     await Task.yield()
