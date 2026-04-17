@@ -65,37 +65,21 @@ extension Account {
   }
 }
 
-/// Sidebar row for an account. Asynchronously loads the full converted balance
-/// (sum of all positions in the account's instrument) via `AccountStore.displayBalance`
-/// and shows a spinner while it's in flight.
+/// Sidebar row for an account. Reads the converted balance from
+/// `AccountStore.convertedBalances` (populated and retried by the store
+/// when conversions fail). Shows a spinner while no balance is available.
 struct AccountSidebarRow: View {
   let account: Account
   var isSelected: Bool = false
   @Environment(AccountStore.self) private var accountStore
-  @State private var balance: InstrumentAmount?
 
   var body: some View {
     SidebarRowView(
       icon: account.sidebarIcon,
       name: account.name,
-      amount: balance,
+      amount: accountStore.convertedBalances[account.id],
       isSelected: isSelected
     )
-    .task(id: balanceInputs) {
-      balance = try? await accountStore.displayBalance(for: account.id)
-    }
-  }
-
-  private var balanceInputs: BalanceInputs {
-    BalanceInputs(
-      positions: account.positions,
-      investmentValue: accountStore.investmentValues[account.id]
-    )
-  }
-
-  private struct BalanceInputs: Equatable {
-    let positions: [Position]
-    let investmentValue: InstrumentAmount?
   }
 }
 

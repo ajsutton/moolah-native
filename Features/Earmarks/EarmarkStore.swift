@@ -21,17 +21,22 @@ final class EarmarkStore {
   private let repository: EarmarkRepository
   private let conversionService: any InstrumentConversionService
   let targetInstrument: Instrument
+  /// Delay between retry attempts after a conversion failure. Production
+  /// uses ~30s; tests pass a small value to keep retries snappy.
+  private let retryDelay: Duration
   private let logger = Logger(subsystem: "com.moolah.app", category: "EarmarkStore")
   private var conversionTask: Task<Void, Never>?
 
   init(
     repository: EarmarkRepository,
     conversionService: any InstrumentConversionService,
-    targetInstrument: Instrument
+    targetInstrument: Instrument,
+    retryDelay: Duration = .seconds(30)
   ) {
     self.repository = repository
     self.conversionService = conversionService
     self.targetInstrument = targetInstrument
+    self.retryDelay = retryDelay
   }
 
   func convertedBalance(for earmarkId: UUID) -> InstrumentAmount? {
@@ -111,61 +116,103 @@ final class EarmarkStore {
     recomputeConvertedTotals()
   }
 
+  /// Recompute per-earmark balances and the aggregate total. Each earmark
+  /// is converted in isolation: a failure for one leaves other earmarks'
+  /// balances populated. The aggregate `convertedTotalBalance` is only
+  /// published when *all* contributing earmarks succeed (an inaccurate
+  /// total is worse than no total). On any failure, schedules a retry
+  /// after `retryDelay` and keeps retrying until everything succeeds or a
+  /// new recompute cancels this task.
   private func recomputeConvertedTotals() {
     conversionTask?.cancel()
-    conversionTask = Task {
-      do {
-        var grandTotal = InstrumentAmount.zero(instrument: targetInstrument)
-        var balances: [UUID: InstrumentAmount] = [:]
-        var saved: [UUID: InstrumentAmount] = [:]
-        var spent: [UUID: InstrumentAmount] = [:]
-
-        for earmark in visibleEarmarks {
-          var earmarkBalance = InstrumentAmount.zero(instrument: earmark.instrument)
-          var earmarkSaved = InstrumentAmount.zero(instrument: earmark.instrument)
-          var earmarkSpent = InstrumentAmount.zero(instrument: earmark.instrument)
-
-          for position in earmark.positions {
-            let converted = try await conversionService.convertAmount(
-              position.amount, to: earmark.instrument, on: Date())
-            guard !Task.isCancelled else { return }
-            earmarkBalance += converted
-          }
-          for position in earmark.savedPositions {
-            let converted = try await conversionService.convertAmount(
-              position.amount, to: earmark.instrument, on: Date())
-            guard !Task.isCancelled else { return }
-            earmarkSaved += converted
-          }
-          for position in earmark.spentPositions {
-            let converted = try await conversionService.convertAmount(
-              position.amount, to: earmark.instrument, on: Date())
-            guard !Task.isCancelled else { return }
-            earmarkSpent += converted
-          }
-
-          balances[earmark.id] = earmarkBalance
-          saved[earmark.id] = earmarkSaved
-          spent[earmark.id] = earmarkSpent
-
-          // Convert earmark balance to target instrument for grand total.
-          // Clamp negative balances to zero so they don't reduce the total.
-          let zeroInTarget = InstrumentAmount.zero(instrument: targetInstrument)
-          let convertedToTarget = try await conversionService.convertAmount(
-            earmarkBalance, to: targetInstrument, on: Date())
-          guard !Task.isCancelled else { return }
-          grandTotal += max(convertedToTarget, zeroInTarget)
-        }
-
-        convertedBalances = balances
-        convertedSavedAmounts = saved
-        convertedSpentAmounts = spent
-        convertedTotalBalance = grandTotal
-      } catch {
-        guard !Task.isCancelled else { return }
-        logger.error("Failed to compute converted earmark totals: \(error.localizedDescription)")
+    let delay = retryDelay
+    // `[weak self]` so the retry loop doesn't pin the store alive when the
+    // owning view goes away while conversions are still failing.
+    conversionTask = Task { [weak self] in
+      while !Task.isCancelled {
+        guard let self else { return }
+        let anyFailed = await self.runConversionAttempt()
+        if !anyFailed { return }
+        try? await Task.sleep(for: delay)
       }
     }
+  }
+
+  /// Single pass over all visible earmarks; returns `true` if any
+  /// conversion failed. Always publishes the latest computed state, even
+  /// if partial.
+  private func runConversionAttempt() async -> Bool {
+    var anyFailed = false
+    var balances: [UUID: InstrumentAmount] = [:]
+    var saved: [UUID: InstrumentAmount] = [:]
+    var spent: [UUID: InstrumentAmount] = [:]
+    var grandTotal = InstrumentAmount.zero(instrument: targetInstrument)
+    var grandTotalValid = true
+    let zeroInTarget = InstrumentAmount.zero(instrument: targetInstrument)
+
+    for earmark in visibleEarmarks {
+      do {
+        let (earmarkBalance, earmarkSaved, earmarkSpent) =
+          try await convertEarmarkPositions(earmark)
+        guard !Task.isCancelled else { return false }
+        balances[earmark.id] = earmarkBalance
+        saved[earmark.id] = earmarkSaved
+        spent[earmark.id] = earmarkSpent
+
+        // Convert earmark balance to target instrument for grand total.
+        // Clamp negative balances to zero so they don't reduce the total.
+        let convertedToTarget = try await conversionService.convertAmount(
+          earmarkBalance, to: targetInstrument, on: Date())
+        guard !Task.isCancelled else { return false }
+        if grandTotalValid {
+          grandTotal += max(convertedToTarget, zeroInTarget)
+        }
+      } catch {
+        anyFailed = true
+        grandTotalValid = false
+        logger.warning(
+          "Conversion failed for earmark \(earmark.name): \(error.localizedDescription)")
+      }
+    }
+
+    guard !Task.isCancelled else { return false }
+
+    convertedBalances = balances
+    convertedSavedAmounts = saved
+    convertedSpentAmounts = spent
+    convertedTotalBalance = grandTotalValid ? grandTotal : nil
+
+    return anyFailed
+  }
+
+  /// Sums an earmark's three position lists, each converted to the
+  /// earmark's own instrument. Throws if any conversion fails so the
+  /// caller treats the whole earmark as failed (we never display a
+  /// partial earmark balance).
+  private func convertEarmarkPositions(_ earmark: Earmark) async throws
+    -> (
+      balance: InstrumentAmount,
+      saved: InstrumentAmount,
+      spent: InstrumentAmount
+    )
+  {
+    let date = Date()
+    var balance = InstrumentAmount.zero(instrument: earmark.instrument)
+    var saved = InstrumentAmount.zero(instrument: earmark.instrument)
+    var spent = InstrumentAmount.zero(instrument: earmark.instrument)
+    for position in earmark.positions {
+      balance += try await conversionService.convertAmount(
+        position.amount, to: earmark.instrument, on: date)
+    }
+    for position in earmark.savedPositions {
+      saved += try await conversionService.convertAmount(
+        position.amount, to: earmark.instrument, on: date)
+    }
+    for position in earmark.spentPositions {
+      spent += try await conversionService.convertAmount(
+        position.amount, to: earmark.instrument, on: date)
+    }
+    return (balance, saved, spent)
   }
 
   func reorderEarmarks(from source: IndexSet, to destination: Int) async {
