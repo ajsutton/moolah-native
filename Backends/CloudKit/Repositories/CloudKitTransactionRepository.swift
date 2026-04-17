@@ -336,6 +336,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       do {
         let converted = try await conversionService.convertAmount(
           entry.amount, to: target, on: today)
+        guard !Task.isCancelled else { return nil }
         total += converted
       } catch {
         logger.warning(
