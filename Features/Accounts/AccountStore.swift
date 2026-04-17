@@ -81,15 +81,6 @@ final class AccountStore {
     accounts.filter { $0.type == .investment && (showHidden || !$0.isHidden) }
   }
 
-  /// Get the balance for an account in its own instrument, computed from positions.
-  func balance(for accountId: UUID) -> InstrumentAmount {
-    guard let account = accounts.by(id: accountId) else {
-      return .zero(instrument: targetInstrument)
-    }
-    let primaryPosition = account.positions.first(where: { $0.instrument == account.instrument })
-    return primaryPosition?.amount ?? .zero(instrument: account.instrument)
-  }
-
   /// The display balance for an account in its own instrument. For investment
   /// accounts with an externally-provided value, returns that; otherwise sums
   /// every position converted via the conversion service. The conversion service
