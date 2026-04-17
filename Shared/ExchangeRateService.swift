@@ -44,21 +44,47 @@ actor ExchangeRateService {
       return cached
     }
 
-    // Fetch from client
+    // Determine what to fetch to cover the requested date.
+    // Frankfurter 404s for weekends, public holidays, and dates past its
+    // last-posted rate, so we always fetch a surrounding range and fall
+    // back to the most-recent prior cached rate when the exact date is
+    // missing.
+    let calendar = Calendar(identifier: .gregorian)
     do {
-      try await fetchAndMerge(base: base, from: date, to: date)
-      if let cached = lookupRate(base: base, quote: quote, dateString: dateString) {
-        return cached
+      if let cache = caches[base] {
+        if dateString > cache.latestDate {
+          let fetchStart = calendar.date(
+            byAdding: .day, value: 1,
+            to: dateFormatter.date(from: cache.latestDate)!)!
+          try await fetchInChunks(base: base, from: fetchStart, to: date)
+        } else if dateString < cache.earliestDate {
+          let fetchEnd = calendar.date(
+            byAdding: .day, value: -1,
+            to: dateFormatter.date(from: cache.earliestDate)!)!
+          try await fetchInChunks(base: base, from: date, to: fetchEnd)
+        } else {
+          // Requested date is inside the cached range but the specific
+          // quote is missing (or the whole date is missing) — we only
+          // reach here after the initial cache lookup returned nil, so
+          // attempt to fetch that single date.
+          try await fetchInChunks(base: base, from: date, to: date)
+        }
+      } else {
+        // Cold cache: fetch a month-wide surrounding range so we pick up
+        // at least one trading day alongside the requested date.
+        let fetchStart = calendar.date(byAdding: .day, value: -30, to: date)!
+        try await fetchInChunks(base: base, from: fetchStart, to: date)
       }
     } catch {
-      // Network failure — try fallback
-      if let fallback = fallbackRate(base: base, quote: quote, dateString: dateString) {
-        return fallback
-      }
-      throw error
+      // Fetch failed — proceed to fallback lookup.
     }
 
-    // Fetch succeeded but no rate for this date — try fallback
+    // Exact hit after fetch?
+    if let cached = lookupRate(base: base, quote: quote, dateString: dateString) {
+      return cached
+    }
+
+    // Fall back to the most-recent cached rate on or before the requested date.
     if let fallback = fallbackRate(base: base, quote: quote, dateString: dateString) {
       return fallback
     }
