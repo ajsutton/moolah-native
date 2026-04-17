@@ -219,7 +219,8 @@ struct SidebarView: View {
     }
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
-        instrument: earmarkStore.targetInstrument,
+        instrument: session.profile.instrument,
+        supportsComplexTransactions: session.profile.supportsComplexTransactions,
         onCreate: { newEarmark in
           Task {
             _ = await earmarkStore.create(newEarmark)
