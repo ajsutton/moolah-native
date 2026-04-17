@@ -93,6 +93,30 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
 
   // MARK: - Fetch
 
+  /// Per-instrument subtotal carried across the `MainActor`/async-conversion
+  /// boundary. Raw `Int64` storage is summed inside the MainActor/SwiftData
+  /// block (fast path — no per-leg `toDomain` / `Decimal` / conversion) and
+  /// then converted to the account's instrument outside `MainActor.run`.
+  private struct SubtotalEntry: Sendable {
+    let instrument: Instrument
+    let amount: InstrumentAmount
+  }
+
+  /// Intermediate result returned from the `MainActor.run` block in
+  /// `fetch(filter:page:pageSize:)`. Conversion of per-instrument subtotals
+  /// happens on the caller's actor, so the MainActor block hands back the
+  /// raw ingredients rather than a fully-formed `TransactionPage`.
+  private struct FetchResult: Sendable {
+    let pageTransactions: [Transaction]
+    /// `nil` when there's no account filter — no running-balance is applicable.
+    let subtotalsToConvert: [SubtotalEntry]?
+    let resolvedTarget: Instrument
+    let totalCount: Int?
+    /// `true` when the requested page was past the end of the result set;
+    /// `pageTransactions` is empty and `subtotalsToConvert` is `nil`.
+    let isEmpty: Bool
+  }
+
   func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> TransactionPage {
     let signpostID = OSSignpostID(log: Signposts.repository)
     os_signpost(
@@ -101,7 +125,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       os_signpost(
         .end, log: Signposts.repository, name: "TransactionRepo.fetch", signpostID: signpostID)
     }
-    return try await MainActor.run {
+    let fetchResult: FetchResult = try await MainActor.run {
       // Match moolah-server: when scheduled is not explicitly requested, exclude scheduled
       // transactions. The server always adds `AND recur_period IS NULL` unless scheduled=true.
       let scheduled = filter.scheduled ?? false
@@ -122,12 +146,12 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       }
 
       // --- Step 2: Fetch TransactionRecords with date/scheduled predicates ---
-      let fetchResult = try fetchTransactionRecords(
+      let recordsFetch = try fetchTransactionRecords(
         scheduled: scheduled,
         dateRange: filter.dateRange
       )
-      let allRecords = fetchResult.records
-      let descriptorResult = fetchResult.result
+      let allRecords = recordsFetch.records
+      let descriptorResult = recordsFetch.result
 
       // --- Step 3: Intersect with accountId filter if needed ---
       var filteredRecords: [TransactionRecord]
@@ -198,6 +222,8 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       os_signpost(.end, log: Signposts.repository, name: "fetch.sort", signpostID: signpostID)
 
       // --- Paginate ---
+      // Resolve target instrument up front so both the empty-page and the
+      // populated-page branches can label the result consistently.
       let resolvedTarget: Instrument
       if let filterAccountId = filter.accountId {
         resolvedTarget = (try? accountInstrument(id: filterAccountId)) ?? self.instrument
@@ -207,13 +233,14 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
 
       let offset = page * pageSize
       guard offset < filteredRecords.count else {
-        // Empty page — priorBalance is zero in whichever instrument best
-        // matches the filter context.
-        return TransactionPage(
-          transactions: [],
-          targetInstrument: resolvedTarget,
-          priorBalance: InstrumentAmount.zero(instrument: resolvedTarget),
-          totalCount: filteredRecords.count)
+        // Empty page — no transactions and no subtotals; caller fills in a
+        // zero priorBalance in `resolvedTarget`.
+        return FetchResult(
+          pageTransactions: [],
+          subtotalsToConvert: nil,
+          resolvedTarget: resolvedTarget,
+          totalCount: filteredRecords.count,
+          isEmpty: true)
       }
       let totalCount = filteredRecords.count
       let end = min(offset + pageSize, totalCount)
@@ -227,12 +254,14 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       }
       os_signpost(.end, log: Signposts.repository, name: "fetch.toDomain", signpostID: signpostID)
 
-      // priorBalance = sum of leg quantities for the filtered account for records after the page.
-      // Account balances are tracked in the account's own instrument (legs of
-      // an account share its instrument), not the profile instrument.
+      // priorBalance: group raw leg storage values by instrument (fast path — no
+      // per-leg toDomain / Decimal / conversion). Conversion to the account
+      // instrument happens outside MainActor at today's rate (Rule 6 of
+      // guides/INSTRUMENT_CONVERSION_GUIDE.md): this is a present-day valuation
+      // of the account, not a historical figure.
       os_signpost(
         .begin, log: Signposts.balance, name: "fetch.priorBalance", signpostID: signpostID)
-      let priorBalance: InstrumentAmount
+      let subtotalsToConvert: [SubtotalEntry]?
       if let filterAccountId = filter.accountId {
         let afterPageRecordIds = Set(filteredRecords[end...].map(\.id))
         let aid = filterAccountId
@@ -240,24 +269,76 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
           predicate: #Predicate { $0.accountId == aid }
         )
         let allAccountLegs = try context.fetch(legDescriptor)
-        var totalStorageValue: Int64 = 0
+        var subtotalsById: [String: Int64] = [:]
         for leg in allAccountLegs where afterPageRecordIds.contains(leg.transactionId) {
-          totalStorageValue += leg.quantity
+          subtotalsById[leg.instrumentId, default: 0] += leg.quantity
         }
-        let accountInstrument = try accountInstrument(id: filterAccountId)
-        priorBalance = InstrumentAmount(
-          storageValue: totalStorageValue, instrument: accountInstrument)
+        subtotalsToConvert = try subtotalsById.map { (instrumentId, storageValue) in
+          let instrument = try resolveInstrument(id: instrumentId)
+          return SubtotalEntry(
+            instrument: instrument,
+            amount: InstrumentAmount(storageValue: storageValue, instrument: instrument))
+        }
       } else {
-        priorBalance = InstrumentAmount.zero(instrument: self.instrument)
+        subtotalsToConvert = nil
       }
       os_signpost(.end, log: Signposts.balance, name: "fetch.priorBalance", signpostID: signpostID)
 
-      return TransactionPage(
-        transactions: pageTransactions,
-        targetInstrument: resolvedTarget,
-        priorBalance: priorBalance,
-        totalCount: totalCount)
+      return FetchResult(
+        pageTransactions: pageTransactions,
+        subtotalsToConvert: subtotalsToConvert,
+        resolvedTarget: resolvedTarget,
+        totalCount: totalCount,
+        isEmpty: false)
     }
+
+    // Convert per-instrument subtotals to the target instrument outside
+    // MainActor.run: the conversion service is async and may hit a remote
+    // rate provider. Same-instrument entries short-circuit without a call.
+    let priorBalance: InstrumentAmount?
+    if fetchResult.isEmpty {
+      priorBalance = InstrumentAmount.zero(instrument: fetchResult.resolvedTarget)
+    } else if let subtotals = fetchResult.subtotalsToConvert {
+      priorBalance = await convertSubtotals(subtotals, to: fetchResult.resolvedTarget)
+    } else {
+      // No account filter: no account-level running balance applicable.
+      priorBalance = InstrumentAmount.zero(instrument: fetchResult.resolvedTarget)
+    }
+
+    return TransactionPage(
+      transactions: fetchResult.pageTransactions,
+      targetInstrument: fetchResult.resolvedTarget,
+      priorBalance: priorBalance,
+      totalCount: fetchResult.totalCount)
+  }
+
+  /// Converts a list of per-instrument subtotals to a single amount in
+  /// `target` using today's exchange rate. Returns `nil` on any conversion
+  /// failure and logs via `os.Logger` (Rule 11 of
+  /// `guides/INSTRUMENT_CONVERSION_GUIDE.md`).
+  private func convertSubtotals(
+    _ subtotals: [SubtotalEntry],
+    to target: Instrument
+  ) async -> InstrumentAmount? {
+    var total = InstrumentAmount.zero(instrument: target)
+    let today = Date()
+    for entry in subtotals {
+      if entry.instrument == target {
+        total += entry.amount
+        continue
+      }
+      do {
+        let converted = try await conversionService.convertAmount(
+          entry.amount, to: target, on: today)
+        total += converted
+      } catch {
+        logger.warning(
+          "priorBalance conversion failed for \(entry.instrument.id, privacy: .public) -> \(target.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
+        )
+        return nil
+      }
+    }
+    return total
   }
 
   // MARK: - Predicate Push-Down Helpers

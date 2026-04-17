@@ -295,9 +295,13 @@ struct TransactionRepositoryContractTests {
     let foreignInstrument = Instrument.USD
     let accountId = UUID()
 
-    // USD -> AUD at 1.5 today.
+    // USD -> AUD at 1.5 today. FixedRateClient keys are ISO-8601 date →
+    // quote-currency rates (base is passed separately to fetchRates).
+    let todayFormatter = ISO8601DateFormatter()
+    todayFormatter.formatOptions = [.withFullDate]
+    let todayKey = todayFormatter.string(from: Date())
     let rates: [String: [String: Decimal]] = [
-      "USD": ["AUD": Decimal(string: "1.5")!]
+      todayKey: ["AUD": Decimal(string: "1.5")!]
     ]
     let (backend, container) = try TestBackend.create(
       instrument: accountInstrument, exchangeRates: rates)
