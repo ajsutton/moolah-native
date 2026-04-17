@@ -45,6 +45,16 @@ struct Profile: Identifiable, Codable, Sendable, Equatable {
     Instrument.fiat(code: currencyCode)
   }
 
+  /// Whether this profile's backend supports multi-instrument data:
+  /// per-account currencies, per-earmark currencies, cross-currency transfers,
+  /// and the custom transaction editor with per-leg instrument overrides.
+  ///
+  /// `true` only for `.cloudKit`. `Remote` and `moolah` backends are
+  /// single-instrument — every account, earmark, and transaction leg must be
+  /// in `profile.currencyCode`. UI must gate currency pickers and custom mode
+  /// on this flag; `Remote*Repository` write paths enforce the constraint via
+  /// `requireMatchesProfileInstrument(...)` (see
+  /// `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 11a).
   var supportsComplexTransactions: Bool {
     backendType == .cloudKit
   }

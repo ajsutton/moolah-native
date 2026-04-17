@@ -5,6 +5,45 @@ import Testing
 
 @Suite("RemoteEarmarkRepository")
 struct RemoteEarmarkRepositoryTests {
+  private func makeGuardOnlyRepository(instrument: Instrument) -> RemoteEarmarkRepository {
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [URLProtocolStub.self]
+    let session = URLSession(configuration: config)
+    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    URLProtocolStub.requestHandler = { _ in
+      Issue.record("Network request should not be made when instrument guard fires")
+      let response = HTTPURLResponse(
+        url: URL(string: "https://api.example.com")!, statusCode: 500, httpVersion: nil,
+        headerFields: nil)!
+      return (response, Data())
+    }
+    return RemoteEarmarkRepository(client: client, instrument: instrument)
+  }
+
+  @Test func createRejectsEarmarkWithNonProfileInstrument() async throws {
+    let repo = makeGuardOnlyRepository(instrument: .AUD)
+    let earmark = Earmark(name: "USD Holiday", instrument: .USD)
+    await #expect(throws: BackendError.self) {
+      _ = try await repo.create(earmark)
+    }
+  }
+
+  @Test func updateRejectsEarmarkWithNonProfileInstrument() async throws {
+    let repo = makeGuardOnlyRepository(instrument: .AUD)
+    let earmark = Earmark(name: "USD Holiday", instrument: .USD)
+    await #expect(throws: BackendError.self) {
+      _ = try await repo.update(earmark)
+    }
+  }
+
+  @Test func setBudgetRejectsAmountInForeignInstrument() async throws {
+    let repo = makeGuardOnlyRepository(instrument: .AUD)
+    let foreignAmount = InstrumentAmount(quantity: 50, instrument: .USD)
+    await #expect(throws: BackendError.self) {
+      try await repo.setBudget(earmarkId: UUID(), categoryId: UUID(), amount: foreignAmount)
+    }
+  }
+
   @Test func testDecodesFixtureJSON() async throws {
     // Given
     let bundle = Bundle(for: TestBundleMarker.self)
