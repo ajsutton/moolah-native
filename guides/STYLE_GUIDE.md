@@ -1233,6 +1233,8 @@ Acceptable uses:
 - **Recent Items submenu** — file-type icon for each entry.
 - **Items that mirror a toolbar button** where the toolbar's SF Symbol is the recognized shorthand for the action (e.g., `Reveal in Finder` with `magnifyingglass`). Use sparingly.
 
+**Context menus (right-click / long-press) are a separate case.** iOS renders contextual menus with leading icons by convention, and macOS 26 does the same. Keep `systemImage:` on context-menu `Button`s — they read as system-native on iOS and provide visual affordance on macOS. The "no icons by default" rule applies to **the menu bar only** (`CommandMenu`, `CommandGroup`).
+
 Unacceptable:
 
 - Icons on every item in File/Edit/View.
