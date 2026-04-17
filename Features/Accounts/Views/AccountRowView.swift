@@ -44,6 +44,13 @@ struct SidebarRowView: View {
           .controlSize(.small)
       }
     }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(accessibilitySummary)
+  }
+
+  private var accessibilitySummary: String {
+    guard let amount else { return "\(name), balance loading" }
+    return "\(name), \(amount.formatted)"
   }
 }
 
