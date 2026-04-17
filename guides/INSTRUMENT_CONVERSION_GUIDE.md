@@ -1,6 +1,6 @@
 # Instrument Conversion Guide
 
-**Version:** 1.0
+**Version:** 1.1
 **Platform targets:** macOS 26+ (primary), iOS 26+ (secondary)
 
 ---
@@ -137,6 +137,21 @@ Use `transaction.date`, `dailyBalance.date`, `snapshot.date`, or the explicit pa
 
 The date used to key a balance and the date supplied to the conversion service must both be normalized the same way (usually `Calendar(identifier: .gregorian).startOfDay(for:)`). Mismatches can cross timezone boundaries and return yesterday's rate for today's value.
 
+### Rule 11a: Single-instrument backends reject foreign-instrument writes
+
+Not every backend supports multi-currency. Only `CloudKitBackend` is multi-instrument; `RemoteBackend` and the hosted `moolah` backend are **single-instrument**. All accounts, earmarks, transaction legs, and budget amounts on those backends must be in the profile's currency.
+
+`Profile.supportsComplexTransactions` is the single source of truth:
+
+- `true` → CloudKit. Per-account currencies, per-earmark currencies, cross-currency transfers, and the custom transaction editor are available.
+- `false` → Remote / moolah. The UI hides currency pickers and the "Custom" transaction mode; sheets default to `profile.instrument`.
+
+**UI layer** — every currency picker (create/edit account, create/edit earmark, per-leg currency in `TransactionDetailView`) must be gated on `supportsComplexTransactions` and omitted when the flag is false. `TransactionDetailView.availableModes` must omit `.custom` for single-instrument profiles.
+
+**Backend layer** — the three `Remote*Repository` write paths (`RemoteAccountRepository.create/update`, `RemoteEarmarkRepository.create/update/setBudget`, `RemoteTransactionRepository.create/update`) call `requireMatchesProfileInstrument(...)` before any HTTP call and throw `BackendError.unsupportedInstrument(...)` on mismatch. This is defence in depth — a gating bug in the UI surfaces as an error, never as silent data that the backend cannot represent.
+
+If you add a new write path on a single-instrument backend (or a new single-instrument backend), it **must** call the guard on every instrument-bearing field — account instrument, opening balance, every transaction leg, earmark instrument, budget amount.
+
 ### Rule 11: Degrade gracefully; never display incorrect or confusing data
 
 Conversion can fail in production — no network, no cached fallback, unsupported pair, missing provider mapping. The system must degrade as gracefully as it can, but it **must never present an incorrect, partial, or mixed-instrument number as if it were the answer the user asked for**.
@@ -201,6 +216,8 @@ See Rule 8. Applies to both `convert(_:from:to:on:)` and `convertAmount(_:to:on:
 | Replacing a failed conversion with `0` / `.zero(instrument:)` in the running sum | A wrong total rendered as authoritative | Mark the affected total unavailable; never substitute zero (Rule 11) |
 | Wrapping all totals in one outer `do { ... } catch { total = nil }` | One bad position blanks sibling totals too — sidebar spinner forever | Scope the catch to the individual failing total; keep siblings rendering (Rule 11) |
 | `try?` on a conversion without logging or surfacing an error | Silent failure, invisible in production | Log via `os.Logger` and surface a retryable error to the user (Rule 11) |
+| Skipping the `supportsComplexTransactions` gate on a currency picker or custom-mode toggle | Lets a Remote / moolah user enter foreign-instrument data that the backend cannot represent | Gate every currency / custom-mode UI on `Profile.supportsComplexTransactions` (Rule 11a) |
+| Adding a write path on a single-instrument backend without calling `requireMatchesProfileInstrument` | Silent corruption — backend receives data it cannot represent | Call the guard on every instrument-bearing field before the HTTP call (Rule 11a) |
 
 ---
 
@@ -242,5 +259,6 @@ See Rule 8. Applies to both `convert(_:from:to:on:)` and `convertAmount(_:to:on:
 
 ## Version History
 
+- **1.1** (2026-04-17): Adds Rule 11a — single-instrument backends (Remote, moolah) reject foreign-instrument writes. Documents the UI gating (`Profile.supportsComplexTransactions`) and the `requireMatchesProfileInstrument` guard in the `Remote*Repository` write paths.
 - **1.0** (2026-04-17): Initial guide. Consolidates instrument-safe-arithmetic and conversion-date rules previously spread across `plans/ROADMAP.md`, `plans/2026-04-17-forecast-currency-conversion-plan.md`, and the `PositionBook` / `InstrumentAmount` source files. Adds Rule 11: on conversion failure, mark the affected total unavailable — never display the convertible portion as the total, never display the unconverted amount in its native instrument, and never substitute zero. Independently-scoped sibling totals must keep rendering.
 - **1.1** (2026-04-17): Rule 7 moved from a call-site obligation to a service-level guarantee — `FiatConversionService` and `FullConversionService` now clamp any future date to `Date()` before rate lookup, so forecast and scheduled call sites can pass `transaction.date` directly.
