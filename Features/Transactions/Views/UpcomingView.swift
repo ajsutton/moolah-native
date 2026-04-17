@@ -21,6 +21,7 @@ struct UpcomingView: View {
         showRecurrence: true,
         supportsComplexTransactions: session.profile.supportsComplexTransactions
       )
+      .focusedSceneValue(\.selectedTransaction, $selectedTransaction)
   }
 
   private var listView: some View {
