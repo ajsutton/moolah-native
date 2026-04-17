@@ -1043,6 +1043,18 @@ Every item here **must** be disabled (not hidden) when no transaction is selecte
 
 Labels match the selection count: `Delete Transaction` with one selected, `Delete 3 Transactions` with many. Prefer the singular when it reads naturally either way.
 
+#### Additional Domain Menus (Account, Earmark)
+
+When the app has more than one primary noun the user acts on, each gets its own domain menu positioned between `Transaction` and `Window`:
+
+```
+… View · Go · Transaction · Account · Earmark · Window · Help
+```
+
+Each domain menu follows the same rules as `Transaction` — verb-phrase items, operate on the focused window's selection via `@FocusedValue`, disabled (not hidden) when no selection is present. Keep each menu short (3–6 items). If a domain has only one or two menu-worthy actions, inline them into `Transaction` under a noun prefix (`Edit Account…`, `View Account Transactions`) instead of creating a dedicated menu.
+
+Do not create a domain menu just to host a single command. And do not invent a generic `Domain` or `Items` menu that covers multiple nouns — each menu owns exactly one noun.
+
 #### Window
 
 Mostly SwiftUI-provided via `.windowSize`, `.windowArrangement`, `.singleWindowList`:
