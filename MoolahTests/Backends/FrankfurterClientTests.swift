@@ -6,13 +6,20 @@ import Testing
 
 @Suite("FrankfurterClient")
 struct FrankfurterClientTests {
-  @Test func parsesV2ResponseFormat() throws {
+  @Test func parsesRangeResponseFormat() throws {
+    // Shape returned by the real Frankfurter range endpoint
+    // (api.frankfurter.app/<from>..<to>?base=<code>).
     let json = """
-      [
-        {"date": "2026-04-11", "base": "AUD", "quote": "USD", "rate": 0.632},
-        {"date": "2026-04-11", "base": "AUD", "quote": "EUR", "rate": 0.581},
-        {"date": "2026-04-10", "base": "AUD", "quote": "USD", "rate": 0.629}
-      ]
+      {
+        "amount": 1.0,
+        "base": "AUD",
+        "start_date": "2026-04-10",
+        "end_date": "2026-04-11",
+        "rates": {
+          "2026-04-10": {"USD": 0.629},
+          "2026-04-11": {"USD": 0.632, "EUR": 0.581}
+        }
+      }
       """
     let data = Data(json.utf8)
     let result = try FrankfurterClient.parseResponse(data)
@@ -23,8 +30,17 @@ struct FrankfurterClientTests {
     #expect(result["2026-04-10"]?["USD"] == Decimal(string: "0.629")!)
   }
 
-  @Test func parsesEmptyResponse() throws {
-    let data = Data("[]".utf8)
+  @Test func parsesEmptyRatesResponse() throws {
+    let json = """
+      {
+        "amount": 1.0,
+        "base": "AUD",
+        "start_date": "2026-04-10",
+        "end_date": "2026-04-10",
+        "rates": {}
+      }
+      """
+    let data = Data(json.utf8)
     let result = try FrankfurterClient.parseResponse(data)
     #expect(result.isEmpty)
   }
