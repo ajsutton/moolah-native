@@ -579,125 +579,77 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     conversionService: any InstrumentConversionService
   ) async throws -> [DailyBalance] {
     let investmentAccountIds = Set(accounts.filter { $0.type == .investment }.map(\.id))
+    let sorted = nonScheduled.sorted { $0.date < $1.date }
 
-    // Filter by date range and sort chronologically (sorted once, reused below)
-    let transactions: [Transaction]
-    if let after {
-      transactions = nonScheduled.filter { $0.date >= after }.sorted(by: { $0.date < $1.date })
-    } else {
-      transactions = nonScheduled.sorted(by: { $0.date < $1.date })
-    }
-
-    // Compute daily balances
+    var book = PositionBook.empty
     var dailyBalances: [Date: DailyBalance] = [:]
-    var currentBalance: InstrumentAmount = .zero(instrument: instrument)
-    var currentInvestments: InstrumentAmount = .zero(instrument: instrument)
-    var perEarmarkAmounts: [UUID: InstrumentAmount] = [:]
 
-    // If 'after' is provided, compute starting balances up to that date.
-    // Starting balance includes ALL leg types on investment accounts
-    // (matching server's selectBalance for hasInvestmentAccount).
+    // Pre-`after` priors: walk into the book with asStartingBalance: true so
+    // that non-transfer legs on investment accounts seed the transfers-only
+    // baseline. This preserves the legacy single-currency semantic:
+    // `investments` for each post-`after` day = snapshot at `after` +
+    // post-`after` transfers.
     if let after {
-      let priorTransactions = nonScheduled.filter { $0.date < after }
-      for txn in priorTransactions.sorted(by: { $0.date < $1.date }) {
-        applyTransaction(
-          txn,
-          to: &currentBalance,
-          investments: &currentInvestments,
-          perEarmarkAmounts: &perEarmarkAmounts,
-          instrument: instrument,
-          investmentAccountIds: investmentAccountIds,
-          investmentTransfersOnly: false
-        )
+      for txn in sorted where txn.date < after {
+        book.apply(
+          txn, investmentAccountIds: investmentAccountIds, asStartingBalance: true)
       }
     }
 
-    // Apply each transaction to running balances (transactions already sorted above).
-    // Only TRANSFER legs change the investment running total for daily deltas
-    // (matching server's dailyProfitAndLoss which only counts transfers
-    // between investment and non-investment accounts).
-    var lastComputeDayDate: Date?
-    var lastComputeDayKey: Date = .distantPast
-
-    for txn in transactions {
-      applyTransaction(
-        txn,
-        to: &currentBalance,
-        investments: &currentInvestments,
-        perEarmarkAmounts: &perEarmarkAmounts,
-        instrument: instrument,
+    // Post-`after` daily updates: normal accumulation. Only `.transfer` legs on
+    // investment accounts contribute to the transfers-only read.
+    for txn in sorted where after.map({ txn.date >= $0 }) ?? true {
+      book.apply(txn, investmentAccountIds: investmentAccountIds)
+      let dayKey = Calendar.current.startOfDay(for: txn.date)
+      dailyBalances[dayKey] = try await book.dailyBalance(
+        on: txn.date,
         investmentAccountIds: investmentAccountIds,
-        investmentTransfersOnly: true
-      )
-
-      let dayKey: Date
-      if let last = lastComputeDayDate, txn.date.isSameDay(as: last) {
-        dayKey = lastComputeDayKey
-      } else {
-        dayKey = Calendar.current.startOfDay(for: txn.date)
-        lastComputeDayKey = dayKey
-        lastComputeDayDate = txn.date
-      }
-      let currentEarmarks = clampedEarmarkTotal(perEarmarkAmounts, instrument: instrument)
-      dailyBalances[dayKey] = DailyBalance(
-        date: dayKey,
-        balance: currentBalance,
-        earmarked: currentEarmarks,
-        availableFunds: currentBalance - currentEarmarks,
-        investments: currentInvestments,
-        investmentValue: nil,
-        netWorth: currentBalance + currentInvestments,
-        bestFit: nil,
+        profileInstrument: instrument,
+        rule: .investmentTransfersOnly,
+        conversionService: conversionService,
         isForecast: false
       )
     }
 
-    // Convert multi-instrument positions to profile currency if needed
-    try await applyMultiInstrumentConversion(
-      to: &dailyBalances,
-      allTransactions: nonScheduled,
-      investmentAccountIds: investmentAccountIds,
-      instrument: instrument,
-      conversionService: conversionService
-    )
-
     // Apply investment values (overrides net worth with market values where available)
     try await applyInvestmentValues(
-      investmentValues, to: &dailyBalances, instrument: instrument,
-      conversionService: conversionService)
+      investmentValues, to: &dailyBalances,
+      instrument: instrument, conversionService: conversionService)
+
+    // Equivalence check (debug only, single-currency only).
+    // Multi-currency divergence is by design (Option A unifies behaviour).
+    #if DEBUG
+      let hasMultiInstrument = nonScheduled.contains { txn in
+        txn.legs.contains { $0.instrument.id != instrument.id }
+      }
+      if !hasMultiInstrument {
+        let legacy = try await computeDailyBalancesLegacy(
+          nonScheduled: nonScheduled,
+          accounts: accounts,
+          investmentValues: investmentValues,
+          after: after,
+          instrument: instrument,
+          conversionService: conversionService
+        )
+        assertDailyBalanceDictsEquivalent(new: dailyBalances, legacy: legacy)
+      }
+    #endif
 
     // Compute bestFit
     var actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
     CloudKitAnalysisRepository.applyBestFit(to: &actualBalances, instrument: instrument)
 
-    // Generate forecasted balances if requested
+    // Generate forecasted balances if requested. The `book` above already
+    // holds the full position at the end of the in-window range, so we can
+    // pass it straight to `generateForecast` as the starting state.
     var forecastBalances: [DailyBalance] = []
     if let forecastUntil {
-      // transactions is sorted chronologically, so .last is the most recent date
-      let lastDate = transactions.last?.date ?? Date()
-
-      // Build the starting PositionBook from the same transactions that fed
-      // the legacy accumulator (currentBalance/currentInvestments/perEarmarkAmounts).
-      // PositionBook.apply tracks per-instrument positions correctly without
-      // needing to be told which rule will be used at read time — the rule
-      // controls READS via dailyBalance, not WRITES via apply.
-      var startingBook = PositionBook.empty
-      if let after {
-        let priorTransactions =
-          nonScheduled
-          .filter { $0.date < after }
-          .sorted(by: { $0.date < $1.date })
-        for txn in priorTransactions {
-          startingBook.apply(txn, investmentAccountIds: investmentAccountIds)
-        }
-      }
-      for txn in transactions {
-        startingBook.apply(txn, investmentAccountIds: investmentAccountIds)
-      }
-
+      let lastDate =
+        sorted.last(where: { txn in after.map({ txn.date >= $0 }) ?? true })?.date
+        ?? Date()
       forecastBalances = try await generateForecast(
         scheduled: scheduled,
-        startingBook: startingBook,
+        startingBook: book,
         startDate: lastDate,
         endDate: forecastUntil,
         investmentAccountIds: investmentAccountIds,
@@ -708,6 +660,115 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
     return actualBalances + forecastBalances
   }
+
+  #if DEBUG
+    /// Legacy implementation of the daily-balance accumulator, kept as a
+    /// correctness oracle for the PositionBook-based `computeDailyBalances`
+    /// during the migration. Single-currency only — multi-currency semantics
+    /// intentionally diverge under Option A.
+    @concurrent
+    private static func computeDailyBalancesLegacy(
+      nonScheduled: [Transaction],
+      accounts: [Account],
+      investmentValues: [(accountId: UUID, date: Date, value: InstrumentAmount)],
+      after: Date?,
+      instrument: Instrument,
+      conversionService: any InstrumentConversionService
+    ) async throws -> [Date: DailyBalance] {
+      let investmentAccountIds = Set(accounts.filter { $0.type == .investment }.map(\.id))
+      let transactions: [Transaction]
+      if let after {
+        transactions = nonScheduled.filter { $0.date >= after }.sorted(by: { $0.date < $1.date })
+      } else {
+        transactions = nonScheduled.sorted(by: { $0.date < $1.date })
+      }
+
+      var dailyBalances: [Date: DailyBalance] = [:]
+      var currentBalance: InstrumentAmount = .zero(instrument: instrument)
+      var currentInvestments: InstrumentAmount = .zero(instrument: instrument)
+      var perEarmarkAmounts: [UUID: InstrumentAmount] = [:]
+
+      if let after {
+        let priorTransactions = nonScheduled.filter { $0.date < after }
+        for txn in priorTransactions.sorted(by: { $0.date < $1.date }) {
+          applyTransaction(
+            txn,
+            to: &currentBalance,
+            investments: &currentInvestments,
+            perEarmarkAmounts: &perEarmarkAmounts,
+            instrument: instrument,
+            investmentAccountIds: investmentAccountIds,
+            investmentTransfersOnly: false
+          )
+        }
+      }
+
+      for txn in transactions {
+        applyTransaction(
+          txn,
+          to: &currentBalance,
+          investments: &currentInvestments,
+          perEarmarkAmounts: &perEarmarkAmounts,
+          instrument: instrument,
+          investmentAccountIds: investmentAccountIds,
+          investmentTransfersOnly: true
+        )
+        let dayKey = Calendar.current.startOfDay(for: txn.date)
+        let currentEarmarks = clampedEarmarkTotal(perEarmarkAmounts, instrument: instrument)
+        dailyBalances[dayKey] = DailyBalance(
+          date: dayKey,
+          balance: currentBalance,
+          earmarked: currentEarmarks,
+          availableFunds: currentBalance - currentEarmarks,
+          investments: currentInvestments,
+          investmentValue: nil,
+          netWorth: currentBalance + currentInvestments,
+          bestFit: nil,
+          isForecast: false
+        )
+      }
+
+      try await applyMultiInstrumentConversion(
+        to: &dailyBalances,
+        allTransactions: nonScheduled,
+        investmentAccountIds: investmentAccountIds,
+        instrument: instrument,
+        conversionService: conversionService
+      )
+      try await applyInvestmentValues(
+        investmentValues, to: &dailyBalances,
+        instrument: instrument, conversionService: conversionService)
+      return dailyBalances
+    }
+
+    private static func assertDailyBalanceDictsEquivalent(
+      new: [Date: DailyBalance],
+      legacy: [Date: DailyBalance],
+      file: StaticString = #file,
+      line: UInt = #line
+    ) {
+      if new.keys.sorted() != legacy.keys.sorted() {
+        assertionFailure(
+          "PositionBook daily-balance keys differ from legacy: \(new.keys.sorted().count) vs \(legacy.keys.sorted().count)",
+          file: file, line: line
+        )
+        return
+      }
+      for date in new.keys.sorted() {
+        let n = new[date]!
+        let l = legacy[date]!
+        if n.balance != l.balance || n.earmarked != l.earmarked
+          || n.availableFunds != l.availableFunds || n.investments != l.investments
+          || n.investmentValue != l.investmentValue || n.netWorth != l.netWorth
+        {
+          assertionFailure(
+            "PositionBook daily-balance diverges from legacy on \(date)\n  new: balance=\(n.balance) earmarked=\(n.earmarked) avail=\(n.availableFunds) invest=\(n.investments) value=\(String(describing: n.investmentValue)) net=\(n.netWorth)\n  legacy: balance=\(l.balance) earmarked=\(l.earmarked) avail=\(l.availableFunds) invest=\(l.investments) value=\(String(describing: l.investmentValue)) net=\(l.netWorth)",
+            file: file, line: line
+          )
+        }
+      }
+    }
+  #endif
 
   @concurrent
   private static func computeExpenseBreakdown(

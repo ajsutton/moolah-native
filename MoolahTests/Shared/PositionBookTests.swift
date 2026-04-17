@@ -336,6 +336,80 @@ struct PositionBookTests {
     #expect(book.accountsFromTransfers.isEmpty)
   }
 
+  // MARK: - apply(_:asStartingBalance:)
+
+  @Test("apply with asStartingBalance: true records non-transfer investment legs in transfers")
+  func startingBalanceRecordsNonTransferInvestmentLegs() async throws {
+    var book = PositionBook.empty
+    // Income on investment account, applied as a starting balance.
+    book.apply(
+      transaction(legs: [
+        TransactionLeg(
+          accountId: investmentAccount, instrument: aud, quantity: 700, type: .income)
+      ]),
+      investmentAccountIds: [investmentAccount],
+      asStartingBalance: true)
+    // Opening balance on investment account, applied as a starting balance.
+    book.apply(
+      transaction(legs: [
+        TransactionLeg(
+          accountId: investmentAccount, instrument: aud, quantity: 300,
+          type: .openingBalance)
+      ]),
+      investmentAccountIds: [investmentAccount],
+      asStartingBalance: true)
+
+    // Both legs land in `accountsFromTransfers` because asStartingBalance == true.
+    #expect(book.accountsFromTransfers[investmentAccount]?[aud] == 1_000)
+    #expect(book.accounts[investmentAccount]?[aud] == 1_000)
+
+    let conversion = FixedConversionService()
+    let result = try await book.dailyBalance(
+      on: date,
+      investmentAccountIds: [investmentAccount],
+      profileInstrument: aud,
+      rule: .investmentTransfersOnly,
+      conversionService: conversion,
+      isForecast: false
+    )
+    // .investmentTransfersOnly read sees the seeded baseline.
+    #expect(result.investments.quantity == 1_000)
+  }
+
+  @Test("apply with asStartingBalance: false (default) leaves non-transfer investment legs out")
+  func startingBalanceFalseExcludesNonTransferInvestmentLegs() {
+    var book = PositionBook.empty
+    // Default behaviour: only .transfer legs on investment accounts contribute
+    // to accountsFromTransfers. An income leg on the investment account must
+    // NOT appear in that dict.
+    book.apply(
+      transaction(legs: [
+        TransactionLeg(
+          accountId: investmentAccount, instrument: aud, quantity: 200, type: .income)
+      ]),
+      investmentAccountIds: [investmentAccount])
+
+    #expect(book.accounts[investmentAccount]?[aud] == 200)
+    #expect(book.accountsFromTransfers.isEmpty)
+  }
+
+  @Test(
+    "apply with asStartingBalance: true is a no-op for accountsFromTransfers when no investment accounts"
+  )
+  func startingBalanceNoInvestmentAccountsIsNoOp() {
+    var book = PositionBook.empty
+    // Bank-only transaction with no investment accounts at all.
+    book.apply(
+      transaction(legs: [
+        TransactionLeg(accountId: bankAccount, instrument: aud, quantity: 500, type: .income)
+      ]),
+      investmentAccountIds: [],
+      asStartingBalance: true)
+
+    #expect(book.accounts[bankAccount]?[aud] == 500)
+    #expect(book.accountsFromTransfers.isEmpty)
+  }
+
   @Test("investment-account transfer leg appears in both all-legs and transfers-only")
   func transferAppearsInBothRules() async throws {
     var book = PositionBook.empty
