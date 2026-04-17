@@ -37,7 +37,7 @@ Each phase closes specific findings from the 2026-04-17 review:
 
 ---
 
-## Phase 0: Style Guide Refinement
+## Phase 0: Style Guide Refinement ✅ Complete
 
 Before touching code, clarify two points in `guides/STYLE_GUIDE.md` §14 that the current text leaves ambiguous. These are guide-only changes and committed separately.
 
@@ -46,7 +46,7 @@ Before touching code, clarify two points in `guides/STYLE_GUIDE.md` §14 that th
 **Files:**
 - Modify: `guides/STYLE_GUIDE.md` — Section 14 "Icons in Menu Items"
 
-- [ ] **Step 1: Add a "Context menus vs menu bar" clarification**
+- [x] **Step 1: Add a "Context menus vs menu bar" clarification**
 
 In the "Icons in Menu Items" subsection, after the "Acceptable uses" list and before "Unacceptable", insert:
 
@@ -54,7 +54,7 @@ In the "Icons in Menu Items" subsection, after the "Acceptable uses" list and be
 **Context menus (right-click / long-press) are a separate case.** iOS renders contextual menus with leading icons by convention, and macOS 26 does the same. Keep `systemImage:` on context-menu `Button`s — they read as system-native on iOS and provide visual affordance on macOS. The "no icons by default" rule applies to **the menu bar only** (`CommandMenu`, `CommandGroup`).
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add guides/STYLE_GUIDE.md
@@ -66,7 +66,7 @@ git commit -m "docs: clarify style guide — context menu icons are permitted"
 **Files:**
 - Modify: `guides/STYLE_GUIDE.md` — Section 14 "Top-Level Menu Structure"
 
-- [ ] **Step 1: Allow additional domain menus alongside Transaction**
+- [x] **Step 1: Allow additional domain menus alongside Transaction**
 
 After the "Transaction" subsection and before "Window", insert a new subsection:
 
@@ -84,7 +84,7 @@ Each domain menu follows the same rules as `Transaction` — verb-phrase items, 
 Do not create a domain menu just to host a single command. And do not invent a generic `Domain` or `Items` menu that covers multiple nouns — each menu owns exactly one noun.
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add guides/STYLE_GUIDE.md
@@ -98,7 +98,7 @@ git commit -m "docs: permit Account and Earmark domain menus alongside Transacti
 
 The §14 Transaction menu outline currently shows `Edit Transaction…  ↩` and `Delete Transaction ⌫`, which creates a tension with §14's Philosophy: "Menus are for ⌘-modified commands. Single-key shortcuts … do not belong in the menu bar." The Return and Delete keys fire via List row focus (list primaryAction / onDeleteCommand), not via menu-registered shortcuts.
 
-- [ ] **Step 1: Update the Transaction menu code block**
+- [x] **Step 1: Update the Transaction menu code block**
 
 In §14's Transaction menu code block, change:
 ```
@@ -118,7 +118,7 @@ to:
 Delete Transaction…                  (ellipsis — confirmation alert; Delete key fires on list focus)
 ```
 
-- [ ] **Step 2: Update the Moolah-Specific Shortcut Map**
+- [x] **Step 2: Update the Moolah-Specific Shortcut Map**
 
 Change:
 ```
@@ -132,7 +132,7 @@ to:
 | Delete Transaction… | — | Transaction (Delete key on list focus via onDeleteCommand) |
 ```
 
-- [ ] **Step 3: Update the "Context Menu ↔ Menu Bar Parity" code example**
+- [x] **Step 3: Update the "Context Menu ↔ Menu Bar Parity" code example**
 
 Find the code block under "Context Menu ↔ Menu Bar Parity" that shows:
 ```swift
@@ -155,7 +155,7 @@ CommandMenu("Transaction") {
 }
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add guides/STYLE_GUIDE.md
