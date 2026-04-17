@@ -396,7 +396,7 @@ struct TransactionStoreTests {
 
     #expect(store.transactions.count == 1)
     #expect(store.transactions[0].transaction.payee == "Fancy Coffee")
-    #expect(store.transactions[0].displayAmount.quantity == Decimal(-7500) / 100)
+    #expect(store.transactions[0].displayAmount?.quantity == Decimal(-7500) / 100)
     #expect(store.error == nil)
   }
 
@@ -468,7 +468,7 @@ struct TransactionStoreTests {
     ]
     await store.update(modified)
     #expect(store.transactions.count == 1)
-    #expect(store.transactions[0].displayAmount.quantity == Decimal(110000) / 100)
+    #expect(store.transactions[0].displayAmount?.quantity == Decimal(110000) / 100)
 
     // Delete
     await store.delete(id: tx.id)
@@ -497,7 +497,7 @@ struct TransactionStoreTests {
     )
 
     await store.load(filter: TransactionFilter(accountId: accountId))
-    #expect(store.transactions[0].balance.quantity == Decimal(100000) / 100)
+    #expect(store.transactions[0].balance?.quantity == Decimal(100000) / 100)
 
     // Add a newer expense
     let expense = Transaction(
@@ -517,9 +517,9 @@ struct TransactionStoreTests {
     // Newest first: expense (balance 97000), then income (balance 100000)
     #expect(store.transactions.count == 2)
     #expect(store.transactions[0].transaction.payee == "Coffee")
-    #expect(store.transactions[0].balance.quantity == Decimal(97000) / 100)
+    #expect(store.transactions[0].balance?.quantity == Decimal(97000) / 100)
     #expect(store.transactions[1].transaction.payee == "Initial")
-    #expect(store.transactions[1].balance.quantity == Decimal(100000) / 100)
+    #expect(store.transactions[1].balance?.quantity == Decimal(100000) / 100)
   }
 
   @Test func testRunningBalancesUpdateAfterDelete() async throws {
@@ -557,12 +557,12 @@ struct TransactionStoreTests {
 
     await store.load(filter: TransactionFilter(accountId: accountId))
     #expect(store.transactions.count == 2)
-    #expect(store.transactions[0].balance.quantity == Decimal(97000) / 100)  // After Coffee
+    #expect(store.transactions[0].balance?.quantity == Decimal(97000) / 100)  // After Coffee
 
     // Delete the expense — balance should revert
     await store.delete(id: tx2.id)
     #expect(store.transactions.count == 1)
-    #expect(store.transactions[0].balance.quantity == Decimal(100000) / 100)  // Only Salary remains
+    #expect(store.transactions[0].balance?.quantity == Decimal(100000) / 100)  // Only Salary remains
   }
 
   // MARK: - Cross-Store Balance Updates
@@ -1034,8 +1034,8 @@ struct TransactionStoreTests {
 
     await store.load(filter: TransactionFilter(accountId: accountId))
     #expect(store.transactions.count == 2)
-    #expect(store.transactions[0].balance.quantity == Decimal(97000) / 100)  // After Coffee
-    #expect(store.transactions[1].balance.quantity == Decimal(100000) / 100)  // After Salary
+    #expect(store.transactions[0].balance?.quantity == Decimal(97000) / 100)  // After Coffee
+    #expect(store.transactions[1].balance?.quantity == Decimal(100000) / 100)  // After Salary
 
     // Update Coffee amount to -5000
     var updated = tx2
@@ -1050,8 +1050,8 @@ struct TransactionStoreTests {
     await store.update(updated)
 
     #expect(store.transactions.count == 2)
-    #expect(store.transactions[0].balance.quantity == Decimal(95000) / 100)  // After updated Coffee
-    #expect(store.transactions[1].balance.quantity == Decimal(100000) / 100)  // After Salary (unchanged)
+    #expect(store.transactions[0].balance?.quantity == Decimal(95000) / 100)  // After updated Coffee
+    #expect(store.transactions[1].balance?.quantity == Decimal(100000) / 100)  // After Salary (unchanged)
   }
 
   // MARK: - Pay Scheduled Transaction

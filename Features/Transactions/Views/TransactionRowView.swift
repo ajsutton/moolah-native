@@ -5,8 +5,8 @@ struct TransactionRowView: View {
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
-  let displayAmount: InstrumentAmount
-  let balance: InstrumentAmount
+  let displayAmount: InstrumentAmount?
+  let balance: InstrumentAmount?
   var hideEarmark: Bool = false
   var viewingAccountId: UUID? = nil
 
@@ -56,9 +56,18 @@ struct TransactionRowView: View {
       Spacer()
 
       VStack(alignment: .trailing, spacing: 2) {
-        InstrumentAmountView(amount: displayAmount, font: .body)
+        if let displayAmount {
+          InstrumentAmountView(amount: displayAmount, font: .body)
+        } else {
+          Text("—")
+            .font(.body)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+        }
 
-        InstrumentAmountView(amount: balance, font: .caption)
+        if let balance {
+          InstrumentAmountView(amount: balance, font: .caption)
+        }
       }
     }
     .padding(.vertical, verticalPadding)
@@ -68,15 +77,19 @@ struct TransactionRowView: View {
 
   private var accessibilityDescription: String {
     let dateStr = transaction.date.formatted(date: .abbreviated, time: .omitted)
-    let amountStr = displayAmount.formatted
-    let balanceStr = balance.formatted
+    let amountStr = displayAmount?.formatted ?? "amount unavailable"
     let typeStr: String
     if transaction.isSimple, let type = transaction.legs.first?.type {
       typeStr = type.displayName
     } else {
       typeStr = "Custom transaction"
     }
-    return "\(typeStr), \(displayPayee), \(amountStr), \(dateStr), balance \(balanceStr)"
+    if let balance {
+      return
+        "\(typeStr), \(displayPayee), \(amountStr), \(dateStr), balance \(balance.formatted)"
+    } else {
+      return "\(typeStr), \(displayPayee), \(amountStr), \(dateStr)"
+    }
   }
 
   private var iconName: String {
