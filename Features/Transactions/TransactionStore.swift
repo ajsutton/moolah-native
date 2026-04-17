@@ -14,14 +14,14 @@ final class TransactionStore {
 
   private let repository: TransactionRepository
   private let conversionService: InstrumentConversionService
-  /// The default target instrument (profile currency). Used when `load` is
-  /// called without an explicit override — e.g. scheduled/upcoming views
-  /// where no account context narrows the display currency.
+  /// The store's default target instrument (profile currency). Used for views
+  /// that don't narrow to a single account — scheduled, upcoming, analysis.
   private(set) var targetInstrument: Instrument
-  /// The instrument used for the currently-loaded view — either the override
-  /// passed to `load(filter:targetInstrument:)` or `targetInstrument`.
+  /// The instrument used for the currently-loaded view.
   /// Account-scoped views display balances in the account's own currency so
-  /// legs native to that account never require conversion.
+  /// native legs don't require conversion. The repository reports the
+  /// account's instrument via `TransactionPage.priorBalance.instrument`, and
+  /// the store aligns to it on the first page fetch.
   private(set) var currentTargetInstrument: Instrument
   private let pageSize: Int
   private let accountStore: AccountStore?
@@ -49,16 +49,9 @@ final class TransactionStore {
     self.earmarkStore = earmarkStore
   }
 
-  /// Loads transactions matching `filter`.
-  ///
-  /// When `targetInstrument` is supplied it overrides the store's default
-  /// (profile) instrument for this load — used by account-scoped views so
-  /// the display currency matches the viewing account. Pass `nil` for global
-  /// views (scheduled, upcoming, analysis) that should display in the
-  /// profile currency.
-  func load(filter: TransactionFilter, targetInstrument: Instrument? = nil) async {
+  func load(filter: TransactionFilter) async {
     currentFilter = filter
-    currentTargetInstrument = targetInstrument ?? self.targetInstrument
+    currentTargetInstrument = targetInstrument
     currentPage = 0
     rawTransactions = []
     priorBalance = .zero(instrument: currentTargetInstrument)
@@ -247,6 +240,13 @@ final class TransactionStore {
       )
       rawTransactions.append(contentsOf: page.transactions)
       priorBalance = page.priorBalance
+      // Adopt the repository's instrument for the display currency. For
+      // single-account views the repo returns the account's instrument so
+      // native legs never need conversion; for global views it's the profile
+      // instrument. This only changes on the first page load.
+      if currentPage == 0 {
+        currentTargetInstrument = page.priorBalance.instrument
+      }
       hasMore = page.transactions.count >= pageSize
       currentPage += 1
       loadedCount = rawTransactions.count
