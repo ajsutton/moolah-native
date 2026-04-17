@@ -120,4 +120,155 @@ struct ExportedDataTests {
     #expect(exported.currencyCode == "")
     #expect(exported.financialYearStartMonth == 1)
   }
+
+  @Test("JSON round-trip preserves mixed-currency instruments on accounts, legs, and earmarks")
+  func multiCurrencyRoundTrip() throws {
+    let aud = Instrument.AUD
+    let usd = Instrument.USD
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let eth = Instrument.crypto(
+      chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
+
+    let audAccountId = UUID()
+    let usdAccountId = UUID()
+    let investmentAccountId = UUID()
+    let cryptoEarmarkAccountId = UUID()
+    let earmarkId = UUID()
+    let foodCategoryId = UUID()
+
+    let original = ExportedData(
+      version: 1,
+      exportedAt: Date(timeIntervalSince1970: 1_700_000_000),
+      profileLabel: "Multi-currency profile",
+      currencyCode: aud.id,
+      financialYearStartMonth: 7,
+      instruments: [aud, usd, bhp, eth],
+      accounts: [
+        Account(id: audAccountId, name: "Checking AUD", type: .bank, instrument: aud),
+        Account(id: usdAccountId, name: "USD Travel", type: .bank, instrument: usd),
+        Account(
+          id: investmentAccountId, name: "Brokerage", type: .investment, instrument: bhp),
+        Account(id: cryptoEarmarkAccountId, name: "Crypto Wallet", type: .asset, instrument: eth),
+      ],
+      categories: [
+        Category(id: foodCategoryId, name: "Food")
+      ],
+      earmarks: [
+        Earmark(
+          id: earmarkId, name: "US Trip", instrument: usd,
+          savingsGoal: InstrumentAmount(quantity: Decimal(string: "500")!, instrument: usd)
+        )
+      ],
+      earmarkBudgets: [
+        earmarkId: [
+          EarmarkBudgetItem(
+            categoryId: foodCategoryId,
+            amount: InstrumentAmount(quantity: Decimal(string: "50")!, instrument: usd)
+          )
+        ]
+      ],
+      transactions: [
+        Transaction(
+          date: Date(timeIntervalSince1970: 1_700_100_000),
+          payee: "Coffee shop NYC",
+          legs: [
+            TransactionLeg(
+              accountId: usdAccountId, instrument: usd,
+              quantity: Decimal(string: "-4.50")!, type: .expense,
+              categoryId: foodCategoryId, earmarkId: earmarkId
+            )
+          ]
+        ),
+        Transaction(
+          date: Date(timeIntervalSince1970: 1_700_200_000),
+          payee: "Stock purchase",
+          legs: [
+            TransactionLeg(
+              accountId: audAccountId, instrument: aud,
+              quantity: Decimal(string: "-1500.00")!, type: .transfer
+            ),
+            TransactionLeg(
+              accountId: investmentAccountId, instrument: bhp,
+              quantity: Decimal(string: "10")!, type: .transfer
+            ),
+          ]
+        ),
+        Transaction(
+          date: Date(timeIntervalSince1970: 1_700_300_000),
+          payee: "Crypto swap",
+          legs: [
+            TransactionLeg(
+              accountId: cryptoEarmarkAccountId, instrument: eth,
+              quantity: Decimal(string: "0.25")!, type: .income
+            )
+          ]
+        ),
+      ],
+      investmentValues: [
+        investmentAccountId: [
+          InvestmentValue(
+            date: Date(timeIntervalSince1970: 1_700_400_000),
+            value: InstrumentAmount(quantity: Decimal(string: "10")!, instrument: bhp)
+          )
+        ],
+        cryptoEarmarkAccountId: [
+          InvestmentValue(
+            date: Date(timeIntervalSince1970: 1_700_500_000),
+            value: InstrumentAmount(quantity: Decimal(string: "0.25")!, instrument: eth)
+          )
+        ],
+      ]
+    )
+
+    let data = try JSONEncoder.exportEncoder.encode(original)
+    let decoded = try JSONDecoder.exportDecoder.decode(ExportedData.self, from: data)
+
+    // Instruments list preserved (all four kinds: two fiat, stock, crypto)
+    let decodedInstrumentsById = Dictionary(
+      uniqueKeysWithValues: decoded.instruments.map { ($0.id, $0) })
+    #expect(decoded.instruments.count == 4)
+    #expect(decodedInstrumentsById[aud.id] == aud)
+    #expect(decodedInstrumentsById[usd.id] == usd)
+    #expect(decodedInstrumentsById[bhp.id] == bhp)
+    #expect(decodedInstrumentsById[eth.id] == eth)
+
+    // Accounts keep their instruments (fiat, stock, and crypto)
+    let decodedAccountsById = Dictionary(uniqueKeysWithValues: decoded.accounts.map { ($0.id, $0) })
+    #expect(decodedAccountsById[audAccountId]?.instrument == aud)
+    #expect(decodedAccountsById[usdAccountId]?.instrument == usd)
+    #expect(decodedAccountsById[investmentAccountId]?.instrument == bhp)
+    #expect(decodedAccountsById[cryptoEarmarkAccountId]?.instrument == eth)
+
+    // Earmark and its savings goal stay on the foreign fiat
+    let decodedEarmark = decoded.earmarks.first { $0.id == earmarkId }
+    #expect(decodedEarmark?.instrument == usd)
+    #expect(decodedEarmark?.savingsGoal?.instrument == usd)
+
+    // Budget item stays on the earmark's instrument
+    let decodedBudget = decoded.earmarkBudgets[earmarkId]?.first
+    #expect(decodedBudget?.amount.instrument == usd)
+
+    // Legs carry through their full kind-specific metadata
+    let legInstruments = decoded.transactions.flatMap { $0.legs.map(\.instrument) }
+    #expect(Set(legInstruments) == Set([aud, usd, bhp, eth]))
+
+    let stockLeg = decoded.transactions
+      .flatMap { $0.legs }
+      .first { $0.instrument.kind == .stock }
+    #expect(stockLeg?.instrument.ticker == "BHP.AX")
+    #expect(stockLeg?.instrument.exchange == "ASX")
+
+    let cryptoLeg = decoded.transactions
+      .flatMap { $0.legs }
+      .first { $0.instrument.kind == .cryptoToken }
+    #expect(cryptoLeg?.instrument.chainId == 1)
+    #expect(cryptoLeg?.instrument.ticker == "ETH")
+    #expect(cryptoLeg?.instrument.decimals == 18)
+
+    // Investment values keep their instrument
+    let decodedStockValues = decoded.investmentValues[investmentAccountId]
+    #expect(decodedStockValues?.first?.value.instrument == bhp)
+    let decodedCryptoValues = decoded.investmentValues[cryptoEarmarkAccountId]
+    #expect(decodedCryptoValues?.first?.value.instrument == eth)
+  }
 }
