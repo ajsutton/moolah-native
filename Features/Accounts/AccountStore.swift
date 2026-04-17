@@ -90,17 +90,25 @@ final class AccountStore {
     return primaryPosition?.amount ?? .zero(instrument: account.instrument)
   }
 
-  /// The display balance for an account: investment value if available for investment accounts,
-  /// otherwise the primary position amount.
-  func displayBalance(for accountId: UUID) -> InstrumentAmount {
+  /// The display balance for an account in its own instrument. For investment
+  /// accounts with an externally-provided value, returns that; otherwise sums
+  /// every position converted via the conversion service. The conversion service
+  /// caches rates, so repeated calls are cheap.
+  func displayBalance(for accountId: UUID) async throws -> InstrumentAmount {
     guard let account = accounts.by(id: accountId) else {
       return .zero(instrument: targetInstrument)
     }
     if account.type == .investment, let value = investmentValues[accountId] {
       return value
     }
-    let primaryPosition = account.positions.first(where: { $0.instrument == account.instrument })
-    return primaryPosition?.amount ?? .zero(instrument: account.instrument)
+    var total = InstrumentAmount.zero(instrument: account.instrument)
+    let date = Date()
+    for position in account.positions {
+      let converted = try await conversionService.convertAmount(
+        position.amount, to: account.instrument, on: date)
+      total += converted
+    }
+    return total
   }
 
   /// Whether an account can be deleted (all positions are zero or empty).
@@ -142,8 +150,9 @@ final class AccountStore {
     var total = InstrumentAmount.zero(instrument: target)
     let date = Date()
     for account in investmentAccounts {
+      let accountBalance = try await displayBalance(for: account.id)
       let converted = try await conversionService.convertAmount(
-        displayBalance(for: account.id), to: target, on: date)
+        accountBalance, to: target, on: date)
       total += converted
     }
     return total

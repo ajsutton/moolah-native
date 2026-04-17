@@ -137,7 +137,8 @@ struct AccountStoreTests {
     let account = store.accounts.first!
     store.updateInvestmentValue(accountId: account.id, value: newValue)
     #expect(store.investmentValues[account.id] == newValue)
-    #expect(store.displayBalance(for: account.id) == newValue)
+    let balance = try await store.displayBalance(for: account.id)
+    #expect(balance == newValue)
   }
 
   @Test func testUpdateInvestmentValueClearsValue() async throws {
@@ -156,9 +157,10 @@ struct AccountStoreTests {
     store.updateInvestmentValue(accountId: account.id, value: nil)
 
     #expect(store.investmentValues[account.id] == nil)
-    // displayBalance falls back to position balance when investmentValue is nil
+    // displayBalance sums positions (converted to account's instrument) when investmentValue is nil
+    let balance = try await store.displayBalance(for: account.id)
     #expect(
-      store.displayBalance(for: account.id)
+      balance
         == InstrumentAmount(
           quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
   }
@@ -450,7 +452,8 @@ struct AccountStoreTests {
       quantity: Decimal(150000) / 100, instrument: Instrument.defaultTestInstrument)
     store.updateInvestmentValue(accountId: acctId, value: investmentValue)
 
-    #expect(store.displayBalance(for: acctId) == investmentValue)
+    let balance = try await store.displayBalance(for: acctId)
+    #expect(balance == investmentValue)
   }
 
   @Test func testCanDeleteReturnsTrueForZeroPositions() async throws {

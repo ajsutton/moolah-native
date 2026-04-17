@@ -29,9 +29,10 @@ struct ListAccountsIntent: AppIntent {
     }
 
     let session = try service.resolveSession(for: profile.id.uuidString)
-    let lines = accounts.map { account in
-      let displayBalance = session.accountStore.displayBalance(for: account.id)
-      return "\(account.name): \(displayBalance.formatted) (\(account.type.displayName))"
+    var lines: [String] = []
+    for account in accounts {
+      let displayBalance = try await session.accountStore.displayBalance(for: account.id)
+      lines.append("\(account.name): \(displayBalance.formatted) (\(account.type.displayName))")
     }
     return .result(value: lines.joined(separator: "\n"))
   }
