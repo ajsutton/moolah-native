@@ -360,4 +360,128 @@ struct AccountStoreConversionTests {
     let balance = try await store.displayBalance(for: UUID())
     #expect(balance == .zero(instrument: .defaultTestInstrument))
   }
+
+  // MARK: - Partial conversion failures (sidebar bug)
+
+  /// When one account's conversion fails, other accounts whose conversions
+  /// succeed still appear in `convertedBalances`. Aggregate totals stay nil
+  /// because we cannot accurately sum a set with a missing value.
+  @Test func perAccountBalancePopulatesEvenWhenAnotherAccountFails() async throws {
+    let aud = Instrument.AUD
+    let usd = Instrument.USD
+    let eur = Instrument.fiat(code: "EUR")
+    let bankAud = Account(name: "AUD Bank", type: .bank, instrument: aud)
+    let bankMixed = Account(name: "Mixed Bank", type: .bank, instrument: eur)
+
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [bankAud, bankMixed], in: container)
+    let audTx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: bankAud.id, instrument: aud,
+          quantity: Decimal(1000), type: .openingBalance)
+      ])
+    let mixedEurTx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: bankMixed.id, instrument: eur,
+          quantity: Decimal(200), type: .openingBalance)
+      ])
+    let mixedUsdTx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: bankMixed.id, instrument: usd,
+          quantity: Decimal(50), type: .openingBalance)
+      ])
+    TestBackend.seed(transactions: [audTx, mixedEurTx, mixedUsdTx], in: container)
+
+    // USD conversions fail; AUD and EUR conversions succeed (1:1 fallback).
+    let conversion = FailingConversionService(failingInstrumentIds: ["USD"])
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: conversion,
+      targetInstrument: aud,
+      retryDelay: .seconds(60))
+
+    await store.load()
+    try await Task.sleep(for: .milliseconds(50))
+
+    // AUD bank: only AUD positions → succeeds.
+    #expect(store.convertedBalances[bankAud.id]?.quantity == 1000)
+    // Mixed bank (EUR + USD): needs USD → EUR conversion which fails → nil.
+    #expect(store.convertedBalances[bankMixed.id] == nil)
+    // Aggregate cannot be accurate with a missing unit → nil.
+    #expect(store.convertedCurrentTotal == nil)
+    #expect(store.convertedNetWorth == nil)
+  }
+
+  /// After conversion service recovers, a retry populates the previously
+  /// failing account balance and the aggregate totals.
+  @Test func conversionFailuresAreRetriedAfterDelay() async throws {
+    let aud = Instrument.AUD
+    let eur = Instrument.fiat(code: "EUR")
+    let bankAud = Account(name: "AUD Bank", type: .bank, instrument: aud)
+    let bankEur = Account(name: "EUR Bank", type: .bank, instrument: eur)
+
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [bankAud, bankEur], in: container)
+    let audTx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: bankAud.id, instrument: aud,
+          quantity: Decimal(1000), type: .openingBalance)
+      ])
+    let eurTx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: bankEur.id, instrument: eur,
+          quantity: Decimal(500), type: .openingBalance)
+      ])
+    TestBackend.seed(transactions: [audTx, eurTx], in: container)
+
+    let conversion = FailingConversionService(failingInstrumentIds: ["EUR"])
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: conversion,
+      targetInstrument: aud,
+      retryDelay: .milliseconds(20))
+
+    await store.load()
+    try await Task.sleep(for: .milliseconds(50))
+
+    // Initial state: EUR bank can't be converted to AUD aggregate target → aggregate nil.
+    #expect(store.convertedCurrentTotal == nil)
+
+    // Recover the conversion service.
+    await conversion.setFailing([])
+
+    // Retry should fire within retryDelay × a few attempts.
+    try await waitForCondition(timeout: .seconds(2)) {
+      store.convertedCurrentTotal != nil
+    }
+
+    // 1000 AUD + 500 EUR (1:1 fallback) = 1500 AUD
+    #expect(store.convertedCurrentTotal?.quantity == 1500)
+    #expect(store.convertedNetWorth?.quantity == 1500)
+    #expect(store.convertedBalances[bankAud.id]?.quantity == 1000)
+    #expect(store.convertedBalances[bankEur.id]?.quantity == 500)
+  }
+}
+
+@MainActor
+private func waitForCondition(
+  timeout: Duration,
+  _ predicate: @MainActor () -> Bool
+) async throws {
+  let deadline = ContinuousClock.now.advanced(by: timeout)
+  while ContinuousClock.now < deadline {
+    if predicate() { return }
+    try await Task.sleep(for: .milliseconds(10))
+  }
+  Issue.record("Timed out waiting for condition")
 }

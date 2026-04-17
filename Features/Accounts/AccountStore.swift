@@ -13,23 +13,34 @@ final class AccountStore {
   private(set) var convertedInvestmentTotal: InstrumentAmount?
   private(set) var convertedNetWorth: InstrumentAmount?
 
+  /// Per-account display balance (sum of positions converted to the
+  /// account's own instrument), updated by `recomputeConvertedTotals`.
+  /// An entry is absent if conversion failed for any of the account's
+  /// positions; per the bug fix, we never display a partial balance.
+  private(set) var convertedBalances: [UUID: InstrumentAmount] = [:]
+
   /// Investment values keyed by account ID, updated by InvestmentStore.
   private(set) var investmentValues: [UUID: InstrumentAmount] = [:]
 
   private let repository: AccountRepository
   private let conversionService: any InstrumentConversionService
   private let targetInstrument: Instrument
+  /// Delay between retry attempts after a conversion failure. Production
+  /// uses ~30s; tests pass a small value to keep retries snappy.
+  private let retryDelay: Duration
   private let logger = Logger(subsystem: "com.moolah.app", category: "AccountStore")
   private var conversionTask: Task<Void, Never>?
 
   init(
     repository: AccountRepository,
     conversionService: any InstrumentConversionService,
-    targetInstrument: Instrument
+    targetInstrument: Instrument,
+    retryDelay: Duration = .seconds(30)
   ) {
     self.repository = repository
     self.conversionService = conversionService
     self.targetInstrument = targetInstrument
+    self.retryDelay = retryDelay
   }
 
   func load() async {
@@ -156,27 +167,107 @@ final class AccountStore {
     return current + investment
   }
 
+  /// Recompute per-account balances and aggregate totals. Each account is
+  /// converted in isolation: a failure for one leaves other accounts'
+  /// balances populated. Aggregate totals are only published when *all*
+  /// underlying conversions succeed (an inaccurate aggregate is worse than
+  /// no aggregate). On any failure, schedules a retry after `retryDelay`
+  /// and keeps retrying until everything succeeds or a new recompute
+  /// cancels this task.
   private func recomputeConvertedTotals() {
     conversionTask?.cancel()
-    conversionTask = Task {
-      do {
-        let current = try await computeConvertedCurrentTotal(in: targetInstrument)
-        guard !Task.isCancelled else { return }
-        let investment = try await computeConvertedInvestmentTotal(in: targetInstrument)
-        guard !Task.isCancelled else { return }
-        convertedCurrentTotal = current
-        convertedInvestmentTotal = investment
-        convertedNetWorth = current + investment
-      } catch {
-        guard !Task.isCancelled else { return }
-        logger.error("Failed to compute converted totals: \(error.localizedDescription)")
+    let delay = retryDelay
+    // `[weak self]` so the retry loop doesn't pin the store alive when the
+    // owning view goes away while conversions are still failing.
+    conversionTask = Task { [weak self] in
+      while !Task.isCancelled {
+        guard let self else { return }
+        let anyFailed = await self.runConversionAttempt()
+        if !anyFailed { return }
+        try? await Task.sleep(for: delay)
       }
     }
+  }
+
+  /// Single pass over all accounts; returns `true` if any conversion failed.
+  /// Always publishes the latest computed state, even if partial.
+  private func runConversionAttempt() async -> Bool {
+    var anyFailed = false
+    var newBalances: [UUID: InstrumentAmount] = [:]
+
+    // Phase 1: per-account display balance in the account's own instrument.
+    // Iterate ALL accounts so per-account display works regardless of showHidden.
+    for account in accounts.ordered {
+      do {
+        let balance = try await displayBalance(for: account.id)
+        guard !Task.isCancelled else { return false }
+        newBalances[account.id] = balance
+      } catch {
+        anyFailed = true
+        logger.warning(
+          "Conversion failed for account \(account.name): \(error.localizedDescription)")
+      }
+    }
+
+    // Phase 2: aggregate totals — only valid if every contributing account
+    // converted successfully *and* the per-account → target conversion works.
+    let date = Date()
+    let (currentTotal, currentValid) = await sumConverted(
+      accounts: currentAccounts, balances: newBalances, on: date)
+    let (investmentTotal, investmentValid) = await sumConverted(
+      accounts: investmentAccounts, balances: newBalances, on: date)
+
+    guard !Task.isCancelled else { return false }
+
+    if !currentValid || !investmentValid {
+      anyFailed = true
+    }
+
+    convertedBalances = newBalances
+    convertedCurrentTotal = currentValid ? currentTotal : nil
+    convertedInvestmentTotal = investmentValid ? investmentTotal : nil
+    convertedNetWorth =
+      (currentValid && investmentValid) ? (currentTotal + investmentTotal) : nil
+
+    return anyFailed
+  }
+
+  /// Sums per-account balances converted to `targetInstrument`. Returns
+  /// `(total, valid)`; `valid` is false if any account is missing from
+  /// `balances` or if its target conversion throws.
+  private func sumConverted(
+    accounts list: [Account],
+    balances: [UUID: InstrumentAmount],
+    on date: Date
+  ) async -> (InstrumentAmount, Bool) {
+    var total = InstrumentAmount.zero(instrument: targetInstrument)
+    var valid = true
+    for account in list {
+      guard let balance = balances[account.id] else {
+        valid = false
+        continue
+      }
+      do {
+        let converted = try await conversionService.convertAmount(
+          balance, to: targetInstrument, on: date)
+        if valid {
+          total += converted
+        }
+      } catch {
+        valid = false
+        logger.warning(
+          "Aggregate conversion failed for \(account.name): \(error.localizedDescription)")
+      }
+    }
+    return (total, valid)
   }
 
   /// Awaits any in-flight converted-totals recomputation. Intended for tests
   /// that need deterministic synchronisation after `load()` / `applyDelta` /
   /// `updateInvestmentValue` kick off `recomputeConvertedTotals()`.
+  ///
+  /// Note: when conversions fail and retry is in progress, this will only
+  /// return when retries succeed (or a new recompute cancels this task).
   func waitForPendingConversions() async {
     guard let task = conversionTask else { return }
     await task.value
