@@ -49,7 +49,8 @@ struct ReportsView: View {
                 title: "Income",
                 balances: reportingStore.incomeBalances,
                 categories: categories,
-                dateRange: resolvedFrom...resolvedTo
+                dateRange: resolvedFrom...resolvedTo,
+                profileInstrument: reportingStore.profileCurrency
               )
 
               Divider()
@@ -58,7 +59,8 @@ struct ReportsView: View {
                 title: "Expenses",
                 balances: reportingStore.expenseBalances,
                 categories: categories,
-                dateRange: resolvedFrom...resolvedTo
+                dateRange: resolvedFrom...resolvedTo,
+                profileInstrument: reportingStore.profileCurrency
               )
             }
           #else
@@ -67,7 +69,8 @@ struct ReportsView: View {
                 title: "Income",
                 balances: reportingStore.incomeBalances,
                 categories: categories,
-                dateRange: resolvedFrom...resolvedTo
+                dateRange: resolvedFrom...resolvedTo,
+                profileInstrument: reportingStore.profileCurrency
               )
 
               Divider()
@@ -76,7 +79,8 @@ struct ReportsView: View {
                 title: "Expenses",
                 balances: reportingStore.expenseBalances,
                 categories: categories,
-                dateRange: resolvedFrom...resolvedTo
+                dateRange: resolvedFrom...resolvedTo,
+                profileInstrument: reportingStore.profileCurrency
               )
             }
           #endif
