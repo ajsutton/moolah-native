@@ -284,4 +284,89 @@ struct SyncCoordinatorTests {
     #expect(handler.profileId == profileId)
     #expect(handler.zoneID == zoneID)
   }
+
+  // MARK: - Batch Kind Selection (issue #61)
+
+  @Test func batchKindAtomicByZoneIsFalseForProfileIndex() {
+    #expect(SyncCoordinator.BatchKind.profileIndex.atomicByZone == false)
+  }
+
+  @Test func batchKindAtomicByZoneIsTrueForProfileData() {
+    #expect(SyncCoordinator.BatchKind.profileData.atomicByZone == true)
+  }
+
+  @Test func selectBatchKindReturnsNilWhenNoChanges() {
+    let kind = SyncCoordinator.selectBatchKind(from: [])
+    #expect(kind == nil)
+  }
+
+  @Test func selectBatchKindPrefersProfileIndexWhenMixed() {
+    let indexZone = CKRecordZone.ID(
+      zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
+    let dataZone = CKRecordZone.ID(
+      zoneName: "profile-\(UUID().uuidString)", ownerName: CKCurrentUserDefaultName)
+    let changes: [CKSyncEngine.PendingRecordZoneChange] = [
+      .saveRecord(CKRecord.ID(recordName: UUID().uuidString, zoneID: dataZone)),
+      .saveRecord(CKRecord.ID(recordName: UUID().uuidString, zoneID: indexZone)),
+      .deleteRecord(CKRecord.ID(recordName: UUID().uuidString, zoneID: dataZone)),
+    ]
+    let kind = SyncCoordinator.selectBatchKind(from: changes)
+    #expect(kind == .profileIndex)
+  }
+
+  @Test func selectBatchKindReturnsProfileDataWhenOnlyDataZoneChanges() {
+    let dataZone1 = CKRecordZone.ID(
+      zoneName: "profile-\(UUID().uuidString)", ownerName: CKCurrentUserDefaultName)
+    let dataZone2 = CKRecordZone.ID(
+      zoneName: "profile-\(UUID().uuidString)", ownerName: CKCurrentUserDefaultName)
+    let changes: [CKSyncEngine.PendingRecordZoneChange] = [
+      .saveRecord(CKRecord.ID(recordName: UUID().uuidString, zoneID: dataZone1)),
+      .saveRecord(CKRecord.ID(recordName: UUID().uuidString, zoneID: dataZone2)),
+    ]
+    let kind = SyncCoordinator.selectBatchKind(from: changes)
+    #expect(kind == .profileData)
+  }
+
+  @Test func selectBatchKindIgnoresUnknownZones() {
+    let unknownZone = CKRecordZone.ID(
+      zoneName: "some-other-zone", ownerName: CKCurrentUserDefaultName)
+    let changes: [CKSyncEngine.PendingRecordZoneChange] = [
+      .saveRecord(CKRecord.ID(recordName: UUID().uuidString, zoneID: unknownZone))
+    ]
+    let kind = SyncCoordinator.selectBatchKind(from: changes)
+    #expect(kind == nil)
+  }
+
+  @Test func filterChangesMatchingProfileIndexKeepsOnlyIndexZone() {
+    let indexZone = CKRecordZone.ID(
+      zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
+    let dataZone = CKRecordZone.ID(
+      zoneName: "profile-\(UUID().uuidString)", ownerName: CKCurrentUserDefaultName)
+    let indexChange: CKSyncEngine.PendingRecordZoneChange =
+      .saveRecord(CKRecord.ID(recordName: UUID().uuidString, zoneID: indexZone))
+    let dataChange: CKSyncEngine.PendingRecordZoneChange =
+      .saveRecord(CKRecord.ID(recordName: UUID().uuidString, zoneID: dataZone))
+    let filtered = SyncCoordinator.filterChanges(
+      [dataChange, indexChange], matching: .profileIndex)
+    #expect(filtered.count == 1)
+    #expect(filtered.first == indexChange)
+  }
+
+  @Test func filterChangesMatchingProfileDataKeepsOnlyDataZones() {
+    let indexZone = CKRecordZone.ID(
+      zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
+    let dataZoneA = CKRecordZone.ID(
+      zoneName: "profile-\(UUID().uuidString)", ownerName: CKCurrentUserDefaultName)
+    let dataZoneB = CKRecordZone.ID(
+      zoneName: "profile-\(UUID().uuidString)", ownerName: CKCurrentUserDefaultName)
+    let indexChange: CKSyncEngine.PendingRecordZoneChange =
+      .saveRecord(CKRecord.ID(recordName: UUID().uuidString, zoneID: indexZone))
+    let dataChangeA: CKSyncEngine.PendingRecordZoneChange =
+      .saveRecord(CKRecord.ID(recordName: UUID().uuidString, zoneID: dataZoneA))
+    let dataChangeB: CKSyncEngine.PendingRecordZoneChange =
+      .deleteRecord(CKRecord.ID(recordName: UUID().uuidString, zoneID: dataZoneB))
+    let filtered = SyncCoordinator.filterChanges(
+      [indexChange, dataChangeA, dataChangeB], matching: .profileData)
+    #expect(filtered == [dataChangeA, dataChangeB])
+  }
 }
