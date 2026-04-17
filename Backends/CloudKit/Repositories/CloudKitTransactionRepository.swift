@@ -1,17 +1,26 @@
 import Foundation
+import OSLog
 import SwiftData
 import os
 
 final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
   private let instrument: Instrument
+  private let conversionService: any InstrumentConversionService
+  private let logger = Logger(
+    subsystem: "com.moolah.app", category: "CloudKitTransactionRepository")
   var onRecordChanged: (UUID) -> Void = { _ in }
   var onRecordDeleted: (UUID) -> Void = { _ in }
   var onInstrumentChanged: (String) -> Void = { _ in }
 
-  init(modelContainer: ModelContainer, instrument: Instrument) {
+  init(
+    modelContainer: ModelContainer,
+    instrument: Instrument,
+    conversionService: any InstrumentConversionService
+  ) {
     self.modelContainer = modelContainer
     self.instrument = instrument
+    self.conversionService = conversionService
   }
 
   @MainActor

@@ -221,25 +221,28 @@ private struct CloudKitCategoryTestBackend: BackendProvider, @unchecked Sendable
   init() {
     let container = try! TestModelContainer.create()
     let instrument = Instrument.defaultTestInstrument
+    let rateClient = FixedRateClient()
+    let cacheDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("test-rates-\(UUID().uuidString)")
+    let exchangeRates = ExchangeRateService(client: rateClient, cacheDirectory: cacheDir)
+    let conversion = FiatConversionService(exchangeRates: exchangeRates)
     self.auth = InMemoryAuthProvider()
     self.accounts = CloudKitAccountRepository(
       modelContainer: container)
     self.transactions = CloudKitTransactionRepository(
-      modelContainer: container, instrument: instrument)
+      modelContainer: container,
+      instrument: instrument,
+      conversionService: conversion)
     self.categories = CloudKitCategoryRepository(
       modelContainer: container)
     self.earmarks = CloudKitEarmarkRepository(
       modelContainer: container, instrument: instrument)
     self.investments = CloudKitInvestmentRepository(
       modelContainer: container, instrument: instrument)
-    let rateClient = FixedRateClient()
-    let cacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("test-rates-\(UUID().uuidString)")
-    let exchangeRates = ExchangeRateService(client: rateClient, cacheDirectory: cacheDir)
-    self.conversionService = FiatConversionService(exchangeRates: exchangeRates)
+    self.conversionService = conversion
     self.analysis = CloudKitAnalysisRepository(
       modelContainer: container, instrument: instrument,
-      conversionService: self.conversionService)
+      conversionService: conversion)
   }
 }
 

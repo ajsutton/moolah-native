@@ -3095,15 +3095,6 @@ private struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable
   init(conversionService customConversion: (any InstrumentConversionService)? = nil) {
     let container = try! TestModelContainer.create()
     let currency = Instrument.defaultTestInstrument
-    self.auth = InMemoryAuthProvider()
-    self.accounts = CloudKitAccountRepository(
-      modelContainer: container)
-    self.transactions = CloudKitTransactionRepository(
-      modelContainer: container, instrument: currency)
-    self.categories = CloudKitCategoryRepository(
-      modelContainer: container)
-    self.earmarks = CloudKitEarmarkRepository(
-      modelContainer: container, instrument: currency)
     let conversion: any InstrumentConversionService
     if let customConversion {
       conversion = customConversion
@@ -3114,6 +3105,17 @@ private struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable
       let exchangeRates = ExchangeRateService(client: rateClient, cacheDirectory: cacheDir)
       conversion = FiatConversionService(exchangeRates: exchangeRates)
     }
+    self.auth = InMemoryAuthProvider()
+    self.accounts = CloudKitAccountRepository(
+      modelContainer: container)
+    self.transactions = CloudKitTransactionRepository(
+      modelContainer: container,
+      instrument: currency,
+      conversionService: conversion)
+    self.categories = CloudKitCategoryRepository(
+      modelContainer: container)
+    self.earmarks = CloudKitEarmarkRepository(
+      modelContainer: container, instrument: currency)
     self.conversionService = conversion
     self.analysis = CloudKitAnalysisRepository(
       modelContainer: container, instrument: currency, conversionService: conversion)
