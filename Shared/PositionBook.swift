@@ -1,4 +1,7 @@
 import Foundation
+import OSLog
+
+private let logger = Logger(subsystem: "com.moolah.app", category: "PositionBook")
 
 /// Per-entity, per-instrument position state. The single place where position
 /// math for transactions and legs lives.
@@ -242,6 +245,11 @@ struct PositionBook: Equatable, Sendable {
   /// Sum a per-instrument position dict into a single `Decimal` in `target`,
   /// using the conversion service for non-target instruments. Single-instrument
   /// positions skip the conversion call.
+  ///
+  /// Per-failure diagnostics: callers that swallow the thrown error (e.g. the
+  /// analysis pipeline skipping a day's balance) leave no trail of which
+  /// instrument/date failed. Log here so production diagnosis can identify
+  /// the offending conversion before re-throwing.
   private func convert(
     _ positions: [Instrument: Decimal],
     to target: Instrument,
@@ -253,7 +261,19 @@ struct PositionBook: Equatable, Sendable {
       if instrument == target {
         total += quantity
       } else {
-        total += try await service.convert(quantity, from: instrument, to: target, on: date)
+        do {
+          total += try await service.convert(quantity, from: instrument, to: target, on: date)
+        } catch {
+          logger.warning(
+            """
+            PositionBook conversion failed: \
+            \(quantity, privacy: .public) \(instrument.id, privacy: .public) \
+            → \(target.id, privacy: .public) on \(date, privacy: .public): \
+            \(error.localizedDescription, privacy: .public)
+            """
+          )
+          throw error
+        }
       }
     }
     return total

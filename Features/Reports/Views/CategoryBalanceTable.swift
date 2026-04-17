@@ -7,6 +7,7 @@ struct CategoryBalanceTable: View {
   let balances: [UUID: InstrumentAmount]
   let categories: Categories
   let dateRange: ClosedRange<Date>
+  let profileInstrument: Instrument
 
   private var reportData: [CategoryGroup] {
     // Group subcategories under roots
@@ -55,8 +56,12 @@ struct CategoryBalanceTable: View {
       .sorted { $0.totalAmount.quantity.magnitude > $1.totalAmount.quantity.magnitude }
   }
 
+  /// Seed the reduce with a zero in the profile instrument so empty balances
+  /// render as the right currency. All `balances` entries come from the
+  /// repository's `fetchCategoryBalancesByType` which returns values in the
+  /// profile instrument, so instrument parity with the seed holds.
   private var grandTotal: InstrumentAmount {
-    balances.values.reduce(.zero(instrument: balances.values.first?.instrument ?? .AUD), +)
+    balances.values.reduce(.zero(instrument: profileInstrument), +)
   }
 
   var body: some View {
@@ -186,7 +191,8 @@ struct CategoryDrillDown: Hashable {
     title: "Income",
     balances: balances,
     categories: categories,
-    dateRange: start...Date()
+    dateRange: start...Date(),
+    profileInstrument: .AUD
   )
   .frame(width: 500, height: 400)
 }

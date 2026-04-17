@@ -67,7 +67,7 @@ final class ReportingStore {
   private let transactionRepository: TransactionRepository
   private let analysisRepository: AnalysisRepository?
   private let conversionService: InstrumentConversionService
-  private let profileCurrency: Instrument
+  private(set) var profileCurrency: Instrument
   private let logger = Logger(subsystem: "com.moolah.app", category: "ReportingStore")
 
   init(
