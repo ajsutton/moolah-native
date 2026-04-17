@@ -101,46 +101,8 @@ struct ExpenseBreakdownCard: View {
   }
 
   private var filteredBreakdown: [ExpenseBreakdownWithPercentage] {
-    // Sum all expenses for this category level, negated to positive for display
-    // (server returns negative amounts for expenses)
-    let categoryTotals = Dictionary(grouping: breakdown) { $0.categoryId }
-      .mapValues { items -> InstrumentAmount in
-        let sum = items.reduce(
-          InstrumentAmount.zero(instrument: items.first!.totalExpenses.instrument)
-        ) {
-          $0 + $1.totalExpenses
-        }
-        let negated = InstrumentAmount(quantity: max(0, -sum.quantity), instrument: sum.instrument)
-        return negated
-      }
-
-    // Filter by selectedCategoryId (show only children if drill-down active)
-    let visibleCategories: [UUID?]
-    if let selectedId = selectedCategoryId {
-      let children = categories.children(of: selectedId)
-        .map { $0.id as UUID? }
-      visibleCategories = children
-    } else {
-      // Show top-level categories (no parent)
-      visibleCategories =
-        categories.roots
-        .map { $0.id as UUID? }
-        + [nil]  // Include uncategorized
-    }
-
-    let filtered = categoryTotals.filter { visibleCategories.contains($0.key) }
-    let total = filtered.values.reduce(
-      .zero(instrument: filtered.values.first?.instrument ?? .AUD), +)
-
-    return filtered.map { categoryId, amount in
-      ExpenseBreakdownWithPercentage(
-        categoryId: categoryId,
-        totalExpenses: amount,
-        percentage: total.quantity > 0
-          ? Double(truncating: (amount.quantity / total.quantity * 100) as NSDecimalNumber) : 0
-      )
-    }
-    .sorted { $0.totalExpenses.quantity > $1.totalExpenses.quantity }
+    AnalysisStore.buildExpenseBreakdown(
+      from: breakdown, categories: categories, selectedCategoryId: selectedCategoryId)
   }
 
   private func categoryName(for id: UUID?) -> String {

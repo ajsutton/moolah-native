@@ -190,6 +190,69 @@ final class AnalysisStore {
     return id
   }
 
+  /// Builds the pie-chart breakdown shown in `ExpenseBreakdownCard`.
+  ///
+  /// At the top level (`selectedCategoryId == nil`), each root category's total rolls up all
+  /// descendants' expenses. When drilled into a parent, each direct child's total rolls up its
+  /// own subtree; transactions directly on the drilled-into parent, or outside its subtree, are
+  /// excluded.
+  static func buildExpenseBreakdown(
+    from breakdown: [ExpenseBreakdown],
+    categories: Categories,
+    selectedCategoryId: UUID?
+  ) -> [ExpenseBreakdownWithPercentage] {
+    guard let instrument = breakdown.first?.totalExpenses.instrument else { return [] }
+
+    var totals: [UUID?: Decimal] = [:]
+    for item in breakdown {
+      let targetId: UUID?
+      if let selected = selectedCategoryId {
+        guard
+          let child = childOfAncestor(
+            for: item.categoryId, ancestor: selected, categories: categories)
+        else { continue }
+        targetId = child
+      } else {
+        targetId = rootCategoryId(for: item.categoryId, categories: categories)
+      }
+      totals[targetId, default: 0] += -item.totalExpenses.quantity
+    }
+
+    let grandTotal = totals.values.reduce(Decimal(0)) { $0 + max(0, $1) }
+
+    return
+      totals
+      .map { id, amount -> ExpenseBreakdownWithPercentage in
+        let clamped = max(0, amount)
+        let percentage =
+          grandTotal > 0
+          ? Double(truncating: (clamped / grandTotal * 100) as NSDecimalNumber) : 0
+        return ExpenseBreakdownWithPercentage(
+          categoryId: id,
+          totalExpenses: InstrumentAmount(quantity: clamped, instrument: instrument),
+          percentage: percentage
+        )
+      }
+      .sorted { $0.totalExpenses.quantity > $1.totalExpenses.quantity }
+  }
+
+  /// Returns the id of the node in `ancestor`'s direct children that is an ancestor of (or equal
+  /// to) `categoryId`, or nil if `categoryId` is outside `ancestor`'s subtree or is `ancestor`
+  /// itself.
+  private static func childOfAncestor(
+    for categoryId: UUID?, ancestor: UUID, categories: Categories
+  ) -> UUID? {
+    guard var id = categoryId else { return nil }
+    while let category = categories.by(id: id) {
+      if category.parentId == ancestor {
+        return id
+      }
+      guard let parentId = category.parentId else { return nil }
+      id = parentId
+    }
+    return nil
+  }
+
   private static func parseMonth(_ month: String) -> Date {
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyyMM"
