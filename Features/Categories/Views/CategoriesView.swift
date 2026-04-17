@@ -96,6 +96,7 @@ struct CategoriesView: View {
           }
         )
       }
+      .focusedSceneValue(\.selectedCategory, $selectedCategory)
   }
 
   private var filteredCategories: [Category] {
