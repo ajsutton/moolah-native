@@ -26,7 +26,7 @@ struct InstrumentAmount: Codable, Sendable, Hashable, Comparable {
       return quantity.formatted(.currency(code: instrument.id))
     case .stock, .cryptoToken:
       let number = quantity.formatted(.number.precision(.fractionLength(0...instrument.decimals)))
-      return "\(number) \(instrument.displaySymbol ?? instrument.name)"
+      return "\(number) \(instrument.displayLabel)"
     }
   }
 

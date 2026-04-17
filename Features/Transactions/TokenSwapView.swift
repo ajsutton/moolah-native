@@ -133,7 +133,7 @@ struct TokenSwapView: View {
       Text(label)
       Spacer()
       if let inst = instrument {
-        Text(inst.displaySymbol ?? inst.name)
+        Text(inst.displayLabel)
           .foregroundStyle(.secondary)
       } else {
         Text("Select")

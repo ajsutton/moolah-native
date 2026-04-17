@@ -27,7 +27,7 @@ struct AddInvestmentValueView: View {
           DatePicker("Date", selection: $date, displayedComponents: .date)
 
           HStack {
-            Text(instrument.id)
+            Text(instrument.displayLabel)
               .foregroundStyle(.secondary)
             TextField("Value", text: $valueString)
               .focused($isValueFieldFocused)

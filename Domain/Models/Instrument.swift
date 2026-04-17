@@ -71,6 +71,21 @@ struct Instrument: Codable, Sendable, Hashable, Identifiable {
     ticker
   }
 
+  /// Best user-facing short label for this instrument, suitable as a prefix next to a
+  /// numeric input field or row label.
+  /// - Fiat: the OS-localised currency symbol (e.g., "£", "$", or the ISO code on locales
+  ///   that don't define a narrow symbol for the currency).
+  /// - Stock/crypto: the ticker (e.g., "BHP.AX", "ETH").
+  /// Falls back to `id`/`name` if neither is available.
+  var displayLabel: String {
+    switch kind {
+    case .fiatCurrency:
+      return currencySymbol ?? id
+    case .stock, .cryptoToken:
+      return ticker ?? name
+    }
+  }
+
   // Convenience constants
   static let AUD = Instrument.fiat(code: "AUD")
   static let USD = Instrument.fiat(code: "USD")

@@ -20,7 +20,7 @@ struct CreateEarmarkSheet: View {
 
         Section("Savings Goal") {
           HStack {
-            Text(instrument.id)
+            Text(instrument.displayLabel)
               .foregroundStyle(.secondary)
             TextField("Amount", text: $savingsGoal)
               #if os(iOS)
