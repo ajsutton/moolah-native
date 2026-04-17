@@ -22,6 +22,10 @@ enum SyncErrorRecovery {
     var quotaExceeded: [CKRecord.ID] = []
     /// All other re-queueable failures (limitExceeded, unexpected errors).
     var requeue: [CKRecord.ID] = []
+    /// Failed deletes that should be re-queued (conflicts, limitExceeded, unexpected errors).
+    /// CKSyncEngine drops failed deletes from its queue; re-queuing prevents permanent
+    /// server-side orphans.
+    var requeueDeletes: [CKRecord.ID] = []
   }
 
   /// Classifies all failed saves and deletes from a sent-changes event.
@@ -72,10 +76,26 @@ enum SyncErrorRecovery {
     }
 
     for (recordID, error) in failedDeletes {
-      if error.code == .zoneNotFound || error.code == .userDeletedZone {
+      switch error.code {
+      case .zoneNotFound, .userDeletedZone:
         result.zoneNotFoundDeletes.append(recordID)
-      } else {
-        logger.error("Failed to delete record \(recordID.recordName): \(error)")
+
+      case .unknownItem:
+        // Record is already gone from the server — the delete has effectively
+        // succeeded. Don't re-queue (would loop forever) and don't treat as a
+        // failure. CKSyncEngine has already removed it from its pending queue.
+        logger.info(
+          "Delete returned unknownItem for \(recordID.recordName) — record already gone, treating as success"
+        )
+
+      default:
+        // Re-queue any other delete failure (serverRecordChanged, limitExceeded,
+        // unexpected errors). CKSyncEngine drops failed items from its queue, so
+        // not re-queuing would leave the record on the server permanently.
+        logger.error(
+          "Delete error (code=\(error.code.rawValue)) for \(recordID.recordName): \(error) — re-queuing"
+        )
+        result.requeueDeletes.append(recordID)
       }
     }
 
@@ -90,21 +110,24 @@ enum SyncErrorRecovery {
     logger: Logger
   ) -> (zoneNotFoundSaves: [CKRecord.ID], zoneNotFoundDeletes: [CKRecord.ID]) {
     // Re-queue conflicts, unknownItems, and other failures (same logic as current recover())
-    var pendingSaves: [CKSyncEngine.PendingRecordZoneChange] = []
+    var pendingChanges: [CKSyncEngine.PendingRecordZoneChange] = []
     for (recordID, _) in failures.conflicts {
-      pendingSaves.append(.saveRecord(recordID))
+      pendingChanges.append(.saveRecord(recordID))
     }
     for (recordID, _) in failures.unknownItems {
-      pendingSaves.append(.saveRecord(recordID))
+      pendingChanges.append(.saveRecord(recordID))
     }
     for recordID in failures.requeue {
-      pendingSaves.append(.saveRecord(recordID))
+      pendingChanges.append(.saveRecord(recordID))
     }
     for recordID in failures.quotaExceeded {
-      pendingSaves.append(.saveRecord(recordID))
+      pendingChanges.append(.saveRecord(recordID))
     }
-    if !pendingSaves.isEmpty {
-      syncEngine?.state.add(pendingRecordZoneChanges: pendingSaves)
+    for recordID in failures.requeueDeletes {
+      pendingChanges.append(.deleteRecord(recordID))
+    }
+    if !pendingChanges.isEmpty {
+      syncEngine?.state.add(pendingRecordZoneChanges: pendingChanges)
     }
 
     return (failures.zoneNotFoundSaves, failures.zoneNotFoundDeletes)
