@@ -624,19 +624,9 @@ HStack {
 
 ### Keyboard Navigation (macOS)
 
-See **Section 13: Focus, Tab Order & Selection** for full implementation patterns covering focus management, tab order, list selection, and menu command wiring.
+See **Section 13: Focus, Tab Order & Selection** for focus management, tab order, and list selection patterns.
 
-**App-level keyboard shortcuts:**
-- `Cmd+N`: New transaction
-- `Cmd+F`: Focus search field
-- `Cmd+R`: Refresh current view
-- `Delete`: Delete selected item (with confirmation)
-- `Cmd+,`: Open settings (if applicable)
-
-```swift
-Button("New Transaction") { ... }
-  .keyboardShortcut("n", modifiers: .command)
-```
+See **Section 14: Menu Bar & Commands (macOS)** for the full keyboard shortcut inventory and the rules for keeping menu bar, toolbar, and context menus coherent.
 
 ### Color Contrast
 - Ensure **4.5:1** contrast ratio for body text (13pt+)
@@ -895,6 +885,581 @@ These are macOS conventions that users expect. Violating them makes the app feel
 
 ---
 
+## 14. Menu Bar & Commands (macOS)
+
+On macOS the menu bar is the **canonical index of every command the app can perform.** Full-keyboard-access users, VoiceOver users, and power users all discover commands by browsing menus and by typing a command name into Help > Search. If an action isn't in the menu bar, for a significant fraction of users it doesn't exist.
+
+iOS is different: menus there are contextual and scoped to a specific control. The rules in this section apply to macOS only. Where a command needs platform parity, implement it on iOS as a toolbar item, context menu, or keyboard shortcut on the relevant view — not via the Mac menu bar.
+
+### Philosophy
+
+- **Every user-initiated action has a menu item.** Toolbar buttons, context menus, and swipe actions exist *in addition to* a menu entry, never *instead of* one. The only exceptions are direct-manipulation gestures that have no clear verb (drag, pinch, click to select).
+- **Menu bar, toolbar, and context menu must agree.** If the toolbar has a ⌘F shortcut for "Find Transaction", the menu bar must have a matching Edit > Find Transaction… item with the same shortcut. If a context menu offers "Reconcile", a top-level menu must offer it too.
+- **Disable, don't hide.** Items reveal *what the app can do*. A greyed-out `Delete Transaction` with no selection is better than a menu that changes shape based on state. Reserve hiding for items that depend on license/build/mode (debug-only, admin-only), never on transient selection.
+- **Menus are for ⌘-modified commands.** Single-key shortcuts for list navigation (`j`, `k`, `space`, `return`) do not belong in the menu bar — they go in a Keyboard Shortcuts help window.
+
+### Top-Level Menu Structure
+
+Moolah's macOS menu bar, left to right:
+
+**Moolah · File · Edit · View · Go · Transaction · Window · Help**
+
+Do not add a generic "Actions" or "Tools" menu. Domain commands go under a menu named for the primary noun they act on (see `Transaction` below).
+
+#### Moolah (App Menu)
+
+System-provided. Never reorder or rename:
+
+- `About Moolah` — no ellipsis (opens a fixed window, takes no input)
+- `Settings…` — ⌘, automatic via the `Settings { }` scene
+- `Services ▸` — system-provided
+- `Hide Moolah` — ⌘H
+- `Hide Others` — ⌥⌘H
+- `Show All`
+- `Quit Moolah` — ⌘Q
+
+SwiftUI placement: `.appInfo` (About), `.appSettings` (Settings), `.systemServices`, `.appVisibility`. Only `.appInfo` is customized — for the custom About window.
+
+#### File
+
+Creation, import/export, and per-window I/O. Use `.newItem`, `.saveItem`, `.importExport` placements.
+
+```
+File
+  New Transaction              ⌘N       (.newItem — replacing)
+  New Earmark                  ⇧⌘N      (.newItem — after)
+  New Account…                 ⌃⌘N      (.newItem — after)
+  New Category…                ⌥⌘N      (.newItem — after)
+  —
+  New Window                   ⌥⇧⌘N     (SwiftUI default when WindowGroup is present)
+  Open Profile ▸                        (.saveItem — before; submenu of profiles)
+  —
+  Close Window                 ⌘W       (system-provided)
+  —
+  Import Profile…              ⇧⌘I      (.importExport)
+  Export Profile…              ⇧⌘E      (.importExport)
+  —
+  Sign Out                     ⇧⌘Q      (bottom of File, before system Quit)
+```
+
+Rationale: the "New" group owns the ⌘N namespace (see §14 Keyboard Shortcuts). New Window moves out to ⌥⇧⌘N so ⌘N can mean "create the primary noun" (a Mac convention Electron apps routinely break).
+
+#### Edit
+
+Standard pasteboard and undo/redo plus app-specific copy/find actions. Use `.undoRedo`, `.pasteboard`, `.textEditing` placements. Even in a finance app where users aren't editing rich text, the Edit menu should exist with the standard items so system services and VoiceOver work correctly.
+
+```
+Edit
+  Undo Edit Transaction        ⌘Z
+  Redo Edit Transaction        ⇧⌘Z
+  —
+  Cut                          ⌘X
+  Copy                         ⌘C
+  Paste                        ⌘V
+  Delete
+  Select All                   ⌘A
+  —
+  Copy Transaction Link        ⌃⌘C      (only when a single transaction is selected)
+  —
+  Find Transactions…           ⌘F       (focuses the search field; not a separate window)
+  Find Next                    ⌘G
+  Find Previous                ⇧⌘G
+```
+
+Do **not** pull in `TextEditingCommands()` or `TextFormattingCommands()` — Moolah doesn't edit rich text. Add pasteboard and find items manually.
+
+Undo/Redo labels should **include the action name** — `Undo Edit Transaction`, `Undo Pay Scheduled Transaction`, `Undo Delete Earmark`. SwiftUI manages this automatically when you use the environment `UndoManager`.
+
+#### View
+
+Chrome and display-state toggles only. No destinations, no creation actions.
+
+```
+View
+  Show Sidebar                 ⌃⌘S
+  Show Inspector               ⌥⌘I
+  —
+  Sort Transactions By ▸
+    Date
+    Amount
+    Payee
+    Category
+  Group Transactions By Date
+  —
+  Show Running Balance
+  Show Hidden Accounts         ⇧⌘H
+  —
+  Show Toolbar                 ⌥⌘T
+  Customize Toolbar…
+  —
+  Enter Full Screen            ⌃⌘F
+```
+
+Compose from `SidebarCommands()`, `ToolbarCommands()`, and `InspectorCommands()` for the platform-standard items (these provide the correct label flip, placements, and localization automatically).
+
+#### Go
+
+Sidebar navigation. Modeled on NetNewsWire and Mail.
+
+```
+Go
+  Accounts                     ⌘1
+  Transactions                 ⌘2
+  Scheduled                    ⌘3
+  Earmarks                     ⌘4
+  Categories                   ⌘5
+  Reports                      ⌘6
+  —
+  Go Back                      ⌘[
+  Go Forward                   ⌘]
+```
+
+⌘0 is reserved for "bring the Main Window forward" (see Window menu). ⌘1–⌘9 map to primary sidebar destinations *only* — never arbitrary actions.
+
+#### Transaction
+
+The primary domain menu. Named for the noun the commands act on (Apple's Mail has `Mailbox` / `Message`; NetNewsWire has `Article`). Contains verbs that operate on the current selection.
+
+```
+Transaction
+  Edit Transaction…            ↩       (primary action on selection)
+  Duplicate Transaction        ⌘D
+  —
+  Mark as Cleared              ⌘K
+  Mark All as Cleared          ⇧⌘K
+  —
+  Pay Scheduled Transaction            (no shortcut — ⌘P is reserved for Print)
+  Skip Next Occurrence
+  —
+  Reveal in Account
+  Copy Transaction Link        ⌃⌘C
+  —
+  Delete Transaction           ⌫        (on menu; fires via Delete key on selection)
+```
+
+Pay Scheduled Transaction is intentionally shortcut-less: ⌘P is a universal Mac shortcut for Print and must not be reassigned, even in apps without a Print command — users hit it reflexively and expect nothing bad to happen. The action is reachable from the Transaction menu, the inline Pay button on upcoming rows, and the context menu.
+
+Every item here **must** be disabled (not hidden) when no transaction is selected — use a `@FocusedValue(\.selectedTransaction)` binding.
+
+Labels match the selection count: `Delete Transaction` with one selected, `Delete 3 Transactions` with many. Prefer the singular when it reads naturally either way.
+
+#### Window
+
+Mostly SwiftUI-provided via `.windowSize`, `.windowArrangement`, `.singleWindowList`:
+
+```
+Window
+  Minimize                     ⌘M
+  Zoom
+  —
+  Tile Window to Left of Screen
+  Tile Window to Right of Screen
+  —
+  Transactions                 ⌘0       (bring main window forward)
+  About Moolah                          (if open)
+  —
+  Bring All to Front
+  —
+  [dynamic list of open profile windows]
+```
+
+Don't override the SwiftUI defaults. The list at the bottom populates automatically.
+
+#### Help
+
+Keep — **never remove the Help menu.** It provides the search field that indexes every menu item by name, which is how VoiceOver and Full Keyboard Access users discover disabled commands.
+
+```
+Help
+  Search                                (SwiftUI-provided)
+  Moolah Help                  ⌘?
+  Keyboard Shortcuts…          ⇧⌘/
+  —
+  Release Notes…
+  Report a Bug…
+  —
+  Privacy Policy
+  Terms of Service
+```
+
+The `Keyboard Shortcuts…` item opens an in-app cheatsheet window listing every shortcut — including the single-key list-navigation ones that don't live in menus (`j`, `k`, `space`, `return`). This is a standard pattern in every Mac-assed Mac app (NetNewsWire, Things, OmniFocus).
+
+### Naming Conventions
+
+**Title case** throughout. Capitalize every word except prepositions of four or fewer letters; always capitalize the first and last word. Never sentence case. Examples: `Save As…`, `Move to Trash`, `Open Recent`, `Mark as Cleared`.
+
+**Verbs for actions, nouns for attributes.** `Print`, `Copy`, `Export…`, `Mark as Cleared` are verb phrases. `Date`, `Amount`, `Bodoni`, `12 pt` inside a `Sort By ▸` submenu are allowed noun attributes.
+
+**Ellipsis (…)** — use the single U+2026 character, never three periods (`...`). An ellipsis appears **iff the item requires additional user input before the action takes effect**:
+
+| Needs ellipsis | No ellipsis |
+|----------------|-------------|
+| `Save As…` (file picker) | `Save` |
+| `Export Profile…` (save panel) | `Refresh` |
+| `Find Transactions…` (focuses field) | `About Moolah` |
+| `Import Profile…` (open panel) | `Show Sidebar` |
+| `New Transaction…` if opening a form sheet | `New Window` |
+| `Customize Toolbar…` (opens sheet) | `Sign Out` |
+| `Delete Transaction…` when a confirm alert appears | `Quit Moolah` |
+
+Confirm-only dialogs for destructive actions earn an ellipsis as a warning. Windows opened by name (About, Inspector, Sidebar) do not — the click *is* the action.
+
+**Toggle state.** Prefer the verb-pair pattern that flips the label on state change:
+
+| ✅ Good | ❌ Bad |
+|---------|--------|
+| `Show Sidebar` / `Hide Sidebar` | `☑ Sidebar` |
+| `Show Hidden Accounts` / `Hide Hidden Accounts` | `Hidden Accounts (on)` |
+| `Show Running Balance` / `Hide Running Balance` | Checkmark-only `Running Balance` |
+
+Apple HIG verbatim: *"Don't use this kind of toggled item [a checkmark] to indicate the presence or absence of a feature such as a grid or ruler. It's unclear whether the checkmark means that the feature is in effect or whether choosing the command turns the feature on."*
+
+Reserve checkmarks for **style-attribute radio groups** inside submenus: `Sort By ▸ Date` / `Amount` / `Payee` — one has a checkmark, the others don't.
+
+**Singular vs plural by selection count.**
+
+```swift
+// Bad — ambiguous
+Button("Delete", role: .destructive) { … }
+
+// Good — labels match selection
+let label = selectionCount == 1
+    ? "Delete Transaction"
+    : "Delete \(selectionCount) Transactions"
+Button(label, role: .destructive) { … }
+```
+
+Prefer the singular form when either reads naturally (`Mark as Cleared` works for 1 or N). Use the explicit count only when plural grammar forces it.
+
+**Include the app name** in `About Moolah`, `Hide Moolah`, `Quit Moolah`, `Moolah Help`. These four are the only places the app's name appears in the standard menus.
+
+**Keep the object noun.** `Mark as Cleared` not `Mark Cleared`; `Copy Transaction Link` not `Copy Link`; `Sort Transactions By ▸` not `Sort By ▸`. The extra word clarifies which thing is being acted on and reads better in VoiceOver.
+
+### Keyboard Shortcuts
+
+#### Reserved Shortcuts — Never Reassign
+
+These shortcuts are owned by macOS or by universal Mac convention. Using them for a different action breaks user expectations and — in many cases — the Mac itself.
+
+| Shortcut | Meaning | Source |
+|----------|---------|--------|
+| ⌘C / ⌘X / ⌘V / ⌘A | Copy / Cut / Paste / Select All | Universal |
+| ⌘Z / ⇧⌘Z | Undo / Redo | Universal |
+| ⌘S / ⇧⌘S | Save / Save As | Document apps |
+| ⌘O | Open | Universal |
+| ⌘N | New (the app's primary "new" action) | Universal |
+| ⌘W | Close Window | System |
+| ⇧⌘W | Close All Windows | System |
+| ⌘Q | Quit | System |
+| ⌘, | Settings | System |
+| ⌘F / ⌘G / ⇧⌘G | Find / Find Next / Find Previous | Universal |
+| ⌘P | Print | Universal |
+| ⌘H / ⌥⌘H | Hide / Hide Others | System |
+| ⌘M | Minimize | System |
+| ⌘T | New Tab | System (tabbed apps) |
+| ⌘R | Refresh / Reload | Universal |
+| ⌘1…⌘9 | Switch to primary destination | Universal |
+| ⌘0 | Main Window / Actual Size | Universal |
+| ⌘Space / ⌘Tab / ⌘` | System | Reserved |
+| ⇧⌘3 / ⇧⌘4 / ⇧⌘5 | Screenshots | System |
+| ⌘? | Help | System |
+| ⌘. | Cancel (in dialogs) | System |
+
+#### Modifier Conventions
+
+- **Shift = reverse direction, or larger scope.** `⇧⌘Z` reverses Undo. `⇧⌘G` finds previous. `⇧⌘K` marks *all* as cleared (vs `⌘K` marks one).
+- **Option = alternate behavior, or apply to all siblings.** `⌥⌘H` hides others (not self). `⌥⌘W` would close all windows in many apps. Hold Option to reveal hidden alternate menu items (see **Alternate Items** below).
+- **Control = rarely used for app shortcuts.** Reserved for text-navigation conventions (`^A` line start, `^E` line end). Avoid inventing ⌃-only shortcuts.
+- **Command = the app-level primary modifier.** Every app command uses ⌘ as its base. Unmodified keys (`j`, `k`, Space) are for list navigation only.
+
+**Modifier display order** when shown in menus: Control · Option · Shift · Command · key → `⌃⌥⇧⌘N`. SwiftUI's `.keyboardShortcut(_:modifiers:)` emits this order automatically.
+
+#### Moolah-Specific Shortcut Map
+
+Assign shortcuts only when the action is **frequent** (used more than a few times per session) and **has a menu item** that displays the shortcut. Never put a shortcut on a view-only button without a matching menu item.
+
+| Action | Shortcut | Menu |
+|--------|----------|------|
+| New Transaction | ⌘N | File |
+| New Earmark | ⇧⌘N | File |
+| New Account… | ⌃⌘N | File |
+| New Category… | ⌥⌘N | File |
+| New Window | ⌥⇧⌘N | File (SwiftUI default) |
+| Open Profile… (submenu) | — | File |
+| Import Profile… | ⇧⌘I | File |
+| Export Profile… | ⇧⌘E | File |
+| Close Window | ⌘W | File (system) |
+| Sign Out | ⇧⌘Q | File |
+| Find Transactions… | ⌘F | Edit |
+| Find Next / Previous | ⌘G / ⇧⌘G | Edit |
+| Copy Transaction Link | ⌃⌘C | Edit |
+| Show/Hide Sidebar | ⌃⌘S | View |
+| Show/Hide Inspector | ⌥⌘I | View |
+| Show/Hide Hidden Accounts | ⇧⌘H | View |
+| Enter/Exit Full Screen | ⌃⌘F | View |
+| Go to Accounts / Transactions / … | ⌘1…⌘6 | Go |
+| Back / Forward | ⌘[ / ⌘] | Go |
+| Duplicate Transaction | ⌘D | Transaction |
+| Mark as Cleared / All | ⌘K / ⇧⌘K | Transaction |
+| Pay Scheduled Transaction | — | Transaction (⌘P reserved for Print) |
+| Delete Transaction | ⌫ | Transaction (fires on selection) |
+| Refresh | ⌘R | (no menu item — handled by `.refreshable`; see note) |
+| Moolah Help | ⌘? | Help |
+| Keyboard Shortcuts | ⇧⌘/ | Help |
+
+**Note on ⌘R:** SwiftUI's `.refreshable` modifier wires ⌘R automatically in lists that support it. If you want the shortcut available outside a scrollable list, add a File > Refresh item.
+
+**List-navigation shortcuts** (not in menus; documented in the Keyboard Shortcuts help sheet):
+
+| Key | Action |
+|-----|--------|
+| ↑ / ↓ | Move selection up/down |
+| j / k | Next / previous (Mail-style, optional) |
+| Space | Primary action on selected item (open inspector) |
+| Return | Primary action on selected item |
+| Escape | Deselect / dismiss inspector |
+| ⌫ | Delete selected item |
+
+Every interactive control must still be reachable via **Tab** with Full Keyboard Access enabled, independent of these shortcuts.
+
+### Icons in Menu Items
+
+**Default: no icons in menu items.** Mac menus have been text-only for forty years, and users read them by text. macOS 26 introduced optional SF Symbols in menus, but Apple's own adoption is inconsistent and the strong community consensus (including [Daring Fireball](https://daringfireball.net/2026/03/what_to_do_about_those_menu_item_icons_in_macos_26_tahoe)) is **reserve icons for the rare items where the glyph adds real information, so they stand out**.
+
+Acceptable uses:
+
+- **Share submenu** — system-inserted; per-destination icon.
+- **Open Profile submenu** — the profile's currency flag or avatar; the icon carries identity that the text does not.
+- **Recent Items submenu** — file-type icon for each entry.
+- **Items that mirror a toolbar button** where the toolbar's SF Symbol is the recognized shorthand for the action (e.g., `Reveal in Finder` with `magnifyingglass`). Use sparingly.
+
+Unacceptable:
+
+- Icons on every item in File/Edit/View.
+- Icons on standard text commands (Cut/Copy/Paste/Undo/Select All).
+- Icons on destructive items to try to make them stand out (the grouping and naming carry that weight).
+- Icons on `About Moolah`, `Quit Moolah`, `Hide Moolah`.
+
+### Grouping & Dividers
+
+Every menu should read as **3–5 items per group, 2–4 groups per menu.** Separate groups with `Divider()` (rendered as `NSMenuItem.separator`).
+
+Chunk by semantic intent, not alphabetically:
+
+```
+File
+  [Create group]                 New Transaction, New Earmark, New Account, New Category
+  ─
+  [Window group]                 New Window, Open Profile
+  ─
+  [I/O group]                    Import Profile, Export Profile
+  ─
+  [Lifecycle group]              Sign Out
+```
+
+**Most-frequent item goes at the top of its group.** For `Transaction`: `Edit…` appears first because pressing Return on a selected row is the expected flow.
+
+**Long menus need submenus.** Once a menu crosses 12 items, promote the most attribute-like group into a submenu (`Sort By ▸`, `Display ▸`).
+
+**Destructive actions occupy their own group at the bottom.**
+
+### Submenus
+
+**One level deep. Maximum two.** No submenus inside submenus inside submenus.
+
+Use submenus for:
+
+- **Attribute sets**: `Sort By ▸`, `Group By ▸`, `Display ▸`. These are radio groups with checkmarks.
+- **Related commands that can't all fit inline**: `Find ▸ Find…` / `Find Next` / `Find Previous` / `Jump to Selection`.
+- **Dynamic lists**: `Open Profile ▸`, `Recent Transactions ▸`.
+
+Do **not** use submenus for:
+
+- Unrelated actions bucketed under a topic (`File Operations ▸ Save / Print / Export` is wrong).
+- Anything with three or fewer items — inline them instead.
+- The menu's primary commands.
+
+Submenu titles are nouns or noun phrases, never ellipsis-suffixed. The child items may take ellipses normally.
+
+### Dynamic Menus
+
+For data-driven lists (profiles, recent items):
+
+```swift
+Menu("Open Profile") {
+    ForEach(profileStore.profiles) { profile in
+        Button(profile.label) { openWindow(value: profile.id) }
+    }
+    if profileStore.profiles.isEmpty {
+        Text("No Profiles")  // disabled placeholder — Text in a menu renders as disabled
+    }
+    Divider()
+    SettingsLink { Text("Manage Profiles…") }
+}
+```
+
+Rules:
+
+- **Never show an empty submenu.** Provide a disabled placeholder like `No Profiles` or `No Recent Items`.
+- **Cap recents at 10** (Apple's Finder convention). Older entries fall off.
+- **Non-recent data lists** (accounts, profiles) show every entry sorted stably.
+- **Include a terminal management item** when the list is user-editable: `Clear Menu` or `Manage Profiles…` after a divider.
+- **Alternate items** revealed by ⌥ must have a primary-accessible equivalent elsewhere. Never make ⌥ the only path.
+
+### Enabled vs Disabled State
+
+Menu items exist to describe what the app can do. Users browse menus to learn the app, and Help > Search only finds items that exist in a menu.
+
+- **Disable, don't hide** when an item is unavailable for the current selection or state. SwiftUI: `.disabled(binding.wrappedValue == nil)`.
+- **Hide** only when the item depends on build mode (debug-only), entitlement (admin/pro feature), or platform (macOS-only item on iOS).
+- **Never disable an entire menu.** The title stays enabled; individual items go dim. macOS handles this automatically when every item is disabled.
+- **Communicate why an item is disabled** via the view's `.help("…")` tooltip on the underlying control, or via adjacent UI (a status line). Don't put explanatory text in the menu item name itself.
+- Disabled items must still be visible to VoiceOver and to Help > Search.
+
+### Destructive Actions
+
+- **Bottom group**, separated by `Divider`. Never mixed with safe actions.
+- **Specific verbs.** `Delete Transaction`, `Remove Account`, `Empty Recycle Bin`. Not bare `Remove` or `Delete`.
+- **Confirm irreversible deletions** with an `Alert` and a destructive-styled button. If the action is undoable via Undo Manager, the confirm may be skipped.
+- **Ellipsis if a confirm alert appears** — `Delete Profile…`. The ellipsis signals "this will ask you something."
+- **No bare shortcut on destructive items.** Use the Delete key on selection (requires focus) for list-item deletion. Never assign `⌘⌫` alone — too easy to misfire.
+- **The menu item itself is not red or icon-marked.** The confirmation alert carries the visual warning.
+
+### Context Menu ↔ Menu Bar Parity
+
+Every context menu item (right-click on a list row) should have a matching top-level menu bar item in the domain menu (`Transaction`, `Account`, etc.). Users right-click for speed, but they discover the feature in the menu bar.
+
+```swift
+// Context menu on a transaction row
+.contextMenu {
+    Button("Edit Transaction…") { openInspector() }
+    Button("Duplicate Transaction") { duplicate() }
+    Button("Mark as Cleared") { markCleared() }
+    Divider()
+    Button("Delete Transaction", role: .destructive) { confirmDelete() }
+}
+
+// Must be mirrored by:
+CommandMenu("Transaction") {
+    Button("Edit Transaction…") { … }.keyboardShortcut(.return, modifiers: [])
+    Button("Duplicate Transaction") { … }.keyboardShortcut("d")
+    Button("Mark as Cleared") { … }.keyboardShortcut("k")
+    Divider()
+    Button("Delete Transaction", role: .destructive) { … }
+}
+```
+
+Wire both to the same action via a `@FocusedValue` (see Section 13).
+
+### Toolbar ↔ Menu Bar Parity
+
+Every toolbar button on a primary window must have a menu equivalent. Toolbar-only commands are invisible to keyboard-only users and to Help search.
+
+- Toolbar actions that map to `ToolbarItem(placement: .primaryAction)` → matching menu item in File or the domain menu.
+- Toolbar-level ⌘F, ⌘R, ⌘N shortcuts must also appear in the menu bar item that displays that shortcut.
+- When the toolbar offers a `Label`-style button, the menu item uses the same verb phrase (`New Transaction` in both).
+
+### SwiftUI Wiring
+
+#### Standard Command Groups
+
+```swift
+.commands {
+    // App-menu
+    AboutCommands()
+
+    // File — compose replacing/before/after newItem and saveItem
+    NewTransactionCommands()        // replaces .newItem
+    NewEarmarkCommands()            // after .newItem
+    NewAccountCommands()            // after .newItem
+    NewCategoryCommands()           // after .newItem
+    ProfileCommands(…)              // before .saveItem (Open Profile, Import/Export, Sign Out)
+
+    // Edit — roll your own; don't pull TextEditingCommands unless editing text
+    FindCommands()                  // .textEditing
+    CopyLinkCommands()              // .pasteboard (after)
+
+    // View — compose with SwiftUI-provided builders
+    SidebarCommands()
+    ToolbarCommands()
+    InspectorCommands()
+    SortCommands()                  // .sidebar (after)
+    ShowHiddenCommands()            // .sidebar (after)
+
+    // Go — new top-level CommandMenu
+    GoCommands()
+
+    // Transaction — new top-level CommandMenu
+    TransactionCommands()
+
+    // Help
+    HelpCommands()                  // after SwiftUI's search field
+}
+```
+
+Reach for built-in `Commands` structs (`SidebarCommands`, `ToolbarCommands`, `InspectorCommands`) before hand-rolling equivalents — they handle labels, placements, and label flips correctly across localizations.
+
+#### Focused Values Pattern
+
+Any menu command that acts on a selection must receive the selection via `@FocusedValue`. Define one key per piece of state, publish from the view that owns it, consume in the command group:
+
+```swift
+// 1. Define
+struct SelectedTransactionKey: FocusedValueKey {
+    typealias Value = Binding<Transaction?>
+}
+
+extension FocusedValues {
+    var selectedTransaction: Binding<Transaction?>? {
+        get { self[SelectedTransactionKey.self] }
+        set { self[SelectedTransactionKey.self] = newValue }
+    }
+}
+
+// 2. Publish from the view
+TransactionListView(…)
+    .focusedSceneValue(\.selectedTransaction, $selectedTransaction)
+
+// 3. Consume in the command
+struct TransactionCommands: Commands {
+    @FocusedValue(\.selectedTransaction) var selection
+
+    var body: some Commands {
+        CommandMenu("Transaction") {
+            Button("Edit Transaction…") { openInspector(selection?.wrappedValue) }
+                .keyboardShortcut(.return, modifiers: [])
+                .disabled(selection?.wrappedValue == nil)
+        }
+    }
+}
+```
+
+Prefer `focusedSceneValue` over `focusedValue` — scene-wide availability is almost always what menu commands want.
+
+### Anti-Patterns
+
+- ❌ **Repurposing ⌘N for "New Window".** ⌘N belongs to the app's primary creation verb.
+- ❌ **Reassigning reserved shortcuts** (⌘H, ⌘M, ⌘Q, ⌘W, ⌘,). Especially ⌘H — common offender.
+- ❌ **Duplicate shortcuts across visible commands** (e.g., ⇧⌘N claimed by both New Earmark and New Category). One shortcut, one visible action.
+- ❌ **Toolbar shortcuts not surfaced in any menu item.** Invisible to Help search and Full Keyboard Access.
+- ❌ **Context-menu-only actions** with no top-level menu entry.
+- ❌ **Three-period ellipsis (`...`) instead of U+2026 (`…`).**
+- ❌ **Missing ellipsis** on items that open input-requiring dialogs.
+- ❌ **Stray ellipsis** on items that act immediately (`About Moolah…`, `Show Inspector…`).
+- ❌ **Sentence case** (`Save as…`). Use title case (`Save As…`).
+- ❌ **Single checkmark** on a feature toggle (`☑ Sidebar`). Use verb-pair `Show Sidebar` / `Hide Sidebar`.
+- ❌ **Hiding items based on selection state.** Disable them instead.
+- ❌ **Empty submenus.** Show a disabled `No Profiles` placeholder.
+- ❌ **Submenus nested more than one level deep.**
+- ❌ **An icon on every menu item.** Icons become noise; reserve for items where the glyph carries identity (Share destinations, profile switcher, toolbar mirrors).
+- ❌ **Removing the Help menu** or the SwiftUI search field inside it.
+- ❌ **A generic "Actions" or "Tools" top-level menu.** Use the primary noun (`Transaction`, `Account`).
+- ❌ **Single-key list-navigation shortcuts** (`j`, `k`, `space`) rendered as menu items. They belong in the Keyboard Shortcuts help sheet.
+- ❌ **Undo/Redo without the action name** — use SwiftUI's `UndoManager` so labels read `Undo Edit Transaction`.
+
+---
+
 ## Version History
+- **1.2** (2026-04-17): Add Section 14 — Menu Bar & Commands (macOS), covering top-level menu structure, naming, keyboard shortcuts, icons, grouping, dynamic menus, toolbar/context-menu parity, SwiftUI wiring. Trimmed Section 9's shortcut list in favor of Section 14.
 - **1.1** (2026-04-15): Add Section 13 — Focus, Tab Order & Selection (form focus, list selection, focus sections, focused values, keyboard expectations)
 - **1.0** (2026-04-08): Initial style guide for Moolah native app (macOS-first, adaptive density, semantic colors, charts)
