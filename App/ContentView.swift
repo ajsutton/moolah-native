@@ -3,6 +3,7 @@ import SwiftUI
 /// Placeholder main content shown after sign-in. Replaced step-by-step with real screens.
 struct ContentView: View {
   @Environment(AuthStore.self) private var authStore
+  @Environment(ProfileSession.self) private var session
   @Environment(AccountStore.self) private var accountStore
   @Environment(TransactionStore.self) private var transactionStore
   @Environment(CategoryStore.self) private var categoryStore
@@ -121,7 +122,7 @@ struct ContentView: View {
     }
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
-        instrument: accountStore.currentTotal.instrument,
+        instrument: session.profile.instrument,
         onCreate: { newEarmark in
           Task {
             _ = await earmarkStore.create(newEarmark)

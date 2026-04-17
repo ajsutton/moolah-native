@@ -56,10 +56,17 @@ final class AutomationService {
     return account
   }
 
-  /// Returns the net worth (current + investment totals) for the given profile.
-  func getNetWorth(profileIdentifier: String) throws -> InstrumentAmount {
+  /// Returns the net worth (current + investment totals) for the given profile,
+  /// converted into the profile's instrument.
+  func getNetWorth(profileIdentifier: String) async throws -> InstrumentAmount {
     let session = try resolveSession(for: profileIdentifier)
-    return session.accountStore.netWorth
+    do {
+      return try await session.accountStore.computeConvertedNetWorth(
+        in: session.profile.instrument)
+    } catch {
+      throw AutomationError.operationFailed(
+        "Failed to compute net worth: \(error.localizedDescription)")
+    }
   }
 
   /// Creates a new account in the given profile.

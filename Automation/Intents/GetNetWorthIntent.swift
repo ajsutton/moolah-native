@@ -14,7 +14,7 @@ struct GetNetWorthIntent: AppIntent {
     guard let service = AutomationServiceLocator.shared.service else {
       throw AutomationError.operationFailed("App not ready")
     }
-    let netWorth = try service.getNetWorth(profileIdentifier: profile.id.uuidString)
+    let netWorth = try await service.getNetWorth(profileIdentifier: profile.id.uuidString)
     return .result(value: netWorth.formatted)
   }
 }

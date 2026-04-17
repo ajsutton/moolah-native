@@ -109,22 +109,6 @@ final class AccountStore {
     return account.positions.isEmpty || account.positions.allSatisfy { $0.quantity == 0 }
   }
 
-  var currentTotal: InstrumentAmount {
-    currentAccounts.reduce(.zero(instrument: targetInstrument)) {
-      $0 + balance(for: $1.id)
-    }
-  }
-
-  var investmentTotal: InstrumentAmount {
-    investmentAccounts.reduce(
-      .zero(instrument: targetInstrument)
-    ) { $0 + displayBalance(for: $1.id) }
-  }
-
-  var netWorth: InstrumentAmount {
-    currentTotal + investmentTotal
-  }
-
   /// Positions for a given account. Returns empty array if not loaded.
   func positions(for accountId: UUID) -> [Position] {
     accounts.by(id: accountId)?.positions ?? []
@@ -165,6 +149,13 @@ final class AccountStore {
     return total
   }
 
+  /// Compute converted net worth (current + investment totals) in a target instrument.
+  func computeConvertedNetWorth(in target: Instrument) async throws -> InstrumentAmount {
+    let current = try await computeConvertedCurrentTotal(in: target)
+    let investment = try await computeConvertedInvestmentTotal(in: target)
+    return current + investment
+  }
+
   private func recomputeConvertedTotals() {
     conversionTask?.cancel()
     conversionTask = Task {
@@ -181,6 +172,14 @@ final class AccountStore {
         logger.error("Failed to compute converted totals: \(error.localizedDescription)")
       }
     }
+  }
+
+  /// Awaits any in-flight converted-totals recomputation. Intended for tests
+  /// that need deterministic synchronisation after `load()` / `applyDelta` /
+  /// `updateInvestmentValue` kick off `recomputeConvertedTotals()`.
+  func waitForPendingConversions() async {
+    guard let task = conversionTask else { return }
+    await task.value
   }
 
   /// Updates the investment value for a specific account locally.
