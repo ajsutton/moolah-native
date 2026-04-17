@@ -49,6 +49,17 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
     instrumentCache[instrument.id] = instrument
   }
 
+  /// Returns the instrument associated with the given account, falling back
+  /// to the profile instrument if the account isn't found.
+  @MainActor
+  private func accountInstrument(id: UUID) throws -> Instrument {
+    let accountDescriptor = FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == id })
+    guard let record = try context.fetch(accountDescriptor).first else {
+      return self.instrument
+    }
+    return try resolveInstrument(id: record.instrumentId)
+  }
+
   // MARK: - Fetch Legs for Transactions
 
   @MainActor
@@ -180,9 +191,17 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       // --- Paginate ---
       let offset = page * pageSize
       guard offset < filteredRecords.count else {
+        // Empty page — priorBalance is zero in whichever instrument best
+        // matches the filter context.
+        let emptyInstrument: Instrument
+        if let filterAccountId = filter.accountId {
+          emptyInstrument = (try? accountInstrument(id: filterAccountId)) ?? self.instrument
+        } else {
+          emptyInstrument = self.instrument
+        }
         return TransactionPage(
           transactions: [],
-          priorBalance: InstrumentAmount.zero(instrument: self.instrument),
+          priorBalance: InstrumentAmount.zero(instrument: emptyInstrument),
           totalCount: filteredRecords.count)
       }
       let totalCount = filteredRecords.count
@@ -197,7 +216,9 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       }
       os_signpost(.end, log: Signposts.repository, name: "fetch.toDomain", signpostID: signpostID)
 
-      // priorBalance = sum of leg quantities for the filtered account for records after the page
+      // priorBalance = sum of leg quantities for the filtered account for records after the page.
+      // Account balances are tracked in the account's own instrument (legs of
+      // an account share its instrument), not the profile instrument.
       os_signpost(
         .begin, log: Signposts.balance, name: "fetch.priorBalance", signpostID: signpostID)
       let priorBalance: InstrumentAmount
@@ -212,8 +233,9 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         for leg in allAccountLegs where afterPageRecordIds.contains(leg.transactionId) {
           totalStorageValue += leg.quantity
         }
+        let accountInstrument = try accountInstrument(id: filterAccountId)
         priorBalance = InstrumentAmount(
-          storageValue: totalStorageValue, instrument: self.instrument)
+          storageValue: totalStorageValue, instrument: accountInstrument)
       } else {
         priorBalance = InstrumentAmount.zero(instrument: self.instrument)
       }

@@ -243,6 +243,47 @@ struct TransactionRepositoryContractTests {
     #expect(page.priorBalance.isZero)
   }
 
+  @Test("priorBalance is labelled with the account's own instrument")
+  func testPriorBalanceUsesAccountInstrument() async throws {
+    // Non-profile instrument for the viewing account.
+    let accountInstrument = Instrument.USD
+    let accountId = UUID()
+    let (backend, container) = try TestBackend.create()
+    let account = Account(
+      id: accountId, name: "USD Account", type: .bank, instrument: accountInstrument)
+    TestBackend.seed(
+      accounts: [(account, InstrumentAmount.zero(instrument: accountInstrument))],
+      in: container)
+    // Two transactions in the USD account so we need a priorBalance across pages.
+    let tx1 = Transaction(
+      date: Date(timeIntervalSince1970: 1),
+      payee: "Older",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: accountInstrument,
+          quantity: Decimal(string: "10")!, type: .income)
+      ])
+    let tx2 = Transaction(
+      date: Date(timeIntervalSince1970: 2),
+      payee: "Newer",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: accountInstrument,
+          quantity: Decimal(string: "20")!, type: .income)
+      ])
+    TestBackend.seed(transactions: [tx1, tx2], in: container)
+
+    // Page size of 1 forces a non-zero priorBalance on page 0.
+    let page0 = try await backend.transactions.fetch(
+      filter: TransactionFilter(accountId: accountId), page: 0, pageSize: 1)
+    #expect(page0.priorBalance.instrument == accountInstrument)
+
+    // Empty paged-past-end response should also use the account's instrument.
+    let pageN = try await backend.transactions.fetch(
+      filter: TransactionFilter(accountId: accountId), page: 99, pageSize: 1)
+    #expect(pageN.priorBalance.instrument == accountInstrument)
+  }
+
   @Test("transfer creates with two legs")
   func testTransferCreatesTwoLegs() async throws {
     let repository = makeCloudKitTransactionRepository()
