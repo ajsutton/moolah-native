@@ -31,6 +31,7 @@ struct AddInvestmentValueView: View {
               .foregroundStyle(.secondary)
             TextField("Value", text: $valueString)
               .focused($isValueFieldFocused)
+              .monospacedDigit()
               #if os(iOS)
                 .keyboardType(.decimalPad)
               #endif
@@ -76,4 +77,18 @@ struct AddInvestmentValueView: View {
     isSubmitting = false
     dismiss()
   }
+}
+
+#Preview {
+  let (backend, _) = PreviewBackend.create()
+  let store = InvestmentStore(
+    repository: backend.investments,
+    transactionRepository: backend.transactions,
+    conversionService: backend.conversionService
+  )
+  AddInvestmentValueView(
+    accountId: UUID(),
+    instrument: .AUD,
+    store: store
+  )
 }

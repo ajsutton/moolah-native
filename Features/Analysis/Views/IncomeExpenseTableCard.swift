@@ -78,9 +78,11 @@ struct IncomeExpenseTableCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                   Text(monthLabel(for: item))
                     .font(.body)
+                    .monospacedDigit()
                   Text(monthsAgoLabel(for: item))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .monospacedDigit()
                 }
                 .frame(minWidth: 120, alignment: .leading)
 

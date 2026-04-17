@@ -32,3 +32,23 @@ struct InvestmentValueRow: View {
     }
   }
 }
+
+#Preview {
+  List {
+    InvestmentValueRow(
+      value: InvestmentValue(
+        date: Date(),
+        value: InstrumentAmount(quantity: 5432, instrument: .AUD)
+      ),
+      onDelete: {}
+    )
+    InvestmentValueRow(
+      value: InvestmentValue(
+        date: Calendar.current.date(byAdding: .month, value: -1, to: Date())!,
+        value: InstrumentAmount(quantity: 5010, instrument: .AUD)
+      ),
+      onDelete: {}
+    )
+  }
+  .frame(width: 320)
+}

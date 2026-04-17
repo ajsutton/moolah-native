@@ -238,3 +238,52 @@ struct InvestmentAccountView: View {
     }
   }
 }
+
+#Preview {
+  let (backend, _) = PreviewBackend.create()
+  let investmentStore = InvestmentStore(
+    repository: backend.investments,
+    transactionRepository: backend.transactions,
+    conversionService: backend.conversionService
+  )
+  let transactionStore = TransactionStore(
+    repository: backend.transactions,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD
+  )
+  let tradeStore = TradeStore(transactions: backend.transactions)
+  let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
+  let account = Account(
+    name: "Brokerage",
+    type: .investment,
+    instrument: .AUD
+  )
+
+  NavigationStack {
+    InvestmentAccountView(
+      account: account,
+      accounts: Accounts(from: [account]),
+      categories: Categories(from: []),
+      earmarks: Earmarks(from: []),
+      investmentStore: investmentStore,
+      transactionStore: transactionStore,
+      tradeStore: tradeStore
+    )
+    .environment(session)
+  }
+  .frame(width: 720, height: 560)
+  .task {
+    _ = try? await backend.accounts.create(
+      account, openingBalance: InstrumentAmount(quantity: 10_000, instrument: .AUD))
+    let calendar = Calendar.current
+    for monthsAgo in (0..<6).reversed() {
+      let date = calendar.date(byAdding: .month, value: -monthsAgo, to: Date())!
+      let quantity: Decimal = 9_500 + Decimal(6 - monthsAgo) * 400
+      await investmentStore.setValue(
+        accountId: account.id,
+        date: date,
+        value: InstrumentAmount(quantity: quantity, instrument: .AUD)
+      )
+    }
+  }
+}

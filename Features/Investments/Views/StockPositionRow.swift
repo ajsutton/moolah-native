@@ -59,3 +59,25 @@ struct StockPositionRow: View {
     return "\(name), \(quantityText), value unavailable"
   }
 }
+
+#Preview {
+  let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+  let apple = Instrument.stock(ticker: "AAPL", exchange: "NASDAQ", name: "Apple")
+  List {
+    StockPositionRow(
+      valuedPosition: ValuedPosition(
+        position: Position(instrument: bhp, quantity: 250),
+        marketValue: 11_325
+      ),
+      profileCurrency: .AUD
+    )
+    StockPositionRow(
+      valuedPosition: ValuedPosition(
+        position: Position(instrument: apple, quantity: 40),
+        marketValue: nil
+      ),
+      profileCurrency: .AUD
+    )
+  }
+  .frame(width: 380)
+}

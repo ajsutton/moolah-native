@@ -176,3 +176,27 @@ struct InvestmentChartView: View {
     })
   }
 }
+
+#Preview {
+  let calendar = Calendar.current
+  let points: [InvestmentChartDataPoint] = (0..<12).reversed().map { monthsAgo in
+    let date = calendar.date(byAdding: .month, value: -monthsAgo, to: Date())!
+    let balance: Decimal = 10_000 + Decimal(12 - monthsAgo) * 500
+    let value: Decimal = balance + Decimal(Double.random(in: -1_000...2_500))
+    return InvestmentChartDataPoint(
+      date: date,
+      value: value,
+      balance: balance,
+      profitLoss: value - balance
+    )
+  }
+  InvestmentChartView(dataPoints: points, instrument: .AUD)
+    .frame(width: 560, height: 320)
+    .padding()
+}
+
+#Preview("Empty") {
+  InvestmentChartView(dataPoints: [], instrument: .AUD)
+    .frame(width: 560, height: 320)
+    .padding()
+}
