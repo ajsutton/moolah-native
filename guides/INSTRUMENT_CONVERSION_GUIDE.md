@@ -137,6 +137,26 @@ Use `transaction.date`, `dailyBalance.date`, `snapshot.date`, or the explicit pa
 
 The date used to key a balance and the date supplied to the conversion service must both be normalized the same way (usually `Calendar(identifier: .gregorian).startOfDay(for:)`). Mismatches can cross timezone boundaries and return yesterday's rate for today's value.
 
+### Rule 11: Degrade gracefully; never silently exclude failed conversions
+
+Conversion can fail in production — no network, no cached fallback, unsupported pair, missing provider mapping. The system must degrade as gracefully as it can, but it **must never present an incorrect number as if it were correct**.
+
+**Allowed degradations:**
+- Mark the affected total as *unavailable* (e.g. show "—", a retry affordance, or an explicit error state) for whatever scope is compromised.
+- Show the convertible portion alongside an explicit indicator of what could not be converted — e.g. "A$1,234 + 2 positions unavailable". The user must be able to see that the number is partial.
+- Render the unconverted `InstrumentAmount` in its native instrument and annotate it, so at least the raw value is visible.
+- Keep independently-convertible sections (other accounts, other earmarks, other report rows) rendering normally — a single failing position should not blank the whole view.
+- Log the failure (`os.Logger`) and surface a user-visible message so the problem is discoverable and retryable.
+
+**Not allowed:**
+- Silently summing only the convertible positions and displaying the result as a complete total.
+- Replacing a failed conversion with `0` (or `.zero(instrument:)`) and folding it into the sum.
+- `try?`-swallowing a conversion error, producing no log, no error state, and no user indication.
+- Aborting the whole aggregation on the first failure when the remaining positions are still independently computable (the pattern behind the "sidebar spinner forever" class of bug).
+- Caching/persisting a partial or fallback total as the authoritative value for the next launch, so the user never sees the real number even after the network recovers.
+
+**Structural guidance:** Catch conversion errors inside the per-position (or per-entity) loop, not around the whole aggregation. Accumulate a list of "failed" identifiers alongside the running total so the view can render both the convertible sum and an explicit indicator. If the total is meaningless without the failed positions (e.g. net worth when a major account can't be valued), mark the total as unavailable rather than presenting a misleading partial.
+
 ---
 
 ## 4. Canonical Patterns
@@ -176,6 +196,10 @@ See Rule 8. Applies to both `convert(_:from:to:on:)` and `convertAmount(_:to:on:
 | Test coverage only via `FixedConversionService` (date-ignoring) | Cannot detect wrong-date regressions | Use `DateBasedFixedConversionService` for date-sensitive tests |
 | Constructing `InstrumentAmount(quantity:, instrument:)` with an implicit running-total instrument | Assumption breaks when inputs differ | Keep positions as `[Instrument: Decimal]` until convert time |
 | Calling `ExchangeRateService` / `CryptoPriceService` / `StockPriceService` directly from a store or view | Bypasses the `InstrumentConversionService` seam and the fast path | Always go through `InstrumentConversionService` |
+| Summing only the convertible positions and displaying as a complete total | Shows an incorrect number with no indication it's partial | Degrade per Rule 11: partial + indicator, or mark total unavailable |
+| Replacing a failed conversion with `0` / `.zero(instrument:)` in the running sum | Same problem — a wrong total rendered as authoritative | Exclude *and* surface; never silently substitute zero (Rule 11) |
+| Wrapping the whole aggregation in one `do { ... } catch { total = nil }` | One bad position blanks the entire view, e.g. sidebar spinner forever | Catch per-position inside the loop; keep the rest rendering (Rule 11) |
+| `try?` on a conversion without logging or surfacing an error | Silent failure, invisible in production | Log via `os.Logger` and set a user-visible error/indicator (Rule 11) |
 
 ---
 
@@ -204,8 +228,17 @@ See Rule 8. Applies to both `convert(_:from:to:on:)` and `convertAmount(_:to:on:
 - [ ] Test coverage uses `DateBasedFixedConversionService` if date correctness matters.
 - [ ] Failure path — a throwing conversion — is surfaced to the user or logged, not `try?`-swallowed.
 
+### For every aggregation that can partially fail
+
+- [ ] Conversion errors are caught *inside* the per-position / per-entity loop, not around the whole aggregation.
+- [ ] Independently-convertible positions still render when one position fails.
+- [ ] Partial totals are displayed with an explicit indicator (e.g. "+ N unavailable"), or the total is marked unavailable — never silently summed as if complete.
+- [ ] Failed conversions are never substituted with `0` in the running sum.
+- [ ] Failures are logged via `os.Logger` and surfaced to the user, with a path to retry once the network / rate source recovers.
+- [ ] Partial / fallback totals are not cached as authoritative values that would hide recovery.
+
 ---
 
 ## Version History
 
-- **1.0** (2026-04-17): Initial guide. Consolidates instrument-safe-arithmetic and conversion-date rules previously spread across `plans/ROADMAP.md`, `plans/2026-04-17-forecast-currency-conversion-plan.md`, and the `PositionBook` / `InstrumentAmount` source files.
+- **1.0** (2026-04-17): Initial guide. Consolidates instrument-safe-arithmetic and conversion-date rules previously spread across `plans/ROADMAP.md`, `plans/2026-04-17-forecast-currency-conversion-plan.md`, and the `PositionBook` / `InstrumentAmount` source files. Adds Rule 11 (graceful degradation without silently excluding failed conversions) to codify the "sidebar blanks forever" class of bug and preclude silent partial totals.
