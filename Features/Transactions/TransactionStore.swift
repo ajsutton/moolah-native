@@ -23,8 +23,8 @@ final class TransactionStore {
   /// The instrument used for the currently-loaded view.
   /// Account-scoped views display balances in the account's own currency so
   /// native legs don't require conversion. The repository reports the
-  /// account's instrument via `TransactionPage.priorBalance.instrument`, and
-  /// the store aligns to it on the first page fetch.
+  /// account's instrument via `TransactionPage.targetInstrument`, and the
+  /// store aligns to it on the first page fetch.
   private(set) var currentTargetInstrument: Instrument
   private let pageSize: Int
   private let accountStore: AccountStore?
