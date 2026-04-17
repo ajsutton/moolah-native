@@ -95,7 +95,7 @@ private struct SimpleTransactionRow: View {
   let transaction: Transaction
   let accounts: Accounts
   let earmarks: Earmarks
-  let displayAmount: InstrumentAmount
+  let displayAmount: InstrumentAmount?
   let isOverdue: Bool
   let isDueToday: Bool
   let onPay: () async -> Void
@@ -142,13 +142,20 @@ private struct SimpleTransactionRow: View {
 
       Spacer()
 
-      Text(
-        displayAmount.quantity,
-        format: .currency(code: displayAmount.instrument.id)
-      )
-      .font(.body)
-      .monospacedDigit()
-      .foregroundStyle(displayAmount.quantity >= 0 ? .green : .red)
+      if let displayAmount {
+        Text(
+          displayAmount.quantity,
+          format: .currency(code: displayAmount.instrument.id)
+        )
+        .font(.body)
+        .monospacedDigit()
+        .foregroundStyle(displayAmount.quantity >= 0 ? .green : .red)
+      } else {
+        Text("—")
+          .font(.body)
+          .monospacedDigit()
+          .foregroundStyle(.secondary)
+      }
 
       Button {
         Task {

@@ -179,6 +179,13 @@ struct TransactionListView: View {
     }
   }
 
+  /// For account-scoped views, display balances in the viewing account's own
+  /// currency so native legs never require conversion. Otherwise fall back to
+  /// the store's default (profile) instrument.
+  private func targetInstrumentForFilter(_ filter: TransactionFilter) -> Instrument? {
+    filter.accountId.flatMap { accounts.by(id: $0)?.instrument }
+  }
+
   private var listView: some View {
     List(selection: selectedTransactionBinding) {
       PositionListView(positions: positions)
@@ -262,7 +269,8 @@ struct TransactionListView: View {
       ToolbarItem(placement: .automatic) {
         Button {
           Task {
-            await transactionStore.load(filter: filter)
+            await transactionStore.load(
+              filter: filter, targetInstrument: targetInstrumentForFilter(filter))
           }
         } label: {
           Label("Refresh", systemImage: "arrow.clockwise")
@@ -295,16 +303,19 @@ struct TransactionListView: View {
       // Reset filter and selection when switching accounts/contexts
       activeFilter = baseFilter
       selectedTransaction = nil
-      await transactionStore.load(filter: baseFilter)
+      await transactionStore.load(
+        filter: baseFilter, targetInstrument: targetInstrumentForFilter(baseFilter))
     }
     .task(id: activeFilter) {
       // Reload when user applies a filter
       if activeFilter != baseFilter {
-        await transactionStore.load(filter: activeFilter)
+        await transactionStore.load(
+          filter: activeFilter, targetInstrument: targetInstrumentForFilter(activeFilter))
       }
     }
     .refreshable {
-      await transactionStore.load(filter: filter)
+      await transactionStore.load(
+        filter: filter, targetInstrument: targetInstrumentForFilter(filter))
     }
     .searchable(text: $searchText, prompt: "Search payee")
     .overlay {

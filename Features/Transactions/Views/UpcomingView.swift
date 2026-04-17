@@ -179,7 +179,7 @@ struct UpcomingTransactionRow: View {
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
-  let displayAmount: InstrumentAmount
+  let displayAmount: InstrumentAmount?
   let isOverdue: Bool
   var isDueToday: Bool = false
   let onPay: () -> Void
@@ -239,7 +239,14 @@ struct UpcomingTransactionRow: View {
 
       Spacer()
 
-      InstrumentAmountView(amount: displayAmount, font: .body)
+      if let displayAmount {
+        InstrumentAmountView(amount: displayAmount, font: .body)
+      } else {
+        Text("—")
+          .font(.body)
+          .foregroundStyle(.secondary)
+          .monospacedDigit()
+      }
 
       Button("Pay") {
         onPay()

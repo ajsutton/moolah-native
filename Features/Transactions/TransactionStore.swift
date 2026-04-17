@@ -14,7 +14,15 @@ final class TransactionStore {
 
   private let repository: TransactionRepository
   private let conversionService: InstrumentConversionService
+  /// The default target instrument (profile currency). Used when `load` is
+  /// called without an explicit override — e.g. scheduled/upcoming views
+  /// where no account context narrows the display currency.
   private(set) var targetInstrument: Instrument
+  /// The instrument used for the currently-loaded view — either the override
+  /// passed to `load(filter:targetInstrument:)` or `targetInstrument`.
+  /// Account-scoped views display balances in the account's own currency so
+  /// legs native to that account never require conversion.
+  private(set) var currentTargetInstrument: Instrument
   private let pageSize: Int
   private let accountStore: AccountStore?
   private let earmarkStore: EarmarkStore?
@@ -35,16 +43,25 @@ final class TransactionStore {
     self.repository = repository
     self.conversionService = conversionService
     self.targetInstrument = targetInstrument
+    self.currentTargetInstrument = targetInstrument
     self.pageSize = pageSize
     self.accountStore = accountStore
     self.earmarkStore = earmarkStore
   }
 
-  func load(filter: TransactionFilter) async {
+  /// Loads transactions matching `filter`.
+  ///
+  /// When `targetInstrument` is supplied it overrides the store's default
+  /// (profile) instrument for this load — used by account-scoped views so
+  /// the display currency matches the viewing account. Pass `nil` for global
+  /// views (scheduled, upcoming, analysis) that should display in the
+  /// profile currency.
+  func load(filter: TransactionFilter, targetInstrument: Instrument? = nil) async {
     currentFilter = filter
+    currentTargetInstrument = targetInstrument ?? self.targetInstrument
     currentPage = 0
     rawTransactions = []
-    priorBalance = .zero(instrument: targetInstrument)
+    priorBalance = .zero(instrument: currentTargetInstrument)
     transactions = []
     hasMore = true
     error = nil
@@ -320,17 +337,13 @@ final class TransactionStore {
       if a.date != b.date { return a.date > b.date }
       return a.id.uuidString < b.id.uuidString
     }
-    do {
-      transactions = try await TransactionPage.withRunningBalances(
-        transactions: rawTransactions,
-        priorBalance: priorBalance,
-        accountId: currentFilter.accountId,
-        earmarkId: currentFilter.earmarkId,
-        targetInstrument: targetInstrument,
-        conversionService: conversionService
-      )
-    } catch {
-      logger.error("Failed to compute balances: \(error.localizedDescription)")
-    }
+    transactions = await TransactionPage.withRunningBalances(
+      transactions: rawTransactions,
+      priorBalance: priorBalance,
+      accountId: currentFilter.accountId,
+      earmarkId: currentFilter.earmarkId,
+      targetInstrument: currentTargetInstrument,
+      conversionService: conversionService
+    )
   }
 }
