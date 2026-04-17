@@ -21,7 +21,9 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
     self.accounts = CloudKitAccountRepository(
       modelContainer: modelContainer)
     self.transactions = CloudKitTransactionRepository(
-      modelContainer: modelContainer, instrument: instrument)
+      modelContainer: modelContainer,
+      instrument: instrument,
+      conversionService: conversionService)
     self.categories = CloudKitCategoryRepository(modelContainer: modelContainer)
     self.earmarks = CloudKitEarmarkRepository(
       modelContainer: modelContainer, instrument: instrument)
