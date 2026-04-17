@@ -407,11 +407,12 @@ struct AccountStoreConversionTests {
       retryDelay: .seconds(60))
 
     await store.load()
-    // Conversion runs off the main actor; wait for the first recompute to
-    // land before asserting. Poll rather than sleeping a fixed interval to
-    // stay robust on busy CI runners.
-    try await waitForCondition(timeout: .seconds(2)) {
-      store.convertedBalances[bankAud.id] != nil
+    // Wait for the first conversion attempt to publish before asserting.
+    // Waiting on `conversionAttemptsCompleted` is deterministic — it increments
+    // exactly once per pass regardless of success — whereas polling for a
+    // specific output value races on busy CI runners.
+    try await waitForCondition(timeout: .seconds(10)) {
+      store.conversionAttemptsCompleted >= 1
     }
 
     // AUD bank: only AUD positions → succeeds.
@@ -457,7 +458,10 @@ struct AccountStoreConversionTests {
       retryDelay: .milliseconds(20))
 
     await store.load()
-    try await Task.sleep(for: .milliseconds(50))
+    // Wait for the first attempt to publish, deterministically.
+    try await waitForCondition(timeout: .seconds(10)) {
+      store.conversionAttemptsCompleted >= 1
+    }
 
     // Initial state: EUR bank can't be converted to AUD aggregate target → aggregate nil.
     #expect(store.convertedCurrentTotal == nil)
@@ -466,7 +470,7 @@ struct AccountStoreConversionTests {
     await conversion.setFailing([])
 
     // Retry should fire within retryDelay × a few attempts.
-    try await waitForCondition(timeout: .seconds(2)) {
+    try await waitForCondition(timeout: .seconds(10)) {
       store.convertedCurrentTotal != nil
     }
 
