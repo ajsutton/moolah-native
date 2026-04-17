@@ -18,6 +18,7 @@ final class ProfileSession: Identifiable {
   let analysisStore: AnalysisStore
   let investmentStore: InvestmentStore
   let tradeStore: TradeStore
+  let reportingStore: ReportingStore
   let exchangeRateService: ExchangeRateService
   let stockPriceService: StockPriceService
   let cryptoPriceService: CryptoPriceService
@@ -128,6 +129,12 @@ final class ProfileSession: Identifiable {
       conversionService: backend.conversionService
     )
     self.tradeStore = TradeStore(transactions: backend.transactions)
+    self.reportingStore = ReportingStore(
+      transactionRepository: backend.transactions,
+      analysisRepository: backend.analysis,
+      conversionService: backend.conversionService,
+      profileCurrency: profile.instrument
+    )
 
     // Wire up cross-store side effects
     let accountStore = self.accountStore

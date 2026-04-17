@@ -135,34 +135,19 @@ struct InvestmentAccountView: View {
       }
     }
     .task(id: account.id) {
-      // Always load values first to determine which mode to use
-      await investmentStore.loadValues(accountId: account.id)
-      if investmentStore.hasLegacyValuations {
-        await investmentStore.loadDailyBalances(accountId: account.id)
-      } else {
-        await investmentStore.loadPositions(accountId: account.id)
-        await investmentStore.valuatePositions(
-          profileCurrency: profileCurrencyInstrument, on: Date())
-      }
+      await investmentStore.loadAllData(
+        accountId: account.id, profileCurrency: profileCurrencyInstrument)
     }
     .onChange(of: showingRecordTrade) { _, showing in
-      if !showing && !investmentStore.hasLegacyValuations {
-        Task {
-          await investmentStore.loadPositions(accountId: account.id)
-          await investmentStore.valuatePositions(
-            profileCurrency: profileCurrencyInstrument, on: Date())
-        }
+      guard !showing else { return }
+      Task {
+        await investmentStore.reloadPositionsIfNeeded(
+          accountId: account.id, profileCurrency: profileCurrencyInstrument)
       }
     }
     .refreshable {
-      await investmentStore.loadValues(accountId: account.id)
-      if investmentStore.hasLegacyValuations {
-        await investmentStore.loadDailyBalances(accountId: account.id)
-      } else {
-        await investmentStore.loadPositions(accountId: account.id)
-        await investmentStore.valuatePositions(
-          profileCurrency: profileCurrencyInstrument, on: Date())
-      }
+      await investmentStore.loadAllData(
+        accountId: account.id, profileCurrency: profileCurrencyInstrument)
     }
   }
 

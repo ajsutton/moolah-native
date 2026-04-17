@@ -333,4 +333,56 @@ struct ReportingStoreTests {
     let kinds = Set(store.profitLoss.map { $0.instrument.kind })
     #expect(kinds == [.stock, .cryptoToken])
   }
+
+  @Test @MainActor func loadCategoryBalances_populatesIncomeAndExpense() async throws {
+    let (backend, container) = try TestBackend.create()
+    let account = Account(
+      id: UUID(), name: "Checking", type: .bank, instrument: .defaultTestInstrument
+    )
+    let incomeCategory = Moolah.Category(id: UUID(), name: "Salary")
+    let expenseCategory = Moolah.Category(id: UUID(), name: "Groceries")
+    TestBackend.seed(accounts: [account], in: container)
+    TestBackend.seed(categories: [incomeCategory, expenseCategory], in: container)
+
+    let today = Date()
+    TestBackend.seed(
+      transactions: [
+        Transaction(
+          date: today,
+          payee: "Employer",
+          legs: [
+            TransactionLeg(
+              accountId: account.id, instrument: .defaultTestInstrument,
+              quantity: 1000, type: .income, categoryId: incomeCategory.id)
+          ]
+        ),
+        Transaction(
+          date: today,
+          payee: "Store",
+          legs: [
+            TransactionLeg(
+              accountId: account.id, instrument: .defaultTestInstrument,
+              quantity: -50, type: .expense, categoryId: expenseCategory.id)
+          ]
+        ),
+      ],
+      in: container
+    )
+
+    let store = ReportingStore(
+      transactionRepository: backend.transactions,
+      analysisRepository: backend.analysis,
+      conversionService: FixedConversionService(),
+      profileCurrency: .defaultTestInstrument
+    )
+
+    let from = Calendar.current.date(byAdding: .day, value: -1, to: today)!
+    let to = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+    await store.loadCategoryBalances(dateRange: from...to)
+
+    #expect(!store.isLoadingCategoryBalances)
+    #expect(store.categoryBalancesError == nil)
+    #expect(store.incomeBalances[incomeCategory.id]?.quantity == 1000)
+    #expect(store.expenseBalances[expenseCategory.id]?.quantity == -50)
+  }
 }

@@ -323,6 +323,14 @@ final class EarmarkStore {
     }
   }
 
+  /// Marks an earmark as hidden so it no longer appears in default lists.
+  @discardableResult
+  func hide(_ earmark: Earmark) async -> Earmark? {
+    var hidden = earmark
+    hidden.isHidden = true
+    return await update(hidden)
+  }
+
   func update(_ earmark: Earmark) async -> Earmark? {
     logger.debug("Updating earmark: \(earmark.name)")
     error = nil

@@ -11,6 +11,9 @@ final class TransactionStore {
   private(set) var error: Error?
   private(set) var loadedCount = 0
   private(set) var totalCount: Int?
+  /// True while a `payScheduledTransaction` call is in flight. Views observe
+  /// this to show a progress indicator on the Pay button.
+  private(set) var isPayingScheduled = false
 
   private let repository: TransactionRepository
   private let conversionService: InstrumentConversionService
@@ -154,6 +157,8 @@ final class TransactionStore {
   /// or deletes it (one-time). Reloads with the scheduled filter afterward.
   /// Returns the updated scheduled transaction if recurring, nil if deleted or failed.
   func payScheduledTransaction(_ scheduledTransaction: Transaction) async -> PayResult {
+    isPayingScheduled = true
+    defer { isPayingScheduled = false }
     // Create a non-scheduled copy with today's date
     let paidTransaction = Transaction(
       id: UUID(),

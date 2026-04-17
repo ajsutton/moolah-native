@@ -152,20 +152,12 @@ struct EarmarksView: View {
           }
           Divider()
           Button("Hide", systemImage: "eye.slash", role: .destructive) {
-            Task {
-              var hidden = earmark
-              hidden.isHidden = true
-              _ = await earmarkStore.update(hidden)
-            }
+            Task { await earmarkStore.hide(earmark) }
           }
         }
         .swipeActions(edge: .trailing) {
           Button(role: .destructive) {
-            Task {
-              var hidden = earmark
-              hidden.isHidden = true
-              _ = await earmarkStore.update(hidden)
-            }
+            Task { await earmarkStore.hide(earmark) }
           } label: {
             Label("Hide", systemImage: "eye.slash")
           }

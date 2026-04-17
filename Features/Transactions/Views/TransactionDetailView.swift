@@ -700,8 +700,6 @@ struct TransactionDetailView: View {
     }
   }
 
-  @State private var isPaying = false
-
   private var isScheduled: Bool {
     showRecurrence && transaction.recurPeriod != nil
   }
@@ -710,26 +708,16 @@ struct TransactionDetailView: View {
     Section {
       Button {
         Task {
-          isPaying = true
-          let result = await transactionStore.payScheduledTransaction(transaction)
-          isPaying = false
-          switch result {
-          case .paid(let updated):
-            if let updated {
-              onUpdate(updated)
-            } else {
-              onDelete(transaction.id)
-            }
-          case .deleted:
-            onDelete(transaction.id)
-          case .failed:
-            break
+          switch await transactionStore.payScheduledTransaction(transaction) {
+          case .paid(let updated?): onUpdate(updated)
+          case .paid(.none), .deleted: onDelete(transaction.id)
+          case .failed: break
           }
         }
       } label: {
         HStack {
           Spacer()
-          if isPaying {
+          if transactionStore.isPayingScheduled {
             ProgressView()
               .controlSize(.small)
           } else {
@@ -738,7 +726,7 @@ struct TransactionDetailView: View {
           Spacer()
         }
       }
-      .disabled(isPaying)
+      .disabled(transactionStore.isPayingScheduled)
       .accessibilityLabel("Pay \(transaction.payee ?? "transaction") now")
     }
   }
