@@ -8,6 +8,7 @@ struct EarmarksView: View {
   let transactionStore: TransactionStore
   let analysisRepository: AnalysisRepository
 
+  @Environment(ProfileSession.self) private var session
   @State private var showCreateSheet = false
   @State private var selectedEarmark: Earmark?
   @State private var earmarkToEdit: Earmark?
@@ -70,7 +71,8 @@ struct EarmarksView: View {
       #endif
       .sheet(isPresented: $showCreateSheet) {
         CreateEarmarkSheet(
-          instrument: earmarkStore.targetInstrument,
+          instrument: session.profile.instrument,
+          supportsComplexTransactions: session.profile.supportsComplexTransactions,
           onCreate: { newEarmark in
             Task {
               _ = await earmarkStore.create(newEarmark)
@@ -82,6 +84,7 @@ struct EarmarksView: View {
       .sheet(item: $earmarkToEdit) { earmark in
         EditEarmarkSheet(
           earmark: earmark,
+          supportsComplexTransactions: session.profile.supportsComplexTransactions,
           onUpdate: { updated in
             Task {
               _ = await earmarkStore.update(updated)
@@ -224,6 +227,7 @@ struct EarmarksView: View {
     conversionService: backend.conversionService,
     targetInstrument: .AUD
   )
+  let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
 
   NavigationStack {
     EarmarksView(
@@ -233,6 +237,7 @@ struct EarmarksView: View {
       transactionStore: transactionStore,
       analysisRepository: backend.analysis
     )
+    .environment(session)
   }
   .task {
     _ = try? await backend.earmarks.create(

@@ -335,6 +335,9 @@ final class EarmarkStore {
       }
       earmarks = Earmarks(from: updatedList)
       logger.debug("Updated earmark in local state: \(updated.name)")
+      // Rebuild converted balances — a changed instrument (or hidden flag)
+      // requires re-expressing existing positions in the new display currency.
+      recomputeConvertedTotals()
       return updated
     } catch {
       logger.error("Failed to update earmark: \(error.localizedDescription)")

@@ -123,6 +123,7 @@ struct ContentView: View {
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
         instrument: session.profile.instrument,
+        supportsComplexTransactions: session.profile.supportsComplexTransactions,
         onCreate: { newEarmark in
           Task {
             _ = await earmarkStore.create(newEarmark)
