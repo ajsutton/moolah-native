@@ -134,138 +134,28 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     after: Date?,
     forecastUntil: Date?
   ) async throws -> [DailyBalance] {
-    // 1. Fetch all non-scheduled transactions
-    let allTransactions = try await fetchTransactions(scheduled: false)
-
-    // 2. Filter by date range and sort chronologically (sorted once, reused below)
-    let transactions = allTransactions.filter { txn in
-      guard let after else { return true }
-      return txn.date >= after
-    }.sorted(by: { $0.date < $1.date })
-
-    // 3. Get accounts to classify as current vs investment
+    // Fetch shared data on MainActor (SwiftData requirement) and split scheduled
+    // vs non-scheduled, then delegate to the off-main static computation path.
+    let allTransactions = try await fetchTransactions()
     let accounts = try await fetchAccounts()
+    let nonScheduled = allTransactions.filter { !$0.isScheduled }
+    let scheduled = allTransactions.filter { $0.isScheduled }
     let investmentAccountIds = Set(accounts.filter { $0.type == .investment }.map(\.id))
+    let investmentValues = try await fetchAllInvestmentValues(
+      investmentAccountIds: investmentAccountIds)
+    let instrument = self.instrument
+    let conversionService = self.conversionService
 
-    // 4. Compute daily balances
-    var dailyBalances: [Date: DailyBalance] = [:]
-    var currentBalance: InstrumentAmount = .zero(instrument: instrument)
-    var currentInvestments: InstrumentAmount = .zero(instrument: instrument)
-    var perEarmarkAmounts: [UUID: InstrumentAmount] = [:]
-
-    // If 'after' is provided, compute starting balances up to that date
-    if let after {
-      let priorTransactions = allTransactions.filter { $0.date < after }
-
-      for txn in priorTransactions.sorted(by: { $0.date < $1.date }) {
-        Self.applyTransaction(
-          txn,
-          to: &currentBalance,
-          investments: &currentInvestments,
-          perEarmarkAmounts: &perEarmarkAmounts,
-          instrument: instrument,
-          investmentAccountIds: investmentAccountIds,
-          investmentTransfersOnly: false
-        )
-      }
-    }
-
-    // Apply each transaction to running balances (transactions already sorted above)
-    var lastDayDate: Date?
-    var lastDayKey: Date = .distantPast
-
-    for txn in transactions {
-      Self.applyTransaction(
-        txn,
-        to: &currentBalance,
-        investments: &currentInvestments,
-        perEarmarkAmounts: &perEarmarkAmounts,
-        instrument: instrument,
-        investmentAccountIds: investmentAccountIds,
-        investmentTransfersOnly: true
-      )
-
-      let dayKey: Date
-      if let last = lastDayDate, txn.date.isSameDay(as: last) {
-        dayKey = lastDayKey
-      } else {
-        dayKey = Calendar.current.startOfDay(for: txn.date)
-        lastDayKey = dayKey
-        lastDayDate = txn.date
-      }
-      let currentEarmarks = Self.clampedEarmarkTotal(perEarmarkAmounts, instrument: instrument)
-      dailyBalances[dayKey] = DailyBalance(
-        date: dayKey,
-        balance: currentBalance,
-        earmarked: currentEarmarks,
-        availableFunds: currentBalance - currentEarmarks,
-        investments: currentInvestments,
-        investmentValue: nil,
-        netWorth: currentBalance + currentInvestments,
-        bestFit: nil,
-        isForecast: false
-      )
-    }
-
-    // 5. Convert multi-instrument positions to profile currency if needed
-    try await Self.applyMultiInstrumentConversion(
-      to: &dailyBalances,
-      allTransactions: allTransactions,
-      investmentAccountIds: investmentAccountIds,
+    return try await Self.computeDailyBalances(
+      nonScheduled: nonScheduled,
+      scheduled: scheduled,
+      accounts: accounts,
+      investmentValues: investmentValues,
+      after: after,
+      forecastUntil: forecastUntil,
       instrument: instrument,
       conversionService: conversionService
     )
-
-    // 6. Apply investment values (overrides net worth with market values where available)
-    let investmentValues = try await fetchAllInvestmentValues(
-      investmentAccountIds: investmentAccountIds)
-    try await Self.applyInvestmentValues(
-      investmentValues, to: &dailyBalances, instrument: instrument,
-      conversionService: conversionService)
-
-    // 6. Compute bestFit (linear regression on availableFunds)
-    var actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
-    CloudKitAnalysisRepository.applyBestFit(to: &actualBalances, instrument: instrument)
-
-    // 7. Generate forecasted balances if requested
-    var scheduledBalances: [DailyBalance] = []
-    if let forecastUntil {
-      let scheduledTransactions = try await fetchTransactions(scheduled: true)
-      // transactions is sorted chronologically, so .last is the most recent date
-      let lastDate = transactions.last?.date ?? Date()
-
-      // Build the starting PositionBook from the same transactions that fed
-      // the legacy accumulator (currentBalance/currentInvestments/perEarmarkAmounts).
-      // PositionBook.apply tracks per-instrument positions correctly without
-      // needing to be told which rule will be used at read time — the rule
-      // controls READS via dailyBalance, not WRITES via apply.
-      var startingBook = PositionBook.empty
-      if let after {
-        let priorTransactions =
-          allTransactions
-          .filter { $0.date < after }
-          .sorted(by: { $0.date < $1.date })
-        for txn in priorTransactions {
-          startingBook.apply(txn, investmentAccountIds: investmentAccountIds)
-        }
-      }
-      for txn in transactions {
-        startingBook.apply(txn, investmentAccountIds: investmentAccountIds)
-      }
-
-      scheduledBalances = try await Self.generateForecast(
-        scheduled: scheduledTransactions,
-        startingBook: startingBook,
-        startDate: lastDate,
-        endDate: forecastUntil,
-        investmentAccountIds: investmentAccountIds,
-        profileInstrument: instrument,
-        conversionService: conversionService
-      )
-    }
-
-    // 8. Combine and return
-    return actualBalances + scheduledBalances
   }
 
   /// Fetch all investment values for the given accounts from SwiftData, sorted by date ascending.
