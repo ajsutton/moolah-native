@@ -66,6 +66,7 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
   }
 
   func create(_ transaction: Transaction) async throws -> Transaction {
+    try requireAllLegsMatchProfile(transaction)
     let dto = try CreateTransactionDTO.fromDomain(transaction)
     let data = try await client.post("transactions/", body: dto)
     let responseDTO = try JSONDecoder().decode(TransactionDTO.self, from: data)
@@ -73,10 +74,19 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
   }
 
   func update(_ transaction: Transaction) async throws -> Transaction {
+    try requireAllLegsMatchProfile(transaction)
     let dto = try TransactionDTO.fromDomain(transaction)
     let data = try await client.put("transactions/\(transaction.id.apiString)/", body: dto)
     let responseDTO = try JSONDecoder().decode(TransactionDTO.self, from: data)
     return responseDTO.toDomain(instrument: instrument)
+  }
+
+  private func requireAllLegsMatchProfile(_ transaction: Transaction) throws {
+    for (index, leg) in transaction.legs.enumerated() {
+      try requireMatchesProfileInstrument(
+        leg.instrument, profile: instrument,
+        entity: "Transaction leg \(index + 1)")
+    }
   }
 
   func delete(id: UUID) async throws {

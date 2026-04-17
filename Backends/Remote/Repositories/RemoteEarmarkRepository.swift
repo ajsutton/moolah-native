@@ -25,6 +25,8 @@ final class RemoteEarmarkRepository: EarmarkRepository, Sendable {
   }
 
   func create(_ earmark: Earmark) async throws -> Earmark {
+    try requireMatchesProfileInstrument(
+      earmark.instrument, profile: instrument, entity: "Earmark \"\(earmark.name)\"")
     let dto = CreateEarmarkDTO(from: earmark)
     let data = try await client.post("earmarks/", body: dto)
     let responseDTO = try JSONDecoder().decode(EarmarkDTO.self, from: data)
@@ -32,6 +34,8 @@ final class RemoteEarmarkRepository: EarmarkRepository, Sendable {
   }
 
   func update(_ earmark: Earmark) async throws -> Earmark {
+    try requireMatchesProfileInstrument(
+      earmark.instrument, profile: instrument, entity: "Earmark \"\(earmark.name)\"")
     let dto = EarmarkDTO.fromDomain(earmark)
     let data = try await client.put("earmarks/\(earmark.id.apiString)/", body: dto)
     let responseDTO = try JSONDecoder().decode(EarmarkDTO.self, from: data)
@@ -59,6 +63,8 @@ final class RemoteEarmarkRepository: EarmarkRepository, Sendable {
   }
 
   func setBudget(earmarkId: UUID, categoryId: UUID, amount: InstrumentAmount) async throws {
+    try requireMatchesProfileInstrument(
+      amount.instrument, profile: instrument, entity: "Budget amount")
     let cents = Int(truncating: (amount.quantity * 100) as NSDecimalNumber)
     let body = SetBudgetDTO(amount: cents)
     _ = try await client.put(

@@ -13,6 +13,45 @@ struct RemoteTransactionRepositoryTests {
     return (session, client)
   }
 
+  private func makeGuardOnlyRepository(instrument: Instrument)
+    -> RemoteTransactionRepository
+  {
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [TransactionURLProtocolStub.self]
+    let session = URLSession(configuration: config)
+    let client = APIClient(baseURL: URL(string: "https://api.example.com/api/")!, session: session)
+    TransactionURLProtocolStub.requestHandler = { _ in
+      Issue.record("Network request should not be made when instrument guard fires")
+      let response = HTTPURLResponse(
+        url: URL(string: "https://api.example.com")!, statusCode: 500, httpVersion: nil,
+        headerFields: nil)!
+      return (response, Data())
+    }
+    return RemoteTransactionRepository(client: client, instrument: instrument)
+  }
+
+  @Test func createRejectsTransactionWithForeignLeg() async throws {
+    let repo = makeGuardOnlyRepository(instrument: .AUD)
+    let leg = TransactionLeg(
+      accountId: UUID(), instrument: .USD, quantity: 50, type: .expense)
+    let txn = Transaction(date: Date(), legs: [leg])
+    await #expect(throws: BackendError.self) {
+      _ = try await repo.create(txn)
+    }
+  }
+
+  @Test func updateRejectsTransactionWhereAnyLegIsForeign() async throws {
+    let repo = makeGuardOnlyRepository(instrument: .AUD)
+    let nativeLeg = TransactionLeg(
+      accountId: UUID(), instrument: .AUD, quantity: 100, type: .income)
+    let foreignLeg = TransactionLeg(
+      accountId: UUID(), instrument: .USD, quantity: -100, type: .expense)
+    let txn = Transaction(date: Date(), legs: [nativeLeg, foreignLeg])
+    await #expect(throws: BackendError.self) {
+      _ = try await repo.update(txn)
+    }
+  }
+
   @Test func testDecodesFixtureJSON() async throws {
     let bundle = Bundle(for: TestBundleMarker.self)
     guard let url = bundle.url(forResource: "transactions", withExtension: "json") else {

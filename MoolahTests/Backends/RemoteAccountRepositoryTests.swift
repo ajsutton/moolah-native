@@ -5,6 +5,49 @@ import Testing
 
 @Suite("RemoteAccountRepository")
 struct RemoteAccountRepositoryTests {
+  private func makeRepository(instrument: Instrument = .defaultTestInstrument)
+    -> RemoteAccountRepository
+  {
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [URLProtocolStub.self]
+    let session = URLSession(configuration: config)
+    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    // Fail the test if the guard doesn't short-circuit before the network call.
+    URLProtocolStub.requestHandler = { _ in
+      Issue.record("Network request should not be made when instrument guard fires")
+      let response = HTTPURLResponse(
+        url: URL(string: "https://api.example.com")!, statusCode: 500, httpVersion: nil,
+        headerFields: nil)!
+      return (response, Data())
+    }
+    return RemoteAccountRepository(client: client, instrument: instrument)
+  }
+
+  @Test func createRejectsAccountWithNonProfileInstrument() async throws {
+    let repo = makeRepository(instrument: .AUD)
+    let account = Account(name: "USD Savings", type: .bank, instrument: .USD)
+    await #expect(throws: BackendError.self) {
+      _ = try await repo.create(account)
+    }
+  }
+
+  @Test func createRejectsOpeningBalanceInForeignInstrument() async throws {
+    let repo = makeRepository(instrument: .AUD)
+    let account = Account(name: "AUD Savings", type: .bank, instrument: .AUD)
+    let foreignOpening = InstrumentAmount(quantity: 100, instrument: .USD)
+    await #expect(throws: BackendError.self) {
+      _ = try await repo.create(account, openingBalance: foreignOpening)
+    }
+  }
+
+  @Test func updateRejectsAccountWithNonProfileInstrument() async throws {
+    let repo = makeRepository(instrument: .AUD)
+    let account = Account(name: "USD Savings", type: .bank, instrument: .USD)
+    await #expect(throws: BackendError.self) {
+      _ = try await repo.update(account)
+    }
+  }
+
   @Test func testDecodesFixtureJSON() async throws {
     // Given
     let bundle = Bundle(for: TestBundleMarker.self)

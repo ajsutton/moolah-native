@@ -5,6 +5,10 @@ enum BackendError: Error, Sendable, Equatable {
   case networkUnavailable
   case validationFailed(String)
   case notFound(String)
+  /// Thrown by single-instrument backends (Remote, moolah) when a write carries
+  /// an instrument other than the profile's currency. Indicates a programmer
+  /// error — the UI should have gated the write on `Profile.supportsComplexTransactions`.
+  case unsupportedInstrument(String)
 }
 
 extension BackendError {
@@ -19,6 +23,8 @@ extension BackendError {
     case .validationFailed(let message):
       return message
     case .notFound(let message):
+      return message
+    case .unsupportedInstrument(let message):
       return message
     }
   }

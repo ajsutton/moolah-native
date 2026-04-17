@@ -49,6 +49,13 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
     guard !account.name.trimmingCharacters(in: .whitespaces).isEmpty else {
       throw BackendError.validationFailed("Account name cannot be empty")
     }
+    try requireMatchesProfileInstrument(
+      account.instrument, profile: instrument, entity: "Account \"\(account.name)\"")
+    if let openingBalance {
+      try requireMatchesProfileInstrument(
+        openingBalance.instrument, profile: instrument,
+        entity: "Opening balance for \"\(account.name)\"")
+    }
 
     let cents: Int
     if let openingBalance {
@@ -85,6 +92,8 @@ final class RemoteAccountRepository: AccountRepository, Sendable {
     guard !account.name.trimmingCharacters(in: .whitespaces).isEmpty else {
       throw BackendError.validationFailed("Account name cannot be empty")
     }
+    try requireMatchesProfileInstrument(
+      account.instrument, profile: instrument, entity: "Account \"\(account.name)\"")
 
     let dto = UpdateAccountDTO(
       id: account.id.apiString,
