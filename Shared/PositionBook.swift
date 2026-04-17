@@ -166,7 +166,7 @@ struct PositionBook: Equatable, Sendable {
   /// Build a `DailyBalance` snapshot from the current book state, converting
   /// per-instrument positions to `profileInstrument` on `date`.
   ///
-  /// Mirrors the semantics of the existing `applyMultiInstrumentConversion`:
+  /// Semantics:
   /// - `balance` sums positions in non-investment accounts.
   /// - `investments` sums positions in investment accounts under the chosen
   ///   `rule` (either all positions or only transfer-derived positions).
