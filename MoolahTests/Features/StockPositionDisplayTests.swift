@@ -185,4 +185,68 @@ struct StockPositionDisplayTests {
     // Total: -8745 + 6750 + 2400 = 405 AUD
     #expect(store.totalPortfolioValue == Decimal(string: "405.00")!)
   }
+
+  /// Per Rule 11 in `guides/INSTRUMENT_CONVERSION_GUIDE.md`: when a
+  /// position's conversion fails, the aggregate `totalPortfolioValue`
+  /// must be marked unavailable (nil) — we must not display a partial
+  /// sum as the portfolio total. Per-position valuations still render
+  /// individually with `marketValue == nil` for the failing one.
+  @Test func totalPortfolioValueIsNilWhenAnyPositionConversionFails() async throws {
+    let accountId = UUID()
+    let today = Date()
+
+    let conversionService = FailingConversionService(
+      rates: [bhp.id: Decimal(45), cba.id: Decimal(120)],
+      failingInstrumentIds: [cba.id]
+    )
+
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: accountId, name: "Invest", type: .investment, instrument: .defaultTestInstrument)
+      ], in: container)
+    TestBackend.seed(
+      transactions: [
+        Transaction(
+          id: UUID(), date: today,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: aud, quantity: Decimal(string: "-6345.00")!,
+              type: .transfer),
+            TransactionLeg(
+              accountId: accountId, instrument: bhp, quantity: Decimal(150), type: .transfer),
+          ]),
+        Transaction(
+          id: UUID(), date: today,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: aud, quantity: Decimal(string: "-2400.00")!,
+              type: .transfer),
+            TransactionLeg(
+              accountId: accountId, instrument: cba, quantity: Decimal(20), type: .transfer),
+          ]),
+      ], in: container)
+
+    let store = InvestmentStore(
+      repository: backend.investments,
+      transactionRepository: backend.transactions,
+      conversionService: conversionService
+    )
+    await store.loadPositions(accountId: accountId)
+    await store.valuatePositions(profileCurrency: aud, on: today)
+
+    // Aggregate is unavailable — one position failed.
+    #expect(store.totalPortfolioValue == nil)
+    // Per-position rendering still works for the convertible BHP.
+    let bhpValued = store.valuedPositions.first { $0.position.instrument == bhp }
+    #expect(bhpValued?.marketValue == Decimal(string: "6750")!)
+    // And the failing position is rendered with nil marketValue so the
+    // view can show "Unavailable" on that row.
+    let cbaValued = store.valuedPositions.first { $0.position.instrument == cba }
+    #expect(cbaValued != nil)
+    #expect(cbaValued?.marketValue == nil)
+    // Error state is surfaced so a retry affordance can be shown.
+    #expect(store.error != nil)
+  }
 }

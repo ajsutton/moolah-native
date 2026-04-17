@@ -143,4 +143,22 @@ struct InstrumentConversionServiceStockTests {
       _ = try await service.convert(Decimal(10), from: bhp, to: aud, on: today)
     }
   }
+
+  /// Scheduled transactions and forecast days carry future dates. The
+  /// FullConversionService must clamp those to today so the fiat-to-fiat
+  /// branch resolves against the latest available rate rather than
+  /// throwing `noRateAvailable` for a future date with no cached rate.
+  @Test("FullConversionService clamps future dates to today (fiat→fiat)")
+  func clampsFutureDatesToToday() async throws {
+    let calendar = Calendar(identifier: .gregorian)
+    let today = calendar.startOfDay(for: Date())
+    let pastKey = dateString(calendar.date(byAdding: .day, value: -10, to: today)!)
+    let service = makeService(
+      exchangeRates: [pastKey: ["USD": Decimal(string: "0.6500")!]]
+    )
+
+    let future = calendar.date(byAdding: .day, value: 30, to: today)!
+    let result = try await service.convert(Decimal(1000), from: aud, to: usd, on: future)
+    #expect(result == Decimal(650))
+  }
 }

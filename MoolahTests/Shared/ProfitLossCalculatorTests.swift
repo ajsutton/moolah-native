@@ -239,6 +239,50 @@ struct ProfitLossCalculatorTests {
     #expect(ethPL?.unrealizedGain == 500)
   }
 
+  /// A multi-currency purchase (USD 2000 + AUD 100 fee) must aggregate
+  /// into the profile currency before contributing to `totalInvested`.
+  /// Without the conversion, USD and AUD quantities would be summed as
+  /// raw decimals and produce a meaningless 2100 rather than 3100 AUD.
+  @Test func mixedFiatLegs_totalInvestedConvertsEachLegToProfileCurrency() async throws {
+    let bhp = stockInstrument("BHP")
+    let usd = Instrument.fiat(code: "USD")
+    let accountId = UUID()
+
+    let buyTx = LegTransaction(
+      date: date(0),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: usd, quantity: -2000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -100, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+
+    // 1 USD = 1.5 AUD, BHP now worth AUD 50/share.
+    let service = FixedConversionService(rates: [
+      "USD": Decimal(string: "1.5")!,
+      "ASX:BHP": 50,
+    ])
+    let results = try await ProfitLossCalculator.compute(
+      transactions: [buyTx],
+      profileCurrency: aud,
+      conversionService: service,
+      asOfDate: date(365)
+    )
+
+    #expect(results.count == 1)
+    // totalInvested: USD 2000×1.5 + AUD 100 = AUD 3100.
+    // currentValue: 100 × AUD 50 = AUD 5000.
+    // unrealizedGain: 5000 − 3100 = 1900.
+    #expect(results[0].totalInvested == 3100)
+    #expect(results[0].currentValue == 5000)
+    #expect(results[0].unrealizedGain == 1900)
+  }
+
   // MARK: - Helpers
 
   private func stockInstrument(_ name: String) -> Instrument {

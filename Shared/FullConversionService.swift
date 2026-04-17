@@ -35,6 +35,13 @@ actor FullConversionService: InstrumentConversionService {
   ) async throws -> Decimal {
     if source == target { return quantity }
 
+    // Frankfurter (and the crypto/stock providers) have no future rates.
+    // Forecast and scheduled-transaction call sites legitimately pass
+    // `transaction.date` which can be in the future — clamp to today so
+    // we resolve against the latest available rate instead of throwing.
+    // See guides/INSTRUMENT_CONVERSION_GUIDE.md Rule 7.
+    let effectiveDate = min(date, Date())
+
     logger.info(
       "Converting \(quantity, privacy: .public) from \(source.id, privacy: .public) (\(String(describing: source.kind), privacy: .public)) to \(target.id, privacy: .public) (\(String(describing: target.kind), privacy: .public))"
     )
@@ -42,29 +49,31 @@ actor FullConversionService: InstrumentConversionService {
     let result: Decimal
     switch (source.kind, target.kind) {
     case (.fiatCurrency, .fiatCurrency):
-      let rate = try await exchangeRates.rate(from: source, to: target, on: date)
+      let rate = try await exchangeRates.rate(from: source, to: target, on: effectiveDate)
       result = quantity * rate
 
     case (.stock, .fiatCurrency):
-      result = try await convertStockToFiat(quantity, stock: source, fiat: target, on: date)
+      result = try await convertStockToFiat(
+        quantity, stock: source, fiat: target, on: effectiveDate)
 
     case (.cryptoToken, .fiatCurrency):
-      result = try await convertCryptoToFiat(quantity, crypto: source, fiat: target, on: date)
+      result = try await convertCryptoToFiat(
+        quantity, crypto: source, fiat: target, on: effectiveDate)
 
     case (.fiatCurrency, .cryptoToken):
       let oneUnitInFiat = try await convertCryptoToFiat(
-        Decimal(1), crypto: target, fiat: source, on: date)
+        Decimal(1), crypto: target, fiat: source, on: effectiveDate)
       result = quantity / oneUnitInFiat
 
     case (.cryptoToken, .cryptoToken):
-      let sourceUsdPrice = try await cryptoUsdPrice(for: source, on: date)
-      let targetUsdPrice = try await cryptoUsdPrice(for: target, on: date)
+      let sourceUsdPrice = try await cryptoUsdPrice(for: source, on: effectiveDate)
+      let targetUsdPrice = try await cryptoUsdPrice(for: target, on: effectiveDate)
       result = (quantity * sourceUsdPrice) / targetUsdPrice
 
     case (.stock, .cryptoToken), (.cryptoToken, .stock):
       // Chain through USD as intermediate
-      let sourceUsd = try await toUsd(quantity, instrument: source, on: date)
-      result = try await fromUsd(sourceUsd, instrument: target, on: date)
+      let sourceUsd = try await toUsd(quantity, instrument: source, on: effectiveDate)
+      result = try await fromUsd(sourceUsd, instrument: target, on: effectiveDate)
 
     case (.fiatCurrency, .stock), (.stock, .stock):
       throw ConversionError.unsupportedConversion(from: source.id, to: target.id)

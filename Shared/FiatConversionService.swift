@@ -18,7 +18,13 @@ actor FiatConversionService: InstrumentConversionService {
     guard from.kind == .fiatCurrency, to.kind == .fiatCurrency else {
       throw ConversionError.unsupportedInstrumentKind
     }
-    let rate = try await exchangeRates.rate(from: from, to: to, on: date)
+    // Frankfurter has no future rates. Forecast and scheduled-transaction
+    // call sites legitimately pass `transaction.date` which can be in the
+    // future — clamp to today so we resolve against the latest available
+    // rate instead of throwing. See guides/INSTRUMENT_CONVERSION_GUIDE.md
+    // Rule 7.
+    let effectiveDate = min(date, Date())
+    let rate = try await exchangeRates.rate(from: from, to: to, on: effectiveDate)
     return quantity * rate
   }
 

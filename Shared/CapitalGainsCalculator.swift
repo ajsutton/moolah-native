@@ -173,26 +173,59 @@ enum CapitalGainsCalculator {
   }
 
   /// Classify legs including non-fiat swaps, using conversion for AUD-equivalent value.
+  ///
+  /// Fiat legs are converted individually to `profileCurrency` on `date`
+  /// before being summed — a transaction may contain fiat legs in
+  /// different currencies (e.g. USD payment + AUD fee), and summing their
+  /// raw quantities would silently blend currencies into a meaningless
+  /// cost basis. See `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 1.
   private static func classifyLegsWithConversion(
     legs: [TransactionLeg],
     date: Date,
     profileCurrency: Instrument,
     conversionService: InstrumentConversionService
   ) async throws -> (buys: [BuyEvent], sells: [SellEvent]) {
-    // First try fiat-paired classification
-    let (fiatBuys, fiatSells) = classifyLegs(
-      legs: legs, date: date, profileCurrency: profileCurrency
-    )
-    if !fiatBuys.isEmpty || !fiatSells.isEmpty {
-      return (fiatBuys, fiatSells)
+    let fiatLegs = legs.filter { $0.instrument.kind == .fiatCurrency }
+    let nonFiatLegs = legs.filter { $0.instrument.kind != .fiatCurrency }
+
+    // Sum fiat outflow / inflow in the profile currency, converting each
+    // leg individually so mixed-currency transactions aggregate correctly.
+    var fiatOutflow: Decimal = 0
+    var fiatInflow: Decimal = 0
+    for leg in fiatLegs where leg.quantity != 0 {
+      let convertedAbs = try await conversionService.convert(
+        abs(leg.quantity), from: leg.instrument, to: profileCurrency, on: date
+      )
+      if leg.quantity < 0 {
+        fiatOutflow += convertedAbs
+      } else {
+        fiatInflow += convertedAbs
+      }
     }
 
-    // Non-fiat swap: both sides are non-fiat
-    let nonFiatLegs = legs.filter { $0.instrument.kind != .fiatCurrency }
-    guard nonFiatLegs.count >= 2 else { return ([], []) }
-
+    // Fiat-paired trades
     var buys: [BuyEvent] = []
     var sells: [SellEvent] = []
+    for leg in nonFiatLegs {
+      if leg.quantity > 0 && fiatOutflow > 0 {
+        let costPerUnit = fiatOutflow / leg.quantity
+        buys.append(
+          BuyEvent(
+            instrument: leg.instrument, quantity: leg.quantity, costPerUnit: costPerUnit))
+      } else if leg.quantity < 0 && fiatInflow > 0 {
+        let proceedsPerUnit = fiatInflow / abs(leg.quantity)
+        sells.append(
+          SellEvent(
+            instrument: leg.instrument, quantity: abs(leg.quantity),
+            proceedsPerUnit: proceedsPerUnit))
+      }
+    }
+    if !buys.isEmpty || !sells.isEmpty {
+      return (buys, sells)
+    }
+
+    // Non-fiat swap: both sides are non-fiat.
+    guard nonFiatLegs.count >= 2 else { return ([], []) }
 
     for leg in nonFiatLegs {
       let profileValue = try await conversionService.convert(
