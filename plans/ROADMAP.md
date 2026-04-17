@@ -75,25 +75,30 @@ CloudKit compatibility required: removing `#Unique` constraints, adding default 
 
 ---
 
-## Phase 6: Multi-Currency Support
+## Phase 6: Multi-Currency Support — Done
 
-Full per-account currency support, building on the exchange rate infrastructure from Phase 4 and multi-instrument foundation from Phase 8. Accounts can have a currency different from the profile's base currency, and all aggregation (totals, net worth, available funds) converts to the profile currency.
+Full per-account / per-earmark / per-leg currency support, building on the exchange rate infrastructure from Phase 4 and multi-instrument foundation from Phase 8. All aggregation (totals, net worth, available funds, forecast, analysis) converts to the profile currency at read time.
 
 ### Done
 
-- `Instrument` model, `Position` type, `TransactionLeg` with per-leg instruments
-- `ExchangeRateService` — Frankfurter API with caching, offline fallback, date-range queries
-- `InstrumentConversionService` protocol with `FiatConversionService` and `FullConversionService`
+- `Instrument` model, `Position` type, `TransactionLeg` with per-leg instruments.
+- `ExchangeRateService` — Frankfurter API with caching, offline fallback, date-range queries.
+- `InstrumentConversionService` protocol with `FiatConversionService` and `FullConversionService`.
 - `Account.instrument` field and `AccountRecord.instrumentId` storage — persisted and read back from SwiftData. Legacy `balance`/`investmentValue` fields removed; accounts are fully position-based.
-- Aggregation — `AccountStore` converts foreign-currency accounts to profile currency for sidebar totals, net worth, and available funds
-- Per-account currency picker in create/edit account UI (gated on `supportsComplexTransactions`)
-- Cross-currency transfers — `TransactionDetailView` shows independent Sent/Received amount fields with a derived exchange-rate hint
-- Analysis views — `CloudKitAnalysisRepository` converts every leg at the transaction's date before aggregating expense breakdown, income/expense totals, and daily balances
+- Aggregation — `AccountStore` converts foreign-currency accounts to profile currency for sidebar totals, net worth, and available funds. `displayBalance` replaces the old sync `balance(for:)`.
+- Per-account currency picker in create/edit account UI (gated on `supportsComplexTransactions`).
+- Per-earmark currency picker in create/edit earmark UI (`c6eda0d`), with `EarmarkStore` re-running `recomputeConvertedTotals` when the instrument changes.
+- Cross-currency transfers — `TransactionDetailView` shows independent Sent/Received amount fields with a derived exchange-rate hint; `TransactionDraft` supports per-leg instrument overrides.
+- Analysis views — `CloudKitAnalysisRepository` converts every leg at the transaction's date before aggregating expense breakdown, income/expense totals, and daily balances.
+- Forecast — scheduled foreign-currency transactions are pre-converted on `Date()` before entering the forecast accumulator (`c31b6af`).
+- Graceful degradation — per-unit isolation + retry for sidebar conversion failures (`61460a1`), transactions still display when conversion fails (`1dc622a`), per-account sidebar rows show the converted balance (`2331571`), `ExchangeRateService` falls back for missing dates and cold caches (`704825b`). Codified as Rule 11 in `guides/INSTRUMENT_CONVERSION_GUIDE.md`.
+- Import / export round-trip preserves earmark instrument (`b9a084f`).
+- Single-instrument backend enforcement — `Remote*Repository` write paths reject foreign-instrument writes with `BackendError.unsupportedInstrument`; UI gates currency pickers and the custom transaction mode on `Profile.supportsComplexTransactions`. Codified as Rule 11a in the guide.
 
-### Remaining
+### Known minor follow-ups (not blockers, not in BUGS.md)
 
-- Fix the multi-currency bugs tracked in `BUGS.md`: sync `AccountStore` totals trap for foreign-currency accounts, a single exchange-rate failure blanks the sidebar forever, `balance(for:)` hides non-primary positions, and there's no export/import round-trip test for multi-currency data.
-- Earmark currency picker — plan in `2026-04-17-earmark-currency-picker-plan.md`.
+- **Instrument override lost on account change** — `TransactionDetailView.swift:561` clears `draft.legDrafts[index].instrumentId` whenever the leg's account changes. If a user explicitly picked a non-account currency for a leg and then switches account, the override is silently dropped (the leg falls back to the new account's instrument via `TransactionDraft.toTransaction`). The resulting transaction is still valid data — UX regression, not a correctness bug.
+- **Profile currency change has no migration UX** — `SettingsView` lets a user change `profile.currencyCode` on a live profile with no warning. The conversion pipeline continues to work (existing accounts/earmarks keep their own instruments and are converted to the new profile currency at display time), but there's no confirmation dialog explaining the change or its effect on existing reports. Out of Phase 6 scope; revisit if users hit it.
 
 ---
 
