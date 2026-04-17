@@ -41,6 +41,7 @@ These cause automated rejection during upload:
 - If CloudKit is used, `com.apple.developer.icloud-container-identifiers` and `com.apple.developer.icloud-services` must be declared
 - Entitlements must match what's configured in the Apple Developer Portal (flag if something looks off)
 - App Sandbox (`com.apple.security.app-sandbox`) should be enabled for distribution
+- **Do NOT flag missing `com.apple.developer.siri` for AppIntents / `AppShortcutsProvider`.** Pure App Intents (no SiriKit `INIntent` types) do not require the Siri entitlement — Siri discovers and runs them via compiled App Intents metadata. The Siri entitlement is for legacy SiriKit intent extensions only. Moolah uses pure AppIntents.
 
 ### App Store Review Guidelines (Human Review)
 These cause rejection during human review:
