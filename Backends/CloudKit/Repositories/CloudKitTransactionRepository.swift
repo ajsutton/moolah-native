@@ -299,7 +299,13 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
     if fetchResult.isEmpty {
       priorBalance = InstrumentAmount.zero(instrument: fetchResult.resolvedTarget)
     } else if let subtotals = fetchResult.subtotalsToConvert {
+      os_signpost(
+        .begin, log: Signposts.balance,
+        name: "fetch.priorBalance.convert", signpostID: signpostID)
       priorBalance = await convertSubtotals(subtotals, to: fetchResult.resolvedTarget)
+      os_signpost(
+        .end, log: Signposts.balance,
+        name: "fetch.priorBalance.convert", signpostID: signpostID)
     } else {
       // No account filter: no account-level running balance applicable.
       priorBalance = InstrumentAmount.zero(instrument: fetchResult.resolvedTarget)
@@ -333,7 +339,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         total += converted
       } catch {
         logger.warning(
-          "priorBalance conversion failed for \(entry.instrument.id, privacy: .public) -> \(target.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
+          "priorBalance conversion failed for \(entry.instrument.id, privacy: .public) -> \(target.id, privacy: .public): \(String(describing: error), privacy: .public)"
         )
         return nil
       }
