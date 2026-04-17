@@ -21,7 +21,7 @@ struct CryptoPositionsSectionView: View {
         ForEach(cryptoPositions, id: \.instrument.id) { position in
           HStack {
             VStack(alignment: .leading) {
-              Text(position.instrument.displaySymbol ?? position.instrument.name)
+              Text(position.instrument.displayLabel)
                 .font(.headline)
               Text(position.instrument.name)
                 .font(.caption)
@@ -80,9 +80,8 @@ struct CryptoPositionsSectionView: View {
     formatter.numberStyle = .decimal
     formatter.maximumFractionDigits = min(instrument.decimals, 8)
     formatter.minimumFractionDigits = 0
-    let symbol = instrument.displaySymbol ?? ""
     let number = formatter.string(from: quantity as NSDecimalNumber) ?? "\(quantity)"
-    return "\(number) \(symbol)"
+    return "\(number) \(instrument.displayLabel)"
   }
 
   private func accessibilityLabel(for position: Position) -> String {
