@@ -242,7 +242,8 @@ struct TransactionRepositoryContractTests {
     )
 
     #expect(page.transactions.isEmpty)
-    #expect(page.priorBalance?.isZero == true)
+    let prior = try #require(page.priorBalance)
+    #expect(prior.isZero)
   }
 
   @Test("priorBalance is labelled with the account's own instrument")
