@@ -91,6 +91,7 @@ struct EarmarksView: View {
           }
         )
       }
+      .focusedSceneValue(\.selectedEarmark, $selectedEarmark)
   }
 
   private var filteredEarmarks: [Earmark] {

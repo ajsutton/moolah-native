@@ -23,6 +23,18 @@ struct SidebarView: View {
     @State private var editMode: EditMode = .inactive
   #endif
 
+  private var selectedAccountBinding: Binding<Account?> {
+    Binding(
+      get: {
+        guard case .account(let id) = selection else { return nil }
+        return accountStore.accounts.by(id: id)
+      },
+      set: { newAccount in
+        selection = newAccount.map { .account($0.id) }
+      }
+    )
+  }
+
   var body: some View {
     List(selection: $selection) {
       Section {
@@ -179,6 +191,8 @@ struct SidebarView: View {
     .listStyle(.sidebar)
     .navigationTitle("")
     .focusedSceneValue(\.showHiddenAccounts, $showHidden)
+    .focusedSceneValue(\.sidebarSelection, $selection)
+    .focusedSceneValue(\.selectedAccount, selectedAccountBinding)
     .onChange(of: showHidden) { _, newValue in
       accountStore.showHidden = newValue
       earmarkStore.showHidden = newValue
