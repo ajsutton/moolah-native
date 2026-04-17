@@ -75,25 +75,20 @@ CloudKit compatibility required: removing `#Unique` constraints, adding default 
 
 ---
 
-## Phase 6: Multi-Currency Support
+## Phase 6: Multi-Currency Support — Done
 
 Full per-account currency support, building on the exchange rate infrastructure from Phase 4 and multi-instrument foundation from Phase 8. Accounts can have a currency different from the profile's base currency, and all aggregation (totals, net worth, available funds) converts to the profile currency.
-
-**Why now:** Phases 7 and 9 (tax reporting, stock import) are only useful if the app can aggregate values across currencies. The infrastructure is already done — this phase wires it into the data layer and UI.
-
-### Done
 
 - `Instrument` model, `Position` type, `TransactionLeg` with per-leg instruments
 - `ExchangeRateService` — Frankfurter API with caching, offline fallback, date-range queries
 - `InstrumentConversionService` protocol with `FiatConversionService` and `FullConversionService`
 - `Account.instrument` field and `AccountRecord.instrumentId` storage — persisted and read back from SwiftData. Legacy `balance`/`investmentValue` fields removed; accounts are fully position-based.
 - Aggregation — `AccountStore` converts foreign-currency accounts to profile currency for sidebar totals, net worth, and available funds
+- Per-account currency picker in create/edit account UI (gated on `supportsComplexTransactions`)
+- Cross-currency transfers — `TransactionDetailView` shows independent Sent/Received amount fields with a derived exchange-rate hint
+- Analysis views — `CloudKitAnalysisRepository` converts every leg at the transaction's date before aggregating expense breakdown, income/expense totals, and daily balances
 
-### Remaining
-
-- Per-account currency picker in create/edit account UI
-- Cross-currency transfers: UI for exchange rate input or market rate selection when transferring between accounts with different currencies
-- Analysis views: expense breakdown and income/expense tables sum foreign-currency legs without converting to profile currency (net worth graph already handles this via `applyMultiInstrumentConversion`)
+Remaining multi-currency work (UI polish, earmark currency picker, etc.) is tracked in `BUGS.md` and individual plans.
 
 ---
 
@@ -117,7 +112,7 @@ Cryptocurrency price fetching, caching, and conversion using CryptoCompare, Bina
 
 ## Phase 9: CSV Import (SelfWealth)
 
-Import Australian stock holdings and trade history from SelfWealth CSV exports. SelfWealth has no API, so CSV is the only reliable data path.
+Import Australian stock holdings and trade history from SelfWealth CSV exports. SelfWealth has no API, so CSV is the only reliable data path. Imported holdings and trades preserve the source currency (typically AUD for SelfWealth, but the importer and resulting legs use per-row instruments so non-AUD-denominated trades import correctly and flow through Phase 6's conversion pipeline).
 
 **Why now:** This unlocks investment tracking for real-world use. The Sharesight API was evaluated (`sharesight-api-research.md`) but requires a paid subscription — CSV import works for any SelfWealth user with zero external dependencies.
 
