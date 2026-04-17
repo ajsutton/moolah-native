@@ -52,6 +52,7 @@ struct AddBudgetLineItemSheet: View {
             Text(earmark.instrument.currencySymbol ?? earmark.instrument.id)
               .foregroundStyle(.secondary)
             TextField("Amount", text: $amountText)
+              .monospacedDigit()
               #if os(iOS)
                 .keyboardType(.decimalPad)
               #endif

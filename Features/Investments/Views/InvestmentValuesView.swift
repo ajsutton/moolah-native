@@ -103,3 +103,35 @@ struct InvestmentValuesView: View {
     .accessibilityLabel("Investment value over time")
   }
 }
+
+#Preview {
+  let (backend, _) = PreviewBackend.create()
+  let store = InvestmentStore(
+    repository: backend.investments,
+    transactionRepository: backend.transactions,
+    conversionService: backend.conversionService
+  )
+  let account = Account(
+    name: "Brokerage",
+    type: .investment,
+    instrument: .AUD
+  )
+  NavigationStack {
+    InvestmentValuesView(account: account, store: store)
+  }
+  .frame(width: 560, height: 480)
+  .task {
+    _ = try? await backend.accounts.create(account, openingBalance: .zero(instrument: .AUD))
+    let calendar = Calendar.current
+    for monthsAgo in (0..<6).reversed() {
+      let date = calendar.date(byAdding: .month, value: -monthsAgo, to: Date())!
+      let quantity: Decimal = 9_000 + Decimal(6 - monthsAgo) * 350
+      await store.setValue(
+        accountId: account.id,
+        date: date,
+        value: InstrumentAmount(quantity: quantity, instrument: .AUD)
+      )
+    }
+    await store.loadValues(accountId: account.id)
+  }
+}

@@ -104,3 +104,35 @@ private struct SummaryPanel: View {
     .accessibilityElement(children: .combine)
   }
 }
+
+#Preview {
+  let (backend, _) = PreviewBackend.create()
+  let store = InvestmentStore(
+    repository: backend.investments,
+    transactionRepository: backend.transactions,
+    conversionService: backend.conversionService
+  )
+  InvestmentSummaryView(
+    investedAmount: InstrumentAmount(quantity: 10_000, instrument: .AUD),
+    currentValue: InstrumentAmount(quantity: 12_500, instrument: .AUD),
+    store: store
+  )
+  .frame(width: 560)
+  .padding()
+}
+
+#Preview("At cost") {
+  let (backend, _) = PreviewBackend.create()
+  let store = InvestmentStore(
+    repository: backend.investments,
+    transactionRepository: backend.transactions,
+    conversionService: backend.conversionService
+  )
+  InvestmentSummaryView(
+    investedAmount: InstrumentAmount(quantity: 10_000, instrument: .AUD),
+    currentValue: nil,
+    store: store
+  )
+  .frame(width: 560)
+  .padding()
+}

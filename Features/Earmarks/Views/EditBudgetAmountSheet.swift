@@ -21,6 +21,7 @@ struct EditBudgetAmountSheet: View {
             Text(lineItem.budgeted.instrument.currencySymbol ?? lineItem.budgeted.instrument.id)
               .foregroundStyle(.secondary)
             TextField("Amount", text: $amountText)
+              .monospacedDigit()
               #if os(iOS)
                 .keyboardType(.decimalPad)
               #endif

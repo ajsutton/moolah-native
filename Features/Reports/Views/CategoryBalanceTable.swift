@@ -161,3 +161,32 @@ struct CategoryDrillDown: Hashable {
   let categoryId: UUID
   let dateRange: ClosedRange<Date>
 }
+
+#Preview {
+  let salaryId = UUID()
+  let bonusId = UUID()
+  let contractingId = UUID()
+  let incomeId = UUID()
+  let interestId = UUID()
+  let categories = Categories(from: [
+    Category(id: incomeId, name: "Income"),
+    Category(id: salaryId, name: "Salary", parentId: incomeId),
+    Category(id: bonusId, name: "Bonus", parentId: incomeId),
+    Category(id: contractingId, name: "Contracting", parentId: incomeId),
+    Category(id: interestId, name: "Interest"),
+  ])
+  let balances: [UUID: InstrumentAmount] = [
+    salaryId: InstrumentAmount(quantity: 4200, instrument: .AUD),
+    bonusId: InstrumentAmount(quantity: 1500, instrument: .AUD),
+    contractingId: InstrumentAmount(quantity: 800, instrument: .AUD),
+    interestId: InstrumentAmount(quantity: 120, instrument: .AUD),
+  ]
+  let start = Calendar.current.date(byAdding: .month, value: -1, to: Date())!
+  CategoryBalanceTable(
+    title: "Income",
+    balances: balances,
+    categories: categories,
+    dateRange: start...Date()
+  )
+  .frame(width: 500, height: 400)
+}

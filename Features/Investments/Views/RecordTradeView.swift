@@ -145,3 +145,18 @@ struct RecordTradeView: View {
     // TODO: Replace with full instrument picker sheet in Phase 5
   }
 }
+
+#Preview {
+  let (backend, _) = PreviewBackend.create()
+  let tradeStore = TradeStore(transactions: backend.transactions)
+  let feeId = UUID()
+  let categories = Categories(from: [
+    Category(id: feeId, name: "Fees")
+  ])
+  RecordTradeView(
+    accountId: UUID(),
+    profileCurrency: .AUD,
+    categories: categories,
+    tradeStore: tradeStore
+  )
+}

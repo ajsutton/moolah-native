@@ -167,3 +167,64 @@ struct ReportsView: View {
     isLoading = false
   }
 }
+
+#Preview {
+  let (backend, _) = PreviewBackend.create()
+  let transactionStore = TransactionStore(
+    repository: backend.transactions,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD
+  )
+  let salaryId = UUID()
+  let groceriesId = UUID()
+  let rentId = UUID()
+  let categories = Categories(from: [
+    Category(id: salaryId, name: "Salary"),
+    Category(id: groceriesId, name: "Groceries"),
+    Category(id: rentId, name: "Rent"),
+  ])
+  let account = Account(name: "Checking", type: .bank, instrument: .AUD)
+
+  ReportsView(
+    analysisRepository: backend.analysis,
+    categories: categories,
+    accounts: Accounts(from: [account]),
+    earmarks: Earmarks(from: []),
+    transactionStore: transactionStore
+  )
+  .frame(width: 900, height: 600)
+  .task {
+    _ = try? await backend.accounts.create(
+      account, openingBalance: InstrumentAmount(quantity: 5_000, instrument: .AUD))
+    _ = try? await backend.categories.create(
+      Category(id: salaryId, name: "Salary"))
+    _ = try? await backend.categories.create(
+      Category(id: groceriesId, name: "Groceries"))
+    _ = try? await backend.categories.create(
+      Category(id: rentId, name: "Rent"))
+    _ = try? await backend.transactions.create(
+      Transaction(
+        date: Date(), payee: "Employer",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .AUD, quantity: 4500, type: .income,
+            categoryId: salaryId)
+        ]))
+    _ = try? await backend.transactions.create(
+      Transaction(
+        date: Date().addingTimeInterval(-86400), payee: "Supermarket",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .AUD, quantity: -220, type: .expense,
+            categoryId: groceriesId)
+        ]))
+    _ = try? await backend.transactions.create(
+      Transaction(
+        date: Date().addingTimeInterval(-2 * 86400), payee: "Landlord",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .AUD, quantity: -1800, type: .expense,
+            categoryId: rentId)
+        ]))
+  }
+}
