@@ -415,8 +415,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
   /// Return a copy of the transaction with every leg's quantity/instrument rewritten
   /// into the profile instrument. Used before feeding scheduled-transaction instances
-  /// into the forecast accumulator so the synchronous `applyTransaction` can assume
-  /// all legs share the profile instrument.
+  /// into the forecast accumulator so every leg already shares the profile instrument
+  /// when `PositionBook.dailyBalance` is queried (skipping the multi-instrument
+  /// conversion path on every forecast day).
   ///
   /// - Parameter date: date passed to the conversion service. For forecast use, this
   ///   is `Date()` — the current rate — because scheduled transactions have future
@@ -506,25 +507,6 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       investmentValues, to: &dailyBalances,
       instrument: instrument, conversionService: conversionService)
 
-    // Equivalence check (debug only, single-currency only).
-    // Multi-currency divergence is by design (Option A unifies behaviour).
-    #if DEBUG
-      let hasMultiInstrument = nonScheduled.contains { txn in
-        txn.legs.contains { $0.instrument.id != instrument.id }
-      }
-      if !hasMultiInstrument {
-        let legacy = try await computeDailyBalancesLegacy(
-          nonScheduled: nonScheduled,
-          accounts: accounts,
-          investmentValues: investmentValues,
-          after: after,
-          instrument: instrument,
-          conversionService: conversionService
-        )
-        assertDailyBalanceDictsEquivalent(new: dailyBalances, legacy: legacy)
-      }
-    #endif
-
     // Compute bestFit
     var actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
     CloudKitAnalysisRepository.applyBestFit(to: &actualBalances, instrument: instrument)
@@ -550,115 +532,6 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
     return actualBalances + forecastBalances
   }
-
-  #if DEBUG
-    /// Legacy implementation of the daily-balance accumulator, kept as a
-    /// correctness oracle for the PositionBook-based `computeDailyBalances`
-    /// during the migration. Single-currency only — multi-currency semantics
-    /// intentionally diverge under Option A.
-    @concurrent
-    private static func computeDailyBalancesLegacy(
-      nonScheduled: [Transaction],
-      accounts: [Account],
-      investmentValues: [(accountId: UUID, date: Date, value: InstrumentAmount)],
-      after: Date?,
-      instrument: Instrument,
-      conversionService: any InstrumentConversionService
-    ) async throws -> [Date: DailyBalance] {
-      let investmentAccountIds = Set(accounts.filter { $0.type == .investment }.map(\.id))
-      let transactions: [Transaction]
-      if let after {
-        transactions = nonScheduled.filter { $0.date >= after }.sorted(by: { $0.date < $1.date })
-      } else {
-        transactions = nonScheduled.sorted(by: { $0.date < $1.date })
-      }
-
-      var dailyBalances: [Date: DailyBalance] = [:]
-      var currentBalance: InstrumentAmount = .zero(instrument: instrument)
-      var currentInvestments: InstrumentAmount = .zero(instrument: instrument)
-      var perEarmarkAmounts: [UUID: InstrumentAmount] = [:]
-
-      if let after {
-        let priorTransactions = nonScheduled.filter { $0.date < after }
-        for txn in priorTransactions.sorted(by: { $0.date < $1.date }) {
-          applyTransaction(
-            txn,
-            to: &currentBalance,
-            investments: &currentInvestments,
-            perEarmarkAmounts: &perEarmarkAmounts,
-            instrument: instrument,
-            investmentAccountIds: investmentAccountIds,
-            investmentTransfersOnly: false
-          )
-        }
-      }
-
-      for txn in transactions {
-        applyTransaction(
-          txn,
-          to: &currentBalance,
-          investments: &currentInvestments,
-          perEarmarkAmounts: &perEarmarkAmounts,
-          instrument: instrument,
-          investmentAccountIds: investmentAccountIds,
-          investmentTransfersOnly: true
-        )
-        let dayKey = Calendar.current.startOfDay(for: txn.date)
-        let currentEarmarks = clampedEarmarkTotal(perEarmarkAmounts, instrument: instrument)
-        dailyBalances[dayKey] = DailyBalance(
-          date: dayKey,
-          balance: currentBalance,
-          earmarked: currentEarmarks,
-          availableFunds: currentBalance - currentEarmarks,
-          investments: currentInvestments,
-          investmentValue: nil,
-          netWorth: currentBalance + currentInvestments,
-          bestFit: nil,
-          isForecast: false
-        )
-      }
-
-      try await applyMultiInstrumentConversion(
-        to: &dailyBalances,
-        allTransactions: nonScheduled,
-        investmentAccountIds: investmentAccountIds,
-        instrument: instrument,
-        conversionService: conversionService
-      )
-      try await applyInvestmentValues(
-        investmentValues, to: &dailyBalances,
-        instrument: instrument, conversionService: conversionService)
-      return dailyBalances
-    }
-
-    private static func assertDailyBalanceDictsEquivalent(
-      new: [Date: DailyBalance],
-      legacy: [Date: DailyBalance],
-      file: StaticString = #file,
-      line: UInt = #line
-    ) {
-      if new.keys.sorted() != legacy.keys.sorted() {
-        assertionFailure(
-          "PositionBook daily-balance keys differ from legacy: \(new.keys.sorted().count) vs \(legacy.keys.sorted().count)",
-          file: file, line: line
-        )
-        return
-      }
-      for date in new.keys.sorted() {
-        let n = new[date]!
-        let l = legacy[date]!
-        if n.balance != l.balance || n.earmarked != l.earmarked
-          || n.availableFunds != l.availableFunds || n.investments != l.investments
-          || n.investmentValue != l.investmentValue || n.netWorth != l.netWorth
-        {
-          assertionFailure(
-            "PositionBook daily-balance diverges from legacy on \(date)\n  new: balance=\(n.balance) earmarked=\(n.earmarked) avail=\(n.availableFunds) invest=\(n.investments) value=\(String(describing: n.investmentValue)) net=\(n.netWorth)\n  legacy: balance=\(l.balance) earmarked=\(l.earmarked) avail=\(l.availableFunds) invest=\(l.investments) value=\(String(describing: l.investmentValue)) net=\(l.netWorth)",
-            file: file, line: line
-          )
-        }
-      }
-    }
-  #endif
 
   @concurrent
   private static func computeExpenseBreakdown(
@@ -815,165 +688,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     }.sorted { $0.month > $1.month }
   }
 
-  // MARK: - Multi-Instrument Net Worth
-
-  /// Recomputes daily balances using currency conversion for multi-instrument positions.
-  /// Accumulates positions per instrument, converts each to profile currency per day,
-  /// then splits into balance (bank accounts) and investments (investment accounts).
-  /// Preserves the invariant: netWorth == balance + investmentValue (or balance + investments).
-  private static func applyMultiInstrumentConversion(
-    to dailyBalances: inout [Date: DailyBalance],
-    allTransactions: [Transaction],
-    investmentAccountIds: Set<UUID>,
-    instrument: Instrument,
-    conversionService: any InstrumentConversionService
-  ) async throws {
-    guard !dailyBalances.isEmpty else { return }
-
-    // Check if any legs use a non-profile instrument; skip if single-instrument
-    let hasMultiInstrument = allTransactions.contains { txn in
-      txn.legs.contains { $0.instrument.id != instrument.id }
-    }
-    guard hasMultiInstrument else { return }
-
-    // Sort transactions chronologically
-    let sorted = allTransactions.sorted { $0.date < $1.date }
-    let calendar = Calendar(identifier: .gregorian)
-
-    // Track positions by instrument, split by bank vs investment
-    var bankPositions: [String: (quantity: Decimal, instrument: Instrument)] = [:]
-    var investmentPositions: [String: (quantity: Decimal, instrument: Instrument)] = [:]
-    var earmarkPositions: [UUID: [String: (quantity: Decimal, instrument: Instrument)]] = [:]
-
-    for txn in sorted {
-      let dayKey = calendar.startOfDay(for: txn.date)
-
-      for leg in txn.legs {
-        let isInvestment = leg.accountId.map(investmentAccountIds.contains) ?? false
-        let key = leg.instrument.id
-
-        if isInvestment {
-          investmentPositions[key, default: (0, leg.instrument)].quantity += leg.quantity
-        } else {
-          bankPositions[key, default: (0, leg.instrument)].quantity += leg.quantity
-        }
-
-        if let earmarkId = leg.earmarkId {
-          earmarkPositions[earmarkId, default: [:]][key, default: (0, leg.instrument)].quantity +=
-            leg.quantity
-        }
-      }
-
-      // Only update days that have a balance entry
-      guard dailyBalances[dayKey] != nil else { continue }
-
-      // Convert all positions to profile currency
-      var bankTotal: Decimal = 0
-      for (_, pos) in bankPositions where pos.quantity != 0 {
-        if pos.instrument.id == instrument.id {
-          bankTotal += pos.quantity
-        } else {
-          bankTotal += try await conversionService.convert(
-            pos.quantity, from: pos.instrument, to: instrument, on: txn.date)
-        }
-      }
-
-      var investTotal: Decimal = 0
-      for (_, pos) in investmentPositions where pos.quantity != 0 {
-        if pos.instrument.id == instrument.id {
-          investTotal += pos.quantity
-        } else {
-          investTotal += try await conversionService.convert(
-            pos.quantity, from: pos.instrument, to: instrument, on: txn.date)
-        }
-      }
-
-      var earmarkTotal: Decimal = 0
-      for (_, positions) in earmarkPositions {
-        var perEarmarkTotal: Decimal = 0
-        for (_, pos) in positions where pos.quantity != 0 {
-          if pos.instrument.id == instrument.id {
-            perEarmarkTotal += pos.quantity
-          } else {
-            perEarmarkTotal += try await conversionService.convert(
-              pos.quantity, from: pos.instrument, to: instrument, on: txn.date)
-          }
-        }
-        earmarkTotal += max(perEarmarkTotal, 0)
-      }
-
-      let balance = InstrumentAmount(quantity: bankTotal, instrument: instrument)
-      let investments = InstrumentAmount(quantity: investTotal, instrument: instrument)
-      let earmarked = InstrumentAmount(quantity: earmarkTotal, instrument: instrument)
-      let existing = dailyBalances[dayKey]!
-
-      dailyBalances[dayKey] = DailyBalance(
-        date: existing.date,
-        balance: balance,
-        earmarked: earmarked,
-        availableFunds: balance - earmarked,
-        investments: investments,
-        investmentValue: existing.investmentValue,
-        netWorth: balance + (existing.investmentValue ?? investments),
-        bestFit: existing.bestFit,
-        isForecast: existing.isForecast
-      )
-    }
-  }
-
   // MARK: - Static Helper Methods
-
-  /// Apply a transaction's legs to running balance totals.
-  /// Each leg is processed independently based on its type and account.
-  /// Apply a transaction's legs to running balance totals.
-  ///
-  /// - Parameter investmentTransfersOnly: When true, only `.transfer` legs on investment
-  ///   accounts affect the `investments` total (matching server's dailyProfitAndLoss
-  ///   which only counts transfers between investment/non-investment accounts).
-  ///   When false, all leg types on investment accounts count (matching server's
-  ///   selectBalance used for starting balances).
-  private static func applyTransaction(
-    _ txn: Transaction,
-    to balance: inout InstrumentAmount,
-    investments: inout InstrumentAmount,
-    perEarmarkAmounts: inout [UUID: InstrumentAmount],
-    instrument: Instrument,
-    investmentAccountIds: Set<UUID>,
-    investmentTransfersOnly: Bool = false
-  ) {
-    let zero = InstrumentAmount.zero(instrument: instrument)
-    for leg in txn.legs {
-      // Only legs with an accountId affect account balances
-      // (matching server's account_id IS NOT NULL requirement).
-      // Earmark-only legs (nil accountId) only affect the earmarked total.
-      if let accountId = leg.accountId {
-        if investmentAccountIds.contains(accountId) {
-          if !investmentTransfersOnly || leg.type == .transfer {
-            investments += leg.amount
-          }
-        } else {
-          balance += leg.amount
-        }
-      }
-      if let earmarkId = leg.earmarkId {
-        perEarmarkAmounts[earmarkId, default: zero] += leg.amount
-      }
-    }
-  }
-
-  /// Computes the earmarked total by clamping each earmark's balance to max(0).
-  /// Negative earmarks (e.g., investments) should not reduce the total.
-  private static func clampedEarmarkTotal(
-    _ perEarmark: [UUID: InstrumentAmount],
-    instrument: Instrument
-  ) -> InstrumentAmount {
-    var total = InstrumentAmount.zero(instrument: instrument)
-    let zero = InstrumentAmount.zero(instrument: instrument)
-    for (_, amount) in perEarmark {
-      total += max(amount, zero)
-    }
-    return total
-  }
 
   private static func applyInvestmentValues(
     _ investmentValues: [(accountId: UUID, date: Date, value: InstrumentAmount)],
