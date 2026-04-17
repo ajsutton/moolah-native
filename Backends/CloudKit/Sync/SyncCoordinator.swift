@@ -260,11 +260,20 @@ final class SyncCoordinator: Sendable {
       queueAllExistingRecordsForAllZones()
     }
 
-    // Eagerly create the profile-index zone, then send if needed
+    // Eagerly create the profile-index zone and all known profile-data zones,
+    // then send if needed. Reactive creation in `handleSentRecordZoneChanges`
+    // remains as a fallback per SYNC_GUIDE Rule 3.
+    let profileIds = containerManager.allProfileIds()
     zoneSetupTask = Task {
       await self.ensureZoneExists(self.profileIndexHandler.zoneID)
+      for profileId in profileIds {
+        let zoneID = CKRecordZone.ID(
+          zoneName: "profile-\(profileId.uuidString)",
+          ownerName: CKCurrentUserDefaultName)
+        await self.ensureZoneExists(zoneID)
+      }
       if self.hasPendingChanges {
-        self.logger.info("Profile-index zone ready — sending pending changes")
+        self.logger.info("Zones ready — sending pending changes")
         await self.sendChanges()
       }
     }
