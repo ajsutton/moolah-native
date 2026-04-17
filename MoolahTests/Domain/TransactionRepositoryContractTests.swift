@@ -222,10 +222,12 @@ struct TransactionRepositoryContractTests {
           $0 + $1.amount
         }
     }
-    let page1PriorSum = page1Sum + page1.priorBalance
+    let page1Prior = try #require(page1.priorBalance)
+    let page1PriorSum = page1Sum + page1Prior
+    let page0Prior = try #require(page0.priorBalance)
 
     #expect(
-      page0.priorBalance == page1PriorSum,
+      page0Prior == page1PriorSum,
       "priorBalance of page 0 should equal sum of all older transactions")
   }
 
@@ -240,7 +242,7 @@ struct TransactionRepositoryContractTests {
     )
 
     #expect(page.transactions.isEmpty)
-    #expect(page.priorBalance.isZero)
+    #expect(page.priorBalance?.isZero == true)
   }
 
   @Test("priorBalance is labelled with the account's own instrument")
@@ -276,12 +278,12 @@ struct TransactionRepositoryContractTests {
     // Page size of 1 forces a non-zero priorBalance on page 0.
     let page0 = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: accountId), page: 0, pageSize: 1)
-    #expect(page0.priorBalance.instrument == accountInstrument)
+    #expect(page0.targetInstrument == accountInstrument)
 
     // Empty paged-past-end response should also use the account's instrument.
     let pageN = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: accountId), page: 99, pageSize: 1)
-    #expect(pageN.priorBalance.instrument == accountInstrument)
+    #expect(pageN.targetInstrument == accountInstrument)
   }
 
   @Test("transfer creates with two legs")

@@ -33,7 +33,7 @@ final class TransactionStore {
   private var currentFilter = TransactionFilter()
   private var currentPage = 0
   private var rawTransactions: [Transaction] = []
-  private var priorBalance: InstrumentAmount = .zero(instrument: .AUD)
+  private var priorBalance: InstrumentAmount? = nil
 
   init(
     repository: TransactionRepository,
@@ -57,7 +57,7 @@ final class TransactionStore {
     currentTargetInstrument = targetInstrument
     currentPage = 0
     rawTransactions = []
-    priorBalance = .zero(instrument: currentTargetInstrument)
+    priorBalance = nil
     transactions = []
     hasMore = true
     error = nil
@@ -245,12 +245,8 @@ final class TransactionStore {
       )
       rawTransactions.append(contentsOf: page.transactions)
       priorBalance = page.priorBalance
-      // Adopt the repository's instrument for the display currency. For
-      // single-account views the repo returns the account's instrument so
-      // native legs never need conversion; for global views it's the profile
-      // instrument. This only changes on the first page load.
       if currentPage == 0 {
-        currentTargetInstrument = page.priorBalance.instrument
+        currentTargetInstrument = page.targetInstrument
       }
       hasMore = page.transactions.count >= pageSize
       currentPage += 1

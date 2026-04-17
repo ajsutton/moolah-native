@@ -79,7 +79,8 @@ struct RemoteTransactionRepositoryTests {
     )
 
     #expect(page.transactions.count == 5)
-    #expect(page.priorBalance == .zero(instrument: .defaultTestInstrument))
+    let prior = try #require(page.priorBalance)
+    #expect(prior == .zero(instrument: .defaultTestInstrument))
 
     let transactions = page.transactions
 
