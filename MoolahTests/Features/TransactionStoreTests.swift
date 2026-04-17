@@ -624,7 +624,8 @@ struct TransactionStoreTests {
     _ = await store.create(tx)
 
     // Seeded balance is 1000 (from OB tx), create adds -50 expense -> 950
-    #expect(accountStore.balance(for: accountId).quantity == Decimal(950))
+    let balance = try await accountStore.displayBalance(for: accountId)
+    #expect(balance.quantity == Decimal(950))
   }
 
   @Test func testUpdateUpdatesAccountBalance() async throws {
@@ -662,7 +663,8 @@ struct TransactionStoreTests {
 
     // Seeded account OB=950 + seeded tx=-50 gives loaded balance=900
     // Update delta: (-75)-(-50)=-25, so 900-25=875
-    #expect(accountStore.balance(for: accountId).quantity == Decimal(875))
+    let balance = try await accountStore.displayBalance(for: accountId)
+    #expect(balance.quantity == Decimal(875))
   }
 
   @Test func testDeleteUpdatesAccountBalance() async throws {
@@ -690,7 +692,8 @@ struct TransactionStoreTests {
 
     // Seeded account OB=950 + seeded tx=-50 gives loaded balance=900
     // Deleting the -50 expense adds 50 back: 900+50=950
-    #expect(accountStore.balance(for: accountId).quantity == Decimal(950))
+    let balance = try await accountStore.displayBalance(for: accountId)
+    #expect(balance.quantity == Decimal(950))
   }
 
   // MARK: - Cross-Store Balance Updates with Transfers
@@ -745,8 +748,10 @@ struct TransactionStoreTests {
     // Loaded: checking=900+(-100)=800, savings=1100+100=1200
     // Update delta: checking: -150-(-100)=-50, savings: +150-100=+50
     // Final: checking=800-50=750, savings=1200+50=1250
-    #expect(accountStore.balance(for: accountId).quantity == Decimal(750))
-    #expect(accountStore.balance(for: savingsId).quantity == Decimal(1250))
+    let checkingBalance = try await accountStore.displayBalance(for: accountId)
+    let savingsBalance = try await accountStore.displayBalance(for: savingsId)
+    #expect(checkingBalance.quantity == Decimal(750))
+    #expect(savingsBalance.quantity == Decimal(1250))
   }
 
   @Test func testChangingTransferToAccount() async throws {
@@ -802,9 +807,12 @@ struct TransactionStoreTests {
     // Change dest from savings to investment:
     // checking delta: -100-(-100)=0, savings delta: 0-100=-100, investment delta: +100-0=+100
     // Final: checking=800, savings=1200-100=1100, investment=500+100=600
-    #expect(accountStore.balance(for: accountId).quantity == Decimal(800))
-    #expect(accountStore.balance(for: savingsId).quantity == Decimal(1100))
-    #expect(accountStore.balance(for: investmentId).quantity == Decimal(600))
+    let checkingBalance = try await accountStore.displayBalance(for: accountId)
+    let savingsBalance = try await accountStore.displayBalance(for: savingsId)
+    let investmentBalance = try await accountStore.displayBalance(for: investmentId)
+    #expect(checkingBalance.quantity == Decimal(800))
+    #expect(savingsBalance.quantity == Decimal(1100))
+    #expect(investmentBalance.quantity == Decimal(600))
   }
 
   // MARK: - Cross-Store Balance Updates with Earmarks
@@ -929,7 +937,8 @@ struct TransactionStoreTests {
     await store.update(updated)
 
     // Loaded: 950+(-50)=900. Update delta: +50-(-50)=+100. Final: 900+100=1000
-    #expect(accountStore.balance(for: accountId).quantity == Decimal(1000))
+    let balance = try await accountStore.displayBalance(for: accountId)
+    #expect(balance.quantity == Decimal(1000))
   }
 
   @Test func testPayScheduledTransactionUpdatesAccountBalance() async throws {
@@ -957,7 +966,8 @@ struct TransactionStoreTests {
     _ = await store.payScheduledTransaction(scheduled)
 
     // Paying a -2000 expense should decrease balance by 2000
-    #expect(accountStore.balance(for: accountId).quantity == Decimal(-1000))
+    let balance = try await accountStore.displayBalance(for: accountId)
+    #expect(balance.quantity == Decimal(-1000))
   }
 
   @Test func testPayOneTimeScheduledTransactionUpdatesAccountBalance() async throws {
@@ -985,7 +995,8 @@ struct TransactionStoreTests {
     _ = await store.payScheduledTransaction(scheduled)
 
     // Paying a -500 expense should decrease balance by 500
-    #expect(accountStore.balance(for: accountId).quantity == Decimal(500))
+    let balance = try await accountStore.displayBalance(for: accountId)
+    #expect(balance.quantity == Decimal(500))
   }
 
   @Test func testRunningBalancesUpdateAfterAmountChange() async throws {

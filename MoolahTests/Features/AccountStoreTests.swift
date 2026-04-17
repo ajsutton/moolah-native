@@ -252,7 +252,8 @@ struct AccountStoreTests {
     let deltas: PositionDeltas = [acctId: [instrument: Decimal(-5000) / 100]]
     store.applyDelta(deltas)
 
-    #expect(store.balance(for: acctId).quantity == Decimal(95000) / 100)
+    let balance = try await store.displayBalance(for: acctId)
+    #expect(balance.quantity == Decimal(95000) / 100)
   }
 
   @Test func testApplyDeltaIncreasesAccountBalance() async throws {
@@ -269,7 +270,8 @@ struct AccountStoreTests {
     let deltas: PositionDeltas = [acctId: [instrument: Decimal(50000) / 100]]
     store.applyDelta(deltas)
 
-    #expect(store.balance(for: acctId).quantity == Decimal(150000) / 100)
+    let balance = try await store.displayBalance(for: acctId)
+    #expect(balance.quantity == Decimal(150000) / 100)
   }
 
   @Test func testApplyDeltaUpdatesBothAccounts() async throws {
@@ -292,8 +294,10 @@ struct AccountStoreTests {
     ]
     store.applyDelta(deltas)
 
-    #expect(store.balance(for: checkingId).quantity == Decimal(90000) / 100)
-    #expect(store.balance(for: savingsId).quantity == Decimal(210000) / 100)
+    let checking = try await store.displayBalance(for: checkingId)
+    let savings = try await store.displayBalance(for: savingsId)
+    #expect(checking.quantity == Decimal(90000) / 100)
+    #expect(savings.quantity == Decimal(210000) / 100)
   }
 
   @Test func testApplyDeltaUpdatesTotals() async throws {
@@ -341,7 +345,8 @@ struct AccountStoreTests {
     let delta = BalanceDeltaCalculator.deltas(old: nil, new: tx)
     store.applyDelta(delta.accountDeltas)
 
-    #expect(store.balance(for: acctId).quantity == Decimal(95000) / 100)
+    let balance = try await store.displayBalance(for: acctId)
+    #expect(balance.quantity == Decimal(95000) / 100)
   }
 
   @Test func testApplyDeltaIgnoresUnknownAccount() async throws {
@@ -360,7 +365,8 @@ struct AccountStoreTests {
     store.applyDelta(deltas)
 
     // Balance should be unchanged
-    #expect(store.balance(for: acctId).quantity == Decimal(100000) / 100)
+    let balance = try await store.displayBalance(for: acctId)
+    #expect(balance.quantity == Decimal(100000) / 100)
   }
 
   // MARK: - Converted Totals
@@ -422,20 +428,7 @@ struct AccountStoreTests {
     #expect(store.convertedNetWorth?.quantity == Decimal(95000) / 100)
   }
 
-  // MARK: - Balance and Display Balance
-
-  @Test func testBalanceForAccountReturnsPositionAmount() async throws {
-    let acctId = UUID()
-    let (backend, container) = try TestBackend.create()
-    _ = seedAccount(
-      id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: container)
-    let store = AccountStore(
-      repository: backend.accounts, conversionService: FixedConversionService(),
-      targetInstrument: .defaultTestInstrument)
-    await store.load()
-
-    #expect(store.balance(for: acctId).quantity == Decimal(100000) / 100)
-  }
+  // MARK: - Display Balance
 
   @Test func testDisplayBalanceReturnsInvestmentValueForInvestmentAccount() async throws {
     let acctId = UUID()
