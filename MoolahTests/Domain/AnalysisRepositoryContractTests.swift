@@ -2153,6 +2153,794 @@ struct AnalysisRepositoryContractTests {
     #expect(data[0].expense.quantity == -25)
   }
 
+  // MARK: - Multi-Instrument PositionBook Coverage
+
+  @Test("holding revalues daily as exchange rate changes")
+  func holdingRevaluesDailyAsRateChanges() async throws {
+    // Profile is AUD. A USD bank account holds 100 USD from day 1 onward.
+    // The USD->AUD rate steps up across days; each day's balance.quantity
+    // must reflect the rate effective on that day.
+    let calendar = Calendar(identifier: .gregorian)
+    let day1 = calendar.date(from: DateComponents(year: 2025, month: 6, day: 1))!
+    let day2 = calendar.date(from: DateComponents(year: 2025, month: 6, day: 2))!
+    let day3 = calendar.date(from: DateComponents(year: 2025, month: 6, day: 3))!
+
+    let conversion = DateBasedFixedConversionService(rates: [
+      day1: ["USD": Decimal(string: "1.50")!],
+      day2: ["USD": Decimal(string: "1.60")!],
+      day3: ["USD": Decimal(string: "1.40")!],
+    ])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let usd = Instrument.fiat(code: "USD")
+    let usdAccount = Account(
+      id: UUID(), name: "USD Cash", type: .bank, instrument: usd)
+    _ = try await backend.accounts.create(usdAccount)
+
+    // Open the position on day1 and add small AUD-only legs on subsequent days
+    // so each day produces a daily balance entry. The USD position is unchanged
+    // across days; only the rate moves.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day1, payee: "Open USD",
+        legs: [
+          TransactionLeg(
+            accountId: usdAccount.id, instrument: usd,
+            quantity: 100, type: .openingBalance)
+        ]))
+
+    // Touch each subsequent day with a separate (zero-impact) AUD account leg
+    // to force a daily-balance entry. Use 1c income on a separate AUD account so
+    // we don't confound the USD revaluation under test.
+    let audAccount = Account(
+      id: UUID(), name: "AUD Tip Jar", type: .bank, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(audAccount)
+
+    for date in [day2, day3] {
+      _ = try await backend.transactions.create(
+        Transaction(
+          date: date, payee: "Tick",
+          legs: [
+            TransactionLeg(
+              accountId: audAccount.id, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "0.01")!, type: .income)
+          ]))
+    }
+
+    let balances = try await backend.analysis.fetchDailyBalances(
+      after: nil, forecastUntil: nil)
+
+    let d1 = balances.first { $0.date == calendar.startOfDay(for: day1) }
+    let d2 = balances.first { $0.date == calendar.startOfDay(for: day2) }
+    let d3 = balances.first { $0.date == calendar.startOfDay(for: day3) }
+    #expect(d1 != nil)
+    #expect(d2 != nil)
+    #expect(d3 != nil)
+
+    // Day1: 100 USD * 1.50 = 150 AUD (no AUD leg yet)
+    #expect(d1?.balance.quantity == 150)
+    // Day2: 100 USD * 1.60 + 0.01 AUD = 160.01 AUD
+    #expect(d2?.balance.quantity == Decimal(string: "160.01"))
+    // Day3: 100 USD * 1.40 + 0.02 AUD (cumulative) = 140.02 AUD
+    #expect(d3?.balance.quantity == Decimal(string: "140.02"))
+
+    // Profile instrument throughout
+    #expect(d1?.balance.instrument == .defaultTestInstrument)
+  }
+
+  @Test("multi-currency starting balance before 'after' cutoff")
+  func multiCurrencyStartingBalanceBeforeAfter() async throws {
+    // Profile = AUD. Pre-`after` history seeds AUD/USD/EUR positions on a bank
+    // account and an investment account. After cutoff, no further activity
+    // except a single AUD leg to produce a daily-balance entry. The post-`after`
+    // balance must reflect the converted starting positions.
+    let usd = Instrument.fiat(code: "USD")
+    let eur = Instrument.fiat(code: "EUR")
+
+    let conversion = FixedConversionService(rates: [
+      "USD": Decimal(string: "1.5")!,
+      "EUR": Decimal(string: "1.7")!,
+    ])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let calendar = Calendar(identifier: .gregorian)
+    let day1 = calendar.date(from: DateComponents(year: 2025, month: 5, day: 1))!
+    let day5 = calendar.date(from: DateComponents(year: 2025, month: 5, day: 5))!
+    let day10 = calendar.date(from: DateComponents(year: 2025, month: 5, day: 10))!
+    let day15 = calendar.date(from: DateComponents(year: 2025, month: 5, day: 15))!
+    let after = calendar.date(from: DateComponents(year: 2025, month: 5, day: 30))!
+    let postCutoff = calendar.date(from: DateComponents(year: 2025, month: 5, day: 31))!
+
+    let bank = Account(
+      id: UUID(), name: "Multi Bank", type: .bank, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(bank)
+
+    let investment = Account(
+      id: UUID(), name: "Multi Investment", type: .investment, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(investment)
+
+    // Pre-`after` priors: AUD opening on bank, USD opening on investment, EUR income on bank.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day1, payee: "AUD opening",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: .defaultTestInstrument,
+            quantity: 200, type: .openingBalance)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day5, payee: "USD investment opening",
+        legs: [
+          TransactionLeg(
+            accountId: investment.id, instrument: usd,
+            quantity: 100, type: .openingBalance)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day10, payee: "EUR side",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: eur,
+            quantity: 50, type: .income)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day15, payee: "USD side income",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: usd,
+            quantity: 40, type: .income)
+        ]))
+
+    // Single post-`after` AUD leg so a daily balance is emitted.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: postCutoff, payee: "Tick",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: .defaultTestInstrument,
+            quantity: Decimal(string: "0.01")!, type: .income)
+        ]))
+
+    let balances = try await backend.analysis.fetchDailyBalances(
+      after: after, forecastUntil: nil)
+
+    let postKey = calendar.startOfDay(for: postCutoff)
+    let post = balances.first { $0.date == postKey }
+    #expect(post != nil)
+    // bank balance:
+    //   200 AUD + 50 EUR * 1.7 + 40 USD * 1.5 + 0.01 AUD
+    // = 200 + 85 + 60 + 0.01 = 345.01 AUD
+    #expect(post?.balance.quantity == Decimal(string: "345.01"))
+    // investments (Option A: pre-after non-transfer legs seed transfers-only):
+    //   100 USD * 1.5 = 150 AUD
+    #expect(post?.investments.quantity == 150)
+    #expect(post?.balance.instrument == .defaultTestInstrument)
+  }
+
+  @Test("multi-currency investment account with no market value record")
+  func multiCurrencyInvestmentNoMarketValue() async throws {
+    // USD-denominated investment account with deposits in USD; no market value
+    // overrides. Verify investmentValue == nil and `investments` reflects the
+    // position-tracking total (snapshot+transfer-deltas under Option A) at each
+    // day's rate.
+    let usd = Instrument.fiat(code: "USD")
+    let calendar = Calendar(identifier: .gregorian)
+    let day1 = calendar.date(from: DateComponents(year: 2025, month: 7, day: 1))!
+    let day2 = calendar.date(from: DateComponents(year: 2025, month: 7, day: 2))!
+    let day3 = calendar.date(from: DateComponents(year: 2025, month: 7, day: 3))!
+
+    let conversion = DateBasedFixedConversionService(rates: [
+      day1: ["USD": Decimal(string: "1.5")!],
+      day2: ["USD": Decimal(string: "1.6")!],
+      day3: ["USD": Decimal(string: "1.7")!],
+    ])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let bank = Account(
+      id: UUID(), name: "Bank", type: .bank, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(bank)
+    let investment = Account(
+      id: UUID(), name: "USD Brokerage", type: .investment, instrument: usd)
+    _ = try await backend.accounts.create(investment)
+
+    // Day1: transfer 100 AUD bank -> 100 USD investment.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day1, payee: "Initial deposit",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: .defaultTestInstrument,
+            quantity: -100, type: .transfer),
+          TransactionLeg(
+            accountId: investment.id, instrument: usd,
+            quantity: 100, type: .transfer),
+        ]))
+    // Day2: transfer another 50 USD into the investment account.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day2, payee: "Top up",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: .defaultTestInstrument,
+            quantity: -50, type: .transfer),
+          TransactionLeg(
+            accountId: investment.id, instrument: usd,
+            quantity: 50, type: .transfer),
+        ]))
+    // Day3: tiny AUD income to ensure a daily-balance entry on day3.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day3, payee: "Tick",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: .defaultTestInstrument,
+            quantity: Decimal(string: "0.01")!, type: .income)
+        ]))
+
+    let balances = try await backend.analysis.fetchDailyBalances(
+      after: nil, forecastUntil: nil)
+
+    let d1 = balances.first { $0.date == calendar.startOfDay(for: day1) }
+    let d2 = balances.first { $0.date == calendar.startOfDay(for: day2) }
+    let d3 = balances.first { $0.date == calendar.startOfDay(for: day3) }
+    #expect(d1?.investmentValue == nil, "no market value records → investmentValue should be nil")
+    #expect(d2?.investmentValue == nil)
+    #expect(d3?.investmentValue == nil)
+
+    // investments converts the running USD position at each day's rate.
+    // Day1: 100 USD * 1.5 = 150 AUD; Day2: 150 USD * 1.6 = 240 AUD;
+    // Day3: 150 USD * 1.7 = 255 AUD.
+    #expect(d1?.investments.quantity == 150)
+    #expect(d2?.investments.quantity == 240)
+    #expect(d3?.investments.quantity == 255)
+
+    // netWorth uses `investments` (no override) — bank + investments.
+    // Day1: -100 AUD bank + 150 AUD investments = 50 AUD
+    #expect(d1?.netWorth.quantity == 50)
+  }
+
+  @Test("multi-currency earmark clamping")
+  func multiCurrencyEarmarkClamping() async throws {
+    // Two earmarks. Earmark A: AUD income +200, USD outflow -100. Per-earmark
+    // total = 200 AUD + (-100 USD * 1.5) = 200 - 150 = 50 AUD (positive,
+    // contributes 50 AUD to earmarkedTotal). Earmark B: USD outflow only,
+    // -50 USD * 1.5 = -75 AUD (negative, clamps to 0, does NOT subtract from
+    // total). Expected earmarkedTotal = 50 AUD (clamping is per-earmark, not
+    // global).
+    let usd = Instrument.fiat(code: "USD")
+    let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let bank = Account(
+      id: UUID(), name: "Bank", type: .bank, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(bank)
+
+    let earmarkA = Earmark(id: UUID(), name: "A", instrument: .defaultTestInstrument)
+    let earmarkB = Earmark(id: UUID(), name: "B", instrument: .defaultTestInstrument)
+    _ = try await backend.earmarks.create(earmarkA)
+    _ = try await backend.earmarks.create(earmarkB)
+
+    let calendar = Calendar(identifier: .gregorian)
+    let date = calendar.date(from: DateComponents(year: 2025, month: 8, day: 1))!
+
+    // Earmark A: AUD income 200 and USD expense -100.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: date, payee: "A: AUD income",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: .defaultTestInstrument,
+            quantity: 200, type: .income, earmarkId: earmarkA.id)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: date, payee: "A: USD expense",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: usd,
+            quantity: -100, type: .expense, earmarkId: earmarkA.id)
+        ]))
+    // Earmark B: USD expense only, -50 USD => -75 AUD per-earmark; clamps to 0.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: date, payee: "B: USD expense",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: usd,
+            quantity: -50, type: .expense, earmarkId: earmarkB.id)
+        ]))
+
+    let balances = try await backend.analysis.fetchDailyBalances(
+      after: nil, forecastUntil: nil)
+    let day = balances.first { $0.date == calendar.startOfDay(for: date) }
+    #expect(day != nil)
+    // Per-earmark clamping: A contributes 50, B clamps to 0. Total = 50.
+    #expect(day?.earmarked.quantity == 50)
+    #expect(day?.earmarked.instrument == .defaultTestInstrument)
+  }
+
+  @Test("multi-currency expense breakdown across months")
+  func multiCurrencyExpenseBreakdownAcrossMonths() async throws {
+    // Two categories, mixed currencies, across two financial months. Verify
+    // grouping by (categoryId, financialMonth) sums conversions correctly.
+    let usd = Instrument.fiat(code: "USD")
+    let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let account = Account(
+      id: UUID(), name: "Bank", type: .bank, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(account)
+
+    let groceries = Category(id: UUID(), name: "Groceries")
+    let transport = Category(id: UUID(), name: "Transport")
+    _ = try await backend.categories.create(groceries)
+    _ = try await backend.categories.create(transport)
+
+    let calendar = Calendar(identifier: .gregorian)
+    // monthEnd = 25 → month "202506" covers Jan 26..Feb 25 .. June covers May 26..Jun 25.
+    // Use clear non-boundary dates.
+    let mayDate = calendar.date(from: DateComponents(year: 2025, month: 5, day: 10))!  // 202505
+    let juneDate = calendar.date(from: DateComponents(year: 2025, month: 6, day: 10))!  // 202506
+
+    // May: groceries -100 USD => -150 AUD; transport -20 AUD.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: mayDate, payee: "May groc USD",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: usd,
+            quantity: -100, type: .expense, categoryId: groceries.id)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: mayDate, payee: "May transit",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: -20, type: .expense, categoryId: transport.id)
+        ]))
+    // June: groceries -40 AUD; transport -30 USD => -45 AUD.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: juneDate, payee: "June groc",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: -40, type: .expense, categoryId: groceries.id)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: juneDate, payee: "June transit USD",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: usd,
+            quantity: -30, type: .expense, categoryId: transport.id)
+        ]))
+
+    let breakdown = try await backend.analysis.fetchExpenseBreakdown(monthEnd: 25, after: nil)
+
+    // Expect 4 entries: (groceries, 202505), (transport, 202505), (groceries, 202506), (transport, 202506).
+    #expect(breakdown.count == 4)
+
+    func find(_ category: Moolah.Category, _ month: String) -> ExpenseBreakdown? {
+      breakdown.first { $0.categoryId == category.id && $0.month == month }
+    }
+
+    #expect(find(groceries, "202505")?.totalExpenses.quantity == -150)
+    #expect(find(transport, "202505")?.totalExpenses.quantity == -20)
+    #expect(find(groceries, "202506")?.totalExpenses.quantity == -40)
+    #expect(find(transport, "202506")?.totalExpenses.quantity == -45)
+    for entry in breakdown {
+      #expect(entry.totalExpenses.instrument == .defaultTestInstrument)
+    }
+  }
+
+  @Test("multi-currency income/expense with rate changes across months")
+  func multiCurrencyIncomeExpenseRateChangesAcrossMonths() async throws {
+    // Same income amount in USD on different months. Use date-based rates.
+    let usd = Instrument.fiat(code: "USD")
+    let calendar = Calendar(identifier: .gregorian)
+    let mayDate = calendar.date(from: DateComponents(year: 2025, month: 5, day: 10))!  // 202505
+    let juneDate = calendar.date(from: DateComponents(year: 2025, month: 6, day: 10))!  // 202506
+
+    let conversion = DateBasedFixedConversionService(rates: [
+      mayDate: ["USD": Decimal(string: "1.5")!],
+      juneDate: ["USD": Decimal(string: "2.0")!],
+    ])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let account = Account(
+      id: UUID(), name: "Bank", type: .bank, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(account)
+
+    // 100 USD income in May -> 150 AUD; 100 USD income in June -> 200 AUD.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: mayDate, payee: "May Pay USD",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: usd,
+            quantity: 100, type: .income)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: juneDate, payee: "June Pay USD",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: usd,
+            quantity: 100, type: .income)
+        ]))
+
+    let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
+
+    let may = data.first { $0.month == "202505" }
+    let june = data.first { $0.month == "202506" }
+    #expect(may != nil)
+    #expect(june != nil)
+    #expect(may?.income.quantity == 150)
+    #expect(june?.income.quantity == 200)
+    #expect(may?.income.instrument == .defaultTestInstrument)
+    #expect(june?.income.instrument == .defaultTestInstrument)
+  }
+
+  @Test("category balances multi-currency")
+  func categoryBalancesMultiCurrencyExtended() async throws {
+    // Multiple categories with mixed currencies across a date range.
+    // Use date-based rates so different days give different conversions.
+    let usd = Instrument.fiat(code: "USD")
+    let eur = Instrument.fiat(code: "EUR")
+    let calendar = Calendar(identifier: .gregorian)
+    let day1 = calendar.date(from: DateComponents(year: 2025, month: 9, day: 1))!
+    let day5 = calendar.date(from: DateComponents(year: 2025, month: 9, day: 5))!
+    let day10 = calendar.date(from: DateComponents(year: 2025, month: 9, day: 10))!
+
+    let conversion = DateBasedFixedConversionService(rates: [
+      day1: ["USD": Decimal(string: "1.4")!, "EUR": Decimal(string: "1.6")!],
+      day5: ["USD": Decimal(string: "1.5")!, "EUR": Decimal(string: "1.7")!],
+      day10: ["USD": Decimal(string: "1.6")!, "EUR": Decimal(string: "1.8")!],
+    ])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let account = Account(
+      id: UUID(), name: "Bank", type: .bank, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(account)
+
+    let food = Category(id: UUID(), name: "Food")
+    let travel = Category(id: UUID(), name: "Travel")
+    _ = try await backend.categories.create(food)
+    _ = try await backend.categories.create(travel)
+
+    // Food: -100 USD on day1 (=> -140 AUD) + -50 AUD on day5 = -190 AUD.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day1, payee: "Food USD",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: usd,
+            quantity: -100, type: .expense, categoryId: food.id)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day5, payee: "Food AUD",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: -50, type: .expense, categoryId: food.id)
+        ]))
+    // Travel: -20 EUR on day5 (=> -34 AUD) + -10 EUR on day10 (=> -18 AUD) = -52 AUD.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day5, payee: "Travel EUR",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: eur,
+            quantity: -20, type: .expense, categoryId: travel.id)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day10, payee: "Travel EUR",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: eur,
+            quantity: -10, type: .expense, categoryId: travel.id)
+        ]))
+
+    let balances = try await backend.analysis.fetchCategoryBalances(
+      dateRange: day1...day10,
+      transactionType: .expense,
+      filters: nil
+    )
+
+    #expect(balances[food.id]?.quantity == -190)
+    #expect(balances[travel.id]?.quantity == -52)
+    #expect(balances[food.id]?.instrument == .defaultTestInstrument)
+  }
+
+  @Test("mixed bank + investment + earmark + multi-currency + rate-varying")
+  func mixedSmokeMultiCurrencyRateVarying() async throws {
+    // End-to-end smoke: combine bank + investment accounts, an earmark, USD
+    // legs, and rate variation across days. Verify per-day invariants:
+    //   netWorth = balance + (investmentValue ?? investments)
+    //   availableFunds = balance - earmarked
+    let usd = Instrument.fiat(code: "USD")
+    let calendar = Calendar(identifier: .gregorian)
+    let day1 = calendar.date(from: DateComponents(year: 2025, month: 10, day: 1))!
+    let day2 = calendar.date(from: DateComponents(year: 2025, month: 10, day: 2))!
+    let day3 = calendar.date(from: DateComponents(year: 2025, month: 10, day: 3))!
+
+    let conversion = DateBasedFixedConversionService(rates: [
+      day1: ["USD": Decimal(string: "1.4")!],
+      day2: ["USD": Decimal(string: "1.5")!],
+      day3: ["USD": Decimal(string: "1.6")!],
+    ])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let bank = Account(
+      id: UUID(), name: "Bank AUD", type: .bank, instrument: .defaultTestInstrument)
+    let investment = Account(
+      id: UUID(), name: "USD Stocks", type: .investment, instrument: usd)
+    _ = try await backend.accounts.create(bank)
+    _ = try await backend.accounts.create(investment)
+
+    let earmark = Earmark(id: UUID(), name: "Holiday", instrument: .defaultTestInstrument)
+    _ = try await backend.earmarks.create(earmark)
+
+    // Day1: Open AUD bank with 1000 AUD; +100 AUD income tagged earmark.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day1, payee: "Open Bank",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: .defaultTestInstrument,
+            quantity: 1000, type: .openingBalance)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day1, payee: "Holiday savings",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: .defaultTestInstrument,
+            quantity: 100, type: .income, earmarkId: earmark.id)
+        ]))
+    // Day2: Transfer -200 AUD to 200 USD investment.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day2, payee: "Buy USD stocks",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: .defaultTestInstrument,
+            quantity: -200, type: .transfer),
+          TransactionLeg(
+            accountId: investment.id, instrument: usd,
+            quantity: 200, type: .transfer),
+        ]))
+    // Day3: USD expense -50 USD on bank account.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day3, payee: "USD spend",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: usd,
+            quantity: -50, type: .expense)
+        ]))
+
+    let balances = try await backend.analysis.fetchDailyBalances(
+      after: nil, forecastUntil: nil)
+    #expect(balances.count >= 3)
+
+    // Internal consistency every day.
+    for entry in balances {
+      let expectedNet = entry.balance + (entry.investmentValue ?? entry.investments)
+      #expect(entry.netWorth == expectedNet, "netWorth invariant failed on \(entry.date)")
+      #expect(
+        entry.availableFunds == entry.balance - entry.earmarked,
+        "availableFunds invariant failed on \(entry.date)")
+      #expect(entry.balance.instrument == .defaultTestInstrument)
+    }
+
+    // Spot-check day3: bank = 1000 + 100 - 200 (AUD) + (-50 USD * 1.6 = -80 AUD)
+    //                = 820 AUD; investments (transfers-only) = 200 USD * 1.6 = 320 AUD.
+    let d3 = balances.first { $0.date == calendar.startOfDay(for: day3) }
+    #expect(d3?.balance.quantity == 820)
+    #expect(d3?.investments.quantity == 320)
+    // Earmark = 100 AUD (positive, never clamped).
+    #expect(d3?.earmarked.quantity == 100)
+  }
+
+  @Test("applyInvestmentValues override still wins on multi-currency investments")
+  func investmentValueOverrideWinsMultiCurrency() async throws {
+    // USD investment account with a USD market-value override. The override
+    // (converted to profile) must take precedence in netWorth over the
+    // position-tracking total.
+    let usd = Instrument.fiat(code: "USD")
+    let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let bank = Account(
+      id: UUID(), name: "Bank", type: .bank, instrument: .defaultTestInstrument)
+    let investment = Account(
+      id: UUID(), name: "USD Stocks", type: .investment, instrument: usd)
+    _ = try await backend.accounts.create(bank)
+    _ = try await backend.accounts.create(investment)
+
+    let calendar = Calendar(identifier: .gregorian)
+    let day1 = calendar.date(from: DateComponents(year: 2025, month: 11, day: 1))!
+    let day2 = calendar.date(from: DateComponents(year: 2025, month: 11, day: 2))!
+
+    // Day1 transfer -100 AUD bank -> 100 USD investment (positionTracking total
+    // for investments = 100 USD * 1.5 = 150 AUD).
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day1, payee: "Buy",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: .defaultTestInstrument,
+            quantity: -100, type: .transfer),
+          TransactionLeg(
+            accountId: investment.id, instrument: usd,
+            quantity: 100, type: .transfer),
+        ]))
+    // Day2: market value = 200 USD on investment account. Bank tick to ensure
+    // a daily-balance entry is emitted on day2.
+    try await backend.investments.setValue(
+      accountId: investment.id, date: day2,
+      value: InstrumentAmount(quantity: 200, instrument: usd)
+    )
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day2, payee: "Tick",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: .defaultTestInstrument,
+            quantity: Decimal(string: "0.01")!, type: .income)
+        ]))
+
+    let balances = try await backend.analysis.fetchDailyBalances(
+      after: nil, forecastUntil: nil)
+
+    let d2 = balances.first { $0.date == calendar.startOfDay(for: day2) }
+    #expect(d2 != nil)
+    // investmentValue override = 200 USD * 1.5 = 300 AUD.
+    #expect(d2?.investmentValue?.quantity == 300)
+    #expect(d2?.investmentValue?.instrument == .defaultTestInstrument)
+    // netWorth uses the override, NOT the position-tracking total.
+    // bank = -100 + 0.01 = -99.99 AUD; netWorth = -99.99 + 300 = 200.01 AUD.
+    #expect(d2?.netWorth.quantity == Decimal(string: "200.01"))
+    // The position-tracking total is also exposed via `investments`.
+    #expect(d2?.investments.quantity == 150)
+  }
+
+  @Test("forecast starting from multi-currency actuals")
+  func forecastFromMultiCurrencyActuals() async throws {
+    // Actuals leave a USD position on a USD investment account. A scheduled
+    // USD expense projects forward; the forecast must build from the
+    // per-instrument starting book and pre-convert the scheduled leg at Date().
+    let usd = Instrument.fiat(code: "USD")
+    let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let calendar = Calendar(identifier: .gregorian)
+    let today = calendar.startOfDay(for: Date())
+    let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+    let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+    let nextWeek = calendar.date(byAdding: .day, value: 7, to: today)!
+
+    let bank = Account(
+      id: UUID(), name: "Bank AUD", type: .bank, instrument: .defaultTestInstrument)
+    let investment = Account(
+      id: UUID(), name: "USD Brokerage", type: .investment, instrument: usd)
+    _ = try await backend.accounts.create(bank)
+    _ = try await backend.accounts.create(investment)
+
+    // Yesterday: opening 800 AUD on bank, then transfer -300 AUD bank → 200 USD
+    // investment (rate 1.5: 300/1.5 = 200 USD). Bank ends at 500 AUD; investment
+    // holds 200 USD. The USD position is recorded in `accountsFromTransfers`
+    // so it survives into the transfers-only forecast view.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: yesterday, payee: "AUD opening",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: .defaultTestInstrument,
+            quantity: 800, type: .openingBalance)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: yesterday, payee: "Buy USD",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: .defaultTestInstrument,
+            quantity: -300, type: .transfer),
+          TransactionLeg(
+            accountId: investment.id, instrument: usd,
+            quantity: 200, type: .transfer),
+        ]))
+
+    // Scheduled (one-off): -50 USD expense tomorrow on the bank account.
+    _ = try await backend.transactions.create(
+      Transaction(
+        id: UUID(), date: tomorrow, payee: "USD scheduled",
+        recurPeriod: .once,
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: usd,
+            quantity: -50, type: .expense)
+        ]))
+
+    let balances = try await backend.analysis.fetchDailyBalances(
+      after: nil, forecastUntil: nextWeek)
+
+    let forecastEntry = balances.first { $0.date == tomorrow && $0.isForecast }
+    #expect(forecastEntry != nil, "expected a forecast entry for tomorrow")
+    // Bank starts at 500 AUD; scheduled -50 USD is pre-converted at Date()
+    // (rate 1.5) → -75 AUD. Bank running = 500 - 75 = 425 AUD.
+    #expect(forecastEntry?.balance.quantity == 425)
+    // Investments carry the 200 USD opening from actuals: 200 USD * 1.5 = 300 AUD.
+    #expect(forecastEntry?.investments.quantity == 300)
+  }
+
+  @Test(
+    "single-currency starting balance includes pre-after non-transfer investment legs (Option A)")
+  func singleCurrencyOptionAStartingBalance() async throws {
+    // Pre-`after` non-transfer legs on an investment account (here: openingBalance
+    // and income) must seed the `investments` total, even after `after`. This
+    // pins the Option A semantic explicitly so future refactors don't break it.
+    let backend = CloudKitAnalysisTestBackend()  // single-currency (AUD only)
+
+    let bank = Account(
+      id: UUID(), name: "Bank", type: .bank, instrument: .defaultTestInstrument)
+    let investment = Account(
+      id: UUID(), name: "Investment", type: .investment, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(bank)
+    _ = try await backend.accounts.create(investment)
+
+    let calendar = Calendar(identifier: .gregorian)
+    let day1 = calendar.date(from: DateComponents(year: 2025, month: 12, day: 1))!
+    let day5 = calendar.date(from: DateComponents(year: 2025, month: 12, day: 5))!
+    let after = calendar.date(from: DateComponents(year: 2025, month: 12, day: 10))!
+    let day12 = calendar.date(from: DateComponents(year: 2025, month: 12, day: 12))!
+
+    // Pre-`after` non-transfer legs on the investment account: opening 500 + income 100.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day1, payee: "Investment opening",
+        legs: [
+          TransactionLeg(
+            accountId: investment.id, instrument: .defaultTestInstrument,
+            quantity: 500, type: .openingBalance)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day5, payee: "Investment dividend",
+        legs: [
+          TransactionLeg(
+            accountId: investment.id, instrument: .defaultTestInstrument,
+            quantity: 100, type: .income)
+        ]))
+    // Post-`after`: a single bank-account income on day12 to emit a daily entry.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day12, payee: "Tick",
+        legs: [
+          TransactionLeg(
+            accountId: bank.id, instrument: .defaultTestInstrument,
+            quantity: 10, type: .income)
+        ]))
+
+    let balances = try await backend.analysis.fetchDailyBalances(
+      after: after, forecastUntil: nil)
+
+    let day = balances.first { $0.date == calendar.startOfDay(for: day12) }
+    #expect(day != nil)
+    // Option A: pre-after openingBalance + income on investment account
+    // contribute to the transfers-only baseline (snapshot at `after`).
+    // Expect investments == 600 (500 + 100), NOT 0.
+    #expect(day?.investments.quantity == 600)
+    #expect(day?.balance.quantity == 10)
+  }
+
   // MARK: - loadAll Tests
 
   @Test("loadAll returns combined results matching individual methods")
