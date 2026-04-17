@@ -252,7 +252,7 @@ struct AutomationServiceAccountTests {
     // Reload to pick up positions computed from the opening balance transaction
     await session.accountStore.load()
 
-    let netWorth = try service.getNetWorth(profileIdentifier: "Test")
+    let netWorth = try await service.getNetWorth(profileIdentifier: "Test")
     #expect(netWorth.quantity == 1000)
   }
 

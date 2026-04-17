@@ -237,7 +237,7 @@ struct SidebarView: View {
     }
     .sheet(isPresented: $showCreateAccountSheet) {
       CreateAccountView(
-        instrument: accountStore.currentTotal.instrument, accountStore: accountStore,
+        instrument: session.profile.instrument, accountStore: accountStore,
         supportsComplexTransactions: session.profile.supportsComplexTransactions)
     }
     .sheet(item: $accountToEdit) { account in

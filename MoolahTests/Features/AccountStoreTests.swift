@@ -75,20 +75,49 @@ struct AccountStoreTests {
       targetInstrument: .defaultTestInstrument)
 
     await store.load()
+    await store.waitForPendingConversions()
 
     #expect(
-      store.currentTotal
+      store.convertedCurrentTotal
         == InstrumentAmount(
           quantity: Decimal(550000) / 100, instrument: Instrument.defaultTestInstrument))  // 100000 + 500000 - 50000
     #expect(
-      store.investmentTotal
+      store.convertedInvestmentTotal
         == InstrumentAmount(
           quantity: Decimal(2_000_000) / 100, instrument: Instrument.defaultTestInstrument))
     #expect(
-      store.netWorth
+      store.convertedNetWorth
         == InstrumentAmount(
           quantity: Decimal(2_550_000) / 100, instrument: Instrument.defaultTestInstrument)
     )
+  }
+
+  @Test func testConvertedTotalsHandleMixedInstruments() async throws {
+    let aud = Instrument.defaultTestInstrument  // AUD in tests
+    let usd = Instrument.fiat(code: "USD")
+    let (backend, container) = try TestBackend.create()
+    _ = seedAccount(name: "AUD Bank", balance: Decimal(100000) / 100, in: container)
+    _ = seedAccount(
+      name: "USD Bank", instrument: usd, balance: Decimal(50000) / 100, in: container)
+    _ = seedAccount(
+      name: "USD Asset", type: .asset, instrument: usd, balance: Decimal(20000) / 100,
+      in: container)
+
+    // 1 USD = 2 AUD — simple test rate
+    let conversion = FixedConversionService(rates: ["USD": 2])
+    let store = AccountStore(
+      repository: backend.accounts, conversionService: conversion, targetInstrument: aud)
+
+    await store.load()
+    await store.waitForPendingConversions()
+
+    // 1_000.00 AUD + (500.00 USD * 2) + (200.00 USD * 2) = 1_000 + 1_000 + 400 = 2_400.00
+    #expect(
+      store.convertedCurrentTotal
+        == InstrumentAmount(quantity: Decimal(240_000) / 100, instrument: aud))
+    #expect(
+      store.convertedNetWorth
+        == InstrumentAmount(quantity: Decimal(240_000) / 100, instrument: aud))
   }
 
   // MARK: - updateInvestmentValue
@@ -275,14 +304,16 @@ struct AccountStoreTests {
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
     await store.load()
+    await store.waitForPendingConversions()
 
-    #expect(store.currentTotal.quantity == Decimal(100000) / 100)
+    #expect(store.convertedCurrentTotal?.quantity == Decimal(100000) / 100)
 
     let deltas: PositionDeltas = [checkingId: [instrument: Decimal(-5000) / 100]]
     store.applyDelta(deltas)
+    await store.waitForPendingConversions()
 
-    #expect(store.currentTotal.quantity == Decimal(95000) / 100)
-    #expect(store.netWorth.quantity == Decimal(95000) / 100)
+    #expect(store.convertedCurrentTotal?.quantity == Decimal(95000) / 100)
+    #expect(store.convertedNetWorth?.quantity == Decimal(95000) / 100)
   }
 
   @Test func testApplyDeltaViaBalanceDeltaCalculator() async throws {
@@ -357,7 +388,7 @@ struct AccountStoreTests {
 
     await store.load()
     // Wait for async conversion task to complete
-    try await Task.sleep(for: .milliseconds(100))
+    await store.waitForPendingConversions()
 
     #expect(store.convertedCurrentTotal != nil)
     #expect(store.convertedCurrentTotal?.quantity == Decimal(100000) / 100)
@@ -377,13 +408,13 @@ struct AccountStoreTests {
     )
 
     await store.load()
-    try await Task.sleep(for: .milliseconds(100))
+    await store.waitForPendingConversions()
 
     #expect(store.convertedCurrentTotal?.quantity == Decimal(100000) / 100)
 
     let deltas: PositionDeltas = [acctId: [instrument: Decimal(-5000) / 100]]
     store.applyDelta(deltas)
-    try await Task.sleep(for: .milliseconds(100))
+    await store.waitForPendingConversions()
 
     #expect(store.convertedCurrentTotal?.quantity == Decimal(95000) / 100)
     #expect(store.convertedNetWorth?.quantity == Decimal(95000) / 100)
