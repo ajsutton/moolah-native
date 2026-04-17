@@ -102,6 +102,7 @@ struct TransactionListView: View {
         )
       )
       .focusedSceneValue(\.newTransactionAction, createNewTransaction)
+      .focusedSceneValue(\.selectedTransaction, selectedTransactionBinding)
       .alert("Error", isPresented: $showError) {
         Button("OK", role: .cancel) {}
       } message: {
