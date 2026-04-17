@@ -357,6 +357,70 @@ struct CapitalGainsCalculatorTests {
     #expect(result.events[0].gain == 1500)
   }
 
+  // MARK: - Date-sensitive routing
+  //
+  // `computeWithConversion` must convert every fiat or non-fiat-swap leg
+  // on the transaction's date (Rule 5). The rate-ignoring
+  // `FixedConversionService` would not detect a regression that swapped
+  // `tx.date` for `Date()` or another date; this test uses
+  // `DateBasedFixedConversionService` to make that observable.
+
+  /// Crypto-to-crypto swap: both legs are valued via the conversion
+  /// service. The rate schedule below has a different rate effective at
+  /// the swap date than would be returned for "today" (`Date()`), so a
+  /// regression that misrouted the lookup date would yield a different
+  /// gain than the assertion permits.
+  @Test func cryptoSwap_conversionUsesTransactionDate() async throws {
+    let eth = cryptoInstrument("ETH")
+    let uni = cryptoInstrument("UNI")
+    let accountId = UUID()
+
+    let buyTx = LegTransaction(
+      date: date(0),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -3000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: eth, quantity: 1, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+
+    let swapTx = LegTransaction(
+      date: date(200),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: eth, quantity: -1, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: uni, quantity: 500, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+
+    // Rate schedule:
+    //   pre-date(100): no rates (1:1 fallback)
+    //   date(100)..<date(365): ETH=4000 AUD, UNI=8 AUD  ← effective on swap date(200)
+    //   date(365) onward:      ETH=10 AUD,   UNI=0.01 AUD  ← what `Date()` would resolve to
+    //
+    // Correct routing (tx.date=swap date(200)) → ETH proceeds 4000 AUD,
+    // gain = 4000 − 3000 = 1000.
+    // Mistake (`Date()` ≈ today, > date(365)) → proceeds 10 AUD, gain ≈ −2990.
+    // Mistake (`buyTx.date`=date(0)) → 1:1 fallback, proceeds 1 AUD, gain = −2999.
+    let service = DateBasedFixedConversionService(rates: [
+      date(100): [eth.id: 4000, uni.id: 8],
+      date(365): [eth.id: 10, uni.id: Decimal(string: "0.01")!],
+    ])
+    let result = try await CapitalGainsCalculator.computeWithConversion(
+      transactions: [buyTx, swapTx],
+      profileCurrency: aud,
+      conversionService: service
+    )
+
+    #expect(result.events.count == 1)
+    #expect(result.events[0].instrument.id == eth.id)
+    #expect(result.events[0].gain == 1000)
+  }
+
   // MARK: - Helpers
 
   private func stockInstrument(_ name: String) -> Instrument {
