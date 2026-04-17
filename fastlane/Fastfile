@@ -95,9 +95,18 @@ platform :ios do
       is_key_content_base64: true
     )
 
-    increment_build_number(
-      build_number: latest_testflight_build_number(api_key: api_key) + 1
-    )
+    # The pbxproj is regenerated from project.yml on every `just generate`,
+    # so `increment_build_number` (which edits pbxproj) would be overwritten.
+    # Patch CURRENT_PROJECT_VERSION in project.yml and regenerate instead.
+    next_build = latest_testflight_build_number(api_key: api_key) + 1
+    project_yml = File.expand_path("../../project.yml", __FILE__)
+    original = File.read(project_yml)
+    updated = original.sub(/(CURRENT_PROJECT_VERSION: )"\d+"/, "\\1\"#{next_build}\"")
+    UI.user_error!("Could not find CURRENT_PROJECT_VERSION in project.yml") if updated == original
+    File.write(project_yml, updated)
+    UI.message("Set CURRENT_PROJECT_VERSION to #{next_build} in project.yml")
+
+    sh("cd .. && just generate")
 
     profile_name = ENV["sigh_rocks.moolah.app_appstore_profile-name"]
 
