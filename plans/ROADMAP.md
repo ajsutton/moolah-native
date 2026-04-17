@@ -75,9 +75,11 @@ CloudKit compatibility required: removing `#Unique` constraints, adding default 
 
 ---
 
-## Phase 6: Multi-Currency Support — Done
+## Phase 6: Multi-Currency Support
 
 Full per-account currency support, building on the exchange rate infrastructure from Phase 4 and multi-instrument foundation from Phase 8. Accounts can have a currency different from the profile's base currency, and all aggregation (totals, net worth, available funds) converts to the profile currency.
+
+### Done
 
 - `Instrument` model, `Position` type, `TransactionLeg` with per-leg instruments
 - `ExchangeRateService` — Frankfurter API with caching, offline fallback, date-range queries
@@ -88,7 +90,10 @@ Full per-account currency support, building on the exchange rate infrastructure 
 - Cross-currency transfers — `TransactionDetailView` shows independent Sent/Received amount fields with a derived exchange-rate hint
 - Analysis views — `CloudKitAnalysisRepository` converts every leg at the transaction's date before aggregating expense breakdown, income/expense totals, and daily balances
 
-Remaining multi-currency work (UI polish, earmark currency picker, etc.) is tracked in `BUGS.md` and individual plans.
+### Remaining
+
+- Fix the multi-currency bugs tracked in `BUGS.md`: sync `AccountStore` totals trap for foreign-currency accounts, a single exchange-rate failure blanks the sidebar forever, `balance(for:)` hides non-primary positions, and there's no export/import round-trip test for multi-currency data.
+- Earmark currency picker — plan in `2026-04-17-earmark-currency-picker-plan.md`.
 
 ---
 
