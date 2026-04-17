@@ -39,6 +39,14 @@ You are an expert in multi-instrument (multi-currency, stocks, crypto) arithmeti
 - Calls to `ExchangeRateService` / `CryptoPriceService` / `StockPriceService` directly from a store or view, bypassing `InstrumentConversionService`.
 - `try?` on a conversion without logging — silent failures make multi-currency bugs invisible.
 
+### Graceful Degradation (Rule 11)
+
+- Aggregations wrapped in one outer `do { ... } catch { total = nil }`, so a single failing position blanks the whole view (the "sidebar spinner forever" pattern).
+- Silent per-position exclusion: summing only the convertible positions and displaying the result as a complete total, with no indicator that data is missing.
+- Substituting `0` / `.zero(instrument:)` for a failed conversion in a running sum — same problem under a different dressing.
+- Partial or fallback totals cached/persisted as the authoritative value, so recovery never surfaces the real number.
+- Missing retry affordance / error state for the user when a conversion fails.
+
 ### Test Coverage
 
 - Tests covering date-sensitive behaviour only via `FixedConversionService` (ignores date) when `DateBasedFixedConversionService` would actually exercise the bug.
@@ -61,7 +69,8 @@ Produce a detailed report with:
 Categorize by severity:
 - **Critical (will crash):** Arithmetic on `InstrumentAmount`s that can have different instruments at runtime. Reduce seeds that cannot be guaranteed to match every element. Clamps applied across mixed instruments.
 - **Critical (wrong numbers):** Historic code using `Date()`. Forecast/scheduled code using a future date. Comparisons between mixed-instrument amounts driving business logic.
-- **Important:** Ambiguous date threading where caller intent is unclear. Missing single-instrument fast path on a hot path. Bypassing the `InstrumentConversionService` seam.
+- **Critical (silently wrong):** Partial totals shown as complete — convertible positions summed and displayed without any indicator that other positions failed to convert, or failed conversions substituted with `0`. Violates Rule 11.
+- **Important:** Ambiguous date threading where caller intent is unclear. Missing single-instrument fast path on a hot path. Bypassing the `InstrumentConversionService` seam. Aggregation wrapped in one outer try/catch so a single failure blanks the whole view.
 - **Minor:** Tests that only cover the happy path with `FixedConversionService` and cannot detect date regressions. Comments/docs that misstate the convention.
 
 For each issue include:
