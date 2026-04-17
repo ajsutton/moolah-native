@@ -157,6 +157,12 @@ struct ReportsView: View {
     conversionService: backend.conversionService,
     targetInstrument: .AUD
   )
+  let reportingStore = ReportingStore(
+    transactionRepository: backend.transactions,
+    analysisRepository: backend.analysis,
+    conversionService: backend.conversionService,
+    profileCurrency: .AUD
+  )
   let salaryId = UUID()
   let groceriesId = UUID()
   let rentId = UUID()
@@ -168,7 +174,7 @@ struct ReportsView: View {
   let account = Account(name: "Checking", type: .bank, instrument: .AUD)
 
   ReportsView(
-    analysisRepository: backend.analysis,
+    reportingStore: reportingStore,
     categories: categories,
     accounts: Accounts(from: [account]),
     earmarks: Earmarks(from: []),
