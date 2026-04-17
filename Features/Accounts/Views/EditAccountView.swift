@@ -55,9 +55,11 @@ struct EditAccountView: View {
             } else {
               ProgressView()
                 .controlSize(.small)
+                .accessibilityLabel("Loading balance")
             }
           }
           .accessibilityLabel("Current balance, read-only")
+          .accessibilityValue(displayBalance?.formatted ?? "Loading")
         }
 
         PositionListView(positions: accountStore.positions(for: account.id))

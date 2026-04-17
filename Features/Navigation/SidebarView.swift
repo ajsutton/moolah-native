@@ -79,8 +79,7 @@ struct SidebarView: View {
             NavigationLink(value: SidebarSelection.earmark(earmark.id)) {
               SidebarRowView(
                 icon: "bookmark.fill", name: earmark.name,
-                amount: earmarkStore.convertedBalance(for: earmark.id)
-                  ?? .zero(instrument: earmark.instrument),
+                amount: earmarkStore.convertedBalance(for: earmark.id),
                 isSelected: selection == .earmark(earmark.id))
             }
           }
