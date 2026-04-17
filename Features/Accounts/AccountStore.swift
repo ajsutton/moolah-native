@@ -22,6 +22,12 @@ final class AccountStore {
   /// Investment values keyed by account ID, updated by InvestmentStore.
   private(set) var investmentValues: [UUID: InstrumentAmount] = [:]
 
+  /// Number of conversion passes that have completed since the store was
+  /// created. Incremented after every `runConversionAttempt`, whether the
+  /// pass succeeded or scheduled a retry. Tests wait on this to know the
+  /// store has published the results of at least one pass.
+  private(set) var conversionAttemptsCompleted: Int = 0
+
   private let repository: AccountRepository
   private let conversionService: any InstrumentConversionService
   private let targetInstrument: Instrument
@@ -228,6 +234,7 @@ final class AccountStore {
     convertedInvestmentTotal = investmentValid ? investmentTotal : nil
     convertedNetWorth =
       (currentValid && investmentValid) ? (currentTotal + investmentTotal) : nil
+    conversionAttemptsCompleted += 1
 
     return anyFailed
   }
