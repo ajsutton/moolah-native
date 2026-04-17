@@ -247,7 +247,16 @@ extension TransactionFilter {
 /// balance prior to the earliest transaction in this page.
 struct TransactionPage: Sendable {
   let transactions: [Transaction]
-  let priorBalance: InstrumentAmount
+  /// The instrument in which the running balance column should be displayed for
+  /// this fetch. For account-scoped fetches this is the account's own instrument;
+  /// for global fetches it's the profile instrument. Always populated — even when
+  /// `priorBalance` is `nil` due to a conversion failure.
+  let targetInstrument: Instrument
+  /// Account balance before the oldest transaction in `transactions`. `nil` when
+  /// the repository could not compute it (e.g. exchange-rate lookup failed). The
+  /// transactions themselves are still returned so the list renders; running
+  /// balances are just unavailable.
+  let priorBalance: InstrumentAmount?
   let totalCount: Int?
 
   /// Computes the running balance after each transaction, converting each leg
@@ -262,7 +271,7 @@ struct TransactionPage: Sendable {
   /// The transactions themselves are always returned.
   static func withRunningBalances(
     transactions: [Transaction],
-    priorBalance: InstrumentAmount,
+    priorBalance: InstrumentAmount?,
     accountId: UUID?,
     earmarkId: UUID? = nil,
     targetInstrument: Instrument,

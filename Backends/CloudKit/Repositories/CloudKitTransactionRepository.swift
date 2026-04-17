@@ -189,19 +189,21 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       os_signpost(.end, log: Signposts.repository, name: "fetch.sort", signpostID: signpostID)
 
       // --- Paginate ---
+      let resolvedTarget: Instrument
+      if let filterAccountId = filter.accountId {
+        resolvedTarget = (try? accountInstrument(id: filterAccountId)) ?? self.instrument
+      } else {
+        resolvedTarget = self.instrument
+      }
+
       let offset = page * pageSize
       guard offset < filteredRecords.count else {
         // Empty page — priorBalance is zero in whichever instrument best
         // matches the filter context.
-        let emptyInstrument: Instrument
-        if let filterAccountId = filter.accountId {
-          emptyInstrument = (try? accountInstrument(id: filterAccountId)) ?? self.instrument
-        } else {
-          emptyInstrument = self.instrument
-        }
         return TransactionPage(
           transactions: [],
-          priorBalance: InstrumentAmount.zero(instrument: emptyInstrument),
+          targetInstrument: resolvedTarget,
+          priorBalance: InstrumentAmount.zero(instrument: resolvedTarget),
           totalCount: filteredRecords.count)
       }
       let totalCount = filteredRecords.count
@@ -242,7 +244,10 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       os_signpost(.end, log: Signposts.balance, name: "fetch.priorBalance", signpostID: signpostID)
 
       return TransactionPage(
-        transactions: pageTransactions, priorBalance: priorBalance, totalCount: totalCount)
+        transactions: pageTransactions,
+        targetInstrument: resolvedTarget,
+        priorBalance: priorBalance,
+        totalCount: totalCount)
     }
   }
 

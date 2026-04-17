@@ -55,8 +55,9 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
       logger.debug("Successfully decoded \(wrapper.transactions.count) transactions")
       return TransactionPage(
         transactions: wrapper.transactions.map { $0.toDomain(instrument: self.instrument) },
+        targetInstrument: self.instrument,
         priorBalance: InstrumentAmount(
-          quantity: Decimal(wrapper.priorBalance) / 100, instrument: instrument),
+          quantity: Decimal(wrapper.priorBalance) / 100, instrument: self.instrument),
         totalCount: wrapper.totalNumberOfTransactions
       )
     } catch {
