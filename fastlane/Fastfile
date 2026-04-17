@@ -95,18 +95,14 @@ platform :ios do
       is_key_content_base64: true
     )
 
-    # The pbxproj is regenerated from project.yml on every `just generate`,
-    # so `increment_build_number` (which edits pbxproj) would be overwritten.
-    # Patch CURRENT_PROJECT_VERSION in project.yml and regenerate instead.
-    next_build = latest_testflight_build_number(api_key: api_key) + 1
-    project_yml = File.expand_path("../../project.yml", __FILE__)
-    original = File.read(project_yml)
-    updated = original.sub(/(CURRENT_PROJECT_VERSION: )"\d+"/, "\\1\"#{next_build}\"")
-    UI.user_error!("Could not find CURRENT_PROJECT_VERSION in project.yml") if updated == original
-    File.write(project_yml, updated)
-    UI.message("Set CURRENT_PROJECT_VERSION to #{next_build} in project.yml")
-
-    sh("cd .. && just generate")
+    # `increment_build_number` edits the generated pbxproj, which is wiped by
+    # `just generate`. That's fine here: nothing regenerates between this call
+    # and `build_app`, and TestFlight is the persistent source of truth for the
+    # next build number (not project.yml's hard-coded "1"). Do NOT add a
+    # `just generate` below this point or the bump will be lost.
+    increment_build_number(
+      build_number: latest_testflight_build_number(api_key: api_key) + 1
+    )
 
     profile_name = ENV["sigh_rocks.moolah.app_appstore_profile-name"]
 
