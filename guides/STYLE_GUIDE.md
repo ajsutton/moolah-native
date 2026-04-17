@@ -1022,7 +1022,7 @@ The primary domain menu. Named for the noun the commands act on (Apple's Mail ha
 
 ```
 Transaction
-  Edit Transaction…            ↩       (primary action on selection)
+  Edit Transaction…                    (opens inspector; fires on list double-click / Return)
   Duplicate Transaction        ⌘D
   —
   Mark as Cleared              ⌘K
@@ -1034,7 +1034,7 @@ Transaction
   Reveal in Account
   Copy Transaction Link        ⌃⌘C
   —
-  Delete Transaction           ⌫        (on menu; fires via Delete key on selection)
+  Delete Transaction…                  (ellipsis — confirmation alert; Delete key fires on list focus)
 ```
 
 Pay Scheduled Transaction is intentionally shortcut-less: ⌘P is a universal Mac shortcut for Print and must not be reassigned, even in apps without a Print command — users hit it reflexively and expect nothing bad to happen. The action is reachable from the Transaction menu, the inline Pay button on upcoming rows, and the context menu.
@@ -1214,7 +1214,8 @@ Assign shortcuts only when the action is **frequent** (used more than a few time
 | Duplicate Transaction | ⌘D | Transaction |
 | Mark as Cleared / All | ⌘K / ⇧⌘K | Transaction |
 | Pay Scheduled Transaction | — | Transaction (⌘P reserved for Print) |
-| Delete Transaction | ⌫ | Transaction (fires on selection) |
+| Edit Transaction… | — | Transaction (list primaryAction on Return/double-click) |
+| Delete Transaction… | — | Transaction (Delete key on list focus via onDeleteCommand) |
 | Refresh | ⌘R | (no menu item — handled by `.refreshable`; see note) |
 | Moolah Help | ⌘? | Help |
 | Keyboard Shortcuts | ⇧⌘/ | Help |
@@ -1355,11 +1356,11 @@ Every context menu item (right-click on a list row) should have a matching top-l
 
 // Must be mirrored by:
 CommandMenu("Transaction") {
-    Button("Edit Transaction…") { … }.keyboardShortcut(.return, modifiers: [])
+    Button("Edit Transaction…") { … }                  // no menu shortcut — fires on list focus
     Button("Duplicate Transaction") { … }.keyboardShortcut("d")
     Button("Mark as Cleared") { … }.keyboardShortcut("k")
     Divider()
-    Button("Delete Transaction", role: .destructive) { … }
+    Button("Delete Transaction…", role: .destructive) { … }   // ellipsis for confirmation
 }
 ```
 
