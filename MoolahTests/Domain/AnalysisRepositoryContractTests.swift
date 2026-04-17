@@ -1080,7 +1080,8 @@ struct AnalysisRepositoryContractTests {
     let balances = try await backend.analysis.fetchCategoryBalances(
       dateRange: dateRange,
       transactionType: .expense,
-      filters: nil
+      filters: nil,
+      targetInstrument: .defaultTestInstrument
     )
 
     // Verify totals are correct
@@ -1137,7 +1138,8 @@ struct AnalysisRepositoryContractTests {
     let balances = try await backend.analysis.fetchCategoryBalances(
       dateRange: dateRange,
       transactionType: .expense,
-      filters: nil
+      filters: nil,
+      targetInstrument: .defaultTestInstrument
     )
 
     // Only completed transaction counted
@@ -1189,7 +1191,8 @@ struct AnalysisRepositoryContractTests {
     let incomeBalances = try await backend.analysis.fetchCategoryBalances(
       dateRange: dateRange,
       transactionType: .income,
-      filters: nil
+      filters: nil,
+      targetInstrument: .defaultTestInstrument
     )
 
     // Only income counted
@@ -1200,7 +1203,8 @@ struct AnalysisRepositoryContractTests {
     let expenseBalances = try await backend.analysis.fetchCategoryBalances(
       dateRange: dateRange,
       transactionType: .expense,
-      filters: nil
+      filters: nil,
+      targetInstrument: .defaultTestInstrument
     )
 
     // Only expense counted
@@ -1253,7 +1257,8 @@ struct AnalysisRepositoryContractTests {
     let balances = try await backend.analysis.fetchCategoryBalances(
       dateRange: yesterday...today,
       transactionType: .expense,
-      filters: nil
+      filters: nil,
+      targetInstrument: .defaultTestInstrument
     )
 
     // Only yesterday's transaction counted
@@ -1313,7 +1318,8 @@ struct AnalysisRepositoryContractTests {
     let balances = try await backend.analysis.fetchCategoryBalances(
       dateRange: dateRange,
       transactionType: .expense,
-      filters: TransactionFilter(accountId: account1.id)
+      filters: TransactionFilter(accountId: account1.id),
+      targetInstrument: .defaultTestInstrument
     )
 
     // Only account1 transaction counted
@@ -1364,7 +1370,8 @@ struct AnalysisRepositoryContractTests {
     let balances = try await backend.analysis.fetchCategoryBalances(
       dateRange: dateRange,
       transactionType: .expense,
-      filters: nil
+      filters: nil,
+      targetInstrument: .defaultTestInstrument
     )
 
     #expect(balances.count == 1)
@@ -1383,7 +1390,8 @@ struct AnalysisRepositoryContractTests {
     let balances = try await backend.analysis.fetchCategoryBalances(
       dateRange: dateRange,
       transactionType: .expense,
-      filters: nil
+      filters: nil,
+      targetInstrument: .defaultTestInstrument
     )
 
     #expect(balances.isEmpty)
@@ -2005,7 +2013,8 @@ struct AnalysisRepositoryContractTests {
     let balances = try await backend.analysis.fetchCategoryBalances(
       dateRange: today...today,
       transactionType: .expense,
-      filters: nil
+      filters: nil,
+      targetInstrument: .defaultTestInstrument
     )
 
     // -40 USD * 1.5 = -60 AUD
@@ -2650,12 +2659,62 @@ struct AnalysisRepositoryContractTests {
     let balances = try await backend.analysis.fetchCategoryBalances(
       dateRange: day1...day10,
       transactionType: .expense,
-      filters: nil
+      filters: nil,
+      targetInstrument: .defaultTestInstrument
     )
 
     #expect(balances[food.id]?.quantity == -190)
     #expect(balances[travel.id]?.quantity == -52)
     #expect(balances[food.id]?.instrument == .defaultTestInstrument)
+  }
+
+  @Test("category balances convert to the requested target instrument")
+  func categoryBalancesHonourTargetInstrument() async throws {
+    // Profile is AUD but the caller (an earmark detail view) requests
+    // totals in USD so they can be summed against USD-denominated budget
+    // items. The repository must convert to USD rather than the profile
+    // instrument. USD -> USD leg passes through; AUD -> USD is converted.
+    let usd = Instrument.fiat(code: "USD")
+    // `FixedConversionService` keys by the `from` instrument only. Using AUD
+    // → 0.5 means `-40 AUD -> -40 * 0.5 = -20 USD` below.
+    let conversion = FixedConversionService(rates: [
+      "AUD": Decimal(string: "0.5")!
+    ])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+    let account = Account(
+      id: UUID(), name: "Bank", type: .bank, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(account)
+
+    let category = Category(id: UUID(), name: "Food")
+    _ = try await backend.categories.create(category)
+
+    let today = Calendar.current.startOfDay(for: Date())
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today, payee: "AUD Store",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: .defaultTestInstrument,
+            quantity: -40, type: .expense, categoryId: category.id)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: today, payee: "US Store",
+        legs: [
+          TransactionLeg(
+            accountId: account.id, instrument: usd,
+            quantity: -30, type: .expense, categoryId: category.id)
+        ]))
+
+    let balances = try await backend.analysis.fetchCategoryBalances(
+      dateRange: today...today,
+      transactionType: .expense,
+      filters: nil,
+      targetInstrument: usd
+    )
+
+    // -40 AUD * 0.5 = -20 USD; -30 USD passes through. Sum = -50 USD.
+    #expect(balances[category.id] == InstrumentAmount(quantity: -50, instrument: usd))
   }
 
   @Test("mixed bank + investment + earmark + multi-currency + rate-varying")

@@ -74,7 +74,8 @@ final class AnalysisBenchmarks: XCTestCase {
     measure(metrics: metrics, options: options) {
       _ = try! awaitSync {
         try await repo.fetchCategoryBalances(
-          dateRange: dateRange, transactionType: .expense, filters: nil)
+          dateRange: dateRange, transactionType: .expense, filters: nil,
+          targetInstrument: .defaultTestInstrument)
       }
     }
   }
@@ -88,7 +89,9 @@ final class AnalysisBenchmarks: XCTestCase {
     let dateRange = start...end
     measure(metrics: metrics, options: options) {
       _ = try! awaitSync {
-        try await repo.fetchCategoryBalancesByType(dateRange: dateRange, filters: nil)
+        try await repo.fetchCategoryBalancesByType(
+          dateRange: dateRange, filters: nil,
+          targetInstrument: .defaultTestInstrument)
       }
     }
   }

@@ -95,7 +95,8 @@ final class ReportingStore {
     do {
       let result = try await analysisRepository.fetchCategoryBalancesByType(
         dateRange: dateRange,
-        filters: TransactionFilter()
+        filters: TransactionFilter(),
+        targetInstrument: profileCurrency
       )
       incomeBalances = result.income
       expenseBalances = result.expense

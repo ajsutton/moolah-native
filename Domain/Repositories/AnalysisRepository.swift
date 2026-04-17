@@ -47,12 +47,19 @@ protocol AnalysisRepository: Sendable {
   ///   - dateRange: Date range to analyze (inclusive on both ends).
   ///   - transactionType: Filter to 'income' or 'expense' transactions.
   ///   - filters: Optional additional filters (account, earmark, payee, etc.).
-  /// - Returns: Dictionary where keys are category UUIDs and values are total InstrumentAmounts.
+  ///   - targetInstrument: Instrument to convert the aggregated amounts into. Callers that
+  ///     filter by earmark should pass the earmark's instrument so the totals are directly
+  ///     comparable to the earmark's budget items (see
+  ///     `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 1/2). Single-instrument backends
+  ///     require this to match the profile instrument.
+  /// - Returns: Dictionary where keys are category UUIDs and values are total
+  ///   `InstrumentAmount`s in `targetInstrument`.
   /// - Throws: BackendError on network/auth failure.
   func fetchCategoryBalances(
     dateRange: ClosedRange<Date>,
     transactionType: TransactionType,
-    filters: TransactionFilter?
+    filters: TransactionFilter?,
+    targetInstrument: Instrument
   ) async throws -> [UUID: InstrumentAmount]
 
   /// Fetch category balances for both income and expense in a single pass.
@@ -63,11 +70,13 @@ protocol AnalysisRepository: Sendable {
   /// - Parameters:
   ///   - dateRange: Date range to analyze (inclusive on both ends).
   ///   - filters: Optional additional filters (account, earmark, payee, etc.).
+  ///   - targetInstrument: Instrument the aggregated amounts are expressed in.
   /// - Returns: Tuple of income and expense dictionaries mapping category UUIDs to totals.
   /// - Throws: BackendError on network/auth failure.
   func fetchCategoryBalancesByType(
     dateRange: ClosedRange<Date>,
-    filters: TransactionFilter?
+    filters: TransactionFilter?,
+    targetInstrument: Instrument
   ) async throws -> (income: [UUID: InstrumentAmount], expense: [UUID: InstrumentAmount])
 
   /// Load all analysis data in a single batch, avoiding redundant fetches.
@@ -92,12 +101,15 @@ struct AnalysisData: Sendable {
 extension AnalysisRepository {
   func fetchCategoryBalancesByType(
     dateRange: ClosedRange<Date>,
-    filters: TransactionFilter?
+    filters: TransactionFilter?,
+    targetInstrument: Instrument
   ) async throws -> (income: [UUID: InstrumentAmount], expense: [UUID: InstrumentAmount]) {
     async let incomeResult = fetchCategoryBalances(
-      dateRange: dateRange, transactionType: .income, filters: filters)
+      dateRange: dateRange, transactionType: .income, filters: filters,
+      targetInstrument: targetInstrument)
     async let expenseResult = fetchCategoryBalances(
-      dateRange: dateRange, transactionType: .expense, filters: filters)
+      dateRange: dateRange, transactionType: .expense, filters: filters,
+      targetInstrument: targetInstrument)
     return try await (income: incomeResult, expense: expenseResult)
   }
 
