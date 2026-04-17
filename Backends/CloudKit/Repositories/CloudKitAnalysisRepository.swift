@@ -356,7 +356,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
   func fetchCategoryBalances(
     dateRange: ClosedRange<Date>,
     transactionType: TransactionType,
-    filters: TransactionFilter?
+    filters: TransactionFilter?,
+    targetInstrument: Instrument
   ) async throws -> [UUID: InstrumentAmount] {
     // 1. Fetch all transactions
     let allTransactions = try await fetchTransactions()
@@ -387,8 +388,8 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         }
 
         let amount = try await Self.convertedAmount(
-          leg, to: instrument, on: tx.date, conversionService: conversionService)
-        balances[categoryId, default: .zero(instrument: instrument)] += amount
+          leg, to: targetInstrument, on: tx.date, conversionService: conversionService)
+        balances[categoryId, default: .zero(instrument: targetInstrument)] += amount
       }
     }
 

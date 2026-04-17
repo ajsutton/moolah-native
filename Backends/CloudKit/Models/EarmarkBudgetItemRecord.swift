@@ -27,8 +27,15 @@ final class EarmarkBudgetItemRecord {
     self.instrumentId = instrumentId
   }
 
-  func toDomain() -> EarmarkBudgetItem {
-    let instrument = Instrument.fiat(code: instrumentId)
+  /// Domain conversion keyed to the owning earmark's instrument.
+  /// Budget items must always share their earmark's instrument (see
+  /// `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 1/2). The stored
+  /// `instrumentId` is preserved for backwards compatibility but any drift
+  /// is resolved here — the quantity is kept, the instrument is the
+  /// earmark's. Pass `nil` to fall back to the stored `instrumentId` (used
+  /// only by code paths that cannot resolve the earmark).
+  func toDomain(earmarkInstrument: Instrument? = nil) -> EarmarkBudgetItem {
+    let instrument = earmarkInstrument ?? Instrument.fiat(code: instrumentId)
     return EarmarkBudgetItem(
       id: id, categoryId: categoryId,
       amount: InstrumentAmount(storageValue: amount, instrument: instrument))

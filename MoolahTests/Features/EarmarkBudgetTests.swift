@@ -219,7 +219,8 @@ struct BudgetLineItemMergeTests {
     let result = BudgetLineItem.buildLineItems(
       budgetItems: budgetItems,
       categoryBalances: categoryBalances,
-      categories: categories
+      categories: categories,
+      earmarkInstrument: .defaultTestInstrument
     )
 
     #expect(result.count == 1)
@@ -243,7 +244,8 @@ struct BudgetLineItemMergeTests {
     let result = BudgetLineItem.buildLineItems(
       budgetItems: budgetItems,
       categoryBalances: categoryBalances,
-      categories: categories
+      categories: categories,
+      earmarkInstrument: .defaultTestInstrument
     )
 
     #expect(result.count == 1)
@@ -263,7 +265,8 @@ struct BudgetLineItemMergeTests {
     let result = BudgetLineItem.buildLineItems(
       budgetItems: budgetItems,
       categoryBalances: categoryBalances,
-      categories: categories
+      categories: categories,
+      earmarkInstrument: .defaultTestInstrument
     )
 
     #expect(result.count == 1)
@@ -289,7 +292,8 @@ struct BudgetLineItemMergeTests {
     let result = BudgetLineItem.buildLineItems(
       budgetItems: budgetItems,
       categoryBalances: categoryBalances,
-      categories: categories
+      categories: categories,
+      earmarkInstrument: .defaultTestInstrument
     )
 
     // remaining = budget + actual = 60000 + (-70000) = -10000 (over budget)
@@ -319,7 +323,8 @@ struct BudgetLineItemMergeTests {
     let result = BudgetLineItem.buildLineItems(
       budgetItems: budgetItems,
       categoryBalances: [:],
-      categories: categories
+      categories: categories,
+      earmarkInstrument: .defaultTestInstrument
     )
 
     #expect(result.map(\.categoryName) == ["Alpha", "Middle", "Zebra"])
@@ -386,15 +391,19 @@ struct BudgetLineItemMergeTests {
     let result = BudgetLineItem.buildLineItems(
       budgetItems: budgetItems,
       categoryBalances: [:],
-      categories: categories
+      categories: categories,
+      earmarkInstrument: .defaultTestInstrument
     )
 
     #expect(result.first?.categoryName == "Unknown")
   }
 
-  // MARK: - Multi-instrument budget items
+  // MARK: - Budget item instrument parity
 
-  @Test func budgetItemInForeignInstrumentPreservesInstrumentInLineItem() {
+  @Test func budgetItemIsCoercedToEarmarkInstrumentInLineItem() {
+    // Budget items stored with a mismatched instrument label (e.g. from stale
+    // CloudKit data) are re-expressed in the earmark's instrument so sums
+    // across the list are instrument-safe.
     let catId = UUID()
     let categories = Categories(from: [Category(id: catId, name: "Travel")])
     let budgetItems = [
@@ -406,21 +415,24 @@ struct BudgetLineItemMergeTests {
     let result = BudgetLineItem.buildLineItems(
       budgetItems: budgetItems,
       categoryBalances: [:],
-      categories: categories
+      categories: categories,
+      earmarkInstrument: .AUD
     )
 
     #expect(result.count == 1)
-    #expect(result[0].budgeted.instrument == .USD)
+    #expect(result[0].budgeted.instrument == .AUD)
     #expect(result[0].budgeted.quantity == Decimal(500))
   }
 
-  @Test func multipleBudgetItemsAcrossInstrumentsEachRetainTheirOwnInstrument() {
+  @Test func allLineItemsShareEarmarkInstrument() {
     let audCat = UUID()
     let usdCat = UUID()
     let categories = Categories(from: [
       Category(id: audCat, name: "Groceries"),
       Category(id: usdCat, name: "Subscriptions"),
     ])
+    // Both budget items should land in the earmark's instrument even if the
+    // records drifted in storage.
     let budgetItems = [
       EarmarkBudgetItem(
         categoryId: audCat,
@@ -433,13 +445,14 @@ struct BudgetLineItemMergeTests {
     let result = BudgetLineItem.buildLineItems(
       budgetItems: budgetItems,
       categoryBalances: [:],
-      categories: categories
+      categories: categories,
+      earmarkInstrument: .AUD
     )
 
     #expect(result.count == 2)
     let audLine = result.first { $0.id == audCat }
     let usdLine = result.first { $0.id == usdCat }
     #expect(audLine?.budgeted.instrument == .AUD)
-    #expect(usdLine?.budgeted.instrument == .USD)
+    #expect(usdLine?.budgeted.instrument == .AUD)
   }
 }

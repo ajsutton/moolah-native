@@ -312,10 +312,13 @@ final class EarmarkStore {
     let oldItems = budgetItems
     budgetItems.removeAll { $0.categoryId == categoryId }
 
+    // Setting amount to 0 removes the budget entry on the server. Use the
+    // earmark's own instrument so the repository's instrument-parity guard
+    // doesn't reject the zero write on a multi-currency profile.
+    let zeroInstrument = earmarks.by(id: earmarkId)?.instrument ?? targetInstrument
     do {
-      // Setting amount to 0 removes the budget entry on the server
       try await repository.setBudget(
-        earmarkId: earmarkId, categoryId: categoryId, amount: .zero(instrument: targetInstrument))
+        earmarkId: earmarkId, categoryId: categoryId, amount: .zero(instrument: zeroInstrument))
     } catch {
       logger.error("Failed to remove budget item: \(error.localizedDescription)")
       budgetItems = oldItems

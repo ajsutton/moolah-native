@@ -44,10 +44,12 @@ final class EarmarkRecord {
     positions: [Position] = [], savedPositions: [Position] = [], spentPositions: [Position] = []
   ) -> Earmark {
     let instrument = instrumentId.map { Instrument.fiat(code: $0) } ?? defaultInstrument
-    let savingsGoal: InstrumentAmount? = savingsTarget.flatMap { target in
-      guard let instrumentId = savingsTargetInstrumentId else { return nil }
-      let inst = Instrument.fiat(code: instrumentId)
-      return InstrumentAmount(storageValue: target, instrument: inst)
+    // Savings goal is always expressed in the earmark's own instrument. The
+    // `savingsTargetInstrumentId` column is preserved for backwards
+    // compatibility with older records but any drift is resolved here — the
+    // quantity is kept, the label is the earmark's instrument.
+    let savingsGoal: InstrumentAmount? = savingsTarget.map { target in
+      InstrumentAmount(storageValue: target, instrument: instrument)
     }
     return Earmark(
       id: id,

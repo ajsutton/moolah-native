@@ -96,12 +96,20 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       os_signpost(
         .end, log: Signposts.repository, name: "EarmarkRepo.fetchBudget", signpostID: signpostID)
     }
-    let descriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
+    let budgetDescriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
       predicate: #Predicate { $0.earmarkId == earmarkId }
     )
+    let earmarkDescriptor = FetchDescriptor<EarmarkRecord>(
+      predicate: #Predicate { $0.id == earmarkId }
+    )
+    let defaultInstrument = self.instrument
     return try await MainActor.run {
-      let records = try context.fetch(descriptor)
-      return records.map { $0.toDomain() }
+      let earmarkInstrument =
+        try context.fetch(earmarkDescriptor).first
+        .flatMap { $0.instrumentId.map { Instrument.fiat(code: $0) } }
+        ?? defaultInstrument
+      let records = try context.fetch(budgetDescriptor)
+      return records.map { $0.toDomain(earmarkInstrument: earmarkInstrument) }
     }
   }
 
@@ -116,10 +124,23 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
     let earmarkDescriptor = FetchDescriptor<EarmarkRecord>(
       predicate: #Predicate { $0.id == earmarkId }
     )
+    let defaultInstrument = self.instrument
 
     try await MainActor.run {
-      guard try context.fetch(earmarkDescriptor).first != nil else {
+      guard let earmarkRecord = try context.fetch(earmarkDescriptor).first else {
         throw BackendError.serverError(404)
+      }
+      // Budget items must match the earmark's instrument. Zero-amount writes
+      // (used to remove an entry) are always accepted — the value has no
+      // instrument meaning. See `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 1/2.
+      let earmarkInstrument =
+        earmarkRecord.instrumentId
+        .map { Instrument.fiat(code: $0) } ?? defaultInstrument
+      if !amount.isZero, amount.instrument != earmarkInstrument {
+        throw BackendError.unsupportedInstrument(
+          "Budget amount uses \(amount.instrument.id); earmark uses \(earmarkInstrument.id). "
+            + "Budget items must share the earmark's instrument."
+        )
       }
 
       let budgetDescriptor = FetchDescriptor<EarmarkBudgetItemRecord>(

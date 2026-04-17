@@ -118,38 +118,53 @@ struct EarmarkRepositoryContractTests {
     #expect(fetched.savingsGoal?.quantity == Decimal(string: "5000.00")!)
   }
 
-  @Test("budget items preserve their own instrument distinct from earmark instrument")
-  func testBudgetItemsPreserveInstrumentDistinctFromEarmark() async throws {
+  @Test("budget items adopt the earmark's instrument")
+  func testBudgetItemsUseEarmarkInstrument() async throws {
     let repository = makeCloudKitEarmarkRepository(initialEarmarks: [
-      Earmark(name: "Mixed Fund", instrument: .AUD)
+      Earmark(name: "AUD Fund", instrument: .AUD)
     ])
     let earmarks = try await repository.fetchAll()
     let earmarkId = earmarks[0].id
-    let audCategory = UUID()
-    let usdCategory = UUID()
+    let categoryA = UUID()
+    let categoryB = UUID()
 
-    let audAmount = InstrumentAmount(
+    let amountA = InstrumentAmount(
       quantity: Decimal(string: "100.00")!, instrument: .AUD)
-    let usdAmount = InstrumentAmount(
-      quantity: Decimal(string: "80.00")!, instrument: .USD)
+    let amountB = InstrumentAmount(
+      quantity: Decimal(string: "80.00")!, instrument: .AUD)
 
     try await repository.setBudget(
-      earmarkId: earmarkId, categoryId: audCategory, amount: audAmount)
+      earmarkId: earmarkId, categoryId: categoryA, amount: amountA)
     try await repository.setBudget(
-      earmarkId: earmarkId, categoryId: usdCategory, amount: usdAmount)
+      earmarkId: earmarkId, categoryId: categoryB, amount: amountB)
 
     let fetched = try await repository.fetchBudget(earmarkId: earmarkId)
     #expect(fetched.count == 2)
-    let audItem = try #require(fetched.first { $0.categoryId == audCategory })
-    let usdItem = try #require(fetched.first { $0.categoryId == usdCategory })
-    #expect(audItem.amount.instrument == .AUD)
-    #expect(audItem.amount.quantity == Decimal(string: "100.00")!)
-    #expect(usdItem.amount.instrument == .USD)
-    #expect(usdItem.amount.quantity == Decimal(string: "80.00")!)
+    for item in fetched {
+      #expect(item.amount.instrument == .AUD)
+    }
   }
 
-  @Test("updating budget item changes amount without changing instrument")
-  func testUpdatingBudgetItemPreservesInstrument() async throws {
+  @Test("setBudget rejects amounts in a different instrument from the earmark")
+  func testSetBudgetRejectsForeignInstrument() async throws {
+    let repository = makeCloudKitEarmarkRepository(initialEarmarks: [
+      Earmark(name: "AUD Fund", instrument: .AUD)
+    ])
+    let earmarks = try await repository.fetchAll()
+    let earmarkId = earmarks[0].id
+    let categoryId = UUID()
+
+    let foreign = InstrumentAmount(
+      quantity: Decimal(string: "80.00")!, instrument: .USD)
+
+    await #expect(throws: BackendError.self) {
+      try await repository.setBudget(
+        earmarkId: earmarkId, categoryId: categoryId, amount: foreign)
+    }
+  }
+
+  @Test("updating budget item changes amount and keeps the earmark's instrument")
+  func testUpdatingBudgetItemKeepsEarmarkInstrument() async throws {
     let repository = makeCloudKitEarmarkRepository(initialEarmarks: [
       Earmark(name: "Travel", instrument: .AUD)
     ])
@@ -157,18 +172,18 @@ struct EarmarkRepositoryContractTests {
     let earmarkId = earmarks[0].id
     let categoryId = UUID()
 
-    let usdFirst = InstrumentAmount(
-      quantity: Decimal(string: "100.00")!, instrument: .USD)
-    let usdSecond = InstrumentAmount(
-      quantity: Decimal(string: "250.00")!, instrument: .USD)
+    let first = InstrumentAmount(
+      quantity: Decimal(string: "100.00")!, instrument: .AUD)
+    let second = InstrumentAmount(
+      quantity: Decimal(string: "250.00")!, instrument: .AUD)
 
-    try await repository.setBudget(earmarkId: earmarkId, categoryId: categoryId, amount: usdFirst)
-    try await repository.setBudget(earmarkId: earmarkId, categoryId: categoryId, amount: usdSecond)
+    try await repository.setBudget(earmarkId: earmarkId, categoryId: categoryId, amount: first)
+    try await repository.setBudget(earmarkId: earmarkId, categoryId: categoryId, amount: second)
 
     let fetched = try await repository.fetchBudget(earmarkId: earmarkId)
     let entries = fetched.filter { $0.categoryId == categoryId }
     #expect(entries.count == 1)
-    #expect(entries[0].amount.instrument == .USD)
+    #expect(entries[0].amount.instrument == .AUD)
     #expect(entries[0].amount.quantity == Decimal(string: "250.00")!)
   }
 

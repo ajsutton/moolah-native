@@ -80,20 +80,21 @@ struct EarmarkBudgetSectionView: View {
     BudgetLineItem.buildLineItems(
       budgetItems: earmarkStore.budgetItems,
       categoryBalances: categoryBalances,
-      categories: categories
+      categories: categories,
+      earmarkInstrument: earmark.instrument
     )
   }
 
   private var totalActual: InstrumentAmount {
-    lineItems.reduce(.zero(instrument: lineItems.first?.actual.instrument ?? .AUD)) {
-      $0 + $1.actual
-    }
+    // All line items share the earmark's instrument (see
+    // `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 1/2). Budget items are
+    // stored in the earmark's instrument; category balances are fetched
+    // with `targetInstrument: earmark.instrument` below.
+    lineItems.reduce(.zero(instrument: earmark.instrument)) { $0 + $1.actual }
   }
 
   private var totalBudgeted: InstrumentAmount {
-    lineItems.reduce(.zero(instrument: lineItems.first?.budgeted.instrument ?? .AUD)) {
-      $0 + $1.budgeted
-    }
+    lineItems.reduce(.zero(instrument: earmark.instrument)) { $0 + $1.budgeted }
   }
 
   private var totalRemaining: InstrumentAmount {
@@ -243,7 +244,8 @@ struct EarmarkBudgetSectionView: View {
       categoryBalances = try await analysisRepository.fetchCategoryBalances(
         dateRange: distantPast...now,
         transactionType: .expense,
-        filters: TransactionFilter(earmarkId: earmark.id)
+        filters: TransactionFilter(earmarkId: earmark.id),
+        targetInstrument: earmark.instrument
       )
     } catch {
       categoryBalances = [:]

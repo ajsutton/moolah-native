@@ -71,8 +71,13 @@ final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
   func fetchCategoryBalances(
     dateRange: ClosedRange<Date>,
     transactionType: TransactionType,
-    filters: TransactionFilter?
+    filters: TransactionFilter?,
+    targetInstrument: Instrument
   ) async throws -> [UUID: InstrumentAmount] {
+    // Remote is single-instrument; callers must request the profile instrument.
+    // See `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 11a.
+    try requireMatchesProfileInstrument(
+      targetInstrument, profile: instrument, entity: "Category balances target instrument")
     var queryItems: [URLQueryItem] = [
       URLQueryItem(name: "from", value: BackendDateFormatter.string(from: dateRange.lowerBound)),
       URLQueryItem(name: "to", value: BackendDateFormatter.string(from: dateRange.upperBound)),
