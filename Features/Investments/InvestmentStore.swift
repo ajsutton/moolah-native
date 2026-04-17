@@ -87,6 +87,28 @@ final class InvestmentStore {
     isLoading = false
   }
 
+  /// Loads the full dataset required by `InvestmentAccountView`, branching on
+  /// whether the account uses legacy manual valuations or position tracking.
+  /// Keeps the branching logic out of the view so `.task`/`.refreshable`
+  /// blocks stay one-liners.
+  func loadAllData(accountId: UUID, profileCurrency: Instrument) async {
+    await loadValues(accountId: accountId)
+    if hasLegacyValuations {
+      await loadDailyBalances(accountId: accountId)
+    } else {
+      await loadPositions(accountId: accountId)
+      await valuatePositions(profileCurrency: profileCurrency, on: Date())
+    }
+  }
+
+  /// Refreshes position data after a trade is recorded. Used from
+  /// `.onChange` where we only care about position-tracked accounts.
+  func reloadPositionsIfNeeded(accountId: UUID, profileCurrency: Instrument) async {
+    guard !hasLegacyValuations else { return }
+    await loadPositions(accountId: accountId)
+    await valuatePositions(profileCurrency: profileCurrency, on: Date())
+  }
+
   func setValue(accountId: UUID, date: Date, value: InstrumentAmount) async {
     error = nil
     do {

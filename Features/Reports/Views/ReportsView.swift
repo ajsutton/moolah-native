@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Main Reports view displaying income and expense breakdown by category.
 struct ReportsView: View {
-  let analysisRepository: AnalysisRepository
+  let reportingStore: ReportingStore
   let categories: Categories
   let accounts: Accounts
   let earmarks: Earmarks
@@ -18,11 +18,6 @@ struct ReportsView: View {
   @State private var resolvedFrom: Date = DateRange.last12Months.startDate()
   @State private var resolvedTo: Date = DateRange.last12Months.endDate()
 
-  @State private var incomeBalances: [UUID: InstrumentAmount] = [:]
-  @State private var expenseBalances: [UUID: InstrumentAmount] = [:]
-  @State private var isLoading = false
-  @State private var error: Error?
-
   var body: some View {
     NavigationStack {
       VStack(spacing: 0) {
@@ -31,17 +26,19 @@ struct ReportsView: View {
 
         Divider()
 
-        if isLoading {
+        if reportingStore.isLoadingCategoryBalances {
           ProgressView("Loading report...")
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let error {
+        } else if let error = reportingStore.categoryBalancesError {
           ContentUnavailableView {
             Label("Error Loading Report", systemImage: "exclamationmark.triangle")
           } description: {
             Text(error.localizedDescription)
           } actions: {
             Button("Try Again") {
-              Task { await loadData() }
+              Task {
+                await reportingStore.loadCategoryBalances(dateRange: resolvedFrom...resolvedTo)
+              }
             }
           }
         } else {
@@ -50,7 +47,7 @@ struct ReportsView: View {
             HStack(spacing: 0) {
               CategoryBalanceTable(
                 title: "Income",
-                balances: incomeBalances,
+                balances: reportingStore.incomeBalances,
                 categories: categories,
                 dateRange: resolvedFrom...resolvedTo
               )
@@ -59,7 +56,7 @@ struct ReportsView: View {
 
               CategoryBalanceTable(
                 title: "Expenses",
-                balances: expenseBalances,
+                balances: reportingStore.expenseBalances,
                 categories: categories,
                 dateRange: resolvedFrom...resolvedTo
               )
@@ -68,7 +65,7 @@ struct ReportsView: View {
             VStack(spacing: 0) {
               CategoryBalanceTable(
                 title: "Income",
-                balances: incomeBalances,
+                balances: reportingStore.incomeBalances,
                 categories: categories,
                 dateRange: resolvedFrom...resolvedTo
               )
@@ -77,7 +74,7 @@ struct ReportsView: View {
 
               CategoryBalanceTable(
                 title: "Expenses",
-                balances: expenseBalances,
+                balances: reportingStore.expenseBalances,
                 categories: categories,
                 dateRange: resolvedFrom...resolvedTo
               )
@@ -101,26 +98,30 @@ struct ReportsView: View {
         )
       }
     }
-    .task {
-      await loadData()
+    .task(id: DateRangeKey(from: resolvedFrom, to: resolvedTo)) {
+      await reportingStore.loadCategoryBalances(dateRange: resolvedFrom...resolvedTo)
     }
     .onChange(of: dateRange) { _, newValue in
-      if newValue != .custom {
-        resolvedFrom = newValue.startDate()
-        resolvedTo = newValue.endDate()
-      }
-      Task { await loadData() }
+      guard newValue != .custom else { return }
+      resolvedFrom = newValue.startDate()
+      resolvedTo = newValue.endDate()
     }
     .onChange(of: customFrom) { _, newValue in
       guard dateRange == .custom else { return }
       resolvedFrom = newValue
-      Task { await loadData() }
     }
     .onChange(of: customTo) { _, newValue in
       guard dateRange == .custom else { return }
       resolvedTo = newValue
-      Task { await loadData() }
     }
+  }
+
+  /// Stable identity for the `.task(id:)` trigger — re-running the load
+  /// whenever either endpoint changes while letting SwiftUI cancel any
+  /// in-flight request when the view disappears.
+  private struct DateRangeKey: Hashable {
+    let from: Date
+    let to: Date
   }
 
   private var dateRangeSelector: some View {
@@ -146,25 +147,6 @@ struct ReportsView: View {
       Spacer()
     }
     .padding()
-  }
-
-  private func loadData() async {
-    isLoading = true
-    error = nil
-
-    do {
-      let range = resolvedFrom...resolvedTo
-      let result = try await analysisRepository.fetchCategoryBalancesByType(
-        dateRange: range,
-        filters: TransactionFilter()
-      )
-      incomeBalances = result.income
-      expenseBalances = result.expense
-    } catch {
-      self.error = error
-    }
-
-    isLoading = false
   }
 }
 

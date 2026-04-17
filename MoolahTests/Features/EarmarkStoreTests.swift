@@ -508,6 +508,22 @@ struct EarmarkStoreTests {
     #expect(store.error != nil)
   }
 
+  @Test func testHideMarksEarmarkHidden() async throws {
+    let earmark = Earmark(name: "Vacation", instrument: .defaultTestInstrument)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(earmarks: [earmark], in: container)
+    let store = EarmarkStore(
+      repository: backend.earmarks, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
+    await store.load()
+
+    let result = await store.hide(earmark)
+
+    #expect(result?.isHidden == true)
+    #expect(store.earmarks.by(id: earmark.id)?.isHidden == true)
+    #expect(store.visibleEarmarks.contains(where: { $0.id == earmark.id }) == false)
+  }
+
   // MARK: - Show Hidden
 
   @Test("visibleEarmarks excludes hidden earmarks by default")

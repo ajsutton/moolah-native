@@ -211,11 +211,9 @@ struct TransactionListView: View {
             Label("Delete", systemImage: "trash")
           }
         }
-        .onAppear {
+        .task {
           if entry.id == transactionStore.transactions.last?.id {
-            Task {
-              await transactionStore.loadMore()
-            }
+            await transactionStore.loadMore()
           }
         }
       }

@@ -11,6 +11,7 @@ struct ContentView: View {
   @Environment(AnalysisStore.self) private var analysisStore
   @Environment(InvestmentStore.self) private var investmentStore
   @Environment(TradeStore.self) private var tradeStore
+  @Environment(ReportingStore.self) private var reportingStore
   #if os(macOS)
     @State private var selection: SidebarSelection? = .analysis
   #else
@@ -92,7 +93,7 @@ struct ContentView: View {
         CategoriesView(categoryStore: categoryStore)
       case .reports:
         ReportsView(
-          analysisRepository: analysisStore.repository,
+          reportingStore: reportingStore,
           categories: categoryStore.categories,
           accounts: accountStore.accounts,
           earmarks: earmarkStore.earmarks,

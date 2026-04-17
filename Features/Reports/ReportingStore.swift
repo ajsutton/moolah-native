@@ -58,19 +58,52 @@ final class ReportingStore {
   private(set) var isLoading = false
   private(set) var error: Error?
 
+  /// Category balances for the Reports view, bucketed by transaction type.
+  private(set) var incomeBalances: [UUID: InstrumentAmount] = [:]
+  private(set) var expenseBalances: [UUID: InstrumentAmount] = [:]
+  private(set) var isLoadingCategoryBalances = false
+  private(set) var categoryBalancesError: Error?
+
   private let transactionRepository: TransactionRepository
+  private let analysisRepository: AnalysisRepository?
   private let conversionService: InstrumentConversionService
   private let profileCurrency: Instrument
   private let logger = Logger(subsystem: "com.moolah.app", category: "ReportingStore")
 
   init(
     transactionRepository: TransactionRepository,
+    analysisRepository: AnalysisRepository? = nil,
     conversionService: InstrumentConversionService,
     profileCurrency: Instrument
   ) {
     self.transactionRepository = transactionRepository
+    self.analysisRepository = analysisRepository
     self.conversionService = conversionService
     self.profileCurrency = profileCurrency
+  }
+
+  /// Loads income + expense category balances for a date range. Results are
+  /// published to `incomeBalances` / `expenseBalances`; failures land on
+  /// `categoryBalancesError`.
+  func loadCategoryBalances(dateRange: ClosedRange<Date>) async {
+    guard let analysisRepository else {
+      logger.error("loadCategoryBalances called without analysisRepository")
+      return
+    }
+    isLoadingCategoryBalances = true
+    categoryBalancesError = nil
+    do {
+      let result = try await analysisRepository.fetchCategoryBalancesByType(
+        dateRange: dateRange,
+        filters: TransactionFilter()
+      )
+      incomeBalances = result.income
+      expenseBalances = result.expense
+    } catch {
+      logger.error("Failed to load category balances: \(error)")
+      categoryBalancesError = error
+    }
+    isLoadingCategoryBalances = false
   }
 
   func loadProfitLoss() async {
