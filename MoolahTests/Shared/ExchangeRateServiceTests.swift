@@ -224,4 +224,92 @@ struct ExchangeRateServiceTests {
       try await service.rate(from: .AUD, to: .USD, on: date("2025-01-15"))
     }
   }
+
+  // MARK: - Cold cache surrounding fetch
+
+  /// When there is no cache for the base currency and the requested date is
+  /// missing from the client (weekend / holiday / today's rate not posted),
+  /// we still fetch a surrounding range wide enough to cover a recent trading
+  /// day and fall back to the most-recent prior cached rate.
+  @Test func coldCacheFallsBackToPriorTradingDayWhenRequestedDateMissing() async throws {
+    // Client has data for Jan 17 (Friday) but not Jan 18 (Saturday).
+    let service = makeService(rates: [
+      "2025-01-17": ["USD": Decimal(string: "0.6500")!]
+    ])
+
+    // First call with a cold cache on Saturday. The service should fetch a
+    // month-wide surrounding range, populate cache with Jan 17, and fall
+    // back to Jan 17's rate.
+    let saturdayRate = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-18"))
+    #expect(saturdayRate == Decimal(string: "0.6500")!)
+  }
+
+  @Test func coldCacheWithNetworkErrorThrows() async throws {
+    // shouldFail simulates a network error. With no prior cache and a failing
+    // fetch we have nothing to fall back to, so we must throw.
+    let service = makeService(shouldFail: true)
+    await #expect(throws: (any Error).self) {
+      try await service.rate(from: .AUD, to: .USD, on: date("2025-01-15"))
+    }
+  }
+
+  // MARK: - Cache extension
+
+  /// After priming the cache, requesting a date after the latest cached date
+  /// should trigger a forward extension fetch. If the client returns no data
+  /// for the new range (e.g., today's rate not yet posted), we fall back to
+  /// the most-recent cached rate rather than throwing.
+  @Test func futureRequestExtendsForwardAndFallsBack() async throws {
+    let service = makeService(rates: [
+      "2025-01-10": ["USD": Decimal(string: "0.6400")!]
+    ])
+    // Prime the cache by fetching Jan 10.
+    _ = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-10"))
+
+    // Request Jan 15 — client has no data for this date; forward extension
+    // of [Jan 11, Jan 15] returns empty. Should fall back to Jan 10's rate.
+    let rate = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-15"))
+    #expect(rate == Decimal(string: "0.6400")!)
+  }
+
+  /// Requesting a date before the earliest cached date should trigger a
+  /// backward extension fetch and pull in data from the client for the
+  /// missing historical range.
+  @Test func pastRequestExtendsBackwardAndReturnsRate() async throws {
+    let service = makeService(rates: [
+      "2025-01-15": ["USD": Decimal(string: "0.6480")!],
+      "2025-01-25": ["USD": Decimal(string: "0.6600")!],
+    ])
+    // Prime cache with Jan 25 (earliest will be 2024-12-26 via surrounding fetch,
+    // but client has no data for those dates so cache contains only Jan 25).
+    _ = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-25"))
+
+    // Request Jan 15 — backward extension fetch of [Jan 15, Jan 24] should
+    // pull in Jan 15.
+    let rate = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-15"))
+    #expect(rate == Decimal(string: "0.6480")!)
+  }
+
+  /// Once the cache is primed, a network error on a subsequent extension
+  /// fetch should still fall back to cached data rather than propagate.
+  @Test func extensionFetchErrorFallsBackToCache() async throws {
+    // Step 1: populate cache with a successful fetch.
+    let primingClient = FixedRateClient(rates: [
+      "2025-01-10": ["USD": Decimal(string: "0.6400")!]
+    ])
+    let cacheDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("exchange-rate-tests")
+      .appendingPathComponent(UUID().uuidString)
+    let service = ExchangeRateService(client: primingClient, cacheDirectory: cacheDir)
+    _ = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-10"))
+
+    // Step 2: new service using the same cache dir but with a failing client.
+    let failingClient = FixedRateClient(shouldFail: true)
+    let service2 = ExchangeRateService(client: failingClient, cacheDirectory: cacheDir)
+
+    // Requesting Jan 15 triggers a forward extension fetch that fails. Should
+    // still return the cached Jan 10 rate via fallback.
+    let rate = try await service2.rate(from: .AUD, to: .USD, on: date("2025-01-15"))
+    #expect(rate == Decimal(string: "0.6400")!)
+  }
 }
