@@ -283,6 +283,57 @@ struct ProfitLossCalculatorTests {
     #expect(results[0].unrealizedGain == 1900)
   }
 
+  // MARK: - Date-sensitive routing
+  //
+  // These tests use `DateBasedFixedConversionService` to verify that
+  // `compute` routes its two conversion calls to the correct dates:
+  // historic cost basis (`tx.date`, Rule 5) and current valuation
+  // (`asOfDate`, Rule 6). The rate-ignoring `FixedConversionService`
+  // would pass even if production code swapped the dates.
+
+  /// Cost basis must convert each fiat outflow leg on `tx.date` while
+  /// `currentValue` must convert the open position on `asOfDate`. The
+  /// rate schedule below makes both choices observable: swapping the
+  /// dates would yield different totals.
+  @Test func datesRouteCorrectly_costBasisOnTxDate_currentValueOnAsOfDate() async throws {
+    let bhp = stockInstrument("BHP")
+    let usd = Instrument.fiat(code: "USD")
+    let accountId = UUID()
+
+    let buyTx = LegTransaction(
+      date: date(0),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: usd, quantity: -2000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+
+    // date(0):   USD→AUD 1.5,  BHP→AUD 30   (cost basis must use these)
+    // date(365): USD→AUD 2.0,  BHP→AUD 50   (current valuation must use these)
+    //
+    // Correct routing: totalInvested = 2000 × 1.5 = 3000; currentValue = 100 × 50 = 5000.
+    // If dates were swapped: totalInvested = 2000 × 2.0 = 4000; currentValue = 100 × 30 = 3000.
+    let service = DateBasedFixedConversionService(rates: [
+      date(0): ["USD": Decimal(string: "1.5")!, "ASX:BHP": 30],
+      date(365): ["USD": Decimal(string: "2.0")!, "ASX:BHP": 50],
+    ])
+    let results = try await ProfitLossCalculator.compute(
+      transactions: [buyTx],
+      profileCurrency: aud,
+      conversionService: service,
+      asOfDate: date(365)
+    )
+
+    #expect(results.count == 1)
+    let pl = results[0]
+    #expect(pl.totalInvested == 3000)
+    #expect(pl.currentValue == 5000)
+    #expect(pl.unrealizedGain == 2000)
+  }
+
   // MARK: - Helpers
 
   private func stockInstrument(_ name: String) -> Instrument {
