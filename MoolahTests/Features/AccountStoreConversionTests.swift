@@ -407,7 +407,12 @@ struct AccountStoreConversionTests {
       retryDelay: .seconds(60))
 
     await store.load()
-    try await Task.sleep(for: .milliseconds(50))
+    // Conversion runs off the main actor; wait for the first recompute to
+    // land before asserting. Poll rather than sleeping a fixed interval to
+    // stay robust on busy CI runners.
+    try await waitForCondition(timeout: .seconds(2)) {
+      store.convertedBalances[bankAud.id] != nil
+    }
 
     // AUD bank: only AUD positions → succeeds.
     #expect(store.convertedBalances[bankAud.id]?.quantity == 1000)
