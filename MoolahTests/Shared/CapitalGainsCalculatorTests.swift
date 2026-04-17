@@ -263,6 +263,100 @@ struct CapitalGainsCalculatorTests {
     #expect(result.events[0].gain == 1000)
   }
 
+  /// Mixed-fiat buy: 100 BHP paid for with USD 2000 + AUD 100 fee,
+  /// profile currency = AUD at 1 USD = 1.5 AUD. The calculator must
+  /// convert each fiat leg to the profile currency before summing,
+  /// producing a cost basis of AUD 3100 (not the raw 2100 from blending
+  /// USD and AUD quantities).
+  @Test func mixedFiatLegs_convertToProfileCurrencyBeforeSumming() async throws {
+    let bhp = stockInstrument("BHP")
+    let usd = Instrument.fiat(code: "USD")
+    let accountId = UUID()
+
+    let buyTx = LegTransaction(
+      date: date(0),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: usd, quantity: -2000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -100, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+
+    let sellTx = LegTransaction(
+      date: date(400),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: -100, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: 4000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+
+    let service = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let result = try await CapitalGainsCalculator.computeWithConversion(
+      transactions: [buyTx, sellTx],
+      profileCurrency: aud,
+      conversionService: service
+    )
+
+    // Cost basis AUD 3100 (USD 2000 × 1.5 = 3000 plus AUD 100 fee),
+    // proceeds AUD 4000. Gain 900.
+    #expect(result.events.count == 1)
+    #expect(result.events[0].gain == 900)
+  }
+
+  /// Mixed-fiat sell: 100 BHP sold for USD 3000 with AUD 50 fee,
+  /// profile currency = AUD at 1 USD = 1.5 AUD. Proceeds must aggregate
+  /// to AUD 4500 − AUD 50 direction depends on the fee side; here the
+  /// fee is modelled as an inflow because the existing fiat-paired
+  /// classifier only sums absolute inflow. Covers the sell-side symmetry
+  /// of the fix.
+  @Test func mixedFiatLegs_sellSide_convertInflowToProfileCurrency() async throws {
+    let bhp = stockInstrument("BHP")
+    let usd = Instrument.fiat(code: "USD")
+    let accountId = UUID()
+
+    let buyTx = LegTransaction(
+      date: date(0),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: -3000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+
+    // Sell 100 BHP, receive USD 3000. Expected proceeds: AUD 4500.
+    let sellTx = LegTransaction(
+      date: date(400),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: bhp, quantity: -100, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: usd, quantity: 3000, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+
+    let service = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let result = try await CapitalGainsCalculator.computeWithConversion(
+      transactions: [buyTx, sellTx],
+      profileCurrency: aud,
+      conversionService: service
+    )
+
+    // Cost basis AUD 3000, proceeds AUD 4500. Gain 1500.
+    #expect(result.events.count == 1)
+    #expect(result.events[0].gain == 1500)
+  }
+
   // MARK: - Helpers
 
   private func stockInstrument(_ name: String) -> Instrument {

@@ -19,7 +19,11 @@ final class InvestmentStore {
   private(set) var error: Error?
   private(set) var positions: [Position] = []
   private(set) var valuedPositions: [ValuedPosition] = []
-  private(set) var totalPortfolioValue: Decimal = 0
+  /// Total portfolio value in the profile currency. `nil` when any
+  /// individual position's conversion failed — per Rule 11 in
+  /// `guides/INSTRUMENT_CONVERSION_GUIDE.md` we must not display a
+  /// partial sum as the portfolio total.
+  private(set) var totalPortfolioValue: Decimal?
 
   var selectedPeriod: TimePeriod = .all
 
@@ -156,44 +160,46 @@ final class InvestmentStore {
   }
 
   /// Valuate all loaded positions using current market prices.
+  ///
+  /// Per Rule 11 in `guides/INSTRUMENT_CONVERSION_GUIDE.md`: if any
+  /// position's conversion fails, the aggregate `totalPortfolioValue`
+  /// is marked unavailable (`nil`) and `error` is set so the view can
+  /// surface a retry affordance. Per-position `ValuedPosition`s still
+  /// render individually — the failing position appears with a `nil`
+  /// `marketValue` and sibling positions with their successful values.
   func valuatePositions(profileCurrency: Instrument, on date: Date) async {
     var valued: [ValuedPosition] = []
     var total: Decimal = 0
+    var firstFailure: Error?
 
     for position in positions {
-      if position.instrument.kind == .fiatCurrency {
-        // Fiat positions: convert to profile currency if different
-        let value: Decimal
-        if position.instrument.id == profileCurrency.id {
-          value = position.quantity
-        } else {
-          do {
-            value = try await conversionService.convert(
-              position.quantity, from: position.instrument, to: profileCurrency, on: date
-            )
-          } catch {
-            valued.append(ValuedPosition(position: position, marketValue: nil))
-            continue
-          }
-        }
+      if position.instrument.id == profileCurrency.id {
+        valued.append(ValuedPosition(position: position, marketValue: position.quantity))
+        total += position.quantity
+        continue
+      }
+      do {
+        let value = try await conversionService.convert(
+          position.quantity, from: position.instrument, to: profileCurrency, on: date
+        )
         valued.append(ValuedPosition(position: position, marketValue: value))
         total += value
-      } else {
-        // Stock positions: convert quantity to profile currency value
-        do {
-          let value = try await conversionService.convert(
-            position.quantity, from: position.instrument, to: profileCurrency, on: date
-          )
-          valued.append(ValuedPosition(position: position, marketValue: value))
-          total += value
-        } catch {
-          valued.append(ValuedPosition(position: position, marketValue: nil))
-        }
+      } catch {
+        logger.warning(
+          "Failed to valuate position \(position.instrument.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
+        )
+        valued.append(ValuedPosition(position: position, marketValue: nil))
+        if firstFailure == nil { firstFailure = error }
       }
     }
 
     valuedPositions = valued
-    totalPortfolioValue = total
+    if let firstFailure {
+      totalPortfolioValue = nil
+      self.error = firstFailure
+    } else {
+      totalPortfolioValue = total
+    }
   }
 
   // MARK: - Computed Properties

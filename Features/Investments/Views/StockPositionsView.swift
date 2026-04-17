@@ -2,7 +2,9 @@ import SwiftUI
 
 struct StockPositionsView: View {
   let valuedPositions: [ValuedPosition]
-  let totalValue: Decimal
+  /// Profile-currency total. `nil` means at least one position's
+  /// valuation failed, so we must not render a partial sum as the total.
+  let totalValue: Decimal?
   let profileCurrency: Instrument
 
   var body: some View {
@@ -12,9 +14,16 @@ struct StockPositionsView: View {
         Text("Positions")
           .font(.headline)
         Spacer()
-        Text(totalValue.formatted(.currency(code: profileCurrency.id)))
-          .font(.headline)
-          .monospacedDigit()
+        if let totalValue {
+          Text(totalValue.formatted(.currency(code: profileCurrency.id)))
+            .font(.headline)
+            .monospacedDigit()
+        } else {
+          Text("Unavailable")
+            .font(.headline)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("Total portfolio value unavailable")
+        }
       }
       .padding(.horizontal)
       .padding(.vertical, 12)

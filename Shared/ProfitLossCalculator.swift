@@ -20,14 +20,25 @@ enum ProfitLossCalculator {
     // Track total invested and realized gains per instrument
     var instrumentData: [String: InstrumentData] = [:]
 
-    // Process all transactions to compute total invested
+    // Process all transactions to compute total invested.
+    //
+    // Fiat legs can span multiple currencies (e.g. a USD payment plus an
+    // AUD fee). We convert each outflow leg to `profileCurrency` on the
+    // transaction's date before summing so `totalInvested` is expressed
+    // in a single currency. See guides/INSTRUMENT_CONVERSION_GUIDE.md
+    // Rules 1 and 5.
     let sorted = transactions.sorted { $0.date < $1.date }
     for tx in sorted {
       let fiatLegs = tx.legs.filter { $0.instrument.kind == .fiatCurrency }
       let nonFiatLegs = tx.legs.filter { $0.instrument.kind != .fiatCurrency }
 
-      let fiatOutflow = fiatLegs.filter { $0.quantity < 0 }
-        .reduce(Decimal(0)) { $0 + abs($1.quantity) }
+      var fiatOutflow: Decimal = 0
+      for leg in fiatLegs where leg.quantity < 0 {
+        let converted = try await conversionService.convert(
+          abs(leg.quantity), from: leg.instrument, to: profileCurrency, on: tx.date
+        )
+        fiatOutflow += converted
+      }
 
       for leg in nonFiatLegs where leg.quantity > 0 {
         instrumentData[leg.instrument.id, default: InstrumentData(instrument: leg.instrument)]

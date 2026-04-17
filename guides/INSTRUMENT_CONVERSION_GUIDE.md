@@ -99,21 +99,21 @@ Reads whose semantics are "what is this worth right now" must convert on today:
 - `AccountStore` rollups used by the sidebar and account detail.
 - "Current" earmark availability shown to the user.
 
-### Rule 7: Forecast and scheduled use `Date()`, not the future date
+### Rule 7: Future dates are clamped to today by the conversion service
 
-Frankfurter has no future rates. Converting on a scheduled transaction's future `date` will either fail or silently return the wrong value. Convert extrapolated scheduled instances on `Date()` before they enter the forecast accumulator.
+Frankfurter (and the stock/crypto rate providers) have no future rates. The conversion service (`FiatConversionService.convert` and `FullConversionService.convert`) therefore **clamps any `on: date` greater than `Date()` to today** before looking up a rate, so a future date resolves against the latest available rate rather than throwing.
+
+**Practical consequence for call sites:** forecast and scheduled-transaction code may pass the natural semantic date (`transaction.date`, `scheduledInstance.date`) without pre-clamping. The service guarantees the lookup date is never in the future.
 
 ```swift
-// WRONG: future date, no rate exists
+// Fine — the service clamps the future date to today.
 let converted = try await conversionService.convertAmount(
   leg.amount, to: profile.instrument, on: scheduledInstance.date)
-
-// CORRECT: today's rate is the documented best estimate
-let converted = try await conversionService.convertAmount(
-  leg.amount, to: profile.instrument, on: Date())
 ```
 
-See `plans/2026-04-17-forecast-currency-conversion-plan.md` for the full rationale.
+Callers are still free to pass `Date()` explicitly if that expresses intent more clearly (e.g. "current valuation of a historic position"), but it is not required for correctness. Do not add a separate `isForecast` / `conversionDate` parameter to internal APIs purely to select between the transaction date and today — the service handles it.
+
+See `plans/2026-04-17-forecast-currency-conversion-plan.md` for the original rationale and the issue-#47 commit for the service-level clamp.
 
 ### Rule 8: Single-instrument fast path
 
@@ -189,7 +189,7 @@ See Rule 8. Applies to both `convert(_:from:to:on:)` and `convertAmount(_:to:on:
 | Clamping `max(sum, .zero(instrument: X))` before conversion | Traps when `sum.instrument != X` | Clamp after conversion (Rule 4) |
 | Historic reports calling `.convert(..., on: Date())` | Report values drift from the authoritative historic rate | Pass the snapshot/transaction date (Rule 5) |
 | Sidebar/net-worth calling `.convert(..., on: someHistoricDate)` | Shows a stale rate as "now" | Pass `Date()` (Rule 6) |
-| Forecast converting on the scheduled future date | Frankfurter has no future rates; throws or returns wrong value | Convert on `Date()` (Rule 7) |
+| Threading an `isForecast` / `conversionDate` parameter through internal APIs purely to swap between `tx.date` and `Date()` | The conversion service already clamps future dates to today — no caller needs this branch | Pass `transaction.date` and rely on Rule 7's service-level clamp |
 | Routing same-instrument data through the conversion service | Unnecessary async hop and network/cache traffic | Fast-path when `instrument == target` (Rule 8) |
 | Using `createdAt` / `updatedAt` as conversion date | Metadata timestamp is not the semantic observation date | Use `transaction.date` / `dailyBalance.date` (Rule 9) |
 | Keying balances and converting rates with un-normalized `Date` | Timezone drift — "today's rate" for yesterday's balance | Normalize both with `startOfDay` (Rule 10) |
@@ -218,7 +218,7 @@ See Rule 8. Applies to both `convert(_:from:to:on:)` and `convertAmount(_:to:on:
 
 - [ ] Historic reads (daily balances before today, transaction lists, expense/income breakdowns, tax summaries) convert on the snapshot/transaction date.
 - [ ] Current-value reads (sidebar, net worth, available funds, investment valuations, account detail) convert on `Date()`.
-- [ ] Forecast/scheduled paths convert on `Date()`, never on a scheduled transaction's future date.
+- [ ] Forecast/scheduled paths may pass `transaction.date` — the conversion service clamps to today automatically (Rule 7). Do not add bespoke `isForecast` plumbing.
 - [ ] Date is the semantic observation date (`transaction.date`, `dailyBalance.date`), not wall-clock metadata (`createdAt`, `updatedAt`).
 - [ ] Date used to key a bucket matches the date handed to the conversion service (same `startOfDay` normalization).
 
@@ -243,3 +243,4 @@ See Rule 8. Applies to both `convert(_:from:to:on:)` and `convertAmount(_:to:on:
 ## Version History
 
 - **1.0** (2026-04-17): Initial guide. Consolidates instrument-safe-arithmetic and conversion-date rules previously spread across `plans/ROADMAP.md`, `plans/2026-04-17-forecast-currency-conversion-plan.md`, and the `PositionBook` / `InstrumentAmount` source files. Adds Rule 11: on conversion failure, mark the affected total unavailable — never display the convertible portion as the total, never display the unconverted amount in its native instrument, and never substitute zero. Independently-scoped sibling totals must keep rendering.
+- **1.1** (2026-04-17): Rule 7 moved from a call-site obligation to a service-level guarantee — `FiatConversionService` and `FullConversionService` now clamp any future date to `Date()` before rate lookup, so forecast and scheduled call sites can pass `transaction.date` directly.

@@ -82,4 +82,49 @@ struct InstrumentConversionServiceTests {
     )
     #expect(result == amount)
   }
+
+  /// Scheduled transactions and forecast days carry future dates. Frankfurter
+  /// has no future rates, so before the clamp, a cold cache + future date
+  /// threw `noRateAvailable`. The service now clamps `on: date` to today, so
+  /// future dates resolve against the latest available rate instead.
+  @Test("convert clamps future dates to today when only past rates are available")
+  func convertClampsFutureDatesToToday() async throws {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withFullDate]
+    let calendar = Calendar(identifier: .gregorian)
+    let today = calendar.startOfDay(for: Date())
+    let pastDate = calendar.date(byAdding: .day, value: -15, to: today)!
+    let pastKey = formatter.string(from: pastDate)
+    let service = makeService(rates: [
+      pastKey: ["USD": Decimal(string: "0.6500")!]
+    ])
+
+    let future = calendar.date(byAdding: .day, value: 30, to: today)!
+    let result = try await service.convert(
+      Decimal(string: "1000.00")!,
+      from: .AUD, to: .USD,
+      on: future
+    )
+    #expect(result == Decimal(string: "650.00")!)
+  }
+
+  @Test("convertAmount clamps future dates to today")
+  func convertAmountClampsFutureDatesToToday() async throws {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withFullDate]
+    let calendar = Calendar(identifier: .gregorian)
+    let today = calendar.startOfDay(for: Date())
+    let pastKey = formatter.string(
+      from: calendar.date(byAdding: .day, value: -3, to: today)!
+    )
+    let service = makeService(rates: [
+      pastKey: ["USD": Decimal(string: "0.6500")!]
+    ])
+
+    let future = calendar.date(byAdding: .day, value: 7, to: today)!
+    let amount = InstrumentAmount(quantity: Decimal(1000), instrument: .AUD)
+    let result = try await service.convertAmount(amount, to: .USD, on: future)
+    #expect(result.instrument == .USD)
+    #expect(result.quantity == Decimal(650))
+  }
 }
