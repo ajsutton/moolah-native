@@ -1,5 +1,13 @@
 # Claude Code Instructions — moolah-native
 
+## Git Workflow
+
+**`main` is protected and does not accept direct pushes.** All changes must land via a pull request.
+
+- **Default to a worktree.** Never make changes directly on the `main` checkout. At the start of any task that modifies files, create a git worktree on a feature branch (see the `superpowers:using-git-worktrees` skill). `.worktrees/` is gitignored.
+- **Ship via PR.** Push the feature branch and open a pull request with `gh pr create`. Do not attempt `git push origin main` — it will be rejected by branch protection.
+- **Exceptions:** Read-only inspection and investigation can happen on the `main` checkout without a worktree. If you're unsure whether a task will require edits, create the worktree up front.
+
 ## Build & Test
 
 Always use `just` targets to ensure consistent builds and test runs:
