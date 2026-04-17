@@ -40,10 +40,7 @@ struct SidebarView: View {
       Section {
         ForEach(accountStore.currentAccounts) { account in
           NavigationLink(value: SidebarSelection.account(account.id)) {
-            SidebarRowView(
-              icon: account.sidebarIcon, name: account.name,
-              amount: accountStore.displayBalance(for: account.id),
-              isSelected: selection == .account(account.id))
+            AccountSidebarRow(account: account, isSelected: selection == .account(account.id))
           }
           .contextMenu {
             Button("Edit Account", systemImage: "pencil") {
@@ -113,10 +110,7 @@ struct SidebarView: View {
       Section("Investments") {
         ForEach(accountStore.investmentAccounts) { account in
           NavigationLink(value: SidebarSelection.account(account.id)) {
-            SidebarRowView(
-              icon: account.sidebarIcon, name: account.name,
-              amount: accountStore.displayBalance(for: account.id),
-              isSelected: selection == .account(account.id))
+            AccountSidebarRow(account: account, isSelected: selection == .account(account.id))
           }
           .contextMenu {
             Button("Edit Account", systemImage: "pencil") {

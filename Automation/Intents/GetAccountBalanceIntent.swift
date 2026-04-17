@@ -18,7 +18,7 @@ struct GetAccountBalanceIntent: AppIntent {
       throw AutomationError.operationFailed("App not ready")
     }
     let session = try service.resolveSession(for: profile.id.uuidString)
-    let displayBalance = session.accountStore.displayBalance(for: account.id)
+    let displayBalance = try await session.accountStore.displayBalance(for: account.id)
     return .result(value: displayBalance.formatted)
   }
 }

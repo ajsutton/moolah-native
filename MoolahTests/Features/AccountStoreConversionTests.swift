@@ -246,4 +246,118 @@ struct AccountStoreConversionTests {
     let kinds = Set(positions.map(\.instrument.kind))
     #expect(kinds == [.fiatCurrency, .stock, .cryptoToken])
   }
+
+  // MARK: - displayBalance
+
+  @Test func displayBalanceSumsAllPositionsInAccountInstrument() async throws {
+    let accountId = UUID()
+    let account = Account(
+      id: accountId, name: "Revolut", type: .bank, instrument: .AUD)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: container)
+
+    let audTx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD,
+          quantity: Decimal(string: "1000.00")!, type: .openingBalance)
+      ]
+    )
+    let usdTx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .USD,
+          quantity: Decimal(string: "200.00")!, type: .openingBalance)
+      ]
+    )
+    TestBackend.seed(transactions: [audTx, usdTx], in: container)
+
+    // 1 USD = 1.5 AUD
+    let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let store = AccountStore(
+      repository: backend.accounts, conversionService: conversion,
+      targetInstrument: .AUD)
+    await store.load()
+
+    let balance = try await store.displayBalance(for: accountId)
+    #expect(balance.instrument == .AUD)
+    // 1000 AUD + 200 USD * 1.5 = 1300 AUD
+    #expect(balance.quantity == Decimal(string: "1300.00")!)
+  }
+
+  @Test func displayBalanceForSingleCurrencyAccountReturnsPrimaryPosition() async throws {
+    let accountId = UUID()
+    let account = Account(
+      id: accountId, name: "Bank", type: .bank, instrument: .defaultTestInstrument)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: container)
+
+    let tx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .defaultTestInstrument,
+          quantity: Decimal(string: "750.00")!, type: .openingBalance)
+      ]
+    )
+    TestBackend.seed(transactions: [tx], in: container)
+
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: backend.conversionService,
+      targetInstrument: .defaultTestInstrument)
+    await store.load()
+
+    let balance = try await store.displayBalance(for: accountId)
+    #expect(balance.quantity == Decimal(string: "750.00")!)
+    #expect(balance.instrument == .defaultTestInstrument)
+  }
+
+  @Test func displayBalanceForInvestmentAccountPrefersInvestmentValue() async throws {
+    let accountId = UUID()
+    let account = Account(
+      id: accountId, name: "Portfolio", type: .investment, instrument: .AUD)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: container)
+
+    let usdTx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .USD,
+          quantity: Decimal(string: "100.00")!, type: .openingBalance)
+      ]
+    )
+    TestBackend.seed(transactions: [usdTx], in: container)
+
+    let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let store = AccountStore(
+      repository: backend.accounts, conversionService: conversion,
+      targetInstrument: .AUD)
+    await store.load()
+
+    // No investment value yet → falls back to converted position sum (USD * 1.5 = 150 AUD)
+    let sumBalance = try await store.displayBalance(for: accountId)
+    #expect(sumBalance.quantity == Decimal(string: "150.00")!)
+
+    // Investment value set externally → wins over converted positions
+    let externalValue = InstrumentAmount(
+      quantity: Decimal(string: "999.00")!, instrument: .AUD)
+    store.updateInvestmentValue(accountId: accountId, value: externalValue)
+    let override = try await store.displayBalance(for: accountId)
+    #expect(override == externalValue)
+  }
+
+  @Test func displayBalanceForUnknownAccountReturnsZero() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: backend.conversionService,
+      targetInstrument: .defaultTestInstrument)
+    await store.load()
+    let balance = try await store.displayBalance(for: UUID())
+    #expect(balance == .zero(instrument: .defaultTestInstrument))
+  }
 }

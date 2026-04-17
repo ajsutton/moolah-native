@@ -7,7 +7,7 @@ import SwiftUI
 struct SidebarRowView: View {
   let icon: String
   let name: String
-  let amount: InstrumentAmount
+  let amount: InstrumentAmount?
   var isSelected: Bool = false
 
   @Environment(\.backgroundProminence) private var backgroundProminence
@@ -20,7 +20,7 @@ struct SidebarRowView: View {
     // Only use bright overrides when the row has a prominent (blue) selection
     // background. When the sidebar is unfocused the background is grey and
     // standard green/red are more readable.
-    guard isSelected, backgroundProminence == .increased else { return nil }
+    guard let amount, isSelected, backgroundProminence == .increased else { return nil }
     if amount.isPositive { return Self.selectedPositiveColor }
     if amount.isNegative { return Self.selectedNegativeColor }
     return nil
@@ -37,7 +37,12 @@ struct SidebarRowView: View {
 
       Spacer()
 
-      InstrumentAmountView(amount: amount, colorOverride: amountColorOverride)
+      if let amount {
+        InstrumentAmountView(amount: amount, colorOverride: amountColorOverride)
+      } else {
+        ProgressView()
+          .controlSize(.small)
+      }
     }
   }
 }
@@ -50,6 +55,40 @@ extension Account {
     case .creditCard: return "creditcard"
     case .investment: return "chart.line.uptrend.xyaxis"
     }
+  }
+}
+
+/// Sidebar row for an account. Asynchronously loads the full converted balance
+/// (sum of all positions in the account's instrument) via `AccountStore.displayBalance`
+/// and shows a spinner while it's in flight.
+struct AccountSidebarRow: View {
+  let account: Account
+  var isSelected: Bool = false
+  @Environment(AccountStore.self) private var accountStore
+  @State private var balance: InstrumentAmount?
+
+  var body: some View {
+    SidebarRowView(
+      icon: account.sidebarIcon,
+      name: account.name,
+      amount: balance,
+      isSelected: isSelected
+    )
+    .task(id: balanceInputs) {
+      balance = try? await accountStore.displayBalance(for: account.id)
+    }
+  }
+
+  private var balanceInputs: BalanceInputs {
+    BalanceInputs(
+      positions: account.positions,
+      investmentValue: accountStore.investmentValues[account.id]
+    )
+  }
+
+  private struct BalanceInputs: Equatable {
+    let positions: [Position]
+    let investmentValue: InstrumentAmount?
   }
 }
 

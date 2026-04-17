@@ -9,6 +9,7 @@ struct EditAccountView: View {
   @State private var isSubmitting = false
   @State private var errorMessage: String?
   @State private var showingHideConfirmation = false
+  @State private var displayBalance: InstrumentAmount?
   @FocusState private var focusedField: Field?
 
   let account: Account
@@ -48,11 +49,18 @@ struct EditAccountView: View {
           }
 
           LabeledContent("Current Balance") {
-            InstrumentAmountView(amount: accountStore.displayBalance(for: account.id))
-              .foregroundStyle(.secondary)
+            if let displayBalance {
+              InstrumentAmountView(amount: displayBalance)
+                .foregroundStyle(.secondary)
+            } else {
+              ProgressView()
+                .controlSize(.small)
+            }
           }
           .accessibilityLabel("Current balance, read-only")
         }
+
+        PositionListView(positions: accountStore.positions(for: account.id))
 
         Section {
           Toggle("Hide Account", isOn: $isHidden)
@@ -83,6 +91,9 @@ struct EditAccountView: View {
               : ""
           )
         }
+      }
+      .task(id: balanceInputs) {
+        displayBalance = try? await accountStore.displayBalance(for: account.id)
       }
       .navigationTitle("Edit Account")
       #if os(iOS)
@@ -117,6 +128,18 @@ struct EditAccountView: View {
 
   private var isValid: Bool {
     !name.trimmingCharacters(in: .whitespaces).isEmpty
+  }
+
+  private var balanceInputs: BalanceInputs {
+    BalanceInputs(
+      positions: accountStore.positions(for: account.id),
+      investmentValue: accountStore.investmentValues[account.id]
+    )
+  }
+
+  private struct BalanceInputs: Equatable {
+    let positions: [Position]
+    let investmentValue: InstrumentAmount?
   }
 
   private func save() async {
