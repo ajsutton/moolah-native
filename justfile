@@ -8,11 +8,43 @@ set dotenv-load := true
 default:
     @just --list
 
+# Run swift-format style lint (prints warnings; does not exit non-zero for
+# pre-existing advisory violations). Use `format-check` in CI and pre-commit
+# to enforce actual formatting.
 lint:
     swift-format lint -r . --configuration .swift-format
 
-lint-fix:
+# Apply swift-format formatting in place across the repo. Run this before
+# committing; CI rejects changes that are not in formatted form.
+format:
     swift-format format -i -r . --configuration .swift-format
+
+# Back-compat alias for `format`.
+lint-fix: format
+
+# Verify that every tracked Swift file is already in formatted form.
+# Non-destructive: does not modify any files. Exits non-zero on any diff.
+# Used by CI; run locally before committing if you want to preview failures
+# without applying changes.
+format-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    fail=0
+    while IFS= read -r file; do
+        if ! cmp -s "$file" <(swift-format format --configuration .swift-format "$file"); then
+            echo "::error file=$file::Not formatted; run 'just format' to fix"
+            diff -u --label "$file" --label "$file (formatted)" \
+                "$file" <(swift-format format --configuration .swift-format "$file") || true
+            fail=1
+        fi
+    done < <(git ls-files '*.swift')
+    if [ "$fail" -ne 0 ]; then
+        echo
+        echo "One or more files are not formatted correctly."
+        echo "Run 'just format' and commit the result."
+        exit 1
+    fi
+    echo "All Swift files are correctly formatted."
 
 # FILTERS restrict the run to specific tests: each is a class (e.g.
 # TransactionStoreTests) or class/method (e.g. TransactionStoreTests/testFoo);

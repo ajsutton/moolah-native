@@ -21,8 +21,8 @@ jobs:
       - name: Validate App Store requirements
         run: just validate-appstore
 
-      - name: Format
-        run: just lint
+      - name: Format check
+        run: just format-check
 
       - name: Test
         run: just test

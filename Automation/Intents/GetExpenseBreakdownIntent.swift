@@ -60,11 +60,10 @@ enum ExpensePeriod: String, AppEnum {
   static let typeDisplayRepresentation = TypeDisplayRepresentation(
     name: "Period")
 
-  static let caseDisplayRepresentations:
-    [ExpensePeriod: DisplayRepresentation] = [
-      .thisMonth: "This Month",
-      .lastMonth: "Last Month",
-    ]
+  static let caseDisplayRepresentations: [ExpensePeriod: DisplayRepresentation] = [
+    .thisMonth: "This Month",
+    .lastMonth: "Last Month",
+  ]
 
   var displayLabel: String {
     switch self {

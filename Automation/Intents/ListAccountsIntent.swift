@@ -47,13 +47,12 @@ enum AccountTypeEnum: String, AppEnum {
   static let typeDisplayRepresentation = TypeDisplayRepresentation(
     name: "Account Type")
 
-  static let caseDisplayRepresentations:
-    [AccountTypeEnum: DisplayRepresentation] = [
-      .bank: "Bank Account",
-      .creditCard: "Credit Card",
-      .asset: "Asset",
-      .investment: "Investment",
-    ]
+  static let caseDisplayRepresentations: [AccountTypeEnum: DisplayRepresentation] = [
+    .bank: "Bank Account",
+    .creditCard: "Credit Card",
+    .asset: "Asset",
+    .investment: "Investment",
+  ]
 
   var toDomainType: AccountType {
     switch self {
