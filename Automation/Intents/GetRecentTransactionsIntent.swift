@@ -2,8 +2,8 @@ import AppIntents
 import Foundation
 
 struct GetRecentTransactionsIntent: AppIntent {
-  nonisolated(unsafe) static var title: LocalizedStringResource = "Recent Transactions"
-  nonisolated(unsafe) static var description = IntentDescription(
+  static let title: LocalizedStringResource = "Recent Transactions"
+  static let description = IntentDescription(
     "Shows recent transactions, optionally filtered by account.")
 
   @Parameter(title: "Profile")

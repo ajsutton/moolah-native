@@ -2,8 +2,8 @@ import AppIntents
 import Foundation
 
 struct AddInvestmentValueIntent: AppIntent {
-  nonisolated(unsafe) static var title: LocalizedStringResource = "Set Investment Value"
-  nonisolated(unsafe) static var description = IntentDescription(
+  static let title: LocalizedStringResource = "Set Investment Value"
+  static let description = IntentDescription(
     "Records the current market value for an investment account.")
 
   @Parameter(title: "Profile")

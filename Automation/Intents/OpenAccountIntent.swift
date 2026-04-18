@@ -8,8 +8,8 @@ import Foundation
 #endif
 
 struct OpenAccountIntent: AppIntent {
-  nonisolated(unsafe) static var title: LocalizedStringResource = "Open Account"
-  nonisolated(unsafe) static var description = IntentDescription(
+  static let title: LocalizedStringResource = "Open Account"
+  static let description = IntentDescription(
     "Opens a specific account in the Moolah app.")
 
   @Parameter(title: "Profile")
@@ -18,7 +18,7 @@ struct OpenAccountIntent: AppIntent {
   @Parameter(title: "Account")
   var account: AccountEntity
 
-  nonisolated(unsafe) static var openAppWhenRun = true
+  static let openAppWhenRun = true
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<String> {

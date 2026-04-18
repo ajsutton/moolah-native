@@ -2,9 +2,9 @@ import AppIntents
 import Foundation
 
 struct CategoryEntity: AppEntity {
-  nonisolated(unsafe) static var typeDisplayRepresentation = TypeDisplayRepresentation(
+  static let typeDisplayRepresentation = TypeDisplayRepresentation(
     name: "Category")
-  nonisolated(unsafe) static var defaultQuery = CategoryQuery()
+  static let defaultQuery = CategoryQuery()
 
   var id: UUID
   var name: String

@@ -2,8 +2,8 @@ import AppIntents
 import Foundation
 
 struct ListAccountsIntent: AppIntent {
-  nonisolated(unsafe) static var title: LocalizedStringResource = "List Accounts"
-  nonisolated(unsafe) static var description = IntentDescription(
+  static let title: LocalizedStringResource = "List Accounts"
+  static let description = IntentDescription(
     "Lists accounts and their balances for a profile.")
 
   @Parameter(title: "Profile")
@@ -44,10 +44,10 @@ enum AccountTypeEnum: String, AppEnum {
   case asset
   case investment
 
-  nonisolated(unsafe) static var typeDisplayRepresentation = TypeDisplayRepresentation(
+  static let typeDisplayRepresentation = TypeDisplayRepresentation(
     name: "Account Type")
 
-  nonisolated(unsafe) static var caseDisplayRepresentations:
+  static let caseDisplayRepresentations:
     [AccountTypeEnum: DisplayRepresentation] = [
       .bank: "Bank Account",
       .creditCard: "Credit Card",

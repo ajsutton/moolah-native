@@ -2,9 +2,9 @@ import AppIntents
 import Foundation
 
 struct ProfileEntity: AppEntity {
-  nonisolated(unsafe) static var typeDisplayRepresentation = TypeDisplayRepresentation(
+  static let typeDisplayRepresentation = TypeDisplayRepresentation(
     name: "Profile")
-  nonisolated(unsafe) static var defaultQuery = ProfileQuery()
+  static let defaultQuery = ProfileQuery()
 
   var id: UUID
   var name: String

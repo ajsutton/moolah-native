@@ -2,8 +2,8 @@ import AppIntents
 import Foundation
 
 struct CreateTransactionIntent: AppIntent {
-  nonisolated(unsafe) static var title: LocalizedStringResource = "Add Transaction"
-  nonisolated(unsafe) static var description = IntentDescription(
+  static let title: LocalizedStringResource = "Add Transaction"
+  static let description = IntentDescription(
     "Creates a new transaction in the specified account.")
 
   @Parameter(title: "Profile")

@@ -2,9 +2,9 @@ import AppIntents
 import Foundation
 
 struct EarmarkEntity: AppEntity {
-  nonisolated(unsafe) static var typeDisplayRepresentation = TypeDisplayRepresentation(
+  static let typeDisplayRepresentation = TypeDisplayRepresentation(
     name: "Earmark")
-  nonisolated(unsafe) static var defaultQuery = EarmarkQuery()
+  static let defaultQuery = EarmarkQuery()
 
   var id: UUID
   var name: String

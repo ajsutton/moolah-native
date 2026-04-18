@@ -2,8 +2,8 @@ import AppIntents
 import Foundation
 
 struct GetEarmarkBalanceIntent: AppIntent {
-  nonisolated(unsafe) static var title: LocalizedStringResource = "Get Earmark Balance"
-  nonisolated(unsafe) static var description = IntentDescription(
+  static let title: LocalizedStringResource = "Get Earmark Balance"
+  static let description = IntentDescription(
     "Returns the balance of a specific earmark.")
 
   @Parameter(title: "Profile")
