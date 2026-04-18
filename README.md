@@ -94,8 +94,8 @@ preserves this parameter through the Google OAuth dance.
 for the exact one-file change to `src/handlers/auth/googleLogin.js`. No Google
 Cloud Console configuration changes are needed.
 
-**`moolah://` URL scheme** is already registered in `App/Info.plist`. No additional
-Xcode configuration is required.
+**`moolah://` URL scheme** is already registered in `App/Info-iOS.plist` and
+`App/Info-macOS.plist`. No additional Xcode configuration is required.
 
 ## Project Structure
 
