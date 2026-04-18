@@ -36,6 +36,12 @@ just build-ios
 
 # Regenerate Moolah.xcodeproj from project.yml (run after editing project.yml)
 just generate
+
+# Apply swift-format to the repo (run before every commit)
+just format
+
+# Verify formatting (non-destructive; exits non-zero on any diff; used by CI)
+just format-check
 ```
 
 ### Capturing Test Output
@@ -116,12 +122,18 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
 
 **Before committing any code, you MUST:**
 
-1. **Check for Compiler Warnings**
+1. **Format Swift files**
+   - Run `just format` to apply `swift-format` across the repo (uses `.swift-format` config)
+   - CI runs `just format-check` and **will fail** if any tracked `.swift` file is not in formatted form
+   - `just format-check` is non-destructive — run it locally to preview CI's result without mutating files
+   - Xcode's editor / format-on-save can silently reformat files to a layout that disagrees with `swift-format`. Always run `just format` immediately before `git commit` so CI doesn't kick the PR back.
+
+2. **Check for Compiler Warnings**
    - Use Xcode MCP: `mcp__xcode__XcodeListNavigatorIssues` with `severity: "warning"`
    - Or run `xcodebuild` and check for warnings
    - **ALL warnings in user code must be fixed.** (Preview macro warnings from `#Preview` can be ignored.)
 
-2. **Common Warning Fixes:**
+3. **Common Warning Fixes:**
    - **"Result of call to X is unused"**: Add `_ = ` before the call to explicitly discard the result
      ```swift
      // Before
@@ -133,7 +145,7 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
    - **"Variable 'x' was never mutated"**: Change `var` to `let`
    - **"Initialization of immutable value 'x' was never used"**: Remove unused variables
 
-3. **Build Configuration**
+4. **Build Configuration**
    - The project is configured with `SWIFT_TREAT_WARNINGS_AS_ERRORS: YES`
    - Builds will fail if there are any warnings in user code
    - This ensures warning-free commits at all times
