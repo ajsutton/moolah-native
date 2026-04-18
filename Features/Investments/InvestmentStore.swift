@@ -49,6 +49,12 @@ final class InvestmentStore {
   }
 
   /// Load all values for the account.
+  ///
+  /// Per `guides/CONCURRENCY_GUIDE.md`, pagination loops must check
+  /// `Task.isCancelled` after each network round-trip so that when the
+  /// caller is cancelled (e.g. the `.task` on `InvestmentAccountView`
+  /// tears down) we stop paginating immediately rather than fetching
+  /// every remaining page and then discarding the result.
   func loadValues(accountId: UUID) async {
     do {
       var all: [InvestmentValue] = []
@@ -57,6 +63,7 @@ final class InvestmentStore {
       while true {
         let result = try await repository.fetchValues(
           accountId: accountId, page: page, pageSize: batchSize)
+        guard !Task.isCancelled else { return }
         all.append(contentsOf: result.values)
         if !result.hasMore { break }
         page += 1
@@ -159,6 +166,10 @@ final class InvestmentStore {
           page: page,
           pageSize: 200
         )
+        // Per guides/CONCURRENCY_GUIDE.md: stop paginating as soon as
+        // the enclosing task is cancelled so we don't keep hitting the
+        // network after the view that requested this data has gone.
+        guard !Task.isCancelled else { return }
         allTransactions.append(contentsOf: result.transactions)
         if result.transactions.count < 200 { break }
         page += 1

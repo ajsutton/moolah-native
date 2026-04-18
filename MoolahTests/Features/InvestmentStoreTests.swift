@@ -537,4 +537,73 @@ struct InvestmentStoreTests {
     #expect(store.values.count == 1)
     #expect(store.values[0].value.instrument == .USD)
   }
+
+  // MARK: - Cancellation
+
+  @Test("loadValues bails out of pagination when the task is cancelled")
+  func testLoadValuesHonoursCancellation() async throws {
+    // Seed enough values to span multiple pages so pagination would
+    // otherwise keep looping past the cancellation point.
+    let accountId = UUID()
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      investmentValues: makeValues(accountId: accountId, count: 450), in: container
+    )
+    let store = InvestmentStore(
+      repository: backend.investments, conversionService: FixedConversionService())
+
+    // Run loadValues inside a task we cancel before it runs. The
+    // cancellation flag is inherited, so the guard after the first
+    // fetch should return without populating `values`.
+    let task = Task { @MainActor in
+      await store.loadValues(accountId: accountId)
+    }
+    task.cancel()
+    await task.value
+
+    // The cancellation guard fires after the first page returns, so
+    // `values` must not be populated with the full dataset.
+    #expect(
+      store.values.count < 450,
+      "Expected loadValues to stop paginating after cancellation, but got \(store.values.count) values"
+    )
+    #expect(store.error == nil, "Cancellation should not surface as an error")
+  }
+
+  @Test("loadPositions bails out of pagination when the task is cancelled")
+  func testLoadPositionsHonoursCancellation() async throws {
+    let accountId = UUID()
+    let (backend, container) = try TestBackend.create()
+    // Seed > 200 transactions so loadPositions would normally paginate.
+    let transactions: [Transaction] = (0..<250).map { i in
+      Transaction(
+        date: Calendar.current.date(byAdding: .day, value: -i, to: Date())!,
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: .defaultTestInstrument,
+            quantity: Decimal(1), type: .income)
+        ]
+      )
+    }
+    _ = TestBackend.seed(transactions: transactions, in: container)
+
+    let store = InvestmentStore(
+      repository: backend.investments,
+      transactionRepository: backend.transactions,
+      conversionService: FixedConversionService())
+
+    let task = Task { @MainActor in
+      await store.loadPositions(accountId: accountId)
+    }
+    task.cancel()
+    await task.value
+
+    // When cancelled, positions must not be computed from a partial
+    // fetch and written to the store.
+    #expect(
+      store.positions.isEmpty,
+      "Expected positions to remain empty on cancellation, got \(store.positions.count)"
+    )
+    #expect(store.error == nil, "Cancellation should not surface as an error")
+  }
 }
