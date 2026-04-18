@@ -87,6 +87,7 @@ struct TransactionListView: View {
   @State private var showError = false
   @State private var errorMessage = ""
   @State private var searchText = ""
+  @FocusState private var searchFieldFocused: Bool
   @State private var transactionPendingDelete: Transaction.ID?
 
   var body: some View {
@@ -103,6 +104,8 @@ struct TransactionListView: View {
         )
       )
       .focusedSceneValue(\.newTransactionAction, createNewTransaction)
+      .focusedSceneValue(\.findInListAction) { searchFieldFocused = true }
+      .searchFocused($searchFieldFocused)
       .focusedSceneValue(\.selectedTransaction, selectedTransactionBinding)
       .alert("Error", isPresented: $showError) {
         Button("OK", role: .cancel) {}
@@ -281,7 +284,6 @@ struct TransactionListView: View {
               ? "line.3.horizontal.decrease.circle.fill"
               : "line.3.horizontal.decrease.circle")
         }
-        .keyboardShortcut("f", modifiers: .command)
       }
 
       ToolbarItem(placement: .automatic) {
@@ -293,7 +295,6 @@ struct TransactionListView: View {
         } label: {
           Label("Refresh", systemImage: "arrow.clockwise")
         }
-        .keyboardShortcut("r", modifiers: .command)
       }
 
       ToolbarItem(placement: .primaryAction) {
@@ -302,7 +303,6 @@ struct TransactionListView: View {
         } label: {
           Label("Add Transaction", systemImage: "plus")
         }
-        .keyboardShortcut("n", modifiers: .command)
       }
     }
     .sheet(isPresented: $showFilterSheet) {

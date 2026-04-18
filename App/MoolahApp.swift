@@ -65,6 +65,7 @@ struct MoolahDomainCommands: Commands {
   @FocusedValue(\.selectedTransaction) private var selectedTransaction
   @FocusedValue(\.selectedAccount) private var selectedAccount
   @FocusedValue(\.sidebarSelection) private var sidebarSelection
+  @FocusedValue(\.findInListAction) private var findInListAction
 
   var body: some Commands {
     CommandMenu("Transaction") {
@@ -147,6 +148,26 @@ struct MoolahDomainCommands: Commands {
         }
       }
       .disabled(selectedAccount?.wrappedValue == nil)
+    }
+
+    CommandGroup(after: .textEditing) {
+      Button("Find Transactions\u{2026}") { findInListAction?() }
+        .keyboardShortcut("f", modifiers: .command)
+        .disabled(findInListAction == nil)
+
+      Button("Find Next") {}
+        .keyboardShortcut("g", modifiers: .command)
+        .disabled(true)
+
+      Button("Find Previous") {}
+        .keyboardShortcut("g", modifiers: [.command, .shift])
+        .disabled(true)
+    }
+
+    CommandGroup(after: .pasteboard) {
+      Button("Copy Transaction Link") {}
+        .keyboardShortcut("c", modifiers: [.command, .control])
+        .disabled(true)
     }
   }
 }
