@@ -8,7 +8,7 @@
   /// Data is captured at construction time (on MainActor) and stored as plain values.
   /// The object specifier methods are nonisolated so NSScripting can call them freely.
   @objc(ScriptableProfile)
-  class ScriptableProfile: NSObject, @unchecked Sendable {
+  final class ScriptableProfile: NSObject, Sendable {
     private let _uniqueID: String
     private let _name: String
     private let _currencyCode: String
