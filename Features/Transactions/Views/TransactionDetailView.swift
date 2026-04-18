@@ -136,17 +136,6 @@ struct TransactionDetailView: View {
     _draft = State(initialValue: initialDraft)
   }
 
-  private var isNewTransaction: Bool {
-    if draft.isCustom {
-      let allLegsEmpty = draft.legDrafts.allSatisfy {
-        $0.amountText.isEmpty || $0.amountText == "0"
-      }
-      return allLegsEmpty && (transaction.payee?.isEmpty ?? true)
-    }
-    return (draft.amountText == "0" || draft.amountText.isEmpty)
-      && (transaction.payee?.isEmpty ?? true)
-  }
-
   private var sortedAccounts: [Account] {
     accounts.ordered.sorted { a, b in
       if a.type.isCurrent != b.type.isCurrent {
@@ -239,11 +228,9 @@ struct TransactionDetailView: View {
       #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
       #endif
-      .onAppear {
-        if isNewTransaction {
-          focusedField = isSimpleEarmarkOnly ? .amount : .payee
-        }
-      }
+      #if os(macOS)
+        .defaultFocus($focusedField, isSimpleEarmarkOnly ? .amount : .payee)
+      #endif
       .onChange(of: draft) { _, _ in debouncedSave() }
       .onChange(of: legCategoryFieldFocused) { _, focused in
         for i in draft.legDrafts.indices {
