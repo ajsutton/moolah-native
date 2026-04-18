@@ -57,12 +57,14 @@ struct ShowHiddenCommands: Commands {
   }
 }
 
-/// Minimal test wrapper: two CommandMenus with no @FocusedValue. Tests whether
-/// wrapping multiple top-level CommandMenus in a single Commands struct compiles.
+/// Minimal test wrapper: two CommandMenus with a @FocusedValue.
 struct TestDoubleMenuCommands: Commands {
+  @FocusedValue(\.selectedTransaction) private var selectedTransaction
+
   var body: some Commands {
     CommandMenu("TestA") {
       Button("X") {}
+        .disabled(selectedTransaction?.wrappedValue == nil)
     }
     CommandMenu("TestB") {
       Button("Y") {}
