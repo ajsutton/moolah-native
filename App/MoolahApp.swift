@@ -213,6 +213,9 @@ struct MoolahApp: App {
         NewTransactionCommands()
         NewEarmarkCommands()
         RefreshCommands()
+        SidebarCommands()
+        ToolbarCommands()
+        InspectorCommands()
         ShowHiddenCommands()
       }
 
