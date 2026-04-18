@@ -138,6 +138,13 @@ enum CapitalGainsCalculator {
   }
 
   /// Classify legs into buy/sell events using fiat legs for cost/proceeds.
+  ///
+  /// Signs are preserved throughout (CLAUDE.md monetary sign convention):
+  /// we never `abs()` raw leg quantities. Instead we build positive
+  /// outflow/inflow totals by flipping the sign of negative quantities, and
+  /// we derive per-unit costs from the natural sign relationship (both
+  /// numerator and denominator carry the same sign, so the quotient is
+  /// positive either way).
   private static func classifyLegs(
     legs: [TransactionLeg],
     date: Date,
@@ -146,8 +153,10 @@ enum CapitalGainsCalculator {
     let fiatLegs = legs.filter { $0.instrument.kind == .fiatCurrency }
     let nonFiatLegs = legs.filter { $0.instrument.kind != .fiatCurrency }
 
+    // Outflow is the sum of negative fiat quantities, reported as a
+    // non-negative total. Inflow is the sum of positive fiat quantities.
     let fiatOutflow = fiatLegs.filter { $0.quantity < 0 }
-      .reduce(Decimal(0)) { $0 + abs($1.quantity) }
+      .reduce(Decimal(0)) { $0 - $1.quantity }
     let fiatInflow = fiatLegs.filter { $0.quantity > 0 }
       .reduce(Decimal(0)) { $0 + $1.quantity }
 
@@ -161,10 +170,12 @@ enum CapitalGainsCalculator {
           BuyEvent(
             instrument: leg.instrument, quantity: leg.quantity, costPerUnit: costPerUnit))
       } else if leg.quantity < 0 && fiatInflow > 0 {
-        let proceedsPerUnit = fiatInflow / abs(leg.quantity)
+        // leg.quantity is negative; -leg.quantity is the positive sell size.
+        let sellQuantity = -leg.quantity
+        let proceedsPerUnit = fiatInflow / sellQuantity
         sells.append(
           SellEvent(
-            instrument: leg.instrument, quantity: abs(leg.quantity),
+            instrument: leg.instrument, quantity: sellQuantity,
             proceedsPerUnit: proceedsPerUnit))
       }
     }
@@ -179,6 +190,15 @@ enum CapitalGainsCalculator {
   /// different currencies (e.g. USD payment + AUD fee), and summing their
   /// raw quantities would silently blend currencies into a meaningless
   /// cost basis. See `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 1.
+  ///
+  /// Signs are preserved end to end (CLAUDE.md monetary sign convention):
+  /// every leg's natural signed quantity flows through the conversion
+  /// service, and buy/sell classification is driven by that sign alone.
+  /// We never pre-apply `abs()` to a raw leg quantity — positive
+  /// outflow/inflow totals are built by flipping the sign of negative
+  /// *converted* values, and per-unit costs/proceeds are derived from
+  /// same-sign ratios (both numerator and denominator share the leg's
+  /// sign, so the quotient is naturally positive).
   private static func classifyLegsWithConversion(
     legs: [TransactionLeg],
     date: Date,
@@ -189,17 +209,20 @@ enum CapitalGainsCalculator {
     let nonFiatLegs = legs.filter { $0.instrument.kind != .fiatCurrency }
 
     // Sum fiat outflow / inflow in the profile currency, converting each
-    // leg individually so mixed-currency transactions aggregate correctly.
+    // leg's signed quantity so mixed-currency transactions aggregate
+    // correctly without discarding sign information.
     var fiatOutflow: Decimal = 0
     var fiatInflow: Decimal = 0
     for leg in fiatLegs where leg.quantity != 0 {
-      let convertedAbs = try await conversionService.convert(
-        abs(leg.quantity), from: leg.instrument, to: profileCurrency, on: date
+      let converted = try await conversionService.convert(
+        leg.quantity, from: leg.instrument, to: profileCurrency, on: date
       )
       if leg.quantity < 0 {
-        fiatOutflow += convertedAbs
+        // Converted value shares the leg's negative sign; flip it to
+        // accumulate a non-negative outflow total.
+        fiatOutflow -= converted
       } else {
-        fiatInflow += convertedAbs
+        fiatInflow += converted
       }
     }
 
@@ -213,10 +236,12 @@ enum CapitalGainsCalculator {
           BuyEvent(
             instrument: leg.instrument, quantity: leg.quantity, costPerUnit: costPerUnit))
       } else if leg.quantity < 0 && fiatInflow > 0 {
-        let proceedsPerUnit = fiatInflow / abs(leg.quantity)
+        // leg.quantity is negative; -leg.quantity is the positive sell size.
+        let sellQuantity = -leg.quantity
+        let proceedsPerUnit = fiatInflow / sellQuantity
         sells.append(
           SellEvent(
-            instrument: leg.instrument, quantity: abs(leg.quantity),
+            instrument: leg.instrument, quantity: sellQuantity,
             proceedsPerUnit: proceedsPerUnit))
       }
     }
@@ -228,19 +253,23 @@ enum CapitalGainsCalculator {
     guard nonFiatLegs.count >= 2 else { return ([], []) }
 
     for leg in nonFiatLegs {
+      // Convert the signed quantity. The converted value carries the
+      // same sign as the leg, so dividing one by the other yields a
+      // positive per-unit value without needing `abs()`.
       let profileValue = try await conversionService.convert(
-        abs(leg.quantity), from: leg.instrument, to: profileCurrency, on: date
+        leg.quantity, from: leg.instrument, to: profileCurrency, on: date
       )
-      let valuePerUnit = profileValue / abs(leg.quantity)
+      let valuePerUnit = profileValue / leg.quantity
 
       if leg.quantity > 0 {
         buys.append(
           BuyEvent(
             instrument: leg.instrument, quantity: leg.quantity, costPerUnit: valuePerUnit))
       } else {
+        let sellQuantity = -leg.quantity
         sells.append(
           SellEvent(
-            instrument: leg.instrument, quantity: abs(leg.quantity), proceedsPerUnit: valuePerUnit))
+            instrument: leg.instrument, quantity: sellQuantity, proceedsPerUnit: valuePerUnit))
       }
     }
 
