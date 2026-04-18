@@ -95,6 +95,32 @@ struct EarmarksView: View {
         )
       }
       .focusedSceneValue(\.selectedEarmark, $selectedEarmark)
+      .onReceive(
+        NotificationCenter.default.publisher(for: .requestEarmarkEdit),
+        perform: handleEarmarkEditRequest
+      )
+      .onReceive(
+        NotificationCenter.default.publisher(for: .requestEarmarkToggleHidden),
+        perform: handleEarmarkToggleHidden
+      )
+  }
+
+  private func handleEarmarkEditRequest(_ note: Notification) {
+    guard let id = note.object as? UUID,
+      let earmark = earmarkStore.earmarks.ordered.first(where: { $0.id == id })
+    else { return }
+    earmarkToEdit = earmark
+  }
+
+  private func handleEarmarkToggleHidden(_ note: Notification) {
+    guard let id = note.object as? UUID,
+      let earmark = earmarkStore.earmarks.ordered.first(where: { $0.id == id })
+    else { return }
+    Task {
+      var updated = earmark
+      updated.isHidden.toggle()
+      _ = await earmarkStore.update(updated)
+    }
   }
 
   private var filteredEarmarks: [Earmark] {
@@ -147,26 +173,41 @@ struct EarmarksView: View {
         )
         .tag(earmark)
         .contextMenu {
-          Button("Edit", systemImage: "pencil") {
+          Button("Edit Earmark\u{2026}", systemImage: "pencil") {
             earmarkToEdit = earmark
           }
           Divider()
-          Button("Hide", systemImage: "eye.slash", role: .destructive) {
-            Task { await earmarkStore.hide(earmark) }
+          Button(
+            earmark.isHidden ? "Show Earmark" : "Hide Earmark",
+            systemImage: earmark.isHidden ? "eye" : "eye.slash"
+          ) {
+            Task {
+              var updated = earmark
+              updated.isHidden.toggle()
+              _ = await earmarkStore.update(updated)
+            }
           }
         }
         .swipeActions(edge: .trailing) {
-          Button(role: .destructive) {
-            Task { await earmarkStore.hide(earmark) }
+          Button {
+            Task {
+              var updated = earmark
+              updated.isHidden.toggle()
+              _ = await earmarkStore.update(updated)
+            }
           } label: {
-            Label("Hide", systemImage: "eye.slash")
+            Label(
+              earmark.isHidden ? "Show Earmark" : "Hide Earmark",
+              systemImage: earmark.isHidden ? "eye" : "eye.slash"
+            )
           }
+          .tint(earmark.isHidden ? .green : .orange)
         }
         .swipeActions(edge: .leading) {
           Button {
             earmarkToEdit = earmark
           } label: {
-            Label("Edit", systemImage: "pencil")
+            Label("Edit Earmark", systemImage: "pencil")
           }
           .tint(.blue)
         }

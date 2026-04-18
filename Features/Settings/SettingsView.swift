@@ -283,7 +283,6 @@ struct SettingsView: View {
           }
           .buttonStyle(.borderless)
           .accessibilityLabel("Add profile")
-          .keyboardShortcut("n", modifiers: [.command, .shift])
 
           Button {
             if let id = selectedProfileID,
@@ -300,7 +299,6 @@ struct SettingsView: View {
           .buttonStyle(.borderless)
           .disabled(selectedProfileID == nil)
           .accessibilityLabel("Remove selected profile")
-          .keyboardShortcut(.delete, modifiers: [])
 
           Button {
             showImportPicker = true

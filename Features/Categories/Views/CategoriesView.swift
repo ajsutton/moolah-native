@@ -131,7 +131,7 @@ struct CategoriesView: View {
         .accessibilityLabel(category.name)
         .tag(category)
         .contextMenu {
-          Button("Edit", systemImage: "pencil") {
+          Button("Edit Category\u{2026}", systemImage: "pencil") {
             selectedCategory = category
           }
         }
@@ -139,7 +139,7 @@ struct CategoriesView: View {
           Button {
             selectedCategory = category
           } label: {
-            Label("Edit", systemImage: "pencil")
+            Label("Edit Category", systemImage: "pencil")
           }
           .tint(.blue)
         }
@@ -165,7 +165,6 @@ struct CategoriesView: View {
         } label: {
           Label("Add Category", systemImage: "plus")
         }
-        .keyboardShortcut("n", modifiers: [.command, .shift])
       }
     }
     .task {

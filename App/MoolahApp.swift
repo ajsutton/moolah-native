@@ -14,13 +14,13 @@ struct NewItemCommands: Commands {
 
   var body: some Commands {
     CommandGroup(replacing: .newItem) {
-      Button("New Transaction") {
+      Button("New Transaction\u{2026}") {
         newTransactionAction?()
       }
       .keyboardShortcut("n", modifiers: .command)
       .disabled(newTransactionAction == nil)
 
-      Button("New Earmark") {
+      Button("New Earmark\u{2026}") {
         newEarmarkAction?()
       }
       .keyboardShortcut("n", modifiers: [.command, .shift])
@@ -83,6 +83,7 @@ struct ShowHiddenCommands: Commands {
 struct MoolahDomainCommands: Commands {
   @FocusedValue(\.selectedTransaction) private var selectedTransaction
   @FocusedValue(\.selectedAccount) private var selectedAccount
+  @FocusedValue(\.selectedEarmark) private var selectedEarmark
   @FocusedValue(\.sidebarSelection) private var sidebarSelection
   @FocusedValue(\.findInListAction) private var findInListAction
   @Environment(\.openWindow) private var openWindow
@@ -169,6 +170,26 @@ struct MoolahDomainCommands: Commands {
         }
       }
       .disabled(selectedAccount?.wrappedValue == nil)
+    }
+
+    CommandMenu("Earmark") {
+      Button("Edit Earmark\u{2026}") {
+        NotificationCenter.default.post(
+          name: .requestEarmarkEdit,
+          object: selectedEarmark?.wrappedValue?.id
+        )
+      }
+      .disabled(selectedEarmark?.wrappedValue == nil)
+
+      Button(
+        selectedEarmark?.wrappedValue?.isHidden == true ? "Show Earmark" : "Hide Earmark"
+      ) {
+        NotificationCenter.default.post(
+          name: .requestEarmarkToggleHidden,
+          object: selectedEarmark?.wrappedValue?.id
+        )
+      }
+      .disabled(selectedEarmark?.wrappedValue == nil)
     }
 
     CommandGroup(after: .textEditing) {
