@@ -57,17 +57,76 @@ struct ShowHiddenCommands: Commands {
   }
 }
 
-/// Minimal test wrapper: two CommandMenus with a @FocusedValue.
-struct TestDoubleMenuCommands: Commands {
+/// Moolah-specific top-level domain menus grouped into one Commands struct so
+/// the outer `.commands` block stays within `CommandsBuilder`'s 10-argument limit.
+struct MoolahDomainCommands: Commands {
   @FocusedValue(\.selectedTransaction) private var selectedTransaction
+  @FocusedValue(\.sidebarSelection) private var sidebarSelection
 
   var body: some Commands {
-    CommandMenu("TestA") {
-      Button("X") {}
-        .disabled(selectedTransaction?.wrappedValue == nil)
+    CommandMenu("Transaction") {
+      Button("Edit Transaction\u{2026}") {
+        NotificationCenter.default.post(
+          name: .requestTransactionEdit,
+          object: selectedTransaction?.wrappedValue?.id
+        )
+      }
+      .disabled(selectedTransaction?.wrappedValue == nil)
+
+      Button("Duplicate Transaction") {}
+        .disabled(true)
+
+      Divider()
+
+      Button("Delete Transaction\u{2026}", role: .destructive) {
+        NotificationCenter.default.post(
+          name: .requestTransactionDelete,
+          object: selectedTransaction?.wrappedValue?.id
+        )
+      }
+      .disabled(selectedTransaction?.wrappedValue == nil)
     }
-    CommandMenu("TestB") {
-      Button("Y") {}
+
+    CommandMenu("Go") {
+      Button("Transactions") {
+        sidebarSelection?.wrappedValue = .allTransactions
+      }
+      .keyboardShortcut("1", modifiers: .command)
+      .disabled(sidebarSelection == nil)
+
+      Button("Scheduled") {
+        sidebarSelection?.wrappedValue = .upcomingTransactions
+      }
+      .keyboardShortcut("2", modifiers: .command)
+      .disabled(sidebarSelection == nil)
+
+      Button("Categories") {
+        sidebarSelection?.wrappedValue = .categories
+      }
+      .keyboardShortcut("3", modifiers: .command)
+      .disabled(sidebarSelection == nil)
+
+      Button("Reports") {
+        sidebarSelection?.wrappedValue = .reports
+      }
+      .keyboardShortcut("4", modifiers: .command)
+      .disabled(sidebarSelection == nil)
+
+      Button("Analysis") {
+        sidebarSelection?.wrappedValue = .analysis
+      }
+      .keyboardShortcut("5", modifiers: .command)
+      .disabled(sidebarSelection == nil)
+
+      Divider()
+
+      Button("Go Back") {}
+        .keyboardShortcut("[", modifiers: .command)
+        .disabled(true)
+
+      Button("Go Forward") {}
+        .keyboardShortcut("]", modifiers: .command)
+        .disabled(true)
     }
   }
 }
@@ -226,8 +285,7 @@ struct MoolahApp: App {
         ToolbarCommands()
         InspectorCommands()
         ShowHiddenCommands()
-        TransactionCommands()
-        TestDoubleMenuCommands()
+        MoolahDomainCommands()
       }
 
       Window("About Moolah", id: "about") {
