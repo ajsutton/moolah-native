@@ -218,6 +218,7 @@ struct MoolahApp: App {
         InspectorCommands()
         ShowHiddenCommands()
         TransactionCommands()
+        GoCommands()
       }
 
       Window("About Moolah", id: "about") {
