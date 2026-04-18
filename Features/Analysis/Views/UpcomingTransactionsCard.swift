@@ -143,13 +143,7 @@ private struct SimpleTransactionRow: View {
       Spacer()
 
       if let displayAmount {
-        Text(
-          displayAmount.quantity,
-          format: .currency(code: displayAmount.instrument.id)
-        )
-        .font(.body)
-        .monospacedDigit()
-        .foregroundStyle(displayAmount.quantity >= 0 ? .green : .red)
+        InstrumentAmountView(amount: displayAmount, font: .body)
       } else {
         Text("—")
           .font(.body)
