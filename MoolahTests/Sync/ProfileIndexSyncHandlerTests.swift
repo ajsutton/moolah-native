@@ -316,4 +316,63 @@ struct ProfileIndexSyncHandlerTests {
     )
     #expect(records.first?.encodedSystemFields == nil)
   }
+
+  // MARK: - handleSentRecordZoneChanges
+
+  @Test func handleSentRecordZoneChangesUpdatesSystemFieldsFromSavedRecords() throws {
+    let (handler, container) = try makeHandler()
+
+    let profileId = UUID()
+    let context = ModelContext(container)
+    context.insert(ProfileRecord(id: profileId, label: "Test", currencyCode: "AUD"))
+    try context.save()
+
+    // Build a CKRecord with encoded system fields (produced by applyRemoteChanges on a
+    // real record so the system fields blob is valid).
+    let ckRecord = CKRecord(
+      recordType: ProfileRecord.recordType,
+      recordID: CKRecord.ID(recordName: profileId.uuidString, zoneID: handler.zoneID)
+    )
+    ckRecord["label"] = "Test" as CKRecordValue
+    ckRecord["currencyCode"] = "AUD" as CKRecordValue
+    ckRecord["financialYearStartMonth"] = 7 as CKRecordValue
+    ckRecord["createdAt"] = Date() as CKRecordValue
+    let expectedSystemFields = ckRecord.encodedSystemFields
+
+    let failures = handler.handleSentRecordZoneChanges(
+      savedRecords: [ckRecord],
+      failedSaves: [],
+      failedDeletes: []
+    )
+
+    #expect(failures.conflicts.isEmpty)
+    #expect(failures.unknownItems.isEmpty)
+    #expect(failures.requeue.isEmpty)
+    #expect(failures.requeueDeletes.isEmpty)
+
+    // Read the updated system fields back through a FRESH context. If the handler had
+    // mutated the shared mainContext without saving (or reused a stale context), a new
+    // context would not see the change. Using a fresh context here verifies the write
+    // was actually persisted to the store.
+    let freshContext = ModelContext(container)
+    let records = try freshContext.fetch(
+      FetchDescriptor<ProfileRecord>(predicate: #Predicate { $0.id == profileId })
+    )
+    #expect(records.first?.encodedSystemFields == expectedSystemFields)
+  }
+
+  @Test func handleSentRecordZoneChangesWithNoRecordsReturnsEmptyFailures() throws {
+    let (handler, _) = try makeHandler()
+
+    let failures = handler.handleSentRecordZoneChanges(
+      savedRecords: [],
+      failedSaves: [],
+      failedDeletes: []
+    )
+
+    #expect(failures.conflicts.isEmpty)
+    #expect(failures.unknownItems.isEmpty)
+    #expect(failures.requeue.isEmpty)
+    #expect(failures.requeueDeletes.isEmpty)
+  }
 }
