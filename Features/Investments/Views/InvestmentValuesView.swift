@@ -12,7 +12,7 @@ struct InvestmentValuesView: View {
         ContentUnavailableView(
           "No Values Recorded",
           systemImage: "chart.line.uptrend.xyaxis",
-          description: Text("Tap + to record your first investment value")
+          description: Text("Record a value to start tracking this investment over time.")
         )
       } else {
         if store.values.count > 1 {
