@@ -337,11 +337,51 @@ struct TransactionListView: View {
     }
     .searchable(text: $searchText, prompt: "Search payee")
     .overlay {
-      if !transactionStore.isLoading && transactionStore.transactions.isEmpty {
+      emptyStateOverlay
+    }
+  }
+
+  /// Empty-state overlay, differentiated by context:
+  /// - Active search with no matches → system search empty state.
+  /// - Loaded transactions exist but none match the current (filter + search) → hint to
+  ///   clear filters/search.
+  /// - No transactions loaded at all with an active filter → filter excludes everything.
+  /// - Otherwise (new / empty account) → encourage adding the first transaction.
+  @ViewBuilder
+  private var emptyStateOverlay: some View {
+    if transactionStore.isLoading {
+      EmptyView()
+    } else if filteredTransactions.isEmpty {
+      let hasSearch = !searchText.isEmpty
+      let hasFilter = activeFilter != baseFilter
+      let hasAnyLoaded = !transactionStore.transactions.isEmpty
+
+      if hasSearch && hasAnyLoaded {
+        // Some transactions are loaded; the search is narrowing them to zero.
+        ContentUnavailableView.search(text: searchText)
+      } else if hasFilter {
+        ContentUnavailableView {
+          Label("No Matches", systemImage: "line.3.horizontal.decrease.circle")
+        } description: {
+          Text("No transactions match the current filter.")
+        } actions: {
+          Button("Clear Filter") {
+            activeFilter = baseFilter
+          }
+        }
+      } else if hasSearch {
+        // No transactions are loaded at all, but a search term is present.
+        ContentUnavailableView.search(text: searchText)
+      } else {
         ContentUnavailableView(
           "No Transactions",
           systemImage: "tray",
-          description: Text("No transactions found.")
+          description: Text(
+            PlatformActionVerb.emptyStatePrompt(
+              buttonLabel: "+",
+              suffix: "to add your first transaction."
+            )
+          )
         )
       }
     }
