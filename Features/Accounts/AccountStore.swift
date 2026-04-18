@@ -394,11 +394,12 @@ final class AccountStore {
     }
 
     if let firstError {
-      // Roll back optimistic state and surface the error to the UI, then
-      // reload to reconcile with whatever did persist on the server.
+      // Roll back optimistic state and reload to reconcile with whatever did
+      // persist on the server. Set the error AFTER reload, since load()
+      // clears `error` at its start and would otherwise swallow the failure.
       accounts = previousAccounts
-      self.error = firstError
       await load()
+      self.error = firstError
       return
     }
 
