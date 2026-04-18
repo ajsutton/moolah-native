@@ -22,6 +22,7 @@ final class ProfileSession: Identifiable {
   let exchangeRateService: ExchangeRateService
   let stockPriceService: StockPriceService
   let cryptoPriceService: CryptoPriceService
+  let cryptoTokenStore: CryptoTokenStore
 
   /// Observer token for sync coordinator notifications (nil for remote profiles).
   private var syncObserverToken: SyncCoordinator.ObserverToken?
@@ -42,41 +43,9 @@ final class ProfileSession: Identifiable {
     let exchangeRateService = ExchangeRateService(client: FrankfurterClient())
     self.exchangeRateService = exchangeRateService
 
-    let backend: BackendProvider
-    switch profile.backendType {
-    case .remote, .moolah:
-      // Each profile gets its own cookie storage and URLSession.
-      // Ephemeral config provides an isolated cookie storage that URLSession
-      // actually integrates with for automatic Set-Cookie handling.
-      let config = URLSessionConfiguration.ephemeral
-      let cookieStorage = config.httpCookieStorage!
-      let session = URLSession(configuration: config)
+    let stockPriceService = StockPriceService(client: YahooFinanceClient())
+    self.stockPriceService = stockPriceService
 
-      // Each profile gets its own keychain entry keyed by profile ID
-      let cookieKeychain = CookieKeychain(account: profile.id.uuidString)
-
-      backend = RemoteBackend(
-        baseURL: profile.resolvedServerURL,
-        instrument: profile.instrument,
-        session: session,
-        cookieKeychain: cookieKeychain,
-        cookieStorage: cookieStorage
-      )
-
-    case .cloudKit:
-      guard let containerManager else {
-        fatalError("ProfileContainerManager is required for CloudKit profiles")
-      }
-      let profileContainer = try! containerManager.container(for: profile.id)
-      backend = CloudKitBackend(
-        modelContainer: profileContainer,
-        instrument: profile.instrument,
-        profileLabel: profile.label,
-        conversionService: FiatConversionService(exchangeRates: exchangeRateService)
-      )
-    }
-    self.backend = backend
-    self.stockPriceService = StockPriceService(client: YahooFinanceClient())
     let cryptoCompareClient = CryptoCompareClient()
     let binanceClient = BinanceClient { date in
       let usdtMapping = CryptoProviderMapping(
@@ -102,11 +71,63 @@ final class ProfileSession: Identifiable {
     priceClients.append(cryptoCompareClient)
     priceClients.append(binanceClient)
 
-    self.cryptoPriceService = CryptoPriceService(
+    let cryptoPriceService = CryptoPriceService(
       clients: priceClients,
       tokenRepository: ICloudTokenRepository(),
       resolutionClient: CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey)
     )
+    self.cryptoPriceService = cryptoPriceService
+    self.cryptoTokenStore = CryptoTokenStore(cryptoPriceService: cryptoPriceService)
+
+    let backend: BackendProvider
+    switch profile.backendType {
+    case .remote, .moolah:
+      // Each profile gets its own cookie storage and URLSession.
+      // Ephemeral config provides an isolated cookie storage that URLSession
+      // actually integrates with for automatic Set-Cookie handling.
+      let config = URLSessionConfiguration.ephemeral
+      let cookieStorage = config.httpCookieStorage!
+      let session = URLSession(configuration: config)
+
+      // Each profile gets its own keychain entry keyed by profile ID
+      let cookieKeychain = CookieKeychain(account: profile.id.uuidString)
+
+      // RemoteBackend uses its own FiatConversionService internally;
+      // moolah-server is fiat-only so stock/crypto conversion via remote is
+      // out of scope. See issue #102 for the CloudKit fix.
+      backend = RemoteBackend(
+        baseURL: profile.resolvedServerURL,
+        instrument: profile.instrument,
+        session: session,
+        cookieKeychain: cookieKeychain,
+        cookieStorage: cookieStorage
+      )
+
+    case .cloudKit:
+      guard let containerManager else {
+        fatalError("ProfileContainerManager is required for CloudKit profiles")
+      }
+      let profileContainer = try! containerManager.container(for: profile.id)
+      // CloudKit profiles need full stock+crypto conversion support. The
+      // closure reads registered tokens from CryptoPriceService on each
+      // conversion so registrations added at runtime become usable without
+      // rebuilding the service. See issue #102.
+      let conversionService = FullConversionService(
+        exchangeRates: exchangeRateService,
+        stockPrices: stockPriceService,
+        cryptoPrices: cryptoPriceService,
+        providerMappings: {
+          await cryptoPriceService.registeredItems().map(\.mapping)
+        }
+      )
+      backend = CloudKitBackend(
+        modelContainer: profileContainer,
+        instrument: profile.instrument,
+        profileLabel: profile.label,
+        conversionService: conversionService
+      )
+    }
+    self.backend = backend
     self.authStore = AuthStore(backend: backend)
     self.accountStore = AccountStore(
       repository: backend.accounts, conversionService: backend.conversionService,

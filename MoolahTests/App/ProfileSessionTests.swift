@@ -49,4 +49,33 @@ struct ProfileSessionTests {
 
     #expect(session.investmentStore.onInvestmentValueChanged != nil)
   }
+
+  /// Regression for #102: a CloudKit profile must use `FullConversionService`,
+  /// not `FiatConversionService`, so stock and crypto positions can be
+  /// converted. `FiatConversionService` throws `unsupportedInstrumentKind`
+  /// for any non-fiat input which (via Rule 11) blanks aggregates.
+  @Test("CloudKit profile uses FullConversionService")
+  func cloudKitProfileUsesFullConversionService() throws {
+    let containerManager = try ProfileContainerManager.forTesting()
+    let profile = Profile(
+      label: "iCloud", backendType: .cloudKit,
+      currencyCode: "AUD", financialYearStartMonth: 7
+    )
+    let session = ProfileSession(profile: profile, containerManager: containerManager)
+
+    #expect(session.backend.conversionService is FullConversionService)
+  }
+
+  @Test("CloudKit profile exposes cryptoTokenStore on session")
+  func cloudKitProfileExposesCryptoTokenStore() throws {
+    let containerManager = try ProfileContainerManager.forTesting()
+    let profile = Profile(
+      label: "iCloud", backendType: .cloudKit,
+      currencyCode: "AUD", financialYearStartMonth: 7
+    )
+    let session = ProfileSession(profile: profile, containerManager: containerManager)
+
+    // Store exists and starts empty (registrations load on demand).
+    #expect(session.cryptoTokenStore.registrations.isEmpty)
+  }
 }

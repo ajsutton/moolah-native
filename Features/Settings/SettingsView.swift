@@ -43,15 +43,16 @@ struct SettingsView: View {
   // MARK: - macOS: HSplitView layout
 
   #if os(macOS)
-    private var cryptoPriceServiceForSettings: CryptoPriceService {
+    private var cryptoTokenStoreForSettings: CryptoTokenStore {
       if let session = sessionManager.sessions.values.first {
-        return session.cryptoPriceService
+        return session.cryptoTokenStore
       }
-      return CryptoPriceService(
+      let fallbackService = CryptoPriceService(
         clients: [CryptoCompareClient(), BinanceClient()],
         tokenRepository: ICloudTokenRepository(),
         resolutionClient: CompositeTokenResolutionClient()
       )
+      return CryptoTokenStore(cryptoPriceService: fallbackService)
     }
 
     private var macOSLayout: some View {
@@ -60,7 +61,7 @@ struct SettingsView: View {
           profilesContent
         }
         Tab("Crypto", systemImage: "bitcoinsign.circle") {
-          CryptoSettingsView(cryptoPriceService: cryptoPriceServiceForSettings)
+          CryptoSettingsView(store: cryptoTokenStoreForSettings)
         }
       }
       .frame(minWidth: 600, minHeight: 400)
@@ -133,15 +134,16 @@ struct SettingsView: View {
   // MARK: - iOS: NavigationStack layout
 
   #if os(iOS)
-    private var cryptoPriceServiceForSettings: CryptoPriceService {
+    private var cryptoTokenStoreForSettings: CryptoTokenStore {
       if let session = activeSession {
-        return session.cryptoPriceService
+        return session.cryptoTokenStore
       }
-      return CryptoPriceService(
+      let fallbackService = CryptoPriceService(
         clients: [CryptoCompareClient(), BinanceClient()],
         tokenRepository: ICloudTokenRepository(),
         resolutionClient: CompositeTokenResolutionClient()
       )
+      return CryptoTokenStore(cryptoPriceService: fallbackService)
     }
 
     private var iOSLayout: some View {
@@ -191,7 +193,7 @@ struct SettingsView: View {
 
         Section {
           NavigationLink {
-            CryptoSettingsView(cryptoPriceService: cryptoPriceServiceForSettings)
+            CryptoSettingsView(store: cryptoTokenStoreForSettings)
           } label: {
             Label("Crypto Tokens", systemImage: "bitcoinsign.circle")
           }

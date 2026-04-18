@@ -42,7 +42,7 @@ struct InstrumentConversionServiceCryptoTests {
       exchangeRates: exchangeService,
       stockPrices: stockService,
       cryptoPrices: cryptoService,
-      providerMappings: providerMappings
+      providerMappings: { providerMappings }
     )
   }
 
@@ -198,4 +198,57 @@ struct InstrumentConversionServiceCryptoTests {
     }
   }
 
+  /// The conversion service must consult its provider-mappings source on every
+  /// conversion so tokens registered after construction become resolvable
+  /// without rebuilding the service. `ProfileSession` wires the closure to the
+  /// `CryptoPriceService`, which persists registrations to the token
+  /// repository; newly-added tokens must flow through without app restart.
+  @Test func providerMappingsClosureIsQueriedPerConversion() async throws {
+    let cryptoClient = FixedCryptoPriceClient(
+      prices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]]
+    )
+    let cryptoService = CryptoPriceService(
+      clients: [cryptoClient],
+      cacheDirectory: FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString)
+    )
+    let exchangeService = ExchangeRateService(
+      client: FixedRateClient(rates: [:]),
+      cacheDirectory: FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString)
+    )
+    let stockService = StockPriceService(client: FixedStockPriceClient())
+    let source = MutableMappingsSource()
+
+    let service = FullConversionService(
+      exchangeRates: exchangeService,
+      stockPrices: stockService,
+      cryptoPrices: cryptoService,
+      providerMappings: { await source.current() }
+    )
+
+    await #expect(throws: (any Error).self) {
+      _ = try await service.convert(Decimal(1), from: eth, to: usd, on: date("2026-04-10"))
+    }
+
+    await source.set([
+      CryptoProviderMapping(
+        instrumentId: "1:native", coingeckoId: "ethereum",
+        cryptocompareSymbol: "ETH", binanceSymbol: "ETHUSDT"
+      )
+    ])
+
+    let result = try await service.convert(
+      Decimal(1), from: eth, to: usd, on: date("2026-04-10")
+    )
+    #expect(result == Decimal(string: "1623.45")!)
+  }
+}
+
+private actor MutableMappingsSource {
+  private var mappings: [CryptoProviderMapping] = []
+
+  func current() -> [CryptoProviderMapping] { mappings }
+
+  func set(_ new: [CryptoProviderMapping]) { mappings = new }
 }
