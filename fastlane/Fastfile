@@ -40,24 +40,12 @@ platform :ios do
 
     profile_name = ENV["sigh_rocks.moolah.app_appstore_profile-name"]
 
-    entitlements_path = "build/Moolah.entitlements"
-    FileUtils.mkdir_p("build")
-    File.write(entitlements_path, <<~PLIST)
-      <?xml version="1.0" encoding="UTF-8"?>
-      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-      <plist version="1.0">
-      <dict>
-        <key>com.apple.developer.icloud-container-identifiers</key>
-        <array><string>iCloud.rocks.moolah.app.v2</string></array>
-        <key>com.apple.developer.icloud-services</key>
-        <array><string>CloudKit</string></array>
-        <key>com.apple.security.app-sandbox</key>
-        <true/>
-        <key>com.apple.security.network.client</key>
-        <true/>
-      </dict>
-      </plist>
-    PLIST
+    # Distribution entitlements live in fastlane/Moolah.entitlements and are
+    # shared by both `validate` and `beta` lanes so they can never diverge.
+    # The file is intentionally kept outside any XcodeGen source path; XcodeGen
+    # auto-discovers .entitlements files in source directories and would apply
+    # them to all builds, breaking CI simulator tests without CloudKit.
+    entitlements_path = File.expand_path("Moolah.entitlements", __dir__)
 
     build_app(
       scheme: "Moolah-iOS",
@@ -106,27 +94,10 @@ platform :ios do
 
     profile_name = ENV["sigh_rocks.moolah.app_appstore_profile-name"]
 
-    # Generate entitlements file for distribution builds.
-    # Not checked into the repo because XcodeGen auto-discovers .entitlements
-    # files and applies them to all builds, breaking CI simulator tests.
-    entitlements_path = "build/Moolah.entitlements"
-    FileUtils.mkdir_p("build")
-    File.write(entitlements_path, <<~PLIST)
-      <?xml version="1.0" encoding="UTF-8"?>
-      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-      <plist version="1.0">
-      <dict>
-        <key>com.apple.developer.icloud-container-identifiers</key>
-        <array><string>iCloud.rocks.moolah.app.v2</string></array>
-        <key>com.apple.developer.icloud-services</key>
-        <array><string>CloudKit</string></array>
-        <key>com.apple.security.app-sandbox</key>
-        <true/>
-        <key>com.apple.security.network.client</key>
-        <true/>
-      </dict>
-      </plist>
-    PLIST
+    # Share the entitlements file with the `validate` lane so the IPA we upload
+    # to TestFlight always matches what validate inspected. See the comment in
+    # `validate` for why this file is kept in fastlane/ rather than App/.
+    entitlements_path = File.expand_path("Moolah.entitlements", __dir__)
 
     build_app(
       scheme: "Moolah-iOS",
