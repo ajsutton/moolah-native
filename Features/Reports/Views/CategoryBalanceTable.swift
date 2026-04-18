@@ -115,6 +115,8 @@ struct CategoryBalanceTable: View {
                 Spacer()
                 InstrumentAmountView(amount: group.totalAmount, font: .headline)
               }
+              .accessibilityElement(children: .combine)
+              .accessibilityLabel("\(group.name), \(group.totalAmount.formatted)")
             }
           }
         }
