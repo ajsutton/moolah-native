@@ -1,5 +1,7 @@
 # CSV Import for Stock Holdings & Trade History — Design Spec
 
+> **Superseded** by `plans/2026-04-18-csv-import-design.md`, which folds SelfWealth support into a unified CSV import pipeline shared with bank transactions and future crypto exchanges. This file is kept for historical reference; the new spec is the source of truth.
+
 ## Goal
 
 Import Australian stock holdings and trade history from SelfWealth CSV exports into the app. SelfWealth has no public API, so CSV export is the only reliable data path. The design should handle SelfWealth's format as the primary target while being extensible to other Australian brokers (CommSec, Stake, etc.) in future.
