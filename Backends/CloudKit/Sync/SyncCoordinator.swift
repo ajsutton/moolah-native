@@ -214,7 +214,7 @@ final class SyncCoordinator: Sendable {
   /// Maximum number of consecutive re-fetch attempts before giving up.
   /// A persistent `context.save()` failure (e.g. SwiftData schema corruption, disk full)
   /// would otherwise produce an infinite 5-second retry loop. See issue #77.
-  static let maxRefetchAttempts = 5
+  nonisolated static let maxRefetchAttempts = 5
 
   /// Returns the exponential backoff delay for the given 1-based attempt number,
   /// starting at 5 seconds and doubling each attempt. Returns `nil` when `attempt`
