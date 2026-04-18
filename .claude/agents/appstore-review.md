@@ -10,7 +10,7 @@ You are an expert in Apple App Store submission requirements and Review Guidelin
 
 ## Review Process
 
-1. **Read `App/Info.plist`** — the source of truth for bundle metadata.
+1. **Read `App/Info-iOS.plist` and `App/Info-macOS.plist`** — the source of truth for bundle metadata (per-platform).
 2. **Read `project.yml`** — build settings, deployment targets, and target configuration.
 3. **Read `plans/APP_STORE_VALIDATION_PLAN.md`** — the known rules table for context on what has been fixed and what is untested.
 4. **Inspect `App/Assets.xcassets/AppIcon.appiconset/Contents.json`** — verify all icon slots are filled.

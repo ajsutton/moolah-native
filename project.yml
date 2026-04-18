@@ -45,6 +45,8 @@ targets:
     platform: iOS
     sources:
       - path: App
+        excludes:
+          - Info-macOS.plist
       - path: Domain
       - path: Backends
       - path: Features
@@ -57,7 +59,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: rocks.moolah.app
         PRODUCT_NAME: Moolah
         PRODUCT_MODULE_NAME: Moolah
-        INFOPLIST_FILE: App/Info.plist
+        INFOPLIST_FILE: App/Info-iOS.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
         Release:
@@ -68,6 +70,8 @@ targets:
     platform: macOS
     sources:
       - path: App
+        excludes:
+          - Info-iOS.plist
       - path: Domain
       - path: Backends
       - path: Features
@@ -80,7 +84,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: rocks.moolah.app
         PRODUCT_NAME: Moolah
         PRODUCT_MODULE_NAME: Moolah
-        INFOPLIST_FILE: App/Info.plist
+        INFOPLIST_FILE: App/Info-macOS.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
         Release:
