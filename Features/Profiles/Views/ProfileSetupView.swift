@@ -53,8 +53,8 @@ struct ProfileSetupView: View {
               Task { await addDefaultProfile() }
             } label: {
               Label(
-                String(localized: "Sign in to Moolah"),
-                systemImage: "person.crop.circle.badge.checkmark"
+                String(localized: "Connect to Moolah"),
+                systemImage: "link"
               )
               .frame(maxWidth: 280)
             }
@@ -66,8 +66,8 @@ struct ProfileSetupView: View {
               Task { await addDefaultProfile() }
             } label: {
               Label(
-                String(localized: "Sign in to Moolah"),
-                systemImage: "person.crop.circle.badge.checkmark"
+                String(localized: "Connect to Moolah"),
+                systemImage: "link"
               )
               .frame(maxWidth: 280)
             }
