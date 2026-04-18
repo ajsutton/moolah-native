@@ -498,6 +498,36 @@ struct InvestmentStoreTests {
     #expect(store.values[0].value.quantity == Decimal(5000))
   }
 
+  // MARK: - Cancellation
+
+  @Test("loadPositions bails out deterministically mid-pagination when the task is cancelled")
+  func testLoadPositionsHonoursCancellationDeterministic() async throws {
+    let accountId = UUID()
+    let (backend, _) = try TestBackend.create()
+    let repo = CancellablePagingTransactionRepository(pageSize: 200)
+
+    let store = InvestmentStore(
+      repository: backend.investments,
+      transactionRepository: repo,
+      conversionService: FixedConversionService()
+    )
+
+    let task = Task { @MainActor in
+      await store.loadPositions(accountId: accountId)
+    }
+
+    // Wait until the repo has started serving its first page, then cancel
+    // the task. The fix's cancellation check should short-circuit before
+    // positions are published.
+    await repo.waitForFirstFetch()
+    task.cancel()
+    await repo.releaseSecondFetch()
+    await task.value
+
+    #expect(store.positions.isEmpty)
+    #expect(store.error == nil)
+  }
+
   @Test("Different accounts can have values in different instruments")
   func testValuesWithDifferentInstrumentsPerAccount() async throws {
     let audAccount = UUID()
