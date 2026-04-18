@@ -63,6 +63,16 @@ struct ShowHiddenCommands: Commands {
   }
 }
 
+/// Groups the Moolah-specific domain menus (Transaction, Go, and future Account/Earmark/Category).
+/// Wraps them into a single `Commands` so the top-level `.commands` block stays within
+/// `CommandsBuilder`'s 10-argument `buildBlock` limit.
+struct MoolahDomainCommands: Commands {
+  var body: some Commands {
+    TransactionCommands()
+    GoCommands()
+  }
+}
+
 @main
 @MainActor
 struct MoolahApp: App {
@@ -217,8 +227,7 @@ struct MoolahApp: App {
         ToolbarCommands()
         InspectorCommands()
         ShowHiddenCommands()
-        TransactionCommands()
-        GoCommands()
+        MoolahDomainCommands()
       }
 
       Window("About Moolah", id: "about") {
