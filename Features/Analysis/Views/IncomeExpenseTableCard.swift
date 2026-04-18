@@ -6,7 +6,7 @@ struct IncomeExpenseTableCard: View {
   private static let initialVisibleCount = 6
   private static let loadMoreCount = 6
 
-  private static let monthLabelFormatter: DateFormatter = {
+  nonisolated private static let monthLabelFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateFormat = "MMM yyyy"
     return formatter
@@ -82,7 +82,7 @@ struct IncomeExpenseTableCard: View {
             VStack(spacing: 0) {
               HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                  Text(monthLabel(for: item))
+                  Text(Self.monthLabel(for: item))
                     .font(.body)
                     .monospacedDigit()
                   Text(monthsAgoLabel(for: item))
@@ -106,6 +106,9 @@ struct IncomeExpenseTableCard: View {
               }
               .padding(.horizontal, 12)
               .padding(.vertical, 8)
+              .accessibilityElement(children: .combine)
+              .accessibilityLabel(
+                Self.accessibilityLabel(for: item, in: data, includeEarmarks: includeEarmarks))
 
               Divider()
             }
@@ -156,7 +159,24 @@ struct IncomeExpenseTableCard: View {
     }
   }
 
-  private func monthLabel(for item: MonthlyIncomeExpense) -> String {
+  /// Builds a single combined VoiceOver label for a data row, so VoiceOver reads
+  /// the row as one element (`month: income, expense, savings, total savings`)
+  /// rather than traversing each `InstrumentAmountView` independently.
+  nonisolated static func accessibilityLabel(
+    for item: MonthlyIncomeExpense,
+    in data: [MonthlyIncomeExpense],
+    includeEarmarks: Bool
+  ) -> String {
+    let month = Self.monthLabel(for: item)
+    let income = includeEarmarks ? item.totalIncome : item.income
+    let expense = includeEarmarks ? item.totalExpense : item.expense
+    let profit = includeEarmarks ? item.totalProfit : item.profit
+    let total = Self.cumulativeSavings(upTo: item, in: data, includeEarmarks: includeEarmarks)
+    return
+      "\(month). Income \(income.formatted). Expense \(expense.formatted). Savings \(profit.formatted). Total savings \(total.formatted)."
+  }
+
+  nonisolated static func monthLabel(for item: MonthlyIncomeExpense) -> String {
     Self.monthLabelFormatter.string(from: item.start)
   }
 
