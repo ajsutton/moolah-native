@@ -3059,6 +3059,87 @@ struct AnalysisRepositoryContractTests {
     #expect(result.expenseBreakdown.count == individualBreakdown.count)
     #expect(result.incomeAndExpense.count == individualIncome.count)
   }
+
+  // MARK: - Rule 11 Scoping: per-day conversion failures
+
+  @Test("a single day's conversion failure does not truncate the balance history")
+  func dailyBalanceConversionFailureIsScopedPerDay() async throws {
+    // Profile = AUD. USD bank account holds 100 USD across three days. The
+    // USD→AUD rate is available for day1 and day3 but unavailable on day2.
+    //
+    // Before the fix: `book.dailyBalance` throws on day2 and the entire
+    // fetchDailyBalances call propagates the error — callers lose the complete
+    // balance history (day1 and day3 included). This is the wrong blast radius
+    // for Rule 11: one failing rate should not nuke unrelated days.
+    //
+    // After the fix: day2 is skipped (no entry), day1 and day3 are present
+    // with their correctly-converted totals. The partial result is returned
+    // rather than thrown.
+    let calendar = Calendar(identifier: .gregorian)
+    let day1 = calendar.date(from: DateComponents(year: 2025, month: 7, day: 1))!
+    let day2 = calendar.date(from: DateComponents(year: 2025, month: 7, day: 2))!
+    let day3 = calendar.date(from: DateComponents(year: 2025, month: 7, day: 3))!
+
+    // Rate available on day1 and day3; absent (throws) on day2.
+    let conversion = DateFailingConversionService(
+      rates: [
+        day1: ["USD": Decimal(string: "1.50")!],
+        day3: ["USD": Decimal(string: "1.40")!],
+      ],
+      failingDates: [calendar.startOfDay(for: day2)])
+    let backend = CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let usd = Instrument.fiat(code: "USD")
+    let usdAccount = Account(
+      id: UUID(), name: "USD Cash", type: .bank, instrument: usd)
+    _ = try await backend.accounts.create(usdAccount)
+
+    // Open the USD position on day1; tick AUD on day2 and day3 so each day
+    // has a transaction and therefore a daily-balance entry candidate.
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day1, payee: "Open USD",
+        legs: [
+          TransactionLeg(
+            accountId: usdAccount.id, instrument: usd,
+            quantity: 100, type: .openingBalance)
+        ]))
+
+    let audAccount = Account(
+      id: UUID(), name: "AUD Tip Jar", type: .bank, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(audAccount)
+
+    for date in [day2, day3] {
+      _ = try await backend.transactions.create(
+        Transaction(
+          date: date, payee: "Tick",
+          legs: [
+            TransactionLeg(
+              accountId: audAccount.id, instrument: .defaultTestInstrument,
+              quantity: Decimal(string: "0.01")!, type: .income)
+          ]))
+    }
+
+    // Must not throw: day2's failure is scoped, and the remaining days are
+    // returned intact.
+    let balances = try await backend.analysis.fetchDailyBalances(
+      after: nil, forecastUntil: nil)
+
+    let d1 = balances.first { $0.date == calendar.startOfDay(for: day1) }
+    let d2 = balances.first { $0.date == calendar.startOfDay(for: day2) }
+    let d3 = balances.first { $0.date == calendar.startOfDay(for: day3) }
+
+    // day1 rendered with its converted total (100 USD * 1.50 = 150 AUD).
+    #expect(d1?.balance.quantity == 150)
+    #expect(d1?.balance.instrument == .defaultTestInstrument)
+
+    // day2 is absent (conversion failed; the day's total is unavailable, so the
+    // entry is omitted rather than rendered with a silently-dropped input).
+    #expect(d2 == nil)
+
+    // day3 still rendered: 100 USD * 1.40 + 0.02 AUD (cumulative ticks) = 140.02.
+    #expect(d3?.balance.quantity == Decimal(string: "140.02"))
+  }
 }
 
 // MARK: - Test Helpers
@@ -3077,6 +3158,60 @@ private struct ThrowingConversionService: InstrumentConversionService {
   ) async throws -> InstrumentAmount {
     throw Invoked()
   }
+}
+
+/// Conversion service whose per-date failures can be specified at construction.
+/// Used to exercise Rule 11 scoping when a single day's rate is unavailable.
+///
+/// `convert(_:from:to:on:)` throws `DateFailingConversionError.unavailable` when
+/// the requested conversion date (normalized to start-of-day) is in
+/// `failingDates`. Same-instrument conversions always succeed. Otherwise
+/// behaves like `DateBasedFixedConversionService`.
+private struct DateFailingConversionService: InstrumentConversionService {
+  let rates: [Date: [String: Decimal]]
+  let failingDates: Set<Date>
+  private let sortedDates: [Date]
+
+  init(rates: [Date: [String: Decimal]], failingDates: Set<Date>) {
+    self.rates = rates
+    self.failingDates = failingDates
+    self.sortedDates = rates.keys.sorted(by: >)
+  }
+
+  private func ratesAsOf(_ date: Date) -> [String: Decimal] {
+    for d in sortedDates where d <= date {
+      return rates[d]!
+    }
+    return [:]
+  }
+
+  func convert(
+    _ quantity: Decimal, from: Instrument, to: Instrument, on date: Date
+  ) async throws -> Decimal {
+    if from.id == to.id { return quantity }
+    let dayKey = Calendar(identifier: .gregorian).startOfDay(for: date)
+    if failingDates.contains(dayKey) {
+      throw DateFailingConversionError.unavailable(date: dayKey)
+    }
+    let asOf = ratesAsOf(date)
+    guard let rate = asOf[from.id] else {
+      return quantity
+    }
+    return quantity * rate
+  }
+
+  func convertAmount(
+    _ amount: InstrumentAmount, to instrument: Instrument, on date: Date
+  ) async throws -> InstrumentAmount {
+    guard amount.instrument != instrument else { return amount }
+    let converted = try await convert(
+      amount.quantity, from: amount.instrument, to: instrument, on: date)
+    return InstrumentAmount(quantity: converted, instrument: instrument)
+  }
+}
+
+private enum DateFailingConversionError: Error, Equatable {
+  case unavailable(date: Date)
 }
 
 // MARK: - CloudKit Test Backend

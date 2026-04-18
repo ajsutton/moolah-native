@@ -1,5 +1,9 @@
 import Foundation
+import OSLog
 import SwiftData
+
+private let analysisLogger = Logger(
+  subsystem: "com.moolah.app", category: "CloudKitAnalysisRepository")
 
 final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
@@ -490,17 +494,36 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
     // Post-`after` daily updates: normal accumulation. Only `.transfer` legs on
     // investment accounts contribute to the transfers-only read.
+    //
+    // Per Rule 11 (`guides/INSTRUMENT_CONVERSION_GUIDE.md`), a single failing
+    // conversion on one day's snapshot must not nuke sibling days. Scope the
+    // catch to the per-day `dailyBalance` call so an unresolvable rate only
+    // drops that one day's entry; remaining days render normally. The failing
+    // day's total is unavailable (omitted) rather than rendered with a
+    // silently-dropped input.
     for txn in sorted where after.map({ txn.date >= $0 }) ?? true {
       book.apply(txn, investmentAccountIds: investmentAccountIds)
       let dayKey = Calendar.current.startOfDay(for: txn.date)
-      dailyBalances[dayKey] = try await book.dailyBalance(
-        on: txn.date,
-        investmentAccountIds: investmentAccountIds,
-        profileInstrument: instrument,
-        rule: .investmentTransfersOnly,
-        conversionService: conversionService,
-        isForecast: false
-      )
+      do {
+        dailyBalances[dayKey] = try await book.dailyBalance(
+          on: txn.date,
+          investmentAccountIds: investmentAccountIds,
+          profileInstrument: instrument,
+          rule: .investmentTransfersOnly,
+          conversionService: conversionService,
+          isForecast: false
+        )
+      } catch is CancellationError {
+        throw CancellationError()
+      } catch {
+        analysisLogger.warning(
+          """
+          Skipping daily balance for \(dayKey, privacy: .public) — conversion \
+          failed: \(error.localizedDescription, privacy: .public). \
+          Sibling days continue to render.
+          """
+        )
+      }
     }
 
     // Apply investment values (overrides net worth with market values where available)
@@ -715,16 +738,37 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       }
 
       if !latestByAccount.isEmpty {
-        // Sum values, converting to profile instrument where needed
+        // Sum values, converting to profile instrument where needed.
+        //
+        // Rule 11 scoping: if one foreign-currency investment value can't be
+        // converted on this day, mark this day's `investmentValue` unavailable
+        // (leave it at its prior state — typically `nil`) rather than
+        // aborting the whole balance history. Sibling days keep rendering.
         var total: Decimal = 0
+        var didFail = false
         for value in latestByAccount.values {
           if value.instrument.id == instrument.id {
             total += value.quantity
           } else {
-            total += try await conversionService.convert(
-              value.quantity, from: value.instrument, to: instrument, on: date)
+            do {
+              total += try await conversionService.convert(
+                value.quantity, from: value.instrument, to: instrument, on: date)
+            } catch is CancellationError {
+              throw CancellationError()
+            } catch {
+              analysisLogger.warning(
+                """
+                Skipping investmentValue for \(date, privacy: .public) — \
+                conversion of \(value.instrument.id, privacy: .public) failed: \
+                \(error.localizedDescription, privacy: .public).
+                """
+              )
+              didFail = true
+              break
+            }
           }
         }
+        if didFail { continue }
         let totalValue = InstrumentAmount(quantity: total, instrument: instrument)
         let balance = dailyBalances[date]!
         dailyBalances[date] = DailyBalance(
@@ -850,14 +894,32 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       book.apply(instance, investmentAccountIds: investmentAccountIds)
 
       let dayKey = Calendar.current.startOfDay(for: instance.date)
-      forecastBalances[dayKey] = try await book.dailyBalance(
-        on: instance.date,
-        investmentAccountIds: investmentAccountIds,
-        profileInstrument: instrument,
-        rule: .investmentTransfersOnly,
-        conversionService: conversionService,
-        isForecast: true
-      )
+      // See Rule 11 scoping note in `computeDailyBalances`: a single day's
+      // conversion failure must not drop sibling forecast days. Legs have
+      // already been pre-converted to the profile instrument above, so in
+      // practice the only way this throws is an upstream bug — still, scope
+      // the catch so the forecast series degrades gracefully instead of
+      // truncating.
+      do {
+        forecastBalances[dayKey] = try await book.dailyBalance(
+          on: instance.date,
+          investmentAccountIds: investmentAccountIds,
+          profileInstrument: instrument,
+          rule: .investmentTransfersOnly,
+          conversionService: conversionService,
+          isForecast: true
+        )
+      } catch is CancellationError {
+        throw CancellationError()
+      } catch {
+        analysisLogger.warning(
+          """
+          Skipping forecast balance for \(dayKey, privacy: .public) — \
+          conversion failed: \(error.localizedDescription, privacy: .public). \
+          Sibling forecast days continue to render.
+          """
+        )
+      }
     }
 
     return forecastBalances.values.sorted { $0.date < $1.date }
