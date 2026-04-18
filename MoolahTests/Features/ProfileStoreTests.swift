@@ -535,4 +535,65 @@ struct ProfileStoreTests {
 
     #expect(removedIDs.isEmpty)
   }
+
+  // MARK: - Retry task lifecycle
+
+  @Test("initial load schedules a retry when cloud store is empty but active profile is cloud")
+  func initialLoadSchedulesRetry() throws {
+    let defaults = makeDefaults()
+    let cloudProfileID = UUID()
+    defaults.set(cloudProfileID.uuidString, forKey: "com.moolah.activeProfileID")
+
+    let containerManager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+
+    #expect(store.isCloudLoadPending == true)
+  }
+
+  @Test("no retry is scheduled when a remote profile already satisfies activeProfileID")
+  func noRetryWhenRemoteProfilePresent() throws {
+    let defaults = makeDefaults()
+    let remote = makeProfile(label: "Remote")
+    let encoded = try JSONEncoder().encode([remote])
+    defaults.set(encoded, forKey: "com.moolah.profiles")
+    defaults.set(remote.id.uuidString, forKey: "com.moolah.activeProfileID")
+
+    let containerManager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+
+    #expect(store.isCloudLoadPending == false)
+  }
+
+  @Test("loadCloudProfiles cancels the pending retry once profiles are found")
+  func loadCloudProfilesCancelsPendingRetry() throws {
+    let defaults = makeDefaults()
+    let cloudProfileID = UUID()
+    defaults.set(cloudProfileID.uuidString, forKey: "com.moolah.activeProfileID")
+
+    let containerManager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
+
+    // Retry should be pending because the active profile has no backing record yet.
+    #expect(store.isCloudLoadPending == true)
+
+    // Insert a ProfileRecord directly — simulates CloudKit finishing its initial
+    // import after the store was constructed.
+    let context = ModelContext(containerManager.indexContainer)
+    let profile = Profile(
+      id: cloudProfileID,
+      label: "Cloud",
+      backendType: .cloudKit,
+      currencyCode: "AUD",
+      financialYearStartMonth: 7
+    )
+    context.insert(ProfileRecord.from(profile: profile))
+    try context.save()
+
+    // A remote-change-driven reload should find the profile and cancel the
+    // pending retry so we don't do redundant work.
+    store.loadCloudProfiles(isInitialLoad: false)
+
+    #expect(store.cloudProfiles.count == 1)
+    #expect(store.isCloudLoadPending == false)
+  }
 }

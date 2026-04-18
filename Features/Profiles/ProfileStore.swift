@@ -23,6 +23,12 @@ final class ProfileStore {
   /// SwiftData with CloudKit may not have its store ready on the first fetch.
   private(set) var isCloudLoadPending = false
 
+  /// The currently-scheduled retry task, tracked so it can be cancelled when a
+  /// fresh load arrives (e.g. from a remote change notification) or when a new
+  /// retry is queued. See `guides/CONCURRENCY_GUIDE.md` — fire-and-forget
+  /// `Task {}` in stores must be tracked.
+  private var retryTask: Task<Void, Never>?
+
   /// Called when a cloud profile is removed (locally or via remote sync).
   /// Used by SessionManager to tear down the corresponding ProfileSession.
   var onProfileRemoved: ((UUID) -> Void)?
@@ -212,6 +218,13 @@ final class ProfileStore {
       cloudProfiles = records.map { $0.toProfile() }
       logger.debug("Loaded \(self.cloudProfiles.count) cloud profiles")
 
+      // If this load produced cloud profiles, any pending retry is now
+      // redundant — cancel it so we don't do unnecessary work after the
+      // store is ready.
+      if !cloudProfiles.isEmpty {
+        cancelPendingRetry()
+      }
+
       // Auto-select a profile when none is active (e.g. new device receiving
       // its first cloud profile from another device).
       if activeProfileID == nil, let first = profiles.first {
@@ -304,18 +317,34 @@ final class ProfileStore {
       !remoteProfiles.contains(where: { $0.id == activeProfileID })
     else { return }
 
+    // Cancel any existing retry before starting a new one so we never run
+    // two pending retries concurrently.
+    retryTask?.cancel()
+
     isCloudLoadPending = true
     logger.debug("Cloud profiles empty on initial load, scheduling retry")
-    Task { @MainActor [weak self] in
+    retryTask = Task { @MainActor [weak self] in
       try? await Task.sleep(for: .seconds(1))
-      guard let self, self.cloudProfiles.isEmpty else {
+      guard !Task.isCancelled, let self, self.cloudProfiles.isEmpty else {
         self?.isCloudLoadPending = false
+        self?.retryTask = nil
         return
       }
       self.logger.debug("Retrying cloud profile load")
       self.loadCloudProfiles()
       self.isCloudLoadPending = false
+      self.retryTask = nil
     }
+  }
+
+  /// Cancels any in-flight retry task. Called when an external event (such as
+  /// a remote change notification driving `loadCloudProfiles()`) makes the
+  /// pending retry redundant.
+  private func cancelPendingRetry() {
+    guard retryTask != nil else { return }
+    retryTask?.cancel()
+    retryTask = nil
+    isCloudLoadPending = false
   }
 
   // MARK: - Persistence
