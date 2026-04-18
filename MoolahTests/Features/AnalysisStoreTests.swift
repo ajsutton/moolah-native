@@ -70,6 +70,74 @@ struct AnalysisStoreFilterPersistenceTests {
   }
 }
 
+@Suite("AnalysisStore — refreshIfStale")
+@MainActor
+struct AnalysisStoreRefreshIfStaleTests {
+
+  private func makeDefaults() -> UserDefaults {
+    let suiteName = "com.moolah.test.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defaults.removePersistentDomain(forName: suiteName)
+    return defaults
+  }
+
+  @Test("loads when no data has been loaded yet")
+  func loadsWhenNoDataLoaded() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = AnalysisStore(
+      repository: backend.analysis, defaults: makeDefaults())
+
+    #expect(store.lastLoadedAt == nil)
+    await store.refreshIfStale(minimumInterval: 60)
+    #expect(store.lastLoadedAt != nil)
+  }
+
+  @Test("reloads when elapsed time exceeds minimum interval")
+  func reloadsWhenStale() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = AnalysisStore(
+      repository: backend.analysis, defaults: makeDefaults())
+
+    await store.loadAll()
+    let firstLoad = store.lastLoadedAt
+    #expect(firstLoad != nil)
+
+    // Simulate a stale load by rewinding lastLoadedAt.
+    let staleDate = Date().addingTimeInterval(-120)
+    store.overrideLastLoadedAtForTesting(staleDate)
+
+    await store.refreshIfStale(minimumInterval: 60)
+    #expect(store.lastLoadedAt != nil)
+    #expect(store.lastLoadedAt! > staleDate)
+  }
+
+  @Test("skips reload when elapsed time is within minimum interval")
+  func skipsReloadWhenFresh() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = AnalysisStore(
+      repository: backend.analysis, defaults: makeDefaults())
+
+    await store.loadAll()
+    let firstLoad = store.lastLoadedAt
+    #expect(firstLoad != nil)
+
+    await store.refreshIfStale(minimumInterval: 60)
+    // Should NOT have reloaded — timestamp unchanged.
+    #expect(store.lastLoadedAt == firstLoad)
+  }
+
+  @Test("loadAll updates lastLoadedAt on success")
+  func loadAllUpdatesTimestampOnSuccess() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = AnalysisStore(
+      repository: backend.analysis, defaults: makeDefaults())
+
+    #expect(store.lastLoadedAt == nil)
+    await store.loadAll()
+    #expect(store.lastLoadedAt != nil)
+  }
+}
+
 @Suite("AnalysisStore — categoriesOverTime")
 @MainActor
 struct AnalysisStoreCategoriesOverTimeTests {
