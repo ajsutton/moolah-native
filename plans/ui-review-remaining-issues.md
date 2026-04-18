@@ -22,10 +22,6 @@ Metadata row uses `.caption` instead of `.subheadline` per style guide.
 **File:** `Features/Analysis/Views/NetWorthGraphCard.swift`
 Chart Y-axis labels have no currency unit indicator.
 
-### S7. InvestmentAccountView time period picker accessibility
-**File:** `Features/Investments/Views/InvestmentAccountView.swift:193-217`
-Time period picker buttons lack `.accessibilityValue("Selected")`.
-
 ### S8. TransactionListView punctuation inconsistency
 **File:** `Features/Transactions/Views/TransactionListView.swift:282`
 Empty state description punctuation style differs from other views.
