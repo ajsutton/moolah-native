@@ -153,15 +153,24 @@ final class AccountStore {
     try await computeConvertedTotal(for: currentAccounts, in: target)
   }
 
-  /// Compute converted total for investment accounts.
+  /// Compute converted total for investment accounts. Sums each position
+  /// directly to `target` in one pass, mirroring `computeConvertedTotal`
+  /// (Rule 8 single-instrument fast path is handled inside the conversion
+  /// service). Accounts with an externally-provided `investmentValues`
+  /// entry skip position summing and convert that value once to `target`.
   func computeConvertedInvestmentTotal(in target: Instrument) async throws -> InstrumentAmount {
     var total = InstrumentAmount.zero(instrument: target)
     let date = Date()
     for account in investmentAccounts {
-      let accountBalance = try await displayBalance(for: account.id)
-      let converted = try await conversionService.convertAmount(
-        accountBalance, to: target, on: date)
-      total += converted
+      if let externalValue = investmentValues[account.id] {
+        total += try await conversionService.convertAmount(
+          externalValue, to: target, on: date)
+        continue
+      }
+      for position in account.positions {
+        total += try await conversionService.convertAmount(
+          position.amount, to: target, on: date)
+      }
     }
     return total
   }

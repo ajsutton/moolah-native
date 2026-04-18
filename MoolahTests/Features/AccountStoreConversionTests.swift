@@ -480,6 +480,68 @@ struct AccountStoreConversionTests {
     #expect(store.convertedBalances[bankAud.id]?.quantity == 1000)
     #expect(store.convertedBalances[bankEur.id]?.quantity == 500)
   }
+  /// Regression for #96: `computeConvertedInvestmentTotal` must not route
+  /// through `displayBalance` (which converts every position to the
+  /// account's instrument) and then convert the bottom line again to the
+  /// target. That extra hop doubles the round-trip through the conversion
+  /// actor and doubles the retry blast radius when the outer hop fails.
+  /// The implementation should mirror `computeConvertedCurrentTotal` and
+  /// convert each position directly to `target` in one pass.
+  @Test func computeConvertedInvestmentTotalDoesNotDoubleConvert() async throws {
+    let aud = Instrument.AUD
+    let usd = Instrument.USD
+    let eur = Instrument.fiat(code: "EUR")
+    let accountId = UUID()
+    let account = Account(
+      id: accountId, name: "Portfolio", type: .investment, instrument: aud)
+
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: container)
+
+    // Two foreign-currency positions in distinct instruments so the
+    // repository yields two `Position` entries.
+    let txns = [
+      Transaction(
+        date: Date(),
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: usd,
+            quantity: Decimal(100), type: .openingBalance)
+        ]),
+      Transaction(
+        date: Date(),
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: eur,
+            quantity: Decimal(50), type: .openingBalance)
+        ]),
+    ]
+    TestBackend.seed(transactions: txns, in: container)
+
+    let counter = CountingConversionService(rates: [
+      "USD": Decimal(string: "1.5")!,
+      "EUR": Decimal(string: "2.0")!,
+    ])
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: counter,
+      targetInstrument: aud)
+    await store.load()
+    // Wait for load's own convertedBalances pass to finish so the counter's
+    // baseline is stable before we measure this call.
+    await store.waitForPendingConversions()
+
+    let baseline = await counter.convertAmountCallCount
+    let total = try await store.computeConvertedInvestmentTotal(in: aud)
+    let delta = await counter.convertAmountCallCount - baseline
+
+    // 100 USD * 1.5 + 50 EUR * 2.0 = 150 + 100 = 250 AUD.
+    #expect(total == InstrumentAmount(quantity: Decimal(250), instrument: aud))
+    // One conversion per position (USD→AUD, EUR→AUD). The old implementation
+    // made 3 calls: 2 per-position (→ account.instrument AUD) plus 1 outer
+    // (accountBalance → target). New: 2 calls.
+    #expect(delta == 2)
+  }
 }
 
 @MainActor
