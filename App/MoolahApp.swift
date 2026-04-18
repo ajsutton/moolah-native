@@ -57,6 +57,19 @@ struct ShowHiddenCommands: Commands {
   }
 }
 
+/// Minimal test wrapper: two CommandMenus with no @FocusedValue. Tests whether
+/// wrapping multiple top-level CommandMenus in a single Commands struct compiles.
+struct TestDoubleMenuCommands: Commands {
+  var body: some Commands {
+    CommandMenu("TestA") {
+      Button("X") {}
+    }
+    CommandMenu("TestB") {
+      Button("Y") {}
+    }
+  }
+}
+
 
 @main
 @MainActor
@@ -212,7 +225,7 @@ struct MoolahApp: App {
         InspectorCommands()
         ShowHiddenCommands()
         TransactionCommands()
-        GoCommands()
+        TestDoubleMenuCommands()
       }
 
       Window("About Moolah", id: "about") {
