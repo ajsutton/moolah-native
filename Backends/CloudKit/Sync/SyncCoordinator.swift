@@ -206,6 +206,26 @@ final class SyncCoordinator: Sendable {
   /// Task for coalescing re-fetch requests after save failures.
   private var refetchTask: Task<Void, Never>?
 
+  /// Number of consecutive re-fetch attempts scheduled after a save failure.
+  /// Reset to zero whenever a fetched-record-zone-changes batch applies successfully.
+  /// Exposed for testing.
+  private(set) var refetchAttempts = 0
+
+  /// Maximum number of consecutive re-fetch attempts before giving up.
+  /// A persistent `context.save()` failure (e.g. SwiftData schema corruption, disk full)
+  /// would otherwise produce an infinite 5-second retry loop. See issue #77.
+  static let maxRefetchAttempts = 5
+
+  /// Returns the exponential backoff delay for the given 1-based attempt number,
+  /// starting at 5 seconds and doubling each attempt. Returns `nil` when `attempt`
+  /// exceeds `maxRefetchAttempts` — the caller should stop retrying at that point.
+  nonisolated static func refetchBackoff(forAttempt attempt: Int) -> Duration? {
+    guard attempt >= 1, attempt <= maxRefetchAttempts else { return nil }
+    // 5s, 10s, 20s, 40s, 80s
+    let seconds = 5 * (1 << (attempt - 1))
+    return .seconds(seconds)
+  }
+
   // MARK: - Init
 
   init(containerManager: ProfileContainerManager) {
@@ -284,6 +304,7 @@ final class SyncCoordinator: Sendable {
     zoneSetupTask = nil
     refetchTask?.cancel()
     refetchTask = nil
+    refetchAttempts = 0
     for (_, task) in zoneCreationTasks {
       task.cancel()
     }
@@ -334,15 +355,41 @@ final class SyncCoordinator: Sendable {
     }
   }
 
-  /// Schedules a re-fetch after a 5-second delay. Multiple calls coalesce into one re-fetch.
+  /// Schedules a re-fetch after an exponentially-backed-off delay. Multiple calls coalesce
+  /// into one re-fetch. Gives up after `maxRefetchAttempts` consecutive failures to avoid
+  /// looping forever on a persistent save failure (e.g. SwiftData corruption). See issue #77.
+  ///
+  /// The attempt counter is reset by `resetRefetchAttempts()` whenever a fetch batch applies
+  /// successfully.
   private func scheduleRefetch() {
+    let nextAttempt = refetchAttempts + 1
+    guard let delay = Self.refetchBackoff(forAttempt: nextAttempt) else {
+      logger.error(
+        """
+        Giving up on re-fetch after \(self.refetchAttempts) consecutive save failures. \
+        Local SwiftData writes appear to be persistently failing; further re-fetches would \
+        just loop. Sync will resume after the next external event (account change, push, app \
+        restart, or a successful apply from another fetch).
+        """)
+      refetchTask?.cancel()
+      refetchTask = nil
+      return
+    }
+    refetchAttempts = nextAttempt
     refetchTask?.cancel()
-    refetchTask = Task {
-      try? await Task.sleep(for: .seconds(5))
+    refetchTask = Task { [delay, nextAttempt] in
+      try? await Task.sleep(for: delay)
       guard !Task.isCancelled else { return }
-      self.logger.info("Re-fetching changes after save failure")
+      self.logger.info(
+        "Re-fetching changes after save failure (attempt \(nextAttempt)/\(Self.maxRefetchAttempts))"
+      )
       await self.fetchChanges()
     }
+  }
+
+  /// Resets the re-fetch attempt counter. Called on every successful apply of fetched changes.
+  func resetRefetchAttempts() {
+    refetchAttempts = 0
   }
 
   // MARK: - Fetch Session
@@ -663,6 +710,9 @@ final class SyncCoordinator: Sendable {
         switch indexResult {
         case .success:
           await MainActor.run {
+            // Successful apply proves local writes are working — reset the re-fetch
+            // attempt counter so a future transient failure gets a full retry budget.
+            resetRefetchAttempts()
             if isFetchingChanges {
               fetchSessionIndexChanged = true
             } else {
@@ -700,8 +750,11 @@ final class SyncCoordinator: Sendable {
         // stale snapshot if stop() was called during applyRemoteChanges
         switch result {
         case .success(let changedTypes):
-          if !changedTypes.isEmpty {
-            await MainActor.run {
+          await MainActor.run {
+            // Successful apply proves local writes are working — reset the re-fetch
+            // attempt counter so a future transient failure gets a full retry budget.
+            resetRefetchAttempts()
+            if !changedTypes.isEmpty {
               if isFetchingChanges {
                 accumulateFetchSessionChanges(for: profileId, changedTypes: changedTypes)
               } else {

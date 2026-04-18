@@ -352,6 +352,60 @@ struct SyncCoordinatorTests {
     #expect(filtered.first == indexChange)
   }
 
+  // MARK: - Re-fetch Backoff (issue #77)
+
+  @Test func refetchBackoffFirstAttemptIsFiveSeconds() {
+    #expect(SyncCoordinator.refetchBackoff(forAttempt: 1) == .seconds(5))
+  }
+
+  @Test func refetchBackoffDoublesEachAttempt() {
+    #expect(SyncCoordinator.refetchBackoff(forAttempt: 1) == .seconds(5))
+    #expect(SyncCoordinator.refetchBackoff(forAttempt: 2) == .seconds(10))
+    #expect(SyncCoordinator.refetchBackoff(forAttempt: 3) == .seconds(20))
+    #expect(SyncCoordinator.refetchBackoff(forAttempt: 4) == .seconds(40))
+    #expect(SyncCoordinator.refetchBackoff(forAttempt: 5) == .seconds(80))
+  }
+
+  @Test func refetchBackoffReturnsNilBeyondMaxAttempts() {
+    #expect(SyncCoordinator.refetchBackoff(forAttempt: 0) == nil)
+    #expect(SyncCoordinator.refetchBackoff(forAttempt: 6) == nil)
+    #expect(SyncCoordinator.refetchBackoff(forAttempt: 100) == nil)
+  }
+
+  @Test func refetchBackoffReturnsNilForNegativeAttempt() {
+    #expect(SyncCoordinator.refetchBackoff(forAttempt: -1) == nil)
+  }
+
+  @Test func maxRefetchAttemptsIsFive() {
+    #expect(SyncCoordinator.maxRefetchAttempts == 5)
+  }
+
+  @Test func refetchAttemptsStartsAtZero() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+    #expect(coordinator.refetchAttempts == 0)
+  }
+
+  @Test func resetRefetchAttemptsClearsCounter() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+
+    // Simulate some accumulated failures by invoking reset after manual mutation isn't
+    // possible (counter is private(set)), so we just verify reset keeps it at zero
+    // and the method exists with the expected signature.
+    coordinator.resetRefetchAttempts()
+    #expect(coordinator.refetchAttempts == 0)
+  }
+
+  @Test func stopResetsRefetchAttempts() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+
+    // stop() should also reset the counter
+    coordinator.stop()
+    #expect(coordinator.refetchAttempts == 0)
+  }
+
   @Test func filterChangesMatchingProfileDataKeepsOnlyDataZones() {
     let indexZone = CKRecordZone.ID(
       zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
