@@ -2,13 +2,9 @@
 import SwiftUI
 
 struct CryptoSettingsView: View {
-  @State private var store: CryptoTokenStore
+  @Bindable var store: CryptoTokenStore
   @State private var showAddToken = false
   @State private var apiKeyInput = ""
-
-  init(cryptoPriceService: CryptoPriceService) {
-    _store = State(initialValue: CryptoTokenStore(cryptoPriceService: cryptoPriceService))
-  }
 
   var body: some View {
     Form {

@@ -9,22 +9,23 @@ actor FullConversionService: InstrumentConversionService {
   private let exchangeRates: ExchangeRateService
   private let stockPrices: StockPriceService
   private let cryptoPrices: CryptoPriceService?
-  private let providerMappingsByInstrumentId: [String: CryptoProviderMapping]
+  private let providerMappings: @Sendable () async -> [CryptoProviderMapping]
   private let logger = Logger(subsystem: "com.moolah.app", category: "CurrencyConversion")
 
+  /// - Parameter providerMappings: Closure invoked on each crypto conversion
+  ///   to obtain the current set of provider mappings. Tokens registered via
+  ///   `CryptoPriceService` after service construction become resolvable on
+  ///   the next conversion without rebuilding the service.
   init(
     exchangeRates: ExchangeRateService,
     stockPrices: StockPriceService,
     cryptoPrices: CryptoPriceService? = nil,
-    providerMappings: [CryptoProviderMapping] = []
+    providerMappings: @Sendable @escaping () async -> [CryptoProviderMapping] = { [] }
   ) {
     self.exchangeRates = exchangeRates
     self.stockPrices = stockPrices
     self.cryptoPrices = cryptoPrices
-    self.providerMappingsByInstrumentId = Dictionary(
-      providerMappings.map { ($0.instrumentId, $0) },
-      uniquingKeysWith: { _, last in last }
-    )
+    self.providerMappings = providerMappings
   }
 
   func convert(
@@ -133,7 +134,8 @@ actor FullConversionService: InstrumentConversionService {
     guard let cryptoPrices else {
       throw ConversionError.noCryptoPriceService
     }
-    guard let mapping = providerMappingsByInstrumentId[instrument.id] else {
+    let mappings = await providerMappings()
+    guard let mapping = mappings.first(where: { $0.instrumentId == instrument.id }) else {
       throw ConversionError.noProviderMapping(instrumentId: instrument.id)
     }
     return try await cryptoPrices.price(for: instrument, mapping: mapping, on: date)
