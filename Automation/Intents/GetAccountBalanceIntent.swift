@@ -2,8 +2,8 @@ import AppIntents
 import Foundation
 
 struct GetAccountBalanceIntent: AppIntent {
-  nonisolated(unsafe) static var title: LocalizedStringResource = "Get Account Balance"
-  nonisolated(unsafe) static var description = IntentDescription(
+  static let title: LocalizedStringResource = "Get Account Balance"
+  static let description = IntentDescription(
     "Returns the balance of a specific account.")
 
   @Parameter(title: "Profile")

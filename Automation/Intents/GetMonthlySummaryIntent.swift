@@ -2,8 +2,8 @@ import AppIntents
 import Foundation
 
 struct GetMonthlySummaryIntent: AppIntent {
-  nonisolated(unsafe) static var title: LocalizedStringResource = "Monthly Summary"
-  nonisolated(unsafe) static var description = IntentDescription(
+  static let title: LocalizedStringResource = "Monthly Summary"
+  static let description = IntentDescription(
     "Returns a summary of income, expenses, and net for a given month.")
 
   @Parameter(title: "Profile")

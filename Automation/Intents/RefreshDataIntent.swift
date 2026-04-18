@@ -2,8 +2,8 @@ import AppIntents
 import Foundation
 
 struct RefreshDataIntent: AppIntent {
-  nonisolated(unsafe) static var title: LocalizedStringResource = "Refresh Data"
-  nonisolated(unsafe) static var description = IntentDescription(
+  static let title: LocalizedStringResource = "Refresh Data"
+  static let description = IntentDescription(
     "Refreshes all data from the server for a profile.")
 
   @Parameter(title: "Profile", default: nil)

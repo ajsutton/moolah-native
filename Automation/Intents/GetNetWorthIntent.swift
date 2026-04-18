@@ -2,8 +2,8 @@ import AppIntents
 import Foundation
 
 struct GetNetWorthIntent: AppIntent {
-  nonisolated(unsafe) static var title: LocalizedStringResource = "Get Net Worth"
-  nonisolated(unsafe) static var description = IntentDescription(
+  static let title: LocalizedStringResource = "Get Net Worth"
+  static let description = IntentDescription(
     "Returns the net worth for a profile.")
 
   @Parameter(title: "Profile")

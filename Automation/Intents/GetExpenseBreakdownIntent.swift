@@ -2,8 +2,8 @@ import AppIntents
 import Foundation
 
 struct GetExpenseBreakdownIntent: AppIntent {
-  nonisolated(unsafe) static var title: LocalizedStringResource = "Expense Breakdown"
-  nonisolated(unsafe) static var description = IntentDescription(
+  static let title: LocalizedStringResource = "Expense Breakdown"
+  static let description = IntentDescription(
     "Shows a breakdown of expenses by category for a given period.")
 
   @Parameter(title: "Profile")
@@ -57,10 +57,10 @@ enum ExpensePeriod: String, AppEnum {
   case thisMonth
   case lastMonth
 
-  nonisolated(unsafe) static var typeDisplayRepresentation = TypeDisplayRepresentation(
+  static let typeDisplayRepresentation = TypeDisplayRepresentation(
     name: "Period")
 
-  nonisolated(unsafe) static var caseDisplayRepresentations:
+  static let caseDisplayRepresentations:
     [ExpensePeriod: DisplayRepresentation] = [
       .thisMonth: "This Month",
       .lastMonth: "Last Month",
