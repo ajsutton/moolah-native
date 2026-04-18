@@ -66,6 +66,8 @@ struct MoolahDomainCommands: Commands {
   @FocusedValue(\.selectedAccount) private var selectedAccount
   @FocusedValue(\.sidebarSelection) private var sidebarSelection
   @FocusedValue(\.findInListAction) private var findInListAction
+  @Environment(\.openWindow) private var openWindow
+  @Environment(\.openURL) private var openURL
 
   var body: some Commands {
     CommandMenu("Transaction") {
@@ -168,6 +170,37 @@ struct MoolahDomainCommands: Commands {
       Button("Copy Transaction Link") {}
         .keyboardShortcut("c", modifiers: [.command, .control])
         .disabled(true)
+    }
+
+    CommandGroup(after: .help) {
+      Button("Moolah Help") {
+        openURL(URL(string: "https://moolah.app/help")!)
+      }
+
+      Button("Keyboard Shortcuts\u{2026}") {
+        openWindow(id: "keyboard-shortcuts")
+      }
+      .keyboardShortcut("/", modifiers: [.command, .shift])
+
+      Divider()
+
+      Button("Release Notes") {
+        openURL(URL(string: "https://moolah.app/release-notes")!)
+      }
+
+      Button("Report a Bug") {
+        openURL(URL(string: "https://github.com/ajsutton/moolah-native/issues/new")!)
+      }
+
+      Divider()
+
+      Button("Privacy Policy") {
+        openURL(URL(string: "https://moolah.app/privacy")!)
+      }
+
+      Button("Terms of Service") {
+        openURL(URL(string: "https://moolah.app/terms")!)
+      }
     }
   }
 }
@@ -333,6 +366,11 @@ struct MoolahApp: App {
       }
       .windowResizability(.contentSize)
       .windowStyle(.hiddenTitleBar)
+
+      Window("Keyboard Shortcuts", id: "keyboard-shortcuts") {
+        KeyboardShortcutsView()
+      }
+      .windowResizability(.contentSize)
 
       Settings {
         SettingsView()
