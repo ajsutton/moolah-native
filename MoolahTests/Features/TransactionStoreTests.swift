@@ -1530,6 +1530,44 @@ struct TransactionStoreTests {
     #expect(failingStore.error != nil)
   }
 
+  /// Issue #48: a conversion failure while computing running balances must be
+  /// surfaced on the store so the UI can render a retry path, not silently
+  /// swallowed. Target is AUD; seeded transaction is in USD and the conversion
+  /// service refuses the USD pair.
+  @Test func testConversionFailureSurfacesErrorOnStore() async throws {
+    let aud = Instrument.defaultTestInstrument
+    let usd = Instrument.USD
+    let (backend, container) = try TestBackend.create()
+
+    let account = Account(id: accountId, name: "AUD", type: .bank, instrument: aud)
+    TestBackend.seed(accounts: [account], in: container)
+
+    let foreignTx = Transaction(
+      date: makeDate("2024-01-05"),
+      payee: "Overseas",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: usd, quantity: Decimal(-50), type: .expense)
+      ]
+    )
+    TestBackend.seed(transactions: [foreignTx], in: container)
+
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FailingConversionService(failingInstrumentIds: [usd.id]),
+      targetInstrument: aud
+    )
+
+    await store.load(filter: TransactionFilter(accountId: accountId))
+
+    // The row still renders so the list isn't blanked...
+    #expect(store.transactions.count == 1)
+    // ...but its display/balance are unavailable and the error is surfaced.
+    #expect(store.transactions.first?.displayAmount == nil)
+    #expect(store.transactions.first?.balance == nil)
+    #expect(store.error != nil)
+  }
+
   @Test func testFetchPayeeSuggestionsEmptyPrefixReturnsEmpty() async throws {
     let transactions = [
       Transaction(
