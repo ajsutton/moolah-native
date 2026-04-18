@@ -19,6 +19,11 @@ final class AnalysisStore {
     cachedHistoryMonths != nil && !dailyBalances.isEmpty
   }
 
+  /// Timestamp of the last successful `loadAll()`. Used by `refreshIfStale` to
+  /// avoid reloading when data was recently fetched (e.g. the app briefly
+  /// becomes inactive returning from a share sheet or system dialog).
+  private(set) var lastLoadedAt: Date?
+
   // Filters (persisted across launches)
   var historyMonths: Int {
     didSet { defaults.set(historyMonths, forKey: "analysisHistoryMonths") }
@@ -86,12 +91,34 @@ final class AnalysisStore {
 
       cachedHistoryMonths = historyMonths
       cachedForecastMonths = forecastMonths
+      lastLoadedAt = Date()
     } catch {
       logger.error("Failed to load analysis data: \(error)")
       self.error = error
     }
 
     isLoading = false
+  }
+
+  /// Reloads analysis data only if it has been at least `minimumInterval` seconds since
+  /// the last successful `loadAll()`. Called on scene phase transitions from background
+  /// to active — the app briefly going inactive (share sheet, Command-Tab, notification
+  /// banner) should not trigger a disruptive reload.
+  ///
+  /// Always loads if no data has been loaded yet.
+  func refreshIfStale(minimumInterval: TimeInterval) async {
+    if let last = lastLoadedAt,
+      Date().timeIntervalSince(last) < minimumInterval
+    {
+      return
+    }
+    await loadAll()
+  }
+
+  /// Test hook: allows tests to rewind `lastLoadedAt` to simulate staleness without
+  /// waiting real time. Not intended for production use.
+  func overrideLastLoadedAtForTesting(_ date: Date?) {
+    lastLoadedAt = date
   }
 
   /// Extends balance data to fill gaps, matching the web app's extrapolateBalances logic:
