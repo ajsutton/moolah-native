@@ -87,6 +87,7 @@ struct TransactionListView: View {
   @State private var showError = false
   @State private var errorMessage = ""
   @State private var searchText = ""
+  @State private var transactionPendingDelete: Transaction.ID?
 
   var body: some View {
     listView
@@ -113,6 +114,36 @@ struct TransactionListView: View {
           errorMessage = error.userMessage
           showError = true
         }
+      }
+      .confirmationDialog(
+        "Delete this transaction?",
+        isPresented: Binding(
+          get: { transactionPendingDelete != nil },
+          set: { if !$0 { transactionPendingDelete = nil } }
+        ),
+        titleVisibility: .visible
+      ) {
+        Button("Delete Transaction", role: .destructive) {
+          if let id = transactionPendingDelete {
+            Task { await transactionStore.delete(id: id) }
+          }
+          transactionPendingDelete = nil
+        }
+        Button("Cancel", role: .cancel) { transactionPendingDelete = nil }
+      } message: {
+        Text("This action cannot be undone.")
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .requestTransactionEdit)) { note in
+        guard let id = note.object as? Transaction.ID,
+          let entry = filteredTransactions.first(where: { $0.transaction.id == id })
+        else { return }
+        selectedTransaction = entry.transaction
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .requestTransactionDelete)) { note in
+        guard let id = note.object as? Transaction.ID,
+          filteredTransactions.contains(where: { $0.transaction.id == id })
+        else { return }
+        transactionPendingDelete = id
       }
   }
 
@@ -192,23 +223,19 @@ struct TransactionListView: View {
         .tag(entry.transaction)
         .contentShape(Rectangle())
         .contextMenu {
-          Button("Edit", systemImage: "pencil") {
+          Button("Edit Transaction\u{2026}", systemImage: "pencil") {
             selectedTransaction = entry.transaction
           }
           Divider()
-          Button("Delete", systemImage: "trash", role: .destructive) {
-            Task {
-              await transactionStore.delete(id: entry.transaction.id)
-            }
+          Button("Delete Transaction\u{2026}", systemImage: "trash", role: .destructive) {
+            transactionPendingDelete = entry.transaction.id
           }
         }
         .swipeActions(edge: .trailing) {
           Button(role: .destructive) {
-            Task {
-              await transactionStore.delete(id: entry.transaction.id)
-            }
+            transactionPendingDelete = entry.transaction.id
           } label: {
-            Label("Delete", systemImage: "trash")
+            Label("Delete Transaction", systemImage: "trash")
           }
         }
         .task {
