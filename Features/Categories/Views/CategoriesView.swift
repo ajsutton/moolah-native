@@ -97,6 +97,9 @@ struct CategoriesView: View {
         )
       }
       .focusedSceneValue(\.selectedCategory, $selectedCategory)
+      .focusedSceneValue(\.newCategoryAction) {
+        showCreateSheet = true
+      }
   }
 
   private var filteredCategories: [Category] {

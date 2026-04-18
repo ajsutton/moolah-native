@@ -3,12 +3,14 @@ import OSLog
 import SwiftData
 import SwiftUI
 
-/// Combined File > New… commands (Transaction, Earmark; Account and Category are
-/// added in later phases). Grouping them into one Commands struct keeps the
-/// top-level `.commands` block under `CommandsBuilder`'s 10-argument limit.
+/// Combined File > New… commands (Transaction, Earmark, Account, Category).
+/// Grouping them into one Commands struct keeps the top-level `.commands` block
+/// under `CommandsBuilder`'s 10-argument limit.
 struct NewItemCommands: Commands {
   @FocusedValue(\.newTransactionAction) private var newTransactionAction
   @FocusedValue(\.newEarmarkAction) private var newEarmarkAction
+  @FocusedValue(\.newAccountAction) private var newAccountAction
+  @FocusedValue(\.newCategoryAction) private var newCategoryAction
 
   var body: some Commands {
     CommandGroup(replacing: .newItem) {
@@ -23,6 +25,18 @@ struct NewItemCommands: Commands {
       }
       .keyboardShortcut("n", modifiers: [.command, .shift])
       .disabled(newEarmarkAction == nil)
+
+      Button("New Account\u{2026}") {
+        newAccountAction?()
+      }
+      .keyboardShortcut("n", modifiers: [.command, .control])
+      .disabled(newAccountAction == nil)
+
+      Button("New Category\u{2026}") {
+        newCategoryAction?()
+      }
+      .keyboardShortcut("n", modifiers: [.command, .option])
+      .disabled(newCategoryAction == nil)
     }
   }
 }

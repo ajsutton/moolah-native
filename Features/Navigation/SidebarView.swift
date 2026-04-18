@@ -217,6 +217,9 @@ struct SidebarView: View {
     .focusedSceneValue(\.newEarmarkAction) {
       showCreateEarmarkSheet = true
     }
+    .focusedSceneValue(\.newAccountAction) {
+      showCreateAccountSheet = true
+    }
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
         instrument: session.profile.instrument,

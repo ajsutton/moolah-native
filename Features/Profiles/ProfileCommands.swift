@@ -21,18 +21,17 @@
           containerManager: containerManager,
           session: session
         )
-
-        Divider()
       }
 
-      CommandGroup(after: .singleWindowList) {
+      CommandGroup(after: .importExport) {
+        Divider()
         Button("Sign Out") {
           if let authStore {
             Task { await authStore.signOut() }
           }
         }
         .disabled(authStore == nil || authStore?.requiresSignIn != true)
-        .keyboardShortcut("o", modifiers: [.command, .shift])
+        .keyboardShortcut("q", modifiers: [.command, .shift])
       }
     }
   }
