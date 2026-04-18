@@ -46,7 +46,7 @@ struct TransactionRunningBalanceTests {
       tx(daysFromEpoch: 1, accountId: accountId, quantity: -10, instrument: target),
     ]
 
-    let result = await TransactionPage.withRunningBalances(
+    let response = await TransactionPage.withRunningBalances(
       transactions: transactions,
       priorBalance: .zero(instrument: target),
       accountId: accountId,
@@ -54,9 +54,11 @@ struct TransactionRunningBalanceTests {
       conversionService: FixedConversionService()
     )
 
-    #expect(result.count == 3)
-    #expect(result.allSatisfy { $0.balance != nil })
-    #expect(result.allSatisfy { $0.displayAmount != nil })
+    #expect(response.rows.count == 3)
+    #expect(response.rows.allSatisfy { $0.balance != nil })
+    #expect(response.rows.allSatisfy { $0.displayAmount != nil })
+    // No conversion errors occurred.
+    #expect(response.firstConversionError == nil)
   }
 
   /// A transaction with an unconvertible leg still appears in the result,
@@ -67,7 +69,7 @@ struct TransactionRunningBalanceTests {
       tx(daysFromEpoch: 1, accountId: accountId, quantity: -10, instrument: foreign)
     ]
 
-    let result = await TransactionPage.withRunningBalances(
+    let response = await TransactionPage.withRunningBalances(
       transactions: transactions,
       priorBalance: .zero(instrument: target),
       accountId: accountId,
@@ -75,10 +77,12 @@ struct TransactionRunningBalanceTests {
       conversionService: FailingConversionService(failingInstrumentIds: [foreign.id])
     )
 
-    #expect(result.count == 1)
-    #expect(result[0].transaction.id == transactions[0].id)
-    #expect(result[0].balance == nil)
-    #expect(result[0].displayAmount == nil)
+    #expect(response.rows.count == 1)
+    #expect(response.rows[0].transaction.id == transactions[0].id)
+    #expect(response.rows[0].balance == nil)
+    #expect(response.rows[0].displayAmount == nil)
+    // The error is exposed to callers so they can surface a retry path.
+    #expect(response.firstConversionError != nil)
   }
 
   /// Earlier transactions (older — processed first in the reversed iteration)
@@ -100,7 +104,7 @@ struct TransactionRunningBalanceTests {
       tx(id: oldestId, daysFromEpoch: 1, accountId: accountId, quantity: -10, instrument: target),
     ]
 
-    let result = await TransactionPage.withRunningBalances(
+    let response = await TransactionPage.withRunningBalances(
       transactions: transactions,
       priorBalance: .zero(instrument: target),
       accountId: accountId,
@@ -108,14 +112,16 @@ struct TransactionRunningBalanceTests {
       conversionService: FailingConversionService(failingInstrumentIds: [foreign.id])
     )
 
-    #expect(result.count == 3)
+    #expect(response.rows.count == 3)
     // Result is newest-first. Oldest two (middle, oldest) keep their balances.
-    let byId = Dictionary(uniqueKeysWithValues: result.map { ($0.transaction.id, $0) })
+    let byId = Dictionary(uniqueKeysWithValues: response.rows.map { ($0.transaction.id, $0) })
     #expect(byId[oldestId]?.balance != nil)
     #expect(byId[middleId]?.balance != nil)
     // The unconvertible newest transaction has nil balance.
     #expect(byId[newestId]?.balance == nil)
     #expect(byId[newestId]?.displayAmount == nil)
+    // Error propagates out even though other rows convert cleanly.
+    #expect(response.firstConversionError != nil)
   }
 
   /// When the FIRST (oldest) transaction can't convert, every subsequent
@@ -131,7 +137,7 @@ struct TransactionRunningBalanceTests {
       tx(id: oldestId, daysFromEpoch: 1, accountId: accountId, quantity: -10, instrument: foreign),
     ]
 
-    let result = await TransactionPage.withRunningBalances(
+    let response = await TransactionPage.withRunningBalances(
       transactions: transactions,
       priorBalance: .zero(instrument: target),
       accountId: accountId,
@@ -139,7 +145,40 @@ struct TransactionRunningBalanceTests {
       conversionService: FailingConversionService(failingInstrumentIds: [foreign.id])
     )
 
-    #expect(result.count == 3)
-    #expect(result.allSatisfy { $0.balance == nil })
+    #expect(response.rows.count == 3)
+    #expect(response.rows.allSatisfy { $0.balance == nil })
+    #expect(response.firstConversionError != nil)
+  }
+
+  /// Issue #48: conversion failures must be reported to the caller — no more
+  /// silent `try?`-style swallow. Captures the first error encountered so a
+  /// store can surface it to the user and log/diagnose in production.
+  @Test func conversionFailureReportsFirstError() async throws {
+    let accountId = UUID()
+    // Oldest fails first so it's the "first" error in chronological processing.
+    let oldestFailingId = UUID()
+    let newerFailingId = UUID()
+    let transactions = [
+      tx(
+        id: newerFailingId, daysFromEpoch: 3, accountId: accountId,
+        quantity: -30, instrument: foreign),
+      tx(
+        id: oldestFailingId, daysFromEpoch: 2, accountId: accountId,
+        quantity: -20, instrument: foreign),
+    ]
+
+    let response = await TransactionPage.withRunningBalances(
+      transactions: transactions,
+      priorBalance: .zero(instrument: target),
+      accountId: accountId,
+      targetInstrument: target,
+      conversionService: FailingConversionService(failingInstrumentIds: [foreign.id])
+    )
+
+    let error = try #require(response.firstConversionError)
+    // Processing iterates oldest-to-newest (reversed), so the first failure
+    // recorded is the oldest transaction.
+    #expect(error.transactionId == oldestFailingId)
+    #expect(error.targetInstrumentId == target.id)
   }
 }

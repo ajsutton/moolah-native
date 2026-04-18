@@ -338,7 +338,7 @@ final class TransactionStore {
       if a.date != b.date { return a.date > b.date }
       return a.id.uuidString < b.id.uuidString
     }
-    transactions = await TransactionPage.withRunningBalances(
+    let result = await TransactionPage.withRunningBalances(
       transactions: rawTransactions,
       priorBalance: priorBalance,
       accountId: currentFilter.accountId,
@@ -346,5 +346,21 @@ final class TransactionStore {
       targetInstrument: currentTargetInstrument,
       conversionService: conversionService
     )
+    transactions = result.rows
+    // Surface conversion failures so the user sees a retryable error state
+    // rather than silently blanked balances. Per Rule 11 of
+    // `guides/INSTRUMENT_CONVERSION_GUIDE.md`, a failed conversion must be
+    // logged and surfaced; the store logs here in addition to the per-leg log
+    // emitted by `withRunningBalances`. If a prior recompute published a
+    // conversion error and the current one succeeds, clear it so the UI
+    // reflects recovery.
+    if let conversionError = result.firstConversionError {
+      logger.error(
+        "Conversion failed while computing running balances: \(conversionError.localizedDescription)"
+      )
+      self.error = conversionError
+    } else if self.error is RunningBalanceConversionError {
+      self.error = nil
+    }
   }
 }

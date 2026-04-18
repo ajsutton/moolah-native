@@ -1,4 +1,8 @@
 import Foundation
+import OSLog
+
+private let transactionLogger = Logger(
+  subsystem: "com.moolah.app", category: "Transaction.withRunningBalances")
 
 enum TransactionType: String, Codable, Sendable, CaseIterable {
   case income
@@ -269,6 +273,11 @@ struct TransactionPage: Sendable {
   /// `balance == nil`, and every subsequent (newer) transaction also has
   /// `balance == nil` since the running total can no longer be tracked.
   /// The transactions themselves are always returned.
+  ///
+  /// The result also carries the first conversion error encountered (if any) so
+  /// callers can surface a retryable error state to the user. Per Rule 11 of
+  /// `guides/INSTRUMENT_CONVERSION_GUIDE.md`, every failure is logged via
+  /// `os.Logger` at `warning` level, not silently swallowed.
   static func withRunningBalances(
     transactions: [Transaction],
     priorBalance: InstrumentAmount?,
@@ -276,10 +285,11 @@ struct TransactionPage: Sendable {
     earmarkId: UUID? = nil,
     targetInstrument: Instrument,
     conversionService: InstrumentConversionService
-  ) async -> [TransactionWithBalance] {
+  ) async -> RunningBalanceResult {
     var balance: InstrumentAmount? = priorBalance
     var result: [TransactionWithBalance] = []
     result.reserveCapacity(transactions.count)
+    var firstConversionError: RunningBalanceConversionError?
 
     for transaction in transactions.reversed() {
       let convertedLegs: [ConvertedTransactionLeg]?
@@ -297,6 +307,20 @@ struct TransactionPage: Sendable {
         }
         convertedLegs = legs
       } catch {
+        transactionLogger.warning(
+          """
+          Failed to convert leg to \(targetInstrument.id, privacy: .public) for transaction \
+          \(transaction.id, privacy: .public) on \(transaction.date, privacy: .public): \
+          \(error.localizedDescription, privacy: .public). Running balance will be unavailable \
+          from this point.
+          """)
+        if firstConversionError == nil {
+          firstConversionError = RunningBalanceConversionError(
+            transactionId: transaction.id,
+            targetInstrumentId: targetInstrument.id,
+            underlyingDescription: error.localizedDescription
+          )
+        }
         convertedLegs = nil
       }
 
@@ -349,7 +373,36 @@ struct TransactionPage: Sendable {
     }
 
     result.reverse()
-    return result
+    return RunningBalanceResult(
+      rows: result,
+      firstConversionError: firstConversionError
+    )
+  }
+}
+
+/// The outcome of `TransactionPage.withRunningBalances`: the computed rows plus
+/// the first conversion failure encountered (if any).
+///
+/// Callers that need only the rendered rows can read `rows`. Stores that drive
+/// a user-visible error state should observe `firstConversionError` and publish
+/// it so the user sees a retry path rather than silently blanked balances.
+/// See Rule 11 of `guides/INSTRUMENT_CONVERSION_GUIDE.md`.
+struct RunningBalanceResult: Sendable {
+  let rows: [TransactionWithBalance]
+  let firstConversionError: RunningBalanceConversionError?
+}
+
+/// A typed, Sendable wrapper around the first conversion error encountered
+/// during running-balance computation. Carries the failing transaction id so
+/// diagnostics can correlate logs with the surfaced user-visible error.
+struct RunningBalanceConversionError: LocalizedError, Sendable {
+  let transactionId: UUID
+  let targetInstrumentId: String
+  let underlyingDescription: String
+
+  var errorDescription: String? {
+    "Unable to convert a transaction to \(targetInstrumentId). The running balance is "
+      + "unavailable until the rate source recovers. (\(underlyingDescription))"
   }
 }
 
