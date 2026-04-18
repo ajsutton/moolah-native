@@ -176,7 +176,9 @@ struct InvestmentAccountView: View {
         ContentUnavailableView(
           "No Values",
           systemImage: "chart.line.uptrend.xyaxis",
-          description: Text("Tap + to record a value")
+          description: Text(
+            PlatformActionVerb.emptyStatePrompt(buttonLabel: "+", suffix: "to record a value")
+          )
         )
       } else {
         List {

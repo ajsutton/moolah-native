@@ -229,12 +229,16 @@ HStack(alignment: .firstTextBaseline, spacing: 12) {
 ```
 
 #### Empty States
-Use `ContentUnavailableView` for empty lists:
+Use `ContentUnavailableView` for empty lists. Because macOS users click and iOS
+users tap, build the prompt with `PlatformActionVerb.emptyStatePrompt(_:_:)` so
+the verb matches the platform (never hardcode "Tap" or "Click"):
 ```swift
 ContentUnavailableView(
   "No Transactions",
   systemImage: "tray",
-  description: Text("Tap + to add your first transaction")
+  description: Text(
+    PlatformActionVerb.emptyStatePrompt(buttonLabel: "+", suffix: "to add your first transaction")
+  )
 )
 ```
 
