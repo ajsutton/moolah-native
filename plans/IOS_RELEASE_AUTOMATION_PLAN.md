@@ -493,10 +493,10 @@ Add `APPSTORE_BUILD` to `SWIFT_ACTIVE_COMPILATION_CONDITIONS` for Release builds
 
 **File: `Features/Profiles/Views/ProfileSetupView.swift`**
 
-Wrap the "Sign in to Moolah" button and "Use a custom server" button/fields in `#if !APPSTORE_BUILD` blocks. In App Store builds, only the "Store in iCloud" button and its form fields should appear.
+Wrap the "Connect to Moolah" button and "Use a custom server" button/fields in `#if !APPSTORE_BUILD` blocks. In App Store builds, only the "Store in iCloud" button and its form fields should appear.
 
 **What to change:**
-- The "Sign in to Moolah" button (both the `showICloudForm` and `!showICloudForm` branches) → wrap in `#if !APPSTORE_BUILD`
+- The "Connect to Moolah" button (both the `showICloudForm` and `!showICloudForm` branches) → wrap in `#if !APPSTORE_BUILD`
 - The "Use a custom server" button → wrap in `#if !APPSTORE_BUILD`
 - The `customServerFields` section → wrap in `#if !APPSTORE_BUILD`
 - In App Store builds, auto-expand the iCloud form (since it's the only option) — set `showICloudForm = true` by default or skip the initial button and show the form directly
