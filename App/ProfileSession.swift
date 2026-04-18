@@ -257,20 +257,54 @@ final class ProfileSession: Identifiable {
 
       let reloadStart = ContinuousClock.now
       logger.debug("Reloading stores after CloudKit sync: \(types)")
-      if types.contains(AccountRecord.recordType) || types.contains(TransactionRecord.recordType) {
+      let plan = Self.storesToReload(for: types)
+      if plan.contains(.accounts) {
         await accountStore.reloadFromSync()
       }
-      if types.contains(CategoryRecord.recordType) {
+      if plan.contains(.categories) {
         await categoryStore.reloadFromSync()
       }
-      if types.contains(EarmarkRecord.recordType)
-        || types.contains(EarmarkBudgetItemRecord.recordType)
-      {
+      if plan.contains(.earmarks) {
         await earmarkStore.reloadFromSync()
       }
       let reloadMs = (ContinuousClock.now - reloadStart).inMilliseconds
       logger.info("📊 Store reloads after sync completed in \(reloadMs)ms for types: \(types)")
     }
+  }
+
+  /// Which stores should be reloaded for a given set of changed record types.
+  /// Exposed as a pure static function so the reload-mapping policy can be
+  /// unit-tested without driving the debounced async task.
+  ///
+  /// `TransactionLegRecord` drives both account balances and earmark positions,
+  /// so a remote leg-only change (e.g. category/earmark reassignment performed
+  /// on another device) must reload both stores even if the parent
+  /// `TransactionRecord` did not change in this batch.
+  struct StoreReloadPlan: OptionSet, Sendable, Equatable {
+    let rawValue: Int
+    static let accounts = StoreReloadPlan(rawValue: 1 << 0)
+    static let categories = StoreReloadPlan(rawValue: 1 << 1)
+    static let earmarks = StoreReloadPlan(rawValue: 1 << 2)
+  }
+
+  static func storesToReload(for changedTypes: Set<String>) -> StoreReloadPlan {
+    var plan: StoreReloadPlan = []
+    if changedTypes.contains(AccountRecord.recordType)
+      || changedTypes.contains(TransactionRecord.recordType)
+      || changedTypes.contains(TransactionLegRecord.recordType)
+    {
+      plan.insert(.accounts)
+    }
+    if changedTypes.contains(CategoryRecord.recordType) {
+      plan.insert(.categories)
+    }
+    if changedTypes.contains(EarmarkRecord.recordType)
+      || changedTypes.contains(EarmarkBudgetItemRecord.recordType)
+      || changedTypes.contains(TransactionLegRecord.recordType)
+    {
+      plan.insert(.earmarks)
+    }
+    return plan
   }
 
   // MARK: - Sync Cleanup
