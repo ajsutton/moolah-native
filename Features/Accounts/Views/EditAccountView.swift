@@ -9,7 +9,6 @@ struct EditAccountView: View {
   @State private var isSubmitting = false
   @State private var errorMessage: String?
   @State private var showingHideConfirmation = false
-  @State private var displayBalance: InstrumentAmount?
   @FocusState private var focusedField: Field?
 
   let account: Account
@@ -52,6 +51,10 @@ struct EditAccountView: View {
             if let displayBalance {
               InstrumentAmountView(amount: displayBalance)
                 .foregroundStyle(.secondary)
+            } else if isBalanceUnavailable {
+              Text("Unavailable")
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Current balance unavailable")
             } else {
               ProgressView()
                 .controlSize(.small)
@@ -59,7 +62,7 @@ struct EditAccountView: View {
             }
           }
           .accessibilityLabel("Current balance, read-only")
-          .accessibilityValue(displayBalance?.formatted ?? "Loading")
+          .accessibilityValue(balanceAccessibilityValue)
         }
 
         PositionListView(positions: accountStore.positions(for: account.id))
@@ -93,9 +96,6 @@ struct EditAccountView: View {
               : ""
           )
         }
-      }
-      .task(id: balanceInputs) {
-        displayBalance = try? await accountStore.displayBalance(for: account.id)
       }
       .navigationTitle("Edit Account")
       #if os(iOS)
@@ -132,16 +132,26 @@ struct EditAccountView: View {
     !name.trimmingCharacters(in: .whitespaces).isEmpty
   }
 
-  private var balanceInputs: BalanceInputs {
-    BalanceInputs(
-      positions: accountStore.positions(for: account.id),
-      investmentValue: accountStore.investmentValues[account.id]
-    )
+  /// Reads the converted balance published by `AccountStore`, which handles
+  /// retries and logging for conversion failures. `nil` means either no
+  /// conversion pass has run yet (loading) or the conversion failed
+  /// (unavailable) — `isBalanceUnavailable` distinguishes the two.
+  private var displayBalance: InstrumentAmount? {
+    accountStore.convertedBalances[account.id]
   }
 
-  private struct BalanceInputs: Equatable {
-    let positions: [Position]
-    let investmentValue: InstrumentAmount?
+  /// True when a conversion attempt has completed but no balance is
+  /// available — i.e. conversion failed. Distinct from the initial
+  /// "still loading" state before the first attempt.
+  private var isBalanceUnavailable: Bool {
+    accountStore.conversionAttemptsCompleted > 0 && displayBalance == nil
+  }
+
+  private var balanceAccessibilityValue: String {
+    if let displayBalance {
+      return displayBalance.formatted
+    }
+    return isBalanceUnavailable ? "Unavailable" : "Loading"
   }
 
   private func save() async {
