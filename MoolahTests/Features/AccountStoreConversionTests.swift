@@ -546,6 +546,146 @@ struct AccountStoreConversionTests {
     // (accountBalance → target). New: 2 calls.
     #expect(delta == 2)
   }
+
+  // MARK: - computeConvertedInvestmentTotal single-pass conversion
+
+  /// Issue #96: `computeConvertedInvestmentTotal` previously routed positions
+  /// through two conversions — positions → account instrument → target. For
+  /// asymmetric rates (which all real-world rates are), chaining conversions
+  /// compounds rounding error and produces a different result than summing
+  /// positions directly to `target`. This test uses an asymmetric rate table
+  /// where double-conversion and single-pass conversion produce distinct
+  /// numerical answers and asserts the single-pass answer is returned.
+  @Test func computeConvertedInvestmentTotalSumsPositionsDirectlyToTarget()
+    async throws
+  {
+    let accountId = UUID()
+    // Investment account held in AUD; target is USD. Asymmetric rates:
+    //   USD -> USD (fast path, 1:1)
+    //   AUD -> USD = 0.67
+    // With double-conversion:
+    //   displayBalance(AUD):  100 USD -> AUD at 1.5 = 150 AUD; + 1000 AUD = 1150 AUD
+    //   convert 1150 AUD -> USD at 0.67 = 770.50 USD
+    // With single-pass:
+    //   100 USD -> USD (fast path) = 100 USD
+    //   1000 AUD -> USD at 0.67 = 670 USD
+    //   total = 770 USD
+    // The 0.50 difference is the double-conversion drift.
+    let account = Account(
+      id: accountId, name: "Portfolio", type: .investment, instrument: .AUD)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: container)
+
+    let audTx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD,
+          quantity: Decimal(string: "1000.00")!, type: .openingBalance)
+      ])
+    let usdTx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .USD,
+          quantity: Decimal(string: "100.00")!, type: .openingBalance)
+      ])
+    TestBackend.seed(transactions: [audTx, usdTx], in: container)
+
+    let conversion = FixedConversionService(rates: [
+      "AUD": Decimal(string: "0.67")!,
+      "USD": Decimal(string: "1.5")!,
+    ])
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: conversion,
+      targetInstrument: .USD)
+    await store.load()
+
+    let total = try await store.computeConvertedInvestmentTotal(in: .USD)
+    #expect(total.instrument == .USD)
+    // Single-pass: 100 USD + (1000 AUD * 0.67) = 100 + 670 = 770 USD
+    #expect(total.quantity == Decimal(string: "770.00")!)
+  }
+
+  /// When an investment account has an externally-supplied value (e.g. from
+  /// `InvestmentStore.valuatePositions`), `computeConvertedInvestmentTotal`
+  /// must use that value verbatim and convert it *once* to the target —
+  /// never re-sum the raw positions, and never double-convert.
+  @Test func computeConvertedInvestmentTotalUsesExternalValueWhenProvided()
+    async throws
+  {
+    let accountId = UUID()
+    let account = Account(
+      id: accountId, name: "Brokerage", type: .investment, instrument: .AUD)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: container)
+
+    // Seed raw positions that would produce a different total than the
+    // external value — this makes it provable the external value is used.
+    let rawTx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD,
+          quantity: Decimal(string: "100.00")!, type: .openingBalance)
+      ])
+    TestBackend.seed(transactions: [rawTx], in: container)
+
+    let conversion = FixedConversionService(rates: [
+      "AUD": Decimal(string: "0.5")!
+    ])
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: conversion,
+      targetInstrument: .USD)
+    await store.load()
+
+    // External valuation in AUD (e.g. latest InvestmentValue): 2000 AUD.
+    let externalValue = InstrumentAmount(
+      quantity: Decimal(string: "2000.00")!, instrument: .AUD)
+    store.updateInvestmentValue(accountId: accountId, value: externalValue)
+
+    let total = try await store.computeConvertedInvestmentTotal(in: .USD)
+    // 2000 AUD -> USD at 0.5 = 1000 USD (external value converted once)
+    #expect(total.instrument == .USD)
+    #expect(total.quantity == Decimal(string: "1000.00")!)
+  }
+
+  /// Same-instrument positions and target must hit the fast path without
+  /// stacking spurious conversions. For a profile where account instrument,
+  /// positions, and target all share a currency, the result equals the raw
+  /// position sum.
+  @Test func computeConvertedInvestmentTotalFastPathSameInstrument()
+    async throws
+  {
+    let accountId = UUID()
+    let account = Account(
+      id: accountId, name: "Portfolio", type: .investment,
+      instrument: .defaultTestInstrument)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: container)
+
+    let tx = Transaction(
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .defaultTestInstrument,
+          quantity: Decimal(string: "1234.56")!, type: .openingBalance)
+      ])
+    TestBackend.seed(transactions: [tx], in: container)
+
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: backend.conversionService,
+      targetInstrument: .defaultTestInstrument)
+    await store.load()
+
+    let total = try await store.computeConvertedInvestmentTotal(
+      in: .defaultTestInstrument)
+    #expect(total.instrument == .defaultTestInstrument)
+    #expect(total.quantity == Decimal(string: "1234.56")!)
+  }
 }
 
 @MainActor
