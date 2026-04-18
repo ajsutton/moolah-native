@@ -49,7 +49,7 @@ struct ExpenseBreakdownCard: View {
             .font(.caption)
             .fontWeight(.semibold)
             .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 1)
+            .shadow(color: .primary.opacity(0.4), radius: 1, x: 0, y: 1)
         }
       }
     }
