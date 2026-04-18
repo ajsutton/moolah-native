@@ -98,7 +98,7 @@ struct AccountStoreConversionTests {
     let account = Account(
       id: accountId, name: "Revolut", type: .bank,
       instrument: .defaultTestInstrument)
-    let todayString = ISO8601DateFormatter.dateOnly.string(from: Date())
+    let todayString = Date().iso8601DateOnlyString
     let rates: [String: [String: Decimal]] = [
       todayString: [
         "AUD": Decimal(string: "1.5385")!
