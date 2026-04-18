@@ -9,10 +9,11 @@
 
 - **Personal tax** for contractors (income often without PAYG withholding), with investment income (dividends, interest, rental) and capital gains from stocks/crypto
 - **Family trust tax returns** tracked in the same profile as personal finances
-- **Capital gains**: computed from transaction legs via FIFO lot tracking in `CostBasisEngine` (Phase 5). `CapitalGainsSummary.asTaxAdjustmentValues()` auto-populates `shortTermCapitalGains`, `longTermCapitalGains`, and `capitalLosses` on `TaxYearAdjustments`. Manual override still available for external adjustments.
+- **Capital gains**: computed from transaction legs via FIFO lot tracking in `CostBasisEngine` (Phase 5, shipped 2026-04-12). `CapitalGainsSummary.asTaxAdjustmentValues(currency:)` auto-populates `shortTermCapitalGains`, `longTermCapitalGains`, and `capitalLosses` on `TaxYearAdjustments`. Manual override still available for external adjustments.
 - **Tax calculation**: estimated liability with marginal rates, Medicare levy, CGT discount, franking credits, offsets. Not a lodgeable return — data for accountants plus actionable estimates.
 - **Rate tables**: bundled per financial year so historical reports stay accurate.
-- **iCloud backend**: full support. moolah-server backend: sensible defaults, tax features effectively read-only/inert.
+- **Multi-instrument**: all tax totals roll up to the profile's reporting instrument (`Profile.instrument`, derived from `Profile.currencyCode` — typically AUD for Australian tax). Per-instrument amounts are converted via `InstrumentConversionService` following `guides/INSTRUMENT_CONVERSION_GUIDE.md`. Rule 11 applies: if any conversion fails, the dependent total is marked unavailable — never show partial sums or native-instrument fallbacks.
+- **CloudKit backend**: full support. Remote backend (moolah-server): sensible defaults, tax features effectively read-only/inert. Remote is single-instrument (`Profile.supportsComplexTransactions == false`), so multi-instrument concerns apply only to CloudKit profiles.
 
 ## Non-Goals
 
@@ -31,29 +32,32 @@ A managed entity representing a tax-filing person or trust. Avoids freeform stri
 
 ```
 Owner
-  id: String
+  id: UUID
   name: String           // e.g. "AJ", "Partner", "Smith Family Trust"
   type: OwnerType        // .person | .trust
 ```
 
-- `OwnerRepository` protocol for CRUD: `fetchAll`, `create`, `update`, `delete`
-- iCloud backend: full CRUD
-- moolah-server backend: returns a single default person owner (the profile holder); mutations are no-ops
+- `OwnerRepository` protocol (or grouped under `TaxRepository` — see below) for CRUD: `fetchAll`, `create`, `update`, `delete`
+- CloudKit backend: full CRUD
+- Remote (moolah-server) backend: returns a single default person owner (the profile holder, name = `profile.cachedUserName`); mutations are no-ops
 - InMemory backend: full implementation for tests
 
 ### Account changes
 
-- New field: `ownerId: String?` — references an Owner. Nil defaults to the profile's default owner.
-- iCloud backend stores and syncs this field
-- moolah-server backend: always nil (all accounts belong to profile holder)
+- `Account` already has an `instrument: Instrument` field (used for multi-instrument support). No change needed for currency handling.
+- New field: `ownerId: UUID?` — references an Owner. Nil defaults to the profile's default owner.
+- CloudKit backend stores and syncs this field
+- Remote backend: always nil (all accounts belong to profile holder)
 
 ### Category changes
 
+Current `Category` model has only `id: UUID`, `name: String`, `parentId: UUID?`. Two new fields are required:
+
 - New field: `taxCategory: TaxCategory?` — classifies the category for tax reporting
-- New field: `ownerId: String?` — overrides attribution (for joint account income split by category)
+- New field: `ownerId: UUID?` — overrides attribution (for joint account income split by category)
 - Both fields edited inline on the existing category edit screen
-- iCloud backend stores and syncs these fields
-- moolah-server backend: always nil for both
+- CloudKit backend stores and syncs these fields
+- Remote backend: always nil for both
 
 ### TaxCategory enum
 
@@ -78,29 +82,31 @@ Classifies categories into tax-relevant groupings:
 
 ### TaxYearAdjustments (new entity)
 
-A single record per financial year per owner. Stores values that can't be derived from transactions.
+A single record per financial year per owner. Stores values that can't be derived from transactions. All monetary fields are `InstrumentAmount` in the profile's reporting instrument (`profile.instrument`).
 
 ```
 TaxYearAdjustments
-  id: String
+  id: UUID
   financialYear: Int              // e.g. 2026 for FY2025-26
-  ownerId: String                 // which owner this applies to
+  ownerId: UUID                   // which owner this applies to
 
   // Capital gains — auto-populated from ReportingStore.capitalGainsSummary via
-  // asTaxAdjustmentValues(), with manual override still available
-  shortTermCapitalGains: MonetaryAmount?
-  longTermCapitalGains: MonetaryAmount?     // pre-discount amount
-  capitalLosses: MonetaryAmount?
+  // asTaxAdjustmentValues(currency:), with manual override still available.
+  // Values are already in profile.instrument (the summary is computed by
+  // CapitalGainsCalculator.computeWithConversion using profile currency as target).
+  shortTermCapitalGains: InstrumentAmount?
+  longTermCapitalGains: InstrumentAmount?     // pre-discount amount
+  capitalLosses: InstrumentAmount?
 
-  // Credits and offsets
-  frankingCredits: MonetaryAmount?
-  paygWithheld: MonetaryAmount?             // tax withheld by payers
+  // Credits and offsets (stored in profile.instrument)
+  frankingCredits: InstrumentAmount?
+  paygWithheld: InstrumentAmount?             // tax withheld by payers
 
   // Instalments paid
-  q1InstalmentPaid: MonetaryAmount?
-  q2InstalmentPaid: MonetaryAmount?
-  q3InstalmentPaid: MonetaryAmount?
-  q4InstalmentPaid: MonetaryAmount?
+  q1InstalmentPaid: InstrumentAmount?
+  q2InstalmentPaid: InstrumentAmount?
+  q3InstalmentPaid: InstrumentAmount?
+  q4InstalmentPaid: InstrumentAmount?
 
   // Other factors
   hasPrivateHealth: Bool?                    // affects Medicare levy surcharge
@@ -113,14 +119,26 @@ TaxYearAdjustments
 
 ```
 BeneficiaryDistribution
-  ownerId: String       // must reference a person-type Owner
-  percentage: Decimal    // e.g. 50.0 for 50%
+  ownerId: UUID         // must reference a person-type Owner
+  percentage: Decimal   // e.g. 50.0 for 50%
 ```
 
+**Persisted instrument:** adjustment values are stored as `InstrumentAmount`, so the instrument travels with the value. If a user ever switches `profile.currencyCode` after entering adjustments, older records remain interpretable at their original instrument (display/recalculation can convert on read).
+
 - CRUD via `TaxRepository` protocol: `fetchAdjustments(financialYear:ownerId:)`, `saveAdjustments(_:)`
-- iCloud backend: full CRUD
-- moolah-server backend: returns nil; mutations are no-ops
+- CloudKit backend: full CRUD
+- Remote backend: returns nil; mutations are no-ops
 - InMemory backend: full implementation for tests
+
+### Bridge from ReportingStore (already implemented)
+
+`CapitalGainsSummary.asTaxAdjustmentValues(currency: Instrument)` in `Features/Reports/ReportingStore.swift` returns:
+
+```swift
+(shortTerm: InstrumentAmount, longTerm: InstrumentAmount, losses: InstrumentAmount)
+```
+
+where `losses` is the absolute value of the net loss (if `totalGain < 0`). `TaxStore.loadTaxSummary` calls `ReportingStore.loadCapitalGains(financialYear:)`, passes `profile.instrument` to the bridge, and fills the three capital gains fields on `TaxYearAdjustments` unless the user has manually overridden them.
 
 ### TaxRateTable (bundled data, not server-stored)
 
@@ -153,11 +171,13 @@ TaxRateTable
 A pure Swift struct with no async calls or repository dependencies. All inputs passed in, `TaxEstimate` returned. Highly unit-testable.
 
 **Inputs:**
-- Income totals grouped by `TaxCategory` (from category balance aggregation)
-- Deduction totals grouped by `TaxCategory`
-- `TaxYearAdjustments` for the year
+- Income totals grouped by `TaxCategory` (from category balance aggregation), already in `profile.instrument`
+- Deduction totals grouped by `TaxCategory`, already in `profile.instrument`
+- `TaxYearAdjustments` for the year (all values in `profile.instrument`)
 - `TaxRateTable` for the year and owner type
 - Trust distribution income (for person-type owners who are trust beneficiaries)
+
+**Instrument invariant:** the calculator does no conversion. All input `InstrumentAmount` values must be in the same instrument (the profile's reporting instrument). `InstrumentAmount` arithmetic traps on mismatched instruments, so a misconfigured caller fails loudly rather than silently producing a wrong total. Conversion happens upstream in `AnalysisRepository.fetchCategoryBalances(...)` (see below) and in `CapitalGainsCalculator.computeWithConversion(...)`.
 
 **Calculation steps (person):**
 
@@ -188,37 +208,41 @@ A pure Swift struct with no async calls or repository dependencies. All inputs p
 
 ### TaxEstimate (output model)
 
+All amounts are `InstrumentAmount` in the profile's reporting instrument. Optional-unavailable fields are used for values whose source conversion failed (per Rule 11 of `INSTRUMENT_CONVERSION_GUIDE.md`): the specific figure and any total that depends on it become `nil`, while independent sibling figures keep rendering.
+
 ```
 TaxEstimate
+  instrument: Instrument                     // profile.instrument at calculation time
+
   // Income breakdown
-  incomeByType: [TaxCategory: MonetaryAmount]
-  trustDistributionIncome: MonetaryAmount?
-  totalAssessableIncome: MonetaryAmount
+  incomeByType: [TaxCategory: InstrumentAmount]
+  trustDistributionIncome: InstrumentAmount?
+  totalAssessableIncome: InstrumentAmount?   // nil if any contributing conversion failed
 
   // Deductions
-  deductionsByType: [TaxCategory: MonetaryAmount]
-  totalDeductions: MonetaryAmount
+  deductionsByType: [TaxCategory: InstrumentAmount]
+  totalDeductions: InstrumentAmount?
 
   // Capital gains
-  netCapitalGains: MonetaryAmount
+  netCapitalGains: InstrumentAmount?
 
   // Core calculation
-  taxableIncome: MonetaryAmount
-  taxOnIncome: MonetaryAmount               // from bracket calculation
-  medicareLevy: MonetaryAmount
-  medicareLevySurcharge: MonetaryAmount?
+  taxableIncome: InstrumentAmount?
+  taxOnIncome: InstrumentAmount?             // from bracket calculation
+  medicareLevy: InstrumentAmount?
+  medicareLevySurcharge: InstrumentAmount?
 
   // Credits
-  frankingCreditOffset: MonetaryAmount?
-  paygWithheldCredit: MonetaryAmount?
+  frankingCreditOffset: InstrumentAmount?
+  paygWithheldCredit: InstrumentAmount?
 
   // Result
-  estimatedLiability: MonetaryAmount         // the headline number
+  estimatedLiability: InstrumentAmount?      // the headline number; nil if any input unavailable
 
   // Instalments
-  quarterlyInstalment: MonetaryAmount?       // recommended payment
-  totalInstalmentsPaid: MonetaryAmount
-  instalmentShortfall: MonetaryAmount?       // positive = underpaid
+  quarterlyInstalment: InstrumentAmount?     // recommended payment
+  totalInstalmentsPaid: InstrumentAmount
+  instalmentShortfall: InstrumentAmount?     // positive = underpaid
 ```
 
 ---
@@ -228,32 +252,34 @@ TaxEstimate
 ### TaxRepository (new protocol)
 
 ```swift
-protocol TaxRepository {
+protocol TaxRepository: Sendable {
     func fetchOwners() async throws -> [Owner]
     func createOwner(_ owner: Owner) async throws -> Owner
     func updateOwner(_ owner: Owner) async throws -> Owner
-    func deleteOwner(id: String) async throws
+    func deleteOwner(id: UUID) async throws
 
-    func fetchAdjustments(financialYear: Int, ownerId: String) async throws -> TaxYearAdjustments?
+    func fetchAdjustments(financialYear: Int, ownerId: UUID) async throws -> TaxYearAdjustments?
     func saveAdjustments(_ adjustments: TaxYearAdjustments) async throws -> TaxYearAdjustments
 }
 ```
 
-Added to `BackendProvider` alongside existing repositories.
+Added to `BackendProvider` alongside existing repositories (`accounts`, `transactions`, `categories`, `earmarks`, `analysis`, `investments`, `conversionService`).
 
 ### TaxStore (@MainActor)
 
-Orchestrates data loading and calculation:
+Orchestrates data loading and calculation. Reads `profile.instrument` and threads it through every aggregation call so all values arrive in the reporting instrument.
 
 - `loadTaxSummary(financialYear:owner:)`:
   1. Load owners, categories (with tax mappings), accounts (with owner assignments)
   2. Determine which categories are attributed to the selected owner (see attribution chain)
-  3. Call `AnalysisRepository.fetchCategoryBalances(dateRange:transactionType:)` for income and expenses across the FY
+  3. Call `AnalysisRepository.fetchCategoryBalancesByType(dateRange:filters:targetInstrument:)` with `targetInstrument: profile.instrument` for the FY. This returns `(income: [UUID: InstrumentAmount], expense: [UUID: InstrumentAmount])` with all values converted to the reporting instrument.
   4. Group results by `TaxCategory`
   5. If person: check for trust beneficiary distributions, run trust calculation first
-  6. Load `TaxYearAdjustments`
-  7. Load `TaxRateTable`
-  8. Run `TaxCalculator` → publish `TaxEstimate`
+  6. Load `TaxYearAdjustments` (or use defaults if none saved)
+  7. Pull capital gains by calling `ReportingStore.loadCapitalGains(financialYear:)` and `CapitalGainsSummary.asTaxAdjustmentValues(currency: profile.instrument)`; populate adjustments unless the user has saved overrides
+  8. Load `TaxRateTable` for (financialYear, ownerType)
+  9. Run `TaxCalculator` → publish `TaxEstimate`
+  10. On any `BackendError.conversionFailed` (or equivalent) from step 3 or 7, mark the affected categories/fields unavailable and propagate `nil` through dependent totals per Rule 11
 
 - `loadInstalmentRecommendation(financialYear:quarter:owner:)`:
   - Same flow but calculator also annualises YTD and computes per-quarter recommendation
@@ -264,7 +290,7 @@ When determining which owner a transaction's category belongs to:
 
 1. **Category has explicit `ownerId`** → use that owner
 2. **Transaction's account has `ownerId`** → use that owner
-3. **Profile default owner** — the owner with the earliest-created person-type record. When the iCloud backend has no owners, the tax UI prompts the user to create one before proceeding.
+3. **Profile default owner** — the owner with the earliest-created person-type record. When the CloudKit backend has no owners, the tax UI prompts the user to create one before proceeding.
 
 ---
 
@@ -284,6 +310,7 @@ When determining which owner a transaction's category belongs to:
   - Credits and offsets
   - **Estimated net liability** (headline)
 - Drill-down: tapping an income/deduction line navigates to filtered transaction list (reuse existing transaction list with category + date range filter)
+- **Unavailable values**: any line whose source conversion failed renders as an "Unavailable" state (not zero, not a partial sum). The estimated liability is hidden with an explanation when any required input is unavailable. Sibling lines whose data is complete still render normally.
 
 ### Quarterly Instalments screen
 
@@ -316,17 +343,19 @@ When determining which owner a transaction's category belongs to:
 
 ## Backend Implementation
 
-### iCloud backend
+### CloudKit backend
 
-- `Owner` stored as a new CKRecord type
-- `TaxYearAdjustments` stored as a new CKRecord type (one record per FY per owner)
+- `Owner` stored as a new CKRecord type (must be added to `guides/SYNC_GUIDE.md` compliant sync flow)
+- `TaxYearAdjustments` stored as a new CKRecord type (one record per FY per owner). `InstrumentAmount` fields are persisted as (decimal quantity, instrument code) pairs, consistent with how amounts are stored elsewhere.
 - `BeneficiaryDistribution` stored as a nested/child record or serialised within adjustments
 - Category record gains `taxCategory` (string) and `ownerId` (reference) fields
-- Account record gains `ownerId` (reference) field
+- Account record gains `ownerId` (reference) field; its existing `instrument` field is untouched
 
-### moolah-server backend
+### Remote backend (moolah-server)
 
-- `fetchOwners()`: returns `[Owner(id: "default", name: profile.cachedUserName, type: .person)]`
+Remote is single-instrument (`Profile.supportsComplexTransactions == false`) so tax features are inert:
+
+- `fetchOwners()`: returns a single default person owner whose name is `profile.cachedUserName`
 - `createOwner/updateOwner/deleteOwner`: no-op
 - Category and Account tax fields: always nil on fetch, ignored on update
 - `fetchAdjustments`: returns nil
@@ -334,7 +363,7 @@ When determining which owner a transaction's category belongs to:
 
 ### InMemory backend
 
-- Full implementation for tests and previews, matching iCloud behaviour
+- Full implementation for tests and previews, matching CloudKit behaviour
 
 ---
 
