@@ -59,8 +59,11 @@ struct ShowHiddenCommands: Commands {
 
 /// Moolah-specific top-level domain menus grouped into one Commands struct so
 /// the outer `.commands` block stays within `CommandsBuilder`'s 10-argument limit.
+/// CommandMenus are inlined here (rather than references to per-feature structs)
+/// to keep the opaque `some Commands` return type inferable.
 struct MoolahDomainCommands: Commands {
   @FocusedValue(\.selectedTransaction) private var selectedTransaction
+  @FocusedValue(\.selectedAccount) private var selectedAccount
   @FocusedValue(\.sidebarSelection) private var sidebarSelection
 
   var body: some Commands {
@@ -128,9 +131,25 @@ struct MoolahDomainCommands: Commands {
         .keyboardShortcut("]", modifiers: .command)
         .disabled(true)
     }
+
+    CommandMenu("Account") {
+      Button("Edit Account\u{2026}") {
+        NotificationCenter.default.post(
+          name: .requestAccountEdit,
+          object: selectedAccount?.wrappedValue?.id
+        )
+      }
+      .disabled(selectedAccount?.wrappedValue == nil)
+
+      Button("View Transactions") {
+        if let id = selectedAccount?.wrappedValue?.id {
+          sidebarSelection?.wrappedValue = .account(id)
+        }
+      }
+      .disabled(selectedAccount?.wrappedValue == nil)
+    }
   }
 }
-
 
 @main
 @MainActor
