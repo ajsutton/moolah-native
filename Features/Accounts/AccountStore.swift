@@ -364,6 +364,24 @@ final class AccountStore {
   }
 
   func reorderAccounts(_ reordered: [Account], positionOffset: Int = 0) async {
+    // Save previous state for rollback on failure.
+    let previousAccounts = accounts
+    error = nil
+
+    // Optimistic local reorder so the UI reflects the new ordering immediately.
+    var optimistic = accounts.ordered
+    for (index, account) in reordered.enumerated() {
+      guard let existingIndex = optimistic.firstIndex(where: { $0.id == account.id }) else {
+        continue
+      }
+      optimistic[existingIndex].position = positionOffset + index
+    }
+    accounts = Accounts(from: optimistic)
+
+    // Persist each reorder. Accumulate the first encountered error rather than
+    // silently swallowing failures — partial failure leaves server state
+    // inconsistent, so we must surface it and roll back.
+    var firstError: Error?
     for (index, account) in reordered.enumerated() {
       var updated = account
       updated.position = positionOffset + index
@@ -371,9 +389,20 @@ final class AccountStore {
         _ = try await repository.update(updated)
       } catch {
         logger.error("Failed to persist account reorder for \(updated.id): \(error)")
+        if firstError == nil { firstError = error }
       }
     }
-    // Reload to get consistent state
+
+    if let firstError {
+      // Roll back optimistic state and surface the error to the UI, then
+      // reload to reconcile with whatever did persist on the server.
+      accounts = previousAccounts
+      self.error = firstError
+      await load()
+      return
+    }
+
+    // Success: reload to get authoritative state from the repository.
     await load()
   }
 

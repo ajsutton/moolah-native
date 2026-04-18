@@ -513,4 +513,125 @@ struct AccountStoreTests {
     let fetched = try await backend.accounts.fetchAll()
     #expect(fetched.first?.instrument.id == eurInstrument.id)
   }
+
+  // MARK: - reorderAccounts
+
+  @Test func testReorderAccountsPersistsNewPositions() async throws {
+    let idA = UUID()
+    let idB = UUID()
+    let idC = UUID()
+    let (backend, container) = try TestBackend.create()
+    let a = seedAccount(id: idA, name: "A", position: 0, in: container)
+    let b = seedAccount(id: idB, name: "B", position: 1, in: container)
+    let c = seedAccount(id: idC, name: "C", position: 2, in: container)
+    let store = AccountStore(
+      repository: backend.accounts, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
+    await store.load()
+
+    // Reverse order: C, B, A
+    await store.reorderAccounts([c, b, a])
+
+    #expect(store.error == nil)
+    #expect(store.accounts.ordered.map(\.name) == ["C", "B", "A"])
+
+    let persisted = try await backend.accounts.fetchAll().sorted { $0.position < $1.position }
+    #expect(persisted.map(\.name) == ["C", "B", "A"])
+  }
+
+  @Test func testReorderAccountsSurfacesErrorOnFailure() async throws {
+    let idA = UUID()
+    let idB = UUID()
+    let repository = FailingAccountRepository(
+      accounts: [
+        Account(
+          id: idA, name: "A", type: .bank, instrument: .defaultTestInstrument, position: 0,
+          isHidden: false),
+        Account(
+          id: idB, name: "B", type: .bank, instrument: .defaultTestInstrument, position: 1,
+          isHidden: false),
+      ])
+    let store = AccountStore(
+      repository: repository, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
+    await store.load()
+    #expect(store.accounts.ordered.map(\.name) == ["A", "B"])
+
+    // Start failing further repository calls (update + fetchAll during reload).
+    repository.shouldFail = true
+    let accounts = store.accounts.ordered
+    await store.reorderAccounts([accounts[1], accounts[0]])
+
+    // Error must be surfaced, not silently swallowed.
+    #expect(store.error != nil)
+    // State rolls back to the pre-reorder ordering when persistence fails.
+    #expect(store.accounts.ordered.map(\.name) == ["A", "B"])
+  }
+
+  @Test func testReorderAccountsRollsBackLocalStateOnFailure() async throws {
+    let idA = UUID()
+    let idB = UUID()
+    let original = [
+      Account(
+        id: idA, name: "A", type: .bank, instrument: .defaultTestInstrument, position: 0,
+        isHidden: false),
+      Account(
+        id: idB, name: "B", type: .bank, instrument: .defaultTestInstrument, position: 1,
+        isHidden: false),
+    ]
+    let repository = FailingAccountRepository(accounts: original)
+    let store = AccountStore(
+      repository: repository, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
+    await store.load()
+
+    // Make update() fail but allow fetchAll() to succeed so the post-failure
+    // reload restores the original server-side order.
+    repository.failOnUpdate = true
+    let accounts = store.accounts.ordered
+    await store.reorderAccounts([accounts[1], accounts[0]])
+
+    #expect(store.error != nil)
+    // After rollback + reload, the authoritative ordering is preserved.
+    #expect(store.accounts.ordered.map(\.name) == ["A", "B"])
+    #expect(store.accounts.ordered.map(\.position) == [0, 1])
+  }
+}
+
+// MARK: - Test helpers
+
+/// In-memory AccountRepository whose methods can be toggled to fail, letting
+/// tests exercise error-handling paths without spinning up CloudKit.
+private final class FailingAccountRepository: AccountRepository, @unchecked Sendable {
+  private var accounts: [Account]
+  var shouldFail = false
+  var failOnUpdate = false
+
+  init(accounts: [Account]) {
+    self.accounts = accounts
+  }
+
+  func fetchAll() async throws -> [Account] {
+    if shouldFail { throw BackendError.networkUnavailable }
+    return accounts
+  }
+
+  func create(_ account: Account, openingBalance: InstrumentAmount?) async throws -> Account {
+    if shouldFail { throw BackendError.networkUnavailable }
+    accounts.append(account)
+    return account
+  }
+
+  func update(_ account: Account) async throws -> Account {
+    if shouldFail || failOnUpdate { throw BackendError.networkUnavailable }
+    if let idx = accounts.firstIndex(where: { $0.id == account.id }) {
+      accounts[idx] = account
+    }
+    return account
+  }
+
+  func delete(id: UUID) async throws {
+    if shouldFail { throw BackendError.networkUnavailable }
+    accounts.removeAll { $0.id == id }
+  }
 }
