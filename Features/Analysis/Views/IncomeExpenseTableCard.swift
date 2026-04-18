@@ -6,6 +6,12 @@ struct IncomeExpenseTableCard: View {
   private static let initialVisibleCount = 6
   private static let loadMoreCount = 6
 
+  private static let monthLabelFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "MMM yyyy"
+    return formatter
+  }()
+
   @State private var includeEarmarks = false
   @State private var visibleCount = IncomeExpenseTableCard.initialVisibleCount
 
@@ -151,9 +157,7 @@ struct IncomeExpenseTableCard: View {
   }
 
   private func monthLabel(for item: MonthlyIncomeExpense) -> String {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "MMM yyyy"
-    return formatter.string(from: item.start)
+    Self.monthLabelFormatter.string(from: item.start)
   }
 
   private func monthsAgoLabel(for item: MonthlyIncomeExpense) -> String {
