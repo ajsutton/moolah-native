@@ -78,4 +78,72 @@ struct ProfileSessionTests {
     // Store exists and starts empty (registrations load on demand).
     #expect(session.cryptoTokenStore.registrations.isEmpty)
   }
+
+  // MARK: - storesToReload (sync reload dispatch policy)
+
+  @Test("AccountRecord change reloads the account store")
+  func accountRecordReloadsAccounts() {
+    let plan = ProfileSession.storesToReload(for: [AccountRecord.recordType])
+    #expect(plan == .accounts)
+  }
+
+  @Test("TransactionRecord change reloads the account store")
+  func transactionRecordReloadsAccounts() {
+    let plan = ProfileSession.storesToReload(for: [TransactionRecord.recordType])
+    #expect(plan == .accounts)
+  }
+
+  @Test("TransactionLegRecord change reloads both accounts and earmarks")
+  func transactionLegRecordReloadsAccountsAndEarmarks() {
+    // Regression for issue #76: leg-only remote changes (e.g. category or
+    // earmark reassignment on another device) must trigger reloads of both
+    // the account store and the earmark store, even when the parent
+    // TransactionRecord did not change in this batch.
+    let plan = ProfileSession.storesToReload(for: [TransactionLegRecord.recordType])
+    #expect(plan.contains(.accounts))
+    #expect(plan.contains(.earmarks))
+    #expect(!plan.contains(.categories))
+  }
+
+  @Test("CategoryRecord change reloads only the category store")
+  func categoryRecordReloadsCategories() {
+    let plan = ProfileSession.storesToReload(for: [CategoryRecord.recordType])
+    #expect(plan == .categories)
+  }
+
+  @Test("EarmarkRecord change reloads the earmark store")
+  func earmarkRecordReloadsEarmarks() {
+    let plan = ProfileSession.storesToReload(for: [EarmarkRecord.recordType])
+    #expect(plan == .earmarks)
+  }
+
+  @Test("EarmarkBudgetItemRecord change reloads the earmark store")
+  func earmarkBudgetItemRecordReloadsEarmarks() {
+    let plan = ProfileSession.storesToReload(for: [EarmarkBudgetItemRecord.recordType])
+    #expect(plan == .earmarks)
+  }
+
+  @Test("Unknown record types do not trigger any reload")
+  func unknownRecordTypesDoNotReload() {
+    let plan = ProfileSession.storesToReload(for: ["CD_SomethingElse"])
+    #expect(plan.isEmpty)
+  }
+
+  @Test("Empty changed types produces an empty plan")
+  func emptyChangedTypesProducesEmptyPlan() {
+    let plan = ProfileSession.storesToReload(for: [])
+    #expect(plan.isEmpty)
+  }
+
+  @Test("Mixed record types combine reload plans")
+  func mixedRecordTypesCombineReloadPlans() {
+    let plan = ProfileSession.storesToReload(
+      for: [
+        TransactionLegRecord.recordType,
+        CategoryRecord.recordType,
+      ])
+    #expect(plan.contains(.accounts))
+    #expect(plan.contains(.earmarks))
+    #expect(plan.contains(.categories))
+  }
 }
