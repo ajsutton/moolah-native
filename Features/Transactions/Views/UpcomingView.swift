@@ -53,6 +53,12 @@ struct UpcomingView: View {
         else { return }
         transactionPendingDelete = id
       }
+      .onReceive(NotificationCenter.default.publisher(for: .requestTransactionPay)) { note in
+        guard let id = note.object as? Transaction.ID,
+          let match = transactionStore.transactions.first(where: { $0.transaction.id == id })
+        else { return }
+        Task { await payTransaction(match.transaction) }
+      }
   }
 
   private var listView: some View {

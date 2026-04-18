@@ -9,6 +9,10 @@ extension Notification.Name {
   static let requestTransactionEdit = Notification.Name("requestTransactionEdit")
   static let requestTransactionDuplicate = Notification.Name("requestTransactionDuplicate")
   static let requestTransactionDelete = Notification.Name("requestTransactionDelete")
+  static let requestTransactionPay = Notification.Name("requestTransactionPay")
+
+  // Category commands
+  static let requestCategoryEdit = Notification.Name("requestCategoryEdit")
 
   // Account commands
   static let requestAccountEdit = Notification.Name("requestAccountEdit")

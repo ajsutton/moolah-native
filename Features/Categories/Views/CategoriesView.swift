@@ -100,6 +100,12 @@ struct CategoriesView: View {
       .focusedSceneValue(\.newCategoryAction) {
         showCreateSheet = true
       }
+      .onReceive(NotificationCenter.default.publisher(for: .requestCategoryEdit)) { note in
+        guard let id = note.object as? UUID,
+          let category = categoryStore.categories.by(id: id)
+        else { return }
+        selectedCategory = category
+      }
   }
 
   private var filteredCategories: [Category] {

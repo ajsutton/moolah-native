@@ -84,6 +84,7 @@ struct MoolahDomainCommands: Commands {
   @FocusedValue(\.selectedTransaction) private var selectedTransaction
   @FocusedValue(\.selectedAccount) private var selectedAccount
   @FocusedValue(\.selectedEarmark) private var selectedEarmark
+  @FocusedValue(\.selectedCategory) private var selectedCategory
   @FocusedValue(\.sidebarSelection) private var sidebarSelection
   @FocusedValue(\.findInListAction) private var findInListAction
   @Environment(\.openWindow) private var openWindow
@@ -101,6 +102,14 @@ struct MoolahDomainCommands: Commands {
 
       Button("Duplicate Transaction") {}
         .disabled(true)
+
+      Button("Pay Scheduled Transaction") {
+        NotificationCenter.default.post(
+          name: .requestTransactionPay,
+          object: selectedTransaction?.wrappedValue?.id
+        )
+      }
+      .disabled(selectedTransaction?.wrappedValue?.recurPeriod == nil)
 
       Divider()
 
@@ -190,6 +199,16 @@ struct MoolahDomainCommands: Commands {
         )
       }
       .disabled(selectedEarmark?.wrappedValue == nil)
+    }
+
+    CommandMenu("Category") {
+      Button("Edit Category\u{2026}") {
+        NotificationCenter.default.post(
+          name: .requestCategoryEdit,
+          object: selectedCategory?.wrappedValue?.id
+        )
+      }
+      .disabled(selectedCategory?.wrappedValue == nil)
     }
 
     CommandGroup(after: .textEditing) {
