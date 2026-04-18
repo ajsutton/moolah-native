@@ -43,16 +43,21 @@ struct RefreshCommands: Commands {
   }
 }
 
-/// View menu toggle for showing hidden accounts and earmarks
+/// View menu verb-pair for showing / hiding hidden accounts and earmarks.
+/// Uses a Button with a flipped label (per §14 "Toggle State") and stays
+/// visible when no window is focused — disabled per §14 "Disable, don't hide".
 struct ShowHiddenCommands: Commands {
   @FocusedValue(\.showHiddenAccounts) private var showHidden
 
   var body: some Commands {
     CommandGroup(after: .sidebar) {
-      if let showHidden {
-        Toggle("Show Hidden Accounts", isOn: showHidden)
-          .keyboardShortcut("h", modifiers: [.command, .shift])
+      Button(
+        showHidden?.wrappedValue == true ? "Hide Hidden Accounts" : "Show Hidden Accounts"
+      ) {
+        showHidden?.wrappedValue.toggle()
       }
+      .keyboardShortcut("h", modifiers: [.command, .shift])
+      .disabled(showHidden == nil)
     }
   }
 }
