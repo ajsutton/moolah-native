@@ -43,7 +43,7 @@ struct SidebarView: View {
             AccountSidebarRow(account: account, isSelected: selection == .account(account.id))
           }
           .contextMenu {
-            Button("Edit Account", systemImage: "pencil") {
+            Button("Edit Account\u{2026}", systemImage: "pencil") {
               accountToEdit = account
             }
             Button("View Transactions", systemImage: "list.bullet") {
@@ -112,7 +112,7 @@ struct SidebarView: View {
             AccountSidebarRow(account: account, isSelected: selection == .account(account.id))
           }
           .contextMenu {
-            Button("Edit Account", systemImage: "pencil") {
+            Button("Edit Account\u{2026}", systemImage: "pencil") {
               accountToEdit = account
             }
             Button("View Transactions", systemImage: "list.bullet") {
@@ -239,6 +239,17 @@ struct SidebarView: View {
         account: account, accountStore: accountStore,
         supportsComplexTransactions: session.profile.supportsComplexTransactions)
     }
+    .onReceive(
+      NotificationCenter.default.publisher(for: .requestAccountEdit),
+      perform: handleAccountEditRequest
+    )
+  }
+
+  private func handleAccountEditRequest(_ note: Notification) {
+    guard let id = note.object as? UUID,
+      let account = accountStore.accounts.by(id: id)
+    else { return }
+    accountToEdit = account
   }
 
   private func totalRow(label: String, value: InstrumentAmount?) -> some View {
