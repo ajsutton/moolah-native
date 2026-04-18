@@ -69,7 +69,6 @@ struct ShowHiddenCommands: Commands {
 struct MoolahDomainCommands: Commands {
   var body: some Commands {
     TransactionCommands()
-    GoCommands()
   }
 }
 
