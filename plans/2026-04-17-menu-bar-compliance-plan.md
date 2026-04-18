@@ -164,16 +164,21 @@ git commit -m "docs: remove single-key shortcut annotations from Transaction men
 
 ---
 
-## Phase 1: Focused Value Foundation
+## Phase 1: Focused Value Foundation ✅ Complete
 
 All subsequent menu-bar commands operate on selection. Centralize the selection state via `@FocusedValue` first so later phases can consume it without circular changes.
+
+Status verified 2026-04-18:
+- `Shared/FocusedValues.swift` contains all eleven focused value keys listed in Task 1.1.
+- `TransactionListView.swift:105` and `UpcomingView.swift:24` publish `selectedTransaction`.
+- `SidebarView.swift:187–188` publish `sidebarSelection` and `selectedAccount`; `EarmarksView.swift:97` publishes `selectedEarmark`; `CategoriesView.swift:99` publishes `selectedCategory`.
 
 ### Task 1.1: Add focused value keys for selection state
 
 **Files:**
 - Modify: `Shared/FocusedValues.swift`
 
-- [ ] **Step 1: Add new focused value keys**
+- [x] **Step 1: Add new focused value keys**
 
 Replace the contents of `Shared/FocusedValues.swift` with:
 
@@ -292,7 +297,7 @@ extension FocusedValues {
 }
 ```
 
-- [ ] **Step 2: Build — verify warning-free compile**
+- [x] **Step 2: Build — verify warning-free compile**
 
 ```bash
 just build-mac 2>&1 | tee .agent-tmp/phase1-build.txt
@@ -300,7 +305,7 @@ grep -i 'warning\|error' .agent-tmp/phase1-build.txt
 ```
 Expected: No warnings, no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add Shared/FocusedValues.swift
@@ -311,13 +316,13 @@ git commit -m "feat: add focused value keys for menu selection state"
 
 **Files:**
 - Modify: `Features/Transactions/Views/TransactionListView.swift:104`
-- Modify: `Features/Upcoming/Views/UpcomingView.swift` (wherever list selection is owned)
+- Modify: `Features/Transactions/Views/UpcomingView.swift` (wherever list selection is owned)
 
-- [ ] **Step 1: Find the selection binding in TransactionListView**
+- [x] **Step 1: Find the selection binding in TransactionListView**
 
 Read `Features/Transactions/Views/TransactionListView.swift` and locate `selectedTransactionBinding` (used on line 182 `List(selection: selectedTransactionBinding)`).
 
-- [ ] **Step 2: Publish the binding alongside the existing `newTransactionAction` publication**
+- [x] **Step 2: Publish the binding alongside the existing `newTransactionAction` publication**
 
 At line 104, change:
 
@@ -332,15 +337,15 @@ to:
 .focusedSceneValue(\.selectedTransaction, selectedTransactionBinding)
 ```
 
-- [ ] **Step 3: Same publication for UpcomingView**
+- [x] **Step 3: Same publication for UpcomingView**
 
-Read `Features/Upcoming/Views/UpcomingView.swift`. Locate its selection state (likely `@State private var selectedTransaction: Transaction?` and a `List(selection:)`). Append to its root view modifier:
+Read `Features/Transactions/Views/UpcomingView.swift`. Locate its selection state (`@State private var selectedTransaction: Transaction?` and a `List(selection:)`). Append to its root view modifier:
 
 ```swift
 .focusedSceneValue(\.selectedTransaction, $selectedTransaction)
 ```
 
-- [ ] **Step 4: Build**
+- [x] **Step 4: Build**
 
 ```bash
 just build-mac 2>&1 | tee .agent-tmp/phase1-build.txt
@@ -348,10 +353,10 @@ grep -i 'warning\|error' .agent-tmp/phase1-build.txt
 ```
 Expected: clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
-git add Features/Transactions/Views/TransactionListView.swift Features/Upcoming/Views/UpcomingView.swift
+git add Features/Transactions/Views/TransactionListView.swift Features/Transactions/Views/UpcomingView.swift
 git commit -m "feat: publish selectedTransaction focused value from list views"
 ```
 
@@ -362,7 +367,7 @@ git commit -m "feat: publish selectedTransaction focused value from list views"
 - Modify: `Features/Earmarks/Views/EarmarksView.swift`
 - Modify: `Features/Categories/Views/CategoriesView.swift`
 
-- [ ] **Step 1: Publish `sidebarSelection` and `selectedAccount` from SidebarView**
+- [x] **Step 1: Publish `sidebarSelection` and `selectedAccount` from SidebarView**
 
 Read `Features/Navigation/SidebarView.swift`. Near the existing `.focusedSceneValue(\.showHiddenAccounts, $showHidden)` at line 181, add:
 
@@ -389,7 +394,7 @@ private var selectedAccountBinding: Binding<Account?> {
 
 Adjust the case matching to match the actual `SidebarSelection` enum shape in the codebase.
 
-- [ ] **Step 2: Publish `selectedEarmark` from EarmarksView**
+- [x] **Step 2: Publish `selectedEarmark` from EarmarksView**
 
 Read `Features/Earmarks/Views/EarmarksView.swift`. Locate its list selection. Add to its root view modifier:
 
@@ -397,7 +402,7 @@ Read `Features/Earmarks/Views/EarmarksView.swift`. Locate its list selection. Ad
 .focusedSceneValue(\.selectedEarmark, $selectedEarmark)
 ```
 
-- [ ] **Step 3: Publish `selectedCategory` from CategoriesView**
+- [x] **Step 3: Publish `selectedCategory` from CategoriesView**
 
 Read `Features/Categories/Views/CategoriesView.swift`. Locate its list selection. Add:
 
@@ -405,7 +410,7 @@ Read `Features/Categories/Views/CategoriesView.swift`. Locate its list selection
 .focusedSceneValue(\.selectedCategory, $selectedCategory)
 ```
 
-- [ ] **Step 4: Build**
+- [x] **Step 4: Build**
 
 ```bash
 just build-mac 2>&1 | tee .agent-tmp/phase1-build.txt
@@ -413,7 +418,7 @@ grep -i 'warning\|error' .agent-tmp/phase1-build.txt
 ```
 Expected: clean.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 just test 2>&1 | tee .agent-tmp/phase1-test.txt
@@ -421,7 +426,7 @@ grep -i 'failed\|error:' .agent-tmp/phase1-test.txt
 ```
 Expected: no new failures.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add Features/Navigation/SidebarView.swift Features/Earmarks/Views/EarmarksView.swift Features/Categories/Views/CategoriesView.swift
