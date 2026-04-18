@@ -94,7 +94,7 @@ struct AutocompleteSuggestionDropdown<Item: Identifiable>: View {
         #else
           .fill(Color(uiColor: .secondarySystemGroupedBackground))
         #endif
-        .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
+        .shadow(color: Color.primary.opacity(0.15), radius: 10, y: 4)
     }
     .overlay(
       RoundedRectangle(cornerRadius: 8)
