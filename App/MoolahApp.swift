@@ -3,9 +3,12 @@ import OSLog
 import SwiftData
 import SwiftUI
 
-/// Commands for creating new transactions
-struct NewTransactionCommands: Commands {
+/// Combined File > New… commands (Transaction, Earmark; Account and Category are
+/// added in later phases). Grouping them into one Commands struct keeps the
+/// top-level `.commands` block under `CommandsBuilder`'s 10-argument limit.
+struct NewItemCommands: Commands {
   @FocusedValue(\.newTransactionAction) private var newTransactionAction
+  @FocusedValue(\.newEarmarkAction) private var newEarmarkAction
 
   var body: some Commands {
     CommandGroup(replacing: .newItem) {
@@ -14,16 +17,7 @@ struct NewTransactionCommands: Commands {
       }
       .keyboardShortcut("n", modifiers: .command)
       .disabled(newTransactionAction == nil)
-    }
-  }
-}
 
-/// Commands for creating new earmarks
-struct NewEarmarkCommands: Commands {
-  @FocusedValue(\.newEarmarkAction) private var newEarmarkAction
-
-  var body: some Commands {
-    CommandGroup(after: .newItem) {
       Button("New Earmark") {
         newEarmarkAction?()
       }
@@ -63,14 +57,6 @@ struct ShowHiddenCommands: Commands {
   }
 }
 
-/// Groups the Moolah-specific domain menus (Transaction, Go, and future Account/Earmark/Category).
-/// Wraps them into a single `Commands` so the top-level `.commands` block stays within
-/// `CommandsBuilder`'s 10-argument `buildBlock` limit.
-struct MoolahDomainCommands: Commands {
-  var body: some Commands {
-    TransactionCommands()
-  }
-}
 
 @main
 @MainActor
@@ -219,14 +205,14 @@ struct MoolahApp: App {
         ProfileCommands(
           profileStore: profileStore, sessionManager: sessionManager,
           containerManager: containerManager)
-        NewTransactionCommands()
-        NewEarmarkCommands()
+        NewItemCommands()
         RefreshCommands()
         SidebarCommands()
         ToolbarCommands()
         InspectorCommands()
         ShowHiddenCommands()
-        MoolahDomainCommands()
+        TransactionCommands()
+        GoCommands()
       }
 
       Window("About Moolah", id: "about") {
@@ -257,8 +243,7 @@ struct MoolahApp: App {
         handleScenePhaseChange(newPhase)
       }
       .commands {
-        NewTransactionCommands()
-        NewEarmarkCommands()
+        NewItemCommands()
         RefreshCommands()
         ShowHiddenCommands()
       }
