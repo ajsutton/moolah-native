@@ -186,67 +186,73 @@ struct UpcomingTransactionRow: View {
 
   var body: some View {
     HStack {
-      VStack(alignment: .leading, spacing: 4) {
-        HStack(spacing: 4) {
-          if isOverdue {
-            Image(systemName: "exclamationmark.triangle.fill")
-              .foregroundStyle(.red)
-              .imageScale(.small)
-              .accessibilityLabel("Overdue")
+      HStack {
+        VStack(alignment: .leading, spacing: 4) {
+          HStack(spacing: 4) {
+            if isOverdue {
+              Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+                .imageScale(.small)
+                .accessibilityHidden(true)
+            }
+            Text(displayPayee)
+              .font(.headline)
+              .foregroundStyle(isOverdue ? .red : .primary)
           }
-          Text(displayPayee)
-            .font(.headline)
-            .foregroundStyle(isOverdue ? .red : .primary)
-        }
 
-        HStack(spacing: 4) {
-          Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
-            .font(.caption)
-            .foregroundStyle(isDueToday ? .orange : .secondary)
-            .fontWeight(isDueToday ? .semibold : .regular)
-            .monospacedDigit()
-
-          if let recurrence = recurrenceDescription {
-            Text("•")
-              .foregroundStyle(.secondary)
-            Text(recurrence)
+          HStack(spacing: 4) {
+            Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
               .font(.caption)
-              .foregroundStyle(.secondary)
-              .accessibilityLabel("Repeats \(recurrence)")
-          }
+              .foregroundStyle(isDueToday ? .orange : .secondary)
+              .fontWeight(isDueToday ? .semibold : .regular)
+              .monospacedDigit()
 
-          ForEach(transaction.legs.compactMap(\.categoryId).uniqued(), id: \.self) { catId in
-            if let category = categories.by(id: catId) {
+            if let recurrence = recurrenceDescription {
               Text("•")
                 .foregroundStyle(.secondary)
-              Text(category.name)
+                .accessibilityHidden(true)
+              Text(recurrence)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
-          }
 
-          ForEach(transaction.legs.compactMap(\.earmarkId).uniqued(), id: \.self) { eid in
-            if let earmark = earmarks.by(id: eid) {
-              Text("•")
-                .foregroundStyle(.secondary)
-              Text(earmark.name)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            ForEach(transaction.legs.compactMap(\.categoryId).uniqued(), id: \.self) { catId in
+              if let category = categories.by(id: catId) {
+                Text("•")
+                  .foregroundStyle(.secondary)
+                  .accessibilityHidden(true)
+                Text(category.name)
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
+            }
+
+            ForEach(transaction.legs.compactMap(\.earmarkId).uniqued(), id: \.self) { eid in
+              if let earmark = earmarks.by(id: eid) {
+                Text("•")
+                  .foregroundStyle(.secondary)
+                  .accessibilityHidden(true)
+                Text(earmark.name)
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
             }
           }
         }
-      }
 
-      Spacer()
+        Spacer()
 
-      if let displayAmount {
-        InstrumentAmountView(amount: displayAmount, font: .body)
-      } else {
-        Text("—")
-          .font(.body)
-          .foregroundStyle(.secondary)
-          .monospacedDigit()
+        if let displayAmount {
+          InstrumentAmountView(amount: displayAmount, font: .body)
+        } else {
+          Text("—")
+            .font(.body)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+        }
       }
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel(accessibilityDescription)
 
       Button("Pay") {
         onPay()
@@ -261,6 +267,32 @@ struct UpcomingTransactionRow: View {
       .accessibilityLabel("Pay \(displayPayee)")
     }
     .contentShape(Rectangle())
+  }
+
+  private var accessibilityDescription: String {
+    var parts: [String] = []
+    if isOverdue {
+      parts.append("Overdue")
+    }
+    parts.append(displayPayee)
+    let amountStr = displayAmount?.formatted ?? "amount unavailable"
+    parts.append(amountStr)
+    let dateStr = transaction.date.formatted(date: .abbreviated, time: .omitted)
+    if isDueToday {
+      parts.append("due today, \(dateStr)")
+    } else {
+      parts.append(dateStr)
+    }
+    if let recurrence = recurrenceDescription {
+      parts.append("repeats \(recurrence)")
+    }
+    let categoryNames = transaction.legs.compactMap(\.categoryId).uniqued()
+      .compactMap { categories.by(id: $0)?.name }
+    parts.append(contentsOf: categoryNames)
+    let earmarkNames = transaction.legs.compactMap(\.earmarkId).uniqued()
+      .compactMap { earmarks.by(id: $0)?.name }
+    parts.append(contentsOf: earmarkNames)
+    return parts.joined(separator: ", ")
   }
 
   private var displayPayee: String {
