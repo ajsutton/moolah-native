@@ -215,21 +215,39 @@ final class EarmarkStore {
     return (balance, saved, spent)
   }
 
+  /// Reorders the visible earmarks, persisting each new position to the
+  /// repository. On any failure, rolls back local state, reloads from the
+  /// repository to reconcile partial writes, and surfaces the error via
+  /// `self.error`. Hidden earmarks keep their existing positions.
   func reorderEarmarks(from source: IndexSet, to destination: Int) async {
+    // Save old state for rollback.
+    let previousEarmarks = earmarks
+    error = nil
+
     var visible = visibleEarmarks
     visible.move(fromOffsets: source, toOffset: destination)
-
     for index in visible.indices {
       visible[index].position = index
-      do {
-        _ = try await repository.update(visible[index])
-      } catch {
-        logger.error("Failed to persist earmark reorder for \(visible[index].id): \(error)")
-      }
     }
 
+    // Apply optimistic update so the UI reflects the new order immediately.
     let hiddenEarmarks = earmarks.ordered.filter { $0.isHidden }
     earmarks = Earmarks(from: visible + hiddenEarmarks)
+
+    for earmark in visible {
+      do {
+        _ = try await repository.update(earmark)
+      } catch {
+        logger.error("Failed to persist earmark reorder for \(earmark.id): \(error)")
+        // Rollback local state, then reload to reconcile any partial writes
+        // already persisted to the backend before the failure. Use
+        // `reloadFromSync` so it preserves `self.error` set below.
+        earmarks = previousEarmarks
+        await reloadFromSync()
+        self.error = error
+        return
+      }
+    }
   }
 
   func create(_ earmark: Earmark) async -> Earmark? {

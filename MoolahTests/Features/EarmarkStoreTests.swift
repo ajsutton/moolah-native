@@ -433,6 +433,50 @@ struct EarmarkStoreTests {
     #expect(persisted[2].position == 2)
   }
 
+  @Test func testReorderSurfacesErrorOnFailure() async throws {
+    let e0 = Earmark(name: "First", instrument: .defaultTestInstrument, position: 0)
+    let e1 = Earmark(name: "Second", instrument: .defaultTestInstrument, position: 1)
+    let e2 = Earmark(name: "Third", instrument: .defaultTestInstrument, position: 2)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(earmarks: [e0, e1, e2], in: container)
+    let failing = UpdateFailingEarmarkRepository(wrapping: backend.earmarks)
+    let store = EarmarkStore(
+      repository: failing, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
+    await store.load()
+
+    failing.failUpdates = true
+    await store.reorderEarmarks(from: IndexSet(integer: 2), to: 0)
+
+    #expect(store.error != nil)
+  }
+
+  @Test func testReorderRollsBackOnFailure() async throws {
+    let e0 = Earmark(name: "First", instrument: .defaultTestInstrument, position: 0)
+    let e1 = Earmark(name: "Second", instrument: .defaultTestInstrument, position: 1)
+    let e2 = Earmark(name: "Third", instrument: .defaultTestInstrument, position: 2)
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(earmarks: [e0, e1, e2], in: container)
+    let failing = UpdateFailingEarmarkRepository(wrapping: backend.earmarks)
+    let store = EarmarkStore(
+      repository: failing, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
+    await store.load()
+
+    // First update succeeds (persists partial reorder on the server), second
+    // update throws — exercises the reconcile-after-partial-write path.
+    failing.failAfter = 1
+    await store.reorderEarmarks(from: IndexSet(integer: 2), to: 0)
+
+    // Local store state is reconciled with the repository (not the stale
+    // pre-reorder snapshot, since one write landed).
+    let persisted = try await backend.earmarks.fetchAll().sorted { $0.position < $1.position }
+    let storeOrdered = store.earmarks.ordered.sorted { $0.position < $1.position }
+    #expect(storeOrdered.map(\.id) == persisted.map(\.id))
+    #expect(storeOrdered.map(\.position) == persisted.map(\.position))
+    #expect(store.error != nil)
+  }
+
   // MARK: - create / update
 
   @Test func testCreateAddsEarmark() async throws {
@@ -854,5 +898,49 @@ private struct FailingEarmarkRepository: EarmarkRepository {
 
   func setBudget(earmarkId: UUID, categoryId: UUID, amount: InstrumentAmount) async throws {
     throw BackendError.networkUnavailable
+  }
+}
+
+/// Wraps a real repository but can be configured to fail `update` calls so
+/// tests can exercise error paths without mocking.
+@MainActor
+private final class UpdateFailingEarmarkRepository: EarmarkRepository {
+  private let wrapped: any EarmarkRepository
+  /// When `true`, every `update` call throws immediately.
+  var failUpdates: Bool = false
+  /// When non-nil, the first `failAfter` calls succeed; subsequent calls
+  /// throw. Useful for simulating partial writes.
+  var failAfter: Int?
+  private var updateCount: Int = 0
+
+  init(wrapping repository: any EarmarkRepository) {
+    self.wrapped = repository
+  }
+
+  func fetchAll() async throws -> [Earmark] {
+    try await wrapped.fetchAll()
+  }
+
+  func create(_ earmark: Earmark) async throws -> Earmark {
+    try await wrapped.create(earmark)
+  }
+
+  func update(_ earmark: Earmark) async throws -> Earmark {
+    if failUpdates {
+      throw BackendError.networkUnavailable
+    }
+    if let threshold = failAfter, updateCount >= threshold {
+      throw BackendError.networkUnavailable
+    }
+    updateCount += 1
+    return try await wrapped.update(earmark)
+  }
+
+  func fetchBudget(earmarkId: UUID) async throws -> [EarmarkBudgetItem] {
+    try await wrapped.fetchBudget(earmarkId: earmarkId)
+  }
+
+  func setBudget(earmarkId: UUID, categoryId: UUID, amount: InstrumentAmount) async throws {
+    try await wrapped.setBudget(earmarkId: earmarkId, categoryId: categoryId, amount: amount)
   }
 }
