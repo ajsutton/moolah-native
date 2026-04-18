@@ -32,9 +32,14 @@ struct StockPositionsView: View {
 
       if valuedPositions.isEmpty {
         ContentUnavailableView(
-          "No Positions",
+          "No Positions Yet",
           systemImage: "chart.bar",
-          description: Text("Record a trade to start tracking positions")
+          description: Text(
+            PlatformActionVerb.emptyStatePrompt(
+              buttonLabel: "Record Trade",
+              suffix: "to log your first buy or sell — we'll track the rest."
+            )
+          )
         )
       } else {
         List {
