@@ -407,12 +407,14 @@ struct AccountStoreConversionTests {
       retryDelay: .seconds(60))
 
     await store.load()
-    // Wait for the first conversion attempt to publish before asserting.
-    // Waiting on `conversionAttemptsCompleted` is deterministic — it increments
-    // exactly once per pass regardless of success — whereas polling for a
-    // specific output value races on busy CI runners.
-    try await waitForCondition(timeout: .seconds(10)) {
-      store.conversionAttemptsCompleted >= 1
+    // Wait for the first conversion pass to publish bankAud's balance. We
+    // poll the observable we actually assert on: when bankAud is present,
+    // the pass has written the whole `newBalances` / totals set atomically
+    // within a single MainActor tick, so the other invariants below hold.
+    // Timeout is generous because iOS simulator CI has been observed to
+    // take >10s for the first pass under CoreData/SwiftData setup load.
+    try await waitForCondition(timeout: .seconds(30)) {
+      store.convertedBalances[bankAud.id] != nil
     }
 
     // AUD bank: only AUD positions → succeeds.
@@ -458,9 +460,11 @@ struct AccountStoreConversionTests {
       retryDelay: .milliseconds(20))
 
     await store.load()
-    // Wait for the first attempt to publish, deterministically.
-    try await waitForCondition(timeout: .seconds(10)) {
-      store.conversionAttemptsCompleted >= 1
+    // Wait for the first pass to publish the succeeding account's balance
+    // before probing the partial-failure state. Polling an observable we
+    // actually care about keeps this robust on slow iOS simulator CI.
+    try await waitForCondition(timeout: .seconds(30)) {
+      store.convertedBalances[bankAud.id] != nil
     }
 
     // Initial state: EUR bank can't be converted to AUD aggregate target → aggregate nil.
@@ -470,7 +474,7 @@ struct AccountStoreConversionTests {
     await conversion.setFailing([])
 
     // Retry should fire within retryDelay × a few attempts.
-    try await waitForCondition(timeout: .seconds(10)) {
+    try await waitForCondition(timeout: .seconds(30)) {
       store.convertedCurrentTotal != nil
     }
 
