@@ -68,9 +68,12 @@ struct AnalysisView: View {
     .onChange(of: store.forecastMonths) { _, _ in
       Task { await store.loadAll() }
     }
-    .onChange(of: scenePhase) { _, newPhase in
-      if newPhase == .active {
-        Task { await store.loadAll() }
+    .onChange(of: scenePhase) { oldPhase, newPhase in
+      // Only refresh when returning from the background (not from brief inactive
+      // states like share sheets, system dialogs, or Command-Tab). Use a staleness
+      // threshold to avoid disruptive reloads when the app has just been loaded.
+      if oldPhase == .background && newPhase == .active {
+        Task { await store.refreshIfStale(minimumInterval: 60) }
       }
     }
   }
