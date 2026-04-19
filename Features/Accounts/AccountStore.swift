@@ -334,6 +334,13 @@ final class AccountStore {
       accounts = Accounts(from: accounts.ordered + [created])
       logger.debug("Created account: \(created.name)")
 
+      // Populate `convertedBalances` for the new account. Without this,
+      // an account whose positions never differ from what `fetchAll`
+      // returns (notably an empty investment account) would spin forever
+      // in the sidebar, because `reloadFromSync` only recomputes when
+      // fetched accounts differ from the local copy.
+      recomputeConvertedTotals()
+
       isLoading = false
       return created
     } catch {

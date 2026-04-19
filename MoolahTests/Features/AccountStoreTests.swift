@@ -495,6 +495,29 @@ struct AccountStoreTests {
     #expect(fetched.first?.instrument.id == usdInstrument.id)
   }
 
+  /// Regression: creating an empty investment account (no positions, no
+  /// external investment value) must populate `convertedBalances` with a zero
+  /// amount in the account's instrument. Without this, the sidebar row spins
+  /// forever because `AccountSidebarRow` reads `convertedBalances[id]` and
+  /// `SidebarRowView` renders a `ProgressView` whenever that entry is `nil`.
+  @Test func testCreateEmptyInvestmentAccountPopulatesConvertedBalance() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = AccountStore(
+      repository: backend.accounts, conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
+    let account = Account(
+      id: UUID(), name: "Brokerage", type: .investment,
+      instrument: .defaultTestInstrument, position: 0, isHidden: false)
+
+    let created = try await store.create(account)
+    await store.waitForPendingConversions()
+
+    let balance = store.convertedBalances[created.id]
+    #expect(balance != nil)
+    #expect(balance?.quantity == 0)
+    #expect(balance?.instrument.id == Instrument.defaultTestInstrument.id)
+  }
+
   @Test func testUpdatePersistsChangedInstrument() async throws {
     let (backend, container) = try TestBackend.create()
     let original = seedAccount(name: "Savings", in: container)
