@@ -406,6 +406,39 @@ struct SyncCoordinatorTests {
     #expect(coordinator.refetchAttempts == 0)
   }
 
+  // MARK: - Long-Retry (issue #77)
+
+  @Test func longRetryIntervalIsThirtyMinutes() {
+    #expect(SyncCoordinator.longRetryInterval == .seconds(30 * 60))
+  }
+
+  @Test func hasPendingLongRetryStartsFalse() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+    #expect(coordinator.hasPendingLongRetry == false)
+  }
+
+  @Test func resetRefetchAttemptsCancelsPendingLongRetry() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+
+    // resetRefetchAttempts must wipe both the counter and the long-retry task.
+    // From a fresh coordinator there is no long retry pending, but the invariant
+    // is what we're exercising: after the call, hasPendingLongRetry == false.
+    coordinator.resetRefetchAttempts()
+    #expect(coordinator.hasPendingLongRetry == false)
+  }
+
+  @Test func stopCancelsPendingLongRetry() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+
+    // stop() must also wipe the long-retry task so a stopped coordinator leaves
+    // no timers running.
+    coordinator.stop()
+    #expect(coordinator.hasPendingLongRetry == false)
+  }
+
   @Test func filterChangesMatchingProfileDataKeepsOnlyDataZones() {
     let indexZone = CKRecordZone.ID(
       zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)

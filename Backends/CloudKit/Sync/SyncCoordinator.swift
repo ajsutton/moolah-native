@@ -206,15 +206,31 @@ final class SyncCoordinator: Sendable {
   /// Task for coalescing re-fetch requests after save failures.
   private var refetchTask: Task<Void, Never>?
 
+  /// Last-resort periodic retry scheduled after the short-retry budget is exhausted.
+  /// Fires every `longRetryInterval`, resets the short-retry counter, and re-triggers
+  /// a fetch so persistent failures don't leave local data silently incomplete.
+  private var longRetryTask: Task<Void, Never>?
+
   /// Number of consecutive re-fetch attempts scheduled after a save failure.
   /// Reset to zero whenever a fetched-record-zone-changes batch applies successfully.
   /// Exposed for testing.
   private(set) var refetchAttempts = 0
 
-  /// Maximum number of consecutive re-fetch attempts before giving up.
-  /// A persistent `context.save()` failure (e.g. SwiftData schema corruption, disk full)
-  /// would otherwise produce an infinite 5-second retry loop. See issue #77.
+  /// `true` while a last-resort periodic retry is pending. Exposed for testing.
+  var hasPendingLongRetry: Bool { longRetryTask != nil }
+
+  /// Maximum number of consecutive re-fetch attempts before giving up on the short-retry
+  /// chain and falling back to the long-retry timer. A persistent `context.save()` failure
+  /// (e.g. SwiftData schema corruption, disk full) would otherwise produce an infinite
+  /// 5-second retry loop. See issue #77.
   nonisolated static let maxRefetchAttempts = 5
+
+  /// Interval between last-resort periodic retries after the short-retry budget is
+  /// exhausted. Long enough to avoid battery / quota impact on a persistently failing
+  /// device, but short enough that a device that comes back online (disk freed, schema
+  /// migrated by a later app update, transient corruption cleared) recovers without
+  /// requiring an app restart. See issue #77.
+  nonisolated static let longRetryInterval: Duration = .seconds(30 * 60)
 
   /// Returns the exponential backoff delay for the given 1-based attempt number,
   /// starting at 5 seconds and doubling each attempt. Returns `nil` when `attempt`
@@ -304,6 +320,8 @@ final class SyncCoordinator: Sendable {
     zoneSetupTask = nil
     refetchTask?.cancel()
     refetchTask = nil
+    longRetryTask?.cancel()
+    longRetryTask = nil
     refetchAttempts = 0
     for (_, task) in zoneCreationTasks {
       task.cancel()
@@ -366,13 +384,15 @@ final class SyncCoordinator: Sendable {
     guard let delay = Self.refetchBackoff(forAttempt: nextAttempt) else {
       logger.error(
         """
-        Giving up on re-fetch after \(self.refetchAttempts) consecutive save failures. \
-        Local SwiftData writes appear to be persistently failing; further re-fetches would \
-        just loop. Sync will resume after the next external event (account change, push, app \
-        restart, or a successful apply from another fetch).
+        Giving up on short re-fetch chain after \(self.refetchAttempts) consecutive save \
+        failures. Local SwiftData writes appear to be persistently failing. Scheduling a \
+        last-resort retry in \(Self.longRetryInterval) so a recovered device (disk freed, \
+        schema migrated, transient corruption cleared) resyncs without requiring an app \
+        restart.
         """)
       refetchTask?.cancel()
       refetchTask = nil
+      scheduleLongRetry()
       return
     }
     refetchAttempts = nextAttempt
@@ -387,9 +407,34 @@ final class SyncCoordinator: Sendable {
     }
   }
 
-  /// Resets the re-fetch attempt counter. Called on every successful apply of fetched changes.
+  /// Schedules a last-resort periodic retry after the short-retry budget is exhausted.
+  /// On fire, resets the short-retry counter and re-triggers a fetch. If that fetch also
+  /// fails to save, the short-retry chain runs again and, on exhaustion, reschedules
+  /// another long retry — producing a slow periodic probe that eventually recovers once
+  /// the underlying fault clears. Coalesces with any existing long-retry task.
+  private func scheduleLongRetry() {
+    longRetryTask?.cancel()
+    longRetryTask = Task { [interval = Self.longRetryInterval] in
+      try? await Task.sleep(for: interval)
+      guard !Task.isCancelled else { return }
+      self.logger.info(
+        "Last-resort re-fetch firing after \(interval) — short-retry chain previously exhausted"
+      )
+      // Reset the short-retry counter so the next save failure gets a fresh backoff
+      // budget instead of immediately re-exhausting.
+      self.refetchAttempts = 0
+      self.longRetryTask = nil
+      await self.fetchChanges()
+    }
+  }
+
+  /// Resets the re-fetch attempt counter and cancels any pending long-retry task.
+  /// Called on every successful apply of fetched changes — a single successful apply
+  /// proves local writes are working, so the slow recovery timer is no longer needed.
   func resetRefetchAttempts() {
     refetchAttempts = 0
+    longRetryTask?.cancel()
+    longRetryTask = nil
   }
 
   // MARK: - Fetch Session
