@@ -2,7 +2,10 @@ name: CI
 
 on:
   push:
-    branches: ["master", "main"]
+    branches:
+      - master
+      - main
+      - 'mq-spec-*'   # speculative merge-queue branches; CI runs without a PR
   pull_request:
 
 jobs:
