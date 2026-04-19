@@ -187,7 +187,10 @@ extension TransactionDraft {
     from transaction: Transaction, viewingAccountId: UUID? = nil,
     accounts: Accounts = Accounts(from: [])
   ) {
-    // Build legDrafts from all legs, applying the negation rule for display
+    // Always populate instrumentId so the draft is self-describing and round-trips
+    // preserve each leg's instrument — including cases where a leg's instrument
+    // differs from its account's instrument (e.g. a cross-currency trade booked
+    // against a single investment account).
     let drafts = transaction.legs.map { leg in
       LegDraft(
         type: leg.type,
@@ -196,7 +199,8 @@ extension TransactionDraft {
           quantity: leg.quantity, type: leg.type, decimals: leg.instrument.decimals),
         categoryId: leg.categoryId,
         categoryText: "",
-        earmarkId: leg.earmarkId
+        earmarkId: leg.earmarkId,
+        instrumentId: leg.instrument.id
       )
     }
 
@@ -234,7 +238,7 @@ extension TransactionDraft {
   }
 
   /// Create a blank earmark-only draft for a new earmark transaction.
-  init(earmarkId: UUID, viewingAccountId: UUID? = nil) {
+  init(earmarkId: UUID, instrumentId: String? = nil, viewingAccountId: UUID? = nil) {
     self.init(
       payee: "",
       date: Date(),
@@ -246,7 +250,8 @@ extension TransactionDraft {
       legDrafts: [
         LegDraft(
           type: .income, accountId: nil, amountText: "0",
-          categoryId: nil, categoryText: "", earmarkId: earmarkId)
+          categoryId: nil, categoryText: "", earmarkId: earmarkId,
+          instrumentId: instrumentId)
       ],
       relevantLegIndex: 0,
       viewingAccountId: viewingAccountId
@@ -254,7 +259,7 @@ extension TransactionDraft {
   }
 
   /// Create a blank draft for a new transaction.
-  init(accountId: UUID? = nil, viewingAccountId: UUID? = nil) {
+  init(accountId: UUID? = nil, instrumentId: String? = nil, viewingAccountId: UUID? = nil) {
     self.init(
       payee: "",
       date: Date(),
@@ -266,7 +271,8 @@ extension TransactionDraft {
       legDrafts: [
         LegDraft(
           type: .expense, accountId: accountId, amountText: "0",
-          categoryId: nil, categoryText: "", earmarkId: nil)
+          categoryId: nil, categoryText: "", earmarkId: nil,
+          instrumentId: instrumentId)
       ],
       relevantLegIndex: 0,
       viewingAccountId: viewingAccountId
@@ -318,7 +324,8 @@ extension TransactionDraft {
         amountText: counterpartAmount,
         categoryId: nil,
         categoryText: "",
-        earmarkId: nil
+        earmarkId: nil,
+        instrumentId: defaultAccount?.instrument.id
       )
 
       legDrafts[relevantLegIndex].type = .transfer
@@ -446,11 +453,13 @@ extension TransactionDraft {
 // MARK: - Conversion
 
 extension TransactionDraft {
-  /// Build a `Transaction` from the draft, looking up instruments from `accounts`.
-  /// Returns nil when the draft is not valid.
+  /// Build a `Transaction` from the draft. Each leg's `instrumentId` must resolve
+  /// in `availableInstruments`; `accounts` and `earmarks` are unused for instrument
+  /// lookup (each leg is self-describing) but remain as parameters for future use.
+  /// Returns nil when the draft is invalid or an instrument can't be resolved.
   func toTransaction(
     id: UUID,
-    accounts: Accounts,
+    accounts: Accounts = Accounts(from: []),
     earmarks: Earmarks = Earmarks(from: []),
     availableInstruments: [Instrument] = []
   ) -> Transaction? {
@@ -458,17 +467,9 @@ extension TransactionDraft {
 
     var legs: [TransactionLeg] = []
     for legDraft in legDrafts {
-      let instrument: Instrument
-      if let overrideId = legDraft.instrumentId {
-        guard let resolved = availableInstruments.first(where: { $0.id == overrideId }) else {
-          return nil
-        }
-        instrument = resolved
-      } else if let acctId = legDraft.accountId, let account = accounts.by(id: acctId) {
-        instrument = account.instrument
-      } else if let emId = legDraft.earmarkId, let earmark = earmarks.by(id: emId) {
-        instrument = earmark.instrument
-      } else {
+      guard let overrideId = legDraft.instrumentId,
+        let instrument = availableInstruments.first(where: { $0.id == overrideId })
+      else {
         return nil
       }
 
@@ -542,12 +543,14 @@ extension TransactionDraft {
 // MARK: - Custom Mode Operations
 
 extension TransactionDraft {
-  /// Append a blank leg for custom mode editing.
-  mutating func addLeg(defaultAccountId: UUID? = nil) {
+  /// Append a blank leg for custom mode editing. Callers should pass the default
+  /// account's instrument so the leg is self-describing from the start.
+  mutating func addLeg(defaultAccountId: UUID? = nil, instrumentId: String? = nil) {
     legDrafts.append(
       LegDraft(
         type: .expense, accountId: defaultAccountId, amountText: "0",
-        categoryId: nil, categoryText: "", earmarkId: nil
+        categoryId: nil, categoryText: "", earmarkId: nil,
+        instrumentId: instrumentId
       ))
   }
 

@@ -543,9 +543,15 @@ struct TransactionDetailView: View {
           Text(account.name).tag(UUID?.some(account.id))
         }
       }
-      .onChange(of: draft.legDrafts[index].accountId) { _, _ in
+      .onChange(of: draft.legDrafts[index].accountId) { _, newAccountId in
         draft.enforceEarmarkOnlyInvariants(at: index)
-        draft.legDrafts[index].instrumentId = nil
+        if let newAccountId, let account = accounts.by(id: newAccountId) {
+          draft.legDrafts[index].instrumentId = account.instrument.id
+        } else if let emId = draft.legDrafts[index].earmarkId,
+          let earmark = earmarks.by(id: emId)
+        {
+          draft.legDrafts[index].instrumentId = earmark.instrument.id
+        }
       }
 
       Picker(
@@ -627,7 +633,11 @@ struct TransactionDetailView: View {
   private var addSubTransactionSection: some View {
     Section {
       Button("Add Sub-transaction") {
-        draft.addLeg(defaultAccountId: sortedAccounts.first?.id)
+        let defaultAccount = sortedAccounts.first
+        draft.addLeg(
+          defaultAccountId: defaultAccount?.id,
+          instrumentId: defaultAccount?.instrument.id
+        )
       }
       .accessibilityLabel("Add Sub-transaction")
     }

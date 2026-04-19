@@ -13,7 +13,8 @@ struct TransactionDraftTests {
   /// Build a simple one-leg draft for testing.
   private func makeExpenseDraft(
     amountText: String = "10.00",
-    accountId: UUID? = nil
+    accountId: UUID? = nil,
+    instrumentId: String? = Instrument.defaultTestInstrument.id
   ) -> TransactionDraft {
     TransactionDraft(
       payee: "Test",
@@ -26,7 +27,8 @@ struct TransactionDraftTests {
       legDrafts: [
         TransactionDraft.LegDraft(
           type: .expense, accountId: accountId ?? accountA,
-          amountText: amountText, categoryId: nil, categoryText: "", earmarkId: nil)
+          amountText: amountText, categoryId: nil, categoryText: "", earmarkId: nil,
+          instrumentId: instrumentId)
       ],
       relevantLegIndex: 0,
       viewingAccountId: nil
@@ -654,7 +656,8 @@ struct TransactionDraftTests {
   @Test func toTransactionSimpleExpense() {
     let draft = makeExpenseDraft(amountText: "25.00", accountId: accountA)
     let accounts = makeAccounts([makeAccount(id: accountA)])
-    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
+    let tx = draft.toTransaction(
+      id: UUID(), accounts: accounts, availableInstruments: [instrument])
 
     #expect(tx != nil)
     #expect(tx!.legs.count == 1)
@@ -671,12 +674,14 @@ struct TransactionDraftTests {
       legDrafts: [
         TransactionDraft.LegDraft(
           type: .income, accountId: accountA, amountText: "3000.00",
-          categoryId: nil, categoryText: "", earmarkId: nil)
+          categoryId: nil, categoryText: "", earmarkId: nil,
+          instrumentId: instrument.id)
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
     let accounts = makeAccounts([makeAccount(id: accountA)])
-    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
+    let tx = draft.toTransaction(
+      id: UUID(), accounts: accounts, availableInstruments: [instrument])
 
     #expect(tx != nil)
     #expect(tx!.legs[0].quantity == Decimal(string: "3000.00"))  // income: as-is
@@ -686,7 +691,8 @@ struct TransactionDraftTests {
     // Display value "-10" for expense → quantity = -(-10) = +10
     let draft = makeExpenseDraft(amountText: "-10.00", accountId: accountA)
     let accounts = makeAccounts([makeAccount(id: accountA)])
-    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
+    let tx = draft.toTransaction(
+      id: UUID(), accounts: accounts, availableInstruments: [instrument])
 
     #expect(tx != nil)
     #expect(tx!.legs[0].quantity == Decimal(string: "10.00"))
@@ -700,7 +706,8 @@ struct TransactionDraftTests {
     var draft = makeExpenseDraft(amountText: "100.00", accountId: accountA)
     draft.setType(.transfer, accounts: accounts)
 
-    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
+    let tx = draft.toTransaction(
+      id: UUID(), accounts: accounts, availableInstruments: [instrument])
     #expect(tx != nil)
     #expect(tx!.legs.count == 2)
     #expect(tx!.legs[0].quantity == Decimal(string: "-100.00"))
@@ -728,7 +735,8 @@ struct TransactionDraftTests {
 
     let draft = TransactionDraft(from: original)
     let accounts = makeAccounts([makeAccount(id: accountA)])
-    let roundTripped = draft.toTransaction(id: id, accounts: accounts)
+    let roundTripped = draft.toTransaction(
+      id: id, accounts: accounts, availableInstruments: [instrument])
 
     #expect(roundTripped != nil)
     #expect(roundTripped!.id == original.id)
@@ -765,7 +773,8 @@ struct TransactionDraftTests {
       makeAccount(id: accountA),
       makeAccount(id: accountB),
     ])
-    let roundTripped = draft.toTransaction(id: id, accounts: accounts)
+    let roundTripped = draft.toTransaction(
+      id: id, accounts: accounts, availableInstruments: [instrument])
 
     #expect(roundTripped != nil)
     #expect(roundTripped!.legs.count == 2)
@@ -794,7 +803,8 @@ struct TransactionDraftTests {
       makeAccount(id: accountA),
       makeAccount(id: accountB),
     ])
-    let roundTripped = draft.toTransaction(id: id, accounts: accounts)
+    let roundTripped = draft.toTransaction(
+      id: id, accounts: accounts, availableInstruments: [instrument])
 
     #expect(roundTripped != nil)
     // Quantities must be preserved regardless of which leg is "relevant"
@@ -816,15 +826,18 @@ struct TransactionDraftTests {
       legDrafts: [
         TransactionDraft.LegDraft(
           type: .expense, accountId: accountA, amountText: "100.00",
-          categoryId: catId, categoryText: "", earmarkId: nil),
+          categoryId: catId, categoryText: "", earmarkId: nil,
+          instrumentId: instrument.id),
         TransactionDraft.LegDraft(
           type: .income, accountId: accountB, amountText: "50.00",
-          categoryId: nil, categoryText: "", earmarkId: earmarkId),
+          categoryId: nil, categoryText: "", earmarkId: earmarkId,
+          instrumentId: instrument.id),
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
 
-    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
+    let tx = draft.toTransaction(
+      id: UUID(), accounts: accounts, availableInstruments: [instrument])
     #expect(tx != nil)
     #expect(tx!.legs.count == 2)
     #expect(tx!.legs[0].quantity == Decimal(string: "-100.00"))  // expense negated
@@ -846,7 +859,8 @@ struct TransactionDraftTests {
     draft.isRepeating = false
 
     let accounts = makeAccounts([makeAccount(id: accountA)])
-    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
+    let tx = draft.toTransaction(
+      id: UUID(), accounts: accounts, availableInstruments: [instrument])
     #expect(tx != nil)
     #expect(tx!.recurPeriod == nil)
     #expect(tx!.recurEvery == nil)
@@ -987,12 +1001,14 @@ struct TransactionDraftTests {
       legDrafts: [
         TransactionDraft.LegDraft(
           type: .expense, accountId: accountA, amountText: "4.50",
-          categoryId: nil, categoryText: "", earmarkId: nil)
+          categoryId: nil, categoryText: "", earmarkId: nil,
+          instrumentId: Instrument.USD.id)
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
 
-    let tx = try #require(draft.toTransaction(id: UUID(), accounts: accounts))
+    let tx = try #require(
+      draft.toTransaction(id: UUID(), accounts: accounts, availableInstruments: [.USD]))
     #expect(tx.legs.count == 1)
     #expect(tx.legs[0].instrument == .USD)
     #expect(tx.legs[0].quantity == Decimal(string: "-4.50")!)
@@ -1010,15 +1026,18 @@ struct TransactionDraftTests {
       legDrafts: [
         TransactionDraft.LegDraft(
           type: .transfer, accountId: accountA, amountText: "1000.00",
-          categoryId: nil, categoryText: "", earmarkId: nil),
+          categoryId: nil, categoryText: "", earmarkId: nil,
+          instrumentId: Instrument.AUD.id),
         TransactionDraft.LegDraft(
           type: .transfer, accountId: accountB, amountText: "-650.00",
-          categoryId: nil, categoryText: "", earmarkId: nil),
+          categoryId: nil, categoryText: "", earmarkId: nil,
+          instrumentId: Instrument.USD.id),
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
 
-    let tx = try #require(draft.toTransaction(id: UUID(), accounts: accounts))
+    let tx = try #require(
+      draft.toTransaction(id: UUID(), accounts: accounts, availableInstruments: [.AUD, .USD]))
     #expect(tx.legs.count == 2)
     #expect(tx.legs[0].instrument == .AUD)
     #expect(tx.legs[0].quantity == Decimal(string: "-1000.00")!)
@@ -1040,15 +1059,18 @@ struct TransactionDraftTests {
       legDrafts: [
         TransactionDraft.LegDraft(
           type: .transfer, accountId: accountA, amountText: "6345.00",
-          categoryId: nil, categoryText: "", earmarkId: nil),
+          categoryId: nil, categoryText: "", earmarkId: nil,
+          instrumentId: Instrument.AUD.id),
         TransactionDraft.LegDraft(
           type: .transfer, accountId: accountB, amountText: "-150",
-          categoryId: nil, categoryText: "", earmarkId: nil),
+          categoryId: nil, categoryText: "", earmarkId: nil,
+          instrumentId: bhp.id),
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
 
-    let tx = try #require(draft.toTransaction(id: UUID(), accounts: accounts))
+    let tx = try #require(
+      draft.toTransaction(id: UUID(), accounts: accounts, availableInstruments: [.AUD, bhp]))
     #expect(tx.legs.count == 2)
     #expect(tx.legs[0].instrument == .AUD)
     #expect(tx.legs[0].quantity == Decimal(string: "-6345.00")!)
@@ -1161,7 +1183,8 @@ struct TransactionDraftTests {
     #expect(draft.legDrafts[0].amountText == "50.00")
     // But conversion would produce different quantity
     let accounts = makeAccounts([makeAccount(id: accountA)])
-    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
+    let tx = draft.toTransaction(
+      id: UUID(), accounts: accounts, availableInstruments: [instrument])
     #expect(tx!.legs[0].quantity == Decimal(string: "50.00"))  // income: as-is
   }
 
@@ -1252,7 +1275,8 @@ struct TransactionDraftTests {
       legDrafts: [
         TransactionDraft.LegDraft(
           type: .income, accountId: nil, amountText: "500",
-          categoryId: nil, categoryText: "", earmarkId: emId)
+          categoryId: nil, categoryText: "", earmarkId: emId,
+          instrumentId: Instrument.defaultTestInstrument.id)
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
@@ -1261,7 +1285,9 @@ struct TransactionDraftTests {
         id: emId, name: "Holiday",
         instrument: .defaultTestInstrument)
     ])
-    let tx = draft.toTransaction(id: UUID(), accounts: Accounts(from: []), earmarks: earmarks)
+    let tx = draft.toTransaction(
+      id: UUID(), accounts: Accounts(from: []), earmarks: earmarks,
+      availableInstruments: [instrument])
     #expect(tx != nil)
     #expect(tx!.legs.count == 1)
     #expect(tx!.legs[0].accountId == nil)
@@ -1281,10 +1307,12 @@ struct TransactionDraftTests {
       legDrafts: [
         TransactionDraft.LegDraft(
           type: .expense, accountId: acctId, amountText: "50",
-          categoryId: nil, categoryText: "", earmarkId: nil),
+          categoryId: nil, categoryText: "", earmarkId: nil,
+          instrumentId: Instrument.defaultTestInstrument.id),
         TransactionDraft.LegDraft(
           type: .income, accountId: nil, amountText: "50",
-          categoryId: nil, categoryText: "", earmarkId: emId),
+          categoryId: nil, categoryText: "", earmarkId: emId,
+          instrumentId: Instrument.defaultTestInstrument.id),
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
@@ -1297,7 +1325,9 @@ struct TransactionDraftTests {
         id: emId, name: "Holiday",
         instrument: .defaultTestInstrument)
     ])
-    let tx = draft.toTransaction(id: UUID(), accounts: accounts, earmarks: earmarks)
+    let tx = draft.toTransaction(
+      id: UUID(), accounts: accounts, earmarks: earmarks,
+      availableInstruments: [instrument])
     #expect(tx != nil)
     #expect(tx!.legs.count == 2)
     #expect(tx!.legs[0].accountId == acctId)
@@ -1527,7 +1557,9 @@ struct TransactionDraftTests {
     #expect(tx!.legs[0].instrument.id == "USD")
   }
 
-  @Test func legDraftNilInstrumentIdDerivesFromAccount() {
+  @Test func legDraftNilInstrumentIdReturnsNil() {
+    // instrumentId is the canonical source of truth; a leg without one can't
+    // resolve to an instrument and the draft is considered invalid-to-save.
     let acctId = UUID()
     let accounts = makeAccounts([makeAccount(id: acctId, instrument: .AUD)])
     let draft = TransactionDraft(
@@ -1541,9 +1573,9 @@ struct TransactionDraftTests {
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
-    let tx = draft.toTransaction(id: UUID(), accounts: accounts)
-    #expect(tx != nil)
-    #expect(tx!.legs[0].instrument.id == "AUD")
+    let tx = draft.toTransaction(
+      id: UUID(), accounts: accounts, availableInstruments: [.AUD])
+    #expect(tx == nil)
   }
 
   @Test func legDraftInvalidInstrumentIdReturnsNil() {
@@ -1584,7 +1616,8 @@ struct TransactionDraftTests {
       makeAccount(id: accountB, instrument: .USD),
     ])
     let draft = TransactionDraft(from: original, viewingAccountId: accountA, accounts: accounts)
-    let roundTripped = draft.toTransaction(id: id, accounts: accounts)
+    let roundTripped = draft.toTransaction(
+      id: id, accounts: accounts, availableInstruments: [.AUD, .USD])
     #expect(roundTripped != nil)
     #expect(roundTripped!.legs.count == 2)
     #expect(roundTripped!.legs[0].quantity == Decimal(string: "-100"))
@@ -1627,5 +1660,248 @@ struct TransactionDraftTests {
       relevantLegIndex: 0, viewingAccountId: nil
     )
     #expect(draft.canSwitchToSimple == false)
+  }
+
+  // MARK: - Complex Round-Trip
+
+  /// Build a draft from `original`, convert back to a transaction, and return the result.
+  /// Fails the calling test if either step yields nil.
+  private func roundTrip(
+    _ original: Transaction,
+    accounts: Accounts,
+    earmarks: Earmarks = Earmarks(from: []),
+    availableInstruments: [Instrument]
+  ) -> Transaction? {
+    let draft = TransactionDraft(from: original, accounts: accounts)
+    return draft.toTransaction(
+      id: original.id,
+      accounts: accounts,
+      earmarks: earmarks,
+      availableInstruments: availableInstruments
+    )
+  }
+
+  /// The user's reported scenario: a custom transaction where two legs reference
+  /// the same account but carry different instruments (an AUD↔NZD trade booked
+  /// against a single AUD investment account). The round-trip must preserve each
+  /// leg's instrument rather than silently re-deriving it from the account.
+  @Test func customTransactionMixedInstrumentsSameAccountRoundTrips() throws {
+    let accountId = UUID()
+    let accounts = makeAccounts([makeAccount(id: accountId, instrument: .AUD)])
+    let availableInstruments = [Instrument.AUD, Instrument.fiat(code: "NZD")]
+    let original = Transaction(
+      id: UUID(),
+      date: Date(),
+      payee: "AUD/NZD trade",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD, quantity: -500, type: .transfer),
+        TransactionLeg(
+          accountId: accountId, instrument: .fiat(code: "NZD"), quantity: 650, type: .transfer),
+      ]
+    )
+
+    let roundTripped = try #require(
+      roundTrip(original, accounts: accounts, availableInstruments: availableInstruments))
+
+    #expect(roundTripped.legs.count == 2)
+    #expect(roundTripped.legs[0].instrument == .AUD)
+    #expect(roundTripped.legs[0].quantity == Decimal(-500))
+    #expect(roundTripped.legs[0].accountId == accountId)
+    #expect(roundTripped.legs[1].instrument == .fiat(code: "NZD"))
+    #expect(roundTripped.legs[1].quantity == Decimal(650))
+    #expect(roundTripped.legs[1].accountId == accountId)
+  }
+
+  @Test func customTransactionPreservesLegOrder() throws {
+    let accountIds = [UUID(), UUID(), UUID()]
+    let accounts = makeAccounts(accountIds.map { makeAccount(id: $0) })
+    let original = Transaction(
+      id: UUID(),
+      date: Date(),
+      payee: "Three-way split",
+      legs: [
+        TransactionLeg(
+          accountId: accountIds[0], instrument: instrument, quantity: -100, type: .expense),
+        TransactionLeg(
+          accountId: accountIds[1], instrument: instrument, quantity: -200, type: .expense),
+        TransactionLeg(
+          accountId: accountIds[2], instrument: instrument, quantity: 300, type: .income),
+      ]
+    )
+
+    let roundTripped = try #require(
+      roundTrip(original, accounts: accounts, availableInstruments: [instrument]))
+
+    #expect(roundTripped.legs.count == 3)
+    #expect(roundTripped.legs[0].accountId == accountIds[0])
+    #expect(roundTripped.legs[0].quantity == Decimal(-100))
+    #expect(roundTripped.legs[1].accountId == accountIds[1])
+    #expect(roundTripped.legs[1].quantity == Decimal(-200))
+    #expect(roundTripped.legs[2].accountId == accountIds[2])
+    #expect(roundTripped.legs[2].quantity == Decimal(300))
+  }
+
+  @Test func customTransactionPreservesPerLegFields() throws {
+    let categoryIdA = UUID()
+    let categoryIdB = UUID()
+    let earmarkIdA = UUID()
+    let earmarkIdB = UUID()
+    let accounts = makeAccounts([
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
+    ])
+    let original = Transaction(
+      id: UUID(),
+      date: Date(),
+      payee: "Mixed",
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -75, type: .expense,
+          categoryId: categoryIdA, earmarkId: earmarkIdA),
+        TransactionLeg(
+          accountId: accountB, instrument: instrument, quantity: 25, type: .income,
+          categoryId: categoryIdB, earmarkId: earmarkIdB),
+      ]
+    )
+
+    let roundTripped = try #require(
+      roundTrip(original, accounts: accounts, availableInstruments: [instrument]))
+
+    #expect(roundTripped.legs[0].type == .expense)
+    #expect(roundTripped.legs[0].categoryId == categoryIdA)
+    #expect(roundTripped.legs[0].earmarkId == earmarkIdA)
+    #expect(roundTripped.legs[1].type == .income)
+    #expect(roundTripped.legs[1].categoryId == categoryIdB)
+    #expect(roundTripped.legs[1].earmarkId == earmarkIdB)
+  }
+
+  @Test func customTransactionPreservesDecimalPrecision() throws {
+    let jpy = Instrument.fiat(code: "JPY")  // 0 decimals
+    #expect(jpy.decimals == 0)
+    let accountJpy = UUID()
+    let accountAud = UUID()
+    let accounts = makeAccounts([
+      makeAccount(id: accountJpy, instrument: jpy),
+      makeAccount(id: accountAud, instrument: .AUD),
+    ])
+    let original = Transaction(
+      id: UUID(),
+      date: Date(),
+      legs: [
+        TransactionLeg(
+          accountId: accountJpy, instrument: jpy, quantity: Decimal(-12_345), type: .transfer),
+        TransactionLeg(
+          accountId: accountAud, instrument: .AUD,
+          quantity: Decimal(string: "123.45")!, type: .transfer),
+      ]
+    )
+
+    let roundTripped = try #require(
+      roundTrip(original, accounts: accounts, availableInstruments: [jpy, .AUD]))
+
+    #expect(roundTripped.legs[0].quantity == Decimal(-12_345))
+    #expect(roundTripped.legs[0].instrument == jpy)
+    #expect(roundTripped.legs[1].quantity == Decimal(string: "123.45"))
+    #expect(roundTripped.legs[1].instrument == .AUD)
+  }
+
+  @Test func customTransactionPreservesTransactionLevelFields() throws {
+    let accounts = makeAccounts([
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
+    ])
+    let date = Date(timeIntervalSince1970: 1_700_000_000)
+    let id = UUID()
+    let original = Transaction(
+      id: id,
+      date: date,
+      payee: "Complex",
+      notes: "multi-leg notes",
+      recurPeriod: .month,
+      recurEvery: 3,
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -100, type: .expense),
+        TransactionLeg(
+          accountId: accountB, instrument: instrument, quantity: -200, type: .expense),
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: 300, type: .income),
+      ]
+    )
+
+    let roundTripped = try #require(
+      roundTrip(original, accounts: accounts, availableInstruments: [instrument]))
+
+    #expect(roundTripped.id == id)
+    #expect(roundTripped.date == date)
+    #expect(roundTripped.payee == "Complex")
+    #expect(roundTripped.notes == "multi-leg notes")
+    #expect(roundTripped.recurPeriod == .month)
+    #expect(roundTripped.recurEvery == 3)
+  }
+
+  @Test func customTransactionEarmarkOnlyLegRoundTrips() throws {
+    let earmarkId = UUID()
+    let accounts = makeAccounts([makeAccount(id: accountA, instrument: instrument)])
+    let earmark = Earmark(
+      id: earmarkId, name: "Travel", instrument: instrument)
+    let earmarks = Earmarks(from: [earmark])
+    let original = Transaction(
+      id: UUID(),
+      date: Date(),
+      payee: "Allocate",
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -50, type: .expense),
+        TransactionLeg(
+          accountId: nil, instrument: instrument, quantity: 50, type: .income,
+          earmarkId: earmarkId),
+      ]
+    )
+
+    let roundTripped = try #require(
+      roundTrip(
+        original, accounts: accounts, earmarks: earmarks,
+        availableInstruments: [instrument]))
+
+    #expect(roundTripped.legs.count == 2)
+    #expect(roundTripped.legs[0].accountId == accountA)
+    #expect(roundTripped.legs[0].earmarkId == nil)
+    #expect(roundTripped.legs[1].accountId == nil)
+    #expect(roundTripped.legs[1].earmarkId == earmarkId)
+    #expect(roundTripped.legs[1].instrument == instrument)
+  }
+
+  @Test func customTransactionMixedLegTypesRoundTrip() throws {
+    let accountC = UUID()
+    let accounts = makeAccounts([
+      makeAccount(id: accountA),
+      makeAccount(id: accountB),
+      makeAccount(id: accountC),
+    ])
+    let original = Transaction(
+      id: UUID(),
+      date: Date(),
+      payee: "Mixed types",
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -100, type: .expense),
+        TransactionLeg(
+          accountId: accountB, instrument: instrument, quantity: 50, type: .income),
+        TransactionLeg(
+          accountId: accountC, instrument: instrument, quantity: 50, type: .transfer),
+      ]
+    )
+
+    let roundTripped = try #require(
+      roundTrip(original, accounts: accounts, availableInstruments: [instrument]))
+
+    #expect(roundTripped.legs[0].type == .expense)
+    #expect(roundTripped.legs[0].quantity == Decimal(-100))
+    #expect(roundTripped.legs[1].type == .income)
+    #expect(roundTripped.legs[1].quantity == Decimal(50))
+    #expect(roundTripped.legs[2].type == .transfer)
+    #expect(roundTripped.legs[2].quantity == Decimal(50))
   }
 }
