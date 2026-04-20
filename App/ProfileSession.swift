@@ -17,7 +17,6 @@ final class ProfileSession: Identifiable {
   let earmarkStore: EarmarkStore
   let analysisStore: AnalysisStore
   let investmentStore: InvestmentStore
-  let tradeStore: TradeStore
   let reportingStore: ReportingStore
   let exchangeRateService: ExchangeRateService
   let stockPriceService: StockPriceService
@@ -149,7 +148,6 @@ final class ProfileSession: Identifiable {
       transactionRepository: backend.transactions,
       conversionService: backend.conversionService
     )
-    self.tradeStore = TradeStore(transactions: backend.transactions)
     self.reportingStore = ReportingStore(
       transactionRepository: backend.transactions,
       analysisRepository: backend.analysis,
