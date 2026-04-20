@@ -38,6 +38,10 @@ struct RecentlyAddedView: View {
       }
     }
     .navigationTitle("Recently Added")
+    .dropDestination(for: URL.self) { urls, _ in
+      Task { await ingestDroppedURLs(urls) }
+      return !urls.isEmpty
+    }
     .toolbar {
       ToolbarItem(placement: .automatic) {
         Picker("Time window", selection: $window) {
@@ -82,6 +86,28 @@ struct RecentlyAddedView: View {
     }
     await viewModel?.load(window: window)
     await importStore.reloadStagingLists()
+  }
+
+  /// Handle a CSV drop (from Finder / Files / another app) onto the view.
+  /// Routes via `ImportStore.ingest(source: .droppedFile(forcedAccountId: nil))`
+  /// so the matcher picks up if a profile is registered, or the file lands
+  /// in Needs Setup otherwise. After ingest, refresh the view-model so new
+  /// rows appear.
+  private func ingestDroppedURLs(_ urls: [URL]) async {
+    for url in urls {
+      guard url.pathExtension.lowercased() == "csv" || url.pathExtension.isEmpty else {
+        continue
+      }
+      let didStart = url.startAccessingSecurityScopedResource()
+      defer {
+        if didStart { url.stopAccessingSecurityScopedResource() }
+      }
+      guard let data = try? Data(contentsOf: url) else { continue }
+      _ = await importStore.ingest(
+        data: data,
+        source: .droppedFile(url: url, forcedAccountId: nil))
+    }
+    await reload()
   }
 }
 

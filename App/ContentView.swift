@@ -18,7 +18,10 @@ struct ContentView: View {
   #endif
 
   @Environment(\.pendingNavigation) private var pendingNavigationBinding
+  @Environment(ImportStore.self) private var importStore
   @State private var showCreateEarmarkSheet = false
+  @State private var showImportCSVPicker = false
+  @State private var importError: String?
 
   var body: some View {
     NavigationSplitView {
@@ -116,6 +119,9 @@ struct ContentView: View {
     .focusedSceneValue(\.newEarmarkAction) {
       showCreateEarmarkSheet = true
     }
+    .focusedSceneValue(\.importCSVAction) {
+      showImportCSVPicker = true
+    }
     .focusedSceneValue(\.refreshAction) {
       Task {
         async let a: Void = accountStore.load()
@@ -141,6 +147,48 @@ struct ContentView: View {
         applyNavigation(navigation.destination)
         pendingNavigationBinding?.wrappedValue = nil
       }
+    }
+    .fileImporter(
+      isPresented: $showImportCSVPicker,
+      allowedContentTypes: [.commaSeparatedText, .plainText],
+      allowsMultipleSelection: true
+    ) { result in
+      Task {
+        await handleImportPickerResult(result)
+      }
+    }
+    .alert(
+      "Import failed",
+      isPresented: Binding(
+        get: { importError != nil },
+        set: { if !$0 { importError = nil } })
+    ) {
+      Button("OK") { importError = nil }
+    } message: {
+      Text(importError ?? "")
+    }
+  }
+
+  private func handleImportPickerResult(_ result: Result<[URL], Error>) async {
+    switch result {
+    case .success(let urls):
+      for url in urls {
+        let didStart = url.startAccessingSecurityScopedResource()
+        defer {
+          if didStart { url.stopAccessingSecurityScopedResource() }
+        }
+        do {
+          let data = try Data(contentsOf: url)
+          _ = await importStore.ingest(
+            data: data,
+            source: .pickedFile(url: url, securityScoped: didStart))
+        } catch {
+          importError = "Couldn't read \(url.lastPathComponent): \(error.localizedDescription)"
+        }
+      }
+      selection = .recentlyAdded
+    case .failure(let error):
+      importError = error.localizedDescription
     }
   }
 

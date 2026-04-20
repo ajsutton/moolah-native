@@ -60,6 +60,12 @@ struct SidebarSelectionKey: FocusedValueKey {
   typealias Value = Binding<SidebarSelection?>
 }
 
+/// Trigger action for File > Import CSV… (⇧⌘I). Opens the file picker in
+/// the focused window.
+struct ImportCSVActionKey: FocusedValueKey {
+  typealias Value = () -> Void
+}
+
 extension FocusedValues {
   var newTransactionAction: NewTransactionActionKey.Value? {
     get { self[NewTransactionActionKey.self] }
@@ -108,5 +114,9 @@ extension FocusedValues {
   var sidebarSelection: SidebarSelectionKey.Value? {
     get { self[SidebarSelectionKey.self] }
     set { self[SidebarSelectionKey.self] = newValue }
+  }
+  var importCSVAction: ImportCSVActionKey.Value? {
+    get { self[ImportCSVActionKey.self] }
+    set { self[ImportCSVActionKey.self] = newValue }
   }
 }

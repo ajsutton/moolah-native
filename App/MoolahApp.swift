@@ -421,6 +421,7 @@ struct MoolahApp: App {
           profileStore: profileStore, sessionManager: sessionManager,
           containerManager: containerManager, syncCoordinator: syncCoordinator)
         NewItemCommands()
+        ImportCSVCommands()
         RefreshCommands()
         SidebarCommands()
         ToolbarCommands()
