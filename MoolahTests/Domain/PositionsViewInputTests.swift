@@ -275,6 +275,45 @@ struct PositionsViewInputTests {
     #expect(input.showsChart)  // chart can still render for working instruments
   }
 
+  @Test("totalValue is zero (not nil) for empty positions")
+  func totalValueEmptyPositions() {
+    let input = PositionsViewInput(
+      title: "x", hostCurrency: aud, positions: [], historicalValue: nil)
+    #expect(input.totalValue == amount(0))
+    #expect(input.totalGainLoss == amount(0))
+    #expect(!input.showsPLPill)
+    #expect(!input.showsGroupSubtotals)
+  }
+
+  @Test("showsPLPill is true when cost basis exists and total is available")
+  func plPillVisibleWhenCostBasisAndTotal() {
+    let input = PositionsViewInput(
+      title: "x", hostCurrency: aud,
+      positions: [
+        ValuedPosition(
+          instrument: bhp, quantity: 1, unitPrice: nil,
+          costBasis: amount(50), value: amount(60))
+      ],
+      historicalValue: nil
+    )
+    #expect(input.showsPLPill)
+  }
+
+  @Test("showsChart is true when historicalValue exists and at least one row carries cost basis")
+  func chartVisibleWithSeriesAndCostBasis() {
+    let input = PositionsViewInput(
+      title: "x", hostCurrency: aud,
+      positions: [
+        ValuedPosition(
+          instrument: bhp, quantity: 1, unitPrice: nil,
+          costBasis: amount(50), value: amount(60))
+      ],
+      historicalValue: HistoricalValueSeries(
+        hostCurrency: aud, total: [], perInstrument: [:])
+    )
+    #expect(input.showsChart)
+  }
+
   @Test("showsGroupSubtotals is true only when more than one kind is present")
   func subtotalsRequireMultipleKinds() {
     let stockOnly = PositionsViewInput(

@@ -54,10 +54,7 @@ struct PositionsViewInput: Sendable, Hashable {
   /// `true` iff the all-positions chart line should render. False when any
   /// row's current value is unavailable — partial historical totals would be
   /// misleading.
-  var showsAggregateChart: Bool {
-    guard showsChart, totalValue != nil else { return false }
-    return true
-  }
+  var showsAggregateChart: Bool { showsChart && totalValue != nil }
 
   /// `true` iff more than one `Instrument.Kind` is represented. Drives whether
   /// the table renders per-group subtotals.
