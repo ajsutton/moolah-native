@@ -97,7 +97,7 @@ struct EarmarkStoreTests {
       targetInstrument: .defaultTestInstrument)
     await store.load()
 
-    store.applyDelta(
+    await store.applyDelta(
       earmarkDeltas: [earmarkId: [instrument: -100]],
       savedDeltas: [:],
       spentDeltas: [earmarkId: [instrument: 100]]
@@ -127,7 +127,7 @@ struct EarmarkStoreTests {
       targetInstrument: .defaultTestInstrument)
     await store.load()
 
-    store.applyDelta(
+    await store.applyDelta(
       earmarkDeltas: [earmarkId: [instrument: 200]],
       savedDeltas: [earmarkId: [instrument: 200]],
       spentDeltas: [:]
@@ -163,7 +163,7 @@ struct EarmarkStoreTests {
       targetInstrument: .defaultTestInstrument)
     await store.load()
 
-    store.applyDelta(
+    await store.applyDelta(
       earmarkDeltas: [
         earmark1Id: [instrument: -100],
         earmark2Id: [instrument: 50],
@@ -208,9 +208,6 @@ struct EarmarkStoreTests {
       targetInstrument: .defaultTestInstrument)
 
     await store.load()
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedTotalBalance != nil
-    }
 
     #expect(store.convertedTotalBalance?.quantity == 500)
   }
@@ -241,9 +238,6 @@ struct EarmarkStoreTests {
       targetInstrument: .defaultTestInstrument)
 
     await store.load()
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedTotalBalance != nil
-    }
 
     // Individual balances should reflect true values
     #expect(store.convertedBalance(for: positiveId)?.quantity == 500)
@@ -271,18 +265,13 @@ struct EarmarkStoreTests {
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
     await store.load()
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedTotalBalance?.quantity == 500
-    }
+    #expect(store.convertedTotalBalance?.quantity == 500)
 
-    store.applyDelta(
+    await store.applyDelta(
       earmarkDeltas: [earmarkId: [instrument: -100]],
       savedDeltas: [:],
       spentDeltas: [earmarkId: [instrument: 100]]
     )
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedTotalBalance?.quantity == 400
-    }
 
     #expect(store.convertedTotalBalance?.quantity == 400)
   }
@@ -308,9 +297,6 @@ struct EarmarkStoreTests {
       targetInstrument: .defaultTestInstrument)
 
     await store.load()
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedBalance(for: earmarkId) != nil
-    }
 
     #expect(store.convertedBalance(for: earmarkId)?.quantity == 500)
     #expect(store.convertedSaved(for: earmarkId)?.quantity == 500)
@@ -335,18 +321,13 @@ struct EarmarkStoreTests {
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
     await store.load()
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedBalance(for: earmarkId)?.quantity == 500
-    }
+    #expect(store.convertedBalance(for: earmarkId)?.quantity == 500)
 
-    store.applyDelta(
+    await store.applyDelta(
       earmarkDeltas: [earmarkId: [instrument: -100]],
       savedDeltas: [:],
       spentDeltas: [earmarkId: [instrument: 100]]
     )
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedBalance(for: earmarkId)?.quantity == 400
-    }
 
     #expect(store.convertedBalance(for: earmarkId)?.quantity == 400)
     #expect(store.convertedSpent(for: earmarkId)?.quantity == 100)
@@ -705,9 +686,6 @@ struct EarmarkStoreTests {
       targetInstrument: aud)
 
     await store.load()
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedBalance(for: earmarkId) != nil
-    }
 
     let balance = try #require(store.convertedBalance(for: earmarkId))
     #expect(balance.instrument == usd)
@@ -736,9 +714,6 @@ struct EarmarkStoreTests {
       conversionService: FixedConversionService(rates: ["AUD": 2]),
       targetInstrument: aud)
     await store.load()
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedBalance(for: earmarkId)?.instrument == aud
-    }
 
     let before = try #require(store.convertedBalance(for: earmarkId))
     #expect(before.instrument == aud)
@@ -749,9 +724,6 @@ struct EarmarkStoreTests {
     changed.instrument = usd
     let updated = await store.update(changed)
     #expect(updated?.instrument == usd)
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedBalance(for: earmarkId)?.instrument == usd
-    }
 
     let after = try #require(store.convertedBalance(for: earmarkId))
     #expect(after.instrument == usd)
@@ -815,13 +787,9 @@ struct EarmarkStorePartialConversionTests {
       targetInstrument: aud,
       retryDelay: .seconds(60))
 
+    // `load()` awaits the first conversion pass inline, so after it returns
+    // the partial-failure state is published deterministically — no polling.
     await store.load()
-    // Poll the observable we actually assert on. When the healthy earmark's
-    // balance is published, the first conversion pass has written all per-
-    // earmark state atomically within one MainActor tick.
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedBalance(for: healthyEarmark.id) != nil
-    }
 
     #expect(store.convertedBalance(for: healthyEarmark.id)?.quantity == 300)
     #expect(store.convertedBalance(for: mixedEarmark.id) == nil)
@@ -866,42 +834,26 @@ struct EarmarkStorePartialConversionTests {
       targetInstrument: aud,
       retryDelay: .milliseconds(20))
 
+    // `load()` awaits the first pass; since EUR fails we land in the
+    // partial-failure state with a retry loop running in the background.
     await store.load()
-    // Wait for the first pass to publish the succeeding earmark before
-    // probing the partial-failure state.
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedBalance(for: audEarmark.id) != nil
-    }
 
     // Aggregate cannot be computed (EUR → AUD fails). Per-earmark balances
     // are still displayed in their own currency where no conversion is
     // needed.
     #expect(store.convertedTotalBalance == nil)
 
+    // Recover the conversion service and wait for the retry loop to
+    // succeed — `waitForPendingConversions()` returns when the loop
+    // terminates on the first successful attempt.
     await conversion.setFailing([])
-
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedTotalBalance != nil
-    }
+    await store.waitForPendingConversions()
 
     // 400 AUD + 200 EUR (1:1 fallback) = 600 AUD
     #expect(store.convertedTotalBalance?.quantity == 600)
     #expect(store.convertedBalance(for: audEarmark.id)?.quantity == 400)
     #expect(store.convertedBalance(for: eurEarmark.id)?.quantity == 200)
   }
-}
-
-@MainActor
-private func waitForCondition(
-  timeout: Duration,
-  _ predicate: @MainActor () -> Bool
-) async throws {
-  let deadline = ContinuousClock.now.advanced(by: timeout)
-  while ContinuousClock.now < deadline {
-    if predicate() { return }
-    try await Task.sleep(for: .milliseconds(10))
-  }
-  Issue.record("Timed out waiting for condition")
 }
 
 // MARK: - Test helpers

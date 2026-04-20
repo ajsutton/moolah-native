@@ -244,7 +244,7 @@ final class TransactionStore {
     if !delta.earmarkDeltas.isEmpty || !delta.earmarkSavedDeltas.isEmpty
       || !delta.earmarkSpentDeltas.isEmpty
     {
-      earmarkStore?.applyDelta(
+      await earmarkStore?.applyDelta(
         earmarkDeltas: delta.earmarkDeltas,
         savedDeltas: delta.earmarkSavedDeltas,
         spentDeltas: delta.earmarkSpentDeltas

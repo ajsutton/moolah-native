@@ -75,7 +75,6 @@ struct AccountStoreTests {
       targetInstrument: .defaultTestInstrument)
 
     await store.load()
-    await store.waitForPendingConversions()
 
     #expect(
       store.convertedCurrentTotal
@@ -109,7 +108,6 @@ struct AccountStoreTests {
       repository: backend.accounts, conversionService: conversion, targetInstrument: aud)
 
     await store.load()
-    await store.waitForPendingConversions()
 
     // 1_000.00 AUD + (500.00 USD * 2) + (200.00 USD * 2) = 1_000 + 1_000 + 400 = 2_400.00
     #expect(
@@ -310,13 +308,11 @@ struct AccountStoreTests {
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
     await store.load()
-    await store.waitForPendingConversions()
 
     #expect(store.convertedCurrentTotal?.quantity == Decimal(100000) / 100)
 
     let deltas: PositionDeltas = [checkingId: [instrument: Decimal(-5000) / 100]]
     await store.applyDelta(deltas)
-    await store.waitForPendingConversions()
 
     #expect(store.convertedCurrentTotal?.quantity == Decimal(95000) / 100)
     #expect(store.convertedNetWorth?.quantity == Decimal(95000) / 100)
@@ -395,8 +391,6 @@ struct AccountStoreTests {
     )
 
     await store.load()
-    // Wait for async conversion task to complete
-    await store.waitForPendingConversions()
 
     #expect(store.convertedCurrentTotal != nil)
     #expect(store.convertedCurrentTotal?.quantity == Decimal(100000) / 100)
@@ -416,13 +410,11 @@ struct AccountStoreTests {
     )
 
     await store.load()
-    await store.waitForPendingConversions()
 
     #expect(store.convertedCurrentTotal?.quantity == Decimal(100000) / 100)
 
     let deltas: PositionDeltas = [acctId: [instrument: Decimal(-5000) / 100]]
     await store.applyDelta(deltas)
-    await store.waitForPendingConversions()
 
     #expect(store.convertedCurrentTotal?.quantity == Decimal(95000) / 100)
     #expect(store.convertedNetWorth?.quantity == Decimal(95000) / 100)
@@ -510,7 +502,6 @@ struct AccountStoreTests {
       instrument: .defaultTestInstrument, position: 0, isHidden: false)
 
     let created = try await store.create(account)
-    await store.waitForPendingConversions()
 
     let balance = store.convertedBalances[created.id]
     #expect(balance != nil)

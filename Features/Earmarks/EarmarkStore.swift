@@ -61,7 +61,7 @@ final class EarmarkStore {
     do {
       earmarks = Earmarks(from: try await repository.fetchAll())
       logger.debug("Loaded \(self.earmarks.count) earmarks")
-      recomputeConvertedTotals()
+      await recomputeConvertedTotals()
     } catch {
       logger.error("Failed to load earmarks: \(error.localizedDescription)")
       self.error = error
@@ -80,7 +80,7 @@ final class EarmarkStore {
       if fresh.ordered != earmarks.ordered {
         earmarks = fresh
         logger.debug("Sync: updated earmarks (\(fresh.count) earmarks) in \(elapsed)ms")
-        recomputeConvertedTotals()
+        await recomputeConvertedTotals()
       }
       if elapsed > 16 {
         logger.warning("⚠️ PERF: earmarkStore.reloadFromSync took \(elapsed)ms")
@@ -101,7 +101,7 @@ final class EarmarkStore {
     earmarkDeltas: PositionDeltas,
     savedDeltas: PositionDeltas,
     spentDeltas: PositionDeltas
-  ) {
+  ) async {
     var result = earmarks
     let allIds = Set(earmarkDeltas.keys).union(savedDeltas.keys).union(spentDeltas.keys)
     for earmarkId in allIds {
@@ -113,29 +113,48 @@ final class EarmarkStore {
       )
     }
     earmarks = result
-    recomputeConvertedTotals()
+    await recomputeConvertedTotals()
   }
 
-  /// Recompute per-earmark balances and the aggregate total. Each earmark
-  /// is converted in isolation: a failure for one leaves other earmarks'
-  /// balances populated. The aggregate `convertedTotalBalance` is only
-  /// published when *all* contributing earmarks succeed (an inaccurate
-  /// total is worse than no total). On any failure, schedules a retry
-  /// after `retryDelay` and keeps retrying until everything succeeds or a
-  /// new recompute cancels this task.
-  private func recomputeConvertedTotals() {
+  /// Recompute per-earmark balances and the aggregate total. The first
+  /// pass runs inline and is awaited by the caller, so observers see
+  /// fully-published state the moment `load()`/`applyDelta` returns —
+  /// no poll, no race. If the first pass hits any conversion failure,
+  /// a background retry loop is spawned that keeps attempting until
+  /// everything succeeds or a new recompute cancels it. Callers that
+  /// want to await retry success use `waitForPendingConversions()`.
+  ///
+  /// Each earmark is converted in isolation: a failure for one leaves
+  /// other earmarks' balances populated. The aggregate
+  /// `convertedTotalBalance` is only published when *all* contributing
+  /// earmarks succeed (an inaccurate total is worse than no total).
+  private func recomputeConvertedTotals() async {
     conversionTask?.cancel()
+    conversionTask = nil
+
+    let anyFailed = await runConversionAttempt()
+    guard anyFailed else { return }
+
     let delay = retryDelay
     // `[weak self]` so the retry loop doesn't pin the store alive when the
     // owning view goes away while conversions are still failing.
     conversionTask = Task { [weak self] in
       while !Task.isCancelled {
-        guard let self else { return }
-        let anyFailed = await self.runConversionAttempt()
-        if !anyFailed { return }
         try? await Task.sleep(for: delay)
+        guard let self, !Task.isCancelled else { return }
+        if !(await self.runConversionAttempt()) { return }
       }
     }
+  }
+
+  /// Awaits the background retry loop, if one is running. Only relevant
+  /// after a first pass that hit a conversion failure — returns
+  /// immediately when there is no retry task pending. When a retry loop
+  /// is running, this returns when it terminates (on the first
+  /// successful attempt, or when a new recompute cancels it).
+  func waitForPendingConversions() async {
+    guard let task = conversionTask else { return }
+    await task.value
   }
 
   /// Single pass over all visible earmarks; returns `true` if any
@@ -366,7 +385,7 @@ final class EarmarkStore {
       logger.debug("Updated earmark in local state: \(updated.name)")
       // Rebuild converted balances — a changed instrument (or hidden flag)
       // requires re-expressing existing positions in the new display currency.
-      recomputeConvertedTotals()
+      await recomputeConvertedTotals()
       return updated
     } catch {
       logger.error("Failed to update earmark: \(error.localizedDescription)")
