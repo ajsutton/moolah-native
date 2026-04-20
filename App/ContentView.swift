@@ -52,8 +52,7 @@ struct ContentView: View {
               categories: categoryStore.categories,
               earmarks: earmarkStore.earmarks,
               investmentStore: investmentStore,
-              transactionStore: transactionStore,
-              tradeStore: tradeStore)
+              transactionStore: transactionStore)
           } else {
             TransactionListView(
               title: account.name,
