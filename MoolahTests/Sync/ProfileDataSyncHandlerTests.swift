@@ -239,6 +239,123 @@ struct ProfileDataSyncHandlerTests {
     }
   }
 
+  // MARK: - queueUnsyncedRecords
+
+  @Test func queueUnsyncedRecordsReturnsRecordsWithNilSystemFields() throws {
+    let (handler, container) = try makeHandler()
+
+    let unsyncedAccountId = UUID()
+    let syncedAccountId = UUID()
+    let unsyncedInstrumentId = "AUD"
+    let syncedInstrumentId = "USD"
+
+    let context = ModelContext(container)
+
+    // Record without system fields (never synced, e.g. just migrated)
+    context.insert(
+      AccountRecord(
+        id: unsyncedAccountId, name: "Unsynced", type: "bank", position: 0,
+        isHidden: false))
+
+    // Record with system fields (already synced)
+    let synced = AccountRecord(
+      id: syncedAccountId, name: "Synced", type: "bank", position: 1,
+      isHidden: false)
+    synced.encodedSystemFields = Data([0x01, 0x02, 0x03])
+    context.insert(synced)
+
+    // Instruments follow the same rule (string-keyed)
+    context.insert(
+      InstrumentRecord(
+        id: unsyncedInstrumentId, kind: "fiatCurrency",
+        name: "Australian Dollar", decimals: 2))
+    let syncedInstrument = InstrumentRecord(
+      id: syncedInstrumentId, kind: "fiatCurrency",
+      name: "US Dollar", decimals: 2)
+    syncedInstrument.encodedSystemFields = Data([0x04, 0x05])
+    context.insert(syncedInstrument)
+
+    try context.save()
+
+    let recordIDs = handler.queueUnsyncedRecords()
+    let recordNames = Set(recordIDs.map(\.recordName))
+
+    #expect(recordNames.contains(unsyncedAccountId.uuidString))
+    #expect(recordNames.contains(unsyncedInstrumentId))
+    #expect(!recordNames.contains(syncedAccountId.uuidString))
+    #expect(!recordNames.contains(syncedInstrumentId))
+  }
+
+  @Test func queueUnsyncedRecordsReturnsEmptyWhenAllSynced() throws {
+    let (handler, container) = try makeHandler()
+
+    let context = ModelContext(container)
+    let account = AccountRecord(
+      id: UUID(), name: "Acc", type: "bank", position: 0, isHidden: false)
+    account.encodedSystemFields = Data([0x01])
+    context.insert(account)
+    try context.save()
+
+    let recordIDs = handler.queueUnsyncedRecords()
+    #expect(recordIDs.isEmpty)
+  }
+
+  @Test func queueUnsyncedRecordsReturnsAllWhenNoneSynced() throws {
+    let (handler, container) = try makeHandler()
+
+    let accountId = UUID()
+    let txnId = UUID()
+    let legId = UUID()
+    let categoryId = UUID()
+    let earmarkId = UUID()
+    let budgetItemId = UUID()
+    let investmentValueId = UUID()
+    let instrumentId = "AUD"
+
+    let context = ModelContext(container)
+    context.insert(
+      InstrumentRecord(
+        id: instrumentId, kind: "fiatCurrency",
+        name: "Australian Dollar", decimals: 2))
+    context.insert(
+      AccountRecord(id: accountId, name: "Acc", type: "bank", position: 0, isHidden: false))
+    context.insert(
+      CategoryRecord(id: categoryId, name: "Food", parentId: nil))
+    context.insert(
+      EarmarkRecord(id: earmarkId, name: "Holiday", instrumentId: instrumentId))
+    context.insert(
+      EarmarkBudgetItemRecord(
+        id: budgetItemId, earmarkId: earmarkId, categoryId: categoryId,
+        amount: 0, instrumentId: instrumentId))
+    context.insert(
+      InvestmentValueRecord(
+        id: investmentValueId, accountId: accountId, date: Date(),
+        value: 0, instrumentId: instrumentId))
+    context.insert(TransactionRecord(id: txnId, date: Date(), payee: "Test"))
+    context.insert(
+      TransactionLegRecord(
+        id: legId, transactionId: txnId, accountId: accountId,
+        instrumentId: instrumentId, quantity: 0, type: "income", sortOrder: 0))
+    try context.save()
+
+    let recordIDs = handler.queueUnsyncedRecords()
+    let recordNames = Set(recordIDs.map(\.recordName))
+
+    #expect(recordNames.count == 8)
+    #expect(recordNames.contains(instrumentId))
+    #expect(recordNames.contains(accountId.uuidString))
+    #expect(recordNames.contains(categoryId.uuidString))
+    #expect(recordNames.contains(earmarkId.uuidString))
+    #expect(recordNames.contains(budgetItemId.uuidString))
+    #expect(recordNames.contains(investmentValueId.uuidString))
+    #expect(recordNames.contains(txnId.uuidString))
+    #expect(recordNames.contains(legId.uuidString))
+
+    for recordID in recordIDs {
+      #expect(recordID.zoneID == handler.zoneID)
+    }
+  }
+
   // MARK: - buildBatchRecordLookup
 
   @Test func buildBatchRecordLookupFindsRecordsByUUID() throws {

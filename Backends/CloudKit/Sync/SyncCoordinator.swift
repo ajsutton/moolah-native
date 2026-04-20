@@ -170,6 +170,14 @@ final class SyncCoordinator: Sendable {
   let containerManager: ProfileContainerManager
   let profileIndexHandler: ProfileIndexSyncHandler
 
+  /// User defaults used to persist per-profile "backfill scan complete" flags so the
+  /// scan runs at most once per profile across app launches. Injected for testing.
+  private let userDefaults: UserDefaults
+
+  /// Key prefix for the per-profile backfill-scan-completed flag. The full key is
+  /// `"\(backfillScanCompleteKeyPrefix).\(profileId.uuidString)"`.
+  private static let backfillScanCompleteKeyPrefix = "com.moolah.sync.backfillScanComplete"
+
   private let logger = Logger(subsystem: "com.moolah.app", category: "SyncCoordinator")
   private var syncEngine: CKSyncEngine?
   private(set) var isRunning = false
@@ -244,8 +252,12 @@ final class SyncCoordinator: Sendable {
 
   // MARK: - Init
 
-  init(containerManager: ProfileContainerManager) {
+  init(
+    containerManager: ProfileContainerManager,
+    userDefaults: UserDefaults = .standard
+  ) {
     self.containerManager = containerManager
+    self.userDefaults = userDefaults
     self.profileIndexHandler = ProfileIndexSyncHandler(
       modelContainer: containerManager.indexContainer)
   }
@@ -300,6 +312,7 @@ final class SyncCoordinator: Sendable {
     // then send if needed. Reactive creation in `handleSentRecordZoneChanges`
     // remains as a fallback per SYNC_GUIDE Rule 3.
     let profileIds = containerManager.allProfileIds()
+    let shouldBackfillUnsynced = !isFirstLaunch
     zoneSetupTask = Task {
       await self.ensureZoneExists(self.profileIndexHandler.zoneID)
       for profileId in profileIds {
@@ -307,6 +320,14 @@ final class SyncCoordinator: Sendable {
           zoneName: "profile-\(profileId.uuidString)",
           ownerName: CKCurrentUserDefaultName)
         await self.ensureZoneExists(zoneID)
+      }
+      // After zones are confirmed, backfill any records that never got queued for upload
+      // (e.g. data imported by migration on a build that predated the migration→sync fix,
+      // or a previous run that crashed between the SwiftData write and the sync-engine
+      // queue). Skipped on first launch because `queueAllExistingRecordsForAllZones`
+      // has already queued everything.
+      if shouldBackfillUnsynced {
+        _ = self.queueUnsyncedRecordsForAllProfiles()
       }
       if self.hasPendingChanges {
         self.logger.info("Zones ready — sending pending changes")
@@ -516,6 +537,142 @@ final class SyncCoordinator: Sendable {
 
   // MARK: - Queue All Existing Records
 
+  /// Ensures the given profile's zone exists on CloudKit, then queues every record in
+  /// that profile's local SwiftData store for upload. Called by `MigrationCoordinator`
+  /// after a migration import, which writes records directly to SwiftData and so
+  /// bypasses the repository `onRecordChanged` hooks that normally feed the sync engine.
+  ///
+  /// The zone is created first so the initial send does not have to round-trip through
+  /// `.zoneNotFound` and `pendingZoneCreation`.
+  ///
+  /// Returns the record IDs that were queued (empty if the profile has no records or
+  /// its handler couldn't be resolved). The caller is responsible for invoking
+  /// `sendChanges()` afterwards if an immediate upload is desired.
+  @discardableResult
+  func queueAllRecordsAfterImport(for profileId: UUID) async -> [CKRecord.ID] {
+    let zoneID = CKRecordZone.ID(
+      zoneName: "profile-\(profileId.uuidString)",
+      ownerName: CKCurrentUserDefaultName)
+
+    // Only hit CloudKit when the coordinator is actually running; tests never start
+    // the engine and should not make network calls for zone creation.
+    if isRunning {
+      await ensureZoneExists(zoneID)
+    }
+
+    guard let handler = try? handlerForProfileZone(profileId: profileId, zoneID: zoneID) else {
+      logger.error("Failed to get handler for post-import queueing, profile \(profileId)")
+      return []
+    }
+    let recordIDs = handler.queueAllExistingRecords()
+    if !recordIDs.isEmpty {
+      syncEngine?.state.add(
+        pendingRecordZoneChanges: recordIDs.map { .saveRecord($0) })
+      logger.info(
+        "Queued \(recordIDs.count) records for upload after import, profile \(profileId)")
+    }
+    // Mark the profile as backfill-scanned: we've just queued every record, which is
+    // a strict superset of what the startup backfill scan would do. Prevents the next
+    // launch from re-scanning this profile's SwiftData store for nothing.
+    markBackfillScanComplete(for: profileId)
+    return recordIDs
+  }
+
+  /// Scans every known cloud profile for records that have never been successfully
+  /// synced (i.e. `encodedSystemFields == nil`) and queues them for upload. Called on
+  /// coordinator start so users whose profiles were migrated on a previous build — where
+  /// migration did not queue imported records — still end up with their data uploaded
+  /// on the next launch.
+  ///
+  /// Idempotent: records that already have system fields are skipped, and CKSyncEngine's
+  /// pending list dedupes against any other queued changes.
+  @discardableResult
+  func queueUnsyncedRecordsForAllProfiles() -> [CKRecord.ID] {
+    var queued: [CKRecord.ID] = []
+    for profileId in containerManager.allProfileIds() {
+      // Skip profiles whose backfill scan has already run — the only work left for
+      // those is normal sync traffic. This keeps the startup scan O(1) on the happy
+      // path: after the first run per profile we never touch its SwiftData store again.
+      if hasCompletedBackfillScan(for: profileId) {
+        continue
+      }
+      let zoneID = CKRecordZone.ID(
+        zoneName: "profile-\(profileId.uuidString)",
+        ownerName: CKCurrentUserDefaultName)
+      guard let handler = try? handlerForProfileZone(profileId: profileId, zoneID: zoneID)
+      else {
+        logger.error("Failed to get handler for backfill queueing, profile \(profileId)")
+        continue
+      }
+      let recordIDs = handler.queueUnsyncedRecords()
+      if !recordIDs.isEmpty {
+        syncEngine?.state.add(
+          pendingRecordZoneChanges: recordIDs.map { .saveRecord($0) })
+        queued.append(contentsOf: recordIDs)
+      }
+      markBackfillScanComplete(for: profileId)
+    }
+    if !queued.isEmpty {
+      logger.info(
+        "Queued \(queued.count) previously-unsynced records for upload across all profiles")
+    }
+    return queued
+  }
+
+  private func hasCompletedBackfillScan(for profileId: UUID) -> Bool {
+    userDefaults.bool(forKey: backfillScanCompleteKey(for: profileId))
+  }
+
+  private func markBackfillScanComplete(for profileId: UUID) {
+    userDefaults.set(true, forKey: backfillScanCompleteKey(for: profileId))
+  }
+
+  /// Clears the backfill-scan flag for one profile — called whenever the profile's
+  /// local data is destroyed or its system fields are reset (zone deletion,
+  /// encrypted data reset), so the next scan re-examines it instead of skipping
+  /// based on stale state.
+  private func clearBackfillScanFlag(for profileId: UUID) {
+    userDefaults.removeObject(forKey: backfillScanCompleteKey(for: profileId))
+  }
+
+  /// Clears every backfill-scan flag. Called on sign-out/switch-accounts, where
+  /// the set of valid profiles may change entirely before the next scan runs.
+  private func clearAllBackfillScanFlags() {
+    let prefix = Self.backfillScanCompleteKeyPrefix + "."
+    for key in userDefaults.dictionaryRepresentation().keys where key.hasPrefix(prefix) {
+      userDefaults.removeObject(forKey: key)
+    }
+  }
+
+  private func backfillScanCompleteKey(for profileId: UUID) -> String {
+    "\(Self.backfillScanCompleteKeyPrefix).\(profileId.uuidString)"
+  }
+
+  // MARK: - Test Hooks
+
+  /// Test-only: runs the same bookkeeping as a CloudKit `.signOut` account event, so
+  /// unit tests can verify backfill-flag cleanup without a real CKSyncEngine.
+  func handleSignOutForTesting() {
+    deleteAllLocalData()
+    deleteStateSerialization()
+    clearAllBackfillScanFlags()
+    isFetchingChanges = false
+  }
+
+  /// Test-only: runs the same bookkeeping as a `.deleted` zone deletion for the given
+  /// zone, so unit tests can verify backfill-flag cleanup without dispatching a real
+  /// sync event.
+  func handleZoneDeletedForTesting(zoneID: CKRecordZone.ID) {
+    handleZoneDeleted(zoneID, zoneType: Self.parseZone(zoneID))
+  }
+
+  /// Test-only: runs the same bookkeeping as an `.encryptedDataReset` zone deletion,
+  /// so unit tests can verify backfill-flag cleanup without dispatching a real sync
+  /// event.
+  func handleEncryptedDataResetForTesting(zoneID: CKRecordZone.ID) {
+    handleEncryptedDataReset(zoneID, zoneType: Self.parseZone(zoneID))
+  }
+
   private func queueAllExistingRecordsForAllZones() {
     // Queue profile-index records
     let indexRecordIDs = profileIndexHandler.queueAllExistingRecords()
@@ -539,6 +696,9 @@ final class SyncCoordinator: Sendable {
       } catch {
         logger.error("Failed to queue records for profile \(profileId): \(error)")
       }
+      // This path queued every record for the profile, so there is nothing left for
+      // the per-launch backfill scan to find.
+      markBackfillScanComplete(for: profileId)
     }
   }
 
@@ -579,12 +739,14 @@ final class SyncCoordinator: Sendable {
       logger.info("Account signed out — deleting all local data and sync state")
       deleteAllLocalData()
       deleteStateSerialization()
+      clearAllBackfillScanFlags()
       isFetchingChanges = false
 
     case .switchAccounts:
       logger.info("Account switched — full reset")
       deleteAllLocalData()
       deleteStateSerialization()
+      clearAllBackfillScanFlags()
       isFetchingChanges = false
 
     @unknown default:
@@ -651,6 +813,9 @@ final class SyncCoordinator: Sendable {
           notifyObservers(for: profileId, changedTypes: changedTypes)
         }
       }
+      // Records have been wiped; any re-created zone starts with no system fields and
+      // must be re-scanned. Clear the flag so the next backfill pass picks it up.
+      clearBackfillScanFlag(for: profileId)
 
     case .unknown:
       break
@@ -673,6 +838,7 @@ final class SyncCoordinator: Sendable {
           notifyObservers(for: profileId, changedTypes: changedTypes)
         }
       }
+      clearBackfillScanFlag(for: profileId)
 
     case .unknown:
       break
@@ -705,6 +871,10 @@ final class SyncCoordinator: Sendable {
             pendingRecordZoneChanges: recordIDs.map { .saveRecord($0) })
         }
       }
+      // System fields were cleared; if a later crash happens before the re-upload
+      // persists, the next backfill scan must revisit this profile instead of
+      // trusting a stale "complete" flag from before the reset.
+      clearBackfillScanFlag(for: profileId)
 
     case .unknown:
       break

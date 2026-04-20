@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
   @Environment(ProfileStore.self) private var profileStore
   @Environment(ProfileContainerManager.self) private var containerManager
+  @Environment(SyncCoordinator.self) private var syncCoordinator
 
   #if os(macOS)
     @Environment(SessionManager.self) private var sessionManager
@@ -393,7 +394,9 @@ struct SettingsView: View {
         let coordinator = MigrationCoordinator()
         _ = try await coordinator.importFromFile(
           url: url,
-          modelContainer: container
+          modelContainer: container,
+          profileId: newProfile.id,
+          syncCoordinator: syncCoordinator
         )
         profileStore.setActiveProfile(newProfile.id)
       } catch {

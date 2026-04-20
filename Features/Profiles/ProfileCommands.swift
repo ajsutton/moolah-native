@@ -6,6 +6,7 @@
     let profileStore: ProfileStore
     let sessionManager: SessionManager
     let containerManager: ProfileContainerManager
+    let syncCoordinator: SyncCoordinator
 
     @FocusedValue(\.authStore) private var authStore
     @FocusedValue(\.activeProfileSession) private var session
@@ -19,6 +20,7 @@
         ExportImportButtons(
           profileStore: profileStore,
           containerManager: containerManager,
+          syncCoordinator: syncCoordinator,
           session: session
         )
       }

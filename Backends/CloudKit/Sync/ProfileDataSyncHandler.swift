@@ -347,6 +347,48 @@ final class ProfileDataSyncHandler: Sendable {
     return recordIDs
   }
 
+  /// Scans all record types and returns CKRecord.IDs for records that have never been
+  /// successfully sent to CloudKit (i.e. `encodedSystemFields == nil`). Used on startup
+  /// to backfill uploads for profiles whose data landed via migration or any other path
+  /// that bypassed the repository `onRecordChanged` hooks.
+  func queueUnsyncedRecords() -> [CKRecord.ID] {
+    let signpostID = OSSignpostID(log: Signposts.sync)
+    os_signpost(
+      .begin, log: Signposts.sync, name: "queueUnsyncedRecords", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.sync, name: "queueUnsyncedRecords", signpostID: signpostID)
+    }
+
+    var recordIDs: [CKRecord.ID] = []
+
+    func collectUnsynced<T: PersistentModel & SystemFieldsCacheable>(
+      _ type: T.Type, extract: (T) -> String
+    ) {
+      let context = ModelContext(modelContainer)
+      let records = fetchOrLog(FetchDescriptor<T>(), context: context)
+      for r in records where r.encodedSystemFields == nil {
+        recordIDs.append(CKRecord.ID(recordName: extract(r), zoneID: zoneID))
+      }
+    }
+
+    // Same dependency order as queueAllExistingRecords.
+    collectUnsynced(InstrumentRecord.self) { $0.id }
+    collectUnsynced(CategoryRecord.self) { $0.id.uuidString }
+    collectUnsynced(AccountRecord.self) { $0.id.uuidString }
+    collectUnsynced(EarmarkRecord.self) { $0.id.uuidString }
+    collectUnsynced(EarmarkBudgetItemRecord.self) { $0.id.uuidString }
+    collectUnsynced(InvestmentValueRecord.self) { $0.id.uuidString }
+    collectUnsynced(TransactionRecord.self) { $0.id.uuidString }
+    collectUnsynced(TransactionLegRecord.self) { $0.id.uuidString }
+
+    if !recordIDs.isEmpty {
+      logger.info("Collected \(recordIDs.count) unsynced records for upload")
+    }
+
+    return recordIDs
+  }
+
   // MARK: - Local Data Deletion
 
   /// Deletes all local records for this profile's zone.

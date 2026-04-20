@@ -1,3 +1,4 @@
+import CloudKit
 import Foundation
 import SwiftData
 import Testing
@@ -219,5 +220,66 @@ struct MigrationIntegrationTests {
     let budgetItems = try await cloudBackend.earmarks.fetchBudget(earmarkId: holiday!.id)
     #expect(budgetItems.count == 1)
     #expect(budgetItems.first?.amount.quantity == Decimal(string: "50.00")!)
+  }
+
+  @Test(
+    "MigrationCoordinator.migrate queues imported records with SyncCoordinator for upload"
+  )
+  func migrateQueuesRecordsForSync() async throws {
+    let backend = try await makeSeededBackend()
+    let manager = try ProfileContainerManager.forTesting()
+    let profileStore = ProfileStore(
+      defaults: UserDefaults(suiteName: "migrate-queues-\(UUID().uuidString)")!,
+      containerManager: manager
+    )
+    let syncCoordinator = SyncCoordinator(containerManager: manager)
+
+    let sourceProfile = Profile(
+      id: UUID(),
+      label: "Source",
+      backendType: .remote,
+      currencyCode: instrument.id,
+      financialYearStartMonth: 7
+    )
+
+    let coordinator = MigrationCoordinator()
+    await coordinator.migrate(
+      sourceProfile: sourceProfile,
+      from: backend,
+      to: manager,
+      profileStore: profileStore,
+      syncCoordinator: syncCoordinator
+    )
+
+    guard case .succeeded(_, let newProfileId, _) = coordinator.state else {
+      Issue.record("Expected .succeeded state, got \(coordinator.state)")
+      return
+    }
+
+    // The migration must have queued the new profile's records with the sync coordinator
+    // so they get uploaded to CloudKit. Otherwise other devices never see the migrated data.
+    let queued = coordinator.lastRecordIDsQueuedForUpload
+    #expect(!queued.isEmpty)
+    let zoneName = "profile-\(newProfileId.uuidString)"
+    for recordID in queued {
+      #expect(recordID.zoneID.zoneName == zoneName)
+    }
+
+    // Sanity: the queued record set should at least cover every account/transaction/category
+    // that was seeded.
+    let recordNames = Set(queued.map(\.recordName))
+    let container = try manager.container(for: newProfileId)
+    let context = ModelContext(container)
+    let importedAccounts = try context.fetch(FetchDescriptor<AccountRecord>())
+    for account in importedAccounts {
+      #expect(recordNames.contains(account.id.uuidString))
+    }
+
+    // The startup backfill scan must skip this profile — migration has already queued
+    // everything and flagged the profile as backfilled. Re-scanning would do pointless
+    // SwiftData iteration on every launch.
+    let leftover = syncCoordinator.queueUnsyncedRecordsForAllProfiles()
+      .filter { $0.zoneID.zoneName == zoneName }
+    #expect(leftover.isEmpty)
   }
 }

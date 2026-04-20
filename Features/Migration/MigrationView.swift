@@ -7,6 +7,7 @@ struct MigrationView: View {
 
   @Environment(ProfileStore.self) private var profileStore
   @Environment(ProfileContainerManager.self) private var containerManager
+  @Environment(SyncCoordinator.self) private var syncCoordinator
   @Environment(\.dismiss) private var dismiss
   #if os(macOS)
     @Environment(\.openWindow) private var openWindow
@@ -61,7 +62,8 @@ struct MigrationView: View {
             sourceProfile: sourceProfile,
             from: backend,
             to: containerManager,
-            profileStore: profileStore
+            profileStore: profileStore,
+            syncCoordinator: syncCoordinator
           )
         }
       }

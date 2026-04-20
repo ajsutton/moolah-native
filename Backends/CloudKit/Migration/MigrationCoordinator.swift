@@ -1,3 +1,4 @@
+@preconcurrency import CloudKit
 import Foundation
 import OSLog
 import Observation
@@ -81,6 +82,12 @@ final class MigrationCoordinator {
   }
 
   private(set) var state: State = .idle
+
+  /// Record IDs queued with the sync coordinator by the most recent successful
+  /// `migrate(...)` call. Empty if no sync coordinator was provided, the migration
+  /// failed, or the profile had no records to queue. Exposed for test verification.
+  private(set) var lastRecordIDsQueuedForUpload: [CKRecord.ID] = []
+
   private let logger = Logger(subsystem: "com.moolah.app", category: "Migration")
 
   /// Migrates data from a remote profile to a new iCloud profile.
@@ -90,13 +97,19 @@ final class MigrationCoordinator {
   ///   - backend: The backend for the source profile (provides repositories)
   ///   - containerManager: The per-profile container manager used to create the target store
   ///   - profileStore: The profile store for creating the new profile and renaming the old one
+  ///   - syncCoordinator: Optional sync coordinator. When provided, the newly-imported
+  ///     profile's zone is created on CloudKit and every imported record is queued for
+  ///     upload so other devices receive the migrated data. Pass `nil` for tests that
+  ///     don't exercise sync.
   func migrate(
     sourceProfile: Profile,
     from backend: any BackendProvider,
     to containerManager: ProfileContainerManager,
-    profileStore: ProfileStore
+    profileStore: ProfileStore,
+    syncCoordinator: SyncCoordinator? = nil
   ) async {
     state = .exporting(step: "Starting...")
+    lastRecordIDsQueuedForUpload = []
 
     do {
       // 1. Export all data from the source backend
@@ -188,6 +201,19 @@ final class MigrationCoordinator {
       // 6. Switch to the new iCloud profile
       profileStore.setActiveProfile(newProfileId)
 
+      // 7. Queue the imported records with the sync coordinator so they upload to
+      // CloudKit and propagate to other devices. `CloudKitDataImporter` writes records
+      // directly to SwiftData and so bypasses the repository `onRecordChanged` hooks —
+      // without this step the new profile's data would only ever exist on the device
+      // that performed the migration.
+      if let syncCoordinator {
+        let queued = await syncCoordinator.queueAllRecordsAfterImport(for: newProfileId)
+        lastRecordIDsQueuedForUpload = queued
+        if !queued.isEmpty {
+          await syncCoordinator.sendChanges()
+        }
+      }
+
       state = .succeeded(
         result, newProfileId: newProfileId, balanceWarnings: verification.balanceMismatches)
 
@@ -234,10 +260,16 @@ final class MigrationCoordinator {
   /// - Parameters:
   ///   - url: The file URL to read the exported JSON from
   ///   - modelContainer: The target container to import data into
+  ///   - profileId: The UUID of the new profile that owns `modelContainer`. Required
+  ///     when `syncCoordinator` is non-nil so imported records can be queued for upload.
+  ///   - syncCoordinator: Optional sync coordinator. When provided, all imported records
+  ///     are queued for upload so the profile syncs to CloudKit and other devices.
   /// - Returns: The import result with counts of imported records
   func importFromFile(
     url: URL,
-    modelContainer: ModelContainer
+    modelContainer: ModelContainer,
+    profileId: UUID? = nil,
+    syncCoordinator: SyncCoordinator? = nil
   ) async throws -> ImportResult {
     state = .importing(step: "reading file", progress: 0)
 
@@ -283,6 +315,17 @@ final class MigrationCoordinator {
     if !verification.countMatch {
       state = .idle
       throw MigrationError.verificationFailed(verification)
+    }
+
+    // Queue every imported record for upload so the new profile actually syncs to
+    // CloudKit. Without this the container has data but CKSyncEngine never hears
+    // about it — the profile would be iCloud-backed in name only.
+    if let syncCoordinator, let profileId {
+      let queued = await syncCoordinator.queueAllRecordsAfterImport(for: profileId)
+      lastRecordIDsQueuedForUpload = queued
+      if !queued.isEmpty {
+        await syncCoordinator.sendChanges()
+      }
     }
 
     state = .idle

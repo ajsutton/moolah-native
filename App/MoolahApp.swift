@@ -410,7 +410,7 @@ struct MoolahApp: App {
         AboutCommands()
         ProfileCommands(
           profileStore: profileStore, sessionManager: sessionManager,
-          containerManager: containerManager)
+          containerManager: containerManager, syncCoordinator: syncCoordinator)
         NewItemCommands()
         RefreshCommands()
         SidebarCommands()
@@ -436,6 +436,7 @@ struct MoolahApp: App {
           .environment(profileStore)
           .environment(sessionManager)
           .environment(containerManager)
+          .environment(syncCoordinator)
           .modelContainer(containerManager.indexContainer)
       }
     #else

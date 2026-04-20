@@ -7,6 +7,7 @@
   struct ExportImportButtons: View {
     let profileStore: ProfileStore
     let containerManager: ProfileContainerManager
+    let syncCoordinator: SyncCoordinator
     let session: ProfileSession?
 
     @Environment(\.openWindow) private var openWindow
@@ -97,7 +98,9 @@
         let coordinator = MigrationCoordinator()
         _ = try await coordinator.importFromFile(
           url: url,
-          modelContainer: container
+          modelContainer: container,
+          profileId: newProfile.id,
+          syncCoordinator: syncCoordinator
         )
         openWindow(value: newProfile.id)
       } catch {
