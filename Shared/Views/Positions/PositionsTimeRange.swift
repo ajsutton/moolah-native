@@ -29,6 +29,18 @@ enum PositionsTimeRange: Hashable, Sendable, CaseIterable, Identifiable {
     }
   }
 
+  /// Long-form label for VoiceOver (the short `label` "1M" is opaque when read aloud).
+  var accessibilityLabel: String {
+    switch self {
+    case .oneMonth: return "1 month"
+    case .threeMonths: return "3 months"
+    case .sixMonths: return "6 months"
+    case .ytd: return "Year to date"
+    case .oneYear: return "1 year"
+    case .all: return "All time"
+    }
+  }
+
   /// First date inside the range, given a `now` reference. `nil` for `.all`
   /// (caller treats as "from the earliest available data point").
   func cutoff(from now: Date) -> Date? {
