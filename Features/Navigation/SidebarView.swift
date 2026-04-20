@@ -15,6 +15,7 @@ struct SidebarView: View {
   @Environment(AccountStore.self) private var accountStore
   @Environment(EarmarkStore.self) private var earmarkStore
   @Environment(ProfileSession.self) private var session
+  @Environment(ImportStore.self) private var importStore
   @Binding var selection: SidebarSelection?
   @State private var showCreateEarmarkSheet = false
   @State private var showCreateAccountSheet = false
@@ -42,6 +43,10 @@ struct SidebarView: View {
         ForEach(accountStore.currentAccounts) { account in
           NavigationLink(value: SidebarSelection.account(account.id)) {
             AccountSidebarRow(account: account, isSelected: selection == .account(account.id))
+          }
+          .dropDestination(for: URL.self) { urls, _ in
+            Task { await ingestDroppedURLs(urls, forcedAccountId: account.id) }
+            return !urls.isEmpty
           }
           .contextMenu {
             Button("Edit Account\u{2026}", systemImage: "pencil") {
@@ -277,6 +282,24 @@ struct SidebarView: View {
     var accounts = accountStore.currentAccounts
     accounts.move(fromOffsets: source, toOffset: destination)
     await accountStore.reorderAccounts(accounts)
+  }
+
+  /// Dropped CSV onto a sidebar account row: force the import onto that
+  /// account, bypassing profile matching. A profile is created on success.
+  private func ingestDroppedURLs(_ urls: [URL], forcedAccountId: UUID) async {
+    for url in urls
+    where url.pathExtension.lowercased() == "csv"
+      || url.pathExtension.isEmpty
+    {
+      let didStart = url.startAccessingSecurityScopedResource()
+      defer {
+        if didStart { url.stopAccessingSecurityScopedResource() }
+      }
+      guard let data = try? Data(contentsOf: url) else { continue }
+      _ = await importStore.ingest(
+        data: data,
+        source: .droppedFile(url: url, forcedAccountId: forcedAccountId))
+    }
   }
 
   private func reorderInvestmentAccounts(from source: IndexSet, to destination: Int) async {

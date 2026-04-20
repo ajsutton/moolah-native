@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// File > Import CSV… menu item. The actual `.fileImporter` sheet lives in
-/// the focused window's view; this command triggers the focused-value action
-/// that opens it.
+/// File > Import CSV… menu item plus Paste CSV. The actual handlers live in
+/// the focused window's view; the commands trigger focused-value actions.
 struct ImportCSVCommands: Commands {
   @FocusedValue(\.importCSVAction) private var importCSVAction
+  @FocusedValue(\.pasteCSVAction) private var pasteCSVAction
 
   var body: some Commands {
     CommandGroup(replacing: .importExport) {
@@ -13,6 +13,12 @@ struct ImportCSVCommands: Commands {
       }
       .keyboardShortcut("i", modifiers: [.command, .shift])
       .disabled(importCSVAction == nil)
+
+      Button("Paste CSV") {
+        pasteCSVAction?()
+      }
+      .keyboardShortcut("v", modifiers: [.command, .shift, .option])
+      .disabled(pasteCSVAction == nil)
     }
   }
 }
