@@ -9,12 +9,13 @@ struct InvestmentAccountView: View {
   let earmarks: Earmarks
   let investmentStore: InvestmentStore
   let transactionStore: TransactionStore
-  let tradeStore: TradeStore
 
   @Environment(ProfileSession.self) private var session
   @State private var showingAddValue = false
-  @State private var showingRecordTrade = false
   @State private var selectedTransaction: Transaction?
+  @State private var positionsInput: PositionsViewInput = PositionsViewInput(
+    title: "", hostCurrency: .AUD, positions: [], historicalValue: nil)
+  @State private var positionsRange: PositionsTimeRange = .threeMonths
 
   /// The profile's fiat currency instrument, derived from the account's instrument.
   private var profileCurrencyInstrument: Instrument {
@@ -79,11 +80,8 @@ struct InvestmentAccountView: View {
           }
         #endif
       } else {
-        // Position-tracked: show positions and trade button
-        StockPositionsView(
-          valuedPositions: investmentStore.valuedPositions,
-          totalValue: investmentStore.totalPortfolioValue,
-          profileCurrency: profileCurrencyInstrument
+        PositionsView(
+          input: positionsInput
         )
       }
 
@@ -114,40 +112,17 @@ struct InvestmentAccountView: View {
       AddInvestmentValueView(
         accountId: account.id, instrument: account.instrument, store: investmentStore)
     }
-    .sheet(isPresented: $showingRecordTrade) {
-      RecordTradeView(
-        accountId: account.id,
-        profileCurrency: profileCurrencyInstrument,
-        categories: categories,
-        tradeStore: tradeStore
-      )
-    }
-    .toolbar {
-      if !investmentStore.hasLegacyValuations {
-        ToolbarItem(placement: .primaryAction) {
-          Button {
-            showingRecordTrade = true
-          } label: {
-            Label("Record Trade", systemImage: "arrow.left.arrow.right")
-          }
-          .help("Record Trade")
-        }
-      }
-    }
     .task(id: account.id) {
       await investmentStore.loadAllData(
         accountId: account.id, profileCurrency: profileCurrencyInstrument)
-    }
-    .onChange(of: showingRecordTrade) { _, showing in
-      guard !showing else { return }
-      Task {
-        await investmentStore.reloadPositionsIfNeeded(
-          accountId: account.id, profileCurrency: profileCurrencyInstrument)
-      }
+      positionsInput = await investmentStore.positionsViewInput(
+        title: account.name, range: positionsRange)
     }
     .refreshable {
       await investmentStore.loadAllData(
         accountId: account.id, profileCurrency: profileCurrencyInstrument)
+      positionsInput = await investmentStore.positionsViewInput(
+        title: account.name, range: positionsRange)
     }
   }
 
@@ -238,7 +213,6 @@ struct InvestmentAccountView: View {
     conversionService: backend.conversionService,
     targetInstrument: .AUD
   )
-  let tradeStore = TradeStore(transactions: backend.transactions)
   let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
   let account = Account(
     name: "Brokerage",
@@ -253,8 +227,7 @@ struct InvestmentAccountView: View {
       categories: Categories(from: []),
       earmarks: Earmarks(from: []),
       investmentStore: investmentStore,
-      transactionStore: transactionStore,
-      tradeStore: tradeStore
+      transactionStore: transactionStore
     )
     .environment(session)
   }
