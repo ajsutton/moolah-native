@@ -30,6 +30,8 @@ The screen-driver rule (UI_TEST_GUIDE §2) is inviolable.
 - Test method bodies call only driver methods. No `.buttons[…]`, `.textFields[…]`, `.staticTexts[…]`, `.exists`, `.waitForExistence(...)`, `.tap()` reached through XCUI.
 - Test names describe the user-visible behaviour in plain English (TEST_GUIDE §2). `testOpeningTradeFocusesPayee` good; `test_TDV_focus_init_v2` bad.
 - One behaviour per test (TEST_GUIDE §2). If the test name needs an "and" or asserts more than one independent thing, flag it.
+- Tests do not repeat post-conditions an action already owns (UI_TEST_GUIDE §3 invariant 1, "What goes where"). If a test calls `app.sidebar.switchToAccount(.checking)` and then asserts the transaction list reloaded, flag it — the action's own post-condition wait already proved that, and the redundant assertion belongs in the driver. Tests assert *scenario-specific* outcomes only.
+- Tests do not inline multi-step UI sequences that recur across tests (UI_TEST_GUIDE §3 "What goes where", §2 "extend the driver first"). Heuristic: when three or more consecutive driver calls on the same sub-driver always appear together (here and in any other existing test), suggest extracting them into a single new driver action that owns the combined post-condition.
 
 ### Driver files (`MoolahUITests_macOS/Helpers/Screens/**`, `MoolahUITests_macOS/Helpers/Fields/**`)
 
@@ -73,24 +75,49 @@ These patterns are **always wrong** in `MoolahUITests_macOS/`. Flag every occurr
 - New identifier areas extend the existing `UITestIdentifiers` structure (e.g. add a nested namespace) rather than introducing parallel naming schemes.
 - Every constant is referenced by at least one view's `.accessibilityIdentifier(_:)` call **and** at least one driver lookup. Unreferenced identifiers are dead code.
 
+## Rule Names (escape-hatch registry)
+
+The registry below names every rule that supports escape-hatch suppression. A few advisory checks (plain-English test names, accessibility-label preservation, no-bulk-identifier passes, seed-metadata documentation) do not appear here — they are flagged for human judgement and cannot be silenced with a comment.
+
+| Rule name | What it covers |
+| --- | --- |
+| `xcui-import` | Test file references `XCUIApplication`, `XCUIElement`, `XCUIElementQuery`, or another XCUI primitive. |
+| `inline-identifier` | A view's `.accessibilityIdentifier(_:)` call uses a string literal instead of a `UITestIdentifiers` constant; or a test/driver references an identifier-shaped string literal. |
+| `bounded-wait` | A wait is missing, unbounded, or implemented as a sleep / `asyncAfter` / retry loop. |
+| `trace-record` | A driver action method does not start with `Trace.record(#function, ...)`. |
+| `single-resolver` | A driver looks up an XCUI element through a path other than `MoolahApp.element(for:)`. |
+| `cached-element` | A driver caches an `XCUIElement` reference on a stored property. |
+| `loud-failure` | A driver action handles a precondition violation by returning silently or swallowing a thrown error instead of failing the test. |
+| `expect-no-mutate` | An `expect…` method mutates UI state. |
+| `test-base-class` | A UI test class inherits from `XCTestCase` instead of `MoolahUITestCase`. |
+| `single-behaviour` | A test asserts more than one independent behaviour, or has a name with "and"/"then". |
+| `redundant-postcondition` | A test repeats a post-condition the preceding driver action already owns. |
+| `seed-dead-code` | A seed enum case is not referenced by any test. |
+| `identifier-dead-code` | A `UITestIdentifiers` constant is not referenced by any view or driver. |
+| `seed-uuid-literal` | A seed entity's UUID is generated via `UUID()` instead of a hard-coded `UUID(uuidString:)!` literal. |
+| `inline-multi-step` | A test inlines a multi-step driver sequence that recurs (3+ consecutive driver calls on the same sub-driver appearing here and in another test) instead of extracting it into a single driver action. |
+
 ## Escape Hatch
 
 A `// ui-test-review: allow <rule> — <reason>` comment on the line immediately above an offending line skips that single rule for that line, with a written justification. This follows the SwiftLint exception pattern.
 
 When you encounter an escape-hatch comment:
-- Verify the `<rule>` name matches one of the rules above (e.g. `inline-identifier`, `xcui-import`, `cached-element`, `bounded-wait`).
-- Verify the `<reason>` is a real explanation, not "rule is annoying" or "TODO".
+- Verify the `<rule>` name matches an entry in the Rule Names registry above. Mistyped or unknown rule names do not skip anything.
+- Verify the `<reason>` is a real explanation tied to the specific call site, not "rule is annoying", "TODO", or a copy-pasted boilerplate phrase.
 - If the comment is present and well-formed, treat the line as approved and move on.
-- If the comment cites a non-existent rule or has no real reason, flag it.
+- If the comment cites a non-existent rule or has no real reason, flag it as Important.
 
 Exceptions are exceptional. Every one is a smell that the rule, the test design, or the driver design is wrong. Note them in your report so the author re-considers before merge.
 
 ## False Positives to Avoid
 
-- **`MoolahApp.element(for:)`** itself uses `XCUIApplication` and `XCUIElement` — that is the resolver, the one place those types are allowed to live.
-- **`UITestSupport/` files** intended to be linked into both the main app and the test target may import `XCTest` or reference `XCUIElement` only when defining the resolver/test-case API surface. They are infrastructure, not tests.
-- **Driver methods that are pure delegations** (e.g. `func type(_ s: String) { Trace.record(#function); textField.type(s) }` where the inner call is itself a driver method on `AutocompleteFieldDriver`) do not need their own `waitForExistence` — the inner driver method's wait covers the post-condition. Verify the chain ultimately resolves to a real wait.
+The following sites are the only legitimate test-side homes for XCUI primitives.
+
+- **`MoolahApp.element(for:)`** itself uses `XCUIApplication` and `XCUIElement` — that is the resolver, the one place those types are allowed to live for production element lookups.
 - **`MoolahUITestCase.tearDown`** uses `XCUIApplication` and `XCUIElement` to dump the accessibility tree and grab a screenshot — that is the failure-artefact regime, not test code.
+- **Driver methods that are pure delegations** (e.g. `func type(_ s: String) { Trace.record(#function); textField.type(s) }` where the inner call is itself a driver method on `AutocompleteFieldDriver`) do not need their own `waitForExistence` — the inner driver method's wait covers the post-condition. Verify the chain ultimately resolves to a real wait.
+
+`UITestSupport/` is **app-side** code (compiled into both the main app and the UI-test target). Files there — `UITestSeeds.swift`, `UITestIdentifiers.swift` — must not import `XCTest` or `XCUI*`; if they do, that is a real violation, not a false positive. `MoolahApp` and `MoolahUITestCase` live in the UI-test target (`MoolahUITests_macOS/Helpers/`), not in `UITestSupport/` — do not conflate the two.
 
 ## Key References
 
