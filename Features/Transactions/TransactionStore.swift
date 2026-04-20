@@ -136,7 +136,7 @@ final class TransactionStore {
         rawTransactions[index] = created
       }
       await recomputeBalances()
-      applyBalanceDeltas(old: nil, new: created)
+      await applyBalanceDeltas(old: nil, new: created)
       return created
     } catch {
       logger.error("Failed to create transaction: \(error.localizedDescription)")
@@ -162,7 +162,7 @@ final class TransactionStore {
         rawTransactions[index] = updated
       }
       await recomputeBalances()
-      applyBalanceDeltas(old: old, new: updated)
+      await applyBalanceDeltas(old: old, new: updated)
     } catch {
       logger.error("Failed to update transaction: \(error.localizedDescription)")
       rawTransactions = snapshot
@@ -227,7 +227,7 @@ final class TransactionStore {
 
     do {
       try await repository.delete(id: id)
-      applyBalanceDeltas(old: removed, new: nil)
+      await applyBalanceDeltas(old: removed, new: nil)
     } catch {
       logger.error("Failed to delete transaction: \(error.localizedDescription)")
       rawTransactions = snapshot
@@ -236,10 +236,10 @@ final class TransactionStore {
     }
   }
 
-  private func applyBalanceDeltas(old: Transaction?, new: Transaction?) {
+  private func applyBalanceDeltas(old: Transaction?, new: Transaction?) async {
     let delta = BalanceDeltaCalculator.deltas(old: old, new: new)
     if !delta.accountDeltas.isEmpty {
-      accountStore?.applyDelta(delta.accountDeltas)
+      await accountStore?.applyDelta(delta.accountDeltas)
     }
     if !delta.earmarkDeltas.isEmpty || !delta.earmarkSavedDeltas.isEmpty
       || !delta.earmarkSpentDeltas.isEmpty

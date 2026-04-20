@@ -22,11 +22,10 @@ final class AccountStore {
   /// Investment values keyed by account ID, updated by InvestmentStore.
   private(set) var investmentValues: [UUID: InstrumentAmount] = [:]
 
-  /// Number of conversion passes that have completed since the store was
-  /// created. Incremented after every `runConversionAttempt`, whether the
-  /// pass succeeded or scheduled a retry. Tests wait on this to know the
-  /// store has published the results of at least one pass.
-  private(set) var conversionAttemptsCompleted: Int = 0
+  /// True once at least one conversion pass has completed, regardless of
+  /// success or failure. Views use this to distinguish "still loading"
+  /// from "conversion ran and produced no balance".
+  private(set) var hasCompletedInitialConversion: Bool = false
 
   private let repository: AccountRepository
   private let conversionService: any InstrumentConversionService
@@ -59,7 +58,7 @@ final class AccountStore {
     do {
       accounts = Accounts(from: try await repository.fetchAll())
       logger.debug("Loaded \(self.accounts.count) accounts")
-      recomputeConvertedTotals()
+      await recomputeConvertedTotals()
     } catch {
       logger.error("❌ Failed to load accounts: \(error.localizedDescription)")
       self.error = error
@@ -78,7 +77,7 @@ final class AccountStore {
       if fresh.ordered != accounts.ordered {
         accounts = fresh
         logger.debug("Sync: updated accounts (\(fresh.count) accounts) in \(elapsed)ms")
-        recomputeConvertedTotals()
+        await recomputeConvertedTotals()
       }
       if elapsed > 16 {
         logger.warning("⚠️ PERF: accountStore.reloadFromSync took \(elapsed)ms")
@@ -192,24 +191,33 @@ final class AccountStore {
     return current + investment
   }
 
-  /// Recompute per-account balances and aggregate totals. Each account is
-  /// converted in isolation: a failure for one leaves other accounts'
-  /// balances populated. Aggregate totals are only published when *all*
-  /// underlying conversions succeed (an inaccurate aggregate is worse than
-  /// no aggregate). On any failure, schedules a retry after `retryDelay`
-  /// and keeps retrying until everything succeeds or a new recompute
-  /// cancels this task.
-  private func recomputeConvertedTotals() {
+  /// Recompute per-account balances and aggregate totals. The first pass
+  /// runs inline and is awaited by the caller, so after `load()` (and every
+  /// other caller below) returns, observers see fully-published balances —
+  /// no poll, no race. If the first pass hits any conversion failure, a
+  /// background retry loop is spawned that keeps attempting until everything
+  /// succeeds or a new recompute cancels it. Callers that want to await
+  /// retry success use `waitForPendingConversions()`.
+  ///
+  /// Each account is converted in isolation: a failure for one leaves other
+  /// accounts' balances populated. Aggregate totals are only published when
+  /// *all* underlying conversions succeed (an inaccurate aggregate is worse
+  /// than no aggregate).
+  private func recomputeConvertedTotals() async {
     conversionTask?.cancel()
+    conversionTask = nil
+
+    let anyFailed = await runConversionAttempt()
+    guard anyFailed else { return }
+
     let delay = retryDelay
     // `[weak self]` so the retry loop doesn't pin the store alive when the
     // owning view goes away while conversions are still failing.
     conversionTask = Task { [weak self] in
       while !Task.isCancelled {
-        guard let self else { return }
-        let anyFailed = await self.runConversionAttempt()
-        if !anyFailed { return }
         try? await Task.sleep(for: delay)
+        guard let self, !Task.isCancelled else { return }
+        if !(await self.runConversionAttempt()) { return }
       }
     }
   }
@@ -253,7 +261,7 @@ final class AccountStore {
     convertedInvestmentTotal = investmentValid ? investmentTotal : nil
     convertedNetWorth =
       (currentValid && investmentValid) ? (currentTotal + investmentTotal) : nil
-    conversionAttemptsCompleted += 1
+    hasCompletedInitialConversion = true
 
     return anyFailed
   }
@@ -288,12 +296,11 @@ final class AccountStore {
     return (total, valid)
   }
 
-  /// Awaits any in-flight converted-totals recomputation. Intended for tests
-  /// that need deterministic synchronisation after `load()` / `applyDelta` /
-  /// `updateInvestmentValue` kick off `recomputeConvertedTotals()`.
-  ///
-  /// Note: when conversions fail and retry is in progress, this will only
-  /// return when retries succeed (or a new recompute cancels this task).
+  /// Awaits the background retry loop, if one is running. Only relevant
+  /// after a first pass that hit a conversion failure — returns immediately
+  /// when the store has no retry task pending. When a retry loop is running,
+  /// this returns when it terminates (which happens only when a retry pass
+  /// succeeds, or a new recompute cancels the loop).
   func waitForPendingConversions() async {
     guard let task = conversionTask else { return }
     await task.value
@@ -301,24 +308,24 @@ final class AccountStore {
 
   /// Updates the investment value for a specific account locally.
   /// Called when InvestmentStore sets or removes a value.
-  func updateInvestmentValue(accountId: UUID, value: InstrumentAmount?) {
+  func updateInvestmentValue(accountId: UUID, value: InstrumentAmount?) async {
     guard accounts.by(id: accountId) != nil else { return }
     if let value {
       investmentValues[accountId] = value
     } else {
       investmentValues.removeValue(forKey: accountId)
     }
-    recomputeConvertedTotals()
+    await recomputeConvertedTotals()
   }
 
   /// Applies position deltas to account balances.
-  func applyDelta(_ accountDeltas: PositionDeltas) {
+  func applyDelta(_ accountDeltas: PositionDeltas) async {
     var result = accounts
     for (accountId, instrumentDeltas) in accountDeltas {
       result = result.adjustingPositions(of: accountId, by: instrumentDeltas)
     }
     accounts = result
-    recomputeConvertedTotals()
+    await recomputeConvertedTotals()
   }
 
   // MARK: - Mutations
@@ -339,7 +346,7 @@ final class AccountStore {
       // returns (notably an empty investment account) would spin forever
       // in the sidebar, because `reloadFromSync` only recomputes when
       // fetched accounts differ from the local copy.
-      recomputeConvertedTotals()
+      await recomputeConvertedTotals()
 
       isLoading = false
       return created

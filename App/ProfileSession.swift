@@ -155,10 +155,15 @@ final class ProfileSession: Identifiable {
       profileCurrency: profile.instrument
     )
 
-    // Wire up cross-store side effects
+    // Wire up cross-store side effects. The callback is fire-and-forget in
+    // production; `updateInvestmentValue` awaits its own first conversion
+    // pass, so the sidebar reflects the new value once the Task completes
+    // on MainActor.
     let accountStore = self.accountStore
     self.investmentStore.onInvestmentValueChanged = { accountId, latestValue in
-      accountStore.updateInvestmentValue(accountId: accountId, value: latestValue)
+      Task {
+        await accountStore.updateInvestmentValue(accountId: accountId, value: latestValue)
+      }
     }
 
     // Register with SyncCoordinator for iCloud profiles

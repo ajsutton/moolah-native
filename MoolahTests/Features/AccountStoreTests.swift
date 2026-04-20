@@ -135,7 +135,7 @@ struct AccountStoreTests {
       quantity: Decimal(150000) / 100, instrument: Instrument.defaultTestInstrument)
 
     let account = store.accounts.first!
-    store.updateInvestmentValue(accountId: account.id, value: newValue)
+    await store.updateInvestmentValue(accountId: account.id, value: newValue)
     #expect(store.investmentValues[account.id] == newValue)
     let balance = try await store.displayBalance(for: account.id)
     #expect(balance == newValue)
@@ -153,8 +153,8 @@ struct AccountStoreTests {
     let account = store.accounts.first!
     let investmentValue = InstrumentAmount(
       quantity: Decimal(200000) / 100, instrument: Instrument.defaultTestInstrument)
-    store.updateInvestmentValue(accountId: account.id, value: investmentValue)
-    store.updateInvestmentValue(accountId: account.id, value: nil)
+    await store.updateInvestmentValue(accountId: account.id, value: investmentValue)
+    await store.updateInvestmentValue(accountId: account.id, value: nil)
 
     #expect(store.investmentValues[account.id] == nil)
     // displayBalance sums positions (converted to account's instrument) when investmentValue is nil
@@ -176,7 +176,7 @@ struct AccountStoreTests {
 
     let newValue = InstrumentAmount(
       quantity: Decimal(150000) / 100, instrument: Instrument.defaultTestInstrument)
-    store.updateInvestmentValue(accountId: UUID(), value: newValue)
+    await store.updateInvestmentValue(accountId: UUID(), value: newValue)
 
     // Should not affect existing accounts
     #expect(store.accounts.count == 1)
@@ -250,7 +250,7 @@ struct AccountStoreTests {
     await store.load()
 
     let deltas: PositionDeltas = [acctId: [instrument: Decimal(-5000) / 100]]
-    store.applyDelta(deltas)
+    await store.applyDelta(deltas)
 
     let balance = try await store.displayBalance(for: acctId)
     #expect(balance.quantity == Decimal(95000) / 100)
@@ -268,7 +268,7 @@ struct AccountStoreTests {
     await store.load()
 
     let deltas: PositionDeltas = [acctId: [instrument: Decimal(50000) / 100]]
-    store.applyDelta(deltas)
+    await store.applyDelta(deltas)
 
     let balance = try await store.displayBalance(for: acctId)
     #expect(balance.quantity == Decimal(150000) / 100)
@@ -292,7 +292,7 @@ struct AccountStoreTests {
       checkingId: [instrument: Decimal(-10000) / 100],
       savingsId: [instrument: Decimal(10000) / 100],
     ]
-    store.applyDelta(deltas)
+    await store.applyDelta(deltas)
 
     let checking = try await store.displayBalance(for: checkingId)
     let savings = try await store.displayBalance(for: savingsId)
@@ -315,7 +315,7 @@ struct AccountStoreTests {
     #expect(store.convertedCurrentTotal?.quantity == Decimal(100000) / 100)
 
     let deltas: PositionDeltas = [checkingId: [instrument: Decimal(-5000) / 100]]
-    store.applyDelta(deltas)
+    await store.applyDelta(deltas)
     await store.waitForPendingConversions()
 
     #expect(store.convertedCurrentTotal?.quantity == Decimal(95000) / 100)
@@ -343,7 +343,7 @@ struct AccountStoreTests {
       ]
     )
     let delta = BalanceDeltaCalculator.deltas(old: nil, new: tx)
-    store.applyDelta(delta.accountDeltas)
+    await store.applyDelta(delta.accountDeltas)
 
     let balance = try await store.displayBalance(for: acctId)
     #expect(balance.quantity == Decimal(95000) / 100)
@@ -362,7 +362,7 @@ struct AccountStoreTests {
     await store.load()
 
     let deltas: PositionDeltas = [unknownId: [instrument: Decimal(-5000) / 100]]
-    store.applyDelta(deltas)
+    await store.applyDelta(deltas)
 
     // Balance should be unchanged
     let balance = try await store.displayBalance(for: acctId)
@@ -421,7 +421,7 @@ struct AccountStoreTests {
     #expect(store.convertedCurrentTotal?.quantity == Decimal(100000) / 100)
 
     let deltas: PositionDeltas = [acctId: [instrument: Decimal(-5000) / 100]]
-    store.applyDelta(deltas)
+    await store.applyDelta(deltas)
     await store.waitForPendingConversions()
 
     #expect(store.convertedCurrentTotal?.quantity == Decimal(95000) / 100)
@@ -443,7 +443,7 @@ struct AccountStoreTests {
 
     let investmentValue = InstrumentAmount(
       quantity: Decimal(150000) / 100, instrument: Instrument.defaultTestInstrument)
-    store.updateInvestmentValue(accountId: acctId, value: investmentValue)
+    await store.updateInvestmentValue(accountId: acctId, value: investmentValue)
 
     let balance = try await store.displayBalance(for: acctId)
     #expect(balance == investmentValue)

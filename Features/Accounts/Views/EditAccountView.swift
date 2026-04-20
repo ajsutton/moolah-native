@@ -145,7 +145,7 @@ struct EditAccountView: View {
   /// available — i.e. conversion failed. Distinct from the initial
   /// "still loading" state before the first attempt.
   private var isBalanceUnavailable: Bool {
-    accountStore.conversionAttemptsCompleted > 0 && displayBalance == nil
+    accountStore.hasCompletedInitialConversion && displayBalance == nil
   }
 
   private var balanceAccessibilityValue: String {

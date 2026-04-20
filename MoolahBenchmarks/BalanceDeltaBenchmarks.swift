@@ -138,7 +138,7 @@ final class BalanceDeltaBenchmarks: XCTestCase {
       try! awaitSync { @MainActor in
         let deltas: PositionDeltas = [accountId: [.AUD: Decimal(-50)]]
         for _ in 0..<100 {
-          accountStore.applyDelta(deltas)
+          await accountStore.applyDelta(deltas)
         }
       }
     }

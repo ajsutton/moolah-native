@@ -345,7 +345,7 @@ struct AccountStoreConversionTests {
     // Investment value set externally → wins over converted positions
     let externalValue = InstrumentAmount(
       quantity: Decimal(string: "999.00")!, instrument: .AUD)
-    store.updateInvestmentValue(accountId: accountId, value: externalValue)
+    await store.updateInvestmentValue(accountId: accountId, value: externalValue)
     let override = try await store.displayBalance(for: accountId)
     #expect(override == externalValue)
   }
@@ -406,16 +406,10 @@ struct AccountStoreConversionTests {
       targetInstrument: aud,
       retryDelay: .seconds(60))
 
+    // `load()` awaits the first conversion pass inline, so after it returns
+    // `convertedBalances` reflects the partial-failure state deterministically
+    // — no polling or timeouts needed.
     await store.load()
-    // Wait for the first conversion pass to publish bankAud's balance. We
-    // poll the observable we actually assert on: when bankAud is present,
-    // the pass has written the whole `newBalances` / totals set atomically
-    // within a single MainActor tick, so the other invariants below hold.
-    // Timeout is generous because iOS simulator CI has been observed to
-    // take >10s for the first pass under CoreData/SwiftData setup load.
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedBalances[bankAud.id] != nil
-    }
 
     // AUD bank: only AUD positions → succeeds.
     #expect(store.convertedBalances[bankAud.id]?.quantity == 1000)
@@ -459,24 +453,18 @@ struct AccountStoreConversionTests {
       targetInstrument: aud,
       retryDelay: .milliseconds(20))
 
+    // `load()` awaits the first pass; since EUR fails we land in the
+    // partial-failure state with a retry loop running in the background.
     await store.load()
-    // Wait for the first pass to publish the succeeding account's balance
-    // before probing the partial-failure state. Polling an observable we
-    // actually care about keeps this robust on slow iOS simulator CI.
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedBalances[bankAud.id] != nil
-    }
 
     // Initial state: EUR bank can't be converted to AUD aggregate target → aggregate nil.
     #expect(store.convertedCurrentTotal == nil)
 
-    // Recover the conversion service.
+    // Recover the conversion service and wait for the background retry
+    // loop to succeed. `waitForPendingConversions()` returns when the loop
+    // terminates, which happens on the first successful attempt.
     await conversion.setFailing([])
-
-    // Retry should fire within retryDelay × a few attempts.
-    try await waitForCondition(timeout: .seconds(30)) {
-      store.convertedCurrentTotal != nil
-    }
+    await store.waitForPendingConversions()
 
     // 1000 AUD + 500 EUR (1:1 fallback) = 1500 AUD
     #expect(store.convertedCurrentTotal?.quantity == 1500)
@@ -530,10 +518,9 @@ struct AccountStoreConversionTests {
       repository: backend.accounts,
       conversionService: counter,
       targetInstrument: aud)
+    // `load()` awaits the first conversion pass, so the counter baseline
+    // is stable before we measure this call.
     await store.load()
-    // Wait for load's own convertedBalances pass to finish so the counter's
-    // baseline is stable before we measure this call.
-    await store.waitForPendingConversions()
 
     let baseline = await counter.convertAmountCallCount
     let total = try await store.computeConvertedInvestmentTotal(in: aud)
@@ -644,7 +631,7 @@ struct AccountStoreConversionTests {
     // External valuation in AUD (e.g. latest InvestmentValue): 2000 AUD.
     let externalValue = InstrumentAmount(
       quantity: Decimal(string: "2000.00")!, instrument: .AUD)
-    store.updateInvestmentValue(accountId: accountId, value: externalValue)
+    await store.updateInvestmentValue(accountId: accountId, value: externalValue)
 
     let total = try await store.computeConvertedInvestmentTotal(in: .USD)
     // 2000 AUD -> USD at 0.5 = 1000 USD (external value converted once)
@@ -686,17 +673,4 @@ struct AccountStoreConversionTests {
     #expect(total.instrument == .defaultTestInstrument)
     #expect(total.quantity == Decimal(string: "1234.56")!)
   }
-}
-
-@MainActor
-private func waitForCondition(
-  timeout: Duration,
-  _ predicate: @MainActor () -> Bool
-) async throws {
-  let deadline = ContinuousClock.now.advanced(by: timeout)
-  while ContinuousClock.now < deadline {
-    if predicate() { return }
-    try await Task.sleep(for: .milliseconds(10))
-  }
-  Issue.record("Timed out waiting for condition")
 }
