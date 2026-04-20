@@ -1,0 +1,7 @@
+Date,Type,Description,Debit,Credit,Balance
+01/03/2024,Cash In,Cash deposit,,10000.00,10000.00
+02/03/2024,Trade,BUY 100 BHP @ $45.50,4550.00,,5450.00
+02/03/2024,Brokerage,Brokerage fee,9.50,,5440.50
+02/03/2024,GST on Brokerage,GST,0.95,,5439.55
+15/03/2024,Dividend,DIVIDEND - BHP GROUP LIMITED,,120.00,5559.55
+01/04/2024,Trade,SELL 50 CBA @ $110.25,,5512.50,11072.05
