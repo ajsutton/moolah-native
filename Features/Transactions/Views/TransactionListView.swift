@@ -278,6 +278,9 @@ struct TransactionListView: View {
             viewingAccountId: filter.accountId
           )
           .tag(entry.transaction)
+          .accessibilityIdentifier(
+            UITestIdentifiers.TransactionList.transaction(entry.transaction.id)
+          )
           .contentShape(Rectangle())
           .contextMenu {
             Button("Edit Transaction\u{2026}", systemImage: "pencil") {

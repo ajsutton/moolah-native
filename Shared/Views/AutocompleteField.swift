@@ -58,6 +58,12 @@ struct AutocompleteSuggestionDropdown<Item: Identifiable>: View {
   let icon: Image?
   @Binding var highlightedIndex: Int?
   let onSelect: (Item) -> Void
+  /// Optional UI-test identifier provider applied to each visible
+  /// suggestion row. Wrappers (e.g. `PayeeSuggestionDropdown`) pass a
+  /// closure mapping row index to the matching `UITestIdentifiers`
+  /// constant; production code that doesn't need test identifiers can
+  /// omit it.
+  let rowIdentifier: ((Int) -> String)?
 
   init(
     items: [Item],
@@ -65,7 +71,8 @@ struct AutocompleteSuggestionDropdown<Item: Identifiable>: View {
     label: @escaping (Item) -> String,
     icon: Image? = nil,
     highlightedIndex: Binding<Int?>,
-    onSelect: @escaping (Item) -> Void
+    onSelect: @escaping (Item) -> Void,
+    rowIdentifier: ((Int) -> String)? = nil
   ) {
     self.items = items
     self.searchText = searchText
@@ -73,6 +80,7 @@ struct AutocompleteSuggestionDropdown<Item: Identifiable>: View {
     self.icon = icon
     self._highlightedIndex = highlightedIndex
     self.onSelect = onSelect
+    self.rowIdentifier = rowIdentifier
   }
 
   var body: some View {
@@ -135,6 +143,7 @@ struct AutocompleteSuggestionDropdown<Item: Identifiable>: View {
       }
     #endif
     .accessibilityLabel("Suggestion: \(label(item))")
+    .accessibilityIdentifier(rowIdentifier?(index) ?? "")
   }
 
   private func highlightedText(_ text: String, matching search: String) -> Text {

@@ -10,11 +10,18 @@ import Foundation
 /// areas extend this enum rather than introducing parallel naming schemes.
 ///
 /// Identifiers are added incrementally as drivers and tests need them — see
-/// `guides/UI_TEST_GUIDE.md` §4. The namespaces below are stubs awaiting
-/// entries from the first driver PR.
+/// `guides/UI_TEST_GUIDE.md` §4.
 public enum UITestIdentifiers {
   public enum Sidebar {
     /// Sidebar row for a specific account. `id` is the account's UUID, lowercased.
+    ///
+    /// The same UUID identifier is applied whether the account renders in
+    /// the Current Accounts section or the Investments section — `AccountType`
+    /// today is mutually exclusive across the two sections (bank/cc/asset
+    /// for Current; investment for Investments). If a future account type
+    /// can appear in both sections, switch this to a sectioned namespace
+    /// (`sidebar.account.current.<uuid>` vs `sidebar.account.investment.<uuid>`)
+    /// to avoid duplicates resolving via `firstMatch`.
     public static func account(_ id: UUID) -> String {
       "sidebar.account.\(id.uuidString.lowercased())"
     }
@@ -25,11 +32,26 @@ public enum UITestIdentifiers {
     }
   }
 
+  public enum TransactionList {
+    /// Centre-column row for a specific transaction. `id` is the
+    /// transaction's UUID, lowercased.
+    public static func transaction(_ id: UUID) -> String {
+      "transactionlist.transaction.\(id.uuidString.lowercased())"
+    }
+  }
+
   public enum Detail {
-    // Intentionally empty — populated when TransactionDetailScreen lands.
+    /// Payee text field on the transaction detail surface.
+    public static let payee = "detail.payee"
   }
 
   public enum Autocomplete {
-    // Intentionally empty — populated when AutocompleteFieldDriver lands.
+    /// Container element of the payee autocomplete dropdown.
+    public static let payee = "autocomplete.payee"
+
+    /// Indexed payee suggestion row inside the dropdown.
+    public static func payeeSuggestion(_ index: Int) -> String {
+      "autocomplete.payee.suggestion.\(index)"
+    }
   }
 }

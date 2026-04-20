@@ -384,6 +384,7 @@ struct TransactionDetailView: View {
         onAcceptHighlighted: acceptHighlightedPayee
       )
       .focused($focusedField, equals: .payee)
+      .accessibilityIdentifier(UITestIdentifiers.Detail.payee)
 
       HStack {
         TextField("Amount", text: amountBinding)
@@ -520,6 +521,7 @@ struct TransactionDetailView: View {
         onAcceptHighlighted: acceptHighlightedPayee
       )
       .focused($focusedField, equals: .payee)
+      .accessibilityIdentifier(UITestIdentifiers.Detail.payee)
 
       DatePicker("Date", selection: $draft.date, displayedComponents: .date)
     }

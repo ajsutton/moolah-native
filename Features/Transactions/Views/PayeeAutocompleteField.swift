@@ -51,8 +51,10 @@ struct PayeeSuggestionDropdown: View {
       label: { $0.name },
       icon: Image(systemName: "magnifyingglass"),
       highlightedIndex: $highlightedIndex,
-      onSelect: { onSelect($0.name) }
+      onSelect: { onSelect($0.name) },
+      rowIdentifier: { UITestIdentifiers.Autocomplete.payeeSuggestion($0) }
     )
+    .accessibilityIdentifier(UITestIdentifiers.Autocomplete.payee)
   }
 }
 

@@ -1,0 +1,79 @@
+import XCTest
+
+/// Driver entrypoint for UI tests. Owns the underlying `XCUIApplication`,
+/// launches it with the `--ui-testing` argument and the chosen seed, and
+/// exposes typed screen drivers as properties.
+///
+/// Tests interact with the app **only** through this type and the screen
+/// drivers it returns — never `XCUIElement` or `XCUIApplication` directly.
+/// See `guides/UI_TEST_GUIDE.md` §2 (the screen-driver rule).
+@MainActor
+final class MoolahApp {
+  let application: XCUIApplication
+  let seed: UITestSeed
+
+  /// The standard launch entrypoint used by tests:
+  ///
+  ///   let app = MoolahApp.launch(seed: .tradeBaseline)
+  ///
+  /// Always pair with `MoolahApp` returned to a local — never store on the
+  /// test class. The application is terminated automatically by
+  /// `MoolahUITestCase.tearDown`.
+  static func launch(seed: UITestSeed) -> MoolahApp {
+    let application = XCUIApplication()
+    application.launchArguments = ["--ui-testing"]
+    application.launchEnvironment = ["UI_TESTING_SEED": seed.rawValue]
+    application.launch()
+    let app = MoolahApp(application: application, seed: seed)
+    app.expectMainWindowVisible()
+    return app
+  }
+
+  init(application: XCUIApplication, seed: UITestSeed) {
+    self.application = application
+    self.seed = seed
+  }
+
+  // MARK: - Screen drivers
+
+  /// Sidebar containing accounts, named views, and earmarks.
+  var sidebar: SidebarScreen { SidebarScreen(app: self) }
+
+  /// Centre column listing transactions for the current sidebar selection.
+  var transactionList: TransactionListScreen { TransactionListScreen(app: self) }
+
+  /// Right column or sheet showing a single transaction's editable detail.
+  var transactionDetail: TransactionDetailScreen { TransactionDetailScreen(app: self) }
+
+  /// System dialogs (alerts, delete confirmations, error sheets).
+  var dialogs: DialogScreen { DialogScreen(app: self) }
+
+  // MARK: - Single element resolver
+
+  /// All identifier lookups in the driver layer go through this method, by
+  /// rule. One place to add logging, change resolution strategy, or
+  /// future-proof the lookup mechanism.
+  func element(for identifier: String) -> XCUIElement {
+    application.descendants(matching: .any).matching(identifier: identifier).firstMatch
+  }
+
+  // MARK: - Helpers used by drivers and `MoolahUITestCase`
+
+  /// Bounded wait for an element with the given identifier to exist. Used
+  /// by drivers and by `MoolahUITestCase.waitForIdentifier(_:timeout:)`.
+  /// Default 3 s — see `guides/UI_TEST_GUIDE.md` §3 invariant 1.
+  @discardableResult
+  func waitForElement(identifier: String, timeout: TimeInterval = 3) -> Bool {
+    element(for: identifier).waitForExistence(timeout: timeout)
+  }
+
+  /// Waits up to `timeout` seconds for the main profile window to appear.
+  /// Called automatically from `launch(seed:)`; drivers reuse it after
+  /// actions that re-create the window.
+  func expectMainWindowVisible(timeout: TimeInterval = 5) {
+    if !application.windows.firstMatch.waitForExistence(timeout: timeout) {
+      Trace.recordFailure("main window did not appear within \(timeout)s")
+      XCTFail("Moolah main window did not appear within \(timeout)s of launch")
+    }
+  }
+}

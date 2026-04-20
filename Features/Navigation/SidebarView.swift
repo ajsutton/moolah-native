@@ -48,6 +48,7 @@ struct SidebarView: View {
             Task { await ingestDroppedURLs(urls, forcedAccountId: account.id) }
             return !urls.isEmpty
           }
+          .accessibilityIdentifier(UITestIdentifiers.Sidebar.account(account.id))
           .contextMenu {
             Button("Edit Account\u{2026}", systemImage: "pencil") {
               accountToEdit = account
@@ -117,6 +118,7 @@ struct SidebarView: View {
           NavigationLink(value: SidebarSelection.account(account.id)) {
             AccountSidebarRow(account: account, isSelected: selection == .account(account.id))
           }
+          .accessibilityIdentifier(UITestIdentifiers.Sidebar.account(account.id))
           .contextMenu {
             Button("Edit Account\u{2026}", systemImage: "pencil") {
               accountToEdit = account

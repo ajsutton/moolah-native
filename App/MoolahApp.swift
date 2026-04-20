@@ -501,6 +501,18 @@ struct MoolahApp: App {
           .environment(syncCoordinator)
           .modelContainer(containerManager.indexContainer)
       }
+
+      // Auto-open the seeded profile window on `--ui-testing` launches.
+      // `WindowGroup(for: Profile.ID.self)` does not present without an
+      // explicit value, so a hidden launcher Window with
+      // `.defaultLaunchBehavior(.presented)` runs `openWindow(value:)`
+      // and immediately dismisses itself. In production the launcher is
+      // suppressed and never reachable from the UI.
+      Window("UI Testing Launcher", id: "ui-testing-launcher") {
+        UITestingLauncherView(profileId: uiTestingProfileId)
+      }
+      .windowResizability(.contentSize)
+      .defaultLaunchBehavior(uiTestingProfileId != nil ? .presented : .suppressed)
     #else
       WindowGroup {
         ProfileRootView(activeSession: $activeSession)
