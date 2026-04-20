@@ -66,6 +66,12 @@ struct ImportCSVActionKey: FocusedValueKey {
   typealias Value = () -> Void
 }
 
+/// Trigger action for Edit > Paste CSV (⌥⇧⌘V). Reads tabular text from
+/// the pasteboard and runs it through the ImportStore pipeline.
+struct PasteCSVActionKey: FocusedValueKey {
+  typealias Value = () -> Void
+}
+
 extension FocusedValues {
   var newTransactionAction: NewTransactionActionKey.Value? {
     get { self[NewTransactionActionKey.self] }
@@ -118,5 +124,9 @@ extension FocusedValues {
   var importCSVAction: ImportCSVActionKey.Value? {
     get { self[ImportCSVActionKey.self] }
     set { self[ImportCSVActionKey.self] = newValue }
+  }
+  var pasteCSVAction: PasteCSVActionKey.Value? {
+    get { self[PasteCSVActionKey.self] }
+    set { self[PasteCSVActionKey.self] = newValue }
   }
 }

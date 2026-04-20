@@ -1,6 +1,7 @@
 import Foundation
 import OSLog
 import Observation
+import os
 
 private let importStoreBackgroundLogger = Logger(
   subsystem: "com.moolah.app", category: "ImportStore.Background")
@@ -187,24 +188,48 @@ final class ImportStore {
   private func runPipeline(
     data: Data, source: ImportSource, sessionId: UUID
   ) async throws -> ImportSessionResult {
+    let pipelineSignpost = OSSignpostID(log: Signposts.importPipeline)
+    os_signpost(
+      .begin, log: Signposts.importPipeline, name: "ingest", signpostID: pipelineSignpost)
+    defer {
+      os_signpost(
+        .end, log: Signposts.importPipeline, name: "ingest", signpostID: pipelineSignpost)
+    }
 
     // 1. Decode + tokenize.
+    let tokenizeSignpost = OSSignpostID(log: Signposts.importPipeline)
+    os_signpost(
+      .begin, log: Signposts.importPipeline, name: "tokenize",
+      signpostID: tokenizeSignpost)
     let rows: [[String]]
     do {
       rows = try CSVTokenizer.parse(data)
     } catch {
+      os_signpost(
+        .end, log: Signposts.importPipeline, name: "tokenize",
+        signpostID: tokenizeSignpost)
       throw IngestError.decode(error.localizedDescription)
     }
+    os_signpost(
+      .end, log: Signposts.importPipeline, name: "tokenize",
+      signpostID: tokenizeSignpost)
     guard let headers = rows.first else { throw IngestError.empty }
 
     // 2. Select parser + parse.
+    let parseSignpost = OSSignpostID(log: Signposts.importPipeline)
+    os_signpost(
+      .begin, log: Signposts.importPipeline, name: "parse", signpostID: parseSignpost)
     let parser = registry.select(for: headers)
     let records: [ParsedRecord]
     do {
       records = try parser.parse(rows: rows)
     } catch let error as CSVParserError {
+      os_signpost(
+        .end, log: Signposts.importPipeline, name: "parse", signpostID: parseSignpost)
       throw IngestError.parse(error)
     }
+    os_signpost(
+      .end, log: Signposts.importPipeline, name: "parse", signpostID: parseSignpost)
     let candidates = records.compactMap { record -> ParsedTransaction? in
       if case .transaction(let tx) = record { return tx } else { return nil }
     }
@@ -230,6 +255,9 @@ final class ImportStore {
     }
 
     // 4. Dedup.
+    let dedupSignpost = OSSignpostID(log: Signposts.importPipeline)
+    os_signpost(
+      .begin, log: Signposts.importPipeline, name: "dedup", signpostID: dedupSignpost)
     let existingPage = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: resolvedProfile.accountId),
       page: 0, pageSize: 1000)
@@ -237,8 +265,13 @@ final class ImportStore {
       candidates,
       against: existingPage.transactions,
       accountId: resolvedProfile.accountId)
+    os_signpost(
+      .end, log: Signposts.importPipeline, name: "dedup", signpostID: dedupSignpost)
 
     // 5. Rules engine + persist.
+    let rulesSignpost = OSSignpostID(log: Signposts.importPipeline)
+    os_signpost(
+      .begin, log: Signposts.importPipeline, name: "rules", signpostID: rulesSignpost)
     let rules = try await backend.importRules.fetchAll()
     let accountInstrument = try await resolveInstrument(
       for: resolvedProfile.accountId)
@@ -261,6 +294,8 @@ final class ImportStore {
           "Create failed for candidate at \(candidate.date): \(error.localizedDescription)")
       }
     }
+    os_signpost(
+      .end, log: Signposts.importPipeline, name: "rules", signpostID: rulesSignpost)
 
     // 6. Update profile lastUsedAt (best-effort).
     var updatedProfile = resolvedProfile

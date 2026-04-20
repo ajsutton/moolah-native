@@ -199,6 +199,19 @@ struct SettingsView: View {
             Label("Crypto Tokens", systemImage: "bitcoinsign.circle")
           }
         }
+
+        Section("Import") {
+          NavigationLink {
+            ImportSettingsView()
+          } label: {
+            Label("CSV Import", systemImage: "tray.and.arrow.down")
+          }
+          NavigationLink {
+            ImportRulesSettingsView()
+          } label: {
+            Label("Import Rules", systemImage: "list.bullet.rectangle")
+          }
+        }
       }
       .navigationTitle("Settings")
       .overlay {

@@ -24,6 +24,9 @@ final class ProfileSession: Identifiable {
   let cryptoTokenStore: CryptoTokenStore
   let importStore: ImportStore
   let importRuleStore: ImportRuleStore
+  let importPreferences: ImportPreferences
+  private let folderScanner: FolderScanService
+  private let folderWatcher: FolderWatchService
 
   /// Observer token for sync coordinator notifications (nil for remote profiles).
   private var syncObserverToken: SyncCoordinator.ObserverToken?
@@ -182,6 +185,18 @@ final class ProfileSession: Identifiable {
       )
     }
     self.importRuleStore = ImportRuleStore(repository: backend.importRules)
+    let preferencesDirectory = stagingDirectory.deletingLastPathComponent()
+    let preferences = ImportPreferences(directory: preferencesDirectory)
+    self.importPreferences = preferences
+    let scanner = FolderScanService(
+      profileId: profile.id,
+      importStore: self.importStore,
+      preferences: preferences)
+    self.folderScanner = scanner
+    self.folderWatcher = FolderWatchService(
+      importStore: self.importStore,
+      preferences: preferences,
+      scanner: scanner)
 
     // Wire up cross-store side effects. The callback is fire-and-forget in
     // production; `updateInvestmentValue` awaits its own first conversion
@@ -376,6 +391,27 @@ final class ProfileSession: Identifiable {
     }
     syncReloadTask?.cancel()
     syncReloadTask = nil
+  }
+
+  // MARK: - Folder watch
+
+  /// Kick off the folder watch: catches up on any files added while the app
+  /// was closed and (on macOS) opens an FSEvents stream for live updates.
+  /// Safe to call repeatedly; stop() must be paired with start() for state
+  /// hygiene.
+  func startFolderWatch() async {
+    await folderWatcher.start()
+  }
+
+  /// Stop the folder watch and release the security-scoped resource.
+  func stopFolderWatch() {
+    folderWatcher.stop()
+  }
+
+  /// Catch-up scan — used at launch / foreground on iOS where the live
+  /// watch isn't available.
+  func scanWatchedFolder() async {
+    await folderScanner.scanForNewFiles()
   }
 
   /// Per-profile directory under Application Support where CSV import staging

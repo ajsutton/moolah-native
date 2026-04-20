@@ -1,5 +1,11 @@
 import SwiftUI
 
+#if os(macOS)
+  import AppKit
+#else
+  import UIKit
+#endif
+
 /// Placeholder main content shown after sign-in. Replaced step-by-step with real screens.
 struct ContentView: View {
   @Environment(AuthStore.self) private var authStore
@@ -122,6 +128,9 @@ struct ContentView: View {
     .focusedSceneValue(\.importCSVAction) {
       showImportCSVPicker = true
     }
+    .focusedSceneValue(\.pasteCSVAction) {
+      Task { await pasteCSVFromClipboard() }
+    }
     .focusedSceneValue(\.refreshAction) {
       Task {
         async let a: Void = accountStore.load()
@@ -167,6 +176,25 @@ struct ContentView: View {
     } message: {
       Text(importError ?? "")
     }
+  }
+
+  private func pasteCSVFromClipboard() async {
+    #if os(macOS)
+      guard let text = NSPasteboard.general.string(forType: .string), !text.isEmpty else {
+        importError = "Nothing to paste."
+        return
+      }
+    #else
+      guard let text = UIPasteboard.general.string, !text.isEmpty else {
+        importError = "Nothing to paste."
+        return
+      }
+    #endif
+    let data = Data(text.utf8)
+    _ = await importStore.ingest(
+      data: data,
+      source: .paste(text: text, label: "Pasted CSV"))
+    selection = .recentlyAdded
   }
 
   private func handleImportPickerResult(_ result: Result<[URL], Error>) async {
