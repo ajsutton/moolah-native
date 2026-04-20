@@ -36,7 +36,6 @@ struct PositionsView: View {
       #endif
       .onChange(of: input) { _, _ in
         selection = nil
-        range = .threeMonths
       }
     }
   }
