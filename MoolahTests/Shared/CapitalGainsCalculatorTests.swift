@@ -7,7 +7,7 @@ import Testing
 struct CapitalGainsCalculatorTests {
   let aud = Instrument.fiat(code: "AUD")
 
-  @Test func stockPurchase_thenSale_producesGainEvent() {
+  @Test func stockPurchase_thenSale_producesGainEvent() async throws {
     let bhp = stockInstrument("BHP")
     let accountId = UUID()
 
@@ -35,9 +35,10 @@ struct CapitalGainsCalculatorTests {
           categoryId: nil, earmarkId: nil),
       ])
 
-    let result = CapitalGainsCalculator.compute(
+    let result = try await CapitalGainsCalculator.computeWithConversion(
       transactions: [buyTx, sellTx],
-      profileCurrency: aud
+      profileCurrency: aud,
+      conversionService: FixedConversionService(rates: [:])
     )
 
     #expect(result.events.count == 1)
@@ -46,7 +47,7 @@ struct CapitalGainsCalculatorTests {
     #expect(result.totalRealizedGain == 1000)
   }
 
-  @Test func noSales_noGainEvents() {
+  @Test func noSales_noGainEvents() async throws {
     let bhp = stockInstrument("BHP")
     let accountId = UUID()
 
@@ -61,9 +62,10 @@ struct CapitalGainsCalculatorTests {
           categoryId: nil, earmarkId: nil),
       ])
 
-    let result = CapitalGainsCalculator.compute(
+    let result = try await CapitalGainsCalculator.computeWithConversion(
       transactions: [buyTx],
-      profileCurrency: aud
+      profileCurrency: aud,
+      conversionService: FixedConversionService(rates: [:])
     )
 
     #expect(result.events.isEmpty)
@@ -113,7 +115,7 @@ struct CapitalGainsCalculatorTests {
     #expect(result.events[0].gain == 1000)
   }
 
-  @Test func financialYearFilter_onlyIncludesEventsInRange() {
+  @Test func financialYearFilter_onlyIncludesEventsInRange() async throws {
     let bhp = stockInstrument("BHP")
     let accountId = UUID()
 
@@ -139,15 +141,17 @@ struct CapitalGainsCalculatorTests {
           categoryId: nil, earmarkId: nil),
       ])
 
-    let allResult = CapitalGainsCalculator.compute(
+    let allResult = try await CapitalGainsCalculator.computeWithConversion(
       transactions: [buyTx, sellTx],
-      profileCurrency: aud
+      profileCurrency: aud,
+      conversionService: FixedConversionService(rates: [:])
     )
     #expect(allResult.events.count == 1)
 
-    let earlyResult = CapitalGainsCalculator.compute(
+    let earlyResult = try await CapitalGainsCalculator.computeWithConversion(
       transactions: [buyTx, sellTx],
       profileCurrency: aud,
+      conversionService: FixedConversionService(rates: [:]),
       sellDateRange: date(0)...date(100)
     )
     // Sale on day 400 is outside the range
@@ -156,7 +160,7 @@ struct CapitalGainsCalculatorTests {
 
   // MARK: - Multi-instrument scenarios
 
-  @Test func multipleStocks_produceIndependentGainEvents() {
+  @Test func multipleStocks_produceIndependentGainEvents() async throws {
     let bhp = stockInstrument("BHP")
     let cba = stockInstrument("CBA")
     let accountId = UUID()
@@ -202,9 +206,10 @@ struct CapitalGainsCalculatorTests {
           categoryId: nil, earmarkId: nil),
       ])
 
-    let result = CapitalGainsCalculator.compute(
+    let result = try await CapitalGainsCalculator.computeWithConversion(
       transactions: [buyBHP, buyCBA, sellBHP, sellCBA],
-      profileCurrency: aud
+      profileCurrency: aud,
+      conversionService: FixedConversionService(rates: [:])
     )
 
     #expect(result.events.count == 2)
@@ -215,7 +220,7 @@ struct CapitalGainsCalculatorTests {
     #expect(result.totalRealizedGain == 3000)
   }
 
-  @Test func sellingOneInstrumentDoesNotTouchCostBasisOfAnother() {
+  @Test func sellingOneInstrumentDoesNotTouchCostBasisOfAnother() async throws {
     // If a user sells BHP, CBA cost basis must not change.
     let bhp = stockInstrument("BHP")
     let cba = stockInstrument("CBA")
@@ -252,9 +257,10 @@ struct CapitalGainsCalculatorTests {
           categoryId: nil, earmarkId: nil),
       ])
 
-    let result = CapitalGainsCalculator.compute(
+    let result = try await CapitalGainsCalculator.computeWithConversion(
       transactions: [buyBHP, buyCBA, sellAllBHP],
-      profileCurrency: aud
+      profileCurrency: aud,
+      conversionService: FixedConversionService(rates: [:])
     )
 
     // Only BHP sale produces an event; CBA is still held.
