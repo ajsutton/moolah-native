@@ -270,6 +270,10 @@ struct MoolahApp: App {
   @Environment(\.scenePhase) private var scenePhase
   private let containerManager: ProfileContainerManager
   private let syncCoordinator: SyncCoordinator
+  /// The seeded profile ID under `--ui-testing`, or `nil` for production
+  /// launches. Stored as `let` because `MoolahApp.init` runs once per
+  /// process; the value is decided at launch and never changes.
+  private let uiTestingProfileId: UUID?
   @State private var profileStore: ProfileStore
   private let logger = Logger(subsystem: "com.moolah.app", category: "BackgroundSync")
   @State private var pendingNavigation: PendingNavigation?
@@ -283,35 +287,69 @@ struct MoolahApp: App {
     @State private var sessionManager: SessionManager
   #endif
 
+  /// Returns the `UITestSeed` to hydrate from when the process was launched
+  /// with `--ui-testing`, or `nil` for normal launches. An unset or unknown
+  /// `UI_TESTING_SEED` is a fatal error so test runs cannot silently fall
+  /// back to an unrelated seed when the environment fails to propagate.
+  private static func uiTestingSeed(from arguments: [String]) -> UITestSeed? {
+    guard arguments.contains("--ui-testing") else { return nil }
+    guard let raw = ProcessInfo.processInfo.environment["UI_TESTING_SEED"] else {
+      fatalError(
+        "--ui-testing launched without UI_TESTING_SEED — set the env var via MoolahApp.launch(seed:)."
+      )
+    }
+    guard let seed = UITestSeed(rawValue: raw) else {
+      fatalError("Unknown UI test seed '\(raw)' — extend UITestSeed in UITestSupport.")
+    }
+    return seed
+  }
+
   init() {
+    // UI-testing launch mode: swap the on-disk profile index for an
+    // in-memory one and hydrate it from UI_TESTING_SEED. CloudKit sync and
+    // telemetry are skipped entirely — the app runs against `TestBackend`
+    // shaped storage (in-memory `CloudKitBackend`) so XCUITest flows never
+    // touch the user's iCloud. See guides/UI_TEST_GUIDE.md §6.
+    let uiTestingSeed = Self.uiTestingSeed(from: CommandLine.arguments)
+    var uiTestingProfileId: UUID? = nil
+
     do {
-      let profileSchema = Schema([ProfileRecord.self])
-      let profileStoreURL = URL.applicationSupportDirectory.appending(path: "Moolah-v2.store")
-      let profileConfig = ModelConfiguration(
-        url: profileStoreURL,
-        cloudKitDatabase: .none
-      )
-      let indexContainer = try ModelContainer(for: profileSchema, configurations: [profileConfig])
+      let manager: ProfileContainerManager
+      if let seed = uiTestingSeed {
+        manager = try ProfileContainerManager.forTesting()
+        let profile = try UITestSeedHydrator.hydrate(seed, into: manager)
+        uiTestingProfileId = profile.id
+      } else {
+        let profileSchema = Schema([ProfileRecord.self])
+        let profileStoreURL = URL.applicationSupportDirectory.appending(path: "Moolah-v2.store")
+        let profileConfig = ModelConfiguration(
+          url: profileStoreURL,
+          cloudKitDatabase: .none
+        )
+        let indexContainer = try ModelContainer(
+          for: profileSchema, configurations: [profileConfig])
 
-      let dataSchema = Schema([
-        AccountRecord.self,
-        TransactionRecord.self,
-        TransactionLegRecord.self,
-        InstrumentRecord.self,
-        CategoryRecord.self,
-        EarmarkRecord.self,
-        EarmarkBudgetItemRecord.self,
-        InvestmentValueRecord.self,
-        CSVImportProfileRecord.self,
-        ImportRuleRecord.self,
-      ])
+        let dataSchema = Schema([
+          AccountRecord.self,
+          TransactionRecord.self,
+          TransactionLegRecord.self,
+          InstrumentRecord.self,
+          CategoryRecord.self,
+          EarmarkRecord.self,
+          EarmarkBudgetItemRecord.self,
+          InvestmentValueRecord.self,
+          CSVImportProfileRecord.self,
+          ImportRuleRecord.self,
+        ])
 
-      let manager = ProfileContainerManager(
-        indexContainer: indexContainer,
-        dataSchema: dataSchema
-      )
+        manager = ProfileContainerManager(
+          indexContainer: indexContainer,
+          dataSchema: dataSchema
+        )
+      }
       containerManager = manager
       syncCoordinator = SyncCoordinator(containerManager: manager)
+      self.uiTestingProfileId = uiTestingProfileId
     } catch {
       fatalError("Failed to initialize ModelContainer: \(error)")
     }
@@ -321,13 +359,23 @@ struct MoolahApp: App {
 
     let coordinator = syncCoordinator
 
-    // Wire sync coordinator to reload profiles on remote changes (only when CloudKit is available)
-    // Never start CloudKit sync under XCTest: the test binary is signed with the production
-    // iCloud entitlement, so the coordinator would fetch real records from the user's iCloud
-    // into on-disk profile stores; those records have bled into tests' in-memory containers
-    // via SwiftData's shared process state and caused intermittent balance failures.
+    // Wire sync coordinator to reload profiles on remote changes only for
+    // production launches. Test contexts must not reach for real iCloud:
+    //   - XCTest: the test binary is signed with the production iCloud
+    //     entitlement, so the coordinator would fetch real records from the
+    //     user's iCloud into on-disk profile stores; those records have bled
+    //     into tests' in-memory containers via SwiftData's shared process
+    //     state and caused intermittent balance failures.
+    //   - --ui-testing: the app is running against in-memory `TestBackend`-
+    //     shaped storage and must not reach for real iCloud. See
+    //     guides/UI_TEST_GUIDE.md §6.
     let isRunningTests = NSClassFromString("XCTestCase") != nil
-    if CloudKitAuthProvider.isCloudKitAvailable && !isRunningTests {
+    let isUITesting = uiTestingProfileId != nil
+    if isUITesting {
+      logger.info("Running under --ui-testing — skipping CloudKit sync coordinator")
+    } else if isRunningTests {
+      logger.info("Running under XCTest — skipping CloudKit sync coordinator")
+    } else if CloudKitAuthProvider.isCloudKitAvailable {
       logger.info("CloudKit available — starting sync coordinator")
       _ = coordinator.addIndexObserver { [weak store] in
         store?.loadCloudProfiles()
@@ -346,8 +394,6 @@ struct MoolahApp: App {
 
       // Clean up the legacy CloudKit zone from SwiftData's automatic sync
       LegacyZoneCleanup.performIfNeeded()
-    } else if isRunningTests {
-      logger.info("Running under XCTest — skipping CloudKit sync coordinator")
     } else {
       logger.warning(
         "CloudKit not available — profile sync disabled (NSUbiquitousContainers missing from Info.plist)"
@@ -389,7 +435,9 @@ struct MoolahApp: App {
   var body: some Scene {
     #if os(macOS)
       WindowGroup(for: Profile.ID.self) { $profileID in
-        ProfileWindowView(profileID: profileID)
+        // UI-testing mode pins the window to the seeded profile; the
+        // per-window binding is used only in production launches.
+        ProfileWindowView(profileID: uiTestingProfileId ?? profileID)
           .environment(profileStore)
           .environment(sessionManager)
           .environment(containerManager)
@@ -397,6 +445,10 @@ struct MoolahApp: App {
           .environment(\.pendingNavigation, $pendingNavigation)
           .onOpenURL { url in handleURL(url) }
           .task {
+            // Daily backup runs in production launches only; under UI
+            // testing the fixture container is ephemeral, so there is
+            // nothing meaningful to back up.
+            guard uiTestingProfileId == nil else { return }
             backupManager.performDailyBackup(
               profiles: profileStore.profiles,
               containerManager: containerManager

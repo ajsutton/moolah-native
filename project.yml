@@ -60,6 +60,7 @@ targets:
       - path: Features
       - path: Shared
       - path: Automation
+      - path: UITestSupport
     dependencies:
       - sdk: AppIntents.framework
     settings:
@@ -90,6 +91,7 @@ targets:
       - path: Features
       - path: Shared
       - path: Automation
+      - path: UITestSupport
     dependencies:
       - sdk: AppIntents.framework
     settings:
@@ -161,6 +163,24 @@ targets:
     dependencies:
       - target: Moolah_macOS
 
+  MoolahUITests_macOS:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: MoolahUITests_macOS
+      - path: UITestSupport
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: rocks.moolah.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: YES
+        CODE_SIGNING_ALLOWED: YES
+        ENABLE_HARDENED_RUNTIME: NO
+        TEST_TARGET_NAME: Moolah_macOS
+    dependencies:
+      - target: Moolah_macOS
+
 schemes:
   Moolah:
     build:
@@ -197,3 +217,13 @@ schemes:
       config: Debug-Tests
       targets:
         - MoolahBenchmarks_macOS
+
+  Moolah-macOS-UITests:
+    build:
+      targets:
+        Moolah_macOS: all
+        MoolahUITests_macOS: [test]
+    test:
+      config: Debug-Tests
+      targets:
+        - MoolahUITests_macOS

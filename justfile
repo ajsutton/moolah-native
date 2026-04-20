@@ -67,6 +67,12 @@ test-ios *FILTERS: generate
 benchmark *FILTER: generate
     bash scripts/benchmark.sh {{ FILTER }}
 
+# Run UI tests on native macOS (no simulator). FILTERS work like `test`:
+# pass a class name (e.g. `UITestingLaunchSmokeTests`) or class/method to
+# narrow the run. The MoolahUITests_macOS prefix is added automatically.
+test-ui *FILTERS: generate
+    bash scripts/test-ui.sh {{ FILTERS }}
+
 # Build the app for macOS
 build-mac: generate
     #!/usr/bin/env bash
