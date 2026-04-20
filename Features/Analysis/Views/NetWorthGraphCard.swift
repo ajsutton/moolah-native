@@ -36,9 +36,17 @@ struct NetWorthGraphCard: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      Text("Net Worth")
-        .font(.title2)
-        .fontWeight(.semibold)
+      HStack(alignment: .firstTextBaseline) {
+        Text("Net Worth")
+          .font(.title2)
+          .fontWeight(.semibold)
+        if let instrument = balances.first?.balance.instrument {
+          Text(instrument.id)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("Values in \(instrument.id)")
+        }
+      }
 
       if balances.isEmpty {
         emptyState

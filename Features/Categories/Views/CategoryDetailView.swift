@@ -7,8 +7,7 @@ struct CategoryDetailView: View {
   let onDelete: (UUID, UUID?) -> Void
 
   @State private var editedName: String
-  @State private var showDeleteConfirmation = false
-  @State private var selectedReplacementId: UUID?
+  @State private var showDeleteSheet = false
 
   init(
     category: Category,
@@ -40,7 +39,7 @@ struct CategoryDetailView: View {
 
       Section {
         Button("Delete Category", role: .destructive) {
-          showDeleteConfirmation = true
+          showDeleteSheet = true
         }
       }
     }
@@ -54,37 +53,21 @@ struct CategoryDetailView: View {
           .disabled(editedName == category.name || editedName.isEmpty)
       }
     }
-    .confirmationDialog(
-      "Delete Category",
-      isPresented: $showDeleteConfirmation,
-      presenting: deletionOptions
-    ) { options in
-      if options.hasReplacements {
-        Button("Delete and Reassign", role: .destructive) {
-          // Show picker for replacement
-          onDelete(category.id, selectedReplacementId)
+    .sheet(isPresented: $showDeleteSheet) {
+      DeleteCategorySheet(
+        category: category,
+        replacements: replacementCandidates,
+        onCancel: { showDeleteSheet = false },
+        onConfirm: { replacementId in
+          showDeleteSheet = false
+          onDelete(category.id, replacementId)
         }
-      }
-
-      Button("Delete Without Replacement", role: .destructive) {
-        onDelete(category.id, nil)
-      }
-
-      Button("Cancel", role: .cancel) {}
-    } message: { options in
-      if options.hasReplacements {
-        Text(
-          "Select a replacement category for transactions and subcategories, or delete without replacement."
-        )
-      } else {
-        Text("This will permanently delete this category.")
-      }
+      )
     }
   }
 
-  private var deletionOptions: DeletionOptions {
-    let replacements = categories.roots.filter { $0.id != category.id }
-    return DeletionOptions(hasReplacements: !replacements.isEmpty)
+  private var replacementCandidates: [Category] {
+    categories.roots.filter { $0.id != category.id }
   }
 
   private func saveChanges() {
@@ -94,8 +77,61 @@ struct CategoryDetailView: View {
   }
 }
 
-private struct DeletionOptions {
-  let hasReplacements: Bool
+private struct DeleteCategorySheet: View {
+  let category: Category
+  let replacements: [Category]
+  let onCancel: () -> Void
+  let onConfirm: (UUID?) -> Void
+
+  @State private var selectedReplacementId: UUID?
+
+  var body: some View {
+    NavigationStack {
+      Form {
+        Section {
+          Text(message)
+            .font(.body)
+        }
+
+        if !replacements.isEmpty {
+          Section("Reassign Transactions") {
+            Picker("Replacement Category", selection: $selectedReplacementId) {
+              Text("None (unassign)").tag(UUID?.none)
+              ForEach(replacements) { candidate in
+                Text(candidate.name).tag(Optional(candidate.id))
+              }
+            }
+          }
+        }
+
+        Section {
+          Button("Delete Category", role: .destructive) {
+            onConfirm(selectedReplacementId)
+          }
+        }
+      }
+      .navigationTitle("Delete \(category.name)")
+      #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+      #endif
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel", action: onCancel)
+        }
+      }
+    }
+    #if os(macOS)
+      .frame(minWidth: 400, minHeight: 300)
+    #endif
+  }
+
+  private var message: String {
+    if replacements.isEmpty {
+      return "This will permanently delete this category."
+    }
+    return
+      "Choose a replacement category for transactions and subcategories, or leave unset to unassign them."
+  }
 }
 
 #Preview {

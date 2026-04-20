@@ -5,6 +5,7 @@ import SwiftUI
 /// Validates availability/connectivity before creating the profile.
 struct ProfileSetupView: View {
   @Environment(ProfileStore.self) private var profileStore
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var showCustomServer = false
   @State private var customURL = ""
   @State private var customLabel = ""
@@ -35,7 +36,7 @@ struct ProfileSetupView: View {
         VStack(spacing: 12) {
           if !showICloudForm {
             Button {
-              withAnimation { showICloudForm = true }
+              withAnimation(reduceMotion ? nil : .default) { showICloudForm = true }
             } label: {
               Label(
                 String(localized: "Store in iCloud"),
@@ -78,7 +79,7 @@ struct ProfileSetupView: View {
 
           if !showCustomServer && !showICloudForm {
             Button {
-              withAnimation { showCustomServer = true }
+              withAnimation(reduceMotion ? nil : .default) { showCustomServer = true }
             } label: {
               Text(String(localized: "Use a custom server"))
                 .font(.subheadline)

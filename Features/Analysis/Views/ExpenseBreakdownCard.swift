@@ -94,7 +94,7 @@ struct ExpenseBreakdownCard: View {
             selectedCategoryId = nil
           }
           .font(.caption)
-          .foregroundStyle(.blue)
+          .foregroundStyle(.tint)
         }
       }
     }

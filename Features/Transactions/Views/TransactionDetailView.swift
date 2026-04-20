@@ -1122,3 +1122,40 @@ struct TransactionDetailView: View {
     )
   }
 }
+
+#Preview("Scheduled (Recurring)") {
+  let accountId = UUID()
+  NavigationStack {
+    TransactionDetailView(
+      transaction: Transaction(
+        date: Date().addingTimeInterval(60 * 60 * 24 * 3),
+        payee: "Rent",
+        recurPeriod: .month,
+        recurEvery: 1,
+        legs: [
+          TransactionLeg(accountId: accountId, instrument: .AUD, quantity: -1800, type: .expense)
+        ]
+      ),
+      accounts: Accounts(from: [
+        Account(id: accountId, name: "Checking", type: .bank, instrument: .AUD)
+      ]),
+      categories: Categories(from: [
+        Category(name: "Housing")
+      ]),
+      earmarks: Earmarks(from: []),
+      transactionStore: {
+        let (backend, _) = PreviewBackend.create()
+        return TransactionStore(
+          repository: backend.transactions,
+          conversionService: backend.conversionService,
+          targetInstrument: .AUD
+        )
+      }(),
+      showRecurrence: true,
+      viewingAccountId: accountId,
+      supportsComplexTransactions: true,
+      onUpdate: { _ in },
+      onDelete: { _ in }
+    )
+  }
+}

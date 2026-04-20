@@ -37,7 +37,11 @@ struct WelcomeView: View {
           )
           .frame(maxWidth: 280)
         }
-        .buttonStyle(.borderedProminent)
+        #if os(macOS)
+          .buttonStyle(.bordered)
+        #else
+          .buttonStyle(.borderedProminent)
+        #endif
         .controlSize(.large)
       }
 

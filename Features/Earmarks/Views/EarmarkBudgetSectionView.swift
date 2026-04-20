@@ -12,6 +12,9 @@ struct EarmarkBudgetSectionView: View {
   @State private var editingLineItem: BudgetLineItem?
   @State private var deleteConfirmation: BudgetLineItem?
 
+  @ScaledMetric private var columnMinWidth: CGFloat = 70
+  @ScaledMetric private var columnIdealWidth: CGFloat = 90
+
   var body: some View {
     Group {
       if earmarkStore.isBudgetLoading || isLoadingBalances {
@@ -142,11 +145,11 @@ struct EarmarkBudgetSectionView: View {
       Text("Category")
         .frame(maxWidth: .infinity, alignment: .leading)
       Text("Actual")
-        .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
+        .frame(minWidth: columnMinWidth, idealWidth: columnIdealWidth, alignment: .trailing)
       Text("Budget")
-        .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
+        .frame(minWidth: columnMinWidth, idealWidth: columnIdealWidth, alignment: .trailing)
       Text("Remaining")
-        .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
+        .frame(minWidth: columnMinWidth, idealWidth: columnIdealWidth, alignment: .trailing)
     }
     .font(.caption)
     .foregroundStyle(.secondary)
@@ -161,21 +164,21 @@ struct EarmarkBudgetSectionView: View {
 
       InstrumentAmountView(amount: lineItem.actual)
         .font(.body)
-        .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
+        .frame(minWidth: columnMinWidth, idealWidth: columnIdealWidth, alignment: .trailing)
 
       Button {
         editingLineItem = lineItem
       } label: {
         InstrumentAmountView(amount: lineItem.budgeted, colorOverride: .primary)
           .font(.body)
-          .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
+          .frame(minWidth: columnMinWidth, idealWidth: columnIdealWidth, alignment: .trailing)
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Edit budget for \(lineItem.categoryName)")
 
       InstrumentAmountView(amount: lineItem.remaining)
         .font(.body)
-        .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
+        .frame(minWidth: columnMinWidth, idealWidth: columnIdealWidth, alignment: .trailing)
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(
@@ -191,15 +194,15 @@ struct EarmarkBudgetSectionView: View {
 
       InstrumentAmountView(amount: totalActual)
         .font(.headline)
-        .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
+        .frame(minWidth: columnMinWidth, idealWidth: columnIdealWidth, alignment: .trailing)
 
       InstrumentAmountView(amount: totalBudgeted, colorOverride: .primary)
         .font(.headline)
-        .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
+        .frame(minWidth: columnMinWidth, idealWidth: columnIdealWidth, alignment: .trailing)
 
       InstrumentAmountView(amount: totalRemaining)
         .font(.headline)
-        .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
+        .frame(minWidth: columnMinWidth, idealWidth: columnIdealWidth, alignment: .trailing)
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(
@@ -215,15 +218,15 @@ struct EarmarkBudgetSectionView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
 
       Spacer()
-        .frame(minWidth: 70, idealWidth: 90)
+        .frame(minWidth: columnMinWidth, idealWidth: columnIdealWidth)
 
       InstrumentAmountView(amount: amount)
         .font(.body)
-        .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
+        .frame(minWidth: columnMinWidth, idealWidth: columnIdealWidth, alignment: .trailing)
 
       InstrumentAmountView(amount: amount)
         .font(.body)
-        .frame(minWidth: 70, idealWidth: 90, alignment: .trailing)
+        .frame(minWidth: columnMinWidth, idealWidth: columnIdealWidth, alignment: .trailing)
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel("Unallocated: \(amount.formatted)")
