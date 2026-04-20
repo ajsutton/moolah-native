@@ -570,6 +570,15 @@ struct MoolahApp: App {
   // MARK: - URL Scheme Handling
 
   private func handleURL(_ url: URL) {
+    // CSV files opened via Finder "Open With Moolah" or dropped on the
+    // Dock icon arrive as `file://` URLs. Post a notification — the
+    // active profile's `ContentView` is subscribed and will route it
+    // through `ImportStore.ingest` (matcher auto-routes, unknown files
+    // land in Needs Setup) exactly like a drag-and-drop.
+    if url.isFileURL && url.pathExtension.lowercased() == "csv" {
+      NotificationCenter.default.post(name: .openCSVFile, object: url)
+      return
+    }
     do {
       let route = try URLSchemeHandler.parse(url)
       // Find profile by name (case-insensitive) then by UUID

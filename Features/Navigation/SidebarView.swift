@@ -177,7 +177,21 @@ struct SidebarView: View {
         }
 
         NavigationLink(value: SidebarSelection.recentlyAdded) {
-          Label("Recently Added", systemImage: "tray.full")
+          HStack {
+            Label("Recently Added", systemImage: "tray.full")
+            Spacer()
+            if importStore.unreviewedBadgeCount > 0 {
+              Text("\(importStore.unreviewedBadgeCount)")
+                .font(.caption)
+                .monospacedDigit()
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(.tint, in: Capsule())
+                .foregroundStyle(.white)
+                .accessibilityLabel(
+                  "\(importStore.unreviewedBadgeCount) recently imported need review")
+            }
+          }
         }
 
         NavigationLink(value: SidebarSelection.allTransactions) {

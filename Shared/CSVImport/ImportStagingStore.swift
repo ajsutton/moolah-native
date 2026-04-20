@@ -129,6 +129,16 @@ actor ImportStagingStore {
     return try Data(contentsOf: match.stagingPath)
   }
 
+  /// Load the raw bytes of a previously staged failed file — used for the
+  /// Retry action in the Failed Files panel.
+  func data(forFailedId failedId: UUID) throws -> Data {
+    let index = try load()
+    guard let match = index.failed.first(where: { $0.id == failedId }) else {
+      throw StagingError.notFound(id: failedId)
+    }
+    return try Data(contentsOf: match.stagingPath)
+  }
+
   // MARK: - Persistence
 
   private struct Index: Codable {

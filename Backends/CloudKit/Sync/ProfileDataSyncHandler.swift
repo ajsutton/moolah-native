@@ -1130,6 +1130,7 @@ final class ProfileDataSyncHandler: Sendable {
         existing.createdAt = values.createdAt
         existing.lastUsedAt = values.lastUsedAt
         existing.dateFormatRawValue = values.dateFormatRawValue
+        existing.columnRoleRawValuesEncoded = values.columnRoleRawValuesEncoded
         existing.encodedSystemFields = systemFields[id.uuidString]
       } else {
         values.encodedSystemFields = systemFields[id.uuidString]
