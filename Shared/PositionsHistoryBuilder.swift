@@ -109,7 +109,14 @@ struct PositionsHistoryBuilder: Sendable {
       var aggOK = true
       var anyHeld = false
 
+      // Note: host-currency legs are excluded from `quantities` in `apply()`, so
+      // every instrument here is a non-host investment instrument and always
+      // requires a conversion call.
       for (instrument, qty) in quantities where qty != 0 {
+        if Task.isCancelled {
+          return HistoricalValueSeries(
+            hostCurrency: hostCurrency, total: total, perInstrument: perInstrument)
+        }
         anyHeld = true
         let cost = engine.openLots(for: instrument)
           .reduce(Decimal(0)) { $0 + $1.remainingCost }

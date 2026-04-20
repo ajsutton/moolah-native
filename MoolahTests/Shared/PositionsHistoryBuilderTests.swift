@@ -83,10 +83,11 @@ struct PositionsHistoryBuilderTests {
     // point reflects the cumulative cost basis at that date — exact step
     // function: 4_000 from day 1, 6_500 from day 10 onwards.
     let bhpSeries = series.series(for: bhp)
+    let calendar = Calendar(identifier: .gregorian)
     let day5 = try #require(
-      bhpSeries.first { Calendar.current.isDate($0.date, inSameDayAs: date(daysAfterEpoch: 5)) })
+      bhpSeries.first { calendar.isDate($0.date, inSameDayAs: date(daysAfterEpoch: 5)) })
     let day20 = try #require(
-      bhpSeries.first { Calendar.current.isDate($0.date, inSameDayAs: date(daysAfterEpoch: 20)) })
+      bhpSeries.first { calendar.isDate($0.date, inSameDayAs: date(daysAfterEpoch: 20)) })
     #expect(day5.cost == 4_000)
     #expect(day20.cost == 6_500)
   }
@@ -112,6 +113,60 @@ struct PositionsHistoryBuilderTests {
     #expect(series.totalSeries.allSatisfy { $0.date < self.date(daysAfterEpoch: 2) })
     // Per-instrument BHP still has full daily coverage.
     #expect(series.series(for: bhp).count == 5)
+  }
+
+  @Test("pre-fold: transactions before the visible range still seed cost basis at start")
+  func preFoldHistoricalCostBasis() async throws {
+    // Buy on day 0 (well before the .oneMonth cutoff for now=day 200).
+    let txns = [buy(instrument: bhp, qty: 10, fiat: 500, daysAfterEpoch: 0)]
+    let service = FixedConversionService(rates: [bhp.id: Decimal(60)])
+    let builder = PositionsHistoryBuilder(conversionService: service)
+    let now = date(daysAfterEpoch: 200)
+    let series = await builder.build(
+      transactions: txns, accountId: accountId,
+      hostCurrency: aud, range: .oneMonth, now: now
+    )
+
+    // First visible point's cost should reflect the prior buy ($500), and
+    // value should reflect 10 shares × $60 = $600.
+    let bhpSeries = series.series(for: bhp)
+    let firstPoint = try #require(bhpSeries.first)
+    #expect(firstPoint.cost == 500)
+    #expect(firstPoint.value == 600)
+  }
+
+  @Test("same-day multiple transactions: both reflected in the day's emitted point")
+  func sameDayMultipleTransactions() async throws {
+    let txns = [
+      buy(instrument: bhp, qty: 100, fiat: 4_000, daysAfterEpoch: 1),
+      buy(instrument: bhp, qty: 50, fiat: 2_500, daysAfterEpoch: 1),  // same day
+    ]
+    let service = FixedConversionService(rates: [bhp.id: Decimal(50)])
+    let builder = PositionsHistoryBuilder(conversionService: service)
+    let now = date(daysAfterEpoch: 5)
+
+    let series = await builder.build(
+      transactions: txns, accountId: accountId,
+      hostCurrency: aud, range: .threeMonths, now: now
+    )
+
+    let bhpSeries = series.series(for: bhp)
+    let firstPoint = try #require(bhpSeries.first)
+    // Both buys folded by end of day 1: 150 shares total cost 6500.
+    #expect(firstPoint.value == 150 * Decimal(50))
+    #expect(firstPoint.cost == 6_500)
+  }
+
+  @Test("empty transactions input returns an empty series")
+  func emptyTransactions() async {
+    let service = FixedConversionService(rates: [:])
+    let builder = PositionsHistoryBuilder(conversionService: service)
+    let series = await builder.build(
+      transactions: [], accountId: accountId,
+      hostCurrency: aud, range: .oneMonth, now: Date()
+    )
+    #expect(series.totalSeries.isEmpty)
+    #expect(series.instruments.isEmpty)
   }
 
   @Test("range cutoff drops samples earlier than the requested window")
