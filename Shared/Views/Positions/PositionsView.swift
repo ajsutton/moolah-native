@@ -31,7 +31,9 @@ struct PositionsView: View {
         Divider()
         PositionsTable(input: input, selection: $selection)
       }
-      .onExitCommand { selection = nil }
+      #if os(macOS)
+        .onExitCommand { selection = nil }
+      #endif
       .onChange(of: input) { _, _ in
         selection = nil
         range = .threeMonths
