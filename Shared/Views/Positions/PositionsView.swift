@@ -11,7 +11,7 @@ struct PositionsView: View {
   let input: PositionsViewInput
 
   @State private var selection: Instrument?
-  @State private var range: PositionsTimeRange = .threeMonths
+  @Binding var range: PositionsTimeRange
 
   var body: some View {
     if input.positions.isEmpty {
@@ -70,7 +70,8 @@ struct PositionsView: View {
         ),
       ],
       historicalValue: nil  // chart hidden in preview to keep snapshot stable
-    )
+    ),
+    range: .constant(.threeMonths)
   )
   .frame(width: 720, height: 480)
 }
@@ -91,7 +92,8 @@ struct PositionsView: View {
           value: InstrumentAmount(quantity: 1_000, instrument: .AUD)),
       ],
       historicalValue: nil
-    )
+    ),
+    range: .constant(.threeMonths)
   )
   .frame(width: 480, height: 240)
 }
@@ -108,7 +110,8 @@ struct PositionsView: View {
           unitPrice: nil, costBasis: nil, value: nil)
       ],
       historicalValue: nil
-    )
+    ),
+    range: .constant(.threeMonths)
   )
   .frame(width: 480, height: 240)
 }
@@ -120,7 +123,8 @@ struct PositionsView: View {
       hostCurrency: .AUD,
       positions: [],
       historicalValue: nil
-    )
+    ),
+    range: .constant(.threeMonths)
   )
   .frame(width: 480, height: 200)
 }
@@ -153,7 +157,8 @@ struct PositionsView: View {
         )
       ],
       historicalValue: series
-    )
+    ),
+    range: .constant(.threeMonths)
   )
   .frame(width: 720, height: 640)
 }
