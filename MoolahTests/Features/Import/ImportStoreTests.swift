@@ -271,7 +271,7 @@ struct ImportStoreTests {
     }
   }
 
-  @Test("malformed row (invalid date) carries row index into failedFiles")
+  @Test("malformed row (invalid date) carries row index AND row content into failedFiles")
   func malformedRowSurfacesIndex() async throws {
     let (backend, _) = try TestBackend.create()
     let accountId = UUID()
@@ -292,8 +292,75 @@ struct ImportStoreTests {
     if case .failed = result {
       #expect(store.failedFiles.count == 1)
       #expect(store.failedFiles[0].offendingRowIndex == 2)
+      #expect(store.failedFiles[0].offendingRow == ["not-a-date", "COFFEE", "5.50", "", "989.00"])
     } else {
       Issue.record("expected .failed")
+    }
+  }
+
+  @Test("dismissPending clears the entry from both the store and staging")
+  func dismissPendingClearsEntry() async throws {
+    let (backend, _) = try TestBackend.create()
+    let (store, dir) = try makeStore(backend: backend)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let data = try cbaFixtureBytes()
+    let result = await store.ingest(
+      data: data,
+      source: .pickedFile(url: URL(fileURLWithPath: "/tmp/cba.csv"), securityScoped: false))
+    guard case .needsSetup(let id) = result else {
+      Issue.record("expected .needsSetup")
+      return
+    }
+    #expect(store.pendingSetup.count == 1)
+    await store.dismissPending(id: id)
+    #expect(store.pendingSetup.isEmpty)
+  }
+
+  @Test("dismissFailed clears the entry from both the store and staging")
+  func dismissFailedClearsEntry() async throws {
+    let (backend, _) = try TestBackend.create()
+    let (store, dir) = try makeStore(backend: backend)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let bytes = Data("Foo,Bar,Baz\n1,2,3\n".utf8)
+    _ = await store.ingest(
+      data: bytes,
+      source: .pickedFile(url: URL(fileURLWithPath: "/tmp/bad.csv"), securityScoped: false))
+    #expect(store.failedFiles.count == 1)
+    let id = store.failedFiles[0].id
+    await store.dismissFailed(id: id)
+    #expect(store.failedFiles.isEmpty)
+  }
+
+  @Test("finishSetup re-reads staged bytes, creates profile, and imports")
+  func finishSetupCompletesImport() async throws {
+    let (backend, _) = try TestBackend.create()
+    let accountId = UUID()
+    try await seedAccount(backend, id: accountId, name: "Cash")
+    let (store, dir) = try makeStore(backend: backend)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let data = try cbaFixtureBytes()
+    let first = await store.ingest(
+      data: data,
+      source: .pickedFile(url: URL(fileURLWithPath: "/tmp/cba.csv"), securityScoped: false))
+    guard case .needsSetup(let pendingId) = first else {
+      Issue.record("expected .needsSetup on first ingest")
+      return
+    }
+
+    // User confirms the setup form with a freshly-constructed profile.
+    let newProfile = CSVImportProfile(
+      accountId: accountId,
+      parserIdentifier: "generic-bank",
+      headerSignature: ["date", "description", "debit", "credit", "balance"])
+    let second = await store.finishSetup(pendingId: pendingId, profile: newProfile)
+    if case .imported(_, let imported, _) = second {
+      #expect(imported.count == 4)
+      #expect(store.pendingSetup.isEmpty)
+      // Profile was persisted and routed.
+      let profiles = try await backend.csvImportProfiles.fetchAll()
+      #expect(profiles.count == 1)
+    } else {
+      Issue.record("expected .imported after finishSetup; got \(second)")
     }
   }
 

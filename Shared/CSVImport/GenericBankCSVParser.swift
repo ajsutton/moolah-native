@@ -70,14 +70,14 @@ struct GenericBankCSVParser: CSVParser, Sendable {
           continue
         }
         throw CSVParserError.malformedRow(
-          index: rowIndex, reason: "invalid date: \(dateString)")
+          index: rowIndex, reason: "invalid date: \(dateString)", row: row)
       }
       let amount: Decimal
       if let amountIdx = mapping.amount {
         let amountField = safe(row, amountIdx)
         guard let parsed = parseAmount(amountField) else {
           throw CSVParserError.malformedRow(
-            index: rowIndex, reason: "invalid amount: \(amountField)")
+            index: rowIndex, reason: "invalid amount: \(amountField)", row: row)
         }
         amount = parsed
       } else {

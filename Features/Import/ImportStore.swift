@@ -2,6 +2,9 @@ import Foundation
 import OSLog
 import Observation
 
+private let importStoreBackgroundLogger = Logger(
+  subsystem: "com.moolah.app", category: "ImportStore.Background")
+
 /// Result of a single `ingest` call. `ImportStore.recentSessions` carries
 /// the last few for the Recently Added view.
 enum ImportSessionResult: Sendable {
@@ -33,7 +36,7 @@ enum IngestError: Error, Sendable {
     case .parse(let error):
       switch error {
       case .headerMismatch: return "Headers did not match any known parser"
-      case .malformedRow(let index, let reason):
+      case .malformedRow(let index, let reason, _):
         return "Malformed row \(index): \(reason)"
       case .emptyFile: return "File was empty"
       }
@@ -43,8 +46,10 @@ enum IngestError: Error, Sendable {
   }
 
   var offendingRow: (row: [String]?, index: Int?) {
-    if case .parse(let e) = self, case .malformedRow(let index, _) = e {
-      return (nil, index)
+    if case .parse(let e) = self,
+      case .malformedRow(let index, _, let row) = e
+    {
+      return (row, index)
     }
     return (nil, nil)
   }
@@ -74,19 +79,16 @@ final class ImportStore {
   private let backend: any BackendProvider
   private let registry: CSVParserRegistry
   private let staging: ImportStagingStore
-  private let fileManager: FileManager
   private let logger = Logger(subsystem: "com.moolah.app", category: "ImportStore")
 
   init(
     backend: any BackendProvider,
     staging: ImportStagingStore,
-    registry: CSVParserRegistry = .default,
-    fileManager: FileManager = .default
+    registry: CSVParserRegistry = .default
   ) {
     self.backend = backend
     self.registry = registry
     self.staging = staging
-    self.fileManager = fileManager
   }
 
   // MARK: - Public API
@@ -264,7 +266,7 @@ final class ImportStore {
 
     // 7. Optional delete source.
     if resolvedProfile.deleteAfterImport, let url = source.sourceURL {
-      deleteSourceIfPossible(at: url)
+      await Self.deleteSourceInBackground(at: url)
     }
 
     return .imported(
@@ -409,7 +411,16 @@ final class ImportStore {
 
   private func resolveInstrument(for accountId: UUID) async throws -> Instrument {
     let accounts = try await backend.accounts.fetchAll()
-    return accounts.first(where: { $0.id == accountId })?.instrument ?? .AUD
+    guard let account = accounts.first(where: { $0.id == accountId }) else {
+      // At this point in the pipeline the account must exist — profile
+      // routing already validated it. A miss here means the account was
+      // deleted between fetches. Throw rather than fall back to AUD (which
+      // would silently persist rows with the wrong instrument on non-AUD
+      // accounts — Rule 11 violation).
+      throw IngestError.other(
+        "Account \(accountId) not found; cannot resolve its instrument.")
+    }
+    return account.instrument
   }
 
   // MARK: - Staging helpers
@@ -457,14 +468,22 @@ final class ImportStore {
     return id
   }
 
-  private func deleteSourceIfPossible(at url: URL) {
-    do {
-      try fileManager.removeItem(at: url)
-    } catch {
-      let description = error.localizedDescription
-      logger.warning(
-        "Could not delete source file at \(url.path, privacy: .public): \(description, privacy: .public)"
-      )
+  /// File delete runs on a detached background task so the main actor isn't
+  /// blocked waiting on a (potentially slow) filesystem call — network-share
+  /// volumes, security-scoped resource locks, and iCloud Drive materialisation
+  /// can all push `removeItem` into the hundreds-of-ms range.
+  nonisolated private static func deleteSourceInBackground(at url: URL) async {
+    let task = Task.detached(priority: .utility) {
+      do {
+        try FileManager.default.removeItem(at: url)
+      } catch {
+        let path = url.path
+        let description = error.localizedDescription
+        importStoreBackgroundLogger.warning(
+          "Could not delete source file at \(path, privacy: .public): \(description, privacy: .public)"
+        )
+      }
     }
+    await task.value
   }
 }

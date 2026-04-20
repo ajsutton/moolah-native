@@ -52,12 +52,14 @@ struct ParsedTransactionShapeTests {
     }
   }
 
-  @Test("CSVParserError.malformedRow carries the row index and reason")
+  @Test("CSVParserError.malformedRow carries the row index, reason, and row")
   func csvParserErrorShape() {
-    let e = CSVParserError.malformedRow(index: 7, reason: "unparseable amount")
-    if case .malformedRow(let index, let reason) = e {
+    let e = CSVParserError.malformedRow(
+      index: 7, reason: "unparseable amount", row: ["a", "b", "c"])
+    if case .malformedRow(let index, let reason, let row) = e {
       #expect(index == 7)
       #expect(reason == "unparseable amount")
+      #expect(row == ["a", "b", "c"])
     } else {
       Issue.record("expected .malformedRow")
     }

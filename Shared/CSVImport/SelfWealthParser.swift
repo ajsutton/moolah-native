@@ -40,7 +40,8 @@ struct SelfWealthParser: CSVParser, Sendable {
       let type = safe(row, columns.type)
       let description = safe(row, columns.description)
       guard let date = parseDate(safe(row, columns.date)) else {
-        throw CSVParserError.malformedRow(index: rowIndex, reason: "invalid date")
+        throw CSVParserError.malformedRow(
+          index: rowIndex, reason: "invalid date", row: row)
       }
       let debitValue = parseAmount(safe(row, columns.debit)) ?? 0
       let creditValue = parseAmount(safe(row, columns.credit)) ?? 0
@@ -191,7 +192,7 @@ struct SelfWealthParser: CSVParser, Sendable {
       let match = Self.tradeRegex.regex.firstMatch(in: description, options: [], range: range)
     else {
       throw CSVParserError.malformedRow(
-        index: index, reason: "unrecognised trade description: \(description)")
+        index: index, reason: "unrecognised trade description: \(description)", row: row)
     }
     let ns = description as NSString
     let kind = ns.substring(with: match.range(at: 1))
@@ -199,7 +200,7 @@ struct SelfWealthParser: CSVParser, Sendable {
     let ticker = ns.substring(with: match.range(at: 3))
     guard let quantity = Decimal(string: quantityText) else {
       throw CSVParserError.malformedRow(
-        index: index, reason: "invalid trade quantity: \(quantityText)")
+        index: index, reason: "invalid trade quantity: \(quantityText)", row: row)
     }
     let stockInstrument = Instrument(
       id: "ASX:\(ticker)",
