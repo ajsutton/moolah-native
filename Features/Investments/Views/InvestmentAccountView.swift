@@ -18,9 +18,12 @@ struct InvestmentAccountView: View {
   @State private var positionsRange: PositionsTimeRange = .threeMonths
   @State private var isLoadingPositions = false
 
-  /// The profile's fiat currency instrument, derived from the account's instrument.
+  /// The profile's reporting currency — used for valuing positions and the
+  /// chart series. NOT the account's own instrument: an investment account
+  /// can be denominated in a non-fiat instrument (e.g., a crypto wallet),
+  /// but valuations should always roll up into the user's fiat currency.
   private var profileCurrencyInstrument: Instrument {
-    account.instrument
+    session.profile.instrument
   }
 
   /// The invested amount (balance from positions in the account's primary instrument).
@@ -119,25 +122,27 @@ struct InvestmentAccountView: View {
     }
     .task(id: account.id) {
       isLoadingPositions = true
+      defer { isLoadingPositions = false }
       await investmentStore.loadAllData(
         accountId: account.id, profileCurrency: profileCurrencyInstrument)
       positionsInput = await investmentStore.positionsViewInput(
         title: account.name, range: positionsRange)
-      isLoadingPositions = false
     }
-    .onChange(of: positionsRange) { _, _ in
-      Task {
-        positionsInput = await investmentStore.positionsViewInput(
-          title: account.name, range: positionsRange)
-      }
+    .task(id: positionsRange) {
+      // Skip until loadAllData has populated the store; the .task(id: account.id)
+      // block runs the first build. We only fire re-builds for subsequent
+      // range changes.
+      guard investmentStore.loadedAccountId != nil else { return }
+      positionsInput = await investmentStore.positionsViewInput(
+        title: account.name, range: positionsRange)
     }
     .refreshable {
       isLoadingPositions = true
+      defer { isLoadingPositions = false }
       await investmentStore.loadAllData(
         accountId: account.id, profileCurrency: profileCurrencyInstrument)
       positionsInput = await investmentStore.positionsViewInput(
         title: account.name, range: positionsRange)
-      isLoadingPositions = false
     }
   }
 
