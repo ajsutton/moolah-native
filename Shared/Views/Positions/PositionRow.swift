@@ -1,0 +1,154 @@
+import SwiftUI
+
+/// Single-row presentation in `PositionsTable`. Used by both the wide
+/// (`Table`) layout (where columns position the cells) and the narrow
+/// (`List`) layout (where the row composes its own two-line layout).
+///
+/// Failed valuations render as `—` per `guides/STYLE_GUIDE.md`. Signs are
+/// preserved across value, cost, and gain — the row never `abs()`s an amount.
+struct PositionRow: View {
+  let row: ValuedPosition
+
+  var body: some View {
+    HStack(alignment: .firstTextBaseline) {
+      VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 6) {
+          KindBadge(kind: row.instrument.kind)
+          Text(row.instrument.name)
+            .font(.headline)
+        }
+        if let secondary = secondaryIdentifier {
+          Text(secondary)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        Text(quantityText)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .monospacedDigit()
+      }
+
+      Spacer()
+
+      VStack(alignment: .trailing, spacing: 2) {
+        if let value = row.value {
+          Text(value.formatted)
+            .monospacedDigit()
+        } else {
+          Text("—")
+            .foregroundStyle(.tertiary)
+            .accessibilityLabel("Value unavailable")
+        }
+        if let gain = row.gainLoss {
+          Text(gainText(gain))
+            .font(.caption)
+            .monospacedDigit()
+            .foregroundStyle(gain.isNegative ? .red : .green)
+        }
+      }
+    }
+    .padding(.vertical, 4)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(accessibilityLabel)
+  }
+
+  private var quantityText: String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .decimal
+    formatter.minimumFractionDigits = 0
+    formatter.maximumFractionDigits = min(row.instrument.decimals, 8)
+    let qty = formatter.string(from: row.quantity as NSDecimalNumber) ?? "\(row.quantity)"
+    switch row.instrument.kind {
+    case .fiatCurrency:
+      return InstrumentAmount(quantity: row.quantity, instrument: row.instrument).formatted
+    case .stock: return "\(qty) shares"
+    case .cryptoToken: return "\(qty) \(row.instrument.displayLabel)"
+    }
+  }
+
+  private var secondaryIdentifier: String? {
+    switch row.instrument.kind {
+    case .stock: return row.instrument.exchange
+    case .cryptoToken:
+      if let chainId = row.instrument.chainId {
+        return Instrument.chainName(for: chainId)
+      }
+      return nil
+    case .fiatCurrency: return nil
+    }
+  }
+
+  private func gainText(_ gain: InstrumentAmount) -> String {
+    let sign = gain.quantity > 0 ? "+" : ""
+    return "\(sign)\(gain.formatted)"
+  }
+
+  private var accessibilityLabel: String {
+    var parts: [String] = [row.instrument.name, quantityText]
+    if let value = row.value {
+      parts.append("valued at \(value.formatted)")
+    } else {
+      parts.append("value unavailable")
+    }
+    if let gain = row.gainLoss {
+      parts.append("gain \(gainText(gain))")
+    }
+    return parts.joined(separator: ", ")
+  }
+}
+
+/// Coloured badge prefix for a row, distinguishing instrument kinds at a
+/// glance. Colours are semantic (no hardcoded RGB).
+struct KindBadge: View {
+  let kind: Instrument.Kind
+
+  var body: some View {
+    let (label, tint): (String, Color) = {
+      switch kind {
+      case .stock: return ("S", .blue)
+      case .cryptoToken: return ("C", .orange)
+      case .fiatCurrency: return ("$", .secondary)
+      }
+    }()
+    Text(label)
+      .font(.caption2.weight(.bold))
+      .foregroundStyle(.white)
+      .frame(width: 18, height: 18)
+      .background(tint, in: RoundedRectangle(cornerRadius: 4))
+      .accessibilityHidden(true)
+  }
+}
+
+#Preview("rows") {
+  let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+  let eth = Instrument.crypto(
+    chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
+  let aud = Instrument.AUD
+  List {
+    PositionRow(
+      row: ValuedPosition(
+        instrument: bhp, quantity: 250,
+        unitPrice: InstrumentAmount(quantity: 45.30, instrument: aud),
+        costBasis: InstrumentAmount(quantity: 10_125, instrument: aud),
+        value: InstrumentAmount(quantity: 11_325, instrument: aud)
+      ))
+    PositionRow(
+      row: ValuedPosition(
+        instrument: eth, quantity: 2.45,
+        unitPrice: InstrumentAmount(quantity: 4_000, instrument: aud),
+        costBasis: InstrumentAmount(quantity: 7_500, instrument: aud),
+        value: InstrumentAmount(quantity: 9_800, instrument: aud)
+      ))
+    PositionRow(
+      row: ValuedPosition(
+        instrument: aud, quantity: 1_520,
+        unitPrice: nil, costBasis: nil,
+        value: InstrumentAmount(quantity: 1_520, instrument: aud)
+      ))
+    PositionRow(
+      row: ValuedPosition(
+        instrument: bhp, quantity: 100,
+        unitPrice: nil, costBasis: nil, value: nil))
+  }
+  .frame(width: 420)
+}
