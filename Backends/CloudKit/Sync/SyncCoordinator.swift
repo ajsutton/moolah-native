@@ -589,11 +589,15 @@ final class SyncCoordinator: Sendable {
   @discardableResult
   func queueUnsyncedRecordsForAllProfiles() -> [CKRecord.ID] {
     var queued: [CKRecord.ID] = []
-    for profileId in containerManager.allProfileIds() {
+    var scannedProfiles = 0
+    var skippedProfiles = 0
+    let allProfiles = containerManager.allProfileIds()
+    for profileId in allProfiles {
       // Skip profiles whose backfill scan has already run — the only work left for
       // those is normal sync traffic. This keeps the startup scan O(1) on the happy
       // path: after the first run per profile we never touch its SwiftData store again.
       if hasCompletedBackfillScan(for: profileId) {
+        skippedProfiles += 1
         continue
       }
       let zoneID = CKRecordZone.ID(
@@ -605,6 +609,7 @@ final class SyncCoordinator: Sendable {
         continue
       }
       let recordIDs = handler.queueUnsyncedRecords()
+      scannedProfiles += 1
       if !recordIDs.isEmpty {
         syncEngine?.state.add(
           pendingRecordZoneChanges: recordIDs.map { .saveRecord($0) })
@@ -612,10 +617,12 @@ final class SyncCoordinator: Sendable {
       }
       markBackfillScanComplete(for: profileId)
     }
-    if !queued.isEmpty {
-      logger.info(
-        "Queued \(queued.count) previously-unsynced records for upload across all profiles")
-    }
+    logger.info(
+      """
+      Backfill scan complete: \(allProfiles.count) profiles total, \
+      \(scannedProfiles) scanned, \(skippedProfiles) skipped (already flagged), \
+      \(queued.count) unsynced records queued for upload
+      """)
     return queued
   }
 
