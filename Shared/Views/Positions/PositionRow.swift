@@ -33,11 +33,11 @@ struct PositionRow: View {
       VStack(alignment: .trailing, spacing: 2) {
         if let value = row.value {
           Text(value.formatted)
+            .font(.body)
             .monospacedDigit()
         } else {
           Text("—")
             .foregroundStyle(.tertiary)
-            .accessibilityLabel("Value unavailable")
         }
         if let gain = row.gainLoss {
           Text(gainText(gain))
@@ -47,7 +47,7 @@ struct PositionRow: View {
         }
       }
     }
-    .padding(.vertical, 4)
+    .padding(.vertical, 8)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)
   }
@@ -91,7 +91,11 @@ struct PositionRow: View {
       parts.append("value unavailable")
     }
     if let gain = row.gainLoss {
-      parts.append("gain \(gainText(gain))")
+      if gain.isNegative {
+        parts.append("loss of \((-gain).formatted)")
+      } else {
+        parts.append("gain of \(gain.formatted)")
+      }
     }
     return parts.joined(separator: ", ")
   }
@@ -107,7 +111,7 @@ struct KindBadge: View {
       switch kind {
       case .stock: return ("S", .blue)
       case .cryptoToken: return ("C", .orange)
-      case .fiatCurrency: return ("$", .secondary)
+      case .fiatCurrency: return ("$", .indigo)
       }
     }()
     Text(label)
@@ -149,6 +153,13 @@ struct KindBadge: View {
       row: ValuedPosition(
         instrument: bhp, quantity: 100,
         unitPrice: nil, costBasis: nil, value: nil))
+    PositionRow(
+      row: ValuedPosition(
+        instrument: bhp, quantity: 50,
+        unitPrice: InstrumentAmount(quantity: 30, instrument: aud),
+        costBasis: InstrumentAmount(quantity: 2_000, instrument: aud),
+        value: InstrumentAmount(quantity: 1_500, instrument: aud)
+      ))
   }
   .frame(width: 420)
 }
