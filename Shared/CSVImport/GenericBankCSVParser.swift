@@ -104,7 +104,8 @@ struct GenericBankCSVParser: CSVParser, Sendable {
         accountId: nil,
         instrument: .AUD,
         quantity: amount,
-        type: amount >= 0 ? .income : .expense)
+        type: amount >= 0 ? .income : .expense,
+        isInstrumentPlaceholder: true)
       let tx = ParsedTransaction(
         date: date,
         legs: [leg],

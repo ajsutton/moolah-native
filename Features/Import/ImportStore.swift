@@ -353,11 +353,13 @@ final class ImportStore {
   ) -> Transaction {
     var legs = evaluation.transaction.legs.map { leg -> TransactionLeg in
       let resolvedAccount = leg.accountId ?? routedAccountId
-      // Rewrite the placeholder AUD on cash-side legs to match the account's
-      // actual instrument. Position legs (non-AUD) are left alone.
+      // Rewrite placeholder-instrument legs (cash legs from parsers) to the
+      // routed account's actual instrument. Explicit instrument legs (e.g.
+      // SelfWealth's ASX:BHP position leg) are left alone. The flag is set
+      // by the parser at the leg's point-of-origin, replacing the earlier
+      // fragile "is it AUD?" heuristic.
       let resolvedInstrument =
-        (leg.instrument == .AUD && accountInstrument != .AUD)
-        ? accountInstrument : leg.instrument
+        leg.isInstrumentPlaceholder ? accountInstrument : leg.instrument
       return TransactionLeg(
         accountId: resolvedAccount,
         instrument: resolvedInstrument,
