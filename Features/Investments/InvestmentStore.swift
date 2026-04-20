@@ -18,6 +18,7 @@ final class InvestmentStore {
   private(set) var totalPortfolioValue: Decimal?
 
   var selectedPeriod: TimePeriod = .all
+  private(set) var loadedAccountId: UUID?
 
   /// Callback fired after an investment value is set or removed, so other stores
   /// can update the account's displayed investment value.
@@ -174,6 +175,7 @@ final class InvestmentStore {
         }
       }
 
+      loadedAccountId = accountId
       positions = quantityByInstrument.compactMap { instrument, quantity in
         guard quantity != 0 else { return nil }
         return Position(instrument: instrument, quantity: quantity)
@@ -274,6 +276,110 @@ final class InvestmentStore {
       balances: dailyBalances,
       period: selectedPeriod
     )
+  }
+
+  // MARK: - PositionsView Input
+
+  /// Builds the `PositionsViewInput` for the unified positions UI. Reads
+  /// from the already-loaded `valuedPositions` for the row data, replays
+  /// trade transactions through the shared `TradeEventClassifier` +
+  /// `CostBasisEngine` to derive a per-instrument cost-basis snapshot, and
+  /// asks `PositionsHistoryBuilder` for the chart series.
+  ///
+  /// Caller-supplied `title` lets the host pass the account name (or any
+  /// embedding-appropriate label).
+  func positionsViewInput(
+    title: String,
+    range: PositionsTimeRange
+  ) async -> PositionsViewInput {
+    guard let transactionRepository else {
+      return PositionsViewInput(
+        title: title, hostCurrency: .AUD,
+        positions: valuedPositions, historicalValue: nil)
+    }
+
+    let txns = (try? await fetchAllTransactions(repository: transactionRepository)) ?? []
+    let hostCurrency = valuedPositions.first?.value?.instrument ?? .AUD
+    let costSnapshot = await costBasisSnapshot(
+      transactions: txns, hostCurrency: hostCurrency)
+    let rowsWithCost: [ValuedPosition] = valuedPositions.map { row in
+      ValuedPosition(
+        instrument: row.instrument,
+        quantity: row.quantity,
+        unitPrice: row.unitPrice,
+        costBasis: costSnapshot[row.instrument.id].map {
+          InstrumentAmount(quantity: $0, instrument: hostCurrency)
+        },
+        value: row.value
+      )
+    }
+
+    let series = await PositionsHistoryBuilder(conversionService: conversionService).build(
+      transactions: txns,
+      accountId: loadedAccountId ?? UUID(),
+      hostCurrency: hostCurrency,
+      range: range
+    )
+
+    return PositionsViewInput(
+      title: title,
+      hostCurrency: hostCurrency,
+      positions: rowsWithCost,
+      historicalValue: series
+    )
+  }
+
+  private func fetchAllTransactions(
+    repository: TransactionRepository
+  ) async throws -> [Transaction] {
+    guard let accountId = loadedAccountId else { return [] }
+    var all: [Transaction] = []
+    var page = 0
+    while true {
+      let result = try await repository.fetch(
+        filter: TransactionFilter(accountId: accountId),
+        page: page, pageSize: 200
+      )
+      if Task.isCancelled { return all }
+      all.append(contentsOf: result.transactions)
+      if result.transactions.count < 200 { break }
+      page += 1
+    }
+    return all
+  }
+
+  private func costBasisSnapshot(
+    transactions: [Transaction], hostCurrency: Instrument
+  ) async -> [String: Decimal] {
+    var engine = CostBasisEngine()
+    let sorted = transactions.sorted { $0.date < $1.date }
+    for txn in sorted {
+      do {
+        let classification = try await TradeEventClassifier.classify(
+          legs: txn.legs, on: txn.date,
+          hostCurrency: hostCurrency, conversionService: conversionService
+        )
+        for buy in classification.buys {
+          engine.processBuy(
+            instrument: buy.instrument, quantity: buy.quantity,
+            costPerUnit: buy.costPerUnit, date: txn.date)
+        }
+        for sell in classification.sells {
+          _ = engine.processSell(
+            instrument: sell.instrument, quantity: sell.quantity,
+            proceedsPerUnit: sell.proceedsPerUnit, date: txn.date)
+        }
+      } catch {
+        logger.warning(
+          "Failed to classify txn \(txn.id, privacy: .public) for cost basis: \(error.localizedDescription, privacy: .public)"
+        )
+      }
+    }
+    var result: [String: Decimal] = [:]
+    for lot in engine.allOpenLots() {
+      result[lot.instrument.id, default: 0] += lot.remainingCost
+    }
+    return result
   }
 
   /// Annualized return rate as a percentage, computed via binary search.
