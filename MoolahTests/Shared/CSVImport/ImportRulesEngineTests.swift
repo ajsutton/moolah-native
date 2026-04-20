@@ -238,6 +238,21 @@ struct ImportRulesEngineTests {
     #expect(e2.assignedPayee == "Café")
   }
 
+  @Test("empty-condition rule matches every candidate (both matchModes)")
+  func emptyConditionsMatchEverything() {
+    let tx = candidate(description: "ANYTHING", amount: 42)
+    let allRule = rule(
+      name: "all", position: 0, matchMode: .all, conditions: [],
+      actions: [.appendNote("A")])
+    let anyRule = rule(
+      name: "any", position: 1, matchMode: .any, conditions: [],
+      actions: [.appendNote("B")])
+    let e = ImportRulesEngine.evaluate(
+      tx, routedAccountId: accountId, rules: [allRule, anyRule])
+    #expect(e.appendedNotes == "A B")
+    #expect(e.matchedRuleIds == [allRule.id, anyRule.id])
+  }
+
   @Test("rules run in position order, not array order")
   func rulesRunInPositionOrder() {
     let tx = candidate(description: "ANY", amount: -5)

@@ -241,6 +241,8 @@ struct CSVImportProfile: Sendable, Identifiable {
 1. **Bank reference match** — account-wide, no date constraint. If the incoming row has a `bankReference` and any existing transaction on the same account has `importOrigin.bankReference` equal to it → duplicate. Skip.
 2. **Same-date exact match** — search existing transactions on the same `accountId` on the same `date`. If any has matching `(rawAmount, normalised rawDescription)` → duplicate. Skip.
 3. **Balance alignment** — applies only when the CSV has a running balance column **and** all rows in the file are single-leg single-currency (bank rows). Walk the incoming rows in date order against existing transactions in the same account, matching against the running-balance sequence; rows that slot cleanly into a balance gap are duplicates.
+
+    > **v1 simplification (implemented).** `CSVDeduplicator` currently matches any candidate whose `(date, rawAmount, rawBalance)` triple lines up with an existing transaction on the same calendar day, without walking the running-balance sequence. This catches overlapping re-downloads of the same bank export and is cheap. The full running-balance walk ships in a follow-up if fixtures show cases the triple-match misses.
 4. Else: new row. Import.
 
 **Normalisation for comparison:** uppercase, trim, collapse internal whitespace, strip ASCII punctuation other than reference-like digits.

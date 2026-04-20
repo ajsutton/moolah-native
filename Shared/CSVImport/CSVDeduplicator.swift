@@ -44,6 +44,9 @@ enum CSVDeduplicator {
     let existingOnAccount = existing.filter { $0.accountIds.contains(accountId) }
 
     // Layer 1: bank reference lookup.
+    // "First" here means first in the caller's array order — the lookup keeps
+    // the initial insertion so layer-1 dedup is deterministic given the
+    // caller's ordering.
     let byRef: [String: Transaction] = existingOnAccount.reduce(into: [:]) { acc, tx in
       if let ref = tx.importOrigin?.bankReference, !ref.isEmpty, acc[ref] == nil {
         acc[ref] = tx

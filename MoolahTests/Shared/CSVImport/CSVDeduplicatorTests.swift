@@ -154,6 +154,34 @@ struct CSVDeduplicatorTests {
     #expect(result.kept.count == 1)
   }
 
+  @Test("layer 2 — same UTC calendar day at different times still matches")
+  func layer2SameDayDifferentTimeOfDay() {
+    var morning = DateComponents()
+    morning.year = 2024
+    morning.month = 4
+    morning.day = 2
+    morning.hour = 0
+    morning.minute = 0
+    morning.second = 1
+    var evening = morning
+    evening.hour = 23
+    evening.minute = 59
+    evening.second = 59
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(identifier: "UTC")!
+    let existing = [
+      existingTransaction(
+        accountId: accountId, date: cal.date(from: morning)!,
+        description: "COFFEE", amount: Decimal(string: "-5.50")!)
+    ]
+    let incoming = candidate(
+      date: cal.date(from: evening)!,
+      description: "COFFEE",
+      amount: Decimal(string: "-5.50")!)
+    let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
+    #expect(result.kept.isEmpty)
+  }
+
   @Test("layer 2 — different amounts don't match")
   func layer2DifferentAmountKept() {
     let existing = [

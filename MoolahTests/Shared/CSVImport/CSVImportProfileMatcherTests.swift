@@ -153,6 +153,26 @@ struct CSVImportProfileMatcherTests {
     #expect(CSVImportProfileMatcher.match(input) == .routed(pA))
   }
 
+  @Test("score=0 tie — filename pattern still tiebreaks across all candidates")
+  func scoreZeroFilenameTiebreak() {
+    // Two profiles, no overlap on either (both score 0), but only one has a
+    // filename pattern that matches. The tiebreak pool includes both
+    // profiles (not just the overlap-winning ones), so the filename check
+    // fires and picks the single pattern-matching profile.
+    let accountA = UUID()
+    let accountB = UUID()
+    let pA = profile(accountId: accountA, filenamePattern: "cba-*.csv")
+    let pB = profile(accountId: accountB, filenamePattern: "anz-*.csv")
+    let input = MatcherInput(
+      filename: "cba-april.csv",
+      parserIdentifier: "generic-bank",
+      headerSignature: ["date", "amount", "description", "balance"],
+      candidates: [],
+      existingByAccountId: [accountA: [], accountB: []],
+      profiles: [pA, pB])
+    #expect(CSVImportProfileMatcher.match(input) == .routed(pA))
+  }
+
   @Test("tie on overlap with no filename hint → needsSetup(.ambiguousMatch)")
   func tieWithoutFilenameHint() {
     let accountA = UUID()
