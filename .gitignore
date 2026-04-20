@@ -25,6 +25,9 @@ build/
 .claude/worktrees/
 .claude/scheduled_tasks.lock
 
+# Superpowers skill state
+.superpowers/
+
 # Fastlane
 fastlane/report.xml
 fastlane/Preview.html
