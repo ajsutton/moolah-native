@@ -70,8 +70,8 @@ struct TradeFlowIntegrationTests {
 
     // Valuate
     await investmentStore.valuatePositions(profileCurrency: aud, on: today)
-    let bhpValued = investmentStore.valuedPositions.first { $0.position.instrument == bhp }
-    #expect(bhpValued?.marketValue == Decimal(string: "4500.00")!)  // 100 * 45.00
+    let bhpValued = investmentStore.valuedPositions.first { $0.instrument == bhp }
+    #expect(bhpValued?.value?.quantity == Decimal(string: "4500.00")!)  // 100 * 45.00
 
     // Sell 30 BHP for $1,350
     var sellDraft = TradeDraft(accountId: accountId)

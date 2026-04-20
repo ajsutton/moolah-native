@@ -7,7 +7,7 @@ struct StockPositionRow: View {
   var body: some View {
     HStack {
       VStack(alignment: .leading, spacing: 2) {
-        Text(valuedPosition.position.instrument.name)
+        Text(valuedPosition.instrument.name)
           .font(.headline)
         Text(quantityText)
           .font(.caption)
@@ -18,7 +18,7 @@ struct StockPositionRow: View {
       Spacer()
 
       VStack(alignment: .trailing, spacing: 2) {
-        if let marketValue = valuedPosition.marketValue {
+        if let marketValue = valuedPosition.value?.quantity {
           Text(formatCurrency(marketValue))
             .font(.body)
             .monospacedDigit()
@@ -35,16 +35,17 @@ struct StockPositionRow: View {
   }
 
   private var quantityText: String {
-    let position = valuedPosition.position
-    if position.instrument.kind == .fiatCurrency {
-      return formatCurrency(position.quantity)
+    let instrument = valuedPosition.instrument
+    let quantity = valuedPosition.quantity
+    if instrument.kind == .fiatCurrency {
+      return formatCurrency(quantity)
     }
     let formatter = NumberFormatter()
     formatter.minimumFractionDigits = 0
-    formatter.maximumFractionDigits = position.instrument.decimals
+    formatter.maximumFractionDigits = instrument.decimals
     formatter.numberStyle = .decimal
     return
-      "\(formatter.string(from: position.quantity as NSDecimalNumber) ?? "\(position.quantity)") shares"
+      "\(formatter.string(from: quantity as NSDecimalNumber) ?? "\(quantity)") shares"
   }
 
   private func formatCurrency(_ value: Decimal) -> String {
@@ -52,8 +53,8 @@ struct StockPositionRow: View {
   }
 
   private var accessibilityText: String {
-    let name = valuedPosition.position.instrument.name
-    if let value = valuedPosition.marketValue {
+    let name = valuedPosition.instrument.name
+    if let value = valuedPosition.value?.quantity {
       return "\(name), \(quantityText), valued at \(formatCurrency(value))"
     }
     return "\(name), \(quantityText), value unavailable"
@@ -66,15 +67,14 @@ struct StockPositionRow: View {
   List {
     StockPositionRow(
       valuedPosition: ValuedPosition(
-        position: Position(instrument: bhp, quantity: 250),
-        marketValue: 11_325
+        instrument: bhp, quantity: 250, unitPrice: nil, costBasis: nil,
+        value: InstrumentAmount(quantity: 11_325, instrument: .AUD)
       ),
       profileCurrency: .AUD
     )
     StockPositionRow(
       valuedPosition: ValuedPosition(
-        position: Position(instrument: apple, quantity: 40),
-        marketValue: nil
+        instrument: apple, quantity: 40, unitPrice: nil, costBasis: nil, value: nil
       ),
       profileCurrency: .AUD
     )

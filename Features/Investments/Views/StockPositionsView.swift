@@ -61,11 +61,11 @@ struct StockPositionsView: View {
   }
 
   private var stockPositions: [ValuedPosition] {
-    valuedPositions.filter { $0.position.instrument.kind == .stock }
+    valuedPositions.filter { $0.instrument.kind == .stock }
   }
 
   private var cashPositions: [ValuedPosition] {
-    valuedPositions.filter { $0.position.instrument.kind == .fiatCurrency }
+    valuedPositions.filter { $0.instrument.kind == .fiatCurrency }
   }
 }
 
@@ -74,9 +74,15 @@ struct StockPositionsView: View {
   let cba = Instrument.stock(ticker: "CBA.AX", exchange: "ASX", name: "CBA")
   StockPositionsView(
     valuedPositions: [
-      ValuedPosition(position: Position(instrument: bhp, quantity: 250), marketValue: 11_325),
-      ValuedPosition(position: Position(instrument: cba, quantity: 80), marketValue: 9_600),
-      ValuedPosition(position: Position(instrument: .AUD, quantity: 2_480), marketValue: 2_480),
+      ValuedPosition(
+        instrument: bhp, quantity: 250, unitPrice: nil, costBasis: nil,
+        value: InstrumentAmount(quantity: 11_325, instrument: .AUD)),
+      ValuedPosition(
+        instrument: cba, quantity: 80, unitPrice: nil, costBasis: nil,
+        value: InstrumentAmount(quantity: 9_600, instrument: .AUD)),
+      ValuedPosition(
+        instrument: .AUD, quantity: 2_480, unitPrice: nil, costBasis: nil,
+        value: InstrumentAmount(quantity: 2_480, instrument: .AUD)),
     ],
     totalValue: 23_405,
     profileCurrency: .AUD
@@ -88,7 +94,7 @@ struct StockPositionsView: View {
   let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
   StockPositionsView(
     valuedPositions: [
-      ValuedPosition(position: Position(instrument: bhp, quantity: 250), marketValue: nil)
+      ValuedPosition(instrument: bhp, quantity: 250, unitPrice: nil, costBasis: nil, value: nil)
     ],
     totalValue: nil,
     profileCurrency: .AUD

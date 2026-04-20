@@ -1,0 +1,38 @@
+import Foundation
+
+/// One row in a `PositionsView`: instrument identity + quantity, plus the
+/// current unit price, cost basis, and total value all expressed in the host
+/// currency. `value`, `unitPrice`, and `costBasis` are independently optional
+/// so callers can supply only what they have:
+///
+/// - Flow contexts (filtered transaction list): `costBasis` and `unitPrice`
+///   are `nil`; `value` is the converted flow amount or `nil` on failure.
+/// - Investment account: all four are populated where the conversion service
+///   succeeds. A per-row conversion failure leaves `value` (and the derived
+///   `gainLoss`) `nil`; the caller still renders qty + identifier.
+struct ValuedPosition: Sendable, Hashable, Identifiable {
+  let instrument: Instrument
+  let quantity: Decimal
+  let unitPrice: InstrumentAmount?
+  let costBasis: InstrumentAmount?
+  let value: InstrumentAmount?
+
+  var id: String { instrument.id }
+
+  /// The position quantity wrapped as an `InstrumentAmount` in the
+  /// instrument's own units (not the host currency).
+  var amount: InstrumentAmount {
+    InstrumentAmount(quantity: quantity, instrument: instrument)
+  }
+
+  /// `true` iff a cost basis has been provided for this row.
+  var hasCostBasis: Bool { costBasis != nil }
+
+  /// Value minus cost basis in the host currency, or `nil` if either side is
+  /// missing. Per CLAUDE.md sign convention the result preserves its sign —
+  /// callers must not `abs()` the gain when colouring or sorting.
+  var gainLoss: InstrumentAmount? {
+    guard let value, let costBasis else { return nil }
+    return value - costBasis
+  }
+}
