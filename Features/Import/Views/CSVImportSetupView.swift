@@ -99,6 +99,18 @@ struct CSVImportSetupView: View {
           Label(error, systemImage: "exclamationmark.circle")
             .foregroundStyle(.red)
         }
+
+        // Destructive action lives in the form body, not the toolbar, so
+        // it doesn't sit alongside Cancel / Save & Import where users
+        // might tap it by accident. See Apple HIG "Destructive actions".
+        Section {
+          Button("Delete staged file", role: .destructive) {
+            Task {
+              await store.deletePending()
+              dismiss()
+            }
+          }
+        }
       }
       .formStyle(.grouped)
       .navigationTitle("Set up CSV import")
@@ -107,14 +119,6 @@ struct CSVImportSetupView: View {
           Button("Cancel") {
             store.cancel()
             dismiss()
-          }
-        }
-        ToolbarItem(placement: .destructiveAction) {
-          Button("Delete", role: .destructive) {
-            Task {
-              await store.deletePending()
-              dismiss()
-            }
           }
         }
         ToolbarItem(placement: .confirmationAction) {
@@ -133,9 +137,11 @@ struct CSVImportSetupView: View {
         await store.regeneratePreview()
       }
       .onChange(of: dateFormatChoice) { _, newValue in
-        store.dateFormatOverride = newValue.resolved
-        Task { await store.regeneratePreview() }
+        Task { await store.applyDateFormatOverride(newValue.resolved) }
       }
+      #if os(macOS)
+        .frame(minWidth: 520, minHeight: 480)
+      #endif
     }
   }
 
@@ -147,28 +153,49 @@ struct CSVImportSetupView: View {
   private func columnMappingRows(
     mapping: GenericBankCSVParser.ColumnMapping
   ) -> some View {
-    let entries: [(label: String, index: Int?)] = [
-      ("Date", mapping.date),
-      ("Description", mapping.description),
-      ("Amount", mapping.amount),
-      ("Debit", mapping.debit),
-      ("Credit", mapping.credit),
-      ("Balance", mapping.balance),
-      ("Reference", mapping.reference),
-    ]
-    ForEach(entries, id: \.label) { entry in
+    // Editable: one row per CSV column, dropdown picks the role. Default
+    // reflects the detector's mapping; user overrides flow through
+    // `store.applyColumnRole(_:forColumn:)` which regenerates the preview.
+    ForEach(Array(store.detectedHeaders.enumerated()), id: \.offset) { index, header in
       HStack {
-        Text(entry.label)
+        Text(header).lineLimit(1)
         Spacer()
-        if let index = entry.index, index < store.detectedHeaders.count {
-          Text(store.detectedHeaders[index])
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
-        } else {
-          Text("—").foregroundStyle(.secondary)
+        Picker(
+          "Role",
+          selection: Binding(
+            get: { roleForColumn(index: index, mapping: mapping) },
+            set: { newRole in
+              let effectiveRole: CSVImportSetupStore.ColumnRole? =
+                (newRole == .ignore) ? nil : newRole
+              Task { await store.applyColumnRole(effectiveRole, forColumn: index) }
+            })
+        ) {
+          ForEach(CSVImportSetupStore.ColumnRole.allCases) { role in
+            Text(role.label).tag(role)
+          }
         }
+        .labelsHidden()
       }
     }
+  }
+
+  /// Returns the user's chosen role for this column index if set; otherwise
+  /// derives the role from the detected mapping. `.ignore` is the displayed
+  /// role for any column whose index isn't used by the mapping.
+  private func roleForColumn(
+    index: Int, mapping: GenericBankCSVParser.ColumnMapping
+  ) -> CSVImportSetupStore.ColumnRole {
+    if index < store.columnRoles.count, let override = store.columnRoles[index] {
+      return override
+    }
+    if mapping.date == index { return .date }
+    if mapping.description == index { return .description }
+    if mapping.amount == index { return .amount }
+    if mapping.debit == index { return .debit }
+    if mapping.credit == index { return .credit }
+    if mapping.balance == index { return .balance }
+    if mapping.reference == index { return .reference }
+    return .ignore
   }
 }
 

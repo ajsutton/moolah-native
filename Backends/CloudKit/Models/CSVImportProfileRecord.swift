@@ -17,6 +17,8 @@ final class CSVImportProfileRecord {
   var deleteAfterImport: Bool = false
   var createdAt: Date = Date()
   var lastUsedAt: Date?
+  /// Persisted user-confirmed date format (see CSVImportProfile).
+  var dateFormatRawValue: String?
   var encodedSystemFields: Data?
 
   init(
@@ -27,7 +29,8 @@ final class CSVImportProfileRecord {
     filenamePattern: String? = nil,
     deleteAfterImport: Bool = false,
     createdAt: Date = Date(),
-    lastUsedAt: Date? = nil
+    lastUsedAt: Date? = nil,
+    dateFormatRawValue: String? = nil
   ) {
     self.id = id
     self.accountId = accountId
@@ -37,6 +40,7 @@ final class CSVImportProfileRecord {
     self.deleteAfterImport = deleteAfterImport
     self.createdAt = createdAt
     self.lastUsedAt = lastUsedAt
+    self.dateFormatRawValue = dateFormatRawValue
   }
 
   /// Unit-separator (U+001F). Chosen because the CSV tokenizer never produces
@@ -54,7 +58,8 @@ final class CSVImportProfileRecord {
       filenamePattern: filenamePattern,
       deleteAfterImport: deleteAfterImport,
       createdAt: createdAt,
-      lastUsedAt: lastUsedAt)
+      lastUsedAt: lastUsedAt,
+      dateFormatRawValue: dateFormatRawValue)
   }
 
   static func from(_ profile: CSVImportProfile) -> CSVImportProfileRecord {
@@ -66,6 +71,7 @@ final class CSVImportProfileRecord {
       filenamePattern: profile.filenamePattern,
       deleteAfterImport: profile.deleteAfterImport,
       createdAt: profile.createdAt,
-      lastUsedAt: profile.lastUsedAt)
+      lastUsedAt: profile.lastUsedAt,
+      dateFormatRawValue: profile.dateFormatRawValue)
   }
 }

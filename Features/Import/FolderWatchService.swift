@@ -24,6 +24,9 @@
     private var stream: FSEventStreamRef?
     private var watchedURL: URL?
     private var didStartAccess: Bool = false
+    /// Held across the stream's lifetime and deallocated in `stop()` so the
+    /// FSEventStreamContext isn't leaked when we drop the stream.
+    private var contextPointer: UnsafeMutablePointer<FSEventStreamContext>?
 
     init(
       importStore: ImportStore,
@@ -93,6 +96,7 @@
         return
       }
       stream = newStream
+      contextPointer = context
       FSEventStreamSetDispatchQueue(newStream, .main)
       FSEventStreamStart(newStream)
       let folderPath = resolved.url.path
@@ -107,6 +111,11 @@
         FSEventStreamRelease(stream)
       }
       stream = nil
+      if let contextPointer {
+        contextPointer.deinitialize(count: 1)
+        contextPointer.deallocate()
+      }
+      contextPointer = nil
       if didStartAccess, let watchedURL {
         watchedURL.stopAccessingSecurityScopedResource()
       }

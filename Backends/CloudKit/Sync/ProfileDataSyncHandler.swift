@@ -1129,6 +1129,7 @@ final class ProfileDataSyncHandler: Sendable {
         existing.deleteAfterImport = values.deleteAfterImport
         existing.createdAt = values.createdAt
         existing.lastUsedAt = values.lastUsedAt
+        existing.dateFormatRawValue = values.dateFormatRawValue
         existing.encodedSystemFields = systemFields[id.uuidString]
       } else {
         values.encodedSystemFields = systemFields[id.uuidString]

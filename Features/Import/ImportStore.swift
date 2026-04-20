@@ -83,6 +83,11 @@ final class ImportStore {
   /// `CSVImportSetupStore`. Mutations still flow through the `ImportStore`
   /// public API; external callers should only read.
   let staging: ImportStagingStore
+  /// Optional resolver for the folder-watch "delete after import" default.
+  /// `ProfileSession` wires this to `ImportPreferences.deleteAfterImportFolderDefault`
+  /// so `.folderWatch` ingests honour the setting even when the matched
+  /// profile's own `deleteAfterImport` is false.
+  var folderWatchDeleteAfterImport: (@MainActor () -> Bool)?
   private let logger = Logger(subsystem: "com.moolah.app", category: "ImportStore")
 
   init(
@@ -170,13 +175,35 @@ final class ImportStore {
   @discardableResult
   func finishSetup(pendingId: UUID, profile: CSVImportProfile) async -> ImportSessionResult {
     do {
+      let pendingRecord = try await staging.pendingFiles().first {
+        $0.id == pendingId
+      }
+      let originalFilename = pendingRecord?.originalFilename ?? "setup-\(pendingId.uuidString)"
+      // Resolve the source bookmark (if any) so delete-after-import still
+      // works on the file the user originally picked.
+      let bookmark = pendingRecord?.sourceBookmark
+      let sourceURL: URL? = {
+        guard let bookmark else { return nil }
+        var isStale = false
+        #if os(macOS)
+          let options: URL.BookmarkResolutionOptions = [.withSecurityScope]
+        #else
+          let options: URL.BookmarkResolutionOptions = []
+        #endif
+        return try? URL(
+          resolvingBookmarkData: bookmark,
+          options: options,
+          relativeTo: nil,
+          bookmarkDataIsStale: &isStale)
+      }()
       let bytes = try await staging.data(for: pendingId)
       _ = try await backend.csvImportProfiles.create(profile)
       try await staging.dismiss(pendingId: pendingId)
       await reloadStagingLists()
       return await ingest(
         data: bytes,
-        source: .paste(text: "", label: "setup-\(pendingId.uuidString)"))
+        source: .reingestFromSetup(
+          filename: originalFilename, sourceURL: sourceURL))
     } catch {
       logger.error("finishSetup failed: \(error.localizedDescription)")
       return .failed(message: error.localizedDescription)
@@ -215,14 +242,27 @@ final class ImportStore {
       signpostID: tokenizeSignpost)
     guard let headers = rows.first else { throw IngestError.empty }
 
-    // 2. Select parser + parse.
+    // 2. Select parser. We do profile lookup first (when possible) so a
+    // saved `dateFormatRawValue` override can be threaded into the parser.
+    let parser = registry.select(for: headers)
+    let profileForOverride = try? await preExistingProfile(
+      parserIdentifier: parser.identifier, headers: headers,
+      forcedAccountId: source.forcedAccountId)
+    let dateFormatOverride = profileForOverride?.dateFormatRawValue
+      .flatMap(GenericBankCSVParser.DateFormat.fromRawValue)
+
+    // 3. Parse.
     let parseSignpost = OSSignpostID(log: Signposts.importPipeline)
     os_signpost(
       .begin, log: Signposts.importPipeline, name: "parse", signpostID: parseSignpost)
-    let parser = registry.select(for: headers)
     let records: [ParsedRecord]
     do {
-      records = try parser.parse(rows: rows)
+      if let genericParser = parser as? GenericBankCSVParser {
+        records = try genericParser.parse(
+          rows: rows, overrideDateFormat: dateFormatOverride)
+      } else {
+        records = try parser.parse(rows: rows)
+      }
     } catch let error as CSVParserError {
       os_signpost(
         .end, log: Signposts.importPipeline, name: "parse", signpostID: parseSignpost)
@@ -273,8 +313,19 @@ final class ImportStore {
     os_signpost(
       .begin, log: Signposts.importPipeline, name: "rules", signpostID: rulesSignpost)
     let rules = try await backend.importRules.fetchAll()
-    let accountInstrument = try await resolveInstrument(
-      for: resolvedProfile.accountId)
+    // Fetch every account once and build a { id → instrument } map so
+    // `buildTransaction` can stamp each leg with its own account's
+    // instrument — in particular the destination leg of a `.markAsTransfer`
+    // rule, which may target an account in a different instrument than the
+    // source (Rule 11a — never write a leg with the wrong instrument).
+    let allAccounts = try await backend.accounts.fetchAll()
+    let accountInstruments: [UUID: Instrument] = Dictionary(
+      uniqueKeysWithValues: allAccounts.map { ($0.id, $0.instrument) })
+    guard let routedInstrument = accountInstruments[resolvedProfile.accountId]
+    else {
+      throw IngestError.other(
+        "Account \(resolvedProfile.accountId) not found; cannot resolve its instrument.")
+    }
     var persisted: [Transaction] = []
     for candidate in dedup.kept {
       let evaluation = ImportRulesEngine.evaluate(
@@ -283,7 +334,8 @@ final class ImportStore {
       let transaction = buildTransaction(
         from: evaluation,
         routedAccountId: resolvedProfile.accountId,
-        accountInstrument: accountInstrument,
+        accountInstrument: routedInstrument,
+        accountInstruments: accountInstruments,
         sessionId: sessionId,
         source: source,
         parserIdentifier: parser.identifier)
@@ -297,13 +349,29 @@ final class ImportStore {
     os_signpost(
       .end, log: Signposts.importPipeline, name: "rules", signpostID: rulesSignpost)
 
-    // 6. Update profile lastUsedAt (best-effort).
+    // 6. Update profile lastUsedAt (best-effort — log on failure rather than
+    // silently swallow so a backend hiccup isn't invisible).
     var updatedProfile = resolvedProfile
     updatedProfile.lastUsedAt = Date()
-    _ = try? await backend.csvImportProfiles.update(updatedProfile)
+    do {
+      _ = try await backend.csvImportProfiles.update(updatedProfile)
+    } catch {
+      logger.warning(
+        "Profile lastUsedAt update failed (non-critical): \(error.localizedDescription, privacy: .public)"
+      )
+    }
 
-    // 7. Optional delete source.
-    if resolvedProfile.deleteAfterImport, let url = source.sourceURL {
+    // 7. Optional delete source. Honour either the profile-level flag or
+    // (for folder-watched files) the folder-level default.
+    let folderDefaultDelete: Bool = {
+      if case .folderWatch = source {
+        return folderWatchDeleteAfterImport?() ?? false
+      }
+      return false
+    }()
+    if resolvedProfile.deleteAfterImport || folderDefaultDelete,
+      let url = source.sourceURL
+    {
       await Self.deleteSourceInBackground(at: url)
     }
 
@@ -318,6 +386,31 @@ final class ImportStore {
   private enum ProfileResolution {
     case routed(CSVImportProfile)
     case needsSetup(pendingId: UUID)
+  }
+
+  /// Cheap lookup used to pre-fetch a profile before parsing, so parser
+  /// overrides like `dateFormatRawValue` can be threaded into the parse
+  /// step. Returns nil when zero / multiple profiles match — the pipeline
+  /// then falls back to auto-detect.
+  private func preExistingProfile(
+    parserIdentifier: String,
+    headers: [String],
+    forcedAccountId: UUID?
+  ) async throws -> CSVImportProfile? {
+    let profiles = try await backend.csvImportProfiles.fetchAll()
+    let normalisedHeaders = headers.map { CSVImportProfile.normalise($0) }
+    if let forcedAccountId {
+      return profiles.first(where: {
+        $0.accountId == forcedAccountId
+          && $0.parserIdentifier == parserIdentifier
+          && $0.headerSignature == normalisedHeaders
+      })
+    }
+    let matching = profiles.filter {
+      $0.parserIdentifier == parserIdentifier
+        && $0.headerSignature == normalisedHeaders
+    }
+    return matching.count == 1 ? matching[0] : nil
   }
 
   private func resolveProfile(
@@ -385,6 +478,7 @@ final class ImportStore {
     from evaluation: RuleEvaluation,
     routedAccountId: UUID,
     accountInstrument: Instrument,
+    accountInstruments: [UUID: Instrument],
     sessionId: UUID,
     source: ImportSource,
     parserIdentifier: String
@@ -416,6 +510,11 @@ final class ImportStore {
     if let toId = evaluation.transferTargetAccountId,
       let cash = legs.first
     {
+      // Each side of a transfer carries ITS OWN account's instrument
+      // (Rule 11a). Fall back to the source leg's instrument if the
+      // destination account isn't in the lookup — that's a same-instrument
+      // transfer, which is the safe default when the map is incomplete.
+      let destinationInstrument = accountInstruments[toId] ?? cash.instrument
       legs = [
         TransactionLeg(
           accountId: routedAccountId,
@@ -425,7 +524,7 @@ final class ImportStore {
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
           accountId: toId,
-          instrument: cash.instrument,
+          instrument: destinationInstrument,
           quantity: abs(cash.quantity),
           type: .transfer,
           categoryId: nil, earmarkId: nil),
@@ -447,20 +546,6 @@ final class ImportStore {
       notes: evaluation.appendedNotes,
       legs: legs,
       importOrigin: origin)
-  }
-
-  private func resolveInstrument(for accountId: UUID) async throws -> Instrument {
-    let accounts = try await backend.accounts.fetchAll()
-    guard let account = accounts.first(where: { $0.id == accountId }) else {
-      // At this point in the pipeline the account must exist — profile
-      // routing already validated it. A miss here means the account was
-      // deleted between fetches. Throw rather than fall back to AUD (which
-      // would silently persist rows with the wrong instrument on non-AUD
-      // accounts — Rule 11 violation).
-      throw IngestError.other(
-        "Account \(accountId) not found; cannot resolve its instrument.")
-    }
-    return account.instrument
   }
 
   // MARK: - Staging helpers
@@ -508,22 +593,22 @@ final class ImportStore {
     return id
   }
 
-  /// File delete runs on a detached background task so the main actor isn't
-  /// blocked waiting on a (potentially slow) filesystem call — network-share
-  /// volumes, security-scoped resource locks, and iCloud Drive materialisation
-  /// can all push `removeItem` into the hundreds-of-ms range.
+  /// File delete runs off the main actor so the UI isn't blocked on a slow
+  /// filesystem call — network-share volumes, security-scoped resource
+  /// locks, and iCloud Drive materialisation can all push `removeItem` into
+  /// the hundreds-of-ms range. As a `nonisolated` async function called via
+  /// `await` from the main actor, Swift's concurrency runtime schedules
+  /// the body on a cooperative pool thread automatically — no
+  /// `Task.detached` needed.
   nonisolated private static func deleteSourceInBackground(at url: URL) async {
-    let task = Task.detached(priority: .utility) {
-      do {
-        try FileManager.default.removeItem(at: url)
-      } catch {
-        let path = url.path
-        let description = error.localizedDescription
-        importStoreBackgroundLogger.warning(
-          "Could not delete source file at \(path, privacy: .public): \(description, privacy: .public)"
-        )
-      }
+    do {
+      try FileManager.default.removeItem(at: url)
+    } catch {
+      let path = url.path
+      let description = error.localizedDescription
+      importStoreBackgroundLogger.warning(
+        "Could not delete source file at \(path, privacy: .public): \(description, privacy: .public)"
+      )
     }
-    await task.value
   }
 }

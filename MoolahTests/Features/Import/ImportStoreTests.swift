@@ -218,6 +218,72 @@ struct ImportStoreTests {
     #expect(sum == 0)
   }
 
+  // MARK: - Instrument correctness (Rule 11 / Rule 11a)
+
+  @Test("placeholder cash legs are rewritten to the non-AUD target account's instrument")
+  func placeholderLegRewriteNonAUD() async throws {
+    let (backend, _) = try TestBackend.create()
+    let eurAccount = UUID()
+    let eur = Instrument.fiat(code: "EUR")
+    try await seedAccount(backend, id: eurAccount, name: "EUR Bank", instrument: eur)
+    _ = try await seedProfile(backend, accountId: eurAccount)
+
+    let (store, dir) = try makeStore(backend: backend)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let data = try cbaFixtureBytes()
+    _ = await store.ingest(
+      data: data,
+      source: .pickedFile(url: URL(fileURLWithPath: "/tmp/cba.csv"), securityScoped: false))
+
+    let page = try await backend.transactions.fetch(
+      filter: TransactionFilter(accountId: eurAccount), page: 0, pageSize: 50)
+    #expect(!page.transactions.isEmpty)
+    // Every persisted leg must carry the target account's instrument —
+    // the parser's placeholder .AUD must never survive into persistence.
+    for tx in page.transactions {
+      for leg in tx.legs {
+        #expect(leg.instrument == eur)
+      }
+    }
+  }
+
+  @Test("markAsTransfer across instruments stamps each leg with its own account's instrument")
+  func markAsTransferCrossInstrument() async throws {
+    let (backend, _) = try TestBackend.create()
+    let audSource = UUID()
+    let usdTarget = UUID()
+    try await seedAccount(backend, id: audSource, name: "AUD Source", instrument: .AUD)
+    try await seedAccount(backend, id: usdTarget, name: "USD Target", instrument: .USD)
+    _ = try await seedProfile(backend, accountId: audSource)
+    let rule = ImportRule(
+      name: "Cross-currency transfer",
+      position: 0,
+      conditions: [.descriptionContains(["COFFEE"])],
+      actions: [.markAsTransfer(toAccountId: usdTarget)])
+    _ = try await backend.importRules.create(rule)
+
+    let (store, dir) = try makeStore(backend: backend)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let data = try cbaFixtureBytes()
+    _ = await store.ingest(
+      data: data,
+      source: .pickedFile(url: URL(fileURLWithPath: "/tmp/cba.csv"), securityScoped: false))
+
+    let page = try await backend.transactions.fetch(
+      filter: TransactionFilter(accountId: audSource), page: 0, pageSize: 50)
+    let coffee = page.transactions.first(where: {
+      $0.importOrigin?.rawDescription == "COFFEE HUT SYDNEY"
+    })!
+    #expect(coffee.legs.count == 2)
+    let sourceLeg = coffee.legs.first(where: { $0.accountId == audSource })!
+    let destinationLeg = coffee.legs.first(where: { $0.accountId == usdTarget })!
+    #expect(sourceLeg.instrument == .AUD)
+    // Rule 11a: destination leg carries the destination account's
+    // instrument, NOT the source's. Without this fix, both legs would
+    // be .AUD and the USD-target account would silently gain an AUD leg.
+    #expect(destinationLeg.instrument == .USD)
+  }
+
   @Test("skip rule drops rows from persistence")
   func rulesSkipDropsRows() async throws {
     let (backend, _) = try TestBackend.create()

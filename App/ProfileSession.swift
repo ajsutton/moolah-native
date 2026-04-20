@@ -197,6 +197,12 @@ final class ProfileSession: Identifiable {
       importStore: self.importStore,
       preferences: preferences,
       scanner: scanner)
+    // Wire the folder-watch delete-after-import default into ImportStore so a
+    // `.folderWatch` ingest honours it even when the matched profile's own
+    // `deleteAfterImport` is off.
+    self.importStore.folderWatchDeleteAfterImport = { [preferences] in
+      preferences.deleteAfterImportFolderDefault
+    }
 
     // Wire up cross-store side effects. The callback is fire-and-forget in
     // production; `updateInvestmentValue` awaits its own first conversion

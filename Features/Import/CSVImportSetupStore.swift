@@ -20,6 +20,9 @@ final class CSVImportSetupStore {
   var deleteAfterImport: Bool = false
   /// Override date-format detection when the user disagrees.
   var dateFormatOverride: GenericBankCSVParser.DateFormat?
+  /// Per-column role overrides keyed by header index. `.ignore` means the
+  /// column won't be used. See `ColumnRole`.
+  var columnRoles: [ColumnRole?] = []
 
   /// Computed read-only state for the view.
   private(set) var detectedParserIdentifier: String
@@ -33,6 +36,80 @@ final class CSVImportSetupStore {
   /// Is the detected parser the fallback generic one (column-mapping UI shown),
   /// or a source-specific parser (mapping hidden).
   var isGenericParser: Bool { detectedParserIdentifier == "generic-bank" }
+
+  /// The role a column has been assigned by the user or by the detector.
+  enum ColumnRole: String, CaseIterable, Identifiable, Sendable {
+    case date, description, amount, debit, credit, balance, reference, ignore
+    var id: String { rawValue }
+    var label: String {
+      switch self {
+      case .date: return "Date"
+      case .description: return "Description"
+      case .amount: return "Amount"
+      case .debit: return "Debit"
+      case .credit: return "Credit"
+      case .balance: return "Balance"
+      case .reference: return "Reference"
+      case .ignore: return "Ignore"
+      }
+    }
+  }
+
+  /// Compose a `ColumnMapping` from the user's current role assignments.
+  /// `columnRoles` is seeded from the detected mapping in `regeneratePreview`,
+  /// so this function derives the mapping purely from the roles array — a
+  /// role set to `.ignore` (or simply left `nil`) means the column is unused,
+  /// even if the detector had originally picked it.
+  ///
+  /// Missing `.date` / `.description` columns resolve to `-1`; the parser's
+  /// `safe(row:_:)` helper returns `""` for out-of-bounds indices, which is
+  /// the intended "not mapped" behaviour.
+  func effectiveMapping() -> GenericBankCSVParser.ColumnMapping? {
+    guard let base = detectedMapping else { return nil }
+    // If columnRoles hasn't been seeded yet (no regeneratePreview run),
+    // ship the detected mapping with the date-format override applied.
+    guard columnRoles.count == detectedHeaders.count else {
+      var mapping = base
+      if let override = dateFormatOverride {
+        mapping.dateFormat = override
+        mapping.dateFormatAmbiguous = false
+      }
+      return mapping
+    }
+    var mapping = base
+    mapping.date = columnRoles.firstIndex(of: .date) ?? -1
+    mapping.description = columnRoles.firstIndex(of: .description) ?? -1
+    mapping.amount = columnRoles.firstIndex(of: .amount)
+    mapping.debit = columnRoles.firstIndex(of: .debit)
+    mapping.credit = columnRoles.firstIndex(of: .credit)
+    mapping.balance = columnRoles.firstIndex(of: .balance)
+    mapping.reference = columnRoles.firstIndex(of: .reference)
+    if let override = dateFormatOverride {
+      mapping.dateFormat = override
+      mapping.dateFormatAmbiguous = false
+    }
+    return mapping
+  }
+
+  /// Re-read the preview after a role change.
+  func applyColumnRole(_ role: ColumnRole?, forColumn index: Int) async {
+    while columnRoles.count < detectedHeaders.count {
+      columnRoles.append(nil)
+    }
+    // Single-value roles (date / description / amount / debit / credit /
+    // balance / reference) map to exactly one column — reassigning them
+    // clears the previous column. `.ignore` is deliberately excluded from
+    // this rule because multiple columns can legitimately be ignored.
+    if let role, role != .ignore {
+      for otherIndex in columnRoles.indices
+      where otherIndex != index && columnRoles[otherIndex] == role {
+        columnRoles[otherIndex] = nil
+      }
+    }
+    guard columnRoles.indices.contains(index) else { return }
+    columnRoles[index] = role
+    await regeneratePreview()
+  }
 
   private let backend: any BackendProvider
   private let importStore: ImportStore
@@ -57,21 +134,69 @@ final class CSVImportSetupStore {
     self.filenamePattern = Self.suggestedFilenamePattern(from: pending.originalFilename)
   }
 
+  /// Update the date-format override and regenerate the preview in one
+  /// atomic step. Called by the view's `onChange` so the mutation and the
+  /// async reload stay together inside the store.
+  func applyDateFormatOverride(
+    _ override: GenericBankCSVParser.DateFormat?
+  ) async {
+    dateFormatOverride = override
+    await regeneratePreview()
+  }
+
   /// Parse the staged bytes with the current settings, populate the preview.
   func regeneratePreview() async {
     do {
       let data = try await staging.data(for: pending.id)
       let rows = try CSVTokenizer.parse(data)
       rowCount = max(0, rows.count - 1)
-      let parser = registry.select(for: rows.first ?? [])
+      let headers = rows.first ?? []
+      detectedHeaders = headers
+      let parser = registry.select(for: headers)
       detectedParserIdentifier = parser.identifier
       if let generic = parser as? GenericBankCSVParser {
         detectedMapping = generic.inferMapping(
-          from: rows.first ?? [], sampleRows: Array(rows.dropFirst().prefix(5)))
+          from: headers, sampleRows: Array(rows.dropFirst().prefix(5)))
       } else {
         detectedMapping = nil
       }
-      let records = try parser.parse(rows: rows)
+      // Seed columnRoles from the detected mapping on first run so the UI
+      // picker starts at the detector's choice AND so the mapping can be
+      // derived purely from `columnRoles` from here on (a `.ignore` or
+      // `nil` entry means the column is unused — the detector's original
+      // pick does not "leak through").
+      if columnRoles.count != headers.count {
+        columnRoles = Array(repeating: nil, count: headers.count)
+        if let detected = detectedMapping {
+          if columnRoles.indices.contains(detected.date) {
+            columnRoles[detected.date] = .date
+          }
+          if columnRoles.indices.contains(detected.description) {
+            columnRoles[detected.description] = .description
+          }
+          if let idx = detected.amount, columnRoles.indices.contains(idx) {
+            columnRoles[idx] = .amount
+          }
+          if let idx = detected.debit, columnRoles.indices.contains(idx) {
+            columnRoles[idx] = .debit
+          }
+          if let idx = detected.credit, columnRoles.indices.contains(idx) {
+            columnRoles[idx] = .credit
+          }
+          if let idx = detected.balance, columnRoles.indices.contains(idx) {
+            columnRoles[idx] = .balance
+          }
+          if let idx = detected.reference, columnRoles.indices.contains(idx) {
+            columnRoles[idx] = .reference
+          }
+        }
+      }
+      let records: [ParsedRecord]
+      if parser is GenericBankCSVParser, let mapping = effectiveMapping() {
+        records = try parseGenericWith(mapping: mapping, rows: rows)
+      } else {
+        records = try parser.parse(rows: rows)
+      }
       preview = Array(
         records.compactMap { rec -> ParsedTransaction? in
           if case .transaction(let tx) = rec { return tx } else { return nil }
@@ -85,6 +210,16 @@ final class CSVImportSetupStore {
       logger.error(
         "Preview failed: \(error.localizedDescription, privacy: .public)")
     }
+  }
+
+  /// Parse the rows with an explicit mapping. Bypasses the detector so the
+  /// user's role assignments take effect immediately in the preview.
+  private func parseGenericWith(
+    mapping: GenericBankCSVParser.ColumnMapping, rows: [[String]]
+  ) throws -> [ParsedRecord] {
+    let parser = GenericBankCSVParser()
+    return try parser.parse(
+      rows: rows, overrideMapping: mapping)
   }
 
   /// Build the profile, persist it, and re-enter the pipeline. Returns the
@@ -104,7 +239,8 @@ final class CSVImportSetupStore {
       parserIdentifier: detectedParserIdentifier,
       headerSignature: detectedHeaders,
       filenamePattern: filenamePattern.isEmpty ? nil : filenamePattern,
-      deleteAfterImport: deleteAfterImport)
+      deleteAfterImport: deleteAfterImport,
+      dateFormatRawValue: dateFormatOverride?.rawValue)
     return await importStore.finishSetup(pendingId: pending.id, profile: profile)
   }
 

@@ -1,5 +1,9 @@
+import OSLog
 import SwiftUI
 import UniformTypeIdentifiers
+
+private let importSettingsLogger = Logger(
+  subsystem: "com.moolah.app", category: "ImportSettingsView")
 
 /// Settings → Import: pick a folder to watch, toggle delete-after-import,
 /// and browse import profiles. Device-local settings — not synced.
@@ -40,8 +44,8 @@ struct ImportSettingsView: View {
       Section("Import profiles") {
         if profiles.isEmpty {
           Text(
-            "No profiles yet. Profiles are created automatically when you "
-              + "import a CSV into an account."
+            "No profiles yet. Moolah saves one the first time you "
+              + "complete a CSV import into an account."
           )
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -55,6 +59,7 @@ struct ImportSettingsView: View {
               if let lastUsedAt = profile.lastUsedAt {
                 Text("Last used \(lastUsedAt, style: .relative) ago")
                   .font(.caption2).foregroundStyle(.secondary)
+                  .monospacedDigit()
               }
             }
             .swipeActions(edge: .trailing) {
@@ -86,7 +91,9 @@ struct ImportSettingsView: View {
     do {
       profiles = try await session.backend.csvImportProfiles.fetchAll()
     } catch {
-      // Silent log; UI shows empty list.
+      importSettingsLogger.error(
+        "Failed to reload import profiles: \(error.localizedDescription, privacy: .public)"
+      )
     }
   }
 
@@ -99,11 +106,12 @@ struct ImportSettingsView: View {
     switch result {
     case .success(let urls):
       guard let url = urls.first else { return }
+      // Ordering: take security-scoped access, persist the bookmark
+      // (needs active scope), then release our scope. `startFolderWatch`
+      // re-resolves the bookmark and acquires its own long-lived scope.
       let didStart = url.startAccessingSecurityScopedResource()
-      defer {
-        if didStart { url.stopAccessingSecurityScopedResource() }
-      }
       session.importPreferences.setWatchedFolder(url)
+      if didStart { url.stopAccessingSecurityScopedResource() }
       Task { await session.startFolderWatch() }
     case .failure:
       break

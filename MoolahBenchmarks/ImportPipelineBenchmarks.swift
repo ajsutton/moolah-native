@@ -49,7 +49,7 @@ final class ImportPipelineBenchmarks: XCTestCase {
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }
   private var options: XCTMeasureOptions {
     let opts = XCTMeasureOptions()
-    opts.iterationCount = 5
+    opts.iterationCount = 10
     return opts
   }
 
@@ -173,19 +173,33 @@ final class ImportPipelineBenchmarks: XCTestCase {
     }
   }
 
-  /// End-to-end: 10 files × 1 000 rows each against the seeded TestBackend.
+  /// End-to-end: 10 files × 1 000 rows each against a fresh TestBackend per
+  /// iteration so numbers are comparable (earlier versions accumulated
+  /// transactions across iterations, inflating dedup cost).
   /// Measures tokenize + parse + profile match + dedup + rules + persist +
   /// the cleanup steps. One of the most realistic benchmarks.
   func testImportPipelineEndToEnd10Files1000RowsEach() throws {
-    let importStore = try awaitSync { @MainActor in
-      let dir = FileManager.default.temporaryDirectory
-        .appendingPathComponent("bench-\(UUID().uuidString)")
-      let staging = try ImportStagingStore(directory: dir)
-      return ImportStore(backend: Self._backend, staging: staging)
-    }
     let data = Self.makeCBAData(rowCount: 1000)
     measure(metrics: metrics, options: options) {
       try! awaitSync { @MainActor in
+        // Fresh backend + staging per iteration — no state leaks between
+        // runs so the reported time measures a clean 10-file ingest.
+        let (backend, _) = try TestBackend.create()
+        let accountId = UUID()
+        _ = try await backend.accounts.create(
+          Account(
+            id: accountId, name: "Bench", type: .bank, instrument: .AUD,
+            positions: [], position: 0, isHidden: false),
+          openingBalance: nil)
+        _ = try await backend.csvImportProfiles.create(
+          CSVImportProfile(
+            accountId: accountId,
+            parserIdentifier: "generic-bank",
+            headerSignature: ["date", "description", "debit", "credit", "balance"]))
+        let dir = FileManager.default.temporaryDirectory
+          .appendingPathComponent("bench-\(UUID().uuidString)")
+        let staging = try ImportStagingStore(directory: dir)
+        let importStore = ImportStore(backend: backend, staging: staging)
         for _ in 0..<10 {
           _ = await importStore.ingest(
             data: data,
