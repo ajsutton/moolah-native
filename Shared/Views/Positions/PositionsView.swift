@@ -31,9 +31,11 @@ struct PositionsView: View {
         Divider()
         PositionsTable(input: input, selection: $selection)
       }
-      #if os(macOS)
-        .onExitCommand { selection = nil }
-      #endif
+      .onExitCommand { selection = nil }
+      .onChange(of: input) { _, _ in
+        selection = nil
+        range = .threeMonths
+      }
     }
   }
 }
@@ -119,4 +121,37 @@ struct PositionsView: View {
     )
   )
   .frame(width: 480, height: 200)
+}
+
+#Preview("With chart") {
+  let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+  let aud = Instrument.AUD
+  let calendar = Calendar(identifier: .gregorian)
+  let now = Date()
+  let points: [HistoricalValueSeries.Point] = (0..<60).map { d in
+    let date = calendar.date(byAdding: .day, value: -59 + d, to: now)!
+    return HistoricalValueSeries.Point(
+      date: date, value: 10_000 + Decimal(d) * 25, cost: 9_500)
+  }
+  let series = HistoricalValueSeries(
+    hostCurrency: aud,
+    total: points,
+    perInstrument: [bhp.id: points]
+  )
+  return PositionsView(
+    input: PositionsViewInput(
+      title: "Brokerage",
+      hostCurrency: aud,
+      positions: [
+        ValuedPosition(
+          instrument: bhp, quantity: 100,
+          unitPrice: InstrumentAmount(quantity: points.last!.value / 100, instrument: aud),
+          costBasis: InstrumentAmount(quantity: 9_500, instrument: aud),
+          value: InstrumentAmount(quantity: points.last!.value, instrument: aud)
+        )
+      ],
+      historicalValue: series
+    )
+  )
+  .frame(width: 720, height: 640)
 }
