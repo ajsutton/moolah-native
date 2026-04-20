@@ -33,8 +33,12 @@ struct MigrationView: View {
         migrationFailure(error)
       }
     }
-    .padding(32)
-    .frame(minWidth: 400, minHeight: 300)
+    #if os(macOS)
+      .padding(24)
+      .frame(minWidth: 420, minHeight: 280)
+    #else
+      .padding(20)
+    #endif
     .interactiveDismissDisabled(!isIdle && !isComplete)
   }
 

@@ -78,6 +78,12 @@ NavigationSplitView (macOS/iPad) or NavigationStack (iPhone)
 | Sidebar width | 220pt | 220pt | N/A |
 | Form section spacing | 16pt | 20pt | 24pt |
 | Inline padding | 12pt | 16pt | 20pt |
+| Sheet content padding (custom content) | 24pt | 20pt | 20pt |
+| Sheet content padding (Form) | System (do not override) | System | System |
+| Popover content padding | 16pt | 16pt | 16pt |
+| Sheet minimum frame (macOS) | 400×300pt (simple) / 500×400pt (multi-section) | — | — |
+
+See [Sheets & Dialogs](#sheets--dialogs) in Section 6 for full guidance on sheet padding, sizing, and button placement.
 
 ---
 
@@ -435,6 +441,98 @@ Button("Delete Account", role: .destructive) { ... }
 - Use `Label` with `.labelStyle(.titleAndIcon)` in sheets/modals
 - Prefer SF Symbols in toolbar for space efficiency
 
+### Sheets & Dialogs
+
+Sheets (`.sheet`, `.fullScreenCover`, `.popover`) and dialogs must keep content visually inset from the sheet edges. Apple's HIG — and every well-built Mac/iOS app — uses generous margins around dialog content. Text or controls that run flush to the sheet edges look broken and make a sheet feel unfinished. This applies on both macOS (where sheets are floating panels over the parent window) and iOS (where they slide up from the bottom).
+
+**The rule:** every sheet needs visible breathing room between its content and the sheet's outer chrome. Choose the right technique for the content type below — do not hand-roll padding when a system style already provides it.
+
+#### Padding by content type
+
+| Content inside the sheet | macOS | iOS | How to achieve it |
+|---|---|---|---|
+| `Form` with `.formStyle(.grouped)` | ✅ Automatic | ✅ Automatic | Use this for **all editing sheets**. The grouped form style provides the correct outer margins and inter-section spacing on both platforms. |
+| Custom `VStack` / `ScrollView` / flow UI | 24pt all sides | 20pt horizontal, 24pt vertical | Apply `.padding(.horizontal, 20).padding(.vertical, 24)` on macOS and platform-match on iOS, or use `.padding(24)` / `.padding(20)` when uniform. |
+| `.popover` custom content | 16pt all sides | 16pt all sides | `.padding(16)` on the popover's root view. |
+| `.alert` / `.confirmationDialog` | ✅ System-controlled | ✅ System-controlled | Never add padding — the system lays out title, message, and buttons. |
+
+`Form` is the correct primitive for any sheet that edits data (create/edit earmark, account, category, transaction, token). It gets the correct outer margin, section grouping, and focus handling for free on both platforms. **Reach for `VStack` only when the sheet is presenting status, progress, or a wizard-style flow** (e.g., migration, onboarding) where a form is the wrong metaphor.
+
+#### Sheet sizing (macOS)
+
+macOS sheets shrink to fit their content by default, which produces cramped, awkward dialogs. Always set a minimum frame on the sheet's root view:
+
+| Sheet purpose | Minimum size |
+|---|---|
+| Simple edit form (1–2 fields) | `.frame(minWidth: 400, minHeight: 300)` |
+| Multi-section form | `.frame(minWidth: 500, minHeight: 400)` |
+| Status / progress / confirmation with detail | `.frame(minWidth: 420, minHeight: 280)` |
+| Wizard or multi-step flow | `.frame(minWidth: 520, minHeight: 420)` |
+
+Wrap the frame modifier in `#if os(macOS)` when iOS should remain fullscreen-style.
+
+#### Button placement
+
+- **macOS:** Cancel / confirm buttons live in the toolbar via `.cancellationAction` and `.confirmationAction` placements. Do not place them in the sheet body.
+- **iOS:** Same pattern — `NavigationStack` + toolbar buttons. A `Done` or `Save` confirmation button goes on the trailing side.
+- **Status/wizard sheets** (no Form) may use inline buttons at the bottom with `.controlSize(.large)` and `.buttonStyle(.borderedProminent)` for the primary action. Pair with `.padding()` and a `HStack(spacing: 12)` when showing multiple choices.
+
+#### Examples
+
+Correct — `Form` gets system padding automatically:
+```swift
+NavigationStack {
+  Form {
+    Section("Details") {
+      TextField("Name", text: $name)
+    }
+  }
+  .formStyle(.grouped)
+  .navigationTitle("Edit Category")
+  .toolbar { /* Cancel / Save */ }
+}
+#if os(macOS)
+.frame(minWidth: 400, minHeight: 300)
+#endif
+```
+
+Correct — custom content with explicit padding and minimum frame:
+```swift
+VStack(spacing: 16) {
+  Image(systemName: "checkmark.circle.fill")
+  Text("Migration Complete").font(.title)
+  // ...
+}
+.padding(24)
+#if os(macOS)
+.frame(minWidth: 420, minHeight: 300)
+#endif
+```
+
+Wrong — plain content with no padding:
+```swift
+// Text and buttons touch the sheet edges
+VStack {
+  Text("Warning")
+  Button("Confirm") { ... }
+}
+```
+
+Wrong — hand-rolling padding around a `Form` (the form already provides it, producing doubled margins):
+```swift
+Form { ... }
+  .padding(20)   // ❌ Don't — duplicates system padding
+```
+
+#### Anti-patterns
+
+- ❌ Plain `VStack` / `ScrollView` / `List` in a `.sheet` with no outer padding
+- ❌ Adding `.padding()` to a `Form` — system padding already applies; this produces doubled margins
+- ❌ Applying padding to `.alert` or `.confirmationDialog` — the system owns their layout
+- ❌ Missing `.frame(minWidth:minHeight:)` on macOS sheets (produces a too-small panel)
+- ❌ Placing Cancel/Save buttons inside the sheet body instead of the toolbar (Form sheets only)
+- ❌ Mixing padding values across similar sheets (e.g., `.padding(16)` in one, `.padding(32)` in another) — pick `20`/`24` and stay consistent
+
 ### Detail Panels (Inspector Pattern)
 
 Detail panels (transaction detail, category detail) use SwiftUI's `.inspector()` modifier on macOS and `.sheet()` on iOS. The inspector appears as a trailing sidebar at the window level.
@@ -686,6 +784,8 @@ var animation: Animation? {
 - ❌ Hardcoded colors (e.g., `Color(red: 0.2, green: 0.8, blue: 0.3)`)
 - ❌ Using `GeometryReader` for spacing (prefer `Spacer()`, `padding()`)
 - ❌ Over-nesting `VStack`/`HStack` (flatten where possible)
+- ❌ Sheet content flush to the sheet edges — use `Form` or `.padding(24)` on macOS / `.padding(20)` on iOS (see Sheets & Dialogs)
+- ❌ macOS sheets without a minimum `.frame(minWidth:minHeight:)` — they collapse to unreadable panels
 
 ### Typography
 - ❌ Custom fonts for amounts (always use SF Pro with `.monospacedDigit()`)
@@ -1479,6 +1579,7 @@ Prefer `focusedSceneValue` over `focusedValue` — scene-wide availability is al
 ---
 
 ## Version History
+- **1.3** (2026-04-20): Add "Sheets & Dialogs" subsection to Section 6 — content padding rules (24pt macOS custom / 20pt iOS / 16pt popover, system handles `Form` and `.alert`), macOS minimum-frame table, button placement, examples and anti-patterns. Extended Section 3 spacing table and Section 11 layout anti-patterns with sheet padding rules.
 - **1.2** (2026-04-17): Add Section 14 — Menu Bar & Commands (macOS), covering top-level menu structure, naming, keyboard shortcuts, icons, grouping, dynamic menus, toolbar/context-menu parity, SwiftUI wiring. Trimmed Section 9's shortcut list in favor of Section 14.
 - **1.1** (2026-04-15): Add Section 13 — Focus, Tab Order & Selection (form focus, list selection, focus sections, focused values, keyboard expectations)
 - **1.0** (2026-04-08): Initial style guide for Moolah native app (macOS-first, adaptive density, semantic colors, charts)
