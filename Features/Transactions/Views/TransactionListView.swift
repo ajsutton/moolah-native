@@ -232,151 +232,154 @@ struct TransactionListView: View {
   }
 
   private var listView: some View {
-    List(selection: selectedTransactionBinding) {
+    VStack(spacing: 0) {
       if let positionsInput, !positionsInput.positions.isEmpty {
         PositionsView(input: positionsInput, range: $positionsRange)
+        Divider()
       }
-      ForEach(filteredTransactions) { entry in
-        TransactionRowView(
-          transaction: entry.transaction, accounts: accounts,
-          categories: categories, earmarks: earmarks, displayAmount: entry.displayAmount,
-          balance: entry.balance, hideEarmark: filter.earmarkId != nil,
-          viewingAccountId: filter.accountId
-        )
-        .tag(entry.transaction)
-        .contentShape(Rectangle())
-        .contextMenu {
-          Button("Edit Transaction\u{2026}", systemImage: "pencil") {
-            selectedTransaction = entry.transaction
-          }
-          Divider()
-          Button("Delete Transaction\u{2026}", systemImage: "trash", role: .destructive) {
-            transactionPendingDelete = entry.transaction.id
-          }
-        }
-        .swipeActions(edge: .trailing) {
-          Button(role: .destructive) {
-            transactionPendingDelete = entry.transaction.id
-          } label: {
-            Label("Delete Transaction", systemImage: "trash")
-          }
-        }
-        .task {
-          if entry.id == transactionStore.transactions.last?.id {
-            await transactionStore.loadMore()
-          }
-        }
-      }
-
-      if transactionStore.isLoading {
-        HStack {
-          Spacer()
-          if let total = transactionStore.totalCount, total > 0 {
-            VStack(spacing: 4) {
-              ProgressView(value: Double(transactionStore.loadedCount), total: Double(total))
-                .frame(maxWidth: 200)
-              Text("Loading \(transactionStore.loadedCount) of \(total)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+      List(selection: selectedTransactionBinding) {
+        ForEach(filteredTransactions) { entry in
+          TransactionRowView(
+            transaction: entry.transaction, accounts: accounts,
+            categories: categories, earmarks: earmarks, displayAmount: entry.displayAmount,
+            balance: entry.balance, hideEarmark: filter.earmarkId != nil,
+            viewingAccountId: filter.accountId
+          )
+          .tag(entry.transaction)
+          .contentShape(Rectangle())
+          .contextMenu {
+            Button("Edit Transaction\u{2026}", systemImage: "pencil") {
+              selectedTransaction = entry.transaction
             }
-          } else {
-            ProgressView()
+            Divider()
+            Button("Delete Transaction\u{2026}", systemImage: "trash", role: .destructive) {
+              transactionPendingDelete = entry.transaction.id
+            }
           }
-          Spacer()
-        }
-      }
-    }
-    #if os(macOS)
-      .listStyle(.inset)
-    #else
-      .listStyle(.plain)
-    #endif
-    .profileNavigationTitle(displayTitle)
-    .toolbar {
-      ToolbarItem(placement: .automatic) {
-        Button {
-          showFilterSheet = true
-        } label: {
-          Label(
-            "Filter",
-            systemImage: activeFilter != baseFilter
-              ? "line.3.horizontal.decrease.circle.fill"
-              : "line.3.horizontal.decrease.circle")
-        }
-      }
-
-      ToolbarItem(placement: .automatic) {
-        Button {
-          Task {
-            await transactionStore.load(
-              filter: filter)
+          .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+              transactionPendingDelete = entry.transaction.id
+            } label: {
+              Label("Delete Transaction", systemImage: "trash")
+            }
           }
-        } label: {
-          Label("Refresh", systemImage: "arrow.clockwise")
+          .task {
+            if entry.id == transactionStore.transactions.last?.id {
+              await transactionStore.loadMore()
+            }
+          }
         }
-      }
 
-      ToolbarItem(placement: .primaryAction) {
-        Button {
-          createNewTransaction()
-        } label: {
-          Label("Add Transaction", systemImage: "plus")
+        if transactionStore.isLoading {
+          HStack {
+            Spacer()
+            if let total = transactionStore.totalCount, total > 0 {
+              VStack(spacing: 4) {
+                ProgressView(value: Double(transactionStore.loadedCount), total: Double(total))
+                  .frame(maxWidth: 200)
+                Text("Loading \(transactionStore.loadedCount) of \(total)")
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+                  .monospacedDigit()
+              }
+            } else {
+              ProgressView()
+            }
+            Spacer()
+          }
         }
       }
-    }
-    .sheet(isPresented: $showFilterSheet) {
-      TransactionFilterView(
-        filter: activeFilter,
-        accounts: accounts,
-        categories: categories,
-        earmarks: earmarks,
-        onApply: { newFilter in
-          activeFilter = newFilter
-          showFilterSheet = false
+      #if os(macOS)
+        .listStyle(.inset)
+      #else
+        .listStyle(.plain)
+      #endif
+      .profileNavigationTitle(displayTitle)
+      .toolbar {
+        ToolbarItem(placement: .automatic) {
+          Button {
+            showFilterSheet = true
+          } label: {
+            Label(
+              "Filter",
+              systemImage: activeFilter != baseFilter
+                ? "line.3.horizontal.decrease.circle.fill"
+                : "line.3.horizontal.decrease.circle")
+          }
         }
-      )
-    }
-    .task(id: baseFilter) {
-      // Reset filter and selection when switching accounts/contexts
-      activeFilter = baseFilter
-      selectedTransaction = nil
-      await transactionStore.load(
-        filter: baseFilter)
-    }
-    .task(id: activeFilter) {
-      // Reload when user applies a filter
-      if activeFilter != baseFilter {
+
+        ToolbarItem(placement: .automatic) {
+          Button {
+            Task {
+              await transactionStore.load(
+                filter: filter)
+            }
+          } label: {
+            Label("Refresh", systemImage: "arrow.clockwise")
+          }
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+          Button {
+            createNewTransaction()
+          } label: {
+            Label("Add Transaction", systemImage: "plus")
+          }
+        }
+      }
+      .sheet(isPresented: $showFilterSheet) {
+        TransactionFilterView(
+          filter: activeFilter,
+          accounts: accounts,
+          categories: categories,
+          earmarks: earmarks,
+          onApply: { newFilter in
+            activeFilter = newFilter
+            showFilterSheet = false
+          }
+        )
+      }
+      .task(id: baseFilter) {
+        // Reset filter and selection when switching accounts/contexts
+        activeFilter = baseFilter
+        selectedTransaction = nil
         await transactionStore.load(
-          filter: activeFilter)
+          filter: baseFilter)
       }
-    }
-    .task(id: positions) {
-      guard let conversionService, !positions.isEmpty else {
-        positionsInput = nil
-        return
+      .task(id: activeFilter) {
+        // Reload when user applies a filter
+        if activeFilter != baseFilter {
+          await transactionStore.load(
+            filter: activeFilter)
+        }
       }
-      let valuator = PositionsValuator(conversionService: conversionService)
-      let rows = await valuator.valuate(
-        positions: positions,
-        hostCurrency: positionsHostCurrency,
-        costBasis: [:],
-        on: Date()
-      )
-      positionsInput = PositionsViewInput(
-        title: positionsTitle,
-        hostCurrency: positionsHostCurrency,
-        positions: rows,
-        historicalValue: nil
-      )
-    }
-    .refreshable {
-      await transactionStore.load(
-        filter: filter)
-    }
-    .searchable(text: $searchText, prompt: "Search payee")
-    .overlay {
-      emptyStateOverlay
+      .task(id: positions) {
+        guard let conversionService, !positions.isEmpty else {
+          positionsInput = nil
+          return
+        }
+        let valuator = PositionsValuator(conversionService: conversionService)
+        let rows = await valuator.valuate(
+          positions: positions,
+          hostCurrency: positionsHostCurrency,
+          costBasis: [:],
+          on: Date()
+        )
+        positionsInput = PositionsViewInput(
+          title: positionsTitle,
+          hostCurrency: positionsHostCurrency,
+          positions: rows,
+          historicalValue: nil
+        )
+      }
+      .refreshable {
+        await transactionStore.load(
+          filter: filter)
+      }
+      .searchable(text: $searchText, prompt: "Search payee")
+      .overlay {
+        emptyStateOverlay
+      }
     }
   }
 
