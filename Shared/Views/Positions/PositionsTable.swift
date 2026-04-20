@@ -13,7 +13,7 @@ struct PositionsTable: View {
   @Environment(\.horizontalSizeClass) private var sizeClass
 
   @State private var sortOrder: [KeyPathComparator<ValuedPosition>] = [
-    .init(\.quantity, order: .reverse)
+    .init(\.valueQuantity, order: .reverse)
   ]
 
   var body: some View {
@@ -57,28 +57,28 @@ struct PositionsTable: View {
         Text(row.quantityFormatted)
           .monospacedDigit()
       }
-      TableColumn("Unit Price") { row in
+      TableColumn("Unit Price", value: \.unitPriceQuantity) { row in
         if let unit = row.unitPrice {
           Text(unit.formatted).monospacedDigit()
         } else {
           Text("—").foregroundStyle(.tertiary)
         }
       }
-      TableColumn("Cost") { row in
+      TableColumn("Cost", value: \.costBasisQuantity) { row in
         if let cost = row.costBasis {
           Text(cost.formatted).monospacedDigit()
         } else {
           Text("—").foregroundStyle(.tertiary)
         }
       }
-      TableColumn("Value") { row in
+      TableColumn("Value", value: \.valueQuantity) { row in
         if let value = row.value {
           Text(value.formatted).monospacedDigit()
         } else {
           Text("—").foregroundStyle(.tertiary)
         }
       }
-      TableColumn("Gain") { row in
+      TableColumn("Gain", value: \.gainQuantity) { row in
         if let gain = row.gainLoss {
           Text(gain.signedFormatted)
             .monospacedDigit()

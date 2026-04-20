@@ -55,3 +55,24 @@ extension InstrumentAmount {
     return "\(sign)\(formatted)"
   }
 }
+
+// MARK: - Sortable accessors
+
+extension ValuedPosition {
+  /// Non-optional `Decimal` view of `unitPrice` for sortable Table columns.
+  /// Missing values sort as zero — paired with the `—` placeholder rendered
+  /// in the cell, this groups failed/unknown rows together at one end.
+  var unitPriceQuantity: Decimal { unitPrice?.quantity ?? 0 }
+
+  /// Non-optional `Decimal` view of `costBasis` for sortable Table columns.
+  /// Missing values sort as zero (see `unitPriceQuantity`).
+  var costBasisQuantity: Decimal { costBasis?.quantity ?? 0 }
+
+  /// Non-optional `Decimal` view of `value` for sortable Table columns.
+  /// Missing values sort as zero (see `unitPriceQuantity`).
+  var valueQuantity: Decimal { value?.quantity ?? 0 }
+
+  /// Non-optional `Decimal` view of `gainLoss` for sortable Table columns.
+  /// Missing values sort as zero (see `unitPriceQuantity`).
+  var gainQuantity: Decimal { gainLoss?.quantity ?? 0 }
+}
