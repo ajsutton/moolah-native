@@ -58,6 +58,8 @@ run_ios() {
         -scheme Moolah-iOS \
         -destination "platform=iOS Simulator,name=$IOS_SIMULATOR" \
         ${filter_flags[@]+"${filter_flags[@]}"}
+    bash "$REPO_ROOT/scripts/assert-no-icloud-in-test-host.sh" \
+        "$REPO_ROOT/.DerivedData-ios/Build/Products/Debug-Tests-iphonesimulator/Moolah.app/Moolah"
 }
 
 run_mac() {
@@ -71,6 +73,8 @@ run_mac() {
         -scheme Moolah-macOS \
         -destination "platform=macOS" \
         ${filter_flags[@]+"${filter_flags[@]}"}
+    bash "$REPO_ROOT/scripts/assert-no-icloud-in-test-host.sh" \
+        "$REPO_ROOT/.DerivedData-mac/Build/Products/Debug-Tests/Moolah.app/Contents/MacOS/Moolah"
 }
 
 # ---------------------------------------------------------------------------
