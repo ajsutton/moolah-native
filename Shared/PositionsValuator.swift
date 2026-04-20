@@ -35,6 +35,11 @@ struct PositionsValuator: Sendable {
   ) async -> [ValuedPosition] {
     var rows: [ValuedPosition] = []
     rows.reserveCapacity(positions.count)
+    // Sequential await per row, not a TaskGroup: rows are independent, but the
+    // conversion service caches per (instrument, date), so warm-cache loads are
+    // O(1) per row. Cold-cache loads pay O(N * RTT) — acceptable for the dozens
+    // of positions per account this view targets. If profiling later shows cold
+    // loads are user-visible, switching to withTaskGroup is a self-contained change.
     for position in positions {
       rows.append(
         await row(for: position, hostCurrency: hostCurrency, costBasis: costBasis, on: date))
@@ -66,6 +71,12 @@ struct PositionsValuator: Sendable {
       let total = try await conversionService.convert(
         position.quantity, from: position.instrument, to: hostCurrency, on: date
       )
+      // For short positions (negative quantity), `total` and `position.quantity`
+      // share the negative sign, so the quotient yields a positive per-unit price
+      // — the natural reading of "what one share is worth right now". The zero
+      // guard prevents NaN from propagating into the rendered amount; we accept
+      // that a service returning total == 0 yields unitPrice == 0 (which is rare
+      // and visually obvious as "free", which is correct for the data we have).
       let unit: InstrumentAmount? =
         position.quantity == 0
         ? nil
