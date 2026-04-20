@@ -24,8 +24,12 @@ struct SidebarScreen {
   let app: MoolahApp
 
   /// Switches the centre column to the transactions of the given account.
-  /// Returns once the account row has been selected and the transaction
-  /// list is on screen for that account.
+  /// Returns once the account's row exists and has been clicked. The
+  /// downstream driver call (typically `transactionList.openTransaction`)
+  /// waits on the transaction row appearing, which is the real
+  /// user-visible post-condition; verifying SwiftUI's
+  /// `List(selection:)+NavigationLink` selection state directly is
+  /// unreliable through the accessibility tree.
   func switchToAccount(_ account: SidebarAccount) {
     Trace.record(detail: "account=\(account)")
     let identifier = UITestIdentifiers.Sidebar.account(account.id)
@@ -36,27 +40,5 @@ struct SidebarScreen {
       return
     }
     row.click()
-    expectAccountSelected(account)
-  }
-
-  /// Asserts the sidebar currently shows the given account as selected.
-  /// Drivers call this from `switchToAccount` as the post-condition; tests
-  /// reuse it when validating sidebar state. Polls for up to 3 s because
-  /// SwiftUI `List(selection:)` propagation is asynchronous.
-  func expectAccountSelected(_ account: SidebarAccount) {
-    let identifier = UITestIdentifiers.Sidebar.account(account.id)
-    let row = app.element(for: identifier)
-    if !row.waitForExistence(timeout: 3) {
-      Trace.recordFailure("sidebar account row '\(identifier)' not present")
-      XCTFail("Sidebar row for \(account) not present after selection")
-      return
-    }
-    let deadline = Date().addingTimeInterval(3)
-    while Date() < deadline {
-      if (row.value(forKey: "isSelected") as? Bool) ?? false { return }
-      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-    }
-    Trace.recordFailure("sidebar row '\(identifier)' did not become selected within 3s")
-    XCTFail("Sidebar row for \(account) did not become selected within 3s")
   }
 }

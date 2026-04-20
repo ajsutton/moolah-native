@@ -138,8 +138,10 @@ class MoolahUITestCase: XCTestCase {
       return
     }
 
-    // Attach a one-line attachment naming the artefact root so the test
-    // navigator surfaces it without the reader having to resolve env vars.
+    // Print the path so `scripts/test-ui.sh` can grep it out and copy the
+    // artefacts back into `.agent-tmp/`, and attach an XCTAttachment so the
+    // test navigator surfaces it.
+    print("[MoolahUITestCase] ARTEFACT_DIR \(dir.path)")
     add(XCTAttachment(string: "ui-fail artefacts written to: \(dir.path)\n"))
 
     write(treeText(for: app), to: dir.appendingPathComponent("tree.txt"))
@@ -150,10 +152,17 @@ class MoolahUITestCase: XCTestCase {
     attachArtefacts(in: dir)
   }
 
-  /// Resolves `<repo-root>/.agent-tmp/ui-fail-<TestName>/`.
-  /// Tests run with `xcodebuild`, which sets `SRCROOT` to the project dir;
-  /// when unavailable we fall back to `NSTemporaryDirectory()` so the
-  /// artefacts at least survive on disk.
+  /// Resolves `/private/tmp/MoolahUITests/ui-fail-<TestName>/`.
+  ///
+  /// The XCUITest runner is sandboxed and cannot write to the developer's
+  /// `Documents` folder; `NSTemporaryDirectory()` returns the runner's
+  /// container-private tmp dir, which the host shell can only read with
+  /// extra TCC prompts. `/private/tmp/` is the system-wide tmp folder,
+  /// readable and writable by both the sandboxed runner and the host
+  /// shell without any TCC interaction. `scripts/test-ui.sh` greps the
+  /// `[MoolahUITestCase] ARTEFACT_DIR` lines out of xcodebuild's stdout
+  /// and copies each artefact dir back into `<repo-root>/.agent-tmp/`
+  /// after `xcodebuild test` exits.
   private func artefactDirectory(for testName: String) -> URL {
     let cleanName =
       testName
@@ -161,12 +170,8 @@ class MoolahUITestCase: XCTestCase {
       .replacingOccurrences(of: "[", with: "")
       .replacingOccurrences(of: "]", with: "")
       .replacingOccurrences(of: " ", with: "_")
-    let repoRoot =
-      ProcessInfo.processInfo.environment["MOOLAH_REPO_ROOT"]
-      ?? ProcessInfo.processInfo.environment["SRCROOT"]
-      ?? FileManager.default.currentDirectoryPath
-    return URL(fileURLWithPath: repoRoot)
-      .appendingPathComponent(".agent-tmp", isDirectory: true)
+    return URL(fileURLWithPath: "/private/tmp", isDirectory: true)
+      .appendingPathComponent("MoolahUITests", isDirectory: true)
       .appendingPathComponent("ui-fail-\(cleanName)", isDirectory: true)
   }
 

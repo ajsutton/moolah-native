@@ -40,11 +40,44 @@ for f in ${FILTERS[@]+"${FILTERS[@]}"}; do
 done
 
 echo "==> Running UI tests on native macOS…"
+# Capture xcodebuild output in a tmpfile so we can both print it live and
+# scan it afterwards for ARTEFACT_DIR lines emitted by MoolahUITestCase
+# when a test fails. The runner is sandboxed and cannot write directly to
+# the worktree's `.agent-tmp/`, so artefacts land under
+# `$TMPDIR/MoolahUITests/`. We copy them back here so subsequent agent
+# inspection (and CI uploads) can find them in the conventional location.
+LOG_FILE="$(mktemp)"
+trap 'rm -f "$LOG_FILE"' EXIT
+
+set +e
 xcodebuild test "${COMMON_ARGS[@]}" \
     -derivedDataPath "$REPO_ROOT/.DerivedData-mac-ui" \
     -scheme Moolah-macOS-UITests \
     -destination "platform=macOS" \
-    ${filter_flags[@]+"${filter_flags[@]}"}
+    ${filter_flags[@]+"${filter_flags[@]}"} \
+    | tee "$LOG_FILE"
+EXIT_CODE=${PIPESTATUS[0]}
+set -e
 
-echo ""
-echo "==> UI tests passed."
+# Mirror any captured artefact directories back into the repo's .agent-tmp/
+# so they survive after $TMPDIR cleanup.
+mkdir -p "$REPO_ROOT/.agent-tmp"
+copied=0
+while IFS= read -r src; do
+    [ -d "$src" ] || continue
+    dest="$REPO_ROOT/.agent-tmp/$(basename "$src")"
+    rm -rf "$dest"
+    cp -R "$src" "$dest"
+    copied=$((copied + 1))
+    echo "==> mirrored artefacts: $dest"
+done < <(grep -oE '\[MoolahUITestCase\] ARTEFACT_DIR [^ ]+' "$LOG_FILE" \
+    | awk '{print $3}' | sort -u)
+
+if [ "$EXIT_CODE" -eq 0 ]; then
+    echo ""
+    echo "==> UI tests passed."
+else
+    echo ""
+    echo "==> UI tests FAILED (exit $EXIT_CODE). $copied artefact dir(s) copied to .agent-tmp/."
+    exit "$EXIT_CODE"
+fi

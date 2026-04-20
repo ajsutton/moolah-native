@@ -17,6 +17,28 @@ struct AutocompleteFieldDriver {
 
   // MARK: - Actions
 
+  /// Clicks the field to give it keyboard focus. Returns once the field
+  /// reports `hasKeyboardFocus`. Use this when the field has not been
+  /// auto-focused by the surrounding view (see BUGS.md regarding
+  /// `defaultFocus(.payee)` not winning the macOS first-responder).
+  func tap() {
+    Trace.record(detail: "field=\(fieldIdentifier)")
+    let field = app.element(for: fieldIdentifier)
+    if !field.waitForExistence(timeout: 3) {
+      Trace.recordFailure("field '\(fieldIdentifier)' did not appear for tap")
+      XCTFail("Autocomplete field '\(fieldIdentifier)' did not appear within 3s")
+      return
+    }
+    field.click()
+    let deadline = Date().addingTimeInterval(3)
+    while Date() < deadline {
+      if (field.value(forKey: "hasKeyboardFocus") as? Bool) ?? false { return }
+      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+    Trace.recordFailure("tap on '\(fieldIdentifier)' did not produce focus")
+    XCTFail("Autocomplete field '\(fieldIdentifier)' did not focus after tap")
+  }
+
   /// Types `text` into the field. Returns once the field's reported value
   /// reflects the typed text.
   func type(_ text: String) {

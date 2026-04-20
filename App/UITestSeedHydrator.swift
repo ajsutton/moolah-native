@@ -160,13 +160,20 @@ enum UITestSeedHydrator {
 
     let outgoing = InstrumentAmount(quantity: -amount.quantity, instrument: amount.instrument)
 
+    // Both legs are `.transfer` so the transaction satisfies
+    // `Transaction.isSimple` (same type, amounts negate, distinct accounts,
+    // no category/earmark on the second leg). That triggers the simple-mode
+    // path in `TransactionDetailView`, which is what the focus, autocomplete,
+    // and cross-currency tests exercise. Mixed `.expense`/`.income` would
+    // render the custom multi-leg view, where the `defaultFocus(_:_:)`
+    // modifier on the simple section never fires.
     context.insert(
       TransactionLegRecord(
         transactionId: id,
         accountId: fromAccountId,
         instrumentId: amount.instrument.id,
         quantity: outgoing.storageValue,
-        type: TransactionType.expense.rawValue,
+        type: TransactionType.transfer.rawValue,
         sortOrder: 0
       )
     )
@@ -176,7 +183,7 @@ enum UITestSeedHydrator {
         accountId: toAccountId,
         instrumentId: amount.instrument.id,
         quantity: amount.storageValue,
-        type: TransactionType.income.rawValue,
+        type: TransactionType.transfer.rawValue,
         sortOrder: 1
       )
     )

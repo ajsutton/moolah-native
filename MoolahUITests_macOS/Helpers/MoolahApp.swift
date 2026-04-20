@@ -67,13 +67,19 @@ final class MoolahApp {
     element(for: identifier).waitForExistence(timeout: timeout)
   }
 
-  /// Waits up to `timeout` seconds for the main profile window to appear.
+  /// Waits up to `timeout` seconds for the main profile window to appear,
+  /// then ensures the app is the foreground process so subsequent
+  /// keyboard / focus assertions reflect a real interactive session
+  /// (the launcher → profile-window handoff under `--ui-testing` can
+  /// briefly hand activation back to the test runner).
   /// Called automatically from `launch(seed:)`; drivers reuse it after
   /// actions that re-create the window.
   func expectMainWindowVisible(timeout: TimeInterval = 5) {
     if !application.windows.firstMatch.waitForExistence(timeout: timeout) {
       Trace.recordFailure("main window did not appear within \(timeout)s")
       XCTFail("Moolah main window did not appear within \(timeout)s of launch")
+      return
     }
+    application.activate()
   }
 }
