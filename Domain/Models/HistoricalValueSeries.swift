@@ -17,6 +17,7 @@ import Foundation
 struct HistoricalValueSeries: Sendable, Hashable {
   struct Point: Sendable, Hashable {
     let date: Date
+    /// `value` and `cost` are denominated in the enclosing series' `hostCurrency`.
     let value: Decimal
     let cost: Decimal
   }
@@ -28,7 +29,7 @@ struct HistoricalValueSeries: Sendable, Hashable {
   let perInstrument: [String: [Point]]
 
   /// All instrument ids represented in the per-instrument map.
-  var instruments: [String] { Array(perInstrument.keys) }
+  var instruments: [String] { perInstrument.keys.sorted() }
 
   /// The aggregate points; convenience for symmetry with `series(for:)`.
   var totalSeries: [Point] { total }
