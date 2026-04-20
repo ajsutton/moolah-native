@@ -28,6 +28,7 @@ The screen-driver rule (UI_TEST_GUIDE §2) is inviolable.
 - No raw identifier-like string literals. The signal regex is `"[a-z]+\.[a-z]+(\.[^"]+)?"` — every match must be either a constant from `UITestIdentifiers` referenced via the driver, or accompanied by the escape-hatch comment with justification.
 - The test class inherits `MoolahUITestCase` (not `XCTestCase` directly). This is what wires up failure artefacts.
 - Test method bodies call only driver methods. No `.buttons[…]`, `.textFields[…]`, `.staticTexts[…]`, `.exists`, `.waitForExistence(...)`, `.tap()` reached through XCUI.
+- Test method bodies do not call `MoolahUITestCase`'s low-level driver primitives directly: `waitForIdentifier(_:timeout:)`, `assertFocused(_:)`, `typeInto(_:text:)`, `pressKey(_:modifiers:)`. Those exist for drivers, not tests. Tests reach the same behaviour via the typed driver hierarchy.
 - Test names describe the user-visible behaviour in plain English (TEST_GUIDE §2). `testOpeningTradeFocusesPayee` good; `test_TDV_focus_init_v2` bad.
 - One behaviour per test (TEST_GUIDE §2). If the test name needs an "and" or asserts more than one independent thing, flag it.
 - Tests do not repeat post-conditions an action already owns (UI_TEST_GUIDE §3 invariant 1, "What goes where"). If a test calls `app.sidebar.switchToAccount(.checking)` and then asserts the transaction list reloaded, flag it — the action's own post-condition wait already proved that, and the redundant assertion belongs in the driver. Tests assert *scenario-specific* outcomes only.
@@ -37,8 +38,10 @@ The screen-driver rule (UI_TEST_GUIDE §2) is inviolable.
 
 Drivers carry the discipline that lets tests stay clean.
 
-- **Action methods** (imperative verbs: `tap`, `type`, `pressEnter`, `switchToAccount`, `select`, `dismiss`) start with `Trace.record(#function, ...)` on their first line. Without the trace, `trace.txt` cannot point at the failing step.
+- **Action methods** (imperative verbs: `tap`, `type`, `pressEnter`, `switchToAccount`, `select`, `dismiss`) start with `Trace.record(#function, ...)` on their first line. Without the trace, `trace.txt` cannot point at the failing step. Action methods also record `✓` on successful completion and `✗` on failure (via the failure path) so the trace artefact reflects outcome, not just intent.
+- **Expectation methods (`expect…`) do not call `Trace.record`.** Trace records only actions; otherwise the trace pollutes with read-only checks and obscures the action sequence.
 - **Action methods** contain at least one bounded wait, or delegate to another driver action that does. The wait targets a real post-condition (an element existing, a value propagating, a focus state changing) — not a fixed delay.
+- **Wait timeouts default to 3 s.** Any `waitForExistence(timeout:)` (or other bounded-wait) call without a timeout, with `.infinity`, or with a value materially above 3 s and no inline justification is a violation. The 3 s budget is the contract that keeps the suite under 60 s overall.
 - **Expectation methods** (`expect…` verbs) never mutate state. Read-only assertions only.
 - All element lookups go through `MoolahApp.element(for:)`. **No** `app.buttons[…]`, `app.textFields[…]`, `app.staticTexts[…]` or any direct XCUI-element-query access from a driver. The single resolver is the instrumentation seam.
 - No cached `XCUIElement` properties on a driver. Re-resolve on every call. Cached references go stale across SwiftUI re-renders and produce false flake-looking failures.
@@ -62,6 +65,28 @@ These patterns are **always wrong** in `MoolahUITests_macOS/`. Flag every occurr
 - `accessibilityLabel(_:)` calls (for VoiceOver) are not modified or removed by the test work — identifiers and labels coexist.
 - Identifiers are only added to elements a current test (or imminent test in the same PR) needs. No bulk-identifier passes across unrelated views.
 - No test-only production branches (TEST_GUIDE §4). Flag any `#if DEBUG`, `#if TESTING`, `if isUITest`, or similar branch added in a view (or anywhere else in main-app code) to alter behaviour for a UI test. The single legitimate test-mode entry point is the `--ui-testing` launch argument plus the `UI_TESTING_SEED` environment variable, read once at app startup at the dependency-injection seam — never scattered through business logic or view bodies.
+
+### `MoolahUITestCase` (`MoolahUITests_macOS/Helpers/MoolahUITestCase.swift`)
+
+When the test base class itself is modified, verify the failure-artefact regime is intact (UI_TEST_GUIDE §5):
+
+- `tearDown` produces all four artefacts on test failure: `tree.txt`, `screenshot.png`, `seed.txt`, `trace.txt`.
+- Each artefact is attached to the `XCTestCase` result *and* mirrored to `.agent-tmp/ui-fail-<TestName>/` for direct inspection.
+- `tree.txt` columns are `identifier | type | label | value | frame | focused?` — one element per line, indented by depth.
+- `seed.txt` content matches the fixture metadata documented in the matching `UITestSeed` case (UUIDs, names, amounts, dates).
+- `trace.txt` is generated from `Trace.record(...)` invocations made during the test run, in order, with `✓`/`✗` outcome marks.
+
+If any of these regress, the suite loses the property that failures are debuggable on first read — the entire reason the regime exists.
+
+### Tests changed alongside production changes
+
+When a test diff is part of a PR that also changes production code or a driver, look for a "test walked back to make it pass" smell (UI_TEST_GUIDE §5, "Never modify the test to work around a failure"):
+
+- Was an `expect…` assertion loosened (e.g. count went from `expectSuggestionsVisible(count: 2)` to `count: 1`) without a corresponding spec/scope change?
+- Was a previously-checked behaviour deleted from the test rather than the driver fixed?
+- Did the test's "Arrange / Act / Assert" trio shrink while the driver and seed are unchanged?
+
+These are heuristics, not hard rules — but flag them as Important so the reviewer can confirm the change reflects a real product update, not a workaround.
 
 ### Seed files (`UITestSupport/UITestSeeds.swift`)
 
@@ -96,7 +121,7 @@ The registry below names every rule that supports escape-hatch suppression. A fe
 | `seed-dead-code` | A seed enum case is not referenced by any test. |
 | `identifier-dead-code` | A `UITestIdentifiers` constant is not referenced by any view or driver. |
 | `seed-uuid-literal` | A seed entity's UUID is generated via `UUID()` instead of a hard-coded `UUID(uuidString:)!` literal. |
-| `inline-multi-step` | A test inlines a multi-step driver sequence that recurs (3+ consecutive driver calls on the same sub-driver appearing here and in another test) instead of extracting it into a single driver action. |
+| `inline-multi-step` | A test inlines a multi-step driver sequence that recurs (3+ consecutive driver calls on the same sub-driver appearing here and in another test) instead of extracting it into a single driver action. *Verifying this rule requires `Grep`-ing across `MoolahUITests_macOS/Tests/**` for the same call sequence elsewhere; treat the check as best-effort.* |
 | `test-only-branch` | Production code (view body or otherwise) contains a `#if DEBUG`, `#if TESTING`, `if isUITest`, or equivalent branch added to alter behaviour for a UI test. |
 
 ## Escape Hatch
@@ -132,11 +157,11 @@ Produce a detailed report with:
 
 ### Issues Found
 
-Categorize by severity:
+Categorize by severity. The mapping is roughly: Critical = "always-wrong, would erode suite reliability"; Important = enforceable rule from the registry that needs to be addressed (or escape-hatched with justification); Minor = advisory / human-judgement check that does not block merge but is worth raising.
 
-- **Critical:** Sleeps, unbounded waits, retry loops, `XCUI*` referenced from a test file, raw identifier literals in a view (any of the always-wrong patterns above). These would erode the suite's reliability if merged.
-- **Important:** Driver action missing `Trace.record(#function)`, driver action with no post-condition wait, cached `XCUIElement` properties, element lookup that bypasses `MoolahApp.element(for:)`, test class inheriting `XCTestCase` instead of `MoolahUITestCase`, escape-hatch comment with no justification.
-- **Minor:** Test name not in plain English, identifier added to a view but not used by any test in this PR, unreferenced seed or constant, missing fixture documentation in a seed.
+- **Critical:** `xcui-import` in test files, `bounded-wait` violations (sleeps, `asyncAfter`, retry loops, unbounded waits), `inline-identifier` in views, `test-only-branch` in production code, regressed failure-artefact regime (see "MoolahUITestCase" section), or any silently broken escape-hatch (cites a non-existent rule).
+- **Important:** Any other registry rule violated without a valid escape hatch — `trace-record`, `single-resolver`, `cached-element`, `loud-failure`, `expect-no-mutate`, `test-base-class`, `single-behaviour`, `redundant-postcondition`, `seed-uuid-literal`, `seed-dead-code`, `identifier-dead-code`, `inline-multi-step`. Also: escape-hatch comment without a real reason; tests-walked-back-to-make-them-pass smell.
+- **Minor:** Advisory checks not in the registry — test name not in plain English, identifier added to a view that no test uses yet, missing fixture documentation in a seed, accessibility label removed alongside a new identifier, namespace regex drift.
 
 For each issue include:
 - File path and line number (`file:line`).
