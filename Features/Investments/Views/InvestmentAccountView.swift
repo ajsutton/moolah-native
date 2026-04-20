@@ -16,6 +16,7 @@ struct InvestmentAccountView: View {
   @State private var positionsInput: PositionsViewInput = PositionsViewInput(
     title: "", hostCurrency: .AUD, positions: [], historicalValue: nil)
   @State private var positionsRange: PositionsTimeRange = .threeMonths
+  @State private var isLoadingPositions = false
 
   /// The profile's fiat currency instrument, derived from the account's instrument.
   private var profileCurrencyInstrument: Instrument {
@@ -80,9 +81,13 @@ struct InvestmentAccountView: View {
           }
         #endif
       } else {
-        PositionsView(
-          input: positionsInput
-        )
+        if isLoadingPositions && positionsInput.positions.isEmpty {
+          ProgressView()
+            .frame(maxWidth: .infinity)
+            .padding()
+        } else {
+          PositionsView(input: positionsInput, range: $positionsRange)
+        }
       }
 
       Divider()
@@ -113,16 +118,26 @@ struct InvestmentAccountView: View {
         accountId: account.id, instrument: account.instrument, store: investmentStore)
     }
     .task(id: account.id) {
+      isLoadingPositions = true
       await investmentStore.loadAllData(
         accountId: account.id, profileCurrency: profileCurrencyInstrument)
       positionsInput = await investmentStore.positionsViewInput(
         title: account.name, range: positionsRange)
+      isLoadingPositions = false
+    }
+    .onChange(of: positionsRange) { _, _ in
+      Task {
+        positionsInput = await investmentStore.positionsViewInput(
+          title: account.name, range: positionsRange)
+      }
     }
     .refreshable {
+      isLoadingPositions = true
       await investmentStore.loadAllData(
         accountId: account.id, profileCurrency: profileCurrencyInstrument)
       positionsInput = await investmentStore.positionsViewInput(
         title: account.name, range: positionsRange)
+      isLoadingPositions = false
     }
   }
 
@@ -245,5 +260,48 @@ struct InvestmentAccountView: View {
         value: InstrumentAmount(quantity: quantity, instrument: .AUD)
       )
     }
+  }
+}
+
+#Preview("Position-tracked") {
+  let (backend, _) = PreviewBackend.create()
+  let investmentStore = InvestmentStore(
+    repository: backend.investments,
+    transactionRepository: backend.transactions,
+    conversionService: backend.conversionService
+  )
+  let transactionStore = TransactionStore(
+    repository: backend.transactions,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD
+  )
+  let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
+  let account = Account(name: "Brokerage", type: .investment, instrument: .AUD)
+
+  return NavigationStack {
+    InvestmentAccountView(
+      account: account,
+      accounts: Accounts(from: [account]),
+      categories: Categories(from: []),
+      earmarks: Earmarks(from: []),
+      investmentStore: investmentStore,
+      transactionStore: transactionStore
+    )
+    .environment(session)
+  }
+  .frame(width: 720, height: 600)
+  .task {
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    _ = try? await backend.accounts.create(
+      account, openingBalance: InstrumentAmount(quantity: 0, instrument: .AUD))
+    _ = try? await backend.transactions.create(
+      Transaction(
+        date: Date().addingTimeInterval(-86_400 * 30),
+        legs: [
+          TransactionLeg(accountId: account.id, instrument: bhp, quantity: 100, type: .income),
+          TransactionLeg(accountId: account.id, instrument: .AUD, quantity: -4_000, type: .expense),
+        ]
+      )
+    )
   }
 }
