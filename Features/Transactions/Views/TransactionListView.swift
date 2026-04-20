@@ -9,6 +9,9 @@ struct TransactionListView: View {
   let earmarks: Earmarks
   let transactionStore: TransactionStore
   var positions: [Position] = []
+  var positionsHostCurrency: Instrument = .AUD
+  var positionsTitle: String = "Balances"
+  var conversionService: (any InstrumentConversionService)?
 
   /// When non-nil, the parent owns the selection and handles the inspector.
   /// When nil, TransactionListView manages its own selection and inspector.
@@ -52,7 +55,10 @@ struct TransactionListView: View {
     title: String, filter: TransactionFilter,
     accounts: Accounts, categories: Categories, earmarks: Earmarks,
     transactionStore: TransactionStore,
-    positions: [Position] = []
+    positions: [Position] = [],
+    positionsHostCurrency: Instrument = .AUD,
+    positionsTitle: String = "Balances",
+    conversionService: (any InstrumentConversionService)? = nil
   ) {
     self.title = title
     self.baseFilter = filter
@@ -61,6 +67,9 @@ struct TransactionListView: View {
     self.earmarks = earmarks
     self.transactionStore = transactionStore
     self.positions = positions
+    self.positionsHostCurrency = positionsHostCurrency
+    self.positionsTitle = positionsTitle
+    self.conversionService = conversionService
     self._externalSelection = nil
     self._activeFilter = State(initialValue: filter)
   }
@@ -71,6 +80,9 @@ struct TransactionListView: View {
     accounts: Accounts, categories: Categories, earmarks: Earmarks,
     transactionStore: TransactionStore,
     positions: [Position] = [],
+    positionsHostCurrency: Instrument = .AUD,
+    positionsTitle: String = "Balances",
+    conversionService: (any InstrumentConversionService)? = nil,
     selectedTransaction: Binding<Transaction?>
   ) {
     self.title = title
@@ -80,9 +92,15 @@ struct TransactionListView: View {
     self.earmarks = earmarks
     self.transactionStore = transactionStore
     self.positions = positions
+    self.positionsHostCurrency = positionsHostCurrency
+    self.positionsTitle = positionsTitle
+    self.conversionService = conversionService
     self._externalSelection = selectedTransaction
     self._activeFilter = State(initialValue: filter)
   }
+
+  @State private var positionsInput: PositionsViewInput?
+  @State private var positionsRange: PositionsTimeRange = .threeMonths
 
   @State private var showError = false
   @State private var errorMessage = ""
@@ -215,7 +233,9 @@ struct TransactionListView: View {
 
   private var listView: some View {
     List(selection: selectedTransactionBinding) {
-      PositionListView(positions: positions)
+      if let positionsInput, !positionsInput.positions.isEmpty {
+        PositionsView(input: positionsInput, range: $positionsRange)
+      }
       ForEach(filteredTransactions) { entry in
         TransactionRowView(
           transaction: entry.transaction, accounts: accounts,
@@ -330,6 +350,25 @@ struct TransactionListView: View {
         await transactionStore.load(
           filter: activeFilter)
       }
+    }
+    .task(id: positions) {
+      guard let conversionService, !positions.isEmpty else {
+        positionsInput = nil
+        return
+      }
+      let valuator = PositionsValuator(conversionService: conversionService)
+      let rows = await valuator.valuate(
+        positions: positions,
+        hostCurrency: positionsHostCurrency,
+        costBasis: [:],
+        on: Date()
+      )
+      positionsInput = PositionsViewInput(
+        title: positionsTitle,
+        hostCurrency: positionsHostCurrency,
+        positions: rows,
+        historicalValue: nil
+      )
     }
     .refreshable {
       await transactionStore.load(
