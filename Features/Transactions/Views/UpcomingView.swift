@@ -23,6 +23,7 @@ struct UpcomingView: View {
         supportsComplexTransactions: session.profile.supportsComplexTransactions
       )
       .focusedSceneValue(\.selectedTransaction, $selectedTransaction)
+      .focusedSceneValue(\.newTransactionAction, createNewScheduledTransaction)
       .confirmationDialog(
         "Delete this transaction?",
         isPresented: Binding(
@@ -161,6 +162,15 @@ struct UpcomingView: View {
       }
     }
     .profileNavigationTitle("Upcoming")
+    .toolbar {
+      ToolbarItem(placement: .primaryAction) {
+        Button {
+          createNewScheduledTransaction()
+        } label: {
+          Label("Add Scheduled Transaction", systemImage: "plus")
+        }
+      }
+    }
     .task {
       await transactionStore.load(filter: TransactionFilter(scheduled: true))
     }
@@ -172,8 +182,41 @@ struct UpcomingView: View {
         ContentUnavailableView(
           "No Scheduled Transactions",
           systemImage: "calendar",
-          description: Text("Create a recurring transaction to see it here.")
+          description: Text(
+            PlatformActionVerb.emptyStatePrompt(
+              buttonLabel: "+",
+              suffix: "to add a recurring transaction."
+            )
+          )
         )
+      }
+    }
+  }
+
+  private func createNewScheduledTransaction() {
+    let instrument = accounts.ordered.first?.instrument ?? .AUD
+    let fallbackAccountId = accounts.ordered.first?.id
+
+    let placeholder: Transaction? = fallbackAccountId.map { id in
+      Transaction(
+        date: Date(),
+        payee: "",
+        recurPeriod: .month,
+        recurEvery: 1,
+        legs: [TransactionLeg(accountId: id, instrument: instrument, quantity: 0, type: .expense)]
+      )
+    }
+    selectedTransaction = placeholder
+
+    Task {
+      if let created = await transactionStore.createDefaultScheduled(
+        accountId: nil,
+        fallbackAccountId: fallbackAccountId,
+        instrument: instrument
+      ) {
+        if selectedTransaction?.id == placeholder?.id {
+          selectedTransaction = created
+        }
       }
     }
   }

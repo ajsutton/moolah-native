@@ -1530,6 +1530,90 @@ struct TransactionStoreTests {
     #expect(failingStore.error != nil)
   }
 
+  // MARK: - createDefaultScheduled
+
+  @Test func testCreateDefaultScheduledSetsMonthlyRecurrence() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
+
+    await store.load(filter: TransactionFilter(scheduled: true))
+
+    let created = await store.createDefaultScheduled(
+      accountId: accountId,
+      fallbackAccountId: nil,
+      instrument: Instrument.defaultTestInstrument
+    )
+
+    #expect(created != nil)
+    #expect(created?.isScheduled == true)
+    #expect(created?.recurPeriod == .month)
+    #expect(created?.recurEvery == 1)
+    #expect(created?.legs.first?.type == .expense)
+    #expect(created?.legs.first?.quantity == 0)
+    #expect(created?.accountIds.contains(accountId) == true)
+    #expect(created?.payee == "")
+  }
+
+  @Test func testCreateDefaultScheduledFallsBackToFirstAccount() async throws {
+    let fallbackAccountId = UUID()
+    let (backend, _) = try TestBackend.create()
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
+
+    await store.load(filter: TransactionFilter(scheduled: true))
+
+    let created = await store.createDefaultScheduled(
+      accountId: nil,
+      fallbackAccountId: fallbackAccountId,
+      instrument: Instrument.defaultTestInstrument
+    )
+
+    #expect(created != nil)
+    #expect(created?.isScheduled == true)
+    #expect(created?.accountIds.contains(fallbackAccountId) == true)
+  }
+
+  @Test func testCreateDefaultScheduledReturnsNilWhenNoAccount() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
+
+    let result = await store.createDefaultScheduled(
+      accountId: nil,
+      fallbackAccountId: nil,
+      instrument: Instrument.defaultTestInstrument
+    )
+
+    #expect(result == nil)
+  }
+
+  @Test func testCreateDefaultScheduledReturnsNilOnFailure() async throws {
+    let failingStore = TransactionStore(
+      repository: FailingTransactionRepository(),
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
+
+    let result = await failingStore.createDefaultScheduled(
+      accountId: accountId,
+      fallbackAccountId: nil,
+      instrument: Instrument.defaultTestInstrument
+    )
+
+    #expect(result == nil)
+    #expect(failingStore.error != nil)
+  }
+
   /// Issue #48: a conversion failure while computing running balances must be
   /// surfaced on the store so the UI can render a retry path, not silently
   /// swallowed. Target is AUD; seeded transaction is in USD and the conversion

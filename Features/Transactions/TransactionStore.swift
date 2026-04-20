@@ -87,6 +87,25 @@ final class TransactionStore {
     return await create(tx)
   }
 
+  /// Creates a default scheduled transaction (monthly recurrence, expense, zero
+  /// amount, today's date). Appears in the Upcoming view immediately; the user
+  /// refines payee, amount, and recurrence in the inspector.
+  func createDefaultScheduled(
+    accountId: UUID?,
+    fallbackAccountId: UUID?,
+    instrument: Instrument
+  ) async -> Transaction? {
+    guard let acctId = accountId ?? fallbackAccountId else { return nil }
+    let tx = Transaction(
+      date: Date(),
+      payee: "",
+      recurPeriod: .month,
+      recurEvery: 1,
+      legs: [TransactionLeg(accountId: acctId, instrument: instrument, quantity: 0, type: .expense)]
+    )
+    return await create(tx)
+  }
+
   /// Creates a default earmark-only transaction (income type, zero amount, today's date).
   func createDefaultEarmark(
     earmarkId: UUID,

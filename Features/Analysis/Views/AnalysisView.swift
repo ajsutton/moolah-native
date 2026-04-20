@@ -41,6 +41,7 @@ struct AnalysisView: View {
       supportsComplexTransactions: session.profile.supportsComplexTransactions
     )
     .profileNavigationTitle("Analysis")
+    .focusedSceneValue(\.newTransactionAction, createNewScheduledTransaction)
     .toolbar {
       ToolbarItem(placement: .primaryAction) {
         Menu {
@@ -53,6 +54,14 @@ struct AnalysisView: View {
           }
         } label: {
           Label("Filters", systemImage: "slider.horizontal.3")
+        }
+      }
+
+      ToolbarItem(placement: .primaryAction) {
+        Button {
+          createNewScheduledTransaction()
+        } label: {
+          Label("Add Scheduled Transaction", systemImage: "plus")
         }
       }
     }
@@ -74,6 +83,35 @@ struct AnalysisView: View {
       // threshold to avoid disruptive reloads when the app has just been loaded.
       if oldPhase == .background && newPhase == .active {
         Task { await store.refreshIfStale(minimumInterval: 60) }
+      }
+    }
+  }
+
+  private func createNewScheduledTransaction() {
+    let accounts = accountStore.accounts
+    let instrument = accounts.ordered.first?.instrument ?? .AUD
+    let fallbackAccountId = accounts.ordered.first?.id
+
+    let placeholder: Transaction? = fallbackAccountId.map { id in
+      Transaction(
+        date: Date(),
+        payee: "",
+        recurPeriod: .month,
+        recurEvery: 1,
+        legs: [TransactionLeg(accountId: id, instrument: instrument, quantity: 0, type: .expense)]
+      )
+    }
+    selectedUpcomingTransaction = placeholder
+
+    Task {
+      if let created = await transactionStore.createDefaultScheduled(
+        accountId: nil,
+        fallbackAccountId: fallbackAccountId,
+        instrument: instrument
+      ) {
+        if selectedUpcomingTransaction?.id == placeholder?.id {
+          selectedUpcomingTransaction = created
+        }
       }
     }
   }
