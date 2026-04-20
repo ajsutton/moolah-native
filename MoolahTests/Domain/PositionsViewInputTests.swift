@@ -122,4 +122,17 @@ struct HistoricalValueSeriesTests {
     )
     #expect(Set(series.instruments) == Set([bhp.id, cba.id]))
   }
+
+  @Test("totalSeries is empty when total is empty even when perInstrument has data")
+  func totalEmptyWithPerInstrumentPopulated() {
+    let series = HistoricalValueSeries(
+      hostCurrency: aud,
+      total: [],
+      perInstrument: [
+        bhp.id: [HistoricalValueSeries.Point(date: date(1), value: 60, cost: 50)]
+      ]
+    )
+    #expect(series.totalSeries.isEmpty)
+    #expect(series.series(for: bhp).count == 1)
+  }
 }
