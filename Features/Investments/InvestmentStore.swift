@@ -191,7 +191,7 @@ final class InvestmentStore {
   /// is marked unavailable (`nil`) and `error` is set so the view can
   /// surface a retry affordance. Per-position `ValuedPosition`s still
   /// render individually — the failing position appears with a `nil`
-  /// `marketValue` and sibling positions with their successful values.
+  /// `value` and sibling positions with their successful values.
   func valuatePositions(profileCurrency: Instrument, on date: Date) async {
     var valued: [ValuedPosition] = []
     var total: Decimal = 0
