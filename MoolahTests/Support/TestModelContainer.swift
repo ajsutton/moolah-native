@@ -17,7 +17,13 @@ enum TestModelContainer {
       InvestmentValueRecord.self,
       InstrumentRecord.self,
     ])
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    // `cloudKitDatabase: .none` is critical: the test binary is signed with
+    // iCloud entitlements, so SwiftData's default (`.automatic`) attaches
+    // CoreData+CloudKit mirroring to every in-memory store in the process.
+    // Mirroring on a /dev/null store fails but can still import records from
+    // iCloud into the test container before tearing down — the cause of the
+    // `AnalysisRepositoryContractTests` daily-revaluation flake.
+    let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     return try ModelContainer(for: schema, configurations: [config])
   }
 }
