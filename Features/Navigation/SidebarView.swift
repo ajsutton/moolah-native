@@ -3,6 +3,7 @@ import SwiftUI
 enum SidebarSelection: Hashable {
   case account(UUID)
   case earmark(UUID)
+  case recentlyAdded
   case allTransactions
   case upcomingTransactions
   case categories
@@ -168,6 +169,10 @@ struct SidebarView: View {
 
         NavigationLink(value: SidebarSelection.upcomingTransactions) {
           Label("Upcoming", systemImage: "calendar")
+        }
+
+        NavigationLink(value: SidebarSelection.recentlyAdded) {
+          Label("Recently Added", systemImage: "tray.full")
         }
 
         NavigationLink(value: SidebarSelection.allTransactions) {

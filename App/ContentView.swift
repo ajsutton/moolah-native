@@ -76,6 +76,8 @@ struct ContentView: View {
             transactionStore: transactionStore,
             analysisRepository: analysisStore.repository)
         }
+      case .recentlyAdded:
+        RecentlyAddedView(backend: session.backend)
       case .allTransactions:
         TransactionListView(
           title: "All Transactions",

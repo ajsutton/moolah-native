@@ -22,6 +22,7 @@ final class ProfileSession: Identifiable {
   let stockPriceService: StockPriceService
   let cryptoPriceService: CryptoPriceService
   let cryptoTokenStore: CryptoTokenStore
+  let importStore: ImportStore
 
   /// Observer token for sync coordinator notifications (nil for remote profiles).
   private var syncObserverToken: SyncCoordinator.ObserverToken?
@@ -154,6 +155,31 @@ final class ProfileSession: Identifiable {
       conversionService: backend.conversionService,
       profileCurrency: profile.instrument
     )
+
+    // CSV import: ImportStore owns the pipeline orchestration; the staging
+    // store lives per-profile on disk so pending/failed files follow the
+    // profile across app restarts.
+    let stagingDirectory = ProfileSession.importStagingDirectory(for: profile.id)
+    do {
+      let staging = try ImportStagingStore(directory: stagingDirectory)
+      self.importStore = ImportStore(backend: backend, staging: staging)
+    } catch {
+      // Fall back to a scratch staging store in a temporary directory. This
+      // keeps the store non-optional — pending/failed files won't persist
+      // across app restarts in this degraded mode but the pipeline still
+      // works.
+      let fallback = FileManager.default.temporaryDirectory
+        .appendingPathComponent("csv-staging-fallback-\(profile.id.uuidString)")
+      // swiftlint:disable:next force_try — fallback in a tmp dir cannot fail
+      // in practice on Apple platforms.
+      let staging = try! ImportStagingStore(directory: fallback)
+      self.importStore = ImportStore(backend: backend, staging: staging)
+      let errDesc = error.localizedDescription
+      let stagingPath = stagingDirectory.path
+      logger.error(
+        "Failed to open CSV import staging at \(stagingPath, privacy: .public): \(errDesc, privacy: .public). Falling back to tmp."
+      )
+    }
 
     // Wire up cross-store side effects. The callback is fire-and-forget in
     // production; `updateInvestmentValue` awaits its own first conversion
@@ -342,5 +368,23 @@ final class ProfileSession: Identifiable {
     }
     syncReloadTask?.cancel()
     syncReloadTask = nil
+  }
+
+  /// Per-profile directory under Application Support where CSV import staging
+  /// lives. Not part of the SwiftData store because staging is device-local
+  /// and doesn't sync.
+  nonisolated static func importStagingDirectory(for profileId: UUID) -> URL {
+    let base =
+      (try? FileManager.default.url(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask,
+        appropriateFor: nil,
+        create: true))
+      ?? FileManager.default.temporaryDirectory
+    return
+      base
+      .appendingPathComponent("Moolah", isDirectory: true)
+      .appendingPathComponent("csv-staging", isDirectory: true)
+      .appendingPathComponent(profileId.uuidString, isDirectory: true)
   }
 }
