@@ -13,6 +13,8 @@ final class RemoteBackend: BackendProvider {
   let analysis: any AnalysisRepository
   let investments: any InvestmentRepository
   let conversionService: any InstrumentConversionService
+  let csvImportProfiles: any CSVImportProfileRepository
+  let importRules: any ImportRuleRepository
 
   init(
     baseURL: URL,
@@ -33,5 +35,7 @@ final class RemoteBackend: BackendProvider {
     investments = RemoteInvestmentRepository(client: client, instrument: instrument)
     let exchangeRates = ExchangeRateService(client: FrankfurterClient())
     conversionService = FiatConversionService(exchangeRates: exchangeRates)
+    csvImportProfiles = RemoteCSVImportProfileRepository()
+    importRules = RemoteImportRuleRepository()
   }
 }

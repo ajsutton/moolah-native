@@ -10,6 +10,8 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
   let analysis: any AnalysisRepository
   let investments: any InvestmentRepository
   let conversionService: any InstrumentConversionService
+  let csvImportProfiles: any CSVImportProfileRepository
+  let importRules: any ImportRuleRepository
 
   init(
     modelContainer: ModelContainer,
@@ -33,5 +35,8 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
     self.investments = CloudKitInvestmentRepository(
       modelContainer: modelContainer, instrument: instrument)
     self.conversionService = conversionService
+    self.csvImportProfiles = CloudKitCSVImportProfileRepository(
+      modelContainer: modelContainer)
+    self.importRules = CloudKitImportRuleRepository(modelContainer: modelContainer)
   }
 }

@@ -217,6 +217,8 @@ private struct CloudKitCategoryTestBackend: BackendProvider, @unchecked Sendable
   let analysis: any AnalysisRepository
   let investments: any InvestmentRepository
   let conversionService: any InstrumentConversionService
+  let csvImportProfiles: any CSVImportProfileRepository
+  let importRules: any ImportRuleRepository
 
   init() {
     let container = try! TestModelContainer.create()
@@ -243,6 +245,9 @@ private struct CloudKitCategoryTestBackend: BackendProvider, @unchecked Sendable
     self.analysis = CloudKitAnalysisRepository(
       modelContainer: container, instrument: instrument,
       conversionService: conversion)
+    self.csvImportProfiles = CloudKitCSVImportProfileRepository(
+      modelContainer: container)
+    self.importRules = CloudKitImportRuleRepository(modelContainer: container)
   }
 }
 

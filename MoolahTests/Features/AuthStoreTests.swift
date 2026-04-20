@@ -122,6 +122,8 @@ private struct TestAuthBackend: BackendProvider {
   let analysis: any AnalysisRepository
   let investments: any InvestmentRepository
   let conversionService: any InstrumentConversionService
+  let csvImportProfiles: any CSVImportProfileRepository
+  let importRules: any ImportRuleRepository
 
   init(auth: any AuthProvider) throws {
     let (backend, _) = try TestBackend.create()
@@ -133,6 +135,8 @@ private struct TestAuthBackend: BackendProvider {
     self.analysis = backend.analysis
     self.investments = backend.investments
     self.conversionService = backend.conversionService
+    self.csvImportProfiles = backend.csvImportProfiles
+    self.importRules = backend.importRules
   }
 }
 

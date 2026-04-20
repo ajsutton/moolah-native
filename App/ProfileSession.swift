@@ -225,6 +225,22 @@ final class ProfileSession: Identifiable {
           syncCoordinator?.queueDeletion(id: id, zoneID: zoneID)
         }
       }
+      if let repo = backend.csvImportProfiles as? CloudKitCSVImportProfileRepository {
+        repo.onRecordChanged = { [weak syncCoordinator] id in
+          syncCoordinator?.queueSave(id: id, zoneID: zoneID)
+        }
+        repo.onRecordDeleted = { [weak syncCoordinator] id in
+          syncCoordinator?.queueDeletion(id: id, zoneID: zoneID)
+        }
+      }
+      if let repo = backend.importRules as? CloudKitImportRuleRepository {
+        repo.onRecordChanged = { [weak syncCoordinator] id in
+          syncCoordinator?.queueSave(id: id, zoneID: zoneID)
+        }
+        repo.onRecordDeleted = { [weak syncCoordinator] id in
+          syncCoordinator?.queueDeletion(id: id, zoneID: zoneID)
+        }
+      }
     } else if profile.backendType == .cloudKit {
       logger.warning("CloudKit not available — profile sync disabled for \(profile.id)")
     }

@@ -3226,6 +3226,8 @@ private struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable
   let analysis: any AnalysisRepository
   let investments: any InvestmentRepository
   let conversionService: any InstrumentConversionService
+  let csvImportProfiles: any CSVImportProfileRepository
+  let importRules: any ImportRuleRepository
 
   init(conversionService customConversion: (any InstrumentConversionService)? = nil) {
     let container = try! TestModelContainer.create()
@@ -3256,5 +3258,8 @@ private struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable
       modelContainer: container, instrument: currency, conversionService: conversion)
     self.investments = CloudKitInvestmentRepository(
       modelContainer: container, instrument: currency)
+    self.csvImportProfiles = CloudKitCSVImportProfileRepository(
+      modelContainer: container)
+    self.importRules = CloudKitImportRuleRepository(modelContainer: container)
   }
 }

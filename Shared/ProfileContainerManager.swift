@@ -119,6 +119,8 @@ final class ProfileContainerManager {
       EarmarkRecord.self,
       EarmarkBudgetItemRecord.self,
       InvestmentValueRecord.self,
+      CSVImportProfileRecord.self,
+      ImportRuleRecord.self,
     ])
 
     return ProfileContainerManager(

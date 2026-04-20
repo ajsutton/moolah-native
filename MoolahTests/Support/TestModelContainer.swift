@@ -16,6 +16,8 @@ enum TestModelContainer {
       EarmarkBudgetItemRecord.self,
       InvestmentValueRecord.self,
       InstrumentRecord.self,
+      CSVImportProfileRecord.self,
+      ImportRuleRecord.self,
     ])
     // `cloudKitDatabase: .none` is critical: the test binary is signed with
     // iCloud entitlements, so SwiftData's default (`.automatic`) attaches

@@ -302,6 +302,8 @@ struct MoolahApp: App {
         EarmarkRecord.self,
         EarmarkBudgetItemRecord.self,
         InvestmentValueRecord.self,
+        CSVImportProfileRecord.self,
+        ImportRuleRecord.self,
       ])
 
       let manager = ProfileContainerManager(

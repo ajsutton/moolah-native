@@ -134,6 +134,8 @@
         InstrumentRecord.self, CategoryRecord.self,
         EarmarkRecord.self, EarmarkBudgetItemRecord.self,
         InvestmentValueRecord.self,
+        CSVImportProfileRecord.self,
+        ImportRuleRecord.self,
       ])
       let config = ModelConfiguration(url: sourceURL)
       _ = try ModelContainer(for: schema, configurations: [config])

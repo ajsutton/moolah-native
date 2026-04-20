@@ -11,4 +11,6 @@ protocol BackendProvider: Sendable {
   var analysis: any AnalysisRepository { get }
   var investments: any InvestmentRepository { get }
   var conversionService: any InstrumentConversionService { get }
+  var csvImportProfiles: any CSVImportProfileRepository { get }
+  var importRules: any ImportRuleRepository { get }
 }

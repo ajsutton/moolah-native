@@ -14,6 +14,8 @@ enum PreviewBackend {
       EarmarkRecord.self,
       EarmarkBudgetItemRecord.self,
       InvestmentValueRecord.self,
+      CSVImportProfileRecord.self,
+      ImportRuleRecord.self,
     ])
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: schema, configurations: [config])

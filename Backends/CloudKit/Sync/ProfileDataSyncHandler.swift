@@ -235,6 +235,28 @@ final class ProfileDataSyncHandler: Sendable {
     }
 
     if !remaining.isEmpty {
+      let rIds = Array(remaining)
+      let profiles = fetchOrLog(
+        FetchDescriptor<CSVImportProfileRecord>(predicate: #Predicate { rIds.contains($0.id) }),
+        context: context)
+      for r in profiles {
+        lookup[r.id] = buildCKRecord(for: r)
+        remaining.remove(r.id)
+      }
+    }
+
+    if !remaining.isEmpty {
+      let rIds = Array(remaining)
+      let rules = fetchOrLog(
+        FetchDescriptor<ImportRuleRecord>(predicate: #Predicate { rIds.contains($0.id) }),
+        context: context)
+      for r in rules {
+        lookup[r.id] = buildCKRecord(for: r)
+        remaining.remove(r.id)
+      }
+    }
+
+    if !remaining.isEmpty {
       logger.warning(
         "Batch lookup: \(remaining.count) of \(uuids.count) records not found in local store")
     }
@@ -281,6 +303,12 @@ final class ProfileDataSyncHandler: Sendable {
       return buildCKRecord(for: record)
     }
     if let record = fetchInvestmentValue(id: uuid, context: context) {
+      return buildCKRecord(for: record)
+    }
+    if let record = fetchCSVImportProfile(id: uuid, context: context) {
+      return buildCKRecord(for: record)
+    }
+    if let record = fetchImportRule(id: uuid, context: context) {
       return buildCKRecord(for: record)
     }
 
@@ -339,6 +367,8 @@ final class ProfileDataSyncHandler: Sendable {
     collectIDs(InvestmentValueRecord.self) { $0.id }
     collectIDs(TransactionRecord.self) { $0.id }
     collectIDs(TransactionLegRecord.self) { $0.id }
+    collectIDs(CSVImportProfileRecord.self) { $0.id }
+    collectIDs(ImportRuleRecord.self) { $0.id }
 
     if !recordIDs.isEmpty {
       logger.info("Collected \(recordIDs.count) existing records for upload")
@@ -381,6 +411,8 @@ final class ProfileDataSyncHandler: Sendable {
     collectUnsynced(InvestmentValueRecord.self) { $0.id.uuidString }
     collectUnsynced(TransactionRecord.self) { $0.id.uuidString }
     collectUnsynced(TransactionLegRecord.self) { $0.id.uuidString }
+    collectUnsynced(CSVImportProfileRecord.self) { $0.id.uuidString }
+    collectUnsynced(ImportRuleRecord.self) { $0.id.uuidString }
 
     if !recordIDs.isEmpty {
       logger.info("Collected \(recordIDs.count) unsynced records for upload")
@@ -411,6 +443,8 @@ final class ProfileDataSyncHandler: Sendable {
     deleteAll(EarmarkRecord.self)
     deleteAll(EarmarkBudgetItemRecord.self)
     deleteAll(InvestmentValueRecord.self)
+    deleteAll(CSVImportProfileRecord.self)
+    deleteAll(ImportRuleRecord.self)
 
     do {
       try context.save()
@@ -444,6 +478,8 @@ final class ProfileDataSyncHandler: Sendable {
     clearAll(EarmarkBudgetItemRecord.self)
     clearAll(InvestmentValueRecord.self)
     clearAll(InstrumentRecord.self)
+    clearAll(CSVImportProfileRecord.self)
+    clearAll(ImportRuleRecord.self)
 
     do {
       try context.save()
@@ -503,6 +539,20 @@ final class ProfileDataSyncHandler: Sendable {
     case InvestmentValueRecord.recordType:
       if let record = fetchOrLog(
         FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
+      ).first {
+        record.encodedSystemFields = data
+      }
+    case CSVImportProfileRecord.recordType:
+      if let record = fetchOrLog(
+        FetchDescriptor<CSVImportProfileRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
+      ).first {
+        record.encodedSystemFields = data
+      }
+    case ImportRuleRecord.recordType:
+      if let record = fetchOrLog(
+        FetchDescriptor<ImportRuleRecord>(predicate: #Predicate { $0.id == id }),
         context: context
       ).first {
         record.encodedSystemFields = data
@@ -574,6 +624,20 @@ final class ProfileDataSyncHandler: Sendable {
     case InvestmentValueRecord.recordType:
       if let record = fetchOrLog(
         FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
+      ).first {
+        record.encodedSystemFields = nil
+      }
+    case CSVImportProfileRecord.recordType:
+      if let record = fetchOrLog(
+        FetchDescriptor<CSVImportProfileRecord>(predicate: #Predicate { $0.id == id }),
+        context: context
+      ).first {
+        record.encodedSystemFields = nil
+      }
+    case ImportRuleRecord.recordType:
+      if let record = fetchOrLog(
+        FetchDescriptor<ImportRuleRecord>(predicate: #Predicate { $0.id == id }),
         context: context
       ).first {
         record.encodedSystemFields = nil
@@ -707,6 +771,10 @@ final class ProfileDataSyncHandler: Sendable {
         batchUpsertEarmarkBudgetItems(ckRecords, context: context, systemFields: systemFields)
       case InvestmentValueRecord.recordType:
         batchUpsertInvestmentValues(ckRecords, context: context, systemFields: systemFields)
+      case CSVImportProfileRecord.recordType:
+        batchUpsertCSVImportProfiles(ckRecords, context: context, systemFields: systemFields)
+      case ImportRuleRecord.recordType:
+        batchUpsertImportRules(ckRecords, context: context, systemFields: systemFields)
       case ProfileRecord.recordType:
         break  // Handled by ProfileIndexSyncHandler
       default:
@@ -765,6 +833,16 @@ final class ProfileDataSyncHandler: Sendable {
       case InvestmentValueRecord.recordType:
         let records = fetchOrLog(
           FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { ids.contains($0.id) }),
+          context: context)
+        for record in records { context.delete(record) }
+      case CSVImportProfileRecord.recordType:
+        let records = fetchOrLog(
+          FetchDescriptor<CSVImportProfileRecord>(predicate: #Predicate { ids.contains($0.id) }),
+          context: context)
+        for record in records { context.delete(record) }
+      case ImportRuleRecord.recordType:
+        let records = fetchOrLog(
+          FetchDescriptor<ImportRuleRecord>(predicate: #Predicate { ids.contains($0.id) }),
           context: context)
         for record in records { context.delete(record) }
       case ProfileRecord.recordType:
@@ -1029,6 +1107,64 @@ final class ProfileDataSyncHandler: Sendable {
     }
   }
 
+  nonisolated private static func batchUpsertCSVImportProfiles(
+    _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
+  ) {
+    let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
+      guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
+      return (id, ck)
+    }
+    let existing = fetchOrLog(FetchDescriptor<CSVImportProfileRecord>(), context: context)
+    var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+
+    for (id, ckRecord) in pairs {
+      let values = CSVImportProfileRecord.fieldValues(from: ckRecord)
+      if let existing = byID[id] {
+        existing.accountId = values.accountId
+        existing.parserIdentifier = values.parserIdentifier
+        existing.headerSignature = values.headerSignature
+        existing.filenamePattern = values.filenamePattern
+        existing.deleteAfterImport = values.deleteAfterImport
+        existing.createdAt = values.createdAt
+        existing.lastUsedAt = values.lastUsedAt
+        existing.encodedSystemFields = systemFields[id.uuidString]
+      } else {
+        values.encodedSystemFields = systemFields[id.uuidString]
+        context.insert(values)
+        byID[id] = values
+      }
+    }
+  }
+
+  nonisolated private static func batchUpsertImportRules(
+    _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
+  ) {
+    let pairs: [(UUID, CKRecord)] = ckRecords.compactMap { ck in
+      guard let id = UUID(uuidString: ck.recordID.recordName) else { return nil }
+      return (id, ck)
+    }
+    let existing = fetchOrLog(FetchDescriptor<ImportRuleRecord>(), context: context)
+    var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+
+    for (id, ckRecord) in pairs {
+      let values = ImportRuleRecord.fieldValues(from: ckRecord)
+      if let existing = byID[id] {
+        existing.name = values.name
+        existing.enabled = values.enabled
+        existing.position = values.position
+        existing.matchMode = values.matchMode
+        existing.conditionsJSON = values.conditionsJSON
+        existing.actionsJSON = values.actionsJSON
+        existing.accountScope = values.accountScope
+        existing.encodedSystemFields = systemFields[id.uuidString]
+      } else {
+        values.encodedSystemFields = systemFields[id.uuidString]
+        context.insert(values)
+        byID[id] = values
+      }
+    }
+  }
+
   // MARK: - Per-Type Fetch Methods
 
   private func fetchAccount(id: UUID, context: ModelContext) -> AccountRecord? {
@@ -1069,6 +1205,17 @@ final class ProfileDataSyncHandler: Sendable {
 
   private func fetchTransactionLeg(id: UUID, context: ModelContext) -> TransactionLegRecord? {
     let descriptor = FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { $0.id == id })
+    return fetchOrLog(descriptor, context: context).first
+  }
+
+  private func fetchCSVImportProfile(id: UUID, context: ModelContext) -> CSVImportProfileRecord? {
+    let descriptor = FetchDescriptor<CSVImportProfileRecord>(
+      predicate: #Predicate { $0.id == id })
+    return fetchOrLog(descriptor, context: context).first
+  }
+
+  private func fetchImportRule(id: UUID, context: ModelContext) -> ImportRuleRecord? {
+    let descriptor = FetchDescriptor<ImportRuleRecord>(predicate: #Predicate { $0.id == id })
     return fetchOrLog(descriptor, context: context).first
   }
 }

@@ -27,6 +27,8 @@ extension EarmarkRecord: IdentifiableRecord {}
 extension EarmarkBudgetItemRecord: IdentifiableRecord {}
 extension InvestmentValueRecord: IdentifiableRecord {}
 extension ProfileRecord: IdentifiableRecord {}
+extension CSVImportProfileRecord: IdentifiableRecord {}
+extension ImportRuleRecord: IdentifiableRecord {}
 
 /// Protocol for records that can store CKRecord system fields.
 protocol SystemFieldsCacheable: AnyObject {
@@ -42,6 +44,8 @@ extension EarmarkBudgetItemRecord: SystemFieldsCacheable {}
 extension InvestmentValueRecord: SystemFieldsCacheable {}
 extension InstrumentRecord: SystemFieldsCacheable {}
 extension ProfileRecord: SystemFieldsCacheable {}
+extension CSVImportProfileRecord: SystemFieldsCacheable {}
+extension ImportRuleRecord: SystemFieldsCacheable {}
 
 // MARK: - CKRecord System Fields
 
@@ -357,6 +361,79 @@ extension InvestmentValueRecord: CloudKitRecordConvertible {
   }
 }
 
+// MARK: - CSVImportProfileRecord + CloudKitRecordConvertible
+
+extension CSVImportProfileRecord: CloudKitRecordConvertible {
+  static let recordType = "CD_CSVImportProfileRecord"
+
+  func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
+    let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    let record = CKRecord(recordType: Self.recordType, recordID: recordID)
+    record["accountId"] = accountId.uuidString as CKRecordValue
+    record["parserIdentifier"] = parserIdentifier as CKRecordValue
+    record["headerSignature"] = headerSignature as CKRecordValue
+    if let v = filenamePattern { record["filenamePattern"] = v as CKRecordValue }
+    record["deleteAfterImport"] = (deleteAfterImport ? 1 : 0) as CKRecordValue
+    record["createdAt"] = createdAt as CKRecordValue
+    if let v = lastUsedAt { record["lastUsedAt"] = v as CKRecordValue }
+    return record
+  }
+
+  static func fieldValues(from ckRecord: CKRecord) -> CSVImportProfileRecord {
+    let record = CSVImportProfileRecord(
+      id: UUID(uuidString: ckRecord.recordID.recordName) ?? UUID(),
+      accountId: (ckRecord["accountId"] as? String).flatMap { UUID(uuidString: $0) } ?? UUID(),
+      parserIdentifier: ckRecord["parserIdentifier"] as? String ?? "",
+      headerSignature: [],
+      filenamePattern: ckRecord["filenamePattern"] as? String,
+      deleteAfterImport: (ckRecord["deleteAfterImport"] as? Int ?? 0) != 0,
+      createdAt: ckRecord["createdAt"] as? Date ?? Date(),
+      lastUsedAt: ckRecord["lastUsedAt"] as? Date)
+    // Store the joined headerSignature directly (init normalises via joining,
+    // but the CK value already arrives pre-joined).
+    record.headerSignature = ckRecord["headerSignature"] as? String ?? ""
+    return record
+  }
+}
+
+// MARK: - ImportRuleRecord + CloudKitRecordConvertible
+
+extension ImportRuleRecord: CloudKitRecordConvertible {
+  static let recordType = "CD_ImportRuleRecord"
+
+  func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
+    let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    let record = CKRecord(recordType: Self.recordType, recordID: recordID)
+    record["name"] = name as CKRecordValue
+    record["enabled"] = (enabled ? 1 : 0) as CKRecordValue
+    record["position"] = position as CKRecordValue
+    record["matchMode"] = matchMode as CKRecordValue
+    record["conditionsJSON"] = conditionsJSON as CKRecordValue
+    record["actionsJSON"] = actionsJSON as CKRecordValue
+    if let v = accountScope { record["accountScope"] = v.uuidString as CKRecordValue }
+    return record
+  }
+
+  static func fieldValues(from ckRecord: CKRecord) -> ImportRuleRecord {
+    let id = UUID(uuidString: ckRecord.recordID.recordName) ?? UUID()
+    // The convenience initializer re-encodes the conditions/actions arrays,
+    // so to avoid a decode-then-re-encode round trip we go through the
+    // synthesised property setters on a fresh record.
+    let record = ImportRuleRecord(
+      id: id,
+      name: ckRecord["name"] as? String ?? "",
+      enabled: (ckRecord["enabled"] as? Int ?? 0) != 0,
+      position: ckRecord["position"] as? Int ?? 0,
+      matchMode: MatchMode(rawValue: ckRecord["matchMode"] as? String ?? "all") ?? .all,
+      conditions: [],
+      actions: [],
+      accountScope: (ckRecord["accountScope"] as? String).flatMap { UUID(uuidString: $0) })
+    record.conditionsJSON = ckRecord["conditionsJSON"] as? Data ?? Data()
+    record.actionsJSON = ckRecord["actionsJSON"] as? Data ?? Data()
+    return record
+  }
+}
+
 // MARK: - Lookup Helper
 
 /// Maps CKRecord.recordType strings to the corresponding record types for dispatching.
@@ -371,5 +448,7 @@ enum RecordTypeRegistry: Sendable {
     EarmarkRecord.recordType: EarmarkRecord.self,
     EarmarkBudgetItemRecord.recordType: EarmarkBudgetItemRecord.self,
     InvestmentValueRecord.recordType: InvestmentValueRecord.self,
+    CSVImportProfileRecord.recordType: CSVImportProfileRecord.self,
+    ImportRuleRecord.recordType: ImportRuleRecord.self,
   ]
 }
