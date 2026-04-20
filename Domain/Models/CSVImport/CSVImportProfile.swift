@@ -10,8 +10,8 @@ import Foundation
 struct CSVImportProfile: Codable, Sendable, Identifiable, Hashable {
   let id: UUID
   var accountId: UUID
-  var parserIdentifier: String
-  var headerSignature: [String]
+  let parserIdentifier: String
+  let headerSignature: [String]
   var filenamePattern: String?
   var deleteAfterImport: Bool
   let createdAt: Date

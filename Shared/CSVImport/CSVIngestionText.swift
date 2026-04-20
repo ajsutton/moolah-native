@@ -2,7 +2,7 @@ import Foundation
 
 /// Bytes-to-text decoding for CSV ingestion. Uses Apple's built-in encoding
 /// detection via `NSString.stringEncoding(for:...)` after a UTF-8 fast path.
-enum CSVIngestionText {
+enum CSVIngestionText: Sendable {
 
   enum DecodeError: Error, Equatable {
     case undecodable

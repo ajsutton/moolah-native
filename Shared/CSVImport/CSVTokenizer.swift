@@ -6,7 +6,7 @@ import Foundation
 /// Iteration is done over Unicode scalars rather than Swift `Character`s so
 /// that `\r\n` (which Swift collapses into a single grapheme cluster) is
 /// handled correctly.
-enum CSVTokenizer {
+enum CSVTokenizer: Sendable {
 
   /// Parse CSV text into rows. See type docs for handled edge cases.
   static func parse(_ text: String) -> [[String]] {

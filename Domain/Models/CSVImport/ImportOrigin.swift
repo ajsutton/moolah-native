@@ -15,14 +15,14 @@ import Foundation
 /// wrap this in an enum `TransactionImportOrigin` with `.single`/`.merged`
 /// cases. v1 stores only single values; the upgrade is an enum wrap.
 struct ImportOrigin: Codable, Sendable, Hashable {
-  var rawDescription: String
-  var bankReference: String?
-  var rawAmount: Decimal
-  var rawBalance: Decimal?
-  var importedAt: Date
-  var importSessionId: UUID
-  var sourceFilename: String?
-  var parserIdentifier: String
+  let rawDescription: String
+  let bankReference: String?
+  let rawAmount: Decimal
+  let rawBalance: Decimal?
+  let importedAt: Date
+  let importSessionId: UUID
+  let sourceFilename: String?
+  let parserIdentifier: String
 
   init(
     rawDescription: String,
