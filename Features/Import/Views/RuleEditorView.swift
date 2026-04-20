@@ -6,13 +6,31 @@ import SwiftUI
 /// the draft away.
 struct RuleEditorView: View {
   @State private var rule: ImportRule
+  /// UUID-keyed view-state wrappers around each condition / action. Using
+  /// stable IDs (rather than `Array.Index` offsets) keeps SwiftUI's view
+  /// identity pinned to the same row after a mid-list delete, so focus,
+  /// in-flight text edits, and Binding reads don't jump to a stale index.
+  @State private var identifiedConditions: [IdentifiedCondition]
+  @State private var identifiedActions: [IdentifiedAction]
+  @State private var affectedCount: Int?
+  @State private var countingTask: Task<Void, Never>?
   let onSave: (ImportRule) -> Void
   @Environment(\.dismiss) private var dismiss
   @Environment(CategoryStore.self) private var categoryStore
   @Environment(AccountStore.self) private var accountStore
+  @Environment(ImportRuleStore.self) private var ruleStore
+  @Environment(ProfileSession.self) private var session
 
   init(initialRule: ImportRule, onSave: @escaping (ImportRule) -> Void) {
     _rule = State(initialValue: initialRule)
+    _identifiedConditions = State(
+      initialValue: initialRule.conditions.map {
+        IdentifiedCondition(id: UUID(), condition: $0)
+      })
+    _identifiedActions = State(
+      initialValue: initialRule.actions.map {
+        IdentifiedAction(id: UUID(), action: $0)
+      })
     self.onSave = onSave
   }
 
@@ -22,6 +40,17 @@ struct RuleEditorView: View {
         Section(header: Text("Rule")) {
           TextField("Name", text: $rule.name)
           Toggle("Enabled", isOn: $rule.enabled)
+          Picker(
+            "Applies to",
+            selection: Binding(
+              get: { rule.accountScope },
+              set: { rule.accountScope = $0 })
+          ) {
+            Text("All accounts").tag(UUID?.none)
+            ForEach(accountStore.accounts.ordered, id: \.id) { account in
+              Text(account.name).tag(UUID?.some(account.id))
+            }
+          }
         }
 
         Section(header: Text("If \(matchModeLabel) of these are true")) {
@@ -30,48 +59,73 @@ struct RuleEditorView: View {
             Text("Any").tag(MatchMode.any)
           }
           .pickerStyle(.segmented)
-          ForEach(Array(rule.conditions.enumerated()), id: \.offset) { index, _ in
+          ForEach($identifiedConditions) { $item in
             ConditionRow(
-              condition: Binding(
-                get: { rule.conditions[index] },
-                set: { rule.conditions[index] = $0 }),
-              onDelete: { rule.conditions.remove(at: index) })
+              condition: $item.condition,
+              onDelete: {
+                identifiedConditions.removeAll { $0.id == item.id }
+              })
           }
           Button {
-            rule.conditions.append(.descriptionContains([""]))
+            identifiedConditions.append(
+              IdentifiedCondition(id: UUID(), condition: .descriptionContains([""])))
           } label: {
             Label("Add Condition", systemImage: "plus.circle")
           }
         }
 
         Section(header: Text("Perform these actions")) {
-          ForEach(Array(rule.actions.enumerated()), id: \.offset) { index, _ in
+          ForEach($identifiedActions) { $item in
             ActionRow(
-              action: Binding(
-                get: { rule.actions[index] },
-                set: { rule.actions[index] = $0 }),
+              action: $item.action,
               categories: categoryStore.categories,
               accounts: accountStore.accounts,
-              onDelete: { rule.actions.remove(at: index) })
+              onDelete: {
+                identifiedActions.removeAll { $0.id == item.id }
+              })
           }
           Menu {
-            Button("Set Payee") { rule.actions.append(.setPayee("")) }
-            Button("Set Category") {
-              if let firstCategory = categoryStore.categories.flattenedByPath().first?.category {
-                rule.actions.append(.setCategory(firstCategory.id))
-              } else {
-                rule.actions.append(.setCategory(UUID()))
+            Button("Set Payee") {
+              identifiedActions.append(
+                IdentifiedAction(id: UUID(), action: .setPayee("")))
+            }
+            // Only offer Set Category when categories exist — spec forbids
+            // rules referencing invented category UUIDs.
+            if let firstCategory = categoryStore.categories.flattenedByPath().first?.category {
+              Button("Set Category") {
+                identifiedActions.append(
+                  IdentifiedAction(id: UUID(), action: .setCategory(firstCategory.id)))
               }
             }
-            Button("Append Note") { rule.actions.append(.appendNote("")) }
+            Button("Append Note") {
+              identifiedActions.append(
+                IdentifiedAction(id: UUID(), action: .appendNote("")))
+            }
             if let firstAccount = accountStore.accounts.ordered.first {
               Button("Mark as Transfer") {
-                rule.actions.append(.markAsTransfer(toAccountId: firstAccount.id))
+                identifiedActions.append(
+                  IdentifiedAction(
+                    id: UUID(),
+                    action: .markAsTransfer(toAccountId: firstAccount.id)))
               }
             }
-            Button("Skip Row") { rule.actions.append(.skip) }
+            Button("Skip Row") {
+              identifiedActions.append(
+                IdentifiedAction(id: UUID(), action: .skip))
+            }
           } label: {
             Label("Add Action", systemImage: "plus.circle")
+          }
+        }
+
+        Section(header: Text("Preview")) {
+          HStack(spacing: 6) {
+            if affectedCount == nil {
+              ProgressView().controlSize(.small)
+            }
+            Text(previewText)
+              .font(.subheadline)
+              .foregroundStyle(affectedCount == nil ? .secondary : .primary)
           }
         }
       }
@@ -83,18 +137,83 @@ struct RuleEditorView: View {
         }
         ToolbarItem(placement: .confirmationAction) {
           Button("Save") {
-            onSave(rule)
+            var out = rule
+            out.conditions = identifiedConditions.map(\.condition)
+            out.actions = identifiedActions.map(\.action)
+            onSave(out)
             dismiss()
           }
           .disabled(rule.name.isEmpty)
         }
       }
+      .task(id: previewKey) {
+        await schedulePreview()
+      }
+      #if os(macOS)
+        .frame(minWidth: 540, minHeight: 520)
+      #endif
     }
+  }
+
+  /// Serialises the conditions + matchMode + accountScope so the preview
+  /// task cancels and re-runs on any change, but not on name / action edits
+  /// (which don't affect the match set).
+  private var previewKey: String {
+    var bits: [String] = [rule.matchMode.rawValue]
+    for item in identifiedConditions {
+      bits.append(String(describing: item.condition))
+    }
+    if let scope = rule.accountScope {
+      bits.append("scope:\(scope.uuidString)")
+    }
+    return bits.joined(separator: "|")
+  }
+
+  private var previewText: String {
+    guard let count = affectedCount else {
+      return "Counting past transactions…"
+    }
+    switch count {
+    case 0: return "No past transactions would match this rule."
+    case 1: return "1 past transaction would match this rule."
+    default: return "\(count) past transactions would match this rule."
+    }
+  }
+
+  /// Wait a short debounce before re-counting so typing in the token
+  /// editor doesn't hammer the backend.
+  private func schedulePreview() async {
+    affectedCount = nil
+    try? await Task.sleep(nanoseconds: 500_000_000)
+    if Task.isCancelled { return }
+    let count = await ruleStore.countAffected(
+      conditions: identifiedConditions.map(\.condition),
+      matchMode: rule.matchMode,
+      accountScope: rule.accountScope,
+      backend: session.backend)
+    if Task.isCancelled { return }
+    affectedCount = count
   }
 
   private var matchModeLabel: String {
     rule.matchMode == .all ? "all" : "any"
   }
+}
+
+// MARK: - UUID-keyed view-state wrappers
+
+/// Wraps a `RuleCondition` with a persistent UUID so SwiftUI `ForEach` can
+/// keep view identity stable across mid-list deletes. Mirrors into
+/// `rule.conditions` on Save.
+private struct IdentifiedCondition: Identifiable {
+  let id: UUID
+  var condition: RuleCondition
+}
+
+/// Wraps a `RuleAction` with a persistent UUID for the same reason.
+private struct IdentifiedAction: Identifiable {
+  let id: UUID
+  var action: RuleAction
 }
 
 // MARK: - Condition editor row
@@ -105,7 +224,7 @@ private struct ConditionRow: View {
 
   var body: some View {
     HStack {
-      Picker("", selection: conditionKindBinding) {
+      Picker("Condition type", selection: conditionKindBinding) {
         ForEach(ConditionKind.allCases, id: \.self) { kind in
           Text(kind.label).tag(kind)
         }
@@ -144,13 +263,19 @@ private struct ConditionRow: View {
           value: Binding(
             get: { min },
             set: { condition = .amountBetween(min: $0, max: max) }),
-          format: .number)
+          format: .number
+        )
+        .monospacedDigit()
+        .accessibilityLabel("Minimum amount")
         TextField(
           "max",
           value: Binding(
             get: { max },
             set: { condition = .amountBetween(min: min, max: $0) }),
-          format: .number)
+          format: .number
+        )
+        .monospacedDigit()
+        .accessibilityLabel("Maximum amount")
       case .sourceAccountIs:
         Text("(on routed account)")
           .font(.caption)
@@ -246,7 +371,7 @@ private struct ActionRow: View {
 
   var body: some View {
     HStack {
-      Picker("", selection: actionKindBinding) {
+      Picker("Action type", selection: actionKindBinding) {
         ForEach(ActionKind.allCases, id: \.self) { kind in
           Text(kind.label).tag(kind)
         }
@@ -348,6 +473,10 @@ private enum ActionKind: String, CaseIterable, Hashable {
       return .setPayee("")
     case .setCategory:
       if case .setCategory(let id) = existing { return .setCategory(id) }
+      // Prefer an existing category; if none exist the caller shouldn't
+      // have offered this option in the picker, so the fallback is
+      // defensive. The rule editor's "Add Action" menu hides Set Category
+      // entirely when categories are empty.
       let first = categories.flattenedByPath().first?.category.id ?? UUID()
       return .setCategory(first)
     case .appendNote:

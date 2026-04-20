@@ -16,6 +16,12 @@ struct CSVImportProfile: Codable, Sendable, Identifiable, Hashable {
   var deleteAfterImport: Bool
   let createdAt: Date
   var lastUsedAt: Date?
+  /// User-confirmed date format for ambiguous generic-bank exports. `nil`
+  /// means "auto-detect". Stored as the raw-value string form of
+  /// `GenericBankCSVParser.DateFormat` so the domain layer doesn't depend
+  /// on Shared/. Format strings follow `DateFormatter` conventions (e.g.
+  /// `"dd/MM/yyyy"`, `"MM/dd/yyyy"`, `"yyyy-MM-dd"`).
+  var dateFormatRawValue: String?
 
   init(
     id: UUID = UUID(),
@@ -25,7 +31,8 @@ struct CSVImportProfile: Codable, Sendable, Identifiable, Hashable {
     filenamePattern: String? = nil,
     deleteAfterImport: Bool = false,
     createdAt: Date = Date(),
-    lastUsedAt: Date? = nil
+    lastUsedAt: Date? = nil,
+    dateFormatRawValue: String? = nil
   ) {
     self.id = id
     self.accountId = accountId
@@ -35,6 +42,7 @@ struct CSVImportProfile: Codable, Sendable, Identifiable, Hashable {
     self.deleteAfterImport = deleteAfterImport
     self.createdAt = createdAt
     self.lastUsedAt = lastUsedAt
+    self.dateFormatRawValue = dateFormatRawValue
   }
 
   /// Canonical header form: trimmed + lowercased. This is what both the

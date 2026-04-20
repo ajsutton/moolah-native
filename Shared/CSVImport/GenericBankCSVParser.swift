@@ -43,6 +43,24 @@ struct GenericBankCSVParser: CSVParser, Sendable {
       case .iso: return "yyyy-MM-dd"
       }
     }
+
+    /// Stable string form used to persist the user's override on
+    /// `CSVImportProfile.dateFormatRawValue`. The shape is the
+    /// `DateFormatter` pattern so round-tripping is lossless.
+    var rawValue: String { formatString }
+
+    /// Parse a persisted `dateFormatRawValue` back into a concrete case.
+    /// Returns nil for unknown patterns — callers fall back to auto-detect.
+    static func fromRawValue(_ value: String) -> DateFormat? {
+      switch value {
+      case "dd/MM/yyyy": return .ddMMyyyy(separator: "/")
+      case "dd-MM-yyyy": return .ddMMyyyy(separator: "-")
+      case "MM/dd/yyyy": return .mmDDyyyy(separator: "/")
+      case "MM-dd-yyyy": return .mmDDyyyy(separator: "-")
+      case "yyyy-MM-dd": return .iso
+      default: return nil
+      }
+    }
   }
 
   func recognizes(headers: [String]) -> Bool {
@@ -50,11 +68,40 @@ struct GenericBankCSVParser: CSVParser, Sendable {
   }
 
   func parse(rows: [[String]]) throws -> [ParsedRecord] {
-    guard let headers = rows.first else { throw CSVParserError.emptyFile }
+    try parse(rows: rows, overrideDateFormat: nil)
+  }
+
+  /// Parse variant that lets the caller force the date format (Needs Setup
+  /// form on an ambiguous file). `nil` = auto-detect as normal.
+  func parse(
+    rows: [[String]], overrideDateFormat: DateFormat?
+  ) throws -> [ParsedRecord] {
+    guard !rows.isEmpty, let headers = rows.first else { throw CSVParserError.emptyFile }
     let sample = Array(rows.dropFirst().prefix(5))
-    guard let mapping = inferMapping(from: headers, sampleRows: sample) else {
+    guard var mapping = inferMapping(from: headers, sampleRows: sample) else {
       throw CSVParserError.headerMismatch
     }
+    if let override = overrideDateFormat {
+      mapping.dateFormat = override
+      mapping.dateFormatAmbiguous = false
+    }
+    return try parseRows(rows, with: mapping)
+  }
+
+  /// Parse variant that takes a fully-formed `ColumnMapping` from the Needs
+  /// Setup form — bypasses the detector so the user's role overrides are
+  /// authoritative.
+  func parse(
+    rows: [[String]], overrideMapping: ColumnMapping
+  ) throws -> [ParsedRecord] {
+    guard !rows.isEmpty else { throw CSVParserError.emptyFile }
+    return try parseRows(rows, with: overrideMapping)
+  }
+
+  /// Shared row-loop implementation used by all `parse` variants.
+  private func parseRows(
+    _ rows: [[String]], with mapping: ColumnMapping
+  ) throws -> [ParsedRecord] {
     var results: [ParsedRecord] = []
     for (offset, row) in rows.dropFirst().enumerated() {
       let rowIndex = offset + 1  // 1-based for user-facing error messages

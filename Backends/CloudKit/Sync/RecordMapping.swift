@@ -376,6 +376,7 @@ extension CSVImportProfileRecord: CloudKitRecordConvertible {
     record["deleteAfterImport"] = (deleteAfterImport ? 1 : 0) as CKRecordValue
     record["createdAt"] = createdAt as CKRecordValue
     if let v = lastUsedAt { record["lastUsedAt"] = v as CKRecordValue }
+    if let v = dateFormatRawValue { record["dateFormatRawValue"] = v as CKRecordValue }
     return record
   }
 
@@ -388,7 +389,8 @@ extension CSVImportProfileRecord: CloudKitRecordConvertible {
       filenamePattern: ckRecord["filenamePattern"] as? String,
       deleteAfterImport: (ckRecord["deleteAfterImport"] as? Int ?? 0) != 0,
       createdAt: ckRecord["createdAt"] as? Date ?? Date(),
-      lastUsedAt: ckRecord["lastUsedAt"] as? Date)
+      lastUsedAt: ckRecord["lastUsedAt"] as? Date,
+      dateFormatRawValue: ckRecord["dateFormatRawValue"] as? String)
     // Store the joined headerSignature directly (init normalises via joining,
     // but the CK value already arrives pre-joined).
     record.headerSignature = ckRecord["headerSignature"] as? String ?? ""

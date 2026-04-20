@@ -10,6 +10,22 @@ struct ImportRulesSettingsView: View {
 
   var body: some View {
     List {
+      ForEach(ruleStore.rules) { rule in
+        RuleRow(rule: rule) { editingRule = rule }
+      }
+      .onMove { source, destination in
+        var ids = ruleStore.rules.map(\.id)
+        ids.move(fromOffsets: source, toOffset: destination)
+        Task { await ruleStore.reorder(ids) }
+      }
+      .onDelete { offsets in
+        let ids = offsets.map { ruleStore.rules[$0].id }
+        for id in ids {
+          Task { await ruleStore.delete(id: id) }
+        }
+      }
+    }
+    .overlay {
       if ruleStore.rules.isEmpty {
         ContentUnavailableView(
           "No rules yet",
@@ -17,32 +33,18 @@ struct ImportRulesSettingsView: View {
           description: Text(
             "Rules run at CSV import time to set the payee, category, "
               + "notes, or to mark a row as a transfer."))
-      } else {
-        ForEach(ruleStore.rules) { rule in
-          RuleRow(rule: rule) { editingRule = rule }
-        }
-        .onMove { source, destination in
-          var ids = ruleStore.rules.map(\.id)
-          ids.move(fromOffsets: source, toOffset: destination)
-          Task { await ruleStore.reorder(ids) }
-        }
-        .onDelete { offsets in
-          let ids = offsets.map { ruleStore.rules[$0].id }
-          for id in ids {
-            Task { await ruleStore.delete(id: id) }
-          }
-        }
       }
     }
     .navigationTitle("Import Rules")
     .toolbar {
       ToolbarItem(placement: .primaryAction) {
+        // `Label("Add Rule", …)` already carries "Add Rule" as the
+        // VoiceOver label; no explicit `.accessibilityLabel` needed.
         Button {
           showingAddSheet = true
         } label: {
           Label("Add Rule", systemImage: "plus")
         }
-        .accessibilityLabel("Add Rule")
       }
       #if !os(macOS)
         ToolbarItem(placement: .navigationBarTrailing) {
@@ -99,12 +101,18 @@ private struct RuleRow: View {
           .foregroundStyle(.secondary)
           .lineLimit(1)
       }
-      .onTapGesture { onEdit() }
       Spacer()
+      // Tab-reachable keyboard path for macOS users; redundant with the
+      // whole-row tap on mouse/touch.
       Button("Edit") { onEdit() }
         .buttonStyle(.borderless)
     }
+    // Whole-row click target: a bare `.onTapGesture` on the VStack only
+    // responded to taps on the label text, which left most of the row
+    // dead. `.contentShape(Rectangle())` + row-level tap routes every
+    // click — including on the trailing `Spacer()` — to the editor.
     .contentShape(Rectangle())
+    .onTapGesture { onEdit() }
   }
 
   private func summarise(_ rule: ImportRule) -> String {

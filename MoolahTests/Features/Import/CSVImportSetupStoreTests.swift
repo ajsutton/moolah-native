@@ -127,6 +127,49 @@ struct CSVImportSetupStoreTests {
         == "anz-*.txt")
   }
 
+  @Test("preview applies the detected column mapping to real rows")
+  func previewAppliesColumnMapping() async throws {
+    let (backend, _) = try TestBackend.create()
+    let dir = tempDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let staging = try ImportStagingStore(directory: dir)
+    let importStore = ImportStore(backend: backend, staging: staging)
+    let bytes = try CSVFixtureLoader.data("cba-everyday-standard")
+    let pending = try await seedPending(staging, bytes: bytes)
+
+    let store = CSVImportSetupStore(
+      pending: pending, backend: backend,
+      importStore: importStore, staging: staging)
+    await store.regeneratePreview()
+
+    let coffee = store.preview.first(where: {
+      $0.rawDescription == "COFFEE HUT SYDNEY"
+    })
+    #expect(coffee != nil)
+    #expect(coffee?.rawAmount == Decimal(string: "-5.50"))
+    #expect(coffee?.rawBalance == Decimal(string: "994.50"))
+  }
+
+  @Test("user column-role overrides flow through to preview")
+  func columnRoleOverridesApplied() async throws {
+    let (backend, _) = try TestBackend.create()
+    let dir = tempDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let staging = try ImportStagingStore(directory: dir)
+    let importStore = ImportStore(backend: backend, staging: staging)
+    let bytes = try CSVFixtureLoader.data("cba-everyday-standard")
+    let pending = try await seedPending(staging, bytes: bytes)
+    let store = CSVImportSetupStore(
+      pending: pending, backend: backend,
+      importStore: importStore, staging: staging)
+    await store.regeneratePreview()
+    // Detected mapping puts Description at column 1. Overriding it to
+    // .ignore should route the raw description to an empty value.
+    await store.applyColumnRole(.ignore, forColumn: 1)
+    let firstTx = store.preview.first
+    #expect(firstTx?.rawDescription == "")
+  }
+
   @Test("deletePending removes the staged pending file")
   func deletePendingClears() async throws {
     let (backend, _) = try TestBackend.create()

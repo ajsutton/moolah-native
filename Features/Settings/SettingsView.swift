@@ -64,6 +64,15 @@ struct SettingsView: View {
         Tab("Crypto", systemImage: "bitcoinsign.circle") {
           CryptoSettingsView(store: cryptoTokenStoreForSettings)
         }
+        // macOS Settings tabs host the Form / List directly — the window
+        // already supplies chrome and a title, so wrapping in a second
+        // `NavigationStack` would produce a duplicate navigation bar.
+        Tab("Import", systemImage: "tray.and.arrow.down") {
+          ImportSettingsView()
+        }
+        Tab("Rules", systemImage: "list.bullet.rectangle") {
+          ImportRulesSettingsView()
+        }
       }
       .frame(minWidth: 600, minHeight: 400)
       .sheet(isPresented: $showAddProfile) {

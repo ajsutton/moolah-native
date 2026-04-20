@@ -22,6 +22,12 @@ enum ImportSource: Sendable {
   /// name for surfaces like the failed-files panel.
   case paste(text: String, label: String?)
 
+  /// Re-entry for the Needs Setup flow. Preserves the original filename and
+  /// (optional) source URL so `ImportOrigin.sourceFilename` carries the real
+  /// name and `profile.deleteAfterImport` can still honour the toggle after
+  /// the user completes setup.
+  case reingestFromSetup(filename: String, sourceURL: URL?)
+
   /// User-visible filename or paste label for diagnostics and the
   /// `ImportOrigin.sourceFilename` field.
   var filename: String? {
@@ -32,6 +38,8 @@ enum ImportSource: Sendable {
       return url.lastPathComponent
     case .paste(_, let label):
       return label
+    case .reingestFromSetup(let filename, _):
+      return filename
     }
   }
 
@@ -48,6 +56,8 @@ enum ImportSource: Sendable {
     case .pickedFile(let url, _),
       .folderWatch(let url, _),
       .droppedFile(let url, _):
+      return url
+    case .reingestFromSetup(_, let url):
       return url
     case .paste:
       return nil
