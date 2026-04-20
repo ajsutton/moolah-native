@@ -84,4 +84,38 @@ struct PositionsValuatorTests {
     )
     #expect(rows[0].costBasis == InstrumentAmount(quantity: 4_000, instrument: aud))
   }
+
+  @Test("empty positions input returns an empty array")
+  func emptyInput() async {
+    let service = FixedConversionService(rates: [:])
+    let valuator = PositionsValuator(conversionService: service)
+    let rows = await valuator.valuate(
+      positions: [], hostCurrency: aud, costBasis: [:], on: Date())
+    #expect(rows.isEmpty)
+  }
+
+  @Test("zero-quantity position has nil unitPrice (no division by zero)")
+  func zeroQuantityUnitPrice() async {
+    let positions = [Position(instrument: bhp, quantity: 0)]
+    let service = FixedConversionService(rates: [bhp.id: Decimal(40)])
+    let valuator = PositionsValuator(conversionService: service)
+    let rows = await valuator.valuate(
+      positions: positions, hostCurrency: aud, costBasis: [:], on: Date())
+    #expect(rows.count == 1)
+    #expect(rows[0].unitPrice == nil)
+  }
+
+  @Test("negative quantity (short position) preserves sign in value, positive unit price")
+  func shortPositionSignPreservation() async throws {
+    // Short -10 shares of BHP @ $40 each → value = -$400 (you owe $400 worth),
+    // unit price = $40 (one share is still worth $40 regardless of position sign).
+    let positions = [Position(instrument: bhp, quantity: -10)]
+    let service = FixedConversionService(rates: [bhp.id: Decimal(40)])
+    let valuator = PositionsValuator(conversionService: service)
+    let rows = await valuator.valuate(
+      positions: positions, hostCurrency: aud, costBasis: [:], on: Date())
+    let row = try #require(rows.first)
+    #expect(row.value == InstrumentAmount(quantity: -400, instrument: aud))
+    #expect(row.unitPrice == InstrumentAmount(quantity: 40, instrument: aud))
+  }
 }
