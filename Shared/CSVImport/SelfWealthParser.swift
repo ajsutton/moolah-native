@@ -63,7 +63,8 @@ struct SelfWealthParser: CSVParser, Sendable {
           accountId: nil,
           instrument: .AUD,
           quantity: cashAmount,
-          type: .income)
+          type: .income,
+          isInstrumentPlaceholder: true)
         results.append(
           .transaction(
             ParsedTransaction(
@@ -79,7 +80,8 @@ struct SelfWealthParser: CSVParser, Sendable {
           accountId: nil,
           instrument: .AUD,
           quantity: cashAmount,
-          type: .expense)
+          type: .expense,
+          isInstrumentPlaceholder: true)
         results.append(
           .transaction(
             ParsedTransaction(
@@ -95,7 +97,8 @@ struct SelfWealthParser: CSVParser, Sendable {
           accountId: nil,
           instrument: .AUD,
           quantity: cashAmount,
-          type: cashAmount >= 0 ? .income : .expense)
+          type: cashAmount >= 0 ? .income : .expense,
+          isInstrumentPlaceholder: true)
         results.append(
           .transaction(
             ParsedTransaction(
@@ -215,12 +218,14 @@ struct SelfWealthParser: CSVParser, Sendable {
       accountId: nil,
       instrument: .AUD,
       quantity: cashAmount,
-      type: kind == "BUY" ? .expense : .income)
+      type: kind == "BUY" ? .expense : .income,
+      isInstrumentPlaceholder: true)
     let positionLeg = ParsedLeg(
       accountId: nil,
       instrument: stockInstrument,
       quantity: kind == "BUY" ? quantity : -quantity,
-      type: kind == "BUY" ? .income : .expense)
+      type: kind == "BUY" ? .income : .expense,
+      isInstrumentPlaceholder: false)
     return .transaction(
       ParsedTransaction(
         date: date,
