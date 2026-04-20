@@ -359,6 +359,8 @@ final class ProfileDataSyncHandler: Sendable {
     // 6. Investment values (reference accounts + instruments)
     // 7. Transactions (header only)
     // 8. Transaction legs (reference transactions, accounts, instruments)
+    // 9. CSV import profiles (reference accounts)
+    // 10. Import rules (optionally reference accounts via accountScope)
     collectStringIDs(InstrumentRecord.self) { $0.id }
     collectIDs(CategoryRecord.self) { $0.id }
     collectIDs(AccountRecord.self) { $0.id }

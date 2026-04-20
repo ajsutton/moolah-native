@@ -63,9 +63,10 @@ struct ImportRuleRepositoryContractTests {
       try await backend.importRules.reorder([a.id, b.id, UUID()])
     }
 
-    // State is unchanged after failed reorders.
+    // State is unchanged after failed reorders — ids, positions, everything.
     let all = try await backend.importRules.fetchAll()
     #expect(Set(all.map(\.id)) == Set([a.id, b.id]))
+    #expect(all.map(\.position) == [0, 1])
   }
 
   @Test("exhaustive round-trip preserves every condition and action case")

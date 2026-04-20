@@ -323,6 +323,12 @@ final class ProfileSession: Identifiable {
     {
       plan.insert(.earmarks)
     }
+    // NOTE: CSVImportProfileRecord and ImportRuleRecord arrive through sync but
+    // have no dedicated stores yet. Phase F of the CSV import feature will add
+    // CSVImportProfileStore and ImportRuleStore; this function will need
+    // corresponding `plan.insert(…)` entries at that point. Until then, remote
+    // changes land in SwiftData but no observer is notified — acceptable because
+    // there's no UI consuming them yet.
     return plan
   }
 

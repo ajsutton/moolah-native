@@ -1,5 +1,9 @@
 import Foundation
+import OSLog
 import SwiftData
+
+private let importRuleRecordLogger = Logger(
+  subsystem: "com.moolah.app", category: "ImportRuleRecord")
 
 @Model
 final class ImportRuleRecord {
@@ -35,15 +39,55 @@ final class ImportRuleRecord {
     self.position = position
     self.matchMode = matchMode.rawValue
     self.accountScope = accountScope
-    self.conditionsJSON = (try? JSONEncoder().encode(conditions)) ?? Data()
-    self.actionsJSON = (try? JSONEncoder().encode(actions)) ?? Data()
+    do {
+      self.conditionsJSON = try JSONEncoder().encode(conditions)
+    } catch {
+      importRuleRecordLogger.error(
+        """
+        Failed to encode ImportRule conditions for rule \(id, privacy: .public): \
+        \(error.localizedDescription, privacy: .public). Record will persist with \
+        empty conditions.
+        """)
+      self.conditionsJSON = Data()
+    }
+    do {
+      self.actionsJSON = try JSONEncoder().encode(actions)
+    } catch {
+      importRuleRecordLogger.error(
+        """
+        Failed to encode ImportRule actions for rule \(id, privacy: .public): \
+        \(error.localizedDescription, privacy: .public). Record will persist with \
+        empty actions.
+        """)
+      self.actionsJSON = Data()
+    }
   }
 
   func toDomain() -> ImportRule {
-    let conditions =
-      (try? JSONDecoder().decode([RuleCondition].self, from: conditionsJSON)) ?? []
-    let actions =
-      (try? JSONDecoder().decode([RuleAction].self, from: actionsJSON)) ?? []
+    let conditions: [RuleCondition]
+    do {
+      conditions = try JSONDecoder().decode([RuleCondition].self, from: conditionsJSON)
+    } catch {
+      importRuleRecordLogger.warning(
+        """
+        Failed to decode ImportRule conditions for rule \(self.id, privacy: .public): \
+        \(error.localizedDescription, privacy: .public). Rule will be loaded with no \
+        conditions (empty match).
+        """)
+      conditions = []
+    }
+    let actions: [RuleAction]
+    do {
+      actions = try JSONDecoder().decode([RuleAction].self, from: actionsJSON)
+    } catch {
+      importRuleRecordLogger.warning(
+        """
+        Failed to decode ImportRule actions for rule \(self.id, privacy: .public): \
+        \(error.localizedDescription, privacy: .public). Rule will be loaded with no \
+        actions (no-op).
+        """)
+      actions = []
+    }
     return ImportRule(
       id: id,
       name: name,

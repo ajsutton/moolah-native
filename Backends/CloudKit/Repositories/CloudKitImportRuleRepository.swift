@@ -69,6 +69,9 @@ final class CloudKitImportRuleRepository: ImportRuleRepository, @unchecked Senda
   /// Atomically renumber `position` across every existing rule. Throws if the
   /// passed ids do not exactly match the set of stored rule ids (no adds, no
   /// drops). No fix-up on mismatch: callers re-fetch and re-order.
+  ///
+  /// Only ids whose position actually changed are queued for upload — a reorder
+  /// that leaves every position unchanged is a no-op to CloudKit.
   func reorder(_ orderedIds: [UUID]) async throws {
     try await MainActor.run {
       let all = try context.fetch(FetchDescriptor<ImportRuleRecord>())
@@ -79,14 +82,16 @@ final class CloudKitImportRuleRepository: ImportRuleRepository, @unchecked Senda
       }
       let indexById = Dictionary(
         uniqueKeysWithValues: orderedIds.enumerated().map { ($1, $0) })
+      var changedIds: [UUID] = []
       for record in all {
         let newPosition = indexById[record.id] ?? record.position
         if record.position != newPosition {
           record.position = newPosition
+          changedIds.append(record.id)
         }
       }
       try context.save()
-      for id in orderedIds { onRecordChanged(id) }
+      for id in changedIds { onRecordChanged(id) }
     }
   }
 }
