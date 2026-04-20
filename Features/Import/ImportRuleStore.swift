@@ -34,6 +34,20 @@ final class ImportRuleStore {
     }
   }
 
+  /// Re-fetch rules without flipping `isLoading` or clearing `error`. Called
+  /// when CloudKit delivers a remote change to an `ImportRuleRecord`. Replaces
+  /// `rules` only when the fetched list differs so observers don't churn on
+  /// no-op syncs.
+  func reloadFromSync() async {
+    do {
+      let fresh = try await repository.fetchAll().sorted { $0.position < $1.position }
+      if fresh != rules { rules = fresh }
+    } catch {
+      logger.error(
+        "Sync reload of rules failed: \(error.localizedDescription, privacy: .public)")
+    }
+  }
+
   @discardableResult
   func create(_ rule: ImportRule) async -> ImportRule? {
     do {

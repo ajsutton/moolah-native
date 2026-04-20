@@ -71,6 +71,7 @@ final class RecentlyAddedViewModel {
   }
 
   func load(window: Window, now: Date = Date()) async {
+    guard !isLoading else { return }
     self.window = window
     isLoading = true
     defer { isLoading = false }

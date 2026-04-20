@@ -49,8 +49,9 @@ struct RecentlyAddedView: View {
         .accessibilityLabel("Time window")
       }
     }
-    .task { await reload() }
-    .onChange(of: window) { _, _ in Task { await reload() } }
+    // .task(id: window) fires on first appearance and re-fires (auto-cancelling
+    // any in-flight load) whenever `window` changes.
+    .task(id: window) { await reload() }
   }
 
   private func sessionHeader(_ session: RecentlyAddedViewModel.SessionGroup) -> some View {

@@ -23,6 +23,7 @@ final class ProfileSession: Identifiable {
   let cryptoPriceService: CryptoPriceService
   let cryptoTokenStore: CryptoTokenStore
   let importStore: ImportStore
+  let importRuleStore: ImportRuleStore
 
   /// Observer token for sync coordinator notifications (nil for remote profiles).
   private var syncObserverToken: SyncCoordinator.ObserverToken?
@@ -180,6 +181,7 @@ final class ProfileSession: Identifiable {
         "Failed to open CSV import staging at \(stagingPath, privacy: .public): \(errDesc, privacy: .public). Falling back to tmp."
       )
     }
+    self.importRuleStore = ImportRuleStore(repository: backend.importRules)
 
     // Wire up cross-store side effects. The callback is fire-and-forget in
     // production; `updateInvestmentValue` awaits its own first conversion
@@ -312,6 +314,9 @@ final class ProfileSession: Identifiable {
       if plan.contains(.earmarks) {
         await earmarkStore.reloadFromSync()
       }
+      if plan.contains(.importRules) {
+        await importRuleStore.reloadFromSync()
+      }
       let reloadMs = (ContinuousClock.now - reloadStart).inMilliseconds
       logger.info("📊 Store reloads after sync completed in \(reloadMs)ms for types: \(types)")
     }
@@ -325,11 +330,13 @@ final class ProfileSession: Identifiable {
   /// so a remote leg-only change (e.g. category/earmark reassignment performed
   /// on another device) must reload both stores even if the parent
   /// `TransactionRecord` did not change in this batch.
+  // StoreReloadPlan follows the OptionSet pattern for coalesced sync reloads.
   struct StoreReloadPlan: OptionSet, Sendable, Equatable {
     let rawValue: Int
     static let accounts = StoreReloadPlan(rawValue: 1 << 0)
     static let categories = StoreReloadPlan(rawValue: 1 << 1)
     static let earmarks = StoreReloadPlan(rawValue: 1 << 2)
+    static let importRules = StoreReloadPlan(rawValue: 1 << 3)
   }
 
   static func storesToReload(for changedTypes: Set<String>) -> StoreReloadPlan {
@@ -349,12 +356,13 @@ final class ProfileSession: Identifiable {
     {
       plan.insert(.earmarks)
     }
-    // NOTE: CSVImportProfileRecord and ImportRuleRecord arrive through sync but
-    // have no dedicated stores yet. Phase F of the CSV import feature will add
-    // CSVImportProfileStore and ImportRuleStore; this function will need
-    // corresponding `plan.insert(…)` entries at that point. Until then, remote
-    // changes land in SwiftData but no observer is notified — acceptable because
-    // there's no UI consuming them yet.
+    if changedTypes.contains(ImportRuleRecord.recordType) {
+      plan.insert(.importRules)
+    }
+    // NOTE: CSVImportProfileRecord has no dedicated store — the setup form
+    // fetches profiles directly via `backend.csvImportProfiles`. Remote
+    // changes land in SwiftData; the setup form reads through to the fresh
+    // values on its own `task`.
     return plan
   }
 
