@@ -877,6 +877,14 @@ final class ProfileDataSyncHandler: Sendable {
         existing.notes = values.notes
         existing.recurPeriod = values.recurPeriod
         existing.recurEvery = values.recurEvery
+        existing.importOriginRawDescription = values.importOriginRawDescription
+        existing.importOriginBankReference = values.importOriginBankReference
+        existing.importOriginRawAmount = values.importOriginRawAmount
+        existing.importOriginRawBalance = values.importOriginRawBalance
+        existing.importOriginImportedAt = values.importOriginImportedAt
+        existing.importOriginImportSessionId = values.importOriginImportSessionId
+        existing.importOriginSourceFilename = values.importOriginSourceFilename
+        existing.importOriginParserIdentifier = values.importOriginParserIdentifier
         existing.encodedSystemFields = systemFields[id.uuidString]
       } else {
         values.encodedSystemFields = systemFields[id.uuidString]

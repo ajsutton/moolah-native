@@ -131,11 +131,35 @@ extension TransactionRecord: CloudKitRecordConvertible {
     if let notes { record["notes"] = notes as CKRecordValue }
     if let recurPeriod { record["recurPeriod"] = recurPeriod as CKRecordValue }
     if let recurEvery { record["recurEvery"] = recurEvery as CKRecordValue }
+    if let v = importOriginRawDescription {
+      record["importOriginRawDescription"] = v as CKRecordValue
+    }
+    if let v = importOriginBankReference {
+      record["importOriginBankReference"] = v as CKRecordValue
+    }
+    if let v = importOriginRawAmount {
+      record["importOriginRawAmount"] = v as CKRecordValue
+    }
+    if let v = importOriginRawBalance {
+      record["importOriginRawBalance"] = v as CKRecordValue
+    }
+    if let v = importOriginImportedAt {
+      record["importOriginImportedAt"] = v as CKRecordValue
+    }
+    if let v = importOriginImportSessionId {
+      record["importOriginImportSessionId"] = v.uuidString as CKRecordValue
+    }
+    if let v = importOriginSourceFilename {
+      record["importOriginSourceFilename"] = v as CKRecordValue
+    }
+    if let v = importOriginParserIdentifier {
+      record["importOriginParserIdentifier"] = v as CKRecordValue
+    }
     return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> TransactionRecord {
-    TransactionRecord(
+    let record = TransactionRecord(
       id: UUID(uuidString: ckRecord.recordID.recordName) ?? UUID(),
       date: ckRecord["date"] as? Date ?? Date(),
       payee: ckRecord["payee"] as? String,
@@ -143,6 +167,16 @@ extension TransactionRecord: CloudKitRecordConvertible {
       recurPeriod: ckRecord["recurPeriod"] as? String,
       recurEvery: ckRecord["recurEvery"] as? Int
     )
+    record.importOriginRawDescription = ckRecord["importOriginRawDescription"] as? String
+    record.importOriginBankReference = ckRecord["importOriginBankReference"] as? String
+    record.importOriginRawAmount = ckRecord["importOriginRawAmount"] as? String
+    record.importOriginRawBalance = ckRecord["importOriginRawBalance"] as? String
+    record.importOriginImportedAt = ckRecord["importOriginImportedAt"] as? Date
+    record.importOriginImportSessionId = (ckRecord["importOriginImportSessionId"] as? String)
+      .flatMap { UUID(uuidString: $0) }
+    record.importOriginSourceFilename = ckRecord["importOriginSourceFilename"] as? String
+    record.importOriginParserIdentifier = ckRecord["importOriginParserIdentifier"] as? String
+    return record
   }
 }
 

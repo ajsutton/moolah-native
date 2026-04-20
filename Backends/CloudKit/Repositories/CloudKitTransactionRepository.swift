@@ -466,6 +466,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       record.notes = transaction.notes
       record.recurPeriod = transaction.recurPeriod?.rawValue
       record.recurEvery = transaction.recurEvery
+      record.importOrigin = transaction.importOrigin
 
       // Delete old leg records
       let legDescriptor = FetchDescriptor<TransactionLegRecord>(
