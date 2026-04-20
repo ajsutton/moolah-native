@@ -320,7 +320,12 @@ struct MoolahApp: App {
     let coordinator = syncCoordinator
 
     // Wire sync coordinator to reload profiles on remote changes (only when CloudKit is available)
-    if CloudKitAuthProvider.isCloudKitAvailable {
+    // Never start CloudKit sync under XCTest: the test binary is signed with the production
+    // iCloud entitlement, so the coordinator would fetch real records from the user's iCloud
+    // into on-disk profile stores; those records have bled into tests' in-memory containers
+    // via SwiftData's shared process state and caused intermittent balance failures.
+    let isRunningTests = NSClassFromString("XCTestCase") != nil
+    if CloudKitAuthProvider.isCloudKitAvailable && !isRunningTests {
       logger.info("CloudKit available — starting sync coordinator")
       _ = coordinator.addIndexObserver { [weak store] in
         store?.loadCloudProfiles()
@@ -339,6 +344,8 @@ struct MoolahApp: App {
 
       // Clean up the legacy CloudKit zone from SwiftData's automatic sync
       LegacyZoneCleanup.performIfNeeded()
+    } else if isRunningTests {
+      logger.info("Running under XCTest — skipping CloudKit sync coordinator")
     } else {
       logger.warning(
         "CloudKit not available — profile sync disabled (NSUbiquitousContainers missing from Info.plist)"
