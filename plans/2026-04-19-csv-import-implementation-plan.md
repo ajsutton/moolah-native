@@ -194,6 +194,8 @@ Phase H: benchmarks — Task 23
 
 Pure RFC-4180 tokenizer. No dependencies beyond `Foundation`. Handles BOM, CRLF/LF/CR, quoted fields with embedded commas, escaped double-quotes, blank lines, and Apple-provided encoding detection for `Data` inputs via `NSString.stringEncoding(for:encodingOptions:convertedString:usedLossyConversion:)`. No custom encoding heuristics (per spec).
 
+> **Encoding policy.** `CSVIngestionText.decode` tries UTF-8 first (covers the vast majority of modern bank exports) and falls back to `NSString.stringEncoding(for:...)` for everything else — Apple's built-in detection already covers UTF-16 (LE/BE, with/without BOM) and Windows-1252, which is all we've seen in the wild. Deliberately not pulling in ICU/iconv: binary dependency + extra error surface with no observed benefit. Revisit only if a real fixture defeats the current detector.
+
 **Files:**
 - Create: `Shared/CSVImport/CSVTokenizer.swift`
 - Create: `Shared/CSVImport/CSVIngestionText.swift`  (encoding-detection helper wrapping the Apple API)

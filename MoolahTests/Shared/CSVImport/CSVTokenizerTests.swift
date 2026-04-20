@@ -72,6 +72,18 @@ struct CSVTokenizerTests {
     #expect(rows == [["a", " b", "c"]])
   }
 
+  @Test("empty fields between commas become empty strings")
+  func parsesEmptyFieldsBetweenCommas() {
+    let rows = CSVTokenizer.parse("a,,b\n")
+    #expect(rows == [["a", "", "b"]])
+  }
+
+  @Test("trailing comma produces a trailing empty field")
+  func trailingCommaProducesEmptyField() {
+    let rows = CSVTokenizer.parse("a,b,\n")
+    #expect(rows == [["a", "b", ""]])
+  }
+
   @Test("parses UTF-8 bytes")
   func parseDataUtf8() throws {
     let data = "a,b\n".data(using: .utf8)!
