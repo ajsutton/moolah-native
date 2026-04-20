@@ -110,13 +110,14 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
 
 ## Testing & TDD
 
+- **Test discipline:** All tests MUST follow `guides/TEST_GUIDE.md`. UI tests additionally MUST follow `guides/UI_TEST_GUIDE.md`. Both are non-optional.
 - **Write the test file before the implementation file (TDD).**
 - **Contract Tests:** Every repository protocol has a contract test suite in `MoolahTests/Domain/`. Tests run against `CloudKitBackend` with in-memory SwiftData. `RemoteBackend` tests use fixture JSON stubs.
 - **Store Tests:** Every store method that mutates state must have tests verifying both the store's published state and the underlying repository state. Use `TestBackend` (creates `CloudKitBackend` with in-memory SwiftData) — never mock the repository. Test error paths (rollback on failure) not just happy paths.
 - **When adding a new user action** (button tap, swipe, menu item) that triggers a multi-step async flow: put the logic in the store, write the test for the store method, then wire the view to call it.
 - **Verification:** Every `CloudKitBackend` repository method must be verified against `moolah-server` source before implementation. Read the corresponding route/controller in `../moolah-server/src/` to confirm filtering semantics, sort order, and computed values.
 - **Fixtures:** Remote backend tests use `URLProtocol` stubs against fixture JSON in `MoolahTests/Support/Fixtures/`.
-- **Targets:** `MoolahTests_iOS` (simulator) and `MoolahTests_macOS` (native).
+- **Targets:** `MoolahTests_iOS` (simulator), `MoolahTests_macOS` (native), `MoolahUITests_macOS` (XCUITest, macOS only — see `guides/UI_TEST_GUIDE.md`).
 
 ## Pre-Commit Checklist
 
