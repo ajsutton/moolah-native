@@ -42,6 +42,14 @@ struct GenericBankCSVParserTests {
     let records = try parser.parse(rows: rows)
     let txs = transactions(records)
     #expect(records.count == 5)
+    // Opening-balance row has no debit or credit — we explicitly emit .skip
+    // instead of rejecting, so a CBA export with a leading OPENING BALANCE row
+    // still parses. Pin the contract.
+    if case .skip(let reason) = records[0] {
+      #expect(reason.contains("debit or credit"))
+    } else {
+      Issue.record("expected opening-balance row to be .skip, got \(records[0])")
+    }
     let coffee = txs.first(where: { $0.rawDescription == "COFFEE HUT SYDNEY" })!
     #expect(coffee.rawAmount == Decimal(string: "-5.50"))
     #expect(coffee.rawBalance == Decimal(string: "994.50"))
@@ -80,12 +88,16 @@ struct GenericBankCSVParserTests {
   func recognizesWestpacDashDate() throws {
     let parser = GenericBankCSVParser()
     let rows = try self.rows("westpac-everyday")
+    let mapping = parser.inferMapping(
+      from: rows[0], sampleRows: Array(rows.dropFirst()))!
+    #expect(mapping.dateFormat == .ddMMyyyy(separator: "-"))
     let records = try parser.parse(rows: rows)
     let txs = transactions(records)
     // First data row is an "OPENING" with no debit/credit → emits .skip.
     // Second row is the coffee expense.
     let coffee = txs.first(where: { $0.rawDescription == "COFFEE" })!
     #expect(coffee.date == dateAt(2024, 4, 2))
+    #expect(coffee.rawAmount == Decimal(string: "-5.50"))
   }
 
   @Test("populates bankReference from ING reference column")
@@ -196,13 +208,45 @@ struct GenericBankCSVParserTests {
   @Test("preserves sign from debit/credit split — never abs()")
   func preservesSignFromDebitCreditSplit() throws {
     let parser = GenericBankCSVParser()
-    let rows = try self.rows("cba-everyday-standard")
-    let records = try parser.parse(rows: rows)
-    let txs = transactions(records)
-    // The pay row is a credit; amount must be positive
-    let pay = txs.first(where: { $0.rawDescription == "PAY NET" })!
-    #expect(pay.rawAmount == Decimal(string: "3000.00"))
-    #expect(pay.legs[0].type == .income)
+    // Unsigned positive debits (Macquarie-style "Debit Amount" = 5.50) must
+    // flip to negative in the output — that's the core of "debit means
+    // money out, so output sign is negative" regardless of how the export
+    // encodes it.
+    let unsignedDebitRows: [[String]] = [
+      ["Date", "Description", "Debit Amount", "Credit Amount", "Balance"],
+      ["02/04/2024", "COFFEE", "5.50", "", "994.50"],
+      ["03/04/2024", "SALARY", "", "3000.00", "3994.50"],
+    ]
+    let unsignedRecords = try parser.parse(rows: unsignedDebitRows)
+    let unsignedTxs = transactions(unsignedRecords)
+    #expect(unsignedTxs[0].rawAmount == Decimal(string: "-5.50"))
+    #expect(unsignedTxs[0].legs[0].type == .expense)
+    #expect(unsignedTxs[1].rawAmount == Decimal(string: "3000.00"))
+    #expect(unsignedTxs[1].legs[0].type == .income)
+
+    // Already-signed negative debits (some banks emit "-5.50" in the Debit
+    // column) must stay negative — `-abs()` is idempotent on negatives.
+    let signedDebitRows: [[String]] = [
+      ["Date", "Description", "Debit Amount", "Credit Amount", "Balance"],
+      ["02/04/2024", "COFFEE", "-5.50", "", "994.50"],
+    ]
+    let signedRecords = try parser.parse(rows: signedDebitRows)
+    let signedTxs = transactions(signedRecords)
+    #expect(signedTxs[0].rawAmount == Decimal(string: "-5.50"))
+    #expect(signedTxs[0].legs[0].type == .expense)
+  }
+
+  @Test("rejects file with an unterminated-quote-induced malformed row")
+  func rejectsMalformedUnterminatedQuote() throws {
+    let parser = GenericBankCSVParser()
+    let rows = try self.rows("malformed-unterminated-quote")
+    // The tokenizer greedily absorbs the unterminated-quote field; the
+    // resulting row has fewer columns than the header, so the date column
+    // is either empty or collapses into the description — either way, the
+    // parser cannot extract a valid date and must throw.
+    #expect(throws: CSVParserError.self) {
+      _ = try parser.parse(rows: rows)
+    }
   }
 
   @Test("flags ambiguous date format when both components are always ≤ 12")

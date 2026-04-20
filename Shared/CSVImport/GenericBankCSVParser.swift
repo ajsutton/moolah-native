@@ -138,8 +138,10 @@ struct GenericBankCSVParser: CSVParser, Sendable {
       let descIdx = find(["description", "narrative", "memo", "details"])
     else { return nil }
 
-    let debitIdx = find(["debit amount", "debit", " dr", "dr "]) ?? findExact(normalised, "dr")
-    let creditIdx = find(["credit amount", "credit", " cr", "cr "]) ?? findExact(normalised, "cr")
+    // Headers have already been trimmed, so space-padded candidates never
+    // match. `findExact` catches the bare `Dr`/`Cr` column case.
+    let debitIdx = find(["debit amount", "debit"]) ?? findExact(normalised, "dr")
+    let creditIdx = find(["credit amount", "credit"]) ?? findExact(normalised, "cr")
     // Prefer a D/C split when both columns are explicitly named (banks like
     // Macquarie use "Debit Amount" / "Credit Amount"). Otherwise look for a
     // single signed "Amount" column. "Running Bal." stays with balance.

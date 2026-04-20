@@ -17,8 +17,9 @@ protocol CSVParser: Sendable {
   /// every row of a file with these headers.
   func recognizes(headers: [String]) -> Bool
 
-  /// Parse the rows (header row already consumed). Whole-file-or-nothing: if
-  /// any row fails, throw. Rows that should be silently dropped return
+  /// Parse the rows including the header row (`rows[0]`). Implementations
+  /// consume the header row and iterate data rows. Whole-file-or-nothing: if
+  /// any data row fails, throw. Rows that should be silently dropped return
   /// `ParsedRecord.skip(reason:)`.
   func parse(rows: [[String]]) throws -> [ParsedRecord]
 }

@@ -28,7 +28,7 @@ struct SelfWealthParser: CSVParser, Sendable {
   func parse(rows: [[String]]) throws -> [ParsedRecord] {
     guard let headers = rows.first else { throw CSVParserError.emptyFile }
     guard recognizes(headers: headers) else { throw CSVParserError.headerMismatch }
-    let columns = columnIndex(headers)
+    let columns = try columnIndex(headers)
 
     var results: [ParsedRecord] = []
     for (offset, row) in rows.dropFirst().enumerated() {
@@ -123,15 +123,23 @@ struct SelfWealthParser: CSVParser, Sendable {
     let balance: Int
   }
 
-  private func columnIndex(_ headers: [String]) -> Columns {
+  /// Precondition: `recognizes(headers:)` has already returned true for these
+  /// headers. Every required column is present, so `firstIndex(of:)` cannot
+  /// return nil here.
+  private func columnIndex(_ headers: [String]) throws -> Columns {
     let normalised = headers.map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+    guard let date = normalised.firstIndex(of: "date"),
+      let type = normalised.firstIndex(of: "type"),
+      let description = normalised.firstIndex(of: "description"),
+      let debit = normalised.firstIndex(of: "debit"),
+      let credit = normalised.firstIndex(of: "credit"),
+      let balance = normalised.firstIndex(of: "balance")
+    else {
+      throw CSVParserError.headerMismatch
+    }
     return Columns(
-      date: normalised.firstIndex(of: "date") ?? -1,
-      type: normalised.firstIndex(of: "type") ?? -1,
-      description: normalised.firstIndex(of: "description") ?? -1,
-      debit: normalised.firstIndex(of: "debit") ?? -1,
-      credit: normalised.firstIndex(of: "credit") ?? -1,
-      balance: normalised.firstIndex(of: "balance") ?? -1)
+      date: date, type: type, description: description,
+      debit: debit, credit: credit, balance: balance)
   }
 
   private func safe(_ row: [String], _ index: Int) -> String {
@@ -154,11 +162,20 @@ struct SelfWealthParser: CSVParser, Sendable {
     return formatter.date(from: field.trimmingCharacters(in: .whitespaces))
   }
 
-  private static let tradeRegex: NSRegularExpression = {
-    // swiftlint:disable:next force_try — regex literal always compiles
-    try! NSRegularExpression(
+  /// NSRegularExpression is documented thread-safe for matching operations but
+  /// is not formally `Sendable` in Swift's type system. Wrap it in an
+  /// `@unchecked Sendable` box so a strict-concurrency build (or a future
+  /// Swift upgrade) doesn't flag the static shared instance.
+  private struct SendableRegex: @unchecked Sendable {
+    let regex: NSRegularExpression
+  }
+
+  private static let tradeRegex: SendableRegex = {
+    // Regex is a compile-time constant; force-try here cannot fail at runtime.
+    let compiled = try! NSRegularExpression(
       pattern: #"(BUY|SELL)\s+(\d+)\s+([A-Z0-9.]+)\s+@\s+\$?([\d.]+)"#,
       options: [])
+    return SendableRegex(regex: compiled)
   }()
 
   private func parseTrade(
@@ -171,7 +188,7 @@ struct SelfWealthParser: CSVParser, Sendable {
   ) throws -> ParsedRecord {
     let range = NSRange(description.startIndex..., in: description)
     guard
-      let match = Self.tradeRegex.firstMatch(in: description, options: [], range: range)
+      let match = Self.tradeRegex.regex.firstMatch(in: description, options: [], range: range)
     else {
       throw CSVParserError.malformedRow(
         index: index, reason: "unrecognised trade description: \(description)")
