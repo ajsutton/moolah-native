@@ -108,6 +108,9 @@ struct TokenSwapView: View {
         }
       }
     }
+    #if os(macOS)
+      .frame(minWidth: 500, minHeight: 400)
+    #endif
   }
 
   private func save() async {

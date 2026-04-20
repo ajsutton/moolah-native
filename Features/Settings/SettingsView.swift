@@ -69,7 +69,7 @@ struct SettingsView: View {
       .sheet(isPresented: $showAddProfile) {
         ProfileFormView()
           .environment(profileStore)
-          .frame(minWidth: 350, minHeight: 250)
+          .frame(minWidth: 400, minHeight: 300)
       }
       .alert(deleteAlertTitle, isPresented: $showDeleteAlert) {
         deleteAlertButtons

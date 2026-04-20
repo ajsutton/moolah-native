@@ -48,6 +48,9 @@ struct EditBudgetAmountSheet: View {
       }
     }
     .presentationDetents([.medium])
+    #if os(macOS)
+      .frame(minWidth: 400, minHeight: 300)
+    #endif
   }
 
   private func save() {

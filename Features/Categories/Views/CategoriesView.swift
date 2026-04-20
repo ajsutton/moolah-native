@@ -264,6 +264,9 @@ private struct CreateCategorySheet: View {
         }
       }
     }
+    #if os(macOS)
+      .frame(minWidth: 400, minHeight: 300)
+    #endif
   }
 
   private var allCategories: [Category] {

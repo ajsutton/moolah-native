@@ -126,6 +126,9 @@ struct EditAccountView: View {
         Text("This account will be hidden. You can show it again later from the View menu.")
       }
     }
+    #if os(macOS)
+      .frame(minWidth: 500, minHeight: 400)
+    #endif
   }
 
   private var isValid: Bool {
