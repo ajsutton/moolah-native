@@ -61,6 +61,7 @@ These patterns are **always wrong** in `MoolahUITests_macOS/`. Flag every occurr
 - The constant referenced exists in `UITestSupport/UITestIdentifiers.swift` and matches the namespace regex `[a-z]+\.[a-z]+(\.[^"]+)?`.
 - `accessibilityLabel(_:)` calls (for VoiceOver) are not modified or removed by the test work — identifiers and labels coexist.
 - Identifiers are only added to elements a current test (or imminent test in the same PR) needs. No bulk-identifier passes across unrelated views.
+- No test-only production branches (TEST_GUIDE §4). Flag any `#if DEBUG`, `#if TESTING`, `if isUITest`, or similar branch added in a view (or anywhere else in main-app code) to alter behaviour for a UI test. The single legitimate test-mode entry point is the `--ui-testing` launch argument plus the `UI_TESTING_SEED` environment variable, read once at app startup at the dependency-injection seam — never scattered through business logic or view bodies.
 
 ### Seed files (`UITestSupport/UITestSeeds.swift`)
 
@@ -96,6 +97,7 @@ The registry below names every rule that supports escape-hatch suppression. A fe
 | `identifier-dead-code` | A `UITestIdentifiers` constant is not referenced by any view or driver. |
 | `seed-uuid-literal` | A seed entity's UUID is generated via `UUID()` instead of a hard-coded `UUID(uuidString:)!` literal. |
 | `inline-multi-step` | A test inlines a multi-step driver sequence that recurs (3+ consecutive driver calls on the same sub-driver appearing here and in another test) instead of extracting it into a single driver action. |
+| `test-only-branch` | Production code (view body or otherwise) contains a `#if DEBUG`, `#if TESTING`, `if isUITest`, or equivalent branch added to alter behaviour for a UI test. |
 
 ## Escape Hatch
 
