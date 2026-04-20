@@ -12,6 +12,10 @@ struct PositionsTable: View {
 
   @Environment(\.horizontalSizeClass) private var sizeClass
 
+  @State private var sortOrder: [KeyPathComparator<ValuedPosition>] = [
+    .init(\.quantity, order: .reverse)
+  ]
+
   var body: some View {
     Group {
       #if os(macOS)
@@ -34,9 +38,9 @@ struct PositionsTable: View {
 
   @ViewBuilder
   private var wideLayout: some View {
-    let allRows = groups.flatMap(\.rows)
-    Table(allRows, selection: rowSelectionBinding) {
-      TableColumn("Instrument") { row in
+    let sortedRows = groups.flatMap(\.rows).sorted(using: sortOrder)
+    Table(sortedRows, selection: rowSelectionBinding, sortOrder: $sortOrder) {
+      TableColumn("Instrument", value: \.instrument.name) { row in
         HStack(spacing: 6) {
           KindBadge(kind: row.instrument.kind)
           VStack(alignment: .leading) {
@@ -46,9 +50,11 @@ struct PositionsTable: View {
             }
           }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(instrumentLabel(for: row))
       }
-      TableColumn("Qty") { row in
-        Text(qtyString(for: row))
+      TableColumn("Qty", value: \.quantity) { row in
+        Text(row.quantityFormatted)
           .monospacedDigit()
       }
       TableColumn("Unit Price") { row in
@@ -74,9 +80,9 @@ struct PositionsTable: View {
       }
       TableColumn("Gain") { row in
         if let gain = row.gainLoss {
-          Text(gainString(gain))
+          Text(gain.signedFormatted)
             .monospacedDigit()
-            .foregroundStyle(gain.isNegative ? .red : .green)
+            .foregroundStyle(gainColor(gain))
         } else {
           Text("—").foregroundStyle(.tertiary)
         }
@@ -105,29 +111,9 @@ struct PositionsTable: View {
 
   @ViewBuilder
   private var narrowLayout: some View {
-    List {
+    List(selection: narrowSelectionBinding) {
       ForEach(groups) { group in
-        if input.showsGroupSubtotals {
-          Section(group.title) {
-            ForEach(group.rows) { row in
-              PositionRow(row: row)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                  selection = (selection == row.instrument) ? nil : row.instrument
-                }
-                .background(selection == row.instrument ? Color.accentColor.opacity(0.12) : .clear)
-            }
-          }
-        } else {
-          ForEach(group.rows) { row in
-            PositionRow(row: row)
-              .contentShape(Rectangle())
-              .onTapGesture {
-                selection = (selection == row.instrument) ? nil : row.instrument
-              }
-              .background(selection == row.instrument ? Color.accentColor.opacity(0.12) : .clear)
-          }
-        }
+        groupContent(for: group)
       }
     }
     #if !os(macOS)
@@ -135,29 +121,54 @@ struct PositionsTable: View {
     #endif
   }
 
-  // MARK: - Helpers
-
-  private func qtyString(for row: ValuedPosition) -> String {
-    switch row.instrument.kind {
-    case .fiatCurrency:
-      return InstrumentAmount(quantity: row.quantity, instrument: row.instrument).formatted
-    case .stock:
-      let formatter = NumberFormatter()
-      formatter.numberStyle = .decimal
-      formatter.maximumFractionDigits = row.instrument.decimals
-      return formatter.string(from: row.quantity as NSDecimalNumber) ?? "\(row.quantity)"
-    case .cryptoToken:
-      let formatter = NumberFormatter()
-      formatter.numberStyle = .decimal
-      formatter.maximumFractionDigits = min(row.instrument.decimals, 8)
-      let qty = formatter.string(from: row.quantity as NSDecimalNumber) ?? "\(row.quantity)"
-      return "\(qty) \(row.instrument.displayLabel)"
+  @ViewBuilder
+  private func groupContent(for group: InstrumentGroup) -> some View {
+    if input.showsGroupSubtotals {
+      Section(group.title) {
+        ForEach(group.rows) { row in
+          PositionRow(row: row).tag(row.id)
+        }
+      }
+    } else {
+      ForEach(group.rows) { row in
+        PositionRow(row: row).tag(row.id)
+      }
     }
   }
 
-  private func gainString(_ gain: InstrumentAmount) -> String {
-    let sign = gain.quantity > 0 ? "+" : ""
-    return "\(sign)\(gain.formatted)"
+  private var narrowSelectionBinding: Binding<String?> {
+    Binding(
+      get: { selection?.id },
+      set: { id in
+        if let id, let instrument = input.positions.first(where: { $0.id == id })?.instrument {
+          selection = (selection?.id == id) ? nil : instrument
+        } else {
+          selection = nil
+        }
+      }
+    )
+  }
+
+  // MARK: - Helpers
+
+  private func gainColor(_ gain: InstrumentAmount) -> Color {
+    if gain.isNegative { return .red }
+    if gain.isZero { return .primary }
+    return .green
+  }
+
+  private func instrumentLabel(for row: ValuedPosition) -> String {
+    let kindWord: String = {
+      switch row.instrument.kind {
+      case .stock: return "Stock"
+      case .cryptoToken: return "Crypto"
+      case .fiatCurrency: return "Cash"
+      }
+    }()
+    if let exchange = row.instrument.exchange {
+      return "\(row.instrument.name), \(kindWord), \(exchange)"
+    }
+    return "\(row.instrument.name), \(kindWord)"
   }
 }
 
@@ -192,4 +203,57 @@ struct InstrumentGroup: Identifiable {
       .init(kind: .cash, rows: cash),
     ].filter { !$0.rows.isEmpty }
   }
+}
+
+#Preview("PositionsTable - mixed wide") {
+  let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+  let cba = Instrument.stock(ticker: "CBA.AX", exchange: "ASX", name: "CBA")
+  let eth = Instrument.crypto(
+    chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
+  let aud = Instrument.AUD
+  let input = PositionsViewInput(
+    title: "Brokerage",
+    hostCurrency: aud,
+    positions: [
+      ValuedPosition(
+        instrument: bhp, quantity: 250,
+        unitPrice: InstrumentAmount(quantity: 45.30, instrument: aud),
+        costBasis: InstrumentAmount(quantity: 10_125, instrument: aud),
+        value: InstrumentAmount(quantity: 11_325, instrument: aud)),
+      ValuedPosition(
+        instrument: cba, quantity: 80,
+        unitPrice: InstrumentAmount(quantity: 120, instrument: aud),
+        costBasis: InstrumentAmount(quantity: 9_000, instrument: aud),
+        value: InstrumentAmount(quantity: 9_600, instrument: aud)),
+      ValuedPosition(
+        instrument: eth, quantity: 2.45,
+        unitPrice: InstrumentAmount(quantity: 4_000, instrument: aud),
+        costBasis: InstrumentAmount(quantity: 7_500, instrument: aud),
+        value: InstrumentAmount(quantity: 9_800, instrument: aud)),
+      ValuedPosition(
+        instrument: aud, quantity: 2_480,
+        unitPrice: nil, costBasis: nil,
+        value: InstrumentAmount(quantity: 2_480, instrument: aud)),
+    ],
+    historicalValue: nil
+  )
+  return PositionsTable(input: input, selection: .constant(nil))
+    .frame(width: 720, height: 360)
+}
+
+#Preview("PositionsTable - conversion failure") {
+  let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+  let aud = Instrument.AUD
+  let input = PositionsViewInput(
+    title: "Brokerage",
+    hostCurrency: aud,
+    positions: [
+      ValuedPosition(
+        instrument: bhp, quantity: 250,
+        unitPrice: nil, costBasis: nil, value: nil)
+    ],
+    historicalValue: nil
+  )
+  return PositionsTable(input: input, selection: .constant(nil))
+    .frame(width: 720, height: 240)
 }

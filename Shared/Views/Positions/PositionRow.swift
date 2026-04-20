@@ -22,7 +22,7 @@ struct PositionRow: View {
             .font(.caption)
             .foregroundStyle(.secondary)
         }
-        Text(quantityText)
+        Text(row.quantityCaption)
           .font(.caption)
           .foregroundStyle(.secondary)
           .monospacedDigit()
@@ -40,30 +40,16 @@ struct PositionRow: View {
             .foregroundStyle(.tertiary)
         }
         if let gain = row.gainLoss {
-          Text(gainText(gain))
+          Text(gain.signedFormatted)
             .font(.caption)
             .monospacedDigit()
-            .foregroundStyle(gain.isNegative ? .red : .green)
+            .foregroundStyle(gainColor(gain))
         }
       }
     }
     .padding(.vertical, 8)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)
-  }
-
-  private var quantityText: String {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .decimal
-    formatter.minimumFractionDigits = 0
-    formatter.maximumFractionDigits = min(row.instrument.decimals, 8)
-    let qty = formatter.string(from: row.quantity as NSDecimalNumber) ?? "\(row.quantity)"
-    switch row.instrument.kind {
-    case .fiatCurrency:
-      return InstrumentAmount(quantity: row.quantity, instrument: row.instrument).formatted
-    case .stock: return "\(qty) shares"
-    case .cryptoToken: return "\(qty) \(row.instrument.displayLabel)"
-    }
   }
 
   private var secondaryIdentifier: String? {
@@ -78,13 +64,14 @@ struct PositionRow: View {
     }
   }
 
-  private func gainText(_ gain: InstrumentAmount) -> String {
-    let sign = gain.quantity > 0 ? "+" : ""
-    return "\(sign)\(gain.formatted)"
+  private func gainColor(_ gain: InstrumentAmount) -> Color {
+    if gain.isNegative { return .red }
+    if gain.isZero { return .primary }
+    return .green
   }
 
   private var accessibilityLabel: String {
-    var parts: [String] = [row.instrument.name, quantityText]
+    var parts: [String] = [row.instrument.name, row.quantityCaption]
     if let value = row.value {
       parts.append("valued at \(value.formatted)")
     } else {
