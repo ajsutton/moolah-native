@@ -363,6 +363,12 @@ final class InvestmentStore {
     transactions: [Transaction], hostCurrency: Instrument
   ) async -> [String: Decimal] {
     var engine = CostBasisEngine()
+    // Track instruments whose cost basis has been corrupted by a failing
+    // classification (e.g., a historical exchange rate gap on a swap). Per
+    // Rule 11 we must NOT return a silently-wrong number for these — omit
+    // them from the result so the caller treats the cost basis as
+    // unavailable rather than wrong.
+    var instrumentsWithFailedClassification: Set<String> = []
     let sorted = transactions.sorted { $0.date < $1.date }
     for txn in sorted {
       guard !Task.isCancelled else { break }
@@ -385,11 +391,20 @@ final class InvestmentStore {
         logger.warning(
           "Failed to classify txn \(txn.id, privacy: .public) for cost basis: \(error.localizedDescription, privacy: .public)"
         )
+        // Mark every non-fiat instrument in this txn's legs as having
+        // uncertain cost basis going forward.
+        for leg in txn.legs where leg.instrument.kind != .fiatCurrency {
+          instrumentsWithFailedClassification.insert(leg.instrument.id)
+        }
       }
     }
     var result: [String: Decimal] = [:]
     for lot in engine.allOpenLots() {
       result[lot.instrument.id, default: 0] += lot.remainingCost
+    }
+    // Drop any instrument whose cost basis is no longer reliable.
+    for id in instrumentsWithFailedClassification {
+      result.removeValue(forKey: id)
     }
     return result
   }
