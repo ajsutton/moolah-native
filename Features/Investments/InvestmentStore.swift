@@ -19,6 +19,7 @@ final class InvestmentStore {
 
   var selectedPeriod: TimePeriod = .all
   private(set) var loadedAccountId: UUID?
+  private(set) var loadedHostCurrency: Instrument?
 
   /// Callback fired after an investment value is set or removed, so other stores
   /// can update the account's displayed investment value.
@@ -92,6 +93,7 @@ final class InvestmentStore {
   /// Keeps the branching logic out of the view so `.task`/`.refreshable`
   /// blocks stay one-liners.
   func loadAllData(accountId: UUID, profileCurrency: Instrument) async {
+    loadedHostCurrency = profileCurrency
     await loadValues(accountId: accountId)
     if hasLegacyValuations {
       await loadDailyBalances(accountId: accountId)
@@ -293,13 +295,22 @@ final class InvestmentStore {
     range: PositionsTimeRange
   ) async -> PositionsViewInput {
     guard let transactionRepository else {
+      let hostCurrency = loadedHostCurrency ?? .AUD
       return PositionsViewInput(
-        title: title, hostCurrency: .AUD,
+        title: title, hostCurrency: hostCurrency,
         positions: valuedPositions, historicalValue: nil)
     }
 
-    let txns = (try? await fetchAllTransactions(repository: transactionRepository)) ?? []
-    let hostCurrency = valuedPositions.first?.value?.instrument ?? .AUD
+    let txns: [Transaction]
+    do {
+      txns = try await fetchAllTransactions(repository: transactionRepository)
+    } catch {
+      logger.warning(
+        "fetchAllTransactions failed, cost basis will be empty: \(error.localizedDescription, privacy: .public)"
+      )
+      txns = []
+    }
+    let hostCurrency = loadedHostCurrency ?? valuedPositions.first?.value?.instrument ?? .AUD
     let costSnapshot = await costBasisSnapshot(
       transactions: txns, hostCurrency: hostCurrency)
     let rowsWithCost: [ValuedPosition] = valuedPositions.map { row in
@@ -340,7 +351,7 @@ final class InvestmentStore {
         filter: TransactionFilter(accountId: accountId),
         page: page, pageSize: 200
       )
-      if Task.isCancelled { return all }
+      guard !Task.isCancelled else { return all }
       all.append(contentsOf: result.transactions)
       if result.transactions.count < 200 { break }
       page += 1
@@ -354,6 +365,7 @@ final class InvestmentStore {
     var engine = CostBasisEngine()
     let sorted = transactions.sorted { $0.date < $1.date }
     for txn in sorted {
+      guard !Task.isCancelled else { break }
       do {
         let classification = try await TradeEventClassifier.classify(
           legs: txn.legs, on: txn.date,
