@@ -69,4 +69,18 @@ struct TradeEventClassifierTests {
     #expect(result.buys[0].quantity == Decimal(string: "0.1")!)
     #expect(result.buys[0].costPerUnit == 60_000)
   }
+
+  @Test("all-fiat transaction: returns empty classification")
+  func allFiatTransaction() async throws {
+    let legs = [
+      TransactionLeg(accountId: UUID(), instrument: aud, quantity: -100, type: .expense),
+      TransactionLeg(accountId: UUID(), instrument: aud, quantity: 100, type: .income),
+    ]
+    let result = try await TradeEventClassifier.classify(
+      legs: legs, on: date, hostCurrency: aud,
+      conversionService: FixedConversionService(rates: [:])
+    )
+    #expect(result.buys.isEmpty)
+    #expect(result.sells.isEmpty)
+  }
 }

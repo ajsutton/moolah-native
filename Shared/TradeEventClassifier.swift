@@ -15,7 +15,7 @@ struct TradeSellEvent: Sendable, Equatable {
   let proceedsPerUnit: Decimal
 }
 
-struct TradeEventClassification: Sendable {
+struct TradeEventClassification: Sendable, Equatable {
   let buys: [TradeBuyEvent]
   let sells: [TradeSellEvent]
 }
@@ -38,6 +38,11 @@ struct TradeEventClassification: Sendable {
 /// Per CLAUDE.md sign convention, signs are preserved end-to-end; we never
 /// `abs()` a raw leg quantity. Per-unit values are always positive because
 /// numerator and denominator share the leg's sign.
+///
+/// A transaction with a single non-fiat leg and no fiat legs (e.g. a
+/// dividend reinvestment recorded as one income leg) is not classifiable
+/// and produces an empty `TradeEventClassification`. Callers that want to
+/// treat such legs as opening positions must handle them separately.
 ///
 /// This is the single source of truth used by both
 /// `CapitalGainsCalculator` (tax reporting) and the
