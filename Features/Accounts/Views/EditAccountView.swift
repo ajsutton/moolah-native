@@ -65,8 +65,6 @@ struct EditAccountView: View {
           .accessibilityValue(balanceAccessibilityValue)
         }
 
-        PositionListView(positions: accountStore.positions(for: account.id))
-
         Section {
           Toggle("Hide Account", isOn: $isHidden)
             .disabled(!accountStore.canDelete(account.id))
