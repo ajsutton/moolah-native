@@ -11,7 +11,7 @@ struct RecentlyAddedView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      NeedsSetupAndFailedPanel()
+      NeedsSetupAndFailedPanel(backend: backend, staging: importStore.staging)
       if let viewModel {
         if viewModel.isLoading && viewModel.sessions.isEmpty {
           ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -163,6 +163,8 @@ private struct RecentlyAddedRow: View {
 /// Needs Setup / Failed Files panel. Shown above the session list when either
 /// list is non-empty; fully hidden when both are empty.
 private struct NeedsSetupAndFailedPanel: View {
+  let backend: any BackendProvider
+  let staging: ImportStagingStore
   @Environment(ImportStore.self) private var importStore
 
   var body: some View {
@@ -173,7 +175,7 @@ private struct NeedsSetupAndFailedPanel: View {
         if !importStore.pendingSetup.isEmpty {
           Text("Needs Setup").font(.headline)
           ForEach(importStore.pendingSetup) { file in
-            PendingRow(file: file)
+            PendingRow(file: file, backend: backend, staging: staging)
           }
         }
         if !importStore.failedFiles.isEmpty {
@@ -193,7 +195,10 @@ private struct NeedsSetupAndFailedPanel: View {
 
 private struct PendingRow: View {
   let file: PendingSetupFile
+  let backend: any BackendProvider
+  let staging: ImportStagingStore
   @Environment(ImportStore.self) private var importStore
+  @State private var showingSetup = false
 
   var body: some View {
     HStack {
@@ -204,10 +209,18 @@ private struct PendingRow: View {
           .font(.caption).foregroundStyle(.secondary)
       }
       Spacer()
+      Button("Set up\u{2026}") { showingSetup = true }
+        .buttonStyle(.borderless)
       Button("Dismiss") {
         Task { await importStore.dismissPending(id: file.id) }
       }
       .buttonStyle(.borderless)
+    }
+    .sheet(isPresented: $showingSetup) {
+      CSVImportSetupView(
+        store: CSVImportSetupStore(
+          pending: file, backend: backend,
+          importStore: importStore, staging: staging))
     }
   }
 }

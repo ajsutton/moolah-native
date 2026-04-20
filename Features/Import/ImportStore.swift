@@ -78,7 +78,10 @@ final class ImportStore {
 
   private let backend: any BackendProvider
   private let registry: CSVParserRegistry
-  private let staging: ImportStagingStore
+  /// Exposed so the Needs Setup sheet can re-read staged bytes via its own
+  /// `CSVImportSetupStore`. Mutations still flow through the `ImportStore`
+  /// public API; external callers should only read.
+  let staging: ImportStagingStore
   private let logger = Logger(subsystem: "com.moolah.app", category: "ImportStore")
 
   init(
