@@ -68,4 +68,15 @@ struct ValuedPositionTests {
     )
     #expect(row.gainLoss == nil)
   }
+
+  @Test("gainLoss is negative when value is below cost basis")
+  func gainLossNegativeOnUnderwater() {
+    let row = ValuedPosition(
+      instrument: bhp, quantity: 250,
+      unitPrice: nil,
+      costBasis: InstrumentAmount(quantity: 11_325, instrument: aud),
+      value: InstrumentAmount(quantity: 10_125, instrument: aud)
+    )
+    #expect(row.gainLoss == InstrumentAmount(quantity: -1_200, instrument: aud))
+  }
 }
