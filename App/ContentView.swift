@@ -61,7 +61,10 @@ struct ContentView: View {
               categories: categoryStore.categories,
               earmarks: earmarkStore.earmarks,
               transactionStore: transactionStore,
-              positions: accountStore.positions(for: account.id))
+              positions: accountStore.positions(for: account.id),
+              positionsHostCurrency: account.instrument,
+              positionsTitle: account.name,
+              conversionService: session.backend.conversionService)
           }
         }
       case .earmark(let id):
