@@ -112,10 +112,10 @@ struct StockPositionDisplayTests {
     await store.loadPositions(accountId: accountId)
     await store.valuatePositions(profileCurrency: aud, on: today)
 
-    let bhpValued = store.valuedPositions.first { $0.position.instrument == bhp }
+    let bhpValued = store.valuedPositions.first { $0.instrument == bhp }
     #expect(bhpValued != nil)
     // 150 shares * $45.00 = $6,750.00
-    #expect(bhpValued!.marketValue == Decimal(string: "6750.00")!)
+    #expect(bhpValued!.value?.quantity == Decimal(string: "6750.00")!)
   }
 
   @Test func totalPortfolioValueSumsAllPositions() async throws {
@@ -239,13 +239,13 @@ struct StockPositionDisplayTests {
     // Aggregate is unavailable — one position failed.
     #expect(store.totalPortfolioValue == nil)
     // Per-position rendering still works for the convertible BHP.
-    let bhpValued = store.valuedPositions.first { $0.position.instrument == bhp }
-    #expect(bhpValued?.marketValue == Decimal(string: "6750")!)
-    // And the failing position is rendered with nil marketValue so the
+    let bhpValued = store.valuedPositions.first { $0.instrument == bhp }
+    #expect(bhpValued?.value?.quantity == Decimal(string: "6750")!)
+    // And the failing position is rendered with nil value so the
     // view can show "Unavailable" on that row.
-    let cbaValued = store.valuedPositions.first { $0.position.instrument == cba }
+    let cbaValued = store.valuedPositions.first { $0.instrument == cba }
     #expect(cbaValued != nil)
-    #expect(cbaValued?.marketValue == nil)
+    #expect(cbaValued?.value == nil)
     // Error state is surfaced so a retry affordance can be shown.
     #expect(store.error != nil)
   }

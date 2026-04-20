@@ -2,14 +2,6 @@ import Foundation
 import OSLog
 import Observation
 
-/// A position with its current market value in the profile currency.
-struct ValuedPosition: Identifiable, Sendable {
-  let position: Position
-  var marketValue: Decimal?  // nil if price lookup failed
-
-  var id: String { position.instrument.id }
-}
-
 @Observable
 @MainActor
 final class InvestmentStore {
@@ -207,7 +199,14 @@ final class InvestmentStore {
 
     for position in positions {
       if position.instrument.id == profileCurrency.id {
-        valued.append(ValuedPosition(position: position, marketValue: position.quantity))
+        valued.append(
+          ValuedPosition(
+            instrument: position.instrument,
+            quantity: position.quantity,
+            unitPrice: nil,
+            costBasis: nil,
+            value: InstrumentAmount(quantity: position.quantity, instrument: profileCurrency)
+          ))
         total += position.quantity
         continue
       }
@@ -215,13 +214,31 @@ final class InvestmentStore {
         let value = try await conversionService.convert(
           position.quantity, from: position.instrument, to: profileCurrency, on: date
         )
-        valued.append(ValuedPosition(position: position, marketValue: value))
+        let unit =
+          position.quantity == 0
+          ? nil
+          : InstrumentAmount(quantity: value / position.quantity, instrument: profileCurrency)
+        valued.append(
+          ValuedPosition(
+            instrument: position.instrument,
+            quantity: position.quantity,
+            unitPrice: unit,
+            costBasis: nil,
+            value: InstrumentAmount(quantity: value, instrument: profileCurrency)
+          ))
         total += value
       } catch {
         logger.warning(
           "Failed to valuate position \(position.instrument.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
         )
-        valued.append(ValuedPosition(position: position, marketValue: nil))
+        valued.append(
+          ValuedPosition(
+            instrument: position.instrument,
+            quantity: position.quantity,
+            unitPrice: nil,
+            costBasis: nil,
+            value: nil
+          ))
         if firstFailure == nil { firstFailure = error }
       }
     }
