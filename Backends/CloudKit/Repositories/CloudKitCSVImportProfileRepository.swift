@@ -47,6 +47,8 @@ final class CloudKitCSVImportProfileRepository: CSVImportProfileRepository, @unc
       record.deleteAfterImport = profile.deleteAfterImport
       record.lastUsedAt = profile.lastUsedAt
       record.dateFormatRawValue = profile.dateFormatRawValue
+      record.columnRoleRawValuesEncoded = CSVImportProfileRecord.encodeColumnRoles(
+        profile.columnRoleRawValues)
       try context.save()
       onRecordChanged(profile.id)
       return record.toDomain()

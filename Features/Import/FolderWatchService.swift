@@ -27,6 +27,11 @@
     /// Held across the stream's lifetime and deallocated in `stop()` so the
     /// FSEventStreamContext isn't leaked when we drop the stream.
     private var contextPointer: UnsafeMutablePointer<FSEventStreamContext>?
+    /// Tasks spawned by the FSEvents callback — tracked so `stop()` can
+    /// cancel any in-flight `handleEvents` before the service is torn
+    /// down, avoiding orphan ingests after the watch was explicitly
+    /// stopped.
+    private var inFlightTasks: [Task<Void, Never>] = []
 
     init(
       importStore: ImportStore,
@@ -74,8 +79,18 @@
             paths.append(cfString as String)
           }
         }
-        Task { @MainActor in
+        // `FSEventStreamSetDispatchQueue(newStream, .main)` (below) means
+        // this callback fires on the main queue — but it's a C function
+        // pointer with no actor isolation, so we still need the explicit
+        // `Task { @MainActor in }` hop. Tracking the task lets `stop()`
+        // cancel it if the watch is torn down mid-ingest.
+        let task: Task<Void, Never> = Task { @MainActor in
           await service.handleEvents(paths: paths)
+        }
+        Task { @MainActor in
+          service.inFlightTasks.append(task)
+          await task.value
+          service.inFlightTasks.removeAll { $0.isCancelled }
         }
       }
 
@@ -116,6 +131,10 @@
         contextPointer.deallocate()
       }
       contextPointer = nil
+      // Cancel any in-flight handle-events tasks so no ingest kicks off
+      // after the watch has been torn down.
+      for task in inFlightTasks { task.cancel() }
+      inFlightTasks.removeAll()
       if didStartAccess, let watchedURL {
         watchedURL.stopAccessingSecurityScopedResource()
       }
@@ -127,6 +146,7 @@
 
     fileprivate func handleEvents(paths: [String]) async {
       for path in paths {
+        if Task.isCancelled { return }
         let url = URL(fileURLWithPath: path)
         guard url.pathExtension.lowercased() == "csv" else { continue }
         guard fileManager.fileExists(atPath: url.path) else { continue }

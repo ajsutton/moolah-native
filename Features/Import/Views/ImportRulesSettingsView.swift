@@ -5,6 +5,7 @@ import SwiftUI
 struct ImportRulesSettingsView: View {
   @Environment(ImportRuleStore.self) private var ruleStore
   @Environment(CategoryStore.self) private var categoryStore
+  @Environment(ProfileSession.self) private var session
   @State private var editingRule: ImportRule?
   @State private var showingAddSheet = false
 
@@ -52,7 +53,10 @@ struct ImportRulesSettingsView: View {
         }
       #endif
     }
-    .task { await ruleStore.load() }
+    .task {
+      await ruleStore.load()
+      await ruleStore.refreshStats(backend: session.backend)
+    }
     .sheet(isPresented: $showingAddSheet) {
       RuleEditorView(
         initialRule: ImportRule(
@@ -100,6 +104,12 @@ private struct RuleRow: View {
           .font(.caption)
           .foregroundStyle(.secondary)
           .lineLimit(1)
+        if let stats = ruleStore.matchStats[rule.id], stats.matchCount > 0 {
+          Text(statsCaption(stats))
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+        }
       }
       Spacer()
       // Tab-reachable keyboard path for macOS users; redundant with the
@@ -113,6 +123,16 @@ private struct RuleRow: View {
     // click — including on the trailing `Spacer()` — to the editor.
     .contentShape(Rectangle())
     .onTapGesture { onEdit() }
+  }
+
+  private func statsCaption(_ stats: ImportRuleStore.RuleMatchStats) -> String {
+    let matches =
+      stats.matchCount == 1
+      ? "1 match" : "\(stats.matchCount) matches"
+    guard let last = stats.lastMatchedAt else { return matches }
+    let formatter = RelativeDateTimeFormatter()
+    formatter.unitsStyle = .short
+    return "\(matches) · last \(formatter.localizedString(for: last, relativeTo: Date()))"
   }
 
   private func summarise(_ rule: ImportRule) -> String {

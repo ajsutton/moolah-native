@@ -170,6 +170,45 @@ struct CSVImportSetupStoreTests {
     #expect(firstTx?.rawDescription == "")
   }
 
+  @Test("saveAndImport persists column-role overrides on the profile")
+  func saveAndImportPersistsColumnRoles() async throws {
+    let (backend, _) = try TestBackend.create()
+    let accountId = UUID()
+    _ = try await backend.accounts.create(
+      Account(
+        id: accountId, name: "Cash", type: .bank, instrument: .AUD,
+        positions: [], position: 0, isHidden: false),
+      openingBalance: nil)
+    let dir = tempDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let staging = try ImportStagingStore(directory: dir)
+    let importStore = ImportStore(backend: backend, staging: staging)
+    let bytes = try CSVFixtureLoader.data("cba-everyday-standard")
+    let pending = try await seedPending(staging, bytes: bytes)
+    let store = CSVImportSetupStore(
+      pending: pending, backend: backend,
+      importStore: importStore, staging: staging)
+    store.targetAccountId = accountId
+    await store.regeneratePreview()
+    // Swap debit and credit columns so the detector's seed doesn't
+    // match — forcing columnRoleRawValues onto the profile.
+    await store.applyColumnRole(.credit, forColumn: 2)
+    await store.applyColumnRole(.debit, forColumn: 3)
+
+    let result = await store.saveAndImport()
+    guard case .imported = result else {
+      Issue.record("expected .imported, got \(result)")
+      return
+    }
+    let profile = try await backend.csvImportProfiles.fetchAll().first!
+    #expect(profile.columnRoleRawValues != nil)
+    // Columns 0..4 for the CBA file: Date, Description, Debit, Credit, Balance.
+    // We swapped columns 2 and 3, so the persisted roles at those indices
+    // should be `credit` and `debit` (not `debit` / `credit`).
+    #expect(profile.columnRoleRawValues?[2] == "credit")
+    #expect(profile.columnRoleRawValues?[3] == "debit")
+  }
+
   @Test("deletePending removes the staged pending file")
   func deletePendingClears() async throws {
     let (backend, _) = try TestBackend.create()

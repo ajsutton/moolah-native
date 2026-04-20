@@ -75,6 +75,10 @@ final class ImportStore {
   private(set) var failedFiles: [FailedImportFile] = []
   /// Session summaries for the Recently Added view, newest first.
   private(set) var recentSessions: [ImportSessionSummary] = []
+  /// Count of recently-imported transactions with no category assigned.
+  /// Drives the sidebar badge on Recently Added. Refreshed at app launch
+  /// and after every successful ingest.
+  private(set) var unreviewedBadgeCount: Int = 0
   private(set) var lastError: String?
 
   private let backend: any BackendProvider
@@ -122,6 +126,7 @@ final class ImportStore {
             importedAt: Date(),
             filename: source.filename),
           at: 0)
+        await refreshBadge()
       }
       if case .needsSetup = result {
         await reloadStagingLists()
@@ -138,6 +143,28 @@ final class ImportStore {
       lastError = error.localizedDescription
       await reloadStagingLists()
       return .failed(message: error.localizedDescription + " (staged as \(pendingId))")
+    }
+  }
+
+  /// Refresh the sidebar badge count (transactions imported in the last
+  /// 24 hours whose legs are all uncategorised). Call at app launch, on
+  /// scene-foreground, and after each successful ingest.
+  func refreshBadge(now: Date = Date()) async {
+    do {
+      let page = try await backend.transactions.fetch(
+        filter: TransactionFilter(), page: 0, pageSize: 500)
+      let windowStart = now.addingTimeInterval(-86_400)
+      unreviewedBadgeCount =
+        page.transactions.filter { tx in
+          guard let origin = tx.importOrigin else { return false }
+          guard origin.importedAt >= windowStart && origin.importedAt <= now else {
+            return false
+          }
+          return tx.legs.allSatisfy { $0.categoryId == nil }
+        }.count
+    } catch {
+      logger.error(
+        "refreshBadge failed: \(error.localizedDescription, privacy: .public)")
     }
   }
 
@@ -166,6 +193,30 @@ final class ImportStore {
       await reloadStagingLists()
     } catch {
       logger.error("Dismiss failed failed: \(error.localizedDescription)")
+    }
+  }
+
+  /// Retry a previously-failed file: re-read the staged bytes, drop the
+  /// failed record, and send the bytes back through `ingest`. Works for
+  /// any file we staged (picker, drop, paste, folder-watch) because we
+  /// use the on-disk copy, not the original URL.
+  @discardableResult
+  func retryFailed(id: UUID) async -> ImportSessionResult {
+    do {
+      guard let record = try await staging.failedFiles().first(where: { $0.id == id })
+      else {
+        return .failed(message: "Failed file not found")
+      }
+      let bytes = try await staging.data(forFailedId: id)
+      try await staging.dismiss(failedId: id)
+      await reloadStagingLists()
+      return await ingest(
+        data: bytes,
+        source: .reingestFromSetup(
+          filename: record.originalFilename, sourceURL: nil))
+    } catch {
+      logger.error("retryFailed failed: \(error.localizedDescription)")
+      return .failed(message: error.localizedDescription)
     }
   }
 
@@ -251,6 +302,19 @@ final class ImportStore {
     let dateFormatOverride = profileForOverride?.dateFormatRawValue
       .flatMap(GenericBankCSVParser.DateFormat.fromRawValue)
 
+    // Column-role override: if the profile stored a user-edited column
+    // mapping, rebuild the ColumnMapping from it and pass as an explicit
+    // `overrideMapping` so the parser doesn't re-auto-detect. Without
+    // this, the user's first-time setup choice would be ignored on
+    // every subsequent import with the same header signature.
+    let columnMappingOverride = profileForOverride?.columnRoleRawValues.flatMap {
+      Self.buildColumnMapping(
+        headers: headers,
+        columnRoleRawValues: $0,
+        sampleRows: Array(rows.dropFirst().prefix(5)),
+        dateFormatOverride: dateFormatOverride)
+    }
+
     // 3. Parse.
     let parseSignpost = OSSignpostID(log: Signposts.importPipeline)
     os_signpost(
@@ -258,8 +322,13 @@ final class ImportStore {
     let records: [ParsedRecord]
     do {
       if let genericParser = parser as? GenericBankCSVParser {
-        records = try genericParser.parse(
-          rows: rows, overrideDateFormat: dateFormatOverride)
+        if let mapping = columnMappingOverride {
+          records = try genericParser.parse(
+            rows: rows, overrideMapping: mapping)
+        } else {
+          records = try genericParser.parse(
+            rows: rows, overrideDateFormat: dateFormatOverride)
+        }
       } else {
         records = try parser.parse(rows: rows)
       }
@@ -546,6 +615,54 @@ final class ImportStore {
       notes: evaluation.appendedNotes,
       legs: legs,
       importOrigin: origin)
+  }
+
+  /// Rebuild a `GenericBankCSVParser.ColumnMapping` from the raw strings
+  /// persisted on `CSVImportProfile.columnRoleRawValues`. Static +
+  /// nonisolated so it can be called from `runPipeline` without crossing
+  /// actor boundaries. Returns nil when the raw-values array is empty /
+  /// all nil / obviously inconsistent with the live headers.
+  nonisolated static func buildColumnMapping(
+    headers: [String],
+    columnRoleRawValues: [String?],
+    sampleRows: [[String]],
+    dateFormatOverride: GenericBankCSVParser.DateFormat?
+  ) -> GenericBankCSVParser.ColumnMapping? {
+    guard columnRoleRawValues.count == headers.count else { return nil }
+    // Resolve role per column; indices < 0 mean "unassigned" which
+    // `safe(row:_:)` turns into "".
+    func firstIndex(of role: CSVImportSetupStore.ColumnRole) -> Int? {
+      columnRoleRawValues.firstIndex { $0 == role.rawValue }
+    }
+    let date = firstIndex(of: .date) ?? -1
+    let description = firstIndex(of: .description) ?? -1
+    guard date >= 0, description >= 0 else { return nil }
+    let amount = firstIndex(of: .amount)
+    let debit = firstIndex(of: .debit)
+    let credit = firstIndex(of: .credit)
+    let balance = firstIndex(of: .balance)
+    let reference = firstIndex(of: .reference)
+    guard amount != nil || (debit != nil && credit != nil) else { return nil }
+
+    // Date format: prefer the explicit override; otherwise re-detect
+    // against the current sample rows using the same algorithm the
+    // detector uses when a profile has no stored format.
+    let parser = GenericBankCSVParser()
+    let detectedMapping = parser.inferMapping(from: headers, sampleRows: sampleRows)
+    let detectedFormat =
+      detectedMapping?.dateFormat ?? .ddMMyyyy(separator: "/")
+    let dateFormat = dateFormatOverride ?? detectedFormat
+
+    return GenericBankCSVParser.ColumnMapping(
+      date: date,
+      description: description,
+      amount: amount,
+      debit: debit,
+      credit: credit,
+      balance: balance,
+      reference: reference,
+      dateFormat: dateFormat,
+      dateFormatAmbiguous: false)
   }
 
   // MARK: - Staging helpers

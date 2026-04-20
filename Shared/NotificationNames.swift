@@ -20,4 +20,10 @@ extension Notification.Name {
   // Earmark commands
   static let requestEarmarkEdit = Notification.Name("requestEarmarkEdit")
   static let requestEarmarkToggleHidden = Notification.Name("requestEarmarkToggleHidden")
+
+  /// Posted when the app is asked to open a CSV file URL (Finder "Open
+  /// With", Dock-icon drop). `object` is the file `URL`. The active
+  /// profile's `ContentView` observes this and routes it through
+  /// `ImportStore.ingest`.
+  static let openCSVFile = Notification.Name("openCSVFile")
 }

@@ -24,6 +24,7 @@ struct ContentView: View {
   #endif
 
   @Environment(\.pendingNavigation) private var pendingNavigationBinding
+  @Environment(\.scenePhase) private var scenePhase
   @Environment(ImportStore.self) private var importStore
   @State private var showCreateEarmarkSheet = false
   @State private var showImportCSVPicker = false
@@ -37,7 +38,28 @@ struct ContentView: View {
           async let a: Void = accountStore.load()
           async let c: Void = categoryStore.load()
           async let e: Void = earmarkStore.load()
-          _ = await (a, c, e)
+          async let b: Void = importStore.refreshBadge()
+          // Start the folder watch (macOS FSEvents or, on iOS, the
+          // catch-up scan) if the user has picked one. The call is a
+          // no-op when no folder is configured.
+          async let w: Void = session.startFolderWatch()
+          _ = await (a, c, e, b, w)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+          if newPhase == .active {
+            Task {
+              await importStore.refreshBadge()
+              // iOS doesn't have FSEvents, so foreground-entry is the
+              // natural place to re-scan the watched folder. macOS's
+              // live watch handles this automatically, but re-scanning
+              // on activate is cheap and covers the window-reopened case.
+              await session.scanWatchedFolder()
+            }
+          }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openCSVFile)) { note in
+          guard let url = note.object as? URL else { return }
+          Task { await ingestCSVFileURL(url) }
         }
         .toolbar {
           #if os(iOS)
@@ -195,6 +217,26 @@ struct ContentView: View {
       data: data,
       source: .paste(text: text, label: "Pasted CSV"))
     selection = .recentlyAdded
+  }
+
+  /// Ingest a CSV file URL received from "Open With Moolah" / Dock drop.
+  /// Security-scoped resource access follows the same pattern as the
+  /// file importer: `url` comes from the system and needs explicit
+  /// scope start/stop.
+  private func ingestCSVFileURL(_ url: URL) async {
+    let didStart = url.startAccessingSecurityScopedResource()
+    defer {
+      if didStart { url.stopAccessingSecurityScopedResource() }
+    }
+    do {
+      let data = try Data(contentsOf: url)
+      _ = await importStore.ingest(
+        data: data,
+        source: .droppedFile(url: url, forcedAccountId: nil))
+      selection = .recentlyAdded
+    } catch {
+      importError = "Couldn't read \(url.lastPathComponent): \(error.localizedDescription)"
+    }
   }
 
   private func handleImportPickerResult(_ result: Result<[URL], Error>) async {

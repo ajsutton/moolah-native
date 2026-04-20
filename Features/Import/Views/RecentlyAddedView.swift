@@ -6,8 +6,13 @@ import SwiftUI
 struct RecentlyAddedView: View {
   let backend: any BackendProvider
   @Environment(ImportStore.self) private var importStore
+  @Environment(TransactionStore.self) private var transactionStore
   @State private var viewModel: RecentlyAddedViewModel?
   @State private var window: RecentlyAddedViewModel.Window = .last24Hours
+  @State private var searchText: String = ""
+  @State private var createRuleFromTransaction: Transaction?
+  @State private var showingCreateRuleFromSearch: Bool = false
+  @State private var transactionForDetail: Transaction?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -15,21 +20,32 @@ struct RecentlyAddedView: View {
       if let viewModel {
         if viewModel.isLoading && viewModel.sessions.isEmpty {
           ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if viewModel.sessions.isEmpty {
+        } else if visibleSessions(viewModel).isEmpty {
           ContentUnavailableView(
-            "Nothing imported yet",
+            searchText.isEmpty ? "Nothing imported yet" : "No matches",
             systemImage: "tray",
-            description: Text(emptyStatePrompt))
+            description: Text(
+              searchText.isEmpty ? emptyStatePrompt : "Try a different search term."))
         } else {
           List {
-            ForEach(viewModel.sessions) { session in
+            ForEach(visibleSessions(viewModel)) { session in
               Section(header: sessionHeader(session)) {
                 ForEach(session.transactions, id: \.id) { tx in
                   RecentlyAddedRow(transaction: tx)
+                    .contextMenu {
+                      Button("Open") { transactionForDetail = tx }
+                      Button("Create rule from this\u{2026}") {
+                        createRuleFromTransaction = tx
+                      }
+                      Button("Delete", role: .destructive) {
+                        Task { await deleteTransaction(tx) }
+                      }
+                    }
                 }
               }
             }
           }
+          .searchable(text: $searchText, prompt: "Search description, payee, or notes")
         }
       } else {
         ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -50,17 +66,50 @@ struct RecentlyAddedView: View {
         .pickerStyle(.menu)
         .accessibilityLabel("Time window")
       }
+      // Create-rule-from-search affordance: visible only when the search
+      // field is non-empty, matching the plan's Task 18.5 spec.
+      if !searchText.isEmpty {
+        ToolbarItem(placement: .automatic) {
+          Button {
+            showingCreateRuleFromSearch = true
+          } label: {
+            Label("Create rule matching this search", systemImage: "plus.rectangle.on.folder")
+          }
+        }
+      }
     }
-    // .task(id: window) fires on first appearance and re-fires (auto-cancelling
-    // any in-flight load) whenever `window` changes.
-    .task(id: window) { await reload() }
-    // After a successful ingest (including `finishSetup` completing a
-    // Needs Setup file) `ImportStore.recentSessions` grows. Use that as
-    // the signal to re-query the backend so the new transactions appear
-    // in the session list without the user having to switch the window.
-    .onChange(of: importStore.recentSessions.count) { _, _ in
-      Task { await reload() }
+    .sheet(item: $createRuleFromTransaction) { tx in
+      CreateRuleFromTransactionSheet(
+        transaction: tx,
+        corpus: corpusFromViewModel())
     }
+    .sheet(isPresented: $showingCreateRuleFromSearch) {
+      RuleFromSearchSheet(query: searchText)
+    }
+    .sheet(item: $transactionForDetail) { tx in
+      TransactionDetailSheet(transaction: tx)
+    }
+    // `.task(id:)` fires on first appearance and re-fires (auto-cancelling
+    // any in-flight load) whenever any of the tracked values change. We
+    // combine `window` and `importStore.recentSessions.count` into a
+    // single id so a finishSetup completion re-queries the backend with
+    // the same cancellation hygiene the window-picker already had —
+    // avoiding the unbounded `Task { … }` in `.onChange` that the
+    // concurrency review flagged.
+    .task(id: reloadKey) { await reload() }
+  }
+
+  /// Composite id for `.task(id:)` — re-fire the reload whenever the
+  /// window changes OR `ImportStore.recentSessions` grows (i.e. an
+  /// ingest completed). `recentSessions.count` is a stable proxy for
+  /// "something new was imported" without us having to observe the
+  /// session list itself.
+  private struct ReloadKey: Hashable {
+    let window: RecentlyAddedViewModel.Window
+    let importedCount: Int
+  }
+  private var reloadKey: ReloadKey {
+    ReloadKey(window: window, importedCount: importStore.recentSessions.count)
   }
 
   /// Platform-specific empty-state copy: macOS users drag files and use
@@ -106,6 +155,54 @@ struct RecentlyAddedView: View {
     }
     await viewModel?.load(window: window)
     await importStore.reloadStagingLists()
+  }
+
+  /// Apply `searchText` to the view-model's grouped sessions. Empty query
+  /// returns the full list; non-empty filters each session's transactions
+  /// (keeping the session shell only if at least one row matches).
+  private func visibleSessions(
+    _ viewModel: RecentlyAddedViewModel
+  ) -> [RecentlyAddedViewModel.SessionGroup] {
+    guard !searchText.isEmpty else { return viewModel.sessions }
+    let query = searchText.lowercased()
+    return
+      viewModel.sessions
+      .compactMap { group -> RecentlyAddedViewModel.SessionGroup? in
+        let matching = group.transactions.filter { tx in
+          matches(tx, query: query)
+        }
+        guard !matching.isEmpty else { return nil }
+        return RecentlyAddedViewModel.SessionGroup(
+          id: group.id,
+          importedAt: group.importedAt,
+          filenames: group.filenames,
+          transactions: matching
+        )
+      }
+  }
+
+  private func matches(_ tx: Transaction, query: String) -> Bool {
+    let haystack: [String] = [
+      tx.payee ?? "",
+      tx.notes ?? "",
+      tx.importOrigin?.rawDescription ?? "",
+    ]
+    return haystack.contains { $0.lowercased().contains(query) }
+  }
+
+  /// Corpus for distinguishing-token extraction: every `rawDescription`
+  /// visible in the current window. Empty array means extraction will
+  /// fall back to using the single description as-is.
+  private func corpusFromViewModel() -> [String] {
+    guard let viewModel else { return [] }
+    return viewModel.sessions.flatMap { group in
+      group.transactions.compactMap { $0.importOrigin?.rawDescription }
+    }
+  }
+
+  private func deleteTransaction(_ tx: Transaction) async {
+    await transactionStore.delete(id: tx.id)
+    await reload()
   }
 
   /// Handle a CSV drop (from Finder / Files / another app) onto the view.
@@ -282,10 +379,108 @@ private struct FailedRow: View {
       .accessibilityElement(children: .combine)
       .accessibilityLabel("\(file.originalFilename) failed: \(file.error)")
       Spacer()
+      // Always available — we re-read the staged bytes, not the
+      // original URL, so retries work even for paste/folder-watch files
+      // whose source URLs are gone.
+      Button("Retry") {
+        Task { await importStore.retryFailed(id: file.id) }
+      }
+      .buttonStyle(.borderless)
       Button("Dismiss") {
         Task { await importStore.dismissFailed(id: file.id) }
       }
       .buttonStyle(.borderless)
     }
+  }
+}
+
+/// Thin read-only transaction summary for the Recently Added context-menu
+/// "Open" action. Shows date, amount, legs, and the raw import origin so
+/// the user can verify what was imported without launching the full
+/// editor. For edits, they navigate to the transaction list and open it
+/// there.
+private struct TransactionDetailSheet: View {
+  let transaction: Transaction
+  @Environment(\.dismiss) private var dismiss
+
+  var body: some View {
+    NavigationStack {
+      Form {
+        Section("Transaction") {
+          LabeledContent("Date") {
+            Text(transaction.date, format: .dateTime.day().month().year())
+              .monospacedDigit()
+          }
+          if let payee = transaction.payee, !payee.isEmpty {
+            LabeledContent("Payee", value: payee)
+          }
+          if let notes = transaction.notes, !notes.isEmpty {
+            LabeledContent("Notes", value: notes)
+          }
+        }
+        Section("Legs") {
+          ForEach(Array(transaction.legs.enumerated()), id: \.offset) { _, leg in
+            HStack {
+              Text(leg.type.rawValue.capitalized)
+                .foregroundStyle(.secondary)
+              Spacer()
+              InstrumentAmountView(
+                amount: InstrumentAmount(
+                  quantity: leg.quantity, instrument: leg.instrument),
+                font: .body)
+            }
+          }
+        }
+        if let origin = transaction.importOrigin {
+          Section("Import origin") {
+            LabeledContent("Source", value: origin.sourceFilename ?? origin.parserIdentifier)
+            LabeledContent("Raw description", value: origin.rawDescription)
+            if let ref = origin.bankReference, !ref.isEmpty {
+              LabeledContent("Bank reference", value: ref)
+            }
+            LabeledContent("Imported") {
+              Text(origin.importedAt, format: .dateTime.day().month().year().hour().minute())
+                .monospacedDigit()
+            }
+          }
+        }
+      }
+      .formStyle(.grouped)
+      .navigationTitle("Transaction")
+      .toolbar {
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Done") { dismiss() }
+        }
+      }
+      #if os(macOS)
+        .frame(minWidth: 480, minHeight: 420)
+      #endif
+    }
+  }
+}
+
+/// Bridges a Recently Added search query into a pre-filled rule editor.
+/// The query is tokenised on whitespace; each token becomes a term in a
+/// single `descriptionContains` condition.
+private struct RuleFromSearchSheet: View {
+  let query: String
+  @Environment(ImportRuleStore.self) private var ruleStore
+
+  var body: some View {
+    RuleEditorView(
+      initialRule: ImportRule(
+        name: "Rule from \"\(query.prefix(20))\"",
+        position: ruleStore.rules.count,
+        conditions: [.descriptionContains(tokens)],
+        actions: []),
+      onSave: { rule in
+        Task { await ruleStore.create(rule) }
+      })
+  }
+
+  private var tokens: [String] {
+    query
+      .split(separator: " ", omittingEmptySubsequences: true)
+      .map { String($0) }
   }
 }

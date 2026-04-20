@@ -8,6 +8,7 @@ struct TransactionListView: View {
   let categories: Categories
   let earmarks: Earmarks
   let transactionStore: TransactionStore
+  @Environment(ImportStore.self) private var importStore
   var positions: [Position] = []
   var positionsHostCurrency: Instrument = .AUD
   var positionsTitle: String = "Balances"
@@ -107,6 +108,7 @@ struct TransactionListView: View {
   @State private var searchText = ""
   @FocusState private var searchFieldFocused: Bool
   @State private var transactionPendingDelete: Transaction.ID?
+  @State private var createRuleFromTransaction: Transaction?
 
   var body: some View {
     listView
@@ -166,6 +168,36 @@ struct TransactionListView: View {
         else { return }
         transactionPendingDelete = id
       }
+      .modifier(
+        TransactionListCSVImportAddons(
+          createRuleFromTransaction: $createRuleFromTransaction,
+          corpusProvider: {
+            transactionStore.transactions.compactMap {
+              $0.transaction.importOrigin?.rawDescription
+            }
+          },
+          forcedAccountId: filter.accountId,
+          ingestDroppedURLs: ingestDroppedURLs))
+  }
+
+  /// Mirror of `RecentlyAddedView.ingestDroppedURLs` but with a forced
+  /// account. Kept here so the view can hand off to `ImportStore`
+  /// directly; logic is intentionally minimal (security-scope → read
+  /// bytes → ingest).
+  fileprivate func ingestDroppedURLs(_ urls: [URL], forcedAccountId: UUID) async {
+    for url in urls {
+      guard url.pathExtension.lowercased() == "csv" || url.pathExtension.isEmpty else {
+        continue
+      }
+      let didStart = url.startAccessingSecurityScopedResource()
+      defer {
+        if didStart { url.stopAccessingSecurityScopedResource() }
+      }
+      guard let data = try? Data(contentsOf: url) else { continue }
+      _ = await importStore.ingest(
+        data: data,
+        source: .droppedFile(url: url, forcedAccountId: forcedAccountId))
+    }
   }
 
   private func createNewTransaction() {
@@ -250,6 +282,14 @@ struct TransactionListView: View {
           .contextMenu {
             Button("Edit Transaction\u{2026}", systemImage: "pencil") {
               selectedTransaction = entry.transaction
+            }
+            // Only offer "Create rule from this…" for CSV-imported rows —
+            // ImportOrigin is how we extract distinguishing tokens, and
+            // manually-entered transactions don't have one.
+            if entry.transaction.importOrigin != nil {
+              Button("Create rule from this\u{2026}", systemImage: "plus.rectangle.on.folder") {
+                createRuleFromTransaction = entry.transaction
+              }
             }
             Divider()
             Button("Delete Transaction\u{2026}", systemImage: "trash", role: .destructive) {
@@ -477,5 +517,31 @@ struct TransactionListView: View {
           TransactionLeg(accountId: savingsId, instrument: .AUD, quantity: 1000, type: .transfer),
         ]))
     await store.load(filter: TransactionFilter(accountId: accountId))
+  }
+}
+
+/// Groups the CSV-import-specific modifiers (create-rule sheet + drop
+/// target) so the main `body` chain stays within the Swift type checker's
+/// complexity budget. Extracting a modifier was the minimal change that
+/// kept these affordances without triggering a `too complex` compile
+/// error on the long `.onReceive` / `.sheet` chain.
+private struct TransactionListCSVImportAddons: ViewModifier {
+  @Binding var createRuleFromTransaction: Transaction?
+  let corpusProvider: () -> [String]
+  let forcedAccountId: UUID?
+  let ingestDroppedURLs: (_ urls: [URL], _ forcedAccountId: UUID) async -> Void
+
+  func body(content: Content) -> some View {
+    content
+      .sheet(item: $createRuleFromTransaction) { tx in
+        CreateRuleFromTransactionSheet(
+          transaction: tx,
+          corpus: corpusProvider())
+      }
+      .dropDestination(for: URL.self) { urls, _ in
+        guard let accountId = forcedAccountId else { return false }
+        Task { await ingestDroppedURLs(urls, accountId) }
+        return !urls.isEmpty
+      }
   }
 }

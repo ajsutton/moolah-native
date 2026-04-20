@@ -108,7 +108,22 @@ final class CSVImportSetupStore {
     }
     guard columnRoles.indices.contains(index) else { return }
     columnRoles[index] = role
-    await regeneratePreview()
+    await regeneratePreviewCancellable()
+  }
+
+  /// Wraps `regeneratePreview()` with cancellation of the previous task
+  /// so rapid role / date-format changes don't race. The window of
+  /// vulnerability is small (one `await staging.data` hop), but the
+  /// concurrency guide explicitly calls for this pattern on stored-state
+  /// reloads triggered by UI input.
+  private func regeneratePreviewCancellable() async {
+    previewTask?.cancel()
+    let task = Task { [weak self] in
+      guard let self else { return }
+      await self.regeneratePreview()
+    }
+    previewTask = task
+    await task.value
   }
 
   private let backend: any BackendProvider
@@ -116,6 +131,11 @@ final class CSVImportSetupStore {
   private let staging: ImportStagingStore
   private let registry: CSVParserRegistry
   private let logger = Logger(subsystem: "com.moolah.app", category: "CSVImportSetupStore")
+  /// Stored so that rapid-fire role changes cancel the previous preview
+  /// regeneration instead of racing with it. `applyColumnRole` fires on
+  /// every picker change; without cancellation a slow `staging.data`
+  /// read from the old request could stomp the newer one.
+  private var previewTask: Task<Void, Never>?
 
   init(
     pending: PendingSetupFile,
@@ -141,7 +161,7 @@ final class CSVImportSetupStore {
     _ override: GenericBankCSVParser.DateFormat?
   ) async {
     dateFormatOverride = override
-    await regeneratePreview()
+    await regeneratePreviewCancellable()
   }
 
   /// Parse the staged bytes with the current settings, populate the preview.
@@ -166,29 +186,10 @@ final class CSVImportSetupStore {
       // `nil` entry means the column is unused — the detector's original
       // pick does not "leak through").
       if columnRoles.count != headers.count {
-        columnRoles = Array(repeating: nil, count: headers.count)
         if let detected = detectedMapping {
-          if columnRoles.indices.contains(detected.date) {
-            columnRoles[detected.date] = .date
-          }
-          if columnRoles.indices.contains(detected.description) {
-            columnRoles[detected.description] = .description
-          }
-          if let idx = detected.amount, columnRoles.indices.contains(idx) {
-            columnRoles[idx] = .amount
-          }
-          if let idx = detected.debit, columnRoles.indices.contains(idx) {
-            columnRoles[idx] = .debit
-          }
-          if let idx = detected.credit, columnRoles.indices.contains(idx) {
-            columnRoles[idx] = .credit
-          }
-          if let idx = detected.balance, columnRoles.indices.contains(idx) {
-            columnRoles[idx] = .balance
-          }
-          if let idx = detected.reference, columnRoles.indices.contains(idx) {
-            columnRoles[idx] = .reference
-          }
+          columnRoles = Self.seedColumnRoles(headers: headers, from: detected)
+        } else {
+          columnRoles = Array(repeating: nil, count: headers.count)
         }
       }
       let records: [ParsedRecord]
@@ -231,6 +232,27 @@ final class CSVImportSetupStore {
       saveError = message
       return .failed(message: message)
     }
+    // Generic-bank files MUST have a Date column assigned — otherwise
+    // every row throws a date-parse error at ingest time with no obvious
+    // remediation. Surface it up-front in the Setup sheet instead.
+    if isGenericParser, let mapping = effectiveMapping() {
+      if mapping.date < 0 {
+        let message = "Assign a Date column before saving."
+        saveError = message
+        return .failed(message: message)
+      }
+      if mapping.description < 0 {
+        let message = "Assign a Description column before saving."
+        saveError = message
+        return .failed(message: message)
+      }
+      if mapping.amount == nil && (mapping.debit == nil || mapping.credit == nil) {
+        let message =
+          "Assign an Amount column, or both Debit and Credit columns, before saving."
+        saveError = message
+        return .failed(message: message)
+      }
+    }
     isSaving = true
     defer { isSaving = false }
     saveError = nil
@@ -240,8 +262,44 @@ final class CSVImportSetupStore {
       headerSignature: detectedHeaders,
       filenamePattern: filenamePattern.isEmpty ? nil : filenamePattern,
       deleteAfterImport: deleteAfterImport,
-      dateFormatRawValue: dateFormatOverride?.rawValue)
+      dateFormatRawValue: dateFormatOverride?.rawValue,
+      columnRoleRawValues: columnRoleRawValuesForPersistence)
     return await importStore.finishSetup(pendingId: pending.id, profile: profile)
+  }
+
+  /// Persist the user's column-role overrides only when they actually
+  /// diverge from the detected mapping — otherwise future imports should
+  /// continue to benefit from detector improvements on the same
+  /// (parser, headers) combination. Checks both "any non-nil role" and
+  /// "differs from the detector's seed".
+  private var columnRoleRawValuesForPersistence: [String?]? {
+    guard !columnRoles.isEmpty else { return nil }
+    guard let detected = detectedMapping else { return nil }
+    let seeded = Self.seedColumnRoles(
+      headers: detectedHeaders, from: detected)
+    // Rows where the user hasn't touched anything match the seed; skip
+    // persistence so the profile stays auto-detect where possible.
+    if seeded == columnRoles { return nil }
+    return columnRoles.map { $0?.rawValue }
+  }
+
+  /// Pure seeding logic extracted so `regeneratePreview` and
+  /// `columnRoleRawValuesForPersistence` stay in sync. Mirrors whatever
+  /// the detector returned from `inferMapping`.
+  static func seedColumnRoles(
+    headers: [String], from detected: GenericBankCSVParser.ColumnMapping
+  ) -> [ColumnRole?] {
+    var roles: [ColumnRole?] = Array(repeating: nil, count: headers.count)
+    if roles.indices.contains(detected.date) { roles[detected.date] = .date }
+    if roles.indices.contains(detected.description) {
+      roles[detected.description] = .description
+    }
+    if let idx = detected.amount, roles.indices.contains(idx) { roles[idx] = .amount }
+    if let idx = detected.debit, roles.indices.contains(idx) { roles[idx] = .debit }
+    if let idx = detected.credit, roles.indices.contains(idx) { roles[idx] = .credit }
+    if let idx = detected.balance, roles.indices.contains(idx) { roles[idx] = .balance }
+    if let idx = detected.reference, roles.indices.contains(idx) { roles[idx] = .reference }
+    return roles
   }
 
   /// Leave the pending file where it is; just dismiss the sheet.

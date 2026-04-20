@@ -19,6 +19,12 @@ final class CSVImportProfileRecord {
   var lastUsedAt: Date?
   /// Persisted user-confirmed date format (see CSVImportProfile).
   var dateFormatRawValue: String?
+  /// Positional column-role overrides serialised as the same unit-separator
+  /// joined form as `headerSignature`. `nil` element becomes the empty
+  /// string; a completely-nil serialisation ("\u{1F}\u{1F}…") survives
+  /// round-tripping. Stored as a single `String?` so the CKRecord stays a
+  /// flat dictionary of scalars.
+  var columnRoleRawValuesEncoded: String?
   var encodedSystemFields: Data?
 
   init(
@@ -30,7 +36,8 @@ final class CSVImportProfileRecord {
     deleteAfterImport: Bool = false,
     createdAt: Date = Date(),
     lastUsedAt: Date? = nil,
-    dateFormatRawValue: String? = nil
+    dateFormatRawValue: String? = nil,
+    columnRoleRawValuesEncoded: String? = nil
   ) {
     self.id = id
     self.accountId = accountId
@@ -41,6 +48,7 @@ final class CSVImportProfileRecord {
     self.createdAt = createdAt
     self.lastUsedAt = lastUsedAt
     self.dateFormatRawValue = dateFormatRawValue
+    self.columnRoleRawValuesEncoded = columnRoleRawValuesEncoded
   }
 
   /// Unit-separator (U+001F). Chosen because the CSV tokenizer never produces
@@ -59,7 +67,8 @@ final class CSVImportProfileRecord {
       deleteAfterImport: deleteAfterImport,
       createdAt: createdAt,
       lastUsedAt: lastUsedAt,
-      dateFormatRawValue: dateFormatRawValue)
+      dateFormatRawValue: dateFormatRawValue,
+      columnRoleRawValues: Self.decodeColumnRoles(columnRoleRawValuesEncoded))
   }
 
   static func from(_ profile: CSVImportProfile) -> CSVImportProfileRecord {
@@ -72,6 +81,20 @@ final class CSVImportProfileRecord {
       deleteAfterImport: profile.deleteAfterImport,
       createdAt: profile.createdAt,
       lastUsedAt: profile.lastUsedAt,
-      dateFormatRawValue: profile.dateFormatRawValue)
+      dateFormatRawValue: profile.dateFormatRawValue,
+      columnRoleRawValuesEncoded: Self.encodeColumnRoles(profile.columnRoleRawValues))
+  }
+
+  /// Join the `[String?]` role list into a single String using the same
+  /// unit-separator as `headerSignature`. `nil` elements become empty
+  /// strings; round-tripping preserves position + identity.
+  static func encodeColumnRoles(_ roles: [String?]?) -> String? {
+    guard let roles else { return nil }
+    return roles.map { $0 ?? "" }.joined(separator: Self.separator)
+  }
+
+  static func decodeColumnRoles(_ encoded: String?) -> [String?]? {
+    guard let encoded, !encoded.isEmpty else { return nil }
+    return encoded.components(separatedBy: Self.separator).map { $0.isEmpty ? nil : $0 }
   }
 }
