@@ -10,7 +10,7 @@
 
 **Tech Stack:** Swift 6, SwiftUI, SwiftData, CloudKit, Swift Testing, Yahoo Finance API (via existing `YahooFinanceClient`)
 
-**Key files to read before starting:** `plans/2026-04-12-multi-instrument-design.md` (overall design), `plans/2026-04-12-phase1-foundation-plan.md` (foundation types this builds on), `CLAUDE.md`, `CONCURRENCY_GUIDE.md`, `STYLE_GUIDE.md`.
+**Key files to read before starting:** `plans/2026-04-12-multi-instrument-design.md` (overall design), `plans/2026-04-12-phase1-foundation-plan.md` (foundation types this builds on), `CLAUDE.md`, `CONCURRENCY_GUIDE.md`, `UI_GUIDE.md`.
 
 **Prerequisite:** Phase 1 (Instrument, InstrumentAmount, TransactionLeg, leg-based transactions) and Phase 2 (InstrumentConversionService with fiat-to-fiat, Position type, multi-currency account display) must be complete before starting this plan.
 

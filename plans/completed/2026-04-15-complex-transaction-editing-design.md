@@ -193,7 +193,7 @@ The existing `isNewTransaction` heuristic checks `relevantLeg?.amount.isZero` an
 - **UI-facing:** "Sub-transactions" — used in section headers and add button text. "Custom" — used in the type picker label.
 - **Code:** "legs" — model property names (`transaction.legs`, `LegDraft`, `legDrafts`).
 
-Update `guides/STYLE_GUIDE.md` section 6 ("Components & Patterns") under the existing "Transaction Detail Form" subsection: add the custom mode form section order variant and the sub-transaction/custom terminology convention.
+Update `guides/UI_GUIDE.md` section 6 ("Components & Patterns") under the existing "Transaction Detail Form" subsection: add the custom mode form section order variant and the sub-transaction/custom terminology convention.
 
 ## Previews
 
@@ -214,11 +214,11 @@ Add a `#Preview` for complex mode showing a transaction with multiple legs and `
 | `Shared/Models/TransactionDraft.swift` | Add `LegDraft` struct, `isCustom`, `legDrafts` fields, `applyAutofill(from:)`, extend `toTransaction()` and `init(from:)` |
 | `Features/Transactions/Views/TransactionDetailView.swift` | `TransactionMode` enum, platform-adaptive type picker, conditional simple/complex form, sub-transaction sections, simplified autofill call, `supportsComplexTransactions` parameter |
 | `Features/Transactions/Views/TransactionInspectorModifier.swift` | Thread `supportsComplexTransactions` parameter |
-| `guides/STYLE_GUIDE.md` | Add sub-transaction/custom terminology, custom transaction form pattern. Update any existing "complex transaction" references to "custom transaction" |
+| `guides/UI_GUIDE.md` | Add sub-transaction/custom terminology, custom transaction form pattern. Update any existing "complex transaction" references to "custom transaction" |
 | `MoolahTests/Shared/TransactionDraftTests.swift` | Tests for `LegDraft`, complex mode `toTransaction()`, `applyAutofill(from:)`, round-trip from complex transaction |
 | `MoolahTests/Domain/ProfileTests.swift` | Test `supportsComplexTransactions` for each backend type |
 | `Features/Transactions/Views/TransactionRowView.swift` | Rename "Complex transaction" VoiceOver label to "Custom transaction" |
-| `guides/STYLE_GUIDE.md` icon/colour tables | Rename "Complex" to "Custom" in transaction type icon and colour tables |
+| `guides/UI_GUIDE.md` icon/colour tables | Rename "Complex" to "Custom" in transaction type icon and colour tables |
 
 **Note:** The implementation plan should enumerate all call sites of `TransactionDetailView` to ensure `supportsComplexTransactions` is threaded through each one.
 

@@ -114,7 +114,7 @@ UUID straight back.
 
 ## 5. Design goals
 
-1. Restore the invariant in `guides/STYLE_GUIDE.md §13`: opening the inspector
+1. Restore the invariant in `guides/UI_GUIDE.md §13`: opening the inspector
    places first-responder on payee (or amount, for simple earmark-only).
 2. No `Task.sleep`, no retry loops.
 3. Works on CloudKit (Remote is out of scope; it will be retired).
@@ -288,5 +288,5 @@ timer-based `.task` retry (PR #241) gets removed in the same change so the
   preserved, no optimistic-replace needed).
 - Audit other `.searchable` screens (earmarks, categories, accounts) for
   the same inspector/focus interaction.
-- Expand `guides/STYLE_GUIDE.md §13` with the inspector-vs-searchable
+- Expand `guides/UI_GUIDE.md §13` with the inspector-vs-searchable
   caveat so the next contributor doesn't re-discover it.

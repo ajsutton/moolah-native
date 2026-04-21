@@ -3,7 +3,7 @@ import Foundation
 /// Platform-correct action verbs for user-facing copy.
 ///
 /// macOS users click with a pointer; iOS users tap on a touchscreen. Per
-/// `guides/STYLE_GUIDE.md` §1 (macOS-First Philosophy) and Apple HIG, prompts
+/// `guides/UI_GUIDE.md` §1 (macOS-First Philosophy) and Apple HIG, prompts
 /// must use the platform-appropriate verb. Using "Tap" on macOS (or "Click" on
 /// iOS) feels foreign and undermines the native feel of the app.
 ///

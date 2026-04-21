@@ -11,7 +11,7 @@
 **Authoritative references:**
 - Spec: `plans/2026-04-18-csv-import-design.md`
 - SelfWealth parsing specifics: `plans/csv-import-design.md` (superseded; use *only* for SelfWealth CSV column layout and description regex)
-- Guides: `guides/SYNC_GUIDE.md`, `guides/CONCURRENCY_GUIDE.md`, `guides/STYLE_GUIDE.md`, `guides/BENCHMARKING_GUIDE.md`
+- Guides: `guides/SYNC_GUIDE.md`, `guides/CONCURRENCY_GUIDE.md`, `guides/UI_GUIDE.md`, `guides/BENCHMARKING_GUIDE.md`
 - Review agents to invoke at appropriate points: `@concurrency-review`, `@sync-review`, `@ui-review`
 
 ---

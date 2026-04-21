@@ -15,7 +15,7 @@ Implement custom (multi-leg) transaction editing in `TransactionDetailView`. The
 - `Domain/Models/Profile.swift`
 - `MoolahTests/Domain/ProfileTests.swift`
 - `Features/Transactions/Views/TransactionRowView.swift`
-- `guides/STYLE_GUIDE.md`
+- `guides/UI_GUIDE.md`
 
 **Tasks:**
 1. Add `supportsComplexTransactions` computed property to `Profile`:
@@ -26,7 +26,7 @@ Implement custom (multi-leg) transaction editing in `TransactionDetailView`. The
    ```
 2. Add tests in `ProfileTests.swift` for each `BackendType` value.
 3. Rename "Complex transaction" to "Custom transaction" in `TransactionRowView.swift` (line 77, VoiceOver label).
-4. Rename "Complex" to "Custom" in `guides/STYLE_GUIDE.md` icon table (line 546) and colour table (line 565). Only change the label — keep the symbol name (`arrow.trianglehead.branch`) and colour (`.purple`) unchanged.
+4. Rename "Complex" to "Custom" in `guides/UI_GUIDE.md` icon table (line 546) and colour table (line 565). Only change the label — keep the symbol name (`arrow.trianglehead.branch`) and colour (`.purple`) unchanged.
 5. Add custom transaction form pattern and sub-transaction terminology to style guide section 6, under the existing "Transaction Detail Form" subsection. Include the custom mode form section order (Type → Details → Sub-transactions → Recurrence → Notes → Pay → Delete) and the terminology convention ("Sub-transactions" for section headers/buttons, "Custom" for the type picker label, "legs" in code).
 
 **Dependencies:** None. This step is self-contained.

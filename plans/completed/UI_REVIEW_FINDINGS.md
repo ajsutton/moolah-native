@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-09
 **Status:** In Progress
-**Scope:** All view files in Features/, Shared/, App/ against STYLE_GUIDE.md and Apple HIG
+**Scope:** All view files in Features/, Shared/, App/ against UI_GUIDE.md and Apple HIG
 
 ---
 

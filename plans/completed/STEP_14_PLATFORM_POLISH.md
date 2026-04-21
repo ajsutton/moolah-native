@@ -1449,7 +1449,7 @@ Step 14 is complete when **all** of the following criteria are met:
 **Mitigation:**
 - Add accessibility tests to CI pipeline
 - Require accessibility review before merging UI changes
-- Document accessibility patterns in STYLE_GUIDE.md
+- Document accessibility patterns in UI_GUIDE.md
 
 ### Risk 4: Platform-Specific Code Drift
 **Risk:** macOS and iOS implementations diverge, causing duplicate code.

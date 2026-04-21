@@ -212,7 +212,7 @@ Land with the changes (not after):
 1. If `store.createDefault` / `createDefaultEarmark` have no other
    callers after Phase 4, remove them. Otherwise leave alone (they're
    convenience wrappers; removing them is scope creep).
-2. Expand `guides/STYLE_GUIDE.md §13` with the inspector / `.searchable`
+2. Expand `guides/UI_GUIDE.md §13` with the inspector / `.searchable`
    caveat: "`defaultFocus` does not pull focus in from outside its
    region. If your form is presented alongside a scene-level focus
    claimant (e.g. `.searchable` toolbar), blur that claimant explicitly

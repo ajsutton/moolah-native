@@ -165,7 +165,7 @@ The current `BinanceClient` takes a static `usdtUsdRate` constructor param (defa
 - USDT rate fetched as part of prefetch cycle.
 
 ### Settings UI
-- UI review agent validates all new views against `STYLE_GUIDE.md` and Apple HIG after each is created. Review/fix cycle repeats until clean.
+- UI review agent validates all new views against `UI_GUIDE.md` and Apple HIG after each is created. Review/fix cycle repeats until clean.
 
 ---
 

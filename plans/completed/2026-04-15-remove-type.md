@@ -83,7 +83,7 @@ private var iconColor: Color {
 }
 ```
 
-`.purple` is visually distinct from the existing four transaction-type colors and maintains the same vibrancy. Document `.purple` as the semantic color for complex/multi-leg transactions in `guides/STYLE_GUIDE.md`.
+`.purple` is visually distinct from the existing four transaction-type colors and maintains the same vibrancy. Document `.purple` as the semantic color for complex/multi-leg transactions in `guides/UI_GUIDE.md`.
 
 **accessibility — update `accessibilityDescription` (P3):**
 
@@ -157,7 +157,7 @@ Using `allSatisfy` is stronger than checking `legs.first` — it verifies all le
 
 ### Step 1: TransactionRowView (P1, P2, P3)
 
-Branch `iconName` and `iconColor` on `isSimple` — simple transactions use the existing type switch on `legs.first?.type`, complex transactions use `"arrow.trianglehead.branch"` icon with `.purple` color. Document `.purple` as the semantic color for complex transactions in `guides/STYLE_GUIDE.md`. Remove the per-icon `.accessibilityLabel` and add type information to `accessibilityDescription` using `.displayName`. Add a complex transaction row to the `#Preview` block so the new icon path has visual coverage.
+Branch `iconName` and `iconColor` on `isSimple` — simple transactions use the existing type switch on `legs.first?.type`, complex transactions use `"arrow.trianglehead.branch"` icon with `.purple` color. Document `.purple` as the semantic color for complex transactions in `guides/UI_GUIDE.md`. Remove the per-icon `.accessibilityLabel` and add type information to `accessibilityDescription` using `.displayName`. Add a complex transaction row to the `#Preview` block so the new icon path has visual coverage.
 
 ### Step 2: TransactionDetailView (P4)
 

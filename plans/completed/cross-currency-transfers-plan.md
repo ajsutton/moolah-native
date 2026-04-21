@@ -1155,7 +1155,7 @@ git commit -m "chore: update call sites for cross-currency transfer changes"
 
 - [ ] **Step 1: Run the UI reviewer agent**
 
-Invoke `@ui-review` on the TransactionDetailView to check compliance with STYLE_GUIDE.md and Apple HIG.
+Invoke `@ui-review` on the TransactionDetailView to check compliance with UI_GUIDE.md and Apple HIG.
 
 - [ ] **Step 2: Fix any issues raised**
 
