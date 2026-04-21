@@ -2,9 +2,14 @@
 # Prepares the build tree for local CloudKit development.
 #
 # 1. Writes .build/Moolah.entitlements with the full sandbox + CloudKit keys.
-# 2. Produces project-entitlements.yml — a copy of project.yml with a
-#    Debug-only settings block added to each app target that wires in
-#    CODE_SIGN_ENTITLEMENTS and the CLOUDKIT_ENABLED compilation condition.
+# 2. Produces project-entitlements.yml — a copy of project.yml that:
+#    - Adds a Debug-only block to each app target wiring in
+#      CODE_SIGN_ENTITLEMENTS and the CLOUDKIT_ENABLED compilation condition.
+#    - Appends CODE_SIGN_ENTITLEMENTS to each target's existing Release block.
+#      Release already bakes in CLOUDKIT_ENABLED via project.yml; without the
+#      matching entitlements file the signed binary calls CKContainer.default()
+#      without the required capability and is killed silently by the hardened
+#      runtime at launch — which is what breaks `just install-mac`.
 #
 # The Debug-Tests configuration deliberately does NOT get these, so
 # `just test` never signs the test host with iCloud entitlements. See
@@ -55,6 +60,10 @@ debug_block = "\n".join([
     "",
 ])
 
+release_entitlements_line = (
+    f"          CODE_SIGN_ENTITLEMENTS: {entitlements_path}\n"
+)
+
 for target in ("Moolah_iOS", "Moolah_macOS"):
     target_header = f"  {target}:\n    type: application\n"
     target_start = content.find(target_header)
@@ -71,12 +80,35 @@ for target in ("Moolah_iOS", "Moolah_macOS"):
     insert_at = configs_pos + len(configs_marker)
     content = content[:insert_at] + debug_block + content[insert_at:]
 
-# Sanity check — both app targets now carry a Debug-scoped entitlement block.
-marker = "        Debug:\n          CODE_SIGN_ENTITLEMENTS:"
-if content.count(marker) != 2:
+    # Append CODE_SIGN_ENTITLEMENTS to this target's existing Release: block.
+    # Search forward from the Debug block we just inserted so we stay inside
+    # this target's configs: section.
+    release_header = "        Release:\n"
+    release_pos = content.find(release_header, insert_at)
+    if release_pos == -1:
+        raise SystemExit(
+            f"inject-entitlements: could not find Release: block for {target}"
+        )
+    release_insert_at = release_pos + len(release_header)
+    content = (
+        content[:release_insert_at]
+        + release_entitlements_line
+        + content[release_insert_at:]
+    )
+
+# Sanity check — both app targets now carry a Debug-scoped entitlement block
+# and a CODE_SIGN_ENTITLEMENTS line at the top of their Release block.
+debug_marker = "        Debug:\n          CODE_SIGN_ENTITLEMENTS:"
+if content.count(debug_marker) != 2:
     raise SystemExit(
         "inject-entitlements: expected 2 Debug entitlement blocks, "
-        f"found {content.count(marker)}"
+        f"found {content.count(debug_marker)}"
+    )
+release_marker = "        Release:\n          CODE_SIGN_ENTITLEMENTS:"
+if content.count(release_marker) != 2:
+    raise SystemExit(
+        "inject-entitlements: expected 2 Release entitlement lines, "
+        f"found {content.count(release_marker)}"
     )
 
 with open(os.environ["OUTFILE"], "w") as f:
