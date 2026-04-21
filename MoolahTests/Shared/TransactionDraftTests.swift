@@ -943,6 +943,93 @@ struct TransactionDraftTests {
     #expect(draft.legDrafts[0].categoryText == "Groceries")
   }
 
+  @Test func autofillPreservesViewingAccountForSimpleMatch() {
+    // Match was recorded against accountB, but the user is viewing accountA.
+    let matchTx = Transaction(
+      date: Date(),
+      payee: "Coffee",
+      legs: [
+        TransactionLeg(
+          accountId: accountB, instrument: instrument,
+          quantity: -5, type: .expense)
+      ]
+    )
+
+    var draft = TransactionDraft(accountId: accountA, viewingAccountId: accountA)
+    draft.applyAutofill(from: matchTx, categories: Categories(from: []))
+
+    // The leg's account must remain the viewed account; only the other
+    // fields (amount, type, category, etc.) should be copied from the match.
+    #expect(draft.legDrafts[0].accountId == accountA)
+  }
+
+  @Test func autofillRemapsInstrumentToViewingAccount() {
+    let usd = Instrument.fiat(code: "USD")
+    let eur = Instrument.fiat(code: "EUR")
+    let accounts = makeAccounts([
+      makeAccount(id: accountA, instrument: usd),
+      makeAccount(id: accountB, instrument: eur),
+    ])
+    let matchTx = Transaction(
+      date: Date(),
+      payee: "Coffee",
+      legs: [
+        TransactionLeg(
+          accountId: accountB, instrument: eur,
+          quantity: -5, type: .expense)
+      ]
+    )
+
+    var draft = TransactionDraft(accountId: accountA, viewingAccountId: accountA)
+    draft.applyAutofill(from: matchTx, categories: Categories(from: []), accounts: accounts)
+
+    #expect(draft.legDrafts[0].accountId == accountA)
+    #expect(draft.legDrafts[0].instrumentId == usd.id)
+  }
+
+  @Test func autofillWithoutViewingContextUsesMatchAccount() {
+    // When there's no viewing account (e.g. "All Transactions"), autofill
+    // should adopt the match's account as before.
+    let matchTx = Transaction(
+      date: Date(),
+      payee: "Coffee",
+      legs: [
+        TransactionLeg(
+          accountId: accountB, instrument: instrument,
+          quantity: -5, type: .expense)
+      ]
+    )
+
+    var draft = TransactionDraft(accountId: accountA, viewingAccountId: nil)
+    draft.applyAutofill(from: matchTx, categories: Categories(from: []))
+
+    #expect(draft.legDrafts[0].accountId == accountB)
+  }
+
+  @Test func autofillPreservesViewingAccountForTransferMatch() {
+    // Transfer match is A→B, but user is viewing accountC; the viewed-account
+    // leg should be remapped to C while the counterpart leg is preserved.
+    let accountC = UUID()
+    let matchTx = Transaction(
+      date: Date(),
+      payee: "Savings",
+      legs: [
+        TransactionLeg(
+          accountId: accountA, instrument: instrument, quantity: -100, type: .transfer),
+        TransactionLeg(
+          accountId: accountB, instrument: instrument, quantity: 100, type: .transfer),
+      ]
+    )
+
+    var draft = TransactionDraft(accountId: accountC, viewingAccountId: accountC)
+    draft.applyAutofill(from: matchTx, categories: Categories(from: []))
+
+    // pinRelevantLeg falls through to index 0 since C isn't in the match, so
+    // leg 0 is the "viewed" leg and must be remapped to accountC.
+    #expect(draft.legDrafts[0].accountId == accountC)
+    #expect(draft.legDrafts[1].accountId == accountB)
+  }
+
   // MARK: - showFromAccount
 
   @Test func showFromAccountFalseWhenViewingPrimaryLeg() {

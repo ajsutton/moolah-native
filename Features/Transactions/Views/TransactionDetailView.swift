@@ -850,7 +850,7 @@ struct TransactionDetailView: View {
     Task {
       guard let match = await transactionStore.fetchTransactionForAutofill(payee: selectedPayee)
       else { return }
-      draft.applyAutofill(from: match, categories: categories)
+      draft.applyAutofill(from: match, categories: categories, accounts: accounts)
     }
   }
 
