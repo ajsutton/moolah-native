@@ -245,7 +245,15 @@ struct TransactionDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
       #endif
       #if os(macOS)
+        // `defaultFocus` alone does not pull first-responder into the inspector
+        // when focus currently sits outside its region (e.g., the list's
+        // `.searchable` toolbar field). `.task(id:)` runs after the view is in
+        // the window hierarchy and imperatively claims focus on the expected
+        // field, re-firing whenever the selected transaction changes.
         .defaultFocus($focusedField, isSimpleEarmarkOnly ? .amount : .payee)
+        .task(id: transaction.id) {
+          focusedField = isSimpleEarmarkOnly ? .amount : .payee
+        }
       #endif
       .onChange(of: draft) { _, _ in debouncedSave() }
       .onChange(of: legCategoryFieldFocused) { _, focused in
