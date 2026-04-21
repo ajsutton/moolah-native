@@ -40,18 +40,21 @@ for f in ${FILTERS[@]+"${FILTERS[@]}"}; do
 done
 
 echo "==> Running UI tests on native macOS…"
-# Capture xcodebuild output in a tmpfile so we can both print it live and
-# scan it afterwards for ARTEFACT_DIR lines emitted by MoolahUITestCase
-# when a test fails. The runner is sandboxed and cannot write directly to
-# the worktree's `.agent-tmp/`, so artefacts land under
-# `$TMPDIR/MoolahUITests/`. We copy them back here so subsequent agent
-# inspection (and CI uploads) can find them in the conventional location.
+# Use derived data outside the developer's Documents folder so xcodebuild
+# does not re-trigger the macOS TCC Documents-access prompt on every
+# binary re-sign. CI overrides via the DERIVED_DATA_PATH env var.
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-/tmp/moolah-derived-data-ui}"
+mkdir -p "$DERIVED_DATA_PATH"
+
+# Capture xcodebuild output so we can both print it live and scan it for
+# `[MoolahUITestCase] ARTEFACT_DIR` lines on failure (the runner is
+# sandboxed and writes artefacts to /private/tmp/MoolahUITests/...).
 LOG_FILE="$(mktemp)"
 trap 'rm -f "$LOG_FILE"' EXIT
 
 set +e
 xcodebuild test "${COMMON_ARGS[@]}" \
-    -derivedDataPath "$REPO_ROOT/.DerivedData-mac-ui" \
+    -derivedDataPath "$DERIVED_DATA_PATH" \
     -scheme Moolah-macOS-UITests \
     -destination "platform=macOS" \
     ${filter_flags[@]+"${filter_flags[@]}"} \
