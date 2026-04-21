@@ -836,7 +836,7 @@ func reorderAccounts(newOrder: [Account]) async {
 }
 ```
 
-**STYLE_GUIDE Compliance:**
+**UI_GUIDE Compliance:**
 - Use semantic colors for accounts by type (bank = blue, creditCard = orange, etc.)
 - Monospaced digits for all balances
 - Consistent spacing (12pt inline padding)
@@ -1285,7 +1285,7 @@ Follow Test-Driven Development: write tests first, then implementation.
 3. Add validation logic
 4. Wire to `AccountStore.create`
 5. Test manually on macOS and iOS simulator
-6. Run UI review agent for STYLE_GUIDE compliance
+6. Run UI review agent for UI_GUIDE compliance
 
 **Checkpoint:** Can create accounts via UI
 
