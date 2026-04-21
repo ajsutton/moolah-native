@@ -22,7 +22,7 @@ struct ImportPreferencesRecord: Codable, Sendable, Equatable {
 @MainActor
 final class ImportPreferences {
 
-  private(set) var record: ImportPreferencesRecord = ImportPreferencesRecord()
+  private(set) var record = ImportPreferencesRecord()
   private let url: URL
   private let fileManager: FileManager
   private let logger = Logger(subsystem: "com.moolah.app", category: "ImportPreferences")

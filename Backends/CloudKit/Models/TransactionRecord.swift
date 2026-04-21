@@ -10,8 +10,8 @@ final class TransactionRecord {
     [\.id]
   )
 
-  var id: UUID = UUID()
-  var date: Date = Date()
+  var id = UUID()
+  var date = Date()
   var payee: String?
   var notes: String?
   var recurPeriod: String?  // Raw value of RecurPeriod

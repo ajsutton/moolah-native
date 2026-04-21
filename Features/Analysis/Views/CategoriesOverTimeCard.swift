@@ -156,7 +156,7 @@ struct CategoriesOverTimeCard: View {
     Category(id: UUID(), name: "Entertainment"),
   ]
 
-  let entries = categories.enumerated().map { index, category in
+  let entries = categories.enumerated().map { _, category in
     CategoryOverTimeEntry(
       categoryId: category.id,
       points: (0..<6).map { month in

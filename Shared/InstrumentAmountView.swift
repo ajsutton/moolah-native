@@ -5,8 +5,8 @@ import SwiftUI
 /// Use `colorOverride` to force a specific color (e.g. `.secondary` for running balances).
 struct InstrumentAmountView: View {
   let amount: InstrumentAmount
-  var font: Font? = nil
-  var colorOverride: Color? = nil
+  var font: Font?
+  var colorOverride: Color?
 
   var body: some View {
     text

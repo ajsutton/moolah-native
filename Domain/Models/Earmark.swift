@@ -188,7 +188,7 @@ struct Earmarks: RandomAccessCollection, Sendable {
   }
 
   var endIndex: Int {
-    return ordered.count
+    ordered.count
   }
 
   subscript(index: Int) -> Earmark {

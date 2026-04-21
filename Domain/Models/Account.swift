@@ -125,7 +125,7 @@ struct Accounts: RandomAccessCollection, Sendable {
   }
 
   var endIndex: Int {
-    return ordered.count
+    ordered.count
   }
 
   subscript(idex: Int) -> Account {

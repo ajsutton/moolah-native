@@ -49,7 +49,7 @@ final class RemoteEarmarkRepository: EarmarkRepository, Sendable {
       // Server returns { "categoryId1": amount, "categoryId2": amount, ... }
       let dict = try JSONDecoder().decode([String: Int].self, from: data)
       logger.debug("Successfully decoded \(dict.count) budget items")
-      return dict.compactMap { (key, value) in
+      return dict.compactMap { key, value in
         guard let categoryId = FlexibleUUID.parse(key) else { return nil }
         return EarmarkBudgetItem(
           categoryId: categoryId,

@@ -5,12 +5,12 @@ import SwiftData
 final class ProfileRecord {
 
   @Attribute(.preserveValueOnDeletion)
-  var id: UUID = UUID()
+  var id = UUID()
 
   var label: String = ""
   var currencyCode: String = ""
   var financialYearStartMonth: Int = 7
-  var createdAt: Date = Date()
+  var createdAt = Date()
   var encodedSystemFields: Data?
 
   init(

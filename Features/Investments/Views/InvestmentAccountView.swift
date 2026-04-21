@@ -13,7 +13,7 @@ struct InvestmentAccountView: View {
   @Environment(ProfileSession.self) private var session
   @State private var showingAddValue = false
   @State private var selectedTransaction: Transaction?
-  @State private var positionsInput: PositionsViewInput = PositionsViewInput(
+  @State private var positionsInput = PositionsViewInput(
     title: "", hostCurrency: .AUD, positions: [], historicalValue: nil)
   @State private var positionsRange: PositionsTimeRange = .threeMonths
   @State private var isLoadingPositions = false

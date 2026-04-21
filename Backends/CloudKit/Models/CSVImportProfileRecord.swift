@@ -6,8 +6,8 @@ final class CSVImportProfileRecord {
 
   #Index<CSVImportProfileRecord>([\.id])
 
-  var id: UUID = UUID()
-  var accountId: UUID = UUID()
+  var id = UUID()
+  var accountId = UUID()
   var parserIdentifier: String = ""
   /// Normalised CSV headers joined by the ASCII unit-separator (U+001F) so
   /// the column fits a single CKRecord `String` field rather than an array.
@@ -15,7 +15,7 @@ final class CSVImportProfileRecord {
   var headerSignature: String = ""
   var filenamePattern: String?
   var deleteAfterImport: Bool = false
-  var createdAt: Date = Date()
+  var createdAt = Date()
   var lastUsedAt: Date?
   /// Persisted user-confirmed date format (see CSVImportProfile).
   var dateFormatRawValue: String?

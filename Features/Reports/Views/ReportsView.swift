@@ -13,7 +13,7 @@ struct ReportsView: View {
   @State private var dateRange: DateRange = .last12Months
   @State private var customFrom: Date = Calendar.current.date(
     byAdding: .year, value: -1, to: Date())!
-  @State private var customTo: Date = Date()
+  @State private var customTo = Date()
 
   /// Resolved date range, computed once when dateRange or custom dates change.
   /// Stored in @State to avoid re-evaluating Date() on every SwiftUI render cycle.

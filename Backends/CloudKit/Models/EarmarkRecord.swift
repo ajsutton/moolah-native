@@ -6,7 +6,7 @@ final class EarmarkRecord {
 
   #Index<EarmarkRecord>([\.id])
 
-  var id: UUID = UUID()
+  var id = UUID()
   var name: String = ""
   var position: Int = 0
   var isHidden: Bool = false

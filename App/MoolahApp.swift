@@ -311,7 +311,7 @@ struct MoolahApp: App {
     // shaped storage (in-memory `CloudKitBackend`) so XCUITest flows never
     // touch the user's iCloud. See guides/UI_TEST_GUIDE.md §6.
     let uiTestingSeed = Self.uiTestingSeed(from: CommandLine.arguments)
-    var uiTestingProfileId: UUID? = nil
+    var uiTestingProfileId: UUID?
 
     do {
       let manager: ProfileContainerManager

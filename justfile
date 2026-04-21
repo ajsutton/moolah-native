@@ -14,10 +14,11 @@ default:
 lint:
     swift-format lint -r . --configuration .swift-format
 
-# Apply swift-format formatting in place across the repo. Run this before
-# committing; CI rejects changes that are not in formatted form.
+# Apply swift-format formatting in place, then run SwiftLint autocorrect.
+# Run this before committing; CI rejects unformatted files or new lint warnings.
 format:
     swift-format format -i -r . --configuration .swift-format
+    swiftlint lint --fix --quiet
 
 # Back-compat alias for `format`.
 lint-fix: format
@@ -45,6 +46,7 @@ format-check:
         exit 1
     fi
     echo "All Swift files are correctly formatted."
+    swiftlint lint --baseline .swiftlint-baseline.yml --strict --quiet
 
 # FILTERS restrict the run to specific tests: each is a class (e.g.
 # TransactionStoreTests) or class/method (e.g. TransactionStoreTests/testFoo);

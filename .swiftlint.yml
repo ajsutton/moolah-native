@@ -1,0 +1,172 @@
+# SwiftLint configuration — complementary to swift-format.
+# swift-format owns all layout/formatting rules. SwiftLint owns policy
+# and idiom rules swift-format doesn't cover.
+# See guides/CODE_GUIDE.md and plans/2026-04-22-swift-code-guide-design.md.
+
+excluded:
+  - .build
+  - .DerivedData-ios
+  - .DerivedData-mac
+  - .worktrees
+  - Moolah.xcodeproj
+  - build
+  - scripts
+  - fastlane
+
+disabled_rules:
+  # swift-format territory — do not enable these.
+  - line_length
+  - trailing_comma
+  - opening_brace
+  - closure_spacing
+  - colon
+  - comma
+  - operator_whitespace
+  - return_arrow_whitespace
+  - statement_position
+  - trailing_whitespace
+  - vertical_whitespace
+  - sorted_imports
+  # Autocorrect produces invalid code for our codebase. Tracked in tech-debt
+  # issues; revisit once a safer fix strategy exists.
+  # TODO(#262): re-enable redundant_nil_coalescing — autofix removes `?? nil`
+  # on dictionary subscripts of optional values, producing Int?? where Int? is
+  # required. Broke TransactionDetailView.swift (legCategoryHighlightedIndex).
+  - redundant_nil_coalescing
+  # TODO(#263): re-enable redundant_discardable_let — autofix rewrites
+  # `let _ = foo()` to `_ = foo()` inside SwiftUI @ViewBuilder bodies, which
+  # changes semantics (view builders accept `let _`, not bare assignments).
+  # Broke ProfileWindowView.swift.
+  - redundant_discardable_let
+  # TODO(#264): re-enable attributes — 903 baseline violations that fight
+  # swift-format's chosen layout for `@State`, `@Binding`, etc. swift-format
+  # owns layout; revisit once we decide whether to override the formatter.
+  - attributes
+  # TODO(#265): re-enable multiline_arguments — 2380 baseline violations that
+  # fight swift-format's call-site layout choices. swift-format owns layout;
+  # revisit once a stable convention is agreed.
+  - multiline_arguments
+
+opt_in_rules:
+  - array_init
+  - closure_body_length
+  - closure_end_indentation
+  - collection_alignment
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - contains_over_first_not_nil
+  - contains_over_range_nil_comparison
+  - convenience_type
+  - discouraged_optional_boolean
+  - discouraged_optional_collection
+  - empty_collection_literal
+  - empty_count
+  - empty_string
+  - enum_case_associated_values_count
+  - explicit_init
+  - fallthrough
+  - fatal_error_message
+  - file_header
+  - file_name
+  - first_where
+  - flatmap_over_map_reduce
+  - force_cast
+  - force_try
+  - force_unwrapping
+  - identical_operands
+  - implicit_return
+  - implicitly_unwrapped_optional
+  - joined_default_parameter
+  - last_where
+  - legacy_multiple
+  - let_var_whitespace
+  - literal_expression_end_indentation
+  - lower_acl_than_parent
+  - modifier_order
+  - multiline_parameters
+  - nimble_operator
+  - operator_usage_whitespace
+  - optional_enum_case_matching
+  - overridden_super_call
+  - pattern_matching_keywords
+  - prefer_self_type_over_type_of_self
+  - prefer_zero_over_explicit_init
+  - private_action
+  - private_outlet
+  - prohibited_super_call
+  - reduce_into
+  - redundant_nil_coalescing
+  - redundant_type_annotation
+  - sorted_first_last
+  - static_operator
+  - strict_fileprivate
+  - toggle_bool
+  - unavailable_function
+  - unneeded_parentheses_in_closure_argument
+  - untyped_error_in_catch
+  - unused_declaration
+  - unused_import
+  - vertical_parameter_alignment_on_call
+  - yoda_condition
+
+file_length:
+  warning: 400
+  error: 1000
+
+type_body_length:
+  warning: 250
+  error: 350
+
+function_body_length:
+  warning: 50
+  error: 100
+
+cyclomatic_complexity:
+  warning: 10
+  error: 20
+
+nesting:
+  type_level:
+    warning: 1
+  function_level:
+    warning: 2
+
+identifier_name:
+  min_length:
+    warning: 3
+    error: 2
+  max_length:
+    warning: 40
+    error: 60
+  excluded: [id, x, y, i, j, n, ok, to]
+
+large_tuple:
+  warning: 2
+  error: 3
+
+force_try:
+  severity: warning
+  excluded:
+    - MoolahTests/**
+    - MoolahUITests_macOS/**
+    - MoolahBenchmarks/**
+    - UITestSupport/**
+
+force_cast:
+  severity: warning
+  excluded:
+    - MoolahTests/**
+    - MoolahUITests_macOS/**
+    - MoolahBenchmarks/**
+    - UITestSupport/**
+
+force_unwrapping:
+  severity: warning
+  excluded:
+    - MoolahTests/**
+    - MoolahUITests_macOS/**
+    - MoolahBenchmarks/**
+    - UITestSupport/**
+
+implicitly_unwrapped_optional:
+  severity: warning

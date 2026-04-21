@@ -3,8 +3,8 @@ import SwiftData
 
 @Model
 final class TransactionLegRecord {
-  var id: UUID = UUID()
-  var transactionId: UUID = UUID()
+  var id = UUID()
+  var transactionId = UUID()
   var accountId: UUID?
   var instrumentId: String = ""
   var quantity: Int64 = 0  // Actual value × 10^8

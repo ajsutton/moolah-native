@@ -8,7 +8,7 @@ struct TransactionRowView: View {
   let displayAmount: InstrumentAmount?
   let balance: InstrumentAmount?
   var hideEarmark: Bool = false
-  var viewingAccountId: UUID? = nil
+  var viewingAccountId: UUID?
 
   #if os(macOS)
     @ScaledMetric private var verticalPadding: CGFloat = 8

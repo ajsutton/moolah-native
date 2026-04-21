@@ -15,6 +15,7 @@ REST API at `https://moolah.rocks/api/`.
 | macOS deployment target | 26+ |
 | XcodeGen | Latest (`brew install xcodegen`) |
 | just | Latest (`brew install just`) |
+| SwiftLint | 0.55+ (`brew install swiftlint`) — run by `just format` and `just format-check` |
 | Ruby + Bundler | 3.3+ (for Fastlane, release builds only) |
 
 ## Quick start

@@ -444,7 +444,7 @@ extension ImportRuleRecord: CloudKitRecordConvertible {
 
 /// Maps CKRecord.recordType strings to the corresponding record types for dispatching.
 enum RecordTypeRegistry: Sendable {
-  static nonisolated(unsafe) let allTypes: [String: any CloudKitRecordConvertible.Type] = [
+  nonisolated(unsafe) static let allTypes: [String: any CloudKitRecordConvertible.Type] = [
     ProfileRecord.recordType: ProfileRecord.self,
     InstrumentRecord.recordType: InstrumentRecord.self,
     AccountRecord.recordType: AccountRecord.self,

@@ -5,7 +5,7 @@ import Observation
 @Observable
 @MainActor
 final class AccountStore {
-  private(set) var accounts: Accounts = Accounts(from: [])
+  private(set) var accounts = Accounts(from: [])
   private(set) var isLoading = false
   private(set) var error: Error?
 

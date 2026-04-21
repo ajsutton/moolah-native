@@ -125,7 +125,7 @@ final class RecentlyAddedViewModel {
     let dict = Dictionary(
       grouping: transactions,
       by: { $0.importOrigin?.importSessionId ?? UUID() })
-    return dict.map { (id, txs) in
+    return dict.map { id, txs in
       let filenames = Array(
         Set(txs.compactMap { $0.importOrigin?.sourceFilename })
       ).sorted()

@@ -83,7 +83,7 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
   }
 
   func fetchDailyBalances(accountId: UUID) async throws -> [AccountDailyBalance] {
-    return try await MainActor.run {
+    try await MainActor.run {
       // Get scheduled transaction IDs to exclude
       let scheduledDescriptor = FetchDescriptor<TransactionRecord>(
         predicate: #Predicate { $0.recurPeriod != nil }

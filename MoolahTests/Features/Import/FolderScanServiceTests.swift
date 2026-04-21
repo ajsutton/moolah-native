@@ -54,7 +54,7 @@ struct FolderScanServiceTests {
   }
 
   private func cbaLines(startBalance: Decimal = 1000) -> [String] {
-    return [
+    [
       "Date,Description,Debit,Credit,Balance",
       "02/04/2024,COFFEE HUT SYDNEY,-5.50,,\(startBalance - 5.50)",
       "03/04/2024,PAY NET,,3000.00,\(startBalance + 2994.50)",

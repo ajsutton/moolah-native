@@ -16,7 +16,7 @@ struct MonthlyIncomeExpenseDTO: Codable {
   let earmarkedProfit: Int
 
   func toDomain(instrument: Instrument) -> MonthlyIncomeExpense {
-    return MonthlyIncomeExpense(
+    MonthlyIncomeExpense(
       month: String(month),
       start: BackendDateFormatter.date(from: start) ?? Date(),
       end: BackendDateFormatter.date(from: end) ?? Date(),

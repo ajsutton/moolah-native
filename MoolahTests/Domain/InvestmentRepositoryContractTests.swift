@@ -456,7 +456,7 @@ private let sharedAccountId = UUID()
 private func getAccountId(from repo: any InvestmentRepository) async -> UUID {
   // This is only called on repos built with makeCloudKitInvestmentRepository
   // which uses sharedAccountId — we return it directly.
-  return sharedAccountId
+  sharedAccountId
 }
 
 private func makeCloudKitInvestmentRepository(

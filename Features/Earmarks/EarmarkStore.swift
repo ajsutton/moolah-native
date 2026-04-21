@@ -5,7 +5,7 @@ import Observation
 @Observable
 @MainActor
 final class EarmarkStore {
-  private(set) var earmarks: Earmarks = Earmarks(from: [])
+  private(set) var earmarks = Earmarks(from: [])
   private(set) var isLoading = false
   private(set) var error: Error?
 

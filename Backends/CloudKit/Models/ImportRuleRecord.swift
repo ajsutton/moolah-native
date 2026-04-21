@@ -10,16 +10,16 @@ final class ImportRuleRecord {
 
   #Index<ImportRuleRecord>([\.id])
 
-  var id: UUID = UUID()
+  var id = UUID()
   var name: String = ""
   var enabled: Bool = true
   var position: Int = 0
   var matchMode: String = MatchMode.all.rawValue
   /// JSON-encoded [RuleCondition]. Kept as a single column because the
   /// associated-value enums don't have a clean per-field CKRecord mapping.
-  var conditionsJSON: Data = Data()
+  var conditionsJSON = Data()
   /// JSON-encoded [RuleAction]. Same reasoning as conditionsJSON.
-  var actionsJSON: Data = Data()
+  var actionsJSON = Data()
   var accountScope: UUID?
   var encodedSystemFields: Data?
 

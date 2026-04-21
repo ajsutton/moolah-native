@@ -33,7 +33,7 @@ final class TransactionStore {
   private var currentFilter = TransactionFilter()
   private var currentPage = 0
   private var rawTransactions: [Transaction] = []
-  private var priorBalance: InstrumentAmount? = nil
+  private var priorBalance: InstrumentAmount?
 
   init(
     repository: TransactionRepository,

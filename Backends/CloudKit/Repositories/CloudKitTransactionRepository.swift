@@ -273,7 +273,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
         for leg in allAccountLegs where afterPageRecordIds.contains(leg.transactionId) {
           subtotalsById[leg.instrumentId, default: 0] += leg.quantity
         }
-        subtotalsToConvert = try subtotalsById.map { (instrumentId, storageValue) in
+        subtotalsToConvert = try subtotalsById.map { instrumentId, storageValue in
           let instrument = try resolveInstrument(id: instrumentId)
           return SubtotalEntry(
             instrument: instrument,

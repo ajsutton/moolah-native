@@ -1240,14 +1240,14 @@ struct TransactionDraftTests {
   }
 
   @Test func parseDisplayTextRoundTrips() {
-    let original: Decimal = Decimal(string: "-42.50")!
+    let original = Decimal(string: "-42.50")!
     let display = TransactionDraft.displayText(quantity: original, type: .expense, decimals: 2)
     let parsed = TransactionDraft.parseDisplayText(display, type: .expense, decimals: 2)
     #expect(parsed == original)
   }
 
   @Test func parseDisplayTextRefundRoundTrips() {
-    let original: Decimal = Decimal(string: "10.00")!  // refund expense
+    let original = Decimal(string: "10.00")!  // refund expense
     let display = TransactionDraft.displayText(quantity: original, type: .expense, decimals: 2)
     #expect(display == "-10.00")
     let parsed = TransactionDraft.parseDisplayText(display, type: .expense, decimals: 2)
@@ -1255,7 +1255,7 @@ struct TransactionDraftTests {
   }
 
   @Test func parseDisplayTextIncomeRoundTrips() {
-    let original: Decimal = Decimal(string: "3000.00")!
+    let original = Decimal(string: "3000.00")!
     let display = TransactionDraft.displayText(quantity: original, type: .income, decimals: 2)
     let parsed = TransactionDraft.parseDisplayText(display, type: .income, decimals: 2)
     #expect(parsed == original)

@@ -145,7 +145,7 @@ struct AnalysisRepositoryContractTests {
     )
 
     let forecast = balances.filter { $0.isForecast }
-    #expect(forecast.count > 0, "Should have forecast balances")
+    #expect(!forecast.isEmpty, "Should have forecast balances")
   }
 
   @Test("earmarked balance in dailyBalances reflects earmarked transactions")

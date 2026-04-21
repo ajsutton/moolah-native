@@ -8,7 +8,7 @@ struct CreateEarmarkSheet: View {
   @State private var name: String = ""
   @State private var currencyCode: String
   @State private var savingsGoal: String = ""
-  @State private var startDate: Date = Date()
+  @State private var startDate = Date()
   @State private var endDate: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date())!
   @State private var useDateRange: Bool = false
   @Environment(\.dismiss) private var dismiss

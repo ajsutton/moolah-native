@@ -6,9 +6,9 @@ final class InvestmentValueRecord {
 
   #Index<InvestmentValueRecord>([\.id], [\.accountId])
 
-  var id: UUID = UUID()
-  var accountId: UUID = UUID()
-  var date: Date = Date()
+  var id = UUID()
+  var accountId = UUID()
+  var date = Date()
   var value: Int64 = 0  // storageValue (× 10^8)
   var instrumentId: String = ""
   var encodedSystemFields: Data?

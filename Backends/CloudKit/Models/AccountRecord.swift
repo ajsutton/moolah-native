@@ -6,7 +6,7 @@ final class AccountRecord {
 
   #Index<AccountRecord>([\.id])
 
-  var id: UUID = UUID()
+  var id = UUID()
   var name: String = ""
   var type: String = "bank"  // Raw value of AccountType
   var position: Int = 0

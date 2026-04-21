@@ -5,7 +5,7 @@ struct ExpenseBreakdownCard: View {
   let breakdown: [ExpenseBreakdown]
   let categories: Categories
 
-  @State private var selectedCategoryId: UUID? = nil
+  @State private var selectedCategoryId: UUID?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {

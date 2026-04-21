@@ -280,7 +280,7 @@ struct ScheduledTransactionTests {
     // Verify the scheduled transaction is gone
     let page2 = try await backend.transactions.fetch(
       filter: TransactionFilter(scheduled: true), page: 0, pageSize: 50)
-    #expect(page2.transactions.count == 0)
+    #expect(page2.transactions.isEmpty)
 
     // Verify the paid transaction exists
     let page3 = try await backend.transactions.fetch(

@@ -6,7 +6,7 @@ final class CategoryRecord {
 
   #Index<CategoryRecord>([\.id])
 
-  var id: UUID = UUID()
+  var id = UUID()
   var name: String = ""
   var parentId: UUID?
   var encodedSystemFields: Data?

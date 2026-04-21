@@ -11,11 +11,11 @@ import SwiftData
 /// to this handler. Methods return results (record IDs, failures) instead of
 /// directly interacting with CKSyncEngine state.
 @MainActor
-final class ProfileIndexSyncHandler: Sendable {
+final class ProfileIndexSyncHandler {
   nonisolated let zoneID: CKRecordZone.ID
   nonisolated let modelContainer: ModelContainer
 
-  private nonisolated let logger = Logger(
+  nonisolated private let logger = Logger(
     subsystem: "com.moolah.app", category: "ProfileIndexSyncHandler")
 
   init(modelContainer: ModelContainer) {
@@ -27,7 +27,7 @@ final class ProfileIndexSyncHandler: Sendable {
   }
 
   /// Fetches records using the given descriptor, logging errors instead of silently discarding them.
-  private nonisolated func fetchOrLog<T: PersistentModel>(
+  nonisolated private func fetchOrLog<T: PersistentModel>(
     _ descriptor: FetchDescriptor<T>,
     context: ModelContext
   ) -> [T] {

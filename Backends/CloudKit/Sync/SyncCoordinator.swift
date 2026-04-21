@@ -14,7 +14,7 @@ import os
 /// - `profile-<uuid>` → `ProfileDataSyncHandler` (via `ProfileContainerManager`)
 @Observable
 @MainActor
-final class SyncCoordinator: Sendable {
+final class SyncCoordinator {
 
   // MARK: - Zone Parsing
 
@@ -175,7 +175,7 @@ final class SyncCoordinator: Sendable {
 
   // MARK: - State
 
-  let stateFileURL: URL = URL.applicationSupportDirectory
+  let stateFileURL = URL.applicationSupportDirectory
     .appending(path: "Moolah-v2-sync.syncstate")
 
   let containerManager: ProfileContainerManager
@@ -329,7 +329,7 @@ final class SyncCoordinator: Sendable {
   /// this as `nonisolated async` from a `@MainActor`-originating `Task {}`
   /// still inherits the main thread for the body; `Task.detached` is the
   /// only reliable way to force execution onto the cooperative pool.
-  private nonisolated static func prepareEngine(
+  nonisolated private static func prepareEngine(
     stateFileURL: URL,
     delegate: any CKSyncEngineDelegate & Sendable
   ) async -> PreparedEngine {
@@ -1025,7 +1025,7 @@ final class SyncCoordinator: Sendable {
 
         // Filter pre-extracted system fields to this zone (off-main)
         let savedNames = Set(saved.map { $0.recordID.recordName })
-        let zonePreExtracted = preExtractedSystemFields.filter { (recordName, _) in
+        let zonePreExtracted = preExtractedSystemFields.filter { recordName, _ in
           savedNames.contains(recordName)
         }
 

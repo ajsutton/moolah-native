@@ -56,7 +56,7 @@ struct TransactionRepositoryContractTests {
     )
 
     // Should include "Woolworths" (case-insensitive contains match)
-    #expect(page.transactions.count > 0)
+    #expect(!page.transactions.isEmpty)
     for transaction in page.transactions {
       let payee = transaction.payee?.lowercased() ?? ""
       #expect(payee.contains("wool"))

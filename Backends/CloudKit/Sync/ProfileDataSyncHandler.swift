@@ -20,12 +20,12 @@ enum ApplyResult: Sendable {
 /// to this handler. Methods return results (changed types, record IDs, failures)
 /// instead of directly interacting with CKSyncEngine state.
 @MainActor
-final class ProfileDataSyncHandler: Sendable {
+final class ProfileDataSyncHandler {
   nonisolated let profileId: UUID
   nonisolated let zoneID: CKRecordZone.ID
   nonisolated let modelContainer: ModelContainer
 
-  private nonisolated let logger = Logger(
+  nonisolated private let logger = Logger(
     subsystem: "com.moolah.app", category: "ProfileDataSyncHandler")
 
   init(profileId: UUID, zoneID: CKRecordZone.ID, modelContainer: ModelContainer) {
@@ -734,11 +734,11 @@ final class ProfileDataSyncHandler: Sendable {
 
   // MARK: - Batch Processing (Static)
 
-  private nonisolated static let batchLogger = Logger(
+  nonisolated private static let batchLogger = Logger(
     subsystem: "com.moolah.app", category: "ProfileDataSyncHandler")
 
   /// Static version of fetchOrLog for use in nonisolated static batch methods.
-  private nonisolated static func fetchOrLog<T: PersistentModel>(
+  nonisolated private static func fetchOrLog<T: PersistentModel>(
     _ descriptor: FetchDescriptor<T>,
     context: ModelContext
   ) -> [T] {

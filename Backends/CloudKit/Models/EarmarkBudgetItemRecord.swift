@@ -6,9 +6,9 @@ final class EarmarkBudgetItemRecord {
 
   #Index<EarmarkBudgetItemRecord>([\.id], [\.earmarkId])
 
-  var id: UUID = UUID()
-  var earmarkId: UUID = UUID()
-  var categoryId: UUID = UUID()
+  var id = UUID()
+  var earmarkId = UUID()
+  var categoryId = UUID()
   var amount: Int64 = 0  // storageValue (× 10^8)
   var instrumentId: String = ""
   var encodedSystemFields: Data?

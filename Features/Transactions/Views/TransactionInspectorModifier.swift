@@ -12,7 +12,7 @@ struct TransactionInspectorModifier: ViewModifier {
   let earmarks: Earmarks
   let transactionStore: TransactionStore
   var showRecurrence: Bool = false
-  var viewingAccountId: UUID? = nil
+  var viewingAccountId: UUID?
   var supportsComplexTransactions: Bool = false
 
   private var isPresented: Binding<Bool> {
@@ -104,7 +104,7 @@ struct OptionalTransactionInspector: ViewModifier {
   let earmarks: Earmarks
   let transactionStore: TransactionStore
   var showRecurrence: Bool = false
-  var viewingAccountId: UUID? = nil
+  var viewingAccountId: UUID?
   var supportsComplexTransactions: Bool = false
 
   func body(content: Content) -> some View {

@@ -5,7 +5,7 @@ import Observation
 @Observable
 @MainActor
 final class CategoryStore {
-  private(set) var categories: Categories = Categories(from: [])
+  private(set) var categories = Categories(from: [])
   private(set) var isLoading = false
   private(set) var error: Error?
 
