@@ -108,6 +108,10 @@ opt_in_rules:
   - vertical_parameter_alignment_on_call
   - yoda_condition
 
+# SwiftLint (0.63) rejects per-rule `excluded:` on `file_length` and
+# `type_body_length` (surfaces as "invalid key(s) 'excluded'"), and silently
+# ignores it on `function_body_length`. Path-scoping would require moving
+# test files under the top-level `excluded:` list, which we don't want.
 file_length:
   warning: 400
   error: 1000
@@ -143,32 +147,19 @@ large_tuple:
   warning: 2
   error: 3
 
+# SwiftLint (0.63) silently ignores per-rule `excluded:` on `force_try`,
+# `force_cast`, `force_unwrapping`, and `implicitly_unwrapped_optional`
+# (no "invalid key" warning, but violation counts are unchanged whether the
+# paths are present or omitted). Path-scoping would require moving test
+# files under the top-level `excluded:` list, which we don't want.
 force_try:
   severity: warning
-  excluded:
-    - MoolahTests/**
-    - MoolahUITests_macOS/**
-    - MoolahBenchmarks/**
-    - UITestSupport/**
 
 force_cast:
   severity: warning
-  excluded:
-    - MoolahTests/**
-    - MoolahUITests_macOS/**
-    - MoolahBenchmarks/**
-    - UITestSupport/**
 
 force_unwrapping:
   severity: warning
-  excluded:
-    - MoolahTests/**
-    - MoolahUITests_macOS/**
-    - MoolahBenchmarks/**
-    - UITestSupport/**
 
-# SwiftLint rejects per-rule `excluded:` on implicitly_unwrapped_optional.
-# Path-scoping would require moving test files under the top-level `excluded:`
-# list, which we don't want.
 implicitly_unwrapped_optional:
   severity: warning
