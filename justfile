@@ -94,10 +94,14 @@ run-mac: generate
     xcodebuild build "${args[@]}"
     open .build/Build/Products/Debug/Moolah.app
 
-# Build a Release macOS app and install to /Applications
-install-mac: generate
+# Build a Release macOS app and install to /Applications.
+# Forces ENABLE_ENTITLEMENTS=1 for the regenerate: Release bakes in
+# CLOUDKIT_ENABLED, so an un-entitled binary is killed silently at launch
+# by the hardened runtime when it calls CKContainer.default().
+install-mac:
     #!/usr/bin/env bash
     set -euo pipefail
+    ENABLE_ENTITLEMENTS=1 just generate
     xcodebuild build \
         -scheme Moolah-macOS \
         -destination 'platform=macOS' \
