@@ -28,6 +28,14 @@ struct TransactionDetailView: View {
   @State private var legCategoryJustSelected: [Int: Bool] = [:]
   @State private var showLegCategorySuggestions: [Int: Bool] = [:]
   @State private var legCategoryHighlightedIndex: [Int: Int?] = [:]
+  /// Snapshot of whether the transaction was a blank/new draft at open
+  /// time (empty payee + all-zero legs). Captured once at init so that
+  /// `autofillFromPayee` only copies fields from a matched transaction
+  /// when the user is filling in a fresh transaction — never when they
+  /// are editing an existing one. Without this guard, selecting a payee
+  /// from the dropdown while editing a $5,000 transfer would clobber the
+  /// amount, type, and category.
+  @State private var openedAsNewTransaction: Bool
   @FocusState private var focusedField: Field?
 
   private enum Field: Hashable {
@@ -138,6 +146,10 @@ struct TransactionDetailView: View {
       }
     }
     _draft = State(initialValue: initialDraft)
+
+    let payeeEmpty = (transaction.payee?.isEmpty ?? true)
+    let allLegsZero = transaction.legs.allSatisfy { $0.quantity == .zero }
+    _openedAsNewTransaction = State(initialValue: payeeEmpty && allLegsZero)
   }
 
   private var sortedAccounts: [Account] {
@@ -437,6 +449,7 @@ struct TransactionDetailView: View {
             Text(account.name).tag(UUID?.some(account.id))
           }
         }
+        .accessibilityIdentifier(UITestIdentifiers.Detail.toAccountPicker)
         .onChange(of: draft.legDrafts[counterpartIndex].accountId) { _, _ in
           draft.snapToSameCurrencyIfNeeded(accounts: accounts)
         }
@@ -455,9 +468,11 @@ struct TransactionDetailView: View {
               #endif
               .focused($focusedField, equals: .counterpartAmount)
               .onSubmit { focusedField = nil }
+              .accessibilityIdentifier(UITestIdentifiers.Detail.counterpartAmount)
             Text(counterpartInstrument?.id ?? "")
               .foregroundStyle(.secondary)
               .monospacedDigit()
+              .accessibilityIdentifier(UITestIdentifiers.Detail.counterpartAmountInstrument)
           }
 
           if let rate = derivedRate {
@@ -616,6 +631,7 @@ struct TransactionDetailView: View {
           onAcceptHighlighted: { acceptHighlightedLegCategory(at: index) }
         )
         .focused($legCategoryFieldFocused, equals: index)
+        .accessibilityIdentifier(UITestIdentifiers.Detail.Leg.category(index))
       }
 
       Picker("Earmark", selection: $draft.legDrafts[index].earmarkId) {
@@ -817,6 +833,11 @@ struct TransactionDetailView: View {
   }
 
   private func autofillFromPayee(_ selectedPayee: String) {
+    // Only auto-copy amount/type/category from a past transaction when
+    // the user is filling in a fresh draft. Editing an existing
+    // transaction's payee must never rewrite other fields — see BUGS.md
+    // before removing this guard.
+    guard openedAsNewTransaction else { return }
     Task {
       guard let match = await transactionStore.fetchTransactionForAutofill(payee: selectedPayee)
       else { return }
@@ -926,6 +947,10 @@ struct TransactionDetailView: View {
             draft.legDrafts[activeIndex].categoryText = selected.path
             showLegCategorySuggestions[activeIndex] = false
             legCategoryHighlightedIndex[activeIndex] = nil
+          },
+          identifier: UITestIdentifiers.Autocomplete.Leg.category(activeIndex),
+          rowIdentifier: { rowIndex in
+            UITestIdentifiers.Autocomplete.Leg.categorySuggestion(activeIndex, rowIndex)
           }
         )
         .frame(width: rect.width)

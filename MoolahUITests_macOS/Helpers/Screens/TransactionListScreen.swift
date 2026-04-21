@@ -5,12 +5,14 @@ import XCTest
 /// seeded UUID.
 enum TransactionListEntry {
   case bhpPurchase
+  case splitShop
 
   /// The fixed UUID written to the seeded `ProfileContainerManager` by
   /// `UITestSeedHydrator`.
   var id: UUID {
     switch self {
     case .bhpPurchase: return UITestFixtures.TradeBaseline.bhpPurchaseId
+    case .splitShop: return UITestFixtures.TradeBaseline.splitShopId
     }
   }
 }

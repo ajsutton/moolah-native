@@ -64,6 +64,12 @@ public enum UITestFixtures {
     public static let brokerageAccountId = UUID(uuidString: "A1000000-0000-0000-0000-000000000011")!
     public static let brokerageAccountName = "Brokerage"
 
+    /// A USD-denominated account so the cross-currency test can switch a
+    /// transfer's counterpart leg to a different instrument.
+    public static let usdAccountId = UUID(uuidString: "A1000000-0000-0000-0000-000000000012")!
+    public static let usdAccountName = "USD Savings"
+    public static let usdAccountInstrumentCode = "USD"
+
     public static let bhpPurchaseId = UUID(uuidString: "A1000000-0000-0000-0000-000000000020")!
     public static let bhpPurchasePayee = "BHP Purchase"
     public static let bhpPurchaseAmountCents = 500_000  // 5,000.00 AUD
@@ -73,6 +79,37 @@ public enum UITestFixtures {
     /// Cents moved by every historical expense. Kept identical across the
     /// list so tests that care only about payee text don't encode amounts.
     public static let historicalExpenseAmountCents = 5_000  // 50.00 AUD
+
+    // MARK: - Categories
+    //
+    // A minimal category set that gives the autocomplete dropdown
+    // matches for the prefixes exercised by the multi-leg isolation test:
+    //
+    //   "G" → [Groceries, Gym]           (count = 2)
+    //   "Gr" → [Groceries]                (count = 1)
+    //
+    // Seeded flat — no parent hierarchy — because the test only asserts
+    // dropdown visibility, not label formatting.
+    public static let groceriesCategoryId =
+      UUID(uuidString: "A1000000-0000-0000-0000-000000000040")!
+    public static let groceriesCategoryName = "Groceries"
+    public static let gymCategoryId =
+      UUID(uuidString: "A1000000-0000-0000-0000-000000000041")!
+    public static let gymCategoryName = "Gym"
+
+    // MARK: - Custom (multi-leg) transaction
+    //
+    // A two-leg expense split from `checking`, both legs with the same
+    // account so `Transaction.isSimple == false` → `TransactionDraft.isCustom
+    // == true` → the detail view renders per-leg sections with category
+    // autocomplete fields.
+    public static let splitShopId = UUID(uuidString: "A1000000-0000-0000-0000-000000000050")!
+    public static let splitShopPayee = "Split Shop"
+    /// 2026-03-23 00:00:00 UTC — between the historical expenses and the
+    /// BHP trade.
+    public static let splitShopDate = Date(timeIntervalSince1970: 1_774_224_000)
+    public static let splitShopLegAAmountCents = 3_000  // 30.00 AUD
+    public static let splitShopLegBAmountCents = 2_000  // 20.00 AUD
 
     /// Four historical expense transactions from `checking`, ordered by
     /// date. Payee frequency is the only axis `fetchPayeeSuggestions` sorts

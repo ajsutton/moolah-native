@@ -71,6 +71,19 @@ enum UITestSeedHydrator {
       in: context
     )
 
+    // USD account lets the cross-currency test switch a transfer's
+    // counterpart to a different instrument.
+    let usd = Instrument.USD
+    try upsertInstrument(usd, in: context)
+    try upsertAccount(
+      id: fixtures.usdAccountId,
+      name: fixtures.usdAccountName,
+      type: .bank,
+      instrumentId: usd.id,
+      position: 2,
+      in: context
+    )
+
     try upsertTrade(
       id: fixtures.bhpPurchaseId,
       payee: fixtures.bhpPurchasePayee,
@@ -98,6 +111,27 @@ enum UITestSeedHydrator {
         in: context
       )
     }
+
+    try upsertCategory(
+      id: fixtures.groceriesCategoryId, name: fixtures.groceriesCategoryName, in: context)
+    try upsertCategory(
+      id: fixtures.gymCategoryId, name: fixtures.gymCategoryName, in: context)
+
+    try upsertCustomExpenseSplit(
+      id: fixtures.splitShopId,
+      payee: fixtures.splitShopPayee,
+      date: fixtures.splitShopDate,
+      legAAmount: InstrumentAmount(
+        quantity: Decimal(fixtures.splitShopLegAAmountCents) / 100,
+        instrument: instrument
+      ),
+      legBAmount: InstrumentAmount(
+        quantity: Decimal(fixtures.splitShopLegBAmountCents) / 100,
+        instrument: instrument
+      ),
+      accountId: fixtures.checkingAccountId,
+      in: context
+    )
 
     try context.save()
     return profile
@@ -230,6 +264,69 @@ enum UITestSeedHydrator {
         quantity: outgoing.storageValue,
         type: TransactionType.expense.rawValue,
         sortOrder: 0
+      )
+    )
+  }
+
+  private static func upsertCategory(
+    id: UUID,
+    name: String,
+    in context: ModelContext
+  ) throws {
+    let targetId = id
+    let descriptor = FetchDescriptor<CategoryRecord>(
+      predicate: #Predicate { $0.id == targetId }
+    )
+    if try context.fetch(descriptor).first != nil { return }
+    context.insert(CategoryRecord(id: id, name: name))
+  }
+
+  /// Inserts a two-leg expense split on the same account. Both legs share
+  /// `accountId`, which makes `Transaction.isSimple` false (it requires
+  /// `a.accountId != b.accountId`) and flips `TransactionDraft.isCustom`
+  /// to true. Categories are left nil on both legs so the test can type
+  /// into an empty category field and observe autocomplete behaviour.
+  private static func upsertCustomExpenseSplit(
+    id: UUID,
+    payee: String,
+    date: Date,
+    legAAmount: InstrumentAmount,
+    legBAmount: InstrumentAmount,
+    accountId: UUID,
+    in context: ModelContext
+  ) throws {
+    let targetId = id
+    let descriptor = FetchDescriptor<TransactionRecord>(
+      predicate: #Predicate { $0.id == targetId }
+    )
+    if try context.fetch(descriptor).first != nil { return }
+
+    let txn = TransactionRecord(id: id, date: date, payee: payee)
+    context.insert(txn)
+
+    let outgoingA = InstrumentAmount(
+      quantity: -legAAmount.quantity, instrument: legAAmount.instrument)
+    let outgoingB = InstrumentAmount(
+      quantity: -legBAmount.quantity, instrument: legBAmount.instrument)
+
+    context.insert(
+      TransactionLegRecord(
+        transactionId: id,
+        accountId: accountId,
+        instrumentId: legAAmount.instrument.id,
+        quantity: outgoingA.storageValue,
+        type: TransactionType.expense.rawValue,
+        sortOrder: 0
+      )
+    )
+    context.insert(
+      TransactionLegRecord(
+        transactionId: id,
+        accountId: accountId,
+        instrumentId: legBAmount.instrument.id,
+        quantity: outgoingB.storageValue,
+        type: TransactionType.expense.rawValue,
+        sortOrder: 1
       )
     )
   }

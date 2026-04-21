@@ -56,15 +56,20 @@ final class UITestSeedHydratorTests: XCTestCase {
 
     let context = ModelContext(container)
     let accounts = try context.fetch(FetchDescriptor<AccountRecord>())
-    XCTAssertEqual(accounts.count, 2, "expected checking + brokerage accounts")
+    XCTAssertEqual(accounts.count, 3, "expected checking + brokerage + USD accounts")
     let ids = Set(accounts.map(\.id))
     XCTAssertEqual(
       ids,
       [
         UITestFixtures.TradeBaseline.checkingAccountId,
         UITestFixtures.TradeBaseline.brokerageAccountId,
+        UITestFixtures.TradeBaseline.usdAccountId,
       ]
     )
+    let usd = try XCTUnwrap(
+      accounts.first { $0.id == UITestFixtures.TradeBaseline.usdAccountId }
+    )
+    XCTAssertEqual(usd.instrumentId, UITestFixtures.TradeBaseline.usdAccountInstrumentCode)
   }
 
   func testHydrateTradeBaselineSeedsTheTradeTransaction() throws {
@@ -96,6 +101,55 @@ final class UITestSeedHydratorTests: XCTestCase {
         UITestFixtures.TradeBaseline.checkingAccountId,
         UITestFixtures.TradeBaseline.brokerageAccountId,
       ]
+    )
+  }
+
+  func testHydrateTradeBaselineSeedsTheCategories() throws {
+    let profile = try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager)
+    let container = try containerManager.container(for: profile.id)
+
+    let context = ModelContext(container)
+    let categories = try context.fetch(FetchDescriptor<CategoryRecord>())
+    let byId = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
+    XCTAssertEqual(
+      byId[UITestFixtures.TradeBaseline.groceriesCategoryId]?.name,
+      UITestFixtures.TradeBaseline.groceriesCategoryName)
+    XCTAssertEqual(
+      byId[UITestFixtures.TradeBaseline.gymCategoryId]?.name,
+      UITestFixtures.TradeBaseline.gymCategoryName)
+  }
+
+  func testHydrateTradeBaselineSeedsTheCustomSplitTransaction() throws {
+    let profile = try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager)
+    let container = try containerManager.container(for: profile.id)
+
+    let context = ModelContext(container)
+    let splitId = UITestFixtures.TradeBaseline.splitShopId
+    let split = try XCTUnwrap(
+      try context.fetch(
+        FetchDescriptor<TransactionRecord>(
+          predicate: #Predicate { $0.id == splitId }
+        )
+      ).first,
+      "custom split transaction must exist"
+    )
+    XCTAssertEqual(split.payee, UITestFixtures.TradeBaseline.splitShopPayee)
+
+    let legs = try context.fetch(
+      FetchDescriptor<TransactionLegRecord>(
+        predicate: #Predicate { $0.transactionId == splitId }
+      )
+    )
+    XCTAssertEqual(legs.count, 2, "split has two legs")
+    let accountIds = Set(legs.compactMap(\.accountId))
+    XCTAssertEqual(
+      accountIds,
+      [UITestFixtures.TradeBaseline.checkingAccountId],
+      "both legs share Checking — drives isCustom == true"
+    )
+    XCTAssertTrue(
+      legs.allSatisfy { $0.type == TransactionType.expense.rawValue },
+      "both legs are expense"
     )
   }
 
@@ -146,7 +200,8 @@ final class UITestSeedHydratorTests: XCTestCase {
     let second = try containerManager.container(for: UITestFixtures.TradeBaseline.profileId)
     let secondTxnCount = try ModelContext(second).fetch(FetchDescriptor<TransactionRecord>()).count
 
-    let expected = 1 + UITestFixtures.TradeBaseline.historicalPayees.count
+    // 1 trade + N historical single-leg expenses + 1 custom multi-leg split.
+    let expected = 1 + UITestFixtures.TradeBaseline.historicalPayees.count + 1
     XCTAssertEqual(firstTxnCount, expected)
     XCTAssertEqual(secondTxnCount, expected, "hydration must be idempotent for robust relaunches")
   }

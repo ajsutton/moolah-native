@@ -241,6 +241,9 @@ class MoolahUITestCase: XCTestCase {
       lines.append("checking.name   = \(f.checkingAccountName)")
       lines.append("brokerage.id    = \(f.brokerageAccountId)")
       lines.append("brokerage.name  = \(f.brokerageAccountName)")
+      lines.append("usdSavings.id   = \(f.usdAccountId)")
+      lines.append("usdSavings.name = \(f.usdAccountName)")
+      lines.append("usdSavings.instrument = \(f.usdAccountInstrumentCode)")
       lines.append("trade.id        = \(f.bhpPurchaseId)")
       lines.append("trade.payee     = \(f.bhpPurchasePayee)")
       lines.append("trade.cents     = \(f.bhpPurchaseAmountCents)")
@@ -252,6 +255,15 @@ class MoolahUITestCase: XCTestCase {
             + "\(historical.id) / \(historical.payee) / \(historical.date)"
         )
       }
+      lines.append(
+        "category.groceries.id/name = \(f.groceriesCategoryId) / \(f.groceriesCategoryName)")
+      lines.append("category.gym.id/name = \(f.gymCategoryId) / \(f.gymCategoryName)")
+      lines.append(
+        "splitShop.id/payee/date = \(f.splitShopId) / \(f.splitShopPayee) / \(f.splitShopDate)")
+      lines.append(
+        "splitShop.legA.cents / legB.cents = "
+          + "\(f.splitShopLegAAmountCents) / \(f.splitShopLegBAmountCents)"
+      )
     }
     return lines.joined(separator: "\n") + "\n"
   }

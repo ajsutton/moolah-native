@@ -40,20 +40,50 @@ struct CategoryAutocompleteField: View {
 }
 
 /// The floating dropdown for category suggestions — mirrors PayeeSuggestionDropdown.
+///
+/// `identifier` + `rowIdentifier` are optional so the simple-mode call site
+/// (which doesn't need UI-test targeting today) can keep calling the struct
+/// without extra arguments. The multi-leg call site passes both so each
+/// leg's dropdown surfaces in the accessibility tree with a distinct
+/// identifier (`autocomplete.leg.<legIndex>.category[.suggestion.N]`).
 struct CategorySuggestionDropdown: View {
   let suggestions: [CategorySuggestion]
   let searchText: String
   @Binding var highlightedIndex: Int?
   let onSelect: (CategorySuggestion) -> Void
+  let identifier: String?
+  let rowIdentifier: ((Int) -> String)?
+
+  init(
+    suggestions: [CategorySuggestion],
+    searchText: String,
+    highlightedIndex: Binding<Int?>,
+    onSelect: @escaping (CategorySuggestion) -> Void,
+    identifier: String? = nil,
+    rowIdentifier: ((Int) -> String)? = nil
+  ) {
+    self.suggestions = suggestions
+    self.searchText = searchText
+    self._highlightedIndex = highlightedIndex
+    self.onSelect = onSelect
+    self.identifier = identifier
+    self.rowIdentifier = rowIdentifier
+  }
 
   var body: some View {
-    AutocompleteSuggestionDropdown(
+    let dropdown = AutocompleteSuggestionDropdown(
       items: suggestions,
       searchText: searchText,
       label: { $0.path },
       highlightedIndex: $highlightedIndex,
-      onSelect: { onSelect($0) }
+      onSelect: { onSelect($0) },
+      rowIdentifier: rowIdentifier
     )
+    if let identifier {
+      dropdown.accessibilityIdentifier(identifier)
+    } else {
+      dropdown
+    }
   }
 }
 

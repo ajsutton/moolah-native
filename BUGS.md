@@ -13,3 +13,4 @@ can start typing.
 The first UI test (`TransactionDetailFocusTests.testOpeningTradeFocusesPayee`)
 works around this by tapping the payee field explicitly before asserting
 focus. When this bug is fixed, that `.tap()` step can be deleted.
+
