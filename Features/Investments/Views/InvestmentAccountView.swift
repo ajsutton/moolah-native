@@ -38,73 +38,87 @@ struct InvestmentAccountView: View {
   }
 
   var body: some View {
-    VStack(spacing: 0) {
+    Group {
       if investmentStore.hasLegacyValuations {
-        // Legacy: show manual valuations
-        if !investmentStore.values.isEmpty {
-          InvestmentSummaryView(
-            investedAmount: investedAmount,
-            currentValue: latestInvestmentValue,
-            store: investmentStore
+        VStack(spacing: 0) {
+          // Legacy: show manual valuations
+          if !investmentStore.values.isEmpty {
+            InvestmentSummaryView(
+              investedAmount: investedAmount,
+              currentValue: latestInvestmentValue,
+              store: investmentStore
+            )
+            .padding(.horizontal)
+            .padding(.top)
+          }
+
+          // Chart + valuations: side by side on macOS, stacked on iOS
+          #if os(macOS)
+            HStack(alignment: .top, spacing: 0) {
+              VStack(spacing: 16) {
+                timePeriodPicker
+                InvestmentChartView(
+                  dataPoints: investmentStore.chartDataPoints,
+                  instrument: account.instrument)
+              }
+              .padding()
+
+              Divider()
+
+              valuationsList
+                .frame(width: 240)
+            }
+          #else
+            VStack(spacing: 0) {
+              VStack(spacing: 16) {
+                timePeriodPicker
+                InvestmentChartView(
+                  dataPoints: investmentStore.chartDataPoints,
+                  instrument: account.instrument)
+              }
+              .padding()
+
+              Divider()
+
+              valuationsList
+                .frame(maxHeight: 300)
+            }
+          #endif
+
+          Divider()
+
+          // Transaction list fills remaining space
+          TransactionListView(
+            title: "",
+            filter: TransactionFilter(accountId: account.id),
+            accounts: accounts,
+            categories: categories,
+            earmarks: earmarks,
+            transactionStore: transactionStore,
+            selectedTransaction: $selectedTransaction
           )
-          .padding(.horizontal)
-          .padding(.top)
         }
-
-        // Chart + valuations: side by side on macOS, stacked on iOS
-        #if os(macOS)
-          HStack(alignment: .top, spacing: 0) {
-            VStack(spacing: 16) {
-              timePeriodPicker
-              InvestmentChartView(
-                dataPoints: investmentStore.chartDataPoints,
-                instrument: account.instrument)
-            }
-            .padding()
-
-            Divider()
-
-            valuationsList
-              .frame(width: 240)
-          }
-        #else
-          VStack(spacing: 0) {
-            VStack(spacing: 16) {
-              timePeriodPicker
-              InvestmentChartView(
-                dataPoints: investmentStore.chartDataPoints,
-                instrument: account.instrument)
-            }
-            .padding()
-
-            Divider()
-
-            valuationsList
-              .frame(maxHeight: 300)
-          }
-        #endif
       } else {
-        if isLoadingPositions && positionsInput.positions.isEmpty {
-          ProgressView()
-            .frame(maxWidth: .infinity)
-            .padding()
-        } else {
-          PositionsView(input: positionsInput, range: $positionsRange)
+        PositionsTransactionsSplit(defaultTab: .positions) {
+          if isLoadingPositions && positionsInput.positions.isEmpty {
+            ProgressView()
+              .frame(maxWidth: .infinity)
+              .padding()
+          } else {
+            PositionsView(input: positionsInput, range: $positionsRange)
+          }
+        } transactions: {
+          TransactionListView(
+            title: "",
+            filter: TransactionFilter(accountId: account.id),
+            accounts: accounts,
+            categories: categories,
+            earmarks: earmarks,
+            transactionStore: transactionStore,
+            selectedTransaction: $selectedTransaction
+          )
         }
       }
-
-      Divider()
-
-      // Transaction list fills remaining space
-      TransactionListView(
-        title: "",
-        filter: TransactionFilter(accountId: account.id),
-        accounts: accounts,
-        categories: categories,
-        earmarks: earmarks,
-        transactionStore: transactionStore,
-        selectedTransaction: $selectedTransaction
-      )
     }
     .transactionInspector(
       selectedTransaction: $selectedTransaction,
