@@ -265,160 +265,164 @@ struct TransactionListView: View {
         PositionsView(input: positionsInput, range: $positionsRange)
         Divider()
       }
-      List(selection: selectedTransactionBinding) {
-        ForEach(filteredTransactions) { entry in
-          TransactionRowView(
-            transaction: entry.transaction, accounts: accounts,
-            categories: categories, earmarks: earmarks, displayAmount: entry.displayAmount,
-            balance: entry.balance, hideEarmark: filter.earmarkId != nil,
-            viewingAccountId: filter.accountId
-          )
-          .tag(entry.transaction)
-          .accessibilityIdentifier(
-            UITestIdentifiers.TransactionList.transaction(entry.transaction.id)
-          )
-          .contentShape(Rectangle())
-          .contextMenu {
-            Button("Edit Transaction\u{2026}", systemImage: "pencil") {
-              selectedTransaction = entry.transaction
-            }
-            // Only offer "Create rule from this…" for CSV-imported rows —
-            // ImportOrigin is how we extract distinguishing tokens, and
-            // manually-entered transactions don't have one.
-            if entry.transaction.importOrigin != nil {
-              Button("Create rule from this\u{2026}", systemImage: "plus.rectangle.on.folder") {
-                createRuleFromTransaction = entry.transaction
-              }
-            }
-            Divider()
-            Button("Delete Transaction\u{2026}", systemImage: "trash", role: .destructive) {
-              transactionPendingDelete = entry.transaction.id
-            }
-          }
-          .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-              transactionPendingDelete = entry.transaction.id
-            } label: {
-              Label("Delete Transaction", systemImage: "trash")
-            }
-          }
-          .task {
-            if entry.id == transactionStore.transactions.last?.id {
-              await transactionStore.loadMore()
-            }
-          }
-        }
+      transactionsList
+    }
+  }
 
-        if transactionStore.isLoading {
-          HStack {
-            Spacer()
-            if let total = transactionStore.totalCount, total > 0 {
-              VStack(spacing: 4) {
-                ProgressView(value: Double(transactionStore.loadedCount), total: Double(total))
-                  .frame(maxWidth: 200)
-                Text("Loading \(transactionStore.loadedCount) of \(total)")
-                  .font(.caption)
-                  .foregroundStyle(.secondary)
-                  .monospacedDigit()
-              }
-            } else {
-              ProgressView()
-            }
-            Spacer()
-          }
-        }
-      }
-      #if os(macOS)
-        .listStyle(.inset)
-      #else
-        .listStyle(.plain)
-      #endif
-      .profileNavigationTitle(displayTitle)
-      .toolbar {
-        ToolbarItem(placement: .automatic) {
-          Button {
-            showFilterSheet = true
-          } label: {
-            Label(
-              "Filter",
-              systemImage: activeFilter != baseFilter
-                ? "line.3.horizontal.decrease.circle.fill"
-                : "line.3.horizontal.decrease.circle")
-          }
-        }
-
-        ToolbarItem(placement: .automatic) {
-          Button {
-            Task {
-              await transactionStore.load(
-                filter: filter)
-            }
-          } label: {
-            Label("Refresh", systemImage: "arrow.clockwise")
-          }
-        }
-
-        ToolbarItem(placement: .primaryAction) {
-          Button {
-            createNewTransaction()
-          } label: {
-            Label("Add Transaction", systemImage: "plus")
-          }
-        }
-      }
-      .sheet(isPresented: $showFilterSheet) {
-        TransactionFilterView(
-          filter: activeFilter,
-          accounts: accounts,
-          categories: categories,
-          earmarks: earmarks,
-          onApply: { newFilter in
-            activeFilter = newFilter
-            showFilterSheet = false
-          }
+  private var transactionsList: some View {
+    List(selection: selectedTransactionBinding) {
+      ForEach(filteredTransactions) { entry in
+        TransactionRowView(
+          transaction: entry.transaction, accounts: accounts,
+          categories: categories, earmarks: earmarks, displayAmount: entry.displayAmount,
+          balance: entry.balance, hideEarmark: filter.earmarkId != nil,
+          viewingAccountId: filter.accountId
         )
+        .tag(entry.transaction)
+        .accessibilityIdentifier(
+          UITestIdentifiers.TransactionList.transaction(entry.transaction.id)
+        )
+        .contentShape(Rectangle())
+        .contextMenu {
+          Button("Edit Transaction\u{2026}", systemImage: "pencil") {
+            selectedTransaction = entry.transaction
+          }
+          // Only offer "Create rule from this…" for CSV-imported rows —
+          // ImportOrigin is how we extract distinguishing tokens, and
+          // manually-entered transactions don't have one.
+          if entry.transaction.importOrigin != nil {
+            Button("Create rule from this\u{2026}", systemImage: "plus.rectangle.on.folder") {
+              createRuleFromTransaction = entry.transaction
+            }
+          }
+          Divider()
+          Button("Delete Transaction\u{2026}", systemImage: "trash", role: .destructive) {
+            transactionPendingDelete = entry.transaction.id
+          }
+        }
+        .swipeActions(edge: .trailing) {
+          Button(role: .destructive) {
+            transactionPendingDelete = entry.transaction.id
+          } label: {
+            Label("Delete Transaction", systemImage: "trash")
+          }
+        }
+        .task {
+          if entry.id == transactionStore.transactions.last?.id {
+            await transactionStore.loadMore()
+          }
+        }
       }
-      .task(id: baseFilter) {
-        // Reset filter and selection when switching accounts/contexts
-        activeFilter = baseFilter
-        selectedTransaction = nil
+
+      if transactionStore.isLoading {
+        HStack {
+          Spacer()
+          if let total = transactionStore.totalCount, total > 0 {
+            VStack(spacing: 4) {
+              ProgressView(value: Double(transactionStore.loadedCount), total: Double(total))
+                .frame(maxWidth: 200)
+              Text("Loading \(transactionStore.loadedCount) of \(total)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            }
+          } else {
+            ProgressView()
+          }
+          Spacer()
+        }
+      }
+    }
+    #if os(macOS)
+      .listStyle(.inset)
+    #else
+      .listStyle(.plain)
+    #endif
+    .profileNavigationTitle(displayTitle)
+    .toolbar {
+      ToolbarItem(placement: .automatic) {
+        Button {
+          showFilterSheet = true
+        } label: {
+          Label(
+            "Filter",
+            systemImage: activeFilter != baseFilter
+              ? "line.3.horizontal.decrease.circle.fill"
+              : "line.3.horizontal.decrease.circle")
+        }
+      }
+
+      ToolbarItem(placement: .automatic) {
+        Button {
+          Task {
+            await transactionStore.load(
+              filter: filter)
+          }
+        } label: {
+          Label("Refresh", systemImage: "arrow.clockwise")
+        }
+      }
+
+      ToolbarItem(placement: .primaryAction) {
+        Button {
+          createNewTransaction()
+        } label: {
+          Label("Add Transaction", systemImage: "plus")
+        }
+      }
+    }
+    .sheet(isPresented: $showFilterSheet) {
+      TransactionFilterView(
+        filter: activeFilter,
+        accounts: accounts,
+        categories: categories,
+        earmarks: earmarks,
+        onApply: { newFilter in
+          activeFilter = newFilter
+          showFilterSheet = false
+        }
+      )
+    }
+    .task(id: baseFilter) {
+      // Reset filter and selection when switching accounts/contexts
+      activeFilter = baseFilter
+      selectedTransaction = nil
+      await transactionStore.load(
+        filter: baseFilter)
+    }
+    .task(id: activeFilter) {
+      // Reload when user applies a filter
+      if activeFilter != baseFilter {
         await transactionStore.load(
-          filter: baseFilter)
+          filter: activeFilter)
       }
-      .task(id: activeFilter) {
-        // Reload when user applies a filter
-        if activeFilter != baseFilter {
-          await transactionStore.load(
-            filter: activeFilter)
-        }
+    }
+    .task(id: positions) {
+      guard let conversionService, !positions.isEmpty else {
+        positionsInput = nil
+        return
       }
-      .task(id: positions) {
-        guard let conversionService, !positions.isEmpty else {
-          positionsInput = nil
-          return
-        }
-        let valuator = PositionsValuator(conversionService: conversionService)
-        let rows = await valuator.valuate(
-          positions: positions,
-          hostCurrency: positionsHostCurrency,
-          costBasis: [:],
-          on: Date()
-        )
-        positionsInput = PositionsViewInput(
-          title: positionsTitle,
-          hostCurrency: positionsHostCurrency,
-          positions: rows,
-          historicalValue: nil
-        )
-      }
-      .refreshable {
-        await transactionStore.load(
-          filter: filter)
-      }
-      .searchable(text: $searchText, prompt: "Search payee")
-      .overlay {
-        emptyStateOverlay
-      }
+      let valuator = PositionsValuator(conversionService: conversionService)
+      let rows = await valuator.valuate(
+        positions: positions,
+        hostCurrency: positionsHostCurrency,
+        costBasis: [:],
+        on: Date()
+      )
+      positionsInput = PositionsViewInput(
+        title: positionsTitle,
+        hostCurrency: positionsHostCurrency,
+        positions: rows,
+        historicalValue: nil
+      )
+    }
+    .refreshable {
+      await transactionStore.load(
+        filter: filter)
+    }
+    .searchable(text: $searchText, prompt: "Search payee")
+    .overlay {
+      emptyStateOverlay
     }
   }
 
