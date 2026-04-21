@@ -57,6 +57,14 @@ final class MoolahApp {
     application.descendants(matching: .any).matching(identifier: identifier).firstMatch
   }
 
+  /// Keyboard shortcut entrypoint for drivers. Drivers must route keyboard
+  /// events through this method rather than reaching into `application`
+  /// directly — the single seam keeps `MoolahApp` as the only surface the
+  /// driver layer talks to (mirrors `element(for:)`).
+  func pressKeyboardShortcut(_ key: String, modifiers: XCUIElement.KeyModifierFlags = []) {
+    application.typeKey(key, modifierFlags: modifiers)
+  }
+
   // MARK: - Helpers used by drivers and `MoolahUITestCase`
 
   /// Bounded wait for an element with the given identifier to exist. Used

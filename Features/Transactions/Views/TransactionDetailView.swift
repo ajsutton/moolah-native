@@ -246,10 +246,11 @@ struct TransactionDetailView: View {
       #endif
       #if os(macOS)
         // `defaultFocus` alone does not pull first-responder into the inspector
-        // when focus currently sits outside its region (e.g., the list's
-        // `.searchable` toolbar field). `.task(id:)` runs after the view is in
-        // the window hierarchy and imperatively claims focus on the expected
-        // field, re-firing whenever the selected transaction changes.
+        // when focus currently sits outside its region; `.task(id:)` runs
+        // after the view is in the window hierarchy and imperatively claims
+        // focus on the expected field. The list view cooperates by blurring
+        // the `.searchable` toolbar field when the inspector opens, so the
+        // responder chain's fallback doesn't steal our assignment.
         .defaultFocus($focusedField, isSimpleEarmarkOnly ? .amount : .payee)
         .task(id: transaction.id) {
           focusedField = isSimpleEarmarkOnly ? .amount : .payee

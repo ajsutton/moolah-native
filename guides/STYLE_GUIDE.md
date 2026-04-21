@@ -854,6 +854,9 @@ TextField("Notes", text: $notes, axis: .vertical)
   Form { ... }
       .defaultFocus($focusedField, .payee)
   ```
+- **Caveat — `defaultFocus` does not pull focus in from outside its region.** It picks the default target *within* a focus region once focus enters that region. If the form is presented alongside a scene-level focus claimant (a `.searchable` toolbar field is the usual culprit) the search field holds first-responder and `defaultFocus` silently does nothing. Two mitigations, applied at the surrounding view rather than the form:
+  1. Blur the claimant explicitly when the form presents — `.onChange(of: selected) { if $1 != nil { searchFieldFocused = false } }` on the list.
+  2. Back `defaultFocus` with an imperative `.task(id:)` on the form that sets `focusedField = .target` once the view is in the window hierarchy.
 - Advance focus on submit — when Return is pressed in a text field, move to the next logical field:
   ```swift
   TextField("Payee", text: $payee)

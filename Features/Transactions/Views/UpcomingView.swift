@@ -197,6 +197,10 @@ struct UpcomingView: View {
     let instrument = accounts.ordered.first?.instrument ?? .AUD
     let fallbackAccountId = accounts.ordered.first?.id
 
+    // Build the placeholder with its own UUID and persist that exact
+    // transaction — CloudKit's repository echoes the input, so
+    // `selectedTransaction.id` stays stable through the create and the
+    // inspector doesn't recreate its detail view (preserves focus state).
     let placeholder: Transaction? = fallbackAccountId.map { id in
       Transaction(
         date: Date(),
@@ -207,17 +211,9 @@ struct UpcomingView: View {
       )
     }
     selectedTransaction = placeholder
-
+    guard let placeholder else { return }
     Task {
-      if let created = await transactionStore.createDefaultScheduled(
-        accountId: nil,
-        fallbackAccountId: fallbackAccountId,
-        instrument: instrument
-      ) {
-        if selectedTransaction?.id == placeholder?.id {
-          selectedTransaction = created
-        }
-      }
+      _ = await transactionStore.create(placeholder)
     }
   }
 

@@ -38,6 +38,17 @@ final class SyncCoordinator: Sendable {
     return .unknown
   }
 
+  /// Result of preparing a `CKSyncEngine` off the main actor — returned by
+  /// `prepareEngine(stateFileURL:delegate:)` and consumed by `completeStart`.
+  /// `@unchecked Sendable` because `CKSyncEngine` isn't declared `Sendable` by
+  /// CloudKit, but we only transfer ownership one-way (prepare-thread → main
+  /// actor) with no concurrent readers, so the Task.value happens-before edge
+  /// makes it safe. Keep this struct to value types only.
+  private struct PreparedEngine: @unchecked Sendable {
+    let engine: CKSyncEngine
+    let isFirstLaunch: Bool
+  }
+
   // MARK: - Batch Kind
 
   /// Zone-kind bucket for a single `RecordZoneChangeBatch`.
@@ -211,6 +222,10 @@ final class SyncCoordinator: Sendable {
   /// The zone setup task (creates profile-index zone on start).
   private var zoneSetupTask: Task<Void, Never>?
 
+  /// Task that runs `CKSyncEngine.init` off the main actor. Held so it can be
+  /// awaited/cancelled from `stop()`.
+  private var startTask: Task<Void, Never>?
+
   /// Task for coalescing re-fetch requests after save failures.
   private var refetchTask: Task<Void, Never>?
 
@@ -281,25 +296,71 @@ final class SyncCoordinator: Sendable {
   // MARK: - Lifecycle
 
   func start() {
-    guard !isRunning else { return }
+    guard !isRunning, startTask == nil else { return }
 
     let signpostID = OSSignpostID(log: Signposts.sync)
     os_signpost(.begin, log: Signposts.sync, name: "coordinatorStart", signpostID: signpostID)
+
+    // `CKSyncEngine.init(configuration:)` synchronously unarchives the
+    // `stateSerialization` blob via `NSKeyedUnarchiver`, which blocks the
+    // calling thread for many seconds when the pending-record-zone-changes
+    // queue has grown large. Run it off the main actor so app launch stays
+    // snappy. The end-of-startup signpost + "Started" log fire in
+    // `completeStart` once the engine object is back on the main actor.
+    let stateURL = self.stateFileURL
+    let delegate: any CKSyncEngineDelegate & Sendable = self
+    startTask = Task { [weak self] in
+      let prepared = await Self.prepareEngine(stateFileURL: stateURL, delegate: delegate)
+      // `stop()` cancels `startTask` — if that races with prepareEngine, drop
+      // the prepared engine. `delegate` strongly captures `self`, so the
+      // `guard let self` alone would still succeed after a stop.
+      guard !Task.isCancelled, let self else { return }
+      self.completeStart(prepared: prepared, signpostID: signpostID)
+    }
+  }
+
+  /// Off-actor: reads sync state from disk and constructs the `CKSyncEngine`.
+  ///
+  /// We deliberately use `Task.detached` rather than relying on the
+  /// `nonisolated async` hop. Per CONCURRENCY_GUIDE §8 detached tasks are
+  /// normally an anti-pattern, but here the heavy synchronous work
+  /// (`NSKeyedUnarchiver` inside `CKSyncEngine.init`) must not run on the
+  /// main thread. Empirically (see `.agent-tmp` startup samples), calling
+  /// this as `nonisolated async` from a `@MainActor`-originating `Task {}`
+  /// still inherits the main thread for the body; `Task.detached` is the
+  /// only reliable way to force execution onto the cooperative pool.
+  private nonisolated static func prepareEngine(
+    stateFileURL: URL,
+    delegate: any CKSyncEngineDelegate & Sendable
+  ) async -> PreparedEngine {
+    await Task.detached(priority: .userInitiated) {
+      let data = try? Data(contentsOf: stateFileURL)
+      let savedState = data.flatMap {
+        try? JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0)
+      }
+      let configuration = CKSyncEngine.Configuration(
+        database: CKContainer.default().privateCloudDatabase,
+        stateSerialization: savedState,
+        delegate: delegate
+      )
+      return PreparedEngine(
+        engine: CKSyncEngine(configuration),
+        isFirstLaunch: savedState == nil)
+    }.value
+  }
+
+  /// Back-on-MainActor half of `start()`: installs the engine and kicks off
+  /// zone setup. Split from `start()` so the heavy init can run off-actor.
+  private func completeStart(
+    prepared: PreparedEngine, signpostID: OSSignpostID
+  ) {
     defer {
       os_signpost(.end, log: Signposts.sync, name: "coordinatorStart", signpostID: signpostID)
+      startTask = nil
     }
 
-    // Migration: delete old per-engine state files
-    containerManager.deleteOldSyncStateFiles()
-
-    let savedState = loadStateSerialization()
-    isFirstLaunch = savedState == nil
-    let configuration = CKSyncEngine.Configuration(
-      database: CKContainer.default().privateCloudDatabase,
-      stateSerialization: savedState,
-      delegate: self
-    )
-    syncEngine = CKSyncEngine(configuration)
+    syncEngine = prepared.engine
+    isFirstLaunch = prepared.isFirstLaunch
     isRunning = true
     logger.info("Started unified sync coordinator")
 
@@ -337,6 +398,8 @@ final class SyncCoordinator: Sendable {
   }
 
   func stop() {
+    startTask?.cancel()
+    startTask = nil
     zoneSetupTask?.cancel()
     zoneSetupTask = nil
     refetchTask?.cancel()
@@ -361,6 +424,12 @@ final class SyncCoordinator: Sendable {
     syncEngine.map { !$0.state.pendingRecordZoneChanges.isEmpty } ?? false
   }
 
+  // During the short window between `start()` returning and `completeStart`
+  // installing the engine, these queue calls silently no-op. That's safe
+  // because no user-driven edits can reach `queueSave`/`queueDeletion` before
+  // the UI is ready, and any already-persisted records are re-queued by
+  // `queueAllExistingRecordsForAllZones` / `queueUnsyncedRecordsForAllProfiles`
+  // inside `completeStart`.
   func queueSave(id: UUID, zoneID: CKRecordZone.ID) {
     let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
     syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
@@ -710,11 +779,7 @@ final class SyncCoordinator: Sendable {
   }
 
   // MARK: - State Persistence
-
-  private func loadStateSerialization() -> CKSyncEngine.State.Serialization? {
-    guard let data = try? Data(contentsOf: stateFileURL) else { return nil }
-    return try? JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: data)
-  }
+  // (Load of the state serialization happens off-actor in `prepareEngine`.)
 
   private func saveStateSerialization(_ serialization: CKSyncEngine.State.Serialization) {
     do {

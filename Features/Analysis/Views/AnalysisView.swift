@@ -92,6 +92,10 @@ struct AnalysisView: View {
     let instrument = accounts.ordered.first?.instrument ?? .AUD
     let fallbackAccountId = accounts.ordered.first?.id
 
+    // Persist the placeholder directly so the returned transaction carries
+    // the same UUID. The inspector's `.id(selected.id)` stays stable and
+    // the detail view's focus state survives the create (see
+    // `plans/2026-04-21-transaction-detail-focus-design.md`).
     let placeholder: Transaction? = fallbackAccountId.map { id in
       Transaction(
         date: Date(),
@@ -102,17 +106,9 @@ struct AnalysisView: View {
       )
     }
     selectedUpcomingTransaction = placeholder
-
+    guard let placeholder else { return }
     Task {
-      if let created = await transactionStore.createDefaultScheduled(
-        accountId: nil,
-        fallbackAccountId: fallbackAccountId,
-        instrument: instrument
-      ) {
-        if selectedUpcomingTransaction?.id == placeholder?.id {
-          selectedUpcomingTransaction = created
-        }
-      }
+      _ = await transactionStore.create(placeholder)
     }
   }
 
