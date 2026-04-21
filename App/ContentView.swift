@@ -94,7 +94,8 @@ struct ContentView: View {
               positions: accountStore.positions(for: account.id),
               positionsHostCurrency: account.instrument,
               positionsTitle: account.name,
-              conversionService: session.backend.conversionService)
+              conversionService: session.backend.conversionService,
+              supportsComplexTransactions: session.profile.supportsComplexTransactions)
           }
         }
       case .earmark(let id):
@@ -116,7 +117,8 @@ struct ContentView: View {
           accounts: accountStore.accounts,
           categories: categoryStore.categories,
           earmarks: earmarkStore.earmarks,
-          transactionStore: transactionStore)
+          transactionStore: transactionStore,
+          supportsComplexTransactions: session.profile.supportsComplexTransactions)
       case .upcomingTransactions:
         UpcomingView(
           accounts: accountStore.accounts,
