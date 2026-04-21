@@ -99,6 +99,14 @@ struct AutocompleteSuggestionDropdown<Item: Identifiable>: View {
     }
     .padding(.vertical, 4)
     .background {
+      // Opaque chrome must not steal hit-tests from whatever the user clicks
+      // on next. Without `.allowsHitTesting(false)`, clicking a field sitting
+      // underneath an open dropdown (e.g. the leg-1 category field while
+      // leg-0's dropdown is open in a multi-leg transaction) is intercepted
+      // by the rounded background, producing XCUITest "Not hittable" flakes
+      // and — for real users — a dead click that neither dismisses the
+      // dropdown nor focuses the intended field. The row buttons draw their
+      // own content and remain hittable.
       RoundedRectangle(cornerRadius: 8)
         #if os(macOS)
           .fill(Color(nsColor: .controlBackgroundColor))
@@ -106,10 +114,12 @@ struct AutocompleteSuggestionDropdown<Item: Identifiable>: View {
           .fill(Color(uiColor: .secondarySystemGroupedBackground))
         #endif
         .shadow(color: Color.primary.opacity(0.15), radius: 10, y: 4)
+        .allowsHitTesting(false)
     }
     .overlay(
       RoundedRectangle(cornerRadius: 8)
         .stroke(.separator, lineWidth: 0.5)
+        .allowsHitTesting(false)
     )
     .compositingGroup()
     // `children: .contain` keeps the container addressable (with its
