@@ -5,19 +5,26 @@ import SwiftUI
 /// position so the user can resize and the size sticks. On iOS, stacking
 /// the two panes leaves neither with enough room, so a segmented picker
 /// swaps between them.
+///
+/// The macOS divider position is shared across every call site (all users of
+/// this container autosave under the same `NSSplitView` key). That matches
+/// the Finder-sidebar convention: the user adjusts once and their preference
+/// applies everywhere this component renders.
 struct PositionsTransactionsSplit<Positions: View, Transactions: View>: View {
-  enum DefaultTab { case positions, transactions }
+  /// The pane the iOS segmented picker selects initially. On macOS both
+  /// panes are always visible in the split, so this only affects iOS.
+  enum Tab { case positions, transactions }
 
-  let defaultTab: DefaultTab
+  let defaultTab: Tab
   @ViewBuilder let positions: () -> Positions
   @ViewBuilder let transactions: () -> Transactions
 
   #if !os(macOS)
-    @State private var selectedTab: DefaultTab
+    @State private var selectedTab: Tab
   #endif
 
   init(
-    defaultTab: DefaultTab,
+    defaultTab: Tab,
     @ViewBuilder positions: @escaping () -> Positions,
     @ViewBuilder transactions: @escaping () -> Transactions
   ) {
@@ -41,9 +48,9 @@ struct PositionsTransactionsSplit<Positions: View, Transactions: View>: View {
       }
     #else
       VStack(spacing: 0) {
-        Picker("View", selection: $selectedTab) {
-          Text("Positions").tag(DefaultTab.positions)
-          Text("Transactions").tag(DefaultTab.transactions)
+        Picker("Show", selection: $selectedTab) {
+          Text("Positions").tag(Tab.positions)
+          Text("Transactions").tag(Tab.transactions)
         }
         .pickerStyle(.segmented)
         .padding(.horizontal)
@@ -60,7 +67,7 @@ struct PositionsTransactionsSplit<Positions: View, Transactions: View>: View {
   }
 }
 
-#Preview("Default: transactions") {
+#Preview("Transactions-first") {
   PositionsTransactionsSplit(defaultTab: .transactions) {
     Color.blue.opacity(0.2).overlay(Text("Positions pane"))
   } transactions: {
@@ -69,7 +76,7 @@ struct PositionsTransactionsSplit<Positions: View, Transactions: View>: View {
   .frame(width: 480, height: 480)
 }
 
-#Preview("Default: positions") {
+#Preview("Positions-first") {
   PositionsTransactionsSplit(defaultTab: .positions) {
     Color.blue.opacity(0.2).overlay(Text("Positions pane"))
   } transactions: {

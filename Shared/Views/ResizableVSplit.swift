@@ -8,6 +8,12 @@ import SwiftUI
   /// `UserDefaults`. SwiftUI's `VSplitView` has no binding for the
   /// divider position and doesn't persist it — hence the AppKit wrap.
   ///
+  /// Keyboard accessibility: wrapping `NSSplitView` inside
+  /// `NSViewRepresentable` means the AppKit keyboard shortcut for
+  /// focusing a split-view divider (Option+F6) typically won't reach
+  /// this view through the SwiftUI responder chain. Users rely on the
+  /// pointer (or the autosaved size) to adjust the split.
+  ///
   /// - Parameters:
   ///   - autosaveName: Key under which `NSSplitView` persists the
   ///     divider position. One shared name across all call sites means
@@ -75,7 +81,7 @@ import SwiftUI
 
       if !hasSavedFrames {
         let height = initialTopHeight
-        DispatchQueue.main.async { [weak split] in
+        Task { @MainActor [weak split] in
           split?.setPosition(height, ofDividerAt: 0)
         }
       }
