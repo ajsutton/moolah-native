@@ -259,12 +259,15 @@ struct TransactionListView: View {
     }
   }
 
+  @ViewBuilder
   private var listView: some View {
-    VStack(spacing: 0) {
-      if let positionsInput, !positionsInput.positions.isEmpty {
+    if let positionsInput, !positionsInput.positions.isEmpty {
+      PositionsTransactionsSplit(defaultTab: .transactions) {
         PositionsView(input: positionsInput, range: $positionsRange)
-        Divider()
+      } transactions: {
+        transactionsList
       }
+    } else {
       transactionsList
     }
   }
