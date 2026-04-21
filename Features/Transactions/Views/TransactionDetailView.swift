@@ -250,9 +250,23 @@ struct TransactionDetailView: View {
         // `.searchable` toolbar field). `.task(id:)` runs after the view is in
         // the window hierarchy and imperatively claims focus on the expected
         // field, re-firing whenever the selected transaction changes.
+        //
+        // Assign once immediately (fast path — clicking a list row) and
+        // re-assert briefly afterwards. Some flows (⌘N menu events and
+        // the placeholder → persisted-transaction swap during creation)
+        // have AppKit restore first-responder to the window's default
+        // responder after our initial assignment; the re-assertion wins
+        // that race. We only re-assert when focus is nil so we don't
+        // steal focus from a Tab'd-to field.
         .defaultFocus($focusedField, isSimpleEarmarkOnly ? .amount : .payee)
         .task(id: transaction.id) {
-          focusedField = isSimpleEarmarkOnly ? .amount : .payee
+          let target: Field = isSimpleEarmarkOnly ? .amount : .payee
+          focusedField = target
+          for delayMs: UInt64 in [50, 150] {
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+            if Task.isCancelled { return }
+            if focusedField == nil { focusedField = target }
+          }
         }
       #endif
       .onChange(of: draft) { _, _ in debouncedSave() }

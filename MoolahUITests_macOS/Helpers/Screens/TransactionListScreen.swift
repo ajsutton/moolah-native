@@ -27,7 +27,7 @@ struct TransactionListScreen {
   /// detail surface for that transaction is visible (i.e. the payee field
   /// has been added to the accessibility tree).
   func openTransaction(_ entry: TransactionListEntry) {
-    Trace.record(detail: "entry=\(entry)")
+    Trace.record(#function, detail: "entry=\(entry)")
     let identifier = UITestIdentifiers.TransactionList.transaction(entry.id)
     let row = app.element(for: identifier)
     if !row.waitForExistence(timeout: 3) {
@@ -40,6 +40,21 @@ struct TransactionListScreen {
     if !payee.waitForExistence(timeout: 3) {
       Trace.recordFailure("detail.payee did not appear after opening \(entry)")
       XCTFail("Transaction detail did not surface payee field after opening \(entry)")
+    }
+  }
+
+  /// Triggers the "New Transaction" menu command (⌘N) and returns once
+  /// the detail surface for the new transaction is visible (i.e. the
+  /// payee field exists in the accessibility tree). The caller is
+  /// responsible for focus assertions — this method does not assume the
+  /// field has been auto-focused.
+  func createTransaction() {
+    Trace.record(#function)
+    app.pressKeyboardShortcut("n", modifiers: .command)
+    let payee = app.element(for: UITestIdentifiers.Detail.payee)
+    if !payee.waitForExistence(timeout: 3) {
+      Trace.recordFailure("detail.payee did not appear after ⌘N")
+      XCTFail("Transaction detail did not surface payee field after ⌘N")
     }
   }
 }
