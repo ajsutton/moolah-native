@@ -246,27 +246,14 @@ struct TransactionDetailView: View {
       #endif
       #if os(macOS)
         // `defaultFocus` alone does not pull first-responder into the inspector
-        // when focus currently sits outside its region (e.g., the list's
-        // `.searchable` toolbar field). `.task(id:)` runs after the view is in
-        // the window hierarchy and imperatively claims focus on the expected
-        // field, re-firing whenever the selected transaction changes.
-        //
-        // Assign once immediately (fast path — clicking a list row) and
-        // re-assert briefly afterwards. Some flows (⌘N menu events and
-        // the placeholder → persisted-transaction swap during creation)
-        // have AppKit restore first-responder to the window's default
-        // responder after our initial assignment; the re-assertion wins
-        // that race. We only re-assert when focus is nil so we don't
-        // steal focus from a Tab'd-to field.
+        // when focus currently sits outside its region; `.task(id:)` runs
+        // after the view is in the window hierarchy and imperatively claims
+        // focus on the expected field. The list view cooperates by blurring
+        // the `.searchable` toolbar field when the inspector opens, so the
+        // responder chain's fallback doesn't steal our assignment.
         .defaultFocus($focusedField, isSimpleEarmarkOnly ? .amount : .payee)
         .task(id: transaction.id) {
-          let target: Field = isSimpleEarmarkOnly ? .amount : .payee
-          focusedField = target
-          for delayMs: UInt64 in [50, 150] {
-            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
-            if Task.isCancelled { return }
-            if focusedField == nil { focusedField = target }
-          }
+          focusedField = isSimpleEarmarkOnly ? .amount : .payee
         }
       #endif
       .onChange(of: draft) { _, _ in debouncedSave() }

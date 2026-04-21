@@ -126,6 +126,14 @@ struct TransactionListView: View {
       .focusedSceneValue(\.newTransactionAction, createNewTransaction)
       .focusedSceneValue(\.findInListAction) { searchFieldFocused = true }
       .searchFocused($searchFieldFocused)
+      // When the inspector opens, release our claim on the `.searchable`
+      // first responder so focus can land on the detail view's payee/amount
+      // field (set imperatively by `TransactionDetailView.task(id:)`).
+      // Without this, AppKit's responder-chain fallback — reinforced after
+      // a ⌘N menu event — would restore focus to the search field.
+      .onChange(of: selectedTransaction) { _, new in
+        if new != nil { searchFieldFocused = false }
+      }
       .focusedSceneValue(\.selectedTransaction, selectedTransactionBinding)
       .alert("Error", isPresented: $showError) {
         Button("OK", role: .cancel) {}
@@ -203,9 +211,14 @@ struct TransactionListView: View {
   private func createNewTransaction() {
     let instrument = accounts.ordered.first?.instrument ?? .AUD
 
-    // When viewing from an earmark (no account in filter), create an earmark-only transaction
+    // Build the placeholder with its own UUID and send that exact
+    // transaction through `store.create`. CloudKit's repository echoes
+    // the input transaction, so `selectedTransaction.id` stays stable
+    // across the persist — the inspector's `.id(selected.id)` does not
+    // force a view recreation and the detail view's focus state survives.
+    let placeholder: Transaction?
     if let earmarkId = filter.earmarkId, filter.accountId == nil {
-      let placeholder = Transaction(
+      placeholder = Transaction(
         date: Date(),
         payee: "",
         legs: [
@@ -214,43 +227,22 @@ struct TransactionListView: View {
             earmarkId: earmarkId)
         ]
       )
-      selectedTransaction = placeholder
-      Task {
-        if let created = await transactionStore.createDefaultEarmark(
-          earmarkId: earmarkId,
-          instrument: instrument
-        ) {
-          if selectedTransaction?.id == placeholder.id {
-            selectedTransaction = created
-          }
-        }
-      }
-      return
-    }
-
-    let acctId = filter.accountId ?? accounts.ordered.first?.id
-
-    // Create a placeholder for optimistic selection while the store creates it
-    let placeholder: Transaction? = acctId.map { id in
-      Transaction(
+    } else if let acctId = filter.accountId ?? accounts.ordered.first?.id {
+      placeholder = Transaction(
         date: Date(),
         payee: "",
-        legs: [TransactionLeg(accountId: id, instrument: instrument, quantity: 0, type: .expense)]
+        legs: [
+          TransactionLeg(accountId: acctId, instrument: instrument, quantity: 0, type: .expense)
+        ]
       )
+    } else {
+      placeholder = nil
     }
-    selectedTransaction = placeholder
 
-    // Create the transaction in the store and update selection with server-confirmed version
+    selectedTransaction = placeholder
+    guard let placeholder else { return }
     Task {
-      if let created = await transactionStore.createDefault(
-        accountId: filter.accountId,
-        fallbackAccountId: accounts.ordered.first?.id,
-        instrument: instrument
-      ) {
-        if selectedTransaction?.id == placeholder?.id {
-          selectedTransaction = created
-        }
-      }
+      _ = await transactionStore.create(placeholder)
     }
   }
 

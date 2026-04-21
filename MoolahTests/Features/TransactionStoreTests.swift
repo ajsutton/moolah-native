@@ -358,6 +358,43 @@ struct TransactionStoreTests {
     #expect(store.error == nil)
   }
 
+  /// The placeholder-pass-through pattern in `TransactionListView.createNewTransaction`
+  /// (and the upcoming-view equivalent) relies on `store.create(placeholder)`
+  /// returning a transaction with the same UUID the caller passed in. The
+  /// inspector's `.id(selected.id)` otherwise forces a view recreation on
+  /// every create, which would drop focus state. See
+  /// `plans/2026-04-21-transaction-detail-focus-design.md`.
+  @Test func testCreatePreservesInputUUID() async throws {
+    let (backend, _) = try TestBackend.create()
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
+    await store.load(filter: TransactionFilter(accountId: accountId))
+
+    let placeholderId = UUID()
+    let placeholder = Transaction(
+      id: placeholderId,
+      date: makeDate("2024-02-01"),
+      payee: "",
+      legs: [
+        TransactionLeg(
+          accountId: accountId,
+          instrument: Instrument.defaultTestInstrument,
+          quantity: 0,
+          type: .expense
+        )
+      ]
+    )
+
+    let created = await store.create(placeholder)
+
+    #expect(created?.id == placeholderId)
+    #expect(store.transactions.count == 1)
+    #expect(store.transactions[0].transaction.id == placeholderId)
+  }
+
   @Test func testUpdateModifiesTransaction() async throws {
     let tx = Transaction(
       date: makeDate("2024-01-15"),
