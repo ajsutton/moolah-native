@@ -222,7 +222,7 @@ Successfully implemented full CRUD operations for account management following s
 - AccountStore is @MainActor
 - Repositories are Sendable (actor for InMemory, final class for Remote)
 
-### ✅ STYLE_GUIDE.md Compliance
+### ✅ UI_GUIDE.md Compliance
 - Semantic colors:
   - `.red` for destructive actions (delete button)
   - `.secondary` for read-only balance
@@ -282,7 +282,7 @@ Successfully implemented full CRUD operations for account management following s
 - ✅ Contract tests pass for both InMemory and Remote backends
 - ✅ Optimistic updates in AccountStore with rollback on failure
 - ✅ Error messages shown to user for validation failures
-- ✅ All UI components follow STYLE_GUIDE.md
+- ✅ All UI components follow UI_GUIDE.md
 - ✅ VoiceOver accessibility labels for all form fields
 - ✅ Works on both macOS and iOS (platform-specific adaptations)
 
@@ -418,7 +418,7 @@ Successfully implemented full CRUD operations for account management following s
 
 ## Conclusion
 
-Step 13 is **COMPLETE** from an implementation perspective. All acceptance criteria from the must-have list have been satisfied. The implementation follows strict TDD, adheres to STYLE_GUIDE.md, maintains domain isolation, and provides comprehensive error handling.
+Step 13 is **COMPLETE** from an implementation perspective. All acceptance criteria from the must-have list have been satisfied. The implementation follows strict TDD, adheres to UI_GUIDE.md, maintains domain isolation, and provides comprehensive error handling.
 
 The code is production-ready pending:
 - Test execution verification

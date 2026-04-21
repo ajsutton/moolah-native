@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Bring Moolah's menu bar, toolbar, and context menus into compliance with `guides/STYLE_GUIDE.md` §14 (Menu Bar & Commands), addressing all 29 findings from the 2026-04-17 UI review without breaking iOS (which has no menu bar).
+**Goal:** Bring Moolah's menu bar, toolbar, and context menus into compliance with `guides/UI_GUIDE.md` §14 (Menu Bar & Commands), addressing all 29 findings from the 2026-04-17 UI review without breaking iOS (which has no menu bar).
 
 **Architecture:** Implement in 10 phases. Each phase is independently commit-able, leaves the app working on both macOS and iOS, and can be reviewed as its own unit. Focused values + selection plumbing come first so later phases can consume them. All new `CommandMenu`s and `CommandGroup`s live in macOS-only files or `#if os(macOS)` guards — the `.commands { }` block is already macOS-only in `MoolahApp.swift`. Changes that touch shared views (context-menu renames, focused-value publication) are safe on iOS: `focusedSceneValue` is a no-op without a consumer, and relabeled context menus improve clarity on both platforms.
 
@@ -39,12 +39,12 @@ Each phase closes specific findings from the 2026-04-17 review:
 
 ## Phase 0: Style Guide Refinement ✅ Complete
 
-Before touching code, clarify two points in `guides/STYLE_GUIDE.md` §14 that the current text leaves ambiguous. These are guide-only changes and committed separately.
+Before touching code, clarify two points in `guides/UI_GUIDE.md` §14 that the current text leaves ambiguous. These are guide-only changes and committed separately.
 
 ### Task 0.1: Clarify icon policy for context menus
 
 **Files:**
-- Modify: `guides/STYLE_GUIDE.md` — Section 14 "Icons in Menu Items"
+- Modify: `guides/UI_GUIDE.md` — Section 14 "Icons in Menu Items"
 
 - [x] **Step 1: Add a "Context menus vs menu bar" clarification**
 
@@ -57,14 +57,14 @@ In the "Icons in Menu Items" subsection, after the "Acceptable uses" list and be
 - [x] **Step 2: Commit**
 
 ```bash
-git add guides/STYLE_GUIDE.md
+git add guides/UI_GUIDE.md
 git commit -m "docs: clarify style guide — context menu icons are permitted"
 ```
 
 ### Task 0.2: Sanction additional domain menus (Account, Earmark)
 
 **Files:**
-- Modify: `guides/STYLE_GUIDE.md` — Section 14 "Top-Level Menu Structure"
+- Modify: `guides/UI_GUIDE.md` — Section 14 "Top-Level Menu Structure"
 
 - [x] **Step 1: Allow additional domain menus alongside Transaction**
 
@@ -87,14 +87,14 @@ Do not create a domain menu just to host a single command. And do not invent a g
 - [x] **Step 2: Commit**
 
 ```bash
-git add guides/STYLE_GUIDE.md
+git add guides/UI_GUIDE.md
 git commit -m "docs: permit Account and Earmark domain menus alongside Transaction"
 ```
 
 ### Task 0.3: Remove ambiguous single-key shortcuts from §14 Transaction outline
 
 **Files:**
-- Modify: `guides/STYLE_GUIDE.md`
+- Modify: `guides/UI_GUIDE.md`
 
 The §14 Transaction menu outline currently shows `Edit Transaction…  ↩` and `Delete Transaction ⌫`, which creates a tension with §14's Philosophy: "Menus are for ⌘-modified commands. Single-key shortcuts … do not belong in the menu bar." The Return and Delete keys fire via List row focus (list primaryAction / onDeleteCommand), not via menu-registered shortcuts.
 
@@ -158,7 +158,7 @@ CommandMenu("Transaction") {
 - [x] **Step 4: Commit**
 
 ```bash
-git add guides/STYLE_GUIDE.md
+git add guides/UI_GUIDE.md
 git commit -m "docs: remove single-key shortcut annotations from Transaction menu outline"
 ```
 
@@ -560,7 +560,7 @@ Create `Features/Transactions/Commands/TransactionCommands.swift`:
 
   /// Top-level `Transaction` menu. Operates on the focused window's selected transaction.
   ///
-  /// See `guides/STYLE_GUIDE.md` §14 "Transaction" for naming, ordering, and shortcut rationale.
+  /// See `guides/UI_GUIDE.md` §14 "Transaction" for naming, ordering, and shortcut rationale.
   /// Return and Delete keys fire via the list's native focus handling — they are *not* registered
   /// as menu shortcuts here (doing so would make them fire globally, e.g. while typing in a search
   /// field, which §14 explicitly forbids for destructive actions).
@@ -830,7 +830,7 @@ Create `Features/Navigation/Commands/GoCommands.swift`:
 
   /// Top-level `Go` menu. Navigates the focused window's sidebar to one of the primary destinations.
   ///
-  /// See `guides/STYLE_GUIDE.md` §14 "Go" — ⌘1…⌘9 map to primary sidebar destinations only.
+  /// See `guides/UI_GUIDE.md` §14 "Go" — ⌘1…⌘9 map to primary sidebar destinations only.
   struct GoCommands: Commands {
     @FocusedValue(\.sidebarSelection) private var sidebarSelection
 
@@ -1195,7 +1195,7 @@ Populate the Help menu with Moolah Help, Keyboard Shortcuts…, Release Notes, R
 import SwiftUI
 
 /// In-app reference listing every app keyboard shortcut, including unmodified list-navigation keys
-/// that don't live in menus. See `guides/STYLE_GUIDE.md` §14 Keyboard Shortcuts.
+/// that don't live in menus. See `guides/UI_GUIDE.md` §14 Keyboard Shortcuts.
 struct KeyboardShortcutsView: View {
   var body: some View {
     ScrollView {
@@ -1889,7 +1889,7 @@ Dispatch via the Agent tool (from a Claude Code session):
 ```
 Agent tool → subagent_type: ui-review
 Prompt:
-Review all macOS menu bar and command code in Moolah against guides/STYLE_GUIDE.md §14 Menu Bar & Commands. Files to review:
+Review all macOS menu bar and command code in Moolah against guides/UI_GUIDE.md §14 Menu Bar & Commands. Files to review:
 - App/MoolahApp.swift (commands block, NewTransactionCommands, NewEarmarkCommands, RefreshCommands, ShowHiddenCommands)
 - Features/About/AboutCommands.swift
 - Features/Profiles/ProfileCommands.swift

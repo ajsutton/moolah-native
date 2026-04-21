@@ -1915,7 +1915,7 @@ func earmarkToggleBehavior() async throws {
 - [ ] **Financial month grouping respects monthEnd parameter** (e.g., 25th = Jan 26 – Feb 25 is "Feb")
 - [ ] **Investment transfers appear in earmarked columns** (not regular income/expense)
 
-### 7.3 UI/UX Requirements (per STYLE_GUIDE.md)
+### 7.3 UI/UX Requirements (per UI_GUIDE.md)
 
 - [ ] **All monetary amounts use .monospacedDigit()** modifier
 - [ ] **All charts use semantic colors** (.green for income/available, .red for expense, .blue for net worth)

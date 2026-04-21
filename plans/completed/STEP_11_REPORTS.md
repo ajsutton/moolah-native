@@ -1109,7 +1109,7 @@ func negativeDateRange() async throws {
 - [ ] VoiceOver announces category names and amounts correctly
 - [ ] Keyboard navigation works (Tab, Enter)
 - [ ] Reports render correctly on both macOS and iOS
-- [ ] UI follows STYLE_GUIDE.md (semantic colors, monospaced digits, proper spacing)
+- [ ] UI follows UI_GUIDE.md (semantic colors, monospaced digits, proper spacing)
 
 ### Should Have (Nice to Have)
 - [ ] Export report as CSV or PDF (deferred to Step 14)
@@ -1208,7 +1208,7 @@ func negativeDateRange() async throws {
 ### Phase 5: UI Review & Polish (1 hour)
 
 13. **Run `ui-review` agent on `ReportsView` and `CategoryBalanceTable`**
-    - Verify STYLE_GUIDE.md compliance
+    - Verify UI_GUIDE.md compliance
     - Check accessibility (VoiceOver labels, keyboard navigation)
     - Verify platform adaptations (macOS vs iOS layout)
     - Estimated: 30 minutes

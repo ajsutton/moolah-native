@@ -153,13 +153,13 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
 
 ## UI Design & Style Guide
 
-- **Style Guide:** All UI work MUST follow `guides/STYLE_GUIDE.md`. This is not optional.
+- **Style Guide:** All UI work MUST follow `guides/UI_GUIDE.md`. This is not optional.
 - **Apple HIG Compliance:** Follow Apple Human Interface Guidelines for macOS and iOS. When in doubt, consult the official HIG documentation.
 - **macOS-First:** Optimize for desktop patterns (keyboard navigation, context menus, pointer precision), then adapt for iOS.
 - **Semantic Colors:** Use system colors (`.green`, `.red`, `.secondary`) for automatic dark mode support. Never hardcode RGB values.
 - **Monospaced Digits:** Always apply `.monospacedDigit()` to monetary amounts and dates.
 - **Accessibility:** Every UI component must be VoiceOver-accessible with proper labels and keyboard navigation (macOS).
-- **Before Shipping UI:** Run the `ui-review` agent (see Agents section) to validate compliance with `guides/STYLE_GUIDE.md` and identify accessibility issues.
+- **Before Shipping UI:** Run the `ui-review` agent (see Agents section) to validate compliance with `guides/UI_GUIDE.md` and identify accessibility issues.
 
 ## Bug Tracking
 
@@ -173,7 +173,7 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
 
 This project defines specialized review agents in `.claude/agents/`. Invoke them with `@agent-name` (e.g., `@ui-review`, `@concurrency-review`).
 
-- **`ui-review`** — Reviews SwiftUI views for `guides/STYLE_GUIDE.md` compliance, Apple HIG, and accessibility. Use after creating or modifying UI components.
+- **`ui-review`** — Reviews SwiftUI views for `guides/UI_GUIDE.md` compliance, Apple HIG, and accessibility. Use after creating or modifying UI components.
 - **`concurrency-review`** — Reviews Swift code for `guides/CONCURRENCY_GUIDE.md` compliance: actor isolation, task hygiene, Sendable, async patterns. Use after modifying stores, repositories, or backend code.
 - **`sync-review`** — Reviews CKSyncEngine sync code for `guides/SYNC_GUIDE.md` compliance: error handling, change tracking, conflict resolution, account changes, zone management. Use after modifying sync engines, change trackers, or record mappings.
 - **`instrument-conversion-review`** — Reviews Swift code for `guides/INSTRUMENT_CONVERSION_GUIDE.md` compliance: instrument-safe `InstrumentAmount` arithmetic (mismatches trap) and conversion-date correctness (historic = snapshot date, current/future = `Date()`). Use after modifying aggregation, reporting, forecast, or sidebar totals.

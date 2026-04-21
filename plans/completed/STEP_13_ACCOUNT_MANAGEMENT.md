@@ -1188,7 +1188,7 @@ struct AccountRepositoryContractTests {
 - [ ] Contract tests pass for both InMemory and Remote backends
 - [ ] Optimistic updates in AccountStore with rollback on failure
 - [ ] Error messages shown to user for validation failures
-- [ ] All UI components follow STYLE_GUIDE.md
+- [ ] All UI components follow UI_GUIDE.md
 - [ ] VoiceOver accessibility labels for all form fields
 - [ ] Works on both macOS and iOS
 

@@ -1744,7 +1744,7 @@ import SwiftUI
 /// (`Table`) layout (where columns position the cells) and the narrow
 /// (`List`) layout (where the row composes its own two-line layout).
 ///
-/// Failed valuations render as `—` per `guides/STYLE_GUIDE.md`. Signs are
+/// Failed valuations render as `—` per `guides/UI_GUIDE.md`. Signs are
 /// preserved across value, cost, and gain — the row never `abs()`s an amount.
 struct PositionRow: View {
   let row: ValuedPosition

@@ -1102,7 +1102,7 @@ Investment accounts can show value history and allow manual value entries.
 ---
 
 ### 10. Accessibility Audit
-**Gap:** STYLE_GUIDE.md requires VoiceOver labels, keyboard navigation, and color contrast checks. Not clear if all views meet these requirements.
+**Gap:** UI_GUIDE.md requires VoiceOver labels, keyboard navigation, and color contrast checks. Not clear if all views meet these requirements.
 
 **Impact:** Critical (accessibility) — App must be usable by all users.
 

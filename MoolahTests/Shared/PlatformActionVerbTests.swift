@@ -6,7 +6,7 @@ import Testing
 /// Tests for the platform-action-verb helper used in UI copy.
 ///
 /// macOS users click, iOS users tap — empty-state strings must use the
-/// correct verb for the platform per `guides/STYLE_GUIDE.md` §1 (macOS-First).
+/// correct verb for the platform per `guides/UI_GUIDE.md` §1 (macOS-First).
 @Suite("Platform Action Verb Tests")
 struct PlatformActionVerbTests {
 
