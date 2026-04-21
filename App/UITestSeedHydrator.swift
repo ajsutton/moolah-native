@@ -84,6 +84,21 @@ enum UITestSeedHydrator {
       in: context
     )
 
+    let historicalAmount = InstrumentAmount(
+      quantity: Decimal(fixtures.historicalExpenseAmountCents) / 100,
+      instrument: instrument
+    )
+    for historical in fixtures.historicalPayees {
+      try upsertHistoricalExpense(
+        id: historical.id,
+        payee: historical.payee,
+        date: historical.date,
+        amount: historicalAmount,
+        accountId: fixtures.checkingAccountId,
+        in: context
+      )
+    }
+
     try context.save()
     return profile
   }
@@ -185,6 +200,36 @@ enum UITestSeedHydrator {
         quantity: amount.storageValue,
         type: TransactionType.transfer.rawValue,
         sortOrder: 1
+      )
+    )
+  }
+
+  private static func upsertHistoricalExpense(
+    id: UUID,
+    payee: String,
+    date: Date,
+    amount: InstrumentAmount,
+    accountId: UUID,
+    in context: ModelContext
+  ) throws {
+    let targetId = id
+    let descriptor = FetchDescriptor<TransactionRecord>(
+      predicate: #Predicate { $0.id == targetId }
+    )
+    if try context.fetch(descriptor).first != nil { return }
+
+    let txn = TransactionRecord(id: id, date: date, payee: payee)
+    context.insert(txn)
+
+    let outgoing = InstrumentAmount(quantity: -amount.quantity, instrument: amount.instrument)
+    context.insert(
+      TransactionLegRecord(
+        transactionId: id,
+        accountId: accountId,
+        instrumentId: amount.instrument.id,
+        quantity: outgoing.storageValue,
+        type: TransactionType.expense.rawValue,
+        sortOrder: 0
       )
     )
   }

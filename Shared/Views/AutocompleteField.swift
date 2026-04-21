@@ -43,7 +43,10 @@ struct AutocompleteField: View {
         .onKeyPress(.escape) {
           guard suggestionCount > 0 else { return .ignored }
           highlightedIndex = nil
-          onTextChange("")
+          // Clear the binding directly — `.onChange(of: text)` will fire
+          // `onTextChange("")` as a side effect, propagating dropdown
+          // dismissal to the consumer.
+          text = ""
           return .handled
         }
       #endif
@@ -109,6 +112,12 @@ struct AutocompleteSuggestionDropdown<Item: Identifiable>: View {
         .stroke(.separator, lineWidth: 0.5)
     )
     .compositingGroup()
+    // `children: .contain` keeps the container addressable (with its
+    // suggestion-count label for VoiceOver and its wrapper identifier for
+    // UI tests) while still exposing each row as its own accessibility
+    // element. Without this, SwiftUI flattens the VStack into a single
+    // leaf when a label is attached, hiding the rows.
+    .accessibilityElement(children: .contain)
     .accessibilityLabel("\(min(items.count, 8)) suggestions")
   }
 
@@ -143,6 +152,7 @@ struct AutocompleteSuggestionDropdown<Item: Identifiable>: View {
       }
     #endif
     .accessibilityLabel("Suggestion: \(label(item))")
+    .accessibilityAddTraits(highlightedIndex == index ? [.isSelected] : [])
     .accessibilityIdentifier(rowIdentifier?(index) ?? "")
   }
 

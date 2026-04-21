@@ -72,13 +72,22 @@ final class UITestSeedHydratorTests: XCTestCase {
     let container = try containerManager.container(for: profile.id)
 
     let context = ModelContext(container)
-    let transactions = try context.fetch(FetchDescriptor<TransactionRecord>())
-    XCTAssertEqual(transactions.count, 1, "expected exactly one seeded transaction")
-    let txn = try XCTUnwrap(transactions.first)
-    XCTAssertEqual(txn.id, UITestFixtures.TradeBaseline.bhpPurchaseId)
-    XCTAssertEqual(txn.payee, UITestFixtures.TradeBaseline.bhpPurchasePayee)
+    let tradeId = UITestFixtures.TradeBaseline.bhpPurchaseId
+    let trade = try XCTUnwrap(
+      try context.fetch(
+        FetchDescriptor<TransactionRecord>(
+          predicate: #Predicate { $0.id == tradeId }
+        )
+      ).first,
+      "trade transaction must exist"
+    )
+    XCTAssertEqual(trade.payee, UITestFixtures.TradeBaseline.bhpPurchasePayee)
 
-    let legs = try context.fetch(FetchDescriptor<TransactionLegRecord>())
+    let legs = try context.fetch(
+      FetchDescriptor<TransactionLegRecord>(
+        predicate: #Predicate { $0.transactionId == tradeId }
+      )
+    )
     XCTAssertEqual(legs.count, 2, "expected two legs on the trade transaction")
     let accountIds = Set(legs.compactMap(\.accountId))
     XCTAssertEqual(
@@ -88,6 +97,41 @@ final class UITestSeedHydratorTests: XCTestCase {
         UITestFixtures.TradeBaseline.brokerageAccountId,
       ]
     )
+  }
+
+  func testHydrateTradeBaselineSeedsTheHistoricalPayees() throws {
+    let profile = try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager)
+    let container = try containerManager.container(for: profile.id)
+
+    let context = ModelContext(container)
+    let historicalIds = Set(UITestFixtures.TradeBaseline.historicalPayees.map(\.id))
+    let allTransactions = try context.fetch(FetchDescriptor<TransactionRecord>())
+    let historicals = allTransactions.filter { historicalIds.contains($0.id) }
+    XCTAssertEqual(
+      historicals.count,
+      UITestFixtures.TradeBaseline.historicalPayees.count,
+      "expected every historical payee to be seeded"
+    )
+
+    let payees = historicals.compactMap(\.payee).sorted()
+    XCTAssertEqual(
+      payees,
+      ["Coles", "Woolworths", "Woolworths", "Woolworths Metro"],
+      "historical payees must match fixture list exactly"
+    )
+
+    // Each historical has exactly one expense leg on Checking.
+    for historical in historicals {
+      let txnId = historical.id
+      let legs = try context.fetch(
+        FetchDescriptor<TransactionLegRecord>(
+          predicate: #Predicate { $0.transactionId == txnId }
+        )
+      )
+      XCTAssertEqual(legs.count, 1, "historical \(historical.payee ?? "?") should have 1 leg")
+      XCTAssertEqual(legs.first?.accountId, UITestFixtures.TradeBaseline.checkingAccountId)
+      XCTAssertEqual(legs.first?.type, TransactionType.expense.rawValue)
+    }
   }
 
   // MARK: - Determinism
@@ -102,7 +146,8 @@ final class UITestSeedHydratorTests: XCTestCase {
     let second = try containerManager.container(for: UITestFixtures.TradeBaseline.profileId)
     let secondTxnCount = try ModelContext(second).fetch(FetchDescriptor<TransactionRecord>()).count
 
-    XCTAssertEqual(firstTxnCount, 1)
-    XCTAssertEqual(secondTxnCount, 1, "hydration must be idempotent for robust relaunches")
+    let expected = 1 + UITestFixtures.TradeBaseline.historicalPayees.count
+    XCTAssertEqual(firstTxnCount, expected)
+    XCTAssertEqual(secondTxnCount, expected, "hydration must be idempotent for robust relaunches")
   }
 }

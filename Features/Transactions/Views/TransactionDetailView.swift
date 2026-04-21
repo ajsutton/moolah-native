@@ -17,6 +17,10 @@ struct TransactionDetailView: View {
   @State private var showDeleteConfirmation = false
   @State private var showPayeeSuggestions = false
   @State private var payeeHighlightedIndex: Int?
+  /// Mirrors `categoryJustSelected` — set when a payee is accepted so the
+  /// resulting `onTextChange` (from binding update) does not immediately
+  /// re-open the dropdown and re-trigger a prefix fetch.
+  @State private var payeeJustSelected = false
   @State private var showCategorySuggestions = false
   @State private var categoryHighlightedIndex: Int?
   @State private var categoryJustSelected = false
@@ -328,6 +332,7 @@ struct TransactionDetailView: View {
           searchText: draft.payee,
           highlightedIndex: $payeeHighlightedIndex,
           onSelect: { selected in
+            payeeJustSelected = true
             showPayeeSuggestions = false
             payeeHighlightedIndex = nil
             draft.payee = selected
@@ -378,8 +383,12 @@ struct TransactionDetailView: View {
         highlightedIndex: $payeeHighlightedIndex,
         suggestionCount: payeeVisibleSuggestionCount,
         onTextChange: { newValue in
-          showPayeeSuggestions = !newValue.isEmpty
-          transactionStore.fetchPayeeSuggestions(prefix: newValue)
+          if payeeJustSelected {
+            payeeJustSelected = false
+          } else {
+            showPayeeSuggestions = !newValue.isEmpty
+            transactionStore.fetchPayeeSuggestions(prefix: newValue)
+          }
         },
         onAcceptHighlighted: acceptHighlightedPayee
       )
@@ -515,8 +524,12 @@ struct TransactionDetailView: View {
         highlightedIndex: $payeeHighlightedIndex,
         suggestionCount: payeeVisibleSuggestionCount,
         onTextChange: { newValue in
-          showPayeeSuggestions = !newValue.isEmpty
-          transactionStore.fetchPayeeSuggestions(prefix: newValue)
+          if payeeJustSelected {
+            payeeJustSelected = false
+          } else {
+            showPayeeSuggestions = !newValue.isEmpty
+            transactionStore.fetchPayeeSuggestions(prefix: newValue)
+          }
         },
         onAcceptHighlighted: acceptHighlightedPayee
       )
@@ -795,6 +808,7 @@ struct TransactionDetailView: View {
   private func acceptHighlightedPayee() {
     guard let index = payeeHighlightedIndex, index < payeeVisibleSuggestions.count else { return }
     let selected = payeeVisibleSuggestions[index]
+    payeeJustSelected = true
     showPayeeSuggestions = false
     payeeHighlightedIndex = nil
     draft.payee = selected

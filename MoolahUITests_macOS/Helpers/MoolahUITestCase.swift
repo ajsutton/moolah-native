@@ -152,17 +152,17 @@ class MoolahUITestCase: XCTestCase {
     attachArtefacts(in: dir)
   }
 
-  /// Resolves `/private/tmp/MoolahUITests/ui-fail-<TestName>/`.
+  /// Resolves `<runner tmpdir>/MoolahUITests/ui-fail-<TestName>/`.
   ///
-  /// The XCUITest runner is sandboxed and cannot write to the developer's
-  /// `Documents` folder; `NSTemporaryDirectory()` returns the runner's
-  /// container-private tmp dir, which the host shell can only read with
-  /// extra TCC prompts. `/private/tmp/` is the system-wide tmp folder,
-  /// readable and writable by both the sandboxed runner and the host
-  /// shell without any TCC interaction. `scripts/test-ui.sh` greps the
-  /// `[MoolahUITestCase] ARTEFACT_DIR` lines out of xcodebuild's stdout
-  /// and copies each artefact dir back into `<repo-root>/.agent-tmp/`
-  /// after `xcodebuild test` exits.
+  /// The XCUITest runner runs in a stricter sandbox than the app: writes
+  /// to `/private/tmp/` fail with "Operation not permitted" on current
+  /// macOS. `FileManager.default.temporaryDirectory` resolves to the
+  /// runner's own per-process tmpdir under `/var/folders/.../T/` which
+  /// the runner can freely create inside and the developer's shell can
+  /// still read (same uid) without TCC prompts. `scripts/test-ui.sh`
+  /// greps the `[MoolahUITestCase] ARTEFACT_DIR` lines out of
+  /// xcodebuild's stdout and copies each artefact dir back into
+  /// `<repo-root>/.agent-tmp/` after `xcodebuild test` exits.
   private func artefactDirectory(for testName: String) -> URL {
     let cleanName =
       testName
@@ -170,7 +170,7 @@ class MoolahUITestCase: XCTestCase {
       .replacingOccurrences(of: "[", with: "")
       .replacingOccurrences(of: "]", with: "")
       .replacingOccurrences(of: " ", with: "_")
-    return URL(fileURLWithPath: "/private/tmp", isDirectory: true)
+    return FileManager.default.temporaryDirectory
       .appendingPathComponent("MoolahUITests", isDirectory: true)
       .appendingPathComponent("ui-fail-\(cleanName)", isDirectory: true)
   }
@@ -245,6 +245,13 @@ class MoolahUITestCase: XCTestCase {
       lines.append("trade.payee     = \(f.bhpPurchasePayee)")
       lines.append("trade.cents     = \(f.bhpPurchaseAmountCents)")
       lines.append("trade.date      = \(f.bhpPurchaseDate)")
+      lines.append("historical.amount.cents = \(f.historicalExpenseAmountCents)")
+      for (index, historical) in f.historicalPayees.enumerated() {
+        lines.append(
+          "historical[\(index)].id/payee/date = "
+            + "\(historical.id) / \(historical.payee) / \(historical.date)"
+        )
+      }
     }
     return lines.joined(separator: "\n") + "\n"
   }
