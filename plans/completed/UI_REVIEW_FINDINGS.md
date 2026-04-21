@@ -11,7 +11,7 @@
 ### 1. Hardcoded Colors in Expense Breakdown Legend
 - **File:** `Features/Analysis/Views/ExpenseBreakdownCard.swift` (color generation from UUID hash)
 - **Issue:** Colors generated using `Color(red:, green:, blue:)` from UUID hash — violates semantic color system
-- **STYLE_GUIDE violation:** Section 10: "Hardcoded colors"
+- **UI_GUIDE violation:** Section 10: "Hardcoded colors"
 - **Fix:** Use a fixed palette of system-compatible colors
 
 ---
@@ -20,12 +20,12 @@
 
 ### 2. Missing .monospacedDigit() on Dates
 - **File:** `Features/Analysis/Views/UpcomingTransactionsCard.swift` — date text missing `.monospacedDigit()`
-- **STYLE_GUIDE violation:** Section 3: "Always use `.monospacedDigit()` for amounts, balances, and dates"
+- **UI_GUIDE violation:** Section 3: "Always use `.monospacedDigit()` for amounts, balances, and dates"
 
 ### 3. Small Touch Target on Pay Buttons
 - **File:** `Features/Transactions/Views/UpcomingView.swift` — Pay button uses `.controlSize(.small)`
 - **File:** `Features/Analysis/Views/UpcomingTransactionsCard.swift` — same issue
-- **STYLE_GUIDE violation:** Section 10: "Touch targets smaller than 44x44pt (iOS)"
+- **UI_GUIDE violation:** Section 10: "Touch targets smaller than 44x44pt (iOS)"
 - **Fix:** Use `.controlSize(.regular)` on iOS
 
 ### 4. Inconsistent Date Formatting
@@ -37,13 +37,13 @@
 
 ### 5. Hardcoded .white Foreground in UserMenuView
 - **File:** `Features/Auth/UserMenuView.swift` — `.foregroundColor(.white)` on avatar icon
-- **STYLE_GUIDE violation:** Section 4: "Use system colors exclusively"
+- **UI_GUIDE violation:** Section 4: "Use system colors exclusively"
 - **Fix:** Use `.foregroundStyle(.white)` (acceptable on colored background) or make adaptive
 
 ### 6. Missing Accessibility Labels on Icons
 - **File:** `Features/Earmarks/Views/EarmarksView.swift` — arrow.up/arrow.down icons lack accessibility labels
 - **File:** `Features/Transactions/Views/TransactionRowView.swift` — icon-only labels
-- **STYLE_GUIDE violation:** Section 8 & 10
+- **UI_GUIDE violation:** Section 8 & 10
 
 ### 7. Missing Accessibility on Analysis Card Amounts
 - **File:** `Features/Analysis/Views/UpcomingTransactionsCard.swift` — amounts displayed via `formatNoSymbol` without accessibility value

@@ -197,5 +197,5 @@ These are not design decisions — they are flagged for the implementation plan.
 - All contract tests for repositories used to source positions continue to pass.
 - New tests cover: header aggregation (success, partial failure → Unavailable), P&L pill visibility (none/some/all positions with cost basis), chart visibility derivation, row selection updates chart filter, conversion-failure row presentation, empty-set rendering to nothing.
 - Snapshot / preview validation via `RenderPreview` across `Default`, `BHP selected`, `All fiat / no chart`, `Conversion failure`, and `Empty` preview states.
-- UI review (`@ui-review`) on the new views for STYLE_GUIDE + HIG compliance before merge.
+- UI review (`@ui-review`) on the new views for UI_GUIDE + HIG compliance before merge.
 - Concurrency review (`@concurrency-review`) if the historical series fetch introduces new async surface in stores.
