@@ -8,6 +8,8 @@ struct ReportsView: View {
   let earmarks: Earmarks
   let transactionStore: TransactionStore
 
+  @Environment(ProfileSession.self) private var session
+
   @State private var dateRange: DateRange = .last12Months
   @State private var customFrom: Date = Calendar.current.date(
     byAdding: .year, value: -1, to: Date())!
@@ -98,7 +100,8 @@ struct ReportsView: View {
           accounts: accounts,
           categories: categories,
           earmarks: earmarks,
-          transactionStore: transactionStore
+          transactionStore: transactionStore,
+          supportsComplexTransactions: session.profile.supportsComplexTransactions
         )
       }
     }
@@ -176,6 +179,7 @@ struct ReportsView: View {
     Category(id: rentId, name: "Rent"),
   ])
   let account = Account(name: "Checking", type: .bank, instrument: .AUD)
+  let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
 
   ReportsView(
     reportingStore: reportingStore,
@@ -184,6 +188,7 @@ struct ReportsView: View {
     earmarks: Earmarks(from: []),
     transactionStore: transactionStore
   )
+  .environment(session)
   .frame(width: 900, height: 600)
   .task {
     _ = try? await backend.accounts.create(

@@ -13,6 +13,7 @@ struct TransactionListView: View {
   var positionsHostCurrency: Instrument = .AUD
   var positionsTitle: String = "Balances"
   var conversionService: (any InstrumentConversionService)?
+  var supportsComplexTransactions: Bool = false
 
   /// When non-nil, the parent owns the selection and handles the inspector.
   /// When nil, TransactionListView manages its own selection and inspector.
@@ -59,7 +60,8 @@ struct TransactionListView: View {
     positions: [Position] = [],
     positionsHostCurrency: Instrument = .AUD,
     positionsTitle: String = "Balances",
-    conversionService: (any InstrumentConversionService)? = nil
+    conversionService: (any InstrumentConversionService)? = nil,
+    supportsComplexTransactions: Bool = false
   ) {
     self.title = title
     self.baseFilter = filter
@@ -71,6 +73,7 @@ struct TransactionListView: View {
     self.positionsHostCurrency = positionsHostCurrency
     self.positionsTitle = positionsTitle
     self.conversionService = conversionService
+    self.supportsComplexTransactions = supportsComplexTransactions
     self._externalSelection = nil
     self._activeFilter = State(initialValue: filter)
   }
@@ -120,7 +123,8 @@ struct TransactionListView: View {
           categories: categories,
           earmarks: earmarks,
           transactionStore: transactionStore,
-          viewingAccountId: filter.accountId
+          viewingAccountId: filter.accountId,
+          supportsComplexTransactions: supportsComplexTransactions
         )
       )
       .focusedSceneValue(\.newTransactionAction, createNewTransaction)
