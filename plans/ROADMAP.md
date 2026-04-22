@@ -13,7 +13,7 @@ Fix known bugs and build a test safety net before adding new features.
 ### 1a. Bug Fixes — Done
 
 All bugs fixed:
-- **UI freeze during investment value download** — CloudKit repository now uses `fetchLimit`/`fetchOffset` instead of fetching all records per page. (Migration import save is still synchronous/atomic by design — see `BUGS.md`.)
+- **UI freeze during investment value download** — CloudKit repository now uses `fetchLimit`/`fetchOffset` instead of fetching all records per page. (Migration import save is still synchronous/atomic by design.)
 - **Transaction download shows progress bar** — `TransactionPage` now carries `totalCount` from the server; `TransactionStore` exposes `loadedCount`/`totalCount`; view shows determinate `ProgressView`.
 - **macOS upcoming transactions use detail sidebar** — `UpcomingTransactionsCard` now uses platform-specific navigation (inline `HStack` detail on macOS, `.sheet()` on iOS).
 
@@ -95,7 +95,7 @@ Full per-account / per-earmark / per-leg currency support, building on the excha
 - Import / export round-trip preserves earmark instrument (`b9a084f`).
 - Single-instrument backend enforcement — `Remote*Repository` write paths reject foreign-instrument writes with `BackendError.unsupportedInstrument`; UI gates currency pickers and the custom transaction mode on `Profile.supportsComplexTransactions`. Codified as Rule 11a in the guide.
 
-### Known minor follow-ups (not blockers, not in BUGS.md)
+### Known minor follow-ups (not blockers)
 
 - **Instrument override lost on account change** — `TransactionDetailView.swift:561` clears `draft.legDrafts[index].instrumentId` whenever the leg's account changes. If a user explicitly picked a non-account currency for a leg and then switches account, the override is silently dropped (the leg falls back to the new account's instrument via `TransactionDraft.toTransaction`). The resulting transaction is still valid data — UX regression, not a correctness bug.
 - **Profile currency change has no migration UX** — `SettingsView` lets a user change `profile.currencyCode` on a live profile with no warning. The conversion pipeline continues to work (existing accounts/earmarks keep their own instruments and are converted to the new profile currency at display time), but there's no confirmation dialog explaining the change or its effect on existing reports. Out of Phase 6 scope; revisit if users hit it.
