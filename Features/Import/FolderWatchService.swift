@@ -144,7 +144,7 @@
 
     // MARK: - Event handling
 
-    fileprivate func handleEvents(paths: [String]) async {
+    private func handleEvents(paths: [String]) async {
       for path in paths {
         if Task.isCancelled { return }
         let url = URL(fileURLWithPath: path)

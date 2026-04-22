@@ -20,7 +20,7 @@ import XCTest
 class MoolahUITestCase: XCTestCase {
   /// The most recently launched `MoolahApp`, captured by `launch(seed:)`
   /// so `tearDown` can collect artefacts and terminate the process.
-  fileprivate(set) var lastApp: MoolahApp?
+  private(set) var lastApp: MoolahApp?
 
   override func setUp() async throws {
     try await super.setUp()

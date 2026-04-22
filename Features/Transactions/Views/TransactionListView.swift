@@ -196,7 +196,7 @@ struct TransactionListView: View {
   /// account. Kept here so the view can hand off to `ImportStore`
   /// directly; logic is intentionally minimal (security-scope → read
   /// bytes → ingest).
-  fileprivate func ingestDroppedURLs(_ urls: [URL], forcedAccountId: UUID) async {
+  private func ingestDroppedURLs(_ urls: [URL], forcedAccountId: UUID) async {
     for url in urls {
       guard url.pathExtension.lowercased() == "csv" || url.pathExtension.isEmpty else {
         continue
