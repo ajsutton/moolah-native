@@ -33,12 +33,13 @@ struct BinanceClientTests {
 
   @Test func parseKlinesResponse() throws {
     // Binance klines are arrays: [openTime, open, high, low, close, volume, closeTime, ...]
-    let json = """
+    let json = Data(
+      """
       [
         [1743465600000, "1600.00", "1650.00", "1590.00", "1623.45", "1000", 1743551999999, "0", 0, "0", "0", "0"],
         [1743552000000, "1623.45", "1670.00", "1620.00", "1650.00", "1100", 1743638399999, "0", 0, "0", "0", "0"]
       ]
-      """.data(using: .utf8)!
+      """.utf8)
 
     let prices = try BinanceClient.parseKlinesResponse(json)
     #expect(prices.count == 2)
@@ -73,7 +74,8 @@ struct BinanceClientTests {
   // MARK: - Exchange info parsing
 
   @Test func parseExchangeInfoResponse_findsUsdtPairs() throws {
-    let json = """
+    let json = Data(
+      """
       {
           "symbols": [
               { "symbol": "ETHUSDT", "baseAsset": "ETH", "quoteAsset": "USDT", "status": "TRADING" },
@@ -82,7 +84,7 @@ struct BinanceClientTests {
               { "symbol": "OLDUSDT", "baseAsset": "OLD", "quoteAsset": "USDT", "status": "BREAK" }
           ]
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
     let pairs = try BinanceClient.parseExchangeInfoResponse(json)
     #expect(pairs.contains("ETHUSDT"))

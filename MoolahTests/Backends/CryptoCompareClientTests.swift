@@ -45,7 +45,8 @@ struct CryptoCompareClientTests {
   // MARK: - Response parsing
 
   @Test func parseHistodayResponse() throws {
-    let json = """
+    let json = Data(
+      """
       {
         "Response": "Success",
         "Data": {
@@ -55,7 +56,7 @@ struct CryptoCompareClientTests {
           ]
         }
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
     let prices = try CryptoCompareClient.parseHistodayResponse(json)
     #expect(prices.count == 2)
@@ -64,12 +65,13 @@ struct CryptoCompareClientTests {
   }
 
   @Test func parsePriceMultiResponse() throws {
-    let json = """
+    let json = Data(
+      """
       {
         "ETH": {"USD": 1623.45},
         "BTC": {"USD": 67890.12}
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
     let prices = try CryptoCompareClient.parsePriceMultiResponse(json)
     #expect(prices["ETH"] == Decimal(string: "1623.45")!)
@@ -79,7 +81,8 @@ struct CryptoCompareClientTests {
   // MARK: - Coin list parsing
 
   @Test func parseCoinListResponse_extractsSymbolByContractAddress() throws {
-    let json = """
+    let json = Data(
+      """
       {
           "Data": {
               "ETH": {
@@ -99,7 +102,7 @@ struct CryptoCompareClientTests {
               }
           }
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
     let index = try CryptoCompareClient.parseCoinListResponse(json)
     #expect(index["0x1f9840a85d5af5bf1d1762f925bdaddc4201f984"] == "UNI")
@@ -108,7 +111,8 @@ struct CryptoCompareClientTests {
   }
 
   @Test func parseCoinListResponse_nativeTokenHasNoContractEntry() throws {
-    let json = """
+    let json = Data(
+      """
       {
           "Data": {
               "BTC": {
@@ -118,21 +122,22 @@ struct CryptoCompareClientTests {
               }
           }
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
     let index = try CryptoCompareClient.parseCoinListResponse(json)
     #expect(index.isEmpty)
   }
 
   @Test func findNativeSymbol_matchesBySymbol() throws {
-    let json = """
+    let json = Data(
+      """
       {
           "Data": {
               "BTC": { "Symbol": "BTC", "CoinName": "Bitcoin", "SmartContractAddress": "N/A" },
               "ETH": { "Symbol": "ETH", "CoinName": "Ethereum", "SmartContractAddress": "N/A" }
           }
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
     let nativeSymbols = try CryptoCompareClient.parseNativeSymbols(json)
     #expect(nativeSymbols.contains("BTC"))

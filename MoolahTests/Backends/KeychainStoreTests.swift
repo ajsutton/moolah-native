@@ -56,7 +56,7 @@ import Testing
       let store = makeStore()
       defer { store.clear() }
 
-      let data = "hello".data(using: .utf8)!
+      let data = Data("hello".utf8)
       try store.saveData(data)
       let restored = try store.restoreData()
       #expect(restored == data)

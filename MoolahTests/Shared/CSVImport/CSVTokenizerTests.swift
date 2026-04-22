@@ -86,7 +86,7 @@ struct CSVTokenizerTests {
 
   @Test("parses UTF-8 bytes")
   func parseDataUtf8() throws {
-    let data = "a,b\n".data(using: .utf8)!
+    let data = Data("a,b\n".utf8)
     let rows = try CSVTokenizer.parse(data)
     #expect(rows == [["a", "b"]])
   }

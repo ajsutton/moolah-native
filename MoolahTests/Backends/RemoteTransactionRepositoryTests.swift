@@ -111,9 +111,9 @@ struct RemoteTransactionRepositoryTests {
   }
 
   @Test func testConstructsCorrectURLParams() async throws {
-    let emptyResponse = """
-      {"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}
-      """.data(using: .utf8)!
+    let emptyResponse = Data(
+      #"{"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}"#
+        .utf8)
 
     let (_, client) = makeStubSession(data: emptyResponse)
     let repository = RemoteTransactionRepository(client: client, instrument: .defaultTestInstrument)
@@ -147,9 +147,9 @@ struct RemoteTransactionRepositoryTests {
   }
 
   @Test func testScheduledFilterParam() async throws {
-    let emptyResponse = """
-      {"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}
-      """.data(using: .utf8)!
+    let emptyResponse = Data(
+      #"{"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}"#
+        .utf8)
 
     let (_, client) = makeStubSession(data: emptyResponse)
     let repository = RemoteTransactionRepository(client: client, instrument: .defaultTestInstrument)
@@ -180,9 +180,9 @@ struct RemoteTransactionRepositoryTests {
   }
 
   @Test func testDateRangeFilterParam() async throws {
-    let emptyResponse = """
-      {"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}
-      """.data(using: .utf8)!
+    let emptyResponse = Data(
+      #"{"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}"#
+        .utf8)
 
     let (_, client) = makeStubSession(data: emptyResponse)
     let repository = RemoteTransactionRepository(client: client, instrument: .defaultTestInstrument)
@@ -219,9 +219,9 @@ struct RemoteTransactionRepositoryTests {
   }
 
   @Test func testCategoryIdsFilterParam() async throws {
-    let emptyResponse = """
-      {"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}
-      """.data(using: .utf8)!
+    let emptyResponse = Data(
+      #"{"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}"#
+        .utf8)
 
     let (_, client) = makeStubSession(data: emptyResponse)
     let repository = RemoteTransactionRepository(client: client, instrument: .defaultTestInstrument)
@@ -258,9 +258,9 @@ struct RemoteTransactionRepositoryTests {
   }
 
   @Test func testPayeeFilterParam() async throws {
-    let emptyResponse = """
-      {"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}
-      """.data(using: .utf8)!
+    let emptyResponse = Data(
+      #"{"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}"#
+        .utf8)
 
     let (_, client) = makeStubSession(data: emptyResponse)
     let repository = RemoteTransactionRepository(client: client, instrument: .defaultTestInstrument)

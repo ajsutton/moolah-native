@@ -47,9 +47,10 @@ struct RemoteInvestmentRepositoryTests {
 
   @Test("Fetch values sends correct URL with query parameters")
   func testFetchValuesURL() async throws {
-    let fixtureData = """
+    let fixtureData = Data(
+      """
       {"values": [], "hasMore": false}
-      """.data(using: .utf8)!
+      """.utf8)
 
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [URLProtocolStub.self]
@@ -130,7 +131,7 @@ struct RemoteInvestmentRepositoryTests {
 
   @Test("Fetch daily balances sends correct URL")
   func testFetchDailyBalancesURL() async throws {
-    let fixtureData = "[]".data(using: .utf8)!
+    let fixtureData = Data("[]".utf8)
 
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [URLProtocolStub.self]

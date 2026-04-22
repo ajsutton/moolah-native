@@ -8,7 +8,8 @@ import Testing
 struct CompositeTokenResolutionClientTests {
 
   @Test func resolve_contractToken_findsCryptoCompareAndBinance() async throws {
-    let ccCoinList = """
+    let ccCoinList = Data(
+      """
       {
           "Data": {
               "UNI": {
@@ -18,15 +19,16 @@ struct CompositeTokenResolutionClientTests {
               }
           }
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
-    let binanceInfo = """
+    let binanceInfo = Data(
+      """
       {
           "symbols": [
               { "symbol": "UNIUSDT", "baseAsset": "UNI", "quoteAsset": "USDT", "status": "TRADING" }
           ]
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
     let client = CompositeTokenResolutionClient(
       coinListData: ccCoinList,
@@ -45,22 +47,24 @@ struct CompositeTokenResolutionClientTests {
   }
 
   @Test func resolve_nativeToken_matchesBySymbol() async throws {
-    let ccCoinList = """
+    let ccCoinList = Data(
+      """
       {
           "Data": {
               "BTC": { "Symbol": "BTC", "CoinName": "Bitcoin", "SmartContractAddress": "N/A" },
               "WBTC": { "Symbol": "WBTC", "CoinName": "Wrapped BTC", "SmartContractAddress": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599" }
           }
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
-    let binanceInfo = """
+    let binanceInfo = Data(
+      """
       {
           "symbols": [
               { "symbol": "BTCUSDT", "baseAsset": "BTC", "quoteAsset": "USDT", "status": "TRADING" }
           ]
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
     let client = CompositeTokenResolutionClient(
       coinListData: ccCoinList,
@@ -76,13 +80,15 @@ struct CompositeTokenResolutionClientTests {
   }
 
   @Test func resolve_unknownToken_returnsEmptyResult() async throws {
-    let ccCoinList = """
+    let ccCoinList = Data(
+      """
       { "Data": {} }
-      """.data(using: .utf8)!
+      """.utf8)
 
-    let binanceInfo = """
+    let binanceInfo = Data(
+      """
       { "symbols": [] }
-      """.data(using: .utf8)!
+      """.utf8)
 
     let client = CompositeTokenResolutionClient(
       coinListData: ccCoinList,
@@ -100,7 +106,8 @@ struct CompositeTokenResolutionClientTests {
 
   @Test func resolve_matchesContractAddressRegardlessOfCase() async throws {
     // CoinList uses lowercase addresses; callers may pass checksummed (mixed-case).
-    let ccCoinList = """
+    let ccCoinList = Data(
+      """
       {
           "Data": {
               "UNI": {
@@ -110,11 +117,12 @@ struct CompositeTokenResolutionClientTests {
               }
           }
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
-    let binanceInfo = """
+    let binanceInfo = Data(
+      """
       { "symbols": [] }
-      """.data(using: .utf8)!
+      """.utf8)
 
     let client = CompositeTokenResolutionClient(
       coinListData: ccCoinList,
@@ -134,18 +142,20 @@ struct CompositeTokenResolutionClientTests {
   @Test func resolve_nativeOnDifferentChainsAreDistinct() async throws {
     // Resolving native tokens on two different chainIds should not conflate them —
     // the chainId combined with symbol scopes the lookup.
-    let ccCoinList = """
+    let ccCoinList = Data(
+      """
       {
           "Data": {
               "ETH": { "Symbol": "ETH", "CoinName": "Ethereum", "SmartContractAddress": "N/A" },
               "MATIC": { "Symbol": "MATIC", "CoinName": "Polygon", "SmartContractAddress": "N/A" }
           }
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
-    let binanceInfo = """
+    let binanceInfo = Data(
+      """
       { "symbols": [] }
-      """.data(using: .utf8)!
+      """.utf8)
 
     let client = CompositeTokenResolutionClient(
       coinListData: ccCoinList,

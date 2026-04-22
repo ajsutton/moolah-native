@@ -48,14 +48,15 @@ struct CoinGeckoClientTests {
   // MARK: - Response parsing
 
   @Test func parseMarketChartResponse() throws {
-    let json = """
+    let json = Data(
+      """
       {
         "prices": [
           [1743465600000, 1623.45],
           [1743552000000, 1650.00]
         ]
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
     let prices = try CoinGeckoClient.parseMarketChartResponse(json)
     #expect(prices.count == 2)
@@ -64,12 +65,13 @@ struct CoinGeckoClientTests {
   }
 
   @Test func parseSimplePriceResponse() throws {
-    let json = """
+    let json = Data(
+      """
       {
         "ethereum": {"usd": 1623.45},
         "bitcoin": {"usd": 67890.12}
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
     let prices = try CoinGeckoClient.parseSimplePriceResponse(json)
     #expect(prices["ethereum"] == Decimal(string: "1623.45")!)
@@ -79,14 +81,15 @@ struct CoinGeckoClientTests {
   // MARK: - Asset platforms parsing
 
   @Test func parseAssetPlatformsResponse_mapsChainIdToSlug() throws {
-    let json = """
+    let json = Data(
+      """
       [
           { "id": "ethereum", "chain_identifier": 1, "name": "Ethereum" },
           { "id": "optimistic-ethereum", "chain_identifier": 10, "name": "Optimism" },
           { "id": "polygon-pos", "chain_identifier": 137, "name": "Polygon" },
           { "id": "no-chain", "chain_identifier": null, "name": "No Chain" }
       ]
-      """.data(using: .utf8)!
+      """.utf8)
 
     let mapping = try CoinGeckoClient.parseAssetPlatformsResponse(json)
     #expect(mapping[1] == "ethereum")
@@ -98,7 +101,8 @@ struct CoinGeckoClientTests {
   // MARK: - Contract lookup parsing
 
   @Test func parseContractLookupResponse_extractsTokenDetails() throws {
-    let json = """
+    let json = Data(
+      """
       {
           "id": "uniswap",
           "symbol": "uni",
@@ -107,7 +111,7 @@ struct CoinGeckoClientTests {
               "ethereum": { "decimal_place": 18, "contract_address": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984" }
           }
       }
-      """.data(using: .utf8)!
+      """.utf8)
 
     let result = try CoinGeckoClient.parseContractLookupResponse(json)
     #expect(result.id == "uniswap")
