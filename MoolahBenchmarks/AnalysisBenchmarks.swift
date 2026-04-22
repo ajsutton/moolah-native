@@ -27,7 +27,12 @@ final class AnalysisBenchmarks: XCTestCase {
   }
 
   private var repo: CloudKitAnalysisRepository {
-    Self._backend.analysis as! CloudKitAnalysisRepository
+    guard let repo = Self._backend.analysis as? CloudKitAnalysisRepository else {
+      fatalError(
+        "AnalysisBenchmarks requires CloudKitAnalysisRepository; "
+          + "got \(type(of: Self._backend.analysis))")
+    }
+    return repo
   }
 
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }

@@ -96,7 +96,8 @@ struct ExportedDataTests {
     )
 
     let data = try JSONEncoder.exportEncoder.encode(exported)
-    let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+    let object = try JSONSerialization.jsonObject(with: data)
+    let json = try #require(object as? [String: Any])
 
     #expect(json["version"] as? Int == 1)
     #expect(json["profileLabel"] as? String == "Test")
