@@ -26,6 +26,7 @@ This is semantic review, not mechanical review -- SwiftLint already enforces the
 
 Architectural rules are the highest priority: these are the violations that make the codebase hard to test, change, or reason about.
 
+- **`.swiftlint-baseline.yml` must not change.** Any diff to this file is an automatic **Critical** finding — no exceptions unless the PR body explicitly quotes user authorisation for the specific edit. The baseline is a one-way ratchet of pre-existing debt; PRs are expected to fix newly-flagged violations in source, never silence them via the baseline. Reject the PR if it grows the baseline, re-keys existing entries after a file split, or regenerates the file in full. Covered in `CLAUDE.md` > Pre-Commit Checklist.
 - **Domain isolation** -- `Domain/Models/` and `Domain/Repositories/` import nothing from `SwiftUI`, `SwiftData`, `URLSession`, `Backends/`, or any `Remote*` type.
 - **Repository access** only via `@Environment(BackendProvider.self)` + repository protocols. Feature code must not import `Backends/` or reference `Remote*` types directly.
 - **Thin views** -- no multi-step async flows, no error formatting, no aggregations, no parsing in private view methods. Flag logic that should live in a store, model extension, or shared utility. Private view methods are not unit-testable.

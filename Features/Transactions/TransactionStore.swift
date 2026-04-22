@@ -16,6 +16,10 @@ final class TransactionStore {
   private(set) var isPayingScheduled = false
 
   private let repository: TransactionRepository
+  /// Owns the payee-autocomplete debounce/fetch state and the autofill
+  /// lookup. Exposed directly so views bind through the dedicated type;
+  /// `TransactionStore` no longer mirrors its surface.
+  let payeeSuggestionSource: PayeeSuggestionSource
   private let conversionService: InstrumentConversionService
   /// The store's default target instrument (profile currency). Used for views
   /// that don't narrow to a single account — scheduled, upcoming, analysis.
@@ -30,7 +34,11 @@ final class TransactionStore {
   private let accountStore: AccountStore?
   private let earmarkStore: EarmarkStore?
   private let logger = Logger(subsystem: "com.moolah.app", category: "TransactionStore")
-  private var currentFilter = TransactionFilter()
+  /// Filter that produced the current contents of `transactions`. Exposed so
+  /// views sharing the store (Analysis, Upcoming) can ignore stale contents
+  /// from a prior unfiltered load until their own `.task` reloads. When no
+  /// load has completed yet, this is the default empty filter.
+  private(set) var currentFilter = TransactionFilter()
   private var currentPage = 0
   private var rawTransactions: [Transaction] = []
   private var priorBalance: InstrumentAmount?
@@ -44,6 +52,7 @@ final class TransactionStore {
     earmarkStore: EarmarkStore? = nil
   ) {
     self.repository = repository
+    self.payeeSuggestionSource = PayeeSuggestionSource(repository: repository)
     self.conversionService = conversionService
     self.targetInstrument = targetInstrument
     self.currentTargetInstrument = targetInstrument
@@ -71,56 +80,69 @@ final class TransactionStore {
     await fetchPage()
   }
 
-  /// Creates a default transaction with sensible defaults (expense, zero amount, today's date).
-  /// Uses `accountId` if non-nil, otherwise falls back to `fallbackAccountId`.
+  // MARK: - Scheduled Views
+
+  /// Scheduled transactions whose date is before today, sorted ascending by
+  /// date. Empty when the store's current filter isn't `scheduled: true` —
+  /// views sharing the store ignore stale contents from an unfiltered load
+  /// in the frame before their own `.task` reloads the store.
+  var scheduledOverdueTransactions: [TransactionWithBalance] {
+    let today = Calendar.current.startOfDay(for: Date())
+    return scheduledTransactions { $0 < today }
+  }
+
+  /// Scheduled transactions due today or later, sorted ascending by date.
+  var scheduledUpcomingTransactions: [TransactionWithBalance] {
+    let today = Calendar.current.startOfDay(for: Date())
+    return scheduledTransactions { $0 >= today }
+  }
+
+  /// Scheduled transactions from the past plus the next `daysAhead` days —
+  /// the set shown in the Analysis "Upcoming & Overdue" card.
+  func scheduledShortTermTransactions(daysAhead: Int = 14) -> [TransactionWithBalance] {
+    let ceiling = Calendar.current.date(byAdding: .day, value: daysAhead, to: Date()) ?? Date()
+    return scheduledTransactions { $0 <= ceiling }
+  }
+
+  private func scheduledTransactions(
+    where matches: (Date) -> Bool
+  ) -> [TransactionWithBalance] {
+    guard currentFilter.scheduled == true else { return [] }
+    return
+      transactions
+      .filter { matches($0.transaction.date) }
+      .sorted { $0.transaction.date < $1.transaction.date }
+  }
+
+  /// Creates a blank expense bound to `accountId` (falling back to
+  /// `fallbackAccountId`). See `Transaction.defaultExpense(...)` for the shape.
   func createDefault(
     accountId: UUID?,
     fallbackAccountId: UUID?,
     instrument: Instrument
   ) async -> Transaction? {
     guard let acctId = accountId ?? fallbackAccountId else { return nil }
-    let tx = Transaction(
-      date: Date(),
-      payee: "",
-      legs: [TransactionLeg(accountId: acctId, instrument: instrument, quantity: 0, type: .expense)]
-    )
-    return await create(tx)
+    return await create(.defaultExpense(accountId: acctId, instrument: instrument))
   }
 
-  /// Creates a default scheduled transaction (monthly recurrence, expense, zero
-  /// amount, today's date). Appears in the Upcoming view immediately; the user
-  /// refines payee, amount, and recurrence in the inspector.
+  /// Creates a blank monthly-recurring expense. See
+  /// `Transaction.defaultMonthlyScheduled(...)`.
   func createDefaultScheduled(
     accountId: UUID?,
     fallbackAccountId: UUID?,
     instrument: Instrument
   ) async -> Transaction? {
     guard let acctId = accountId ?? fallbackAccountId else { return nil }
-    let tx = Transaction(
-      date: Date(),
-      payee: "",
-      recurPeriod: .month,
-      recurEvery: 1,
-      legs: [TransactionLeg(accountId: acctId, instrument: instrument, quantity: 0, type: .expense)]
-    )
-    return await create(tx)
+    return await create(.defaultMonthlyScheduled(accountId: acctId, instrument: instrument))
   }
 
-  /// Creates a default earmark-only transaction (income type, zero amount, today's date).
+  /// Creates a blank earmark-only income transaction. See
+  /// `Transaction.defaultEarmarkIncome(...)`.
   func createDefaultEarmark(
     earmarkId: UUID,
     instrument: Instrument
   ) async -> Transaction? {
-    let tx = Transaction(
-      date: Date(),
-      payee: "",
-      legs: [
-        TransactionLeg(
-          accountId: nil, instrument: instrument, quantity: 0, type: .income,
-          earmarkId: earmarkId)
-      ]
-    )
-    return await create(tx)
+    await create(.defaultEarmarkIncome(earmarkId: earmarkId, instrument: instrument))
   }
 
   func create(_ transaction: Transaction) async -> Transaction? {
@@ -171,45 +193,29 @@ final class TransactionStore {
     }
   }
 
-  /// Pays a scheduled transaction: creates a non-scheduled copy with today's date,
-  /// then either advances the scheduled transaction to its next due date (recurring)
-  /// or deletes it (one-time). Reloads with the scheduled filter afterward.
-  /// Returns the updated scheduled transaction if recurring, nil if deleted or failed.
+  /// Records a payment of `scheduledTransaction`: creates a paid copy dated
+  /// today, then either advances the scheduled template to its next due date
+  /// (recurring) or deletes it (one-time). The paid copy is removed from
+  /// local state because it doesn't belong in a scheduled-filtered view.
   func payScheduledTransaction(_ scheduledTransaction: Transaction) async -> PayResult {
     isPayingScheduled = true
     defer { isPayingScheduled = false }
-    // Create a non-scheduled copy with today's date
-    let paidTransaction = Transaction(
-      id: UUID(),
-      date: Date(),
-      payee: scheduledTransaction.payee,
-      notes: scheduledTransaction.notes,
-      legs: scheduledTransaction.legs
-    )
 
-    guard await create(paidTransaction) != nil else {
-      return .failed
-    }
+    let paidTransaction = Transaction.paidCopy(of: scheduledTransaction)
+    guard await create(paidTransaction) != nil else { return .failed }
 
-    if scheduledTransaction.isRecurring, let nextDate = scheduledTransaction.nextDueDate() {
-      var updated = scheduledTransaction
-      updated.date = nextDate
-      await update(updated)
+    if let advanced = scheduledTransaction.advancingToNextDueDate() {
+      await update(advanced)
     } else {
       await delete(id: scheduledTransaction.id)
     }
 
-    // Remove the non-scheduled paid transaction from the local list
-    // (it was added by create() but doesn't belong in the scheduled view).
     rawTransactions.removeAll { $0.id == paidTransaction.id }
     await recomputeBalances()
 
-    if scheduledTransaction.isRecurring {
-      let updated = transactions.first { $0.transaction.id == scheduledTransaction.id }?.transaction
-      return .paid(updatedScheduledTransaction: updated)
-    } else {
-      return .deleted
-    }
+    guard scheduledTransaction.isRecurring else { return .deleted }
+    let updated = transactions.first { $0.transaction.id == scheduledTransaction.id }?.transaction
+    return .paid(updatedScheduledTransaction: updated)
   }
 
   enum PayResult {
@@ -241,14 +247,11 @@ final class TransactionStore {
     if !delta.accountDeltas.isEmpty {
       await accountStore?.applyDelta(delta.accountDeltas)
     }
-    if !delta.earmarkDeltas.isEmpty || !delta.earmarkSavedDeltas.isEmpty
-      || !delta.earmarkSpentDeltas.isEmpty
-    {
+    if delta.hasEarmarkChanges {
       await earmarkStore?.applyDelta(
         earmarkDeltas: delta.earmarkDeltas,
         savedDeltas: delta.earmarkSavedDeltas,
-        spentDeltas: delta.earmarkSpentDeltas
-      )
+        spentDeltas: delta.earmarkSpentDeltas)
     }
   }
 
@@ -296,56 +299,6 @@ final class TransactionStore {
       try? await Task.sleep(nanoseconds: 300_000_000)  // 300ms debounce
       guard !Task.isCancelled else { return }
       action()
-    }
-  }
-
-  // MARK: - Payee Suggestions
-
-  private(set) var payeeSuggestions: [String] = []
-  private var suggestionTask: Task<Void, Never>?
-
-  func fetchPayeeSuggestions(prefix: String) {
-    suggestionTask?.cancel()
-
-    guard !prefix.isEmpty else {
-      payeeSuggestions = []
-      return
-    }
-
-    suggestionTask = Task {
-      // Debounce: wait 200ms before firing
-      try? await Task.sleep(nanoseconds: 200_000_000)
-      guard !Task.isCancelled else { return }
-
-      do {
-        let suggestions = try await repository.fetchPayeeSuggestions(prefix: prefix)
-        guard !Task.isCancelled else { return }
-        payeeSuggestions = suggestions
-      } catch {
-        guard !Task.isCancelled else { return }
-        logger.error("Failed to fetch payee suggestions: \(error.localizedDescription)")
-        payeeSuggestions = []
-      }
-    }
-  }
-
-  func clearPayeeSuggestions() {
-    suggestionTask?.cancel()
-    payeeSuggestions = []
-  }
-
-  /// Fetch the most recent transaction matching a payee for auto-fill.
-  func fetchTransactionForAutofill(payee: String) async -> Transaction? {
-    do {
-      let page = try await repository.fetch(
-        filter: TransactionFilter(payee: payee),
-        page: 0,
-        pageSize: 1
-      )
-      return page.transactions.first
-    } catch {
-      logger.error("Failed to fetch autofill transaction: \(error.localizedDescription)")
-      return nil
     }
   }
 

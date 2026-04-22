@@ -19,8 +19,10 @@ final class AccountStore {
   /// positions; per the bug fix, we never display a partial balance.
   private(set) var convertedBalances: [UUID: InstrumentAmount] = [:]
 
-  /// Investment values keyed by account ID, updated by InvestmentStore.
-  private(set) var investmentValues: [UUID: InstrumentAmount] = [:]
+  /// Externally-set values for investment accounts (e.g. mark-to-market share
+  /// prices set via `InvestmentStore`). Read-through to `investmentValueCache`
+  /// so existing call sites can continue to inspect the map directly.
+  var investmentValues: [UUID: InstrumentAmount] { investmentValueCache.values }
 
   /// True once at least one conversion pass has completed, regardless of
   /// success or failure. Views use this to distinguish "still loading"
@@ -30,6 +32,8 @@ final class AccountStore {
   private let repository: AccountRepository
   private let conversionService: any InstrumentConversionService
   private let targetInstrument: Instrument
+  private let investmentValueCache: InvestmentValueCache
+  private let balanceCalculator: AccountBalanceCalculator
   /// Delay between retry attempts after a conversion failure. Production
   /// uses ~30s; tests pass a small value to keep retries snappy.
   private let retryDelay: Duration
@@ -40,11 +44,15 @@ final class AccountStore {
     repository: AccountRepository,
     conversionService: any InstrumentConversionService,
     targetInstrument: Instrument,
+    investmentRepository: (any InvestmentRepository)? = nil,
     retryDelay: Duration = .seconds(30)
   ) {
     self.repository = repository
     self.conversionService = conversionService
     self.targetInstrument = targetInstrument
+    self.investmentValueCache = InvestmentValueCache(repository: investmentRepository)
+    self.balanceCalculator = AccountBalanceCalculator(
+      conversionService: conversionService, targetInstrument: targetInstrument)
     self.retryDelay = retryDelay
   }
 
@@ -58,6 +66,7 @@ final class AccountStore {
     do {
       accounts = Accounts(from: try await repository.fetchAll())
       logger.debug("Loaded \(self.accounts.count) accounts")
+      await preloadInvestmentValues()
       await recomputeConvertedTotals()
     } catch {
       logger.error("❌ Failed to load accounts: \(error.localizedDescription)")
@@ -77,6 +86,7 @@ final class AccountStore {
       if fresh.ordered != accounts.ordered {
         accounts = fresh
         logger.debug("Sync: updated accounts (\(fresh.count) accounts) in \(elapsed)ms")
+        await preloadInvestmentValues()
         await recomputeConvertedTotals()
       }
       if elapsed > 16 {
@@ -85,6 +95,19 @@ final class AccountStore {
     } catch {
       logger.error("Sync reload failed: \(error.localizedDescription)")
     }
+  }
+
+  /// Asks `investmentValueCache` to hydrate itself with the latest value for
+  /// every investment account. Without this, `displayBalance` falls back to
+  /// summing positions until `InvestmentStore` happens to call
+  /// `updateInvestmentValue(accountId:value:)`, so the sidebar flashes the
+  /// transaction sum until the user opens an investment account. See
+  /// `InvestmentValueCache.preload(for:)` for the failure-tolerant details.
+  private func preloadInvestmentValues() async {
+    let investmentAccountIds = accounts.ordered
+      .filter { $0.type == .investment }
+      .map(\.id)
+    await investmentValueCache.preload(for: investmentAccountIds)
   }
 
   var showHidden: Bool = false
@@ -97,25 +120,15 @@ final class AccountStore {
     accounts.filter { $0.type == .investment && (showHidden || !$0.isHidden) }
   }
 
-  /// The display balance for an account in its own instrument. For investment
-  /// accounts with an externally-provided value, returns that; otherwise sums
-  /// every position converted via the conversion service. The conversion service
-  /// caches rates, so repeated calls are cheap.
+  /// The display balance for an account in its own instrument. Forwards to
+  /// `balanceCalculator`, passing the cached externally-set investment value
+  /// when the account is an investment account.
   func displayBalance(for accountId: UUID) async throws -> InstrumentAmount {
     guard let account = accounts.by(id: accountId) else {
       return .zero(instrument: targetInstrument)
     }
-    if account.type == .investment, let value = investmentValues[accountId] {
-      return value
-    }
-    var total = InstrumentAmount.zero(instrument: account.instrument)
-    let date = Date()
-    for position in account.positions {
-      let converted = try await conversionService.convertAmount(
-        position.amount, to: account.instrument, on: date)
-      total += converted
-    }
-    return total
+    return try await balanceCalculator.displayBalance(
+      for: account, investmentValue: investmentValueCache.value(for: accountId))
   }
 
   /// Whether an account can be deleted (all positions are zero or empty).
@@ -129,171 +142,75 @@ final class AccountStore {
     accounts.by(id: accountId)?.positions ?? []
   }
 
-  /// Compute the total value of all current accounts in a target instrument,
-  /// converting foreign-currency positions via the conversion service.
+  /// Total value of `accountList` in `target`, summing positions directly.
   func computeConvertedTotal(for accountList: [Account], in target: Instrument) async throws
     -> InstrumentAmount
   {
-    var total = InstrumentAmount.zero(instrument: target)
-    let date = Date()
-
-    for account in accountList {
-      for position in account.positions {
-        let converted = try await conversionService.convertAmount(
-          position.amount, to: target, on: date)
-        total += converted
-      }
-    }
-    return total
+    try await balanceCalculator.totalConverted(for: accountList, to: target)
   }
 
-  /// Compute converted total for current accounts.
+  /// Total value of current accounts in `target`.
   func computeConvertedCurrentTotal(in target: Instrument) async throws -> InstrumentAmount {
-    try await computeConvertedTotal(for: currentAccounts, in: target)
+    try await balanceCalculator.totalConverted(for: currentAccounts, to: target)
   }
 
-  /// Compute converted total for investment accounts.
-  ///
-  /// Single-pass aggregation: each position is converted directly to `target`
-  /// (Rule 8 fast path for same-instrument positions). If the investment store
-  /// has supplied an externally-valued amount for an account
-  /// (`investmentValues[accountId]`), that amount is used verbatim and converted
-  /// once to `target`. Avoids the double-conversion that a naive two-phase
-  /// (positions → account instrument → target) implementation incurs, which
-  /// (a) chains two rate lookups and compounds rounding error, and
-  /// (b) doubles the retry blast radius — an inner success followed by an
-  /// outer failure could leave per-account balances available but the
-  /// aggregate unavailable, even though a direct sum to `target` would have
-  /// succeeded or failed as a single atomic operation.
+  /// Total value of investment accounts in `target`. Uses cached external
+  /// values when present; otherwise sums positions. Single-pass to avoid
+  /// the double-conversion a two-phase approach would chain.
   func computeConvertedInvestmentTotal(in target: Instrument) async throws -> InstrumentAmount {
-    var total = InstrumentAmount.zero(instrument: target)
-    let date = Date()
-    for account in investmentAccounts {
-      if let externalValue = investmentValues[account.id] {
-        // Externally-valued investment account: convert the provided value
-        // once to `target` (Rule 8 fast-paths when instruments match).
-        total += try await conversionService.convertAmount(
-          externalValue, to: target, on: date)
-        continue
-      }
-      for position in account.positions {
-        total += try await conversionService.convertAmount(
-          position.amount, to: target, on: date)
-      }
-    }
-    return total
+    try await balanceCalculator.totalConverted(
+      for: investmentAccounts, to: target, using: investmentValueCache)
   }
 
-  /// Compute converted net worth (current + investment totals) in a target instrument.
+  /// Net worth (current + investment) in `target`.
   func computeConvertedNetWorth(in target: Instrument) async throws -> InstrumentAmount {
     let current = try await computeConvertedCurrentTotal(in: target)
     let investment = try await computeConvertedInvestmentTotal(in: target)
     return current + investment
   }
 
-  /// Recompute per-account balances and aggregate totals. The first pass
-  /// runs inline and is awaited by the caller, so after `load()` (and every
-  /// other caller below) returns, observers see fully-published balances —
-  /// no poll, no race. If the first pass hits any conversion failure, a
-  /// background retry loop is spawned that keeps attempting until everything
-  /// succeeds or a new recompute cancels it. Callers that want to await
-  /// retry success use `waitForPendingConversions()`.
-  ///
-  /// Each account is converted in isolation: a failure for one leaves other
-  /// accounts' balances populated. Aggregate totals are only published when
-  /// *all* underlying conversions succeed (an inaccurate aggregate is worse
-  /// than no aggregate).
+  /// Recompute per-account balances and aggregate totals via
+  /// `balanceCalculator`. The first pass runs inline and is awaited by the
+  /// caller, so after `load()` (and every other caller below) returns,
+  /// observers see fully-published balances. If the first pass reports any
+  /// conversion failure, a `[weak self]` background retry loop is spawned
+  /// that keeps attempting until everything succeeds or a new recompute
+  /// cancels it. Callers that want to await retry success use
+  /// `waitForPendingConversions()`.
   private func recomputeConvertedTotals() async {
     conversionTask?.cancel()
     conversionTask = nil
 
-    let anyFailed = await runConversionAttempt()
-    guard anyFailed else { return }
+    let snapshot = await computeBalanceSnapshot()
+    publishSnapshot(snapshot)
+    guard snapshot.anyFailed else { return }
 
     let delay = retryDelay
-    // `[weak self]` so the retry loop doesn't pin the store alive when the
-    // owning view goes away while conversions are still failing.
     conversionTask = Task { [weak self] in
       while !Task.isCancelled {
         try? await Task.sleep(for: delay)
         guard let self, !Task.isCancelled else { return }
-        if !(await self.runConversionAttempt()) { return }
+        let retry = await self.computeBalanceSnapshot()
+        self.publishSnapshot(retry)
+        if !retry.anyFailed { return }
       }
     }
   }
 
-  /// Single pass over all accounts; returns `true` if any conversion failed.
-  /// Always publishes the latest computed state, even if partial.
-  private func runConversionAttempt() async -> Bool {
-    var anyFailed = false
-    var newBalances: [UUID: InstrumentAmount] = [:]
+  private func computeBalanceSnapshot() async -> AccountBalanceCalculator.Snapshot {
+    await balanceCalculator.compute(
+      allAccounts: accounts.ordered,
+      currentAccounts: currentAccounts,
+      investmentAccounts: investmentAccounts,
+      investmentValues: investmentValueCache)
+  }
 
-    // Phase 1: per-account display balance in the account's own instrument.
-    // Iterate ALL accounts so per-account display works regardless of showHidden.
-    for account in accounts.ordered {
-      do {
-        let balance = try await displayBalance(for: account.id)
-        guard !Task.isCancelled else { return false }
-        newBalances[account.id] = balance
-      } catch {
-        anyFailed = true
-        logger.warning(
-          "Conversion failed for account \(account.name): \(error.localizedDescription)")
-      }
-    }
-
-    // Phase 2: aggregate totals — only valid if every contributing account
-    // converted successfully *and* the per-account → target conversion works.
-    let date = Date()
-    let (currentTotal, currentValid) = await sumConverted(
-      accounts: currentAccounts, balances: newBalances, on: date)
-    let (investmentTotal, investmentValid) = await sumConverted(
-      accounts: investmentAccounts, balances: newBalances, on: date)
-
-    guard !Task.isCancelled else { return false }
-
-    if !currentValid || !investmentValid {
-      anyFailed = true
-    }
-
-    convertedBalances = newBalances
-    convertedCurrentTotal = currentValid ? currentTotal : nil
-    convertedInvestmentTotal = investmentValid ? investmentTotal : nil
-    convertedNetWorth =
-      (currentValid && investmentValid) ? (currentTotal + investmentTotal) : nil
+  private func publishSnapshot(_ snapshot: AccountBalanceCalculator.Snapshot) {
+    convertedBalances = snapshot.balances
+    convertedCurrentTotal = snapshot.currentTotal
+    convertedInvestmentTotal = snapshot.investmentTotal
+    convertedNetWorth = snapshot.netWorth
     hasCompletedInitialConversion = true
-
-    return anyFailed
-  }
-
-  /// Sums per-account balances converted to `targetInstrument`. Returns
-  /// `(total, valid)`; `valid` is false if any account is missing from
-  /// `balances` or if its target conversion throws.
-  private func sumConverted(
-    accounts list: [Account],
-    balances: [UUID: InstrumentAmount],
-    on date: Date
-  ) async -> (InstrumentAmount, Bool) {
-    var total = InstrumentAmount.zero(instrument: targetInstrument)
-    var valid = true
-    for account in list {
-      guard let balance = balances[account.id] else {
-        valid = false
-        continue
-      }
-      do {
-        let converted = try await conversionService.convertAmount(
-          balance, to: targetInstrument, on: date)
-        if valid {
-          total += converted
-        }
-      } catch {
-        valid = false
-        logger.warning(
-          "Aggregate conversion failed for \(account.name): \(error.localizedDescription)")
-      }
-    }
-    return (total, valid)
   }
 
   /// Awaits the background retry loop, if one is running. Only relevant
@@ -307,14 +224,10 @@ final class AccountStore {
   }
 
   /// Updates the investment value for a specific account locally.
-  /// Called when InvestmentStore sets or removes a value.
+  /// Called when `InvestmentStore` sets or removes a value.
   func updateInvestmentValue(accountId: UUID, value: InstrumentAmount?) async {
     guard accounts.by(id: accountId) != nil else { return }
-    if let value {
-      investmentValues[accountId] = value
-    } else {
-      investmentValues.removeValue(forKey: accountId)
-    }
+    investmentValueCache.set(value, for: accountId)
     await recomputeConvertedTotals()
   }
 
