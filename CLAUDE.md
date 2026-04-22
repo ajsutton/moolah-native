@@ -123,10 +123,10 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
 
 **Before committing any code, you MUST:**
 
-1. **Format Swift files**
-   - Run `just format` to apply `swift-format` across the repo (uses `.swift-format` config)
-   - CI runs `just format-check` and **will fail** if any tracked `.swift` file is not in formatted form
-   - `just format-check` is non-destructive — run it locally to preview CI's result without mutating files
+1. **Format and lint Swift files**
+   - Run `just format` to apply `swift-format` (layout) and `swiftlint --fix` (autocorrectable idioms). Uses `.swift-format` and `.swiftlint.yml` configs.
+   - CI runs `just format-check` and **will fail** if any tracked `.swift` file is not in formatted form, or if new SwiftLint warnings appear beyond the baseline in `.swiftlint-baseline.yml`.
+   - `just format-check` is non-destructive — run it locally to preview CI's result without mutating files.
    - Xcode's editor / format-on-save can silently reformat files to a layout that disagrees with `swift-format`. Always run `just format` immediately before `git commit` so CI doesn't kick the PR back.
 
 2. **Check for Compiler Warnings**
@@ -151,6 +151,12 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
    - Builds will fail if there are any warnings in user code
    - This ensures warning-free commits at all times
 
+## Code Style & Idioms
+
+- **Code Guide:** All Swift code MUST follow `guides/CODE_GUIDE.md`. This is not optional.
+- **Tooling:** `swift-format` handles layout; SwiftLint handles policy. `just format` applies both; `just format-check` enforces them in CI.
+- **Before Shipping Code:** Run the `code-review` agent (see Agents section) to validate compliance with `guides/CODE_GUIDE.md` and surface architectural issues.
+
 ## UI Design & Style Guide
 
 - **Style Guide:** All UI work MUST follow `guides/UI_GUIDE.md`. This is not optional.
@@ -163,7 +169,10 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
 
 ## Bug Tracking
 
-- **Known bugs** are tracked in `BUGS.md` in the project root. When fixing a bug, remove the entry entirely — don't mark it as fixed or strike it through.
+- **Known bugs and feature issues** are tracked as GitHub issues at https://github.com/ajsutton/moolah-native/issues.
+- When fixing a bug, close the corresponding issue from the PR (e.g. `Fixes #123` in the commit or PR body).
+- When adding a TODO or FIXME in Swift source, reference an open GitHub issue: `TODO(#N): reason — https://github.com/ajsutton/moolah-native/issues/N`. Bare `TODO:` / `FIXME:` without an issue reference is disallowed.
+- CI blocks closing a GitHub issue while live `TODO(#N)` comments still reference it (tracked by issue [#249](https://github.com/ajsutton/moolah-native/issues/249)).
 
 ## Planning & Documentation
 
@@ -173,6 +182,7 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
 
 This project defines specialized review agents in `.claude/agents/`. Invoke them with `@agent-name` (e.g., `@ui-review`, `@concurrency-review`).
 
+- **`code-review`** — Reviews Swift code for `guides/CODE_GUIDE.md` compliance and architecture conventions in CLAUDE.md: naming, type choice, protocol design, error handling, optional discipline, extension organization, thin-view discipline, TODO(#N) format. Use after writing or significantly modifying any production Swift file, before committing.
 - **`ui-review`** — Reviews SwiftUI views for `guides/UI_GUIDE.md` compliance, Apple HIG, and accessibility. Use after creating or modifying UI components.
 - **`concurrency-review`** — Reviews Swift code for `guides/CONCURRENCY_GUIDE.md` compliance: actor isolation, task hygiene, Sendable, async patterns. Use after modifying stores, repositories, or backend code.
 - **`sync-review`** — Reviews CKSyncEngine sync code for `guides/SYNC_GUIDE.md` compliance: error handling, change tracking, conflict resolution, account changes, zone management. Use after modifying sync engines, change trackers, or record mappings.
