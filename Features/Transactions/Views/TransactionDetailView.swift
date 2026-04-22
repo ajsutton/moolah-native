@@ -824,9 +824,10 @@ struct TransactionDetailView: View {
 
   private var payeeVisibleSuggestions: [String] {
     guard showPayeeSuggestions, !draft.payee.isEmpty else { return [] }
-    return transactionStore.payeeSuggestionSource.suggestions
-      .filter { $0.localizedCaseInsensitiveCompare(draft.payee) != .orderedSame }
-      .prefix(8).map { $0 }
+    return Array(
+      transactionStore.payeeSuggestionSource.suggestions
+        .filter { $0.localizedCaseInsensitiveCompare(draft.payee) != .orderedSame }
+        .prefix(8))
   }
 
   private var payeeVisibleSuggestionCount: Int {
