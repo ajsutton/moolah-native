@@ -234,9 +234,11 @@ actor CryptoPriceService {
       // Prefetch is best-effort
     }
   }
+}
 
-  // MARK: - Private helpers
+// MARK: - Cache lookup & merge
 
+extension CryptoPriceService {
   private func lookupPrice(tokenId: String, dateString: String) -> Decimal? {
     caches[tokenId]?.prices[dateString]
   }
@@ -309,7 +311,11 @@ actor CryptoPriceService {
       )
     }
   }
+}
 
+// MARK: - Disk cache I/O
+
+extension CryptoPriceService {
   private func cacheFileURL(tokenId: String) -> URL {
     let safeName = tokenId.replacingOccurrences(of: ":", with: "-")
     return cacheDirectory.appendingPathComponent("prices-\(safeName).json.gz")
