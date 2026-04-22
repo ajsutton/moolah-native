@@ -19,8 +19,8 @@ struct AutocompleteFieldDriver {
 
   /// Clicks the field to give it keyboard focus. Returns once the field
   /// reports `hasKeyboardFocus`. Use this when the field has not been
-  /// auto-focused by the surrounding view (see BUGS.md regarding
-  /// `defaultFocus(.payee)` not winning the macOS first-responder).
+  /// auto-focused by the surrounding view (e.g. `defaultFocus(.payee)`
+  /// does not always win the macOS first-responder).
   func tap() {
     Trace.record(detail: "field=\(fieldIdentifier)")
     let field = app.element(for: fieldIdentifier)

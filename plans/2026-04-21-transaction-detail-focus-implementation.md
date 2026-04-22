@@ -217,8 +217,8 @@ Land with the changes (not after):
    region. If your form is presented alongside a scene-level focus
    claimant (e.g. `.searchable` toolbar), blur that claimant explicitly
    on presentation."
-3. Delete the `BUGS.md` entry if PR #241's deletion missed it (it did —
-   PR #240 removed it; verify).
+3. (The top-level bug-tracker file has since been retired from the
+   repo, so no entry remains to delete.)
 
 ## Phase 9 — Final gate
 

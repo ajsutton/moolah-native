@@ -43,7 +43,6 @@ fileGroups:
   - plans
   - CLAUDE.md
   - guides
-  - BUGS.md
   - justfile
   - project.yml
 

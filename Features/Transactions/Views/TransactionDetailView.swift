@@ -844,8 +844,9 @@ struct TransactionDetailView: View {
   private func autofillFromPayee(_ selectedPayee: String) {
     // Only auto-copy amount/type/category from a past transaction when
     // the user is filling in a fresh draft. Editing an existing
-    // transaction's payee must never rewrite other fields — see BUGS.md
-    // before removing this guard.
+    // transaction's payee must never rewrite other fields — do not
+    // remove this guard without an explicit replacement for that
+    // invariant.
     guard openedAsNewTransaction else { return }
     Task {
       guard let match = await transactionStore.fetchTransactionForAutofill(payee: selectedPayee)
