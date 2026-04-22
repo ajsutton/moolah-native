@@ -128,6 +128,7 @@ Views must be thin wrappers that bind state, dispatch actions, and render. **All
    - CI runs `just format-check` and **will fail** if any tracked `.swift` file is not in formatted form, or if new SwiftLint warnings appear beyond the baseline in `.swiftlint-baseline.yml`.
    - `just format-check` is non-destructive — run it locally to preview CI's result without mutating files.
    - Xcode's editor / format-on-save can silently reformat files to a layout that disagrees with `swift-format`. Always run `just format` immediately before `git commit` so CI doesn't kick the PR back.
+   - **NEVER modify `.swiftlint-baseline.yml`** without explicit user permission granted in the current conversation. The baseline is a one-way ratchet of pre-existing debt that the team is paying down — it must not grow, not even to re-key entries after a file split or to accept a reduced-but-different violation on an existing entry. If `just format-check` reports a violation (new or re-keyed), fix the underlying code: shorten the file/function/type, rename the identifier, use `#require` instead of force-unwrap, replace a tuple with a struct, etc. Never run `swiftlint --write-baseline`. Never hand-edit the YAML. The `code-review` agent treats any diff to this file as a Critical finding.
 
 2. **Check for Compiler Warnings**
    - Use Xcode MCP: `mcp__xcode__XcodeListNavigatorIssues` with `severity: "warning"`
