@@ -48,7 +48,7 @@ Architectural rules are the highest priority: these are the violations that make
 
 ### C. API surface
 
-- **Access control leakage** -- `public` on module-internal types; `internal` types accidentally exposing `public` methods; unnecessary `public` that should be `internal` or `private`.
+- **Access control leakage** -- `public` on types outside `Domain/` (the project's only effective module boundary) should be `internal` or `private`; `public` types accidentally exposing additional `public` members.
 - **Parameter label quality** -- does the call site read as a sentence? Per Apple's API Design Guidelines.
 - **Default-argument opportunities** -- overload families that should collapse into one function with defaults.
 - **Initializer ergonomics** -- hand-written memberwise inits (prefer synthesized); init doing non-trivial work (extract into `static func make(…)` factory).
@@ -86,6 +86,7 @@ This agent focuses on semantic code quality and architectural conformance. Other
 - **CloudKit sync correctness** → `@sync-review`.
 - **UI test driver invariants** → `@ui-test-review`.
 - **App Store metadata / entitlements / icons** → `@appstore-review`.
+- **Signpost instrumentation / benchmark harness patterns** → `guides/BENCHMARKING_GUIDE.md`.
 
 A complete pre-merge review invokes `@code-review` plus whichever specialists touched the change set. This remains on-demand, not automated.
 
