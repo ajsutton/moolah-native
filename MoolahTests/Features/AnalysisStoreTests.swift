@@ -538,7 +538,7 @@ struct AnalysisStoreBuildExpenseBreakdownTests {
 // MARK: - IncomeExpenseTableCard.cumulativeSavings
 
 @Suite("IncomeExpenseTableCard — cumulativeSavings")
-struct IncomeExpenseTableCardCumulativeSavingsTests {
+struct IncomeExpenseCumulativeSavingsTests {
 
   private let instrument: Instrument = .defaultTestInstrument
 
@@ -691,7 +691,7 @@ struct IncomeExpenseTableCardCumulativeSavingsTests {
 // MARK: - IncomeExpenseTableCard.accessibilityLabel
 
 @Suite("IncomeExpenseTableCard — accessibilityLabel")
-struct IncomeExpenseTableCardAccessibilityLabelTests {
+struct IncomeExpenseAccessibilityLabelTests {
 
   private let instrument: Instrument = .defaultTestInstrument
 
