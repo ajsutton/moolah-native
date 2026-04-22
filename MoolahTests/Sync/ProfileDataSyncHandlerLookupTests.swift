@@ -1,0 +1,74 @@
+import CloudKit
+import Foundation
+import SwiftData
+import Testing
+
+@testable import Moolah
+
+@Suite("ProfileDataSyncHandler — record lookup")
+@MainActor
+struct ProfileDataSyncHandlerLookupTests {
+
+  @Test func buildBatchRecordLookupFindsRecordsByUUID() throws {
+    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+
+    let accountId = UUID()
+    let txnId = UUID()
+
+    let context = ModelContext(container)
+    context.insert(
+      AccountRecord(id: accountId, name: "Acc", type: "bank", position: 0, isHidden: false))
+    context.insert(
+      TransactionRecord(id: txnId, date: Date(), payee: "Test"))
+    try context.save()
+
+    let lookup = handler.buildBatchRecordLookup(for: [accountId, txnId])
+
+    #expect(lookup.count == 2)
+    #expect(lookup[accountId] != nil)
+    #expect(lookup[txnId] != nil)
+    #expect(lookup[accountId]?.recordType == "CD_AccountRecord")
+    #expect(lookup[txnId]?.recordType == "CD_TransactionRecord")
+  }
+
+  @Test func recordToSaveFindsAccountByUUID() throws {
+    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+
+    let accountId = UUID()
+    let context = ModelContext(container)
+    context.insert(
+      AccountRecord(id: accountId, name: "Found", type: "bank", position: 0, isHidden: false))
+    try context.save()
+
+    let recordID = CKRecord.ID(recordName: accountId.uuidString, zoneID: handler.zoneID)
+    let result = handler.recordToSave(for: recordID)
+    #expect(result != nil)
+    #expect(result?.recordType == "CD_AccountRecord")
+    #expect(result?["name"] as? String == "Found")
+  }
+
+  @Test func recordToSaveFindsInstrumentByStringID() throws {
+    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+
+    let context = ModelContext(container)
+    context.insert(
+      InstrumentRecord(
+        id: "ASX:BHP", kind: "stock", name: "BHP Group", decimals: 2,
+        ticker: "BHP", exchange: "ASX"))
+    try context.save()
+
+    let recordID = CKRecord.ID(recordName: "ASX:BHP", zoneID: handler.zoneID)
+    let result = handler.recordToSave(for: recordID)
+    #expect(result != nil)
+    #expect(result?.recordType == "CD_InstrumentRecord")
+    #expect(result?["name"] as? String == "BHP Group")
+  }
+
+  @Test func recordToSaveReturnsNilForMissingRecord() throws {
+    let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+
+    let recordID = CKRecord.ID(recordName: UUID().uuidString, zoneID: handler.zoneID)
+    let result = handler.recordToSave(for: recordID)
+    #expect(result == nil)
+  }
+}
