@@ -1,6 +1,6 @@
 ---
 name: profile-performance
-description: Use when diagnosing performance issues, UI freezes, or main thread blocking in the running app. Covers stack sampling, log-based timing, and Instruments profiling.
+description: Use when diagnosing performance issues in the running Moolah app — UI freezes, beachballs, main-thread hangs, slow sync sessions, laggy navigation, any `⚠️ PERF:` warning in the app logs, or any user report of "the app feels slow".
 ---
 
 # Profile Performance

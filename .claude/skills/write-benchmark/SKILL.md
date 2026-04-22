@@ -1,6 +1,6 @@
 ---
 name: write-benchmark
-description: Use when adding a new performance benchmark test to MoolahBenchmarks. Guides data seeding, measurement patterns, signpost instrumentation, and naming.
+description: Use when adding or modifying a performance benchmark test in MoolahBenchmarks, adding a new test method to an existing benchmark class, or adding `os_signpost` instrumentation to production code that a benchmark will measure.
 ---
 
 # Writing a Benchmark

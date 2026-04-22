@@ -1,6 +1,6 @@
 ---
 name: run-mac-app-with-logs
-description: Use when you need to run the macOS app and capture runtime logs to diagnose issues - CloudKit sync problems, crashes, unexpected behavior, or verifying logging output
+description: Use when running the Moolah macOS app with runtime logs captured — diagnosing CloudKit sync problems, crashes, hangs, unexpected behaviour, reproducing a bug that only shows up via `os_log`, or verifying that a newly added log statement actually emits.
 ---
 
 # Run Mac App with Logs

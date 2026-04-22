@@ -1,6 +1,6 @@
 ---
 name: interpret-benchmarks
-description: Use when analyzing benchmark results from `just benchmark`. Guides reading XCTest output, identifying regressions, scaling analysis, and deciding next steps.
+description: Use when `just benchmark` output needs to be read or acted on — investigating a suspected performance regression, setting or updating baselines, comparing 1x vs 2x scaling, evaluating whether a stddev is reliable enough to trust, or deciding whether a reported number warrants optimisation.
 ---
 
 # Interpreting Benchmark Results

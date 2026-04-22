@@ -1,6 +1,6 @@
 ---
 name: writing-ui-tests
-description: Use when adding a UI test to MoolahUITests_macOS, extending a screen driver, adding a new test seed or identifier, or fixing a failing UI test. Guides the test-type decision, driver extension rules, seed reuse, user-story test style, the 20-run stability gate, and running the @ui-test-review agent before opening a PR.
+description: Use when adding or modifying a UI test in MoolahUITests_macOS, extending a screen driver under MoolahUITests_macOS or UITestSupport, adding or renaming a UI test seed in `UITestSeeds.swift`, adding an `.accessibilityIdentifier(_:)` intended for test use, or debugging a failing or flaky UI test.
 ---
 
 # Writing a UI Test

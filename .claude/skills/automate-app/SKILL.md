@@ -1,6 +1,6 @@
 ---
 name: automate-app
-description: Use when you need to interact with the running Moolah app — testing UI changes, verifying data, creating test fixtures, or navigating to specific views via AppleScript or URL scheme
+description: Use when driving the running Moolah macOS app from the terminal — verifying a UI change end-to-end, inspecting account/transaction/earmark state, creating or tearing down a test profile's data, or opening the app to a specific view. Also use when a task mentions AppleScript (`osascript`) or the `moolah://` URL scheme.
 ---
 
 # Automating the Moolah App
