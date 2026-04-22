@@ -6,7 +6,7 @@ import Testing
 /// Both InMemoryAuthProvider and RemoteAuthProvider must pass these tests
 /// to prove substitutability per the architecture contract.
 @Suite("AuthProvider contract")
-struct AuthContractTests {
+enum AuthContractTests {
   // MARK: - InMemoryAuthProvider
 
   @Suite("InMemoryAuthProvider")
