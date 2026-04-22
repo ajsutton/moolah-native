@@ -261,20 +261,18 @@ struct TransactionDetailView: View {
       #endif
       .onChange(of: draft) { _, _ in debouncedSave() }
       .onChange(of: legCategoryFieldFocused) { _, focused in
-        for i in draft.legDrafts.indices {
-          if i != focused {
-            showLegCategorySuggestions[i] = false
-            legCategoryHighlightedIndex[i] = nil
-            if let catId = draft.legDrafts[i].categoryId, let cat = categories.by(id: catId) {
-              if draft.legDrafts[i].categoryText != categories.path(for: cat) {
-                legCategoryJustSelected[i] = true
-                draft.legDrafts[i].categoryText = categories.path(for: cat)
-              }
-            } else if !draft.legDrafts[i].categoryText.isEmpty {
+        for i in draft.legDrafts.indices where i != focused {
+          showLegCategorySuggestions[i] = false
+          legCategoryHighlightedIndex[i] = nil
+          if let catId = draft.legDrafts[i].categoryId, let cat = categories.by(id: catId) {
+            if draft.legDrafts[i].categoryText != categories.path(for: cat) {
               legCategoryJustSelected[i] = true
-              draft.legDrafts[i].categoryText = ""
-              draft.legDrafts[i].categoryId = nil
+              draft.legDrafts[i].categoryText = categories.path(for: cat)
             }
+          } else if !draft.legDrafts[i].categoryText.isEmpty {
+            legCategoryJustSelected[i] = true
+            draft.legDrafts[i].categoryText = ""
+            draft.legDrafts[i].categoryId = nil
           }
         }
       }
