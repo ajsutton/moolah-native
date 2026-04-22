@@ -49,7 +49,7 @@ struct FixedCryptoPriceClient: CryptoPriceClient, Sendable {
     var result: [String: Decimal] = [:]
     for mapping in mappings {
       if let tokenPrices = prices[mapping.instrumentId],
-        let latest = tokenPrices.keys.sorted().last
+        let latest = tokenPrices.keys.max()
       {
         result[mapping.instrumentId] = tokenPrices[latest]
       }
