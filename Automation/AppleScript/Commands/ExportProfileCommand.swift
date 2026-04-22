@@ -21,7 +21,7 @@
       }
       let fileURL = URL(fileURLWithPath: (toFile as NSString).expandingTildeInPath)
 
-      let _: Void? = runBlockingWithError { @MainActor () async throws -> Void in
+      let _: Void? = runBlockingWithError { @MainActor () async throws in
         guard let service = ScriptingContext.automationService else {
           throw AutomationError.operationFailed("Scripting not configured")
         }
