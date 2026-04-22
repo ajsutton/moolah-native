@@ -108,6 +108,7 @@ struct RecentlyAddedView: View {
     let window: RecentlyAddedViewModel.Window
     let importedCount: Int
   }
+
   private var reloadKey: ReloadKey {
     ReloadKey(window: window, importedCount: importStore.recentSessions.count)
   }
@@ -221,8 +222,7 @@ struct RecentlyAddedView: View {
       }
       guard let data = try? Data(contentsOf: url) else { continue }
       _ = await importStore.ingest(
-        data: data,
-        source: .droppedFile(url: url, forcedAccountId: nil))
+        data: data, source: .droppedFile(url: url, forcedAccountId: nil))
     }
     await reload()
   }

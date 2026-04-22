@@ -100,8 +100,7 @@ struct MoolahDomainCommands: Commands {
       }
       .disabled(selectedTransaction?.wrappedValue == nil)
 
-      Button("Duplicate Transaction") {}
-        .disabled(true)
+      Button("Duplicate Transaction") {}.disabled(true)
 
       Button("Pay Scheduled Transaction") {
         NotificationCenter.default.post(
@@ -277,6 +276,7 @@ struct MoolahApp: App {
   @State private var profileStore: ProfileStore
   private let logger = Logger(subsystem: "com.moolah.app", category: "BackgroundSync")
   @State private var pendingNavigation: PendingNavigation?
+
   #if os(macOS)
     @NSApplicationDelegateAdaptor(ScriptingBridge.self) var scriptingBridge
     @Environment(\.openWindow) private var openWindow
