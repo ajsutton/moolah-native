@@ -58,13 +58,10 @@ public enum UITestIdentifiers {
     /// "USD"). Rendered in the same row as `counterpartAmount`.
     public static let counterpartAmountInstrument = "detail.counterpartAmount.instrument"
 
-    /// Identifiers for elements that only appear when the transaction is
-    /// rendered in multi-leg (`isCustom`) mode.
-    public enum Leg {
-      /// Category text field inside the given leg section.
-      public static func category(_ index: Int) -> String {
-        "detail.leg.\(index).category"
-      }
+    /// Category text field inside the given leg section. Only rendered when
+    /// the transaction is in multi-leg (`isCustom`) mode.
+    public static func legCategory(_ index: Int) -> String {
+      "detail.leg.\(index).category"
     }
   }
 
@@ -77,20 +74,17 @@ public enum UITestIdentifiers {
       "autocomplete.payee.suggestion.\(index)"
     }
 
-    /// Identifiers for per-leg autocomplete dropdowns (multi-leg `isCustom`
-    /// transactions render one category field per leg).
-    public enum Leg {
-      /// Container element of the category autocomplete dropdown for the
-      /// given leg. Only one leg's category dropdown is visible at a time;
-      /// the identifier reflects whichever leg is active.
-      public static func category(_ legIndex: Int) -> String {
-        "autocomplete.leg.\(legIndex).category"
-      }
+    /// Container element of the category autocomplete dropdown for the given
+    /// leg. Only one leg's category dropdown is visible at a time; the
+    /// identifier reflects whichever leg is active. Only rendered in multi-leg
+    /// (`isCustom`) mode.
+    public static func legCategory(_ legIndex: Int) -> String {
+      "autocomplete.leg.\(legIndex).category"
+    }
 
-      /// Indexed category suggestion row inside the given leg's dropdown.
-      public static func categorySuggestion(_ legIndex: Int, _ rowIndex: Int) -> String {
-        "autocomplete.leg.\(legIndex).category.suggestion.\(rowIndex)"
-      }
+    /// Indexed category suggestion row inside the given leg's dropdown.
+    public static func legCategorySuggestion(_ legIndex: Int, _ rowIndex: Int) -> String {
+      "autocomplete.leg.\(legIndex).category.suggestion.\(rowIndex)"
     }
   }
 }

@@ -15,10 +15,10 @@ struct LegSectionDriver {
   var category: AutocompleteFieldDriver {
     AutocompleteFieldDriver(
       app: app,
-      fieldIdentifier: UITestIdentifiers.Detail.Leg.category(legIndex),
-      dropdownIdentifier: UITestIdentifiers.Autocomplete.Leg.category(legIndex),
+      fieldIdentifier: UITestIdentifiers.Detail.legCategory(legIndex),
+      dropdownIdentifier: UITestIdentifiers.Autocomplete.legCategory(legIndex),
       suggestionIdentifier: { rowIndex in
-        UITestIdentifiers.Autocomplete.Leg.categorySuggestion(legIndex, rowIndex)
+        UITestIdentifiers.Autocomplete.legCategorySuggestion(legIndex, rowIndex)
       }
     )
   }

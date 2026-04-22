@@ -643,7 +643,7 @@ struct TransactionDetailView: View {
           onAcceptHighlighted: { acceptHighlightedLegCategory(at: index) }
         )
         .focused($legCategoryFieldFocused, equals: index)
-        .accessibilityIdentifier(UITestIdentifiers.Detail.Leg.category(index))
+        .accessibilityIdentifier(UITestIdentifiers.Detail.legCategory(index))
       }
 
       Picker("Earmark", selection: $draft.legDrafts[index].earmarkId) {
@@ -963,9 +963,9 @@ struct TransactionDetailView: View {
             showLegCategorySuggestions[activeIndex] = false
             legCategoryHighlightedIndex[activeIndex] = nil
           },
-          identifier: UITestIdentifiers.Autocomplete.Leg.category(activeIndex),
+          identifier: UITestIdentifiers.Autocomplete.legCategory(activeIndex),
           rowIdentifier: { rowIndex in
-            UITestIdentifiers.Autocomplete.Leg.categorySuggestion(activeIndex, rowIndex)
+            UITestIdentifiers.Autocomplete.legCategorySuggestion(activeIndex, rowIndex)
           }
         )
         .frame(width: rect.width)
