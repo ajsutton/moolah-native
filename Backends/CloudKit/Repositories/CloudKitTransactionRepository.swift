@@ -191,7 +191,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
       }
 
       // categoryIds filter: need to check legs
-      if let categoryIds = filter.categoryIds, !categoryIds.isEmpty {
+      if !filter.categoryIds.isEmpty {
         // Fetch all leg records and find transactions with matching categories
         let allLegs = try fetchAllLegRecords()
         let legsByTxnId = Dictionary(grouping: allLegs, by: \.transactionId)
@@ -199,7 +199,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
           guard let legs = legsByTxnId[record.id] else { return false }
           return legs.contains { leg in
             guard let catId = leg.categoryId else { return false }
-            return categoryIds.contains(catId)
+            return filter.categoryIds.contains(catId)
           }
         }
       }

@@ -373,9 +373,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       guard dateRange.contains(tx.date) else { continue }
       guard tx.recurPeriod == nil else { continue }
 
-      if let accountId = filters?.accountId {
-        guard tx.accountIds.contains(accountId) else { continue }
-      }
+      if let accountId = filters?.accountId, !tx.accountIds.contains(accountId) { continue }
       if let payee = filters?.payee, tx.payee != payee {
         continue
       }
@@ -387,7 +385,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
         if let earmarkId = filters?.earmarkId, leg.earmarkId != earmarkId {
           continue
         }
-        if let categoryIds = filters?.categoryIds, !categoryIds.contains(categoryId) {
+        if let categoryIds = filters?.categoryIds, !categoryIds.isEmpty,
+          !categoryIds.contains(categoryId)
+        {
           continue
         }
 

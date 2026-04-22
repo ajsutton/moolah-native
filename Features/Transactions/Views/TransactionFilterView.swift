@@ -35,7 +35,7 @@ struct TransactionFilterView: View {
     _selectedScheduled = State(initialValue: filter.scheduled)
     _dateRangeLowerBound = State(initialValue: filter.dateRange?.lowerBound)
     _dateRangeUpperBound = State(initialValue: filter.dateRange?.upperBound)
-    _selectedCategoryIds = State(initialValue: filter.categoryIds ?? [])
+    _selectedCategoryIds = State(initialValue: filter.categoryIds)
     _payeeText = State(initialValue: filter.payee ?? "")
   }
 
@@ -190,7 +190,7 @@ struct TransactionFilterView: View {
       earmarkId: selectedEarmarkId,
       scheduled: selectedScheduled,
       dateRange: dateRange,
-      categoryIds: selectedCategoryIds.isEmpty ? nil : selectedCategoryIds,
+      categoryIds: selectedCategoryIds,
       payee: payeeText.isEmpty ? nil : payeeText
     )
 

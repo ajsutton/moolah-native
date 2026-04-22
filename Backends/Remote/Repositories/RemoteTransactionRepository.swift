@@ -38,8 +38,8 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
           name: "to", value: BackendDateFormatter.string(from: dateRange.upperBound)))
     }
 
-    if let categoryIds = filter.categoryIds, !categoryIds.isEmpty {
-      for categoryId in categoryIds {
+    if !filter.categoryIds.isEmpty {
+      for categoryId in filter.categoryIds {
         queryItems.append(URLQueryItem(name: "category", value: categoryId.apiString))
       }
     }

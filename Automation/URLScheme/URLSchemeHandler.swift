@@ -56,7 +56,7 @@ enum URLSchemeHandler {
     let destination = try parseDestination(
       firstComponent.lowercased(),
       pathComponents: pathComponents,
-      queryItems: URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+      queryItems: URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
     )
 
     return Route(profileIdentifier: profileIdentifier, destination: destination)
@@ -65,7 +65,7 @@ enum URLSchemeHandler {
   private static func parseDestination(
     _ name: String,
     pathComponents: [String],
-    queryItems: [URLQueryItem]?
+    queryItems: [URLQueryItem]
   ) throws -> Destination {
     switch name {
     case "accounts":
@@ -82,15 +82,15 @@ enum URLSchemeHandler {
       let id = try requireUUID(from: pathComponents, at: 1)
       return .earmark(id)
     case "analysis":
-      let history = queryItems?.first(where: { $0.name == "history" })?.value.flatMap(Int.init)
-      let forecast = queryItems?.first(where: { $0.name == "forecast" })?.value.flatMap(Int.init)
+      let history = queryItems.first(where: { $0.name == "history" })?.value.flatMap(Int.init)
+      let forecast = queryItems.first(where: { $0.name == "forecast" })?.value.flatMap(Int.init)
       return .analysis(history: history, forecast: forecast)
     case "reports":
       let dateFormatter = ISO8601DateFormatter()
       dateFormatter.formatOptions = [.withFullDate]
-      let from = queryItems?.first(where: { $0.name == "from" })?.value.flatMap(
+      let from = queryItems.first(where: { $0.name == "from" })?.value.flatMap(
         dateFormatter.date(from:))
-      let to = queryItems?.first(where: { $0.name == "to" })?.value.flatMap(
+      let to = queryItems.first(where: { $0.name == "to" })?.value.flatMap(
         dateFormatter.date(from:))
       return .reports(from: from, to: to)
     case "categories":

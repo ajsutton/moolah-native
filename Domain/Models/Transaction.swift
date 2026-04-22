@@ -223,7 +223,7 @@ struct TransactionFilter: Sendable, Equatable {
   var earmarkId: UUID?
   var scheduled: Bool?
   var dateRange: ClosedRange<Date>?
-  var categoryIds: Set<UUID>?
+  var categoryIds: Set<UUID>
   var payee: String?
 
   init(
@@ -231,7 +231,7 @@ struct TransactionFilter: Sendable, Equatable {
     earmarkId: UUID? = nil,
     scheduled: Bool? = nil,
     dateRange: ClosedRange<Date>? = nil,
-    categoryIds: Set<UUID>? = nil,
+    categoryIds: Set<UUID> = [],
     payee: String? = nil
   ) {
     self.accountId = accountId
@@ -246,7 +246,7 @@ struct TransactionFilter: Sendable, Equatable {
 extension TransactionFilter {
   var hasActiveFilters: Bool {
     accountId != nil || earmarkId != nil || scheduled != nil
-      || dateRange != nil || categoryIds != nil || payee != nil
+      || dateRange != nil || !categoryIds.isEmpty || payee != nil
   }
 }
 

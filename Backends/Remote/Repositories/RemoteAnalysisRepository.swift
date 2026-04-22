@@ -91,7 +91,7 @@ final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
     if let earmarkId = filters?.earmarkId {
       queryItems.append(URLQueryItem(name: "earmark", value: earmarkId.apiString))
     }
-    if let categoryIds = filters?.categoryIds {
+    if let categoryIds = filters?.categoryIds, !categoryIds.isEmpty {
       queryItems.append(
         contentsOf: categoryIds.map {
           URLQueryItem(name: "category", value: $0.apiString)
