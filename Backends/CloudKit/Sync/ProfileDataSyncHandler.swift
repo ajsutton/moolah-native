@@ -121,12 +121,25 @@ final class ProfileDataSyncHandler {
   /// Builds a CKRecord from a local SwiftData record for upload.
   /// If cached system fields exist for this record, applies fields directly onto the
   /// cached record to preserve the change tag and avoid `.serverRecordChanged` conflicts.
+  ///
+  /// If the cached system fields reference a *different* zone than this handler's
+  /// own zone, they are discarded and the record is uploaded as a fresh create in
+  /// the handler's zone. This is a defence-in-depth guard against legacy corruption
+  /// from the pre-April-15 build, where per-profile `CKSyncEngine`s received
+  /// `fetchedRecordZoneChanges` for every zone in the database and upserted records
+  /// by UUID into the wrong container — so a local record in profile A's store could
+  /// end up with cached system fields pointing at profile B's zone. Zone filtering
+  /// at ingestion (commit `7318941`) and the unified `SyncCoordinator` (commit
+  /// `a0c502b`) prevent new corruption, but rows already on disk keep their stale
+  /// system fields; without this guard they produce an unbreakable
+  /// `serverRecordChanged` loop on every send.
   func buildCKRecord<T: CloudKitRecordConvertible & SystemFieldsCacheable>(
     for record: T
   ) -> CKRecord {
     let freshRecord = record.toCKRecord(in: zoneID)
     if let cachedData = record.encodedSystemFields,
-      let cachedRecord = CKRecord.fromEncodedSystemFields(cachedData)
+      let cachedRecord = CKRecord.fromEncodedSystemFields(cachedData),
+      cachedRecord.recordID.zoneID == zoneID
     {
       for key in freshRecord.allKeys() {
         cachedRecord[key] = freshRecord[key]

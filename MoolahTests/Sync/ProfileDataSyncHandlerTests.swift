@@ -137,6 +137,47 @@ struct ProfileDataSyncHandlerTests {
     #expect(ckRecord["name"] as? String == "Savings")
   }
 
+  @Test("buildCKRecord drops cached system fields when they point to a different zone")
+  func buildCKRecordDropsCachedFieldsOnZoneMismatch() throws {
+    let (handler, container) = try makeHandler()
+
+    // Simulate legacy corruption: a local AccountRecord whose
+    // encodedSystemFields blob references a DIFFERENT profile's zone.
+    // Historically this happened pre-April-15 when per-profile sync engines
+    // received fetch events for every zone in the database and upserted
+    // records by UUID into the wrong container. buildCKRecord must NOT reuse
+    // those system fields — doing so ships the record with a stale change
+    // tag that lives in another zone and triggers an unbreakable
+    // `serverRecordChanged` loop on every send.
+    let foreignZone = CKRecordZone.ID(
+      zoneName: "profile-\(UUID().uuidString)",
+      ownerName: CKCurrentUserDefaultName
+    )
+    let accountId = UUID()
+    let foreignCK = CKRecord(
+      recordType: "CD_AccountRecord",
+      recordID: CKRecord.ID(recordName: accountId.uuidString, zoneID: foreignZone)
+    )
+    let foreignSystemFields = foreignCK.encodedSystemFields
+
+    let context = ModelContext(container)
+    let account = AccountRecord(
+      id: accountId, name: "Corrupt", type: "bank", position: 0, isHidden: false
+    )
+    account.encodedSystemFields = foreignSystemFields
+    context.insert(account)
+    try context.save()
+
+    let built = handler.buildCKRecord(for: account)
+
+    #expect(built.recordID.zoneID == handler.zoneID)
+    // A fresh (unsent) CKRecord has no change tag. Sending with the foreign
+    // tag would be rejected with serverRecordChanged forever.
+    #expect(built.recordChangeTag == nil)
+    #expect(built.recordID.recordName == accountId.uuidString)
+    #expect(built["name"] as? String == "Corrupt")
+  }
+
   @Test func buildCKRecordPreservesCachedSystemFields() throws {
     let (handler, container) = try makeHandler()
 
