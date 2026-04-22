@@ -239,10 +239,10 @@ struct ForecastPicker: View {
                 TransactionLeg(
                   accountId: account.id,
                   instrument: .AUD,
-                  quantity: i % 2 == 0
+                  quantity: i.isMultiple(of: 2)
                     ? Decimal(Int.random(in: 100...500)) : -Decimal(Int.random(in: 50...200)),
-                  type: i % 2 == 0 ? .income : .expense,
-                  categoryId: i % 3 == 0 ? category.id : nil
+                  type: i.isMultiple(of: 2) ? .income : .expense,
+                  categoryId: i.isMultiple(of: 3) ? category.id : nil
                 )
               ]
             ))

@@ -175,7 +175,7 @@ enum BenchmarkFixtures {
       ids.append(id)
       // ~20% are child categories (have a parent).
       let parentId: UUID? =
-        (i >= 10 && i % 5 == 0)
+        (i >= 10 && i.isMultiple(of: 5))
         ? ids[i / 5]
         : nil
       let record = CategoryRecord(
@@ -200,7 +200,7 @@ enum BenchmarkFixtures {
       ids.append(id)
       // Half have savings targets.
       let savingsTarget: Int64? =
-        i % 2 == 0
+        i.isMultiple(of: 2)
         ? InstrumentAmount(quantity: Decimal((i + 1) * 100), instrument: instrument).storageValue
         : nil
       let record = EarmarkRecord(
@@ -297,7 +297,7 @@ enum BenchmarkFixtures {
 
       // Assign earmark to ~5% of transactions.
       let earmarkId: UUID? =
-        (i % 20 == 0 && !earmarkIds.isEmpty)
+        (i.isMultiple(of: 20) && !earmarkIds.isEmpty)
         ? earmarkIds[i % earmarkIds.count]
         : nil
 
