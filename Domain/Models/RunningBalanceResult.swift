@@ -1,0 +1,51 @@
+import Foundation
+
+/// The outcome of `TransactionPage.withRunningBalances`: the computed rows plus
+/// the first conversion failure encountered (if any).
+///
+/// Callers that need only the rendered rows can read `rows`. Stores that drive
+/// a user-visible error state should observe `firstConversionError` and publish
+/// it so the user sees a retry path rather than silently blanked balances.
+/// See Rule 11 of `guides/INSTRUMENT_CONVERSION_GUIDE.md`.
+struct RunningBalanceResult: Sendable {
+  let rows: [TransactionWithBalance]
+  let firstConversionError: RunningBalanceConversionError?
+}
+
+/// A typed, Sendable wrapper around the first conversion error encountered
+/// during running-balance computation. Carries the failing transaction id so
+/// diagnostics can correlate logs with the surfaced user-visible error.
+struct RunningBalanceConversionError: LocalizedError, Sendable {
+  let transactionId: UUID
+  let targetInstrumentId: String
+  let underlyingDescription: String
+
+  var errorDescription: String? {
+    "Unable to convert a transaction to \(targetInstrumentId). The running balance is "
+      + "unavailable until the rate source recovers. (\(underlyingDescription))"
+  }
+}
+
+/// A transaction paired with converted leg amounts and the account balance after it was applied.
+///
+/// `displayAmount` and `balance` are `nil` when conversion failed — either for
+/// this transaction's legs or for an earlier transaction in the running-balance
+/// chain. `convertedLegs` is empty in the same case.
+struct TransactionWithBalance: Sendable, Identifiable {
+  let transaction: Transaction
+  let convertedLegs: [ConvertedTransactionLeg]
+  let displayAmount: InstrumentAmount?
+  let balance: InstrumentAmount?
+
+  var id: UUID { transaction.id }
+
+  /// Returns converted legs belonging to the given account.
+  func legs(forAccount accountId: UUID) -> [ConvertedTransactionLeg] {
+    convertedLegs.filter { $0.leg.accountId == accountId }
+  }
+
+  /// Returns converted legs belonging to the given earmark.
+  func legs(forEarmark earmarkId: UUID) -> [ConvertedTransactionLeg] {
+    convertedLegs.filter { $0.leg.earmarkId == earmarkId }
+  }
+}
