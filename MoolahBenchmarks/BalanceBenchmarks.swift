@@ -7,8 +7,8 @@ import XCTest
 /// measures the full fetch path including the priorBalance reduction.
 final class PriorBalanceBenchmarks: XCTestCase {
 
-  nonisolated(unsafe) private static var _backend: CloudKitBackend!
-  nonisolated(unsafe) private static var _container: ModelContainer!
+  nonisolated(unsafe) private static var _backend: CloudKitBackend?
+  nonisolated(unsafe) private static var _container: ModelContainer?
 
   override static func setUp() {
     super.setUp()
@@ -28,8 +28,18 @@ final class PriorBalanceBenchmarks: XCTestCase {
     super.tearDown()
   }
 
-  private var backend: CloudKitBackend { Self._backend }
-  private var container: ModelContainer { Self._container }
+  private var backend: CloudKitBackend {
+    guard let backend = Self._backend else {
+      fatalError("setUp must initialise _backend before tests run")
+    }
+    return backend
+  }
+  private var container: ModelContainer {
+    guard let container = Self._container else {
+      fatalError("setUp must initialise _container before tests run")
+    }
+    return container
+  }
 
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }
   private var options: XCTMeasureOptions {

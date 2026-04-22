@@ -12,25 +12,26 @@ import XCTest
 /// Swift work rather than filesystem variance.
 final class ImportPipelineBenchmarks: XCTestCase {
 
-  nonisolated(unsafe) private static var _backend: CloudKitBackend!
-  nonisolated(unsafe) private static var _container: ModelContainer!
-  nonisolated(unsafe) private static var _accountId: UUID!
+  nonisolated(unsafe) private static var _backend: CloudKitBackend?
+  nonisolated(unsafe) private static var _container: ModelContainer?
+  nonisolated(unsafe) private static var _accountId: UUID?
 
   override static func setUp() {
     super.setUp()
     let result = try! TestBackend.create()
+    let accountId = UUID()
     _backend = result.backend
     _container = result.container
-    _accountId = UUID()
+    _accountId = accountId
     try! awaitSync { @MainActor in
       _ = try await result.backend.accounts.create(
         Account(
-          id: _accountId, name: "Bench", type: .bank, instrument: .AUD,
+          id: accountId, name: "Bench", type: .bank, instrument: .AUD,
           positions: [], position: 0, isHidden: false),
         openingBalance: nil)
       _ = try await result.backend.csvImportProfiles.create(
         CSVImportProfile(
-          accountId: _accountId,
+          accountId: accountId,
           parserIdentifier: "generic-bank",
           headerSignature: ["date", "description", "debit", "credit", "balance"]))
     }
@@ -43,8 +44,18 @@ final class ImportPipelineBenchmarks: XCTestCase {
     super.tearDown()
   }
 
-  private var backend: CloudKitBackend { Self._backend }
-  private var accountId: UUID { Self._accountId }
+  private var backend: CloudKitBackend {
+    guard let backend = Self._backend else {
+      fatalError("setUp must initialise _backend before tests run")
+    }
+    return backend
+  }
+  private var accountId: UUID {
+    guard let accountId = Self._accountId else {
+      fatalError("setUp must initialise _accountId before tests run")
+    }
+    return accountId
+  }
 
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }
   private var options: XCTMeasureOptions {

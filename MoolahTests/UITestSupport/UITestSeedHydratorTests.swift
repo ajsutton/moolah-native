@@ -14,15 +14,21 @@ import XCTest
 /// symbolically without worrying about non-determinism.
 @MainActor
 final class UITestSeedHydratorTests: XCTestCase {
-  private var containerManager: ProfileContainerManager!
+  private var _containerManager: ProfileContainerManager?
+  private var containerManager: ProfileContainerManager {
+    guard let manager = _containerManager else {
+      fatalError("setUp must initialise containerManager before tests run")
+    }
+    return manager
+  }
 
   override func setUp() async throws {
     try await super.setUp()
-    containerManager = try ProfileContainerManager.forTesting()
+    _containerManager = try ProfileContainerManager.forTesting()
   }
 
   override func tearDown() async throws {
-    containerManager = nil
+    _containerManager = nil
     try await super.tearDown()
   }
 

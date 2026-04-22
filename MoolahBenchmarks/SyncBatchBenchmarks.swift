@@ -6,7 +6,7 @@ import XCTest
 /// Benchmarks for sync batch operations — upsert (download).
 final class SyncBatchBenchmarks: XCTestCase {
 
-  nonisolated(unsafe) private static var _container: ModelContainer!
+  nonisolated(unsafe) private static var _container: ModelContainer?
   nonisolated(unsafe) private static var _existingIds400: [UUID] = []
 
   override static func setUp() {
@@ -27,7 +27,12 @@ final class SyncBatchBenchmarks: XCTestCase {
     super.tearDown()
   }
 
-  private var container: ModelContainer { Self._container }
+  private var container: ModelContainer {
+    guard let container = Self._container else {
+      fatalError("setUp must initialise _container before tests run")
+    }
+    return container
+  }
 
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }
   private var options: XCTMeasureOptions {

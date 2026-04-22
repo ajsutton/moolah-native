@@ -7,8 +7,8 @@ import XCTest
 /// Data is seeded once for the entire class to avoid repeated 3s seeding overhead.
 final class TransactionFetchBenchmarks: XCTestCase {
 
-  nonisolated(unsafe) private static var _backend: CloudKitBackend!
-  nonisolated(unsafe) private static var _container: ModelContainer!
+  nonisolated(unsafe) private static var _backend: CloudKitBackend?
+  nonisolated(unsafe) private static var _container: ModelContainer?
 
   override static func setUp() {
     super.setUp()
@@ -28,7 +28,12 @@ final class TransactionFetchBenchmarks: XCTestCase {
     super.tearDown()
   }
 
-  private var backend: CloudKitBackend { Self._backend }
+  private var backend: CloudKitBackend {
+    guard let backend = Self._backend else {
+      fatalError("setUp must initialise _backend before tests run")
+    }
+    return backend
+  }
 
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }
   private var options: XCTMeasureOptions {

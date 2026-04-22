@@ -8,7 +8,7 @@ import XCTest
 final class AnalysisBenchmarks: XCTestCase {
 
   nonisolated(unsafe) private static var _backend: CloudKitBackend!
-  nonisolated(unsafe) private static var _container: ModelContainer!
+  nonisolated(unsafe) private static var _container: ModelContainer?
 
   override static func setUp() {
     super.setUp()

@@ -9,8 +9,8 @@ import XCTest
 /// transaction edit, while reload (reloadFromSync) is too expensive for that path.
 final class BalanceDeltaBenchmarks: XCTestCase {
 
-  nonisolated(unsafe) private static var _backend: CloudKitBackend!
-  nonisolated(unsafe) private static var _container: ModelContainer!
+  nonisolated(unsafe) private static var _backend: CloudKitBackend?
+  nonisolated(unsafe) private static var _container: ModelContainer?
 
   override static func setUp() {
     super.setUp()
@@ -30,8 +30,18 @@ final class BalanceDeltaBenchmarks: XCTestCase {
     super.tearDown()
   }
 
-  private var backend: CloudKitBackend { Self._backend }
-  private var container: ModelContainer { Self._container }
+  private var backend: CloudKitBackend {
+    guard let backend = Self._backend else {
+      fatalError("setUp must initialise _backend before tests run")
+    }
+    return backend
+  }
+  private var container: ModelContainer {
+    guard let container = Self._container else {
+      fatalError("setUp must initialise _container before tests run")
+    }
+    return container
+  }
 
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }
   private var options: XCTMeasureOptions {
@@ -123,10 +133,11 @@ final class BalanceDeltaBenchmarks: XCTestCase {
   /// Measures applyDelta on AccountStore with a realistic account set.
   /// Applies a single-account, single-instrument delta 100 times per iteration.
   func testAccountStoreApplyDelta() {
+    let backend = self.backend
     let accountStore = try! awaitSync { @MainActor in
       let store = AccountStore(
-        repository: Self._backend.accounts,
-        conversionService: Self._backend.conversionService,
+        repository: backend.accounts,
+        conversionService: backend.conversionService,
         targetInstrument: .AUD)
       await store.load()
       return store
@@ -147,10 +158,11 @@ final class BalanceDeltaBenchmarks: XCTestCase {
   /// Measures reloadFromSync on AccountStore — the expensive path that
   /// re-fetches everything. This is the baseline we're trying to avoid.
   func testAccountReloadFromSync() {
+    let backend = self.backend
     let accountStore = try! awaitSync { @MainActor in
       let store = AccountStore(
-        repository: Self._backend.accounts,
-        conversionService: Self._backend.conversionService,
+        repository: backend.accounts,
+        conversionService: backend.conversionService,
         targetInstrument: .AUD)
       await store.load()
       return store
@@ -166,10 +178,11 @@ final class BalanceDeltaBenchmarks: XCTestCase {
 
   /// Measures reloadFromSync on EarmarkStore — how expensive the earmark reload is.
   func testEarmarkReloadFromSync() {
+    let backend = self.backend
     let earmarkStore = try! awaitSync { @MainActor in
       let store = EarmarkStore(
-        repository: Self._backend.earmarks,
-        conversionService: Self._backend.conversionService,
+        repository: backend.earmarks,
+        conversionService: backend.conversionService,
         targetInstrument: .AUD)
       await store.load()
       return store

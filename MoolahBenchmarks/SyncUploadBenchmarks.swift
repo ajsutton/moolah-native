@@ -11,8 +11,8 @@ import XCTest
 /// of local changes to CloudKit.
 final class SyncUploadBenchmarks: XCTestCase {
 
-  nonisolated(unsafe) private static var _container: ModelContainer!
-  nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler!
+  nonisolated(unsafe) private static var _container: ModelContainer?
+  nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler?
   nonisolated(unsafe) private static var _transactionUUIDs400: Set<UUID> = []
 
   override static func setUp() {
@@ -41,7 +41,12 @@ final class SyncUploadBenchmarks: XCTestCase {
     super.tearDown()
   }
 
-  private var handler: ProfileDataSyncHandler { Self._handler }
+  private var handler: ProfileDataSyncHandler {
+    guard let handler = Self._handler else {
+      fatalError("setUp must initialise _handler before tests run")
+    }
+    return handler
+  }
   private var transactionUUIDs400: Set<UUID> { Self._transactionUUIDs400 }
 
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }

@@ -9,7 +9,7 @@ import XCTest
 /// each transaction also requires fetching its associated leg records.
 final class ConversionBenchmarks: XCTestCase {
 
-  nonisolated(unsafe) private static var _container: ModelContainer!
+  nonisolated(unsafe) private static var _container: ModelContainer?
 
   override static func setUp() {
     super.setUp()
@@ -25,7 +25,12 @@ final class ConversionBenchmarks: XCTestCase {
     super.tearDown()
   }
 
-  private var container: ModelContainer { Self._container }
+  private var container: ModelContainer {
+    guard let container = Self._container else {
+      fatalError("setUp must initialise _container before tests run")
+    }
+    return container
+  }
 
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }
   private var options: XCTMeasureOptions {

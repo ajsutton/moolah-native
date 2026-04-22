@@ -10,9 +10,9 @@ import XCTest
 /// which is the hot path when syncing a large transaction history from another device.
 final class SyncDownloadBenchmarks: XCTestCase {
 
-  nonisolated(unsafe) private static var _container: ModelContainer!
-  nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler!
-  nonisolated(unsafe) private static var _zoneID: CKRecordZone.ID!
+  nonisolated(unsafe) private static var _container: ModelContainer?
+  nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler?
+  nonisolated(unsafe) private static var _zoneID: CKRecordZone.ID?
 
   override static func setUp() {
     super.setUp()
@@ -38,9 +38,24 @@ final class SyncDownloadBenchmarks: XCTestCase {
     super.tearDown()
   }
 
-  private var container: ModelContainer { Self._container }
-  private var handler: ProfileDataSyncHandler { Self._handler }
-  private var zoneID: CKRecordZone.ID { Self._zoneID }
+  private var container: ModelContainer {
+    guard let container = Self._container else {
+      fatalError("setUp must initialise _container before tests run")
+    }
+    return container
+  }
+  private var handler: ProfileDataSyncHandler {
+    guard let handler = Self._handler else {
+      fatalError("setUp must initialise _handler before tests run")
+    }
+    return handler
+  }
+  private var zoneID: CKRecordZone.ID {
+    guard let zoneID = Self._zoneID else {
+      fatalError("setUp must initialise _zoneID before tests run")
+    }
+    return zoneID
+  }
 
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }
   private var options: XCTMeasureOptions {
