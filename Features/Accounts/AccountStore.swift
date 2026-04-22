@@ -30,6 +30,12 @@ final class AccountStore {
   private let repository: AccountRepository
   private let conversionService: any InstrumentConversionService
   private let targetInstrument: Instrument
+  /// Optional repository for preloading the latest investment value per account
+  /// on `load()`. When absent, investment accounts render their sidebar balance
+  /// from transaction positions until `updateInvestmentValue(accountId:value:)`
+  /// is called. Injected so the sidebar shows the correct balance at first
+  /// paint instead of flashing the position sum.
+  private let investmentRepository: (any InvestmentRepository)?
   /// Delay between retry attempts after a conversion failure. Production
   /// uses ~30s; tests pass a small value to keep retries snappy.
   private let retryDelay: Duration
@@ -40,11 +46,13 @@ final class AccountStore {
     repository: AccountRepository,
     conversionService: any InstrumentConversionService,
     targetInstrument: Instrument,
+    investmentRepository: (any InvestmentRepository)? = nil,
     retryDelay: Duration = .seconds(30)
   ) {
     self.repository = repository
     self.conversionService = conversionService
     self.targetInstrument = targetInstrument
+    self.investmentRepository = investmentRepository
     self.retryDelay = retryDelay
   }
 
@@ -58,6 +66,7 @@ final class AccountStore {
     do {
       accounts = Accounts(from: try await repository.fetchAll())
       logger.debug("Loaded \(self.accounts.count) accounts")
+      await preloadInvestmentValues()
       await recomputeConvertedTotals()
     } catch {
       logger.error("❌ Failed to load accounts: \(error.localizedDescription)")
@@ -77,6 +86,7 @@ final class AccountStore {
       if fresh.ordered != accounts.ordered {
         accounts = fresh
         logger.debug("Sync: updated accounts (\(fresh.count) accounts) in \(elapsed)ms")
+        await preloadInvestmentValues()
         await recomputeConvertedTotals()
       }
       if elapsed > 16 {
@@ -84,6 +94,53 @@ final class AccountStore {
       }
     } catch {
       logger.error("Sync reload failed: \(error.localizedDescription)")
+    }
+  }
+
+  /// Fetches the latest investment value for each investment account and
+  /// populates `investmentValues` before the first conversion pass. Without
+  /// this, `displayBalance` falls back to summing positions until
+  /// `InvestmentStore` happens to call `updateInvestmentValue` (only on
+  /// value set/remove), so the sidebar flashes the transaction sum until
+  /// the user opens an investment account and mutates a value.
+  ///
+  /// Failures are silently tolerated per-account; the sidebar simply falls
+  /// back to the position sum for that account, matching the pre-fix
+  /// behaviour rather than breaking the whole load.
+  private func preloadInvestmentValues() async {
+    guard let investmentRepository else { return }
+    let investmentAccountIds = accounts.ordered
+      .filter { $0.type == .investment }
+      .map(\.id)
+    guard !investmentAccountIds.isEmpty else { return }
+
+    let repo = investmentRepository
+    let results = await withTaskGroup(
+      of: (UUID, InstrumentAmount?).self,
+      returning: [(UUID, InstrumentAmount?)].self
+    ) { group in
+      for accountId in investmentAccountIds {
+        group.addTask {
+          do {
+            let page = try await repo.fetchValues(
+              accountId: accountId, page: 0, pageSize: 1)
+            return (accountId, page.values.first?.value)
+          } catch {
+            return (accountId, nil)
+          }
+        }
+      }
+      var collected: [(UUID, InstrumentAmount?)] = []
+      for await result in group {
+        collected.append(result)
+      }
+      return collected
+    }
+
+    for (accountId, value) in results {
+      if let value {
+        investmentValues[accountId] = value
+      }
     }
   }
 

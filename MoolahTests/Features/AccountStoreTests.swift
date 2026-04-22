@@ -118,6 +118,64 @@ struct AccountStoreTests {
         == InstrumentAmount(quantity: Decimal(240_000) / 100, instrument: aud))
   }
 
+  // MARK: - Preload investment values on load
+
+  @Test("load populates investmentValues from latest repository value for investment accounts")
+  func loadPreloadsLatestInvestmentValues() async throws {
+    let acctId = UUID()
+    let instrument = Instrument.defaultTestInstrument
+    let (backend, container) = try TestBackend.create()
+    _ = seedAccount(
+      id: acctId, name: "Brokerage", type: .investment, balance: Decimal(100000) / 100,
+      in: container)
+    let latestDate = Date()
+    let olderDate = Calendar.current.date(byAdding: .day, value: -7, to: latestDate)!
+    TestBackend.seed(
+      investmentValues: [
+        acctId: [
+          InvestmentValue(
+            date: latestDate,
+            value: InstrumentAmount(quantity: Decimal(250000) / 100, instrument: instrument)),
+          InvestmentValue(
+            date: olderDate,
+            value: InstrumentAmount(quantity: Decimal(180000) / 100, instrument: instrument)),
+        ]
+      ],
+      in: container,
+      instrument: instrument)
+
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: FixedConversionService(),
+      targetInstrument: instrument,
+      investmentRepository: backend.investments)
+
+    await store.load()
+
+    #expect(store.investmentValues[acctId]?.quantity == Decimal(250000) / 100)
+    #expect(store.convertedBalances[acctId]?.quantity == Decimal(250000) / 100)
+  }
+
+  @Test("load leaves investmentValues empty when no values exist")
+  func loadOmitsInvestmentValueWhenRepositoryEmpty() async throws {
+    let acctId = UUID()
+    let (backend, container) = try TestBackend.create()
+    _ = seedAccount(
+      id: acctId, name: "Brokerage", type: .investment, balance: Decimal(100000) / 100,
+      in: container)
+
+    let store = AccountStore(
+      repository: backend.accounts,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument,
+      investmentRepository: backend.investments)
+
+    await store.load()
+
+    #expect(store.investmentValues[acctId] == nil)
+    #expect(store.convertedBalances[acctId]?.quantity == Decimal(100000) / 100)
+  }
+
   // MARK: - updateInvestmentValue
 
   @Test func testUpdateInvestmentValueSetsValue() async throws {
