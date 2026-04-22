@@ -23,15 +23,21 @@
     }
 
     /// The top-level scripting element: all open profiles.
-    /// Called by the scripting infrastructure when AppleScript accesses `profiles of application`.
+    /// Called by the scripting infrastructure when AppleScript accesses
+    /// `profiles of application`. On macOS 26 this runs on the main thread,
+    /// so we access `SessionManager` (also main-isolated) synchronously.
     @objc var scriptableProfiles: [ScriptableProfile] {
-      // This is called from the Apple Events thread. We need to hop to MainActor
-      // to access the session manager safely.
-      guard !Thread.isMainThread else {
-        logger.warning("scriptableProfiles accessed on main thread - returning empty")
-        return []
+      if Thread.isMainThread {
+        return MainActor.assumeIsolated {
+          guard let sessionManager = ScriptingContext.sessionManager else {
+            logger.warning("ScriptingBridge accessed before configuration")
+            return []
+          }
+          return sessionManager.openProfiles.map { ScriptableProfile(session: $0) }
+        }
       }
 
+      // Off main — kept for whatever dedicated thread Cocoa might use in future.
       final class ResultBox: @unchecked Sendable {
         var profiles: [ScriptableProfile] = []
       }
