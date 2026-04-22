@@ -218,19 +218,11 @@ struct UpcomingView: View {
   }
 
   private var overdueTransactions: [TransactionWithBalance] {
-    transactionStore.transactions
-      .filter { isOverdue($0.transaction) }
-      .sorted { $0.transaction.date < $1.transaction.date }
+    transactionStore.scheduledOverdueTransactions
   }
 
   private var upcomingTransactions: [TransactionWithBalance] {
-    transactionStore.transactions
-      .filter { !isOverdue($0.transaction) }
-      .sorted { $0.transaction.date < $1.transaction.date }
-  }
-
-  private func isOverdue(_ transaction: Transaction) -> Bool {
-    transaction.date < Calendar.current.startOfDay(for: Date())
+    transactionStore.scheduledUpcomingTransactions
   }
 
   private func isDueToday(_ transaction: Transaction) -> Bool {

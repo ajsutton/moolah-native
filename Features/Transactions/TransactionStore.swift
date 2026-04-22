@@ -30,7 +30,11 @@ final class TransactionStore {
   private let accountStore: AccountStore?
   private let earmarkStore: EarmarkStore?
   private let logger = Logger(subsystem: "com.moolah.app", category: "TransactionStore")
-  private var currentFilter = TransactionFilter()
+  /// Filter that produced the current contents of `transactions`. Exposed so
+  /// views sharing the store (Analysis, Upcoming) can ignore stale contents
+  /// from a prior unfiltered load until their own `.task` reloads. When no
+  /// load has completed yet, this is the default empty filter.
+  private(set) var currentFilter = TransactionFilter()
   private var currentPage = 0
   private var rawTransactions: [Transaction] = []
   private var priorBalance: InstrumentAmount?
@@ -69,6 +73,50 @@ final class TransactionStore {
   func loadMore() async {
     guard !isLoading, hasMore else { return }
     await fetchPage()
+  }
+
+  // MARK: - Scheduled Views
+
+  /// `true` when `transactions` was loaded with a scheduled-only filter. Views
+  /// rendering "Upcoming & Overdue" content use this as a gate so they don't
+  /// render stale items from a prior unfiltered load (e.g. switching from All
+  /// Transactions to Analysis) in the single render frame before their own
+  /// `.task` reloads the store.
+  private var isShowingScheduled: Bool { currentFilter.scheduled == true }
+
+  /// Scheduled transactions whose date is before today, sorted ascending by
+  /// date. Empty when the store's current filter isn't `scheduled: true`.
+  var scheduledOverdueTransactions: [TransactionWithBalance] {
+    guard isShowingScheduled else { return [] }
+    let today = Calendar.current.startOfDay(for: Date())
+    return
+      transactions
+      .filter { $0.transaction.date < today }
+      .sorted { $0.transaction.date < $1.transaction.date }
+  }
+
+  /// Scheduled transactions due today or later, sorted ascending by date.
+  /// Empty when the store's current filter isn't `scheduled: true`.
+  var scheduledUpcomingTransactions: [TransactionWithBalance] {
+    guard isShowingScheduled else { return [] }
+    let today = Calendar.current.startOfDay(for: Date())
+    return
+      transactions
+      .filter { $0.transaction.date >= today }
+      .sorted { $0.transaction.date < $1.transaction.date }
+  }
+
+  /// Scheduled transactions from the past plus the next `daysAhead` days —
+  /// the set shown in the Analysis "Upcoming & Overdue" card. Empty when the
+  /// store's current filter isn't `scheduled: true`.
+  func scheduledShortTermTransactions(daysAhead: Int = 14) -> [TransactionWithBalance] {
+    guard isShowingScheduled else { return [] }
+    let ceiling =
+      Calendar.current.date(byAdding: .day, value: daysAhead, to: Date()) ?? Date()
+    return
+      transactions
+      .filter { $0.transaction.date <= ceiling }
+      .sorted { $0.transaction.date < $1.transaction.date }
   }
 
   /// Creates a default transaction with sensible defaults (expense, zero amount, today's date).

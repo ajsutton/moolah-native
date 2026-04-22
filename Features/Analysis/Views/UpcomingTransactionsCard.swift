@@ -71,11 +71,7 @@ struct UpcomingTransactionsCard: View {
   }
 
   private var shortTermTransactions: [TransactionWithBalance] {
-    let now = Date()
-    let twoWeeksFromNow = Calendar.current.date(byAdding: .day, value: 14, to: now) ?? now
-    return transactionStore.transactions
-      .filter { $0.transaction.date <= twoWeeksFromNow }
-      .sorted { $0.transaction.date < $1.transaction.date }
+    transactionStore.scheduledShortTermTransactions()
   }
 
   private func isOverdue(_ transaction: Transaction) -> Bool {
