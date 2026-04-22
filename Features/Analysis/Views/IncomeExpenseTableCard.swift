@@ -153,8 +153,8 @@ struct IncomeExpenseTableCard: View {
     guard let index = data.firstIndex(where: { $0.id == item.id }) else {
       return .zero(instrument: data.first?.income.instrument ?? .AUD)
     }
-    return data[...index].reduce(InstrumentAmount.zero(instrument: item.income.instrument)) {
-      total, month in
+    let zero = InstrumentAmount.zero(instrument: item.income.instrument)
+    return data[...index].reduce(zero) { total, month in
       total + (includeEarmarks ? month.totalProfit : month.profit)
     }
   }
