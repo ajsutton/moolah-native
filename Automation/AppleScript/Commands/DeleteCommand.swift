@@ -14,86 +14,100 @@
         scriptErrorString = "Missing object specifier for delete"
         return nil
       }
-
-      // Walk up the specifier chain to find the profile name
-      let profileName: String
-      let objectKey = specifier.key
-      let container = specifier.container
-
-      // The specifier should be: object of profile "X"
-      if let nameSpec = container as? NSNameSpecifier {
-        profileName = nameSpec.name
-      } else {
+      guard let profileName = (specifier.container as? NSNameSpecifier)?.name else {
         scriptErrorNumber = -10000
         scriptErrorString = "Cannot determine profile for delete operation"
         return nil
       }
-
-      // Determine what we're deleting based on the key
-      let objectName: String?
-      let objectID: String?
-
-      if let nameSpec = specifier as? NSNameSpecifier {
-        objectName = nameSpec.name
-        objectID = nil
-      } else if let idSpec = specifier as? NSUniqueIDSpecifier {
-        objectName = nil
-        objectID = idSpec.uniqueID as? String
-      } else {
+      guard let target = resolveTarget(specifier) else {
         scriptErrorNumber = -10000
         scriptErrorString = "Cannot identify object to delete"
         return nil
       }
-
+      let objectKey = specifier.key
       let result: Bool? = runBlockingWithError { @MainActor () async throws -> Bool in
         guard let service = ScriptingContext.automationService else {
           throw AutomationError.operationFailed("Scripting not configured")
         }
-
-        switch objectKey {
-        case "scriptableAccounts":
-          let account: Account
-          if let objectName {
-            account = try service.resolveAccount(named: objectName, profileIdentifier: profileName)
-          } else if let objectID, let uuid = UUID(uuidString: objectID) {
-            account = try service.resolveAccount(id: uuid, profileIdentifier: profileName)
-          } else {
-            throw AutomationError.accountNotFound("unknown")
-          }
-          try await service.deleteAccount(profileIdentifier: profileName, accountId: account.id)
-
-        case "scriptableTransactions":
-          guard let objectID, let uuid = UUID(uuidString: objectID) else {
-            throw AutomationError.transactionNotFound("unknown")
-          }
-          try await service.deleteTransaction(profileIdentifier: profileName, transactionId: uuid)
-
-        case "scriptableEarmarks":
-          let earmark: Earmark
-          if let objectName {
-            earmark = try service.resolveEarmark(named: objectName, profileIdentifier: profileName)
-          } else {
-            throw AutomationError.earmarkNotFound("unknown")
-          }
-          try await service.deleteEarmark(profileIdentifier: profileName, earmarkId: earmark.id)
-
-        case "scriptableCategories":
-          let category: Category
-          if let objectName {
-            category = try service.resolveCategory(
-              named: objectName, profileIdentifier: profileName)
-          } else {
-            throw AutomationError.categoryNotFound("unknown")
-          }
-          try await service.deleteCategory(profileIdentifier: profileName, categoryId: category.id)
-
-        default:
-          throw AutomationError.operationFailed("Cannot delete objects of type '\(objectKey)'")
-        }
-
+        try await Self.performDelete(
+          objectKey: objectKey, target: target,
+          profileName: profileName, service: service)
         return true
       }
       return result
+    }
+
+    /// Identifies the object the user wants to delete by name or unique ID.
+    private struct DeleteTarget: Sendable {
+      let name: String?
+      let id: String?
+    }
+
+    private func resolveTarget(_ specifier: NSScriptObjectSpecifier) -> DeleteTarget? {
+      if let nameSpec = specifier as? NSNameSpecifier {
+        return DeleteTarget(name: nameSpec.name, id: nil)
+      }
+      if let idSpec = specifier as? NSUniqueIDSpecifier {
+        return DeleteTarget(name: nil, id: idSpec.uniqueID as? String)
+      }
+      return nil
+    }
+
+    @MainActor
+    private static func performDelete(
+      objectKey: String,
+      target: DeleteTarget,
+      profileName: String,
+      service: AutomationService
+    ) async throws {
+      switch objectKey {
+      case "scriptableAccounts":
+        try await deleteAccount(target: target, profileName: profileName, service: service)
+      case "scriptableTransactions":
+        guard let objectID = target.id, let uuid = UUID(uuidString: objectID) else {
+          throw AutomationError.transactionNotFound("unknown")
+        }
+        try await service.deleteTransaction(profileIdentifier: profileName, transactionId: uuid)
+      case "scriptableEarmarks":
+        try await deleteEarmark(target: target, profileName: profileName, service: service)
+      case "scriptableCategories":
+        try await deleteCategory(target: target, profileName: profileName, service: service)
+      default:
+        throw AutomationError.operationFailed("Cannot delete objects of type '\(objectKey)'")
+      }
+    }
+
+    @MainActor
+    private static func deleteAccount(
+      target: DeleteTarget, profileName: String, service: AutomationService
+    ) async throws {
+      let account: Account
+      if let name = target.name {
+        account = try service.resolveAccount(named: name, profileIdentifier: profileName)
+      } else if let objectID = target.id, let uuid = UUID(uuidString: objectID) {
+        account = try service.resolveAccount(id: uuid, profileIdentifier: profileName)
+      } else {
+        throw AutomationError.accountNotFound("unknown")
+      }
+      try await service.deleteAccount(profileIdentifier: profileName, accountId: account.id)
+    }
+
+    @MainActor
+    private static func deleteEarmark(
+      target: DeleteTarget, profileName: String, service: AutomationService
+    ) async throws {
+      guard let name = target.name else { throw AutomationError.earmarkNotFound("unknown") }
+      let earmark = try service.resolveEarmark(named: name, profileIdentifier: profileName)
+      try await service.deleteEarmark(profileIdentifier: profileName, earmarkId: earmark.id)
+    }
+
+    @MainActor
+    private static func deleteCategory(
+      target: DeleteTarget, profileName: String, service: AutomationService
+    ) async throws {
+      guard let name = target.name else { throw AutomationError.categoryNotFound("unknown") }
+      let category = try service.resolveCategory(named: name, profileIdentifier: profileName)
+      try await service.deleteCategory(profileIdentifier: profileName, categoryId: category.id)
     }
   }
 #endif

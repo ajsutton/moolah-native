@@ -229,49 +229,62 @@ struct GenericBankCSVParser: CSVParser, Sendable {
   private func detectDateFormat(
     columnIndex: Int, sampleRows: [[String]]
   ) -> (DateFormat, Bool) {
+    let signals = scanDateSignals(columnIndex: columnIndex, sampleRows: sampleRows)
+    return decideDateFormat(signals: signals)
+  }
+
+  /// Signals gathered from a single pass over sample date cells.
+  private struct DateFormatSignals {
     var separator: Character = "/"
     var sawSeparator = false
     var firstGreaterThan12 = false
     var secondGreaterThan12 = false
     var anyIsoShaped = false
+  }
 
+  private func scanDateSignals(
+    columnIndex: Int, sampleRows: [[String]]
+  ) -> DateFormatSignals {
+    var signals = DateFormatSignals()
     for row in sampleRows {
       guard columnIndex >= 0, columnIndex < row.count else { continue }
       let value = row[columnIndex].trimmingCharacters(in: .whitespaces)
       if value.isEmpty { continue }
       if isISOShaped(value) {
-        anyIsoShaped = true
+        signals.anyIsoShaped = true
         continue
       }
       let chosen: Character? = value.contains("/") ? "/" : (value.contains("-") ? "-" : nil)
       guard let sep = chosen else { continue }
-      if !sawSeparator {
-        separator = sep
-        sawSeparator = true
+      if !signals.sawSeparator {
+        signals.separator = sep
+        signals.sawSeparator = true
       }
       let components = value.split(separator: sep)
       guard components.count == 3,
         let first = Int(components[0]),
         let second = Int(components[1])
       else { continue }
-      if first > 12 { firstGreaterThan12 = true }
-      if second > 12 { secondGreaterThan12 = true }
+      if first > 12 { signals.firstGreaterThan12 = true }
+      if second > 12 { signals.secondGreaterThan12 = true }
     }
+    return signals
+  }
 
-    if anyIsoShaped {
-      return (.iso, false)
-    }
-    if firstGreaterThan12 && !secondGreaterThan12 {
-      return (.ddMMyyyy(separator: separator), false)
-    }
-    if secondGreaterThan12 && !firstGreaterThan12 {
-      return (.mmDDyyyy(separator: separator), false)
-    }
-    if firstGreaterThan12 && secondGreaterThan12 {
+  private func decideDateFormat(signals: DateFormatSignals) -> (DateFormat, Bool) {
+    if signals.anyIsoShaped { return (.iso, false) }
+    let sep = signals.separator
+    switch (signals.firstGreaterThan12, signals.secondGreaterThan12) {
+    case (true, false):
+      return (.ddMMyyyy(separator: sep), false)
+    case (false, true):
+      return (.mmDDyyyy(separator: sep), false)
+    case (true, true):
       // Both invalid — caller's parse step will throw on the first row.
-      return (.ddMMyyyy(separator: separator), false)
+      return (.ddMMyyyy(separator: sep), false)
+    case (false, false):
+      return (.ddMMyyyy(separator: sep), true)
     }
-    return (.ddMMyyyy(separator: separator), true)
   }
 
   private func isISOShaped(_ value: String) -> Bool {

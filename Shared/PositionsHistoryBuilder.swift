@@ -51,7 +51,6 @@ struct PositionsHistoryBuilder: Sendable {
         hostCurrency: hostCurrency, total: [], perInstrument: [:])
     }
 
-    // Range start: max of (cutoff for selected range, first holding date).
     let cutoff = range.cutoff(from: now) ?? firstTxnDate
     let start = calendar.startOfDay(for: max(cutoff, firstTxnDate))
     let endDay = calendar.startOfDay(for: now)
@@ -60,97 +59,139 @@ struct PositionsHistoryBuilder: Sendable {
         hostCurrency: hostCurrency, total: [], perInstrument: [:])
     }
 
-    // Pre-compute per-day snapshots in one pass over transactions. We fold
-    // each transaction into a running snapshot, then on every distinct
-    // event date emit "the snapshot as of end-of-that-day". Days in between
-    // events carry the prior snapshot forward.
-    var quantities: [Instrument: Decimal] = [:]
-    var engine = CostBasisEngine()
-    var txnIndex = 0
-
-    var perInstrument: [String: [HistoricalValueSeries.Point]] = [:]
-    var total: [HistoricalValueSeries.Point] = []
-
-    // Pre-fold any transactions strictly before `start` so the snapshot at
-    // `start` already reflects historical buys.
-    while txnIndex < sortedTxns.count
-      && calendar.startOfDay(for: sortedTxns[txnIndex].date) < start
-    {
-      await apply(
-        transaction: sortedTxns[txnIndex], accountId: accountId,
-        hostCurrency: hostCurrency,
-        quantities: &quantities, engine: &engine
-      )
-      txnIndex += 1
-    }
+    let context = BuildContext(
+      sortedTxns: sortedTxns, accountId: accountId,
+      hostCurrency: hostCurrency, calendar: calendar)
+    var state = BuildState()
+    await preFoldHistory(before: start, context: context, state: &state)
 
     var day = start
     while day <= endDay {
-      if Task.isCancelled {
-        return HistoricalValueSeries(
-          hostCurrency: hostCurrency, total: total, perInstrument: perInstrument)
-      }
-
-      // Apply every transaction whose start-of-day is `day`.
-      while txnIndex < sortedTxns.count
-        && calendar.startOfDay(for: sortedTxns[txnIndex].date) == day
-      {
-        await apply(
-          transaction: sortedTxns[txnIndex], accountId: accountId,
-          hostCurrency: hostCurrency,
-          quantities: &quantities, engine: &engine
-        )
-        txnIndex += 1
-      }
-
-      // Emit a point per held instrument + an aggregate (when complete).
-      var aggValue: Decimal = 0
-      var aggCost: Decimal = 0
-      var aggOK = true
-      var anyHeld = false
-
-      // Note: host-currency legs are excluded from `quantities` in `apply()`, so
-      // every instrument here is a non-host investment instrument and always
-      // requires a conversion call.
-      for (instrument, qty) in quantities where qty != 0 {
-        if Task.isCancelled {
-          return HistoricalValueSeries(
-            hostCurrency: hostCurrency, total: total, perInstrument: perInstrument)
-        }
-        anyHeld = true
-        let cost = engine.openLots(for: instrument)
-          .reduce(Decimal(0)) { $0 + $1.remainingCost }
-
-        let value: Decimal?
-        do {
-          value = try await conversionService.convert(
-            qty, from: instrument, to: hostCurrency, on: day)
-        } catch {
-          logger.warning(
-            "history conversion failed for \(instrument.id, privacy: .public) on \(day, privacy: .public): \(error.localizedDescription, privacy: .public)"
-          )
-          value = nil
-          aggOK = false
-        }
-
-        if let value {
-          perInstrument[instrument.id, default: []].append(
-            HistoricalValueSeries.Point(date: day, value: value, cost: cost))
-          aggValue += value
-          aggCost += cost
-        }
-      }
-
-      if anyHeld && aggOK {
-        total.append(HistoricalValueSeries.Point(date: day, value: aggValue, cost: aggCost))
-      }
-
+      if Task.isCancelled { return state.series(hostCurrency: hostCurrency) }
+      await applyTransactions(on: day, context: context, state: &state)
+      let cancelled = await emitDailyPoints(
+        for: day, hostCurrency: hostCurrency, state: &state)
+      if cancelled { return state.series(hostCurrency: hostCurrency) }
       guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
       day = next
     }
 
-    return HistoricalValueSeries(
-      hostCurrency: hostCurrency, total: total, perInstrument: perInstrument)
+    return state.series(hostCurrency: hostCurrency)
+  }
+
+  /// Pre-fold any transactions strictly before `start` so the snapshot at
+  /// `start` already reflects historical buys.
+  private func preFoldHistory(
+    before start: Date,
+    context: BuildContext,
+    state: inout BuildState
+  ) async {
+    while state.txnIndex < context.sortedTxns.count
+      && context.calendar.startOfDay(for: context.sortedTxns[state.txnIndex].date) < start
+    {
+      await apply(
+        transaction: context.sortedTxns[state.txnIndex], accountId: context.accountId,
+        hostCurrency: context.hostCurrency,
+        quantities: &state.quantities, engine: &state.engine
+      )
+      state.txnIndex += 1
+    }
+  }
+
+  /// Fold every transaction whose start-of-day is `day` into the running state.
+  private func applyTransactions(
+    on day: Date,
+    context: BuildContext,
+    state: inout BuildState
+  ) async {
+    while state.txnIndex < context.sortedTxns.count
+      && context.calendar.startOfDay(for: context.sortedTxns[state.txnIndex].date) == day
+    {
+      await apply(
+        transaction: context.sortedTxns[state.txnIndex], accountId: context.accountId,
+        hostCurrency: context.hostCurrency,
+        quantities: &state.quantities, engine: &state.engine
+      )
+      state.txnIndex += 1
+    }
+  }
+
+  /// Immutable inputs threaded through `build`'s per-day loop.
+  private struct BuildContext {
+    let sortedTxns: [Transaction]
+    let accountId: UUID
+    let hostCurrency: Instrument
+    let calendar: Calendar
+  }
+
+  /// Emit one point per held instrument on `day` and, when every conversion
+  /// succeeds, one aggregate point. Returns `true` if cancellation was observed
+  /// so the caller can bail.
+  private func emitDailyPoints(
+    for day: Date,
+    hostCurrency: Instrument,
+    state: inout BuildState
+  ) async -> Bool {
+    var aggValue: Decimal = 0
+    var aggCost: Decimal = 0
+    var aggOK = true
+    var anyHeld = false
+
+    // Host-currency legs are excluded from `quantities` in `apply()`, so every
+    // instrument here is a non-host investment instrument and always requires
+    // a conversion call.
+    for (instrument, qty) in state.quantities where qty != 0 {
+      if Task.isCancelled { return true }
+      anyHeld = true
+      let cost = state.engine.openLots(for: instrument)
+        .reduce(Decimal(0)) { $0 + $1.remainingCost }
+      let value = await convertValue(
+        qty: qty, instrument: instrument, hostCurrency: hostCurrency, on: day)
+      if let value {
+        state.perInstrument[instrument.id, default: []].append(
+          HistoricalValueSeries.Point(date: day, value: value, cost: cost))
+        aggValue += value
+        aggCost += cost
+      } else {
+        aggOK = false
+      }
+    }
+
+    if anyHeld && aggOK {
+      state.total.append(
+        HistoricalValueSeries.Point(date: day, value: aggValue, cost: aggCost))
+    }
+    return false
+  }
+
+  /// Convert `qty` of `instrument` to `hostCurrency` on `day`, logging and
+  /// returning `nil` on failure so the caller can mark the day incomplete.
+  private func convertValue(
+    qty: Decimal, instrument: Instrument, hostCurrency: Instrument, on day: Date
+  ) async -> Decimal? {
+    do {
+      return try await conversionService.convert(
+        qty, from: instrument, to: hostCurrency, on: day)
+    } catch {
+      logger.warning(
+        "history conversion failed for \(instrument.id, privacy: .public) on \(day, privacy: .public): \(error.localizedDescription, privacy: .public)"
+      )
+      return nil
+    }
+  }
+
+  /// Mutable running state threaded through `build`'s per-day loop.
+  private struct BuildState {
+    var quantities: [Instrument: Decimal] = [:]
+    var engine = CostBasisEngine()
+    var txnIndex = 0
+    var perInstrument: [String: [HistoricalValueSeries.Point]] = [:]
+    var total: [HistoricalValueSeries.Point] = []
+
+    func series(hostCurrency: Instrument) -> HistoricalValueSeries {
+      HistoricalValueSeries(
+        hostCurrency: hostCurrency, total: total, perInstrument: perInstrument)
+    }
   }
 
   /// Fold one transaction into the running quantity dict and FIFO engine.

@@ -27,22 +27,22 @@ enum DateRange: String, CaseIterable, Identifiable, Sendable {
   func startDate(today: Date, financialYearStartMonth: Int = 7) -> Date {
     let calendar = Calendar.current
 
+    // Fixed-rolling-window cases share one `date(byAdding:)` call shape, so
+    // collapsing them to a single branch keeps the remaining `switch` below
+    // the cyclomatic-complexity threshold.
+    if let monthsAgo = rollingWindowMonthsAgo {
+      guard let date = calendar.date(byAdding: .month, value: -monthsAgo, to: today) else {
+        return today
+      }
+      return date
+    }
+
     switch self {
     case .thisFinancialYear:
       return financialYear(for: today, startMonth: financialYearStartMonth).start
     case .lastFinancialYear:
       let lastYear = calendar.date(byAdding: .year, value: -1, to: today)!
       return financialYear(for: lastYear, startMonth: financialYearStartMonth).start
-    case .lastMonth:
-      return calendar.date(byAdding: .month, value: -1, to: today)!
-    case .last3Months:
-      return calendar.date(byAdding: .month, value: -3, to: today)!
-    case .last6Months:
-      return calendar.date(byAdding: .month, value: -6, to: today)!
-    case .last9Months:
-      return calendar.date(byAdding: .month, value: -9, to: today)!
-    case .last12Months:
-      return calendar.date(byAdding: .month, value: -12, to: today)!
     case .monthToDate:
       return calendar.date(from: calendar.dateComponents([.year, .month], from: today))!
     case .quarterToDate:
@@ -59,6 +59,23 @@ enum DateRange: String, CaseIterable, Identifiable, Sendable {
     case .custom:
       // Default for custom: 1 year ago
       return calendar.date(byAdding: .year, value: -1, to: today)!
+    default:
+      // Handled by the `rollingWindowMonthsAgo` early-return above; the
+      // compiler can't prove exhaustiveness once that branch is lifted out.
+      return today
+    }
+  }
+
+  /// Offset in months for the fixed-window rolling cases (`lastMonth`,
+  /// `last3Months`, etc.); `nil` for everything else.
+  private var rollingWindowMonthsAgo: Int? {
+    switch self {
+    case .lastMonth: return 1
+    case .last3Months: return 3
+    case .last6Months: return 6
+    case .last9Months: return 9
+    case .last12Months: return 12
+    default: return nil
     }
   }
 

@@ -221,59 +221,72 @@ final class ProfileIndexSyncHandler {
     failedSaves: [CKSyncEngine.Event.SentRecordZoneChanges.FailedRecordSave],
     failedDeletes: [(CKRecord.ID, CKError)]
   ) -> SyncErrorRecovery.ClassifiedFailures {
-    // Update system fields on model records after successful upload.
-    if !savedRecords.isEmpty {
-      let context = ModelContext(modelContainer)
-      for saved in savedRecords {
-        guard let profileId = UUID(uuidString: saved.recordID.recordName) else { continue }
-        let descriptor = FetchDescriptor<ProfileRecord>(
-          predicate: #Predicate { $0.id == profileId }
-        )
-        if let record = fetchOrLog(descriptor, context: context).first {
-          record.encodedSystemFields = saved.encodedSystemFields
-        }
-      }
-      do {
-        try context.save()
-      } catch {
-        logger.error("Failed to save system fields after upload: \(error)")
-      }
-    }
-
-    // Classify failures
+    persistSystemFields(for: savedRecords)
     let failures = SyncErrorRecovery.classify(
       failedSaves: failedSaves,
       failedDeletes: failedDeletes,
       logger: logger)
-
-    // Update system fields from server records on conflict, clear on unknownItem
-    if !failures.conflicts.isEmpty || !failures.unknownItems.isEmpty {
-      let context = ModelContext(modelContainer)
-      for (_, serverRecord) in failures.conflicts {
-        guard let profileId = UUID(uuidString: serverRecord.recordID.recordName) else { continue }
-        let descriptor = FetchDescriptor<ProfileRecord>(
-          predicate: #Predicate { $0.id == profileId }
-        )
-        if let record = fetchOrLog(descriptor, context: context).first {
-          record.encodedSystemFields = serverRecord.encodedSystemFields
-        }
-      }
-      for (recordID, _) in failures.unknownItems {
-        guard let profileId = UUID(uuidString: recordID.recordName) else { continue }
-        let descriptor = FetchDescriptor<ProfileRecord>(
-          predicate: #Predicate { $0.id == profileId }
-        )
-        if let record = fetchOrLog(descriptor, context: context).first {
-          record.encodedSystemFields = nil
-        }
-      }
-      do {
-        try context.save()
-      } catch {
-        logger.error("Failed to save system fields after conflict resolution: \(error)")
-      }
-    }
-
+    resolveSystemFields(for: failures)
     return failures
+  }
+
+  /// Persist updated CKRecord system fields onto matching `ProfileRecord` rows
+  /// after a successful upload.
+  private func persistSystemFields(for savedRecords: [CKRecord]) {
+    guard !savedRecords.isEmpty else { return }
+    let context = ModelContext(modelContainer)
+    for saved in savedRecords {
+      updateSystemFields(
+        forProfileId: saved.recordID.recordName,
+        context: context,
+        to: saved.encodedSystemFields
+      )
+    }
+    do {
+      try context.save()
+    } catch {
+      logger.error("Failed to save system fields after upload: \(error)")
+    }
+  }
+
+  /// Apply server-side system fields from conflicts, and clear system fields for
+  /// records the server has already deleted.
+  private func resolveSystemFields(for failures: SyncErrorRecovery.ClassifiedFailures) {
+    guard !failures.conflicts.isEmpty || !failures.unknownItems.isEmpty else { return }
+    let context = ModelContext(modelContainer)
+    for (_, serverRecord) in failures.conflicts {
+      updateSystemFields(
+        forProfileId: serverRecord.recordID.recordName,
+        context: context,
+        to: serverRecord.encodedSystemFields
+      )
+    }
+    for (recordID, _) in failures.unknownItems {
+      updateSystemFields(
+        forProfileId: recordID.recordName,
+        context: context,
+        to: nil
+      )
+    }
+    do {
+      try context.save()
+    } catch {
+      logger.error("Failed to save system fields after conflict resolution: \(error)")
+    }
+  }
+
+  /// Look up a `ProfileRecord` by id string and replace its cached system fields.
+  private func updateSystemFields(
+    forProfileId recordName: String,
+    context: ModelContext,
+    to data: Data?
+  ) {
+    guard let profileId = UUID(uuidString: recordName) else { return }
+    let descriptor = FetchDescriptor<ProfileRecord>(
+      predicate: #Predicate { $0.id == profileId }
+    )
+    if let record = fetchOrLog(descriptor, context: context).first {
+      record.encodedSystemFields = data
+    }
   }
 }

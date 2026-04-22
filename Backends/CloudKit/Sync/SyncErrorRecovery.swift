@@ -35,71 +35,87 @@ enum SyncErrorRecovery {
     logger: Logger
   ) -> ClassifiedFailures {
     var result = ClassifiedFailures()
-
     for failure in failedSaves {
-      let recordID = failure.record.recordID
-
-      switch failure.error.code {
-      case .zoneNotFound, .userDeletedZone:
-        result.zoneNotFoundSaves.append(recordID)
-
-      case .serverRecordChanged:
-        if let serverRecord = failure.error.serverRecord {
-          result.conflicts.append((recordID: recordID, serverRecord: serverRecord))
-        } else {
-          // Server record unavailable — re-queue so the record isn't silently lost
-          logger.warning(
-            "serverRecordChanged with no serverRecord for \(recordID.recordName) — re-queuing")
-          result.requeue.append(recordID)
-        }
-
-      case .unknownItem:
-        result.unknownItems.append((recordID: recordID, recordType: failure.record.recordType))
-
-      case .quotaExceeded:
-        logger.error(
-          "iCloud quota exceeded — sync paused for record \(recordID.recordName)")
-        result.quotaExceeded.append(recordID)
-
-      case .limitExceeded, .batchRequestFailed:
-        result.requeue.append(recordID)
-
-      default:
-        // Re-queue unexpected errors. CKSyncEngine handles transient errors
-        // (network, rate limiting) automatically, but other errors drop the
-        // record from the queue. Re-queuing ensures we don't silently lose data.
-        logger.error(
-          "Save error (code=\(failure.error.code.rawValue)) for \(recordID.recordName): \(failure.error) — re-queuing"
-        )
-        result.requeue.append(recordID)
-      }
+      classifySaveFailure(failure, into: &result, logger: logger)
     }
-
     for (recordID, error) in failedDeletes {
-      switch error.code {
-      case .zoneNotFound, .userDeletedZone:
-        result.zoneNotFoundDeletes.append(recordID)
-
-      case .unknownItem:
-        // Record is already gone from the server — the delete has effectively
-        // succeeded. Don't re-queue (would loop forever) and don't treat as a
-        // failure. CKSyncEngine has already removed it from its pending queue.
-        logger.info(
-          "Delete returned unknownItem for \(recordID.recordName) — record already gone, treating as success"
-        )
-
-      default:
-        // Re-queue any other delete failure (serverRecordChanged, limitExceeded,
-        // unexpected errors). CKSyncEngine drops failed items from its queue, so
-        // not re-queuing would leave the record on the server permanently.
-        logger.error(
-          "Delete error (code=\(error.code.rawValue)) for \(recordID.recordName): \(error) — re-queuing"
-        )
-        result.requeueDeletes.append(recordID)
-      }
+      classifyDeleteFailure(recordID: recordID, error: error, into: &result, logger: logger)
     }
-
     return result
+  }
+
+  /// Route one failed save into the appropriate `ClassifiedFailures` bucket.
+  /// Kept separate so `classify` stays below the cyclomatic-complexity threshold.
+  private static func classifySaveFailure(
+    _ failure: CKSyncEngine.Event.SentRecordZoneChanges.FailedRecordSave,
+    into result: inout ClassifiedFailures,
+    logger: Logger
+  ) {
+    let recordID = failure.record.recordID
+    switch failure.error.code {
+    case .zoneNotFound, .userDeletedZone:
+      result.zoneNotFoundSaves.append(recordID)
+
+    case .serverRecordChanged:
+      if let serverRecord = failure.error.serverRecord {
+        result.conflicts.append((recordID: recordID, serverRecord: serverRecord))
+      } else {
+        // Server record unavailable — re-queue so the record isn't silently lost
+        logger.warning(
+          "serverRecordChanged with no serverRecord for \(recordID.recordName) — re-queuing")
+        result.requeue.append(recordID)
+      }
+
+    case .unknownItem:
+      result.unknownItems.append((recordID: recordID, recordType: failure.record.recordType))
+
+    case .quotaExceeded:
+      logger.error(
+        "iCloud quota exceeded — sync paused for record \(recordID.recordName)")
+      result.quotaExceeded.append(recordID)
+
+    case .limitExceeded, .batchRequestFailed:
+      result.requeue.append(recordID)
+
+    default:
+      // Re-queue unexpected errors. CKSyncEngine handles transient errors
+      // (network, rate limiting) automatically, but other errors drop the
+      // record from the queue. Re-queuing ensures we don't silently lose data.
+      logger.error(
+        "Save error (code=\(failure.error.code.rawValue)) for \(recordID.recordName): \(failure.error) — re-queuing"
+      )
+      result.requeue.append(recordID)
+    }
+  }
+
+  /// Route one failed delete into the appropriate `ClassifiedFailures` bucket.
+  private static func classifyDeleteFailure(
+    recordID: CKRecord.ID,
+    error: CKError,
+    into result: inout ClassifiedFailures,
+    logger: Logger
+  ) {
+    switch error.code {
+    case .zoneNotFound, .userDeletedZone:
+      result.zoneNotFoundDeletes.append(recordID)
+
+    case .unknownItem:
+      // Record is already gone from the server — the delete has effectively
+      // succeeded. Don't re-queue (would loop forever) and don't treat as a
+      // failure. CKSyncEngine has already removed it from its pending queue.
+      logger.info(
+        "Delete returned unknownItem for \(recordID.recordName) — record already gone, treating as success"
+      )
+
+    default:
+      // Re-queue any other delete failure (serverRecordChanged, limitExceeded,
+      // unexpected errors). CKSyncEngine drops failed items from its queue, so
+      // not re-queuing would leave the record on the server permanently.
+      logger.error(
+        "Delete error (code=\(error.code.rawValue)) for \(recordID.recordName): \(error) — re-queuing"
+      )
+      result.requeueDeletes.append(recordID)
+    }
   }
 
   /// Re-queues all classified failures except zone-not-found records.
