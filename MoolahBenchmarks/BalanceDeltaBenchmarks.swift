@@ -12,7 +12,7 @@ final class BalanceDeltaBenchmarks: XCTestCase {
   nonisolated(unsafe) private static var _backend: CloudKitBackend!
   nonisolated(unsafe) private static var _container: ModelContainer!
 
-  override class func setUp() {
+  override static func setUp() {
     super.setUp()
     let result = try! TestBackend.create()
     _backend = result.backend
@@ -24,7 +24,7 @@ final class BalanceDeltaBenchmarks: XCTestCase {
     _ = try! awaitSync { try await result.backend.accounts.fetchAll() }
   }
 
-  override class func tearDown() {
+  override static func tearDown() {
     _backend = nil
     _container = nil
     super.tearDown()

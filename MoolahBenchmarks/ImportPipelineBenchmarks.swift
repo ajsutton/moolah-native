@@ -16,7 +16,7 @@ final class ImportPipelineBenchmarks: XCTestCase {
   nonisolated(unsafe) private static var _container: ModelContainer!
   nonisolated(unsafe) private static var _accountId: UUID!
 
-  override class func setUp() {
+  override static func setUp() {
     super.setUp()
     let result = try! TestBackend.create()
     _backend = result.backend
@@ -36,7 +36,7 @@ final class ImportPipelineBenchmarks: XCTestCase {
     }
   }
 
-  override class func tearDown() {
+  override static func tearDown() {
     _backend = nil
     _container = nil
     _accountId = nil

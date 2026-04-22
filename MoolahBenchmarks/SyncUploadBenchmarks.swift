@@ -15,7 +15,7 @@ final class SyncUploadBenchmarks: XCTestCase {
   nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler!
   nonisolated(unsafe) private static var _transactionUUIDs400: Set<UUID> = []
 
-  override class func setUp() {
+  override static func setUp() {
     super.setUp()
     let result = try! TestBackend.create()
     _container = result.container
@@ -34,7 +34,7 @@ final class SyncUploadBenchmarks: XCTestCase {
     }
   }
 
-  override class func tearDown() {
+  override static func tearDown() {
     _handler = nil
     _container = nil
     _transactionUUIDs400 = []

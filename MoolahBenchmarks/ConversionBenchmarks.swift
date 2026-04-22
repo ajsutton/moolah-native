@@ -11,7 +11,7 @@ final class ConversionBenchmarks: XCTestCase {
 
   nonisolated(unsafe) private static var _container: ModelContainer!
 
-  override class func setUp() {
+  override static func setUp() {
     super.setUp()
     let result = try! TestBackend.create()
     _container = result.container
@@ -20,7 +20,7 @@ final class ConversionBenchmarks: XCTestCase {
     }
   }
 
-  override class func tearDown() {
+  override static func tearDown() {
     _container = nil
     super.tearDown()
   }

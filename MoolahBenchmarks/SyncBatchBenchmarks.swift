@@ -9,7 +9,7 @@ final class SyncBatchBenchmarks: XCTestCase {
   nonisolated(unsafe) private static var _container: ModelContainer!
   nonisolated(unsafe) private static var _existingIds400: [UUID] = []
 
-  override class func setUp() {
+  override static func setUp() {
     super.setUp()
     let result = try! TestBackend.create()
     _container = result.container
@@ -21,7 +21,7 @@ final class SyncBatchBenchmarks: XCTestCase {
     }
   }
 
-  override class func tearDown() {
+  override static func tearDown() {
     _container = nil
     _existingIds400 = []
     super.tearDown()

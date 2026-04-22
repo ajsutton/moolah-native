@@ -14,7 +14,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
   nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler!
   nonisolated(unsafe) private static var _zoneID: CKRecordZone.ID!
 
-  override class func setUp() {
+  override static func setUp() {
     super.setUp()
     let result = try! TestBackend.create()
     _container = result.container
@@ -31,7 +31,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
     }
   }
 
-  override class func tearDown() {
+  override static func tearDown() {
     _handler = nil
     _zoneID = nil
     _container = nil
