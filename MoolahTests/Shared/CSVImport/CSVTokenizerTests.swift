@@ -63,7 +63,7 @@ struct CSVTokenizerTests {
   @Test("empty string yields an empty row list")
   func emptyStringYieldsEmpty() {
     let rows = CSVTokenizer.parse("")
-    #expect(rows == [])
+    #expect(rows.isEmpty)
   }
 
   @Test("keeps leading spaces on unquoted fields")
