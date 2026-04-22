@@ -165,7 +165,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
   /// Fetch all investment values for the given accounts from SwiftData, sorted by date ascending.
   private func fetchAllInvestmentValues(
     investmentAccountIds: Set<UUID>
-  ) async throws -> [(accountId: UUID, date: Date, value: InstrumentAmount)] {
+  ) async throws -> [InvestmentValueSnapshot] {
     guard !investmentAccountIds.isEmpty else { return [] }
     let descriptor = FetchDescriptor<InvestmentValueRecord>()
     return try await MainActor.run {
@@ -173,7 +173,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
       return
         records
         .filter { investmentAccountIds.contains($0.accountId) }
-        .map { (accountId: $0.accountId, date: $0.date, value: $0.toDomain().value) }
+        .map(InvestmentValueSnapshot.init(record:))
         .sorted { $0.date < $1.date }
     }
   }
@@ -468,7 +468,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     nonScheduled: [Transaction],
     scheduled: [Transaction],
     accounts: [Account],
-    investmentValues: [(accountId: UUID, date: Date, value: InstrumentAmount)],
+    investmentValues: [InvestmentValueSnapshot],
     after: Date?,
     forecastUntil: Date?,
     instrument: Instrument,
@@ -715,7 +715,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
   // MARK: - Static Helper Methods
 
   private static func applyInvestmentValues(
-    _ investmentValues: [(accountId: UUID, date: Date, value: InstrumentAmount)],
+    _ investmentValues: [InvestmentValueSnapshot],
     to dailyBalances: inout [Date: DailyBalance],
     instrument: Instrument,
     conversionService: any InstrumentConversionService

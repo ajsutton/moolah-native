@@ -7,6 +7,15 @@ import Testing
 @MainActor
 struct FolderScanServiceTests {
 
+  /// Bundle of objects returned by `makeStack`, replacing a 4-element
+  /// tuple. Members read clearly at the call site (e.g. `stack.scanner`).
+  private struct Stack {
+    let store: ImportStore
+    let accountId: UUID
+    let scanner: FolderScanService
+    let backend: CloudKitBackend
+  }
+
   private func tempDirectory() -> URL {
     FileManager.default.temporaryDirectory
       .appendingPathComponent("scan-\(UUID().uuidString)", isDirectory: true)
@@ -19,9 +28,7 @@ struct FolderScanServiceTests {
     watchedFolder: URL,
     defaults: UserDefaults,
     profileId: UUID = UUID()
-  ) async throws -> (
-    store: ImportStore, accountId: UUID, scanner: FolderScanService, backend: CloudKitBackend
-  ) {
+  ) async throws -> Stack {
     let (backend, _) = try TestBackend.create()
     let accountId = UUID()
     _ = try await backend.accounts.create(
@@ -44,7 +51,7 @@ struct FolderScanServiceTests {
       importStore: store,
       preferences: preferences,
       defaults: defaults)
-    return (store, accountId, scanner, backend)
+    return Stack(store: store, accountId: accountId, scanner: scanner, backend: backend)
   }
 
   private func writeCSV(at url: URL, lines: [String], modified: Date) throws {
@@ -68,17 +75,16 @@ struct FolderScanServiceTests {
       at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
     let defaults = UserDefaults(suiteName: "csvscan-\(UUID().uuidString)")!
-    let (_, accountId, scanner, backend) = try await makeStack(
-      watchedFolder: folder, defaults: defaults)
+    let stack = try await makeStack(watchedFolder: folder, defaults: defaults)
     let a = folder.appendingPathComponent("one.csv")
     let b = folder.appendingPathComponent("two.csv")
     try writeCSV(at: a, lines: cbaLines(), modified: Date(timeIntervalSinceNow: -30))
     try writeCSV(at: b, lines: cbaLines(), modified: Date(timeIntervalSinceNow: -10))
 
-    await scanner.scanForNewFiles()
+    await stack.scanner.scanForNewFiles()
 
-    let page = try await backend.transactions.fetch(
-      filter: TransactionFilter(accountId: accountId), page: 0, pageSize: 50)
+    let page = try await stack.backend.transactions.fetch(
+      filter: TransactionFilter(accountId: stack.accountId), page: 0, pageSize: 50)
     // Each CSV yields 2 candidates → dedup drops second-run duplicates but
     // first run should land 2 for `a` and 0/2 for `b` depending on dedup.
     // Two distinct files with identical bank references/descriptions →
@@ -93,22 +99,21 @@ struct FolderScanServiceTests {
       at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
     let defaults = UserDefaults(suiteName: "csvscan-\(UUID().uuidString)")!
-    let (_, accountId, scanner, backend) = try await makeStack(
-      watchedFolder: folder, defaults: defaults)
+    let stack = try await makeStack(watchedFolder: folder, defaults: defaults)
     let a = folder.appendingPathComponent("one.csv")
     let oldTime = Date(timeIntervalSinceNow: -300)
     try writeCSV(at: a, lines: cbaLines(), modified: oldTime)
 
-    await scanner.scanForNewFiles()
-    let firstPage = try await backend.transactions.fetch(
-      filter: TransactionFilter(accountId: accountId), page: 0, pageSize: 50)
+    await stack.scanner.scanForNewFiles()
+    let firstPage = try await stack.backend.transactions.fetch(
+      filter: TransactionFilter(accountId: stack.accountId), page: 0, pageSize: 50)
     let firstCount = firstPage.transactions.count
 
     // Second scan with no new files → nothing changes. Cursor prevents
     // re-ingest even though dedup would also catch it.
-    await scanner.scanForNewFiles()
-    let secondPage = try await backend.transactions.fetch(
-      filter: TransactionFilter(accountId: accountId), page: 0, pageSize: 50)
+    await stack.scanner.scanForNewFiles()
+    let secondPage = try await stack.backend.transactions.fetch(
+      filter: TransactionFilter(accountId: stack.accountId), page: 0, pageSize: 50)
     #expect(secondPage.transactions.count == firstCount)
   }
 
@@ -119,13 +124,12 @@ struct FolderScanServiceTests {
       at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
     let defaults = UserDefaults(suiteName: "csvscan-\(UUID().uuidString)")!
-    let (_, accountId, scanner, backend) = try await makeStack(
-      watchedFolder: folder, defaults: defaults)
+    let stack = try await makeStack(watchedFolder: folder, defaults: defaults)
     let a = folder.appendingPathComponent("a.csv")
     try writeCSV(at: a, lines: cbaLines(), modified: Date(timeIntervalSinceNow: -600))
-    await scanner.scanForNewFiles()
-    let firstPage = try await backend.transactions.fetch(
-      filter: TransactionFilter(accountId: accountId), page: 0, pageSize: 50)
+    await stack.scanner.scanForNewFiles()
+    let firstPage = try await stack.backend.transactions.fetch(
+      filter: TransactionFilter(accountId: stack.accountId), page: 0, pageSize: 50)
     let first = firstPage.transactions.count
 
     // Drop a second file with a strictly newer mtime + distinct data so dedup
@@ -138,9 +142,9 @@ struct FolderScanServiceTests {
         "04/04/2024,TAXI SYDNEY,-20.00,,950.00",
       ],
       modified: Date(timeIntervalSinceNow: -10))
-    await scanner.scanForNewFiles()
-    let secondPage = try await backend.transactions.fetch(
-      filter: TransactionFilter(accountId: accountId), page: 0, pageSize: 50)
+    await stack.scanner.scanForNewFiles()
+    let secondPage = try await stack.backend.transactions.fetch(
+      filter: TransactionFilter(accountId: stack.accountId), page: 0, pageSize: 50)
     #expect(secondPage.transactions.count > first)
   }
 
@@ -151,15 +155,14 @@ struct FolderScanServiceTests {
       at: folder, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: folder) }
     let defaults = UserDefaults(suiteName: "csvscan-\(UUID().uuidString)")!
-    let (_, accountId, scanner, backend) = try await makeStack(
-      watchedFolder: folder, defaults: defaults)
+    let stack = try await makeStack(watchedFolder: folder, defaults: defaults)
     let txt = folder.appendingPathComponent("notes.txt")
     try writeCSV(
       at: txt, lines: ["hello"],
       modified: Date(timeIntervalSinceNow: -10))
-    await scanner.scanForNewFiles()
-    let page = try await backend.transactions.fetch(
-      filter: TransactionFilter(accountId: accountId), page: 0, pageSize: 50)
+    await stack.scanner.scanForNewFiles()
+    let page = try await stack.backend.transactions.fetch(
+      filter: TransactionFilter(accountId: stack.accountId), page: 0, pageSize: 50)
     #expect(page.transactions.isEmpty)
   }
 

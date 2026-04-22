@@ -171,17 +171,16 @@ final class EarmarkStore {
 
     for earmark in visibleEarmarks {
       do {
-        let (earmarkBalance, earmarkSaved, earmarkSpent) =
-          try await convertEarmarkPositions(earmark)
+        let totals = try await convertEarmarkPositions(earmark)
         guard !Task.isCancelled else { return false }
-        balances[earmark.id] = earmarkBalance
-        saved[earmark.id] = earmarkSaved
-        spent[earmark.id] = earmarkSpent
+        balances[earmark.id] = totals.balance
+        saved[earmark.id] = totals.saved
+        spent[earmark.id] = totals.spent
 
         // Convert earmark balance to target instrument for grand total.
         // Clamp negative balances to zero so they don't reduce the total.
         let convertedToTarget = try await conversionService.convertAmount(
-          earmarkBalance, to: targetInstrument, on: Date())
+          totals.balance, to: targetInstrument, on: Date())
         guard !Task.isCancelled else { return false }
         if grandTotalValid {
           grandTotal += max(convertedToTarget, zeroInTarget)
@@ -204,16 +203,20 @@ final class EarmarkStore {
     return anyFailed
   }
 
+  /// Per-earmark conversion result: the three position-list totals,
+  /// each expressed in the earmark's own instrument.
+  private struct ConvertedEarmarkTotals {
+    let balance: InstrumentAmount
+    let saved: InstrumentAmount
+    let spent: InstrumentAmount
+  }
+
   /// Sums an earmark's three position lists, each converted to the
   /// earmark's own instrument. Throws if any conversion fails so the
   /// caller treats the whole earmark as failed (we never display a
   /// partial earmark balance).
   private func convertEarmarkPositions(_ earmark: Earmark) async throws
-    -> (
-      balance: InstrumentAmount,
-      saved: InstrumentAmount,
-      spent: InstrumentAmount
-    )
+    -> ConvertedEarmarkTotals
   {
     let date = Date()
     var balance = InstrumentAmount.zero(instrument: earmark.instrument)
@@ -231,7 +234,7 @@ final class EarmarkStore {
       spent += try await conversionService.convertAmount(
         position.amount, to: earmark.instrument, on: date)
     }
-    return (balance, saved, spent)
+    return ConvertedEarmarkTotals(balance: balance, saved: saved, spent: spent)
   }
 
   /// Reorders the visible earmarks, persisting each new position to the
