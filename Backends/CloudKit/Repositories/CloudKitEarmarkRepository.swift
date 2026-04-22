@@ -176,13 +176,19 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
     }
   }
 
+  /// Three position lists computed for a single earmark — one per flow
+  /// direction (current holdings, saved-in, spent-out).
+  struct EarmarkPositionLists {
+    let positions: [Position]
+    let savedPositions: [Position]
+    let spentPositions: [Position]
+  }
+
   @MainActor
   private func computeEarmarkPositions(
     for earmarkId: UUID,
     instruments: [String: Instrument]
-  ) throws -> (
-    positions: [Position], savedPositions: [Position], spentPositions: [Position]
-  ) {
+  ) throws -> EarmarkPositionLists {
     // Get scheduled transaction IDs to exclude
     let scheduledDescriptor = FetchDescriptor<TransactionRecord>(
       predicate: #Predicate { $0.recurPeriod != nil }
@@ -233,7 +239,11 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       return Position(instrument: inst, quantity: qty)
     }.sorted { $0.instrument.id < $1.instrument.id }
 
-    return (positions, savedPositions, spentPositions)
+    return EarmarkPositionLists(
+      positions: positions,
+      savedPositions: savedPositions,
+      spentPositions: spentPositions
+    )
   }
 
   /// Fetches all known instruments as a lookup map.

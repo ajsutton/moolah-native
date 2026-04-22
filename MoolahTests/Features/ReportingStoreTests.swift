@@ -194,10 +194,10 @@ struct ReportingStoreTests {
       eventCount: 2
     )
 
-    let (shortTerm, longTerm, losses) = summary.asTaxAdjustmentValues(currency: aud)
-    #expect(shortTerm.quantity == 500)
-    #expect(longTerm.quantity == 1000)
-    #expect(losses.quantity == 0)
+    let values = summary.asTaxAdjustmentValues(currency: aud)
+    #expect(values.shortTerm.quantity == 500)
+    #expect(values.longTerm.quantity == 1000)
+    #expect(values.losses.quantity == 0)
   }
 
   @Test func capitalGainsSummary_taxAdjustmentValues_withLosses() {
@@ -208,10 +208,10 @@ struct ReportingStoreTests {
       eventCount: 3
     )
 
-    let (shortTerm, longTerm, losses) = summary.asTaxAdjustmentValues(currency: aud)
-    #expect(shortTerm.quantity == 0)
-    #expect(longTerm.quantity == 1000)
-    #expect(losses.quantity == 200)
+    let values = summary.asTaxAdjustmentValues(currency: aud)
+    #expect(values.shortTerm.quantity == 0)
+    #expect(values.longTerm.quantity == 1000)
+    #expect(values.losses.quantity == 200)
   }
 
   @Test func capitalGainsSummary_cgtDiscount() {

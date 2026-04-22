@@ -22,18 +22,21 @@ struct CapitalGainsSummary: Sendable {
   }
 }
 
+/// Capital-gains values in a form suitable for populating
+/// `TaxYearAdjustments` fields.
+///
+/// - `shortTerm`: gains from assets held < 12 months
+/// - `longTerm`: pre-discount gains from assets held > 12 months
+/// - `losses`: absolute value of net losses (if total is negative)
+struct TaxAdjustmentValues {
+  let shortTerm: InstrumentAmount
+  let longTerm: InstrumentAmount
+  let losses: InstrumentAmount
+}
+
 extension CapitalGainsSummary {
-  /// Convert to values suitable for TaxYearAdjustments fields.
-  ///
-  /// Maps to:
-  /// - `shortTerm`: gains from assets held < 12 months
-  /// - `longTerm`: pre-discount gains from assets held > 12 months
-  /// - `losses`: absolute value of net losses (if total is negative)
-  func asTaxAdjustmentValues(currency: Instrument) -> (
-    shortTerm: InstrumentAmount,
-    longTerm: InstrumentAmount,
-    losses: InstrumentAmount
-  ) {
+  /// Convert to values suitable for `TaxYearAdjustments` fields.
+  func asTaxAdjustmentValues(currency: Instrument) -> TaxAdjustmentValues {
     let shortTerm = InstrumentAmount(
       quantity: max(0, shortTermGain), instrument: currency
     )
@@ -44,7 +47,7 @@ extension CapitalGainsSummary {
     let losses = InstrumentAmount(
       quantity: abs(totalLoss), instrument: currency
     )
-    return (shortTerm, longTerm, losses)
+    return TaxAdjustmentValues(shortTerm: shortTerm, longTerm: longTerm, losses: losses)
   }
 }
 

@@ -176,18 +176,26 @@
 
     // MARK: - Starfield
 
+    private struct Star {
+      let x: CGFloat
+      let y: CGFloat
+      let size: CGFloat
+      let color: Color
+      let opacity: Double
+    }
+
     private var starfield: some View {
       GeometryReader { geo in
-        let stars: [(x: CGFloat, y: CGFloat, size: CGFloat, color: Color, opacity: Double)] = [
-          (0.15, 0.10, 2, Self.lightBlue, 0.30),
-          (0.70, 0.07, 1.5, Self.balanceGold, 0.25),
-          (0.88, 0.22, 1, Self.lightBlue, 0.20),
-          (0.08, 0.50, 1.5, Color.white, 0.15),
-          (0.92, 0.65, 1, Self.lightBlue, 0.20),
-          (0.22, 0.78, 1.5, Self.balanceGold, 0.20),
-          (0.68, 0.85, 1, Color.white, 0.15),
-          (0.05, 0.35, 1, Self.lightBlue, 0.15),
-          (0.50, 0.90, 1.5, Self.lightBlue, 0.20),
+        let stars: [Star] = [
+          Star(x: 0.15, y: 0.10, size: 2, color: Self.lightBlue, opacity: 0.30),
+          Star(x: 0.70, y: 0.07, size: 1.5, color: Self.balanceGold, opacity: 0.25),
+          Star(x: 0.88, y: 0.22, size: 1, color: Self.lightBlue, opacity: 0.20),
+          Star(x: 0.08, y: 0.50, size: 1.5, color: Color.white, opacity: 0.15),
+          Star(x: 0.92, y: 0.65, size: 1, color: Self.lightBlue, opacity: 0.20),
+          Star(x: 0.22, y: 0.78, size: 1.5, color: Self.balanceGold, opacity: 0.20),
+          Star(x: 0.68, y: 0.85, size: 1, color: Color.white, opacity: 0.15),
+          Star(x: 0.05, y: 0.35, size: 1, color: Self.lightBlue, opacity: 0.15),
+          Star(x: 0.50, y: 0.90, size: 1.5, color: Self.lightBlue, opacity: 0.20),
         ]
 
         ForEach(Array(stars.enumerated()), id: \.offset) { _, star in
