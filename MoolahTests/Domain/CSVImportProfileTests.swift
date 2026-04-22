@@ -35,6 +35,6 @@ struct CSVImportProfileTests {
   func normaliseHelper() {
     #expect(CSVImportProfile.normalise("  Date  ") == "date")
     #expect(CSVImportProfile.normalise("Amount (AUD)") == "amount (aud)")
-    #expect(CSVImportProfile.normalise("") == "")
+    #expect(CSVImportProfile.normalise("").isEmpty)
   }
 }

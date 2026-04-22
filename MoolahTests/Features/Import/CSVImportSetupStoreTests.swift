@@ -167,7 +167,7 @@ struct CSVImportSetupStoreTests {
     // .ignore should route the raw description to an empty value.
     await store.applyColumnRole(.ignore, forColumn: 1)
     let firstTx = store.preview.first
-    #expect(firstTx?.rawDescription == "")
+    #expect(firstTx?.rawDescription.isEmpty == true)
   }
 
   @Test("saveAndImport persists column-role overrides on the profile")

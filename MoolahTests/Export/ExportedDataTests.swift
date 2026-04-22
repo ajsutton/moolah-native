@@ -117,8 +117,8 @@ struct ExportedDataTests {
     )
 
     #expect(exported.version == 1)
-    #expect(exported.profileLabel == "")
-    #expect(exported.currencyCode == "")
+    #expect(exported.profileLabel.isEmpty)
+    #expect(exported.currencyCode.isEmpty)
     #expect(exported.financialYearStartMonth == 1)
   }
 

@@ -258,8 +258,8 @@ struct TransactionDraftTests {
     #expect(draft.legDrafts[0].type == .expense)
     #expect(draft.legDrafts[0].accountId == accountA)
     #expect(draft.legDrafts[0].amountText == "0")
-    #expect(draft.payee == "")
-    #expect(draft.notes == "")
+    #expect(draft.payee.isEmpty)
+    #expect(draft.notes.isEmpty)
     #expect(draft.isRepeating == false)
   }
 
@@ -439,7 +439,7 @@ struct TransactionDraftTests {
     draft.setAmount("abc")
     #expect(draft.legDrafts[draft.relevantLegIndex].amountText == "abc")
     let counterIdx = draft.relevantLegIndex == 0 ? 1 : 0
-    #expect(draft.legDrafts[counterIdx].amountText == "")
+    #expect(draft.legDrafts[counterIdx].amountText.isEmpty)
   }
 
   @Test func setAmountZeroIsValid() {
@@ -1439,7 +1439,7 @@ struct TransactionDraftTests {
     draft.enforceEarmarkOnlyInvariants(at: 0)
     #expect(draft.legDrafts[0].type == .income)
     #expect(draft.legDrafts[0].categoryId == nil)
-    #expect(draft.legDrafts[0].categoryText == "")
+    #expect(draft.legDrafts[0].categoryText.isEmpty)
   }
 
   @Test func earmarkOnlyInvariantsNoOpWhenNotEarmarkOnly() {
