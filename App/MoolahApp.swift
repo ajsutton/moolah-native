@@ -412,9 +412,9 @@ struct MoolahApp: App {
       }
 
       // Configure AppleScript scripting context and App Intents service locator
-      let automationService = AutomationService(sessionManager: sessionManager)
-      ScriptingContext.automationService = automationService
-      ScriptingContext.sessionManager = sessionManager
+      let automationService = ScriptingContext.configure(
+        sessionManager: sessionManager, profileStore: store,
+        containerManager: containerManager, syncCoordinator: coordinator)
       AutomationServiceLocator.shared.service = automationService
     #else
       let sessionManager = SessionManager(

@@ -243,6 +243,22 @@
       <result type="real" description="The net worth value."/>
     </command>
 
+    <command name="export" code="Moolexpo" description="Export a profile's data to a JSON file.">
+      <cocoa class="Moolah.ExportProfileCommand"/>
+      <direct-parameter type="specifier" description="The profile to export."/>
+      <parameter name="to file" code="Ctof" type="text" description="POSIX path of the JSON file to write.">
+        <cocoa key="toFile"/>
+      </parameter>
+    </command>
+
+    <command name="import" code="Moolimpt" description="Import a profile from a JSON file, creating a new profile.">
+      <cocoa class="Moolah.ImportProfileCommand"/>
+      <parameter name="from file" code="Cfrm" type="text" description="POSIX path of the JSON file to read.">
+        <cocoa key="fromFile"/>
+      </parameter>
+      <result type="profile" description="The imported profile."/>
+    </command>
+
   </suite>
 
 </dictionary>
