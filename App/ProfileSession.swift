@@ -343,15 +343,7 @@ final class ProfileSession: Identifiable {
     }
   }
 
-  /// Which stores should be reloaded for a given set of changed record types.
-  /// Exposed as a pure static function so the reload-mapping policy can be
-  /// unit-tested without driving the debounced async task.
-  ///
-  /// `TransactionLegRecord` drives both account balances and earmark positions,
-  /// so a remote leg-only change (e.g. category/earmark reassignment performed
-  /// on another device) must reload both stores even if the parent
-  /// `TransactionRecord` did not change in this batch.
-  // StoreReloadPlan follows the OptionSet pattern for coalesced sync reloads.
+  /// OptionSet for coalesced store reloads after a sync batch.
   struct StoreReloadPlan: OptionSet, Sendable, Equatable {
     let rawValue: Int
     static let accounts = StoreReloadPlan(rawValue: 1 << 0)
@@ -360,6 +352,14 @@ final class ProfileSession: Identifiable {
     static let importRules = StoreReloadPlan(rawValue: 1 << 3)
   }
 
+  /// Which stores should be reloaded for a given set of changed record types.
+  /// Exposed as a pure static function so the reload-mapping policy can be
+  /// unit-tested without driving the debounced async task.
+  ///
+  /// `TransactionLegRecord` drives both account balances and earmark positions,
+  /// so a remote leg-only change (e.g. category/earmark reassignment performed
+  /// on another device) must reload both stores even if the parent
+  /// `TransactionRecord` did not change in this batch.
   static func storesToReload(for changedTypes: Set<String>) -> StoreReloadPlan {
     var plan: StoreReloadPlan = []
     if changedTypes.contains(AccountRecord.recordType)
