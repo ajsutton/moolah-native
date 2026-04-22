@@ -170,8 +170,8 @@ struct TransactionRowView: View {
           TransactionLeg(
             accountId: sourceId, instrument: .AUD, quantity: -50.23, type: .expense,
             categoryId: groceriesId)
-        ]
-      ), accounts: accounts, categories: categories, earmarks: earmarks,
+        ]),
+      accounts: accounts, categories: categories, earmarks: earmarks,
       displayAmount: InstrumentAmount(quantity: -50.23, instrument: .AUD),
       balance: InstrumentAmount(quantity: 1000, instrument: .AUD))
     TransactionRowView(
@@ -181,8 +181,8 @@ struct TransactionRowView: View {
           TransactionLeg(
             accountId: sourceId, instrument: .AUD, quantity: 3500, type: .income,
             earmarkId: holidayFundId)
-        ]
-      ), accounts: accounts, categories: categories, earmarks: earmarks,
+        ]),
+      accounts: accounts, categories: categories, earmarks: earmarks,
       displayAmount: InstrumentAmount(quantity: 3500, instrument: .AUD),
       balance: InstrumentAmount(quantity: 1050.23, instrument: .AUD))
     TransactionRowView(
@@ -191,8 +191,8 @@ struct TransactionRowView: View {
         legs: [
           TransactionLeg(accountId: sourceId, instrument: .AUD, quantity: -1000, type: .transfer),
           TransactionLeg(accountId: savingsId, instrument: .AUD, quantity: 1000, type: .transfer),
-        ]
-      ), accounts: accounts, categories: categories, earmarks: earmarks,
+        ]),
+      accounts: accounts, categories: categories, earmarks: earmarks,
       displayAmount: InstrumentAmount(quantity: -1000, instrument: .AUD),
       balance: InstrumentAmount(quantity: -2449.77, instrument: .AUD),
       viewingAccountId: sourceId)
@@ -202,8 +202,8 @@ struct TransactionRowView: View {
         legs: [
           TransactionLeg(accountId: sourceId, instrument: .AUD, quantity: -500, type: .transfer),
           TransactionLeg(accountId: savingsId, instrument: .AUD, quantity: 500, type: .transfer),
-        ]
-      ), accounts: accounts, categories: categories, earmarks: earmarks,
+        ]),
+      accounts: accounts, categories: categories, earmarks: earmarks,
       displayAmount: InstrumentAmount(quantity: -500, instrument: .AUD),
       balance: InstrumentAmount(quantity: -1449.77, instrument: .AUD),
       viewingAccountId: sourceId)
@@ -216,8 +216,8 @@ struct TransactionRowView: View {
           TransactionLeg(
             accountId: savingsId, instrument: .AUD, quantity: 950, type: .transfer),
           TransactionLeg(accountId: sourceId, instrument: .AUD, quantity: -50, type: .expense),
-        ]
-      ), accounts: accounts, categories: categories, earmarks: earmarks,
+        ]),
+      accounts: accounts, categories: categories, earmarks: earmarks,
       displayAmount: InstrumentAmount(quantity: -1050, instrument: .AUD),
       balance: InstrumentAmount(quantity: -2499.77, instrument: .AUD),
       viewingAccountId: sourceId)
