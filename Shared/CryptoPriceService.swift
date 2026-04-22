@@ -246,10 +246,8 @@ extension CryptoPriceService {
   private func fallbackPrice(tokenId: String, dateString: String) -> Decimal? {
     guard let cache = caches[tokenId] else { return nil }
     let sortedDates = cache.prices.keys.sorted().reversed()
-    for cachedDate in sortedDates {
-      if cachedDate <= dateString {
-        return cache.prices[cachedDate]
-      }
+    for cachedDate in sortedDates where cachedDate <= dateString {
+      return cache.prices[cachedDate]
     }
     return nil
   }
