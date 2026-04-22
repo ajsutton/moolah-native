@@ -7,7 +7,7 @@ import XCTest
 /// on a realistic x2-scale dataset (37k transactions, 62 accounts, 5k investment values).
 final class AnalysisBenchmarks: XCTestCase {
 
-  nonisolated(unsafe) private static var _backend: CloudKitBackend!
+  nonisolated(unsafe) private static var _backend: CloudKitBackend?
   nonisolated(unsafe) private static var _container: ModelContainer?
 
   override static func setUp() {
@@ -26,11 +26,18 @@ final class AnalysisBenchmarks: XCTestCase {
     super.tearDown()
   }
 
+  private var backend: CloudKitBackend {
+    guard let backend = Self._backend else {
+      fatalError("setUp must initialise _backend before tests run")
+    }
+    return backend
+  }
+
   private var repo: CloudKitAnalysisRepository {
-    guard let repo = Self._backend.analysis as? CloudKitAnalysisRepository else {
+    guard let repo = backend.analysis as? CloudKitAnalysisRepository else {
       fatalError(
         "AnalysisBenchmarks requires CloudKitAnalysisRepository; "
-          + "got \(type(of: Self._backend.analysis))")
+          + "got \(type(of: backend.analysis))")
     }
     return repo
   }
