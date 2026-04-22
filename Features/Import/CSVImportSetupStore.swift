@@ -40,6 +40,7 @@ final class CSVImportSetupStore {
   /// The role a column has been assigned by the user or by the detector.
   enum ColumnRole: String, CaseIterable, Identifiable, Sendable {
     case date, description, amount, debit, credit, balance, reference, ignore
+
     var id: String { rawValue }
     var label: String {
       switch self {

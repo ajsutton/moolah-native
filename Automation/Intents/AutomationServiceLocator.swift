@@ -7,5 +7,6 @@ import Foundation
 final class AutomationServiceLocator {
   static let shared = AutomationServiceLocator()
   var service: AutomationService?
+
   private init() {}
 }

@@ -9,9 +9,11 @@ struct MigrationView: View {
   @Environment(ProfileContainerManager.self) private var containerManager
   @Environment(SyncCoordinator.self) private var syncCoordinator
   @Environment(\.dismiss) private var dismiss
+
   #if os(macOS)
     @Environment(\.openWindow) private var openWindow
   #endif
+
   @State private var coordinator = MigrationCoordinator()
 
   var body: some View {

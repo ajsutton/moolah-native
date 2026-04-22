@@ -16,6 +16,7 @@ struct CSVImportSetupView: View {
     case ddMMYYYY
     case mmDDYYYY
     case iso
+
     var id: String { rawValue }
     var label: String {
       switch self {

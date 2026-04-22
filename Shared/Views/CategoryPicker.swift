@@ -3,6 +3,7 @@ import SwiftUI
 /// Preference key for positioning the category dropdown relative to the text field.
 struct CategoryPickerAnchorKey: PreferenceKey {
   static let defaultValue: Anchor<CGRect>? = nil
+
   static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
     value = value ?? nextValue()
   }
@@ -91,6 +92,7 @@ struct CategorySuggestionDropdown: View {
 /// Stores anchors keyed by leg index so multiple fields can coexist.
 struct LegCategoryPickerAnchorKey: PreferenceKey {
   static let defaultValue: [Int: Anchor<CGRect>] = [:]
+
   static func reduce(value: inout [Int: Anchor<CGRect>], nextValue: () -> [Int: Anchor<CGRect>]) {
     value.merge(nextValue()) { _, new in new }
   }

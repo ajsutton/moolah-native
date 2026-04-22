@@ -17,6 +17,7 @@ struct ContentView: View {
   @Environment(AnalysisStore.self) private var analysisStore
   @Environment(InvestmentStore.self) private var investmentStore
   @Environment(ReportingStore.self) private var reportingStore
+
   #if os(macOS)
     @State private var selection: SidebarSelection? = .analysis
   #else

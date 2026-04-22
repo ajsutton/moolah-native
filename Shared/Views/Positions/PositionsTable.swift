@@ -176,6 +176,7 @@ struct PositionsTable: View {
 /// in spec order. Each group is empty if no row of that kind appears.
 struct InstrumentGroup: Identifiable {
   enum Kind { case stocks, crypto, cash }
+
   let kind: Kind
   let rows: [ValuedPosition]
   var id: String {

@@ -21,6 +21,7 @@ struct SidebarView: View {
   @State private var showCreateAccountSheet = false
   @State private var accountToEdit: Account?
   @AppStorage("showHiddenAccounts") private var showHidden = false
+
   #if os(iOS)
     @State private var editMode: EditMode = .inactive
   #endif

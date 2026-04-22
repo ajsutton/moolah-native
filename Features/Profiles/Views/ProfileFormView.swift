@@ -7,6 +7,7 @@ import SwiftUI
 struct ProfileFormView: View {
   @Environment(ProfileStore.self) private var profileStore
   @Environment(\.dismiss) private var dismiss
+
   #if os(macOS)
     @Environment(\.openWindow) private var openWindow
   #endif
