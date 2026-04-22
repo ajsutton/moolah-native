@@ -1787,6 +1787,117 @@ struct TransactionStoreTests {
     #expect(usdLeg.quantity == Decimal(string: "650.00")!)
     #expect(fetched.isTransfer)
   }
+
+  // MARK: - Scheduled view helpers
+
+  /// Seeds one past-dated scheduled transaction and one future-dated scheduled
+  /// transaction plus one past-dated non-scheduled (paid) transaction, then
+  /// returns the prepared store. The non-scheduled transaction is what the
+  /// pre-fix Analysis card was rendering as "overdue" when the shared
+  /// transactionStore had been loaded with a non-scheduled filter first.
+  private func makeScheduledTestStore() async throws -> (
+    store: TransactionStore, backend: CloudKitBackend, container: ModelContainer
+  ) {
+    let (backend, container) = try TestBackend.create()
+    let accountId = UUID()
+    TestBackend.seed(
+      accounts: [
+        (
+          account: Account(
+            id: accountId, name: "Bank", type: .bank, instrument: .defaultTestInstrument),
+          openingBalance: InstrumentAmount(quantity: 0, instrument: .defaultTestInstrument)
+        )
+      ],
+      in: container)
+    let calendar = Calendar.current
+    let overdue = calendar.date(byAdding: .day, value: -5, to: Date())!
+    let upcoming = calendar.date(byAdding: .day, value: 5, to: Date())!
+    let farFuture = calendar.date(byAdding: .day, value: 60, to: Date())!
+    let pastPaid = calendar.date(byAdding: .day, value: -10, to: Date())!
+    TestBackend.seed(
+      transactions: [
+        Transaction(
+          date: overdue, payee: "Overdue Rent",
+          recurPeriod: .month, recurEvery: 1,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: .defaultTestInstrument,
+              quantity: Decimal(-2000), type: .expense)
+          ]),
+        Transaction(
+          date: upcoming, payee: "Upcoming Internet",
+          recurPeriod: .month, recurEvery: 1,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: .defaultTestInstrument,
+              quantity: Decimal(-150), type: .expense)
+          ]),
+        Transaction(
+          date: farFuture, payee: "Future Insurance",
+          recurPeriod: .month, recurEvery: 1,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: .defaultTestInstrument,
+              quantity: Decimal(-300), type: .expense)
+          ]),
+        Transaction(
+          date: pastPaid, payee: "Old Coffee",
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: .defaultTestInstrument,
+              quantity: Decimal(-10), type: .expense)
+          ]),
+      ],
+      in: container)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument)
+    return (store, backend, container)
+  }
+
+  @Test("scheduledOverdueTransactions is empty when filter isn't scheduled-only")
+  func overdueEmptyWhenFilterMismatched() async throws {
+    let (store, _, _) = try await makeScheduledTestStore()
+
+    await store.load(filter: TransactionFilter())
+
+    #expect(!store.transactions.isEmpty)
+    #expect(store.scheduledOverdueTransactions.isEmpty)
+    #expect(store.scheduledUpcomingTransactions.isEmpty)
+    #expect(store.scheduledShortTermTransactions().isEmpty)
+  }
+
+  @Test("scheduledOverdueTransactions returns past-dated scheduled transactions only")
+  func overdueReturnsPastDatedScheduled() async throws {
+    let (store, _, _) = try await makeScheduledTestStore()
+
+    await store.load(filter: TransactionFilter(scheduled: true))
+
+    #expect(store.scheduledOverdueTransactions.count == 1)
+    #expect(store.scheduledOverdueTransactions.first?.transaction.payee == "Overdue Rent")
+  }
+
+  @Test("scheduledUpcomingTransactions returns today-or-later scheduled transactions")
+  func upcomingReturnsTodayOrLaterScheduled() async throws {
+    let (store, _, _) = try await makeScheduledTestStore()
+
+    await store.load(filter: TransactionFilter(scheduled: true))
+
+    let payees = store.scheduledUpcomingTransactions.map(\.transaction.payee)
+    #expect(payees == ["Upcoming Internet", "Future Insurance"])
+  }
+
+  @Test("scheduledShortTermTransactions limits to within the daysAhead window")
+  func shortTermWindowedByDaysAhead() async throws {
+    let (store, _, _) = try await makeScheduledTestStore()
+
+    await store.load(filter: TransactionFilter(scheduled: true))
+
+    // Default 14-day window: includes overdue + near upcoming, excludes 60-day future.
+    let payees = store.scheduledShortTermTransactions().map(\.transaction.payee)
+    #expect(payees == ["Overdue Rent", "Upcoming Internet"])
+  }
 }
 
 // MARK: - Test helpers
