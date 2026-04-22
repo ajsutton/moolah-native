@@ -174,8 +174,8 @@ final class ProfileSession: Identifiable {
       // works.
       let fallback = FileManager.default.temporaryDirectory
         .appendingPathComponent("csv-staging-fallback-\(profile.id.uuidString)")
-      // swiftlint:disable:next force_try — fallback in a tmp dir cannot fail
-      // in practice on Apple platforms.
+      // Fallback in a tmp dir cannot fail in practice on Apple platforms.
+      // swiftlint:disable:next force_try
       let staging = try! ImportStagingStore(directory: fallback)
       self.importStore = ImportStore(backend: backend, staging: staging)
       let errDesc = error.localizedDescription
