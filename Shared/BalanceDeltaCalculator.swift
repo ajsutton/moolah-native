@@ -16,8 +16,13 @@ struct BalanceDelta: Equatable, Sendable {
     accountDeltas: [:], earmarkDeltas: [:], earmarkSavedDeltas: [:], earmarkSpentDeltas: [:])
 
   var isEmpty: Bool {
-    accountDeltas.isEmpty && earmarkDeltas.isEmpty && earmarkSavedDeltas.isEmpty
-      && earmarkSpentDeltas.isEmpty
+    accountDeltas.isEmpty && !hasEarmarkChanges
+  }
+
+  /// `true` when at least one of the earmark-related slices has entries.
+  /// Used by callers that route earmark deltas separately from account deltas.
+  var hasEarmarkChanges: Bool {
+    !earmarkDeltas.isEmpty || !earmarkSavedDeltas.isEmpty || !earmarkSpentDeltas.isEmpty
   }
 
   /// Project a `PositionBook` into the four delta dicts consumed by stores.

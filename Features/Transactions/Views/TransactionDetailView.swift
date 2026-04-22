@@ -1,5 +1,8 @@
 import SwiftUI
 
+// Refactor pending — see https://github.com/ajsutton/moolah-native/issues/309
+// for the planned subview extraction that lets these suppressions go away.
+// swiftlint:disable:next type_body_length
 struct TransactionDetailView: View {
   let transaction: Transaction
   let accounts: Accounts
@@ -344,12 +347,12 @@ struct TransactionDetailView: View {
   @ViewBuilder
   private func payeeOverlay(anchor: Anchor<CGRect>?) -> some View {
     if showPayeeSuggestions, !draft.payee.isEmpty,
-      !transactionStore.payeeSuggestions.isEmpty, let anchor
+      !transactionStore.payeeSuggestionSource.suggestions.isEmpty, let anchor
     {
       GeometryReader { proxy in
         let rect = proxy[anchor]
         PayeeSuggestionDropdown(
-          suggestions: transactionStore.payeeSuggestions,
+          suggestions: transactionStore.payeeSuggestionSource.suggestions,
           searchText: draft.payee,
           highlightedIndex: $payeeHighlightedIndex,
           onSelect: { selected in
@@ -357,7 +360,7 @@ struct TransactionDetailView: View {
             showPayeeSuggestions = false
             payeeHighlightedIndex = nil
             draft.payee = selected
-            transactionStore.clearPayeeSuggestions()
+            transactionStore.payeeSuggestionSource.clear()
             autofillFromPayee(selected)
           }
         )
@@ -408,7 +411,7 @@ struct TransactionDetailView: View {
             payeeJustSelected = false
           } else {
             showPayeeSuggestions = !newValue.isEmpty
-            transactionStore.fetchPayeeSuggestions(prefix: newValue)
+            transactionStore.payeeSuggestionSource.fetch(prefix: newValue)
           }
         },
         onAcceptHighlighted: acceptHighlightedPayee
@@ -552,7 +555,7 @@ struct TransactionDetailView: View {
             payeeJustSelected = false
           } else {
             showPayeeSuggestions = !newValue.isEmpty
-            transactionStore.fetchPayeeSuggestions(prefix: newValue)
+            transactionStore.payeeSuggestionSource.fetch(prefix: newValue)
           }
         },
         onAcceptHighlighted: acceptHighlightedPayee
@@ -821,7 +824,7 @@ struct TransactionDetailView: View {
 
   private var payeeVisibleSuggestions: [String] {
     guard showPayeeSuggestions, !draft.payee.isEmpty else { return [] }
-    return transactionStore.payeeSuggestions
+    return transactionStore.payeeSuggestionSource.suggestions
       .filter { $0.localizedCaseInsensitiveCompare(draft.payee) != .orderedSame }
       .prefix(8).map { $0 }
   }
@@ -837,7 +840,7 @@ struct TransactionDetailView: View {
     showPayeeSuggestions = false
     payeeHighlightedIndex = nil
     draft.payee = selected
-    transactionStore.clearPayeeSuggestions()
+    transactionStore.payeeSuggestionSource.clear()
     autofillFromPayee(selected)
   }
 
@@ -848,7 +851,9 @@ struct TransactionDetailView: View {
     // before removing this guard.
     guard openedAsNewTransaction else { return }
     Task {
-      guard let match = await transactionStore.fetchTransactionForAutofill(payee: selectedPayee)
+      guard
+        let match = await transactionStore.payeeSuggestionSource.fetchTransactionForAutofill(
+          payee: selectedPayee)
       else { return }
       draft.applyAutofill(from: match, categories: categories, accounts: accounts)
     }
@@ -1209,3 +1214,5 @@ struct TransactionDetailView: View {
     )
   }
 }
+
+// swiftlint:disable:this file_length
