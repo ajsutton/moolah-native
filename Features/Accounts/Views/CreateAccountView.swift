@@ -22,7 +22,8 @@ struct CreateAccountView: View {
   }
 
   init(
-    instrument: Instrument, accountStore: AccountStore,
+    instrument: Instrument,
+    accountStore: AccountStore,
     supportsComplexTransactions: Bool = false
   ) {
     self.instrument = instrument

@@ -53,7 +53,10 @@ struct CSVImportProfileMatcherTests {
   }
 
   private func existing(
-    accountId: UUID, date: Date, description: String, amount: Decimal,
+    accountId: UUID,
+    date: Date,
+    description: String,
+    amount: Decimal,
     bankRef: String? = nil
   ) -> Transaction {
     Transaction(

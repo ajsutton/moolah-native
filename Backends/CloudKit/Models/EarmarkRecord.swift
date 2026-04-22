@@ -41,7 +41,9 @@ final class EarmarkRecord {
 
   func toDomain(
     defaultInstrument: Instrument,
-    positions: [Position] = [], savedPositions: [Position] = [], spentPositions: [Position] = []
+    positions: [Position] = [],
+    savedPositions: [Position] = [],
+    spentPositions: [Position] = []
   ) -> Earmark {
     let instrument = instrumentId.map { Instrument.fiat(code: $0) } ?? defaultInstrument
     // Savings goal is always expressed in the earmark's own instrument. The
