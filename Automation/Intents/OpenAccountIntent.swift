@@ -3,8 +3,6 @@ import Foundation
 
 #if os(macOS)
   import AppKit
-#else
-  import UIKit
 #endif
 
 struct OpenAccountIntent: AppIntent {
@@ -24,35 +22,24 @@ struct OpenAccountIntent: AppIntent {
       throw AutomationError.operationFailed("App not ready")
     }
 
+    // Drive the UI in-process through `NavigationBridge`. Avoids firing a
+    // `moolah://` URL event that the `WindowGroup(for:)` auto-spawn would
+    // react to on macOS (issue #378), and works with the URL scheme now
+    // removed (issue #386).
     #if os(macOS)
-      // Drive the UI in-process (focus existing window or call the scene's
-      // `openWindow` action via `ScriptingContext`) rather than firing a
-      // `moolah://` URL event that SwiftUI's `WindowGroup(for:)` would
-      // auto-spawn a stray window for. See issue #378.
-      try dispatchMacOS()
+      let alreadyOpen = ProfileWindowLocator.activateExistingWindow(for: profile.id)
     #else
-      let profileEncoded =
-        profile.name.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? profile.name
-      let urlString = "moolah://\(profileEncoded)/account/\(account.id.uuidString)"
-      if let url = URL(string: urlString) {
-        await UIApplication.shared.open(url)
-      }
+      let alreadyOpen = false
     #endif
+    if !alreadyOpen {
+      guard let opener = NavigationBridge.openProfile else {
+        throw AutomationError.operationFailed("App not ready to open a profile")
+      }
+      opener(profile.id)
+    }
+    NavigationBridge.setPendingNavigation?(
+      PendingNavigation(profileId: profile.id, destination: .account(account.id)))
 
     return .result(value: "Opening \(account.name)")
   }
-
-  #if os(macOS)
-    @MainActor
-    private func dispatchMacOS() throws {
-      if !ProfileWindowLocator.activateExistingWindow(for: profile.id) {
-        guard let opener = ScriptingContext.openProfileWindow else {
-          throw AutomationError.operationFailed("App not ready to open a profile window")
-        }
-        opener(profile.id)
-      }
-      ScriptingContext.setPendingNavigation?(
-        PendingNavigation(profileId: profile.id, destination: .account(account.id)))
-    }
-  #endif
 }

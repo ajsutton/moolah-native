@@ -49,43 +49,15 @@ extension MoolahApp {
     await syncCoordinator.fetchChanges()
   }
 
-  // MARK: - URL Scheme Handling
+  // MARK: - URL Handling
 
+  /// CSV files opened via Finder "Open With Moolah" or dropped on the Dock
+  /// icon arrive here as `file://` URLs. Post a notification — the active
+  /// profile's `ContentView` is subscribed and will route it through
+  /// `ImportStore.ingest` (matcher auto-routes, unknown files land in
+  /// Needs Setup) exactly like a drag-and-drop.
   func handleURL(_ url: URL) {
-    // CSV files opened via Finder "Open With Moolah" or dropped on the
-    // Dock icon arrive as `file://` URLs. Post a notification — the
-    // active profile's `ContentView` is subscribed and will route it
-    // through `ImportStore.ingest` (matcher auto-routes, unknown files
-    // land in Needs Setup) exactly like a drag-and-drop.
-    if url.isFileURL && url.pathExtension.lowercased() == "csv" {
-      NotificationCenter.default.post(name: .openCSVFile, object: url)
-      return
-    }
-    do {
-      let route = try URLSchemeHandler.parse(url)
-      // Find profile by name (case-insensitive) then by UUID
-      if let profile = profileStore.profiles.first(where: {
-        $0.label.lowercased() == route.profileIdentifier.lowercased()
-      })
-        ?? profileStore.profiles.first(where: {
-          $0.id.uuidString.lowercased() == route.profileIdentifier.lowercased()
-        })
-      {
-        #if os(macOS)
-          openWindow(value: profile.id)
-        #else
-          profileStore.setActiveProfile(profile.id)
-        #endif
-        if let destination = route.destination {
-          pendingNavigation = PendingNavigation(
-            profileId: profile.id, destination: destination)
-        }
-      } else {
-        logger.warning(
-          "No profile found matching '\(route.profileIdentifier, privacy: .public)'")
-      }
-    } catch {
-      logger.error("Failed to parse URL: \(error.localizedDescription, privacy: .public)")
-    }
+    guard url.isFileURL, url.pathExtension.lowercased() == "csv" else { return }
+    NotificationCenter.default.post(name: .openCSVFile, object: url)
   }
 }

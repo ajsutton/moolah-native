@@ -27,7 +27,6 @@ struct MoolahApp: App {
 
   #if os(macOS)
     @NSApplicationDelegateAdaptor(ScriptingBridge.self) var scriptingBridge
-    @Environment(\.openWindow) var openWindow
     private let backupManager: StoreBackupManager
     @State private var sessionManager: SessionManager
   #else
