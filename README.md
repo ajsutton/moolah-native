@@ -78,25 +78,8 @@ never leaves the app.
 2. Tap **Sign in with Google** on the Welcome screen.
 3. An in-app browser opens the server's Google sign-in page.
 4. Sign in with your Google account.
-5. **With server update applied** (see below): the browser closes automatically and
-   the app shows your name in the toolbar.
-6. **Without server update**: after signing in you'll see the moolah.rocks web app
-   inside the browser; tap **Cancel** to return to the native app — you'll be signed
-   in. The UX is slightly rough but fully functional.
-
-### Configuring smooth in-app sign-in (`moolah://auth/callback`)
-
-For the browser to close automatically after sign-in, the server must redirect to
-`moolah://auth/callback` instead of `/` when the OAuth flow was initiated by the
-native app. The native app passes `?_native=1` in the initial OAuth request; Bell
-preserves this parameter through the Google OAuth dance.
-
-**Server change required:** see [`prompts/moolah-server-native-auth.md`](prompts/moolah-server-native-auth.md)
-for the exact one-file change to `src/handlers/auth/googleLogin.js`. No Google
-Cloud Console configuration changes are needed.
-
-**`moolah://` URL scheme** is already registered in `App/Info-iOS.plist` and
-`App/Info-macOS.plist`. No additional Xcode configuration is required.
+5. After signing in you'll see the moolah.rocks web app inside the browser; tap
+   **Cancel** to return to the native app — you'll be signed in.
 
 ## Project Structure
 

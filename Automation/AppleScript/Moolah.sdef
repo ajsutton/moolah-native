@@ -232,11 +232,6 @@
       <direct-parameter type="specifier" optional="yes" description="The profile to refresh."/>
     </command>
 
-    <command name="navigate to" code="Moolnavt" description="Navigate to an object in the UI.">
-      <cocoa class="Moolah.NavigateCommand"/>
-      <direct-parameter type="specifier" description="The object to navigate to."/>
-    </command>
-
     <command name="net worth" code="Moolnetw" description="Get the net worth for a profile.">
       <cocoa class="Moolah.NetWorthCommand"/>
       <direct-parameter type="specifier" description="The profile."/>

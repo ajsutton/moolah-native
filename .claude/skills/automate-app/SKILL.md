@@ -1,11 +1,11 @@
 ---
 name: automate-app
-description: Use when driving the running Moolah macOS app from the terminal — verifying a UI change end-to-end, inspecting account/transaction/earmark state, creating or tearing down a test profile's data, or opening the app to a specific view. Also use when a task mentions AppleScript (`osascript`) or the `moolah://` URL scheme.
+description: Use when driving the running Moolah macOS app from the terminal — verifying a UI change end-to-end, inspecting account/transaction/earmark state, or creating or tearing down a test profile's data. Also use when a task mentions AppleScript (`osascript`).
 ---
 
 # Automating the Moolah App
 
-Drive the running Moolah macOS app via AppleScript (`osascript`) for data operations and `moolah://` URLs for navigation.
+Drive the running Moolah macOS app via AppleScript (`osascript`) for data operations.
 
 ## CRITICAL: Profile Safety
 
@@ -111,48 +111,12 @@ osascript -e 'tell application "Moolah" to tell profile "Test" to create categor
 osascript -e 'tell application "Moolah" to tell profile "Test" to create category name "Fruit" parent "Groceries"'
 ```
 
-### Refresh and Navigation
+### Refresh
 
 ```bash
 # Refresh data from backend
 osascript -e 'tell application "Moolah" to refresh profile "Test"'
-
-# Navigate to a specific account
-osascript -e 'tell application "Moolah" to navigate to account "Savings" of profile "Test"'
 ```
-
-## URL Scheme Reference
-
-Use `open` command to trigger navigation. The app opens/focuses the profile window and navigates to the destination.
-
-```bash
-# Open a profile window
-open "moolah://Test"
-
-# Navigate to a specific account
-open "moolah://Test/account/ACCOUNT-UUID-HERE"
-
-# Navigate to a specific transaction (opens in first leg's account context)
-open "moolah://Test/transaction/TRANSACTION-UUID-HERE"
-
-# Navigate to analysis with custom periods
-open "moolah://Test/analysis?history=12&forecast=3"
-
-# Navigate to reports with date range
-open "moolah://Test/reports?from=2026-01-01&to=2026-03-31"
-
-# Navigate to specific views
-open "moolah://Test/categories"
-open "moolah://Test/upcoming"
-open "moolah://Test/earmarks"
-open "moolah://Test/earmark/EARMARK-UUID-HERE"
-open "moolah://Test/accounts"
-
-# URL-encode profile names with spaces
-open "moolah://My%20Finances/analysis"
-```
-
-**Profile resolution:** Tries name match (case-insensitive) first, then UUID. If the profile isn't open, a new window opens for it.
 
 ## Common Test Workflows
 
@@ -167,16 +131,6 @@ osascript -e 'tell application "Moolah" to tell profile "Test" to create transac
 
 # 3. Verify balance changed
 osascript -e 'tell application "Moolah" to get balance of account "Everyday" of profile "Test"'
-```
-
-### Verify UI navigation
-
-```bash
-# Navigate to analysis view and verify visually
-open "moolah://Test/analysis?history=6&forecast=3"
-
-# Navigate to specific account
-open "moolah://Test/account/ACCOUNT-UUID"
 ```
 
 ### Create a full test environment
@@ -237,7 +191,6 @@ Common errors:
 ## Tips
 
 - **Use AppleScript for data operations** (CRUD, balance checks, queries)
-- **Use URL scheme for navigation** (opening views, navigating to specific entities)
 - **Always verify state after mutations** — read back the value you just changed
 - **Use `run-mac-app-with-logs` skill** to capture app logs while running automation for debugging
 - **Amounts are Decimal** — expenses are negative, income is positive. Don't use `abs()`.

@@ -26,7 +26,6 @@ struct ContentView: View {
     @State private var selection: SidebarSelection?
   #endif
 
-  @Environment(\.pendingNavigation) private var pendingNavigationBinding
   @Environment(\.scenePhase) private var scenePhase
   @Environment(ImportStore.self) private var importStore
   @State private var showCreateEarmarkSheet = false
@@ -178,12 +177,6 @@ struct ContentView: View {
         }
       )
     }
-    .onChange(of: pendingNavigationBinding?.wrappedValue) { _, newValue in
-      if let navigation = newValue {
-        applyNavigation(navigation.destination)
-        pendingNavigationBinding?.wrappedValue = nil
-      }
-    }
     .fileImporter(
       isPresented: $showImportCSVPicker,
       allowedContentTypes: [.commaSeparatedText, .plainText],
@@ -264,16 +257,6 @@ struct ContentView: View {
       selection = .recentlyAdded
     case .failure(let error):
       importError = error.localizedDescription
-    }
-  }
-
-  private func applyNavigation(_ destination: URLSchemeHandler.Destination) {
-    if let sidebarSelection = URLSchemeHandler.toSidebarSelection(destination) {
-      selection = sidebarSelection
-    }
-    if case .analysis(let history, let forecast) = destination {
-      if let history { analysisStore.historyMonths = history }
-      if let forecast { analysisStore.forecastMonths = forecast }
     }
   }
 }
