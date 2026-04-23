@@ -28,7 +28,18 @@ Use the wrappers bundled with this skill instead:
 
 Both resolve the bundle via `git rev-parse --show-toplevel` + `/.build/Build/Products/Debug/Moolah.app`, and fail fast with `error: Moolah.app not built at <path>; run 'just run-mac' in this worktree first` if the build is missing. They never build on your behalf — run `just run-mac` yourself first.
 
-Examples below use the short names `moolah-tell` and `moolah-open` for readability; invoke them by their full relative path from the worktree root.
+Examples below use the short names `moolah-tell` and `moolah-open` for readability. When copy-pasting, prefix each with the full relative path from the worktree root:
+
+```bash
+.claude/skills/automate-app/scripts/moolah-tell 'get name of every profile'
+.claude/skills/automate-app/scripts/moolah-open "moolah://Test"
+```
+
+Or add the scripts dir to `$PATH` for the session:
+
+```bash
+export PATH="$PWD/.claude/skills/automate-app/scripts:$PATH"
+```
 
 ## AppleScript Reference
 
@@ -254,8 +265,8 @@ Common errors:
 - **"Profile not found"** — profile isn't open or name is misspelled
 - **"Account not found"** — account name doesn't match (matching is case-insensitive)
 - **"Operation failed"** — backend error, check app logs with `run-mac-app-with-logs` skill
-- **"error: Moolah.app not built at …"** — emitted by `moolah-tell` / `moolah-open` themselves; run `just run-mac` in this worktree first.
-- **"error: moolah-tell must be run from inside a Moolah worktree"** — you're running the wrapper from outside any git repo; `cd` into the worktree first.
+- **`error: Moolah.app not built at <path>`** followed by **`run 'just run-mac' in this worktree first`** (two stderr lines) — emitted by `moolah-tell` / `moolah-open` themselves when the worktree's debug build is missing; run `just run-mac` and retry.
+- **`error: moolah-tell must be run from inside a Moolah worktree`** or **`error: moolah-open must be run from inside a Moolah worktree`** — you're invoking the wrapper from outside any git repo; `cd` into the worktree first.
 
 ## Tips
 
