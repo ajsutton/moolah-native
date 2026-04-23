@@ -37,87 +37,103 @@ struct InvestmentAccountView: View {
     investmentStore.values.first?.value
   }
 
+  /// Embedded transaction list for this account. Factored out because three
+  /// layout branches reuse it verbatim.
+  @ViewBuilder private var accountTransactionList: some View {
+    TransactionListView(
+      title: "",
+      filter: TransactionFilter(accountId: account.id),
+      accounts: accounts,
+      categories: categories,
+      earmarks: earmarks,
+      transactionStore: transactionStore,
+      selectedTransaction: $selectedTransaction
+    )
+  }
+
+  /// The positions/transactions composition for non-legacy accounts. Collapses
+  /// to a bare transaction list when `PositionsView` would be redundant with
+  /// the host's already-visible account balance (see `shouldHide`).
+  @ViewBuilder private var positionTrackedLayout: some View {
+    if positionsInput.shouldHide && !isLoadingPositions {
+      accountTransactionList
+    } else {
+      PositionsTransactionsSplit(defaultTab: .positions) {
+        if isLoadingPositions && positionsInput.positions.isEmpty {
+          ProgressView()
+            .frame(maxWidth: .infinity)
+            .padding()
+        } else {
+          PositionsView(input: positionsInput, range: $positionsRange)
+        }
+      } transactions: {
+        accountTransactionList
+      }
+    }
+  }
+
+  @ViewBuilder private var legacyValuationsLayout: some View {
+    VStack(spacing: 0) {
+      legacySummary
+      legacyChartAndValuations
+      Divider()
+      accountTransactionList
+    }
+  }
+
+  @ViewBuilder private var legacySummary: some View {
+    if !investmentStore.values.isEmpty {
+      InvestmentSummaryView(
+        investedAmount: investedAmount,
+        currentValue: latestInvestmentValue,
+        store: investmentStore
+      )
+      .padding(.horizontal)
+      .padding(.top)
+    }
+  }
+
+  /// Chart + valuations layout: side-by-side on macOS, stacked on iOS.
+  @ViewBuilder private var legacyChartAndValuations: some View {
+    #if os(macOS)
+      HStack(alignment: .top, spacing: 0) {
+        VStack(spacing: 16) {
+          timePeriodPicker
+          InvestmentChartView(
+            dataPoints: investmentStore.chartDataPoints,
+            instrument: account.instrument)
+        }
+        .padding()
+
+        Divider()
+
+        valuationsList
+          .frame(width: 240)
+      }
+    #else
+      VStack(spacing: 0) {
+        VStack(spacing: 16) {
+          timePeriodPicker
+          InvestmentChartView(
+            dataPoints: investmentStore.chartDataPoints,
+            instrument: account.instrument)
+        }
+        .padding()
+
+        Divider()
+
+        valuationsList
+          .frame(maxHeight: 300)
+      }
+    #endif
+  }
+
   var body: some View {
     Group {
       if investmentStore.hasLegacyValuations {
-        VStack(spacing: 0) {
-          // Legacy: show manual valuations
-          if !investmentStore.values.isEmpty {
-            InvestmentSummaryView(
-              investedAmount: investedAmount,
-              currentValue: latestInvestmentValue,
-              store: investmentStore
-            )
-            .padding(.horizontal)
-            .padding(.top)
-          }
-
-          // Chart + valuations: side by side on macOS, stacked on iOS
-          #if os(macOS)
-            HStack(alignment: .top, spacing: 0) {
-              VStack(spacing: 16) {
-                timePeriodPicker
-                InvestmentChartView(
-                  dataPoints: investmentStore.chartDataPoints,
-                  instrument: account.instrument)
-              }
-              .padding()
-
-              Divider()
-
-              valuationsList
-                .frame(width: 240)
-            }
-          #else
-            VStack(spacing: 0) {
-              VStack(spacing: 16) {
-                timePeriodPicker
-                InvestmentChartView(
-                  dataPoints: investmentStore.chartDataPoints,
-                  instrument: account.instrument)
-              }
-              .padding()
-
-              Divider()
-
-              valuationsList
-                .frame(maxHeight: 300)
-            }
-          #endif
-
-          Divider()
-
-          // Transaction list fills remaining space
-          TransactionListView(
-            title: "",
-            filter: TransactionFilter(accountId: account.id),
-            accounts: accounts,
-            categories: categories,
-            earmarks: earmarks,
-            transactionStore: transactionStore,
-            selectedTransaction: $selectedTransaction
-          )
-        }
+        legacyValuationsLayout
       } else {
-        PositionsTransactionsSplit(defaultTab: .positions) {
-          if isLoadingPositions && positionsInput.positions.isEmpty {
-            ProgressView()
-              .frame(maxWidth: .infinity)
-              .padding()
-          } else {
-            PositionsView(input: positionsInput, range: $positionsRange)
-          }
-        } transactions: {
-          TransactionListView(
-            title: "",
-            filter: TransactionFilter(accountId: account.id),
-            accounts: accounts,
-            categories: categories,
-            earmarks: earmarks,
-            transactionStore: transactionStore,
-            selectedTransaction: $selectedTransaction
-          )
-        }
+        positionTrackedLayout
       }
     }
     .transactionInspector(

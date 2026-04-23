@@ -62,4 +62,21 @@ struct PositionsViewInput: Sendable, Hashable {
     let kinds = Set(positions.map(\.instrument.kind))
     return kinds.count > 1
   }
+
+  /// `true` when `PositionsView` should render nothing. Two cases:
+  /// 1. There are no positions at all (nothing to show).
+  /// 2. Every non-zero-quantity position is in `hostCurrency` — the host
+  ///    surface's balance already surfaces this, so a second "100 AUD" row
+  ///    would be redundant noise.
+  ///
+  /// When `hostCurrency` differs from the underlying holdings' instrument
+  /// (e.g. a BTC-denominated investment account reporting in AUD), the rule
+  /// does not fire — the conversion columns still add information.
+  var shouldHide: Bool {
+    if positions.isEmpty { return true }
+    let nonZeroInstruments = Set(
+      positions.lazy.filter { $0.quantity != 0 }.map(\.instrument)
+    )
+    return nonZeroInstruments == [hostCurrency]
+  }
 }

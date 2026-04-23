@@ -4,7 +4,7 @@ import SwiftUI
 
 extension TransactionListView {
   @ViewBuilder var listView: some View {
-    if let positionsInput, !positionsInput.positions.isEmpty {
+    if let positionsInput, !positionsInput.shouldHide {
       PositionsTransactionsSplit(defaultTab: .transactions) {
         PositionsView(input: positionsInput, range: $positionsRange)
       } transactions: {

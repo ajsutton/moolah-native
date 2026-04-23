@@ -4,8 +4,9 @@ import SwiftUI
 
 /// Unified container for displaying positions across the app. Composes a
 /// header, optional chart, and responsive table from a single
-/// `PositionsViewInput`. Renders nothing for empty input — callers decide
-/// whether to show context-specific empty state.
+/// `PositionsViewInput`. Renders nothing when `input.shouldHide` is true
+/// (empty input, or a single-instrument holding that matches the host's own
+/// instrument) — callers decide whether to show context-specific empty state.
 ///
 /// Selection: a single tap on a row filters the chart to that instrument.
 /// Tapping again, the chip's ✕, or pressing Escape clears the selection.
@@ -16,7 +17,7 @@ struct PositionsView: View {
   @Binding var range: PositionsTimeRange
 
   var body: some View {
-    if input.positions.isEmpty {
+    if input.shouldHide {
       EmptyView()
     } else {
       VStack(spacing: 0) {

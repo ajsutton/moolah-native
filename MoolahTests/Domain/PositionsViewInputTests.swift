@@ -341,4 +341,5 @@ struct PositionsViewInputTests {
     )
     #expect(mixed.showsGroupSubtotals)
   }
+
 }
