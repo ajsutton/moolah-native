@@ -124,37 +124,51 @@ enum RuleEditorConditionKind: String, CaseIterable, Hashable {
   /// shapes overlap.
   func defaultCondition(from existing: RuleCondition) -> RuleCondition {
     switch self {
-    case .contains:
-      if case .descriptionContains(let tokens) = existing {
-        return .descriptionContains(tokens)
-      }
-      if case .descriptionDoesNotContain(let tokens) = existing {
-        return .descriptionContains(tokens)
-      }
-      return .descriptionContains([""])
+    case .contains: return .descriptionContains(Self.carriedTokens(from: existing))
     case .doesNotContain:
-      if case .descriptionContains(let tokens) = existing {
-        return .descriptionDoesNotContain(tokens)
-      }
-      if case .descriptionDoesNotContain(let tokens) = existing {
-        return .descriptionDoesNotContain(tokens)
-      }
-      return .descriptionDoesNotContain([""])
-    case .beginsWith:
-      if case .descriptionBeginsWith(let prefix) = existing {
-        return .descriptionBeginsWith(prefix)
-      }
-      return .descriptionBeginsWith("")
+      return .descriptionDoesNotContain(Self.carriedTokens(from: existing))
+    case .beginsWith: return .descriptionBeginsWith(Self.carriedPrefix(from: existing))
     case .amountPositive: return .amountIsPositive
     case .amountNegative: return .amountIsNegative
     case .amountBetween:
-      if case .amountBetween(let min, let max) = existing {
-        return .amountBetween(min: min, max: max)
-      }
-      return .amountBetween(min: 0, max: 0)
-    case .sourceAccount:
-      if case .sourceAccountIs(let id) = existing { return .sourceAccountIs(id) }
-      return .sourceAccountIs(UUID())
+      let bounds = Self.carriedAmountBounds(from: existing) ?? AmountBounds(min: 0, max: 0)
+      return .amountBetween(min: bounds.min, max: bounds.max)
+    case .sourceAccount: return .sourceAccountIs(Self.carriedSourceAccountId(from: existing))
     }
+  }
+
+  /// Returns the tokens carried forward from a description-based
+  /// condition, or `[""]` (a single empty token) as the default for a new
+  /// contains/does-not-contain rule.
+  private static func carriedTokens(from existing: RuleCondition) -> [String] {
+    switch existing {
+    case .descriptionContains(let tokens), .descriptionDoesNotContain(let tokens):
+      return tokens
+    default: return [""]
+    }
+  }
+
+  private static func carriedPrefix(from existing: RuleCondition) -> String {
+    if case .descriptionBeginsWith(let prefix) = existing { return prefix }
+    return ""
+  }
+
+  private static func carriedAmountBounds(
+    from existing: RuleCondition
+  ) -> AmountBounds? {
+    if case let .amountBetween(min, max) = existing {
+      return AmountBounds(min: min, max: max)
+    }
+    return nil
+  }
+
+  private struct AmountBounds {
+    let min: Decimal
+    let max: Decimal
+  }
+
+  private static func carriedSourceAccountId(from existing: RuleCondition) -> UUID {
+    if case .sourceAccountIs(let id) = existing { return id }
+    return UUID()
   }
 }

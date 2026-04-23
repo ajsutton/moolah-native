@@ -94,64 +94,112 @@ extension InvestmentStore {
     guard let latestValue = values.first else { return 0 }
     let targetValue = Double(truncating: currentValue.quantity as NSDecimalNumber)
     let balanceValues = dailyBalances.map {
-      (date: $0.date, balance: Double(truncating: $0.balance.quantity as NSDecimalNumber))
+      BalancePoint(
+        date: $0.date,
+        balance: Double(truncating: $0.balance.quantity as NSDecimalNumber))
     }
 
     guard let firstBalance = balanceValues.first, firstBalance.balance != 0 else { return 0 }
 
-    let calculateFutureValue = { (rate: Double) -> Double in
-      var prevBalance = balanceValues[0].balance
-      var val = prevBalance
-      var date = balanceValues[0].date
-
-      for i in 1...balanceValues.count {
-        let nextDate = i < balanceValues.count ? balanceValues[i].date : latestValue.date
-        let nextBalance = i < balanceValues.count ? balanceValues[i].balance : prevBalance
-        let days = Calendar.current.dateComponents([.day], from: date, to: nextDate).day ?? 0
-
-        if days > 0 {
-          let interest = val * pow(1 + rate / 12, Double(days) / 30)
-          let deposits = nextBalance - prevBalance
-          prevBalance = nextBalance
-          val = interest + deposits
-          date = nextDate
-        }
-      }
-      return val
+    let futureValue: (Double) -> Double = { rate in
+      Self.futureValue(
+        atMonthlyRate: rate,
+        balanceValues: balanceValues,
+        finalDate: latestValue.date)
     }
 
-    var low = -1.0
-    var high = 1.0
-
-    // Ensure high is above the maximum possible return
-    while calculateFutureValue(high) < targetValue {
-      high *= 2
-      if high > 1000 { return .infinity }
+    switch Self.bracketReturnRate(target: targetValue, futureValue: futureValue) {
+    case .overflowHigh: return .infinity
+    case .overflowLow: return -.infinity
+    case .bracket(let bounds):
+      let converged = Self.binarySearchReturnRate(
+        target: targetValue, initial: bounds, futureValue: futureValue)
+      return (converged ?? (bounds.high + bounds.low) / 2) * 100
     }
+  }
 
-    // Ensure low is below the minimum possible return
-    while calculateFutureValue(low) > targetValue {
-      low *= 2
-      if low < -1000 { return -.infinity }
+  private struct BalancePoint {
+    let date: Date
+    let balance: Double
+  }
+
+  private struct RateBracket {
+    var low: Double
+    var high: Double
+  }
+
+  private enum BracketResult {
+    case bracket(RateBracket)
+    case overflowHigh
+    case overflowLow
+  }
+
+  /// Replays cash flows through a candidate monthly rate to get the
+  /// projected value at `finalDate`.
+  private static func futureValue(
+    atMonthlyRate rate: Double,
+    balanceValues: [BalancePoint],
+    finalDate: Date
+  ) -> Double {
+    var prevBalance = balanceValues[0].balance
+    var val = prevBalance
+    var date = balanceValues[0].date
+
+    for i in 1...balanceValues.count {
+      let nextDate = i < balanceValues.count ? balanceValues[i].date : finalDate
+      let nextBalance = i < balanceValues.count ? balanceValues[i].balance : prevBalance
+      let days = Calendar.current.dateComponents([.day], from: date, to: nextDate).day ?? 0
+      guard days > 0 else { continue }
+
+      let interest = val * pow(1 + rate / 12, Double(days) / 30)
+      val = interest + (nextBalance - prevBalance)
+      prevBalance = nextBalance
+      date = nextDate
     }
+    return val
+  }
 
-    // Binary search for the rate
+  /// Grows the bracket `[low, high]` outward until `futureValue(low) <
+  /// target < futureValue(high)`. Returns `.overflowHigh` / `.overflowLow`
+  /// when the return exceeds the sanity cap in the respective direction —
+  /// the caller maps those to `+/- .infinity`.
+  private static func bracketReturnRate(
+    target: Double,
+    futureValue: (Double) -> Double
+  ) -> BracketResult {
+    var bracket = RateBracket(low: -1.0, high: 1.0)
+    while futureValue(bracket.high) < target {
+      bracket.high *= 2
+      if bracket.high > 1000 { return .overflowHigh }
+    }
+    while futureValue(bracket.low) > target {
+      bracket.low *= 2
+      if bracket.low < -1000 { return .overflowLow }
+    }
+    return .bracket(bracket)
+  }
+
+  /// Binary-searches `bracket` for the monthly rate that reproduces
+  /// `target`. Returns the converged rate, or `nil` if the search never
+  /// met the tolerance.
+  private static func binarySearchReturnRate(
+    target: Double,
+    initial: RateBracket,
+    futureValue: (Double) -> Double
+  ) -> Double? {
+    var bracket = initial
     for _ in 0..<100 {
-      let guess = (high + low) / 2
-      let futureValue = calculateFutureValue(guess)
-
-      if low > high {
-        return guess * 100
-      } else if abs(futureValue - targetValue) < 0.01 {
-        return guess * 100
-      } else if futureValue > targetValue {
-        high = guess - 0.0001
+      let guess = (bracket.high + bracket.low) / 2
+      let value = futureValue(guess)
+      if bracket.low > bracket.high { return guess }
+      if abs(value - target) < 0.01 { return guess }
+      if value > target {
+        bracket.high = guess - 0.0001
       } else {
-        low = guess + 0.0001
+        bracket.low = guess + 0.0001
       }
     }
-
-    return ((high + low) / 2) * 100
+    return nil
   }
 
   func costBasisSnapshot(
