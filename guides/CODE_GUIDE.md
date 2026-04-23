@@ -382,6 +382,23 @@ SwiftLint enforces most of these via opt-in rules; follow them by habit.
   ```
 
 - **More than 3 levels of nesting → extract a function.** SwiftLint's [`nesting`](https://realm.github.io/SwiftLint/nesting.html) rule warns past function-level 2, but readability degrades well before the warning. Extract early.
+- **Use `for … where` instead of `for … { if … }`** when the whole loop body is guarded by a single condition. Enforced by [`for_where`](https://realm.github.io/SwiftLint/for_where.html). The `where` clause reads as part of the iteration contract ("for every X that matches P …") and drops one level of nesting from the body.
+
+  ```swift
+  // Good
+  for cachedDate in sortedDates where cachedDate <= dateString {
+    return cache.prices[cachedDate]
+  }
+
+  // Bad — the inner `if` wraps the entire body
+  for cachedDate in sortedDates {
+    if cachedDate <= dateString {
+      return cache.prices[cachedDate]
+    }
+  }
+  ```
+
+  Only applies when the `if` wraps the entire loop body. A loop that does meaningful work before or after a conditional branch should keep the `if` — moving a partial guard into `where` would change the loop's shape.
 
 ---
 
