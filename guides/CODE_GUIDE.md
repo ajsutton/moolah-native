@@ -382,6 +382,14 @@ SwiftLint enforces most of these via opt-in rules; follow them by habit.
   if index % 100 == 0 { /* Bad */ }
   ```
 
+- **`Array(sequence)` over `sequence.map { $0 }` to materialize a sequence.** The identity-closure `map` is a disguised conversion that allocates and iterates without communicating intent; the `Array` initializer names exactly what's happening. Enforced by [`array_init`](https://realm.github.io/SwiftLint/array_init.html).
+
+  ```swift
+  let ids = Array(transaction.legs.lazy.map(\.id))   // Good — `map` is doing real work
+  let legs = Array(transaction.legs)                 // Good — just materializing
+  let legs = transaction.legs.map { $0 }             // Bad — use `Array(…)`
+  ```
+
 ---
 
 ## 15. Control Flow
