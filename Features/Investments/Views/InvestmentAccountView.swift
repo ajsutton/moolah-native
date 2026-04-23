@@ -17,6 +17,15 @@ struct InvestmentAccountView: View {
     title: "", hostCurrency: .AUD, positions: [], historicalValue: nil)
   @State private var positionsRange: PositionsTimeRange = .threeMonths
   @State private var isLoadingPositions = false
+  /// Tracks whether `loadAllData` has run at least once for this account.
+  /// Gates the body so `legacyValuationsLayout` vs `positionTrackedLayout`
+  /// is chosen *after* `investmentStore.values` is known — otherwise the
+  /// branch flips from position-tracked to legacy mid-layout, tearing down
+  /// and re-mounting the embedded `TransactionListView` with its `.toolbar`,
+  /// which double-registers items in SwiftUI's AppKit toolbar bridge and
+  /// crashes Release builds on accounts that have legacy investment values
+  /// (e.g. Test Profile → Crypto).
+  @State private var initialLoadComplete = false
 
   /// The profile's reporting currency — used for valuing positions and the
   /// chart series. NOT the account's own instrument: an investment account
@@ -130,7 +139,10 @@ struct InvestmentAccountView: View {
 
   var body: some View {
     Group {
-      if investmentStore.hasLegacyValuations {
+      if !initialLoadComplete {
+        ProgressView()
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else if investmentStore.hasLegacyValuations {
         legacyValuationsLayout
       } else {
         positionTrackedLayout
@@ -151,12 +163,14 @@ struct InvestmentAccountView: View {
         accountId: account.id, instrument: account.instrument, store: investmentStore)
     }
     .task(id: account.id) {
+      initialLoadComplete = false
       isLoadingPositions = true
       defer { isLoadingPositions = false }
       await investmentStore.loadAllData(
         accountId: account.id, profileCurrency: profileCurrencyInstrument)
       positionsInput = await investmentStore.positionsViewInput(
         title: account.name, range: positionsRange)
+      initialLoadComplete = true
     }
     .task(id: positionsRange) {
       // Skip until loadAllData has populated the store; the .task(id: account.id)
