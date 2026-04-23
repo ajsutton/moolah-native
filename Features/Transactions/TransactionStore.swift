@@ -42,6 +42,11 @@ final class TransactionStore {
   private var currentPage = 0
   private var rawTransactions: [Transaction] = []
   private var priorBalance: InstrumentAmount?
+  /// Monotonic counter bumped by every `load(filter:)` call. `fetchPage`
+  /// captures its value at entry and aborts before mutating state if a newer
+  /// load has superseded it — preventing a stale in-flight fetch (e.g. from a
+  /// view that re-mounted mid-load; see #372) from appending page 0 twice.
+  private var loadGeneration: Int = 0
 
   init(
     repository: TransactionRepository,
@@ -62,6 +67,7 @@ final class TransactionStore {
   }
 
   func load(filter: TransactionFilter) async {
+    loadGeneration &+= 1
     currentFilter = filter
     currentTargetInstrument = targetInstrument
     currentPage = 0
@@ -78,40 +84,6 @@ final class TransactionStore {
   func loadMore() async {
     guard !isLoading, hasMore else { return }
     await fetchPage()
-  }
-
-  // MARK: - Scheduled Views
-
-  /// Scheduled transactions whose date is before today, sorted ascending by
-  /// date. Empty when the store's current filter isn't `scheduled: true` —
-  /// views sharing the store ignore stale contents from an unfiltered load
-  /// in the frame before their own `.task` reloads the store.
-  var scheduledOverdueTransactions: [TransactionWithBalance] {
-    let today = Calendar.current.startOfDay(for: Date())
-    return scheduledTransactions { $0 < today }
-  }
-
-  /// Scheduled transactions due today or later, sorted ascending by date.
-  var scheduledUpcomingTransactions: [TransactionWithBalance] {
-    let today = Calendar.current.startOfDay(for: Date())
-    return scheduledTransactions { $0 >= today }
-  }
-
-  /// Scheduled transactions from the past plus the next `daysAhead` days —
-  /// the set shown in the Analysis "Upcoming & Overdue" card.
-  func scheduledShortTermTransactions(daysAhead: Int = 14) -> [TransactionWithBalance] {
-    let ceiling = Calendar.current.date(byAdding: .day, value: daysAhead, to: Date()) ?? Date()
-    return scheduledTransactions { $0 <= ceiling }
-  }
-
-  private func scheduledTransactions(
-    where matches: (Date) -> Bool
-  ) -> [TransactionWithBalance] {
-    guard currentFilter.scheduled == true else { return [] }
-    return
-      transactions
-      .filter { matches($0.transaction.date) }
-      .sorted { $0.transaction.date < $1.transaction.date }
   }
 
   /// Creates a blank expense bound to `accountId` (falling back to
@@ -256,6 +228,7 @@ final class TransactionStore {
   }
 
   private func fetchPage() async {
+    let myGeneration = loadGeneration
     isLoading = true
     logger.debug("Loading transactions page \(self.currentPage)...")
 
@@ -265,6 +238,11 @@ final class TransactionStore {
         page: currentPage,
         pageSize: pageSize
       )
+      // Skip publishing if a newer `load(filter:)` has superseded us or the
+      // SwiftUI task hosting this fetch was cancelled (view torn down).
+      // Without this guard, a stale in-flight fetch from a re-mounted view
+      // appends page 0 on top of the next load — see #372.
+      guard !Task.isCancelled, myGeneration == loadGeneration else { return }
       rawTransactions.append(contentsOf: page.transactions)
       priorBalance = page.priorBalance
       if currentPage == 0 {
@@ -280,11 +258,18 @@ final class TransactionStore {
       logger.debug(
         "Loaded \(page.transactions.count) transactions (total: \(self.rawTransactions.count))")
     } catch {
+      // Only surface the error for the live load — a superseded one's
+      // failure isn't user-actionable because the newer load is running.
+      guard myGeneration == loadGeneration else { return }
       logger.error("Failed to load transactions: \(error.localizedDescription)")
       self.error = error
     }
 
-    isLoading = false
+    // Only clear isLoading for the live load; the newer load owns the flag
+    // otherwise and will clear it when it finishes.
+    if myGeneration == loadGeneration {
+      isLoading = false
+    }
   }
 
   // MARK: - Debounced Save
