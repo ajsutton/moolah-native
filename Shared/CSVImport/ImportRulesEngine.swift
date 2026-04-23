@@ -112,7 +112,7 @@ enum ImportRulesEngine {
       return transaction.rawAmount > 0
     case .amountIsNegative:
       return transaction.rawAmount < 0
-    case .amountBetween(let min, let max):
+    case let .amountBetween(min, max):
       return transaction.rawAmount >= min && transaction.rawAmount <= max
     case .sourceAccountIs(let id):
       return id == accountId

@@ -155,7 +155,7 @@ private struct RuleRow: View {
     case .descriptionBeginsWith(let prefix): return "starts \(prefix)"
     case .amountIsPositive: return "income"
     case .amountIsNegative: return "expense"
-    case .amountBetween(let min, let max): return "between \(min) and \(max)"
+    case let .amountBetween(min, max): return "between \(min) and \(max)"
     case .sourceAccountIs: return "on one account"
     }
   }

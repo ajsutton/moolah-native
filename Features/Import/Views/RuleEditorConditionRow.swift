@@ -45,7 +45,7 @@ struct RuleEditorConditionRow: View {
             set: { condition = .descriptionBeginsWith($0) }))
       case .amountIsPositive, .amountIsNegative:
         EmptyView()
-      case .amountBetween(let min, let max):
+      case let .amountBetween(min, max):
         TextField(
           "min",
           value: Binding(
