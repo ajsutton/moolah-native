@@ -1,0 +1,83 @@
+import Foundation
+import Testing
+
+@testable import Moolah
+
+@Suite("AutomationService Category Operations")
+@MainActor
+struct AutomationServiceCategoryTests {
+  private func makeServiceWithSession() async throws -> (AutomationService, ProfileSession) {
+    let containerManager = try ProfileContainerManager.forTesting()
+    let sessionManager = SessionManager(containerManager: containerManager)
+    let profile = Profile(
+      label: "Test",
+      backendType: .cloudKit,
+      currencyCode: "AUD",
+      financialYearStartMonth: 7
+    )
+    let session = sessionManager.session(for: profile)
+    await session.categoryStore.load()
+    let service = AutomationService(sessionManager: sessionManager)
+    return (service, session)
+  }
+
+  @Test("createCategory creates and lists categories")
+  func createAndListCategories() async throws {
+    let (service, _) = try await makeServiceWithSession()
+
+    let category = try await service.createCategory(
+      profileIdentifier: "Test",
+      name: "Food",
+      parentName: nil
+    )
+
+    #expect(category.name == "Food")
+    #expect(category.parentId == nil)
+
+    let categories = try service.listCategories(profileIdentifier: "Test")
+    #expect(categories.count == 1)
+    #expect(categories.first?.name == "Food")
+  }
+
+  @Test("resolveCategory finds category by name case-insensitively")
+  func resolveCategoryByName() async throws {
+    let (service, _) = try await makeServiceWithSession()
+
+    _ = try await service.createCategory(
+      profileIdentifier: "Test",
+      name: "Transport",
+      parentName: nil
+    )
+
+    let resolved = try service.resolveCategory(named: "transport", profileIdentifier: "Test")
+    #expect(resolved.name == "Transport")
+  }
+
+  @Test("resolveCategory throws when not found")
+  func resolveCategoryNotFound() async throws {
+    let (service, _) = try await makeServiceWithSession()
+
+    #expect(throws: AutomationError.self) {
+      try service.resolveCategory(named: "NonExistent", profileIdentifier: "Test")
+    }
+  }
+
+  @Test("createCategory with parent creates subcategory")
+  func createSubcategory() async throws {
+    let (service, _) = try await makeServiceWithSession()
+
+    let parent = try await service.createCategory(
+      profileIdentifier: "Test",
+      name: "Food",
+      parentName: nil
+    )
+
+    let child = try await service.createCategory(
+      profileIdentifier: "Test",
+      name: "Groceries",
+      parentName: "Food"
+    )
+
+    #expect(child.parentId == parent.id)
+  }
+}
