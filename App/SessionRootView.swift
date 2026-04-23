@@ -3,7 +3,7 @@ import SwiftUI
 /// Injects all stores from a ProfileSession into the environment, then shows AppRootView.
 /// The `.id(session.id)` forces a full view hierarchy rebuild on profile switch.
 struct SessionRootView: View {
-  let session: ProfileSession
+  @Bindable var session: ProfileSession
 
   var body: some View {
     AppRootView()
@@ -21,5 +21,12 @@ struct SessionRootView: View {
       .environment(session.importRuleStore)
       .focusedSceneValue(\.authStore, session.authStore)
       .focusedSceneValue(\.activeProfileSession, session)
+      .sheet(item: $session.activeExport) { active in
+        ExportProgressSheet(
+          profileLabel: active.profileLabel,
+          stageLabel: active.stageLabel
+        )
+        .interactiveDismissDisabled()
+      }
   }
 }

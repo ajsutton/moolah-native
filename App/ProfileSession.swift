@@ -28,6 +28,11 @@ final class ProfileSession: Identifiable {
   private let folderScanner: FolderScanService
   private let folderWatcher: FolderWatchService
 
+  /// Non-nil while a profile export is in progress. Set by the File menu's
+  /// export command; read by `SessionRootView` to present a progress sheet
+  /// (see issue #359). `nil` when idle so the sheet dismisses automatically.
+  var activeExport: ActiveExport?
+
   /// Observer token for sync coordinator notifications (nil for remote profiles).
   private var syncObserverToken: SyncCoordinator.ObserverToken?
 

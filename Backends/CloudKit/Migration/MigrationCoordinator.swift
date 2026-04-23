@@ -228,30 +228,46 @@ final class MigrationCoordinator {
   ///   - url: The file URL to write the exported JSON to
   ///   - backend: The backend for the profile (provides repositories)
   ///   - profile: The profile to export
+  ///   - progress: Optional callback fired on `@MainActor` with a stage name
+  ///     (`accounts`, `categories`, `earmarks`, `transactions`,
+  ///     `investment values`, `encoding`, `writing`) so the UI can render a
+  ///     progress indicator (see issue #359). The download stages are forwarded
+  ///     from `DataExporter`; `encoding` and `writing` are emitted around the
+  ///     JSON serialisation and atomic file write that run inside this
+  ///     method.
   func exportToFile(
     url: URL,
     backend: any BackendProvider,
-    profile: Profile
+    profile: Profile,
+    progress: @escaping @MainActor (String) -> Void = { _ in }
   ) async throws {
     state = .exporting(step: "Starting...")
+    progress("starting")
 
     let exporter = DataExporter(backend: backend)
     let exported = try await exporter.export(
       profileLabel: profile.label,
       currencyCode: profile.currencyCode,
       financialYearStartMonth: profile.financialYearStartMonth
-    ) { [weak self] progress in
+    ) { [weak self] exportProgress in
       Task { @MainActor in
-        switch progress {
+        switch exportProgress {
         case .downloading(let step):
           self?.state = .exporting(step: step)
+          progress(step)
         default: break
         }
       }
     }
 
+    state = .exporting(step: "encoding")
+    progress("encoding")
     let data = try JSONEncoder.exportEncoder.encode(exported)
+
+    state = .exporting(step: "writing")
+    progress("writing")
     try data.write(to: url, options: .atomic)
+
     state = .idle
   }
 

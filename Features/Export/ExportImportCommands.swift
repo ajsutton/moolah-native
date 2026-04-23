@@ -45,12 +45,20 @@
       guard result == .OK, let url = panel.url else { return }
 
       logger.info("Export: saving to \(url.path, privacy: .public)")
+      session.activeExport = ActiveExport(
+        profileLabel: session.profile.label,
+        stageLabel: ActiveExport.stageLabel(for: "starting"))
+      defer { session.activeExport = nil }
+
       let coordinator = MigrationCoordinator()
       do {
         try await coordinator.exportToFile(
           url: url,
           backend: session.backend,
-          profile: session.profile
+          profile: session.profile,
+          progress: { step in
+            session.activeExport?.stageLabel = ActiveExport.stageLabel(for: step)
+          }
         )
         logger.info("Export: complete — saved to \(url.path, privacy: .public)")
       } catch {
