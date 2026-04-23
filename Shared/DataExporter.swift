@@ -164,7 +164,7 @@ actor DataExporter {
     let nonScheduled = try await backend.transactions.fetchAll(
       filter: TransactionFilter())
     let scheduled = try await backend.transactions.fetchAll(
-      filter: TransactionFilter(scheduled: true))
+      filter: TransactionFilter(scheduled: .scheduledOnly))
     let existingIds = Set(nonScheduled.map(\.id))
     return nonScheduled + scheduled.filter { !existingIds.contains($0.id) }
   }

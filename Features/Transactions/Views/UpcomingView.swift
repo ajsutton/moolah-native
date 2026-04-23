@@ -80,10 +80,10 @@ struct UpcomingView: View {
       }
     }
     .task {
-      await transactionStore.load(filter: TransactionFilter(scheduled: true))
+      await transactionStore.load(filter: TransactionFilter(scheduled: .scheduledOnly))
     }
     .refreshable {
-      await transactionStore.load(filter: TransactionFilter(scheduled: true))
+      await transactionStore.load(filter: TransactionFilter(scheduled: .scheduledOnly))
     }
     .overlay {
       if !transactionStore.isLoading && transactionStore.transactions.isEmpty {
@@ -245,7 +245,7 @@ private func previewSeedTransactions(
           accountId: accountId, instrument: .AUD, quantity: -150, type: .expense,
           categoryId: categoryId)
       ]))
-  await store.load(filter: TransactionFilter(scheduled: true))
+  await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
 }
 
 #Preview {

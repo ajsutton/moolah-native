@@ -109,7 +109,7 @@ struct AutomationServiceAccountTests {
     let updated = try await service.updateAccount(
       profileIdentifier: "Test",
       accountId: created.id,
-      name: "New Name"
+      changes: AccountChanges(name: "New Name")
     )
 
     #expect(updated.name == "New Name")

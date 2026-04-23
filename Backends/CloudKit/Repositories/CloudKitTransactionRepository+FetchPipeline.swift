@@ -24,7 +24,7 @@ extension CloudKitTransactionRepository {
         .end, log: Signposts.repository, name: "TransactionRepo.fetchAll", signpostID: signpostID)
     }
     return try await MainActor.run {
-      let scheduled = filter.scheduled ?? false
+      let scheduled = filter.scheduled == .scheduledOnly
       var filteredRecords = try loadAndFilter(
         filter: filter, scheduled: scheduled, signpostID: signpostID)
       filteredRecords.sort { lhs, rhs in
@@ -46,7 +46,7 @@ extension CloudKitTransactionRepository {
     pageSize: Int,
     signpostID: OSSignpostID
   ) throws -> FetchResult {
-    let scheduled = filter.scheduled ?? false
+    let scheduled = filter.scheduled == .scheduledOnly
     var filteredRecords = try loadAndFilter(
       filter: filter, scheduled: scheduled, signpostID: signpostID)
     filteredRecords.sort { lhs, rhs in

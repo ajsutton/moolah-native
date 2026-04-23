@@ -78,7 +78,7 @@ struct TransactionRepositoryPersistenceTests {
     // Verify persistence by fetching back from repository (scheduled filter needed since
     // the transaction has recurPeriod set, and the default filter excludes scheduled)
     let page = try await repository.fetch(
-      filter: TransactionFilter(scheduled: true),
+      filter: TransactionFilter(scheduled: .scheduledOnly),
       page: 0,
       pageSize: 50
     )

@@ -53,7 +53,7 @@ struct TransactionStoreScheduledOneOffTests {
     // The persisted transaction stays scheduled (period demoted to .once)
     // and remains visible in the scheduled filter — not the regular one.
     let scheduledPage = try await backend.transactions.fetch(
-      filter: TransactionFilter(scheduled: true), page: 0, pageSize: 50)
+      filter: TransactionFilter(scheduled: .scheduledOnly), page: 0, pageSize: 50)
     #expect(scheduledPage.transactions.count == 1)
     let persisted = try #require(scheduledPage.transactions.first)
     #expect(persisted.id == created.id)
@@ -62,7 +62,7 @@ struct TransactionStoreScheduledOneOffTests {
     #expect(persisted.isRecurring == false)
 
     let regularPage = try await backend.transactions.fetch(
-      filter: TransactionFilter(accountId: accountId, scheduled: false),
+      filter: TransactionFilter(accountId: accountId, scheduled: .nonScheduledOnly),
       page: 0,
       pageSize: 50)
     #expect(regularPage.transactions.isEmpty)

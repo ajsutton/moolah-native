@@ -56,8 +56,15 @@ extension DailyBalance {
     self.isForecast = false
   }
 
-  /// Returns a copy of this balance with a different date and optionally different forecast flag.
-  func withDate(_ newDate: Date, isForecast: Bool? = nil) -> DailyBalance {
+  /// Returns a copy of this balance with a different date, preserving the
+  /// original `isForecast` flag. Use `withDate(_:isForecast:)` to override it.
+  func withDate(_ newDate: Date) -> DailyBalance {
+    withDate(newDate, isForecast: self.isForecast)
+  }
+
+  /// Returns a copy of this balance with a different date and an explicit
+  /// `isForecast` flag.
+  func withDate(_ newDate: Date, isForecast: Bool) -> DailyBalance {
     DailyBalance(
       date: newDate,
       balance: balance,
@@ -67,7 +74,7 @@ extension DailyBalance {
       investmentValue: investmentValue,
       netWorth: netWorth,
       bestFit: bestFit,
-      isForecast: isForecast ?? self.isForecast
+      isForecast: isForecast
     )
   }
 }

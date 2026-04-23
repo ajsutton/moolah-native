@@ -89,7 +89,7 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
 struct TransactionFilter: Sendable, Equatable {
   var accountId: UUID?
   var earmarkId: UUID?
-  var scheduled: Bool?
+  var scheduled: ScheduledFilter
   var dateRange: ClosedRange<Date>?
   var categoryIds: Set<UUID>
   var payee: String?
@@ -97,7 +97,7 @@ struct TransactionFilter: Sendable, Equatable {
   init(
     accountId: UUID? = nil,
     earmarkId: UUID? = nil,
-    scheduled: Bool? = nil,
+    scheduled: ScheduledFilter = .all,
     dateRange: ClosedRange<Date>? = nil,
     categoryIds: Set<UUID> = [],
     payee: String? = nil
@@ -113,7 +113,7 @@ struct TransactionFilter: Sendable, Equatable {
 
 extension TransactionFilter {
   var hasActiveFilters: Bool {
-    accountId != nil || earmarkId != nil || scheduled != nil
+    accountId != nil || earmarkId != nil || scheduled != .all
       || dateRange != nil || !categoryIds.isEmpty || payee != nil
   }
 }

@@ -168,7 +168,7 @@ struct TransactionStoreEarmarkTests {
     let store = stores.transactions
     let accountStore = stores.accounts
 
-    await store.load(filter: TransactionFilter(scheduled: true))
+    await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
     _ = await store.payScheduledTransaction(scheduled)
 
     // Paying a -2000 expense should decrease balance by 2000
@@ -200,7 +200,7 @@ struct TransactionStoreEarmarkTests {
     let store = stores.transactions
     let accountStore = stores.accounts
 
-    await store.load(filter: TransactionFilter(scheduled: true))
+    await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
     _ = await store.payScheduledTransaction(scheduled)
 
     // Paying a -500 expense should decrease balance by 500

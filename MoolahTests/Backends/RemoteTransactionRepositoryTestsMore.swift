@@ -35,7 +35,7 @@ struct RemoteTransactionRepositoryTestsMore {
     }
 
     _ = try await repository.fetch(
-      filter: TransactionFilter(scheduled: true),
+      filter: TransactionFilter(scheduled: .scheduledOnly),
       page: 0,
       pageSize: 50
     )

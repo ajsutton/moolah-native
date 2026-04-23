@@ -67,7 +67,7 @@ struct AnalysisView: View {
     }
     .task {
       async let transactions: Void = transactionStore.load(
-        filter: TransactionFilter(scheduled: true))
+        filter: TransactionFilter(scheduled: .scheduledOnly))
       async let analysis: Void = store.loadAll()
       _ = await (transactions, analysis)
     }

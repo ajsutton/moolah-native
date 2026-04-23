@@ -9,18 +9,6 @@ import SwiftData
 let analysisLogger = Logger(
   subsystem: "com.moolah.app", category: "CloudKitAnalysisRepository")
 
-/// Filter applied to `CloudKitAnalysisRepository.fetchTransactions`.
-///
-/// Replaces a tri-state `Bool?` parameter — `nil` meant "all", `true` meant
-/// "scheduled only", `false` meant "non-scheduled only". Using an enum makes
-/// the intent readable at call sites and satisfies SwiftLint's
-/// `discouraged_optional_boolean` rule.
-enum ScheduledFilter {
-  case all
-  case scheduledOnly
-  case nonScheduledOnly
-}
-
 /// Shared parameters threaded through the off-main static computation path.
 ///
 /// Bundles the profile instrument + conversion service that every static
