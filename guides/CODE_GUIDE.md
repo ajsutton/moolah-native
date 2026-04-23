@@ -425,7 +425,13 @@ Every `TODO` or `FIXME` **must reference a tracked GitHub issue**. Bare `TODO:` 
   //             — https://github.com/ajsutton/moolah-native/issues/123
   ```
 
-CI will check that referenced issues remain open while the TODO is live — a closed issue means the TODO has stale rationale. Enforcement tracked by [#249](https://github.com/ajsutton/moolah-native/issues/249).
+Enforcement is automated:
+
+- **Pre-merge** — `just validate-todos` runs in CI on every push and same-repo PR (fork PRs get a format-only variant that doesn't hit the API). Fails if any TODO is bare, or if any `TODO(#N)` reference points at a closed or non-existent issue.
+- **Daily watchdog** — `.github/workflows/todo-issue-watchdog.yml` reconciles the `has-todos` label and reopens any issue that got closed while live references still exist.
+- **Xcode** — SwiftLint's `todo_issue_reference` custom rule flags bare `TODO:` / `FIXME:` inline as you type, so you catch them before CI does.
+
+See `plans/2026-04-23-todo-reference-enforcement-design.md` for the full design.
 
 ---
 

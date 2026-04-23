@@ -27,6 +27,9 @@ disabled_rules:
   - trailing_whitespace
   - vertical_whitespace
   - sorted_imports
+  # `todo_issue_reference` (below) replaces this with stricter semantics:
+  # bare TODO/FIXME is an error, but `TODO(#N)` / `FIXME(#N)` is allowed.
+  - todo
 
 opt_in_rules:
   - array_init
@@ -173,3 +176,14 @@ force_cast:
 
 force_unwrapping:
   severity: warning
+
+# Enforce CODE_GUIDE §20: every TODO / FIXME must reference a GitHub issue
+# in the `TODO(#N)` / `FIXME(#N)` form. Catches bare TODOs inline in Xcode
+# as they're typed. The authoritative CI gate is scripts/check-todos.sh
+# (covers non-Swift files too); this rule is developer-ergonomics sugar.
+custom_rules:
+  todo_issue_reference:
+    name: "TODO must reference a GitHub issue"
+    regex: '//[^\n]*\b(?i:TODO|FIXME)(?!\(#[0-9]+\))[(:]'
+    message: "Use `TODO(#N)` / `FIXME(#N)` referencing an open GitHub issue. See CODE_GUIDE §20."
+    severity: error
