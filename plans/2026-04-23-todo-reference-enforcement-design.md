@@ -107,18 +107,30 @@ validate-todos:
     bash scripts/check-todos.sh
 ```
 
-### CI wiring
+### Fork-safe CI wiring
 
-Add to both the `test` and `ui-test` jobs in `.github/workflows/ci.yml`:
+`GITHUB_TOKEN` must never be exposed to PRs from forks, even in its default read-only form — a malicious PR could edit `scripts/check-todos.sh` and run arbitrary code inside the CI context. The wiring splits on trust:
+
+- **Fork PRs** (head repo ≠ base repo): run `check-todos.sh --format-only`. No token, no network, just the bare-TODO regex check. Still catches the most common convention failure.
+- **Trusted events** (pushes to `main` / `mq-spec-*`, or same-repo PRs): run the full check with `GITHUB_TOKEN` in scope. Liveness enforced.
 
 ```yaml
-- name: Validate TODO references
+- name: Validate TODO format (fork-safe)
+  if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+  run: bash scripts/check-todos.sh --format-only
+
+- name: Validate TODO references (liveness)
+  if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
   env:
     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   run: just validate-todos
 ```
 
-Placed immediately after `Format check` so style/content gates run before heavier build steps.
+The script also auto-detects missing auth (`gh auth status` fails) and falls back to format-only mode. So a misconfigured local run or a dropped token downgrades transparently rather than false-failing.
+
+Merge-queue coverage is preserved: the daemon pushes to `mq-spec-*`, which hits the `push` event and runs the full check with token in scope. Fork PRs that skipped liveness at PR time get the full check before they can land on `main`.
+
+Placed immediately after `Format check` so style/content gates run before heavier build steps. Only the `test` job needs the step; `ui-test` doesn't need to repeat it.
 
 ## Component: `.github/workflows/todo-issue-watchdog.yml` (daily watchdog)
 

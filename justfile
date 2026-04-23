@@ -152,6 +152,12 @@ test-release: install-mac testflight
 validate-appstore:
     bash scripts/validate-appstore.sh
 
+# Validate that every TODO / FIXME references an open GitHub issue.
+# Requires `gh` authenticated (GITHUB_TOKEN in CI or `gh auth login` locally).
+# See guides/CODE_GUIDE.md §20.
+validate-todos:
+    bash scripts/check-todos.sh
+
 # Validate an iOS archive against App Store rules (requires signing)
 validate-ios: generate
     bundle exec fastlane ios validate

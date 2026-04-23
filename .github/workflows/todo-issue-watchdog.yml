@@ -1,0 +1,36 @@
+name: TODO Issue Watchdog
+
+# Daily reconciliation of the `has-todos` label and any closed issues still
+# referenced by live TODO / FIXME comments. See guides/CODE_GUIDE.md §20 and
+# plans/2026-04-23-todo-reference-enforcement-design.md.
+
+on:
+  schedule:
+    - cron: '0 8 * * *'   # 08:00 UTC daily
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  watchdog:
+    name: Reconcile TODO references
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Ensure has-todos label exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create 'has-todos' \
+            --color 'fbca04' \
+            --description 'Open issue is referenced by live TODO(#N) comments — do not close until references are removed.' \
+            2>/dev/null || true
+
+      - name: Reconcile labels and reopen closed issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/todo-watchdog.sh
