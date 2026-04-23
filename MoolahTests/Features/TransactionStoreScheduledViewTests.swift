@@ -185,7 +185,7 @@ struct TransactionStoreScheduledViewTests {
   func overdueReturnsPastDatedScheduled() async throws {
     let fixture = try await makeScheduledTestStore()
 
-    await fixture.store.load(filter: TransactionFilter(scheduled: true))
+    await fixture.store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
 
     #expect(fixture.store.scheduledOverdueTransactions.count == 1)
     #expect(fixture.store.scheduledOverdueTransactions.first?.transaction.payee == "Overdue Rent")
@@ -195,7 +195,7 @@ struct TransactionStoreScheduledViewTests {
   func upcomingReturnsTodayOrLaterScheduled() async throws {
     let fixture = try await makeScheduledTestStore()
 
-    await fixture.store.load(filter: TransactionFilter(scheduled: true))
+    await fixture.store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
 
     let payees = fixture.store.scheduledUpcomingTransactions.map(\.transaction.payee)
     #expect(payees == ["Upcoming Internet", "Future Insurance"])
@@ -205,7 +205,7 @@ struct TransactionStoreScheduledViewTests {
   func shortTermWindowedByDaysAhead() async throws {
     let fixture = try await makeScheduledTestStore()
 
-    await fixture.store.load(filter: TransactionFilter(scheduled: true))
+    await fixture.store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
 
     // Default 14-day window: includes overdue + near upcoming, excludes 60-day future.
     let payees = fixture.store.scheduledShortTermTransactions().map(\.transaction.payee)

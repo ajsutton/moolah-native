@@ -2,8 +2,8 @@ import Foundation
 
 extension TransactionStore {
   /// Scheduled transactions whose date is before today, sorted ascending by
-  /// date. Empty when the store's current filter isn't `scheduled: true` —
-  /// views sharing the store ignore stale contents from an unfiltered load in
+  /// date. Empty when the store's current filter isn't `scheduled: .scheduledOnly`
+  /// — views sharing the store ignore stale contents from an unfiltered load in
   /// the frame before their own `.task` reloads the store.
   var scheduledOverdueTransactions: [TransactionWithBalance] {
     let today = Calendar.current.startOfDay(for: Date())
@@ -26,7 +26,7 @@ extension TransactionStore {
   private func scheduledTransactions(
     where matches: (Date) -> Bool
   ) -> [TransactionWithBalance] {
-    guard currentFilter.scheduled == true else { return [] }
+    guard currentFilter.scheduled == .scheduledOnly else { return [] }
     return
       transactions
       .filter { matches($0.transaction.date) }

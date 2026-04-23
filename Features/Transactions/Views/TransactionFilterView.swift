@@ -11,7 +11,7 @@ struct TransactionFilterView: View {
 
   @State private var selectedAccountId: UUID?
   @State private var selectedEarmarkId: UUID?
-  @State private var selectedScheduled: Bool?
+  @State private var selectedScheduled: ScheduledFilter = .all
   @State private var dateRangeLowerBound: Date?
   @State private var dateRangeUpperBound: Date?
   @State private var selectedCategoryIds: Set<UUID> = []
@@ -179,9 +179,9 @@ struct TransactionFilterView: View {
   private var scheduledSection: some View {
     Section("Scheduled") {
       Picker("Scheduled", selection: $selectedScheduled) {
-        Text("All Transactions").tag(nil as Bool?)
-        Text("Scheduled Only").tag(true as Bool?)
-        Text("Non-Scheduled Only").tag(false as Bool?)
+        Text("All Transactions").tag(ScheduledFilter.all)
+        Text("Scheduled Only").tag(ScheduledFilter.scheduledOnly)
+        Text("Non-Scheduled Only").tag(ScheduledFilter.nonScheduledOnly)
       }
     }
   }
@@ -207,7 +207,7 @@ struct TransactionFilterView: View {
   private func clearAll() {
     selectedAccountId = nil
     selectedEarmarkId = nil
-    selectedScheduled = nil
+    selectedScheduled = .all
     dateRangeLowerBound = nil
     dateRangeUpperBound = nil
     selectedCategoryIds = []

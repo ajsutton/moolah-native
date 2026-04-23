@@ -21,7 +21,7 @@ struct GetRecentTransactionsIntent: AppIntent {
     let transactions = try await service.listTransactions(
       profileIdentifier: profile.id.uuidString,
       accountName: account?.name,
-      scheduled: false
+      scheduled: .nonScheduledOnly
     )
 
     let recent = Array(transactions.prefix(count))

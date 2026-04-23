@@ -231,5 +231,5 @@ private func seedUpcomingPreview(backend: CloudKitBackend, store: TransactionSto
       legs: [
         TransactionLeg(accountId: account.id, instrument: .AUD, quantity: 2000, type: .income)
       ]))
-  await store.load(filter: TransactionFilter(scheduled: true))
+  await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
 }

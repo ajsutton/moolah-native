@@ -3,6 +3,27 @@ import OSLog
 
 private let logger = Logger(subsystem: "com.moolah.app", category: "AutomationService")
 
+/// Tri-state change to an account's `isHidden` flag used by
+/// `AutomationService.updateAccount(...)`. Replaces a `Bool?` so an
+/// "unchanged" intent can't be confused with "set to false" at call sites
+/// and keeps SwiftLint's `discouraged_optional_boolean` rule satisfied.
+enum AccountHiddenChange: Sendable {
+  case unchanged
+  case setTo(Bool)
+}
+
+/// Describes a partial update to an account. Fields left `nil` / `.unchanged`
+/// are preserved; set fields are applied.
+struct AccountChanges: Sendable {
+  var name: String?
+  var hidden: AccountHiddenChange
+
+  init(name: String? = nil, hidden: AccountHiddenChange = .unchanged) {
+    self.name = name
+    self.hidden = hidden
+  }
+}
+
 @MainActor
 final class AutomationService {
   let sessionManager: SessionManager
@@ -98,15 +119,14 @@ final class AutomationService {
   func updateAccount(
     profileIdentifier: String,
     accountId: UUID,
-    name: String? = nil,
-    isHidden: Bool? = nil
+    changes: AccountChanges
   ) async throws -> Account {
     let session = try resolveSession(for: profileIdentifier)
     guard var account = session.accountStore.accounts.by(id: accountId) else {
       throw AutomationError.accountNotFound(accountId.uuidString)
     }
-    if let name { account.name = name }
-    if let isHidden { account.isHidden = isHidden }
+    if let name = changes.name { account.name = name }
+    if case .setTo(let hidden) = changes.hidden { account.isHidden = hidden }
     do {
       return try await session.accountStore.update(account)
     } catch {
@@ -221,7 +241,7 @@ final class AutomationService {
   func listTransactions(
     profileIdentifier: String,
     accountName: String? = nil,
-    scheduled: Bool? = nil
+    scheduled: ScheduledFilter = .all
   ) async throws -> [Transaction] {
     let session = try resolveSession(for: profileIdentifier)
 

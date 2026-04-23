@@ -100,7 +100,7 @@ struct ScheduledTransactionTestsMore {
 
     // Verify it exists and is scheduled
     let page1 = try await backend.transactions.fetch(
-      filter: TransactionFilter(scheduled: true), page: 0, pageSize: 50)
+      filter: TransactionFilter(scheduled: .scheduledOnly), page: 0, pageSize: 50)
     #expect(page1.transactions.count == 1)
 
     // Create paid transaction (simulating the pay action)
@@ -116,12 +116,12 @@ struct ScheduledTransactionTestsMore {
 
     // Verify the scheduled transaction is gone
     let page2 = try await backend.transactions.fetch(
-      filter: TransactionFilter(scheduled: true), page: 0, pageSize: 50)
+      filter: TransactionFilter(scheduled: .scheduledOnly), page: 0, pageSize: 50)
     #expect(page2.transactions.isEmpty)
 
     // Verify the paid transaction exists
     let page3 = try await backend.transactions.fetch(
-      filter: TransactionFilter(scheduled: false), page: 0, pageSize: 50)
+      filter: TransactionFilter(scheduled: .nonScheduledOnly), page: 0, pageSize: 50)
     #expect(page3.transactions.count == 1)
     #expect(page3.transactions[0].isScheduled == false)
   }
@@ -163,7 +163,7 @@ struct ScheduledTransactionTestsMore {
 
     // Verify the scheduled transaction still exists with updated date
     let page = try await backend.transactions.fetch(
-      filter: TransactionFilter(scheduled: true), page: 0, pageSize: 50)
+      filter: TransactionFilter(scheduled: .scheduledOnly), page: 0, pageSize: 50)
     #expect(page.transactions.count == 1)
     #expect(page.transactions[0].isScheduled == true)
 

@@ -27,16 +27,15 @@
         return nil
       }
       let objectKey = specifier.key
-      let result: Bool? = runBlockingWithError { @MainActor () async throws -> Bool in
+      let _: Void? = runBlockingWithError { @MainActor in
         guard let service = ScriptingContext.automationService else {
           throw AutomationError.operationFailed("Scripting not configured")
         }
         try await Self.performDelete(
           objectKey: objectKey, target: target,
           profileName: profileName, service: service)
-        return true
       }
-      return result
+      return nil
     }
 
     /// Identifies the object the user wants to delete by name or unique ID.

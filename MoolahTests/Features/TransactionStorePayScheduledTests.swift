@@ -34,7 +34,7 @@ struct TransactionStorePayScheduledTests {
       targetInstrument: .defaultTestInstrument
     )
 
-    await store.load(filter: TransactionFilter(scheduled: true))
+    await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
     #expect(store.transactions.count == 1)
 
     let result = await store.payScheduledTransaction(scheduled)
@@ -68,7 +68,7 @@ struct TransactionStorePayScheduledTests {
 
     // Backend should still have the scheduled transaction with advanced date
     let scheduledPage = try await backend.transactions.fetch(
-      filter: TransactionFilter(scheduled: true), page: 0, pageSize: 50)
+      filter: TransactionFilter(scheduled: .scheduledOnly), page: 0, pageSize: 50)
     #expect(scheduledPage.transactions.count == 1)
     #expect(scheduledPage.transactions[0].id == scheduled.id)
   }
@@ -97,7 +97,7 @@ struct TransactionStorePayScheduledTests {
       targetInstrument: .defaultTestInstrument
     )
 
-    await store.load(filter: TransactionFilter(scheduled: true))
+    await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
     let result = await store.payScheduledTransaction(scheduled)
     let expectedNextDate = try TransactionStoreTestSupport.makeDate("2024-01-29")
 
@@ -135,7 +135,7 @@ struct TransactionStorePayScheduledTests {
       targetInstrument: .defaultTestInstrument
     )
 
-    await store.load(filter: TransactionFilter(scheduled: true))
+    await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
     #expect(store.transactions.count == 1)
 
     let result = await store.payScheduledTransaction(scheduled)
@@ -174,7 +174,7 @@ struct TransactionStorePayScheduledTests {
       targetInstrument: .defaultTestInstrument
     )
 
-    await store.load(filter: TransactionFilter(scheduled: true))
+    await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
     _ = await store.payScheduledTransaction(scheduled)
 
     // Find the paid (non-scheduled) transaction in the backend

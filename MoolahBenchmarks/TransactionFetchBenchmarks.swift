@@ -56,7 +56,7 @@ final class TransactionFetchBenchmarks: XCTestCase {
   /// Fetch all non-scheduled transactions (the default filter).
   func testFetchAllNonScheduled() {
     let repo = backend.transactions
-    let filter = TransactionFilter(scheduled: false)
+    let filter = TransactionFilter(scheduled: .nonScheduledOnly)
     measure(metrics: metrics, options: options) {
       _ = awaitSyncExpecting { try await repo.fetch(filter: filter, page: 0, pageSize: 50) }
     }

@@ -13,7 +13,7 @@ struct TransactionRepositoryAuxFilterTests {
     let repository = try makeContractCloudKitTransactionRepository(
       initialTransactions: try makeScheduledContractTestTransactions())
     let scheduledPage = try await repository.fetch(
-      filter: TransactionFilter(scheduled: true),
+      filter: TransactionFilter(scheduled: .scheduledOnly),
       page: 0,
       pageSize: 50
     )
@@ -21,7 +21,7 @@ struct TransactionRepositoryAuxFilterTests {
     #expect(scheduledPage.transactions[0].isScheduled)
 
     let nonScheduledPage = try await repository.fetch(
-      filter: TransactionFilter(scheduled: false),
+      filter: TransactionFilter(scheduled: .nonScheduledOnly),
       page: 0,
       pageSize: 50
     )

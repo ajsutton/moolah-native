@@ -110,7 +110,7 @@ struct TransactionStoreCreateDefaultsTests {
       targetInstrument: .defaultTestInstrument
     )
 
-    await store.load(filter: TransactionFilter(scheduled: true))
+    await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
 
     let created = await store.createDefaultScheduled(
       accountId: accountId,
@@ -138,7 +138,7 @@ struct TransactionStoreCreateDefaultsTests {
       targetInstrument: .defaultTestInstrument
     )
 
-    await store.load(filter: TransactionFilter(scheduled: true))
+    await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
 
     let created = await store.createDefaultScheduled(
       accountId: nil,

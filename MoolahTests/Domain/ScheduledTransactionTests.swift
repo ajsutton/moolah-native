@@ -134,7 +134,7 @@ struct ScheduledTransactionTests {
     _ = TestBackend.seed(transactions: [scheduled, oneTime], in: container)
 
     let page = try await backend.transactions.fetch(
-      filter: TransactionFilter(scheduled: true),
+      filter: TransactionFilter(scheduled: .scheduledOnly),
       page: 0,
       pageSize: 50
     )
