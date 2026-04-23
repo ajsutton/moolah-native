@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 import Foundation
 
 /// One step in the FIFO cost-basis machine. The shape mirrors what

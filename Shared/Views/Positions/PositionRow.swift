@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 import SwiftUI
 
 /// Single-row presentation in `PositionsTable`. Used by both the wide

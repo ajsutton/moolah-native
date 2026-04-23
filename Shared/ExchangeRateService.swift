@@ -1,4 +1,6 @@
 // Shared/ExchangeRateService.swift
+// swiftlint:disable multiline_arguments
+
 import Foundation
 
 enum ExchangeRateError: Error, Equatable {

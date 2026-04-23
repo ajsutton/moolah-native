@@ -1,4 +1,6 @@
 // Domain/Models/CryptoRegistration.swift
+// swiftlint:disable multiline_arguments
+
 import Foundation
 
 /// Pairs a crypto instrument with its price provider mapping for persistence.

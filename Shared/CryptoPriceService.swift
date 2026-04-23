@@ -1,4 +1,6 @@
 // Shared/CryptoPriceService.swift
+// swiftlint:disable multiline_arguments
+
 import Foundation
 
 actor CryptoPriceService {

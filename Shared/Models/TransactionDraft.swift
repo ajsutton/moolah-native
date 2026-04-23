@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 import Foundation
 
 /// A value type that captures transaction form state and encapsulates

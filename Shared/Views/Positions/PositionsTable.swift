@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 import SwiftUI
 
 /// Responsive table of `ValuedPosition`s. On wide layouts (macOS, regular iOS

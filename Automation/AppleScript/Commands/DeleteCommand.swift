@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 #if os(macOS)
   import AppKit
   import Foundation

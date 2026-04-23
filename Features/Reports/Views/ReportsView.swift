@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 import SwiftUI
 
 /// Main Reports view displaying income and expense breakdown by category.

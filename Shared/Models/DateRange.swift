@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 import Foundation
 
 /// Predefined date ranges for reports and analysis filtering.

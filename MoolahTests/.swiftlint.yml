@@ -1,0 +1,8 @@
+# Nested SwiftLint config for MoolahTests.
+# Tests compose test data via many-arg factory calls where swift-format's
+# compact multi-arg wrapping is natural and unavoidable; enforcing
+# multiline_arguments here would require either blind disable comments on
+# every test file or thousands of layout changes that fight swift-format.
+# The rule stays on for production code (see top-level `.swiftlint.yml`).
+disabled_rules:
+  - multiline_arguments

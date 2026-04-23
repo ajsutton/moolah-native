@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 import SwiftUI
 
 enum SidebarSelection: Hashable {

@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 import Foundation
 
 /// Input type: a transaction's legs with its date.

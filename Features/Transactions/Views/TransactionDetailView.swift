@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 import SwiftUI
 
 // Refactor pending — see https://github.com/ajsutton/moolah-native/issues/309

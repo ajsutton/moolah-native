@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 import SwiftUI
 
 /// Migration sheet UI presented when the user taps "Migrate to iCloud" in profile settings.

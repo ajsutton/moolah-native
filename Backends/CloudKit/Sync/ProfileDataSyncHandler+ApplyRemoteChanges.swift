@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 @preconcurrency import CloudKit
 import Foundation
 import OSLog

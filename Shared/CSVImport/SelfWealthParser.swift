@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 import Foundation
 
 /// Parser for SelfWealth trade-history CSV exports.

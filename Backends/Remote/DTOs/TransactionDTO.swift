@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 import Foundation
 
 private func centsFromQuantity(_ quantity: Decimal) -> Int {

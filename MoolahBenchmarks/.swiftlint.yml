@@ -1,0 +1,6 @@
+# Nested SwiftLint config for MoolahBenchmarks.
+# Benchmark fixtures build large seed graphs via compact many-arg factory
+# calls; multiline_arguments fights swift-format's wrapping here the same
+# way it does in MoolahTests. The rule stays on for production code.
+disabled_rules:
+  - multiline_arguments

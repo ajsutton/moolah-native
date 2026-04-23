@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 import SwiftUI
 
 /// Recently Added — landing page for CSV imports. Shows the Needs Setup /

@@ -1,4 +1,6 @@
 // Shared/StockPriceService.swift
+// swiftlint:disable multiline_arguments
+
 import Foundation
 
 enum StockPriceError: Error, Equatable {

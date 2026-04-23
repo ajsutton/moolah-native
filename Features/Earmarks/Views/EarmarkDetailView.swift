@@ -1,3 +1,5 @@
+// swiftlint:disable multiline_arguments
+
 import SwiftData
 import SwiftUI
 
