@@ -134,7 +134,8 @@ final class RemoteAuthProvider: AuthProvider {
     }
 
     do {
-      guard let cookies = try cookieKeychain.restore() else {
+      let cookies = try cookieKeychain.restore()
+      guard !cookies.isEmpty else {
         logger.debug("No cookies found in keychain to restore")
         return
       }

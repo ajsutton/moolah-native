@@ -23,8 +23,11 @@ struct CookieKeychain: Sendable {
     try store.saveData(data)
   }
 
-  func restore() throws -> [HTTPCookie]? {
-    guard let data = try store.restoreData() else { return nil }
+  /// Restore cookies from the Keychain. Returns an empty array when
+  /// nothing is stored or when the archived payload can't be decoded;
+  /// callers treat either case as "no cookies to restore".
+  func restore() throws -> [HTTPCookie] {
+    guard let data = try store.restoreData() else { return [] }
     guard
       let propertyList = try NSKeyedUnarchiver.unarchivedObject(
         ofClasses: [
@@ -34,7 +37,7 @@ struct CookieKeychain: Sendable {
         from: data
       ) as? [[HTTPCookiePropertyKey: Any]]
     else {
-      return nil
+      return []
     }
     return propertyList.compactMap { HTTPCookie(properties: $0) }
   }

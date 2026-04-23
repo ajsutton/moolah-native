@@ -13,20 +13,20 @@ enum MigrationError: Error, Sendable {
 extension MigrationError: LocalizedError {
   var errorDescription: String? {
     switch self {
-    case .exportFailed(let step, let underlying):
+    case let .exportFailed(step, underlying):
       return "Failed to export \(step): \(Self.detailedDescription(underlying))"
-    case .importFailed(let underlying):
+    case let .importFailed(underlying):
       return "Failed to import data: \(Self.detailedDescription(underlying))"
-    case .fileReadFailed(let url, let underlying):
+    case let .fileReadFailed(url, underlying):
       return "Failed to read \(url.lastPathComponent): \(Self.detailedDescription(underlying))"
-    case .unsupportedVersion(let version):
+    case let .unsupportedVersion(version):
       return
         "This file uses format version \(version), which is not supported by this version of Moolah."
     case .verificationFailed:
       return "Data verification failed after import"
     case .iCloudUnavailable:
       return "iCloud is not available. Please sign in to iCloud in Settings."
-    case .unexpected(let error):
+    case let .unexpected(error):
       return "Unexpected error: \(Self.detailedDescription(error))"
     }
   }
@@ -37,16 +37,16 @@ extension MigrationError: LocalizedError {
       return error.localizedDescription
     }
     switch decodingError {
-    case .typeMismatch(let type, let context):
+    case let .typeMismatch(type, context):
       let path = context.codingPath.map(\.stringValue).joined(separator: ".")
       return "Type mismatch for \(type) at \(path): \(context.debugDescription)"
-    case .valueNotFound(let type, let context):
+    case let .valueNotFound(type, context):
       let path = context.codingPath.map(\.stringValue).joined(separator: ".")
       return "Missing value for \(type) at \(path): \(context.debugDescription)"
-    case .keyNotFound(let key, let context):
+    case let .keyNotFound(key, context):
       let path = context.codingPath.map(\.stringValue).joined(separator: ".")
       return "Missing key '\(key.stringValue)' at \(path): \(context.debugDescription)"
-    case .dataCorrupted(let context):
+    case let .dataCorrupted(context):
       let path = context.codingPath.map(\.stringValue).joined(separator: ".")
       return "Data corrupted at \(path): \(context.debugDescription)"
     @unknown default:

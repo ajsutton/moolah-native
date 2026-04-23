@@ -25,13 +25,13 @@ struct MigrationView: View {
         migrationPrompt
       case .exporting(let step):
         progressState(title: "Downloading \(step)...")
-      case .importing(let step, let progress):
+      case let .importing(step, progress):
         progressState(title: "Importing \(step)...", progress: progress)
       case .verifying:
         progressState(title: "Verifying data integrity...")
-      case .succeeded(let result, let newProfileId, let balanceWarnings):
+      case let .succeeded(result, newProfileId, balanceWarnings):
         migrationSuccess(result, newProfileId: newProfileId, balanceWarnings: balanceWarnings)
-      case .verificationFailed(let verification, let newProfileId):
+      case let .verificationFailed(verification, newProfileId):
         verificationFailure(verification, newProfileId: newProfileId)
       case .failed(let error):
         migrationFailure(error)

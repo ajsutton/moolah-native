@@ -11,6 +11,7 @@
     @Environment(ProfileStore.self) private var profileStore
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.pendingNavigation) private var pendingNavigationBinding
 
     @Environment(\.dismiss) private var dismiss
 
@@ -57,6 +58,30 @@
               )
               dismiss()
             }
+        }
+      }
+      .background(tagHostingWindow)
+      .task {
+        // Register in-process entry points for AppleScript/App Intents so
+        // `NavigateCommand` / `OpenAccountIntent` don't need to round-trip
+        // through `NSWorkspace.shared.open(moolah://…)` (which triggers
+        // SwiftUI's auto-spawn of a stray window on URL events). See #378.
+        let openAction = openWindow
+        let pendingBinding = pendingNavigationBinding
+        ScriptingContext.openProfileWindow = { id in openAction(value: id) }
+        ScriptingContext.setPendingNavigation = { nav in
+          pendingBinding?.wrappedValue = nav
+        }
+      }
+    }
+
+    /// Stamps the hosting `NSWindow.identifier` with a per-profile identifier
+    /// so `ProfileWindowLocator` can find and focus the window when AppleScript
+    /// or an App Intent opens a profile that is already on screen.
+    @ViewBuilder private var tagHostingWindow: some View {
+      if let profile = resolvedProfile {
+        WindowAccessor { window in
+          window.identifier = ProfileWindowLocator.identifier(for: profile.id)
         }
       }
     }

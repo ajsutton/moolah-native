@@ -27,18 +27,18 @@ import Testing
       try keychain.save(cookies: [cookie])
       let restored = try keychain.restore()
 
-      #expect(restored?.count == 1)
-      #expect(restored?.first?.name == "session_id")
-      #expect(restored?.first?.value == "abc123")
+      #expect(restored.count == 1)
+      #expect(restored.first?.name == "session_id")
+      #expect(restored.first?.value == "abc123")
 
       keychain.clear()
     }
 
-    @Test("restore returns nil when nothing stored")
+    @Test("restore returns an empty array when nothing stored")
     func restoreEmpty() throws {
       keychain.clear()
       let result = try keychain.restore()
-      #expect(result == nil)
+      #expect(result.isEmpty)
     }
 
     @Test("clear removes stored cookies")
@@ -46,7 +46,7 @@ import Testing
       try keychain.save(cookies: [makeCookie()])
       keychain.clear()
       let result = try keychain.restore()
-      #expect(result == nil)
+      #expect(result.isEmpty)
     }
 
     @Test("save overwrites previous entry")
@@ -55,8 +55,8 @@ import Testing
       try keychain.save(cookies: [makeCookie(name: "b", value: "2")])
 
       let restored = try keychain.restore()
-      #expect(restored?.count == 1)
-      #expect(restored?.first?.name == "b")
+      #expect(restored.count == 1)
+      #expect(restored.first?.name == "b")
 
       keychain.clear()
     }

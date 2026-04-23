@@ -23,15 +23,49 @@ struct PendingSetupFile: Codable, Sendable, Hashable, Identifiable {
 }
 
 /// A CSV file that failed to parse outright. Held on disk for the user to see
-/// in the Failed Files panel with the offending row.
+/// in the Failed Files panel with the offending row. `offendingRow` is an
+/// empty array when no specific row was identified (e.g. a decode or
+/// whole-file error); UI should show the error message only in that case.
 struct FailedImportFile: Codable, Sendable, Hashable, Identifiable {
   var id: UUID
   var originalFilename: String
   var stagingPath: URL
   var error: String
-  var offendingRow: [String]?
+  var offendingRow: [String]
   var offendingRowIndex: Int?
   var parsedAt: Date
+
+  init(
+    id: UUID,
+    originalFilename: String,
+    stagingPath: URL,
+    error: String,
+    offendingRow: [String] = [],
+    offendingRowIndex: Int? = nil,
+    parsedAt: Date
+  ) {
+    self.id = id
+    self.originalFilename = originalFilename
+    self.stagingPath = stagingPath
+    self.error = error
+    self.offendingRow = offendingRow
+    self.offendingRowIndex = offendingRowIndex
+    self.parsedAt = parsedAt
+  }
+
+  /// Legacy-compatible decoder: older on-disk indexes stored
+  /// `offendingRow` as `[String]?`. Normalise `nil` to `[]` on read so
+  /// callers can treat the field as a plain `[String]`.
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.id = try container.decode(UUID.self, forKey: .id)
+    self.originalFilename = try container.decode(String.self, forKey: .originalFilename)
+    self.stagingPath = try container.decode(URL.self, forKey: .stagingPath)
+    self.error = try container.decode(String.self, forKey: .error)
+    self.offendingRow = try container.decodeIfPresent([String].self, forKey: .offendingRow) ?? []
+    self.offendingRowIndex = try container.decodeIfPresent(Int.self, forKey: .offendingRowIndex)
+    self.parsedAt = try container.decode(Date.self, forKey: .parsedAt)
+  }
 }
 
 /// Actor-isolated JSON-index + file-copy store for pending/failed CSV

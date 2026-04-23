@@ -201,12 +201,12 @@ struct CSVImportSetupStoreTests {
       return
     }
     let profile = try await backend.csvImportProfiles.fetchAll().first!
-    #expect(profile.columnRoleRawValues != nil)
+    #expect(!profile.columnRoleRawValues.isEmpty)
     // Columns 0..4 for the CBA file: Date, Description, Debit, Credit, Balance.
     // We swapped columns 2 and 3, so the persisted roles at those indices
     // should be `credit` and `debit` (not `debit` / `credit`).
-    #expect(profile.columnRoleRawValues?[2] == "credit")
-    #expect(profile.columnRoleRawValues?[3] == "debit")
+    #expect(profile.columnRoleRawValues[2] == "credit")
+    #expect(profile.columnRoleRawValues[3] == "debit")
   }
 
   @Test("deletePending removes the staged pending file")
