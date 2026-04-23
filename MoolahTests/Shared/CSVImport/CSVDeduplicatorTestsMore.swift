@@ -54,18 +54,21 @@ struct CSVDeduplicatorTestsMore {
     amount: Decimal,
     bankRef: String? = nil,
     balance: Decimal? = nil,
-    legs: [ParsedLeg]? = nil
+    legs: [ParsedLeg] = []
   ) -> ParsedTransaction {
-    ParsedTransaction(
+    let resolvedLegs =
+      legs.isEmpty
+      ? [
+        ParsedLeg(
+          accountId: nil,
+          instrument: .AUD,
+          quantity: amount,
+          type: amount >= 0 ? .income : .expense)
+      ]
+      : legs
+    return ParsedTransaction(
       date: date,
-      legs: legs
-        ?? [
-          ParsedLeg(
-            accountId: nil,
-            instrument: .AUD,
-            quantity: amount,
-            type: amount >= 0 ? .income : .expense)
-        ],
+      legs: resolvedLegs,
       rawRow: [],
       rawDescription: description,
       rawAmount: amount,

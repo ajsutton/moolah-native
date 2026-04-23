@@ -82,14 +82,14 @@ struct ProfileStoreTests {
 
     // Verify cookies are stored
     let before = try keychain.restore()
-    #expect(before != nil)
+    #expect(!before.isEmpty)
 
     // Remove the profile — should clear keychain
     store.removeProfile(profile.id)
 
     // Verify cookies were cleared
     let after = try keychain.restore()
-    #expect(after == nil)
+    #expect(after.isEmpty)
   }
 
   @Test("removeProfile clears active when last profile removed")

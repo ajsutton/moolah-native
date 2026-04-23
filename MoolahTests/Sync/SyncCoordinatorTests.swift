@@ -140,10 +140,10 @@ struct SyncCoordinatorTests {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
-    var callbackTypes: Set<String>?
+    var callbackInvocations: [Set<String>] = []
 
     _ = coordinator.addObserver(for: profileId) { types in
-      callbackTypes = types
+      callbackInvocations.append(types)
     }
 
     // Begin fetch session
@@ -152,15 +152,15 @@ struct SyncCoordinatorTests {
 
     // Simulate accumulated changes — callback should NOT fire yet
     coordinator.accumulateFetchSessionChanges(for: profileId, changedTypes: ["Account"])
-    #expect(callbackTypes == nil)
+    #expect(callbackInvocations.isEmpty)
 
     coordinator.accumulateFetchSessionChanges(for: profileId, changedTypes: ["Transaction"])
-    #expect(callbackTypes == nil)
+    #expect(callbackInvocations.isEmpty)
 
-    // End fetch session — callback fires with all accumulated types
+    // End fetch session — callback fires once with all accumulated types
     coordinator.endFetchingChanges()
     #expect(!coordinator.isFetchingChanges)
-    #expect(callbackTypes == Set(["Account", "Transaction"]))
+    #expect(callbackInvocations == [Set(["Account", "Transaction"])])
   }
 
   @Test

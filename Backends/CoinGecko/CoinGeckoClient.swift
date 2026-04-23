@@ -166,7 +166,7 @@ struct CoinGeckoClient: CryptoPriceClient, Sendable {
   /// Parses the contract lookup response to extract token details.
   static func parseContractLookupResponse(_ data: Data) throws -> ContractLookupResult {
     let raw = try JSONDecoder().decode(ContractLookupRaw.self, from: data)
-    let decimals = raw.detailPlatforms?.values.first?.decimalPlace
+    let decimals = raw.detailPlatforms.values.first?.decimalPlace
     return ContractLookupResult(
       id: raw.id, symbol: raw.symbol, name: raw.name, decimals: decimals
     )
@@ -199,13 +199,25 @@ private struct ContractLookupRaw: Decodable {
   let id: String
   let symbol: String
   let name: String
-  let detailPlatforms: [String: DetailPlatform]?
+  /// Empty when the CoinGecko response omits `detail_platforms` entirely
+  /// (e.g. newer endpoints or minimal test fixtures). A missing key and
+  /// an explicit empty object are treated the same.
+  let detailPlatforms: [String: DetailPlatform]
 
   enum CodingKeys: String, CodingKey {
     case id
     case symbol
     case name
     case detailPlatforms = "detail_platforms"
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.symbol = try container.decode(String.self, forKey: .symbol)
+    self.name = try container.decode(String.self, forKey: .name)
+    self.detailPlatforms =
+      try container.decodeIfPresent([String: DetailPlatform].self, forKey: .detailPlatforms) ?? [:]
   }
 }
 

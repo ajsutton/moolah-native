@@ -124,14 +124,18 @@ extension ImportStore {
     // mapping, rebuild the ColumnMapping from it and pass as an explicit
     // `overrideMapping` so the parser doesn't re-auto-detect. Without
     // this, the user's first-time setup choice would be ignored on every
-    // subsequent import with the same header signature.
-    let columnMappingOverride = profileForOverride?.columnRoleRawValues.flatMap {
-      Self.buildColumnMapping(
+    // subsequent import with the same header signature. An empty
+    // `columnRoleRawValues` means "no override"; skip rebuilding.
+    let columnMappingOverride: GenericBankCSVParser.ColumnMapping? = {
+      guard let rawValues = profileForOverride?.columnRoleRawValues, !rawValues.isEmpty else {
+        return nil
+      }
+      return Self.buildColumnMapping(
         headers: headers,
-        columnRoleRawValues: $0,
+        columnRoleRawValues: rawValues,
         sampleRows: Array(rows.dropFirst().prefix(5)),
         dateFormatOverride: dateFormatOverride)
-    }
+    }()
 
     let records = try runParse(
       parser: parser, rows: rows,

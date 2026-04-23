@@ -30,14 +30,17 @@ struct CryptoPriceServiceTests {
   }
 
   private func makeService(
-    clients: [CryptoPriceClient]? = nil,
+    clients: [CryptoPriceClient] = [],
     prices: [String: [String: Decimal]] = [:],
     shouldFail: Bool = false,
     cacheDirectory: URL? = nil,
     tokenRepository: CryptoTokenRepository? = nil,
     resolutionClient: (any TokenResolutionClient)? = nil
   ) -> CryptoPriceService {
-    let clientList = clients ?? [FixedCryptoPriceClient(prices: prices, shouldFail: shouldFail)]
+    let clientList =
+      clients.isEmpty
+      ? [FixedCryptoPriceClient(prices: prices, shouldFail: shouldFail)]
+      : clients
     let cacheDir =
       cacheDirectory
       ?? FileManager.default.temporaryDirectory

@@ -27,10 +27,10 @@ final class RemoteAnalysisRepository: AnalysisRepository, Sendable {
     var balances = response.dailyBalances.map {
       $0.toDomain(instrument: instrument, isForecast: false)
     }
-    if let scheduled = response.scheduledBalances {
-      balances.append(
-        contentsOf: scheduled.map { $0.toDomain(instrument: self.instrument, isForecast: true) })
-    }
+    balances.append(
+      contentsOf: response.scheduledBalances.map {
+        $0.toDomain(instrument: self.instrument, isForecast: true)
+      })
     return balances.sorted { $0.date < $1.date }
   }
 

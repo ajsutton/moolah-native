@@ -23,15 +23,16 @@ struct CSVImportProfile: Codable, Sendable, Identifiable, Hashable {
   /// `"dd/MM/yyyy"`, `"MM/dd/yyyy"`, `"yyyy-MM-dd"`).
   var dateFormatRawValue: String?
   /// User-confirmed column role assignments from the Needs Setup form,
-  /// positional by header index. `nil` (or an all-nil array) means "let
-  /// the detector pick" — matching the runtime behaviour before this
-  /// override was added. Each element is a `ColumnRole.rawValue` (or
-  /// `nil` to leave the column unassigned / ignored).
+  /// positional by header index. An empty array (or an all-nil array)
+  /// means "let the detector pick" — matching the runtime behaviour
+  /// before this override was added. Each element is a
+  /// `ColumnRole.rawValue` (or `nil` to leave the column unassigned /
+  /// ignored).
   ///
   /// Domain-layer type: a `[String?]` so we don't force `Domain/` to
   /// depend on `Features/` where the enum lives. See
   /// `CSVImportProfile.columnRoles(for:)` for decoding.
-  var columnRoleRawValues: [String?]?
+  var columnRoleRawValues: [String?]
 
   init(
     id: UUID = UUID(),
@@ -43,7 +44,7 @@ struct CSVImportProfile: Codable, Sendable, Identifiable, Hashable {
     createdAt: Date = Date(),
     lastUsedAt: Date? = nil,
     dateFormatRawValue: String? = nil,
-    columnRoleRawValues: [String?]? = nil
+    columnRoleRawValues: [String?] = []
   ) {
     self.id = id
     self.accountId = accountId

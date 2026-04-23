@@ -2,7 +2,18 @@ import Foundation
 
 struct DailyBalancesResponseDTO: Codable {
   let dailyBalances: [DailyBalanceDTO]
-  let scheduledBalances: [DailyBalanceDTO]?
+  /// Forecast balances layered on top of actuals. Empty when the
+  /// endpoint returns no scheduled section (e.g. when the caller omits
+  /// `forecastUntil`), so a missing key and an explicit empty array are
+  /// treated the same.
+  let scheduledBalances: [DailyBalanceDTO]
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.dailyBalances = try container.decode([DailyBalanceDTO].self, forKey: .dailyBalances)
+    self.scheduledBalances =
+      try container.decodeIfPresent([DailyBalanceDTO].self, forKey: .scheduledBalances) ?? []
+  }
 }
 
 struct DailyBalanceDTO: Codable {
