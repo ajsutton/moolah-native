@@ -53,6 +53,7 @@ actor CancellablePagingTransactionRepository: TransactionRepository {
     )
   }
 
+  func fetchAll(filter: TransactionFilter) async throws -> [Transaction] { [] }
   func create(_ transaction: Transaction) async throws -> Transaction { transaction }
   func update(_ transaction: Transaction) async throws -> Transaction { transaction }
   func delete(id: UUID) async throws {}

@@ -8,6 +8,31 @@ import os
 /// prior-balance conversion) stays under SwiftLint's body-length limits and
 /// can be read in isolation.
 extension CloudKitTransactionRepository {
+  /// Returns every matching transaction without pagination. Runs the filter
+  /// and the `TransactionRecord`-to-domain conversion exactly once, so bulk
+  /// callers (profile export, migration) avoid the
+  /// `O(pages × full-dataset-work)` blow-up that `fetch(filter:page:pageSize:)`
+  /// triggers when invoked in a pagination loop.
+  func fetchAll(filter: TransactionFilter) async throws -> [Transaction] {
+    let signpostID = OSSignpostID(log: Signposts.repository)
+    os_signpost(
+      .begin, log: Signposts.repository, name: "TransactionRepo.fetchAll", signpostID: signpostID)
+    defer {
+      os_signpost(
+        .end, log: Signposts.repository, name: "TransactionRepo.fetchAll", signpostID: signpostID)
+    }
+    return try await MainActor.run {
+      let scheduled = filter.scheduled ?? false
+      var filteredRecords = try loadAndFilter(
+        filter: filter, scheduled: scheduled, signpostID: signpostID)
+      filteredRecords.sort { lhs, rhs in
+        if lhs.date != rhs.date { return lhs.date > rhs.date }
+        return lhs.id < rhs.id
+      }
+      return try loadPageTransactions(filteredRecords[...], signpostID: signpostID)
+    }
+  }
+
   /// Synchronous portion of `fetch` — runs entirely on the main actor and
   /// returns the raw ingredients that the async caller needs (page
   /// transactions, per-instrument subtotals, target instrument). Conversion

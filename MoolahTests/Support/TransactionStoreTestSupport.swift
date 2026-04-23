@@ -106,6 +106,10 @@ struct FailingTransactionRepository: TransactionRepository {
     throw BackendError.networkUnavailable
   }
 
+  func fetchAll(filter: TransactionFilter) async throws -> [Transaction] {
+    throw BackendError.networkUnavailable
+  }
+
   func create(_ transaction: Transaction) async throws -> Transaction {
     throw BackendError.networkUnavailable
   }
