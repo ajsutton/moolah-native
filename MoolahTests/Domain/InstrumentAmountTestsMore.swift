@@ -78,10 +78,10 @@ struct InstrumentAmountTestsMore {
     let btc = Instrument.crypto(
       chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8
     )
-    let original = InstrumentAmount(quantity: Decimal(string: "0.12345678")!, instrument: btc)
+    let original = InstrumentAmount(quantity: dec("0.12345678"), instrument: btc)
     #expect(original.storageValue == 12_345_678)
     let restored = InstrumentAmount(storageValue: original.storageValue, instrument: btc)
-    #expect(restored.quantity == Decimal(string: "0.12345678")!)
+    #expect(restored.quantity == dec("0.12345678"))
     #expect(restored.instrument == btc)
   }
 
@@ -93,10 +93,10 @@ struct InstrumentAmountTestsMore {
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
     )
     let original = InstrumentAmount(
-      quantity: Decimal(string: "0.123456789012345678")!, instrument: eth)
+      quantity: dec("0.123456789012345678"), instrument: eth)
     // Only first 8 decimals survive Int64 × 10^8 storage scaling.
     let restored = InstrumentAmount(storageValue: original.storageValue, instrument: eth)
-    #expect(restored.quantity == Decimal(string: "0.12345678")!)
+    #expect(restored.quantity == dec("0.12345678"))
   }
 
   @Test
@@ -124,9 +124,9 @@ struct InstrumentAmountTestsMore {
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
     )
-    let original = InstrumentAmount(quantity: Decimal(string: "1234567.89012345")!, instrument: eth)
+    let original = InstrumentAmount(quantity: dec("1234567.89012345"), instrument: eth)
     let restored = InstrumentAmount(storageValue: original.storageValue, instrument: eth)
-    #expect(restored.quantity == Decimal(string: "1234567.89012345")!)
+    #expect(restored.quantity == dec("1234567.89012345"))
   }
 
   // MARK: - Formatting across instrument kinds
@@ -145,7 +145,7 @@ struct InstrumentAmountTestsMore {
     let btc = Instrument.crypto(
       chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8
     )
-    let amount = InstrumentAmount(quantity: Decimal(string: "0.5")!, instrument: btc)
+    let amount = InstrumentAmount(quantity: dec("0.5"), instrument: btc)
     #expect(amount.formatNoSymbol == "0.50000000")
   }
 
@@ -174,10 +174,10 @@ struct InstrumentAmountTestsMore {
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
     )
-    let amount = InstrumentAmount(quantity: Decimal(string: "0.5")!, instrument: eth)
+    let amount = InstrumentAmount(quantity: dec("0.5"), instrument: eth)
     let negated = -amount
     #expect(negated.instrument == eth)
-    #expect(negated.quantity == Decimal(string: "-0.5")!)
+    #expect(negated.quantity == dec("-0.5"))
   }
 
   @Test
@@ -186,11 +186,11 @@ struct InstrumentAmountTestsMore {
       chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8
     )
     let amounts = [
-      InstrumentAmount(quantity: Decimal(string: "0.00000001")!, instrument: btc),
-      InstrumentAmount(quantity: Decimal(string: "0.00000002")!, instrument: btc),
-      InstrumentAmount(quantity: Decimal(string: "0.00000003")!, instrument: btc),
+      InstrumentAmount(quantity: dec("0.00000001"), instrument: btc),
+      InstrumentAmount(quantity: dec("0.00000002"), instrument: btc),
+      InstrumentAmount(quantity: dec("0.00000003"), instrument: btc),
     ]
     let total = amounts.reduce(.zero(instrument: btc)) { $0 + $1 }
-    #expect(total.quantity == Decimal(string: "0.00000006")!)
+    #expect(total.quantity == dec("0.00000006"))
   }
 }

@@ -20,7 +20,7 @@ struct ImportRuleTests {
         .descriptionBeginsWith("EFTPOS "),
         .amountIsPositive,
         .amountIsNegative,
-        .amountBetween(min: Decimal(string: "-100")!, max: Decimal(string: "-1")!),
+        .amountBetween(min: dec("-100"), max: dec("-1")),
         .sourceAccountIs(UUID()),
       ],
       actions: [

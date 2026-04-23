@@ -105,19 +105,19 @@ struct ExportImportIntegrationTests4 {
     let audAccount = try await backend.accounts.create(
       Account(name: "Checking AUD", type: .bank, instrument: instruments.aud),
       openingBalance: InstrumentAmount(
-        quantity: Decimal(string: "1000.00")!, instrument: instruments.aud))
+        quantity: dec("1000.00"), instrument: instruments.aud))
     let usdAccount = try await backend.accounts.create(
       Account(name: "USD Travel", type: .bank, instrument: instruments.usd),
       openingBalance: InstrumentAmount(
-        quantity: Decimal(string: "200.00")!, instrument: instruments.usd))
+        quantity: dec("200.00"), instrument: instruments.usd))
     let stockAccount = try await backend.accounts.create(
       Account(name: "Brokerage", type: .investment, instrument: instruments.bhp),
       openingBalance: InstrumentAmount(
-        quantity: Decimal(string: "10")!, instrument: instruments.bhp))
+        quantity: dec("10"), instrument: instruments.bhp))
     let cryptoAccount = try await backend.accounts.create(
       Account(name: "Crypto Wallet", type: .asset, instrument: instruments.eth),
       openingBalance: InstrumentAmount(
-        quantity: Decimal(string: "0.5")!, instrument: instruments.eth))
+        quantity: dec("0.5"), instrument: instruments.eth))
     return MultiCurrencyAccounts(
       aud: audAccount, usd: usdAccount, stock: stockAccount, crypto: cryptoAccount)
   }
@@ -134,11 +134,11 @@ struct ExportImportIntegrationTests4 {
     let usdEarmark = try await backend.earmarks.create(
       Earmark(
         name: "US Trip", instrument: usd,
-        savingsGoal: InstrumentAmount(quantity: Decimal(string: "500.00")!, instrument: usd)))
+        savingsGoal: InstrumentAmount(quantity: dec("500.00"), instrument: usd)))
     try await backend.earmarks.setBudget(
       earmarkId: usdEarmark.id,
       categoryId: food.id,
-      amount: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: usd))
+      amount: InstrumentAmount(quantity: dec("50.00"), instrument: usd))
     return MultiCurrencyEarmark(usdEarmark: usdEarmark, foodCategoryId: food.id)
   }
 
@@ -159,7 +159,7 @@ struct ExportImportIntegrationTests4 {
         legs: [
           TransactionLeg(
             accountId: accounts.usd.id, instrument: usd,
-            quantity: Decimal(string: "-4.50")!, type: .expense,
+            quantity: dec("-4.50"), type: .expense,
             categoryId: earmark.foodCategoryId, earmarkId: earmark.usdEarmark.id)
         ]))
     // Cross-instrument investment transfer (AUD -> BHP.AX)
@@ -169,10 +169,10 @@ struct ExportImportIntegrationTests4 {
         legs: [
           TransactionLeg(
             accountId: accounts.aud.id, instrument: aud,
-            quantity: Decimal(string: "-500.00")!, type: .transfer),
+            quantity: dec("-500.00"), type: .transfer),
           TransactionLeg(
             accountId: accounts.stock.id, instrument: bhp,
-            quantity: Decimal(string: "5")!, type: .transfer),
+            quantity: dec("5"), type: .transfer),
         ]))
     // Crypto income
     _ = try await backend.transactions.create(
@@ -181,7 +181,7 @@ struct ExportImportIntegrationTests4 {
         legs: [
           TransactionLeg(
             accountId: accounts.crypto.id, instrument: eth,
-            quantity: Decimal(string: "0.05")!, type: .income)
+            quantity: dec("0.05"), type: .income)
         ]))
   }
 

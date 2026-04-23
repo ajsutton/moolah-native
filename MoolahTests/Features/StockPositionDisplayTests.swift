@@ -36,7 +36,7 @@ struct StockPositionDisplayTests {
           date: buyDate,
           legs: [
             TransactionLeg(
-              accountId: accountId, instrument: aud, quantity: Decimal(string: "-6345.00")!,
+              accountId: accountId, instrument: aud, quantity: dec("-6345.00"),
               type: .transfer),
             TransactionLeg(
               accountId: accountId, instrument: bhp, quantity: Decimal(150), type: .transfer),
@@ -59,7 +59,7 @@ struct StockPositionDisplayTests {
 
     let audPosition = store.positions.first { $0.instrument == aud }
     #expect(audPosition != nil)
-    #expect(audPosition!.quantity == Decimal(string: "-6345.00")!)
+    #expect(audPosition!.quantity == dec("-6345.00"))
   }
 
   @Test
@@ -69,7 +69,7 @@ struct StockPositionDisplayTests {
     let dateKey = dateString(today)
 
     let stockClient = FixedStockPriceClient(responses: [
-      "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: Decimal(string: "45.00")!])
+      "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: dec("45.00")])
     ])
     let stockCacheDir = FileManager.default.temporaryDirectory
       .appendingPathComponent("stock-valued-tests")
@@ -98,7 +98,7 @@ struct StockPositionDisplayTests {
           date: today,
           legs: [
             TransactionLeg(
-              accountId: accountId, instrument: aud, quantity: Decimal(string: "-6345.00")!,
+              accountId: accountId, instrument: aud, quantity: dec("-6345.00"),
               type: .transfer),
             TransactionLeg(
               accountId: accountId, instrument: bhp, quantity: Decimal(150), type: .transfer),
@@ -117,7 +117,7 @@ struct StockPositionDisplayTests {
     let bhpValued = store.valuedPositions.first { $0.instrument == bhp }
     #expect(bhpValued != nil)
     // 150 shares * $45.00 = $6,750.00
-    #expect(bhpValued!.value?.quantity == Decimal(string: "6750.00")!)
+    #expect(bhpValued!.value?.quantity == dec("6750.00"))
   }
 
   @Test
@@ -147,14 +147,14 @@ struct StockPositionDisplayTests {
     // BHP: 150 * 45.00 = 6750 AUD
     // CBA: 20 * 120.00 = 2400 AUD
     // Total: -8745 + 6750 + 2400 = 405 AUD
-    #expect(store.totalPortfolioValue == Decimal(string: "405.00")!)
+    #expect(store.totalPortfolioValue == dec("405.00"))
   }
 
   private func makeTotalPortfolioConversionService(today: Date) -> FullConversionService {
     let dateKey = dateString(today)
     let stockClient = FixedStockPriceClient(responses: [
-      "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: Decimal(string: "45.00")!]),
-      "CBA.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: Decimal(string: "120.00")!]),
+      "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: dec("45.00")]),
+      "CBA.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: dec("120.00")]),
     ])
     let stockCacheDir = FileManager.default.temporaryDirectory
       .appendingPathComponent("stock-total-tests")
@@ -178,7 +178,7 @@ struct StockPositionDisplayTests {
         id: UUID(), date: date,
         legs: [
           TransactionLeg(
-            accountId: accountId, instrument: aud, quantity: Decimal(string: "-6345.00")!,
+            accountId: accountId, instrument: aud, quantity: dec("-6345.00"),
             type: .transfer),
           TransactionLeg(
             accountId: accountId, instrument: bhp, quantity: Decimal(150), type: .transfer),
@@ -188,7 +188,7 @@ struct StockPositionDisplayTests {
         id: UUID(), date: date,
         legs: [
           TransactionLeg(
-            accountId: accountId, instrument: aud, quantity: Decimal(string: "-2400.00")!,
+            accountId: accountId, instrument: aud, quantity: dec("-2400.00"),
             type: .transfer),
           TransactionLeg(
             accountId: accountId, instrument: cba, quantity: Decimal(20), type: .transfer),
@@ -223,7 +223,7 @@ struct StockPositionDisplayTests {
           id: UUID(), date: today,
           legs: [
             TransactionLeg(
-              accountId: accountId, instrument: aud, quantity: Decimal(string: "-6345.00")!,
+              accountId: accountId, instrument: aud, quantity: dec("-6345.00"),
               type: .transfer),
             TransactionLeg(
               accountId: accountId, instrument: bhp, quantity: Decimal(150), type: .transfer),
@@ -232,7 +232,7 @@ struct StockPositionDisplayTests {
           id: UUID(), date: today,
           legs: [
             TransactionLeg(
-              accountId: accountId, instrument: aud, quantity: Decimal(string: "-2400.00")!,
+              accountId: accountId, instrument: aud, quantity: dec("-2400.00"),
               type: .transfer),
             TransactionLeg(
               accountId: accountId, instrument: cba, quantity: Decimal(20), type: .transfer),
@@ -251,7 +251,7 @@ struct StockPositionDisplayTests {
     #expect(store.totalPortfolioValue == nil)
     // Per-position rendering still works for the convertible BHP.
     let bhpValued = store.valuedPositions.first { $0.instrument == bhp }
-    #expect(bhpValued?.value?.quantity == Decimal(string: "6750")!)
+    #expect(bhpValued?.value?.quantity == dec("6750"))
     // And the failing position is rendered with nil value so the
     // view can show "Unavailable" on that row.
     let cbaValued = store.valuedPositions.first { $0.instrument == cba }

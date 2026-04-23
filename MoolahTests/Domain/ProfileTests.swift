@@ -8,10 +8,10 @@ struct ProfileTests {
   @Test("JSON round-trip preserves all fields")
   func jsonRoundTrip() throws {
     let profile = Profile(
-      id: UUID(uuidString: "12345678-1234-1234-1234-123456789ABC")!,
+      id: makeUUID("12345678-1234-1234-1234-123456789ABC"),
       label: "Work Server",
       backendType: .remote,
-      serverURL: URL(string: "https://moolah.rocks/api/")!,
+      serverURL: makeURL("https://moolah.rocks/api/"),
       currencyCode: "USD",
       financialYearStartMonth: 1,
       createdAt: Date(timeIntervalSince1970: 1_700_000_000)
@@ -24,7 +24,7 @@ struct ProfileTests {
     #expect(decoded.id == profile.id)
     #expect(decoded.label == "Work Server")
     #expect(decoded.backendType == .remote)
-    #expect(decoded.serverURL == URL(string: "https://moolah.rocks/api/")!)
+    #expect(decoded.serverURL == makeURL("https://moolah.rocks/api/"))
     #expect(decoded.currencyCode == "USD")
     #expect(decoded.financialYearStartMonth == 1)
     #expect(decoded.createdAt == Date(timeIntervalSince1970: 1_700_000_000))
@@ -34,7 +34,7 @@ struct ProfileTests {
   func defaults() {
     let profile = Profile(
       label: "Moolah",
-      serverURL: URL(string: "https://moolah.rocks/api/")!
+      serverURL: makeURL("https://moolah.rocks/api/")
     )
 
     #expect(!profile.id.uuidString.isEmpty)
@@ -47,7 +47,7 @@ struct ProfileTests {
 
   @Test("instrument computed property maps known codes")
   func instrumentMapping() {
-    var profile = Profile(label: "Test", serverURL: URL(string: "https://test.com/")!)
+    var profile = Profile(label: "Test", serverURL: makeURL("https://test.com/"))
 
     profile.currencyCode = "AUD"
     #expect(profile.instrument == .AUD)
@@ -64,11 +64,11 @@ struct ProfileTests {
     let id = UUID()
     let date = Date()
     let first = Profile(
-      id: id, label: "A", serverURL: URL(string: "https://first.com/")!, createdAt: date)
+      id: id, label: "A", serverURL: makeURL("https://first.com/"), createdAt: date)
     let second = Profile(
-      id: id, label: "A", serverURL: URL(string: "https://first.com/")!, createdAt: date)
+      id: id, label: "A", serverURL: makeURL("https://first.com/"), createdAt: date)
     let third = Profile(
-      id: id, label: "B", serverURL: URL(string: "https://first.com/")!, createdAt: date)
+      id: id, label: "B", serverURL: makeURL("https://first.com/"), createdAt: date)
 
     #expect(first == second)
     #expect(first != third)
@@ -85,7 +85,7 @@ struct ProfileTests {
 
   @Test("remote profile resolves to stored URL")
   func remoteResolvedURL() {
-    let url = URL(string: "https://custom.example.com/api/")!
+    let url = makeURL("https://custom.example.com/api/")
     let profile = Profile(label: "Custom", backendType: .remote, serverURL: url)
 
     #expect(profile.serverURL == url)

@@ -15,15 +15,15 @@ struct InstrumentAmountConversionTests {
   @Test
   func convertedDelegatesToService() async throws {
     let client = FixedRateClient(rates: [
-      "2026-04-11": ["GBP": Decimal(string: "0.497")!]
+      "2026-04-11": ["GBP": dec("0.497")]
     ])
     let service = ExchangeRateService(client: client)
-    let amount = InstrumentAmount(quantity: Decimal(string: "200.00")!, instrument: .AUD)
+    let amount = InstrumentAmount(quantity: dec("200.00"), instrument: .AUD)
 
     let result = try await service.convert(
       amount, to: Instrument.fiat(code: "GBP"), on: date("2026-04-11"))
 
-    #expect(result.quantity == Decimal(string: "99.40")!)
+    #expect(result.quantity == dec("99.40"))
     #expect(result.instrument.id == "GBP")
   }
 
@@ -31,11 +31,11 @@ struct InstrumentAmountConversionTests {
   func convertedSameInstrumentReturnsOriginal() async throws {
     let client = FixedRateClient()
     let service = ExchangeRateService(client: client)
-    let amount = InstrumentAmount(quantity: Decimal(string: "123.45")!, instrument: .AUD)
+    let amount = InstrumentAmount(quantity: dec("123.45"), instrument: .AUD)
 
     let result = try await service.convert(amount, to: .AUD, on: date("2026-04-11"))
 
-    #expect(result.quantity == Decimal(string: "123.45")!)
+    #expect(result.quantity == dec("123.45"))
     #expect(result.instrument == .AUD)
   }
 
@@ -43,7 +43,7 @@ struct InstrumentAmountConversionTests {
   func convertZeroDecimalFiatPreservesPrecision() async throws {
     // JPY has 0 decimals; converting yields a multiplied quantity with normal Decimal precision.
     let client = FixedRateClient(rates: [
-      "2026-04-11": ["JPY": Decimal(string: "95.50")!]
+      "2026-04-11": ["JPY": dec("95.50")]
     ])
     let service = ExchangeRateService(client: client)
     let amount = InstrumentAmount(quantity: Decimal(100), instrument: .AUD)
@@ -58,15 +58,15 @@ struct InstrumentAmountConversionTests {
   @Test
   func convertRespectsSourceQuantitySign() async throws {
     let client = FixedRateClient(rates: [
-      "2026-04-11": ["USD": Decimal(string: "0.65")!]
+      "2026-04-11": ["USD": dec("0.65")]
     ])
     let service = ExchangeRateService(client: client)
-    let amount = InstrumentAmount(quantity: Decimal(string: "-200.00")!, instrument: .AUD)
+    let amount = InstrumentAmount(quantity: dec("-200.00"), instrument: .AUD)
 
     let result = try await service.convert(
       amount, to: .USD, on: date("2026-04-11"))
 
-    #expect(result.quantity == Decimal(string: "-130.00")!)
+    #expect(result.quantity == dec("-130.00"))
     #expect(result.isNegative)
   }
 }

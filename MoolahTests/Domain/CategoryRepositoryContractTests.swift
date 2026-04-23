@@ -130,7 +130,7 @@ struct CategoryRepositoryContractTests {
         TransactionLeg(
           accountId: account.id,
           instrument: .defaultTestInstrument,
-          quantity: Decimal(string: "-5.00")!,
+          quantity: dec("-5.00"),
           type: .expense,
           categoryId: category.id
         )
@@ -165,7 +165,7 @@ struct CategoryRepositoryContractTests {
     try await backend.earmarks.setBudget(
       earmarkId: earmark.id, categoryId: category.id,
       amount: InstrumentAmount(
-        quantity: Decimal(string: "500.00")!, instrument: .defaultTestInstrument))
+        quantity: dec("500.00"), instrument: .defaultTestInstrument))
 
     let budgetBefore = try await backend.earmarks.fetchBudget(earmarkId: earmark.id)
     #expect(budgetBefore.count == 1)
@@ -193,7 +193,7 @@ struct CategoryRepositoryContractTests {
     try await backend.earmarks.setBudget(
       earmarkId: earmark.id, categoryId: groceries.id,
       amount: InstrumentAmount(
-        quantity: Decimal(string: "500.00")!, instrument: .defaultTestInstrument))
+        quantity: dec("500.00"), instrument: .defaultTestInstrument))
 
     // Delete groceries with food as replacement
     try await backend.categories.delete(id: groceries.id, withReplacement: food.id)
@@ -203,7 +203,7 @@ struct CategoryRepositoryContractTests {
     #expect(budget.count == 1, "Budget should have one entry")
     #expect(budget.first?.categoryId == food.id, "Budget should reference replacement category")
     #expect(
-      budget.first?.amount.quantity == Decimal(string: "500.00")!,
+      budget.first?.amount.quantity == dec("500.00"),
       "Budget amount should be preserved")
   }
 }

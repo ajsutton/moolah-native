@@ -68,17 +68,17 @@ struct CryptoPriceServiceTestsMore {
     defer { try? FileManager.default.removeItem(at: tempDir) }
 
     let service1 = makeService(
-      prices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]],
+      prices: ["1:native": ["2026-04-10": dec("1623.45")]],
       cacheDirectory: tempDir
     )
     let price = try await service1.price(
       for: ethInstrument, mapping: ethMapping, on: date("2026-04-10"))
-    #expect(price == Decimal(string: "1623.45")!)
+    #expect(price == dec("1623.45"))
 
     let service2 = makeService(shouldFail: true, cacheDirectory: tempDir)
     let cached = try await service2.price(
       for: ethInstrument, mapping: ethMapping, on: date("2026-04-10"))
-    #expect(cached == Decimal(string: "1623.45")!)
+    #expect(cached == dec("1623.45"))
   }
 
   // MARK: - Prefetch
@@ -90,27 +90,27 @@ struct CryptoPriceServiceTestsMore {
 
     let service = makeService(
       prices: [
-        "1:native": ["2026-04-11": Decimal(string: "1640.00")!],
-        "0:native": ["2026-04-11": Decimal(string: "67890.00")!],
+        "1:native": ["2026-04-11": dec("1640.00")],
+        "0:native": ["2026-04-11": dec("67890.00")],
       ],
       tokenRepository: repo
     )
     await service.prefetchLatest()
     let ethPrice = try await service.price(
       for: ethInstrument, mapping: ethMapping, on: date("2026-04-11"))
-    #expect(ethPrice == Decimal(string: "1640.00")!)
+    #expect(ethPrice == dec("1640.00"))
   }
 
   @Test
   func prefetchUpdatesCacheForRegisteredItems() async throws {
     let service = makeService(prices: [
-      "1:native": ["2026-04-11": Decimal(string: "1640.00")!],
-      "0:native": ["2026-04-11": Decimal(string: "67890.00")!],
+      "1:native": ["2026-04-11": dec("1640.00")],
+      "0:native": ["2026-04-11": dec("67890.00")],
     ])
     await service.prefetchLatest(for: [ethRegistration, btcRegistration])
     let ethPrice = try await service.price(
       for: ethInstrument, mapping: ethMapping, on: date("2026-04-11"))
-    #expect(ethPrice == Decimal(string: "1640.00")!)
+    #expect(ethPrice == dec("1640.00"))
   }
 
   // MARK: - Multiple tokens cached independently
@@ -118,15 +118,15 @@ struct CryptoPriceServiceTestsMore {
   @Test
   func differentTokensAreCachedIndependently() async throws {
     let service = makeService(prices: [
-      "1:native": ["2026-04-10": Decimal(string: "1623.45")!],
-      "0:native": ["2026-04-10": Decimal(string: "67890.00")!],
+      "1:native": ["2026-04-10": dec("1623.45")],
+      "0:native": ["2026-04-10": dec("67890.00")],
     ])
     let ethPrice = try await service.price(
       for: ethInstrument, mapping: ethMapping, on: date("2026-04-10"))
     let btcPrice = try await service.price(
       for: btcInstrument, mapping: btcMapping, on: date("2026-04-10"))
-    #expect(ethPrice == Decimal(string: "1623.45")!)
-    #expect(btcPrice == Decimal(string: "67890.00")!)
+    #expect(ethPrice == dec("1623.45"))
+    #expect(btcPrice == dec("67890.00"))
   }
 
   // MARK: - Registration management

@@ -25,7 +25,7 @@ struct RemoteServerValidatorTests {
       return (response, Data(json.utf8))
     }
 
-    try await validator.validate(url: URL(string: "https://example.com/api/")!)
+    try await validator.validate(url: makeURL("https://example.com/api/"))
   }
 
   @Test("succeeds when server returns loggedIn true with profile")
@@ -41,7 +41,7 @@ struct RemoteServerValidatorTests {
       return (response, Data(json.utf8))
     }
 
-    try await validator.validate(url: URL(string: "https://example.com/api/")!)
+    try await validator.validate(url: makeURL("https://example.com/api/"))
   }
 
   @Test("throws validationFailed for non-JSON response")
@@ -55,7 +55,7 @@ struct RemoteServerValidatorTests {
     }
 
     await #expect(throws: BackendError.self) {
-      try await validator.validate(url: URL(string: "https://example.com/api/")!)
+      try await validator.validate(url: makeURL("https://example.com/api/"))
     }
   }
 
@@ -71,7 +71,7 @@ struct RemoteServerValidatorTests {
     }
 
     await #expect(throws: BackendError.self) {
-      try await validator.validate(url: URL(string: "https://example.com/api/")!)
+      try await validator.validate(url: makeURL("https://example.com/api/"))
     }
   }
 
@@ -85,7 +85,7 @@ struct RemoteServerValidatorTests {
     }
 
     await #expect(throws: BackendError.self) {
-      try await validator.validate(url: URL(string: "https://example.com/api/")!)
+      try await validator.validate(url: makeURL("https://example.com/api/"))
     }
   }
 
@@ -97,7 +97,7 @@ struct RemoteServerValidatorTests {
     }
 
     await #expect(throws: BackendError.self) {
-      try await validator.validate(url: URL(string: "https://example.com/api/")!)
+      try await validator.validate(url: makeURL("https://example.com/api/"))
     }
   }
 }

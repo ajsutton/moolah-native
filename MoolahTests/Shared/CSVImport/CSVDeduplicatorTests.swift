@@ -132,12 +132,12 @@ struct CSVDeduplicatorTests {
     let existing = [
       existingTransaction(
         accountId: accountId, date: date(2024, 4, 2),
-        description: "COFFEE HUT", amount: Decimal(string: "-5.50")!)
+        description: "COFFEE HUT", amount: dec("-5.50"))
     ]
     let incoming = candidate(
       date: date(2024, 4, 2),
       description: "  coffee hut  ",
-      amount: Decimal(string: "-5.50")!)
+      amount: dec("-5.50"))
     let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
     #expect(result.kept.isEmpty)
     #expect(result.skipped.count == 1)
@@ -149,10 +149,10 @@ struct CSVDeduplicatorTests {
     let existing = [
       existingTransaction(
         accountId: accountId, date: date(2024, 4, 2),
-        description: "COFFEE", amount: Decimal(string: "-5.50")!)
+        description: "COFFEE", amount: dec("-5.50"))
     ]
     let incoming = candidate(
-      date: date(2024, 4, 3), description: "COFFEE", amount: Decimal(string: "-5.50")!)
+      date: date(2024, 4, 3), description: "COFFEE", amount: dec("-5.50"))
     let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
     #expect(result.kept.count == 1)
   }
@@ -175,12 +175,12 @@ struct CSVDeduplicatorTests {
     let existing = [
       existingTransaction(
         accountId: accountId, date: cal.date(from: morning)!,
-        description: "COFFEE", amount: Decimal(string: "-5.50")!)
+        description: "COFFEE", amount: dec("-5.50"))
     ]
     let incoming = candidate(
       date: cal.date(from: evening)!,
       description: "COFFEE",
-      amount: Decimal(string: "-5.50")!)
+      amount: dec("-5.50"))
     let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
     #expect(result.kept.isEmpty)
   }
@@ -190,10 +190,10 @@ struct CSVDeduplicatorTests {
     let existing = [
       existingTransaction(
         accountId: accountId, date: date(2024, 4, 2),
-        description: "COFFEE", amount: Decimal(string: "-5.50")!)
+        description: "COFFEE", amount: dec("-5.50"))
     ]
     let incoming = candidate(
-      date: date(2024, 4, 2), description: "COFFEE", amount: Decimal(string: "-5.51")!)
+      date: date(2024, 4, 2), description: "COFFEE", amount: dec("-5.51"))
     let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
     #expect(result.kept.count == 1)
   }

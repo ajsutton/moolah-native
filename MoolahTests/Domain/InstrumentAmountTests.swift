@@ -9,8 +9,8 @@ struct InstrumentAmountTests {
 
   @Test
   func initStoresQuantityAndInstrument() {
-    let amount = InstrumentAmount(quantity: Decimal(string: "50.23")!, instrument: aud)
-    #expect(amount.quantity == Decimal(string: "50.23")!)
+    let amount = InstrumentAmount(quantity: dec("50.23"), instrument: aud)
+    #expect(amount.quantity == dec("50.23"))
     #expect(amount.instrument == aud)
   }
 
@@ -23,12 +23,12 @@ struct InstrumentAmountTests {
 
   @Test
   func isPositiveNegativeZero() {
-    let positive = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: aud)
+    let positive = InstrumentAmount(quantity: dec("1.00"), instrument: aud)
     #expect(positive.isPositive)
     #expect(!positive.isNegative)
     #expect(!positive.isZero)
 
-    let negative = InstrumentAmount(quantity: Decimal(string: "-1.00")!, instrument: aud)
+    let negative = InstrumentAmount(quantity: dec("-1.00"), instrument: aud)
     #expect(negative.isNegative)
     #expect(!negative.isPositive)
 
@@ -40,65 +40,65 @@ struct InstrumentAmountTests {
 
   @Test
   func addition() {
-    let first = InstrumentAmount(quantity: Decimal(string: "1.50")!, instrument: aud)
-    let second = InstrumentAmount(quantity: Decimal(string: "2.50")!, instrument: aud)
+    let first = InstrumentAmount(quantity: dec("1.50"), instrument: aud)
+    let second = InstrumentAmount(quantity: dec("2.50"), instrument: aud)
     let result = first + second
-    #expect(result.quantity == Decimal(string: "4.00")!)
+    #expect(result.quantity == dec("4.00"))
     #expect(result.instrument == aud)
   }
 
   @Test
   func subtraction() {
-    let first = InstrumentAmount(quantity: Decimal(string: "5.00")!, instrument: aud)
-    let second = InstrumentAmount(quantity: Decimal(string: "2.00")!, instrument: aud)
-    #expect((first - second).quantity == Decimal(string: "3.00")!)
+    let first = InstrumentAmount(quantity: dec("5.00"), instrument: aud)
+    let second = InstrumentAmount(quantity: dec("2.00"), instrument: aud)
+    #expect((first - second).quantity == dec("3.00"))
   }
 
   @Test
   func negation() {
-    let first = InstrumentAmount(quantity: Decimal(string: "5.00")!, instrument: aud)
-    #expect((-first).quantity == Decimal(string: "-5.00")!)
+    let first = InstrumentAmount(quantity: dec("5.00"), instrument: aud)
+    #expect((-first).quantity == dec("-5.00"))
     #expect((-first).instrument == aud)
   }
 
   @Test
   func plusEquals() {
-    var first = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: aud)
-    first += InstrumentAmount(quantity: Decimal(string: "0.50")!, instrument: aud)
-    #expect(first.quantity == Decimal(string: "1.50")!)
+    var first = InstrumentAmount(quantity: dec("1.00"), instrument: aud)
+    first += InstrumentAmount(quantity: dec("0.50"), instrument: aud)
+    #expect(first.quantity == dec("1.50"))
   }
 
   @Test
   func comparison() {
-    let first = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: aud)
-    let second = InstrumentAmount(quantity: Decimal(string: "2.00")!, instrument: aud)
+    let first = InstrumentAmount(quantity: dec("1.00"), instrument: aud)
+    let second = InstrumentAmount(quantity: dec("2.00"), instrument: aud)
     #expect(first < second)
     #expect(!(second < first))
   }
 
   @Test
   func decimalValue() {
-    let amount = InstrumentAmount(quantity: Decimal(string: "50.23")!, instrument: aud)
-    #expect(amount.decimalValue == Decimal(string: "50.23")!)
+    let amount = InstrumentAmount(quantity: dec("50.23"), instrument: aud)
+    #expect(amount.decimalValue == dec("50.23"))
   }
 
   @Test
   func formattedFiat() {
-    let amount = InstrumentAmount(quantity: Decimal(string: "50.23")!, instrument: aud)
+    let amount = InstrumentAmount(quantity: dec("50.23"), instrument: aud)
     #expect(amount.formatted.contains("50.23"))
   }
 
   @Test
   func formattedStock() {
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
-    let amount = InstrumentAmount(quantity: Decimal(string: "150")!, instrument: bhp)
+    let amount = InstrumentAmount(quantity: dec("150"), instrument: bhp)
     #expect(amount.formatted == "150 BHP.AX")
   }
 
   @Test
   func formattedStockFractional() {
     let aapl = Instrument.stock(ticker: "AAPL", exchange: "NASDAQ", name: "Apple", decimals: 4)
-    let amount = InstrumentAmount(quantity: Decimal(string: "3.5000")!, instrument: aapl)
+    let amount = InstrumentAmount(quantity: dec("3.5000"), instrument: aapl)
     #expect(amount.formatted == "3.5 AAPL")
   }
 
@@ -106,7 +106,7 @@ struct InstrumentAmountTests {
   func formattedCrypto() {
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
-    let amount = InstrumentAmount(quantity: Decimal(string: "0.5")!, instrument: eth)
+    let amount = InstrumentAmount(quantity: dec("0.5"), instrument: eth)
     #expect(amount.formatted == "0.5 ETH")
   }
 
@@ -121,13 +121,13 @@ struct InstrumentAmountTests {
   @Test
   func formattedNegativeStock() {
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
-    let amount = InstrumentAmount(quantity: Decimal(string: "-10")!, instrument: bhp)
+    let amount = InstrumentAmount(quantity: dec("-10"), instrument: bhp)
     #expect(amount.formatted == "-10 BHP.AX")
   }
 
   @Test
   func formatNoSymbol() {
-    let amount = InstrumentAmount(quantity: Decimal(string: "1234.56")!, instrument: aud)
+    let amount = InstrumentAmount(quantity: dec("1234.56"), instrument: aud)
     let text = amount.formatNoSymbol
     #expect(text.contains("1234.56") || text.contains("1,234.56"))
   }
@@ -135,26 +135,26 @@ struct InstrumentAmountTests {
   @Test
   func reduceForSumming() {
     let amounts = [
-      InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: aud),
-      InstrumentAmount(quantity: Decimal(string: "2.00")!, instrument: aud),
-      InstrumentAmount(quantity: Decimal(string: "-0.50")!, instrument: aud),
+      InstrumentAmount(quantity: dec("1.00"), instrument: aud),
+      InstrumentAmount(quantity: dec("2.00"), instrument: aud),
+      InstrumentAmount(quantity: dec("-0.50"), instrument: aud),
     ]
     let total = amounts.reduce(.zero(instrument: aud)) { $0 + $1 }
-    #expect(total.quantity == Decimal(string: "2.50")!)
+    #expect(total.quantity == dec("2.50"))
   }
 
   @Test
   func equality() {
-    let first = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: .AUD)
-    let second = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: .AUD)
-    let third = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: .USD)
+    let first = InstrumentAmount(quantity: dec("1.00"), instrument: .AUD)
+    let second = InstrumentAmount(quantity: dec("1.00"), instrument: .AUD)
+    let third = InstrumentAmount(quantity: dec("1.00"), instrument: .USD)
     #expect(first == second)
     #expect(first != third)
   }
 
   @Test
   func codableRoundTrip() throws {
-    let original = InstrumentAmount(quantity: Decimal(string: "50.23")!, instrument: .AUD)
+    let original = InstrumentAmount(quantity: dec("50.23"), instrument: .AUD)
     let data = try JSONEncoder().encode(original)
     let decoded = try JSONDecoder().decode(InstrumentAmount.self, from: data)
     #expect(decoded == original)
@@ -164,16 +164,16 @@ struct InstrumentAmountTests {
 
   @Test
   func toStorageValueScalesBy10e8() {
-    let amount = InstrumentAmount(quantity: Decimal(string: "50.23")!, instrument: aud)
+    let amount = InstrumentAmount(quantity: dec("50.23"), instrument: aud)
     #expect(amount.storageValue == 5_023_000_000)
   }
 
   @Test
   func fromStorageValueRoundTrips() {
-    let original = InstrumentAmount(quantity: Decimal(string: "47046.61094572")!, instrument: aud)
+    let original = InstrumentAmount(quantity: dec("47046.61094572"), instrument: aud)
     let stored = original.storageValue
     let restored = InstrumentAmount(storageValue: stored, instrument: aud)
-    #expect(restored.quantity == Decimal(string: "47046.61094572")!)
+    #expect(restored.quantity == dec("47046.61094572"))
   }
 
   @Test
@@ -184,7 +184,7 @@ struct InstrumentAmountTests {
 
   @Test
   func storageValueNegative() {
-    let amount = InstrumentAmount(quantity: Decimal(string: "-50.23")!, instrument: aud)
+    let amount = InstrumentAmount(quantity: dec("-50.23"), instrument: aud)
     #expect(amount.storageValue == -5_023_000_000)
   }
 

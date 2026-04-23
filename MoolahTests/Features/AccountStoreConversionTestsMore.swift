@@ -20,12 +20,12 @@ struct AccountStoreConversionTestsMore {
       legs: [
         TransactionLeg(
           accountId: accountId, instrument: .USD,
-          quantity: Decimal(string: "100.00")!, type: .openingBalance)
+          quantity: dec("100.00"), type: .openingBalance)
       ]
     )
     TestBackend.seed(transactions: [usdTx], in: container)
 
-    let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let conversion = FixedConversionService(rates: ["USD": dec("1.5")])
     let store = AccountStore(
       repository: backend.accounts, conversionService: conversion,
       targetInstrument: .AUD)
@@ -33,11 +33,11 @@ struct AccountStoreConversionTestsMore {
 
     // No investment value yet → falls back to converted position sum (USD * 1.5 = 150 AUD)
     let sumBalance = try await store.displayBalance(for: accountId)
-    #expect(sumBalance.quantity == Decimal(string: "150.00")!)
+    #expect(sumBalance.quantity == dec("150.00"))
 
     // Investment value set externally → wins over converted positions
     let externalValue = InstrumentAmount(
-      quantity: Decimal(string: "999.00")!, instrument: .AUD)
+      quantity: dec("999.00"), instrument: .AUD)
     await store.updateInvestmentValue(accountId: accountId, value: externalValue)
     let override = try await store.displayBalance(for: accountId)
     #expect(override == externalValue)

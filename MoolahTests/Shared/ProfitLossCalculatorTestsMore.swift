@@ -76,7 +76,7 @@ struct ProfitLossCalculatorTestsMore {
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
           accountId: accountId, instrument: eth,
-          quantity: Decimal(string: "1.0")!, type: .transfer,
+          quantity: dec("1.0"), type: .transfer,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -124,7 +124,7 @@ struct ProfitLossCalculatorTestsMore {
 
     // 1 USD = 1.5 AUD, BHP now worth AUD 50/share.
     let service = FixedConversionService(rates: [
-      "USD": Decimal(string: "1.5")!,
+      "USD": dec("1.5"),
       "ASX:BHP": 50,
     ])
     let results = try await ProfitLossCalculator.compute(
@@ -178,8 +178,8 @@ struct ProfitLossCalculatorTestsMore {
     // Correct routing: totalInvested = 2000 × 1.5 = 3000; currentValue = 100 × 50 = 5000.
     // If dates were swapped: totalInvested = 2000 × 2.0 = 4000; currentValue = 100 × 30 = 3000.
     let service = DateBasedFixedConversionService(rates: [
-      date(0): ["USD": Decimal(string: "1.5")!, "ASX:BHP": 30],
-      date(365): ["USD": Decimal(string: "2.0")!, "ASX:BHP": 50],
+      date(0): ["USD": dec("1.5"), "ASX:BHP": 30],
+      date(365): ["USD": dec("2.0"), "ASX:BHP": 50],
     ])
     let results = try await ProfitLossCalculator.compute(
       transactions: [buyTx],

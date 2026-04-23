@@ -17,7 +17,7 @@ struct RemoteCategoryRepositoryTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com"), session: session)
     let repository = RemoteCategoryRepository(client: client)
 
     URLProtocolStub.requestHandler = { request in

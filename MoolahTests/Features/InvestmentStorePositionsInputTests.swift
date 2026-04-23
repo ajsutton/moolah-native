@@ -84,7 +84,7 @@ struct InvestmentStorePositionsInputTests {
         legs: [
           TransactionLeg(accountId: account.id, instrument: eth, quantity: -2, type: .income),
           TransactionLeg(
-            accountId: account.id, instrument: btc, quantity: Decimal(string: "0.1")!,
+            accountId: account.id, instrument: btc, quantity: dec("0.1"),
             type: .income),
         ]
       )

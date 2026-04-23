@@ -35,7 +35,7 @@ struct MigrationIntegrationTests {
     // Checking: +1000.00 - 25.00 = 975.00
     let checking = try await backend.accounts.create(
       Account(name: "Checking", type: .bank, instrument: instrument),
-      openingBalance: InstrumentAmount(quantity: Decimal(string: "975.00")!, instrument: instrument)
+      openingBalance: InstrumentAmount(quantity: dec("975.00"), instrument: instrument)
     )
     _ = try await backend.accounts.create(
       Account(name: "Credit Card", type: .creditCard, instrument: instrument),
@@ -49,7 +49,7 @@ struct MigrationIntegrationTests {
     let holiday = try await backend.earmarks.create(
       Earmark(name: "Holiday", instrument: instrument)
     )
-    let budgetAmount = InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
+    let budgetAmount = InstrumentAmount(quantity: dec("50.00"), instrument: instrument)
     try await backend.earmarks.setBudget(
       earmarkId: holiday.id, categoryId: food.id, amount: budgetAmount)
     return SeededContext(checking: checking, foodId: food.id, holidayId: holiday.id)
@@ -64,7 +64,7 @@ struct MigrationIntegrationTests {
         legs: [
           TransactionLeg(
             accountId: checking.id, instrument: instrument,
-            quantity: Decimal(string: "1000.00")!, type: .income)
+            quantity: dec("1000.00"), type: .income)
         ]))
     _ = try await backend.transactions.create(
       Transaction(
@@ -72,7 +72,7 @@ struct MigrationIntegrationTests {
         legs: [
           TransactionLeg(
             accountId: checking.id, instrument: instrument,
-            quantity: Decimal(string: "-25.00")!, type: .expense,
+            quantity: dec("-25.00"), type: .expense,
             categoryId: foodId, earmarkId: holidayId)
         ]))
     // Scheduled transaction (excluded from balance computation)
@@ -83,7 +83,7 @@ struct MigrationIntegrationTests {
         legs: [
           TransactionLeg(
             accountId: checking.id, instrument: instrument,
-            quantity: Decimal(string: "-10.00")!, type: .expense)
+            quantity: dec("-10.00"), type: .expense)
         ]))
   }
 
@@ -216,7 +216,7 @@ struct MigrationIntegrationTests {
 
     let budgetItems = try await cloudBackend.earmarks.fetchBudget(earmarkId: holiday!.id)
     #expect(budgetItems.count == 1)
-    #expect(budgetItems.first?.amount.quantity == Decimal(string: "50.00")!)
+    #expect(budgetItems.first?.amount.quantity == dec("50.00"))
   }
 
   @Test(

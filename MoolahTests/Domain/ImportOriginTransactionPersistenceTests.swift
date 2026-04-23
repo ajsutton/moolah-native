@@ -14,8 +14,8 @@ struct ImportOriginTransactionPersistenceTests {
     let origin = ImportOrigin(
       rawDescription: "COFFEE @ SHOP",
       bankReference: "REF-42",
-      rawAmount: Decimal(string: "-12.34")!,
-      rawBalance: Decimal(string: "500.00")!,
+      rawAmount: dec("-12.34"),
+      rawBalance: dec("500.00"),
       importedAt: Date(timeIntervalSince1970: 1_700_000_000),
       importSessionId: sessionId,
       sourceFilename: "cba.csv",
@@ -30,7 +30,7 @@ struct ImportOriginTransactionPersistenceTests {
       legs: [
         TransactionLeg(
           accountId: accountId, instrument: .AUD,
-          quantity: Decimal(string: "-12.34")!, type: .expense,
+          quantity: dec("-12.34"), type: .expense,
           categoryId: nil, earmarkId: nil)
       ],
       importOrigin: origin)
@@ -56,7 +56,7 @@ struct ImportOriginTransactionPersistenceTests {
       legs: [
         TransactionLeg(
           accountId: accountId, instrument: .AUD,
-          quantity: Decimal(string: "-12.34")!, type: .expense,
+          quantity: dec("-12.34"), type: .expense,
           categoryId: nil, earmarkId: nil)
       ])
     _ = try await backend.transactions.create(transaction)
@@ -81,7 +81,7 @@ struct ImportOriginTransactionPersistenceTests {
       legs: [
         TransactionLeg(
           accountId: accountId, instrument: .AUD,
-          quantity: Decimal(string: "-12.34")!, type: .expense,
+          quantity: dec("-12.34"), type: .expense,
           categoryId: nil, earmarkId: nil)
       ])
     _ = try await backend.transactions.create(transaction)
@@ -90,7 +90,7 @@ struct ImportOriginTransactionPersistenceTests {
     let origin = ImportOrigin(
       rawDescription: "Updated",
       bankReference: nil,
-      rawAmount: Decimal(string: "-12.34")!,
+      rawAmount: dec("-12.34"),
       rawBalance: nil,
       importedAt: Date(timeIntervalSince1970: 1_700_000_000),
       importSessionId: sessionId,

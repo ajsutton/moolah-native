@@ -17,8 +17,8 @@ struct TransactionImportOriginTests {
     let origin = ImportOrigin(
       rawDescription: "COFFEE",
       bankReference: "REF1",
-      rawAmount: Decimal(string: "-12.34")!,
-      rawBalance: Decimal(string: "100.00")!,
+      rawAmount: dec("-12.34"),
+      rawBalance: dec("100.00"),
       importedAt: Date(timeIntervalSince1970: 1_700_000_000),
       importSessionId: UUID(),
       sourceFilename: "transactions.csv",

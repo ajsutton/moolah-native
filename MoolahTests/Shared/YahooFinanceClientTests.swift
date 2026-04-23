@@ -95,8 +95,8 @@ struct YahooFinanceClientTests {
     #expect(result.instrument == .AUD)
     // Two entries (third has null adjclose and should be skipped)
     #expect(result.prices.count == 2)
-    #expect(result.prices["2022-04-05"] == Decimal(string: "37.80")!)
-    #expect(result.prices["2022-04-06"] == Decimal(string: "38.10")!)
+    #expect(result.prices["2022-04-05"] == dec("37.80"))
+    #expect(result.prices["2022-04-06"] == dec("38.10"))
   }
 
   @Test

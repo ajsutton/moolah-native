@@ -15,7 +15,7 @@ struct SessionManagerTests {
     label: String = "Test",
     url: String = "https://moolah.rocks/api/"
   ) -> Profile {
-    Profile(label: label, serverURL: URL(string: url)!)
+    Profile(label: label, serverURL: makeURL(url))
   }
 
   @Test("session(for:) creates a new session for unknown profile")

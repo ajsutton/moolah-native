@@ -17,7 +17,7 @@ struct ProfileStoreTestsMoreSecondHalf {
   private func makeProfile(label: String = "Test", url: String = "https://moolah.rocks/api/")
     -> Profile
   {
-    Profile(label: label, serverURL: URL(string: url)!)
+    Profile(label: label, serverURL: makeURL(url))
   }
 
   @Test("addProfile does not call onProfileChanged for remote profiles")

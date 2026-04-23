@@ -67,13 +67,13 @@ struct InvestmentStoreTests {
 
     let date = makeDate(year: 2024, month: 3, day: 15)
     let amount = InstrumentAmount(
-      quantity: Decimal(string: "125000.00")!, instrument: .defaultTestInstrument)
+      quantity: dec("125000.00"), instrument: .defaultTestInstrument)
 
     await store.setValue(accountId: accountId, date: date, value: amount)
 
     #expect(store.values.count == 1)
     #expect(store.values[0].date == date)
-    #expect(store.values[0].value.quantity == Decimal(string: "125000.00")!)
+    #expect(store.values[0].value.quantity == dec("125000.00"))
   }
 
   @Test("Set value upserts existing date")
@@ -85,7 +85,7 @@ struct InvestmentStoreTests {
         InvestmentValue(
           date: date,
           value: InstrumentAmount(
-            quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument))
+            quantity: dec("1000.00"), instrument: .defaultTestInstrument))
       ]
     ]
     let (backend, container) = try TestBackend.create()
@@ -97,11 +97,11 @@ struct InvestmentStoreTests {
     #expect(store.values.count == 1)
 
     let newAmount = InstrumentAmount(
-      quantity: Decimal(string: "2000.00")!, instrument: .defaultTestInstrument)
+      quantity: dec("2000.00"), instrument: .defaultTestInstrument)
     await store.setValue(accountId: accountId, date: date, value: newAmount)
 
     #expect(store.values.count == 1)
-    #expect(store.values[0].value.quantity == Decimal(string: "2000.00")!)
+    #expect(store.values[0].value.quantity == dec("2000.00"))
   }
 
   @Test("Set value upserts in-memory when dates have different times on same day")
@@ -114,7 +114,7 @@ struct InvestmentStoreTests {
         InvestmentValue(
           date: morning,
           value: InstrumentAmount(
-            quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument))
+            quantity: dec("1000.00"), instrument: .defaultTestInstrument))
       ]
     ]
     let (backend, container) = try TestBackend.create()
@@ -128,11 +128,11 @@ struct InvestmentStoreTests {
     let evening = Calendar.current.date(
       from: DateComponents(year: 2024, month: 3, day: 15, hour: 18, minute: 30))!
     let newAmount = InstrumentAmount(
-      quantity: Decimal(string: "2000.00")!, instrument: .defaultTestInstrument)
+      quantity: dec("2000.00"), instrument: .defaultTestInstrument)
     await store.setValue(accountId: accountId, date: evening, value: newAmount)
 
     #expect(store.values.count == 1, "Expected upsert but got duplicate entries in store")
-    #expect(store.values[0].value.quantity == Decimal(string: "2000.00")!)
+    #expect(store.values[0].value.quantity == dec("2000.00"))
   }
 
   @Test("Remove value removes from list")
@@ -144,7 +144,7 @@ struct InvestmentStoreTests {
         InvestmentValue(
           date: date,
           value: InstrumentAmount(
-            quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument))
+            quantity: dec("1000.00"), instrument: .defaultTestInstrument))
       ]
     ]
     let (backend, container) = try TestBackend.create()
@@ -188,7 +188,7 @@ struct InvestmentStoreTests {
 
     let date = makeDate(year: 2024, month: 3, day: 15)
     let amount = InstrumentAmount(
-      quantity: Decimal(string: "125000.00")!, instrument: .defaultTestInstrument)
+      quantity: dec("125000.00"), instrument: .defaultTestInstrument)
 
     await store.setValue(accountId: accountId, date: date, value: amount)
 
@@ -206,7 +206,7 @@ struct InvestmentStoreTests {
         InvestmentValue(
           date: laterDate,
           value: InstrumentAmount(
-            quantity: Decimal(string: "2000.00")!, instrument: .defaultTestInstrument))
+            quantity: dec("2000.00"), instrument: .defaultTestInstrument))
       ]
     ]
     let (backend, container) = try TestBackend.create()
@@ -222,11 +222,11 @@ struct InvestmentStoreTests {
 
     // Add an earlier value — the latest should still be the June value
     let earlierAmount = InstrumentAmount(
-      quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)
+      quantity: dec("1000.00"), instrument: .defaultTestInstrument)
     await store.setValue(accountId: accountId, date: earlierDate, value: earlierAmount)
 
     let expectedLatest = InstrumentAmount(
-      quantity: Decimal(string: "2000.00")!, instrument: .defaultTestInstrument)
+      quantity: dec("2000.00"), instrument: .defaultTestInstrument)
     #expect(receivedValue == expectedLatest)
   }
 
@@ -240,11 +240,11 @@ struct InvestmentStoreTests {
         InvestmentValue(
           date: date1,
           value: InstrumentAmount(
-            quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)),
+            quantity: dec("1000.00"), instrument: .defaultTestInstrument)),
         InvestmentValue(
           date: date2,
           value: InstrumentAmount(
-            quantity: Decimal(string: "2000.00")!, instrument: .defaultTestInstrument)),
+            quantity: dec("2000.00"), instrument: .defaultTestInstrument)),
       ]
     ]
     let (backend, container) = try TestBackend.create()
@@ -262,7 +262,7 @@ struct InvestmentStoreTests {
     await store.removeValue(accountId: accountId, date: date2)
 
     let expectedLatest = InstrumentAmount(
-      quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)
+      quantity: dec("1000.00"), instrument: .defaultTestInstrument)
     #expect(receivedValue == .some(expectedLatest))
   }
 
@@ -275,7 +275,7 @@ struct InvestmentStoreTests {
         InvestmentValue(
           date: date,
           value: InstrumentAmount(
-            quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument))
+            quantity: dec("1000.00"), instrument: .defaultTestInstrument))
       ]
     ]
     let (backend, container) = try TestBackend.create()

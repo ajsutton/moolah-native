@@ -13,12 +13,12 @@ struct TransactionLegTests {
     let leg = TransactionLeg(
       accountId: accountId,
       instrument: aud,
-      quantity: Decimal(string: "-50.00")!,
+      quantity: dec("-50.00"),
       type: .expense
     )
     #expect(leg.accountId == accountId)
     #expect(leg.instrument == aud)
-    #expect(leg.quantity == Decimal(string: "-50.00")!)
+    #expect(leg.quantity == dec("-50.00"))
     #expect(leg.type == .expense)
     #expect(leg.categoryId == nil)
     #expect(leg.earmarkId == nil)
@@ -31,7 +31,7 @@ struct TransactionLegTests {
     let leg = TransactionLeg(
       accountId: accountId,
       instrument: aud,
-      quantity: Decimal(string: "-50.00")!,
+      quantity: dec("-50.00"),
       type: .expense,
       categoryId: catId,
       earmarkId: earId
@@ -45,7 +45,7 @@ struct TransactionLegTests {
     let leg = TransactionLeg(
       accountId: accountId,
       instrument: aud,
-      quantity: Decimal(string: "-50.23")!,
+      quantity: dec("-50.23"),
       type: .expense,
       categoryId: UUID()
     )
@@ -59,10 +59,10 @@ struct TransactionLegTests {
     let leg = TransactionLeg(
       accountId: accountId,
       instrument: aud,
-      quantity: Decimal(string: "-50.23")!,
+      quantity: dec("-50.23"),
       type: .expense
     )
-    #expect(leg.amount == InstrumentAmount(quantity: Decimal(string: "-50.23")!, instrument: aud))
+    #expect(leg.amount == InstrumentAmount(quantity: dec("-50.23"), instrument: aud))
   }
 
   @Test
@@ -125,7 +125,7 @@ struct TransactionLegTests {
     let leg = TransactionLeg(
       accountId: accountId,
       instrument: usdc,
-      quantity: Decimal(string: "1234.567890")!,
+      quantity: dec("1234.567890"),
       type: .transfer
     )
     let data = try JSONEncoder().encode(leg)
@@ -136,7 +136,7 @@ struct TransactionLegTests {
     #expect(
       decoded.instrument.contractAddress == "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
     #expect(decoded.instrument.decimals == 6)
-    #expect(decoded.quantity == Decimal(string: "1234.567890")!)
+    #expect(decoded.quantity == dec("1234.567890"))
   }
 
   @Test
@@ -161,10 +161,10 @@ struct TransactionLegTests {
     let leg = TransactionLeg(
       accountId: accountId,
       instrument: eth,
-      quantity: Decimal(string: "0.12345678")!,
+      quantity: dec("0.12345678"),
       type: .transfer
     )
     #expect(leg.amount.instrument == eth)
-    #expect(leg.amount.quantity == Decimal(string: "0.12345678")!)
+    #expect(leg.amount.quantity == dec("0.12345678"))
   }
 }

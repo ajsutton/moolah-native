@@ -9,7 +9,7 @@ struct RemoteTransactionRepositoryTestsMore {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [TransactionURLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com/api/")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com/api/"), session: session)
     return (session, client)
   }
 

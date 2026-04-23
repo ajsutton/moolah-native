@@ -51,7 +51,7 @@ struct InstrumentConversionServiceCryptoTests {
   @Test
   func cryptoToUsdUsesDirectPrice() async throws {
     let service = makeService(
-      cryptoPrices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]],
+      cryptoPrices: ["1:native": ["2026-04-10": dec("1623.45")]],
       providerMappings: [
         CryptoProviderMapping(
           instrumentId: "1:native", coingeckoId: "ethereum",
@@ -60,10 +60,10 @@ struct InstrumentConversionServiceCryptoTests {
       ]
     )
     let result = try await service.convert(
-      Decimal(string: "2.5")!, from: eth, to: usd, on: date("2026-04-10")
+      dec("2.5"), from: eth, to: usd, on: date("2026-04-10")
     )
     // 2.5 * 1623.45 = 4058.625
-    #expect(result == Decimal(string: "4058.625")!)
+    #expect(result == dec("4058.625"))
   }
 
   // MARK: - Crypto -> Fiat (non-USD, two-hop)
@@ -71,8 +71,8 @@ struct InstrumentConversionServiceCryptoTests {
   @Test
   func cryptoToAudGoesViaUsd() async throws {
     let service = makeService(
-      cryptoPrices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]],
-      exchangeRates: ["2026-04-10": ["AUD": Decimal(string: "1.58")!]],
+      cryptoPrices: ["1:native": ["2026-04-10": dec("1623.45")]],
+      exchangeRates: ["2026-04-10": ["AUD": dec("1.58")]],
       providerMappings: [
         CryptoProviderMapping(
           instrumentId: "1:native", coingeckoId: "ethereum",
@@ -81,10 +81,10 @@ struct InstrumentConversionServiceCryptoTests {
       ]
     )
     let result = try await service.convert(
-      Decimal(string: "2.5")!, from: eth, to: aud, on: date("2026-04-10")
+      dec("2.5"), from: eth, to: aud, on: date("2026-04-10")
     )
     let expected =
-      Decimal(string: "2.5")! * Decimal(string: "1623.45")! * Decimal(string: "1.58")!
+      dec("2.5") * dec("1623.45") * dec("1.58")
     #expect(result == expected)
   }
 
@@ -94,8 +94,8 @@ struct InstrumentConversionServiceCryptoTests {
   func cryptoToCryptoChainsThroughUsd() async throws {
     let service = makeService(
       cryptoPrices: [
-        "1:native": ["2026-04-10": Decimal(string: "1623.45")!],
-        "0:native": ["2026-04-10": Decimal(string: "63000.00")!],
+        "1:native": ["2026-04-10": dec("1623.45")],
+        "0:native": ["2026-04-10": dec("63000.00")],
       ],
       providerMappings: [
         CryptoProviderMapping(
@@ -111,8 +111,8 @@ struct InstrumentConversionServiceCryptoTests {
     let result = try await service.convert(
       Decimal(10), from: eth, to: btc, on: date("2026-04-10")
     )
-    let usdValue = Decimal(10) * Decimal(string: "1623.45")!
-    let expected = usdValue / Decimal(string: "63000.00")!
+    let usdValue = Decimal(10) * dec("1623.45")
+    let expected = usdValue / dec("63000.00")
     #expect(result == expected)
   }
 
@@ -121,7 +121,7 @@ struct InstrumentConversionServiceCryptoTests {
   @Test
   func missingProviderMappingThrows() async throws {
     let service = makeService(
-      cryptoPrices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]]
+      cryptoPrices: ["1:native": ["2026-04-10": dec("1623.45")]]
     )
     await #expect(throws: (any Error).self) {
       _ = try await service.convert(Decimal(1), from: eth, to: usd, on: date("2026-04-10"))
@@ -133,7 +133,7 @@ struct InstrumentConversionServiceCryptoTests {
   @Test
   func fiatToCryptoIsInverseOfCryptoToFiat() async throws {
     let service = makeService(
-      cryptoPrices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]],
+      cryptoPrices: ["1:native": ["2026-04-10": dec("1623.45")]],
       providerMappings: [
         CryptoProviderMapping(
           instrumentId: "1:native", coingeckoId: "ethereum",
@@ -144,7 +144,7 @@ struct InstrumentConversionServiceCryptoTests {
     let result = try await service.convert(
       Decimal(5000), from: usd, to: eth, on: date("2026-04-10")
     )
-    let expected = Decimal(5000) / Decimal(string: "1623.45")!
+    let expected = Decimal(5000) / dec("1623.45")
     #expect(result == expected)
   }
 
@@ -154,7 +154,7 @@ struct InstrumentConversionServiceCryptoTests {
   func cryptoToFiatPreservesHighPrecisionMultiplication() async throws {
     // Verify that high-decimal crypto quantities preserve precision through conversion.
     let service = makeService(
-      cryptoPrices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]],
+      cryptoPrices: ["1:native": ["2026-04-10": dec("1623.45")]],
       providerMappings: [
         CryptoProviderMapping(
           instrumentId: "1:native", coingeckoId: "ethereum",
@@ -163,9 +163,9 @@ struct InstrumentConversionServiceCryptoTests {
       ]
     )
     let result = try await service.convert(
-      Decimal(string: "0.00012345")!, from: eth, to: usd, on: date("2026-04-10")
+      dec("0.00012345"), from: eth, to: usd, on: date("2026-04-10")
     )
-    let expected = Decimal(string: "0.00012345")! * Decimal(string: "1623.45")!
+    let expected = dec("0.00012345") * dec("1623.45")
     #expect(result == expected)
   }
 
@@ -174,8 +174,8 @@ struct InstrumentConversionServiceCryptoTests {
     // JPY has 0 decimals; route JPY → USD → ETH should not throw for fiat bridging.
     let jpy = Instrument.fiat(code: "JPY")
     let service = makeService(
-      cryptoPrices: ["1:native": ["2026-04-10": Decimal(string: "2000.00")!]],
-      exchangeRates: ["2026-04-10": ["JPY": Decimal(string: "150.00")!]],
+      cryptoPrices: ["1:native": ["2026-04-10": dec("2000.00")]],
+      exchangeRates: ["2026-04-10": ["JPY": dec("150.00")]],
       providerMappings: [
         CryptoProviderMapping(
           instrumentId: "1:native", coingeckoId: "ethereum",
@@ -214,7 +214,7 @@ struct InstrumentConversionServiceCryptoTests {
   @Test
   func providerMappingsClosureIsQueriedPerConversion() async throws {
     let cryptoClient = FixedCryptoPriceClient(
-      prices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]]
+      prices: ["1:native": ["2026-04-10": dec("1623.45")]]
     )
     let cryptoService = CryptoPriceService(
       clients: [cryptoClient],
@@ -250,7 +250,7 @@ struct InstrumentConversionServiceCryptoTests {
     let result = try await service.convert(
       Decimal(1), from: eth, to: usd, on: date("2026-04-10")
     )
-    #expect(result == Decimal(string: "1623.45")!)
+    #expect(result == dec("1623.45"))
   }
 }
 

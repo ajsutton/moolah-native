@@ -174,7 +174,7 @@ struct AccountRepositoryContractTests {
     let repository = try makeCloudKitAccountRepository()
     let account = Account(name: "US Checking", type: .bank, instrument: .USD)
     let openingBalance = InstrumentAmount(
-      quantity: Decimal(string: "750.00")!, instrument: .USD)
+      quantity: dec("750.00"), instrument: .USD)
 
     _ = try await repository.create(account, openingBalance: openingBalance)
 
@@ -184,7 +184,7 @@ struct AccountRepositoryContractTests {
     #expect(fetched.instrument.id == "USD")
     #expect(fetched.instrument.kind == .fiatCurrency)
     let usdPosition = fetched.positions.first { $0.instrument == .USD }
-    #expect(usdPosition?.quantity == Decimal(string: "750.00")!)
+    #expect(usdPosition?.quantity == dec("750.00"))
   }
 
   @Test("round-trips a stock account preserving exchange and ticker")
@@ -217,7 +217,7 @@ struct AccountRepositoryContractTests {
     )
     let account = Account(name: "Wallet", type: .investment, instrument: usdc)
     let openingBalance = InstrumentAmount(
-      quantity: Decimal(string: "2500.000000")!, instrument: usdc)
+      quantity: dec("2500.000000"), instrument: usdc)
 
     _ = try await repository.create(account, openingBalance: openingBalance)
 
@@ -229,7 +229,7 @@ struct AccountRepositoryContractTests {
     #expect(fetched.instrument.contractAddress == "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
     #expect(fetched.instrument.decimals == 6)
     let position = fetched.positions.first { $0.instrument == usdc }
-    #expect(position?.quantity == Decimal(string: "2500.000000")!)
+    #expect(position?.quantity == dec("2500.000000"))
   }
 
   @Test("accounts with distinct instruments coexist and keep their own instrument")
