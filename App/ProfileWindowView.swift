@@ -50,11 +50,11 @@
           ProgressView()
         } else {
           // Profile is genuinely gone — close this window
-          let _ = logger.warning(
-            "Dismissing window — profile not found. profileID=\(profileID?.uuidString ?? "nil", privacy: .public), profileCount=\(profileStore.profiles.count), profileIDs=\(profileStore.profiles.map(\.id).map(\.uuidString).joined(separator: ","), privacy: .public)"
-          )
           Color.clear
             .onAppear {
+              logger.warning(
+                "Dismissing window — profile not found. profileID=\(profileID?.uuidString ?? "nil", privacy: .public), profileCount=\(profileStore.profiles.count), profileIDs=\(profileStore.profiles.map(\.id).map(\.uuidString).joined(separator: ","), privacy: .public)"
+              )
               dismiss()
             }
         }

@@ -29,11 +29,6 @@ disabled_rules:
   - sorted_imports
   # Autocorrect produces invalid code for our codebase. Tracked in tech-debt
   # issues; revisit once a safer fix strategy exists.
-  # TODO(#263): re-enable redundant_discardable_let — autofix rewrites
-  # `let _ = foo()` to `_ = foo()` inside SwiftUI @ViewBuilder bodies, which
-  # changes semantics (view builders accept `let _`, not bare assignments).
-  # Broke ProfileWindowView.swift.
-  - redundant_discardable_let
   # TODO(#264): re-enable attributes — 903 baseline violations that fight
   # swift-format's chosen layout for `@State`, `@Binding`, etc. swift-format
   # owns layout; revisit once we decide whether to override the formatter.
