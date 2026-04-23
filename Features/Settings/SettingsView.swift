@@ -4,29 +4,32 @@ import UniformTypeIdentifiers
 /// Mail-style account management view used in the macOS Settings scene
 /// and as a sheet on iOS.
 struct SettingsView: View {
-  @Environment(ProfileStore.self) private var profileStore
-  @Environment(ProfileContainerManager.self) private var containerManager
-  @Environment(SyncCoordinator.self) private var syncCoordinator
+  // Environment/State visibility widened from `private` to default (internal)
+  // so the `+Actions` extension file can read dependencies and mutate state
+  // from import/export/delete handlers.
+  @Environment(ProfileStore.self) var profileStore
+  @Environment(ProfileContainerManager.self) var containerManager
+  @Environment(SyncCoordinator.self) var syncCoordinator
 
   #if os(macOS)
-    @Environment(SessionManager.self) private var sessionManager
+    @Environment(SessionManager.self) var sessionManager
   #else
     let activeSession: ProfileSession?
   #endif
 
-  @State private var selectedProfileID: UUID?
-  @State private var showAddProfile = false
-  @State private var profileToDelete: Profile?
-  @State private var showDeleteAlert = false
-  @State private var showImportPicker = false
-  @State private var isImporting = false
-  @State private var importError: String?
+  @State var selectedProfileID: UUID?
+  @State var showAddProfile = false
+  @State var profileToDelete: Profile?
+  @State var showDeleteAlert = false
+  @State var showImportPicker = false
+  @State var isImporting = false
+  @State var importError: String?
 
   #if os(iOS)
-    @State private var exportFileURL: URL?
-    @State private var showExportSheet = false
-    @State private var isExporting = false
-    @State private var exportError: String?
+    @State var exportFileURL: URL?
+    @State var showExportSheet = false
+    @State var isExporting = false
+    @State var exportError: String?
 
     init(activeSession: ProfileSession? = nil) {
       self.activeSession = activeSession
@@ -141,156 +144,6 @@ struct SettingsView: View {
     }
   #endif
 
-  // MARK: - iOS: NavigationStack layout
-
-  #if os(iOS)
-    private var cryptoTokenStoreForSettings: CryptoTokenStore {
-      if let session = activeSession {
-        return session.cryptoTokenStore
-      }
-      let fallbackService = CryptoPriceService(
-        clients: [CryptoCompareClient(), BinanceClient()],
-        tokenRepository: ICloudTokenRepository(),
-        resolutionClient: CompositeTokenResolutionClient()
-      )
-      return CryptoTokenStore(cryptoPriceService: fallbackService)
-    }
-
-    private var iOSLayout: some View {
-      List {
-        profilesSection
-        addImportProfileSection
-        cryptoSection
-        importSettingsSection
-      }
-      .navigationTitle("Settings")
-      .overlay {
-        if isImporting || isExporting {
-          ProgressView(isImporting ? "Importing\u{2026}" : "Exporting\u{2026}")
-            .padding()
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-        }
-      }
-      .sheet(isPresented: $showAddProfile) {
-        ProfileFormView()
-          .environment(profileStore)
-      }
-      .sheet(isPresented: $showExportSheet) {
-        if let exportFileURL {
-          ShareSheetView(url: exportFileURL)
-        }
-      }
-      .alert(deleteAlertTitle, isPresented: $showDeleteAlert) {
-        deleteAlertButtons
-      } message: {
-        deleteAlertMessage
-      }
-      .fileImporter(
-        isPresented: $showImportPicker,
-        allowedContentTypes: [.json]
-      ) { result in
-        Task { await handleImport(result: result) }
-      }
-      .alert(
-        "Import Failed",
-        isPresented: .init(
-          get: { importError != nil },
-          set: { if !$0 { importError = nil } }
-        )
-      ) {
-        Button("OK") { importError = nil }
-      } message: {
-        if let importError {
-          Text(importError)
-        }
-      }
-      .alert(
-        "Export Failed",
-        isPresented: .init(
-          get: { exportError != nil },
-          set: { if !$0 { exportError = nil } }
-        )
-      ) {
-        Button("OK") { exportError = nil }
-      } message: {
-        if let exportError {
-          Text(exportError)
-        }
-      }
-    }
-
-    private var profilesSection: some View {
-      Section("Profiles") {
-        ForEach(profileStore.profiles) { profile in
-          NavigationLink {
-            profileDetailView(for: profile)
-              .navigationTitle(profile.label)
-          } label: {
-            profileRow(profile)
-          }
-          .swipeActions(edge: .leading) {
-            if profile.backendType == .cloudKit,
-              profile.id == profileStore.activeProfileID
-            {
-              Button {
-                Task { await handleExport(profile: profile) }
-              } label: {
-                Label("Export", systemImage: "square.and.arrow.up")
-              }
-              .tint(.blue)
-            }
-          }
-        }
-        .onDelete { indexSet in
-          if let index = indexSet.first {
-            profileToDelete = profileStore.profiles[index]
-            showDeleteAlert = true
-          }
-        }
-      }
-    }
-
-    private var addImportProfileSection: some View {
-      Section {
-        Button {
-          showAddProfile = true
-        } label: {
-          Label("Add Profile", systemImage: "plus")
-        }
-        Button {
-          showImportPicker = true
-        } label: {
-          Label("Import Profile", systemImage: "square.and.arrow.down")
-        }
-      }
-    }
-
-    private var cryptoSection: some View {
-      Section {
-        NavigationLink {
-          CryptoSettingsView(store: cryptoTokenStoreForSettings)
-        } label: {
-          Label("Crypto Tokens", systemImage: "bitcoinsign.circle")
-        }
-      }
-    }
-
-    private var importSettingsSection: some View {
-      Section("Import") {
-        NavigationLink {
-          ImportSettingsView()
-        } label: {
-          Label("CSV Import", systemImage: "tray.and.arrow.down")
-        }
-        NavigationLink {
-          ImportRulesSettingsView()
-        } label: {
-          Label("Import Rules", systemImage: "list.bullet.rectangle")
-        }
-      }
-    }
-  #endif
-
   // MARK: - macOS Profile List (sidebar)
 
   #if os(macOS)
@@ -371,8 +224,10 @@ struct SettingsView: View {
 
   // MARK: - Per-type detail view
 
+  // Access widened from `private` to default (internal) so the `+iOS`
+  // extension can render profile detail from the iOS list.
   @ViewBuilder
-  private func profileDetailView(for profile: Profile) -> some View {
+  func profileDetailView(for profile: Profile) -> some View {
     #if os(macOS)
       let session = sessionManager.sessions[profile.id]
       let authStore = session?.authStore
@@ -392,147 +247,6 @@ struct SettingsView: View {
     }
   }
 
-  // MARK: - Import
-
-  private func handleImport(result: Result<URL, Error>) async {
-    guard case .success(let url) = result else {
-      if case .failure(let error) = result {
-        importError = error.localizedDescription
-      }
-      return
-    }
-    guard url.startAccessingSecurityScopedResource() else {
-      importError = "Could not access the selected file."
-      return
-    }
-    defer { url.stopAccessingSecurityScopedResource() }
-
-    isImporting = true
-    defer { isImporting = false }
-
-    do {
-      let jsonData = try Data(contentsOf: url)
-      let exported = try JSONDecoder.exportDecoder.decode(ExportedData.self, from: jsonData)
-
-      let newProfile = Profile(
-        label: exported.profileLabel,
-        backendType: .cloudKit,
-        currencyCode: exported.currencyCode,
-        financialYearStartMonth: exported.financialYearStartMonth
-      )
-      profileStore.addProfile(newProfile)
-
-      do {
-        let container = try containerManager.container(for: newProfile.id)
-        let coordinator = MigrationCoordinator()
-        _ = try await coordinator.importFromFile(
-          url: url,
-          modelContainer: container,
-          profileId: newProfile.id,
-          syncCoordinator: syncCoordinator
-        )
-        profileStore.setActiveProfile(newProfile.id)
-      } catch {
-        containerManager.deleteStore(for: newProfile.id)
-        profileStore.removeProfile(newProfile.id)
-        throw error
-      }
-    } catch {
-      importError = error.localizedDescription
-    }
-  }
-
-  // MARK: - Export (iOS)
-
-  #if os(iOS)
-    private func handleExport(profile: Profile) async {
-      guard let backend = activeSession?.backend else {
-        exportError = "Switch to this profile before exporting."
-        return
-      }
-
-      isExporting = true
-      defer { isExporting = false }
-
-      do {
-        let tempDir = FileManager.default.temporaryDirectory
-        let filename = "\(profile.label).json"
-        let tempURL = tempDir.appendingPathComponent(filename)
-
-        let coordinator = MigrationCoordinator()
-        try await coordinator.exportToFile(
-          url: tempURL,
-          backend: backend,
-          profile: profile
-        )
-
-        exportFileURL = tempURL
-        showExportSheet = true
-      } catch {
-        exportError = error.localizedDescription
-      }
-    }
-  #endif
-
-  // MARK: - Shared Components
-
-  private func profileRow(_ profile: Profile) -> some View {
-    VStack(alignment: .leading, spacing: 2) {
-      Text(profile.label)
-        .font(.headline)
-      switch profile.backendType {
-      case .moolah:
-        Text("moolah.rocks")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      case .remote:
-        Text(profile.resolvedServerURL.host() ?? profile.resolvedServerURL.absoluteString)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      case .cloudKit:
-        Text("iCloud")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
-    }
-    .accessibilityElement(children: .combine)
-  }
-
-  private var deleteAlertTitle: String {
-    if let profile = profileToDelete, profile.backendType == .cloudKit {
-      return "Delete \(profile.label)?"
-    }
-    return "Remove Profile?"
-  }
-
-  @ViewBuilder private var deleteAlertButtons: some View {
-    Button(profileToDelete?.backendType == .cloudKit ? "Delete" : "Remove", role: .destructive) {
-      if let profile = profileToDelete {
-        profileStore.removeProfile(profile.id)
-        if selectedProfileID == profile.id {
-          selectedProfileID = profileStore.profiles.first?.id
-        }
-        profileToDelete = nil
-      }
-    }
-    Button("Cancel", role: .cancel) {
-      profileToDelete = nil
-    }
-  }
-
-  @ViewBuilder private var deleteAlertMessage: some View {
-    if let profile = profileToDelete {
-      if profile.backendType == .cloudKit {
-        Text(
-          "This will permanently delete all accounts, transactions, and other data in this profile across all your devices. This cannot be undone."
-        )
-      } else {
-        Text(
-          "Are you sure you want to remove \"\(profile.label)\"? You will need to sign in again if you re-add it."
-        )
-      }
-    }
-  }
 }
 
 // MARK: - Moolah Profile Detail

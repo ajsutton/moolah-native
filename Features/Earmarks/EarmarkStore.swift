@@ -9,22 +9,30 @@ final class EarmarkStore {
   private(set) var isLoading = false
   private(set) var error: Error?
 
-  private(set) var budgetItems: [EarmarkBudgetItem] = []
-  private(set) var isBudgetLoading = false
-  private(set) var budgetError: Error?
+  // Setter widened from `private(set)` to default (internal) so the
+  // `+Budget` extension file can mutate these from budget CRUD. The
+  // `private(set)` invariant still holds within this type for all
+  // external consumers — only the sibling extension assigns.
+  var budgetItems: [EarmarkBudgetItem] = []
+  var isBudgetLoading = false
+  var budgetError: Error?
 
   private(set) var convertedTotalBalance: InstrumentAmount?
   private(set) var convertedBalances: [UUID: InstrumentAmount] = [:]
   private(set) var convertedSavedAmounts: [UUID: InstrumentAmount] = [:]
   private(set) var convertedSpentAmounts: [UUID: InstrumentAmount] = [:]
 
-  private let repository: EarmarkRepository
+  // internal (was private) so the `+Budget` extension file in the same module
+  // can reach the repository for budget CRUD.
+  let repository: EarmarkRepository
   private let conversionService: any InstrumentConversionService
   let targetInstrument: Instrument
   /// Delay between retry attempts after a conversion failure. Production
   /// uses ~30s; tests pass a small value to keep retries snappy.
   private let retryDelay: Duration
-  private let logger = Logger(subsystem: "com.moolah.app", category: "EarmarkStore")
+  // internal (was private) so the `+Budget` extension file can log under the
+  // same subsystem/category.
+  let logger = Logger(subsystem: "com.moolah.app", category: "EarmarkStore")
   private var conversionTask: Task<Void, Never>?
 
   init(
@@ -288,81 +296,6 @@ final class EarmarkStore {
       logger.error("Failed to create earmark: \(error.localizedDescription)")
       self.error = error
       return nil
-    }
-  }
-
-  // MARK: - Budget
-
-  func loadBudget(earmarkId: UUID) async {
-    guard !isBudgetLoading else { return }
-    isBudgetLoading = true
-    budgetError = nil
-
-    do {
-      budgetItems = try await repository.fetchBudget(earmarkId: earmarkId)
-    } catch {
-      logger.error("Failed to load budget: \(error.localizedDescription)")
-      budgetError = error
-    }
-
-    isBudgetLoading = false
-  }
-
-  func updateBudgetItem(
-    earmarkId: UUID, categoryId: UUID, amount: InstrumentAmount
-  ) async {
-    let oldItems = budgetItems
-
-    // Optimistic update
-    budgetItems = budgetItems.map { item in
-      guard item.categoryId == categoryId else { return item }
-      var copy = item
-      copy.amount = amount
-      return copy
-    }
-
-    do {
-      try await repository.setBudget(
-        earmarkId: earmarkId, categoryId: categoryId, amount: amount)
-    } catch {
-      logger.error("Failed to update budget item: \(error.localizedDescription)")
-      budgetItems = oldItems
-      budgetError = error
-    }
-  }
-
-  func addBudgetItem(
-    earmarkId: UUID, categoryId: UUID, amount: InstrumentAmount
-  ) async {
-    let newItem = EarmarkBudgetItem(categoryId: categoryId, amount: amount)
-    let oldItems = budgetItems
-    budgetItems.append(newItem)
-
-    do {
-      try await repository.setBudget(
-        earmarkId: earmarkId, categoryId: categoryId, amount: amount)
-    } catch {
-      logger.error("Failed to add budget item: \(error.localizedDescription)")
-      budgetItems = oldItems
-      budgetError = error
-    }
-  }
-
-  func removeBudgetItem(earmarkId: UUID, categoryId: UUID) async {
-    let oldItems = budgetItems
-    budgetItems.removeAll { $0.categoryId == categoryId }
-
-    // Setting amount to 0 removes the budget entry on the server. Use the
-    // earmark's own instrument so the repository's instrument-parity guard
-    // doesn't reject the zero write on a multi-currency profile.
-    let zeroInstrument = earmarks.by(id: earmarkId)?.instrument ?? targetInstrument
-    do {
-      try await repository.setBudget(
-        earmarkId: earmarkId, categoryId: categoryId, amount: .zero(instrument: zeroInstrument))
-    } catch {
-      logger.error("Failed to remove budget item: \(error.localizedDescription)")
-      budgetItems = oldItems
-      budgetError = error
     }
   }
 
