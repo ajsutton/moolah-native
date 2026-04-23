@@ -180,7 +180,7 @@ struct InvestmentChartView: View {
 #Preview {
   let calendar = Calendar.current
   let points: [InvestmentChartDataPoint] = (0..<12).reversed().map { monthsAgo in
-    let date = calendar.date(byAdding: .month, value: -monthsAgo, to: Date())!
+    let date = calendar.date(byAdding: .month, value: -monthsAgo, to: Date()) ?? Date()
     let balance: Decimal = 10_000 + Decimal(12 - monthsAgo) * 500
     let value: Decimal = balance + Decimal(Double.random(in: -1_000...2_500))
     return InvestmentChartDataPoint(

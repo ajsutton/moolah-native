@@ -188,7 +188,7 @@ struct CategoryDrillDown: Hashable {
     contractingId: InstrumentAmount(quantity: 800, instrument: .AUD),
     interestId: InstrumentAmount(quantity: 120, instrument: .AUD),
   ]
-  let start = Calendar.current.date(byAdding: .month, value: -1, to: Date())!
+  let start = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
   CategoryBalanceTable(
     title: "Income",
     balances: balances,

@@ -136,7 +136,7 @@ struct PositionsView: View {
   let calendar = Calendar(identifier: .gregorian)
   let now = Date()
   let points: [HistoricalValueSeries.Point] = (0..<60).map { d in
-    let date = calendar.date(byAdding: .day, value: -59 + d, to: now)!
+    let date = calendar.date(byAdding: .day, value: -59 + d, to: now) ?? now
     return HistoricalValueSeries.Point(
       date: date, value: 10_000 + Decimal(d) * 25, cost: 9_500)
   }
@@ -152,9 +152,9 @@ struct PositionsView: View {
       positions: [
         ValuedPosition(
           instrument: bhp, quantity: 100,
-          unitPrice: InstrumentAmount(quantity: points.last!.value / 100, instrument: aud),
+          unitPrice: InstrumentAmount(quantity: (points.last?.value ?? 0) / 100, instrument: aud),
           costBasis: InstrumentAmount(quantity: 9_500, instrument: aud),
-          value: InstrumentAmount(quantity: points.last!.value, instrument: aud)
+          value: InstrumentAmount(quantity: points.last?.value ?? 0, instrument: aud)
         )
       ],
       historicalValue: series

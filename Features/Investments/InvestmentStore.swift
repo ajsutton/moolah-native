@@ -500,10 +500,7 @@ func mergeChartData(
 
   for value in values {
     if let startDate, value.date < startDate {
-      // Track the closest value before the start date
-      if startValue == nil || value.date > startValue!.date {
-        startValue = value
-      }
+      if value.date > (startValue?.date ?? .distantPast) { startValue = value }
       continue
     }
     let existing = dataByDate[value.date]
@@ -512,10 +509,7 @@ func mergeChartData(
 
   for balance in balances {
     if let startDate, balance.date < startDate {
-      // Track the closest balance before the start date
-      if startBalance == nil || balance.date > startBalance!.date {
-        startBalance = balance
-      }
+      if balance.date > (startBalance?.date ?? .distantPast) { startBalance = balance }
       continue
     }
     let existing = dataByDate[balance.date]

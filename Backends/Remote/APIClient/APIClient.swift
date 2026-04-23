@@ -72,7 +72,7 @@ final class APIClient: Sendable {
     // Both appending(path:) and URL(string:relativeTo:) normalize paths
     let baseString = baseURL.absoluteString
     let separator = baseString.hasSuffix("/") ? "" : "/"
-    return URL(string: baseString + separator + path)!
+    return URL(string: baseString + separator + path) ?? baseURL
   }
 
   func get(_ path: String) async throws -> Data {
@@ -81,11 +81,12 @@ final class APIClient: Sendable {
   }
 
   func get(_ path: String, queryItems: [URLQueryItem]) async throws -> Data {
-    var components = URLComponents(url: url(for: path), resolvingAgainstBaseURL: false)!
+    let base = url(for: path)
+    var components = URLComponents(url: base, resolvingAgainstBaseURL: false) ?? URLComponents()
     if !queryItems.isEmpty {
       components.queryItems = queryItems
     }
-    let request = URLRequest(url: components.url!)
+    let request = URLRequest(url: components.url ?? base)
     return try await data(for: request)
   }
 
@@ -112,11 +113,12 @@ final class APIClient: Sendable {
   }
 
   func delete(_ path: String, queryItems: [URLQueryItem]) async throws -> Data {
-    var components = URLComponents(url: url(for: path), resolvingAgainstBaseURL: false)!
+    let base = url(for: path)
+    var components = URLComponents(url: base, resolvingAgainstBaseURL: false) ?? URLComponents()
     if !queryItems.isEmpty {
       components.queryItems = queryItems
     }
-    var request = URLRequest(url: components.url!)
+    var request = URLRequest(url: components.url ?? base)
     request.httpMethod = "DELETE"
     return try await data(for: request)
   }

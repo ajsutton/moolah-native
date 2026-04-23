@@ -27,12 +27,10 @@ struct CategoryDetailView: View {
       Section("Details") {
         TextField("Name", text: $editedName)
 
-        if category.parentId != nil {
-          if let parent = categories.by(id: category.parentId!) {
-            LabeledContent("Parent Category") {
-              Text(parent.name)
-                .foregroundStyle(.secondary)
-            }
+        if let parentId = category.parentId, let parent = categories.by(id: parentId) {
+          LabeledContent("Parent Category") {
+            Text(parent.name)
+              .foregroundStyle(.secondary)
           }
         }
       }
@@ -142,10 +140,13 @@ private struct DeleteCategorySheet: View {
     Category(id: fruitId, name: "Fruit", parentId: groceriesId),
     Category(name: "Transport"),
   ])
+  let fruit =
+    categories.by(id: fruitId)
+    ?? Category(id: fruitId, name: "Fruit", parentId: groceriesId)
 
   NavigationStack {
     CategoryDetailView(
-      category: categories.by(id: fruitId)!,
+      category: fruit,
       categories: categories,
       onUpdate: { _ in },
       onDelete: { _, _ in }

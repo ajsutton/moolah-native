@@ -52,14 +52,14 @@ final class RemoteAuthProvider: AuthProvider {
   func signIn() async throws -> UserProfile {
     let nonce = UUID().uuidString
 
-    var components = URLComponents(
-      url: client.baseURL.appending(path: "googleauth"),
-      resolvingAgainstBaseURL: false)!
+    let authBase = client.baseURL.appending(path: "googleauth")
+    var components =
+      URLComponents(url: authBase, resolvingAgainstBaseURL: false) ?? URLComponents()
     components.queryItems = [
       URLQueryItem(name: "_native", value: "1"),
       URLQueryItem(name: "_nonce", value: nonce),
     ]
-    let authURL = components.url!
+    let authURL = components.url ?? authBase
 
     #if os(macOS)
       NSWorkspace.shared.open(authURL)

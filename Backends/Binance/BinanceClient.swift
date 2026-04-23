@@ -2,7 +2,9 @@
 import Foundation
 
 struct BinanceClient: CryptoPriceClient, Sendable {
-  private static let baseURL = URL(string: "https://api.binance.com")!
+  private static let baseURLString = "https://api.binance.com"
+  private static let baseURL =
+    URL(string: baseURLString) ?? URL(fileURLWithPath: "/")
   private let session: URLSession
   private let usdtRateLookup: @Sendable (Date) async -> Decimal
 
@@ -36,10 +38,9 @@ struct BinanceClient: CryptoPriceClient, Sendable {
 
     // Binance max 1000 candles per request — paginate if needed
     while chunkStart <= range.upperBound {
-      let chunkEnd = min(
-        calendar.date(byAdding: .day, value: 999, to: chunkStart)!,
-        range.upperBound
-      )
+      let candleWindowEnd =
+        calendar.date(byAdding: .day, value: 999, to: chunkStart) ?? range.upperBound
+      let chunkEnd = min(candleWindowEnd, range.upperBound)
       let url = Self.klinesURL(symbol: symbol, from: chunkStart, to: chunkEnd)
       let (data, response) = try await session.data(for: URLRequest(url: url))
       guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
@@ -47,7 +48,8 @@ struct BinanceClient: CryptoPriceClient, Sendable {
       }
       let chunk = try Self.parseKlinesResponse(data)
       for (key, value) in chunk { allPrices[key] = value }
-      chunkStart = calendar.date(byAdding: .day, value: 1, to: chunkEnd)!
+      guard let next = calendar.date(byAdding: .day, value: 1, to: chunkEnd) else { break }
+      chunkStart = next
     }
 
     let midDate = Date(
@@ -82,10 +84,9 @@ struct BinanceClient: CryptoPriceClient, Sendable {
   static func klinesURL(symbol: String, from: Date, to: Date) -> URL {
     let startMs = Int(from.timeIntervalSince1970 * 1000)
     let endMs = Int(to.timeIntervalSince1970 * 1000)
-    var components = URLComponents(
-      url: baseURL.appendingPathComponent("/api/v3/klines"),
-      resolvingAgainstBaseURL: false
-    )!
+    let pathURL = baseURL.appendingPathComponent("/api/v3/klines")
+    var components =
+      URLComponents(url: pathURL, resolvingAgainstBaseURL: false) ?? URLComponents()
     components.queryItems = [
       URLQueryItem(name: "symbol", value: symbol),
       URLQueryItem(name: "interval", value: "1d"),
@@ -93,7 +94,7 @@ struct BinanceClient: CryptoPriceClient, Sendable {
       URLQueryItem(name: "endTime", value: String(endMs)),
       URLQueryItem(name: "limit", value: "1000"),
     ]
-    return components.url!
+    return components.url ?? pathURL
   }
 
   // MARK: - Response parsers (internal for testing)

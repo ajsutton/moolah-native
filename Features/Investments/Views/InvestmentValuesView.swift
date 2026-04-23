@@ -123,7 +123,7 @@ struct InvestmentValuesView: View {
     _ = try? await backend.accounts.create(account, openingBalance: .zero(instrument: .AUD))
     let calendar = Calendar.current
     for monthsAgo in (0..<6).reversed() {
-      let date = calendar.date(byAdding: .month, value: -monthsAgo, to: Date())!
+      let date = calendar.date(byAdding: .month, value: -monthsAgo, to: Date()) ?? Date()
       let quantity: Decimal = 9_000 + Decimal(6 - monthsAgo) * 350
       await store.setValue(
         accountId: account.id,

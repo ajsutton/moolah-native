@@ -271,7 +271,7 @@ struct InvestmentAccountView: View {
       account, openingBalance: InstrumentAmount(quantity: 10_000, instrument: .AUD))
     let calendar = Calendar.current
     for monthsAgo in (0..<6).reversed() {
-      let date = calendar.date(byAdding: .month, value: -monthsAgo, to: Date())!
+      let date = calendar.date(byAdding: .month, value: -monthsAgo, to: Date()) ?? Date()
       let quantity: Decimal = 9_500 + Decimal(6 - monthsAgo) * 400
       await investmentStore.setValue(
         accountId: account.id,

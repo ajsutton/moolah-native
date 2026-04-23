@@ -44,7 +44,7 @@ struct InvestmentValueRow: View {
     )
     InvestmentValueRow(
       value: InvestmentValue(
-        date: Calendar.current.date(byAdding: .month, value: -1, to: Date())!,
+        date: Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date(),
         value: InstrumentAmount(quantity: 5010, instrument: .AUD)
       ),
       onDelete: {}

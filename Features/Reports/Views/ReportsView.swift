@@ -13,8 +13,8 @@ struct ReportsView: View {
   @Environment(ProfileSession.self) private var session
 
   @State private var dateRange: DateRange = .last12Months
-  @State private var customFrom: Date = Calendar.current.date(
-    byAdding: .year, value: -1, to: Date())!
+  @State private var customFrom: Date =
+    Calendar.current.date(byAdding: .year, value: -1, to: Date()) ?? Date()
   @State private var customTo = Date()
 
   /// Resolved date range, computed once when dateRange or custom dates change.

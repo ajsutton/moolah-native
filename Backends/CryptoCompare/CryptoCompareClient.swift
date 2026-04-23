@@ -2,7 +2,8 @@
 import Foundation
 
 struct CryptoCompareClient: CryptoPriceClient, Sendable {
-  private static let baseURL = URL(string: "https://min-api.cryptocompare.com")!
+  private static let baseURL =
+    URL(string: "https://min-api.cryptocompare.com") ?? URL(fileURLWithPath: "/")
   private let session: URLSession
 
   init(session: URLSession = .shared) {
@@ -65,41 +66,37 @@ struct CryptoCompareClient: CryptoPriceClient, Sendable {
     let calendar = Calendar(identifier: .gregorian)
     let days = max(0, calendar.dateComponents([.day], from: from, to: to).day ?? 0)
     let toTimestamp = Int(to.timeIntervalSince1970)
-
-    var components = URLComponents(
-      url: baseURL.appendingPathComponent("/data/v2/histoday"),
-      resolvingAgainstBaseURL: false
-    )!
+    let pathURL = baseURL.appendingPathComponent("/data/v2/histoday")
+    var components =
+      URLComponents(url: pathURL, resolvingAgainstBaseURL: false) ?? URLComponents()
     components.queryItems = [
       URLQueryItem(name: "fsym", value: symbol),
       URLQueryItem(name: "tsym", value: "USD"),
       URLQueryItem(name: "limit", value: String(days)),
       URLQueryItem(name: "toTs", value: String(toTimestamp)),
     ]
-    return components.url!
+    return components.url ?? pathURL
   }
 
   static func coinListURL() -> URL {
-    var components = URLComponents(
-      url: baseURL.appendingPathComponent("/data/all/coinlist"),
-      resolvingAgainstBaseURL: false
-    )!
+    let pathURL = baseURL.appendingPathComponent("/data/all/coinlist")
+    var components =
+      URLComponents(url: pathURL, resolvingAgainstBaseURL: false) ?? URLComponents()
     components.queryItems = [
       URLQueryItem(name: "summary", value: "true")
     ]
-    return components.url!
+    return components.url ?? pathURL
   }
 
   static func priceMultiURL(symbols: [String]) -> URL {
-    var components = URLComponents(
-      url: baseURL.appendingPathComponent("/data/pricemulti"),
-      resolvingAgainstBaseURL: false
-    )!
+    let pathURL = baseURL.appendingPathComponent("/data/pricemulti")
+    var components =
+      URLComponents(url: pathURL, resolvingAgainstBaseURL: false) ?? URLComponents()
     components.queryItems = [
       URLQueryItem(name: "fsyms", value: symbols.joined(separator: ",")),
       URLQueryItem(name: "tsyms", value: "USD"),
     ]
-    return components.url!
+    return components.url ?? pathURL
   }
 
   // MARK: - Response parsers (internal for testing)

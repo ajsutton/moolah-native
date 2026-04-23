@@ -285,7 +285,7 @@ extension PositionsChart: AXChartDescriptorRepresentable {
   let calendar = Calendar(identifier: .gregorian)
   let now = Date()
   let points: [HistoricalValueSeries.Point] = (0..<60).map { d in
-    let date = calendar.date(byAdding: .day, value: -59 + d, to: now)!
+    let date = calendar.date(byAdding: .day, value: -59 + d, to: now) ?? now
     let trend = Decimal(10_000) + Decimal(d) * 30
     return HistoricalValueSeries.Point(date: date, value: trend, cost: 9_500)
   }
@@ -301,7 +301,7 @@ extension PositionsChart: AXChartDescriptorRepresentable {
         instrument: bhp, quantity: 100,
         unitPrice: nil,
         costBasis: InstrumentAmount(quantity: 9_500, instrument: aud),
-        value: InstrumentAmount(quantity: points.last!.value, instrument: aud)
+        value: InstrumentAmount(quantity: points.last?.value ?? 0, instrument: aud)
       )
     ],
     historicalValue: series
@@ -321,7 +321,7 @@ extension PositionsChart: AXChartDescriptorRepresentable {
   let calendar = Calendar(identifier: .gregorian)
   let now = Date()
   let points: [HistoricalValueSeries.Point] = (0..<30).map { d in
-    let date = calendar.date(byAdding: .day, value: -29 + d, to: now)!
+    let date = calendar.date(byAdding: .day, value: -29 + d, to: now) ?? now
     return HistoricalValueSeries.Point(date: date, value: 4_500 + Decimal(d) * 25, cost: 4_000)
   }
   let series = HistoricalValueSeries(
@@ -334,7 +334,7 @@ extension PositionsChart: AXChartDescriptorRepresentable {
       ValuedPosition(
         instrument: bhp, quantity: 100, unitPrice: nil,
         costBasis: InstrumentAmount(quantity: 4_000, instrument: aud),
-        value: InstrumentAmount(quantity: points.last!.value, instrument: aud)
+        value: InstrumentAmount(quantity: points.last?.value ?? 0, instrument: aud)
       )
     ],
     historicalValue: series

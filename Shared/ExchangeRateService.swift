@@ -1,5 +1,4 @@
 // Shared/ExchangeRateService.swift
-// swiftlint:disable multiline_arguments
 
 import Foundation
 
@@ -15,11 +14,14 @@ actor ExchangeRateService {
 
   init(client: ExchangeRateClient, cacheDirectory: URL? = nil) {
     self.client = client
-    self.cacheDirectory =
-      cacheDirectory
-      ?? FileManager.default.urls(
-        for: .cachesDirectory, in: .userDomainMask
-      ).first!.appendingPathComponent("exchange-rates")
+    if let cacheDirectory {
+      self.cacheDirectory = cacheDirectory
+    } else {
+      let baseCaches =
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        ?? URL(fileURLWithPath: NSTemporaryDirectory())
+      self.cacheDirectory = baseCaches.appendingPathComponent("exchange-rates")
+    }
     self.dateFormatter = ISO8601DateFormatter()
     self.dateFormatter.formatOptions = [.withFullDate]
   }
@@ -51,35 +53,7 @@ actor ExchangeRateService {
     // last-posted rate, so we always fetch a surrounding range and fall
     // back to the most-recent prior cached rate when the exact date is
     // missing.
-    let calendar = Calendar(identifier: .gregorian)
-    do {
-      if let cache = caches[base] {
-        if dateString > cache.latestDate {
-          let fetchStart = calendar.date(
-            byAdding: .day, value: 1,
-            to: dateFormatter.date(from: cache.latestDate)!)!
-          try await fetchInChunks(base: base, from: fetchStart, to: date)
-        } else if dateString < cache.earliestDate {
-          let fetchEnd = calendar.date(
-            byAdding: .day, value: -1,
-            to: dateFormatter.date(from: cache.earliestDate)!)!
-          try await fetchInChunks(base: base, from: date, to: fetchEnd)
-        } else {
-          // Requested date is inside the cached range but the specific
-          // quote is missing (or the whole date is missing) — we only
-          // reach here after the initial cache lookup returned nil, so
-          // attempt to fetch that single date.
-          try await fetchInChunks(base: base, from: date, to: date)
-        }
-      } else {
-        // Cold cache: fetch a month-wide surrounding range so we pick up
-        // at least one trading day alongside the requested date.
-        let fetchStart = calendar.date(byAdding: .day, value: -30, to: date)!
-        try await fetchInChunks(base: base, from: fetchStart, to: date)
-      }
-    } catch {
-      // Fetch failed — proceed to fallback lookup.
-    }
+    await fetchToCoverDate(base: base, date: date, dateString: dateString)
 
     // Exact hit after fetch?
     if let cached = lookupRate(base: base, quote: quote, dateString: dateString) {
@@ -92,6 +66,37 @@ actor ExchangeRateService {
     }
 
     throw ExchangeRateError.noRateAvailable(base: base, quote: quote, date: dateString)
+  }
+
+  /// Attempts to fetch exchange rates covering the requested date.
+  /// Errors are swallowed — callers fall back to cached rates when the fetch fails.
+  private func fetchToCoverDate(base: String, date: Date, dateString: String) async {
+    let calendar = Calendar(identifier: .gregorian)
+    do {
+      if let cache = caches[base] {
+        if dateString > cache.latestDate,
+          let latestDate = dateFormatter.date(from: cache.latestDate),
+          let fetchStart = calendar.date(byAdding: .day, value: 1, to: latestDate)
+        {
+          try await fetchInChunks(base: base, from: fetchStart, to: date)
+        } else if dateString < cache.earliestDate,
+          let earliestDate = dateFormatter.date(from: cache.earliestDate),
+          let fetchEnd = calendar.date(byAdding: .day, value: -1, to: earliestDate)
+        {
+          try await fetchInChunks(base: base, from: date, to: fetchEnd)
+        } else {
+          // Requested date is inside the cached range but the specific quote
+          // is missing — attempt to fetch that single date.
+          try await fetchInChunks(base: base, from: date, to: date)
+        }
+      } else if let fetchStart = calendar.date(byAdding: .day, value: -30, to: date) {
+        // Cold cache: fetch a month-wide surrounding range so we pick up
+        // at least one trading day alongside the requested date.
+        try await fetchInChunks(base: base, from: fetchStart, to: date)
+      }
+    } catch {
+      // Fetch failed — proceed to fallback lookup.
+    }
   }
 
   func rates(
@@ -113,19 +118,18 @@ actor ExchangeRateService {
     let rangeStart = dateFormatter.string(from: range.lowerBound)
     let rangeEnd = dateFormatter.string(from: range.upperBound)
 
+    let gregorian = Calendar(identifier: .gregorian)
     if let cache = caches[base] {
-      if rangeStart < cache.earliestDate {
-        let fetchEnd = Calendar(identifier: .gregorian)
-          .date(
-            byAdding: .day, value: -1,
-            to: dateFormatter.date(from: cache.earliestDate)!)!
+      if rangeStart < cache.earliestDate,
+        let earliestDate = dateFormatter.date(from: cache.earliestDate),
+        let fetchEnd = gregorian.date(byAdding: .day, value: -1, to: earliestDate)
+      {
         try await fetchInChunks(base: base, from: range.lowerBound, to: fetchEnd)
       }
-      if rangeEnd > cache.latestDate {
-        let fetchStart = Calendar(identifier: .gregorian)
-          .date(
-            byAdding: .day, value: 1,
-            to: dateFormatter.date(from: cache.latestDate)!)!
+      if rangeEnd > cache.latestDate,
+        let latestDate = dateFormatter.date(from: cache.latestDate),
+        let fetchStart = gregorian.date(byAdding: .day, value: 1, to: latestDate)
+      {
         try await fetchInChunks(base: base, from: fetchStart, to: range.upperBound)
       }
     } else {
@@ -177,11 +181,14 @@ actor ExchangeRateService {
 
     let fetchFrom: Date
     if let cache = caches[code],
-      let latestDate = dateFormatter.date(from: cache.latestDate)
+      let latestDate = dateFormatter.date(from: cache.latestDate),
+      let next = calendar.date(byAdding: .day, value: 1, to: latestDate)
     {
-      fetchFrom = calendar.date(byAdding: .day, value: 1, to: latestDate)!
+      fetchFrom = next
+    } else if let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: today) {
+      fetchFrom = thirtyDaysAgo
     } else {
-      fetchFrom = calendar.date(byAdding: .day, value: -30, to: today)!
+      fetchFrom = today
     }
 
     do {
@@ -214,7 +221,8 @@ actor ExchangeRateService {
     var current = range.lowerBound
     while current <= range.upperBound {
       dates.append(current)
-      current = calendar.date(byAdding: .day, value: 1, to: current)!
+      guard let next = calendar.date(byAdding: .day, value: 1, to: current) else { break }
+      current = next
     }
     return dates
   }
@@ -223,12 +231,11 @@ actor ExchangeRateService {
     let calendar = Calendar(identifier: .gregorian)
     var chunkStart = from
     while chunkStart <= to {
-      let chunkEnd = min(
-        calendar.date(byAdding: .year, value: 1, to: chunkStart)!,
-        to
-      )
+      let nextYear = calendar.date(byAdding: .year, value: 1, to: chunkStart) ?? to
+      let chunkEnd = min(nextYear, to)
       try await fetchAndMerge(base: base, from: chunkStart, to: chunkEnd)
-      chunkStart = calendar.date(byAdding: .day, value: 1, to: chunkEnd)!
+      guard let next = calendar.date(byAdding: .day, value: 1, to: chunkEnd) else { break }
+      chunkStart = next
     }
   }
 
@@ -241,22 +248,23 @@ actor ExchangeRateService {
   private func merge(base: String, newRates: [String: [String: Decimal]]) {
     guard !newRates.isEmpty else { return }
     let sortedDates = newRates.keys.sorted()
+    guard let earliest = sortedDates.first, let latest = sortedDates.last else { return }
     if var existing = caches[base] {
       for (dateKey, dayRates) in newRates {
         existing.rates[dateKey] = dayRates
       }
-      if let first = sortedDates.first, first < existing.earliestDate {
-        existing.earliestDate = first
+      if earliest < existing.earliestDate {
+        existing.earliestDate = earliest
       }
-      if let last = sortedDates.last, last > existing.latestDate {
-        existing.latestDate = last
+      if latest > existing.latestDate {
+        existing.latestDate = latest
       }
       caches[base] = existing
     } else {
       caches[base] = ExchangeRateCache(
         base: base,
-        earliestDate: sortedDates.first!,
-        latestDate: sortedDates.last!,
+        earliestDate: earliest,
+        latestDate: latest,
         rates: newRates
       )
     }

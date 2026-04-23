@@ -277,8 +277,8 @@ struct UpcomingView: View {
   .task {
     let today = Date()
     let calendar = Calendar.current
-    let overdue = calendar.date(byAdding: .day, value: -5, to: today)!
-    let upcoming = calendar.date(byAdding: .day, value: 5, to: today)!
+    let overdue = calendar.date(byAdding: .day, value: -5, to: today) ?? today
+    let upcoming = calendar.date(byAdding: .day, value: 5, to: today) ?? today
 
     _ = try? await backend.transactions.create(
       Transaction(

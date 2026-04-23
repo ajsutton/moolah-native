@@ -9,7 +9,8 @@ import OSLog
 /// response to the nearest available trading day; 404 is returned only when
 /// the requested dates are wholly outside coverage (e.g. far-future).
 struct FrankfurterClient: ExchangeRateClient, Sendable {
-  private static let baseURL = URL(string: "https://api.frankfurter.app/")!
+  private static let baseURL =
+    URL(string: "https://api.frankfurter.app/") ?? URL(fileURLWithPath: "/")
   private static let logger = Logger(subsystem: "com.moolah.app", category: "FrankfurterClient")
   private let session: URLSession
 
@@ -27,10 +28,11 @@ struct FrankfurterClient: ExchangeRateClient, Sendable {
     let toStr = formatter.string(from: to)
 
     let url = Self.baseURL.appendingPathComponent("\(fromStr)..\(toStr)")
-    var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+    var components =
+      URLComponents(url: url, resolvingAgainstBaseURL: false) ?? URLComponents()
     components.queryItems = [URLQueryItem(name: "base", value: base)]
 
-    let requestURL = components.url!
+    let requestURL = components.url ?? url
     let request = URLRequest(url: requestURL)
     let (data, response) = try await session.data(for: request)
 

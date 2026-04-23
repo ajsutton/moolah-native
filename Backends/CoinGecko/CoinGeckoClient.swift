@@ -2,7 +2,8 @@
 import Foundation
 
 struct CoinGeckoClient: CryptoPriceClient, Sendable {
-  private static let baseURL = URL(string: "https://pro-api.coingecko.com/api/v3")!
+  private static let baseURL =
+    URL(string: "https://pro-api.coingecko.com/api/v3") ?? URL(fileURLWithPath: "/")
   private let session: URLSession
   private let apiKey: String
 
@@ -68,56 +69,52 @@ struct CoinGeckoClient: CryptoPriceClient, Sendable {
   // MARK: - URL builders (internal for testing)
 
   static func marketChartURL(coinId: String, days: Int, apiKey: String) -> URL {
-    var components = URLComponents(
-      url: baseURL.appendingPathComponent("coins/\(coinId)/market_chart"),
-      resolvingAgainstBaseURL: false
-    )!
+    let pathURL = baseURL.appendingPathComponent("coins/\(coinId)/market_chart")
+    var components =
+      URLComponents(url: pathURL, resolvingAgainstBaseURL: false) ?? URLComponents()
     components.queryItems = [
       URLQueryItem(name: "vs_currency", value: "usd"),
       URLQueryItem(name: "days", value: String(days)),
       URLQueryItem(name: "interval", value: "daily"),
       URLQueryItem(name: "x_cg_pro_api_key", value: apiKey),
     ]
-    return components.url!
+    return components.url ?? pathURL
   }
 
   // MARK: - Token resolution
 
   static func assetPlatformsURL(apiKey: String) -> URL {
-    var components = URLComponents(
-      url: baseURL.appendingPathComponent("asset_platforms"),
-      resolvingAgainstBaseURL: false
-    )!
+    let pathURL = baseURL.appendingPathComponent("asset_platforms")
+    var components =
+      URLComponents(url: pathURL, resolvingAgainstBaseURL: false) ?? URLComponents()
     components.queryItems = [
       URLQueryItem(name: "x_cg_pro_api_key", value: apiKey)
     ]
-    return components.url!
+    return components.url ?? pathURL
   }
 
   static func contractLookupURL(platformId: String, contractAddress: String, apiKey: String) -> URL
   {
-    var components = URLComponents(
-      url: baseURL.appendingPathComponent(
-        "coins/\(platformId)/contract/\(contractAddress.lowercased())"),
-      resolvingAgainstBaseURL: false
-    )!
+    let pathURL = baseURL.appendingPathComponent(
+      "coins/\(platformId)/contract/\(contractAddress.lowercased())")
+    var components =
+      URLComponents(url: pathURL, resolvingAgainstBaseURL: false) ?? URLComponents()
     components.queryItems = [
       URLQueryItem(name: "x_cg_pro_api_key", value: apiKey)
     ]
-    return components.url!
+    return components.url ?? pathURL
   }
 
   static func simplePriceURL(coinIds: [String], apiKey: String) -> URL {
-    var components = URLComponents(
-      url: baseURL.appendingPathComponent("simple/price"),
-      resolvingAgainstBaseURL: false
-    )!
+    let pathURL = baseURL.appendingPathComponent("simple/price")
+    var components =
+      URLComponents(url: pathURL, resolvingAgainstBaseURL: false) ?? URLComponents()
     components.queryItems = [
       URLQueryItem(name: "ids", value: coinIds.joined(separator: ",")),
       URLQueryItem(name: "vs_currencies", value: "usd"),
       URLQueryItem(name: "x_cg_pro_api_key", value: apiKey),
     ]
-    return components.url!
+    return components.url ?? pathURL
   }
 
   // MARK: - Response parsers (internal for testing)

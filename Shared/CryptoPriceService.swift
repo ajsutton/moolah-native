@@ -1,5 +1,4 @@
 // Shared/CryptoPriceService.swift
-// swiftlint:disable multiline_arguments
 
 import Foundation
 
@@ -19,11 +18,14 @@ actor CryptoPriceService {
     self.clients = clients
     self.tokenRepository = tokenRepository
     self.resolutionClient = resolutionClient ?? NoOpTokenResolutionClient()
-    self.cacheDirectory =
-      cacheDirectory
-      ?? FileManager.default.urls(
-        for: .cachesDirectory, in: .userDomainMask
-      ).first!.appendingPathComponent("crypto-prices")
+    if let cacheDirectory {
+      self.cacheDirectory = cacheDirectory
+    } else {
+      let baseCaches =
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        ?? URL(fileURLWithPath: NSTemporaryDirectory())
+      self.cacheDirectory = baseCaches.appendingPathComponent("crypto-prices")
+    }
     self.dateFormatter = ISO8601DateFormatter()
     self.dateFormatter.formatOptions = [.withFullDate]
   }
@@ -154,20 +156,19 @@ actor CryptoPriceService {
     let rangeStart = dateFormatter.string(from: range.lowerBound)
     let rangeEnd = dateFormatter.string(from: range.upperBound)
 
+    let gregorian = Calendar(identifier: .gregorian)
     if let cache = caches[tokenId] {
-      if rangeStart < cache.earliestDate {
-        let fetchEnd = Calendar(identifier: .gregorian)
-          .date(
-            byAdding: .day, value: -1,
-            to: dateFormatter.date(from: cache.earliestDate)!)!
+      if rangeStart < cache.earliestDate,
+        let earliestDate = dateFormatter.date(from: cache.earliestDate),
+        let fetchEnd = gregorian.date(byAdding: .day, value: -1, to: earliestDate)
+      {
         try await fetchRange(
           instrument: instrument, mapping: mapping, from: range.lowerBound, to: fetchEnd)
       }
-      if rangeEnd > cache.latestDate {
-        let fetchStart = Calendar(identifier: .gregorian)
-          .date(
-            byAdding: .day, value: 1,
-            to: dateFormatter.date(from: cache.latestDate)!)!
+      if rangeEnd > cache.latestDate,
+        let latestDate = dateFormatter.date(from: cache.latestDate),
+        let fetchStart = gregorian.date(byAdding: .day, value: 1, to: latestDate)
+      {
         try await fetchRange(
           instrument: instrument, mapping: mapping, from: fetchStart, to: range.upperBound)
       }
@@ -260,7 +261,8 @@ extension CryptoPriceService {
     var current = range.lowerBound
     while current <= range.upperBound {
       dates.append(current)
-      current = calendar.date(byAdding: .day, value: 1, to: current)!
+      guard let next = calendar.date(byAdding: .day, value: 1, to: current) else { break }
+      current = next
     }
     return dates
   }
@@ -290,23 +292,24 @@ extension CryptoPriceService {
   private func merge(tokenId: String, symbol: String, newPrices: [String: Decimal]) {
     guard !newPrices.isEmpty else { return }
     let sortedDates = newPrices.keys.sorted()
+    guard let earliest = sortedDates.first, let latest = sortedDates.last else { return }
     if var existing = caches[tokenId] {
       for (dateKey, price) in newPrices {
         existing.prices[dateKey] = price
       }
-      if let first = sortedDates.first, first < existing.earliestDate {
-        existing.earliestDate = first
+      if earliest < existing.earliestDate {
+        existing.earliestDate = earliest
       }
-      if let last = sortedDates.last, last > existing.latestDate {
-        existing.latestDate = last
+      if latest > existing.latestDate {
+        existing.latestDate = latest
       }
       caches[tokenId] = existing
     } else {
       caches[tokenId] = CryptoPriceCache(
         tokenId: tokenId,
         symbol: symbol,
-        earliestDate: sortedDates.first!,
-        latestDate: sortedDates.last!,
+        earliestDate: earliest,
+        latestDate: latest,
         prices: newPrices
       )
     }

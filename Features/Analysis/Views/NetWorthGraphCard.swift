@@ -133,10 +133,10 @@ struct NetWorthGraphCard: View {
       }
 
       if visibleSeries.contains(.investmentValue) {
-        ForEach(actualBalances.filter({ $0.investmentValue != nil })) { balance in
+        ForEach(actualBalances.filter { $0.investmentValue != nil }) { balance in
           LineMark(
             x: .value("Date", balance.date),
-            y: .value("Amount", balance.investmentValue!.doubleValue),
+            y: .value("Amount", (balance.investmentValue?.doubleValue) ?? 0),
             series: .value("Series", "Investment Value")
           )
           .foregroundStyle(.indigo)
@@ -169,10 +169,10 @@ struct NetWorthGraphCard: View {
       }
 
       if visibleSeries.contains(.bestFit) {
-        ForEach(actualBalances.filter({ $0.bestFit != nil })) { balance in
+        ForEach(actualBalances.filter { $0.bestFit != nil }) { balance in
           LineMark(
             x: .value("Date", balance.date),
-            y: .value("Amount", balance.bestFit!.doubleValue),
+            y: .value("Amount", (balance.bestFit?.doubleValue) ?? 0),
             series: .value("Series", "Best Fit")
           )
           .foregroundStyle(.gray)

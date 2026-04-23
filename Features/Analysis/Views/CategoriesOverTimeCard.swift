@@ -163,7 +163,7 @@ struct CategoriesOverTimeCard: View {
         CategoryOverTimePoint(
           month: "20260\(month + 1)",
           monthDate: Calendar.current.date(
-            byAdding: .month, value: -5 + month, to: Date())!,
+            byAdding: .month, value: -5 + month, to: Date()) ?? Date(),
           actualAmount: Decimal(Int.random(in: 100...500)),
           percentage: Double.random(in: 10...50)
         )

@@ -161,10 +161,13 @@
     }
 
     private var websiteLink: some View {
-      Link("moolah.rocks", destination: URL(string: "https://moolah.rocks")!)
-        .font(.system(size: 12))
-        .foregroundStyle(Self.lightBlue)
-        .accessibilityLabel("Open moolah.rocks website")
+      Link(
+        "moolah.rocks",
+        destination: URL(string: "https://moolah.rocks") ?? URL(fileURLWithPath: "/")
+      )
+      .font(.system(size: 12))
+      .foregroundStyle(Self.lightBlue)
+      .accessibilityLabel("Open moolah.rocks website")
     }
 
     private var copyright: some View {

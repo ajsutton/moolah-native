@@ -27,8 +27,9 @@ struct EditEarmarkSheet: View {
     _savingsGoal = State(initialValue: earmark.savingsGoal?.decimalValue.description ?? "")
     _startDate = State(initialValue: earmark.savingsStartDate ?? Date())
     _endDate = State(
-      initialValue: earmark.savingsEndDate ?? Calendar.current.date(
-        byAdding: .year, value: 1, to: Date())!)
+      initialValue: earmark.savingsEndDate
+        ?? Calendar.current.date(byAdding: .year, value: 1, to: Date())
+        ?? Date())
     _useDateRange = State(
       initialValue: earmark.savingsStartDate != nil || earmark.savingsEndDate != nil)
     _isHidden = State(initialValue: earmark.isHidden)

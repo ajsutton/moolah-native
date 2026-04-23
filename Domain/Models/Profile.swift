@@ -7,7 +7,8 @@ enum BackendType: String, Codable, Sendable {
 }
 
 struct Profile: Identifiable, Codable, Sendable, Equatable {
-  static let moolahServerURL = URL(string: "https://moolah.rocks/api/")!
+  static let moolahServerURL =
+    URL(string: "https://moolah.rocks/api/") ?? URL(fileURLWithPath: "/")
 
   let id: UUID
   var label: String

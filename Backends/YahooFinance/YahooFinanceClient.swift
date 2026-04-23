@@ -8,7 +8,9 @@ enum YahooFinanceError: Error {
 }
 
 struct YahooFinanceClient: StockPriceClient, Sendable {
-  private static let baseURL = URL(string: "https://query2.finance.yahoo.com/v8/finance/chart/")!
+  private static let baseURL =
+    URL(string: "https://query2.finance.yahoo.com/v8/finance/chart/")
+    ?? URL(fileURLWithPath: "/")
   private let session: URLSession
 
   init(session: URLSession = .shared) {
@@ -17,14 +19,15 @@ struct YahooFinanceClient: StockPriceClient, Sendable {
 
   func fetchDailyPrices(ticker: String, from: Date, to: Date) async throws -> StockPriceResponse {
     let url = Self.baseURL.appendingPathComponent(ticker)
-    var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+    var components =
+      URLComponents(url: url, resolvingAgainstBaseURL: false) ?? URLComponents()
     components.queryItems = [
       URLQueryItem(name: "period1", value: String(Int(from.timeIntervalSince1970))),
       URLQueryItem(name: "period2", value: String(Int(to.timeIntervalSince1970))),
       URLQueryItem(name: "interval", value: "1d"),
     ]
 
-    var request = URLRequest(url: components.url!)
+    var request = URLRequest(url: components.url ?? url)
     request.setValue(
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
       forHTTPHeaderField: "User-Agent"

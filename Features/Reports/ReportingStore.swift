@@ -11,7 +11,7 @@ struct CapitalGainsSummary: Sendable {
 
   /// Australian CGT discount: 50% on long-term gains for individuals.
   var discountedLongTermGain: Decimal {
-    max(0, longTermGain) * Decimal(string: "0.5")!
+    max(0, longTermGain) / 2
   }
 
   /// Net capital gain after applying CGT discount (losses offset gains before discount).
@@ -137,8 +137,16 @@ final class ReportingStore {
 
       // Australian FY: 1 July (year-1) to 30 June (year)
       let calendar = Calendar(identifier: .gregorian)
-      let fyStart = calendar.date(from: DateComponents(year: financialYear - 1, month: 7, day: 1))!
-      let fyEnd = calendar.date(from: DateComponents(year: financialYear, month: 6, day: 30))!
+      guard
+        let fyStart = calendar.date(
+          from: DateComponents(year: financialYear - 1, month: 7, day: 1)),
+        let fyEnd = calendar.date(
+          from: DateComponents(year: financialYear, month: 6, day: 30))
+      else {
+        logger.error("Could not compute financial year \(financialYear) date range")
+        isLoading = false
+        return
+      }
 
       let result = try await CapitalGainsCalculator.computeWithConversion(
         transactions: transactions,

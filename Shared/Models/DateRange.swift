@@ -1,5 +1,3 @@
-// swiftlint:disable multiline_arguments
-
 import Foundation
 
 /// Predefined date ranges for reports and analysis filtering.
@@ -43,10 +41,10 @@ enum DateRange: String, CaseIterable, Identifiable, Sendable {
     case .thisFinancialYear:
       return financialYear(for: today, startMonth: financialYearStartMonth).start
     case .lastFinancialYear:
-      let lastYear = calendar.date(byAdding: .year, value: -1, to: today)!
+      let lastYear = calendar.date(byAdding: .year, value: -1, to: today) ?? today
       return financialYear(for: lastYear, startMonth: financialYearStartMonth).start
     case .monthToDate:
-      return calendar.date(from: calendar.dateComponents([.year, .month], from: today))!
+      return calendar.date(from: calendar.dateComponents([.year, .month], from: today)) ?? today
     case .quarterToDate:
       let month = calendar.component(.month, from: today)
       let quarterStart = ((month - 1) / 3) * 3 + 1
@@ -55,12 +53,12 @@ enum DateRange: String, CaseIterable, Identifiable, Sendable {
           year: calendar.component(.year, from: today),
           month: quarterStart,
           day: 1
-        ))!
+        )) ?? today
     case .yearToDate:
-      return calendar.date(from: calendar.dateComponents([.year], from: today))!
+      return calendar.date(from: calendar.dateComponents([.year], from: today)) ?? today
     case .custom:
       // Default for custom: 1 year ago
-      return calendar.date(byAdding: .year, value: -1, to: today)!
+      return calendar.date(byAdding: .year, value: -1, to: today) ?? today
     default:
       // Handled by the `rollingWindowMonthsAgo` early-return above; the
       // compiler can't prove exhaustiveness once that branch is lifted out.
@@ -94,7 +92,7 @@ enum DateRange: String, CaseIterable, Identifiable, Sendable {
     case .thisFinancialYear:
       return financialYear(for: today, startMonth: financialYearStartMonth).end
     case .lastFinancialYear:
-      let lastYear = calendar.date(byAdding: .year, value: -1, to: today)!
+      let lastYear = calendar.date(byAdding: .year, value: -1, to: today) ?? today
       return financialYear(for: lastYear, startMonth: financialYearStartMonth).end
     default:
       return today
@@ -112,14 +110,15 @@ enum DateRange: String, CaseIterable, Identifiable, Sendable {
     let endMonth = startMonth == 1 ? 12 : startMonth - 1
     let endYear = startMonth == 1 ? fyYear : fyYear + 1
 
-    let start = calendar.date(from: DateComponents(year: fyYear, month: startMonth, day: 1))!
+    let start =
+      calendar.date(from: DateComponents(year: fyYear, month: startMonth, day: 1)) ?? date
+    let endMonthStart =
+      calendar.date(from: DateComponents(year: endYear, month: endMonth, day: 1)) ?? date
     let lastDayOfEndMonth =
-      calendar.range(
-        of: .day, in: .month,
-        for: calendar.date(from: DateComponents(year: endYear, month: endMonth, day: 1))!
-      )!.upperBound - 1
-    let end = calendar.date(
-      from: DateComponents(year: endYear, month: endMonth, day: lastDayOfEndMonth))!
+      (calendar.range(of: .day, in: .month, for: endMonthStart)?.upperBound ?? 29) - 1
+    let end =
+      calendar.date(
+        from: DateComponents(year: endYear, month: endMonth, day: lastDayOfEndMonth)) ?? date
 
     return (start, end)
   }
