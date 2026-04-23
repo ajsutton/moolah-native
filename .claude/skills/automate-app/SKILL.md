@@ -15,141 +15,168 @@ Drive the running Moolah macOS app via AppleScript (`osascript`) for data operat
 
 ## Prerequisites
 
-The app must be running. Use `just run-mac` to build and launch, or `just run-mac-with-logs` to also capture logs.
+The app must be built and running in **this worktree**. Use `just run-mac` to build and launch, or `just run-mac-with-logs` to also capture logs.
+
+### Why the wrappers
+
+Do **not** use raw `osascript -e 'tell application "Moolah" to …'` or bare `open "moolah://…"` for Moolah automation. Both resolve "Moolah" through LaunchServices, which picks `/Applications/Moolah.app` (the installed release build) over the worktree's debug build. Your automation will silently read from and write to the wrong app.
+
+Use the wrappers bundled with this skill instead:
+
+- `.claude/skills/automate-app/scripts/moolah-tell` — AppleScript runner; auto-wraps the body in `tell application "<worktree-abs-path>" … end tell`.
+- `.claude/skills/automate-app/scripts/moolah-open` — URL-scheme runner; execs `open -a <worktree-abs-path>`.
+
+Both resolve the bundle via `git rev-parse --show-toplevel` + `/.build/Build/Products/Debug/Moolah.app`, and fail fast with `error: Moolah.app not built at <path>; run 'just run-mac' in this worktree first` if the build is missing. They never build on your behalf — run `just run-mac` yourself first.
+
+Examples below use the short names `moolah-tell` and `moolah-open` for readability; invoke them by their full relative path from the worktree root.
 
 ## AppleScript Reference
 
-All commands use `osascript -e '...'` from the terminal. The app must be running and the target profile must be open in a window.
+Each example uses `moolah-tell` (full path: `.claude/skills/automate-app/scripts/moolah-tell`). The wrapper adds the outer `tell application` frame.
 
 ### Profile Operations
 
 ```bash
 # List all open profiles
-osascript -e 'tell application "Moolah" to get name of every profile'
+moolah-tell 'get name of every profile'
 
 # Get profile currency
-osascript -e 'tell application "Moolah" to get currency of profile "Test"'
+moolah-tell 'get currency of profile "Test"'
 
 # Count profiles
-osascript -e 'tell application "Moolah" to count profiles'
+moolah-tell 'count profiles'
 ```
 
 ### Account Operations
 
 ```bash
 # List all accounts
-osascript -e 'tell application "Moolah" to get name of every account of profile "Test"'
+moolah-tell 'get name of every account of profile "Test"'
 
 # Get account balance
-osascript -e 'tell application "Moolah" to get balance of account "Savings" of profile "Test"'
+moolah-tell 'get balance of account "Savings" of profile "Test"'
 
 # Get all account names and balances
-osascript -e 'tell application "Moolah" to get {name, balance} of every account of profile "Test"'
+moolah-tell 'get {name, balance} of every account of profile "Test"'
 
 # Get net worth
-osascript -e 'tell application "Moolah" to net worth of profile "Test"'
+moolah-tell 'net worth of profile "Test"'
 
 # Create account
-osascript -e 'tell application "Moolah" to tell profile "Test" to create account name "New Account" type "bank"'
+moolah-tell 'tell profile "Test" to create account name "New Account" type "bank"'
 # Types: bank, cc, asset, investment
 
 # Delete account
-osascript -e 'tell application "Moolah" to delete account "New Account" of profile "Test"'
+moolah-tell 'delete account "New Account" of profile "Test"'
 ```
 
 ### Transaction Operations
 
 ```bash
 # Create a simple expense
-osascript -e 'tell application "Moolah" to tell profile "Test" to create transaction with payee "Woolworths" amount -42.50 account "Everyday" category "Groceries"'
+moolah-tell 'tell profile "Test" to create transaction with payee "Woolworths" amount -42.50 account "Everyday" category "Groceries"'
 
 # Create with date and notes
-osascript -e 'tell application "Moolah" to tell profile "Test" to create transaction with payee "Rent" amount -2000.00 account "Everyday" date (date "2026-04-01") notes "April rent"'
+moolah-tell 'tell profile "Test" to create transaction with payee "Rent" amount -2000.00 account "Everyday" date (date "2026-04-01") notes "April rent"'
 
 # Create income
-osascript -e 'tell application "Moolah" to tell profile "Test" to create transaction with payee "Employer" amount 5000.00 account "Everyday" category "Salary"'
+moolah-tell 'tell profile "Test" to create transaction with payee "Employer" amount 5000.00 account "Everyday" category "Salary"'
 
 # List transactions (payee and amount)
-osascript -e 'tell application "Moolah" to get {payee, amount} of every transaction of profile "Test"'
+moolah-tell 'get {payee, amount} of every transaction of profile "Test"'
 
 # Get transaction details
-osascript -e 'tell application "Moolah" to get {payee, date, amount, transaction type} of every transaction of profile "Test"'
+moolah-tell 'get {payee, date, amount, transaction type} of every transaction of profile "Test"'
 
 # Delete a transaction
-osascript -e 'tell application "Moolah" to delete transaction id "UUID-HERE" of profile "Test"'
+moolah-tell 'delete transaction id "UUID-HERE" of profile "Test"'
 
 # Pay a scheduled transaction
-osascript -e 'tell application "Moolah" to pay transaction id "UUID-HERE" of profile "Test"'
+moolah-tell 'pay transaction id "UUID-HERE" of profile "Test"'
 ```
 
 ### Earmark Operations
 
 ```bash
 # List earmarks
-osascript -e 'tell application "Moolah" to get {name, balance} of every earmark of profile "Test"'
+moolah-tell 'get {name, balance} of every earmark of profile "Test"'
 
 # Create earmark with target
-osascript -e 'tell application "Moolah" to tell profile "Test" to create earmark name "Holiday" target 5000.00'
+moolah-tell 'tell profile "Test" to create earmark name "Holiday" target 5000.00'
 
 # Create earmark without target
-osascript -e 'tell application "Moolah" to tell profile "Test" to create earmark name "Emergency Fund"'
+moolah-tell 'tell profile "Test" to create earmark name "Emergency Fund"'
 
 # Get earmark balance
-osascript -e 'tell application "Moolah" to get balance of earmark "Holiday" of profile "Test"'
+moolah-tell 'get balance of earmark "Holiday" of profile "Test"'
 ```
 
 ### Category Operations
 
 ```bash
 # List categories
-osascript -e 'tell application "Moolah" to get name of every category of profile "Test"'
+moolah-tell 'get name of every category of profile "Test"'
 
 # Create category
-osascript -e 'tell application "Moolah" to tell profile "Test" to create category name "Groceries"'
+moolah-tell 'tell profile "Test" to create category name "Groceries"'
 
 # Create subcategory
-osascript -e 'tell application "Moolah" to tell profile "Test" to create category name "Fruit" parent "Groceries"'
+moolah-tell 'tell profile "Test" to create category name "Fruit" parent "Groceries"'
 ```
 
 ### Refresh and Navigation
 
 ```bash
 # Refresh data from backend
-osascript -e 'tell application "Moolah" to refresh profile "Test"'
+moolah-tell 'refresh profile "Test"'
 
 # Navigate to a specific account
-osascript -e 'tell application "Moolah" to navigate to account "Savings" of profile "Test"'
+moolah-tell 'navigate to account "Savings" of profile "Test"'
+```
+
+### Multi-line scripts
+
+Pipe the body in on stdin (use `-` or omit the arg):
+
+```bash
+moolah-tell - <<'EOF'
+tell profile "Test"
+  set accts to {name, balance} of every account
+  set cats to name of every category
+  return {accts, cats}
+end tell
+EOF
 ```
 
 ## URL Scheme Reference
 
-Use `open` command to trigger navigation. The app opens/focuses the profile window and navigates to the destination.
+Use `moolah-open` (full path: `.claude/skills/automate-app/scripts/moolah-open`) to route the URL to the worktree build. The app opens/focuses the profile window and navigates to the destination.
 
 ```bash
 # Open a profile window
-open "moolah://Test"
+moolah-open "moolah://Test"
 
 # Navigate to a specific account
-open "moolah://Test/account/ACCOUNT-UUID-HERE"
+moolah-open "moolah://Test/account/ACCOUNT-UUID-HERE"
 
 # Navigate to a specific transaction (opens in first leg's account context)
-open "moolah://Test/transaction/TRANSACTION-UUID-HERE"
+moolah-open "moolah://Test/transaction/TRANSACTION-UUID-HERE"
 
 # Navigate to analysis with custom periods
-open "moolah://Test/analysis?history=12&forecast=3"
+moolah-open "moolah://Test/analysis?history=12&forecast=3"
 
 # Navigate to reports with date range
-open "moolah://Test/reports?from=2026-01-01&to=2026-03-31"
+moolah-open "moolah://Test/reports?from=2026-01-01&to=2026-03-31"
 
 # Navigate to specific views
-open "moolah://Test/categories"
-open "moolah://Test/upcoming"
-open "moolah://Test/earmarks"
-open "moolah://Test/earmark/EARMARK-UUID-HERE"
-open "moolah://Test/accounts"
+moolah-open "moolah://Test/categories"
+moolah-open "moolah://Test/upcoming"
+moolah-open "moolah://Test/earmarks"
+moolah-open "moolah://Test/earmark/EARMARK-UUID-HERE"
+moolah-open "moolah://Test/accounts"
 
 # URL-encode profile names with spaces
-open "moolah://My%20Finances/analysis"
+moolah-open "moolah://My%20Finances/analysis"
 ```
 
 **Profile resolution:** Tries name match (case-insensitive) first, then UUID. If the profile isn't open, a new window opens for it.
@@ -160,85 +187,82 @@ open "moolah://My%20Finances/analysis"
 
 ```bash
 # 1. Check initial balance
-osascript -e 'tell application "Moolah" to get balance of account "Everyday" of profile "Test"'
+moolah-tell 'get balance of account "Everyday" of profile "Test"'
 
 # 2. Create a transaction
-osascript -e 'tell application "Moolah" to tell profile "Test" to create transaction with payee "Test Purchase" amount -25.00 account "Everyday"'
+moolah-tell 'tell profile "Test" to create transaction with payee "Test Purchase" amount -25.00 account "Everyday"'
 
 # 3. Verify balance changed
-osascript -e 'tell application "Moolah" to get balance of account "Everyday" of profile "Test"'
+moolah-tell 'get balance of account "Everyday" of profile "Test"'
 ```
 
 ### Verify UI navigation
 
 ```bash
 # Navigate to analysis view and verify visually
-open "moolah://Test/analysis?history=6&forecast=3"
+moolah-open "moolah://Test/analysis?history=6&forecast=3"
 
 # Navigate to specific account
-open "moolah://Test/account/ACCOUNT-UUID"
+moolah-open "moolah://Test/account/ACCOUNT-UUID"
 ```
 
 ### Create a full test environment
 
 ```bash
-osascript -e '
-tell application "Moolah"
-  tell profile "AI Test"
-    create account name "Checking" type "bank"
-    create account name "Savings" type "bank"
-    create account name "Credit Card" type "cc"
-    create category name "Food"
-    create category name "Transport"
-    create category name "Salary"
-    create earmark name "Emergency Fund" target 10000.00
-    create transaction with payee "Employer" amount 5000.00 account "Checking" category "Salary"
-    create transaction with payee "Groceries" amount -150.00 account "Checking" category "Food"
-    create transaction with payee "Gas" amount -60.00 account "Credit Card" category "Transport"
-  end tell
+moolah-tell - <<'EOF'
+tell profile "AI Test"
+  create account name "Checking" type "bank"
+  create account name "Savings" type "bank"
+  create account name "Credit Card" type "cc"
+  create category name "Food"
+  create category name "Transport"
+  create category name "Salary"
+  create earmark name "Emergency Fund" target 10000.00
+  create transaction with payee "Employer" amount 5000.00 account "Checking" category "Salary"
+  create transaction with payee "Groceries" amount -150.00 account "Checking" category "Food"
+  create transaction with payee "Gas" amount -60.00 account "Credit Card" category "Transport"
 end tell
-'
+EOF
 ```
 
 ### Verify data integrity after code changes
 
 ```bash
-# Get a snapshot of all state
-osascript -e '
-tell application "Moolah"
-  tell profile "AI Test"
-    set accts to {name, balance} of every account
-    set cats to name of every category
-    set earmarks to {name, balance} of every earmark
-    return {accts, cats, earmarks}
-  end tell
+moolah-tell - <<'EOF'
+tell profile "AI Test"
+  set accts to {name, balance} of every account
+  set cats to name of every category
+  set earmarks to {name, balance} of every earmark
+  return {accts, cats, earmarks}
 end tell
-'
+EOF
 ```
 
 ## Error Handling
 
+Put `try` / `on error` **inside** the body — `moolah-tell` supplies the outer `tell application`:
+
 ```bash
-# Wrap in try block to capture errors
-osascript -e '
-try
-  tell application "Moolah" to get balance of account "Nonexistent" of profile "Test"
+moolah-tell 'try
+  get balance of account "Nonexistent" of profile "Test"
 on error errMsg
   return "ERROR: " & errMsg
-end try
-'
+end try'
 ```
 
 Common errors:
 - **"Profile not found"** — profile isn't open or name is misspelled
 - **"Account not found"** — account name doesn't match (matching is case-insensitive)
 - **"Operation failed"** — backend error, check app logs with `run-mac-app-with-logs` skill
+- **"error: Moolah.app not built at …"** — emitted by `moolah-tell` / `moolah-open` themselves; run `just run-mac` in this worktree first.
+- **"error: moolah-tell must be run from inside a Moolah worktree"** — you're running the wrapper from outside any git repo; `cd` into the worktree first.
 
 ## Tips
 
-- **Use AppleScript for data operations** (CRUD, balance checks, queries)
-- **Use URL scheme for navigation** (opening views, navigating to specific entities)
-- **Always verify state after mutations** — read back the value you just changed
-- **Use `run-mac-app-with-logs` skill** to capture app logs while running automation for debugging
+- **Always use `moolah-tell` and `moolah-open`** — raw `osascript` / `open` target `/Applications/Moolah.app`, not your worktree build.
+- **Use AppleScript (`moolah-tell`) for data operations** (CRUD, balance checks, queries).
+- **Use the URL scheme (`moolah-open`) for navigation** (opening views, navigating to specific entities).
+- **Always verify state after mutations** — read back the value you just changed.
+- **Use the `run-mac-app-with-logs` skill** to capture app logs while running automation for debugging.
 - **Amounts are Decimal** — expenses are negative, income is positive. Don't use `abs()`.
-- **Profile must be open** — the profile needs to be open in a window for AppleScript to work with it
+- **Profile must be open** — the profile needs to be open in a window for AppleScript to work with it.
