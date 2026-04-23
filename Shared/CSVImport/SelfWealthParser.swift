@@ -176,6 +176,7 @@ struct SelfWealthParser: CSVParser, Sendable {
 
   private static let tradeRegex: SendableRegex = {
     // Regex is a compile-time constant; force-try here cannot fail at runtime.
+    // swiftlint:disable:next force_try
     let compiled = try! NSRegularExpression(
       pattern: #"(BUY|SELL)\s+(\d+)\s+([A-Z0-9.]+)\s+@\s+\$?([\d.]+)"#,
       options: [])

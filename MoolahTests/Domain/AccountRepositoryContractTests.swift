@@ -11,7 +11,7 @@ struct AccountRepositoryContractTests {
 
   @Test("creates account with opening balance")
   func testCreatesAccount() async throws {
-    let repository = makeCloudKitAccountRepository()
+    let repository = try makeCloudKitAccountRepository()
     let newAccount = Account(
       name: "Savings",
       type: .bank,
@@ -35,7 +35,7 @@ struct AccountRepositoryContractTests {
 
   @Test("rejects empty name")
   func testRejectsEmptyName() async throws {
-    let repository = makeCloudKitAccountRepository()
+    let repository = try makeCloudKitAccountRepository()
     let invalidAccount = Account(
       name: "   ",  // Whitespace only
       type: .bank,
@@ -49,7 +49,7 @@ struct AccountRepositoryContractTests {
 
   @Test("allows negative balance")
   func testAllowsNegativeBalance() async throws {
-    let repository = makeCloudKitAccountRepository()
+    let repository = try makeCloudKitAccountRepository()
     let creditCard = Account(
       name: "Credit Card",
       type: .creditCard,
@@ -70,7 +70,7 @@ struct AccountRepositoryContractTests {
 
   @Test("updates account name and type")
   func testUpdatesAccount() async throws {
-    let repository = makeCloudKitAccountRepository(initialAccounts: [
+    let repository = try makeCloudKitAccountRepository(initialAccounts: [
       Account(
         id: UUID(), name: "Checking", type: .bank,
         instrument: .defaultTestInstrument)
@@ -88,7 +88,7 @@ struct AccountRepositoryContractTests {
 
   @Test("preserves balance on update")
   func testPreservesBalance() async throws {
-    let repository = makeCloudKitAccountRepository(
+    let repository = try makeCloudKitAccountRepository(
       initialAccounts: [
         Account(
           id: UUID(),
@@ -114,7 +114,7 @@ struct AccountRepositoryContractTests {
 
   @Test("throws on update non-existent")
   func testThrowsOnUpdateNonExistent() async throws {
-    let repository = makeCloudKitAccountRepository()
+    let repository = try makeCloudKitAccountRepository()
     let nonExistent = Account(
       name: "DoesNotExist", type: .bank, instrument: .defaultTestInstrument)
 
@@ -127,7 +127,7 @@ struct AccountRepositoryContractTests {
 
   @Test("soft deletes account with zero balance")
   func testDeletesAccountWithZeroBalance() async throws {
-    let repository = makeCloudKitAccountRepository(initialAccounts: [
+    let repository = try makeCloudKitAccountRepository(initialAccounts: [
       Account(
         id: UUID(), name: "Old Account", type: .bank,
         instrument: .defaultTestInstrument)
@@ -146,7 +146,7 @@ struct AccountRepositoryContractTests {
 
   @Test("rejects delete with non-zero balance")
   func testRejectsDeleteWithBalance() async throws {
-    let repository = makeCloudKitAccountRepository(
+    let repository = try makeCloudKitAccountRepository(
       initialAccounts: [
         Account(
           id: UUID(),
@@ -171,7 +171,7 @@ struct AccountRepositoryContractTests {
 
   @Test("round-trips a USD fiat account with USD opening balance")
   func testRoundTripUSDFiatAccount() async throws {
-    let repository = makeCloudKitAccountRepository()
+    let repository = try makeCloudKitAccountRepository()
     let account = Account(name: "US Checking", type: .bank, instrument: .USD)
     let openingBalance = InstrumentAmount(
       quantity: Decimal(string: "750.00")!, instrument: .USD)
@@ -189,7 +189,7 @@ struct AccountRepositoryContractTests {
 
   @Test("round-trips a stock account preserving exchange and ticker")
   func testRoundTripStockAccount() async throws {
-    let repository = makeCloudKitAccountRepository()
+    let repository = try makeCloudKitAccountRepository()
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
     let account = Account(name: "BHP Shares", type: .investment, instrument: bhp)
     let openingBalance = InstrumentAmount(quantity: Decimal(150), instrument: bhp)
@@ -209,7 +209,7 @@ struct AccountRepositoryContractTests {
 
   @Test("round-trips a crypto account preserving chainId and contractAddress")
   func testRoundTripCryptoAccount() async throws {
-    let repository = makeCloudKitAccountRepository()
+    let repository = try makeCloudKitAccountRepository()
     let usdc = Instrument.crypto(
       chainId: 1,
       contractAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
@@ -234,7 +234,7 @@ struct AccountRepositoryContractTests {
 
   @Test("accounts with distinct instruments coexist and keep their own instrument")
   func testMultipleAccountsWithDifferentInstruments() async throws {
-    let repository = makeCloudKitAccountRepository()
+    let repository = try makeCloudKitAccountRepository()
     let audAccount = Account(
       id: UUID(), name: "AUD Bank", type: .bank, instrument: .AUD)
     let usdAccount = Account(
@@ -263,7 +263,7 @@ struct AccountRepositoryContractTests {
 
   @Test("updates preserve non-default instrument")
   func testUpdatePreservesNonDefaultInstrument() async throws {
-    let repository = makeCloudKitAccountRepository()
+    let repository = try makeCloudKitAccountRepository()
     let account = Account(name: "EUR Wallet", type: .bank, instrument: .fiat(code: "EUR"))
     _ = try await repository.create(account, openingBalance: nil)
 
@@ -282,7 +282,7 @@ struct AccountRepositoryContractTests {
 
   @Test("updates positions")
   func testUpdatesPositions() async throws {
-    let repository = makeCloudKitWithPositionedAccounts()
+    let repository = try makeCloudKitWithPositionedAccounts()
     let accounts = try await repository.fetchAll()
     let account1 = accounts.first { $0.name == "First" }!
     let account2 = accounts.first { $0.name == "Second" }!
@@ -316,8 +316,8 @@ struct AccountRepositoryContractTests {
 private func makeCloudKitAccountRepository(
   initialAccounts: [Account] = [],
   openingBalances: [InstrumentAmount] = []
-) -> CloudKitAccountRepository {
-  let container = try! TestModelContainer.create()
+) throws -> CloudKitAccountRepository {
+  let container = try TestModelContainer.create()
   let instrument = Instrument.defaultTestInstrument
   let repo = CloudKitAccountRepository(
     modelContainer: container)
@@ -343,13 +343,13 @@ private func makeCloudKitAccountRepository(
         context.insert(leg)
       }
     }
-    try! context.save()
+    try context.save()
   }
 
   return repo
 }
 
-private func makeCloudKitWithPositionedAccounts() -> CloudKitAccountRepository {
+private func makeCloudKitWithPositionedAccounts() throws -> CloudKitAccountRepository {
   let account1 = Account(
     id: UUID(), name: "First", type: .bank, instrument: .defaultTestInstrument,
     position: 0)
@@ -359,5 +359,5 @@ private func makeCloudKitWithPositionedAccounts() -> CloudKitAccountRepository {
   let account3 = Account(
     id: UUID(), name: "Third", type: .bank, instrument: .defaultTestInstrument,
     position: 2)
-  return makeCloudKitAccountRepository(initialAccounts: [account1, account2, account3])
+  return try makeCloudKitAccountRepository(initialAccounts: [account1, account2, account3])
 }

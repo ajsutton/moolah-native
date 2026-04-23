@@ -11,9 +11,11 @@ final class SyncBatchBenchmarks: XCTestCase {
 
   override static func setUp() {
     super.setUp()
-    let result = try! TestBackend.create()
+    let result = expecting("benchmark TestBackend.create failed") {
+      try TestBackend.create()
+    }
     _container = result.container
-    try! awaitSync { @MainActor in
+    awaitSyncExpecting { @MainActor in
       BenchmarkFixtures.seed(scale: .twoX, in: result.container)
       var descriptor = FetchDescriptor<TransactionRecord>()
       descriptor.fetchLimit = 400
@@ -46,7 +48,7 @@ final class SyncBatchBenchmarks: XCTestCase {
     let instrument = Instrument.defaultTestInstrument
     let container = self.container
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync { @MainActor in
+      awaitSyncExpecting { @MainActor in
         let context = ModelContext(container)
         for i in 0..<400 {
           let txnId = UUID()
@@ -78,7 +80,7 @@ final class SyncBatchBenchmarks: XCTestCase {
     let existingIds = Self._existingIds400
     let container = self.container
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync { @MainActor in
+      awaitSyncExpecting { @MainActor in
         let context = ModelContext(container)
         let matched = try context.fetch(
           FetchDescriptor<TransactionRecord>(

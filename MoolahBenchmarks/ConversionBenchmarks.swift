@@ -13,9 +13,11 @@ final class ConversionBenchmarks: XCTestCase {
 
   override static func setUp() {
     super.setUp()
-    let result = try! TestBackend.create()
+    let result = expecting("benchmark TestBackend.create failed") {
+      try TestBackend.create()
+    }
     _container = result.container
-    try! awaitSync { @MainActor in
+    awaitSyncExpecting { @MainActor in
       BenchmarkFixtures.seed(scale: .twoX, in: result.container)
     }
   }
@@ -42,7 +44,7 @@ final class ConversionBenchmarks: XCTestCase {
   func testToDomain_1000records() {
     let container = self.container
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync { @MainActor in
+      _ = awaitSyncExpecting { @MainActor in
         var descriptor = FetchDescriptor<TransactionRecord>()
         descriptor.fetchLimit = 1000
         let records = try container.mainContext.fetch(descriptor)
@@ -66,7 +68,7 @@ final class ConversionBenchmarks: XCTestCase {
   func testToDomain_5000records() {
     let container = self.container
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync { @MainActor in
+      _ = awaitSyncExpecting { @MainActor in
         var descriptor = FetchDescriptor<TransactionRecord>()
         descriptor.fetchLimit = 5000
         let records = try container.mainContext.fetch(descriptor)

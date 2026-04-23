@@ -20,6 +20,10 @@ enum PreviewBackend {
       ImportRuleRecord.self,
     ])
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    // In-memory ModelContainer construction on a known schema never fails at
+    // runtime. Previews don't render on main in production so a crash here
+    // only affects SwiftUI canvas rendering.
+    // swiftlint:disable:next force_try
     let container = try! ModelContainer(for: schema, configurations: [config])
     let exchangeRates = ExchangeRateService(
       client: FrankfurterClient(),

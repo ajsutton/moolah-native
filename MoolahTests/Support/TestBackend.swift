@@ -3,6 +3,28 @@ import SwiftData
 
 @testable import Moolah
 
+/// Saves a `ModelContext` and traps with a clear message on failure.
+///
+/// In-memory SwiftData saves during test seeding should never fail; a
+/// failure here means the test harness is broken and the suite cannot
+/// proceed. Trapping keeps seed call sites free of `try!` without
+/// forcing every seed helper (and its hundreds of callers) to throw.
+private func saveOrTrap(
+  _ context: ModelContext,
+  file: StaticString = #file,
+  line: UInt = #line
+) {
+  do {
+    try context.save()
+  } catch {
+    preconditionFailure(
+      "TestBackend seed save failed: \(error)",
+      file: file,
+      line: line
+    )
+  }
+}
+
 /// Factory for creating CloudKitBackend instances backed by an in-memory ModelContainer.
 /// Used in all tests as a replacement for InMemoryBackend and individual InMemory*Repository types.
 enum TestBackend {
@@ -40,7 +62,7 @@ enum TestBackend {
     for account in accounts {
       context.insert(AccountRecord.from(account))
     }
-    try! context.save()
+    saveOrTrap(context)
     return accounts
   }
 
@@ -75,7 +97,7 @@ enum TestBackend {
         context.insert(leg)
       }
     }
-    try! context.save()
+    saveOrTrap(context)
     return accounts.map(\.account)
   }
 
@@ -99,7 +121,7 @@ enum TestBackend {
         context.insert(TransactionLegRecord.from(leg, transactionId: txn.id, sortOrder: index))
       }
     }
-    try! context.save()
+    saveOrTrap(context)
     return transactions
   }
 
@@ -117,7 +139,7 @@ enum TestBackend {
       context.insert(
         EarmarkRecord.from(earmark))
     }
-    try! context.save()
+    saveOrTrap(context)
     return earmarks
   }
 
@@ -172,7 +194,7 @@ enum TestBackend {
         context.insert(leg)
       }
     }
-    try! context.save()
+    saveOrTrap(context)
     return earmarks
   }
 
@@ -186,7 +208,7 @@ enum TestBackend {
     for category in categories {
       context.insert(CategoryRecord.from(category))
     }
-    try! context.save()
+    saveOrTrap(context)
     return categories
   }
 
@@ -209,7 +231,7 @@ enum TestBackend {
         context.insert(record)
       }
     }
-    try! context.save()
+    saveOrTrap(context)
     return investmentValues
   }
 
@@ -230,6 +252,6 @@ enum TestBackend {
       )
       context.insert(record)
     }
-    try! context.save()
+    saveOrTrap(context)
   }
 }

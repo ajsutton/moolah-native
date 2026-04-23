@@ -16,9 +16,11 @@ final class SyncDownloadBenchmarks: XCTestCase {
 
   override static func setUp() {
     super.setUp()
-    let result = try! TestBackend.create()
+    let result = expecting("benchmark TestBackend.create failed") {
+      try TestBackend.create()
+    }
     _container = result.container
-    try! awaitSync { @MainActor in
+    awaitSyncExpecting { @MainActor in
       BenchmarkFixtures.seed(scale: .twoX, in: result.container)
       let profileId = UUID()
       let zoneID = CKRecordZone.ID(
@@ -109,7 +111,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
         records.append(txnRecord)
         records.append(legRecord)
       }
-      try! awaitSync { @MainActor in
+      awaitSyncExpecting { @MainActor in
         _ = handler.applyRemoteChanges(saved: records, deleted: [])
       }
     }
@@ -130,7 +132,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
 
     measure(metrics: [XCTClockMetric()], options: clockOptions) {
       // --- Setup (excluded from measurement) ---
-      let deletionTargets: [(CKRecord.ID, String)] = try! awaitSync { @MainActor in
+      let deletionTargets: [(CKRecord.ID, String)] = awaitSyncExpecting { @MainActor in
         let context = ModelContext(container)
         var targets: [(CKRecord.ID, String)] = []
         targets.reserveCapacity(400)
@@ -151,7 +153,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
 
       // --- Measurement ---
       self.startMeasuring()
-      try! awaitSync { @MainActor in
+      awaitSyncExpecting { @MainActor in
         _ = handler.applyRemoteChanges(saved: [], deleted: deletionTargets)
       }
       self.stopMeasuring()

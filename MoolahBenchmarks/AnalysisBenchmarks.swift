@@ -12,10 +12,12 @@ final class AnalysisBenchmarks: XCTestCase {
 
   override static func setUp() {
     super.setUp()
-    let result = try! TestBackend.create()
+    let result = expecting("benchmark TestBackend.create failed") {
+      try TestBackend.create()
+    }
     _backend = result.backend
     _container = result.container
-    try! awaitSync { @MainActor in
+    awaitSyncExpecting { @MainActor in
       BenchmarkFixtures.seed(scale: .twoX, in: result.container)
     }
   }
@@ -57,7 +59,7 @@ final class AnalysisBenchmarks: XCTestCase {
     let historyAfter = Calendar.current.date(byAdding: .month, value: -12, to: Date())!
     let forecastUntil = Calendar.current.date(byAdding: .month, value: 3, to: Date())!
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync {
+      _ = awaitSyncExpecting {
         try await repo.loadAll(
           historyAfter: historyAfter, forecastUntil: forecastUntil, monthEnd: 31)
       }
@@ -70,7 +72,7 @@ final class AnalysisBenchmarks: XCTestCase {
     let repo = self.repo
     let forecastUntil = Calendar.current.date(byAdding: .month, value: 3, to: Date())!
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync {
+      _ = awaitSyncExpecting {
         try await repo.loadAll(historyAfter: nil, forecastUntil: forecastUntil, monthEnd: 31)
       }
     }
@@ -84,7 +86,7 @@ final class AnalysisBenchmarks: XCTestCase {
     let start = Calendar.current.date(byAdding: .month, value: -12, to: end)!
     let dateRange = start...end
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync {
+      _ = awaitSyncExpecting {
         try await repo.fetchCategoryBalances(
           dateRange: dateRange, transactionType: .expense, filters: nil,
           targetInstrument: .defaultTestInstrument)
@@ -100,7 +102,7 @@ final class AnalysisBenchmarks: XCTestCase {
     let start = Calendar.current.date(byAdding: .month, value: -12, to: end)!
     let dateRange = start...end
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync {
+      _ = awaitSyncExpecting {
         try await repo.fetchCategoryBalancesByType(
           dateRange: dateRange, filters: nil,
           targetInstrument: .defaultTestInstrument)

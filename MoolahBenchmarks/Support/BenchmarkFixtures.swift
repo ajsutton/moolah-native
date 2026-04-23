@@ -91,7 +91,7 @@ enum BenchmarkFixtures {
       instrument: instrument
     )
 
-    try! context.save()
+    expecting("benchmark fixtures save failed") { try context.save() }
   }
 
   // MARK: - Private Helpers

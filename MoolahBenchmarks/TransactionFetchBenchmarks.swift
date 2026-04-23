@@ -12,14 +12,16 @@ final class TransactionFetchBenchmarks: XCTestCase {
 
   override static func setUp() {
     super.setUp()
-    let result = try! TestBackend.create()
+    let result = expecting("benchmark TestBackend.create failed") {
+      try TestBackend.create()
+    }
     _backend = result.backend
     _container = result.container
-    try! awaitSync { @MainActor in
+    awaitSyncExpecting { @MainActor in
       BenchmarkFixtures.seed(scale: .twoX, in: result.container)
     }
     // Pre-warm: load accounts so balances are computed from legs.
-    _ = try! awaitSync { try await result.backend.accounts.fetchAll() }
+    _ = awaitSyncExpecting { try await result.backend.accounts.fetchAll() }
   }
 
   override static func tearDown() {
@@ -47,7 +49,7 @@ final class TransactionFetchBenchmarks: XCTestCase {
     let repo = backend.transactions
     let filter = TransactionFilter(accountId: BenchmarkFixtures.heavyAccountId)
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync { try await repo.fetch(filter: filter, page: 0, pageSize: 50) }
+      _ = awaitSyncExpecting { try await repo.fetch(filter: filter, page: 0, pageSize: 50) }
     }
   }
 
@@ -56,7 +58,7 @@ final class TransactionFetchBenchmarks: XCTestCase {
     let repo = backend.transactions
     let filter = TransactionFilter(scheduled: false)
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync { try await repo.fetch(filter: filter, page: 0, pageSize: 50) }
+      _ = awaitSyncExpecting { try await repo.fetch(filter: filter, page: 0, pageSize: 50) }
     }
   }
 
@@ -69,7 +71,7 @@ final class TransactionFetchBenchmarks: XCTestCase {
       dateRange: oneYearAgo...Date()
     )
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync { try await repo.fetch(filter: filter, page: 0, pageSize: 50) }
+      _ = awaitSyncExpecting { try await repo.fetch(filter: filter, page: 0, pageSize: 50) }
     }
   }
 
@@ -86,7 +88,7 @@ final class TransactionFetchBenchmarks: XCTestCase {
       categoryIds: categoryIds
     )
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync { try await repo.fetch(filter: filter, page: 0, pageSize: 50) }
+      _ = awaitSyncExpecting { try await repo.fetch(filter: filter, page: 0, pageSize: 50) }
     }
   }
 
@@ -95,7 +97,7 @@ final class TransactionFetchBenchmarks: XCTestCase {
     let repo = backend.transactions
     let filter = TransactionFilter(accountId: BenchmarkFixtures.heavyAccountId)
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync { try await repo.fetch(filter: filter, page: 10, pageSize: 50) }
+      _ = awaitSyncExpecting { try await repo.fetch(filter: filter, page: 10, pageSize: 50) }
     }
   }
 }

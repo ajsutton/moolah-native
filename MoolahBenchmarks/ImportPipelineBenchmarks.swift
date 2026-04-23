@@ -18,12 +18,14 @@ final class ImportPipelineBenchmarks: XCTestCase {
 
   override static func setUp() {
     super.setUp()
-    let result = try! TestBackend.create()
+    let result = expecting("benchmark TestBackend.create failed") {
+      try TestBackend.create()
+    }
     let accountId = UUID()
     _backend = result.backend
     _container = result.container
     _accountId = accountId
-    try! awaitSync { @MainActor in
+    awaitSyncExpecting { @MainActor in
       _ = try await result.backend.accounts.create(
         Account(
           id: accountId, name: "Bench", type: .bank, instrument: .AUD,
@@ -192,7 +194,7 @@ final class ImportPipelineBenchmarks: XCTestCase {
   func testImportPipelineEndToEnd10Files1000RowsEach() throws {
     let data = Self.makeCBAData(rowCount: 1000)
     measure(metrics: metrics, options: options) {
-      try! awaitSync { @MainActor in
+      awaitSyncExpecting { @MainActor in
         // Fresh backend + staging per iteration — no state leaks between
         // runs so the reported time measures a clean 10-file ingest.
         let (backend, _) = try TestBackend.create()
