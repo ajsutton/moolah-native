@@ -61,8 +61,11 @@ struct TransactionListView: View {
 
   /// Default init — TransactionListView owns selection and shows its own inspector.
   init(
-    title: String, filter: TransactionFilter,
-    accounts: Accounts, categories: Categories, earmarks: Earmarks,
+    title: String,
+    filter: TransactionFilter,
+    accounts: Accounts,
+    categories: Categories,
+    earmarks: Earmarks,
     transactionStore: TransactionStore,
     positions: [Position] = [],
     positionsHostCurrency: Instrument = .AUD,
@@ -87,8 +90,11 @@ struct TransactionListView: View {
 
   /// Embedded init — parent provides selection binding and handles the inspector.
   init(
-    title: String, filter: TransactionFilter,
-    accounts: Accounts, categories: Categories, earmarks: Earmarks,
+    title: String,
+    filter: TransactionFilter,
+    accounts: Accounts,
+    categories: Categories,
+    earmarks: Earmarks,
     transactionStore: TransactionStore,
     positions: [Position] = [],
     positionsHostCurrency: Instrument = .AUD,

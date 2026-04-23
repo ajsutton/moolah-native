@@ -11,7 +11,8 @@ actor CryptoPriceService {
   private let resolutionClient: TokenResolutionClient
 
   init(
-    clients: [CryptoPriceClient], cacheDirectory: URL? = nil,
+    clients: [CryptoPriceClient],
+    cacheDirectory: URL? = nil,
     tokenRepository: CryptoTokenRepository = ICloudTokenRepository(),
     resolutionClient: (any TokenResolutionClient)? = nil
   ) {

@@ -124,7 +124,8 @@ struct TransactionDraft: Sendable, Equatable {
 extension TransactionDraft {
   /// Create a draft pre-populated from an existing transaction (for editing).
   init(
-    from transaction: Transaction, viewingAccountId: UUID? = nil,
+    from transaction: Transaction,
+    viewingAccountId: UUID? = nil,
     accounts: Accounts = Accounts(from: [])
   ) {
     // Always populate instrumentId so the draft is self-describing and round-trips

@@ -44,7 +44,8 @@ final class ProfileSession: Identifiable {
   private var lastSyncEventTime: ContinuousClock.Instant?
 
   init(
-    profile: Profile, containerManager: ProfileContainerManager? = nil,
+    profile: Profile,
+    containerManager: ProfileContainerManager? = nil,
     syncCoordinator: SyncCoordinator? = nil
   ) {
     self.profile = profile
