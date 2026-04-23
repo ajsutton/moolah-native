@@ -398,6 +398,15 @@ SwiftLint enforces most of these via opt-in rules; follow them by habit.
   let earliest = transactions.sorted { $0.date < $1.date }.first   // Bad — use `min(by:)`
   ```
 
+- **`isEmpty` over `== []` / `== [:]` literal comparison.** Comparing a collection to an empty literal forces `Equatable` element-wise equality on an empty shape and reads as a value test; `isEmpty` names the intent and is O(1) on every standard collection. Applies to arrays, dictionaries, sets, and strings (`== ""`). Enforced by [`empty_collection_literal`](https://realm.github.io/SwiftLint/empty_collection_literal.html).
+
+  ```swift
+  if transactions.isEmpty { /* Good */ }
+  if lookup.isEmpty { /* Good */ }
+  if transactions == [] { /* Bad — use `isEmpty` */ }
+  if lookup == [:] { /* Bad — use `isEmpty` */ }
+  ```
+
 ---
 
 ## 15. Control Flow
