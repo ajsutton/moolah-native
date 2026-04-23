@@ -21,6 +21,22 @@
     init(_ command: NSScriptCommand) { self.command = command }
   }
 
+  /// Base class for app-level `NSScriptCommand`s whose direct parameter is an
+  /// object specifier.
+  ///
+  /// Cocoa's default `execute()` resolves the specifier and then dispatches the
+  /// command to the target object's class. When the command is defined at the
+  /// application level (as all Moolah scripting commands are) the target class
+  /// does not implement the command selector, so dispatch fails with -1708
+  /// ("doesn't understand the message"). Overriding `execute()` to call
+  /// `performDefaultImplementation()` directly keeps the handler class in
+  /// charge of resolving the direct parameter itself.
+  class AppLevelScriptCommand: NSScriptCommand {
+    override func execute() -> Any? {
+      performDefaultImplementation()
+    }
+  }
+
   extension NSScriptCommand {
 
     /// Resolves the profile name from the direct parameter (an object specifier).

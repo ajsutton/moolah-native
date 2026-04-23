@@ -4,7 +4,7 @@
   import OSLog
 
   /// Handles: `export profile "X" to file "/path/to/file.json"`
-  class ExportProfileCommand: NSScriptCommand {
+  class ExportProfileCommand: AppLevelScriptCommand {
     override func performDefaultImplementation() -> Any? {
       guard let profileName = resolveProfileName() else {
         scriptErrorNumber = -10000

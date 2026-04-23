@@ -6,7 +6,7 @@
   private let logger = Logger(subsystem: "com.moolah.app", category: "CreateEarmarkCommand")
 
   /// Handles: `create earmark profile "X" name "Holiday" target 5000.0`
-  class CreateEarmarkCommand: NSScriptCommand {
+  class CreateEarmarkCommand: AppLevelScriptCommand {
     override func performDefaultImplementation() -> Any? {
       guard let profileName = resolveProfileName() else {
         scriptErrorNumber = -10000
