@@ -181,6 +181,7 @@ Apple's [Swift API Design Guidelines](https://www.swift.org/documentation/api-de
 Apple's [Choosing Between Structures and Classes](https://developer.apple.com/documentation/swift/choosing-between-structures-and-classes) is the canonical decision guide.
 
 - **`struct` is the default for data.** Value semantics eliminate shared-mutable-state bugs and make types trivially `Sendable`.
+- **Prefer a named `struct` over a tuple with three or more elements.** Two-element tuples (e.g. `(Date, Amount)`) are fine locally; once a third field appears, field names at the call site stop being optional and a `struct` makes that explicit. Enforced by [`large_tuple`](https://realm.github.io/SwiftLint/large_tuple.html) (warn at 2, error at 3) — see §3. Scope the struct as narrowly as the use site allows (file-private helpers for single-file aggregations; sibling types when several files share the shape).
 - **`class` only for:**
   - Identity-driven state (two equal values are not interchangeable).
   - Shared mutable state with deliberately controlled access.
