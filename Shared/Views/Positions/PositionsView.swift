@@ -44,33 +44,34 @@ struct PositionsView: View {
   }
 }
 
-#Preview("Default") {
+private func defaultPreviewPositions() -> [ValuedPosition] {
   let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
   let cba = Instrument.stock(ticker: "CBA.AX", exchange: "ASX", name: "CBA")
   let aud = Instrument.AUD
+  return [
+    ValuedPosition(
+      instrument: bhp, quantity: 250,
+      unitPrice: InstrumentAmount(quantity: 45.30, instrument: aud),
+      costBasis: InstrumentAmount(quantity: 10_125, instrument: aud),
+      value: InstrumentAmount(quantity: 11_325, instrument: aud)),
+    ValuedPosition(
+      instrument: cba, quantity: 80,
+      unitPrice: InstrumentAmount(quantity: 120, instrument: aud),
+      costBasis: InstrumentAmount(quantity: 9_000, instrument: aud),
+      value: InstrumentAmount(quantity: 9_600, instrument: aud)),
+    ValuedPosition(
+      instrument: aud, quantity: 2_480,
+      unitPrice: nil, costBasis: nil,
+      value: InstrumentAmount(quantity: 2_480, instrument: aud)),
+  ]
+}
+
+#Preview("Default") {
   PositionsView(
     input: PositionsViewInput(
       title: "Brokerage",
-      hostCurrency: aud,
-      positions: [
-        ValuedPosition(
-          instrument: bhp, quantity: 250,
-          unitPrice: InstrumentAmount(quantity: 45.30, instrument: aud),
-          costBasis: InstrumentAmount(quantity: 10_125, instrument: aud),
-          value: InstrumentAmount(quantity: 11_325, instrument: aud)
-        ),
-        ValuedPosition(
-          instrument: cba, quantity: 80,
-          unitPrice: InstrumentAmount(quantity: 120, instrument: aud),
-          costBasis: InstrumentAmount(quantity: 9_000, instrument: aud),
-          value: InstrumentAmount(quantity: 9_600, instrument: aud)
-        ),
-        ValuedPosition(
-          instrument: aud, quantity: 2_480,
-          unitPrice: nil, costBasis: nil,
-          value: InstrumentAmount(quantity: 2_480, instrument: aud)
-        ),
-      ],
+      hostCurrency: .AUD,
+      positions: defaultPreviewPositions(),
       historicalValue: nil  // chart hidden in preview to keep snapshot stable
     ),
     range: .constant(.threeMonths)
@@ -131,7 +132,7 @@ struct PositionsView: View {
   .frame(width: 480, height: 200)
 }
 
-#Preview("With chart") {
+private func withChartPreviewInput() -> PositionsViewInput {
   let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
   let aud = Instrument.AUD
   let calendar = Calendar(identifier: .gregorian)
@@ -142,25 +143,20 @@ struct PositionsView: View {
       date: date, value: 10_000 + Decimal(offset) * 25, cost: 9_500)
   }
   let series = HistoricalValueSeries(
-    hostCurrency: aud,
-    total: points,
-    perInstrument: [bhp.id: points]
-  )
-  return PositionsView(
-    input: PositionsViewInput(
-      title: "Brokerage",
-      hostCurrency: aud,
-      positions: [
-        ValuedPosition(
-          instrument: bhp, quantity: 100,
-          unitPrice: InstrumentAmount(quantity: (points.last?.value ?? 0) / 100, instrument: aud),
-          costBasis: InstrumentAmount(quantity: 9_500, instrument: aud),
-          value: InstrumentAmount(quantity: points.last?.value ?? 0, instrument: aud)
-        )
-      ],
-      historicalValue: series
-    ),
-    range: .constant(.threeMonths)
-  )
-  .frame(width: 720, height: 640)
+    hostCurrency: aud, total: points, perInstrument: [bhp.id: points])
+  return PositionsViewInput(
+    title: "Brokerage", hostCurrency: aud,
+    positions: [
+      ValuedPosition(
+        instrument: bhp, quantity: 100,
+        unitPrice: InstrumentAmount(quantity: (points.last?.value ?? 0) / 100, instrument: aud),
+        costBasis: InstrumentAmount(quantity: 9_500, instrument: aud),
+        value: InstrumentAmount(quantity: points.last?.value ?? 0, instrument: aud))
+    ],
+    historicalValue: series)
+}
+
+#Preview("With chart") {
+  PositionsView(input: withChartPreviewInput(), range: .constant(.threeMonths))
+    .frame(width: 720, height: 640)
 }

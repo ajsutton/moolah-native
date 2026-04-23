@@ -88,53 +88,53 @@ struct EarmarkDetailView: View {
 
   private var overviewPanel: some View {
     VStack(spacing: 12) {
-      HStack(spacing: 24) {
-        summaryItem(
-          label: "Balance",
-          amount: earmarkStore.convertedBalance(for: earmark.id)
-            ?? .zero(instrument: earmark.instrument))
-        Divider().frame(maxHeight: 32)
-        summaryItem(
-          label: "Saved",
-          amount: earmarkStore.convertedSaved(for: earmark.id)
-            ?? .zero(instrument: earmark.instrument))
-        Divider().frame(maxHeight: 32)
-        summaryItem(
-          label: "Spent",
-          amount: earmarkStore.convertedSpent(for: earmark.id)
-            ?? .zero(instrument: earmark.instrument))
-      }
-
+      summaryRow
       if let goal = earmark.savingsGoal, goal.isPositive {
-        VStack(spacing: 4) {
-          let balance =
-            earmarkStore.convertedBalance(for: earmark.id) ?? .zero(instrument: earmark.instrument)
-          let progress =
-            balance.isPositive
-            ? Double(truncating: (balance.quantity / goal.quantity) as NSDecimalNumber)
-            : 0.0
-
-          ProgressView(value: min(progress, 1.0)) {
-            HStack {
-              Text("Savings Goal")
-                .font(.caption)
-              Spacer()
-              InstrumentAmountView(amount: balance)
-                .font(.caption)
-              Text("of")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-              InstrumentAmountView(amount: goal)
-                .font(.caption)
-            }
-          }
-          .tint(progress >= 1.0 ? .green : .blue)
-
-          savingsDateRow
-        }
+        savingsProgress(goal: goal)
       }
     }
     .padding()
+  }
+
+  private var summaryRow: some View {
+    HStack(spacing: 24) {
+      summaryItem(
+        label: "Balance",
+        amount: earmarkStore.convertedBalance(for: earmark.id)
+          ?? .zero(instrument: earmark.instrument))
+      Divider().frame(maxHeight: 32)
+      summaryItem(
+        label: "Saved",
+        amount: earmarkStore.convertedSaved(for: earmark.id)
+          ?? .zero(instrument: earmark.instrument))
+      Divider().frame(maxHeight: 32)
+      summaryItem(
+        label: "Spent",
+        amount: earmarkStore.convertedSpent(for: earmark.id)
+          ?? .zero(instrument: earmark.instrument))
+    }
+  }
+
+  private func savingsProgress(goal: InstrumentAmount) -> some View {
+    let balance =
+      earmarkStore.convertedBalance(for: earmark.id) ?? .zero(instrument: earmark.instrument)
+    let progress =
+      balance.isPositive
+      ? Double(truncating: (balance.quantity / goal.quantity) as NSDecimalNumber)
+      : 0.0
+    return VStack(spacing: 4) {
+      ProgressView(value: min(progress, 1.0)) {
+        HStack {
+          Text("Savings Goal").font(.caption)
+          Spacer()
+          InstrumentAmountView(amount: balance).font(.caption)
+          Text("of").font(.caption).foregroundStyle(.secondary)
+          InstrumentAmountView(amount: goal).font(.caption)
+        }
+      }
+      .tint(progress >= 1.0 ? .green : .blue)
+      savingsDateRow
+    }
   }
 
   private func summaryItem(label: String, amount: InstrumentAmount) -> some View {
@@ -203,16 +203,49 @@ struct EarmarkDetailView: View {
   }
 }
 
-#Preview {
-  let earmarkId = UUID()
-  let earmark = Earmark(
-    id: earmarkId,
+@MainActor
+private func seedEarmarkDetailPreview(
+  backend: CloudKitBackend,
+  earmark: Earmark,
+  earmarkStore: EarmarkStore,
+  store: TransactionStore
+) async {
+  let accountId = UUID()
+  _ = try? await backend.accounts.create(
+    Account(id: accountId, name: "Test", type: .bank, instrument: .AUD))
+  _ = try? await backend.earmarks.create(earmark)
+  _ = try? await backend.transactions.create(
+    Transaction(
+      date: Date(), payee: "Flight Booking",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD, quantity: -50.23, type: .expense,
+          earmarkId: earmark.id)
+      ]))
+  _ = try? await backend.transactions.create(
+    Transaction(
+      date: Date().addingTimeInterval(-86400), payee: "Savings Transfer",
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD, quantity: 500, type: .income,
+          earmarkId: earmark.id)
+      ]))
+  await earmarkStore.load()
+  await store.load(filter: TransactionFilter(earmarkId: earmark.id))
+}
+
+private func previewEarmark() -> Earmark {
+  Earmark(
+    id: UUID(),
     name: "Holiday Fund",
     instrument: .AUD,
     savingsGoal: InstrumentAmount(quantity: 5000, instrument: .AUD),
     savingsStartDate: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1)),
-    savingsEndDate: Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 31))
-  )
+    savingsEndDate: Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 31)))
+}
+
+#Preview {
+  let earmark = previewEarmark()
   let (backend, _) = PreviewBackend.create()
   let earmarkStore = EarmarkStore(
     repository: backend.earmarks,
@@ -221,10 +254,8 @@ struct EarmarkDetailView: View {
   let store = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,
-    targetInstrument: .AUD
-  )
-
-  NavigationStack {
+    targetInstrument: .AUD)
+  return NavigationStack {
     EarmarkDetailView(
       earmark: earmark,
       accounts: Accounts(from: []),
@@ -236,27 +267,7 @@ struct EarmarkDetailView: View {
     .environment(earmarkStore)
   }
   .task {
-    let accountId = UUID()
-    _ = try? await backend.accounts.create(
-      Account(id: accountId, name: "Test", type: .bank, instrument: .AUD))
-    _ = try? await backend.earmarks.create(earmark)
-    _ = try? await backend.transactions.create(
-      Transaction(
-        date: Date(), payee: "Flight Booking",
-        legs: [
-          TransactionLeg(
-            accountId: accountId, instrument: .AUD, quantity: -50.23, type: .expense,
-            earmarkId: earmarkId)
-        ]))
-    _ = try? await backend.transactions.create(
-      Transaction(
-        date: Date().addingTimeInterval(-86400), payee: "Savings Transfer",
-        legs: [
-          TransactionLeg(
-            accountId: accountId, instrument: .AUD, quantity: 500, type: .income,
-            earmarkId: earmarkId)
-        ]))
-    await earmarkStore.load()
-    await store.load(filter: TransactionFilter(earmarkId: earmarkId))
+    await seedEarmarkDetailPreview(
+      backend: backend, earmark: earmark, earmarkStore: earmarkStore, store: store)
   }
 }

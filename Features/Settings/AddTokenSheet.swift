@@ -60,65 +60,72 @@ struct AddTokenSheet: View {
 
   // MARK: - Input
 
-  private var inputSection: some View {
-    Group {
-      Section("Token Type") {
-        Toggle("Native / Layer-1 token", isOn: $isNative)
-      }
+  @ViewBuilder private var inputSection: some View {
+    Section("Token Type") {
+      Toggle("Native / Layer-1 token", isOn: $isNative)
+    }
+    if isNative {
+      nativeTokenSection
+    } else {
+      contractTokenSection
+    }
+    resolveTokenSection
+  }
 
-      if isNative {
-        Section("Token") {
-          Picker("Chain", selection: $selectedChainId) {
-            ForEach(chains, id: \.id) { chain in
-              Text(chain.name).tag(chain.id)
-            }
-          }
-          TextField("Symbol (e.g. BTC)", text: $symbolHint)
-            .autocorrectionDisabled()
-            #if os(iOS)
-              .textInputAutocapitalization(.characters)
-            #endif
-        }
-      } else {
-        Section("Contract") {
-          Picker("Chain", selection: $selectedChainId) {
-            ForEach(chains, id: \.id) { chain in
-              Text(chain.name).tag(chain.id)
-            }
-          }
-          TextField("Contract address (0x...)", text: $contractAddress)
-            .autocorrectionDisabled()
-            #if os(iOS)
-              .textInputAutocapitalization(.never)
-              .keyboardType(.asciiCapable)
-            #endif
-          TextField("Symbol hint (optional)", text: $symbolHint)
-            .autocorrectionDisabled()
-            #if os(iOS)
-              .textInputAutocapitalization(.characters)
-            #endif
+  private var nativeTokenSection: some View {
+    Section("Token") {
+      Picker("Chain", selection: $selectedChainId) {
+        ForEach(chains, id: \.id) { chain in
+          Text(chain.name).tag(chain.id)
         }
       }
-
-      Section {
-        Button("Resolve Token") {
-          Task {
-            await store.resolveToken(
-              chainId: selectedChainId,
-              contractAddress: isNative
-                ? nil : contractAddress.trimmingCharacters(in: .whitespaces),
-              symbol: symbolHint.isEmpty ? nil : symbolHint.trimmingCharacters(in: .whitespaces),
-              isNative: isNative
-            )
-          }
-        }
+      TextField("Symbol (e.g. BTC)", text: $symbolHint)
+        .autocorrectionDisabled()
         #if os(iOS)
-          .buttonStyle(.borderedProminent)
-        #else
-          .buttonStyle(.bordered)
+          .textInputAutocapitalization(.characters)
         #endif
-        .disabled(isNative ? symbolHint.isEmpty : contractAddress.isEmpty)
+    }
+  }
+
+  private var contractTokenSection: some View {
+    Section("Contract") {
+      Picker("Chain", selection: $selectedChainId) {
+        ForEach(chains, id: \.id) { chain in
+          Text(chain.name).tag(chain.id)
+        }
       }
+      TextField("Contract address (0x...)", text: $contractAddress)
+        .autocorrectionDisabled()
+        #if os(iOS)
+          .textInputAutocapitalization(.never)
+          .keyboardType(.asciiCapable)
+        #endif
+      TextField("Symbol hint (optional)", text: $symbolHint)
+        .autocorrectionDisabled()
+        #if os(iOS)
+          .textInputAutocapitalization(.characters)
+        #endif
+    }
+  }
+
+  private var resolveTokenSection: some View {
+    Section {
+      Button("Resolve Token") {
+        Task {
+          await store.resolveToken(
+            chainId: selectedChainId,
+            contractAddress: isNative
+              ? nil : contractAddress.trimmingCharacters(in: .whitespaces),
+            symbol: symbolHint.isEmpty ? nil : symbolHint.trimmingCharacters(in: .whitespaces),
+            isNative: isNative)
+        }
+      }
+      #if os(iOS)
+        .buttonStyle(.borderedProminent)
+      #else
+        .buttonStyle(.bordered)
+      #endif
+      .disabled(isNative ? symbolHint.isEmpty : contractAddress.isEmpty)
     }
   }
 

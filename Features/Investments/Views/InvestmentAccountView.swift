@@ -180,43 +180,47 @@ struct InvestmentAccountView: View {
 
   private var valuationsList: some View {
     VStack(spacing: 0) {
-      HStack {
-        Text("Valuations")
-          .font(.headline)
-        Spacer()
-        Button {
-          showingAddValue = true
-        } label: {
-          Label("Record Value", systemImage: "plus")
-            .labelStyle(.iconOnly)
-        }
-        .help("Record Value")
-      }
-      .padding(.horizontal)
-      .padding(.vertical, 12)
-
+      valuationsHeader
       Divider()
+      valuationsBody
+    }
+  }
 
-      if investmentStore.values.isEmpty && !investmentStore.isLoading {
-        ContentUnavailableView(
-          "No Values",
-          systemImage: "chart.line.uptrend.xyaxis",
-          description: Text(
-            PlatformActionVerb.emptyStatePrompt(buttonLabel: "+", suffix: "to record a value")
-          )
-        )
-      } else {
-        List {
-          ForEach(investmentStore.values) { value in
-            InvestmentValueRow(value: value) {
-              Task {
-                await investmentStore.removeValue(accountId: account.id, date: value.date)
-              }
+  private var valuationsHeader: some View {
+    HStack {
+      Text("Valuations").font(.headline)
+      Spacer()
+      Button {
+        showingAddValue = true
+      } label: {
+        Label("Record Value", systemImage: "plus")
+          .labelStyle(.iconOnly)
+      }
+      .help("Record Value")
+    }
+    .padding(.horizontal)
+    .padding(.vertical, 12)
+  }
+
+  @ViewBuilder private var valuationsBody: some View {
+    if investmentStore.values.isEmpty && !investmentStore.isLoading {
+      ContentUnavailableView(
+        "No Values",
+        systemImage: "chart.line.uptrend.xyaxis",
+        description: Text(
+          PlatformActionVerb.emptyStatePrompt(buttonLabel: "+", suffix: "to record a value"))
+      )
+    } else {
+      List {
+        ForEach(investmentStore.values) { value in
+          InvestmentValueRow(value: value) {
+            Task {
+              await investmentStore.removeValue(accountId: account.id, date: value.date)
             }
           }
         }
-        .listStyle(.inset)
       }
+      .listStyle(.inset)
     }
   }
 
@@ -251,26 +255,49 @@ struct InvestmentAccountView: View {
   }
 }
 
+@MainActor
+private func seedLegacyValuations(
+  backend: CloudKitBackend, account: Account, store: InvestmentStore
+) async {
+  _ = try? await backend.accounts.create(
+    account, openingBalance: InstrumentAmount(quantity: 10_000, instrument: .AUD))
+  let calendar = Calendar.current
+  for monthsAgo in (0..<6).reversed() {
+    let date = calendar.date(byAdding: .month, value: -monthsAgo, to: Date()) ?? Date()
+    let quantity: Decimal = 9_500 + Decimal(6 - monthsAgo) * 400
+    await store.setValue(
+      accountId: account.id, date: date,
+      value: InstrumentAmount(quantity: quantity, instrument: .AUD))
+  }
+}
+
+@MainActor
+private func seedPositionValuations(backend: CloudKitBackend, account: Account) async {
+  let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+  _ = try? await backend.accounts.create(
+    account, openingBalance: InstrumentAmount(quantity: 0, instrument: .AUD))
+  _ = try? await backend.transactions.create(
+    Transaction(
+      date: Date().addingTimeInterval(-86_400 * 30),
+      legs: [
+        TransactionLeg(accountId: account.id, instrument: bhp, quantity: 100, type: .income),
+        TransactionLeg(accountId: account.id, instrument: .AUD, quantity: -4_000, type: .expense),
+      ]))
+}
+
 #Preview {
   let (backend, _) = PreviewBackend.create()
   let investmentStore = InvestmentStore(
     repository: backend.investments,
     transactionRepository: backend.transactions,
-    conversionService: backend.conversionService
-  )
+    conversionService: backend.conversionService)
   let transactionStore = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,
-    targetInstrument: .AUD
-  )
+    targetInstrument: .AUD)
   let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
-  let account = Account(
-    name: "Brokerage",
-    type: .investment,
-    instrument: .AUD
-  )
-
-  NavigationStack {
+  let account = Account(name: "Brokerage", type: .investment, instrument: .AUD)
+  return NavigationStack {
     InvestmentAccountView(
       account: account,
       accounts: Accounts(from: [account]),
@@ -282,20 +309,7 @@ struct InvestmentAccountView: View {
     .environment(session)
   }
   .frame(width: 720, height: 560)
-  .task {
-    _ = try? await backend.accounts.create(
-      account, openingBalance: InstrumentAmount(quantity: 10_000, instrument: .AUD))
-    let calendar = Calendar.current
-    for monthsAgo in (0..<6).reversed() {
-      let date = calendar.date(byAdding: .month, value: -monthsAgo, to: Date()) ?? Date()
-      let quantity: Decimal = 9_500 + Decimal(6 - monthsAgo) * 400
-      await investmentStore.setValue(
-        accountId: account.id,
-        date: date,
-        value: InstrumentAmount(quantity: quantity, instrument: .AUD)
-      )
-    }
-  }
+  .task { await seedLegacyValuations(backend: backend, account: account, store: investmentStore) }
 }
 
 #Preview("Position-tracked") {
@@ -303,16 +317,13 @@ struct InvestmentAccountView: View {
   let investmentStore = InvestmentStore(
     repository: backend.investments,
     transactionRepository: backend.transactions,
-    conversionService: backend.conversionService
-  )
+    conversionService: backend.conversionService)
   let transactionStore = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,
-    targetInstrument: .AUD
-  )
+    targetInstrument: .AUD)
   let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
   let account = Account(name: "Brokerage", type: .investment, instrument: .AUD)
-
   return NavigationStack {
     InvestmentAccountView(
       account: account,
@@ -325,18 +336,5 @@ struct InvestmentAccountView: View {
     .environment(session)
   }
   .frame(width: 720, height: 600)
-  .task {
-    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
-    _ = try? await backend.accounts.create(
-      account, openingBalance: InstrumentAmount(quantity: 0, instrument: .AUD))
-    _ = try? await backend.transactions.create(
-      Transaction(
-        date: Date().addingTimeInterval(-86_400 * 30),
-        legs: [
-          TransactionLeg(accountId: account.id, instrument: bhp, quantity: 100, type: .income),
-          TransactionLeg(accountId: account.id, instrument: .AUD, quantity: -4_000, type: .expense),
-        ]
-      )
-    )
-  }
+  .task { await seedPositionValuations(backend: backend, account: account) }
 }

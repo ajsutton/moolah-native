@@ -36,69 +36,72 @@ struct CreateAccountView: View {
 
   var body: some View {
     NavigationStack {
-      Form {
-        Section {
-          TextField("Name", text: $name)
-            .focused($focusedField, equals: .name)
-            .onSubmit { focusedField = .balance }
-            .accessibilityLabel("Account name")
-
-          Picker("Account Type", selection: $type) {
-            ForEach(AccountType.allCases, id: \.self) { type in
-              Text(type.displayName).tag(type)
-            }
-          }
-
-          if supportsComplexTransactions {
-            CurrencyPicker(selection: $currencyCode)
-          }
-
-          LabeledContent("Initial Balance") {
-            TextField(
-              "Amount",
-              value: $balanceDecimal,
-              format: .currency(code: currencyCode)
-            )
-            .monospacedDigit()
-            .focused($focusedField, equals: .balance)
-            #if os(iOS)
-              .keyboardType(.decimalPad)
-              .multilineTextAlignment(.trailing)
-            #endif
-            .accessibilityLabel("Initial balance")
-          }
-
-          DatePicker("Date", selection: $date, displayedComponents: .date)
-        }
-
-        if let errorMessage {
-          Section {
-            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-              .foregroundStyle(.red)
-              .font(.caption)
-          }
-        }
-      }
-      .navigationTitle("Create Account")
-      #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-      #endif
-      #if os(macOS)
-        .defaultFocus($focusedField, .name)
-      #endif
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") { dismiss() }
-        }
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Create") { Task { await submit() } }
-            .disabled(!isValid || isSubmitting)
-        }
-      }
+      form
     }
     #if os(macOS)
       .frame(minWidth: 500, minHeight: 400)
     #endif
+  }
+
+  private var form: some View {
+    Form {
+      Section {
+        detailsFields
+      }
+      if let errorMessage {
+        Section {
+          Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+            .foregroundStyle(.red)
+            .font(.caption)
+        }
+      }
+    }
+    .navigationTitle("Create Account")
+    #if os(iOS)
+      .navigationBarTitleDisplayMode(.inline)
+    #endif
+    #if os(macOS)
+      .defaultFocus($focusedField, .name)
+    #endif
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("Cancel") { dismiss() }
+      }
+      ToolbarItem(placement: .confirmationAction) {
+        Button("Create") { Task { await submit() } }
+          .disabled(!isValid || isSubmitting)
+      }
+    }
+  }
+
+  @ViewBuilder private var detailsFields: some View {
+    TextField("Name", text: $name)
+      .focused($focusedField, equals: .name)
+      .onSubmit { focusedField = .balance }
+      .accessibilityLabel("Account name")
+
+    Picker("Account Type", selection: $type) {
+      ForEach(AccountType.allCases, id: \.self) { type in
+        Text(type.displayName).tag(type)
+      }
+    }
+
+    if supportsComplexTransactions {
+      CurrencyPicker(selection: $currencyCode)
+    }
+
+    LabeledContent("Initial Balance") {
+      TextField("Amount", value: $balanceDecimal, format: .currency(code: currencyCode))
+        .monospacedDigit()
+        .focused($focusedField, equals: .balance)
+        #if os(iOS)
+          .keyboardType(.decimalPad)
+          .multilineTextAlignment(.trailing)
+        #endif
+        .accessibilityLabel("Initial balance")
+    }
+
+    DatePicker("Date", selection: $date, displayedComponents: .date)
   }
 
   private var isValid: Bool {

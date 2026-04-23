@@ -56,73 +56,72 @@ struct IncomeExpenseTableCard: View {
   private var tableView: some View {
     ScrollView(.horizontal, showsIndicators: false) {
       VStack(spacing: 0) {
-        // Header row
-        HStack(spacing: 12) {
-          Text("Month")
-            .frame(minWidth: 120, alignment: .leading)
-          Text("Income")
-            .frame(minWidth: 100, alignment: .trailing)
-          Text("Expense")
-            .frame(minWidth: 100, alignment: .trailing)
-          Text("Savings")
-            .frame(minWidth: 100, alignment: .trailing)
-          Text("Total Savings")
-            .frame(minWidth: 110, alignment: .trailing)
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-
+        headerRow
         Divider()
-
-        // Data rows (lazy, participates in outer ScrollView)
-        LazyVStack(spacing: 0) {
-          ForEach(visibleData) { item in
-            VStack(spacing: 0) {
-              HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                  Text(Self.monthLabel(for: item))
-                    .font(.body)
-                    .monospacedDigit()
-                  Text(monthsAgoLabel(for: item))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                }
-                .frame(minWidth: 120, alignment: .leading)
-
-                InstrumentAmountView(amount: income(for: item))
-                  .frame(minWidth: 100, alignment: .trailing)
-
-                InstrumentAmountView(amount: expense(for: item))
-                  .frame(minWidth: 100, alignment: .trailing)
-
-                InstrumentAmountView(amount: profit(for: item))
-                  .frame(minWidth: 100, alignment: .trailing)
-
-                InstrumentAmountView(amount: cumulativeSavings(upTo: item))
-                  .frame(minWidth: 110, alignment: .trailing)
-              }
-              .padding(.horizontal, 12)
-              .padding(.vertical, 8)
-              .accessibilityElement(children: .combine)
-              .accessibilityLabel(
-                Self.accessibilityLabel(for: item, in: data, includeEarmarks: includeEarmarks))
-
-              Divider()
-            }
-            .onAppear {
-              if item.id == visibleData.last?.id, visibleCount < data.count {
-                visibleCount += Self.loadMoreCount
-              }
-            }
-          }
-        }
+        dataRows
       }
       .frame(minWidth: 530)
     }
     .accessibilityLabel("Monthly income and expense table")
+  }
+
+  private var headerRow: some View {
+    HStack(spacing: 12) {
+      Text("Month").frame(minWidth: 120, alignment: .leading)
+      Text("Income").frame(minWidth: 100, alignment: .trailing)
+      Text("Expense").frame(minWidth: 100, alignment: .trailing)
+      Text("Savings").frame(minWidth: 100, alignment: .trailing)
+      Text("Total Savings").frame(minWidth: 110, alignment: .trailing)
+    }
+    .font(.caption)
+    .foregroundStyle(.secondary)
+    .padding(.horizontal, 12)
+    .padding(.vertical, 8)
+  }
+
+  private var dataRows: some View {
+    // Lazy, participates in outer ScrollView.
+    LazyVStack(spacing: 0) {
+      ForEach(visibleData) { item in
+        dataRow(for: item)
+      }
+    }
+  }
+
+  private func dataRow(for item: MonthlyIncomeExpense) -> some View {
+    VStack(spacing: 0) {
+      HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 2) {
+          Text(Self.monthLabel(for: item))
+            .font(.body)
+            .monospacedDigit()
+          Text(monthsAgoLabel(for: item))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+        }
+        .frame(minWidth: 120, alignment: .leading)
+        InstrumentAmountView(amount: income(for: item))
+          .frame(minWidth: 100, alignment: .trailing)
+        InstrumentAmountView(amount: expense(for: item))
+          .frame(minWidth: 100, alignment: .trailing)
+        InstrumentAmountView(amount: profit(for: item))
+          .frame(minWidth: 100, alignment: .trailing)
+        InstrumentAmountView(amount: cumulativeSavings(upTo: item))
+          .frame(minWidth: 110, alignment: .trailing)
+      }
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel(
+        Self.accessibilityLabel(for: item, in: data, includeEarmarks: includeEarmarks))
+      Divider()
+    }
+    .onAppear {
+      if item.id == visibleData.last?.id, visibleCount < data.count {
+        visibleCount += Self.loadMoreCount
+      }
+    }
   }
 
   private func income(for item: MonthlyIncomeExpense) -> InstrumentAmount {

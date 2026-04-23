@@ -15,42 +15,42 @@ struct EditBudgetAmountSheet: View {
 
   var body: some View {
     NavigationStack {
-      Form {
-        Section("Budget for \(lineItem.categoryName)") {
-          HStack {
-            Text(lineItem.budgeted.instrument.currencySymbol ?? lineItem.budgeted.instrument.id)
-              .foregroundStyle(.secondary)
-            TextField("Amount", text: $amountText)
-              .monospacedDigit()
-              #if os(iOS)
-                .keyboardType(.decimalPad)
-              #endif
-          }
-        }
-      }
-      .formStyle(.grouped)
-      .navigationTitle("Edit Budget")
-      #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-      #endif
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") {
-            dismiss()
-          }
-        }
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Save") {
-            save()
-          }
-          .disabled(amountText.isEmpty)
-        }
-      }
+      form
     }
     .presentationDetents([.medium])
     #if os(macOS)
       .frame(minWidth: 400, minHeight: 300)
     #endif
+  }
+
+  private var form: some View {
+    Form {
+      Section("Budget for \(lineItem.categoryName)") {
+        HStack {
+          Text(lineItem.budgeted.instrument.currencySymbol ?? lineItem.budgeted.instrument.id)
+            .foregroundStyle(.secondary)
+          TextField("Amount", text: $amountText)
+            .monospacedDigit()
+            #if os(iOS)
+              .keyboardType(.decimalPad)
+            #endif
+        }
+      }
+    }
+    .formStyle(.grouped)
+    .navigationTitle("Edit Budget")
+    #if os(iOS)
+      .navigationBarTitleDisplayMode(.inline)
+    #endif
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("Cancel") { dismiss() }
+      }
+      ToolbarItem(placement: .confirmationAction) {
+        Button("Save") { save() }
+          .disabled(amountText.isEmpty)
+      }
+    }
   }
 
   private func save() {

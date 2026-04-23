@@ -987,9 +987,19 @@ struct TransactionDetailView: View {
   }
 }
 
+@MainActor
+private func previewStore() -> TransactionStore {
+  let (backend, _) = PreviewBackend.create()
+  return TransactionStore(
+    repository: backend.transactions,
+    conversionService: backend.conversionService,
+    targetInstrument: .AUD
+  )
+}
+
 #Preview {
   let accountId = UUID()
-  NavigationStack {
+  return NavigationStack {
     TransactionDetailView(
       transaction: Transaction(
         date: Date(),
@@ -1006,17 +1016,8 @@ struct TransactionDetailView: View {
         Category(name: "Groceries"),
         Category(name: "Transport"),
       ]),
-      earmarks: Earmarks(from: [
-        Earmark(name: "Holiday Fund", instrument: .AUD)
-      ]),
-      transactionStore: {
-        let (backend, _) = PreviewBackend.create()
-        return TransactionStore(
-          repository: backend.transactions,
-          conversionService: backend.conversionService,
-          targetInstrument: .AUD
-        )
-      }(),
+      earmarks: Earmarks(from: [Earmark(name: "Holiday Fund", instrument: .AUD)]),
+      transactionStore: previewStore(),
       viewingAccountId: accountId,
       supportsComplexTransactions: true,
       onUpdate: { _ in },
@@ -1028,7 +1029,7 @@ struct TransactionDetailView: View {
 #Preview("Custom Transaction") {
   let accountId1 = UUID()
   let accountId2 = UUID()
-  NavigationStack {
+  return NavigationStack {
     TransactionDetailView(
       transaction: Transaction(
         date: Date(),
@@ -1044,24 +1045,13 @@ struct TransactionDetailView: View {
       ),
       accounts: Accounts(from: [
         Account(id: accountId1, name: "Checking", type: .bank, instrument: .AUD),
-        Account(
-          id: accountId2, name: "Credit Card", type: .creditCard, instrument: .AUD),
+        Account(id: accountId2, name: "Credit Card", type: .creditCard, instrument: .AUD),
       ]),
       categories: Categories(from: [
-        Category(name: "Groceries"),
-        Category(name: "Transport"),
+        Category(name: "Groceries"), Category(name: "Transport"),
       ]),
-      earmarks: Earmarks(from: [
-        Earmark(name: "Holiday Fund", instrument: .AUD)
-      ]),
-      transactionStore: {
-        let (backend, _) = PreviewBackend.create()
-        return TransactionStore(
-          repository: backend.transactions,
-          conversionService: backend.conversionService,
-          targetInstrument: .AUD
-        )
-      }(),
+      earmarks: Earmarks(from: [Earmark(name: "Holiday Fund", instrument: .AUD)]),
+      transactionStore: previewStore(),
       supportsComplexTransactions: true,
       onUpdate: { _ in },
       onDelete: { _ in }
@@ -1071,7 +1061,7 @@ struct TransactionDetailView: View {
 
 #Preview("Earmark-Only Transaction") {
   let earmarkId = UUID()
-  NavigationStack {
+  return NavigationStack {
     TransactionDetailView(
       transaction: Transaction(
         date: Date(),
@@ -1090,14 +1080,7 @@ struct TransactionDetailView: View {
         Earmark(id: earmarkId, name: "Income Tax FY2025", instrument: .AUD),
         Earmark(name: "Holiday Fund", instrument: .AUD),
       ]),
-      transactionStore: {
-        let (backend, _) = PreviewBackend.create()
-        return TransactionStore(
-          repository: backend.transactions,
-          conversionService: backend.conversionService,
-          targetInstrument: .AUD
-        )
-      }(),
+      transactionStore: previewStore(),
       supportsComplexTransactions: true,
       onUpdate: { _ in },
       onDelete: { _ in }
@@ -1108,7 +1091,7 @@ struct TransactionDetailView: View {
 #Preview("Cross-Currency Transfer") {
   let accountId1 = UUID()
   let accountId2 = UUID()
-  NavigationStack {
+  return NavigationStack {
     TransactionDetailView(
       transaction: Transaction(
         date: Date(),
@@ -1125,14 +1108,7 @@ struct TransactionDetailView: View {
       ]),
       categories: Categories(from: []),
       earmarks: Earmarks(from: []),
-      transactionStore: {
-        let (backend, _) = PreviewBackend.create()
-        return TransactionStore(
-          repository: backend.transactions,
-          conversionService: backend.conversionService,
-          targetInstrument: .AUD
-        )
-      }(),
+      transactionStore: previewStore(),
       viewingAccountId: accountId1,
       supportsComplexTransactions: true,
       onUpdate: { _ in },
@@ -1144,7 +1120,7 @@ struct TransactionDetailView: View {
 #Preview("Cross-Currency Transfer (Sent)") {
   let accountId1 = UUID()
   let accountId2 = UUID()
-  NavigationStack {
+  return NavigationStack {
     TransactionDetailView(
       transaction: Transaction(
         date: Date(),
@@ -1160,14 +1136,7 @@ struct TransactionDetailView: View {
       ]),
       categories: Categories(from: []),
       earmarks: Earmarks(from: []),
-      transactionStore: {
-        let (backend, _) = PreviewBackend.create()
-        return TransactionStore(
-          repository: backend.transactions,
-          conversionService: backend.conversionService,
-          targetInstrument: .AUD
-        )
-      }(),
+      transactionStore: previewStore(),
       viewingAccountId: accountId2,
       supportsComplexTransactions: true,
       onUpdate: { _ in },
@@ -1178,7 +1147,7 @@ struct TransactionDetailView: View {
 
 #Preview("Scheduled (Recurring)") {
   let accountId = UUID()
-  NavigationStack {
+  return NavigationStack {
     TransactionDetailView(
       transaction: Transaction(
         date: Date().addingTimeInterval(60 * 60 * 24 * 3),
@@ -1192,18 +1161,9 @@ struct TransactionDetailView: View {
       accounts: Accounts(from: [
         Account(id: accountId, name: "Checking", type: .bank, instrument: .AUD)
       ]),
-      categories: Categories(from: [
-        Category(name: "Housing")
-      ]),
+      categories: Categories(from: [Category(name: "Housing")]),
       earmarks: Earmarks(from: []),
-      transactionStore: {
-        let (backend, _) = PreviewBackend.create()
-        return TransactionStore(
-          repository: backend.transactions,
-          conversionService: backend.conversionService,
-          targetInstrument: .AUD
-        )
-      }(),
+      transactionStore: previewStore(),
       showRecurrence: true,
       viewingAccountId: accountId,
       supportsComplexTransactions: true,

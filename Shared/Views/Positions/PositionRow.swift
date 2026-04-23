@@ -13,45 +13,51 @@ struct PositionRow: View {
 
   var body: some View {
     HStack(alignment: .firstTextBaseline) {
-      VStack(alignment: .leading, spacing: 2) {
-        HStack(spacing: 6) {
-          KindBadge(kind: row.instrument.kind)
-          Text(row.instrument.name)
-            .font(.headline)
-        }
-        if let secondary = secondaryIdentifier {
-          Text(secondary)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-        Text(row.quantityCaption)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .monospacedDigit()
-      }
-
+      leadingColumn
       Spacer()
-
-      VStack(alignment: .trailing, spacing: 2) {
-        if let value = row.value {
-          Text(value.formatted)
-            .font(.body)
-            .monospacedDigit()
-        } else {
-          Text("—")
-            .foregroundStyle(.tertiary)
-        }
-        if let gain = row.gainLoss {
-          Text(gain.signedFormatted)
-            .font(.caption)
-            .monospacedDigit()
-            .foregroundStyle(gainColor(gain))
-        }
-      }
+      trailingColumn
     }
     .padding(.vertical, 8)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)
+  }
+
+  private var leadingColumn: some View {
+    VStack(alignment: .leading, spacing: 2) {
+      HStack(spacing: 6) {
+        KindBadge(kind: row.instrument.kind)
+        Text(row.instrument.name)
+          .font(.headline)
+      }
+      if let secondary = secondaryIdentifier {
+        Text(secondary)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+      Text(row.quantityCaption)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .monospacedDigit()
+    }
+  }
+
+  private var trailingColumn: some View {
+    VStack(alignment: .trailing, spacing: 2) {
+      if let value = row.value {
+        Text(value.formatted)
+          .font(.body)
+          .monospacedDigit()
+      } else {
+        Text("—")
+          .foregroundStyle(.tertiary)
+      }
+      if let gain = row.gainLoss {
+        Text(gain.signedFormatted)
+          .font(.caption)
+          .monospacedDigit()
+          .foregroundStyle(gainColor(gain))
+      }
+    }
   }
 
   private var secondaryIdentifier: String? {
@@ -112,43 +118,42 @@ struct KindBadge: View {
   }
 }
 
-#Preview("rows") {
+private func previewRows() -> [ValuedPosition] {
   let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
   let eth = Instrument.crypto(
     chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
   let aud = Instrument.AUD
+  return [
+    ValuedPosition(
+      instrument: bhp, quantity: 250,
+      unitPrice: InstrumentAmount(quantity: 45.30, instrument: aud),
+      costBasis: InstrumentAmount(quantity: 10_125, instrument: aud),
+      value: InstrumentAmount(quantity: 11_325, instrument: aud)),
+    ValuedPosition(
+      instrument: eth, quantity: 2.45,
+      unitPrice: InstrumentAmount(quantity: 4_000, instrument: aud),
+      costBasis: InstrumentAmount(quantity: 7_500, instrument: aud),
+      value: InstrumentAmount(quantity: 9_800, instrument: aud)),
+    ValuedPosition(
+      instrument: aud, quantity: 1_520,
+      unitPrice: nil, costBasis: nil,
+      value: InstrumentAmount(quantity: 1_520, instrument: aud)),
+    ValuedPosition(
+      instrument: bhp, quantity: 100,
+      unitPrice: nil, costBasis: nil, value: nil),
+    ValuedPosition(
+      instrument: bhp, quantity: 50,
+      unitPrice: InstrumentAmount(quantity: 30, instrument: aud),
+      costBasis: InstrumentAmount(quantity: 2_000, instrument: aud),
+      value: InstrumentAmount(quantity: 1_500, instrument: aud)),
+  ]
+}
+
+#Preview("rows") {
   List {
-    PositionRow(
-      row: ValuedPosition(
-        instrument: bhp, quantity: 250,
-        unitPrice: InstrumentAmount(quantity: 45.30, instrument: aud),
-        costBasis: InstrumentAmount(quantity: 10_125, instrument: aud),
-        value: InstrumentAmount(quantity: 11_325, instrument: aud)
-      ))
-    PositionRow(
-      row: ValuedPosition(
-        instrument: eth, quantity: 2.45,
-        unitPrice: InstrumentAmount(quantity: 4_000, instrument: aud),
-        costBasis: InstrumentAmount(quantity: 7_500, instrument: aud),
-        value: InstrumentAmount(quantity: 9_800, instrument: aud)
-      ))
-    PositionRow(
-      row: ValuedPosition(
-        instrument: aud, quantity: 1_520,
-        unitPrice: nil, costBasis: nil,
-        value: InstrumentAmount(quantity: 1_520, instrument: aud)
-      ))
-    PositionRow(
-      row: ValuedPosition(
-        instrument: bhp, quantity: 100,
-        unitPrice: nil, costBasis: nil, value: nil))
-    PositionRow(
-      row: ValuedPosition(
-        instrument: bhp, quantity: 50,
-        unitPrice: InstrumentAmount(quantity: 30, instrument: aud),
-        costBasis: InstrumentAmount(quantity: 2_000, instrument: aud),
-        value: InstrumentAmount(quantity: 1_500, instrument: aud)
-      ))
+    ForEach(previewRows()) { row in
+      PositionRow(row: row)
+    }
   }
   .frame(width: 420)
 }

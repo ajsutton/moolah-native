@@ -100,44 +100,8 @@ private struct SimpleTransactionRow: View {
 
   var body: some View {
     HStack(spacing: 12) {
-      VStack(alignment: .leading, spacing: 4) {
-        HStack(spacing: 4) {
-          if isOverdue {
-            Image(systemName: "exclamationmark.triangle.fill")
-              .foregroundStyle(.red)
-              .imageScale(.small)
-              .accessibilityLabel("Overdue")
-          }
-          Text(displayPayee)
-            .font(.body)
-            .fontWeight(.medium)
-            .foregroundStyle(isOverdue ? .red : .primary)
-        }
-
-        HStack(spacing: 8) {
-          Text(transaction.date, format: .dateTime.month().day())
-            .font(.caption)
-            .foregroundStyle(isDueToday ? .orange : .secondary)
-            .fontWeight(isDueToday ? .semibold : .regular)
-            .monospacedDigit()
-
-          if let recurPeriod = transaction.recurPeriod,
-            let recurEvery = transaction.recurEvery,
-            recurPeriod != .once
-          {
-            Text("•")
-              .foregroundStyle(.secondary)
-            Text(recurPeriod.recurrenceDescription(every: recurEvery))
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .accessibilityLabel(
-                "Repeats \(recurPeriod.recurrenceDescription(every: recurEvery))")
-          }
-        }
-      }
-
+      payeeColumn
       Spacer()
-
       if let displayAmount {
         InstrumentAmountView(amount: displayAmount, font: .body)
       } else {
@@ -146,31 +110,72 @@ private struct SimpleTransactionRow: View {
           .monospacedDigit()
           .foregroundStyle(.secondary)
       }
-
-      Button {
-        Task {
-          isPaying = true
-          await onPay()
-          isPaying = false
-        }
-      } label: {
-        if isPaying {
-          ProgressView()
-            .controlSize(.small)
-        } else {
-          Text("Pay")
-        }
-      }
-      #if os(macOS)
-        .buttonStyle(.bordered)
-      #else
-        .buttonStyle(.borderedProminent)
-      #endif
-      .controlSize(.small)
-      .disabled(isPaying)
-      .accessibilityLabel("Pay \(displayPayee)")
+      payButton
     }
     .padding(.vertical, 4)
+  }
+
+  private var payeeColumn: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      HStack(spacing: 4) {
+        if isOverdue {
+          Image(systemName: "exclamationmark.triangle.fill")
+            .foregroundStyle(.red)
+            .imageScale(.small)
+            .accessibilityLabel("Overdue")
+        }
+        Text(displayPayee)
+          .font(.body)
+          .fontWeight(.medium)
+          .foregroundStyle(isOverdue ? .red : .primary)
+      }
+      recurrenceRow
+    }
+  }
+
+  private var recurrenceRow: some View {
+    HStack(spacing: 8) {
+      Text(transaction.date, format: .dateTime.month().day())
+        .font(.caption)
+        .foregroundStyle(isDueToday ? .orange : .secondary)
+        .fontWeight(isDueToday ? .semibold : .regular)
+        .monospacedDigit()
+      if let recurPeriod = transaction.recurPeriod,
+        let recurEvery = transaction.recurEvery,
+        recurPeriod != .once
+      {
+        Text("•").foregroundStyle(.secondary)
+        Text(recurPeriod.recurrenceDescription(every: recurEvery))
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .accessibilityLabel(
+            "Repeats \(recurPeriod.recurrenceDescription(every: recurEvery))")
+      }
+    }
+  }
+
+  private var payButton: some View {
+    Button {
+      Task {
+        isPaying = true
+        await onPay()
+        isPaying = false
+      }
+    } label: {
+      if isPaying {
+        ProgressView().controlSize(.small)
+      } else {
+        Text("Pay")
+      }
+    }
+    #if os(macOS)
+      .buttonStyle(.bordered)
+    #else
+      .buttonStyle(.borderedProminent)
+    #endif
+    .controlSize(.small)
+    .disabled(isPaying)
+    .accessibilityLabel("Pay \(displayPayee)")
   }
 
   private var displayPayee: String {
@@ -188,7 +193,7 @@ private struct SimpleTransactionRow: View {
     targetInstrument: .AUD
   )
 
-  UpcomingTransactionsCard(
+  return UpcomingTransactionsCard(
     accounts: Accounts(from: []),
     categories: Categories(from: []),
     earmarks: Earmarks(from: []),
@@ -197,42 +202,34 @@ private struct SimpleTransactionRow: View {
   )
   .frame(width: 400)
   .padding()
-  .task {
-    let account = Account(
+  .task { await seedUpcomingPreview(backend: backend, store: store) }
+}
+
+@MainActor
+private func seedUpcomingPreview(backend: CloudKitBackend, store: TransactionStore) async {
+  let account = Account(id: UUID(), name: "Test Account", type: .bank, instrument: .AUD)
+  _ = try? await backend.accounts.create(
+    account,
+    openingBalance: InstrumentAmount(quantity: 1000, instrument: .AUD))
+  _ = try? await backend.transactions.create(
+    Transaction(
       id: UUID(),
-      name: "Test Account",
-      type: .bank,
-      instrument: .AUD
-    )
-    _ = try? await backend.accounts.create(
-      account,
-      openingBalance: InstrumentAmount(quantity: 1000, instrument: .AUD)
-    )
-
-    _ = try? await backend.transactions.create(
-      Transaction(
-        id: UUID(),
-        date: Date().addingTimeInterval(86400 * 2),
-        payee: "Utility Bill",
-        recurPeriod: .month,
-        recurEvery: 1,
-        legs: [
-          TransactionLeg(accountId: account.id, instrument: .AUD, quantity: -50, type: .expense)
-        ]
-      ))
-
-    _ = try? await backend.transactions.create(
-      Transaction(
-        id: UUID(),
-        date: Date().addingTimeInterval(86400 * 7),
-        payee: "Paycheck",
-        recurPeriod: .week,
-        recurEvery: 2,
-        legs: [
-          TransactionLeg(accountId: account.id, instrument: .AUD, quantity: 2000, type: .income)
-        ]
-      ))
-
-    await store.load(filter: TransactionFilter(scheduled: true))
-  }
+      date: Date().addingTimeInterval(86400 * 2),
+      payee: "Utility Bill",
+      recurPeriod: .month,
+      recurEvery: 1,
+      legs: [
+        TransactionLeg(accountId: account.id, instrument: .AUD, quantity: -50, type: .expense)
+      ]))
+  _ = try? await backend.transactions.create(
+    Transaction(
+      id: UUID(),
+      date: Date().addingTimeInterval(86400 * 7),
+      payee: "Paycheck",
+      recurPeriod: .week,
+      recurEvery: 2,
+      legs: [
+        TransactionLeg(accountId: account.id, instrument: .AUD, quantity: 2000, type: .income)
+      ]))
+  await store.load(filter: TransactionFilter(scheduled: true))
 }

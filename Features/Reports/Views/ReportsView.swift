@@ -25,86 +25,13 @@ struct ReportsView: View {
   var body: some View {
     NavigationStack {
       VStack(spacing: 0) {
-        // Date range selector
         dateRangeSelector
-
         Divider()
-
-        if reportingStore.isLoadingCategoryBalances {
-          ProgressView("Loading report...")
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let error = reportingStore.categoryBalancesError {
-          ContentUnavailableView {
-            Label("Error Loading Report", systemImage: "exclamationmark.triangle")
-          } description: {
-            Text(error.localizedDescription)
-          } actions: {
-            Button("Try Again") {
-              Task {
-                await reportingStore.loadCategoryBalances(dateRange: resolvedFrom...resolvedTo)
-              }
-            }
-          }
-        } else {
-          // Income and Expense columns: side by side on macOS, stacked on iOS
-          #if os(macOS)
-            HStack(spacing: 0) {
-              CategoryBalanceTable(
-                title: "Income",
-                balances: reportingStore.incomeBalances,
-                categories: categories,
-                dateRange: resolvedFrom...resolvedTo,
-                profileInstrument: reportingStore.profileCurrency
-              )
-
-              Divider()
-
-              CategoryBalanceTable(
-                title: "Expenses",
-                balances: reportingStore.expenseBalances,
-                categories: categories,
-                dateRange: resolvedFrom...resolvedTo,
-                profileInstrument: reportingStore.profileCurrency
-              )
-            }
-          #else
-            VStack(spacing: 0) {
-              CategoryBalanceTable(
-                title: "Income",
-                balances: reportingStore.incomeBalances,
-                categories: categories,
-                dateRange: resolvedFrom...resolvedTo,
-                profileInstrument: reportingStore.profileCurrency
-              )
-
-              Divider()
-
-              CategoryBalanceTable(
-                title: "Expenses",
-                balances: reportingStore.expenseBalances,
-                categories: categories,
-                dateRange: resolvedFrom...resolvedTo,
-                profileInstrument: reportingStore.profileCurrency
-              )
-            }
-          #endif
-        }
+        reportContent
       }
       .profileNavigationTitle("Reports")
       .navigationDestination(for: CategoryDrillDown.self) { drillDown in
-        let categoryName = categories.by(id: drillDown.categoryId)?.name ?? "Category"
-        TransactionListView(
-          title: categoryName,
-          filter: TransactionFilter(
-            dateRange: drillDown.dateRange,
-            categoryIds: [drillDown.categoryId]
-          ),
-          accounts: accounts,
-          categories: categories,
-          earmarks: earmarks,
-          transactionStore: transactionStore,
-          supportsComplexTransactions: session.profile.supportsComplexTransactions
-        )
+        drillDownDestination(drillDown)
       }
     }
     .task(id: DateRangeKey(from: resolvedFrom, to: resolvedTo)) {
@@ -123,6 +50,68 @@ struct ReportsView: View {
       guard dateRange == .custom else { return }
       resolvedTo = newValue
     }
+  }
+
+  @ViewBuilder private var reportContent: some View {
+    if reportingStore.isLoadingCategoryBalances {
+      ProgressView("Loading report...")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    } else if let error = reportingStore.categoryBalancesError {
+      ContentUnavailableView {
+        Label("Error Loading Report", systemImage: "exclamationmark.triangle")
+      } description: {
+        Text(error.localizedDescription)
+      } actions: {
+        Button("Try Again") {
+          Task {
+            await reportingStore.loadCategoryBalances(dateRange: resolvedFrom...resolvedTo)
+          }
+        }
+      }
+    } else {
+      incomeAndExpenseTables
+    }
+  }
+
+  @ViewBuilder private var incomeAndExpenseTables: some View {
+    // Income and Expense columns: side by side on macOS, stacked on iOS.
+    #if os(macOS)
+      HStack(spacing: 0) {
+        categoryTable(title: "Income", balances: reportingStore.incomeBalances)
+        Divider()
+        categoryTable(title: "Expenses", balances: reportingStore.expenseBalances)
+      }
+    #else
+      VStack(spacing: 0) {
+        categoryTable(title: "Income", balances: reportingStore.incomeBalances)
+        Divider()
+        categoryTable(title: "Expenses", balances: reportingStore.expenseBalances)
+      }
+    #endif
+  }
+
+  private func categoryTable(title: String, balances: [UUID: InstrumentAmount]) -> some View {
+    CategoryBalanceTable(
+      title: title,
+      balances: balances,
+      categories: categories,
+      dateRange: resolvedFrom...resolvedTo,
+      profileInstrument: reportingStore.profileCurrency)
+  }
+
+  @ViewBuilder
+  private func drillDownDestination(_ drillDown: CategoryDrillDown) -> some View {
+    let categoryName = categories.by(id: drillDown.categoryId)?.name ?? "Category"
+    TransactionListView(
+      title: categoryName,
+      filter: TransactionFilter(
+        dateRange: drillDown.dateRange,
+        categoryIds: [drillDown.categoryId]),
+      accounts: accounts,
+      categories: categories,
+      earmarks: earmarks,
+      transactionStore: transactionStore,
+      supportsComplexTransactions: session.profile.supportsComplexTransactions)
   }
 
   /// Stable identity for the `.task(id:)` trigger — re-running the load
@@ -159,31 +148,69 @@ struct ReportsView: View {
   }
 }
 
+private struct ReportsPreviewIds {
+  let salaryId = UUID()
+  let groceriesId = UUID()
+  let rentId = UUID()
+}
+
+@MainActor
+private func seedReportsPreview(
+  backend: CloudKitBackend,
+  account: Account,
+  ids: ReportsPreviewIds
+) async {
+  _ = try? await backend.accounts.create(
+    account, openingBalance: InstrumentAmount(quantity: 5_000, instrument: .AUD))
+  _ = try? await backend.categories.create(Category(id: ids.salaryId, name: "Salary"))
+  _ = try? await backend.categories.create(Category(id: ids.groceriesId, name: "Groceries"))
+  _ = try? await backend.categories.create(Category(id: ids.rentId, name: "Rent"))
+  _ = try? await backend.transactions.create(
+    Transaction(
+      date: Date(), payee: "Employer",
+      legs: [
+        TransactionLeg(
+          accountId: account.id, instrument: .AUD, quantity: 4500, type: .income,
+          categoryId: ids.salaryId)
+      ]))
+  _ = try? await backend.transactions.create(
+    Transaction(
+      date: Date().addingTimeInterval(-86400), payee: "Supermarket",
+      legs: [
+        TransactionLeg(
+          accountId: account.id, instrument: .AUD, quantity: -220, type: .expense,
+          categoryId: ids.groceriesId)
+      ]))
+  _ = try? await backend.transactions.create(
+    Transaction(
+      date: Date().addingTimeInterval(-2 * 86400), payee: "Landlord",
+      legs: [
+        TransactionLeg(
+          accountId: account.id, instrument: .AUD, quantity: -1800, type: .expense,
+          categoryId: ids.rentId)
+      ]))
+}
+
 #Preview {
   let (backend, _) = PreviewBackend.create()
   let transactionStore = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,
-    targetInstrument: .AUD
-  )
+    targetInstrument: .AUD)
   let reportingStore = ReportingStore(
     transactionRepository: backend.transactions,
     analysisRepository: backend.analysis,
     conversionService: backend.conversionService,
-    profileCurrency: .AUD
-  )
-  let salaryId = UUID()
-  let groceriesId = UUID()
-  let rentId = UUID()
+    profileCurrency: .AUD)
+  let ids = ReportsPreviewIds()
   let categories = Categories(from: [
-    Category(id: salaryId, name: "Salary"),
-    Category(id: groceriesId, name: "Groceries"),
-    Category(id: rentId, name: "Rent"),
+    Category(id: ids.salaryId, name: "Salary"),
+    Category(id: ids.groceriesId, name: "Groceries"),
+    Category(id: ids.rentId, name: "Rent"),
   ])
   let account = Account(name: "Checking", type: .bank, instrument: .AUD)
   let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
-
-  ReportsView(
+  return ReportsView(
     reportingStore: reportingStore,
     categories: categories,
     accounts: Accounts(from: [account]),
@@ -193,37 +220,6 @@ struct ReportsView: View {
   .environment(session)
   .frame(width: 900, height: 600)
   .task {
-    _ = try? await backend.accounts.create(
-      account, openingBalance: InstrumentAmount(quantity: 5_000, instrument: .AUD))
-    _ = try? await backend.categories.create(
-      Category(id: salaryId, name: "Salary"))
-    _ = try? await backend.categories.create(
-      Category(id: groceriesId, name: "Groceries"))
-    _ = try? await backend.categories.create(
-      Category(id: rentId, name: "Rent"))
-    _ = try? await backend.transactions.create(
-      Transaction(
-        date: Date(), payee: "Employer",
-        legs: [
-          TransactionLeg(
-            accountId: account.id, instrument: .AUD, quantity: 4500, type: .income,
-            categoryId: salaryId)
-        ]))
-    _ = try? await backend.transactions.create(
-      Transaction(
-        date: Date().addingTimeInterval(-86400), payee: "Supermarket",
-        legs: [
-          TransactionLeg(
-            accountId: account.id, instrument: .AUD, quantity: -220, type: .expense,
-            categoryId: groceriesId)
-        ]))
-    _ = try? await backend.transactions.create(
-      Transaction(
-        date: Date().addingTimeInterval(-2 * 86400), payee: "Landlord",
-        legs: [
-          TransactionLeg(
-            accountId: account.id, instrument: .AUD, quantity: -1800, type: .expense,
-            categoryId: rentId)
-        ]))
+    await seedReportsPreview(backend: backend, account: account, ids: ids)
   }
 }

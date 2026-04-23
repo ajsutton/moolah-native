@@ -158,69 +158,10 @@ struct SettingsView: View {
 
     private var iOSLayout: some View {
       List {
-        Section("Profiles") {
-          ForEach(profileStore.profiles) { profile in
-            NavigationLink {
-              profileDetailView(for: profile)
-                .navigationTitle(profile.label)
-            } label: {
-              profileRow(profile)
-            }
-            .swipeActions(edge: .leading) {
-              if profile.backendType == .cloudKit,
-                profile.id == profileStore.activeProfileID
-              {
-                Button {
-                  Task { await handleExport(profile: profile) }
-                } label: {
-                  Label("Export", systemImage: "square.and.arrow.up")
-                }
-                .tint(.blue)
-              }
-            }
-          }
-          .onDelete { indexSet in
-            if let index = indexSet.first {
-              profileToDelete = profileStore.profiles[index]
-              showDeleteAlert = true
-            }
-          }
-        }
-
-        Section {
-          Button {
-            showAddProfile = true
-          } label: {
-            Label("Add Profile", systemImage: "plus")
-          }
-
-          Button {
-            showImportPicker = true
-          } label: {
-            Label("Import Profile", systemImage: "square.and.arrow.down")
-          }
-        }
-
-        Section {
-          NavigationLink {
-            CryptoSettingsView(store: cryptoTokenStoreForSettings)
-          } label: {
-            Label("Crypto Tokens", systemImage: "bitcoinsign.circle")
-          }
-        }
-
-        Section("Import") {
-          NavigationLink {
-            ImportSettingsView()
-          } label: {
-            Label("CSV Import", systemImage: "tray.and.arrow.down")
-          }
-          NavigationLink {
-            ImportRulesSettingsView()
-          } label: {
-            Label("Import Rules", systemImage: "list.bullet.rectangle")
-          }
-        }
+        profilesSection
+        addImportProfileSection
+        cryptoSection
+        importSettingsSection
       }
       .navigationTitle("Settings")
       .overlay {
@@ -274,6 +215,77 @@ struct SettingsView: View {
       } message: {
         if let exportError {
           Text(exportError)
+        }
+      }
+    }
+
+    private var profilesSection: some View {
+      Section("Profiles") {
+        ForEach(profileStore.profiles) { profile in
+          NavigationLink {
+            profileDetailView(for: profile)
+              .navigationTitle(profile.label)
+          } label: {
+            profileRow(profile)
+          }
+          .swipeActions(edge: .leading) {
+            if profile.backendType == .cloudKit,
+              profile.id == profileStore.activeProfileID
+            {
+              Button {
+                Task { await handleExport(profile: profile) }
+              } label: {
+                Label("Export", systemImage: "square.and.arrow.up")
+              }
+              .tint(.blue)
+            }
+          }
+        }
+        .onDelete { indexSet in
+          if let index = indexSet.first {
+            profileToDelete = profileStore.profiles[index]
+            showDeleteAlert = true
+          }
+        }
+      }
+    }
+
+    private var addImportProfileSection: some View {
+      Section {
+        Button {
+          showAddProfile = true
+        } label: {
+          Label("Add Profile", systemImage: "plus")
+        }
+        Button {
+          showImportPicker = true
+        } label: {
+          Label("Import Profile", systemImage: "square.and.arrow.down")
+        }
+      }
+    }
+
+    private var cryptoSection: some View {
+      Section {
+        NavigationLink {
+          CryptoSettingsView(store: cryptoTokenStoreForSettings)
+        } label: {
+          Label("Crypto Tokens", systemImage: "bitcoinsign.circle")
+        }
+      }
+    }
+
+    private var importSettingsSection: some View {
+      Section("Import") {
+        NavigationLink {
+          ImportSettingsView()
+        } label: {
+          Label("CSV Import", systemImage: "tray.and.arrow.down")
+        }
+        NavigationLink {
+          ImportRulesSettingsView()
+        } label: {
+          Label("Import Rules", systemImage: "list.bullet.rectangle")
         }
       }
     }

@@ -37,28 +37,9 @@ struct ContentView: View {
     NavigationSplitView {
       SidebarView(selection: $selection)
         .navigationSplitViewColumnWidth(min: 200, ideal: 280)
-        .task {
-          async let accountsLoad: Void = accountStore.load()
-          async let categoriesLoad: Void = categoryStore.load()
-          async let earmarksLoad: Void = earmarkStore.load()
-          async let badgeRefresh: Void = importStore.refreshBadge()
-          // Start the folder watch (macOS FSEvents or, on iOS, the
-          // catch-up scan) if the user has picked one. The call is a
-          // no-op when no folder is configured.
-          async let folderWatch: Void = session.startFolderWatch()
-          _ = await (accountsLoad, categoriesLoad, earmarksLoad, badgeRefresh, folderWatch)
-        }
+        .task { await loadSidebarData() }
         .onChange(of: scenePhase) { _, newPhase in
-          if newPhase == .active {
-            Task {
-              await importStore.refreshBadge()
-              // iOS doesn't have FSEvents, so foreground-entry is the
-              // natural place to re-scan the watched folder. macOS's
-              // live watch handles this automatically, but re-scanning
-              // on activate is cheap and covers the window-reopened case.
-              await session.scanWatchedFolder()
-            }
-          }
+          if newPhase == .active { onScenePhaseActive() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openCSVFile)) { note in
           guard let url = note.object as? URL else { return }
@@ -75,75 +56,7 @@ struct ContentView: View {
           #endif
         }
     } detail: {
-      switch selection {
-      case .account(let id):
-        if let account = accountStore.accounts.by(id: id) {
-          if account.type == .investment {
-            InvestmentAccountView(
-              account: account,
-              accounts: accountStore.accounts,
-              categories: categoryStore.categories,
-              earmarks: earmarkStore.earmarks,
-              investmentStore: investmentStore,
-              transactionStore: transactionStore)
-          } else {
-            TransactionListView(
-              title: account.name,
-              filter: TransactionFilter(accountId: account.id),
-              accounts: accountStore.accounts,
-              categories: categoryStore.categories,
-              earmarks: earmarkStore.earmarks,
-              transactionStore: transactionStore,
-              positions: accountStore.positions(for: account.id),
-              positionsHostCurrency: account.instrument,
-              positionsTitle: account.name,
-              conversionService: session.backend.conversionService,
-              supportsComplexTransactions: session.profile.supportsComplexTransactions)
-          }
-        }
-      case .earmark(let id):
-        if let earmark = earmarkStore.earmarks.by(id: id) {
-          EarmarkDetailView(
-            earmark: earmark,
-            accounts: accountStore.accounts,
-            categories: categoryStore.categories,
-            earmarks: earmarkStore.earmarks,
-            transactionStore: transactionStore,
-            analysisRepository: analysisStore.repository)
-        }
-      case .recentlyAdded:
-        RecentlyAddedView(backend: session.backend)
-      case .allTransactions:
-        TransactionListView(
-          title: "All Transactions",
-          filter: TransactionFilter(),
-          accounts: accountStore.accounts,
-          categories: categoryStore.categories,
-          earmarks: earmarkStore.earmarks,
-          transactionStore: transactionStore,
-          supportsComplexTransactions: session.profile.supportsComplexTransactions)
-      case .upcomingTransactions:
-        UpcomingView(
-          accounts: accountStore.accounts,
-          categories: categoryStore.categories,
-          earmarks: earmarkStore.earmarks,
-          transactionStore: transactionStore)
-      case .categories:
-        CategoriesView(categoryStore: categoryStore)
-      case .reports:
-        ReportsView(
-          reportingStore: reportingStore,
-          categories: categoryStore.categories,
-          accounts: accountStore.accounts,
-          earmarks: earmarkStore.earmarks,
-          transactionStore: transactionStore)
-      case .analysis:
-        AnalysisView(store: analysisStore)
-      case nil:
-        ContentUnavailableView(
-          "Select an Account", systemImage: "sidebar.left",
-          description: Text("Choose an account from the sidebar to view transactions."))
-      }
+      detail
     }
     .navigationSplitViewStyle(.balanced)
     .safeAreaInset(edge: .top, spacing: 0) {
@@ -202,6 +115,78 @@ struct ContentView: View {
       Button("OK") { importError = nil }
     } message: {
       Text(importError ?? "")
+    }
+  }
+
+  private func loadSidebarData() async {
+    async let accountsLoad: Void = accountStore.load()
+    async let categoriesLoad: Void = categoryStore.load()
+    async let earmarksLoad: Void = earmarkStore.load()
+    async let badgeRefresh: Void = importStore.refreshBadge()
+    // Start the folder watch (macOS FSEvents or, on iOS, the
+    // catch-up scan) if the user has picked one. The call is a
+    // no-op when no folder is configured.
+    async let folderWatch: Void = session.startFolderWatch()
+    _ = await (accountsLoad, categoriesLoad, earmarksLoad, badgeRefresh, folderWatch)
+  }
+
+  private func onScenePhaseActive() {
+    Task {
+      await importStore.refreshBadge()
+      // iOS doesn't have FSEvents, so foreground-entry is the
+      // natural place to re-scan the watched folder. macOS's
+      // live watch handles this automatically, but re-scanning
+      // on activate is cheap and covers the window-reopened case.
+      await session.scanWatchedFolder()
+    }
+  }
+
+  @ViewBuilder private var detail: some View {
+    switch selection {
+    case .account(let id):
+      accountDetail(id: id)
+    case .earmark(let id):
+      if let earmark = earmarkStore.earmarks.by(id: id) {
+        EarmarkDetailView(
+          earmark: earmark,
+          accounts: accountStore.accounts,
+          categories: categoryStore.categories,
+          earmarks: earmarkStore.earmarks,
+          transactionStore: transactionStore,
+          analysisRepository: analysisStore.repository)
+      }
+    case .recentlyAdded:
+      RecentlyAddedView(backend: session.backend)
+    case .allTransactions:
+      TransactionListView(
+        title: "All Transactions",
+        filter: TransactionFilter(),
+        accounts: accountStore.accounts,
+        categories: categoryStore.categories,
+        earmarks: earmarkStore.earmarks,
+        transactionStore: transactionStore,
+        supportsComplexTransactions: session.profile.supportsComplexTransactions)
+    case .upcomingTransactions:
+      UpcomingView(
+        accounts: accountStore.accounts,
+        categories: categoryStore.categories,
+        earmarks: earmarkStore.earmarks,
+        transactionStore: transactionStore)
+    case .categories:
+      CategoriesView(categoryStore: categoryStore)
+    case .reports:
+      ReportsView(
+        reportingStore: reportingStore,
+        categories: categoryStore.categories,
+        accounts: accountStore.accounts,
+        earmarks: earmarkStore.earmarks,
+        transactionStore: transactionStore)
+    case .analysis:
+      AnalysisView(store: analysisStore)
+    case nil:
+      ContentUnavailableView(
+        "Select an Account", systemImage: "sidebar.left",
+        description: Text("Choose an account from the sidebar to view transactions."))
     }
   }
 
@@ -274,6 +259,36 @@ struct ContentView: View {
     if case .analysis(let history, let forecast) = destination {
       if let history { analysisStore.historyMonths = history }
       if let forecast { analysisStore.forecastMonths = forecast }
+    }
+  }
+}
+
+extension ContentView {
+  @ViewBuilder
+  func accountDetail(id: UUID) -> some View {
+    if let account = accountStore.accounts.by(id: id) {
+      if account.type == .investment {
+        InvestmentAccountView(
+          account: account,
+          accounts: accountStore.accounts,
+          categories: categoryStore.categories,
+          earmarks: earmarkStore.earmarks,
+          investmentStore: investmentStore,
+          transactionStore: transactionStore)
+      } else {
+        TransactionListView(
+          title: account.name,
+          filter: TransactionFilter(accountId: account.id),
+          accounts: accountStore.accounts,
+          categories: categoryStore.categories,
+          earmarks: earmarkStore.earmarks,
+          transactionStore: transactionStore,
+          positions: accountStore.positions(for: account.id),
+          positionsHostCurrency: account.instrument,
+          positionsTitle: account.name,
+          conversionService: session.backend.conversionService,
+          supportsComplexTransactions: session.profile.supportsComplexTransactions)
+      }
     }
   }
 }

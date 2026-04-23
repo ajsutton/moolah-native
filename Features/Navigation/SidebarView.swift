@@ -42,173 +42,11 @@ struct SidebarView: View {
 
   var body: some View {
     List(selection: $selection) {
-      Section {
-        ForEach(accountStore.currentAccounts) { account in
-          NavigationLink(value: SidebarSelection.account(account.id)) {
-            AccountSidebarRow(account: account, isSelected: selection == .account(account.id))
-          }
-          .dropDestination(for: URL.self) { urls, _ in
-            Task { await ingestDroppedURLs(urls, forcedAccountId: account.id) }
-            return !urls.isEmpty
-          }
-          .accessibilityIdentifier(UITestIdentifiers.Sidebar.account(account.id))
-          .contextMenu {
-            Button("Edit Account\u{2026}", systemImage: "pencil") {
-              accountToEdit = account
-            }
-            Button("View Transactions", systemImage: "list.bullet") {
-              selection = .account(account.id)
-            }
-          }
-        }
-        .onMove { source, destination in
-          Task { await reorderCurrentAccounts(from: source, to: destination) }
-        }
-
-        totalRow(label: "Current Total", value: accountStore.convertedCurrentTotal)
-      } header: {
-        HStack {
-          Text("Current Accounts")
-          Spacer()
-          #if os(iOS)
-            Button {
-              showCreateAccountSheet = true
-            } label: {
-              Image(systemName: "plus")
-                .font(.caption)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Add account")
-          #endif
-        }
-      }
-
-      if !earmarkStore.visibleEarmarks.isEmpty {
-        Section {
-          ForEach(earmarkStore.visibleEarmarks) { earmark in
-            NavigationLink(value: SidebarSelection.earmark(earmark.id)) {
-              SidebarRowView(
-                icon: "bookmark.fill", name: earmark.name,
-                amount: earmarkStore.convertedBalance(for: earmark.id),
-                isSelected: selection == .earmark(earmark.id))
-            }
-          }
-          .onMove { source, destination in
-            Task { await earmarkStore.reorderEarmarks(from: source, to: destination) }
-          }
-
-          totalRow(label: "Earmarked Total", value: earmarkStore.convertedTotalBalance)
-        } header: {
-          HStack {
-            Text("Earmarks")
-            Spacer()
-            #if os(iOS)
-              Button {
-                showCreateEarmarkSheet = true
-              } label: {
-                Image(systemName: "plus")
-                  .font(.caption)
-              }
-              .buttonStyle(.plain)
-              .accessibilityLabel("Add earmark")
-            #endif
-          }
-        }
-      }
-
-      Section("Investments") {
-        ForEach(accountStore.investmentAccounts) { account in
-          NavigationLink(value: SidebarSelection.account(account.id)) {
-            AccountSidebarRow(account: account, isSelected: selection == .account(account.id))
-          }
-          .accessibilityIdentifier(UITestIdentifiers.Sidebar.account(account.id))
-          .contextMenu {
-            Button("Edit Account\u{2026}", systemImage: "pencil") {
-              accountToEdit = account
-            }
-            Button("View Transactions", systemImage: "list.bullet") {
-              selection = .account(account.id)
-            }
-          }
-        }
-        .onMove { source, destination in
-          Task { await reorderInvestmentAccounts(from: source, to: destination) }
-        }
-
-        totalRow(label: "Investment Total", value: accountStore.convertedInvestmentTotal)
-      }
-
-      Section {
-        if let currentTotal = accountStore.convertedCurrentTotal,
-          let earmarkedTotal = earmarkStore.convertedTotalBalance,
-          earmarkedTotal.isPositive
-        {
-          LabeledContent("Available Funds") {
-            InstrumentAmountView(amount: currentTotal - earmarkedTotal)
-          }
-          .font(.headline)
-          .accessibilityLabel(
-            "Available Funds: \((currentTotal - earmarkedTotal).formatted)"
-          )
-        }
-
-        if let netWorth = accountStore.convertedNetWorth {
-          LabeledContent("Net Worth") {
-            InstrumentAmountView(amount: netWorth)
-          }
-          .font(.headline)
-          .bold()
-          .accessibilityLabel(
-            "Net Worth: \(netWorth.formatted)"
-          )
-        }
-      }
-
-      Section {
-        NavigationLink(value: SidebarSelection.analysis) {
-          Label("Analysis", systemImage: "chart.bar.xaxis")
-        }
-
-        NavigationLink(value: SidebarSelection.reports) {
-          Label("Reports", systemImage: "chart.bar.fill")
-        }
-
-        NavigationLink(value: SidebarSelection.categories) {
-          Label("Categories", systemImage: "tag")
-        }
-
-        NavigationLink(value: SidebarSelection.upcomingTransactions) {
-          Label("Upcoming", systemImage: "calendar")
-        }
-
-        NavigationLink(value: SidebarSelection.recentlyAdded) {
-          HStack {
-            Label("Recently Added", systemImage: "tray.full")
-            Spacer()
-            if importStore.unreviewedBadgeCount > 0 {
-              Text("\(importStore.unreviewedBadgeCount)")
-                .font(.caption)
-                .monospacedDigit()
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.tint, in: Capsule())
-                .foregroundStyle(.white)
-                .accessibilityLabel(
-                  "\(importStore.unreviewedBadgeCount) recently imported need review")
-            }
-          }
-        }
-
-        NavigationLink(value: SidebarSelection.allTransactions) {
-          Label("All Transactions", systemImage: "list.bullet")
-        }
-
-        #if os(iOS)
-          Toggle(isOn: $showHidden) {
-            Label("Show Hidden", systemImage: "eye.slash")
-          }
-        #endif
-      }
+      currentAccountsSection
+      earmarksSection
+      investmentsSection
+      totalsSection
+      navigationSection
     }
     .listStyle(.sidebar)
     .navigationTitle("")
@@ -284,18 +122,118 @@ struct SidebarView: View {
     accountToEdit = account
   }
 
-  private func totalRow(label: String, value: InstrumentAmount?) -> some View {
-    LabeledContent(label) {
-      if let value {
-        InstrumentAmountView(amount: value, colorOverride: .secondary)
-      } else {
-        ProgressView()
-          .controlSize(.small)
+  private var currentAccountsSection: some View {
+    Section {
+      ForEach(accountStore.currentAccounts) { account in
+        NavigationLink(value: SidebarSelection.account(account.id)) {
+          AccountSidebarRow(account: account, isSelected: selection == .account(account.id))
+        }
+        .dropDestination(for: URL.self) { urls, _ in
+          Task { await ingestDroppedURLs(urls, forcedAccountId: account.id) }
+          return !urls.isEmpty
+        }
+        .accessibilityIdentifier(UITestIdentifiers.Sidebar.account(account.id))
+        .contextMenu { accountContextMenu(for: account) }
+      }
+      .onMove { source, destination in
+        Task { await reorderCurrentAccounts(from: source, to: destination) }
+      }
+      totalRow(label: "Current Total", value: accountStore.convertedCurrentTotal)
+    } header: {
+      sectionHeader(title: "Current Accounts", addAction: addAccountAction)
+    }
+  }
+
+  @ViewBuilder private var earmarksSection: some View {
+    if !earmarkStore.visibleEarmarks.isEmpty {
+      Section {
+        ForEach(earmarkStore.visibleEarmarks) { earmark in
+          NavigationLink(value: SidebarSelection.earmark(earmark.id)) {
+            SidebarRowView(
+              icon: "bookmark.fill", name: earmark.name,
+              amount: earmarkStore.convertedBalance(for: earmark.id),
+              isSelected: selection == .earmark(earmark.id))
+          }
+        }
+        .onMove { source, destination in
+          Task { await earmarkStore.reorderEarmarks(from: source, to: destination) }
+        }
+        totalRow(label: "Earmarked Total", value: earmarkStore.convertedTotalBalance)
+      } header: {
+        sectionHeader(title: "Earmarks", addAction: addEarmarkAction)
       }
     }
-    .foregroundStyle(.secondary)
-    .font(.callout)
   }
+
+  private var investmentsSection: some View {
+    Section("Investments") {
+      ForEach(accountStore.investmentAccounts) { account in
+        NavigationLink(value: SidebarSelection.account(account.id)) {
+          AccountSidebarRow(account: account, isSelected: selection == .account(account.id))
+        }
+        .accessibilityIdentifier(UITestIdentifiers.Sidebar.account(account.id))
+        .contextMenu { accountContextMenu(for: account) }
+      }
+      .onMove { source, destination in
+        Task { await reorderInvestmentAccounts(from: source, to: destination) }
+      }
+      totalRow(label: "Investment Total", value: accountStore.convertedInvestmentTotal)
+    }
+  }
+
+  @ViewBuilder private var totalsSection: some View {
+    Section {
+      if let currentTotal = accountStore.convertedCurrentTotal,
+        let earmarkedTotal = earmarkStore.convertedTotalBalance,
+        earmarkedTotal.isPositive
+      {
+        LabeledContent("Available Funds") {
+          InstrumentAmountView(amount: currentTotal - earmarkedTotal)
+        }
+        .font(.headline)
+        .accessibilityLabel("Available Funds: \((currentTotal - earmarkedTotal).formatted)")
+      }
+      if let netWorth = accountStore.convertedNetWorth {
+        LabeledContent("Net Worth") {
+          InstrumentAmountView(amount: netWorth)
+        }
+        .font(.headline)
+        .bold()
+        .accessibilityLabel("Net Worth: \(netWorth.formatted)")
+      }
+    }
+  }
+
+  @ViewBuilder private var navigationSection: some View {
+    Section {
+      NavigationLink(value: SidebarSelection.analysis) {
+        Label("Analysis", systemImage: "chart.bar.xaxis")
+      }
+      NavigationLink(value: SidebarSelection.reports) {
+        Label("Reports", systemImage: "chart.bar.fill")
+      }
+      NavigationLink(value: SidebarSelection.categories) {
+        Label("Categories", systemImage: "tag")
+      }
+      NavigationLink(value: SidebarSelection.upcomingTransactions) {
+        Label("Upcoming", systemImage: "calendar")
+      }
+      NavigationLink(value: SidebarSelection.recentlyAdded) {
+        recentlyAddedLabel
+      }
+      NavigationLink(value: SidebarSelection.allTransactions) {
+        Label("All Transactions", systemImage: "list.bullet")
+      }
+      #if os(iOS)
+        Toggle(isOn: $showHidden) {
+          Label("Show Hidden", systemImage: "eye.slash")
+        }
+      #endif
+    }
+  }
+
+  private func addAccountAction() { showCreateAccountSheet = true }
+  private func addEarmarkAction() { showCreateEarmarkSheet = true }
 
   private func reorderCurrentAccounts(from source: IndexSet, to destination: Int) async {
     var accounts = accountStore.currentAccounts
@@ -329,6 +267,81 @@ struct SidebarView: View {
   }
 }
 
+extension SidebarView {
+  private var recentlyAddedLabel: some View {
+    HStack {
+      Label("Recently Added", systemImage: "tray.full")
+      Spacer()
+      if importStore.unreviewedBadgeCount > 0 {
+        Text("\(importStore.unreviewedBadgeCount)")
+          .font(.caption)
+          .monospacedDigit()
+          .padding(.horizontal, 6)
+          .padding(.vertical, 2)
+          .background(.tint, in: Capsule())
+          .foregroundStyle(.white)
+          .accessibilityLabel(
+            "\(importStore.unreviewedBadgeCount) recently imported need review")
+      }
+    }
+  }
+
+  private func totalRow(label: String, value: InstrumentAmount?) -> some View {
+    LabeledContent(label) {
+      if let value {
+        InstrumentAmountView(amount: value, colorOverride: .secondary)
+      } else {
+        ProgressView()
+          .controlSize(.small)
+      }
+    }
+    .foregroundStyle(.secondary)
+    .font(.callout)
+  }
+
+  @ViewBuilder
+  private func accountContextMenu(for account: Account) -> some View {
+    Button("Edit Account\u{2026}", systemImage: "pencil") {
+      accountToEdit = account
+    }
+    Button("View Transactions", systemImage: "list.bullet") {
+      selection = .account(account.id)
+    }
+  }
+
+  @ViewBuilder
+  private func sectionHeader(title: String, addAction: @escaping () -> Void) -> some View {
+    HStack {
+      Text(title)
+      Spacer()
+      #if os(iOS)
+        Button(action: addAction) {
+          Image(systemName: "plus").font(.caption)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Add \(title.lowercased())")
+      #endif
+    }
+  }
+}
+
+@MainActor
+private func seedSidebarPreview(
+  backend: CloudKitBackend,
+  accountStore: AccountStore,
+  earmarkStore: EarmarkStore
+) async {
+  _ = try? await backend.accounts.create(
+    Account(name: "Bank", type: .bank, instrument: .AUD),
+    openingBalance: InstrumentAmount(quantity: 1000, instrument: .AUD))
+  _ = try? await backend.accounts.create(
+    Account(name: "Asset", type: .asset, instrument: .AUD),
+    openingBalance: InstrumentAmount(quantity: 5000, instrument: .AUD))
+  _ = try? await backend.earmarks.create(Earmark(name: "Holiday Fund", instrument: .AUD))
+  await accountStore.load()
+  await earmarkStore.load()
+}
+
 #Preview {
   let (backend, _) = PreviewBackend.create()
   let accountStore = AccountStore(
@@ -341,26 +354,14 @@ struct SidebarView: View {
     targetInstrument: .AUD)
   let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
 
-  NavigationSplitView {
+  return NavigationSplitView {
     SidebarView(selection: .constant(nil))
       .environment(accountStore)
       .environment(earmarkStore)
       .environment(session)
       .task {
-        // Add some preview data
-        _ = try? await backend.accounts.create(
-          Account(
-            name: "Bank", type: .bank, instrument: .AUD),
-          openingBalance: InstrumentAmount(quantity: 1000, instrument: .AUD))
-        _ = try? await backend.accounts.create(
-          Account(
-            name: "Asset", type: .asset, instrument: .AUD),
-          openingBalance: InstrumentAmount(quantity: 5000, instrument: .AUD))
-        _ = try? await backend.earmarks.create(
-          Earmark(name: "Holiday Fund", instrument: .AUD))
-
-        await accountStore.load()
-        await earmarkStore.load()
+        await seedSidebarPreview(
+          backend: backend, accountStore: accountStore, earmarkStore: earmarkStore)
       }
   } detail: {
     Text("Detail")

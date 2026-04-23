@@ -135,82 +135,7 @@ struct EarmarksView: View {
   private var listView: some View {
     List(selection: $selectedEarmark) {
       ForEach(filteredEarmarks) { earmark in
-        VStack(alignment: .leading, spacing: 4) {
-          HStack {
-            Text(earmark.name)
-              .font(.headline)
-            Spacer()
-            InstrumentAmountView(
-              amount: earmarkStore.convertedBalance(for: earmark.id)
-                ?? .zero(instrument: earmark.instrument), font: .headline)
-          }
-
-          HStack(spacing: 12) {
-            Label {
-              InstrumentAmountView(
-                amount: earmarkStore.convertedSaved(for: earmark.id)
-                  ?? .zero(instrument: earmark.instrument), font: .caption)
-            } icon: {
-              Image(systemName: "arrow.up")
-                .foregroundStyle(.green)
-            }
-            .font(.caption)
-
-            Label {
-              InstrumentAmountView(
-                amount: earmarkStore.convertedSpent(for: earmark.id)
-                  ?? .zero(instrument: earmark.instrument), font: .caption)
-            } icon: {
-              Image(systemName: "arrow.down")
-                .foregroundStyle(.red)
-            }
-            .font(.caption)
-          }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-          "\(earmark.name), balance \(earmarkStore.convertedBalance(for: earmark.id)?.formatted ?? "loading")"
-        )
-        .tag(earmark)
-        .contextMenu {
-          Button("Edit Earmark\u{2026}", systemImage: "pencil") {
-            earmarkToEdit = earmark
-          }
-          Divider()
-          Button(
-            earmark.isHidden ? "Show Earmark" : "Hide Earmark",
-            systemImage: earmark.isHidden ? "eye" : "eye.slash"
-          ) {
-            Task {
-              var updated = earmark
-              updated.isHidden.toggle()
-              _ = await earmarkStore.update(updated)
-            }
-          }
-        }
-        .swipeActions(edge: .trailing) {
-          Button {
-            Task {
-              var updated = earmark
-              updated.isHidden.toggle()
-              _ = await earmarkStore.update(updated)
-            }
-          } label: {
-            Label(
-              earmark.isHidden ? "Show Earmark" : "Hide Earmark",
-              systemImage: earmark.isHidden ? "eye" : "eye.slash"
-            )
-          }
-          .tint(earmark.isHidden ? .green : .orange)
-        }
-        .swipeActions(edge: .leading) {
-          Button {
-            earmarkToEdit = earmark
-          } label: {
-            Label("Edit Earmark", systemImage: "pencil")
-          }
-          .tint(.blue)
-        }
+        earmarkRow(earmark)
       }
     }
     #if os(macOS)
@@ -247,6 +172,84 @@ struct EarmarksView: View {
       }
     }
   }
+
+  private func earmarkRow(_ earmark: Earmark) -> some View {
+    earmarkRowContent(earmark)
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel(
+        "\(earmark.name), balance \(earmarkStore.convertedBalance(for: earmark.id)?.formatted ?? "loading")"
+      )
+      .tag(earmark)
+      .contextMenu { rowContextMenu(for: earmark) }
+      .swipeActions(edge: .trailing) {
+        Button {
+          Task { await toggleHidden(earmark) }
+        } label: {
+          Label(
+            earmark.isHidden ? "Show Earmark" : "Hide Earmark",
+            systemImage: earmark.isHidden ? "eye" : "eye.slash")
+        }
+        .tint(earmark.isHidden ? .green : .orange)
+      }
+      .swipeActions(edge: .leading) {
+        Button {
+          earmarkToEdit = earmark
+        } label: {
+          Label("Edit Earmark", systemImage: "pencil")
+        }
+        .tint(.blue)
+      }
+  }
+
+  private func earmarkRowContent(_ earmark: Earmark) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      HStack {
+        Text(earmark.name).font(.headline)
+        Spacer()
+        InstrumentAmountView(
+          amount: earmarkStore.convertedBalance(for: earmark.id)
+            ?? .zero(instrument: earmark.instrument), font: .headline)
+      }
+      HStack(spacing: 12) {
+        Label {
+          InstrumentAmountView(
+            amount: earmarkStore.convertedSaved(for: earmark.id)
+              ?? .zero(instrument: earmark.instrument), font: .caption)
+        } icon: {
+          Image(systemName: "arrow.up").foregroundStyle(.green)
+        }
+        .font(.caption)
+        Label {
+          InstrumentAmountView(
+            amount: earmarkStore.convertedSpent(for: earmark.id)
+              ?? .zero(instrument: earmark.instrument), font: .caption)
+        } icon: {
+          Image(systemName: "arrow.down").foregroundStyle(.red)
+        }
+        .font(.caption)
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func rowContextMenu(for earmark: Earmark) -> some View {
+    Button("Edit Earmark\u{2026}", systemImage: "pencil") {
+      earmarkToEdit = earmark
+    }
+    Divider()
+    Button(
+      earmark.isHidden ? "Show Earmark" : "Hide Earmark",
+      systemImage: earmark.isHidden ? "eye" : "eye.slash"
+    ) {
+      Task { await toggleHidden(earmark) }
+    }
+  }
+
+  private func toggleHidden(_ earmark: Earmark) async {
+    var updated = earmark
+    updated.isHidden.toggle()
+    _ = await earmarkStore.update(updated)
+  }
 }
 
 #Preview {
@@ -262,7 +265,7 @@ struct EarmarksView: View {
   )
   let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
 
-  NavigationStack {
+  return NavigationStack {
     EarmarksView(
       earmarkStore: earmarkStore,
       accounts: Accounts(from: []),
@@ -272,14 +275,16 @@ struct EarmarksView: View {
     )
     .environment(session)
   }
-  .task {
-    _ = try? await backend.earmarks.create(
-      Earmark(
-        name: "Holiday Fund",
-        instrument: .AUD,
-        savingsGoal: InstrumentAmount(quantity: 5000, instrument: .AUD)))
-    _ = try? await backend.earmarks.create(
-      Earmark(name: "Emergency Fund", instrument: .AUD))
-    await earmarkStore.load()
-  }
+  .task { await seedEarmarksPreview(backend: backend, earmarkStore: earmarkStore) }
+}
+
+@MainActor
+private func seedEarmarksPreview(backend: CloudKitBackend, earmarkStore: EarmarkStore) async {
+  _ = try? await backend.earmarks.create(
+    Earmark(
+      name: "Holiday Fund",
+      instrument: .AUD,
+      savingsGoal: InstrumentAmount(quantity: 5000, instrument: .AUD)))
+  _ = try? await backend.earmarks.create(Earmark(name: "Emergency Fund", instrument: .AUD))
+  await earmarkStore.load()
 }

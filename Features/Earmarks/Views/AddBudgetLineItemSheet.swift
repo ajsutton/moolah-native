@@ -16,93 +16,107 @@ struct AddBudgetLineItemSheet: View {
 
   var body: some View {
     NavigationStack {
-      Form {
-        Section("Category") {
-          CategoryAutocompleteField(
-            text: $categoryText,
-            highlightedIndex: $categoryHighlightedIndex,
-            suggestionCount: categoryVisibleSuggestionCount,
-            onTextChange: { _ in
-              if categoryJustSelected {
-                categoryJustSelected = false
-              } else {
-                showCategorySuggestions = true
-              }
-            },
-            onAcceptHighlighted: acceptHighlightedCategory
-          )
-          .focused($categoryFieldFocused)
-          .onChange(of: categoryFieldFocused) { _, focused in
-            if !focused {
-              categoryJustSelected = true
-              showCategorySuggestions = false
-              categoryHighlightedIndex = nil
-              if let id = selectedCategoryId, let cat = categories.by(id: id) {
-                categoryText = categories.path(for: cat)
-              } else {
-                categoryText = ""
-                selectedCategoryId = nil
-              }
-            }
-          }
-        }
-
-        Section("Budget Amount") {
-          HStack {
-            Text(earmark.instrument.currencySymbol ?? earmark.instrument.id)
-              .foregroundStyle(.secondary)
-            TextField("Amount", text: $amountText)
-              .monospacedDigit()
-              #if os(iOS)
-                .keyboardType(.decimalPad)
-              #endif
-          }
-        }
-      }
-      .formStyle(.grouped)
-      .overlayPreferenceValue(CategoryPickerAnchorKey.self) { anchor in
-        if showCategorySuggestions, !categoryVisibleSuggestions.isEmpty, let anchor {
-          GeometryReader { proxy in
-            let rect = proxy[anchor]
-            CategorySuggestionDropdown(
-              suggestions: categoryVisibleSuggestions,
-              searchText: categoryText,
-              highlightedIndex: $categoryHighlightedIndex,
-              onSelect: { selected in
-                categoryJustSelected = true
-                selectedCategoryId = selected.id
-                categoryText = selected.path
-                showCategorySuggestions = false
-                categoryHighlightedIndex = nil
-              }
-            )
-            .frame(width: rect.width)
-            .offset(x: rect.minX, y: rect.maxY + 4)
-          }
-        }
-      }
-      .navigationTitle("Add Budget Item")
-      #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-      #endif
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") {
-            dismiss()
-          }
-        }
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Save") {
-            save()
-          }
-          .disabled(selectedCategoryId == nil || amountText.isEmpty)
-        }
-      }
+      form
     }
     .presentationDetents([.medium])
     #if os(macOS)
       .frame(minWidth: 400, minHeight: 300)
     #endif
+  }
+
+  private var form: some View {
+    Form {
+      categorySection
+      budgetAmountSection
+    }
+    .formStyle(.grouped)
+    .overlayPreferenceValue(CategoryPickerAnchorKey.self) { anchor in
+      if showCategorySuggestions, !categoryVisibleSuggestions.isEmpty, let anchor {
+        suggestionDropdown(anchor: anchor)
+      }
+    }
+    .navigationTitle("Add Budget Item")
+    #if os(iOS)
+      .navigationBarTitleDisplayMode(.inline)
+    #endif
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("Cancel") { dismiss() }
+      }
+      ToolbarItem(placement: .confirmationAction) {
+        Button("Save") { save() }
+          .disabled(selectedCategoryId == nil || amountText.isEmpty)
+      }
+    }
+  }
+
+  private var categorySection: some View {
+    Section("Category") {
+      CategoryAutocompleteField(
+        text: $categoryText,
+        highlightedIndex: $categoryHighlightedIndex,
+        suggestionCount: categoryVisibleSuggestionCount,
+        onTextChange: { _ in
+          if categoryJustSelected {
+            categoryJustSelected = false
+          } else {
+            showCategorySuggestions = true
+          }
+        },
+        onAcceptHighlighted: acceptHighlightedCategory
+      )
+      .focused($categoryFieldFocused)
+      .onChange(of: categoryFieldFocused) { _, focused in
+        if !focused { handleCategoryFieldUnfocused() }
+      }
+    }
+  }
+
+  private var budgetAmountSection: some View {
+    Section("Budget Amount") {
+      HStack {
+        Text(earmark.instrument.currencySymbol ?? earmark.instrument.id)
+          .foregroundStyle(.secondary)
+        TextField("Amount", text: $amountText)
+          .monospacedDigit()
+          #if os(iOS)
+            .keyboardType(.decimalPad)
+          #endif
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func suggestionDropdown(anchor: Anchor<CGRect>) -> some View {
+    GeometryReader { proxy in
+      let rect = proxy[anchor]
+      CategorySuggestionDropdown(
+        suggestions: categoryVisibleSuggestions,
+        searchText: categoryText,
+        highlightedIndex: $categoryHighlightedIndex,
+        onSelect: { selected in
+          categoryJustSelected = true
+          selectedCategoryId = selected.id
+          categoryText = selected.path
+          showCategorySuggestions = false
+          categoryHighlightedIndex = nil
+        }
+      )
+      .frame(width: rect.width)
+      .offset(x: rect.minX, y: rect.maxY + 4)
+    }
+  }
+
+  private func handleCategoryFieldUnfocused() {
+    categoryJustSelected = true
+    showCategorySuggestions = false
+    categoryHighlightedIndex = nil
+    if let id = selectedCategoryId, let cat = categories.by(id: id) {
+      categoryText = categories.path(for: cat)
+    } else {
+      categoryText = ""
+      selectedCategoryId = nil
+    }
   }
 
   private var categoryVisibleSuggestions: [CategorySuggestion] {

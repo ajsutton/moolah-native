@@ -66,72 +66,71 @@ struct CategoryBalanceTable: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      // Header
-      HStack {
-        Text(title)
-          .font(.title2)
-          .fontWeight(.semibold)
-        Spacer()
-      }
-      .padding()
-
+      header
       Divider()
-
-      // Table
       if reportData.isEmpty {
-        // Empty state
         ContentUnavailableView(
           "No Transactions",
           systemImage: "tray",
-          description: Text("No transactions found for this period")
-        )
+          description: Text("No transactions found for this period"))
       } else {
-        List {
-          ForEach(reportData) { group in
-            Section {
-              // Only show children if there are any
-              if !group.children.isEmpty {
-                ForEach(group.children) { child in
-                  NavigationLink(
-                    value: CategoryDrillDown(
-                      categoryId: child.categoryId,
-                      dateRange: dateRange
-                    )
-                  ) {
-                    HStack {
-                      Text(child.name)
-                        .font(.body)
-                      Spacer()
-                      InstrumentAmountView(amount: child.amount)
-                    }
-                  }
-                  .accessibilityLabel("\(child.name), \(child.amount.formatted)")
-                }
-              }
-            } header: {
-              HStack {
-                Text(group.name)
-                  .font(.headline)
-                Spacer()
-                InstrumentAmountView(amount: group.totalAmount, font: .headline)
-              }
-              .accessibilityElement(children: .combine)
-              .accessibilityLabel("\(group.name), \(group.totalAmount.formatted)")
+        categoryList
+      }
+      Divider()
+      footer
+    }
+  }
+
+  private var header: some View {
+    HStack {
+      Text(title).font(.title2).fontWeight(.semibold)
+      Spacer()
+    }
+    .padding()
+  }
+
+  private var footer: some View {
+    HStack {
+      Text("Total").font(.headline)
+      Spacer()
+      InstrumentAmountView(amount: grandTotal, font: .headline)
+    }
+    .padding()
+  }
+
+  private var categoryList: some View {
+    List {
+      ForEach(reportData) { group in
+        categorySection(group)
+      }
+    }
+    .listStyle(.plain)
+  }
+
+  private func categorySection(_ group: CategoryGroup) -> some View {
+    Section {
+      if !group.children.isEmpty {
+        ForEach(group.children) { child in
+          NavigationLink(
+            value: CategoryDrillDown(categoryId: child.categoryId, dateRange: dateRange)
+          ) {
+            HStack {
+              Text(child.name).font(.body)
+              Spacer()
+              InstrumentAmountView(amount: child.amount)
             }
           }
+          .accessibilityLabel("\(child.name), \(child.amount.formatted)")
         }
-        .listStyle(.plain)
       }
-
-      // Footer
-      Divider()
+    } header: {
       HStack {
-        Text("Total")
-          .font(.headline)
+        Text(group.name).font(.headline)
         Spacer()
-        InstrumentAmountView(amount: grandTotal, font: .headline)
+        InstrumentAmountView(amount: group.totalAmount, font: .headline)
       }
-      .padding()
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel("\(group.name), \(group.totalAmount.formatted)")
     }
   }
 

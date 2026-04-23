@@ -115,39 +115,12 @@ struct AnalysisView: View {
   @ViewBuilder
   private func contentView(store: AnalysisStore) -> some View {
     VStack(spacing: 20) {
-      // Net Worth Graph (full width)
       NetWorthGraphCard(balances: store.dailyBalances)
-
-      // Upcoming Transactions & Monthly Income/Expense
-      #if os(macOS)
-        HStack(alignment: .top, spacing: 20) {
-          UpcomingTransactionsCard(
-            accounts: accountStore.accounts,
-            categories: categoryStore.categories,
-            earmarks: earmarkStore.earmarks,
-            transactionStore: transactionStore,
-            selectedTransaction: $selectedUpcomingTransaction
-          )
-          IncomeExpenseTableCard(data: store.incomeAndExpense)
-        }
-      #else
-        UpcomingTransactionsCard(
-          accounts: accountStore.accounts,
-          categories: categoryStore.categories,
-          earmarks: earmarkStore.earmarks,
-          transactionStore: transactionStore,
-          selectedTransaction: $selectedUpcomingTransaction
-        )
-        IncomeExpenseTableCard(data: store.incomeAndExpense)
-      #endif
-
-      // Expense Breakdown (full width)
+      upcomingAndIncomeExpense(store: store)
       ExpenseBreakdownCard(
         breakdown: store.expenseBreakdown,
         categories: categoryStore.categories
       )
-
-      // Categories Over Time (full width)
       CategoriesOverTimeCard(
         entries: store.categoriesOverTime(categories: categoryStore.categories),
         categories: categoryStore.categories,
@@ -156,6 +129,31 @@ struct AnalysisView: View {
       )
     }
     .padding()
+  }
+
+  @ViewBuilder
+  private func upcomingAndIncomeExpense(store: AnalysisStore) -> some View {
+    #if os(macOS)
+      HStack(alignment: .top, spacing: 20) {
+        UpcomingTransactionsCard(
+          accounts: accountStore.accounts,
+          categories: categoryStore.categories,
+          earmarks: earmarkStore.earmarks,
+          transactionStore: transactionStore,
+          selectedTransaction: $selectedUpcomingTransaction
+        )
+        IncomeExpenseTableCard(data: store.incomeAndExpense)
+      }
+    #else
+      UpcomingTransactionsCard(
+        accounts: accountStore.accounts,
+        categories: categoryStore.categories,
+        earmarks: earmarkStore.earmarks,
+        transactionStore: transactionStore,
+        selectedTransaction: $selectedUpcomingTransaction
+      )
+      IncomeExpenseTableCard(data: store.incomeAndExpense)
+    #endif
   }
 }
 
@@ -188,6 +186,35 @@ struct ForecastPicker: View {
   }
 }
 
+@MainActor
+private func seedAnalysisPreview(
+  backend: CloudKitBackend,
+  categoryStore: CategoryStore
+) async {
+  let account = Account(id: UUID(), name: "Checking", type: .bank, instrument: .AUD)
+  _ = try? await backend.accounts.create(account)
+  let category = Category(id: UUID(), name: "Groceries")
+  _ = try? await backend.categories.create(category)
+  for index in 0..<30 {
+    _ = try? await backend.transactions.create(
+      Transaction(
+        id: UUID(),
+        date: Date().addingTimeInterval(-86400 * Double(index)),
+        payee: "Transaction \(index)",
+        legs: [
+          TransactionLeg(
+            accountId: account.id,
+            instrument: .AUD,
+            quantity: index.isMultiple(of: 2)
+              ? Decimal(Int.random(in: 100...500)) : -Decimal(Int.random(in: 50...200)),
+            type: index.isMultiple(of: 2) ? .income : .expense,
+            categoryId: index.isMultiple(of: 3) ? category.id : nil
+          )
+        ]))
+  }
+  await categoryStore.load()
+}
+
 #Preview {
   let (backend, _) = PreviewBackend.create()
   let accountStore = AccountStore(
@@ -202,53 +229,17 @@ struct ForecastPicker: View {
   let transactionStore = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,
-    targetInstrument: .AUD
-  )
+    targetInstrument: .AUD)
   let analysisStore = AnalysisStore(repository: backend.analysis)
 
-  NavigationStack {
+  return NavigationStack {
     AnalysisView(store: analysisStore)
       .environment(accountStore)
       .environment(categoryStore)
       .environment(earmarkStore)
       .environment(transactionStore)
       .task {
-        // Add some preview data
-        let account = Account(
-          id: UUID(),
-          name: "Checking",
-          type: .bank,
-          instrument: .AUD
-        )
-        _ = try? await backend.accounts.create(account)
-
-        let category = Category(
-          id: UUID(),
-          name: "Groceries"
-        )
-        _ = try? await backend.categories.create(category)
-
-        // Add some transactions
-        for i in 0..<30 {
-          _ = try? await backend.transactions.create(
-            Transaction(
-              id: UUID(),
-              date: Date().addingTimeInterval(-86400 * Double(i)),
-              payee: "Transaction \(i)",
-              legs: [
-                TransactionLeg(
-                  accountId: account.id,
-                  instrument: .AUD,
-                  quantity: i.isMultiple(of: 2)
-                    ? Decimal(Int.random(in: 100...500)) : -Decimal(Int.random(in: 50...200)),
-                  type: i.isMultiple(of: 2) ? .income : .expense,
-                  categoryId: i.isMultiple(of: 3) ? category.id : nil
-                )
-              ]
-            ))
-        }
-
-        await categoryStore.load()
+        await seedAnalysisPreview(backend: backend, categoryStore: categoryStore)
       }
   }
 }

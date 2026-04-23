@@ -66,102 +66,8 @@ struct UpcomingView: View {
 
   private var listView: some View {
     List(selection: $selectedTransaction) {
-      if !overdueTransactions.isEmpty {
-        Section("Overdue") {
-          ForEach(overdueTransactions) { entry in
-            UpcomingTransactionRow(
-              transaction: entry.transaction,
-              accounts: accounts,
-              categories: categories,
-              earmarks: earmarks,
-              displayAmount: entry.displayAmount,
-              isOverdue: true,
-              onPay: {
-                Task {
-                  await payTransaction(entry.transaction)
-                }
-              }
-            )
-            .tag(entry.transaction)
-            .contextMenu {
-              Button("Pay Scheduled Transaction", systemImage: "checkmark.circle") {
-                Task { await payTransaction(entry.transaction) }
-              }
-              Button("Edit Transaction\u{2026}", systemImage: "pencil") {
-                selectedTransaction = entry.transaction
-              }
-              Divider()
-              Button("Delete Transaction\u{2026}", systemImage: "trash", role: .destructive) {
-                transactionPendingDelete = entry.transaction.id
-              }
-            }
-            .swipeActions(edge: .trailing) {
-              Button(role: .destructive) {
-                transactionPendingDelete = entry.transaction.id
-              } label: {
-                Label("Delete Transaction", systemImage: "trash")
-              }
-            }
-            .swipeActions(edge: .leading) {
-              Button {
-                Task { await payTransaction(entry.transaction) }
-              } label: {
-                Label("Pay Scheduled Transaction", systemImage: "checkmark.circle")
-              }
-              .tint(.green)
-            }
-          }
-        }
-      }
-
-      if !upcomingTransactions.isEmpty {
-        Section("Upcoming") {
-          ForEach(upcomingTransactions) { entry in
-            UpcomingTransactionRow(
-              transaction: entry.transaction,
-              accounts: accounts,
-              categories: categories,
-              earmarks: earmarks,
-              displayAmount: entry.displayAmount,
-              isOverdue: false,
-              isDueToday: isDueToday(entry.transaction),
-              onPay: {
-                Task {
-                  await payTransaction(entry.transaction)
-                }
-              }
-            )
-            .tag(entry.transaction)
-            .contextMenu {
-              Button("Pay Scheduled Transaction", systemImage: "checkmark.circle") {
-                Task { await payTransaction(entry.transaction) }
-              }
-              Button("Edit Transaction\u{2026}", systemImage: "pencil") {
-                selectedTransaction = entry.transaction
-              }
-              Divider()
-              Button("Delete Transaction\u{2026}", systemImage: "trash", role: .destructive) {
-                transactionPendingDelete = entry.transaction.id
-              }
-            }
-            .swipeActions(edge: .trailing) {
-              Button(role: .destructive) {
-                transactionPendingDelete = entry.transaction.id
-              } label: {
-                Label("Delete Transaction", systemImage: "trash")
-              }
-            }
-            .swipeActions(edge: .leading) {
-              Button {
-                Task { await payTransaction(entry.transaction) }
-              } label: {
-                Label("Pay Scheduled Transaction", systemImage: "checkmark.circle")
-              }
-              .tint(.green)
-            }
-          }
-        }
-      }
+      overdueSection
+      upcomingSection
     }
     .profileNavigationTitle("Upcoming")
     .toolbar {
@@ -192,6 +98,71 @@ struct UpcomingView: View {
           )
         )
       }
+    }
+  }
+
+  @ViewBuilder private var overdueSection: some View {
+    if !overdueTransactions.isEmpty {
+      Section("Overdue") {
+        ForEach(overdueTransactions) { entry in
+          row(for: entry, isOverdue: true)
+        }
+      }
+    }
+  }
+
+  @ViewBuilder private var upcomingSection: some View {
+    if !upcomingTransactions.isEmpty {
+      Section("Upcoming") {
+        ForEach(upcomingTransactions) { entry in
+          row(for: entry, isOverdue: false)
+        }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func row(for entry: TransactionWithBalance, isOverdue: Bool) -> some View {
+    UpcomingTransactionRow(
+      transaction: entry.transaction,
+      accounts: accounts,
+      categories: categories,
+      earmarks: earmarks,
+      displayAmount: entry.displayAmount,
+      isOverdue: isOverdue,
+      isDueToday: isOverdue ? false : isDueToday(entry.transaction),
+      onPay: { Task { await payTransaction(entry.transaction) } }
+    )
+    .tag(entry.transaction)
+    .contextMenu { rowContextMenu(for: entry.transaction) }
+    .swipeActions(edge: .trailing) {
+      Button(role: .destructive) {
+        transactionPendingDelete = entry.transaction.id
+      } label: {
+        Label("Delete Transaction", systemImage: "trash")
+      }
+    }
+    .swipeActions(edge: .leading) {
+      Button {
+        Task { await payTransaction(entry.transaction) }
+      } label: {
+        Label("Pay Scheduled Transaction", systemImage: "checkmark.circle")
+      }
+      .tint(.green)
+    }
+  }
+
+  @ViewBuilder
+  private func rowContextMenu(for transaction: Transaction) -> some View {
+    Button("Pay Scheduled Transaction", systemImage: "checkmark.circle") {
+      Task { await payTransaction(transaction) }
+    }
+    Button("Edit Transaction\u{2026}", systemImage: "pencil") {
+      selectedTransaction = transaction
+    }
+    Divider()
+    Button("Delete Transaction\u{2026}", systemImage: "trash", role: .destructive) {
+      transactionPendingDelete = transaction.id
     }
   }
 
@@ -244,60 +215,62 @@ struct UpcomingView: View {
   }
 }
 
+@MainActor
+private func previewSeedTransactions(
+  backend: CloudKitBackend,
+  accountId: UUID,
+  categoryId: UUID,
+  store: TransactionStore
+) async {
+  let today = Date()
+  let calendar = Calendar.current
+  let overdue = calendar.date(byAdding: .day, value: -5, to: today) ?? today
+  let upcoming = calendar.date(byAdding: .day, value: 5, to: today) ?? today
+
+  _ = try? await backend.transactions.create(
+    Transaction(
+      date: overdue, payee: "Rent",
+      recurPeriod: .month, recurEvery: 1,
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD, quantity: -2000, type: .expense,
+          categoryId: categoryId)
+      ]))
+  _ = try? await backend.transactions.create(
+    Transaction(
+      date: upcoming, payee: "Internet",
+      recurPeriod: .month, recurEvery: 1,
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD, quantity: -150, type: .expense,
+          categoryId: categoryId)
+      ]))
+  await store.load(filter: TransactionFilter(scheduled: true))
+}
+
 #Preview {
   let accountId = UUID()
   let categoryId = UUID()
-
   let accounts = Accounts(from: [
     Account(
       id: accountId, name: "Checking", type: .bank, instrument: .AUD,
-      positions: [Position(instrument: .AUD, quantity: 2449.77)]
-    )
+      positions: [Position(instrument: .AUD, quantity: 2449.77)])
   ])
-
   let categories = Categories(from: [
     Category(id: categoryId, name: "Rent", parentId: nil)
   ])
-
   let (backend, _) = PreviewBackend.create()
   let store = TransactionStore(
     repository: backend.transactions,
     conversionService: backend.conversionService,
-    targetInstrument: .AUD
-  )
-
-  NavigationStack {
+    targetInstrument: .AUD)
+  return NavigationStack {
     UpcomingView(
-      accounts: accounts,
-      categories: categories,
-      earmarks: Earmarks(from: []),
-      transactionStore: store
-    )
+      accounts: accounts, categories: categories,
+      earmarks: Earmarks(from: []), transactionStore: store)
   }
   .task {
-    let today = Date()
-    let calendar = Calendar.current
-    let overdue = calendar.date(byAdding: .day, value: -5, to: today) ?? today
-    let upcoming = calendar.date(byAdding: .day, value: 5, to: today) ?? today
-
-    _ = try? await backend.transactions.create(
-      Transaction(
-        date: overdue, payee: "Rent",
-        recurPeriod: .month, recurEvery: 1,
-        legs: [
-          TransactionLeg(
-            accountId: accountId, instrument: .AUD, quantity: -2000, type: .expense,
-            categoryId: categoryId)
-        ]))
-    _ = try? await backend.transactions.create(
-      Transaction(
-        date: upcoming, payee: "Internet",
-        recurPeriod: .month, recurEvery: 1,
-        legs: [
-          TransactionLeg(
-            accountId: accountId, instrument: .AUD, quantity: -150, type: .expense,
-            categoryId: categoryId)
-        ]))
-    await store.load(filter: TransactionFilter(scheduled: true))
+    await previewSeedTransactions(
+      backend: backend, accountId: accountId, categoryId: categoryId, store: store)
   }
 }

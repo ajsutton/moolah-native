@@ -22,52 +22,45 @@ struct AddInvestmentValueView: View {
 
   var body: some View {
     NavigationStack {
-      Form {
-        Section {
-          DatePicker("Date", selection: $date, displayedComponents: .date)
-
-          HStack {
-            Text(instrument.displayLabel)
-              .foregroundStyle(.secondary)
-            TextField("Value", text: $valueString)
-              .focused($isValueFieldFocused)
-              .monospacedDigit()
-              #if os(iOS)
-                .keyboardType(.decimalPad)
-              #endif
-          }
-        } header: {
-          Text("Investment Value")
-        }
-      }
-      .formStyle(.grouped)
-      .navigationTitle("Add Value")
-      #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-      #endif
-      .onAppear {
-        isValueFieldFocused = true
-      }
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") {
-            dismiss()
-          }
-        }
-
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Add") {
-            Task {
-              await submitValue()
-            }
-          }
-          .disabled(!canSubmit)
-        }
-      }
+      form
     }
     #if os(macOS)
       .frame(minWidth: 400, minHeight: 300)
     #endif
+  }
+
+  private var form: some View {
+    Form {
+      Section {
+        DatePicker("Date", selection: $date, displayedComponents: .date)
+        HStack {
+          Text(instrument.displayLabel).foregroundStyle(.secondary)
+          TextField("Value", text: $valueString)
+            .focused($isValueFieldFocused)
+            .monospacedDigit()
+            #if os(iOS)
+              .keyboardType(.decimalPad)
+            #endif
+        }
+      } header: {
+        Text("Investment Value")
+      }
+    }
+    .formStyle(.grouped)
+    .navigationTitle("Add Value")
+    #if os(iOS)
+      .navigationBarTitleDisplayMode(.inline)
+    #endif
+    .onAppear { isValueFieldFocused = true }
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("Cancel") { dismiss() }
+      }
+      ToolbarItem(placement: .confirmationAction) {
+        Button("Add") { Task { await submitValue() } }
+          .disabled(!canSubmit)
+      }
+    }
   }
 
   private func submitValue() async {

@@ -31,102 +31,112 @@ struct EditAccountView: View {
 
   var body: some View {
     NavigationStack {
-      Form {
-        Section {
-          TextField("Name", text: $name)
-            .focused($focusedField, equals: .name)
-            .accessibilityLabel("Account name")
-
-          Picker("Account Type", selection: $type) {
-            ForEach(AccountType.allCases, id: \.self) { type in
-              Text(type.displayName).tag(type)
-            }
-          }
-
-          if supportsComplexTransactions {
-            CurrencyPicker(selection: $currencyCode)
-          }
-
-          LabeledContent("Current Balance") {
-            if let displayBalance {
-              InstrumentAmountView(amount: displayBalance)
-                .foregroundStyle(.secondary)
-            } else if isBalanceUnavailable {
-              Text("Unavailable")
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Current balance unavailable")
-            } else {
-              ProgressView()
-                .controlSize(.small)
-                .accessibilityLabel("Loading balance")
-            }
-          }
-          .accessibilityLabel("Current balance, read-only")
-          .accessibilityValue(balanceAccessibilityValue)
-        }
-
-        Section {
-          Toggle("Hide Account", isOn: $isHidden)
-            .disabled(!accountStore.canDelete(account.id))
-            .accessibilityHint(
-              !accountStore.canDelete(account.id)
-                ? "Account must have zero balance to hide"
-                : ""
-            )
-        }
-
-        if let errorMessage {
-          Section {
-            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-              .foregroundStyle(.red)
-              .font(.caption)
-          }
-        }
-
-        Section {
-          Button("Hide Account", role: .destructive) {
-            showingHideConfirmation = true
-          }
-          .disabled(!accountStore.canDelete(account.id))
-          .accessibilityHint(
-            !accountStore.canDelete(account.id)
-              ? "Account must have zero balance to hide"
-              : ""
-          )
-        }
-      }
-      .navigationTitle("Edit Account")
-      #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-      #endif
-      #if os(macOS)
-        .defaultFocus($focusedField, .name)
-      #endif
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") { dismiss() }
-        }
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Save") { Task { await save() } }
-            .disabled(!isValid || isSubmitting)
-        }
-      }
-      .confirmationDialog(
-        "Hide Account",
-        isPresented: $showingHideConfirmation,
-        titleVisibility: .visible
-      ) {
-        Button("Hide", role: .destructive) {
-          Task { await delete() }
-        }
-        Button("Cancel", role: .cancel) {}
-      } message: {
-        Text("This account will be hidden. You can show it again later from the View menu.")
-      }
+      form
     }
     #if os(macOS)
       .frame(minWidth: 500, minHeight: 400)
     #endif
+  }
+
+  private var form: some View {
+    Form {
+      detailsSection
+      hideToggleSection
+      if let errorMessage {
+        Section {
+          Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+            .foregroundStyle(.red)
+            .font(.caption)
+        }
+      }
+      hideActionSection
+    }
+    .navigationTitle("Edit Account")
+    #if os(iOS)
+      .navigationBarTitleDisplayMode(.inline)
+    #endif
+    #if os(macOS)
+      .defaultFocus($focusedField, .name)
+    #endif
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("Cancel") { dismiss() }
+      }
+      ToolbarItem(placement: .confirmationAction) {
+        Button("Save") { Task { await save() } }
+          .disabled(!isValid || isSubmitting)
+      }
+    }
+    .confirmationDialog(
+      "Hide Account",
+      isPresented: $showingHideConfirmation,
+      titleVisibility: .visible
+    ) {
+      Button("Hide", role: .destructive) { Task { await delete() } }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text("This account will be hidden. You can show it again later from the View menu.")
+    }
+  }
+
+  private var detailsSection: some View {
+    Section {
+      TextField("Name", text: $name)
+        .focused($focusedField, equals: .name)
+        .accessibilityLabel("Account name")
+      Picker("Account Type", selection: $type) {
+        ForEach(AccountType.allCases, id: \.self) { type in
+          Text(type.displayName).tag(type)
+        }
+      }
+      if supportsComplexTransactions {
+        CurrencyPicker(selection: $currencyCode)
+      }
+      LabeledContent("Current Balance") {
+        currentBalanceDisplay
+      }
+      .accessibilityLabel("Current balance, read-only")
+      .accessibilityValue(balanceAccessibilityValue)
+    }
+  }
+
+  @ViewBuilder private var currentBalanceDisplay: some View {
+    if let displayBalance {
+      InstrumentAmountView(amount: displayBalance)
+        .foregroundStyle(.secondary)
+    } else if isBalanceUnavailable {
+      Text("Unavailable")
+        .foregroundStyle(.secondary)
+        .accessibilityLabel("Current balance unavailable")
+    } else {
+      ProgressView()
+        .controlSize(.small)
+        .accessibilityLabel("Loading balance")
+    }
+  }
+
+  private var hideToggleSection: some View {
+    Section {
+      Toggle("Hide Account", isOn: $isHidden)
+        .disabled(!accountStore.canDelete(account.id))
+        .accessibilityHint(
+          !accountStore.canDelete(account.id)
+            ? "Account must have zero balance to hide"
+            : "")
+    }
+  }
+
+  private var hideActionSection: some View {
+    Section {
+      Button("Hide Account", role: .destructive) {
+        showingHideConfirmation = true
+      }
+      .disabled(!accountStore.canDelete(account.id))
+      .accessibilityHint(
+        !accountStore.canDelete(account.id)
+          ? "Account must have zero balance to hide"
+          : "")
+    }
   }
 
   private var isValid: Bool {

@@ -113,44 +113,11 @@ struct MigrationView: View {
         .font(.system(size: 48))
         .foregroundStyle(.green)
         .accessibilityHidden(true)
-
-      Text("Migration Complete")
-        .font(.title)
-
-      VStack(alignment: .leading, spacing: 4) {
-        summaryRow("Accounts", count: result.accountCount)
-        summaryRow("Categories", count: result.categoryCount)
-        summaryRow("Earmarks", count: result.earmarkCount)
-        summaryRow("Transactions", count: result.transactionCount)
-        if result.investmentValueCount > 0 {
-          summaryRow("Investment Values", count: result.investmentValueCount)
-        }
-        if result.budgetItemCount > 0 {
-          summaryRow("Budget Items", count: result.budgetItemCount)
-        }
-      }
-      .font(.body.monospacedDigit())
-
+      Text("Migration Complete").font(.title)
+      summaryRows(result)
       if !balanceWarnings.isEmpty {
-        DisclosureGroup("Balance differences (\(balanceWarnings.count) accounts)") {
-          VStack(alignment: .leading, spacing: 4) {
-            ForEach(balanceWarnings, id: \.accountName) { mismatch in
-              VStack(alignment: .leading, spacing: 2) {
-                Text(mismatch.accountName)
-                  .font(.subheadline)
-                Text(
-                  "server: \(Self.formatCents(mismatch.serverBalance))  computed: \(Self.formatCents(mismatch.localBalance))  diff: \(Self.formatCents(mismatch.serverBalance - mismatch.localBalance))"
-                )
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-              }
-            }
-          }
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        balanceDifferencesDisclosure(balanceWarnings)
       }
-
       Button("Done") {
         #if os(macOS)
           openWindow(value: newProfileId)
@@ -160,6 +127,22 @@ struct MigrationView: View {
       .buttonStyle(.borderedProminent)
       .controlSize(.large)
     }
+  }
+
+  private func summaryRows(_ result: ImportResult) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      summaryRow("Accounts", count: result.accountCount)
+      summaryRow("Categories", count: result.categoryCount)
+      summaryRow("Earmarks", count: result.earmarkCount)
+      summaryRow("Transactions", count: result.transactionCount)
+      if result.investmentValueCount > 0 {
+        summaryRow("Investment Values", count: result.investmentValueCount)
+      }
+      if result.budgetItemCount > 0 {
+        summaryRow("Budget Items", count: result.budgetItemCount)
+      }
+    }
+    .font(.body.monospacedDigit())
   }
 
   private func summaryRow(_ label: String, count: Int) -> some View {
@@ -182,58 +165,29 @@ struct MigrationView: View {
         .font(.system(size: 48))
         .foregroundStyle(.yellow)
         .accessibilityHidden(true)
-
-      Text("Verification Issue")
-        .font(.title)
-
+      Text("Verification Issue").font(.title)
       Text(
         "The migrated data doesn't match the source. You can keep the new profile for review or delete it and retry."
       )
       .multilineTextAlignment(.center)
       .foregroundStyle(.secondary)
+      verificationCountsPanel(verification)
+      verificationActions(newProfileId: newProfileId)
+    }
+  }
 
-      ScrollView {
-        VStack(alignment: .leading, spacing: 8) {
-          Text("Record counts:")
-            .font(.headline)
-          countRow(
-            "Accounts", expected: verification.expectedCounts.accounts,
-            actual: verification.actualCounts.accounts)
-          countRow(
-            "Categories", expected: verification.expectedCounts.categories,
-            actual: verification.actualCounts.categories)
-          countRow(
-            "Earmarks", expected: verification.expectedCounts.earmarks,
-            actual: verification.actualCounts.earmarks)
-          countRow(
-            "Transactions", expected: verification.expectedCounts.transactions,
-            actual: verification.actualCounts.transactions)
-          countRow(
-            "Investment Values", expected: verification.expectedCounts.investmentValues,
-            actual: verification.actualCounts.investmentValues)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
+  private func verificationActions(newProfileId: UUID) -> some View {
+    HStack(spacing: 12) {
+      Button("Delete and Retry") {
+        coordinator.deleteFailedMigration(
+          profileId: newProfileId,
+          profileStore: profileStore,
+          containerManager: containerManager)
       }
-      .frame(maxHeight: 200)
-      .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-
-      HStack(spacing: 12) {
-        Button("Delete and Retry") {
-          coordinator.deleteFailedMigration(
-            profileId: newProfileId,
-            profileStore: profileStore,
-            containerManager: containerManager
-          )
-        }
-        .controlSize(.large)
-
-        Button("Keep for Review") {
-          dismiss()
-        }
+      .controlSize(.large)
+      Button("Keep for Review") { dismiss() }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
-      }
     }
   }
 
@@ -309,5 +263,55 @@ struct MigrationView: View {
     default:
       return false
     }
+  }
+}
+
+extension MigrationView {
+  private func verificationCountsPanel(_ verification: VerificationResult) -> some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 8) {
+        Text("Record counts:").font(.headline)
+        countRow(
+          "Accounts", expected: verification.expectedCounts.accounts,
+          actual: verification.actualCounts.accounts)
+        countRow(
+          "Categories", expected: verification.expectedCounts.categories,
+          actual: verification.actualCounts.categories)
+        countRow(
+          "Earmarks", expected: verification.expectedCounts.earmarks,
+          actual: verification.actualCounts.earmarks)
+        countRow(
+          "Transactions", expected: verification.expectedCounts.transactions,
+          actual: verification.actualCounts.transactions)
+        countRow(
+          "Investment Values", expected: verification.expectedCounts.investmentValues,
+          actual: verification.actualCounts.investmentValues)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding()
+    }
+    .frame(maxHeight: 200)
+    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+  }
+
+  private func balanceDifferencesDisclosure(
+    _ balanceWarnings: [VerificationResult.BalanceMismatch]
+  ) -> some View {
+    DisclosureGroup("Balance differences (\(balanceWarnings.count) accounts)") {
+      VStack(alignment: .leading, spacing: 4) {
+        ForEach(balanceWarnings, id: \.accountName) { mismatch in
+          VStack(alignment: .leading, spacing: 2) {
+            Text(mismatch.accountName).font(.subheadline)
+            Text(
+              "server: \(Self.formatCents(mismatch.serverBalance))  computed: \(Self.formatCents(mismatch.localBalance))  diff: \(Self.formatCents(mismatch.serverBalance - mismatch.localBalance))"
+            )
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+          }
+        }
+      }
+    }
+    .font(.caption)
+    .foregroundStyle(.secondary)
   }
 }
