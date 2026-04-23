@@ -24,17 +24,35 @@ struct OpenAccountIntent: AppIntent {
       throw AutomationError.operationFailed("App not ready")
     }
 
-    let profileEncoded =
-      profile.name.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? profile.name
-    let urlString = "moolah://\(profileEncoded)/account/\(account.id.uuidString)"
-    if let url = URL(string: urlString) {
-      #if os(macOS)
-        NSWorkspace.shared.open(url)
-      #else
+    #if os(macOS)
+      // Drive the UI in-process (focus existing window or call the scene's
+      // `openWindow` action via `ScriptingContext`) rather than firing a
+      // `moolah://` URL event that SwiftUI's `WindowGroup(for:)` would
+      // auto-spawn a stray window for. See issue #378.
+      try dispatchMacOS()
+    #else
+      let profileEncoded =
+        profile.name.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? profile.name
+      let urlString = "moolah://\(profileEncoded)/account/\(account.id.uuidString)"
+      if let url = URL(string: urlString) {
         await UIApplication.shared.open(url)
-      #endif
-    }
+      }
+    #endif
 
     return .result(value: "Opening \(account.name)")
   }
+
+  #if os(macOS)
+    @MainActor
+    private func dispatchMacOS() throws {
+      if !ProfileWindowLocator.activateExistingWindow(for: profile.id) {
+        guard let opener = ScriptingContext.openProfileWindow else {
+          throw AutomationError.operationFailed("App not ready to open a profile window")
+        }
+        opener(profile.id)
+      }
+      ScriptingContext.setPendingNavigation?(
+        PendingNavigation(profileId: profile.id, destination: .account(account.id)))
+    }
+  #endif
 }
