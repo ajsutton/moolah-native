@@ -367,6 +367,14 @@ SwiftLint enforces most of these via opt-in rules; follow them by habit.
   ```
 
 - **`for … in` over `forEach`** for side effects. `forEach` hides control flow — you can't `break`, `continue`, or `return` from the enclosing function. Use `forEach` only for pure-call chains where control flow isn't relevant.
+- **Don't reach for `.enumerated()` unless you need the index.** SwiftLint's [`unused_enumerated`](https://realm.github.io/SwiftLint/unused_enumerated.html) rule flags `for (_, element) in sequence.enumerated()` — drop the `.enumerated()` and iterate the sequence directly. If you only need the offset for a SwiftUI `ForEach`'s `id:`, prefer giving the element a stable identity (conform to `Identifiable` or key by a domain-unique property) over `Array(…​.enumerated())` + `\.offset`, which re-orders animations on insertion and hides the real identity of the row.
+
+  ```swift
+  for leg in transaction.legs { … }                     // Good
+  for (_, leg) in transaction.legs.enumerated() { … }   // Bad — use the sequence directly
+  for (index, leg) in transaction.legs.enumerated() { … }   // OK — index is used
+  ```
+
 - **`isMultiple(of:)` over `% == 0` for divisibility checks.** `BinaryInteger.isMultiple(of:)` reads as the intent ("is `i` a multiple of `N`") and survives a `0` divisor (`x.isMultiple(of: 0)` is `true` only when `x == 0`, not a trap). Keep `%` for actual remainder arithmetic (e.g. `i % earmarkIds.count` as an index wrap). Enforced by [`legacy_multiple`](https://realm.github.io/SwiftLint/legacy_multiple.html).
 
   ```swift
