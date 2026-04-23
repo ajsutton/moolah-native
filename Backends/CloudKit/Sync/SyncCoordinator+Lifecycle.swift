@@ -1,0 +1,213 @@
+@preconcurrency import CloudKit
+import Foundation
+import OSLog
+import SwiftData
+import os
+
+// Lifecycle management (start/stop), engine-level send/fetch wrappers, and
+// per-fetch-session change accumulation for `SyncCoordinator`.
+@MainActor
+extension SyncCoordinator {
+
+  // MARK: - Lifecycle
+
+  func start() {
+    guard !isRunning, startTask == nil else { return }
+
+    let signpostID = OSSignpostID(log: Signposts.sync)
+    os_signpost(.begin, log: Signposts.sync, name: "coordinatorStart", signpostID: signpostID)
+
+    // `CKSyncEngine.init(configuration:)` synchronously unarchives the
+    // `stateSerialization` blob via `NSKeyedUnarchiver`, which blocks the
+    // calling thread for many seconds when the pending-record-zone-changes
+    // queue has grown large. Run it off the main actor so app launch stays
+    // snappy. The end-of-startup signpost + "Started" log fire in
+    // `completeStart` once the engine object is back on the main actor.
+    let stateURL = self.stateFileURL
+    let delegate: any CKSyncEngineDelegate & Sendable = self
+    startTask = Task { [weak self] in
+      let prepared = await Self.prepareEngine(stateFileURL: stateURL, delegate: delegate)
+      // `stop()` cancels `startTask` — if that races with prepareEngine, drop
+      // the prepared engine. `delegate` strongly captures `self`, so the
+      // `guard let self` alone would still succeed after a stop.
+      guard !Task.isCancelled, let self else { return }
+      self.completeStart(prepared: prepared, signpostID: signpostID)
+    }
+  }
+
+  /// Off-actor: reads sync state from disk and constructs the `CKSyncEngine`.
+  ///
+  /// We deliberately use `Task.detached` rather than relying on the
+  /// `nonisolated async` hop. Per CONCURRENCY_GUIDE §8 detached tasks are
+  /// normally an anti-pattern, but here the heavy synchronous work
+  /// (`NSKeyedUnarchiver` inside `CKSyncEngine.init`) must not run on the
+  /// main thread. Empirically (see `.agent-tmp` startup samples), calling
+  /// this as `nonisolated async` from a `@MainActor`-originating `Task {}`
+  /// still inherits the main thread for the body; `Task.detached` is the
+  /// only reliable way to force execution onto the cooperative pool.
+  nonisolated static func prepareEngine(
+    stateFileURL: URL,
+    delegate: any CKSyncEngineDelegate & Sendable
+  ) async -> PreparedEngine {
+    await Task.detached(priority: .userInitiated) {
+      let data = try? Data(contentsOf: stateFileURL)
+      let savedState = data.flatMap {
+        try? JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0)
+      }
+      let configuration = CKSyncEngine.Configuration(
+        database: CKContainer.default().privateCloudDatabase,
+        stateSerialization: savedState,
+        delegate: delegate
+      )
+      return PreparedEngine(
+        engine: CKSyncEngine(configuration),
+        isFirstLaunch: savedState == nil)
+    }.value
+  }
+
+  /// Back-on-MainActor half of `start()`: installs the engine and kicks off
+  /// zone setup. Split from `start()` so the heavy init can run off-actor.
+  private func completeStart(
+    prepared: PreparedEngine, signpostID: OSSignpostID
+  ) {
+    defer {
+      os_signpost(.end, log: Signposts.sync, name: "coordinatorStart", signpostID: signpostID)
+      startTask = nil
+    }
+
+    syncEngine = prepared.engine
+    isFirstLaunch = prepared.isFirstLaunch
+    isRunning = true
+    logger.info("Started unified sync coordinator")
+
+    // On first launch (migration or truly first launch), queue all existing records
+    if isFirstLaunch {
+      queueAllExistingRecordsForAllZones()
+    }
+
+    // Eagerly create the profile-index zone and all known profile-data zones,
+    // then send if needed. Reactive creation in `handleSentRecordZoneChanges`
+    // remains as a fallback per SYNC_GUIDE Rule 3.
+    let profileIds = containerManager.allProfileIds()
+    let shouldBackfillUnsynced = !isFirstLaunch
+    zoneSetupTask = Task {
+      await self.ensureZoneExists(self.profileIndexHandler.zoneID)
+      for profileId in profileIds {
+        let zoneID = CKRecordZone.ID(
+          zoneName: "profile-\(profileId.uuidString)",
+          ownerName: CKCurrentUserDefaultName)
+        await self.ensureZoneExists(zoneID)
+      }
+      // After zones are confirmed, backfill any records that never got queued for upload
+      // (e.g. data imported by migration on a build that predated the migration→sync fix,
+      // or a previous run that crashed between the SwiftData write and the sync-engine
+      // queue). Skipped on first launch because `queueAllExistingRecordsForAllZones`
+      // has already queued everything.
+      if shouldBackfillUnsynced {
+        _ = self.queueUnsyncedRecordsForAllProfiles()
+      }
+      if self.hasPendingChanges {
+        self.logger.info("Zones ready — sending pending changes")
+        await self.sendChanges()
+      }
+    }
+  }
+
+  func stop() {
+    startTask?.cancel()
+    startTask = nil
+    zoneSetupTask?.cancel()
+    zoneSetupTask = nil
+    cancelRefetchTasks()
+    for (_, task) in zoneCreationTasks {
+      task.cancel()
+    }
+    zoneCreationTasks.removeAll()
+    syncEngine = nil
+    isRunning = false
+    isFetchingChanges = false
+    isQuotaExceeded = false
+    logger.info("Stopped unified sync coordinator")
+  }
+
+  // MARK: - Pending Changes
+
+  var hasPendingChanges: Bool {
+    syncEngine.map { !$0.state.pendingRecordZoneChanges.isEmpty } ?? false
+  }
+
+  // During the short window between `start()` returning and `completeStart`
+  // installing the engine, these queue calls silently no-op. That's safe
+  // because no user-driven edits can reach `queueSave`/`queueDeletion` before
+  // the UI is ready, and any already-persisted records are re-queued by
+  // `queueAllExistingRecordsForAllZones` / `queueUnsyncedRecordsForAllProfiles`
+  // inside `completeStart`.
+  func queueSave(id: UUID, zoneID: CKRecordZone.ID) {
+    let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+  }
+
+  func queueSave(recordName: String, zoneID: CKRecordZone.ID) {
+    let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID)
+    syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+  }
+
+  func queueDeletion(id: UUID, zoneID: CKRecordZone.ID) {
+    let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    syncEngine?.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
+  }
+
+  func sendChanges() async {
+    guard let syncEngine, isRunning else { return }
+    do {
+      try await syncEngine.sendChanges()
+    } catch {
+      logger.error("Failed to send changes: \(error)")
+    }
+  }
+
+  func fetchChanges() async {
+    guard let syncEngine, isRunning else { return }
+    do {
+      try await syncEngine.fetchChanges()
+    } catch {
+      logger.error("Failed to fetch changes: \(error)")
+    }
+  }
+
+  // MARK: - Fetch Session
+
+  func beginFetchingChanges() {
+    if isFetchingChanges {
+      // Prior session ended abnormally — flush accumulated changes
+      logger.warning("Prior fetch session ended abnormally — flushing accumulated changes")
+      flushFetchSessionChanges()
+    }
+    isFetchingChanges = true
+    fetchSessionChangedTypes.removeAll()
+    fetchSessionIndexChanged = false
+  }
+
+  func endFetchingChanges() {
+    isFetchingChanges = false
+    let profileCount = fetchSessionChangedTypes.filter { !$0.value.isEmpty }.count
+    let totalTypes = fetchSessionChangedTypes.values.reduce(into: Set<String>()) {
+      $0.formUnion($1)
+    }
+    logger.info(
+      "Fetch session complete: \(profileCount) profiles changed, types: \(totalTypes), indexChanged: \(self.fetchSessionIndexChanged)"
+    )
+    flushFetchSessionChanges()
+  }
+
+  private func flushFetchSessionChanges() {
+    for (profileId, types) in fetchSessionChangedTypes where !types.isEmpty {
+      notifyObservers(for: profileId, changedTypes: types)
+    }
+    if fetchSessionIndexChanged {
+      notifyIndexObservers()
+    }
+    fetchSessionChangedTypes.removeAll()
+    fetchSessionIndexChanged = false
+  }
+}
