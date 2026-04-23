@@ -390,6 +390,14 @@ SwiftLint enforces most of these via opt-in rules; follow them by habit.
   let legs = transaction.legs.map { $0 }             // Bad — use `Array(…)`
   ```
 
+- **`min()` / `max()` over `sorted().first` / `sorted().last`.** Sorting to pick a single extreme value is O(n log n) and allocates; `min()` / `max()` do it in O(n) without the intermediate array. Use the closure-taking overloads (`min(by:)`, `max(by:)`) when the ordering key is non-default. Enforced by [`sorted_first_last`](https://realm.github.io/SwiftLint/sorted_first_last.html).
+
+  ```swift
+  let earliest = transactions.min(by: { $0.date < $1.date })   // Good
+  let latest = prices.max()                                    // Good
+  let earliest = transactions.sorted { $0.date < $1.date }.first   // Bad — use `min(by:)`
+  ```
+
 ---
 
 ## 15. Control Flow
