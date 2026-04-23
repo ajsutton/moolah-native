@@ -572,95 +572,15 @@ struct TransactionDetailView: View {
     let isLegEarmarkOnly = draft.legDrafts[index].isEarmarkOnly
     Section("Sub-transaction \(index + 1) of \(draft.legDrafts.count)") {
       if !isLegEarmarkOnly {
-        Picker("Type", selection: $draft.legDrafts[index].type) {
-          Text(TransactionType.income.displayName).tag(TransactionType.income)
-          Text(TransactionType.expense.displayName).tag(TransactionType.expense)
-          Text(TransactionType.transfer.displayName).tag(TransactionType.transfer)
-        }
+        legTypePicker(at: index)
       }
-
-      Picker("Account", selection: $draft.legDrafts[index].accountId) {
-        Text("None").tag(UUID?.none)
-        ForEach(sortedAccounts) { account in
-          Text(account.name).tag(UUID?.some(account.id))
-        }
-      }
-      .onChange(of: draft.legDrafts[index].accountId) { _, newAccountId in
-        draft.enforceEarmarkOnlyInvariants(at: index)
-        if let newAccountId, let account = accounts.by(id: newAccountId) {
-          draft.legDrafts[index].instrumentId = account.instrument.id
-        } else if let emId = draft.legDrafts[index].earmarkId,
-          let earmark = earmarks.by(id: emId)
-        {
-          draft.legDrafts[index].instrumentId = earmark.instrument.id
-        }
-      }
-
-      Picker(
-        "Currency",
-        selection: Binding(
-          get: { draft.legDrafts[index].instrumentId ?? legInstrumentId(at: index) },
-          set: { draft.legDrafts[index].instrumentId = $0 }
-        )
-      ) {
-        ForEach(availableInstruments) { instrument in
-          Text("\(instrument.id) — \(CurrencyPicker.currencyName(for: instrument.id))")
-            .tag(instrument.id)
-        }
-      }
-      .accessibilityLabel("Currency for sub-transaction \(index + 1)")
-      .accessibilityHint("Overrides the currency derived from the account")
-
-      HStack {
-        TextField("Amount", text: $draft.legDrafts[index].amountText)
-          .multilineTextAlignment(.trailing)
-          .monospacedDigit()
-          #if os(iOS)
-            .keyboardType(.decimalPad)
-          #endif
-          .focused($focusedField, equals: .legAmount(index))
-        Text(draft.legDrafts[index].instrumentId ?? legInstrumentId(at: index))
-          .foregroundStyle(.secondary)
-          .monospacedDigit()
-      }
-
+      legAccountPicker(at: index)
+      legCurrencyPicker(at: index)
+      legAmountRow(at: index)
       if !isLegEarmarkOnly {
-        LegCategoryAutocompleteField(
-          legIndex: index,
-          text: $draft.legDrafts[index].categoryText,
-          highlightedIndex: Binding(
-            get: { legCategoryHighlightedIndex[index] },
-            set: { legCategoryHighlightedIndex[index] = $0 }
-          ),
-          suggestionCount: legCategoryVisibleSuggestions(for: index).count,
-          onTextChange: { _ in
-            if legCategoryJustSelected[index] == true {
-              legCategoryJustSelected[index] = false
-            } else {
-              showLegCategorySuggestions[index] = true
-            }
-          },
-          onAcceptHighlighted: { acceptHighlightedLegCategory(at: index) }
-        )
-        .focused($legCategoryFieldFocused, equals: index)
-        .accessibilityIdentifier(UITestIdentifiers.Detail.legCategory(index))
+        legCategoryField(at: index)
       }
-
-      Picker("Earmark", selection: $draft.legDrafts[index].earmarkId) {
-        if !isLegEarmarkOnly {
-          Text("None").tag(UUID?.none)
-        }
-        ForEach(earmarks.ordered.filter { !$0.isHidden }) { earmark in
-          Text(earmark.name).tag(UUID?.some(earmark.id))
-        }
-      }
-      #if os(macOS)
-        .pickerStyle(.menu)
-      #endif
-      .onChange(of: draft.legDrafts[index].earmarkId) { _, _ in
-        draft.enforceEarmarkOnlyInvariants(at: index)
-      }
-
+      legEarmarkPicker(at: index, isLegEarmarkOnly: isLegEarmarkOnly)
       if draft.legDrafts.count > 1 {
         Button(role: .destructive) {
           legPendingDeletion = index
@@ -670,6 +590,110 @@ struct TransactionDetailView: View {
         }
         .accessibilityLabel("Delete Sub-transaction")
       }
+    }
+  }
+
+  @ViewBuilder
+  private func legTypePicker(at index: Int) -> some View {
+    Picker("Type", selection: $draft.legDrafts[index].type) {
+      Text(TransactionType.income.displayName).tag(TransactionType.income)
+      Text(TransactionType.expense.displayName).tag(TransactionType.expense)
+      Text(TransactionType.transfer.displayName).tag(TransactionType.transfer)
+    }
+  }
+
+  @ViewBuilder
+  private func legAccountPicker(at index: Int) -> some View {
+    Picker("Account", selection: $draft.legDrafts[index].accountId) {
+      Text("None").tag(UUID?.none)
+      ForEach(sortedAccounts) { account in
+        Text(account.name).tag(UUID?.some(account.id))
+      }
+    }
+    .onChange(of: draft.legDrafts[index].accountId) { _, newAccountId in
+      draft.enforceEarmarkOnlyInvariants(at: index)
+      if let newAccountId, let account = accounts.by(id: newAccountId) {
+        draft.legDrafts[index].instrumentId = account.instrument.id
+      } else if let emId = draft.legDrafts[index].earmarkId,
+        let earmark = earmarks.by(id: emId)
+      {
+        draft.legDrafts[index].instrumentId = earmark.instrument.id
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func legCurrencyPicker(at index: Int) -> some View {
+    Picker(
+      "Currency",
+      selection: Binding(
+        get: { draft.legDrafts[index].instrumentId ?? legInstrumentId(at: index) },
+        set: { draft.legDrafts[index].instrumentId = $0 }
+      )
+    ) {
+      ForEach(availableInstruments) { instrument in
+        Text("\(instrument.id) — \(CurrencyPicker.currencyName(for: instrument.id))")
+          .tag(instrument.id)
+      }
+    }
+    .accessibilityLabel("Currency for sub-transaction \(index + 1)")
+    .accessibilityHint("Overrides the currency derived from the account")
+  }
+
+  @ViewBuilder
+  private func legAmountRow(at index: Int) -> some View {
+    HStack {
+      TextField("Amount", text: $draft.legDrafts[index].amountText)
+        .multilineTextAlignment(.trailing)
+        .monospacedDigit()
+        #if os(iOS)
+          .keyboardType(.decimalPad)
+        #endif
+        .focused($focusedField, equals: .legAmount(index))
+      Text(draft.legDrafts[index].instrumentId ?? legInstrumentId(at: index))
+        .foregroundStyle(.secondary)
+        .monospacedDigit()
+    }
+  }
+
+  @ViewBuilder
+  private func legCategoryField(at index: Int) -> some View {
+    LegCategoryAutocompleteField(
+      legIndex: index,
+      text: $draft.legDrafts[index].categoryText,
+      highlightedIndex: Binding(
+        get: { legCategoryHighlightedIndex[index] },
+        set: { legCategoryHighlightedIndex[index] = $0 }
+      ),
+      suggestionCount: legCategoryVisibleSuggestions(for: index).count,
+      onTextChange: { _ in
+        if legCategoryJustSelected[index] == true {
+          legCategoryJustSelected[index] = false
+        } else {
+          showLegCategorySuggestions[index] = true
+        }
+      },
+      onAcceptHighlighted: { acceptHighlightedLegCategory(at: index) }
+    )
+    .focused($legCategoryFieldFocused, equals: index)
+    .accessibilityIdentifier(UITestIdentifiers.Detail.legCategory(index))
+  }
+
+  @ViewBuilder
+  private func legEarmarkPicker(at index: Int, isLegEarmarkOnly: Bool) -> some View {
+    Picker("Earmark", selection: $draft.legDrafts[index].earmarkId) {
+      if !isLegEarmarkOnly {
+        Text("None").tag(UUID?.none)
+      }
+      ForEach(earmarks.ordered.filter { !$0.isHidden }) { earmark in
+        Text(earmark.name).tag(UUID?.some(earmark.id))
+      }
+    }
+    #if os(macOS)
+      .pickerStyle(.menu)
+    #endif
+    .onChange(of: draft.legDrafts[index].earmarkId) { _, _ in
+      draft.enforceEarmarkOnlyInvariants(at: index)
     }
   }
 

@@ -116,64 +116,8 @@ struct ReportingStoreTests {
       id: UUID(), name: "Brokerage", type: .bank, instrument: .defaultTestInstrument
     )
     TestBackend.seed(accounts: [account], in: container)
-
-    let bhp = Instrument(
-      id: "ASX:BHP", kind: .stock, name: "BHP", decimals: 0,
-      ticker: "BHP.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
-    let cba = Instrument(
-      id: "ASX:CBA", kind: .stock, name: "CBA", decimals: 0,
-      ticker: "CBA.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
-
-    let calendar = Calendar(identifier: .gregorian)
-    // Buy BHP early -- will be long-term when sold
-    let buyBHPDate = calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!
-    let buyBHP = Transaction(
-      date: buyBHPDate,
-      payee: "Buy BHP",
-      legs: [
-        TransactionLeg(
-          accountId: account.id, instrument: aud, quantity: -4000, type: .transfer),
-        TransactionLeg(
-          accountId: account.id, instrument: bhp, quantity: 100, type: .transfer),
-      ]
-    )
-
-    // Buy CBA late -- will be short-term when sold
-    let buyCBADate = calendar.date(from: DateComponents(year: 2025, month: 10, day: 1))!
-    let buyCBA = Transaction(
-      date: buyCBADate,
-      payee: "Buy CBA",
-      legs: [
-        TransactionLeg(
-          accountId: account.id, instrument: aud, quantity: -5000, type: .transfer),
-        TransactionLeg(
-          accountId: account.id, instrument: cba, quantity: 50, type: .transfer),
-      ]
-    )
-
-    // Sell both in FY2026
-    let sellDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 1))!
-    let sellBHP = Transaction(
-      date: sellDate,
-      payee: "Sell BHP",
-      legs: [
-        TransactionLeg(
-          accountId: account.id, instrument: bhp, quantity: -100, type: .transfer),
-        TransactionLeg(
-          accountId: account.id, instrument: aud, quantity: 5000, type: .transfer),
-      ]
-    )
-    let sellCBA = Transaction(
-      date: sellDate,
-      payee: "Sell CBA",
-      legs: [
-        TransactionLeg(
-          accountId: account.id, instrument: cba, quantity: -50, type: .transfer),
-        TransactionLeg(
-          accountId: account.id, instrument: aud, quantity: 6000, type: .transfer),
-      ]
-    )
-    TestBackend.seed(transactions: [buyBHP, buyCBA, sellBHP, sellCBA], in: container)
+    TestBackend.seed(
+      transactions: makeShortAndLongTermGainsFixture(accountId: account.id), in: container)
 
     let store = ReportingStore(
       transactionRepository: backend.transactions,
@@ -190,6 +134,57 @@ struct ReportingStoreTests {
     // CBA: short-term gain = 1000 (6000 - 5000)
     #expect(summary?.shortTermGain == 1000)
     #expect(summary?.totalGain == 2000)
+  }
+
+  /// Two stocks (BHP bought long-term before the window, CBA bought
+  /// short-term inside the window) both sold on the same day in FY2026.
+  private func makeShortAndLongTermGainsFixture(accountId: UUID) -> [Transaction] {
+    let bhp = Instrument(
+      id: "ASX:BHP", kind: .stock, name: "BHP", decimals: 0,
+      ticker: "BHP.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
+    let cba = Instrument(
+      id: "ASX:CBA", kind: .stock, name: "CBA", decimals: 0,
+      ticker: "CBA.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
+
+    let calendar = Calendar(identifier: .gregorian)
+    let buyBHPDate = calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!
+    let buyCBADate = calendar.date(from: DateComponents(year: 2025, month: 10, day: 1))!
+    let sellDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 1))!
+
+    return [
+      Transaction(
+        date: buyBHPDate, payee: "Buy BHP",
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: aud, quantity: -4000, type: .transfer),
+          TransactionLeg(
+            accountId: accountId, instrument: bhp, quantity: 100, type: .transfer),
+        ]),
+      Transaction(
+        date: buyCBADate, payee: "Buy CBA",
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: aud, quantity: -5000, type: .transfer),
+          TransactionLeg(
+            accountId: accountId, instrument: cba, quantity: 50, type: .transfer),
+        ]),
+      Transaction(
+        date: sellDate, payee: "Sell BHP",
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: bhp, quantity: -100, type: .transfer),
+          TransactionLeg(
+            accountId: accountId, instrument: aud, quantity: 5000, type: .transfer),
+        ]),
+      Transaction(
+        date: sellDate, payee: "Sell CBA",
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: cba, quantity: -50, type: .transfer),
+          TransactionLeg(
+            accountId: accountId, instrument: aud, quantity: 6000, type: .transfer),
+        ]),
+    ]
   }
 
   @Test func capitalGainsSummary_taxAdjustmentValues() {

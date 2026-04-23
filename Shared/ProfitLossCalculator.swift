@@ -10,23 +10,40 @@ enum ProfitLossCalculator {
     conversionService: InstrumentConversionService,
     asOfDate: Date
   ) async throws -> [InstrumentProfitLoss] {
-    // Run capital gains computation to get events and open lots
     let gainsResult = try await CapitalGainsCalculator.computeWithConversion(
       transactions: transactions,
       profileCurrency: profileCurrency,
       conversionService: conversionService
     )
 
-    // Track total invested and realized gains per instrument
     var instrumentData: [String: InstrumentData] = [:]
+    try await accumulateInvested(
+      into: &instrumentData,
+      transactions: transactions,
+      profileCurrency: profileCurrency,
+      conversionService: conversionService)
+    accumulateGainsAndLots(into: &instrumentData, result: gainsResult)
 
-    // Process all transactions to compute total invested.
-    //
-    // Fiat legs can span multiple currencies (e.g. a USD payment plus an
-    // AUD fee). We convert each outflow leg to `profileCurrency` on the
-    // transaction's date before summing so `totalInvested` is expressed
-    // in a single currency. See guides/INSTRUMENT_CONVERSION_GUIDE.md
-    // Rules 1 and 5.
+    return try await buildResults(
+      from: instrumentData,
+      profileCurrency: profileCurrency,
+      conversionService: conversionService,
+      asOfDate: asOfDate)
+  }
+
+  /// Process all transactions to compute total invested.
+  ///
+  /// Fiat legs can span multiple currencies (e.g. a USD payment plus an
+  /// AUD fee). We convert each outflow leg to `profileCurrency` on the
+  /// transaction's date before summing so `totalInvested` is expressed
+  /// in a single currency. See guides/INSTRUMENT_CONVERSION_GUIDE.md
+  /// Rules 1 and 5.
+  private static func accumulateInvested(
+    into instrumentData: inout [String: InstrumentData],
+    transactions: [LegTransaction],
+    profileCurrency: Instrument,
+    conversionService: InstrumentConversionService
+  ) async throws {
     let sorted = transactions.sorted { $0.date < $1.date }
     for transaction in sorted {
       let fiatLegs = transaction.legs.filter { $0.instrument.kind == .fiatCurrency }
@@ -45,23 +62,31 @@ enum ProfitLossCalculator {
           .totalInvested += fiatOutflow
       }
     }
+  }
 
-    // Add realized gains from events
-    for event in gainsResult.events {
+  private static func accumulateGainsAndLots(
+    into instrumentData: inout [String: InstrumentData],
+    result: CapitalGainsResult
+  ) {
+    for event in result.events {
       instrumentData[event.instrument.id, default: InstrumentData(instrument: event.instrument)]
         .realizedGain += event.gain
     }
-
-    // Compute current value and unrealized gain from open lots
-    for lot in gainsResult.openLots {
+    for lot in result.openLots {
       let id = lot.instrument.id
       instrumentData[id, default: InstrumentData(instrument: lot.instrument)]
         .currentQuantity += lot.remainingQuantity
       instrumentData[id, default: InstrumentData(instrument: lot.instrument)]
         .remainingCostBasis += lot.remainingCost
     }
+  }
 
-    // Get current market values
+  private static func buildResults(
+    from instrumentData: [String: InstrumentData],
+    profileCurrency: Instrument,
+    conversionService: InstrumentConversionService,
+    asOfDate: Date
+  ) async throws -> [InstrumentProfitLoss] {
     var results: [InstrumentProfitLoss] = []
     for (_, data) in instrumentData {
       var currentValue: Decimal = 0
@@ -70,9 +95,7 @@ enum ProfitLossCalculator {
           data.currentQuantity, from: data.instrument, to: profileCurrency, on: asOfDate
         )
       }
-
       let unrealized = currentValue - data.remainingCostBasis
-
       results.append(
         InstrumentProfitLoss(
           instrument: data.instrument,
@@ -83,7 +106,6 @@ enum ProfitLossCalculator {
           unrealizedGain: unrealized
         ))
     }
-
     return results.sorted { $0.totalGain > $1.totalGain }
   }
 

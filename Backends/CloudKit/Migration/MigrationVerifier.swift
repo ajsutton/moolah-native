@@ -30,32 +30,52 @@ struct MigrationVerifier {
     modelContainer: ModelContainer
   ) async throws -> VerificationResult {
     let context = ModelContext(modelContainer)
-
-    // 1. Record counts (store is profile-scoped, no predicate needed)
-    let accountDescriptor = FetchDescriptor<AccountRecord>()
-    let categoryDescriptor = FetchDescriptor<CategoryRecord>()
-    let earmarkDescriptor = FetchDescriptor<EarmarkRecord>()
-    let txnDescriptor = FetchDescriptor<TransactionRecord>()
-    let investmentDescriptor = FetchDescriptor<InvestmentValueRecord>()
-
-    let accountCount = try context.fetchCount(accountDescriptor)
-    let categoryCount = try context.fetchCount(categoryDescriptor)
-    let earmarkCount = try context.fetchCount(earmarkDescriptor)
-    let txnCount = try context.fetchCount(txnDescriptor)
-    let investmentValueCount = try context.fetchCount(investmentDescriptor)
+    let actualCounts = try fetchActualCounts(context: context)
 
     let expectedInvestmentValueCount = exported.investmentValues.values.reduce(0) { $0 + $1.count }
-
+    let expectedCounts = VerificationResult.EntityCounts(
+      accounts: exported.accounts.count,
+      categories: exported.categories.count,
+      earmarks: exported.earmarks.count,
+      transactions: exported.transactions.count,
+      investmentValues: expectedInvestmentValueCount
+    )
     let countMatch =
-      accountCount == exported.accounts.count
-      && categoryCount == exported.categories.count
-      && earmarkCount == exported.earmarks.count
-      && txnCount == exported.transactions.count
-      && investmentValueCount == expectedInvestmentValueCount
+      actualCounts.accounts == expectedCounts.accounts
+      && actualCounts.categories == expectedCounts.categories
+      && actualCounts.earmarks == expectedCounts.earmarks
+      && actualCounts.transactions == expectedCounts.transactions
+      && actualCounts.investmentValues == expectedCounts.investmentValues
 
-    // 2. Account balance verification — computed from exported data directly
-    //    (avoids ModelContext isolation issues with re-querying imported records)
-    //    Compares the primary position amount against computed leg totals.
+    let balanceMismatches = computeBalanceMismatches(exported: exported)
+    return VerificationResult(
+      countMatch: countMatch,
+      expectedCounts: expectedCounts,
+      actualCounts: actualCounts,
+      balanceMismatches: balanceMismatches
+    )
+  }
+
+  /// Record counts (store is profile-scoped, no predicate needed).
+  private func fetchActualCounts(
+    context: ModelContext
+  ) throws -> VerificationResult.EntityCounts {
+    VerificationResult.EntityCounts(
+      accounts: try context.fetchCount(FetchDescriptor<AccountRecord>()),
+      categories: try context.fetchCount(FetchDescriptor<CategoryRecord>()),
+      earmarks: try context.fetchCount(FetchDescriptor<EarmarkRecord>()),
+      transactions: try context.fetchCount(FetchDescriptor<TransactionRecord>()),
+      investmentValues: try context.fetchCount(FetchDescriptor<InvestmentValueRecord>())
+    )
+  }
+
+  /// Account balance verification — computed from exported data directly
+  /// (avoids ModelContext isolation issues with re-querying imported
+  /// records). Compares the primary position amount against computed leg
+  /// totals.
+  private func computeBalanceMismatches(
+    exported: ExportedData
+  ) -> [VerificationResult.BalanceMismatch] {
     var balanceMismatches: [VerificationResult.BalanceMismatch] = []
     let nonScheduledTxns = exported.transactions.filter { !$0.isScheduled }
 
@@ -86,28 +106,6 @@ struct MigrationVerifier {
         )
       }
     }
-
-    let expectedCounts = VerificationResult.EntityCounts(
-      accounts: exported.accounts.count,
-      categories: exported.categories.count,
-      earmarks: exported.earmarks.count,
-      transactions: exported.transactions.count,
-      investmentValues: expectedInvestmentValueCount
-    )
-
-    let actualCounts = VerificationResult.EntityCounts(
-      accounts: accountCount,
-      categories: categoryCount,
-      earmarks: earmarkCount,
-      transactions: txnCount,
-      investmentValues: investmentValueCount
-    )
-
-    return VerificationResult(
-      countMatch: countMatch,
-      expectedCounts: expectedCounts,
-      actualCounts: actualCounts,
-      balanceMismatches: balanceMismatches
-    )
+    return balanceMismatches
   }
 }

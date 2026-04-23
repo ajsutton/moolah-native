@@ -39,83 +39,81 @@ struct SelfWealthParser: CSVParser, Sendable {
         results.append(.skip(reason: "blank row"))
         continue
       }
-      let type = safe(row, columns.type)
-      let description = safe(row, columns.description)
-      guard let date = parseDate(safe(row, columns.date)) else {
-        throw CSVParserError.malformedRow(
-          index: rowIndex, reason: "invalid date", row: row)
-      }
-      let debitValue = parseAmount(safe(row, columns.debit)) ?? 0
-      let creditValue = parseAmount(safe(row, columns.credit)) ?? 0
-      let balance = parseAmount(safe(row, columns.balance))
-      let cashAmount: Decimal = creditValue != 0 ? creditValue : -abs(debitValue)
-
-      switch type.lowercased() {
-      case "trade":
-        let record = try parseTrade(
-          date: date,
-          description: description,
-          cashAmount: cashAmount,
-          balance: balance,
-          row: row,
-          index: rowIndex)
-        results.append(record)
-      case "dividend":
-        let leg = ParsedLeg(
-          accountId: nil,
-          instrument: .AUD,
-          quantity: cashAmount,
-          type: .income,
-          isInstrumentPlaceholder: true)
-        results.append(
-          .transaction(
-            ParsedTransaction(
-              date: date,
-              legs: [leg],
-              rawRow: row,
-              rawDescription: description,
-              rawAmount: cashAmount,
-              rawBalance: balance,
-              bankReference: dividendReference(for: description))))
-      case "brokerage", "gst on brokerage", "fee":
-        let leg = ParsedLeg(
-          accountId: nil,
-          instrument: .AUD,
-          quantity: cashAmount,
-          type: .expense,
-          isInstrumentPlaceholder: true)
-        results.append(
-          .transaction(
-            ParsedTransaction(
-              date: date,
-              legs: [leg],
-              rawRow: row,
-              rawDescription: description,
-              rawAmount: cashAmount,
-              rawBalance: balance,
-              bankReference: nil)))
-      case "cash in", "cash out", "interest":
-        let leg = ParsedLeg(
-          accountId: nil,
-          instrument: .AUD,
-          quantity: cashAmount,
-          type: cashAmount >= 0 ? .income : .expense,
-          isInstrumentPlaceholder: true)
-        results.append(
-          .transaction(
-            ParsedTransaction(
-              date: date,
-              legs: [leg],
-              rawRow: row,
-              rawDescription: description,
-              rawAmount: cashAmount,
-              rawBalance: balance,
-              bankReference: nil)))
-      default:
-        results.append(.skip(reason: "unknown type: \(type)"))
-      }
+      let record = try parseDataRow(row, columns: columns, rowIndex: rowIndex)
+      results.append(record)
     }
     return results
+  }
+
+  private struct ParsedFields {
+    let type: String
+    let description: String
+    let date: Date
+    let cashAmount: Decimal
+    let balance: Decimal?
+  }
+
+  private func parseDataRow(
+    _ row: [String], columns: Columns, rowIndex: Int
+  ) throws -> ParsedRecord {
+    let type = safe(row, columns.type)
+    let description = safe(row, columns.description)
+    guard let date = parseDate(safe(row, columns.date)) else {
+      throw CSVParserError.malformedRow(index: rowIndex, reason: "invalid date", row: row)
+    }
+    let debitValue = parseAmount(safe(row, columns.debit)) ?? 0
+    let creditValue = parseAmount(safe(row, columns.credit)) ?? 0
+    let balance = parseAmount(safe(row, columns.balance))
+    let cashAmount: Decimal = creditValue != 0 ? creditValue : -abs(debitValue)
+
+    let fields = ParsedFields(
+      type: type, description: description, date: date,
+      cashAmount: cashAmount, balance: balance)
+
+    switch type.lowercased() {
+    case "trade":
+      return try parseTrade(
+        date: date,
+        description: description,
+        cashAmount: cashAmount,
+        balance: balance,
+        row: row,
+        index: rowIndex)
+    case "dividend":
+      return makeSimpleLegRecord(
+        fields: fields, row: row, legType: .income, reference: dividendReference(for: description))
+    case "brokerage", "gst on brokerage", "fee":
+      return makeSimpleLegRecord(fields: fields, row: row, legType: .expense, reference: nil)
+    case "cash in", "cash out", "interest":
+      return makeSimpleLegRecord(
+        fields: fields, row: row,
+        legType: cashAmount >= 0 ? .income : .expense, reference: nil)
+    default:
+      return .skip(reason: "unknown type: \(type)")
+    }
+  }
+
+  private func makeSimpleLegRecord(
+    fields: ParsedFields,
+    row: [String],
+    legType: TransactionType,
+    reference: String?
+  ) -> ParsedRecord {
+    let leg = ParsedLeg(
+      accountId: nil,
+      instrument: .AUD,
+      quantity: fields.cashAmount,
+      type: legType,
+      isInstrumentPlaceholder: true)
+    return .transaction(
+      ParsedTransaction(
+        date: fields.date,
+        legs: [leg],
+        rawRow: row,
+        rawDescription: fields.description,
+        rawAmount: fields.cashAmount,
+        rawBalance: fields.balance,
+        bankReference: reference))
   }
 
   // MARK: - Private

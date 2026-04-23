@@ -227,119 +227,142 @@ enum BenchmarkFixtures {
     let fiveYearsAgo = Calendar.current.date(byAdding: .year, value: -5, to: Date())!
     let timeSpan = Date().timeIntervalSince(fiveYearsAgo)
     let scheduledCount = max(1, Int(Double(scale.transactions) * 0.002))
-    // Non-heavy account IDs for the remaining ~14%.
     let otherAccountIds = Array(accountIds.dropFirst(3))
 
     for i in 0..<scale.transactions {
       let id = deterministicUUID(namespace: 0x05, index: i)
-
-      // Distribute across accounts: 38% heavy0, 32% heavy1, 16% heavy2, 14% others.
-      let accountId: UUID
-      let bucket = i % 100
-      if bucket < 38 {
-        accountId = heavyAccountIds[0]
-      } else if bucket < 70 {
-        accountId = heavyAccountIds[1]
-      } else if bucket < 86 {
-        accountId = heavyAccountIds[2]
-      } else if !otherAccountIds.isEmpty {
-        accountId = otherAccountIds[i % otherAccountIds.count]
-      } else {
-        accountId = heavyAccountIds[0]
-      }
-
-      // Transaction type: 60% expense, 30% income, 10% transfer.
-      let typeBucket = i % 10
-      let txnType: TransactionType
-      var toAccountId: UUID?
-      if typeBucket < 6 {
-        txnType = .expense
-      } else if typeBucket < 9 {
-        txnType = .income
-      } else {
-        txnType = .transfer
-        // Pick a different account for the destination.
-        let destIndex = (accountIds.firstIndex(of: accountId) ?? 0 + 1) % accountIds.count
-        toAccountId = accountIds[destIndex]
-      }
+      let accountId = pickAccountId(for: i, otherAccountIds: otherAccountIds)
+      let (txnType, toAccountId) = pickType(for: i, accountId: accountId, allIds: accountIds)
 
       // Spread dates across 5 years deterministically.
       let fraction = Double(i) / Double(max(1, scale.transactions - 1))
       let date = fiveYearsAgo.addingTimeInterval(fraction * timeSpan)
-
-      // Quantity: vary between 1 and 500 (whole units).
-      let quantity: Int64
-      switch txnType {
-      case .expense:
-        quantity =
-          InstrumentAmount(
-            quantity: Decimal(-((i % 500 + 1))), instrument: instrument
-          ).storageValue
-      case .income:
-        quantity =
-          InstrumentAmount(
-            quantity: Decimal(i % 800 + 1), instrument: instrument
-          ).storageValue
-      case .transfer:
-        quantity =
-          InstrumentAmount(
-            quantity: Decimal(i % 300 + 1), instrument: instrument
-          ).storageValue
-      default:
-        quantity = 0
-      }
+      let quantity = quantityFor(index: i, type: txnType, instrument: instrument)
 
       // Assign category to ~70% of transactions.
       let categoryId: UUID? =
         (i % 10 < 7 && !categoryIds.isEmpty)
         ? categoryIds[i % categoryIds.count]
         : nil
-
       // Assign earmark to ~5% of transactions.
       let earmarkId: UUID? =
         (i.isMultiple(of: 20) && !earmarkIds.isEmpty)
         ? earmarkIds[i % earmarkIds.count]
         : nil
-
       // ~0.2% are scheduled (recurring).
       let isScheduled = i < scheduledCount
-      let recurPeriod: String? = isScheduled ? RecurPeriod.month.rawValue : nil
-      let recurEvery: Int? = isScheduled ? 1 : nil
-
-      let record = TransactionRecord(
+      let spec = TransactionSpec(
         id: id,
         date: date,
         payee: "Payee \(i % 200)",
-        recurPeriod: recurPeriod,
-        recurEvery: recurEvery
-      )
-      context.insert(record)
-
-      // Create the primary leg
-      let legRecord = TransactionLegRecord(
-        transactionId: id,
+        isScheduled: isScheduled,
         accountId: accountId,
-        instrumentId: instrument.id,
+        toAccountId: toAccountId,
+        instrument: instrument,
         quantity: quantity,
-        type: txnType.rawValue,
+        txnType: txnType,
         categoryId: categoryId,
-        earmarkId: earmarkId,
-        sortOrder: 0
-      )
-      context.insert(legRecord)
+        earmarkId: earmarkId)
+      insertTransactionRecords(spec, in: context)
+    }
+  }
 
-      // For transfers, create a second leg for the destination account
-      if let toAccountId {
-        let toLegRecord = TransactionLegRecord(
-          transactionId: id,
-          accountId: toAccountId,
-          instrumentId: instrument.id,
-          quantity: -quantity,
-          type: TransactionType.transfer.rawValue,
-          sortOrder: 1
-        )
-        context.insert(toLegRecord)
-      }
+  private struct TransactionSpec {
+    let id: UUID
+    let date: Date
+    let payee: String
+    let isScheduled: Bool
+    let accountId: UUID
+    let toAccountId: UUID?
+    let instrument: Instrument
+    let quantity: Int64
+    let txnType: TransactionType
+    let categoryId: UUID?
+    let earmarkId: UUID?
+  }
+
+  /// Distribute across accounts: 38% heavy0, 32% heavy1, 16% heavy2, 14% others.
+  private static func pickAccountId(for i: Int, otherAccountIds: [UUID]) -> UUID {
+    let bucket = i % 100
+    if bucket < 38 { return heavyAccountIds[0] }
+    if bucket < 70 { return heavyAccountIds[1] }
+    if bucket < 86 { return heavyAccountIds[2] }
+    if !otherAccountIds.isEmpty { return otherAccountIds[i % otherAccountIds.count] }
+    return heavyAccountIds[0]
+  }
+
+  /// Transaction type: 60% expense, 30% income, 10% transfer.
+  private static func pickType(
+    for i: Int, accountId: UUID, allIds: [UUID]
+  ) -> (TransactionType, UUID?) {
+    let typeBucket = i % 10
+    if typeBucket < 6 { return (.expense, nil) }
+    if typeBucket < 9 { return (.income, nil) }
+    // Transfer: pick a different account for the destination.
+    let destIndex = (allIds.firstIndex(of: accountId) ?? 0 + 1) % allIds.count
+    return (.transfer, allIds[destIndex])
+  }
+
+  /// Quantity: vary between 1 and 500 (whole units).
+  private static func quantityFor(
+    index i: Int, type: TransactionType, instrument: Instrument
+  ) -> Int64 {
+    switch type {
+    case .expense:
+      return InstrumentAmount(
+        quantity: Decimal(-((i % 500 + 1))), instrument: instrument
+      ).storageValue
+    case .income:
+      return InstrumentAmount(
+        quantity: Decimal(i % 800 + 1), instrument: instrument
+      ).storageValue
+    case .transfer:
+      return InstrumentAmount(
+        quantity: Decimal(i % 300 + 1), instrument: instrument
+      ).storageValue
+    default:
+      return 0
+    }
+  }
+
+  @MainActor
+  private static func insertTransactionRecords(
+    _ spec: TransactionSpec, in context: ModelContext
+  ) {
+    let recurPeriod: String? = spec.isScheduled ? RecurPeriod.month.rawValue : nil
+    let recurEvery: Int? = spec.isScheduled ? 1 : nil
+    let record = TransactionRecord(
+      id: spec.id,
+      date: spec.date,
+      payee: spec.payee,
+      recurPeriod: recurPeriod,
+      recurEvery: recurEvery
+    )
+    context.insert(record)
+
+    let legRecord = TransactionLegRecord(
+      transactionId: spec.id,
+      accountId: spec.accountId,
+      instrumentId: spec.instrument.id,
+      quantity: spec.quantity,
+      type: spec.txnType.rawValue,
+      categoryId: spec.categoryId,
+      earmarkId: spec.earmarkId,
+      sortOrder: 0
+    )
+    context.insert(legRecord)
+
+    // For transfers, create a second leg for the destination account.
+    if let toAccountId = spec.toAccountId {
+      let toLegRecord = TransactionLegRecord(
+        transactionId: spec.id,
+        accountId: toAccountId,
+        instrumentId: spec.instrument.id,
+        quantity: -spec.quantity,
+        type: TransactionType.transfer.rawValue,
+        sortOrder: 1
+      )
+      context.insert(toLegRecord)
     }
   }
 

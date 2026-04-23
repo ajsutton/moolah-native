@@ -81,74 +81,102 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
       os_signpost(
         .end, log: Signposts.repository, name: "CategoryRepo.delete", signpostID: signpostID)
     }
-    let targetId = id
+    try await MainActor.run {
+      try performDelete(id: id, replacementId: replacementId)
+    }
+  }
 
+  /// Main-actor portion of `delete(id:withReplacement:)`. All SwiftData
+  /// access happens here so the async wrapper stays a thin signpost shim.
+  @MainActor
+  private func performDelete(id: UUID, replacementId: UUID?) throws {
+    let targetId = id
     let descriptor = FetchDescriptor<CategoryRecord>(
       predicate: #Predicate { $0.id == targetId }
     )
-
-    try await MainActor.run {
-      guard let record = try context.fetch(descriptor).first else {
-        throw BackendError.serverError(404)
-      }
-
-      // Orphan children (server always sets parent_id = NULL)
-      let childDescriptor = FetchDescriptor<CategoryRecord>(
-        predicate: #Predicate { $0.parentId == targetId }
-      )
-      let children = try context.fetch(childDescriptor)
-      for child in children {
-        child.parentId = nil
-      }
-
-      // Update transaction legs that reference this category
-      let deletedId = id
-      let legDescriptor = FetchDescriptor<TransactionLegRecord>(
-        predicate: #Predicate { $0.categoryId == deletedId }
-      )
-      let affectedLegs = try context.fetch(legDescriptor)
-      for leg in affectedLegs {
-        leg.categoryId = replacementId
-      }
-
-      // Update budget items that reference this category
-      let budgetDescriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
-        predicate: #Predicate { $0.categoryId == deletedId }
-      )
-      let affectedBudgets = try context.fetch(budgetDescriptor)
-      var deletedBudgetIds: [UUID] = []
-      var updatedBudgetIds: [UUID] = []
-      for budget in affectedBudgets {
-        if let replacementId {
-          // If replacement already has a budget for this earmark, drop the old one
-          let budgetEarmarkId = budget.earmarkId
-          let existingDescriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
-            predicate: #Predicate {
-              $0.earmarkId == budgetEarmarkId && $0.categoryId == replacementId
-            }
-          )
-          if try context.fetch(existingDescriptor).first != nil {
-            deletedBudgetIds.append(budget.id)
-            context.delete(budget)
-          } else {
-            updatedBudgetIds.append(budget.id)
-            budget.categoryId = replacementId
-          }
-        } else {
-          deletedBudgetIds.append(budget.id)
-          context.delete(budget)
-        }
-      }
-
-      context.delete(record)
-      try context.save()
-
-      // Queue sync changes for all affected records
-      onRecordDeleted(id)
-      for child in children { onRecordChanged(child.id) }
-      for leg in affectedLegs { onRecordChanged(leg.id) }
-      for budgetId in deletedBudgetIds { onRecordDeleted(budgetId) }
-      for budgetId in updatedBudgetIds { onRecordChanged(budgetId) }
+    guard let record = try context.fetch(descriptor).first else {
+      throw BackendError.serverError(404)
     }
+
+    let children = try orphanChildren(of: targetId)
+    let affectedLegs = try reassignLegs(from: id, to: replacementId)
+    let (deletedBudgetIds, updatedBudgetIds) = try reassignBudgets(
+      from: id, to: replacementId)
+
+    context.delete(record)
+    try context.save()
+
+    // Queue sync changes for all affected records
+    onRecordDeleted(id)
+    for child in children { onRecordChanged(child.id) }
+    for leg in affectedLegs { onRecordChanged(leg.id) }
+    for budgetId in deletedBudgetIds { onRecordDeleted(budgetId) }
+    for budgetId in updatedBudgetIds { onRecordChanged(budgetId) }
+  }
+
+  /// Orphan child categories of `targetId` (server always sets parent_id = NULL).
+  @MainActor
+  private func orphanChildren(of targetId: UUID) throws -> [CategoryRecord] {
+    let childDescriptor = FetchDescriptor<CategoryRecord>(
+      predicate: #Predicate { $0.parentId == targetId }
+    )
+    let children = try context.fetch(childDescriptor)
+    for child in children {
+      child.parentId = nil
+    }
+    return children
+  }
+
+  /// Update transaction legs referencing `deletedId` to point at `replacementId`.
+  @MainActor
+  private func reassignLegs(
+    from deletedId: UUID, to replacementId: UUID?
+  ) throws -> [TransactionLegRecord] {
+    let legDescriptor = FetchDescriptor<TransactionLegRecord>(
+      predicate: #Predicate { $0.categoryId == deletedId }
+    )
+    let affectedLegs = try context.fetch(legDescriptor)
+    for leg in affectedLegs {
+      leg.categoryId = replacementId
+    }
+    return affectedLegs
+  }
+
+  /// Reassign budget items that referenced the deleted category. Returns the
+  /// ids of the budgets that were deleted (because their earmark already
+  /// had a budget line for `replacementId`) and the ids that were updated.
+  @MainActor
+  private func reassignBudgets(
+    from deletedId: UUID, to replacementId: UUID?
+  ) throws -> (deleted: [UUID], updated: [UUID]) {
+    let budgetDescriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
+      predicate: #Predicate { $0.categoryId == deletedId }
+    )
+    let affectedBudgets = try context.fetch(budgetDescriptor)
+    var deletedBudgetIds: [UUID] = []
+    var updatedBudgetIds: [UUID] = []
+    for budget in affectedBudgets {
+      guard let replacementId else {
+        deletedBudgetIds.append(budget.id)
+        context.delete(budget)
+        continue
+      }
+      // If the replacement already has a budget for this earmark, drop
+      // the old one; otherwise rewrite this one to point at it.
+      let budgetEarmarkId = budget.earmarkId
+      let existingDescriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
+        predicate: #Predicate {
+          $0.earmarkId == budgetEarmarkId && $0.categoryId == replacementId
+        }
+      )
+      if try context.fetch(existingDescriptor).first != nil {
+        deletedBudgetIds.append(budget.id)
+        context.delete(budget)
+      } else {
+        updatedBudgetIds.append(budget.id)
+        budget.categoryId = replacementId
+      }
+    }
+    return (deletedBudgetIds, updatedBudgetIds)
   }
 }

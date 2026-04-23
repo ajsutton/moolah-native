@@ -44,35 +44,42 @@ enum UITestSeedHydrator {
       financialYearStartMonth: 7,
       createdAt: Date(timeIntervalSince1970: 1_700_000_000)
     )
-
     try upsertProfile(profile, into: manager)
 
     let container = try manager.container(for: profile.id)
     let context = ModelContext(container)
     let instrument = profile.instrument
 
-    try upsertInstrument(instrument, in: context)
+    try seedTradeBaselineAccounts(instrument: instrument, in: context)
+    try seedTradeBaselineTransactions(instrument: instrument, in: context)
 
+    try context.save()
+    return profile
+  }
+
+  /// Seed the accounts used by the Trade Baseline fixture: AUD checking +
+  /// investment + a USD account so the cross-currency test can switch a
+  /// transfer leg's counterpart instrument.
+  private static func seedTradeBaselineAccounts(
+    instrument: Instrument, in context: ModelContext
+  ) throws {
+    let fixtures = UITestFixtures.TradeBaseline.self
+    try upsertInstrument(instrument, in: context)
     try upsertAccount(
       id: fixtures.checkingAccountId,
       name: fixtures.checkingAccountName,
       type: .bank,
       instrumentId: instrument.id,
       position: 0,
-      in: context
-    )
-
+      in: context)
     try upsertAccount(
       id: fixtures.brokerageAccountId,
       name: fixtures.brokerageAccountName,
       type: .investment,
       instrumentId: instrument.id,
       position: 1,
-      in: context
-    )
+      in: context)
 
-    // USD account lets the cross-currency test switch a transfer's
-    // counterpart to a different instrument.
     let usd = Instrument.USD
     try upsertInstrument(usd, in: context)
     try upsertAccount(
@@ -81,26 +88,28 @@ enum UITestSeedHydrator {
       type: .bank,
       instrumentId: usd.id,
       position: 2,
-      in: context
-    )
+      in: context)
+  }
 
+  /// Seed the transactions used by the Trade Baseline fixture.
+  private static func seedTradeBaselineTransactions(
+    instrument: Instrument, in context: ModelContext
+  ) throws {
+    let fixtures = UITestFixtures.TradeBaseline.self
     try upsertTrade(
       id: fixtures.bhpPurchaseId,
       payee: fixtures.bhpPurchasePayee,
       date: fixtures.bhpPurchaseDate,
       amount: InstrumentAmount(
         quantity: Decimal(fixtures.bhpPurchaseAmountCents) / 100,
-        instrument: instrument
-      ),
+        instrument: instrument),
       fromAccountId: fixtures.checkingAccountId,
       toAccountId: fixtures.brokerageAccountId,
-      in: context
-    )
+      in: context)
 
     let historicalAmount = InstrumentAmount(
       quantity: Decimal(fixtures.historicalExpenseAmountCents) / 100,
-      instrument: instrument
-    )
+      instrument: instrument)
     for historical in fixtures.historicalPayees {
       try upsertHistoricalExpense(
         id: historical.id,
@@ -108,8 +117,7 @@ enum UITestSeedHydrator {
         date: historical.date,
         amount: historicalAmount,
         accountId: fixtures.checkingAccountId,
-        in: context
-      )
+        in: context)
     }
 
     try upsertCategory(
@@ -123,18 +131,12 @@ enum UITestSeedHydrator {
       date: fixtures.splitShopDate,
       legAAmount: InstrumentAmount(
         quantity: Decimal(fixtures.splitShopLegAAmountCents) / 100,
-        instrument: instrument
-      ),
+        instrument: instrument),
       legBAmount: InstrumentAmount(
         quantity: Decimal(fixtures.splitShopLegBAmountCents) / 100,
-        instrument: instrument
-      ),
+        instrument: instrument),
       accountId: fixtures.checkingAccountId,
-      in: context
-    )
-
-    try context.save()
-    return profile
+      in: context)
   }
 
   // MARK: - Upsert helpers
