@@ -5,7 +5,7 @@ import os
 
 final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   private let logger = Logger(subsystem: "com.moolah.app", category: "AccountRepository")
-  private let modelContainer: ModelContainer
+  let modelContainer: ModelContainer
   var onRecordChanged: (UUID) -> Void = { _ in }
   var onRecordDeleted: (UUID) -> Void = { _ in }
   var onInstrumentChanged: (String) -> Void = { _ in }
@@ -14,7 +14,9 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     self.modelContainer = modelContainer
   }
 
-  @MainActor private var context: ModelContext {
+  // internal (was private) so the `+Positions` extension file can reach the
+  // main-actor context from its `@MainActor` helper overloads.
+  @MainActor var context: ModelContext {
     modelContainer.mainContext
   }
 
@@ -173,128 +175,6 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       try context.save()
       onRecordChanged(id)
     }
-  }
-
-  // MARK: - Position Computation
-
-  /// Compute per-instrument positions for all accounts.
-  /// Returns a dictionary of accountId -> [Position].
-  @MainActor
-  private func computeAllPositions(instruments: [String: Instrument]) throws -> [UUID: [Position]] {
-    let (_, allLegs) = try fetchNonScheduledLegs()
-
-    // Group by (accountId, instrumentId) and sum quantities
-    var totals: [UUID: [String: Int64]] = [:]
-    for leg in allLegs {
-      guard let accountId = leg.accountId else { continue }
-      totals[accountId, default: [:]][leg.instrumentId, default: 0] += leg.quantity
-    }
-
-    // Resolve instruments and build Position arrays
-    var result: [UUID: [Position]] = [:]
-    for (accountId, instrumentTotals) in totals {
-      var positions: [Position] = []
-      for (instrumentId, quantity) in instrumentTotals {
-        guard quantity != 0 else { continue }
-        let inst = instruments[instrumentId] ?? Instrument.fiat(code: instrumentId)
-        let amount = InstrumentAmount(storageValue: quantity, instrument: inst)
-        positions.append(
-          Position(instrument: inst, quantity: amount.quantity))
-      }
-      positions.sort { $0.instrument.id < $1.instrument.id }
-      if !positions.isEmpty {
-        result[accountId] = positions
-      }
-    }
-    return result
-  }
-
-  /// Fetches all non-scheduled legs in a single pass.
-  @MainActor
-  private func fetchNonScheduledLegs() throws -> (Set<UUID>, [TransactionLegRecord]) {
-    let scheduledDescriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate { $0.recurPeriod != nil }
-    )
-    let scheduledIds = Set(try context.fetch(scheduledDescriptor).map(\.id))
-
-    let legDescriptor = FetchDescriptor<TransactionLegRecord>()
-    let allLegs = try context.fetch(legDescriptor).filter {
-      !scheduledIds.contains($0.transactionId)
-    }
-    return (scheduledIds, allLegs)
-  }
-
-  /// Fetches all known instruments as a lookup map.
-  @MainActor
-  private func fetchInstrumentMap() throws -> [String: Instrument] {
-    let descriptor = FetchDescriptor<InstrumentRecord>()
-    let records = try context.fetch(descriptor)
-    var map: [String: Instrument] = [:]
-    for record in records {
-      map[record.id] = record.toDomain()
-    }
-    return map
-  }
-
-  // MARK: - Background Context Helpers (used by fetchAll)
-
-  /// Fetches all non-scheduled legs using the provided context.
-  private func fetchNonScheduledLegs(context: ModelContext) throws -> (
-    Set<UUID>, [TransactionLegRecord]
-  ) {
-    let scheduledDescriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate { $0.recurPeriod != nil }
-    )
-    let scheduledIds = Set(try context.fetch(scheduledDescriptor).map(\.id))
-
-    let legDescriptor = FetchDescriptor<TransactionLegRecord>()
-    let allLegs = try context.fetch(legDescriptor).filter {
-      !scheduledIds.contains($0.transactionId)
-    }
-    return (scheduledIds, allLegs)
-  }
-
-  /// Compute per-instrument positions from pre-fetched legs.
-  private func computePositions(
-    from allLegs: [TransactionLegRecord], instruments: [String: Instrument]
-  )
-    -> [UUID: [Position]]
-  {
-    // Group by (accountId, instrumentId) and sum quantities
-    var totals: [UUID: [String: Int64]] = [:]
-    for leg in allLegs {
-      guard let accountId = leg.accountId else { continue }
-      totals[accountId, default: [:]][leg.instrumentId, default: 0] += leg.quantity
-    }
-
-    // Resolve instruments and build Position arrays
-    var result: [UUID: [Position]] = [:]
-    for (accountId, instrumentTotals) in totals {
-      var positions: [Position] = []
-      for (instrumentId, quantity) in instrumentTotals {
-        guard quantity != 0 else { continue }
-        let inst = instruments[instrumentId] ?? Instrument.fiat(code: instrumentId)
-        let amount = InstrumentAmount(storageValue: quantity, instrument: inst)
-        positions.append(
-          Position(instrument: inst, quantity: amount.quantity))
-      }
-      positions.sort { $0.instrument.id < $1.instrument.id }
-      if !positions.isEmpty {
-        result[accountId] = positions
-      }
-    }
-    return result
-  }
-
-  /// Fetches all known instruments as a lookup map using the provided context.
-  private func fetchInstrumentMap(context: ModelContext) throws -> [String: Instrument] {
-    let descriptor = FetchDescriptor<InstrumentRecord>()
-    let records = try context.fetch(descriptor)
-    var map: [String: Instrument] = [:]
-    for record in records {
-      map[record.id] = record.toDomain()
-    }
-    return map
   }
 
   // MARK: - Instrument Cache

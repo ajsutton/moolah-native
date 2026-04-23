@@ -1,5 +1,3 @@
-// swiftlint:disable multiline_arguments
-
 import SwiftUI
 
 /// Recently Added — landing page for CSV imports. Shows the Needs Setup /
@@ -18,7 +16,7 @@ struct RecentlyAddedView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      NeedsSetupAndFailedPanel(backend: backend, staging: importStore.staging)
+      RecentlyAddedNeedsSetupPanel(backend: backend, staging: importStore.staging)
       mainContent
     }
     .navigationTitle("Recently Added")
@@ -54,10 +52,10 @@ struct RecentlyAddedView: View {
         corpus: corpusFromViewModel())
     }
     .sheet(isPresented: $showingCreateRuleFromSearch) {
-      RuleFromSearchSheet(query: searchText)
+      RecentlyAddedRuleFromSearchSheet(query: searchText)
     }
     .sheet(item: $transactionForDetail) { transaction in
-      TransactionDetailSheet(transaction: transaction)
+      RecentlyAddedDetailSheet(transaction: transaction)
     }
     // `.task(id:)` fires on first appearance and re-fires (auto-cancelling
     // any in-flight load) whenever any of the tracked values change. We
@@ -291,206 +289,8 @@ private struct RecentlyAddedRow: View {
   }
 }
 
-/// Needs Setup / Failed Files panel. Shown above the session list when either
-/// list is non-empty; fully hidden when both are empty.
-private struct NeedsSetupAndFailedPanel: View {
-  let backend: any BackendProvider
-  let staging: ImportStagingStore
-  @Environment(ImportStore.self) private var importStore
+// `RecentlyAddedNeedsSetupPanel`, `RecentlyAddedPendingRow`, and
+// `RecentlyAddedFailedRow` live in `RecentlyAddedNeedsSetupPanel.swift`.
 
-  var body: some View {
-    if importStore.pendingSetup.isEmpty && importStore.failedFiles.isEmpty {
-      EmptyView()
-    } else {
-      VStack(alignment: .leading, spacing: 8) {
-        if !importStore.pendingSetup.isEmpty {
-          Text("Needs Setup").font(.headline)
-          ForEach(importStore.pendingSetup) { file in
-            PendingRow(file: file, backend: backend, staging: staging)
-          }
-        }
-        if !importStore.failedFiles.isEmpty {
-          Text("Failed Files").font(.headline)
-          ForEach(importStore.failedFiles) { file in
-            FailedRow(file: file)
-          }
-        }
-      }
-      .padding()
-      .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-      .padding(.horizontal)
-      .padding(.top)
-    }
-  }
-}
-
-private struct PendingRow: View {
-  let file: PendingSetupFile
-  let backend: any BackendProvider
-  let staging: ImportStagingStore
-  @Environment(ImportStore.self) private var importStore
-  @State private var setupStore: CSVImportSetupStore?
-
-  var body: some View {
-    HStack {
-      Image(systemName: "doc.badge.ellipsis")
-        .foregroundStyle(.secondary)
-        .accessibilityHidden(true)
-      VStack(alignment: .leading) {
-        Text(file.originalFilename).font(.subheadline)
-        Text(file.detectedParserIdentifier ?? "Unknown parser")
-          .font(.caption).foregroundStyle(.secondary)
-      }
-      .accessibilityElement(children: .combine)
-      .accessibilityLabel("\(file.originalFilename), needs setup")
-      Spacer()
-      Button("Set up\u{2026}") {
-        // Build the store lazily on first open so re-renders of the parent
-        // don't wipe user-entered form state. Held in @State for stability
-        // across sheet dismiss/show cycles.
-        setupStore = CSVImportSetupStore(
-          pending: file, backend: backend,
-          importStore: importStore, staging: staging)
-      }
-      .buttonStyle(.borderless)
-      Button("Dismiss") {
-        Task { await importStore.dismissPending(id: file.id) }
-      }
-      .buttonStyle(.borderless)
-    }
-    .sheet(
-      isPresented: Binding(
-        get: { setupStore != nil },
-        set: { if !$0 { setupStore = nil } })
-    ) {
-      if let setupStore {
-        CSVImportSetupView(store: setupStore)
-      }
-    }
-  }
-}
-
-private struct FailedRow: View {
-  let file: FailedImportFile
-  @Environment(ImportStore.self) private var importStore
-
-  var body: some View {
-    HStack {
-      Image(systemName: "exclamationmark.triangle")
-        .foregroundStyle(.red)
-        .accessibilityHidden(true)
-      VStack(alignment: .leading) {
-        Text(file.originalFilename).font(.subheadline)
-        Text(file.error)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .lineLimit(2)
-      }
-      .accessibilityElement(children: .combine)
-      .accessibilityLabel("\(file.originalFilename) failed: \(file.error)")
-      Spacer()
-      // Always available — we re-read the staged bytes, not the
-      // original URL, so retries work even for paste/folder-watch files
-      // whose source URLs are gone.
-      Button("Retry") {
-        Task { await importStore.retryFailed(id: file.id) }
-      }
-      .buttonStyle(.borderless)
-      Button("Dismiss") {
-        Task { await importStore.dismissFailed(id: file.id) }
-      }
-      .buttonStyle(.borderless)
-    }
-  }
-}
-
-/// Thin read-only transaction summary for the Recently Added context-menu
-/// "Open" action. Shows date, amount, legs, and the raw import origin so
-/// the user can verify what was imported without launching the full
-/// editor. For edits, they navigate to the transaction list and open it
-/// there.
-private struct TransactionDetailSheet: View {
-  let transaction: Transaction
-  @Environment(\.dismiss) private var dismiss
-
-  var body: some View {
-    NavigationStack {
-      Form {
-        Section("Transaction") {
-          LabeledContent("Date") {
-            Text(transaction.date, format: .dateTime.day().month().year())
-              .monospacedDigit()
-          }
-          if let payee = transaction.payee, !payee.isEmpty {
-            LabeledContent("Payee", value: payee)
-          }
-          if let notes = transaction.notes, !notes.isEmpty {
-            LabeledContent("Notes", value: notes)
-          }
-        }
-        Section("Legs") {
-          ForEach(Array(transaction.legs.enumerated()), id: \.offset) { _, leg in
-            HStack {
-              Text(leg.type.rawValue.capitalized)
-                .foregroundStyle(.secondary)
-              Spacer()
-              InstrumentAmountView(
-                amount: InstrumentAmount(
-                  quantity: leg.quantity, instrument: leg.instrument),
-                font: .body)
-            }
-          }
-        }
-        if let origin = transaction.importOrigin {
-          Section("Import origin") {
-            LabeledContent("Source", value: origin.sourceFilename ?? origin.parserIdentifier)
-            LabeledContent("Raw description", value: origin.rawDescription)
-            if let ref = origin.bankReference, !ref.isEmpty {
-              LabeledContent("Bank reference", value: ref)
-            }
-            LabeledContent("Imported") {
-              Text(origin.importedAt, format: .dateTime.day().month().year().hour().minute())
-                .monospacedDigit()
-            }
-          }
-        }
-      }
-      .formStyle(.grouped)
-      .navigationTitle("Transaction")
-      .toolbar {
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Done") { dismiss() }
-        }
-      }
-      #if os(macOS)
-        .frame(minWidth: 480, minHeight: 420)
-      #endif
-    }
-  }
-}
-
-/// Bridges a Recently Added search query into a pre-filled rule editor.
-/// The query is tokenised on whitespace; each token becomes a term in a
-/// single `descriptionContains` condition.
-private struct RuleFromSearchSheet: View {
-  let query: String
-  @Environment(ImportRuleStore.self) private var ruleStore
-
-  var body: some View {
-    RuleEditorView(
-      initialRule: ImportRule(
-        name: "Rule from \"\(query.prefix(20))\"",
-        position: ruleStore.rules.count,
-        conditions: [.descriptionContains(tokens)],
-        actions: []),
-      onSave: { rule in
-        Task { await ruleStore.create(rule) }
-      })
-  }
-
-  private var tokens: [String] {
-    query
-      .split(separator: " ", omittingEmptySubsequences: true)
-      .map { String($0) }
-  }
-}
+// `RecentlyAddedDetailSheet` and `RecentlyAddedRuleFromSearchSheet` live in
+// `RecentlyAddedDetailSheet.swift`.

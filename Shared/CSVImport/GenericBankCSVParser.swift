@@ -304,13 +304,18 @@ struct GenericBankCSVParser: CSVParser, Sendable {
       && value[value.index(value.startIndex, offsetBy: 7)] == "-"
   }
 
+}
+
+// Field-level parsing helpers extracted into an extension so the main struct
+// body stays under SwiftLint's `type_body_length` threshold.
+extension GenericBankCSVParser {
   // MARK: - Parsing helpers
 
-  private func safe(_ row: [String], _ index: Int) -> String {
+  func safe(_ row: [String], _ index: Int) -> String {
     index >= 0 && index < row.count ? row[index] : ""
   }
 
-  private func parseAmount(_ field: String) -> Decimal? {
+  func parseAmount(_ field: String) -> Decimal? {
     var value = field.trimmingCharacters(in: .whitespaces)
     if value.isEmpty { return nil }
     value = value.replacingOccurrences(of: "$", with: "")
@@ -324,7 +329,7 @@ struct GenericBankCSVParser: CSVParser, Sendable {
     return Decimal(string: value)
   }
 
-  private func parseDate(_ field: String, format: DateFormat) -> Date? {
+  func parseDate(_ field: String, format: DateFormat) -> Date? {
     let trimmed = field.trimmingCharacters(in: .whitespaces)
     if trimmed.isEmpty { return nil }
     let formatter = DateFormatter()
