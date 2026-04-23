@@ -193,6 +193,20 @@ Apple's [Choosing Between Structures and Classes](https://developer.apple.com/do
 - **`final class` always.** Inheritance costs more than it delivers for most app code. NetNewsWire shows 253 `final class` vs 12 bare `class` across 92k lines ([CodingGuidelines.md](https://github.com/Ranchero-Software/NetNewsWire/blob/main/Technotes/CodingGuidelines.md)). Non-`final` is the exception and needs a justification in review.
 - **`enum` for closed sets of cases.** Exhaustive `switch` catches missed cases at compile time.
 - **`indirect enum` for recursive types** (expression trees, linked structures).
+- **Case-less `enum` for pure namespaces.** A type that only groups static members (or nested types, as in our `@Suite` contract-test aggregators) should be a case-less `enum`, not a `struct` / `class` / `final class`. The `enum` has no cases, so it can't be instantiated — the compiler enforces the "namespace only" intent that a `struct` would merely document. Enforced by [`convenience_type`](https://realm.github.io/SwiftLint/convenience_type.html).
+
+  ```swift
+  enum CurrencyFormat {                          // Good
+    static let maxFractionDigits = 2
+    static func parseCents(from text: String) -> Int? { … }
+  }
+
+  struct CurrencyFormat {                        // Bad — use a case-less enum
+    static let maxFractionDigits = 2
+    static func parseCents(from text: String) -> Int? { … }
+  }
+  ```
+
 - **`actor`** — defer to `guides/CONCURRENCY_GUIDE.md`. Actors exist for concurrency isolation, not for general "reference-type-with-extras" needs.
 
 ---
