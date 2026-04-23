@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Run AppleScript against the Moolah app built in the current worktree.
+# Auto-wraps the body in `tell application "<abs-path>" ... end tell` so the
+# command targets the worktree's debug build, not /Applications/Moolah.app.
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+app="$root/.build/Build/Products/Debug/Moolah.app"
+
+if [ ! -d "$app" ]; then
+    echo "error: Moolah.app not built at $app" >&2
+    echo "       run 'just run-mac' in this worktree first" >&2
+    exit 1
+fi
+
+if [ "$#" -eq 0 ] || [ "$1" = "-" ]; then
+    body=$(cat)
+else
+    body="$*"
+fi
+
+exec osascript -e "tell application \"$app\"" -e "$body" -e "end tell"
