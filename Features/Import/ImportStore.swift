@@ -34,7 +34,7 @@ enum IngestError: Error, Sendable {
     case .parse(let error):
       switch error {
       case .headerMismatch: return "Headers did not match any known parser"
-      case .malformedRow(let index, let reason, _):
+      case let .malformedRow(index, reason, _):
         return "Malformed row \(index): \(reason)"
       case .emptyFile: return "File was empty"
       }
