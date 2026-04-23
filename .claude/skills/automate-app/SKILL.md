@@ -1,11 +1,11 @@
 ---
 name: automate-app
-description: Use when driving the running Moolah macOS app from the terminal — verifying a UI change end-to-end, inspecting account/transaction/earmark state, creating or tearing down a test profile's data, or opening the app to a specific view. Also use when a task mentions AppleScript (`osascript`) or the `moolah://` URL scheme.
+description: Use when driving the running Moolah macOS app from the terminal — verifying a UI change end-to-end, inspecting account/transaction/earmark state, creating or tearing down a test profile's data, or opening the app to a specific view. Also use when a task mentions AppleScript (`osascript`).
 ---
 
 # Automating the Moolah App
 
-Drive the running Moolah macOS app via AppleScript (`osascript`) for data operations and `moolah://` URLs for navigation.
+Drive the running Moolah macOS app via AppleScript (`osascript`). Data operations and navigation both go through the AppleScript dictionary.
 
 ## CRITICAL: Profile Safety
 
@@ -17,22 +17,20 @@ Drive the running Moolah macOS app via AppleScript (`osascript`) for data operat
 
 The app must be built and running in **this worktree**. Use `just run-mac` to build and launch, or `just run-mac-with-logs` to also capture logs.
 
-### Why the wrappers
+### Why the wrapper
 
-Do **not** use raw `osascript -e 'tell application "Moolah" to …'` or bare `open "moolah://…"` for Moolah automation. Both resolve "Moolah" through LaunchServices, which picks `/Applications/Moolah.app` (the installed release build) over the worktree's debug build. Your automation will silently read from and write to the wrong app.
+Do **not** use raw `osascript -e 'tell application "Moolah" to …'` for Moolah automation. `osascript` resolves "Moolah" through LaunchServices, which picks `/Applications/Moolah.app` (the installed release build) over the worktree's debug build. Your automation will silently read from and write to the wrong app.
 
-Use the wrappers bundled with this skill instead:
+Use the wrapper bundled with this skill instead:
 
 - `.claude/skills/automate-app/scripts/moolah-tell` — AppleScript runner; auto-wraps the body in `tell application "<worktree-abs-path>" … end tell`.
-- `.claude/skills/automate-app/scripts/moolah-open` — URL-scheme runner; execs `open -a <worktree-abs-path>`.
 
-Both resolve the bundle via `git rev-parse --show-toplevel` + `/.build/Build/Products/Debug/Moolah.app`, and fail fast with `error: Moolah.app not built at <path>; run 'just run-mac' in this worktree first` if the build is missing. They never build on your behalf — run `just run-mac` yourself first.
+It resolves the bundle via `git rev-parse --show-toplevel` + `/.build/Build/Products/Debug/Moolah.app`, and fails fast with `error: Moolah.app not built at <path>; run 'just run-mac' in this worktree first` if the build is missing. The wrapper never builds on your behalf — run `just run-mac` yourself first.
 
-Examples below use the short names `moolah-tell` and `moolah-open` for readability. When copy-pasting, prefix each with the full relative path from the worktree root:
+Examples below use the short name `moolah-tell` for readability. When copy-pasting, prefix it with the full relative path from the worktree root:
 
 ```bash
 .claude/skills/automate-app/scripts/moolah-tell 'get name of every profile'
-.claude/skills/automate-app/scripts/moolah-open "moolah://Test"
 ```
 
 Or add the scripts dir to `$PATH` for the session:
@@ -159,38 +157,21 @@ end tell
 EOF
 ```
 
-## URL Scheme Reference
+## Navigation
 
-Use `moolah-open` (full path: `.claude/skills/automate-app/scripts/moolah-open`) to route the URL to the worktree build. The app opens/focuses the profile window and navigates to the destination.
+`navigate to` is part of the AppleScript dictionary — use `moolah-tell`:
 
 ```bash
-# Open a profile window
-moolah-open "moolah://Test"
+# Open / focus a profile window (opens it if not already visible)
+moolah-tell 'navigate to profile "Test"'
 
-# Navigate to a specific account
-moolah-open "moolah://Test/account/ACCOUNT-UUID-HERE"
-
-# Navigate to a specific transaction (opens in first leg's account context)
-moolah-open "moolah://Test/transaction/TRANSACTION-UUID-HERE"
-
-# Navigate to analysis with custom periods
-moolah-open "moolah://Test/analysis?history=12&forecast=3"
-
-# Navigate to reports with date range
-moolah-open "moolah://Test/reports?from=2026-01-01&to=2026-03-31"
-
-# Navigate to specific views
-moolah-open "moolah://Test/categories"
-moolah-open "moolah://Test/upcoming"
-moolah-open "moolah://Test/earmarks"
-moolah-open "moolah://Test/earmark/EARMARK-UUID-HERE"
-moolah-open "moolah://Test/accounts"
-
-# URL-encode profile names with spaces
-moolah-open "moolah://My%20Finances/analysis"
+# Switch the profile window's sidebar to a list view
+moolah-tell 'navigate to every account of profile "Test"'
+moolah-tell 'navigate to every earmark of profile "Test"'
+moolah-tell 'navigate to every category of profile "Test"'
 ```
 
-**Profile resolution:** Tries name match (case-insensitive) first, then UUID. If the profile isn't open, a new window opens for it.
+**Profile resolution:** Matches by name (case-insensitive), then by UUID. If the profile isn't open, a window opens for it.
 
 ## Common Test Workflows
 
@@ -210,11 +191,11 @@ moolah-tell 'get balance of account "Everyday" of profile "Test"'
 ### Verify UI navigation
 
 ```bash
-# Navigate to analysis view and verify visually
-moolah-open "moolah://Test/analysis?history=6&forecast=3"
+# Focus the profile window
+moolah-tell 'navigate to profile "Test"'
 
-# Navigate to specific account
-moolah-open "moolah://Test/account/ACCOUNT-UUID"
+# Switch the sidebar to the accounts list
+moolah-tell 'navigate to every account of profile "Test"'
 ```
 
 ### Create a full test environment
@@ -265,15 +246,14 @@ Common errors:
 - **"Profile not found"** — profile isn't open or name is misspelled
 - **"Account not found"** — account name doesn't match (matching is case-insensitive)
 - **"Operation failed"** — backend error, check app logs with `run-mac-app-with-logs` skill
-- **`error: Moolah.app not built at <path>`** followed by **`run 'just run-mac' in this worktree first`** (two stderr lines) — emitted by `moolah-tell` / `moolah-open` themselves when the worktree's debug build is missing; run `just run-mac` and retry.
-- **`error: moolah-tell must be run from inside a Moolah worktree`** or **`error: moolah-open must be run from inside a Moolah worktree`** — you're invoking the wrapper from outside any git repo; `cd` into the worktree first.
+- **`error: Moolah.app not built at <path>`** followed by **`run 'just run-mac' in this worktree first`** (two stderr lines) — emitted by `moolah-tell` itself when the worktree's debug build is missing; run `just run-mac` and retry.
+- **`error: moolah-tell must be run from inside a Moolah worktree`** — you're invoking the wrapper from outside any git repo; `cd` into the worktree first.
 
 ## Tips
 
-- **Always use `moolah-tell` and `moolah-open`** — raw `osascript` / `open` target `/Applications/Moolah.app`, not your worktree build.
-- **Use AppleScript (`moolah-tell`) for data operations** (CRUD, balance checks, queries).
-- **Use the URL scheme (`moolah-open`) for navigation** (opening views, navigating to specific entities).
+- **Always use `moolah-tell`** — raw `osascript` targets `/Applications/Moolah.app`, not your worktree build.
+- **Use AppleScript for both data operations and navigation** — `moolah-tell 'navigate to …'` focuses the profile window and switches the sidebar.
 - **Always verify state after mutations** — read back the value you just changed.
 - **Use the `run-mac-app-with-logs` skill** to capture app logs while running automation for debugging.
 - **Amounts are Decimal** — expenses are negative, income is positive. Don't use `abs()`.
-- **Profile must be open** — the profile needs to be open in a window for AppleScript to work with it.
+- **Profile must be open** — the profile needs to be open in a window for AppleScript data queries to work. `navigate to profile "X"` will open it if necessary.

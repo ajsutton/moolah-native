@@ -252,8 +252,8 @@ struct ContentView: View {
     }
   }
 
-  private func applyNavigation(_ destination: URLSchemeHandler.Destination) {
-    if let sidebarSelection = URLSchemeHandler.toSidebarSelection(destination) {
+  private func applyNavigation(_ destination: NavigationDestination) {
+    if let sidebarSelection = destination.sidebarSelection {
       selection = sidebarSelection
     }
     if case .analysis(let history, let forecast) = destination {

@@ -64,12 +64,14 @@
       .task {
         // Register in-process entry points for AppleScript/App Intents so
         // `NavigateCommand` / `OpenAccountIntent` don't need to round-trip
-        // through `NSWorkspace.shared.open(moolah://…)` (which triggers
-        // SwiftUI's auto-spawn of a stray window on URL events). See #378.
+        // through `NSWorkspace.shared.open(moolah://…)` — SwiftUI's
+        // auto-spawn of a stray window on URL events (issue #378) — and
+        // since the URL scheme itself has been removed (issue #386),
+        // in-process is the only remaining path.
         let openAction = openWindow
         let pendingBinding = pendingNavigationBinding
-        ScriptingContext.openProfileWindow = { id in openAction(value: id) }
-        ScriptingContext.setPendingNavigation = { nav in
+        NavigationBridge.openProfile = { id in openAction(value: id) }
+        NavigationBridge.setPendingNavigation = { nav in
           pendingBinding?.wrappedValue = nav
         }
       }

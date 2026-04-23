@@ -7,11 +7,12 @@
 
   /// Handles: `navigate to account "Checking" of profile "X"`.
   ///
-  /// Drives the UI in-process through `ScriptingContext` closures rather than
-  /// building a `moolah://` URL and calling `NSWorkspace.shared.open` — a URL
-  /// round-trip causes SwiftUI's `WindowGroup(for: Profile.ID.self)` to
-  /// auto-spawn a stray window on the URL event (issue #378). The URL scheme
-  /// parser is still used to translate the specifier into a `Destination`.
+  /// Drives the UI in-process through `ScriptingContext` closures: focuses an
+  /// existing profile window via `ProfileWindowLocator` when one is already
+  /// on screen, or calls the scene's `openWindow` action through
+  /// `ScriptingContext.openProfileWindow`. Destinations (list views like
+  /// accounts / earmarks / categories) are dispatched via
+  /// `PendingNavigation`.
   class NavigateCommand: AppLevelScriptCommand {
     override func performDefaultImplementation() -> Any? {
       guard let specifier = directParameter as? NSScriptObjectSpecifier else {
@@ -21,24 +22,21 @@
       }
 
       let profileName: String
-      let destinationPath: String
+      let destination: NavigationDestination?
 
       if let profileSpec = specifier.container as? NSNameSpecifier {
         profileName = profileSpec.name
-        destinationPath = destinationTail(for: specifier)
+        destination = Self.destination(for: specifier)
       } else if let nameSpec = specifier as? NSNameSpecifier,
         specifier.key == "scriptableProfiles"
       {
         profileName = nameSpec.name
-        destinationPath = ""
+        destination = nil
       } else {
         scriptErrorNumber = -10000
         scriptErrorString = "Cannot determine profile for navigation"
         return nil
       }
-
-      let destination = parsedDestination(
-        profileName: profileName, destinationPath: destinationPath)
 
       let result: DispatchResult = MainActor.assumeIsolated {
         Self.dispatch(profileName: profileName, destination: destination)
@@ -69,7 +67,7 @@
 
     @MainActor
     private static func dispatch(
-      profileName: String, destination: URLSchemeHandler.Destination?
+      profileName: String, destination: NavigationDestination?
     ) -> DispatchResult {
       guard
         let profileStore = ScriptingContext.profileStore,
@@ -82,9 +80,9 @@
       }
 
       if !ProfileWindowLocator.activateExistingWindow(for: profile.id) {
-        guard let opener = ScriptingContext.openProfileWindow else {
+        guard let opener = NavigationBridge.openProfile else {
           logger.error(
-            "ScriptingContext.openProfileWindow unset — cannot open '\(profileName, privacy: .public)'"
+            "NavigationBridge.openProfile unset — cannot open '\(profileName, privacy: .public)'"
           )
           return .appNotReady
         }
@@ -92,51 +90,27 @@
       }
 
       if let destination {
-        ScriptingContext.setPendingNavigation?(
+        NavigationBridge.setPendingNavigation?(
           PendingNavigation(profileId: profile.id, destination: destination))
       }
       return .success
     }
 
-    // MARK: - Parsing helpers
+    // MARK: - Specifier decoding
 
-    /// Map an object specifier (accounts / transactions / earmarks / categories)
-    /// to the URL path tail that `URLSchemeHandler` will parse.
-    private func destinationTail(for specifier: NSScriptObjectSpecifier) -> String {
+    /// Maps an AppleScript object specifier (`scriptableAccounts`,
+    /// `scriptableEarmarks`, …) onto a `NavigationDestination`. Returns `nil`
+    /// for specifier keys that don't correspond to a list/detail view — the
+    /// caller treats that as "navigate to the profile root only".
+    private static func destination(
+      for specifier: NSScriptObjectSpecifier
+    ) -> NavigationDestination? {
       switch specifier.key {
-      case "scriptableAccounts":
-        return namedPath(prefix: "accounts", specifier: specifier)
-      case "scriptableTransactions":
-        return "transactions"
-      case "scriptableEarmarks":
-        return namedPath(prefix: "earmarks", specifier: specifier)
-      case "scriptableCategories":
-        return "categories"
-      default:
-        return ""
+      case "scriptableAccounts": .accounts
+      case "scriptableEarmarks": .earmarks
+      case "scriptableCategories": .categories
+      default: nil
       }
-    }
-
-    /// Append the specifier's name to `prefix` (if the specifier is a name
-    /// specifier) or return just the prefix otherwise.
-    private func namedPath(prefix: String, specifier: NSScriptObjectSpecifier) -> String {
-      guard let nameSpec = specifier as? NSNameSpecifier else { return prefix }
-      let encoded =
-        nameSpec.name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
-        ?? nameSpec.name
-      return "\(prefix)/\(encoded)"
-    }
-
-    /// Reuses `URLSchemeHandler.parse` to translate the destination path into
-    /// a typed `Destination`. The URL is synthetic — it is never opened.
-    private func parsedDestination(profileName: String, destinationPath: String)
-      -> URLSchemeHandler.Destination?
-    {
-      guard !destinationPath.isEmpty else { return nil }
-      let host =
-        profileName.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? profileName
-      guard let url = URL(string: "moolah://\(host)/\(destinationPath)") else { return nil }
-      return (try? URLSchemeHandler.parse(url))?.destination
     }
 
     @MainActor

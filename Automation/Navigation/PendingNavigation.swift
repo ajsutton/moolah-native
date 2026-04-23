@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// Represents a pending navigation request from a URL scheme.
+/// A navigation request queued from outside the scene graph — typically by an
+/// AppleScript `NavigateCommand` or an App Intent — to be consumed by the
+/// active `ContentView` on the next render.
 struct PendingNavigation: Equatable {
   let profileId: UUID
-  let destination: URLSchemeHandler.Destination
+  let destination: NavigationDestination
 }
 
 // MARK: - Environment Key

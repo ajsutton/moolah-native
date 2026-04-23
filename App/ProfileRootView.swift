@@ -12,6 +12,7 @@
     @Environment(SessionManager.self) private var sessionManager
     @Environment(ProfileContainerManager.self) private var containerManager
     @Environment(SyncCoordinator.self) private var syncCoordinator
+    @Environment(\.pendingNavigation) private var pendingNavigationBinding
     @Binding var activeSession: ProfileSession?
 
     var body: some View {
@@ -45,6 +46,18 @@
       .onAppear {
         if activeSession == nil, let id = profileStore.activeProfileID {
           updateSession(for: id)
+        }
+      }
+      .task {
+        // Register in-process entry points for App Intents so
+        // `OpenAccountIntent` can switch profile / set a pending navigation
+        // without going through `UIApplication.shared.open(moolah://…)` —
+        // the URL scheme has been removed (issue #386).
+        let pendingBinding = pendingNavigationBinding
+        let store = profileStore
+        NavigationBridge.openProfile = { id in store.setActiveProfile(id) }
+        NavigationBridge.setPendingNavigation = { nav in
+          pendingBinding?.wrappedValue = nav
         }
       }
     }
