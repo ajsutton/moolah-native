@@ -139,8 +139,12 @@ moolah-tell 'tell profile "Test" to create category name "Fruit" parent "Groceri
 # Refresh data from backend
 moolah-tell 'refresh profile "Test"'
 
-# Navigate to a specific account
+# Navigate to a specific account (selects it in the sidebar and shows its
+# detail pane — equivalent to clicking the row)
 moolah-tell 'navigate to account "Savings" of profile "Test"'
+
+# Navigate to a specific earmark (same: selects in sidebar, shows detail)
+moolah-tell 'navigate to earmark "Holiday" of profile "Test"'
 ```
 
 ### Multi-line scripts
@@ -169,6 +173,10 @@ moolah-tell 'navigate to profile "Test"'
 moolah-tell 'navigate to every account of profile "Test"'
 moolah-tell 'navigate to every earmark of profile "Test"'
 moolah-tell 'navigate to every category of profile "Test"'
+
+# Open a specific account or earmark's detail pane (matches sidebar click)
+moolah-tell 'navigate to account "Crypto" of profile "Test"'
+moolah-tell 'navigate to earmark "Holiday" of profile "Test"'
 ```
 
 **Profile resolution:** Matches by name (case-insensitive), then by UUID. If the profile isn't open, a window opens for it.

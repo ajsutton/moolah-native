@@ -102,14 +102,34 @@
     /// `scriptableEarmarks`, …) onto a `NavigationDestination`. Returns `nil`
     /// for specifier keys that don't correspond to a list/detail view — the
     /// caller treats that as "navigate to the profile root only".
+    ///
+    /// For name / ID specifiers that resolve to a concrete `ScriptableAccount`
+    /// or `ScriptableEarmark`, returns the specific `.account(id)` /
+    /// `.earmark(id)` destination so callers of `navigate to account "X"`
+    /// land on that detail view (equivalent to clicking the sidebar row).
+    /// When the specifier is the full collection or resolution fails, falls
+    /// back to the collection-level destination.
     private static func destination(
       for specifier: NSScriptObjectSpecifier
     ) -> NavigationDestination? {
+      let resolved = specifier.objectsByEvaluatingSpecifier
       switch specifier.key {
-      case "scriptableAccounts": .accounts
-      case "scriptableEarmarks": .earmarks
-      case "scriptableCategories": .categories
-      default: nil
+      case "scriptableAccounts":
+        if let account = resolved as? ScriptableAccount,
+          let uuid = UUID(uuidString: account.uniqueID)
+        {
+          return .account(uuid)
+        }
+        return .accounts
+      case "scriptableEarmarks":
+        if let earmark = resolved as? ScriptableEarmark,
+          let uuid = UUID(uuidString: earmark.uniqueID)
+        {
+          return .earmark(uuid)
+        }
+        return .earmarks
+      case "scriptableCategories": return .categories
+      default: return nil
       }
     }
 
