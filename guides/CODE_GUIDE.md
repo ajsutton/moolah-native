@@ -348,6 +348,12 @@ SwiftLint enforces most of these via opt-in rules; follow them by habit.
   ```
 
 - **`for … in` over `forEach`** for side effects. `forEach` hides control flow — you can't `break`, `continue`, or `return` from the enclosing function. Use `forEach` only for pure-call chains where control flow isn't relevant.
+- **`isMultiple(of:)` over `% == 0` for divisibility checks.** `BinaryInteger.isMultiple(of:)` reads as the intent ("is `i` a multiple of `N`") and survives a `0` divisor (`x.isMultiple(of: 0)` is `true` only when `x == 0`, not a trap). Keep `%` for actual remainder arithmetic (e.g. `i % earmarkIds.count` as an index wrap). Enforced by [`legacy_multiple`](https://realm.github.io/SwiftLint/legacy_multiple.html).
+
+  ```swift
+  if index.isMultiple(of: 100) { /* Good */ }
+  if index % 100 == 0 { /* Bad */ }
+  ```
 
 ---
 
