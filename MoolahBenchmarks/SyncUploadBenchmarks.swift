@@ -17,9 +17,11 @@ final class SyncUploadBenchmarks: XCTestCase {
 
   override static func setUp() {
     super.setUp()
-    let result = try! TestBackend.create()
+    let result = expecting("benchmark TestBackend.create failed") {
+      try TestBackend.create()
+    }
     _container = result.container
-    try! awaitSync { @MainActor in
+    awaitSyncExpecting { @MainActor in
       BenchmarkFixtures.seed(scale: .twoX, in: result.container)
       let profileId = UUID()
       let zoneID = CKRecordZone.ID(
@@ -67,7 +69,7 @@ final class SyncUploadBenchmarks: XCTestCase {
     let handler = handler
     let uuids = transactionUUIDs400
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync { @MainActor in
+      _ = awaitSyncExpecting { @MainActor in
         handler.buildBatchRecordLookup(for: uuids)
       }
     }

@@ -12,14 +12,16 @@ final class PriorBalanceBenchmarks: XCTestCase {
 
   override static func setUp() {
     super.setUp()
-    let result = try! TestBackend.create()
+    let result = expecting("benchmark TestBackend.create failed") {
+      try TestBackend.create()
+    }
     _backend = result.backend
     _container = result.container
-    try! awaitSync { @MainActor in
+    awaitSyncExpecting { @MainActor in
       BenchmarkFixtures.seed(scale: .twoX, in: result.container)
     }
     // Pre-warm: load accounts so balances are computed from legs.
-    _ = try! awaitSync { try await result.backend.accounts.fetchAll() }
+    _ = awaitSyncExpecting { try await result.backend.accounts.fetchAll() }
   }
 
   override static func tearDown() {
@@ -52,7 +54,7 @@ final class PriorBalanceBenchmarks: XCTestCase {
   func testAccountFetchAll() {
     let repo = backend.accounts
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync { try await repo.fetchAll() }
+      _ = awaitSyncExpecting { try await repo.fetchAll() }
     }
   }
 
@@ -62,7 +64,7 @@ final class PriorBalanceBenchmarks: XCTestCase {
     let repo = backend.transactions
     let filter = TransactionFilter(accountId: BenchmarkFixtures.heavyAccountId)
     measure(metrics: metrics, options: options) {
-      _ = try! awaitSync { try await repo.fetch(filter: filter, page: 0, pageSize: 50) }
+      _ = awaitSyncExpecting { try await repo.fetch(filter: filter, page: 0, pageSize: 50) }
     }
   }
 }

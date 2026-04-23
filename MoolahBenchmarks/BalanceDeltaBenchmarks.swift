@@ -14,14 +14,16 @@ final class BalanceDeltaBenchmarks: XCTestCase {
 
   override static func setUp() {
     super.setUp()
-    let result = try! TestBackend.create()
+    let result = expecting("benchmark TestBackend.create failed") {
+      try TestBackend.create()
+    }
     _backend = result.backend
     _container = result.container
-    try! awaitSync { @MainActor in
+    awaitSyncExpecting { @MainActor in
       BenchmarkFixtures.seed(scale: .twoX, in: result.container)
     }
     // Pre-warm: load accounts so balances are computed from legs.
-    _ = try! awaitSync { try await result.backend.accounts.fetchAll() }
+    _ = awaitSyncExpecting { try await result.backend.accounts.fetchAll() }
   }
 
   override static func tearDown() {
@@ -134,7 +136,7 @@ final class BalanceDeltaBenchmarks: XCTestCase {
   /// Applies a single-account, single-instrument delta 100 times per iteration.
   func testAccountStoreApplyDelta() {
     let backend = self.backend
-    let accountStore = try! awaitSync { @MainActor in
+    let accountStore = awaitSyncExpecting { @MainActor in
       let store = AccountStore(
         repository: backend.accounts,
         conversionService: backend.conversionService,
@@ -142,11 +144,11 @@ final class BalanceDeltaBenchmarks: XCTestCase {
       await store.load()
       return store
     }
-    let accountId = try! awaitSync { @MainActor in
+    let accountId = awaitSyncExpecting { @MainActor in
       accountStore.currentAccounts.first!.id
     }
     measure(metrics: metrics, options: options) {
-      try! awaitSync { @MainActor in
+      awaitSyncExpecting { @MainActor in
         let deltas: PositionDeltas = [accountId: [.AUD: Decimal(-50)]]
         for _ in 0..<100 {
           await accountStore.applyDelta(deltas)
@@ -159,7 +161,7 @@ final class BalanceDeltaBenchmarks: XCTestCase {
   /// re-fetches everything. This is the baseline we're trying to avoid.
   func testAccountReloadFromSync() {
     let backend = self.backend
-    let accountStore = try! awaitSync { @MainActor in
+    let accountStore = awaitSyncExpecting { @MainActor in
       let store = AccountStore(
         repository: backend.accounts,
         conversionService: backend.conversionService,
@@ -168,7 +170,7 @@ final class BalanceDeltaBenchmarks: XCTestCase {
       return store
     }
     measure(metrics: metrics, options: options) {
-      try! awaitSync { @MainActor in
+      awaitSyncExpecting { @MainActor in
         await accountStore.reloadFromSync()
       }
     }
@@ -179,7 +181,7 @@ final class BalanceDeltaBenchmarks: XCTestCase {
   /// Measures reloadFromSync on EarmarkStore — how expensive the earmark reload is.
   func testEarmarkReloadFromSync() {
     let backend = self.backend
-    let earmarkStore = try! awaitSync { @MainActor in
+    let earmarkStore = awaitSyncExpecting { @MainActor in
       let store = EarmarkStore(
         repository: backend.earmarks,
         conversionService: backend.conversionService,
@@ -188,7 +190,7 @@ final class BalanceDeltaBenchmarks: XCTestCase {
       return store
     }
     measure(metrics: metrics, options: options) {
-      try! awaitSync { @MainActor in
+      awaitSyncExpecting { @MainActor in
         await earmarkStore.reloadFromSync()
       }
     }
