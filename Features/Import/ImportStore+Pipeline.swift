@@ -233,12 +233,13 @@ extension ImportStore {
       if evaluation.isSkipped { continue }
       let transaction = buildTransaction(
         from: evaluation,
-        routedAccountId: resolvedProfile.accountId,
-        accountInstrument: routedInstrument,
-        accountInstruments: accountInstruments,
-        sessionId: sessionId,
-        source: source,
-        parserIdentifier: parserIdentifier)
+        context: ImportBuildContext(
+          routedAccountId: resolvedProfile.accountId,
+          accountInstrument: routedInstrument,
+          accountInstruments: accountInstruments,
+          sessionId: sessionId,
+          source: source,
+          parserIdentifier: parserIdentifier))
       do {
         persisted.append(try await backend.transactions.create(transaction))
       } catch {

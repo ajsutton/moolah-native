@@ -129,24 +129,33 @@ extension BenchmarkFixtures {
     return ids
   }
 
+  /// Bundled identifier sets passed to `seedTransactions`. Holds the account,
+  /// category, and earmark UUIDs produced by earlier seeding passes so the
+  /// transaction seeder can reference them without threading three separate
+  /// `[UUID]` parameters through its signature (which would breach
+  /// SwiftLint's `function_parameter_count` limit).
+  struct SeedIds {
+    let accounts: [UUID]
+    let categories: [UUID]
+    let earmarks: [UUID]
+  }
+
   @MainActor
   static func seedTransactions(
     scale: BenchmarkScale,
-    accountIds: [UUID],
-    categoryIds: [UUID],
-    earmarkIds: [UUID],
+    ids: SeedIds,
     in context: ModelContext,
     instrument: Instrument
   ) {
     let fiveYearsAgo = Calendar.current.date(byAdding: .year, value: -5, to: Date())!
     let timeSpan = Date().timeIntervalSince(fiveYearsAgo)
     let scheduledCount = max(1, Int(Double(scale.transactions) * 0.002))
-    let otherAccountIds = Array(accountIds.dropFirst(3))
+    let otherAccountIds = Array(ids.accounts.dropFirst(3))
 
     for i in 0..<scale.transactions {
       let id = deterministicUUID(namespace: 0x05, index: i)
       let accountId = pickAccountId(for: i, otherAccountIds: otherAccountIds)
-      let (txnType, toAccountId) = pickType(for: i, accountId: accountId, allIds: accountIds)
+      let (txnType, toAccountId) = pickType(for: i, accountId: accountId, allIds: ids.accounts)
 
       // Spread dates across 5 years deterministically.
       let fraction = Double(i) / Double(max(1, scale.transactions - 1))
@@ -155,13 +164,13 @@ extension BenchmarkFixtures {
 
       // Assign category to ~70% of transactions.
       let categoryId: UUID? =
-        (i % 10 < 7 && !categoryIds.isEmpty)
-        ? categoryIds[i % categoryIds.count]
+        (i % 10 < 7 && !ids.categories.isEmpty)
+        ? ids.categories[i % ids.categories.count]
         : nil
       // Assign earmark to ~5% of transactions.
       let earmarkId: UUID? =
-        (i.isMultiple(of: 20) && !earmarkIds.isEmpty)
-        ? earmarkIds[i % earmarkIds.count]
+        (i.isMultiple(of: 20) && !ids.earmarks.isEmpty)
+        ? ids.earmarks[i % ids.earmarks.count]
         : nil
       // ~0.2% are scheduled (recurring).
       let isScheduled = i < scheduledCount

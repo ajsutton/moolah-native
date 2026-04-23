@@ -66,28 +66,31 @@ enum UITestSeedHydrator {
     let fixtures = UITestFixtures.TradeBaseline.self
     try upsertInstrument(instrument, in: context)
     try upsertAccount(
-      id: fixtures.checkingAccountId,
-      name: fixtures.checkingAccountName,
-      type: .bank,
-      instrumentId: instrument.id,
-      position: 0,
+      AccountSpec(
+        id: fixtures.checkingAccountId,
+        name: fixtures.checkingAccountName,
+        type: .bank,
+        instrumentId: instrument.id,
+        position: 0),
       in: context)
     try upsertAccount(
-      id: fixtures.brokerageAccountId,
-      name: fixtures.brokerageAccountName,
-      type: .investment,
-      instrumentId: instrument.id,
-      position: 1,
+      AccountSpec(
+        id: fixtures.brokerageAccountId,
+        name: fixtures.brokerageAccountName,
+        type: .investment,
+        instrumentId: instrument.id,
+        position: 1),
       in: context)
 
     let usd = Instrument.USD
     try upsertInstrument(usd, in: context)
     try upsertAccount(
-      id: fixtures.usdAccountId,
-      name: fixtures.usdAccountName,
-      type: .bank,
-      instrumentId: usd.id,
-      position: 2,
+      AccountSpec(
+        id: fixtures.usdAccountId,
+        name: fixtures.usdAccountName,
+        type: .bank,
+        instrumentId: usd.id,
+        position: 2),
       in: context)
   }
 
@@ -97,14 +100,15 @@ enum UITestSeedHydrator {
   ) throws {
     let fixtures = UITestFixtures.TradeBaseline.self
     try upsertTrade(
-      id: fixtures.bhpPurchaseId,
-      payee: fixtures.bhpPurchasePayee,
-      date: fixtures.bhpPurchaseDate,
-      amount: InstrumentAmount(
-        quantity: Decimal(fixtures.bhpPurchaseAmountCents) / 100,
-        instrument: instrument),
-      fromAccountId: fixtures.checkingAccountId,
-      toAccountId: fixtures.brokerageAccountId,
+      TradeSpec(
+        id: fixtures.bhpPurchaseId,
+        payee: fixtures.bhpPurchasePayee,
+        date: fixtures.bhpPurchaseDate,
+        amount: InstrumentAmount(
+          quantity: Decimal(fixtures.bhpPurchaseAmountCents) / 100,
+          instrument: instrument),
+        fromAccountId: fixtures.checkingAccountId,
+        toAccountId: fixtures.brokerageAccountId),
       in: context)
 
     let historicalAmount = InstrumentAmount(
@@ -112,11 +116,12 @@ enum UITestSeedHydrator {
       instrument: instrument)
     for historical in fixtures.historicalPayees {
       try upsertHistoricalExpense(
-        id: historical.id,
-        payee: historical.payee,
-        date: historical.date,
-        amount: historicalAmount,
-        accountId: fixtures.checkingAccountId,
+        HistoricalExpenseSpec(
+          id: historical.id,
+          payee: historical.payee,
+          date: historical.date,
+          amount: historicalAmount,
+          accountId: fixtures.checkingAccountId),
         in: context)
     }
 
@@ -126,16 +131,17 @@ enum UITestSeedHydrator {
       id: fixtures.gymCategoryId, name: fixtures.gymCategoryName, in: context)
 
     try upsertCustomExpenseSplit(
-      id: fixtures.splitShopId,
-      payee: fixtures.splitShopPayee,
-      date: fixtures.splitShopDate,
-      legAAmount: InstrumentAmount(
-        quantity: Decimal(fixtures.splitShopLegAAmountCents) / 100,
-        instrument: instrument),
-      legBAmount: InstrumentAmount(
-        quantity: Decimal(fixtures.splitShopLegBAmountCents) / 100,
-        instrument: instrument),
-      accountId: fixtures.checkingAccountId,
+      CustomExpenseSplitSpec(
+        id: fixtures.splitShopId,
+        payee: fixtures.splitShopPayee,
+        date: fixtures.splitShopDate,
+        legAAmount: InstrumentAmount(
+          quantity: Decimal(fixtures.splitShopLegAAmountCents) / 100,
+          instrument: instrument),
+        legBAmount: InstrumentAmount(
+          quantity: Decimal(fixtures.splitShopLegBAmountCents) / 100,
+          instrument: instrument),
+        accountId: fixtures.checkingAccountId),
       in: context)
   }
 

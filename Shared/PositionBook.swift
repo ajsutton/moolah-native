@@ -168,6 +168,19 @@ struct PositionBook: Equatable, Sendable {
     case investmentTransfersOnly
   }
 
+  /// Per-pipeline inputs that stay constant across a sequence of
+  /// `dailyBalance(on:context:isForecast:)` calls: which accounts are
+  /// investments, the profile's instrument, the accumulation rule, and the
+  /// conversion service. Grouping them into a struct keeps the call's
+  /// parameter count under SwiftLint's threshold and hoists one allocation
+  /// outside the per-day loop at each caller.
+  struct BalanceContext {
+    let investmentAccountIds: Set<UUID>
+    let profileInstrument: Instrument
+    let rule: AccumulationRule
+    let conversionService: any InstrumentConversionService
+  }
+
   /// Build a `DailyBalance` snapshot from the current book state, converting
   /// per-instrument positions to `profileInstrument` on `date`.
   ///
@@ -187,12 +200,13 @@ struct PositionBook: Equatable, Sendable {
   /// `profileInstrument` skip the conversion service entirely.
   func dailyBalance(
     on date: Date,
-    investmentAccountIds: Set<UUID>,
-    profileInstrument: Instrument,
-    rule: AccumulationRule,
-    conversionService: any InstrumentConversionService,
+    context: BalanceContext,
     isForecast: Bool
   ) async throws -> DailyBalance {
+    let profileInstrument = context.profileInstrument
+    let investmentAccountIds = context.investmentAccountIds
+    let conversionService = context.conversionService
+
     // Bank balance: all non-investment account positions.
     var bankTotal: Decimal = 0
     for (accountId, positions) in accounts where !investmentAccountIds.contains(accountId) {
@@ -202,7 +216,7 @@ struct PositionBook: Equatable, Sendable {
 
     // Investments: depending on rule.
     var investmentsTotal: Decimal = 0
-    switch rule {
+    switch context.rule {
     case .allLegs:
       for (accountId, positions) in accounts where investmentAccountIds.contains(accountId) {
         investmentsTotal += try await convert(

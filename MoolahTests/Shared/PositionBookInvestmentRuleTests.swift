@@ -45,10 +45,11 @@ struct PositionBookInvestmentRuleTests {
 
     let result = try await book.dailyBalance(
       on: date,
-      investmentAccountIds: [investmentAccount],
-      profileInstrument: aud,
-      rule: .allLegs,
-      conversionService: conversion,
+      context: PositionBook.BalanceContext(
+        investmentAccountIds: [investmentAccount],
+        profileInstrument: aud,
+        rule: .allLegs,
+        conversionService: conversion),
       isForecast: false
     )
 
@@ -79,10 +80,11 @@ struct PositionBookInvestmentRuleTests {
 
     let result = try await book.dailyBalance(
       on: date,
-      investmentAccountIds: [investmentAccount],
-      profileInstrument: aud,
-      rule: .investmentTransfersOnly,
-      conversionService: conversion,
+      context: PositionBook.BalanceContext(
+        investmentAccountIds: [investmentAccount],
+        profileInstrument: aud,
+        rule: .investmentTransfersOnly,
+        conversionService: conversion),
       isForecast: false
     )
 
@@ -105,10 +107,11 @@ struct PositionBookInvestmentRuleTests {
 
     let result = try await book.dailyBalance(
       on: date,
-      investmentAccountIds: [investmentAccount],
-      profileInstrument: aud,
-      rule: .investmentTransfersOnly,
-      conversionService: conversion,
+      context: PositionBook.BalanceContext(
+        investmentAccountIds: [investmentAccount],
+        profileInstrument: aud,
+        rule: .investmentTransfersOnly,
+        conversionService: conversion),
       isForecast: false
     )
 
@@ -147,10 +150,11 @@ struct PositionBookInvestmentRuleTests {
     let conversion = FixedConversionService()
     let result = try await book.dailyBalance(
       on: date,
-      investmentAccountIds: [investmentAccount],
-      profileInstrument: aud,
-      rule: .investmentTransfersOnly,
-      conversionService: conversion,
+      context: PositionBook.BalanceContext(
+        investmentAccountIds: [investmentAccount],
+        profileInstrument: aud,
+        rule: .investmentTransfersOnly,
+        conversionService: conversion),
       isForecast: false
     )
     // .investmentTransfersOnly read sees the seeded baseline.
@@ -205,18 +209,20 @@ struct PositionBookInvestmentRuleTests {
 
     let allLegs = try await book.dailyBalance(
       on: date,
-      investmentAccountIds: [investmentAccount],
-      profileInstrument: aud,
-      rule: .allLegs,
-      conversionService: conversion,
+      context: PositionBook.BalanceContext(
+        investmentAccountIds: [investmentAccount],
+        profileInstrument: aud,
+        rule: .allLegs,
+        conversionService: conversion),
       isForecast: false
     )
     let transfersOnly = try await book.dailyBalance(
       on: date,
-      investmentAccountIds: [investmentAccount],
-      profileInstrument: aud,
-      rule: .investmentTransfersOnly,
-      conversionService: conversion,
+      context: PositionBook.BalanceContext(
+        investmentAccountIds: [investmentAccount],
+        profileInstrument: aud,
+        rule: .investmentTransfersOnly,
+        conversionService: conversion),
       isForecast: false
     )
 

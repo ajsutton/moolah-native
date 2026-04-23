@@ -6,6 +6,46 @@ import SwiftData
 // re-running the same seed (e.g., after a UI-testing re-launch) doesn't
 // double-insert records.
 extension UITestSeedHydrator {
+  // MARK: - Specs
+  //
+  // Struct wrappers bundle the per-record fields that callers need to
+  // provide. They keep the upsert call sites self-documenting while holding
+  // each helper's parameter count under SwiftLint's threshold.
+
+  struct AccountSpec {
+    let id: UUID
+    let name: String
+    let type: AccountType
+    let instrumentId: String
+    let position: Int
+  }
+
+  struct TradeSpec {
+    let id: UUID
+    let payee: String
+    let date: Date
+    let amount: InstrumentAmount
+    let fromAccountId: UUID
+    let toAccountId: UUID
+  }
+
+  struct HistoricalExpenseSpec {
+    let id: UUID
+    let payee: String
+    let date: Date
+    let amount: InstrumentAmount
+    let accountId: UUID
+  }
+
+  struct CustomExpenseSplitSpec {
+    let id: UUID
+    let payee: String
+    let date: Date
+    let legAAmount: InstrumentAmount
+    let legBAmount: InstrumentAmount
+    let accountId: UUID
+  }
+
   // MARK: - Upsert helpers
 
   static func upsertProfile(
@@ -35,48 +75,40 @@ extension UITestSeedHydrator {
   }
 
   static func upsertAccount(
-    id: UUID,
-    name: String,
-    type: AccountType,
-    instrumentId: String,
-    position: Int,
+    _ spec: AccountSpec,
     in context: ModelContext
   ) throws {
-    let targetId = id
+    let targetId = spec.id
     let descriptor = FetchDescriptor<AccountRecord>(
       predicate: #Predicate { $0.id == targetId }
     )
     if try context.fetch(descriptor).first != nil { return }
     context.insert(
       AccountRecord(
-        id: id,
-        name: name,
-        type: type.rawValue,
-        instrumentId: instrumentId,
-        position: position
+        id: spec.id,
+        name: spec.name,
+        type: spec.type.rawValue,
+        instrumentId: spec.instrumentId,
+        position: spec.position
       )
     )
   }
 
   static func upsertTrade(
-    id: UUID,
-    payee: String,
-    date: Date,
-    amount: InstrumentAmount,
-    fromAccountId: UUID,
-    toAccountId: UUID,
+    _ spec: TradeSpec,
     in context: ModelContext
   ) throws {
-    let targetId = id
+    let targetId = spec.id
     let descriptor = FetchDescriptor<TransactionRecord>(
       predicate: #Predicate { $0.id == targetId }
     )
     if try context.fetch(descriptor).first != nil { return }
 
-    let txn = TransactionRecord(id: id, date: date, payee: payee)
+    let txn = TransactionRecord(id: spec.id, date: spec.date, payee: spec.payee)
     context.insert(txn)
 
-    let outgoing = InstrumentAmount(quantity: -amount.quantity, instrument: amount.instrument)
+    let outgoing = InstrumentAmount(
+      quantity: -spec.amount.quantity, instrument: spec.amount.instrument)
 
     // Both legs are `.transfer` so the transaction satisfies
     // `Transaction.isSimple` (same type, amounts negate, distinct accounts,
@@ -87,9 +119,9 @@ extension UITestSeedHydrator {
     // modifier on the simple section never fires.
     context.insert(
       TransactionLegRecord(
-        transactionId: id,
-        accountId: fromAccountId,
-        instrumentId: amount.instrument.id,
+        transactionId: spec.id,
+        accountId: spec.fromAccountId,
+        instrumentId: spec.amount.instrument.id,
         quantity: outgoing.storageValue,
         type: TransactionType.transfer.rawValue,
         sortOrder: 0
@@ -97,10 +129,10 @@ extension UITestSeedHydrator {
     )
     context.insert(
       TransactionLegRecord(
-        transactionId: id,
-        accountId: toAccountId,
-        instrumentId: amount.instrument.id,
-        quantity: amount.storageValue,
+        transactionId: spec.id,
+        accountId: spec.toAccountId,
+        instrumentId: spec.amount.instrument.id,
+        quantity: spec.amount.storageValue,
         type: TransactionType.transfer.rawValue,
         sortOrder: 1
       )
@@ -108,28 +140,25 @@ extension UITestSeedHydrator {
   }
 
   static func upsertHistoricalExpense(
-    id: UUID,
-    payee: String,
-    date: Date,
-    amount: InstrumentAmount,
-    accountId: UUID,
+    _ spec: HistoricalExpenseSpec,
     in context: ModelContext
   ) throws {
-    let targetId = id
+    let targetId = spec.id
     let descriptor = FetchDescriptor<TransactionRecord>(
       predicate: #Predicate { $0.id == targetId }
     )
     if try context.fetch(descriptor).first != nil { return }
 
-    let txn = TransactionRecord(id: id, date: date, payee: payee)
+    let txn = TransactionRecord(id: spec.id, date: spec.date, payee: spec.payee)
     context.insert(txn)
 
-    let outgoing = InstrumentAmount(quantity: -amount.quantity, instrument: amount.instrument)
+    let outgoing = InstrumentAmount(
+      quantity: -spec.amount.quantity, instrument: spec.amount.instrument)
     context.insert(
       TransactionLegRecord(
-        transactionId: id,
-        accountId: accountId,
-        instrumentId: amount.instrument.id,
+        transactionId: spec.id,
+        accountId: spec.accountId,
+        instrumentId: spec.amount.instrument.id,
         quantity: outgoing.storageValue,
         type: TransactionType.expense.rawValue,
         sortOrder: 0
@@ -156,33 +185,28 @@ extension UITestSeedHydrator {
   /// to true. Categories are left nil on both legs so the test can type
   /// into an empty category field and observe autocomplete behaviour.
   static func upsertCustomExpenseSplit(
-    id: UUID,
-    payee: String,
-    date: Date,
-    legAAmount: InstrumentAmount,
-    legBAmount: InstrumentAmount,
-    accountId: UUID,
+    _ spec: CustomExpenseSplitSpec,
     in context: ModelContext
   ) throws {
-    let targetId = id
+    let targetId = spec.id
     let descriptor = FetchDescriptor<TransactionRecord>(
       predicate: #Predicate { $0.id == targetId }
     )
     if try context.fetch(descriptor).first != nil { return }
 
-    let txn = TransactionRecord(id: id, date: date, payee: payee)
+    let txn = TransactionRecord(id: spec.id, date: spec.date, payee: spec.payee)
     context.insert(txn)
 
     let outgoingA = InstrumentAmount(
-      quantity: -legAAmount.quantity, instrument: legAAmount.instrument)
+      quantity: -spec.legAAmount.quantity, instrument: spec.legAAmount.instrument)
     let outgoingB = InstrumentAmount(
-      quantity: -legBAmount.quantity, instrument: legBAmount.instrument)
+      quantity: -spec.legBAmount.quantity, instrument: spec.legBAmount.instrument)
 
     context.insert(
       TransactionLegRecord(
-        transactionId: id,
-        accountId: accountId,
-        instrumentId: legAAmount.instrument.id,
+        transactionId: spec.id,
+        accountId: spec.accountId,
+        instrumentId: spec.legAAmount.instrument.id,
         quantity: outgoingA.storageValue,
         type: TransactionType.expense.rawValue,
         sortOrder: 0
@@ -190,9 +214,9 @@ extension UITestSeedHydrator {
     )
     context.insert(
       TransactionLegRecord(
-        transactionId: id,
-        accountId: accountId,
-        instrumentId: legBAmount.instrument.id,
+        transactionId: spec.id,
+        accountId: spec.accountId,
+        instrumentId: spec.legBAmount.instrument.id,
         quantity: outgoingB.storageValue,
         type: TransactionType.expense.rawValue,
         sortOrder: 1
