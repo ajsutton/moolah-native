@@ -318,6 +318,20 @@ Apple's [Choosing Between Structures and Classes](https://developer.apple.com/do
 
 - **`[weak self]` only when capturing a reference type with a plausible retain cycle.** SwiftUI views are value types — they don't need `[weak self]`. A `Task { }` inside a `@MainActor` store method capturing the store itself does need it when the store's lifetime is shorter than the task.
 - **Explicit `[self]` captures when semantics matter.** Swift 5.8 requires `self.` inside escaping closures only for non-`@Sendable` contexts; be explicit when the capture list communicates intent, even when the compiler doesn't demand it.
+- **Closure parameter list stays on the opening-brace line.** Enforced by [`closure_parameter_position`](https://realm.github.io/SwiftLint/closure_parameter_position.html). swift-format will happily wrap a long call-site before the trailing `{`, so if the invocation pushes the `{ params in` past the column limit the fix is to shorten the call (extract an arg to a local, rename a verbose identifier), not to drop the params onto their own line.
+
+  ```swift
+  // Good
+  coordinator.addObserver(for: profileId) { [weak self] changedTypes in
+    self?.scheduleReloadFromSync(changedTypes: changedTypes)
+  }
+
+  // Bad — params wrapped onto the next line
+  coordinator.addObserver(for: profileId) {
+    [weak self] changedTypes in
+    self?.scheduleReloadFromSync(changedTypes: changedTypes)
+  }
+  ```
 
 ---
 
