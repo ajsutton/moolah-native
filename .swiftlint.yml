@@ -161,10 +161,10 @@ blanket_disable_command:
     - multiline_arguments
 
 # SwiftLint (0.63) silently ignores per-rule `excluded:` on `force_try`,
-# `force_cast`, `force_unwrapping`, and `implicitly_unwrapped_optional`
-# (no "invalid key" warning, but violation counts are unchanged whether the
-# paths are present or omitted). Path-scoping would require moving test
-# files under the top-level `excluded:` list, which we don't want.
+# `force_cast`, and `force_unwrapping` (no "invalid key" warning, but
+# violation counts are unchanged whether the paths are present or
+# omitted). Path-scoping would require moving test files under the
+# top-level `excluded:` list, which we don't want.
 force_try:
   severity: warning
 
@@ -172,7 +172,4 @@ force_cast:
   severity: warning
 
 force_unwrapping:
-  severity: warning
-
-implicitly_unwrapped_optional:
   severity: warning

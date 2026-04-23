@@ -43,13 +43,17 @@ enum IngestError: Error, Sendable {
     }
   }
 
-  var offendingRow: (row: [String]?, index: Int?) {
+  /// Which row the underlying parser error pointed at, if any. An empty
+  /// `row` with a `nil` `index` means "no row info was captured"
+  /// (e.g. an `.empty` / `.decode` / `.other` error, or a parser error
+  /// other than `.malformedRow`).
+  var offendingRow: (row: [String], index: Int?) {
     if case .parse(let parserError) = self,
       case .malformedRow(let index, _, let row) = parserError
     {
       return (row, index)
     }
-    return (nil, nil)
+    return ([], nil)
   }
 }
 

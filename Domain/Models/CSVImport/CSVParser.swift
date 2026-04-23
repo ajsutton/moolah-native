@@ -28,10 +28,10 @@ protocol CSVParser: Sendable {
 /// own errors too; these three are the expected whole-file rejection paths.
 ///
 /// `malformedRow` carries the raw row content so the Failed Files panel can
-/// show the offending line back to the user. `row` is `nil` only when the
-/// parser couldn't determine which row triggered the error.
+/// show the offending line back to the user. `row` is an empty array only
+/// when the parser couldn't determine which row triggered the error.
 enum CSVParserError: Error, Equatable, Sendable {
   case headerMismatch
-  case malformedRow(index: Int, reason: String, row: [String]?)
+  case malformedRow(index: Int, reason: String, row: [String])
   case emptyFile
 }

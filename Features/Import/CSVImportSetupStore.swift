@@ -272,15 +272,16 @@ final class CSVImportSetupStore {
   /// diverge from the detected mapping — otherwise future imports should
   /// continue to benefit from detector improvements on the same
   /// (parser, headers) combination. Checks both "any non-nil role" and
-  /// "differs from the detector's seed".
-  private var columnRoleRawValuesForPersistence: [String?]? {
-    guard !columnRoles.isEmpty else { return nil }
-    guard let detected = detectedMapping else { return nil }
+  /// "differs from the detector's seed". Returns `[]` when the detector
+  /// seed should win (no override persisted).
+  private var columnRoleRawValuesForPersistence: [String?] {
+    guard !columnRoles.isEmpty else { return [] }
+    guard let detected = detectedMapping else { return [] }
     let seeded = Self.seedColumnRoles(
       headers: detectedHeaders, from: detected)
     // Rows where the user hasn't touched anything match the seed; skip
     // persistence so the profile stays auto-detect where possible.
-    if seeded == columnRoles { return nil }
+    if seeded == columnRoles { return [] }
     return columnRoles.map { $0?.rawValue }
   }
 

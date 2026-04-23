@@ -87,14 +87,19 @@ final class CSVImportProfileRecord {
 
   /// Join the `[String?]` role list into a single String using the same
   /// unit-separator as `headerSignature`. `nil` elements become empty
-  /// strings; round-tripping preserves position + identity.
-  static func encodeColumnRoles(_ roles: [String?]?) -> String? {
-    guard let roles else { return nil }
+  /// strings; round-tripping preserves position + identity. Returns
+  /// `nil` when `roles` is empty so the CKRecord field stays absent
+  /// rather than storing a zero-length marker.
+  static func encodeColumnRoles(_ roles: [String?]) -> String? {
+    guard !roles.isEmpty else { return nil }
     return roles.map { $0 ?? "" }.joined(separator: Self.separator)
   }
 
-  static func decodeColumnRoles(_ encoded: String?) -> [String?]? {
-    guard let encoded, !encoded.isEmpty else { return nil }
+  /// Inverse of `encodeColumnRoles`. Returns an empty array when the
+  /// encoded form is absent / empty, matching the domain-layer
+  /// "no override" sentinel.
+  static func decodeColumnRoles(_ encoded: String?) -> [String?] {
+    guard let encoded, !encoded.isEmpty else { return [] }
     return encoded.components(separatedBy: Self.separator).map { $0.isEmpty ? nil : $0 }
   }
 }

@@ -13,10 +13,10 @@ struct SyncCoordinatorTestsExtra {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
-    var callbackTypes: Set<String>?
+    var callbackInvocations: [Set<String>] = []
 
     _ = coordinator.addObserver(for: profileId) { types in
-      callbackTypes = types
+      callbackInvocations.append(types)
     }
 
     // First session starts
@@ -28,13 +28,13 @@ struct SyncCoordinatorTestsExtra {
     coordinator.beginFetchingChanges()
 
     // The flush from the stuck state should have delivered the old types
-    #expect(callbackTypes == Set(["Account"]))
+    #expect(callbackInvocations == [Set(["Account"])])
 
     // New session should start clean
-    callbackTypes = nil
+    callbackInvocations.removeAll()
     coordinator.accumulateFetchSessionChanges(for: profileId, changedTypes: ["Transaction"])
     coordinator.endFetchingChanges()
-    #expect(callbackTypes == Set(["Transaction"]))
+    #expect(callbackInvocations == [Set(["Transaction"])])
   }
 
   // MARK: - Queue Methods
