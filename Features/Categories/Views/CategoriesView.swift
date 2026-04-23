@@ -227,46 +227,43 @@ private struct CreateCategorySheet: View {
 
   var body: some View {
     NavigationStack {
-      Form {
-        Section("Details") {
-          TextField("Name", text: $name)
-        }
-
-        Section("Parent Category") {
-          Picker("Parent", selection: $selectedParentId) {
-            Text("None (Top-Level)").tag(nil as UUID?)
-            ForEach(allCategories) { category in
-              Text(category.name).tag(category.id as UUID?)
-            }
-          }
-        }
-      }
-      .navigationTitle("New Category")
-      #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-      #endif
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") {
-            dismiss()
-          }
-        }
-
-        ToolbarItem(placement: .primaryAction) {
-          Button("Create") {
-            let newCategory = Category(
-              name: name,
-              parentId: selectedParentId
-            )
-            onCreate(newCategory)
-          }
-          .disabled(name.isEmpty)
-        }
-      }
+      form
     }
     #if os(macOS)
       .frame(minWidth: 400, minHeight: 300)
     #endif
+  }
+
+  private var form: some View {
+    Form {
+      Section("Details") {
+        TextField("Name", text: $name)
+      }
+
+      Section("Parent Category") {
+        Picker("Parent", selection: $selectedParentId) {
+          Text("None (Top-Level)").tag(nil as UUID?)
+          ForEach(allCategories) { category in
+            Text(category.name).tag(category.id as UUID?)
+          }
+        }
+      }
+    }
+    .navigationTitle("New Category")
+    #if os(iOS)
+      .navigationBarTitleDisplayMode(.inline)
+    #endif
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("Cancel") { dismiss() }
+      }
+      ToolbarItem(placement: .primaryAction) {
+        Button("Create") {
+          onCreate(Category(name: name, parentId: selectedParentId))
+        }
+        .disabled(name.isEmpty)
+      }
+    }
   }
 
   private var allCategories: [Category] {

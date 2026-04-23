@@ -30,119 +30,138 @@ struct CSVImportSetupView: View {
 
   var body: some View {
     NavigationStack {
-      Form {
-        Section(header: Text("File")) {
-          LabeledContent("Filename", value: store.pending.originalFilename)
-          LabeledContent("Parser", value: store.detectedParserIdentifier)
-          LabeledContent("Rows") {
-            Text("\(store.rowCount)").monospacedDigit()
+      form
+        .task {
+          await store.regeneratePreview()
+        }
+        .onChange(of: dateFormatChoice) { _, newValue in
+          Task { await store.applyDateFormatOverride(newValue.resolved) }
+        }
+        #if os(macOS)
+          .frame(minWidth: 520, minHeight: 480)
+        #endif
+    }
+  }
+
+  private var form: some View {
+    Form {
+      fileSection
+      targetAccountSection
+      if store.isGenericParser, let mapping = store.detectedMapping {
+        columnMappingSection(mapping: mapping)
+      }
+      if !store.preview.isEmpty {
+        previewSection
+      }
+      optionsSection
+      if let error = store.saveError {
+        Label(error, systemImage: "exclamationmark.circle")
+          .foregroundStyle(.red)
+      }
+      // Destructive action lives in the form body, not the toolbar, so
+      // it doesn't sit alongside Cancel / Save & Import where users
+      // might tap it by accident. See Apple HIG "Destructive actions".
+      Section {
+        Button("Delete staged file", role: .destructive) {
+          Task {
+            await store.deletePending()
+            dismiss()
           }
         }
-
-        Section(header: Text("Target account")) {
-          Picker(
-            "Account",
-            selection: Binding(
-              get: { store.targetAccountId },
-              set: { store.targetAccountId = $0 }
-            )
-          ) {
-            Text("Select…").tag(UUID?.none)
-            ForEach(availableAccounts, id: \.id) { account in
-              Text(account.name).tag(UUID?.some(account.id))
-            }
-          }
+      }
+    }
+    .formStyle(.grouped)
+    .navigationTitle("Set up CSV import")
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("Cancel") {
+          store.cancel()
+          dismiss()
         }
-
-        if store.isGenericParser, let mapping = store.detectedMapping {
-          Section(header: Text("Column mapping")) {
-            columnMappingRows(mapping: mapping)
-            Picker("Date format", selection: $dateFormatChoice) {
-              ForEach(DateFormatChoice.allCases) { choice in
-                Text(choice.label).tag(choice)
-              }
-            }
-            if mapping.dateFormatAmbiguous {
-              Label(
-                "Dates are ambiguous — pick the format to match your file.",
-                systemImage: "exclamationmark.triangle"
-              )
-              .foregroundStyle(.orange)
-              .font(.caption)
-            }
-          }
-        }
-
-        if !store.preview.isEmpty {
-          Section(header: Text("Preview (first 5 rows)")) {
-            ForEach(Array(store.preview.enumerated()), id: \.offset) { _, transaction in
-              PreviewRow(transaction: transaction)
-            }
-          }
-        }
-
-        Section(header: Text("Options")) {
-          TextField(
-            "Filename pattern",
-            text: Binding(
-              get: { store.filenamePattern },
-              set: { store.filenamePattern = $0 })
-          )
-          .textFieldStyle(.roundedBorder)
-          Toggle(
-            "Delete CSV after import",
-            isOn: Binding(
-              get: { store.deleteAfterImport },
-              set: { store.deleteAfterImport = $0 }))
-        }
-
-        if let error = store.saveError {
-          Label(error, systemImage: "exclamationmark.circle")
-            .foregroundStyle(.red)
-        }
-
-        // Destructive action lives in the form body, not the toolbar, so
-        // it doesn't sit alongside Cancel / Save & Import where users
-        // might tap it by accident. See Apple HIG "Destructive actions".
-        Section {
-          Button("Delete staged file", role: .destructive) {
-            Task {
-              await store.deletePending()
+      }
+      ToolbarItem(placement: .confirmationAction) {
+        Button("Save & Import") {
+          Task {
+            _ = await store.saveAndImport()
+            if store.saveError == nil {
               dismiss()
             }
           }
         }
+        .disabled(store.targetAccountId == nil || store.isSaving)
       }
-      .formStyle(.grouped)
-      .navigationTitle("Set up CSV import")
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") {
-            store.cancel()
-            dismiss()
-          }
+    }
+  }
+
+  private var fileSection: some View {
+    Section(header: Text("File")) {
+      LabeledContent("Filename", value: store.pending.originalFilename)
+      LabeledContent("Parser", value: store.detectedParserIdentifier)
+      LabeledContent("Rows") {
+        Text("\(store.rowCount)").monospacedDigit()
+      }
+    }
+  }
+
+  private var targetAccountSection: some View {
+    Section(header: Text("Target account")) {
+      Picker(
+        "Account",
+        selection: Binding(
+          get: { store.targetAccountId },
+          set: { store.targetAccountId = $0 })
+      ) {
+        Text("Select…").tag(UUID?.none)
+        ForEach(availableAccounts, id: \.id) { account in
+          Text(account.name).tag(UUID?.some(account.id))
         }
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Save & Import") {
-            Task {
-              _ = await store.saveAndImport()
-              if store.saveError == nil {
-                dismiss()
-              }
-            }
-          }
-          .disabled(store.targetAccountId == nil || store.isSaving)
+      }
+    }
+  }
+
+  private func columnMappingSection(
+    mapping: GenericBankCSVParser.ColumnMapping
+  ) -> some View {
+    Section(header: Text("Column mapping")) {
+      columnMappingRows(mapping: mapping)
+      Picker("Date format", selection: $dateFormatChoice) {
+        ForEach(DateFormatChoice.allCases) { choice in
+          Text(choice.label).tag(choice)
         }
       }
-      .task {
-        await store.regeneratePreview()
+      if mapping.dateFormatAmbiguous {
+        Label(
+          "Dates are ambiguous — pick the format to match your file.",
+          systemImage: "exclamationmark.triangle"
+        )
+        .foregroundStyle(.orange)
+        .font(.caption)
       }
-      .onChange(of: dateFormatChoice) { _, newValue in
-        Task { await store.applyDateFormatOverride(newValue.resolved) }
+    }
+  }
+
+  private var previewSection: some View {
+    Section(header: Text("Preview (first 5 rows)")) {
+      ForEach(Array(store.preview.enumerated()), id: \.offset) { _, transaction in
+        PreviewRow(transaction: transaction)
       }
-      #if os(macOS)
-        .frame(minWidth: 520, minHeight: 480)
-      #endif
+    }
+  }
+
+  private var optionsSection: some View {
+    Section(header: Text("Options")) {
+      TextField(
+        "Filename pattern",
+        text: Binding(
+          get: { store.filenamePattern },
+          set: { store.filenamePattern = $0 })
+      )
+      .textFieldStyle(.roundedBorder)
+      Toggle(
+        "Delete CSV after import",
+        isOn: Binding(
+          get: { store.deleteAfterImport },
+          set: { store.deleteAfterImport = $0 }))
     }
   }
 

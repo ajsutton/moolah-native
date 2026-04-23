@@ -15,63 +15,8 @@ struct ImportSettingsView: View {
 
   var body: some View {
     Form {
-      Section("Folder watch") {
-        if let path = session.importPreferences.watchedFolderDisplayPath {
-          LabeledContent("Watching") {
-            Text(path).foregroundStyle(.secondary).lineLimit(2)
-          }
-          Button("Change folder…") { showFolderPicker = true }
-          Button("Stop watching", role: .destructive) {
-            session.stopFolderWatch()
-          }
-        } else {
-          Button("Pick folder…") { showFolderPicker = true }
-          Text(
-            "Pick a folder (usually Downloads) and Moolah will scan it for "
-              + "new CSV files at launch, and on macOS watch it live."
-          )
-          .font(.caption)
-          .foregroundStyle(.secondary)
-        }
-
-        Toggle(
-          "Delete CSVs after import",
-          isOn: Binding(
-            get: { session.importPreferences.deleteAfterImportFolderDefault },
-            set: { session.importPreferences.deleteAfterImportFolderDefault = $0 }))
-      }
-
-      Section("Import profiles") {
-        if profiles.isEmpty {
-          Text(
-            "No profiles yet. Moolah saves one the first time you "
-              + "complete a CSV import into an account."
-          )
-          .font(.caption)
-          .foregroundStyle(.secondary)
-        } else {
-          ForEach(profiles) { profile in
-            VStack(alignment: .leading, spacing: 2) {
-              Text(profile.filenamePattern ?? profile.parserIdentifier)
-                .font(.subheadline)
-              Text(profile.headerSignature.joined(separator: " · "))
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-              if let lastUsedAt = profile.lastUsedAt {
-                Text("Last used \(lastUsedAt, style: .relative) ago")
-                  .font(.caption2).foregroundStyle(.secondary)
-                  .monospacedDigit()
-              }
-            }
-            .swipeActions(edge: .trailing) {
-              Button(role: .destructive) {
-                Task { await deleteProfile(profile) }
-              } label: {
-                Label("Delete", systemImage: "trash")
-              }
-            }
-          }
-        }
-      }
+      folderWatchSection
+      profilesSection
     }
     .formStyle(.grouped)
     .navigationTitle("CSV Import")
@@ -82,6 +27,71 @@ struct ImportSettingsView: View {
       allowsMultipleSelection: false
     ) { result in
       handleFolderPick(result)
+    }
+  }
+
+  @ViewBuilder private var folderWatchSection: some View {
+    Section("Folder watch") {
+      if let path = session.importPreferences.watchedFolderDisplayPath {
+        LabeledContent("Watching") {
+          Text(path).foregroundStyle(.secondary).lineLimit(2)
+        }
+        Button("Change folder…") { showFolderPicker = true }
+        Button("Stop watching", role: .destructive) {
+          session.stopFolderWatch()
+        }
+      } else {
+        Button("Pick folder…") { showFolderPicker = true }
+        Text(
+          "Pick a folder (usually Downloads) and Moolah will scan it for "
+            + "new CSV files at launch, and on macOS watch it live."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      }
+      Toggle(
+        "Delete CSVs after import",
+        isOn: Binding(
+          get: { session.importPreferences.deleteAfterImportFolderDefault },
+          set: { session.importPreferences.deleteAfterImportFolderDefault = $0 }))
+    }
+  }
+
+  @ViewBuilder private var profilesSection: some View {
+    Section("Import profiles") {
+      if profiles.isEmpty {
+        Text(
+          "No profiles yet. Moolah saves one the first time you "
+            + "complete a CSV import into an account."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      } else {
+        ForEach(profiles) { profile in
+          profileRow(profile)
+        }
+      }
+    }
+  }
+
+  private func profileRow(_ profile: CSVImportProfile) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text(profile.filenamePattern ?? profile.parserIdentifier)
+        .font(.subheadline)
+      Text(profile.headerSignature.joined(separator: " · "))
+        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+      if let lastUsedAt = profile.lastUsedAt {
+        Text("Last used \(lastUsedAt, style: .relative) ago")
+          .font(.caption2).foregroundStyle(.secondary)
+          .monospacedDigit()
+      }
+    }
+    .swipeActions(edge: .trailing) {
+      Button(role: .destructive) {
+        Task { await deleteProfile(profile) }
+      } label: {
+        Label("Delete", systemImage: "trash")
+      }
     }
   }
 

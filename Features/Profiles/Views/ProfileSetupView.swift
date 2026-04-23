@@ -24,90 +24,90 @@ struct ProfileSetupView: View {
 
   var body: some View {
     ScrollView {
-      VStack(spacing: 32) {
-        VStack(spacing: 8) {
-          Text("Moolah")
-            .font(.largeTitle.bold())
-            .accessibilityAddTraits(.isHeader)
-          Text(String(localized: "Personal finance, your way."))
-            .foregroundStyle(.secondary)
-        }
+      scrollContent
+    }
+  }
 
-        VStack(spacing: 12) {
-          if !showICloudForm {
-            Button {
-              withAnimation(reduceMotion ? nil : .default) { showICloudForm = true }
-            } label: {
-              Label(
-                String(localized: "Store in iCloud"),
-                systemImage: "icloud"
-              )
-              .frame(maxWidth: 280)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(profileStore.isValidating)
-          }
-
-          if showICloudForm {
-            Button {
-              Task { await addDefaultProfile() }
-            } label: {
-              Label(
-                String(localized: "Connect to Moolah"),
-                systemImage: "link"
-              )
-              .frame(maxWidth: 280)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .disabled(profileStore.isValidating)
-          } else {
-            Button {
-              Task { await addDefaultProfile() }
-            } label: {
-              Label(
-                String(localized: "Connect to Moolah"),
-                systemImage: "link"
-              )
-              .frame(maxWidth: 280)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(profileStore.isValidating)
-          }
-
-          if !showCustomServer && !showICloudForm {
-            Button {
-              withAnimation(reduceMotion ? nil : .default) { showCustomServer = true }
-            } label: {
-              Text(String(localized: "Use a custom server"))
-                .font(.subheadline)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-          }
-        }
-
-        if showICloudForm {
-          iCloudFields
-        }
-
-        if showCustomServer {
-          customServerFields
-        }
-
-        if profileStore.isValidating {
-          ProgressView("Connecting...")
-            .accessibilityAddTraits(.updatesFrequently)
-        } else if let error = profileStore.validationError {
-          Label(error, systemImage: "exclamationmark.triangle.fill")
-            .foregroundStyle(.red)
-            .font(.subheadline)
-            .accessibilityLabel("Error: \(error)")
-        }
+  private var scrollContent: some View {
+    VStack(spacing: 32) {
+      header
+      buttons
+      if showICloudForm {
+        iCloudFields
       }
-      .padding()
+      if showCustomServer {
+        customServerFields
+      }
+      if profileStore.isValidating {
+        ProgressView("Connecting...")
+          .accessibilityAddTraits(.updatesFrequently)
+      } else if let error = profileStore.validationError {
+        Label(error, systemImage: "exclamationmark.triangle.fill")
+          .foregroundStyle(.red)
+          .font(.subheadline)
+          .accessibilityLabel("Error: \(error)")
+      }
+    }
+    .padding()
+  }
+
+  private var header: some View {
+    VStack(spacing: 8) {
+      Text("Moolah")
+        .font(.largeTitle.bold())
+        .accessibilityAddTraits(.isHeader)
+      Text(String(localized: "Personal finance, your way."))
+        .foregroundStyle(.secondary)
+    }
+  }
+
+  @ViewBuilder private var buttons: some View {
+    VStack(spacing: 12) {
+      if !showICloudForm {
+        Button {
+          withAnimation(reduceMotion ? nil : .default) { showICloudForm = true }
+        } label: {
+          Label(String(localized: "Store in iCloud"), systemImage: "icloud")
+            .frame(maxWidth: 280)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .disabled(profileStore.isValidating)
+      }
+      connectMoolahButton
+      if !showCustomServer && !showICloudForm {
+        Button {
+          withAnimation(reduceMotion ? nil : .default) { showCustomServer = true }
+        } label: {
+          Text(String(localized: "Use a custom server")).font(.subheadline)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+      }
+    }
+  }
+
+  @ViewBuilder private var connectMoolahButton: some View {
+    if showICloudForm {
+      Button {
+        Task { await addDefaultProfile() }
+      } label: {
+        Label(String(localized: "Connect to Moolah"), systemImage: "link")
+          .frame(maxWidth: 280)
+      }
+      .buttonStyle(.bordered)
+      .controlSize(.large)
+      .disabled(profileStore.isValidating)
+    } else {
+      Button {
+        Task { await addDefaultProfile() }
+      } label: {
+        Label(String(localized: "Connect to Moolah"), systemImage: "link")
+          .frame(maxWidth: 280)
+      }
+      .buttonStyle(.borderedProminent)
+      .controlSize(.large)
+      .disabled(profileStore.isValidating)
     }
   }
 

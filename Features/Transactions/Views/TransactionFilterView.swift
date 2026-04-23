@@ -52,133 +52,138 @@ struct TransactionFilterView: View {
 
   var body: some View {
     NavigationStack {
-      Form {
-        Section("Date Range") {
-          Toggle(
-            "Filter by date",
-            isOn: Binding(
-              get: { dateRangeLowerBound != nil && dateRangeUpperBound != nil },
-              set: { enabled in
-                if enabled {
-                  let now = Date()
-                  let calendar = Calendar.current
-                  dateRangeLowerBound = calendar.date(byAdding: .month, value: -1, to: now)
-                  dateRangeUpperBound = now
-                } else {
-                  dateRangeLowerBound = nil
-                  dateRangeUpperBound = nil
-                }
-              }
-            ))
-
-          if dateRangeLowerBound != nil && dateRangeUpperBound != nil {
-            DatePicker(
-              "Start Date",
-              selection: Binding(
-                get: { dateRangeLowerBound ?? Date() },
-                set: { dateRangeLowerBound = $0 }
-              ),
-              displayedComponents: .date
-            )
-
-            DatePicker(
-              "End Date",
-              selection: Binding(
-                get: { dateRangeUpperBound ?? Date() },
-                set: { dateRangeUpperBound = $0 }
-              ),
-              displayedComponents: .date
-            )
-          }
-        }
-
-        Section("Account") {
-          Picker("Account", selection: $selectedAccountId) {
-            Text("All Accounts").tag(nil as UUID?)
-            ForEach(accounts.ordered) { account in
-              Text(account.name).tag(account.id as UUID?)
-            }
-          }
-        }
-
-        Section("Earmark") {
-          Picker("Earmark", selection: $selectedEarmarkId) {
-            Text("All Earmarks").tag(nil as UUID?)
-            ForEach(earmarks.ordered) { earmark in
-              Text(earmark.name).tag(earmark.id as UUID?)
-            }
-          }
-        }
-
-        Section("Categories") {
-          if categories.roots.isEmpty {
-            Text("No categories available")
-              .foregroundStyle(.secondary)
-          } else {
-            ForEach(allCategories) { category in
-              Toggle(
-                category.name,
-                isOn: Binding(
-                  get: { selectedCategoryIds.contains(category.id) },
-                  set: { isOn in
-                    if isOn {
-                      selectedCategoryIds.insert(category.id)
-                    } else {
-                      selectedCategoryIds.remove(category.id)
-                    }
-                  }
-                ))
-            }
-          }
-        }
-
-        Section("Payee") {
-          TextField("Payee contains…", text: $payeeText)
-        }
-
-        Section("Scheduled") {
-          Picker("Scheduled", selection: $selectedScheduled) {
-            Text("All Transactions").tag(nil as Bool?)
-            Text("Scheduled Only").tag(true as Bool?)
-            Text("Non-Scheduled Only").tag(false as Bool?)
-          }
-        }
-      }
-      .navigationTitle("Filter Transactions")
-      #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-      #endif
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") {
-            dismiss()
-          }
-        }
-
-        ToolbarItem(placement: .primaryAction) {
-          Button("Apply") {
-            applyFilter()
-          }
-        }
-
-        #if os(iOS)
-          ToolbarItem(placement: .bottomBar) {
-            Button("Clear All") {
-              clearAll()
-            }
-          }
-        #else
-          ToolbarItem(placement: .automatic) {
-            Button("Clear All") {
-              clearAll()
-            }
-          }
-        #endif
-      }
+      form
     }
     #if os(macOS)
       .frame(minWidth: 500, minHeight: 400)
     #endif
+  }
+
+  private var form: some View {
+    Form {
+      dateRangeSection
+      accountSection
+      earmarkSection
+      categoriesSection
+      payeeSection
+      scheduledSection
+    }
+    .navigationTitle("Filter Transactions")
+    #if os(iOS)
+      .navigationBarTitleDisplayMode(.inline)
+    #endif
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("Cancel") { dismiss() }
+      }
+      ToolbarItem(placement: .primaryAction) {
+        Button("Apply") { applyFilter() }
+      }
+      #if os(iOS)
+        ToolbarItem(placement: .bottomBar) {
+          Button("Clear All") { clearAll() }
+        }
+      #else
+        ToolbarItem(placement: .automatic) {
+          Button("Clear All") { clearAll() }
+        }
+      #endif
+    }
+  }
+
+  private var dateRangeSection: some View {
+    Section("Date Range") {
+      Toggle(
+        "Filter by date",
+        isOn: Binding(
+          get: { dateRangeLowerBound != nil && dateRangeUpperBound != nil },
+          set: { enabled in
+            if enabled {
+              let now = Date()
+              let calendar = Calendar.current
+              dateRangeLowerBound = calendar.date(byAdding: .month, value: -1, to: now)
+              dateRangeUpperBound = now
+            } else {
+              dateRangeLowerBound = nil
+              dateRangeUpperBound = nil
+            }
+          }
+        ))
+      if dateRangeLowerBound != nil && dateRangeUpperBound != nil {
+        DatePicker(
+          "Start Date",
+          selection: Binding(
+            get: { dateRangeLowerBound ?? Date() },
+            set: { dateRangeLowerBound = $0 }),
+          displayedComponents: .date)
+        DatePicker(
+          "End Date",
+          selection: Binding(
+            get: { dateRangeUpperBound ?? Date() },
+            set: { dateRangeUpperBound = $0 }),
+          displayedComponents: .date)
+      }
+    }
+  }
+
+  private var accountSection: some View {
+    Section("Account") {
+      Picker("Account", selection: $selectedAccountId) {
+        Text("All Accounts").tag(nil as UUID?)
+        ForEach(accounts.ordered) { account in
+          Text(account.name).tag(account.id as UUID?)
+        }
+      }
+    }
+  }
+
+  private var earmarkSection: some View {
+    Section("Earmark") {
+      Picker("Earmark", selection: $selectedEarmarkId) {
+        Text("All Earmarks").tag(nil as UUID?)
+        ForEach(earmarks.ordered) { earmark in
+          Text(earmark.name).tag(earmark.id as UUID?)
+        }
+      }
+    }
+  }
+
+  private var categoriesSection: some View {
+    Section("Categories") {
+      if categories.roots.isEmpty {
+        Text("No categories available").foregroundStyle(.secondary)
+      } else {
+        ForEach(allCategories) { category in
+          Toggle(
+            category.name,
+            isOn: Binding(
+              get: { selectedCategoryIds.contains(category.id) },
+              set: { isOn in
+                if isOn {
+                  selectedCategoryIds.insert(category.id)
+                } else {
+                  selectedCategoryIds.remove(category.id)
+                }
+              }))
+        }
+      }
+    }
+  }
+
+  private var payeeSection: some View {
+    Section("Payee") {
+      TextField("Payee contains…", text: $payeeText)
+    }
+  }
+
+  private var scheduledSection: some View {
+    Section("Scheduled") {
+      Picker("Scheduled", selection: $selectedScheduled) {
+        Text("All Transactions").tag(nil as Bool?)
+        Text("Scheduled Only").tag(true as Bool?)
+        Text("Non-Scheduled Only").tag(false as Bool?)
+      }
+    }
   }
 
   private func applyFilter() {

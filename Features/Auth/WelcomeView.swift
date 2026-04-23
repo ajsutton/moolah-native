@@ -14,12 +14,7 @@ struct WelcomeView: View {
 
   var body: some View {
     VStack(spacing: 32) {
-      VStack(spacing: 8) {
-        Text("Moolah")
-          .font(.largeTitle.bold())
-        Text(String(localized: "Personal finance, your way."))
-          .foregroundStyle(.secondary)
-      }
+      header
 
       #if os(iOS)
         if profileStore.profiles.count > 1 {
@@ -28,21 +23,7 @@ struct WelcomeView: View {
       #endif
 
       if authStore.requiresSignIn {
-        Button {
-          Task { await authStore.signIn() }
-        } label: {
-          Label(
-            String(localized: "Sign in with Google"),
-            systemImage: "person.crop.circle.badge.checkmark"
-          )
-          .frame(maxWidth: 280)
-        }
-        #if os(macOS)
-          .buttonStyle(.bordered)
-        #else
-          .buttonStyle(.borderedProminent)
-        #endif
-        .controlSize(.large)
+        signInButton
       }
 
       if let message = authStore.errorMessage {
@@ -67,6 +48,33 @@ struct WelcomeView: View {
         }
       }
     #endif
+  }
+
+  private var header: some View {
+    VStack(spacing: 8) {
+      Text("Moolah")
+        .font(.largeTitle.bold())
+      Text(String(localized: "Personal finance, your way."))
+        .foregroundStyle(.secondary)
+    }
+  }
+
+  private var signInButton: some View {
+    Button {
+      Task { await authStore.signIn() }
+    } label: {
+      Label(
+        String(localized: "Sign in with Google"),
+        systemImage: "person.crop.circle.badge.checkmark"
+      )
+      .frame(maxWidth: 280)
+    }
+    #if os(macOS)
+      .buttonStyle(.bordered)
+    #else
+      .buttonStyle(.borderedProminent)
+    #endif
+    .controlSize(.large)
   }
 
   #if os(iOS)

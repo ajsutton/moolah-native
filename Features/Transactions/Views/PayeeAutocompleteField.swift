@@ -58,51 +58,60 @@ struct PayeeSuggestionDropdown: View {
   }
 }
 
+private let autocompletePreviewSuggestions = [
+  "My School Connect", "My School Tuckshop", "My School Uniform",
+]
+
+private struct AutocompletePreviewForm: View {
+  @Binding var payee: String
+  @Binding var highlighted: Int?
+
+  var body: some View {
+    Form {
+      Section {
+        PayeeAutocompleteField(
+          text: $payee,
+          highlightedIndex: $highlighted,
+          suggestionCount: autocompletePreviewSuggestions.count,
+          onTextChange: { _ in },
+          onAcceptHighlighted: {}
+        )
+        HStack {
+          TextField("Amount", text: .constant("0.00"))
+            .multilineTextAlignment(.trailing)
+          Text(Instrument.AUD.id).foregroundStyle(.secondary)
+        }
+        DatePicker("Date", selection: .constant(Date()), displayedComponents: .date)
+      }
+      Section {
+        Picker("Account", selection: .constant(UUID?.none)) {
+          Text("Checking").tag(UUID?.none)
+        }
+      }
+    }
+    .formStyle(.grouped)
+  }
+}
+
 #Preview("Autocomplete in Form") {
   @Previewable @State var payee = "My Schoo"
   @Previewable @State var highlighted: Int? = 1
-  let suggestions = ["My School Connect", "My School Tuckshop", "My School Uniform"]
 
-  Form {
-    Section {
-      PayeeAutocompleteField(
-        text: $payee,
-        highlightedIndex: $highlighted,
-        suggestionCount: suggestions.count,
-        onTextChange: { _ in },
-        onAcceptHighlighted: {}
-      )
-
-      HStack {
-        TextField("Amount", text: .constant("0.00"))
-          .multilineTextAlignment(.trailing)
-        Text(Instrument.AUD.id).foregroundStyle(.secondary)
-      }
-
-      DatePicker("Date", selection: .constant(Date()), displayedComponents: .date)
-    }
-
-    Section {
-      Picker("Account", selection: .constant(UUID?.none)) {
-        Text("Checking").tag(UUID?.none)
+  AutocompletePreviewForm(payee: $payee, highlighted: $highlighted)
+    .frame(width: 400, height: 400)
+    .overlayPreferenceValue(PayeeFieldAnchorKey.self) { anchor in
+      if let anchor {
+        GeometryReader { proxy in
+          let rect = proxy[anchor]
+          PayeeSuggestionDropdown(
+            suggestions: autocompletePreviewSuggestions,
+            searchText: "My Schoo",
+            highlightedIndex: $highlighted,
+            onSelect: { selected in payee = selected }
+          )
+          .frame(width: rect.width)
+          .offset(x: rect.minX, y: rect.maxY + 4)
+        }
       }
     }
-  }
-  .formStyle(.grouped)
-  .frame(width: 400, height: 400)
-  .overlayPreferenceValue(PayeeFieldAnchorKey.self) { anchor in
-    if let anchor {
-      GeometryReader { proxy in
-        let rect = proxy[anchor]
-        PayeeSuggestionDropdown(
-          suggestions: suggestions,
-          searchText: "My Schoo",
-          highlightedIndex: $highlighted,
-          onSelect: { selected in payee = selected }
-        )
-        .frame(width: rect.width)
-        .offset(x: rect.minX, y: rect.maxY + 4)
-      }
-    }
-  }
 }

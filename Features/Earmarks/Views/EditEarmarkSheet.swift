@@ -41,66 +41,60 @@ struct EditEarmarkSheet: View {
 
   var body: some View {
     NavigationStack {
-      Form {
-        Section("Details") {
-          TextField("Name", text: $name)
-            .accessibilityLabel("Earmark name")
-
-          if supportsComplexTransactions {
-            CurrencyPicker(selection: $currencyCode)
-          } else {
-            LabeledContent("Currency") {
-              Text(earmark.instrument.displayLabel)
-                .foregroundStyle(.secondary)
-            }
-          }
-
-          Toggle("Hidden", isOn: $isHidden)
-        }
-
-        Section("Savings Goal") {
-          HStack {
-            Text(selectedInstrument.displayLabel)
-              .foregroundStyle(.secondary)
-            TextField("Amount", text: $savingsGoal)
-              .monospacedDigit()
-              #if os(iOS)
-                .keyboardType(.decimalPad)
-              #endif
-          }
-
-          Toggle("Set Date Range", isOn: $useDateRange)
-
-          if useDateRange {
-            DatePicker("Start Date", selection: $startDate, displayedComponents: .date)
-            DatePicker("End Date", selection: $endDate, displayedComponents: .date)
-          }
-        }
-
-      }
-      .formStyle(.grouped)
-      .navigationTitle("Edit Earmark")
-      #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-      #endif
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") {
-            dismiss()
-          }
-        }
-
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Save") {
-            saveChanges()
-          }
-          .disabled(name.isEmpty)
-        }
-      }
+      form
     }
     #if os(macOS)
       .frame(minWidth: 400, minHeight: 300)
     #endif
+  }
+
+  private var form: some View {
+    Form {
+      Section("Details") {
+        TextField("Name", text: $name)
+          .accessibilityLabel("Earmark name")
+        if supportsComplexTransactions {
+          CurrencyPicker(selection: $currencyCode)
+        } else {
+          LabeledContent("Currency") {
+            Text(earmark.instrument.displayLabel)
+              .foregroundStyle(.secondary)
+          }
+        }
+        Toggle("Hidden", isOn: $isHidden)
+      }
+
+      Section("Savings Goal") {
+        HStack {
+          Text(selectedInstrument.displayLabel)
+            .foregroundStyle(.secondary)
+          TextField("Amount", text: $savingsGoal)
+            .monospacedDigit()
+            #if os(iOS)
+              .keyboardType(.decimalPad)
+            #endif
+        }
+        Toggle("Set Date Range", isOn: $useDateRange)
+        if useDateRange {
+          DatePicker("Start Date", selection: $startDate, displayedComponents: .date)
+          DatePicker("End Date", selection: $endDate, displayedComponents: .date)
+        }
+      }
+    }
+    .formStyle(.grouped)
+    .navigationTitle("Edit Earmark")
+    #if os(iOS)
+      .navigationBarTitleDisplayMode(.inline)
+    #endif
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("Cancel") { dismiss() }
+      }
+      ToolbarItem(placement: .confirmationAction) {
+        Button("Save") { saveChanges() }
+          .disabled(name.isEmpty)
+      }
+    }
   }
 
   private func saveChanges() {

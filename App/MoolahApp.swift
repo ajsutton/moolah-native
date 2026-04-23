@@ -124,45 +124,7 @@ struct MoolahDomainCommands: Commands {
     }
 
     CommandMenu("Go") {
-      Button("Transactions") {
-        sidebarSelection?.wrappedValue = .allTransactions
-      }
-      .keyboardShortcut("1", modifiers: .command)
-      .disabled(sidebarSelection == nil)
-
-      Button("Scheduled") {
-        sidebarSelection?.wrappedValue = .upcomingTransactions
-      }
-      .keyboardShortcut("2", modifiers: .command)
-      .disabled(sidebarSelection == nil)
-
-      Button("Categories") {
-        sidebarSelection?.wrappedValue = .categories
-      }
-      .keyboardShortcut("3", modifiers: .command)
-      .disabled(sidebarSelection == nil)
-
-      Button("Reports") {
-        sidebarSelection?.wrappedValue = .reports
-      }
-      .keyboardShortcut("4", modifiers: .command)
-      .disabled(sidebarSelection == nil)
-
-      Button("Analysis") {
-        sidebarSelection?.wrappedValue = .analysis
-      }
-      .keyboardShortcut("5", modifiers: .command)
-      .disabled(sidebarSelection == nil)
-
-      Divider()
-
-      Button("Go Back") {}
-        .keyboardShortcut("[", modifiers: .command)
-        .disabled(true)
-
-      Button("Go Forward") {}
-        .keyboardShortcut("]", modifiers: .command)
-        .disabled(true)
+      goMenuItems
     }
 
     CommandMenu("Account") {
@@ -264,6 +226,31 @@ struct MoolahDomainCommands: Commands {
         if let url = URL(string: "https://moolah.app/terms") { openURL(url) }
       }
     }
+  }
+
+  @ViewBuilder private var goMenuItems: some View {
+    Button("Transactions") { sidebarSelection?.wrappedValue = .allTransactions }
+      .keyboardShortcut("1", modifiers: .command)
+      .disabled(sidebarSelection == nil)
+    Button("Scheduled") { sidebarSelection?.wrappedValue = .upcomingTransactions }
+      .keyboardShortcut("2", modifiers: .command)
+      .disabled(sidebarSelection == nil)
+    Button("Categories") { sidebarSelection?.wrappedValue = .categories }
+      .keyboardShortcut("3", modifiers: .command)
+      .disabled(sidebarSelection == nil)
+    Button("Reports") { sidebarSelection?.wrappedValue = .reports }
+      .keyboardShortcut("4", modifiers: .command)
+      .disabled(sidebarSelection == nil)
+    Button("Analysis") { sidebarSelection?.wrappedValue = .analysis }
+      .keyboardShortcut("5", modifiers: .command)
+      .disabled(sidebarSelection == nil)
+    Divider()
+    Button("Go Back") {}
+      .keyboardShortcut("[", modifiers: .command)
+      .disabled(true)
+    Button("Go Forward") {}
+      .keyboardShortcut("]", modifiers: .command)
+      .disabled(true)
   }
 }
 

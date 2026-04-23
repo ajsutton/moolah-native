@@ -279,35 +279,34 @@ extension PositionsChart: AXChartDescriptorRepresentable {
 
 // MARK: - Previews
 
-#Preview("Chart - aggregate") {
+private func previewChartInput(days: Int, base: Decimal, step: Decimal, cost: Decimal)
+  -> PositionsViewInput
+{
   let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
   let aud = Instrument.AUD
   let calendar = Calendar(identifier: .gregorian)
   let now = Date()
-  let points: [HistoricalValueSeries.Point] = (0..<60).map { offset in
-    let date = calendar.date(byAdding: .day, value: -59 + offset, to: now) ?? now
-    let trend = Decimal(10_000) + Decimal(offset) * 30
-    return HistoricalValueSeries.Point(date: date, value: trend, cost: 9_500)
+  let points: [HistoricalValueSeries.Point] = (0..<days).map { offset in
+    let date = calendar.date(byAdding: .day, value: -(days - 1) + offset, to: now) ?? now
+    return HistoricalValueSeries.Point(
+      date: date, value: base + Decimal(offset) * step, cost: cost)
   }
   let series = HistoricalValueSeries(
-    hostCurrency: aud,
-    total: points,
-    perInstrument: [bhp.id: points]
-  )
-  let input = PositionsViewInput(
+    hostCurrency: aud, total: points, perInstrument: [bhp.id: points])
+  return PositionsViewInput(
     title: "Brokerage", hostCurrency: aud,
     positions: [
       ValuedPosition(
-        instrument: bhp, quantity: 100,
-        unitPrice: nil,
-        costBasis: InstrumentAmount(quantity: 9_500, instrument: aud),
-        value: InstrumentAmount(quantity: points.last?.value ?? 0, instrument: aud)
-      )
+        instrument: bhp, quantity: 100, unitPrice: nil,
+        costBasis: InstrumentAmount(quantity: cost, instrument: aud),
+        value: InstrumentAmount(quantity: points.last?.value ?? 0, instrument: aud))
     ],
-    historicalValue: series
-  )
-  return PositionsChart(
-    input: input,
+    historicalValue: series)
+}
+
+#Preview("Chart - aggregate") {
+  PositionsChart(
+    input: previewChartInput(days: 60, base: 10_000, step: 30, cost: 9_500),
     range: .constant(.threeMonths),
     selectedInstrument: .constant(nil)
   )
@@ -317,31 +316,8 @@ extension PositionsChart: AXChartDescriptorRepresentable {
 
 #Preview("Chart - filtered to instrument") {
   let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
-  let aud = Instrument.AUD
-  let calendar = Calendar(identifier: .gregorian)
-  let now = Date()
-  let points: [HistoricalValueSeries.Point] = (0..<30).map { offset in
-    let date = calendar.date(byAdding: .day, value: -29 + offset, to: now) ?? now
-    return HistoricalValueSeries.Point(
-      date: date, value: 4_500 + Decimal(offset) * 25, cost: 4_000)
-  }
-  let series = HistoricalValueSeries(
-    hostCurrency: aud, total: points,
-    perInstrument: [bhp.id: points]
-  )
-  let input = PositionsViewInput(
-    title: "Brokerage", hostCurrency: aud,
-    positions: [
-      ValuedPosition(
-        instrument: bhp, quantity: 100, unitPrice: nil,
-        costBasis: InstrumentAmount(quantity: 4_000, instrument: aud),
-        value: InstrumentAmount(quantity: points.last?.value ?? 0, instrument: aud)
-      )
-    ],
-    historicalValue: series
-  )
   return PositionsChart(
-    input: input,
+    input: previewChartInput(days: 30, base: 4_500, step: 25, cost: 4_000),
     range: .constant(.oneMonth),
     selectedInstrument: .constant(bhp)
   )

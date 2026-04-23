@@ -19,39 +19,7 @@ struct RecentlyAddedView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       NeedsSetupAndFailedPanel(backend: backend, staging: importStore.staging)
-      if let viewModel {
-        if viewModel.isLoading && viewModel.sessions.isEmpty {
-          ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if visibleSessions(viewModel).isEmpty {
-          ContentUnavailableView(
-            searchText.isEmpty ? "Nothing imported yet" : "No matches",
-            systemImage: "tray",
-            description: Text(
-              searchText.isEmpty ? emptyStatePrompt : "Try a different search term."))
-        } else {
-          List {
-            ForEach(visibleSessions(viewModel)) { session in
-              Section(header: sessionHeader(session)) {
-                ForEach(session.transactions, id: \.id) { transaction in
-                  RecentlyAddedRow(transaction: transaction)
-                    .contextMenu {
-                      Button("Open") { transactionForDetail = transaction }
-                      Button("Create rule from this\u{2026}") {
-                        createRuleFromTransaction = transaction
-                      }
-                      Button("Delete", role: .destructive) {
-                        Task { await deleteTransaction(transaction) }
-                      }
-                    }
-                }
-              }
-            }
-          }
-          .searchable(text: $searchText, prompt: "Search description, payee, or notes")
-        }
-      } else {
-        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-      }
+      mainContent
     }
     .navigationTitle("Recently Added")
     .dropDestination(for: URL.self) { urls, _ in
@@ -109,6 +77,46 @@ struct RecentlyAddedView: View {
   private struct ReloadKey: Hashable {
     let window: RecentlyAddedViewModel.Window
     let importedCount: Int
+  }
+
+  @ViewBuilder private var mainContent: some View {
+    if let viewModel {
+      if viewModel.isLoading && viewModel.sessions.isEmpty {
+        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else if visibleSessions(viewModel).isEmpty {
+        ContentUnavailableView(
+          searchText.isEmpty ? "Nothing imported yet" : "No matches",
+          systemImage: "tray",
+          description: Text(
+            searchText.isEmpty ? emptyStatePrompt : "Try a different search term."))
+      } else {
+        sessionList(viewModel)
+      }
+    } else {
+      ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+  }
+
+  private func sessionList(_ viewModel: RecentlyAddedViewModel) -> some View {
+    List {
+      ForEach(visibleSessions(viewModel)) { session in
+        Section(header: sessionHeader(session)) {
+          ForEach(session.transactions, id: \.id) { transaction in
+            RecentlyAddedRow(transaction: transaction)
+              .contextMenu {
+                Button("Open") { transactionForDetail = transaction }
+                Button("Create rule from this\u{2026}") {
+                  createRuleFromTransaction = transaction
+                }
+                Button("Delete", role: .destructive) {
+                  Task { await deleteTransaction(transaction) }
+                }
+              }
+          }
+        }
+      }
+    }
+    .searchable(text: $searchText, prompt: "Search description, payee, or notes")
   }
 
   private var reloadKey: ReloadKey {

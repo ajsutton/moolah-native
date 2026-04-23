@@ -36,122 +36,143 @@ struct RuleEditorView: View {
 
   var body: some View {
     NavigationStack {
-      Form {
-        Section(header: Text("Rule")) {
-          TextField("Name", text: $rule.name)
-          Toggle("Enabled", isOn: $rule.enabled)
-          Picker(
-            "Applies to",
-            selection: Binding(
-              get: { rule.accountScope },
-              set: { rule.accountScope = $0 })
-          ) {
-            Text("All accounts").tag(UUID?.none)
-            ForEach(accountStore.accounts.ordered, id: \.id) { account in
-              Text(account.name).tag(UUID?.some(account.id))
-            }
-          }
-        }
+      form
+    }
+  }
 
-        Section(header: Text("If \(matchModeLabel) of these are true")) {
-          Picker("Match mode", selection: $rule.matchMode) {
-            Text("All").tag(MatchMode.all)
-            Text("Any").tag(MatchMode.any)
-          }
-          .pickerStyle(.segmented)
-          ForEach($identifiedConditions) { $item in
-            ConditionRow(
-              condition: $item.condition,
-              onDelete: {
-                identifiedConditions.removeAll { $0.id == item.id }
-              })
-          }
-          Button {
-            identifiedConditions.append(
-              IdentifiedCondition(id: UUID(), condition: .descriptionContains([""])))
-          } label: {
-            Label("Add Condition", systemImage: "plus.circle")
-          }
+  private var form: some View {
+    Form {
+      ruleSection
+      conditionsSection
+      actionsSection
+      previewSection
+    }
+    .formStyle(.grouped)
+    .navigationTitle(rule.name.isEmpty ? "New Rule" : rule.name)
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("Cancel") { dismiss() }
+      }
+      ToolbarItem(placement: .confirmationAction) {
+        Button("Save") {
+          var out = rule
+          out.conditions = identifiedConditions.map(\.condition)
+          out.actions = identifiedActions.map(\.action)
+          onSave(out)
+          dismiss()
         }
+        .disabled(rule.name.isEmpty)
+      }
+    }
+    .task(id: previewKey) {
+      await schedulePreview()
+    }
+    #if os(macOS)
+      .frame(minWidth: 540, minHeight: 520)
+    #endif
+  }
 
-        Section(header: Text("Perform these actions")) {
-          ForEach($identifiedActions) { $item in
-            ActionRow(
-              action: $item.action,
-              categories: categoryStore.categories,
-              accounts: accountStore.accounts,
-              onDelete: {
-                identifiedActions.removeAll { $0.id == item.id }
-              })
-          }
-          Menu {
-            Button("Set Payee") {
-              identifiedActions.append(
-                IdentifiedAction(id: UUID(), action: .setPayee("")))
-            }
-            // Only offer Set Category when categories exist — spec forbids
-            // rules referencing invented category UUIDs.
-            if let firstCategory = categoryStore.categories.flattenedByPath().first?.category {
-              Button("Set Category") {
-                identifiedActions.append(
-                  IdentifiedAction(id: UUID(), action: .setCategory(firstCategory.id)))
-              }
-            }
-            Button("Append Note") {
-              identifiedActions.append(
-                IdentifiedAction(id: UUID(), action: .appendNote("")))
-            }
-            if let firstAccount = accountStore.accounts.ordered.first {
-              Button("Mark as Transfer") {
-                identifiedActions.append(
-                  IdentifiedAction(
-                    id: UUID(),
-                    action: .markAsTransfer(toAccountId: firstAccount.id)))
-              }
-            }
-            Button("Skip Row") {
-              identifiedActions.append(
-                IdentifiedAction(id: UUID(), action: .skip))
-            }
-          } label: {
-            Label("Add Action", systemImage: "plus.circle")
-          }
-        }
-
-        Section(header: Text("Preview")) {
-          HStack(spacing: 6) {
-            if affectedCount == nil {
-              ProgressView().controlSize(.small)
-            }
-            Text(previewText)
-              .font(.subheadline)
-              .foregroundStyle(affectedCount == nil ? .secondary : .primary)
-          }
+  private var ruleSection: some View {
+    Section(header: Text("Rule")) {
+      TextField("Name", text: $rule.name)
+      Toggle("Enabled", isOn: $rule.enabled)
+      Picker(
+        "Applies to",
+        selection: Binding(
+          get: { rule.accountScope },
+          set: { rule.accountScope = $0 })
+      ) {
+        Text("All accounts").tag(UUID?.none)
+        ForEach(accountStore.accounts.ordered, id: \.id) { account in
+          Text(account.name).tag(UUID?.some(account.id))
         }
       }
-      .formStyle(.grouped)
-      .navigationTitle(rule.name.isEmpty ? "New Rule" : rule.name)
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") { dismiss() }
-        }
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Save") {
-            var out = rule
-            out.conditions = identifiedConditions.map(\.condition)
-            out.actions = identifiedActions.map(\.action)
-            onSave(out)
-            dismiss()
-          }
-          .disabled(rule.name.isEmpty)
+    }
+  }
+
+  private var conditionsSection: some View {
+    Section(header: Text("If \(matchModeLabel) of these are true")) {
+      Picker("Match mode", selection: $rule.matchMode) {
+        Text("All").tag(MatchMode.all)
+        Text("Any").tag(MatchMode.any)
+      }
+      .pickerStyle(.segmented)
+      ForEach($identifiedConditions) { $item in
+        ConditionRow(
+          condition: $item.condition,
+          onDelete: {
+            identifiedConditions.removeAll { $0.id == item.id }
+          })
+      }
+      Button {
+        identifiedConditions.append(
+          IdentifiedCondition(id: UUID(), condition: .descriptionContains([""])))
+      } label: {
+        Label("Add Condition", systemImage: "plus.circle")
+      }
+    }
+  }
+
+  private var actionsSection: some View {
+    Section(header: Text("Perform these actions")) {
+      ForEach($identifiedActions) { $item in
+        ActionRow(
+          action: $item.action,
+          categories: categoryStore.categories,
+          accounts: accountStore.accounts,
+          onDelete: {
+            identifiedActions.removeAll { $0.id == item.id }
+          })
+      }
+      addActionMenu
+    }
+  }
+
+  @ViewBuilder private var addActionMenu: some View {
+    Menu {
+      Button("Set Payee") {
+        identifiedActions.append(
+          IdentifiedAction(id: UUID(), action: .setPayee("")))
+      }
+      // Only offer Set Category when categories exist — spec forbids
+      // rules referencing invented category UUIDs.
+      if let firstCategory = categoryStore.categories.flattenedByPath().first?.category {
+        Button("Set Category") {
+          identifiedActions.append(
+            IdentifiedAction(id: UUID(), action: .setCategory(firstCategory.id)))
         }
       }
-      .task(id: previewKey) {
-        await schedulePreview()
+      Button("Append Note") {
+        identifiedActions.append(
+          IdentifiedAction(id: UUID(), action: .appendNote("")))
       }
-      #if os(macOS)
-        .frame(minWidth: 540, minHeight: 520)
-      #endif
+      if let firstAccount = accountStore.accounts.ordered.first {
+        Button("Mark as Transfer") {
+          identifiedActions.append(
+            IdentifiedAction(
+              id: UUID(),
+              action: .markAsTransfer(toAccountId: firstAccount.id)))
+        }
+      }
+      Button("Skip Row") {
+        identifiedActions.append(
+          IdentifiedAction(id: UUID(), action: .skip))
+      }
+    } label: {
+      Label("Add Action", systemImage: "plus.circle")
+    }
+  }
+
+  private var previewSection: some View {
+    Section(header: Text("Preview")) {
+      HStack(spacing: 6) {
+        if affectedCount == nil {
+          ProgressView().controlSize(.small)
+        }
+        Text(previewText)
+          .font(.subheadline)
+          .foregroundStyle(affectedCount == nil ? .secondary : .primary)
+      }
     }
   }
 

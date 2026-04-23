@@ -29,129 +29,106 @@ struct ProfileFormView: View {
 
   var body: some View {
     NavigationStack {
-      Form {
+      form
+    }
+  }
+
+  private var form: some View {
+    Form {
+      backendTypeSection
+      if selectedType == .cloudKit {
+        cloudKitSection
+      }
+      if selectedType == .remote {
+        remoteSection
+      }
+      if let error = profileStore.validationError {
         Section {
-          Button {
-            selectedType = .cloudKit
-          } label: {
-            HStack {
-              Label("iCloud", systemImage: "icloud")
-              Spacer()
-              if selectedType == .cloudKit {
-                Image(systemName: "checkmark")
-                  .foregroundStyle(.tint)
-                  .accessibilityHidden(true)
-              }
-            }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-          }
-          .buttonStyle(.plain)
-          .accessibilityAddTraits(selectedType == .cloudKit ? .isSelected : [])
-
-          Button {
-            selectedType = .moolah
-          } label: {
-            HStack {
-              Label("Moolah", systemImage: "cloud")
-              Spacer()
-              if selectedType == .moolah {
-                Image(systemName: "checkmark")
-                  .foregroundStyle(.tint)
-                  .accessibilityHidden(true)
-              }
-            }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-          }
-          .buttonStyle(.plain)
-          .accessibilityAddTraits(selectedType == .moolah ? .isSelected : [])
-
-          Button {
-            selectedType = .remote
-          } label: {
-            HStack {
-              Label("Custom Server", systemImage: "server.rack")
-              Spacer()
-              if selectedType == .remote {
-                Image(systemName: "checkmark")
-                  .foregroundStyle(.tint)
-                  .accessibilityHidden(true)
-              }
-            }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-          }
-          .buttonStyle(.plain)
-          .accessibilityAddTraits(selectedType == .remote ? .isSelected : [])
-        }
-
-        if selectedType == .cloudKit {
-          Section("Profile") {
-            TextField("Name", text: $cloudName)
-
-            CurrencyPicker(selection: $cloudCurrencyCode)
-
-            Picker("Financial Year Starts", selection: $cloudFinancialYearStartMonth) {
-              ForEach(1...12, id: \.self) { month in
-                if month <= Self.monthNames.count {
-                  Text(Self.monthNames[month - 1])
-                    .tag(month)
-                }
-              }
-            }
-          }
-        }
-
-        if selectedType == .remote {
-          Section("Server") {
-            TextField("Server URL", text: $serverURL)
-              .autocorrectionDisabled()
-              #if os(iOS)
-                .keyboardType(.URL)
-                .textInputAutocapitalization(.never)
-              #endif
-              .onChange(of: serverURL) {
-                profileStore.clearValidationError()
-              }
-
-            TextField("Label (optional)", text: $label)
-          }
-        }
-
-        if let error = profileStore.validationError {
-          Section {
-            Label(error, systemImage: "exclamationmark.triangle.fill")
-              .foregroundStyle(.red)
-              .accessibilityLabel("Error: \(error)")
-          }
+          Label(error, systemImage: "exclamationmark.triangle.fill")
+            .foregroundStyle(.red)
+            .accessibilityLabel("Error: \(error)")
         }
       }
-      .formStyle(.grouped)
-      .navigationTitle("Add Profile")
-      #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-      #endif
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") {
-            profileStore.clearValidationError()
-            dismiss()
-          }
+    }
+    .formStyle(.grouped)
+    .navigationTitle("Add Profile")
+    #if os(iOS)
+      .navigationBarTitleDisplayMode(.inline)
+    #endif
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("Cancel") {
+          profileStore.clearValidationError()
+          dismiss()
         }
-
-        ToolbarItem(placement: .confirmationAction) {
-          if profileStore.isValidating {
-            ProgressView()
-              .controlSize(.small)
-          } else {
-            Button("Add") {
-              Task { await save() }
-            }
+      }
+      ToolbarItem(placement: .confirmationAction) {
+        if profileStore.isValidating {
+          ProgressView().controlSize(.small)
+        } else {
+          Button("Add") { Task { await save() } }
             .disabled(!canAdd)
+        }
+      }
+    }
+  }
+
+  private var backendTypeSection: some View {
+    Section {
+      backendTypeButton(.cloudKit, label: "iCloud", systemImage: "icloud")
+      backendTypeButton(.moolah, label: "Moolah", systemImage: "cloud")
+      backendTypeButton(.remote, label: "Custom Server", systemImage: "server.rack")
+    }
+  }
+
+  private func backendTypeButton(
+    _ type: BackendType, label: String, systemImage: String
+  ) -> some View {
+    Button {
+      selectedType = type
+    } label: {
+      HStack {
+        Label(label, systemImage: systemImage)
+        Spacer()
+        if selectedType == type {
+          Image(systemName: "checkmark")
+            .foregroundStyle(.tint)
+            .accessibilityHidden(true)
+        }
+      }
+      .frame(minHeight: 44)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityAddTraits(selectedType == type ? .isSelected : [])
+  }
+
+  private var cloudKitSection: some View {
+    Section("Profile") {
+      TextField("Name", text: $cloudName)
+      CurrencyPicker(selection: $cloudCurrencyCode)
+      Picker("Financial Year Starts", selection: $cloudFinancialYearStartMonth) {
+        ForEach(1...12, id: \.self) { month in
+          if month <= Self.monthNames.count {
+            Text(Self.monthNames[month - 1]).tag(month)
           }
         }
       }
+    }
+  }
+
+  private var remoteSection: some View {
+    Section("Server") {
+      TextField("Server URL", text: $serverURL)
+        .autocorrectionDisabled()
+        #if os(iOS)
+          .keyboardType(.URL)
+          .textInputAutocapitalization(.never)
+        #endif
+        .onChange(of: serverURL) {
+          profileStore.clearValidationError()
+        }
+      TextField("Label (optional)", text: $label)
     }
   }
 

@@ -33,87 +33,93 @@ struct InvestmentChartView: View {
 
   private var chartContent: some View {
     VStack(spacing: 8) {
-      Chart {
-        ForEach(dataPoints) { point in
-          // Profit/Loss area (orange)
-          if let profitLoss = point.profitLoss {
-            AreaMark(
-              x: .value("Date", point.date),
-              y: .value("Profit/Loss", Double(truncating: profitLoss as NSDecimalNumber))
-            )
-            .foregroundStyle(.orange.opacity(0.2))
-            .interpolationMethod(.catmullRom)
-          }
-
-          // Investment Value line (blue)
-          if let value = point.value {
-            LineMark(
-              x: .value("Date", point.date),
-              y: .value("Value", Double(truncating: value as NSDecimalNumber)),
-              series: .value("Series", "Value")
-            )
-            .foregroundStyle(.blue)
-            .lineStyle(StrokeStyle(lineWidth: 2))
-            .interpolationMethod(.catmullRom)
-          }
-
-          // Invested Amount line (gray, step interpolation)
-          if let balance = point.balance {
-            LineMark(
-              x: .value("Date", point.date),
-              y: .value("Balance", Double(truncating: balance as NSDecimalNumber)),
-              series: .value("Series", "Balance")
-            )
-            .foregroundStyle(.gray)
-            .lineStyle(StrokeStyle(lineWidth: 2))
-            .interpolationMethod(.stepEnd)
-          }
-        }
-
-        // Selection rule
-        if let selectedDate {
-          RuleMark(x: .value("Selected", selectedDate))
-            .foregroundStyle(.gray.opacity(0.5))
-            .lineStyle(StrokeStyle(lineWidth: 1))
-        }
-      }
-      .chartXAxis {
-        AxisMarks(values: .automatic(desiredCount: 6)) { value in
-          AxisGridLine()
-          AxisTick()
-          if let date = value.as(Date.self) {
-            AxisValueLabel {
-              Text(date, format: .dateTime.month(.abbreviated).year(.twoDigits))
-                .font(.caption)
-            }
-          }
-        }
-      }
-      .chartYAxis {
-        AxisMarks { value in
-          AxisGridLine()
-          AxisValueLabel {
-            if let amount = value.as(Double.self) {
-              Text(
-                InstrumentAmount(quantity: Decimal(amount), instrument: instrument).formatNoSymbol
-              )
-              .monospacedDigit()
-              .font(.caption)
-            }
-          }
-        }
-      }
-      .chartXSelection(value: $selectedDate)
-      .chartLegend(.hidden)
-      .frame(height: 250)
-      .accessibilityLabel(
-        "Investment chart showing value, invested amount, and profit or loss over time")
+      chart
 
       // Selection detail overlay
       if let selectedDate, let point = closestPoint(to: selectedDate) {
         selectionDetail(point: point)
       }
     }
+  }
+
+  @ChartContentBuilder
+  private func marks(for point: InvestmentChartDataPoint) -> some ChartContent {
+    // Profit/Loss area (orange)
+    if let profitLoss = point.profitLoss {
+      AreaMark(
+        x: .value("Date", point.date),
+        y: .value("Profit/Loss", Double(truncating: profitLoss as NSDecimalNumber))
+      )
+      .foregroundStyle(.orange.opacity(0.2))
+      .interpolationMethod(.catmullRom)
+    }
+    // Investment Value line (blue)
+    if let value = point.value {
+      LineMark(
+        x: .value("Date", point.date),
+        y: .value("Value", Double(truncating: value as NSDecimalNumber)),
+        series: .value("Series", "Value")
+      )
+      .foregroundStyle(.blue)
+      .lineStyle(StrokeStyle(lineWidth: 2))
+      .interpolationMethod(.catmullRom)
+    }
+    // Invested Amount line (gray, step interpolation)
+    if let balance = point.balance {
+      LineMark(
+        x: .value("Date", point.date),
+        y: .value("Balance", Double(truncating: balance as NSDecimalNumber)),
+        series: .value("Series", "Balance")
+      )
+      .foregroundStyle(.gray)
+      .lineStyle(StrokeStyle(lineWidth: 2))
+      .interpolationMethod(.stepEnd)
+    }
+  }
+
+  private var chart: some View {
+    Chart {
+      ForEach(dataPoints) { point in
+        marks(for: point)
+      }
+      // Selection rule
+      if let selectedDate {
+        RuleMark(x: .value("Selected", selectedDate))
+          .foregroundStyle(.gray.opacity(0.5))
+          .lineStyle(StrokeStyle(lineWidth: 1))
+      }
+    }
+    .chartXAxis {
+      AxisMarks(values: .automatic(desiredCount: 6)) { value in
+        AxisGridLine()
+        AxisTick()
+        if let date = value.as(Date.self) {
+          AxisValueLabel {
+            Text(date, format: .dateTime.month(.abbreviated).year(.twoDigits))
+              .font(.caption)
+          }
+        }
+      }
+    }
+    .chartYAxis {
+      AxisMarks { value in
+        AxisGridLine()
+        AxisValueLabel {
+          if let amount = value.as(Double.self) {
+            Text(
+              InstrumentAmount(quantity: Decimal(amount), instrument: instrument).formatNoSymbol
+            )
+            .monospacedDigit()
+            .font(.caption)
+          }
+        }
+      }
+    }
+    .chartXSelection(value: $selectedDate)
+    .chartLegend(.hidden)
+    .frame(height: 250)
+    .accessibilityLabel(
+      "Investment chart showing value, invested amount, and profit or loss over time")
   }
 
   @ViewBuilder

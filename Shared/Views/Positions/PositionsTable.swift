@@ -42,52 +42,58 @@ struct PositionsTable: View {
     let sortedRows = groups.flatMap(\.rows).sorted(using: sortOrder)
     Table(sortedRows, selection: rowSelectionBinding, sortOrder: $sortOrder) {
       TableColumn("Instrument", value: \.instrument.name) { row in
-        HStack(spacing: 6) {
-          KindBadge(kind: row.instrument.kind)
-          VStack(alignment: .leading) {
-            Text(row.instrument.name)
-            if let exchange = row.instrument.exchange {
-              Text(exchange).font(.caption).foregroundStyle(.secondary)
-            }
-          }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(instrumentLabel(for: row))
+        instrumentCell(for: row)
       }
       TableColumn("Qty", value: \.quantity) { row in
-        Text(row.quantityFormatted)
-          .monospacedDigit()
+        Text(row.quantityFormatted).monospacedDigit()
       }
       TableColumn("Unit Price", value: \.unitPriceQuantity) { row in
-        if let unit = row.unitPrice {
-          Text(unit.formatted).monospacedDigit()
-        } else {
-          Text("—").foregroundStyle(.tertiary)
-        }
+        amountCell(row.unitPrice)
       }
       TableColumn("Cost", value: \.costBasisQuantity) { row in
-        if let cost = row.costBasis {
-          Text(cost.formatted).monospacedDigit()
-        } else {
-          Text("—").foregroundStyle(.tertiary)
-        }
+        amountCell(row.costBasis)
       }
       TableColumn("Value", value: \.valueQuantity) { row in
-        if let value = row.value {
-          Text(value.formatted).monospacedDigit()
-        } else {
-          Text("—").foregroundStyle(.tertiary)
-        }
+        amountCell(row.value)
       }
       TableColumn("Gain", value: \.gainQuantity) { row in
-        if let gain = row.gainLoss {
-          Text(gain.signedFormatted)
-            .monospacedDigit()
-            .foregroundStyle(gainColor(gain))
-        } else {
-          Text("—").foregroundStyle(.tertiary)
+        gainCell(row.gainLoss)
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func instrumentCell(for row: ValuedPosition) -> some View {
+    HStack(spacing: 6) {
+      KindBadge(kind: row.instrument.kind)
+      VStack(alignment: .leading) {
+        Text(row.instrument.name)
+        if let exchange = row.instrument.exchange {
+          Text(exchange).font(.caption).foregroundStyle(.secondary)
         }
       }
+    }
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(instrumentLabel(for: row))
+  }
+
+  @ViewBuilder
+  private func amountCell(_ amount: InstrumentAmount?) -> some View {
+    if let amount {
+      Text(amount.formatted).monospacedDigit()
+    } else {
+      Text("—").foregroundStyle(.tertiary)
+    }
+  }
+
+  @ViewBuilder
+  private func gainCell(_ gain: InstrumentAmount?) -> some View {
+    if let gain {
+      Text(gain.signedFormatted)
+        .monospacedDigit()
+        .foregroundStyle(gainColor(gain))
+    } else {
+      Text("—").foregroundStyle(.tertiary)
     }
   }
 
@@ -206,15 +212,14 @@ struct InstrumentGroup: Identifiable {
   }
 }
 
-#Preview("PositionsTable - mixed wide") {
+private func mixedPositionsInput() -> PositionsViewInput {
   let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
   let cba = Instrument.stock(ticker: "CBA.AX", exchange: "ASX", name: "CBA")
   let eth = Instrument.crypto(
     chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
   let aud = Instrument.AUD
-  let input = PositionsViewInput(
-    title: "Brokerage",
-    hostCurrency: aud,
+  return PositionsViewInput(
+    title: "Brokerage", hostCurrency: aud,
     positions: [
       ValuedPosition(
         instrument: bhp, quantity: 250,
@@ -236,9 +241,11 @@ struct InstrumentGroup: Identifiable {
         unitPrice: nil, costBasis: nil,
         value: InstrumentAmount(quantity: 2_480, instrument: aud)),
     ],
-    historicalValue: nil
-  )
-  return PositionsTable(input: input, selection: .constant(nil))
+    historicalValue: nil)
+}
+
+#Preview("PositionsTable - mixed wide") {
+  PositionsTable(input: mixedPositionsInput(), selection: .constant(nil))
     .frame(width: 720, height: 360)
 }
 
