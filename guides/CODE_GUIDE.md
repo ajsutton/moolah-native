@@ -168,6 +168,8 @@ Apple's [Swift API Design Guidelines](https://www.swift.org/documentation/api-de
   account.balance  // Not: account.accountBalance
   ```
 
+- **Type names are UpperCamelCase, 3–40 characters.** Classes, structs, enums, protocols, actors, and type aliases use UpperCamelCase with no underscores or digits used as separators, and fit inside the 3-character minimum / 40-character warning range. SwiftLint's [`type_name`](https://realm.github.io/SwiftLint/type_name.html) rule enforces this — if a name wants to go longer, the type is almost always doing too much and should be split. Test types are not exempt: a test suite named `TransactionIsSimpleCrossCurrencyTransferTests` is a signal that the scenario wants its own helper fixture or a more focused `…Tests` file, not a longer identifier.
+
 ### 4.1 Project suffix conventions
 
 - **OK as needed:** `Controller`, `ViewController`, `Delegate`, `Store` (the `@Observable` owner of UI-bound state).
