@@ -219,7 +219,7 @@ Apple's [Choosing Between Structures and Classes](https://developer.apple.com/do
 
 - **Language default is `internal`.** Don't write `internal` explicitly — it's noise.
 - **Prefer `private`** for members. Smaller surface area = fewer coupling paths.
-- **`fileprivate` only when the compiler requires it.** The project's `.swift-format` `fileScopedDeclarationPrivacy` rule handles the common case of file-scoped declarations automatically; reach for `fileprivate` manually only when an extension in the same file needs access that `private` blocks.
+- **`fileprivate` only when the compiler requires it.** The project's `.swift-format` `fileScopedDeclarationPrivacy` rule handles the common case of file-scoped declarations automatically; reach for `fileprivate` manually only when an extension in the same file needs access that `private` blocks. SwiftLint's `strict_fileprivate` rule enforces this — if an extension of the same type sits in the same file, the member should be `private`, not `fileprivate` (Swift's `private` already reaches same-file same-type extensions). Use `internal` (the language default, written by omitting the keyword) when a sibling extension in a different file needs access.
 - **`public` only at module boundaries.** This project has effectively one module boundary today: `Domain/`. Inside the app target, everything is `internal` or tighter; writing `public` anywhere else is almost certainly wrong.
 
 ---
