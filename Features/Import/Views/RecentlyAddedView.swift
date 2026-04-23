@@ -32,15 +32,15 @@ struct RecentlyAddedView: View {
           List {
             ForEach(visibleSessions(viewModel)) { session in
               Section(header: sessionHeader(session)) {
-                ForEach(session.transactions, id: \.id) { tx in
-                  RecentlyAddedRow(transaction: tx)
+                ForEach(session.transactions, id: \.id) { transaction in
+                  RecentlyAddedRow(transaction: transaction)
                     .contextMenu {
-                      Button("Open") { transactionForDetail = tx }
+                      Button("Open") { transactionForDetail = transaction }
                       Button("Create rule from this\u{2026}") {
-                        createRuleFromTransaction = tx
+                        createRuleFromTransaction = transaction
                       }
                       Button("Delete", role: .destructive) {
-                        Task { await deleteTransaction(tx) }
+                        Task { await deleteTransaction(transaction) }
                       }
                     }
                 }
@@ -61,8 +61,8 @@ struct RecentlyAddedView: View {
     .toolbar {
       ToolbarItem(placement: .automatic) {
         Picker("Time window", selection: $window) {
-          ForEach(RecentlyAddedViewModel.Window.allCases) { w in
-            Text(w.label).tag(w)
+          ForEach(RecentlyAddedViewModel.Window.allCases) { windowOption in
+            Text(windowOption.label).tag(windowOption)
           }
         }
         .pickerStyle(.menu)
@@ -80,16 +80,16 @@ struct RecentlyAddedView: View {
         }
       }
     }
-    .sheet(item: $createRuleFromTransaction) { tx in
+    .sheet(item: $createRuleFromTransaction) { transaction in
       CreateRuleFromTransactionSheet(
-        transaction: tx,
+        transaction: transaction,
         corpus: corpusFromViewModel())
     }
     .sheet(isPresented: $showingCreateRuleFromSearch) {
       RuleFromSearchSheet(query: searchText)
     }
-    .sheet(item: $transactionForDetail) { tx in
-      TransactionDetailSheet(transaction: tx)
+    .sheet(item: $transactionForDetail) { transaction in
+      TransactionDetailSheet(transaction: transaction)
     }
     // `.task(id:)` fires on first appearance and re-fires (auto-cancelling
     // any in-flight load) whenever any of the tracked values change. We
@@ -171,8 +171,8 @@ struct RecentlyAddedView: View {
     return
       viewModel.sessions
       .compactMap { group -> RecentlyAddedViewModel.SessionGroup? in
-        let matching = group.transactions.filter { tx in
-          matches(tx, query: query)
+        let matching = group.transactions.filter { transaction in
+          matches(transaction, query: query)
         }
         guard !matching.isEmpty else { return nil }
         return RecentlyAddedViewModel.SessionGroup(
@@ -184,11 +184,11 @@ struct RecentlyAddedView: View {
       }
   }
 
-  private func matches(_ tx: Transaction, query: String) -> Bool {
+  private func matches(_ transaction: Transaction, query: String) -> Bool {
     let haystack: [String] = [
-      tx.payee ?? "",
-      tx.notes ?? "",
-      tx.importOrigin?.rawDescription ?? "",
+      transaction.payee ?? "",
+      transaction.notes ?? "",
+      transaction.importOrigin?.rawDescription ?? "",
     ]
     return haystack.contains { $0.lowercased().contains(query) }
   }
@@ -203,8 +203,8 @@ struct RecentlyAddedView: View {
     }
   }
 
-  private func deleteTransaction(_ tx: Transaction) async {
-    await transactionStore.delete(id: tx.id)
+  private func deleteTransaction(_ transaction: Transaction) async {
+    await transactionStore.delete(id: transaction.id)
     await reload()
   }
 

@@ -337,15 +337,25 @@ private enum ConditionKind: String, CaseIterable, Hashable {
   func defaultCondition(from existing: RuleCondition) -> RuleCondition {
     switch self {
     case .contains:
-      if case .descriptionContains(let t) = existing { return .descriptionContains(t) }
-      if case .descriptionDoesNotContain(let t) = existing { return .descriptionContains(t) }
+      if case .descriptionContains(let tokens) = existing {
+        return .descriptionContains(tokens)
+      }
+      if case .descriptionDoesNotContain(let tokens) = existing {
+        return .descriptionContains(tokens)
+      }
       return .descriptionContains([""])
     case .doesNotContain:
-      if case .descriptionContains(let t) = existing { return .descriptionDoesNotContain(t) }
-      if case .descriptionDoesNotContain(let t) = existing { return .descriptionDoesNotContain(t) }
+      if case .descriptionContains(let tokens) = existing {
+        return .descriptionDoesNotContain(tokens)
+      }
+      if case .descriptionDoesNotContain(let tokens) = existing {
+        return .descriptionDoesNotContain(tokens)
+      }
       return .descriptionDoesNotContain([""])
     case .beginsWith:
-      if case .descriptionBeginsWith(let p) = existing { return .descriptionBeginsWith(p) }
+      if case .descriptionBeginsWith(let prefix) = existing {
+        return .descriptionBeginsWith(prefix)
+      }
       return .descriptionBeginsWith("")
     case .amountPositive: return .amountIsPositive
     case .amountNegative: return .amountIsNegative
@@ -469,7 +479,7 @@ private enum ActionKind: String, CaseIterable, Hashable {
   ) -> RuleAction {
     switch self {
     case .setPayee:
-      if case .setPayee(let p) = existing { return .setPayee(p) }
+      if case .setPayee(let payee) = existing { return .setPayee(payee) }
       return .setPayee("")
     case .setCategory:
       if case .setCategory(let id) = existing { return .setCategory(id) }

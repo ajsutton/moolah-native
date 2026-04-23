@@ -6,14 +6,14 @@ import Testing
 @Suite("CSVImportProfileMatcher")
 struct CSVImportProfileMatcherTests {
 
-  private func date(_ y: Int, _ m: Int, _ d: Int) -> Date {
-    var c = DateComponents()
-    c.year = y
-    c.month = m
-    c.day = d
+  private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+    var components = DateComponents()
+    components.year = year
+    components.month = month
+    components.day = day
     var cal = Calendar(identifier: .gregorian)
     cal.timeZone = TimeZone(identifier: "UTC")!
-    return cal.date(from: c)!
+    return cal.date(from: components)!
   }
 
   private func profile(
@@ -94,23 +94,23 @@ struct CSVImportProfileMatcherTests {
   @Test("exactly one matching profile → routed")
   func oneProfileRouted() {
     let account = UUID()
-    let p = profile(accountId: account)
+    let matched = profile(accountId: account)
     let input = MatcherInput(
       filename: "cba.csv",
       parserIdentifier: "generic-bank",
       headerSignature: ["Date", "Amount", "Description", "Balance"],
       candidates: [],
       existingByAccountId: [:],
-      profiles: [p])
-    #expect(CSVImportProfileMatcher.match(input) == .routed(p))
+      profiles: [matched])
+    #expect(CSVImportProfileMatcher.match(input) == .routed(matched))
   }
 
   @Test("multi-match — profile with more duplicate overlap wins")
   func duplicateOverlapWins() {
     let accountA = UUID()
     let accountB = UUID()
-    let pA = profile(accountId: accountA)
-    let pB = profile(accountId: accountB)
+    let profileA = profile(accountId: accountA)
+    let profileB = profile(accountId: accountB)
     let candidates = [
       candidate(date: date(2024, 4, 2), description: "COFFEE", amount: -5),
       candidate(date: date(2024, 4, 3), description: "SALARY", amount: 3000),
@@ -126,16 +126,16 @@ struct CSVImportProfileMatcherTests {
       headerSignature: ["date", "amount", "description", "balance"],
       candidates: candidates,
       existingByAccountId: [accountA: existingA, accountB: []],
-      profiles: [pA, pB])
-    #expect(CSVImportProfileMatcher.match(input) == .routed(pA))
+      profiles: [profileA, profileB])
+    #expect(CSVImportProfileMatcher.match(input) == .routed(profileA))
   }
 
   @Test("tie on overlap — filename pattern tiebreaks")
   func filenamePatternTiebreak() {
     let accountA = UUID()
     let accountB = UUID()
-    let pA = profile(accountId: accountA, filenamePattern: "cba-*.csv")
-    let pB = profile(accountId: accountB, filenamePattern: "anz-*.csv")
+    let profileA = profile(accountId: accountA, filenamePattern: "cba-*.csv")
+    let profileB = profile(accountId: accountB, filenamePattern: "anz-*.csv")
     // Both profiles see the coffee candidate and both have a matching
     // existing row — overlap tied at 1.
     let shared = candidate(
@@ -152,8 +152,8 @@ struct CSVImportProfileMatcherTests {
       headerSignature: ["date", "amount", "description", "balance"],
       candidates: [shared],
       existingByAccountId: [accountA: existingA, accountB: existingB],
-      profiles: [pA, pB])
-    #expect(CSVImportProfileMatcher.match(input) == .routed(pA))
+      profiles: [profileA, profileB])
+    #expect(CSVImportProfileMatcher.match(input) == .routed(profileA))
   }
 
   @Test("score=0 tie — filename pattern still tiebreaks across all candidates")
@@ -164,35 +164,35 @@ struct CSVImportProfileMatcherTests {
     // fires and picks the single pattern-matching profile.
     let accountA = UUID()
     let accountB = UUID()
-    let pA = profile(accountId: accountA, filenamePattern: "cba-*.csv")
-    let pB = profile(accountId: accountB, filenamePattern: "anz-*.csv")
+    let profileA = profile(accountId: accountA, filenamePattern: "cba-*.csv")
+    let profileB = profile(accountId: accountB, filenamePattern: "anz-*.csv")
     let input = MatcherInput(
       filename: "cba-april.csv",
       parserIdentifier: "generic-bank",
       headerSignature: ["date", "amount", "description", "balance"],
       candidates: [],
       existingByAccountId: [accountA: [], accountB: []],
-      profiles: [pA, pB])
-    #expect(CSVImportProfileMatcher.match(input) == .routed(pA))
+      profiles: [profileA, profileB])
+    #expect(CSVImportProfileMatcher.match(input) == .routed(profileA))
   }
 
   @Test("tie on overlap with no filename hint → needsSetup(.ambiguousMatch)")
   func tieWithoutFilenameHint() {
     let accountA = UUID()
     let accountB = UUID()
-    let pA = profile(accountId: accountA)
-    let pB = profile(accountId: accountB)
+    let profileA = profile(accountId: accountA)
+    let profileB = profile(accountId: accountB)
     let input = MatcherInput(
       filename: nil,
       parserIdentifier: "generic-bank",
       headerSignature: ["date", "amount", "description", "balance"],
       candidates: [],
       existingByAccountId: [accountA: [], accountB: []],
-      profiles: [pA, pB])
+      profiles: [profileA, profileB])
     if case .needsSetup(let reason) = CSVImportProfileMatcher.match(input),
       case .ambiguousMatch(let ids) = reason
     {
-      #expect(Set(ids) == Set([pA.id, pB.id]))
+      #expect(Set(ids) == Set([profileA.id, profileB.id]))
     } else {
       Issue.record("expected .needsSetup(.ambiguousMatch)")
     }
@@ -231,14 +231,14 @@ struct CSVImportProfileMatcherTests {
   @Test("incoming headers are normalised before matching (case + trim)")
   func headerSignatureNormalisedBeforeMatch() {
     let accountA = UUID()
-    let p = profile(accountId: accountA)
+    let matched = profile(accountId: accountA)
     let input = MatcherInput(
       filename: nil,
       parserIdentifier: "generic-bank",
       headerSignature: [" DATE ", " AMOUNT ", " DESCRIPTION ", " BALANCE "],
       candidates: [],
       existingByAccountId: [:],
-      profiles: [p])
-    #expect(CSVImportProfileMatcher.match(input) == .routed(p))
+      profiles: [matched])
+    #expect(CSVImportProfileMatcher.match(input) == .routed(matched))
   }
 }

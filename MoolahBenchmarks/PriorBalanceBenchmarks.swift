@@ -16,7 +16,7 @@ final class PriorBalanceBenchmarks: XCTestCase {
     _backend = result.backend
     _container = result.container
     try! awaitSync { @MainActor in
-      BenchmarkFixtures.seed(scale: .x2, in: result.container)
+      BenchmarkFixtures.seed(scale: .twoX, in: result.container)
     }
     // Pre-warm: load accounts so balances are computed from legs.
     _ = try! awaitSync { try await result.backend.accounts.fetchAll() }

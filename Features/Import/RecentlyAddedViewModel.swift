@@ -53,7 +53,9 @@ final class RecentlyAddedViewModel {
     /// v1 proxy for "needs review": any transaction whose legs all lack a
     /// category. See the design doc.
     var needsReviewCount: Int {
-      transactions.filter { tx in tx.legs.allSatisfy { $0.categoryId == nil } }.count
+      transactions.filter { transaction in
+        transaction.legs.allSatisfy { $0.categoryId == nil }
+      }.count
     }
   }
 
@@ -99,8 +101,8 @@ final class RecentlyAddedViewModel {
     let filtered = Self.filter(all, window: window, now: now)
     sessions = Self.group(filtered)
     badgeCount =
-      filtered.filter { tx in
-        tx.legs.allSatisfy { $0.categoryId == nil }
+      filtered.filter { transaction in
+        transaction.legs.allSatisfy { $0.categoryId == nil }
       }.count
   }
 
@@ -112,8 +114,8 @@ final class RecentlyAddedViewModel {
     window: Window,
     now: Date = Date()
   ) -> [Transaction] {
-    transactions.filter { tx in
-      guard let origin = tx.importOrigin else { return false }
+    transactions.filter { transaction in
+      guard let origin = transaction.importOrigin else { return false }
       if let range = window.dateRange(now: now) {
         return range.contains(origin.importedAt)
       }

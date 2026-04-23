@@ -12,7 +12,7 @@ struct SelfWealthParserTests {
 
   private func transactions(_ records: [ParsedRecord]) -> [ParsedTransaction] {
     records.compactMap { rec -> ParsedTransaction? in
-      if case .transaction(let tx) = rec { return tx } else { return nil }
+      if case .transaction(let transaction) = rec { return transaction } else { return nil }
     }
   }
 

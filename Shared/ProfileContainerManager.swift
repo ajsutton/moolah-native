@@ -54,17 +54,17 @@ final class ProfileContainerManager {
 
     let basePath = "Moolah-\(profileId.uuidString).store"
     let baseURL = URL.applicationSupportDirectory.appending(path: basePath)
-    let fm = FileManager.default
+    let fileManager = FileManager.default
     for suffix in ["", "-shm", "-wal"] {
       let url = baseURL.deletingLastPathComponent()
         .appending(path: baseURL.lastPathComponent + suffix)
-      try? fm.removeItem(at: url)
+      try? fileManager.removeItem(at: url)
     }
 
     // Delete the sync state file
     let syncStateURL = URL.applicationSupportDirectory
       .appending(path: "Moolah-\(profileId.uuidString).syncstate")
-    try? fm.removeItem(at: syncStateURL)
+    try? fileManager.removeItem(at: syncStateURL)
 
     // Delete the CloudKit zone for this profile
     deleteCloudKitZone(for: profileId)

@@ -31,19 +31,19 @@ struct InstrumentConversionServiceStockTests {
   }
 
   private func dateString(_ date: Date) -> String {
-    let f = ISO8601DateFormatter()
-    f.formatOptions = [.withFullDate]
-    return f.string(from: date)
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withFullDate]
+    return formatter.string(from: date)
   }
 
   @Test
   func stockToListingCurrencySameFiat() async throws {
     // BHP listed in AUD, converting to AUD — just stock price, no FX
     let today = Date()
-    let ds = dateString(today)
+    let dateKey = dateString(today)
     let service = makeService(
       stockPrices: [
-        "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [ds: Decimal(string: "42.30")!])
+        "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: Decimal(string: "42.30")!])
       ]
     )
 
@@ -56,12 +56,12 @@ struct InstrumentConversionServiceStockTests {
   func stockToForeignFiatRequiresFXConversion() async throws {
     // AAPL listed in USD, converting to AUD — stock price * FX rate
     let today = Date()
-    let ds = dateString(today)
+    let dateKey = dateString(today)
     let service = makeService(
       stockPrices: [
-        "AAPL": StockPriceResponse(instrument: .USD, prices: [ds: Decimal(string: "185.50")!])
+        "AAPL": StockPriceResponse(instrument: .USD, prices: [dateKey: Decimal(string: "185.50")!])
       ],
-      exchangeRates: [ds: ["AUD": Decimal(string: "1.55")!]]  // 1 USD = 1.55 AUD
+      exchangeRates: [dateKey: ["AUD": Decimal(string: "1.55")!]]  // 1 USD = 1.55 AUD
     )
 
     let result = try await service.convert(Decimal(10), from: aapl, to: aud, on: today)
@@ -106,10 +106,10 @@ struct InstrumentConversionServiceStockTests {
   func stockInNonPrimaryFiatConvertsViaIntermediate() async throws {
     // Simulate a USD-listed stock converting to USD directly (no FX required).
     let today = Date()
-    let ds = dateString(today)
+    let dateKey = dateString(today)
     let service = makeService(
       stockPrices: [
-        "AAPL": StockPriceResponse(instrument: .USD, prices: [ds: Decimal(string: "185.50")!])
+        "AAPL": StockPriceResponse(instrument: .USD, prices: [dateKey: Decimal(string: "185.50")!])
       ]
     )
 

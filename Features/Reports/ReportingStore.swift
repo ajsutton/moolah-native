@@ -174,8 +174,8 @@ final class ReportingStore {
     let page = try await transactionRepository.fetch(
       filter: TransactionFilter(), page: 0, pageSize: Int.max
     )
-    return page.transactions.map { tx in
-      LegTransaction(date: tx.date, legs: tx.legs)
+    return page.transactions.map { transaction in
+      LegTransaction(date: transaction.date, legs: transaction.legs)
     }
   }
 }

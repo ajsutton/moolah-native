@@ -8,14 +8,14 @@ struct CSVDeduplicatorTests {
 
   private let accountId = UUID()
 
-  private func date(_ y: Int, _ m: Int, _ d: Int) -> Date {
-    var c = DateComponents()
-    c.year = y
-    c.month = m
-    c.day = d
+  private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+    var components = DateComponents()
+    components.year = year
+    components.month = month
+    components.day = day
     var cal = Calendar(identifier: .gregorian)
     cal.timeZone = TimeZone(identifier: "UTC")!
-    return cal.date(from: c)!
+    return cal.date(from: components)!
   }
 
   private func existingTransaction(

@@ -38,15 +38,15 @@ struct ContentView: View {
       SidebarView(selection: $selection)
         .navigationSplitViewColumnWidth(min: 200, ideal: 280)
         .task {
-          async let a: Void = accountStore.load()
-          async let c: Void = categoryStore.load()
-          async let e: Void = earmarkStore.load()
-          async let b: Void = importStore.refreshBadge()
+          async let accountsLoad: Void = accountStore.load()
+          async let categoriesLoad: Void = categoryStore.load()
+          async let earmarksLoad: Void = earmarkStore.load()
+          async let badgeRefresh: Void = importStore.refreshBadge()
           // Start the folder watch (macOS FSEvents or, on iOS, the
           // catch-up scan) if the user has picked one. The call is a
           // no-op when no folder is configured.
-          async let w: Void = session.startFolderWatch()
-          _ = await (a, c, e, b, w)
+          async let folderWatch: Void = session.startFolderWatch()
+          _ = await (accountsLoad, categoriesLoad, earmarksLoad, badgeRefresh, folderWatch)
         }
         .onChange(of: scenePhase) { _, newPhase in
           if newPhase == .active {
@@ -160,10 +160,10 @@ struct ContentView: View {
     }
     .focusedSceneValue(\.refreshAction) {
       Task {
-        async let a: Void = accountStore.load()
-        async let c: Void = categoryStore.load()
-        async let e: Void = earmarkStore.load()
-        _ = await (a, c, e)
+        async let accountsLoad: Void = accountStore.load()
+        async let categoriesLoad: Void = categoryStore.load()
+        async let earmarksLoad: Void = earmarkStore.load()
+        _ = await (accountsLoad, categoriesLoad, earmarksLoad)
       }
     }
     .sheet(isPresented: $showCreateEarmarkSheet) {

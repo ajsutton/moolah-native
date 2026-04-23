@@ -38,34 +38,34 @@ struct ImportRuleRepositoryContractTests {
   @Test("reorder atomically repositions every rule")
   func reorder() async throws {
     let (backend, _) = try TestBackend.create()
-    let a = ImportRule(name: "A", position: 0, conditions: [], actions: [])
-    let b = ImportRule(name: "B", position: 1, conditions: [], actions: [])
-    let c = ImportRule(name: "C", position: 2, conditions: [], actions: [])
-    for r in [a, b, c] { _ = try await backend.importRules.create(r) }
+    let ruleA = ImportRule(name: "A", position: 0, conditions: [], actions: [])
+    let ruleB = ImportRule(name: "B", position: 1, conditions: [], actions: [])
+    let ruleC = ImportRule(name: "C", position: 2, conditions: [], actions: [])
+    for rule in [ruleA, ruleB, ruleC] { _ = try await backend.importRules.create(rule) }
 
-    try await backend.importRules.reorder([c.id, a.id, b.id])
+    try await backend.importRules.reorder([ruleC.id, ruleA.id, ruleB.id])
     let ordered = try await backend.importRules.fetchAll()
-    #expect(ordered.map(\.id) == [c.id, a.id, b.id])
+    #expect(ordered.map(\.id) == [ruleC.id, ruleA.id, ruleB.id])
     #expect(ordered.map(\.position) == [0, 1, 2])
   }
 
   @Test("reorder rejects mismatched id set")
   func reorderMismatch() async throws {
     let (backend, _) = try TestBackend.create()
-    let a = ImportRule(name: "A", position: 0, conditions: [], actions: [])
-    let b = ImportRule(name: "B", position: 1, conditions: [], actions: [])
-    for r in [a, b] { _ = try await backend.importRules.create(r) }
+    let ruleA = ImportRule(name: "A", position: 0, conditions: [], actions: [])
+    let ruleB = ImportRule(name: "B", position: 1, conditions: [], actions: [])
+    for rule in [ruleA, ruleB] { _ = try await backend.importRules.create(rule) }
 
     await #expect(throws: BackendError.self) {
-      try await backend.importRules.reorder([a.id])
+      try await backend.importRules.reorder([ruleA.id])
     }
     await #expect(throws: BackendError.self) {
-      try await backend.importRules.reorder([a.id, b.id, UUID()])
+      try await backend.importRules.reorder([ruleA.id, ruleB.id, UUID()])
     }
 
     // State is unchanged after failed reorders — ids, positions, everything.
     let all = try await backend.importRules.fetchAll()
-    #expect(Set(all.map(\.id)) == Set([a.id, b.id]))
+    #expect(Set(all.map(\.id)) == Set([ruleA.id, ruleB.id]))
     #expect(all.map(\.position) == [0, 1])
   }
 

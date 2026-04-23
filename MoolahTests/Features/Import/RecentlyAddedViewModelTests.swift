@@ -149,10 +149,10 @@ struct RecentlyAddedViewModelTests {
     TestBackend.seed(
       transactions: categorisedTxs + uncategorisedTxs + [outsideTx], in: container)
 
-    let vm = RecentlyAddedViewModel(backend: backend)
-    await vm.load(window: .last24Hours, now: now)
-    #expect(vm.badgeCount == 3)
-    #expect(vm.sessions.count == 1)
-    #expect(vm.sessions[0].transactions.count == 5)
+    let viewModel = RecentlyAddedViewModel(backend: backend)
+    await viewModel.load(window: .last24Hours, now: now)
+    #expect(viewModel.badgeCount == 3)
+    #expect(viewModel.sessions.count == 1)
+    #expect(viewModel.sessions[0].transactions.count == 5)
   }
 }

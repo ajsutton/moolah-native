@@ -28,14 +28,14 @@ enum ProfitLossCalculator {
     // in a single currency. See guides/INSTRUMENT_CONVERSION_GUIDE.md
     // Rules 1 and 5.
     let sorted = transactions.sorted { $0.date < $1.date }
-    for tx in sorted {
-      let fiatLegs = tx.legs.filter { $0.instrument.kind == .fiatCurrency }
-      let nonFiatLegs = tx.legs.filter { $0.instrument.kind != .fiatCurrency }
+    for transaction in sorted {
+      let fiatLegs = transaction.legs.filter { $0.instrument.kind == .fiatCurrency }
+      let nonFiatLegs = transaction.legs.filter { $0.instrument.kind != .fiatCurrency }
 
       var fiatOutflow: Decimal = 0
       for leg in fiatLegs where leg.quantity < 0 {
         let converted = try await conversionService.convert(
-          abs(leg.quantity), from: leg.instrument, to: profileCurrency, on: tx.date
+          abs(leg.quantity), from: leg.instrument, to: profileCurrency, on: transaction.date
         )
         fiatOutflow += converted
       }

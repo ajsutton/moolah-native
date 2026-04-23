@@ -16,7 +16,7 @@ final class ConversionBenchmarks: XCTestCase {
     let result = try! TestBackend.create()
     _container = result.container
     try! awaitSync { @MainActor in
-      BenchmarkFixtures.seed(scale: .x2, in: result.container)
+      BenchmarkFixtures.seed(scale: .twoX, in: result.container)
     }
   }
 

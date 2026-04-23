@@ -16,7 +16,7 @@ struct AccountStoreConversionTests {
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [account], in: container)
 
-    let tx = Transaction(
+    let transaction = Transaction(
       date: Date(),
       legs: [
         TransactionLeg(
@@ -27,7 +27,7 @@ struct AccountStoreConversionTests {
         )
       ]
     )
-    TestBackend.seed(transactions: [tx], in: container)
+    TestBackend.seed(transactions: [transaction], in: container)
 
     let store = AccountStore(
       repository: backend.accounts,
@@ -302,7 +302,7 @@ struct AccountStoreConversionTests {
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [account], in: container)
 
-    let tx = Transaction(
+    let transaction = Transaction(
       date: Date(),
       legs: [
         TransactionLeg(
@@ -310,7 +310,7 @@ struct AccountStoreConversionTests {
           quantity: Decimal(string: "750.00")!, type: .openingBalance)
       ]
     )
-    TestBackend.seed(transactions: [tx], in: container)
+    TestBackend.seed(transactions: [transaction], in: container)
 
     let store = AccountStore(
       repository: backend.accounts,
@@ -669,14 +669,14 @@ struct AccountStoreConversionTests {
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(accounts: [account], in: container)
 
-    let tx = Transaction(
+    let transaction = Transaction(
       date: Date(),
       legs: [
         TransactionLeg(
           accountId: accountId, instrument: .defaultTestInstrument,
           quantity: Decimal(string: "1234.56")!, type: .openingBalance)
       ])
-    TestBackend.seed(transactions: [tx], in: container)
+    TestBackend.seed(transactions: [transaction], in: container)
 
     let store = AccountStore(
       repository: backend.accounts,

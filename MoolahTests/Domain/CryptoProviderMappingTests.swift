@@ -45,15 +45,15 @@ struct CryptoProviderMappingTests {
 
   @Test
   func identityBasedOnInstrumentId() {
-    let a = CryptoProviderMapping(
+    let first = CryptoProviderMapping(
       instrumentId: "1:native", coingeckoId: "ethereum",
       cryptocompareSymbol: "ETH", binanceSymbol: "ETHUSDT"
     )
-    let b = CryptoProviderMapping(
+    let second = CryptoProviderMapping(
       instrumentId: "1:native", coingeckoId: "eth-changed",
       cryptocompareSymbol: nil, binanceSymbol: nil
     )
-    #expect(a.id == b.id)
+    #expect(first.id == second.id)
   }
 
   // MARK: - Built-in presets

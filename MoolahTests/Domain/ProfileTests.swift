@@ -63,13 +63,15 @@ struct ProfileTests {
   func equality() {
     let id = UUID()
     let date = Date()
-    let a = Profile(id: id, label: "A", serverURL: URL(string: "https://a.com/")!, createdAt: date)
-    let b = Profile(id: id, label: "A", serverURL: URL(string: "https://a.com/")!, createdAt: date)
-    let c = Profile(
-      id: id, label: "B", serverURL: URL(string: "https://a.com/")!, createdAt: date)
+    let first = Profile(
+      id: id, label: "A", serverURL: URL(string: "https://first.com/")!, createdAt: date)
+    let second = Profile(
+      id: id, label: "A", serverURL: URL(string: "https://first.com/")!, createdAt: date)
+    let third = Profile(
+      id: id, label: "B", serverURL: URL(string: "https://first.com/")!, createdAt: date)
 
-    #expect(a == b)
-    #expect(a != c)
+    #expect(first == second)
+    #expect(first != third)
   }
 
   @Test("moolah profile resolves to moolah.rocks URL")

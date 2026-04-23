@@ -153,9 +153,9 @@ struct PositionsChart: View {
     let color: Color
     var body: some View {
       GeometryReader { _ in
-        Path { p in
-          p.move(to: .init(x: 0, y: 1))
-          p.addLine(to: .init(x: 14, y: 1))
+        Path { path in
+          path.move(to: .init(x: 0, y: 1))
+          path.addLine(to: .init(x: 14, y: 1))
         }
         .stroke(style: StrokeStyle(lineWidth: 2, dash: [3, 2]))
         .foregroundStyle(color)
@@ -169,10 +169,10 @@ struct PositionsChart: View {
   @ViewBuilder private var rangePicker: some View {
     let picker =
       Picker("Range", selection: $range) {
-        ForEach(PositionsTimeRange.allCases) { r in
-          Text(r.label)
-            .accessibilityLabel(r.accessibilityLabel)
-            .tag(r)
+        ForEach(PositionsTimeRange.allCases) { option in
+          Text(option.label)
+            .accessibilityLabel(option.accessibilityLabel)
+            .tag(option)
         }
       }
       .accessibilityLabel("Chart time range")
@@ -284,9 +284,9 @@ extension PositionsChart: AXChartDescriptorRepresentable {
   let aud = Instrument.AUD
   let calendar = Calendar(identifier: .gregorian)
   let now = Date()
-  let points: [HistoricalValueSeries.Point] = (0..<60).map { d in
-    let date = calendar.date(byAdding: .day, value: -59 + d, to: now) ?? now
-    let trend = Decimal(10_000) + Decimal(d) * 30
+  let points: [HistoricalValueSeries.Point] = (0..<60).map { offset in
+    let date = calendar.date(byAdding: .day, value: -59 + offset, to: now) ?? now
+    let trend = Decimal(10_000) + Decimal(offset) * 30
     return HistoricalValueSeries.Point(date: date, value: trend, cost: 9_500)
   }
   let series = HistoricalValueSeries(
@@ -320,9 +320,10 @@ extension PositionsChart: AXChartDescriptorRepresentable {
   let aud = Instrument.AUD
   let calendar = Calendar(identifier: .gregorian)
   let now = Date()
-  let points: [HistoricalValueSeries.Point] = (0..<30).map { d in
-    let date = calendar.date(byAdding: .day, value: -29 + d, to: now) ?? now
-    return HistoricalValueSeries.Point(date: date, value: 4_500 + Decimal(d) * 25, cost: 4_000)
+  let points: [HistoricalValueSeries.Point] = (0..<30).map { offset in
+    let date = calendar.date(byAdding: .day, value: -29 + offset, to: now) ?? now
+    return HistoricalValueSeries.Point(
+      date: date, value: 4_500 + Decimal(offset) * 25, cost: 4_000)
   }
   let series = HistoricalValueSeries(
     hostCurrency: aud, total: points,

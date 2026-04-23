@@ -52,9 +52,9 @@ struct CryptoPriceServiceTests {
   }
 
   private func date(_ string: String) -> Date {
-    let f = ISO8601DateFormatter()
-    f.formatOptions = [.withFullDate]
-    return f.date(from: string)!
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withFullDate]
+    return formatter.date(from: string)!
   }
 
   // MARK: - Cache miss and hit

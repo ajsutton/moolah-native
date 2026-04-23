@@ -240,8 +240,8 @@ struct ImportStoreTests {
     #expect(!page.transactions.isEmpty)
     // Every persisted leg must carry the target account's instrument —
     // the parser's placeholder .AUD must never survive into persistence.
-    for tx in page.transactions {
-      for leg in tx.legs {
+    for transaction in page.transactions {
+      for leg in transaction.legs {
         #expect(leg.instrument == eur)
       }
     }

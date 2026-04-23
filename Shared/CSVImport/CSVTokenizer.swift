@@ -15,11 +15,11 @@ enum CSVTokenizer: Sendable {
     if scalars.first == "\u{FEFF}" { scalars = scalars.dropFirst() }
     var i = scalars.startIndex
     while i < scalars.endIndex {
-      let c = scalars[i]
+      let scalar = scalars[i]
       if state.inQuotes {
-        i = handleQuoted(c, at: i, in: scalars, state: &state)
+        i = handleQuoted(scalar, at: i, in: scalars, state: &state)
       } else {
-        i = handleUnquoted(c, at: i, in: scalars, state: &state)
+        i = handleUnquoted(scalar, at: i, in: scalars, state: &state)
       }
     }
     if !state.field.isEmpty || !state.row.isEmpty {

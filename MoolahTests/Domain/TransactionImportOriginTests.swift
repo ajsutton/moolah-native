@@ -8,8 +8,8 @@ struct TransactionImportOriginTests {
 
   @Test("Transaction carries optional ImportOrigin; nil by default")
   func defaultsToNil() {
-    let tx = Transaction(date: Date(), legs: [])
-    #expect(tx.importOrigin == nil)
+    let transaction = Transaction(date: Date(), legs: [])
+    #expect(transaction.importOrigin == nil)
   }
 
   @Test("Transaction.importOrigin survives Codable round-trip")
@@ -23,16 +23,16 @@ struct TransactionImportOriginTests {
       importSessionId: UUID(),
       sourceFilename: "transactions.csv",
       parserIdentifier: "generic-bank")
-    let tx = Transaction(date: Date(), legs: [], importOrigin: origin)
-    let data = try JSONEncoder().encode(tx)
+    let transaction = Transaction(date: Date(), legs: [], importOrigin: origin)
+    let data = try JSONEncoder().encode(transaction)
     let decoded = try JSONDecoder().decode(Transaction.self, from: data)
     #expect(decoded.importOrigin == origin)
   }
 
   @Test("nil importOrigin still round-trips cleanly")
   func nilCodableRoundTrip() throws {
-    let tx = Transaction(date: Date(), legs: [])
-    let data = try JSONEncoder().encode(tx)
+    let transaction = Transaction(date: Date(), legs: [])
+    let data = try JSONEncoder().encode(transaction)
     let decoded = try JSONDecoder().decode(Transaction.self, from: data)
     #expect(decoded.importOrigin == nil)
   }

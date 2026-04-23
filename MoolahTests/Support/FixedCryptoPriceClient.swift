@@ -58,8 +58,8 @@ struct FixedCryptoPriceClient: CryptoPriceClient, Sendable {
   }
 
   nonisolated(unsafe) private static let dateFormatter: ISO8601DateFormatter = {
-    let f = ISO8601DateFormatter()
-    f.formatOptions = [.withFullDate]
-    return f
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withFullDate]
+    return formatter
   }()
 }

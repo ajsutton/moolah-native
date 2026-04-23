@@ -232,37 +232,39 @@ class MoolahUITestCase: XCTestCase {
     lines.append("")
     switch app.seed {
     case .tradeBaseline:
-      let f = UITestFixtures.TradeBaseline.self
+      let fixtures = UITestFixtures.TradeBaseline.self
       lines.append("# fixtures")
-      lines.append("profile.id      = \(f.profileId)")
-      lines.append("profile.label   = \(f.profileLabel)")
-      lines.append("profile.currency = \(f.profileCurrencyCode)")
-      lines.append("checking.id     = \(f.checkingAccountId)")
-      lines.append("checking.name   = \(f.checkingAccountName)")
-      lines.append("brokerage.id    = \(f.brokerageAccountId)")
-      lines.append("brokerage.name  = \(f.brokerageAccountName)")
-      lines.append("usdSavings.id   = \(f.usdAccountId)")
-      lines.append("usdSavings.name = \(f.usdAccountName)")
-      lines.append("usdSavings.instrument = \(f.usdAccountInstrumentCode)")
-      lines.append("trade.id        = \(f.bhpPurchaseId)")
-      lines.append("trade.payee     = \(f.bhpPurchasePayee)")
-      lines.append("trade.cents     = \(f.bhpPurchaseAmountCents)")
-      lines.append("trade.date      = \(f.bhpPurchaseDate)")
-      lines.append("historical.amount.cents = \(f.historicalExpenseAmountCents)")
-      for (index, historical) in f.historicalPayees.enumerated() {
+      lines.append("profile.id      = \(fixtures.profileId)")
+      lines.append("profile.label   = \(fixtures.profileLabel)")
+      lines.append("profile.currency = \(fixtures.profileCurrencyCode)")
+      lines.append("checking.id     = \(fixtures.checkingAccountId)")
+      lines.append("checking.name   = \(fixtures.checkingAccountName)")
+      lines.append("brokerage.id    = \(fixtures.brokerageAccountId)")
+      lines.append("brokerage.name  = \(fixtures.brokerageAccountName)")
+      lines.append("usdSavings.id   = \(fixtures.usdAccountId)")
+      lines.append("usdSavings.name = \(fixtures.usdAccountName)")
+      lines.append("usdSavings.instrument = \(fixtures.usdAccountInstrumentCode)")
+      lines.append("trade.id        = \(fixtures.bhpPurchaseId)")
+      lines.append("trade.payee     = \(fixtures.bhpPurchasePayee)")
+      lines.append("trade.cents     = \(fixtures.bhpPurchaseAmountCents)")
+      lines.append("trade.date      = \(fixtures.bhpPurchaseDate)")
+      lines.append("historical.amount.cents = \(fixtures.historicalExpenseAmountCents)")
+      for (index, historical) in fixtures.historicalPayees.enumerated() {
         lines.append(
           "historical[\(index)].id/payee/date = "
             + "\(historical.id) / \(historical.payee) / \(historical.date)"
         )
       }
       lines.append(
-        "category.groceries.id/name = \(f.groceriesCategoryId) / \(f.groceriesCategoryName)")
-      lines.append("category.gym.id/name = \(f.gymCategoryId) / \(f.gymCategoryName)")
+        "category.groceries.id/name = "
+          + "\(fixtures.groceriesCategoryId) / \(fixtures.groceriesCategoryName)")
+      lines.append("category.gym.id/name = \(fixtures.gymCategoryId) / \(fixtures.gymCategoryName)")
       lines.append(
-        "splitShop.id/payee/date = \(f.splitShopId) / \(f.splitShopPayee) / \(f.splitShopDate)")
+        "splitShop.id/payee/date = "
+          + "\(fixtures.splitShopId) / \(fixtures.splitShopPayee) / \(fixtures.splitShopDate)")
       lines.append(
         "splitShop.legA.cents / legB.cents = "
-          + "\(f.splitShopLegAAmountCents) / \(f.splitShopLegBAmountCents)"
+          + "\(fixtures.splitShopLegAAmountCents) / \(fixtures.splitShopLegBAmountCents)"
       )
     }
     return lines.joined(separator: "\n") + "\n"
@@ -286,8 +288,10 @@ class MoolahUITestCase: XCTestCase {
   }
 
   private func attachArtefacts(in dir: URL) {
-    let fm = FileManager.default
-    guard let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+    let fileManager = FileManager.default
+    guard
+      let entries = try? fileManager.contentsOfDirectory(
+        at: dir, includingPropertiesForKeys: nil)
     else { return }
     for url in entries {
       let attachment = XCTAttachment(contentsOfFile: url)

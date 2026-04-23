@@ -134,9 +134,9 @@ struct BinanceClient: CryptoPriceClient, Sendable {
   }
 
   private static func dateString(from date: Date) -> String {
-    let f = ISO8601DateFormatter()
-    f.formatOptions = [.withFullDate]
-    return f.string(from: date)
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withFullDate]
+    return formatter.string(from: date)
   }
 }
 
@@ -162,16 +162,16 @@ private enum KlineValue: Decodable {
 
   init(from decoder: Decoder) throws {
     let container = try decoder.singleValueContainer()
-    if let v = try? container.decode(Int.self) {
-      self = .int(v)
+    if let intValue = try? container.decode(Int.self) {
+      self = .int(intValue)
       return
     }
-    if let v = try? container.decode(String.self) {
-      self = .string(v)
+    if let stringValue = try? container.decode(String.self) {
+      self = .string(stringValue)
       return
     }
-    if let v = try? container.decode(Double.self) {
-      self = .double(v)
+    if let doubleValue = try? container.decode(Double.self) {
+      self = .double(doubleValue)
       return
     }
     throw DecodingError.typeMismatch(

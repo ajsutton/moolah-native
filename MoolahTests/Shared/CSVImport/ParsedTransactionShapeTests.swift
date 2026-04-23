@@ -8,7 +8,7 @@ struct ParsedTransactionShapeTests {
 
   @Test("ParsedTransaction carries rawRow, rawDescription, legs, and a bank reference")
   func parsedTransactionInit() {
-    let tx = ParsedTransaction(
+    let transaction = ParsedTransaction(
       date: Date(timeIntervalSince1970: 0),
       legs: [
         ParsedLeg(
@@ -22,15 +22,15 @@ struct ParsedTransactionShapeTests {
       rawAmount: Decimal(string: "-12.34")!,
       rawBalance: nil,
       bankReference: "REF-1")
-    #expect(tx.legs.count == 1)
-    #expect(tx.bankReference == "REF-1")
-    #expect(tx.legs.first?.accountId == nil)
-    #expect(tx.legs.first?.instrument == .AUD)
+    #expect(transaction.legs.count == 1)
+    #expect(transaction.bankReference == "REF-1")
+    #expect(transaction.legs.first?.accountId == nil)
+    #expect(transaction.legs.first?.instrument == .AUD)
   }
 
   @Test("ParsedRecord round-trips a .transaction and a .skip")
   func parsedRecordCases() {
-    let tx = ParsedTransaction(
+    let transaction = ParsedTransaction(
       date: Date(timeIntervalSince1970: 0),
       legs: [],
       rawRow: [],
@@ -38,10 +38,10 @@ struct ParsedTransactionShapeTests {
       rawAmount: 0,
       rawBalance: nil,
       bankReference: nil)
-    let wrapped = ParsedRecord.transaction(tx)
+    let wrapped = ParsedRecord.transaction(transaction)
     let skip = ParsedRecord.skip(reason: "summary row")
     if case .transaction(let unwrapped) = wrapped {
-      #expect(unwrapped == tx)
+      #expect(unwrapped == transaction)
     } else {
       Issue.record("expected .transaction case")
     }
@@ -54,9 +54,9 @@ struct ParsedTransactionShapeTests {
 
   @Test("CSVParserError.malformedRow carries the row index, reason, and row")
   func csvParserErrorShape() {
-    let e = CSVParserError.malformedRow(
+    let error = CSVParserError.malformedRow(
       index: 7, reason: "unparseable amount", row: ["a", "b", "c"])
-    if case .malformedRow(let index, let reason, let row) = e {
+    if case .malformedRow(let index, let reason, let row) = error {
       #expect(index == 7)
       #expect(reason == "unparseable amount")
       #expect(row == ["a", "b", "c"])

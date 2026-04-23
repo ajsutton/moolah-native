@@ -11,11 +11,11 @@ enum FlexibleUUID {
     // Non-hyphenated 32-char hex: insert hyphens at 8-4-4-4-12 positions
     guard string.count == 32, string.allSatisfy(\.isHexDigit) else { return nil }
     let chars = Array(string)
-    let p1 = String(chars[0..<8])
-    let p2 = String(chars[8..<12])
-    let p3 = String(chars[12..<16])
-    let p4 = String(chars[16..<20])
-    let p5 = String(chars[20..<32])
-    return UUID(uuidString: "\(p1)-\(p2)-\(p3)-\(p4)-\(p5)")
+    let part1 = String(chars[0..<8])
+    let part2 = String(chars[8..<12])
+    let part3 = String(chars[12..<16])
+    let part4 = String(chars[16..<20])
+    let part5 = String(chars[20..<32])
+    return UUID(uuidString: "\(part1)-\(part2)-\(part3)-\(part4)-\(part5)")
   }
 }

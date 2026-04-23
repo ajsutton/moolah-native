@@ -21,12 +21,12 @@ struct ImportRuleStoreTests {
   @Test("load sorts rules by position")
   func loadSortsByPosition() async throws {
     let (backend, _) = try TestBackend.create()
-    _ = try await backend.importRules.create(rule(name: "c", position: 5))
-    _ = try await backend.importRules.create(rule(name: "a", position: 1))
-    _ = try await backend.importRules.create(rule(name: "b", position: 3))
+    _ = try await backend.importRules.create(rule(name: "ruleC", position: 5))
+    _ = try await backend.importRules.create(rule(name: "ruleA", position: 1))
+    _ = try await backend.importRules.create(rule(name: "ruleB", position: 3))
     let store = ImportRuleStore(repository: backend.importRules)
     await store.load()
-    #expect(store.rules.map(\.name) == ["a", "b", "c"])
+    #expect(store.rules.map(\.name) == ["ruleA", "ruleB", "ruleC"])
   }
 
   @Test("create appends the new rule and keeps sorted")
@@ -71,11 +71,11 @@ struct ImportRuleStoreTests {
   func reorderUpdatesPositions() async throws {
     let (backend, _) = try TestBackend.create()
     let store = ImportRuleStore(repository: backend.importRules)
-    let a = await store.create(rule(name: "a", position: 0))!
-    let b = await store.create(rule(name: "b", position: 1))!
-    let c = await store.create(rule(name: "c", position: 2))!
-    await store.reorder([c.id, a.id, b.id])
-    #expect(store.rules.map(\.name) == ["c", "a", "b"])
+    let ruleA = await store.create(rule(name: "ruleA", position: 0))!
+    let ruleB = await store.create(rule(name: "ruleB", position: 1))!
+    let ruleC = await store.create(rule(name: "ruleC", position: 2))!
+    await store.reorder([ruleC.id, ruleA.id, ruleB.id])
+    #expect(store.rules.map(\.name) == ["ruleC", "ruleA", "ruleB"])
     #expect(store.rules.map(\.position) == [0, 1, 2])
   }
 

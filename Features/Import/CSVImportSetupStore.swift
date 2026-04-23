@@ -201,7 +201,7 @@ final class CSVImportSetupStore {
       }
       preview = Array(
         records.compactMap { rec -> ParsedTransaction? in
-          if case .transaction(let tx) = rec { return tx } else { return nil }
+          if case .transaction(let transaction) = rec { return transaction } else { return nil }
         }
         .prefix(5)
       )

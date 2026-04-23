@@ -25,7 +25,7 @@ struct ImportOriginTransactionPersistenceTests {
         id: accountId, name: "Cash", type: .bank,
         instrument: .AUD, positions: [], position: 0, isHidden: false),
       openingBalance: nil)
-    let tx = Transaction(
+    let transaction = Transaction(
       date: Date(timeIntervalSince1970: 1_700_000_000),
       legs: [
         TransactionLeg(
@@ -34,7 +34,7 @@ struct ImportOriginTransactionPersistenceTests {
           categoryId: nil, earmarkId: nil)
       ],
       importOrigin: origin)
-    _ = try await backend.transactions.create(tx)
+    _ = try await backend.transactions.create(transaction)
 
     let page = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: accountId),
@@ -51,7 +51,7 @@ struct ImportOriginTransactionPersistenceTests {
         id: accountId, name: "Cash", type: .bank,
         instrument: .AUD, positions: [], position: 0, isHidden: false),
       openingBalance: nil)
-    let tx = Transaction(
+    let transaction = Transaction(
       date: Date(timeIntervalSince1970: 1_700_000_000),
       legs: [
         TransactionLeg(
@@ -59,7 +59,7 @@ struct ImportOriginTransactionPersistenceTests {
           quantity: Decimal(string: "-12.34")!, type: .expense,
           categoryId: nil, earmarkId: nil)
       ])
-    _ = try await backend.transactions.create(tx)
+    _ = try await backend.transactions.create(transaction)
 
     let page = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: accountId),
@@ -76,7 +76,7 @@ struct ImportOriginTransactionPersistenceTests {
         id: accountId, name: "Cash", type: .bank,
         instrument: .AUD, positions: [], position: 0, isHidden: false),
       openingBalance: nil)
-    var tx = Transaction(
+    var transaction = Transaction(
       date: Date(timeIntervalSince1970: 1_700_000_000),
       legs: [
         TransactionLeg(
@@ -84,7 +84,7 @@ struct ImportOriginTransactionPersistenceTests {
           quantity: Decimal(string: "-12.34")!, type: .expense,
           categoryId: nil, earmarkId: nil)
       ])
-    _ = try await backend.transactions.create(tx)
+    _ = try await backend.transactions.create(transaction)
 
     let sessionId = UUID()
     let origin = ImportOrigin(
@@ -96,16 +96,16 @@ struct ImportOriginTransactionPersistenceTests {
       importSessionId: sessionId,
       sourceFilename: nil,
       parserIdentifier: "generic-bank")
-    tx.importOrigin = origin
-    _ = try await backend.transactions.update(tx)
+    transaction.importOrigin = origin
+    _ = try await backend.transactions.update(transaction)
 
     var page = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: accountId),
       page: 0, pageSize: 10)
     #expect(page.transactions.first?.importOrigin == origin)
 
-    tx.importOrigin = nil
-    _ = try await backend.transactions.update(tx)
+    transaction.importOrigin = nil
+    _ = try await backend.transactions.update(transaction)
     page = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: accountId),
       page: 0, pageSize: 10)

@@ -129,13 +129,13 @@ final class ImportRuleStore {
       for rule in rules {
         var count = 0
         var lastMatchedAt: Date?
-        for tx in page.transactions {
-          guard let origin = tx.importOrigin,
-            let routingAccount = tx.legs.first?.accountId
+        for transaction in page.transactions {
+          guard let origin = transaction.importOrigin,
+            let routingAccount = transaction.legs.first?.accountId
           else { continue }
           let parsed = ParsedTransaction(
-            date: tx.date,
-            legs: tx.legs.map {
+            date: transaction.date,
+            legs: transaction.legs.map {
               ParsedLeg(
                 accountId: $0.accountId, instrument: $0.instrument,
                 quantity: $0.quantity, type: $0.type)
@@ -183,15 +183,15 @@ final class ImportRuleStore {
         conditions: conditions,
         actions: [],
         accountScope: accountScope)
-      return page.transactions.reduce(0) { count, tx in
-        guard let origin = tx.importOrigin,
-          let routingAccount = tx.legs.first?.accountId
+      return page.transactions.reduce(0) { count, transaction in
+        guard let origin = transaction.importOrigin,
+          let routingAccount = transaction.legs.first?.accountId
         else {
           return count
         }
         let parsed = ParsedTransaction(
-          date: tx.date,
-          legs: tx.legs.map {
+          date: transaction.date,
+          legs: transaction.legs.map {
             ParsedLeg(
               accountId: $0.accountId, instrument: $0.instrument,
               quantity: $0.quantity, type: $0.type)

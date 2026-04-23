@@ -11,9 +11,9 @@
     private let logger = Logger(subsystem: "com.moolah.app", category: "Backup")
 
     private static let dateFormatter: DateFormatter = {
-      let f = DateFormatter()
-      f.dateFormat = "yyyy-MM-dd"
-      return f
+      let formatter = DateFormatter()
+      formatter.dateFormat = "yyyy-MM-dd"
+      return formatter
     }()
 
     init(

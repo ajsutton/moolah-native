@@ -152,9 +152,9 @@ struct CryptoCompareClient: CryptoPriceClient, Sendable {
   }
 
   private static func dateString(from date: Date) -> String {
-    let f = ISO8601DateFormatter()
-    f.formatOptions = [.withFullDate]
-    return f.string(from: date)
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withFullDate]
+    return formatter.string(from: date)
   }
 }
 

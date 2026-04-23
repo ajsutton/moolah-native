@@ -153,7 +153,7 @@ struct GenericBankCSVParser: CSVParser, Sendable {
         quantity: amount,
         type: amount >= 0 ? .income : .expense,
         isInstrumentPlaceholder: true)
-      let tx = ParsedTransaction(
+      let transaction = ParsedTransaction(
         date: date,
         legs: [leg],
         rawRow: row,
@@ -161,7 +161,7 @@ struct GenericBankCSVParser: CSVParser, Sendable {
         rawAmount: amount,
         rawBalance: balance,
         bankReference: bankRef)
-      results.append(.transaction(tx))
+      results.append(.transaction(transaction))
     }
     return results
   }

@@ -23,18 +23,18 @@ struct InstrumentTests {
 
   @Test
   func equality() {
-    let a = Instrument.fiat(code: "AUD")
-    let b = Instrument.fiat(code: "AUD")
-    let c = Instrument.fiat(code: "USD")
-    #expect(a == b)
-    #expect(a != c)
+    let first = Instrument.fiat(code: "AUD")
+    let second = Instrument.fiat(code: "AUD")
+    let third = Instrument.fiat(code: "USD")
+    #expect(first == second)
+    #expect(first != third)
   }
 
   @Test
   func hashable() {
-    let a = Instrument.fiat(code: "AUD")
-    let b = Instrument.fiat(code: "AUD")
-    #expect(a.hashValue == b.hashValue)
+    let first = Instrument.fiat(code: "AUD")
+    let second = Instrument.fiat(code: "AUD")
+    #expect(first.hashValue == second.hashValue)
   }
 
   @Test
@@ -57,7 +57,7 @@ struct InstrumentTests {
   func displayLabelForFiatUsesLocalisedCurrencySymbol() {
     let aud = Instrument.fiat(code: "AUD")
     // Whatever the host locale produces for this currency — must match the
-    // OS-provided symbol, not the raw ISO code when a symbol exists.
+    // OS-provided symbol, not the raw ISO code when first symbol exists.
     #expect(aud.displayLabel == (aud.currencySymbol ?? aud.id))
     #expect(!aud.displayLabel.isEmpty)
   }

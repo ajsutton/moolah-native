@@ -35,7 +35,7 @@ enum IngestError: Error, Sendable {
 
   var message: String {
     switch self {
-    case .decode(let s): return "Could not decode file: \(s)"
+    case .decode(let detail): return "Could not decode file: \(detail)"
     case .parse(let error):
       switch error {
       case .headerMismatch: return "Headers did not match any known parser"
@@ -44,13 +44,13 @@ enum IngestError: Error, Sendable {
       case .emptyFile: return "File was empty"
       }
     case .empty: return "File had no rows"
-    case .other(let s): return s
+    case .other(let detail): return detail
     }
   }
 
   var offendingRow: (row: [String]?, index: Int?) {
-    if case .parse(let e) = self,
-      case .malformedRow(let index, _, let row) = e
+    if case .parse(let parserError) = self,
+      case .malformedRow(let index, _, let row) = parserError
     {
       return (row, index)
     }
@@ -157,12 +157,12 @@ final class ImportStore {
         filter: TransactionFilter(), page: 0, pageSize: 500)
       let windowStart = now.addingTimeInterval(-86_400)
       unreviewedBadgeCount =
-        page.transactions.filter { tx in
-          guard let origin = tx.importOrigin else { return false }
+        page.transactions.filter { transaction in
+          guard let origin = transaction.importOrigin else { return false }
           guard origin.importedAt >= windowStart && origin.importedAt <= now else {
             return false
           }
-          return tx.legs.allSatisfy { $0.categoryId == nil }
+          return transaction.legs.allSatisfy { $0.categoryId == nil }
         }.count
     } catch {
       logger.error(
@@ -342,7 +342,11 @@ final class ImportStore {
     os_signpost(
       .end, log: Signposts.importPipeline, name: "parse", signpostID: parseSignpost)
     let candidates = records.compactMap { record -> ParsedTransaction? in
-      if case .transaction(let tx) = record { return tx } else { return nil }
+      if case .transaction(let transaction) = record {
+        return transaction
+      } else {
+        return nil
+      }
     }
     if candidates.isEmpty {
       // Every row skipped (summary-only fixture, empty file) — treat as a
@@ -359,8 +363,8 @@ final class ImportStore {
       candidates: candidates)
     let resolvedProfile: CSVImportProfile
     switch profile {
-    case .routed(let p):
-      resolvedProfile = p
+    case .routed(let routedProfile):
+      resolvedProfile = routedProfile
     case .needsSetup(let pendingId):
       return .needsSetup(pendingId: pendingId)
     }

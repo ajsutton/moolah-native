@@ -7,7 +7,7 @@ import Testing
 @MainActor
 struct FolderScanServiceTests {
 
-  /// Bundle of objects returned by `makeStack`, replacing a 4-element
+  /// Bundle of objects returned by `makeStack`, replacing firstFile 4-element
   /// tuple. Members read clearly at the call site (e.g. `stack.scanner`).
   private struct Stack {
     let store: ImportStore
@@ -76,17 +76,17 @@ struct FolderScanServiceTests {
     defer { try? FileManager.default.removeItem(at: folder) }
     let defaults = UserDefaults(suiteName: "csvscan-\(UUID().uuidString)")!
     let stack = try await makeStack(watchedFolder: folder, defaults: defaults)
-    let a = folder.appendingPathComponent("one.csv")
-    let b = folder.appendingPathComponent("two.csv")
-    try writeCSV(at: a, lines: cbaLines(), modified: Date(timeIntervalSinceNow: -30))
-    try writeCSV(at: b, lines: cbaLines(), modified: Date(timeIntervalSinceNow: -10))
+    let firstFile = folder.appendingPathComponent("one.csv")
+    let secondFile = folder.appendingPathComponent("two.csv")
+    try writeCSV(at: firstFile, lines: cbaLines(), modified: Date(timeIntervalSinceNow: -30))
+    try writeCSV(at: secondFile, lines: cbaLines(), modified: Date(timeIntervalSinceNow: -10))
 
     await stack.scanner.scanForNewFiles()
 
     let page = try await stack.backend.transactions.fetch(
       filter: TransactionFilter(accountId: stack.accountId), page: 0, pageSize: 50)
     // Each CSV yields 2 candidates → dedup drops second-run duplicates but
-    // first run should land 2 for `a` and 0/2 for `b` depending on dedup.
+    // first run should land 2 for `firstFile` and 0/2 for `secondFile` depending on dedup.
     // Two distinct files with identical bank references/descriptions →
     // second file dedup's against first. Expect at least 2 transactions.
     #expect(page.transactions.count >= 2)
@@ -100,9 +100,9 @@ struct FolderScanServiceTests {
     defer { try? FileManager.default.removeItem(at: folder) }
     let defaults = UserDefaults(suiteName: "csvscan-\(UUID().uuidString)")!
     let stack = try await makeStack(watchedFolder: folder, defaults: defaults)
-    let a = folder.appendingPathComponent("one.csv")
+    let firstFile = folder.appendingPathComponent("one.csv")
     let oldTime = Date(timeIntervalSinceNow: -300)
-    try writeCSV(at: a, lines: cbaLines(), modified: oldTime)
+    try writeCSV(at: firstFile, lines: cbaLines(), modified: oldTime)
 
     await stack.scanner.scanForNewFiles()
     let firstPage = try await stack.backend.transactions.fetch(
@@ -125,18 +125,18 @@ struct FolderScanServiceTests {
     defer { try? FileManager.default.removeItem(at: folder) }
     let defaults = UserDefaults(suiteName: "csvscan-\(UUID().uuidString)")!
     let stack = try await makeStack(watchedFolder: folder, defaults: defaults)
-    let a = folder.appendingPathComponent("a.csv")
-    try writeCSV(at: a, lines: cbaLines(), modified: Date(timeIntervalSinceNow: -600))
+    let firstFile = folder.appendingPathComponent("firstFile.csv")
+    try writeCSV(at: firstFile, lines: cbaLines(), modified: Date(timeIntervalSinceNow: -600))
     await stack.scanner.scanForNewFiles()
     let firstPage = try await stack.backend.transactions.fetch(
       filter: TransactionFilter(accountId: stack.accountId), page: 0, pageSize: 50)
     let first = firstPage.transactions.count
 
-    // Drop a second file with a strictly newer mtime + distinct data so dedup
+    // Drop firstFile second file with firstFile strictly newer mtime + distinct data so dedup
     // doesn't drop it.
-    let b = folder.appendingPathComponent("b.csv")
+    let secondFile = folder.appendingPathComponent("secondFile.csv")
     try writeCSV(
-      at: b,
+      at: secondFile,
       lines: [
         "Date,Description,Debit,Credit,Balance",
         "04/04/2024,TAXI SYDNEY,-20.00,,950.00",
@@ -166,7 +166,7 @@ struct FolderScanServiceTests {
     #expect(page.transactions.isEmpty)
   }
 
-  @Test("scanForNewFiles without a watched folder is a no-op")
+  @Test("scanForNewFiles without firstFile watched folder is firstFile no-op")
   func noWatchedFolderIsNoOp() async throws {
     let defaults = UserDefaults(suiteName: "csvscan-\(UUID().uuidString)")!
     let (backend, _) = try TestBackend.create()

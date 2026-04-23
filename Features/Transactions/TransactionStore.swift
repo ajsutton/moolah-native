@@ -306,9 +306,9 @@ final class TransactionStore {
 
   private func recomputeBalances() async {
     // Re-sort newest-first to account for newly inserted/updated transactions
-    rawTransactions.sort { a, b in
-      if a.date != b.date { return a.date > b.date }
-      return a.id.uuidString < b.id.uuidString
+    rawTransactions.sort { lhs, rhs in
+      if lhs.date != rhs.date { return lhs.date > rhs.date }
+      return lhs.id.uuidString < rhs.id.uuidString
     }
     let result = await TransactionPage.withRunningBalances(
       transactions: rawTransactions,

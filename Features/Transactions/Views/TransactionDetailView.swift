@@ -158,11 +158,11 @@ struct TransactionDetailView: View {
   }
 
   private var sortedAccounts: [Account] {
-    accounts.ordered.sorted { a, b in
-      if a.type.isCurrent != b.type.isCurrent {
-        return a.type.isCurrent
+    accounts.ordered.sorted { lhs, rhs in
+      if lhs.type.isCurrent != rhs.type.isCurrent {
+        return lhs.type.isCurrent
       }
-      return a.position < b.position
+      return lhs.position < rhs.position
     }
   }
 

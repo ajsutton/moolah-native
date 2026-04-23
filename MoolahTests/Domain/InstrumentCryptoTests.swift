@@ -24,16 +24,16 @@ struct InstrumentCryptoTests {
 
   @Test
   func contractTokenProperties() {
-    let op = Instrument.crypto(
+    let optimism = Instrument.crypto(
       chainId: 10,
       contractAddress: "0x4200000000000000000000000000000000000042",
       symbol: "OP", name: "Optimism", decimals: 18
     )
-    #expect(op.id == "10:0x4200000000000000000000000000000000000042")
-    #expect(op.kind == .cryptoToken)
-    #expect(op.name == "Optimism")
-    #expect(op.chainId == 10)
-    #expect(op.contractAddress == "0x4200000000000000000000000000000000000042")
+    #expect(optimism.id == "10:0x4200000000000000000000000000000000000042")
+    #expect(optimism.kind == .cryptoToken)
+    #expect(optimism.name == "Optimism")
+    #expect(optimism.chainId == 10)
+    #expect(optimism.contractAddress == "0x4200000000000000000000000000000000000042")
   }
 
   @Test
@@ -68,14 +68,14 @@ struct InstrumentCryptoTests {
 
   @Test
   func equality() {
-    let a = Instrument.crypto(
+    let first = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
-    let b = Instrument.crypto(
+    let second = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "Ether", name: "Ether", decimals: 18)
     // Same chain + address = same id, but Instrument equality is based on all fields
     // Since ticker differs ("ETH" vs "Ether"), these are not equal via Hashable default
     // However the id matches, which is the important thing for lookups
-    #expect(a.id == b.id)
+    #expect(first.id == second.id)
   }
 
   @Test
@@ -130,7 +130,7 @@ struct InstrumentCryptoTests {
 
   @Test
   func nativeAndErc20OnSameChainAreDistinct() {
-    // Native ETH on chain 1 vs a ERC20 on chain 1 must be different.
+    // Native ETH on chain 1 vs first ERC20 on chain 1 must be different.
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil,
       symbol: "ETH", name: "Ethereum", decimals: 18
@@ -147,25 +147,25 @@ struct InstrumentCryptoTests {
 
   @Test
   func optimismChainIdPersistedInInstrumentId() {
-    let op = Instrument.crypto(
+    let optimism = Instrument.crypto(
       chainId: 10,
       contractAddress: "0x4200000000000000000000000000000000000042",
       symbol: "OP", name: "Optimism", decimals: 18
     )
-    #expect(op.id.hasPrefix("10:"))
-    #expect(op.chainId == 10)
+    #expect(optimism.id.hasPrefix("10:"))
+    #expect(optimism.chainId == 10)
   }
 
   @Test
   func cryptoDecimalsDifferenceMakesInstrumentsNotEqual() {
     // Two instruments with the same id+address but different stated decimals must still
     // be considered unequal under Hashable/Equatable (all fields matter).
-    let a = Instrument.crypto(
+    let first = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
     )
-    let b = Instrument.crypto(
+    let second = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 8
     )
-    #expect(a != b)
+    #expect(first != second)
   }
 }

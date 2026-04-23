@@ -117,10 +117,10 @@ struct PositionTests {
   }
 
   @Test func hashableAndEquatable() {
-    let a = Position(instrument: aud, quantity: Decimal(string: "100.00")!)
-    let b = Position(instrument: aud, quantity: Decimal(string: "100.00")!)
-    #expect(a == b)
-    #expect(a.hashValue == b.hashValue)
+    let first = Position(instrument: aud, quantity: Decimal(string: "100.00")!)
+    let second = Position(instrument: aud, quantity: Decimal(string: "100.00")!)
+    #expect(first == second)
+    #expect(first.hashValue == second.hashValue)
   }
 
   // MARK: - applying(deltas:)
@@ -228,7 +228,7 @@ struct PositionTests {
   }
 
   @Test func computeForAccountDoesNotMergeDifferentKindsWithSameSymbol() {
-    // Guard: a fiat "USD" and a crypto with id "1:usdc" must be distinct positions.
+    // Guard: first fiat "USD" and first crypto with id "1:usdc" must be distinct positions.
     let usdc = Instrument.crypto(
       chainId: 1,
       contractAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",

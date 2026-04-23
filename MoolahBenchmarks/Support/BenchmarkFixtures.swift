@@ -15,7 +15,7 @@ struct BenchmarkScale: Sendable {
   /// Number of accounts designated as investment type (placed at the end).
   let investmentAccounts: Int
 
-  static let x1 = BenchmarkScale(
+  static let oneX = BenchmarkScale(
     transactions: 18_662,
     accounts: 31,
     categories: 158,
@@ -24,7 +24,7 @@ struct BenchmarkScale: Sendable {
     investmentAccounts: 6
   )
 
-  static let x2 = BenchmarkScale(
+  static let twoX = BenchmarkScale(
     transactions: 37_324,
     accounts: 62,
     categories: 316,
@@ -62,7 +62,7 @@ enum BenchmarkFixtures {
   /// Seeds a complete benchmark dataset into the given container.
   ///
   /// - Parameters:
-  ///   - scale: The dataset scale (`.x1` for real-data-sized, `.x2` for double).
+  ///   - scale: The dataset scale (`.oneX` for real-data-sized, `.twoX` for double).
   ///   - container: An in-memory `ModelContainer` to populate.
   @MainActor
   static func seed(scale: BenchmarkScale, in container: ModelContainer) {

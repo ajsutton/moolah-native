@@ -75,11 +75,11 @@ final class ImportPipelineBenchmarks: XCTestCase {
       let amount = Decimal(-5) - Decimal(i % 7)
       balance += amount
       let day = (i % 28) + 1
-      let dd = String(format: "%02d", day)
+      let dayStr = String(format: "%02d", day)
       let description = "MERCHANT \(i % 50) SYDNEY"
       let amountStr = "\(amount)"
       let balStr = "\(balance)"
-      lines.append("\(dd)/04/2024,\(description),\(amountStr),,\(balStr)")
+      lines.append("\(dayStr)/04/2024,\(description),\(amountStr),,\(balStr)")
     }
     return Data(lines.joined(separator: "\n").utf8)
   }

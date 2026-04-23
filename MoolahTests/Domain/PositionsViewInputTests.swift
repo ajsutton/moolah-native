@@ -142,8 +142,8 @@ struct PositionsViewInputTests {
   let aud = Instrument.AUD
   let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
 
-  private func amount(_ q: Decimal) -> InstrumentAmount {
-    InstrumentAmount(quantity: q, instrument: aud)
+  private func amount(_ quantity: Decimal) -> InstrumentAmount {
+    InstrumentAmount(quantity: quantity, instrument: aud)
   }
 
   @Test("totalValue sums all row values in host currency")

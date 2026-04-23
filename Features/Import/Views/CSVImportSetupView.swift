@@ -75,8 +75,8 @@ struct CSVImportSetupView: View {
 
         if !store.preview.isEmpty {
           Section(header: Text("Preview (first 5 rows)")) {
-            ForEach(Array(store.preview.enumerated()), id: \.offset) { _, tx in
-              PreviewRow(transaction: tx)
+            ForEach(Array(store.preview.enumerated()), id: \.offset) { _, transaction in
+              PreviewRow(transaction: transaction)
             }
           }
         }

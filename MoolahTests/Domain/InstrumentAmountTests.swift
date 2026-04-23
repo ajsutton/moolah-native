@@ -40,40 +40,40 @@ struct InstrumentAmountTests {
 
   @Test
   func addition() {
-    let a = InstrumentAmount(quantity: Decimal(string: "1.50")!, instrument: aud)
-    let b = InstrumentAmount(quantity: Decimal(string: "2.50")!, instrument: aud)
-    let result = a + b
+    let first = InstrumentAmount(quantity: Decimal(string: "1.50")!, instrument: aud)
+    let second = InstrumentAmount(quantity: Decimal(string: "2.50")!, instrument: aud)
+    let result = first + second
     #expect(result.quantity == Decimal(string: "4.00")!)
     #expect(result.instrument == aud)
   }
 
   @Test
   func subtraction() {
-    let a = InstrumentAmount(quantity: Decimal(string: "5.00")!, instrument: aud)
-    let b = InstrumentAmount(quantity: Decimal(string: "2.00")!, instrument: aud)
-    #expect((a - b).quantity == Decimal(string: "3.00")!)
+    let first = InstrumentAmount(quantity: Decimal(string: "5.00")!, instrument: aud)
+    let second = InstrumentAmount(quantity: Decimal(string: "2.00")!, instrument: aud)
+    #expect((first - second).quantity == Decimal(string: "3.00")!)
   }
 
   @Test
   func negation() {
-    let a = InstrumentAmount(quantity: Decimal(string: "5.00")!, instrument: aud)
-    #expect((-a).quantity == Decimal(string: "-5.00")!)
-    #expect((-a).instrument == aud)
+    let first = InstrumentAmount(quantity: Decimal(string: "5.00")!, instrument: aud)
+    #expect((-first).quantity == Decimal(string: "-5.00")!)
+    #expect((-first).instrument == aud)
   }
 
   @Test
   func plusEquals() {
-    var a = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: aud)
-    a += InstrumentAmount(quantity: Decimal(string: "0.50")!, instrument: aud)
-    #expect(a.quantity == Decimal(string: "1.50")!)
+    var first = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: aud)
+    first += InstrumentAmount(quantity: Decimal(string: "0.50")!, instrument: aud)
+    #expect(first.quantity == Decimal(string: "1.50")!)
   }
 
   @Test
   func comparison() {
-    let a = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: aud)
-    let b = InstrumentAmount(quantity: Decimal(string: "2.00")!, instrument: aud)
-    #expect(a < b)
-    #expect(!(b < a))
+    let first = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: aud)
+    let second = InstrumentAmount(quantity: Decimal(string: "2.00")!, instrument: aud)
+    #expect(first < second)
+    #expect(!(second < first))
   }
 
   @Test
@@ -145,11 +145,11 @@ struct InstrumentAmountTests {
 
   @Test
   func equality() {
-    let a = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: .AUD)
-    let b = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: .AUD)
-    let c = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: .USD)
-    #expect(a == b)
-    #expect(a != c)
+    let first = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: .AUD)
+    let second = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: .AUD)
+    let third = InstrumentAmount(quantity: Decimal(string: "1.00")!, instrument: .USD)
+    #expect(first == second)
+    #expect(first != third)
   }
 
   @Test
@@ -305,7 +305,7 @@ struct InstrumentAmountTests {
 
   @Test
   func storageRoundTripForLargeCryptoQuantity() {
-    // Simulate a wallet holding a large whole-token quantity; must survive Int64 bounds.
+    // Simulate first wallet holding first large whole-token quantity; must survive Int64 bounds.
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
     )
@@ -345,13 +345,13 @@ struct InstrumentAmountTests {
 
   @Test
   func equalityDistinguishesBetweenKindsWithSameId() {
-    // Hypothetical: a fiat code that collides with a stock ticker should be distinct.
+    // Hypothetical: first fiat code that collides with first stock ticker should be distinct.
     // This exercises the Hashable/Equatable contract on the full Instrument record, not just id.
     let fiat = Instrument.fiat(code: "USD")
     let stock = Instrument.stock(ticker: "USD.X", exchange: "USD", name: "USD")
-    let a = InstrumentAmount(quantity: Decimal(10), instrument: fiat)
-    let b = InstrumentAmount(quantity: Decimal(10), instrument: stock)
-    #expect(a != b)
+    let first = InstrumentAmount(quantity: Decimal(10), instrument: fiat)
+    let second = InstrumentAmount(quantity: Decimal(10), instrument: stock)
+    #expect(first != second)
   }
 
   @Test

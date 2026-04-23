@@ -19,8 +19,8 @@ enum CSVIngestionText: Sendable {
 
   static func decode(_ data: Data) throws -> String {
     if let utf8 = String(data: data, encoding: .utf8) { return utf8 }
-    if hasUTF16BOM(data), let s = String(data: data, encoding: .utf16) {
-      return s
+    if hasUTF16BOM(data), let decoded = String(data: data, encoding: .utf16) {
+      return decoded
     }
     var converted: NSString?
     let detected = NSString.stringEncoding(
@@ -42,8 +42,8 @@ enum CSVIngestionText: Sendable {
 
   private static func hasUTF16BOM(_ data: Data) -> Bool {
     guard data.count >= 2 else { return false }
-    let b0 = data[data.startIndex]
-    let b1 = data[data.index(after: data.startIndex)]
-    return (b0 == 0xFE && b1 == 0xFF) || (b0 == 0xFF && b1 == 0xFE)
+    let byte0 = data[data.startIndex]
+    let byte1 = data[data.index(after: data.startIndex)]
+    return (byte0 == 0xFE && byte1 == 0xFF) || (byte0 == 0xFF && byte1 == 0xFE)
   }
 }

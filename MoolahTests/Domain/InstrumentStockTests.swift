@@ -55,18 +55,18 @@ struct InstrumentStockTests {
 
   @Test
   func stockEquality() {
-    let a = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
-    let b = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
-    let c = Instrument.stock(ticker: "CBA.AX", exchange: "ASX", name: "CBA")
-    #expect(a == b)
-    #expect(a != c)
+    let first = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let second = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let third = Instrument.stock(ticker: "CBA.AX", exchange: "ASX", name: "CBA")
+    #expect(first == second)
+    #expect(first != third)
   }
 
   @Test
   func stockHashable() {
-    let a = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
-    let b = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
-    #expect(a.hashValue == b.hashValue)
+    let first = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let second = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    #expect(first.hashValue == second.hashValue)
   }
 
   // MARK: - Edge-case ticker formats

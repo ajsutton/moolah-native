@@ -134,7 +134,7 @@ struct ProfitLossCalculatorTests {
   @Test
   func fiatOnlyTransactions_excludedFromResults() async throws {
     let accountId = UUID()
-    let tx = LegTransaction(
+    let transaction = LegTransaction(
       date: date(0),
       legs: [
         TransactionLeg(
@@ -144,7 +144,7 @@ struct ProfitLossCalculatorTests {
 
     let service = FixedConversionService(rates: [:])
     let results = try await ProfitLossCalculator.compute(
-      transactions: [tx],
+      transactions: [transaction],
       profileCurrency: aud,
       conversionService: service,
       asOfDate: date(0)
@@ -294,11 +294,11 @@ struct ProfitLossCalculatorTests {
   //
   // These tests use `DateBasedFixedConversionService` to verify that
   // `compute` routes its two conversion calls to the correct dates:
-  // historic cost basis (`tx.date`, Rule 5) and current valuation
+  // historic cost basis (`transaction.date`, Rule 5) and current valuation
   // (`asOfDate`, Rule 6). The rate-ignoring `FixedConversionService`
   // would pass even if production code swapped the dates.
 
-  /// Cost basis must convert each fiat outflow leg on `tx.date` while
+  /// Cost basis must convert each fiat outflow leg on `transaction.date` while
   /// `currentValue` must convert the open position on `asOfDate`. The
   /// rate schedule below makes both choices observable: swapping the
   /// dates would yield different totals.
@@ -336,10 +336,10 @@ struct ProfitLossCalculatorTests {
     )
 
     #expect(results.count == 1)
-    let pl = results[0]
-    #expect(pl.totalInvested == 3000)
-    #expect(pl.currentValue == 5000)
-    #expect(pl.unrealizedGain == 2000)
+    let result = results[0]
+    #expect(result.totalInvested == 3000)
+    #expect(result.currentValue == 5000)
+    #expect(result.unrealizedGain == 2000)
   }
 
   // MARK: - Helpers

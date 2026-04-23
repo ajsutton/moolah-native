@@ -135,10 +135,10 @@ struct PositionsView: View {
   let aud = Instrument.AUD
   let calendar = Calendar(identifier: .gregorian)
   let now = Date()
-  let points: [HistoricalValueSeries.Point] = (0..<60).map { d in
-    let date = calendar.date(byAdding: .day, value: -59 + d, to: now) ?? now
+  let points: [HistoricalValueSeries.Point] = (0..<60).map { offset in
+    let date = calendar.date(byAdding: .day, value: -59 + offset, to: now) ?? now
     return HistoricalValueSeries.Point(
-      date: date, value: 10_000 + Decimal(d) * 25, cost: 9_500)
+      date: date, value: 10_000 + Decimal(offset) * 25, cost: 9_500)
   }
   let series = HistoricalValueSeries(
     hostCurrency: aud,

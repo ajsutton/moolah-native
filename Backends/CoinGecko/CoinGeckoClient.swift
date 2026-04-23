@@ -149,7 +149,7 @@ struct CoinGeckoClient: CryptoPriceClient, Sendable {
     let platforms = try JSONDecoder().decode([AssetPlatform].self, from: data)
     var mapping: [Int: String] = [:]
     for platform in platforms {
-      if let chainId = platform.chain_identifier {
+      if let chainId = platform.chainIdentifier {
         mapping[chainId] = platform.id
       }
     }
@@ -166,16 +166,16 @@ struct CoinGeckoClient: CryptoPriceClient, Sendable {
   /// Parses the contract lookup response to extract token details.
   static func parseContractLookupResponse(_ data: Data) throws -> ContractLookupResult {
     let raw = try JSONDecoder().decode(ContractLookupRaw.self, from: data)
-    let decimals = raw.detail_platforms?.values.first?.decimal_place
+    let decimals = raw.detailPlatforms?.values.first?.decimalPlace
     return ContractLookupResult(
       id: raw.id, symbol: raw.symbol, name: raw.name, decimals: decimals
     )
   }
 
   private static func dateString(from date: Date) -> String {
-    let f = ISO8601DateFormatter()
-    f.formatOptions = [.withFullDate]
-    return f.string(from: date)
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withFullDate]
+    return formatter.string(from: date)
   }
 }
 
@@ -185,18 +185,36 @@ private struct MarketChartResponse: Decodable {
 
 private struct AssetPlatform: Decodable {
   let id: String
-  let chain_identifier: Int?
+  let chainIdentifier: Int?
   let name: String
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case chainIdentifier = "chain_identifier"
+    case name
+  }
 }
 
 private struct ContractLookupRaw: Decodable {
   let id: String
   let symbol: String
   let name: String
-  let detail_platforms: [String: DetailPlatform]?
+  let detailPlatforms: [String: DetailPlatform]?
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case symbol
+    case name
+    case detailPlatforms = "detail_platforms"
+  }
 }
 
 private struct DetailPlatform: Decodable {
-  let decimal_place: Int?
-  let contract_address: String?
+  let decimalPlace: Int?
+  let contractAddress: String?
+
+  enum CodingKeys: String, CodingKey {
+    case decimalPlace = "decimal_place"
+    case contractAddress = "contract_address"
+  }
 }

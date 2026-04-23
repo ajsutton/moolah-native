@@ -464,13 +464,13 @@ final class InvestmentStore {
     // Binary search for the rate
     for _ in 0..<100 {
       let guess = (high + low) / 2
-      let fv = calculateFutureValue(guess)
+      let futureValue = calculateFutureValue(guess)
 
       if low > high {
         return guess * 100
-      } else if abs(fv - targetValue) < 0.01 {
+      } else if abs(futureValue - targetValue) < 0.01 {
         return guess * 100
-      } else if fv > targetValue {
+      } else if futureValue > targetValue {
         high = guess - 0.0001
       } else {
         low = guess + 0.0001
@@ -518,18 +518,18 @@ func mergeChartData(
 
   // If we have pre-period values, add them at the start date
   if let startDate {
-    if let sv = startValue {
+    if let seedValue = startValue {
       let existing = dataByDate[startDate]
       dataByDate[startDate] = (
-        value: existing?.value ?? sv.value.quantity,
+        value: existing?.value ?? seedValue.value.quantity,
         balance: existing?.balance
       )
     }
-    if let sb = startBalance {
+    if let seedBalance = startBalance {
       let existing = dataByDate[startDate]
       dataByDate[startDate] = (
         value: existing?.value,
-        balance: existing?.balance ?? sb.balance.quantity
+        balance: existing?.balance ?? seedBalance.balance.quantity
       )
     }
   }
@@ -546,12 +546,12 @@ func mergeChartData(
     let currentValue = item.value ?? lastValue
     let currentBalance = item.balance ?? lastBalance
 
-    if let v = item.value { lastValue = v }
-    if let b = item.balance { lastBalance = b }
+    if let itemValue = item.value { lastValue = itemValue }
+    if let itemBalance = item.balance { lastBalance = itemBalance }
 
     let profitLoss: Decimal? =
-      if let v = currentValue, let b = currentBalance {
-        v - b
+      if let value = currentValue, let balance = currentBalance {
+        value - balance
       } else {
         nil
       }

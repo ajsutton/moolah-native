@@ -162,7 +162,7 @@ private struct RuleRow: View {
 
   private static func describe(_ action: RuleAction) -> String {
     switch action {
-    case .setPayee(let p): return "payee=\(p)"
+    case .setPayee(let payee): return "payee=\(payee)"
     case .setCategory: return "set category"
     case .appendNote(let n): return "note=\(n)"
     case .markAsTransfer: return "mark as transfer"

@@ -40,7 +40,7 @@ struct ScheduledTransactionTests {
   func testIsScheduledWithForeignCurrencyRecurrence() {
     // A monthly USD subscription paid from a USD account.
     let usd = Instrument.USD
-    let tx = Transaction(
+    let transaction = Transaction(
       date: Date(),
       recurPeriod: .month,
       recurEvery: 1,
@@ -50,14 +50,14 @@ struct ScheduledTransactionTests {
           quantity: Decimal(string: "-9.99")!, type: .expense)
       ]
     )
-    #expect(tx.isScheduled)
-    #expect(tx.legs[0].instrument == usd)
+    #expect(transaction.isScheduled)
+    #expect(transaction.legs[0].instrument == usd)
   }
 
   @Test("Scheduled cross-currency transfer retains both instruments")
   func testScheduledCrossCurrencyTransferLegsInstruments() {
     // A weekly currency conversion: 1000 AUD becomes 650 USD every week.
-    let tx = Transaction(
+    let transaction = Transaction(
       date: Date(),
       payee: "Weekly FX",
       recurPeriod: .week,
@@ -71,10 +71,10 @@ struct ScheduledTransactionTests {
           quantity: Decimal(string: "650.00")!, type: .transfer),
       ]
     )
-    #expect(tx.isScheduled)
-    #expect(tx.isTransfer)
-    #expect(tx.legs[0].instrument == .AUD)
-    #expect(tx.legs[1].instrument == .USD)
+    #expect(transaction.isScheduled)
+    #expect(transaction.isTransfer)
+    #expect(transaction.legs[0].instrument == .AUD)
+    #expect(transaction.legs[1].instrument == .USD)
   }
 
   @Test("isScheduled returns true when recurPeriod is set")

@@ -199,10 +199,10 @@ struct SelfWealthParser: CSVParser, Sendable {
       throw CSVParserError.malformedRow(
         index: index, reason: "unrecognised trade description: \(description)", row: row)
     }
-    let ns = description as NSString
-    let kind = ns.substring(with: match.range(at: 1))
-    let quantityText = ns.substring(with: match.range(at: 2))
-    let ticker = ns.substring(with: match.range(at: 3))
+    let descriptionNS = description as NSString
+    let kind = descriptionNS.substring(with: match.range(at: 1))
+    let quantityText = descriptionNS.substring(with: match.range(at: 2))
+    let ticker = descriptionNS.substring(with: match.range(at: 3))
     guard let quantity = Decimal(string: quantityText) else {
       throw CSVParserError.malformedRow(
         index: index, reason: "invalid trade quantity: \(quantityText)", row: row)

@@ -12,9 +12,9 @@ struct StockPositionDisplayTests {
   let cba = Instrument.stock(ticker: "CBA.AX", exchange: "ASX", name: "CBA")
 
   private func dateString(_ date: Date) -> String {
-    let f = ISO8601DateFormatter()
-    f.formatOptions = [.withFullDate]
-    return f.string(from: date)
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withFullDate]
+    return formatter.string(from: date)
   }
 
   @Test
@@ -66,10 +66,10 @@ struct StockPositionDisplayTests {
   func valuedPositionsIncludeMarketValue() async throws {
     let accountId = UUID()
     let today = Date()
-    let ds = dateString(today)
+    let dateKey = dateString(today)
 
     let stockClient = FixedStockPriceClient(responses: [
-      "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [ds: Decimal(string: "45.00")!])
+      "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: Decimal(string: "45.00")!])
     ])
     let stockCacheDir = FileManager.default.temporaryDirectory
       .appendingPathComponent("stock-valued-tests")
@@ -124,11 +124,11 @@ struct StockPositionDisplayTests {
   func totalPortfolioValueSumsAllPositions() async throws {
     let accountId = UUID()
     let today = Date()
-    let ds = dateString(today)
+    let dateKey = dateString(today)
 
     let stockClient = FixedStockPriceClient(responses: [
-      "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [ds: Decimal(string: "45.00")!]),
-      "CBA.AX": StockPriceResponse(instrument: .AUD, prices: [ds: Decimal(string: "120.00")!]),
+      "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: Decimal(string: "45.00")!]),
+      "CBA.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: Decimal(string: "120.00")!]),
     ])
     let stockCacheDir = FileManager.default.temporaryDirectory
       .appendingPathComponent("stock-total-tests")
