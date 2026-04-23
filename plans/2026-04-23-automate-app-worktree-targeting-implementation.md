@@ -45,7 +45,10 @@ Write `.claude/skills/automate-app/scripts/moolah-tell`:
 # command targets the worktree's debug build, not /Applications/Moolah.app.
 set -euo pipefail
 
-root=$(git rev-parse --show-toplevel)
+root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    echo "error: moolah-tell must be run from inside a Moolah worktree" >&2
+    exit 1
+}
 app="$root/.build/Build/Products/Debug/Moolah.app"
 
 if [ ! -d "$app" ]; then
@@ -54,6 +57,7 @@ if [ ! -d "$app" ]; then
     exit 1
 fi
 
+# No args or `-` means read the AppleScript body from stdin.
 if [ "$#" -eq 0 ] || [ "$1" = "-" ]; then
     body=$(cat)
 else
@@ -132,7 +136,10 @@ Write `.claude/skills/automate-app/scripts/moolah-open`:
 # /Applications/Moolah.app.
 set -euo pipefail
 
-root=$(git rev-parse --show-toplevel)
+root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    echo "error: moolah-open must be run from inside a Moolah worktree" >&2
+    exit 1
+}
 app="$root/.build/Build/Products/Debug/Moolah.app"
 
 if [ ! -d "$app" ]; then

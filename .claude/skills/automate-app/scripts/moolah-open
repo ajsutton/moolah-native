@@ -4,7 +4,10 @@
 # /Applications/Moolah.app.
 set -euo pipefail
 
-root=$(git rev-parse --show-toplevel)
+root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    echo "error: moolah-open must be run from inside a Moolah worktree" >&2
+    exit 1
+}
 app="$root/.build/Build/Products/Debug/Moolah.app"
 
 if [ ! -d "$app" ]; then
