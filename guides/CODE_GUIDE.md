@@ -91,6 +91,14 @@ Thresholds below are [SwiftLint](https://realm.github.io/SwiftLint/rule-director
 
 Prefer refactoring over suppression. Suppressions need a reason comment; anonymous suppressions will be rejected in review.
 
+The reason MUST live on its own line (as above). Do not append it to the disable directive with an em-dash or other separator:
+
+```swift
+// swiftlint:disable:next force_try — fallback cannot fail in a tmp dir
+```
+
+SwiftLint parses every whitespace-separated token after the directive as a rule identifier, so words in an inline reason (`in`, `a`, `tmp`, `fallback`, etc.) produce a cascade of [`superfluous_disable_command`](https://realm.github.io/SwiftLint/superfluous_disable_command.html) violations. Put the directive on one line and the reason on the line above or below.
+
 ---
 
 ## 4. Naming
