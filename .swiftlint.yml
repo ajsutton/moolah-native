@@ -29,10 +29,6 @@ disabled_rules:
   - sorted_imports
   # Autocorrect produces invalid code for our codebase. Tracked in tech-debt
   # issues; revisit once a safer fix strategy exists.
-  # TODO(#262): re-enable redundant_nil_coalescing — autofix removes `?? nil`
-  # on dictionary subscripts of optional values, producing Int?? where Int? is
-  # required. Broke TransactionDetailView.swift (legCategoryHighlightedIndex).
-  - redundant_nil_coalescing
   # TODO(#263): re-enable redundant_discardable_let — autofix rewrites
   # `let _ = foo()` to `_ = foo()` inside SwiftUI @ViewBuilder bodies, which
   # changes semantics (view builders accept `let _`, not bare assignments).

@@ -30,7 +30,7 @@ struct TransactionDetailView: View {
   @State private var legPendingDeletion: Int?
   @State private var legCategoryJustSelected: [Int: Bool] = [:]
   @State private var showLegCategorySuggestions: [Int: Bool] = [:]
-  @State private var legCategoryHighlightedIndex: [Int: Int?] = [:]
+  @State private var legCategoryHighlightedIndex: [Int: Int] = [:]
   /// Snapshot of whether the transaction was a blank/new draft at open
   /// time (empty payee + all-zero legs). Captured once at init so that
   /// `autofillFromPayee` only copies fields from a matched transaction
@@ -627,7 +627,7 @@ struct TransactionDetailView: View {
           legIndex: index,
           text: $draft.legDrafts[index].categoryText,
           highlightedIndex: Binding(
-            get: { legCategoryHighlightedIndex[index] ?? nil },
+            get: { legCategoryHighlightedIndex[index] },
             set: { legCategoryHighlightedIndex[index] = $0 }
           ),
           suggestionCount: legCategoryVisibleSuggestions(for: index).count,
@@ -928,7 +928,7 @@ struct TransactionDetailView: View {
 
   private func acceptHighlightedLegCategory(at index: Int) {
     let suggestions = legCategoryVisibleSuggestions(for: index)
-    guard let highlighted = legCategoryHighlightedIndex[index] ?? nil,
+    guard let highlighted = legCategoryHighlightedIndex[index],
       highlighted < suggestions.count
     else { return }
     let selected = suggestions[highlighted]
@@ -951,7 +951,7 @@ struct TransactionDetailView: View {
           suggestions: legCategoryVisibleSuggestions(for: activeIndex),
           searchText: draft.legDrafts[activeIndex].categoryText,
           highlightedIndex: Binding(
-            get: { legCategoryHighlightedIndex[activeIndex] ?? nil },
+            get: { legCategoryHighlightedIndex[activeIndex] },
             set: { legCategoryHighlightedIndex[activeIndex] = $0 }
           ),
           onSelect: { selected in
