@@ -261,7 +261,8 @@ Apple's [Choosing Between Structures and Classes](https://developer.apple.com/do
   ```
 
 - **No force-unwrap, force-try, or `as!` in production.** SwiftLint enforces [`force_unwrapping`](https://realm.github.io/SwiftLint/force_unwrapping.html), [`force_try`](https://realm.github.io/SwiftLint/force_try.html), [`force_cast`](https://realm.github.io/SwiftLint/force_cast.html) as warnings in production paths.
-- **In tests:** force operations are allowed but prefer `XCTUnwrap` and explicit `try` — they produce better failure messages and fail the test cleanly instead of crashing the suite.
+- **Replace `as!` with `guard let … as?` + an explicit failure.** The fix is not to swap the trap for a different trap — it's to surface *why* the cast is expected to succeed. For benchmarks and integration harnesses the right escape hatch is `guard let typed = value as? TargetType else { fatalError("context: got \(type(of: value))") }`; the type name in the message is what makes a future backend swap debuggable instead of cryptic. For tests, extract the value and unwrap via `#require` (Swift Testing) or `XCTUnwrap` (XCTest) so the shape mismatch reads as a test failure rather than a crash. SwiftLint's [`force_cast`](https://realm.github.io/SwiftLint/force_cast.html) rule catches the raw `as!` form; the preferred replacements above both pass the rule and produce better failure output.
+- **In tests:** force operations are allowed but prefer `#require` / `XCTUnwrap` and explicit `try` — they produce better failure messages and fail the test cleanly instead of crashing the suite.
 - **No implicitly unwrapped optionals** outside the rare IBOutlet case. This is a SwiftUI-only codebase; the exception effectively never applies.
 
 ---
