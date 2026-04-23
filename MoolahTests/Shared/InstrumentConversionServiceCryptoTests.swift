@@ -48,7 +48,8 @@ struct InstrumentConversionServiceCryptoTests {
 
   // MARK: - Crypto -> Fiat (USD)
 
-  @Test func cryptoToUsdUsesDirectPrice() async throws {
+  @Test
+  func cryptoToUsdUsesDirectPrice() async throws {
     let service = makeService(
       cryptoPrices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]],
       providerMappings: [
@@ -67,7 +68,8 @@ struct InstrumentConversionServiceCryptoTests {
 
   // MARK: - Crypto -> Fiat (non-USD, two-hop)
 
-  @Test func cryptoToAudGoesViaUsd() async throws {
+  @Test
+  func cryptoToAudGoesViaUsd() async throws {
     let service = makeService(
       cryptoPrices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]],
       exchangeRates: ["2026-04-10": ["AUD": Decimal(string: "1.58")!]],
@@ -88,7 +90,8 @@ struct InstrumentConversionServiceCryptoTests {
 
   // MARK: - Crypto -> Crypto (both non-fiat)
 
-  @Test func cryptoToCryptoChainsThroughUsd() async throws {
+  @Test
+  func cryptoToCryptoChainsThroughUsd() async throws {
     let service = makeService(
       cryptoPrices: [
         "1:native": ["2026-04-10": Decimal(string: "1623.45")!],
@@ -115,7 +118,8 @@ struct InstrumentConversionServiceCryptoTests {
 
   // MARK: - Missing provider mapping throws
 
-  @Test func missingProviderMappingThrows() async throws {
+  @Test
+  func missingProviderMappingThrows() async throws {
     let service = makeService(
       cryptoPrices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]]
     )
@@ -126,7 +130,8 @@ struct InstrumentConversionServiceCryptoTests {
 
   // MARK: - Fiat -> Crypto (reverse direction)
 
-  @Test func fiatToCryptoIsInverseOfCryptoToFiat() async throws {
+  @Test
+  func fiatToCryptoIsInverseOfCryptoToFiat() async throws {
     let service = makeService(
       cryptoPrices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]],
       providerMappings: [
@@ -145,7 +150,8 @@ struct InstrumentConversionServiceCryptoTests {
 
   // MARK: - Precision across kinds
 
-  @Test func cryptoToFiatPreservesHighPrecisionMultiplication() async throws {
+  @Test
+  func cryptoToFiatPreservesHighPrecisionMultiplication() async throws {
     // Verify that high-decimal crypto quantities preserve precision through conversion.
     let service = makeService(
       cryptoPrices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]],
@@ -163,7 +169,8 @@ struct InstrumentConversionServiceCryptoTests {
     #expect(result == expected)
   }
 
-  @Test func zeroDecimalFiatToCryptoGoesThroughUsd() async throws {
+  @Test
+  func zeroDecimalFiatToCryptoGoesThroughUsd() async throws {
     // JPY has 0 decimals; route JPY → USD → ETH should not throw for fiat bridging.
     let jpy = Instrument.fiat(code: "JPY")
     let service = makeService(
@@ -183,7 +190,8 @@ struct InstrumentConversionServiceCryptoTests {
     #expect(result == Decimal(1))
   }
 
-  @Test func missingCryptoPriceThrows() async throws {
+  @Test
+  func missingCryptoPriceThrows() async throws {
     let service = makeService(
       cryptoPrices: [:],
       providerMappings: [
@@ -203,7 +211,8 @@ struct InstrumentConversionServiceCryptoTests {
   /// without rebuilding the service. `ProfileSession` wires the closure to the
   /// `CryptoPriceService`, which persists registrations to the token
   /// repository; newly-added tokens must flow through without app restart.
-  @Test func providerMappingsClosureIsQueriedPerConversion() async throws {
+  @Test
+  func providerMappingsClosureIsQueriedPerConversion() async throws {
     let cryptoClient = FixedCryptoPriceClient(
       prices: ["1:native": ["2026-04-10": Decimal(string: "1623.45")!]]
     )

@@ -29,10 +29,6 @@ disabled_rules:
   - sorted_imports
   # Autocorrect produces invalid code for our codebase. Tracked in tech-debt
   # issues; revisit once a safer fix strategy exists.
-  # TODO(#264): re-enable attributes — 903 baseline violations that fight
-  # swift-format's chosen layout for `@State`, `@Binding`, etc. swift-format
-  # owns layout; revisit once we decide whether to override the formatter.
-  - attributes
   # TODO(#265): re-enable multiline_arguments — 2380 baseline violations that
   # fight swift-format's call-site layout choices. swift-format owns layout;
   # revisit once a stable convention is agreed.
@@ -40,6 +36,7 @@ disabled_rules:
 
 opt_in_rules:
   - array_init
+  - attributes
   - closure_body_length
   - closure_end_indentation
   - collection_alignment
@@ -137,6 +134,14 @@ identifier_name:
 large_tuple:
   warning: 2
   error: 3
+
+# Permits `@Environment(AuthStore.self) private var authStore` — the dominant
+# SwiftUI / SwiftData idiom and what swift-format produces (swift-format sets
+# `lineBreakBetweenDeclarationAttributes: false`, so it keeps attribute +
+# declaration on the same line when you write them that way).
+attributes:
+  severity: warning
+  attributes_with_arguments_always_on_line_above: false
 
 # SwiftLint (0.63) silently ignores per-rule `excluded:` on `force_try`,
 # `force_cast`, `force_unwrapping`, and `implicitly_unwrapped_optional`

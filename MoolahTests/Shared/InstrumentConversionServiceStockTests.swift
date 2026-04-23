@@ -36,7 +36,8 @@ struct InstrumentConversionServiceStockTests {
     return f.string(from: date)
   }
 
-  @Test func stockToListingCurrencySameFiat() async throws {
+  @Test
+  func stockToListingCurrencySameFiat() async throws {
     // BHP listed in AUD, converting to AUD — just stock price, no FX
     let today = Date()
     let ds = dateString(today)
@@ -51,7 +52,8 @@ struct InstrumentConversionServiceStockTests {
     #expect(result == Decimal(string: "6345.00")!)
   }
 
-  @Test func stockToForeignFiatRequiresFXConversion() async throws {
+  @Test
+  func stockToForeignFiatRequiresFXConversion() async throws {
     // AAPL listed in USD, converting to AUD — stock price * FX rate
     let today = Date()
     let ds = dateString(today)
@@ -67,7 +69,8 @@ struct InstrumentConversionServiceStockTests {
     #expect(result == Decimal(string: "2875.25")!)
   }
 
-  @Test func stockToStockNotSupported() async throws {
+  @Test
+  func stockToStockNotSupported() async throws {
     // Stock-to-stock conversion should throw (go through fiat as intermediate)
     let today = Date()
     let service = makeService()
@@ -77,7 +80,8 @@ struct InstrumentConversionServiceStockTests {
     }
   }
 
-  @Test func fiatToStockNotSupported() async throws {
+  @Test
+  func fiatToStockNotSupported() async throws {
     // Fiat-to-stock conversion doesn't make sense for display purposes
     let today = Date()
     let service = makeService()
@@ -87,7 +91,8 @@ struct InstrumentConversionServiceStockTests {
     }
   }
 
-  @Test func foreignFiatToStockListedInDifferentFiatThrowsSymmetrically() async throws {
+  @Test
+  func foreignFiatToStockListedInDifferentFiatThrowsSymmetrically() async throws {
     // fiatToStock is not a supported conversion direction regardless of source fiat.
     let today = Date()
     let service = makeService()
@@ -97,7 +102,8 @@ struct InstrumentConversionServiceStockTests {
     }
   }
 
-  @Test func stockInNonPrimaryFiatConvertsViaIntermediate() async throws {
+  @Test
+  func stockInNonPrimaryFiatConvertsViaIntermediate() async throws {
     // Simulate a USD-listed stock converting to USD directly (no FX required).
     let today = Date()
     let ds = dateString(today)
@@ -111,7 +117,8 @@ struct InstrumentConversionServiceStockTests {
     #expect(result == Decimal(string: "1855.00")!)
   }
 
-  @Test func zeroDecimalFiatToStockAlsoRejected() async throws {
+  @Test
+  func zeroDecimalFiatToStockAlsoRejected() async throws {
     // JPY has 0 decimals; request still throws (direction not supported) without crashing.
     let today = Date()
     let jpy = Instrument.fiat(code: "JPY")
@@ -122,7 +129,8 @@ struct InstrumentConversionServiceStockTests {
     }
   }
 
-  @Test func stockPriceFetchFailureThrows() async throws {
+  @Test
+  func stockPriceFetchFailureThrows() async throws {
     let today = Date()
     let stockClient = FixedStockPriceClient(shouldFail: true)
     let stockCacheDir = FileManager.default.temporaryDirectory

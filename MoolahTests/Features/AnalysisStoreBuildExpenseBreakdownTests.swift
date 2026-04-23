@@ -11,13 +11,15 @@ struct AnalysisStoreBuildExpenseBreakdownTests {
     InstrumentAmount(quantity: quantity, instrument: .defaultTestInstrument)
   }
 
-  @Test func emptyBreakdownReturnsNoEntries() {
+  @Test
+  func emptyBreakdownReturnsNoEntries() {
     let result = AnalysisStore.buildExpenseBreakdown(
       from: [], categories: Categories(from: []), selectedCategoryId: nil)
     #expect(result.isEmpty)
   }
 
-  @Test func topLevelRollsUpChildIntoRoot() {
+  @Test
+  func topLevelRollsUpChildIntoRoot() {
     // Repro: user reports a root category total does not include descendants.
     let foodId = UUID()
     let groceriesId = UUID()
@@ -43,7 +45,8 @@ struct AnalysisStoreBuildExpenseBreakdownTests {
     #expect(result[0].percentage == 100.0)
   }
 
-  @Test func topLevelRollsUpMultipleLevelsOfDescendants() {
+  @Test
+  func topLevelRollsUpMultipleLevelsOfDescendants() {
     let foodId = UUID()
     let groceriesId = UUID()
     let organicId = UUID()
@@ -72,7 +75,8 @@ struct AnalysisStoreBuildExpenseBreakdownTests {
     #expect(result[0].totalExpenses.quantity == Decimal(60))
   }
 
-  @Test func topLevelSortsByTotalDescending() {
+  @Test
+  func topLevelSortsByTotalDescending() {
     let foodId = UUID()
     let transportId = UUID()
     let breakdown = [
@@ -98,7 +102,8 @@ struct AnalysisStoreBuildExpenseBreakdownTests {
     #expect(result[1].percentage == 25.0)
   }
 
-  @Test func topLevelIncludesUncategorized() {
+  @Test
+  func topLevelIncludesUncategorized() {
     let foodId = UUID()
     let breakdown = [
       ExpenseBreakdown(
@@ -120,7 +125,8 @@ struct AnalysisStoreBuildExpenseBreakdownTests {
     #expect(uncategorized?.totalExpenses.quantity == Decimal(100))
   }
 
-  @Test func drilledInShowsChildrenWithDescendantsRolledUp() {
+  @Test
+  func drilledInShowsChildrenWithDescendantsRolledUp() {
     let foodId = UUID()
     let groceriesId = UUID()
     let organicId = UUID()
@@ -157,7 +163,8 @@ struct AnalysisStoreBuildExpenseBreakdownTests {
     #expect(restaurants?.totalExpenses.quantity == Decimal(40))
   }
 
-  @Test func drilledInExcludesItemsOutsideSubtree() {
+  @Test
+  func drilledInExcludesItemsOutsideSubtree() {
     let foodId = UUID()
     let groceriesId = UUID()
     let transportId = UUID()
@@ -184,7 +191,8 @@ struct AnalysisStoreBuildExpenseBreakdownTests {
     #expect(result[0].percentage == 100.0)
   }
 
-  @Test func multipleMonthsAccumulateIntoSameRollupTarget() {
+  @Test
+  func multipleMonthsAccumulateIntoSameRollupTarget() {
     let foodId = UUID()
     let groceriesId = UUID()
     let breakdown = [
@@ -211,7 +219,8 @@ struct AnalysisStoreBuildExpenseBreakdownTests {
     #expect(result[0].totalExpenses.quantity == Decimal(350))
   }
 
-  @Test func positiveExpensesClampToZero() {
+  @Test
+  func positiveExpensesClampToZero() {
     // Server returns negative for expenses; positive values are refunds.
     // Matching web app's Math.max(0, ...) behavior, net-positive rollups clamp to zero.
     let foodId = UUID()

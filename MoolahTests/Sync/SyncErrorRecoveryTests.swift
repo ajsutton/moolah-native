@@ -23,7 +23,8 @@ struct SyncErrorRecoveryTests {
 
   // MARK: - Failed delete classification
 
-  @Test func zoneNotFoundDeleteIsClassifiedForZoneCreation() {
+  @Test
+  func zoneNotFoundDeleteIsClassifiedForZoneCreation() {
     let recordID = Self.makeRecordID()
     let failures = SyncErrorRecovery.classify(
       failedSaves: [],
@@ -34,7 +35,8 @@ struct SyncErrorRecoveryTests {
     #expect(failures.requeueDeletes.isEmpty)
   }
 
-  @Test func userDeletedZoneDeleteIsClassifiedForZoneCreation() {
+  @Test
+  func userDeletedZoneDeleteIsClassifiedForZoneCreation() {
     let recordID = Self.makeRecordID()
     let failures = SyncErrorRecovery.classify(
       failedSaves: [],
@@ -45,7 +47,8 @@ struct SyncErrorRecoveryTests {
     #expect(failures.requeueDeletes.isEmpty)
   }
 
-  @Test func unknownItemDeleteIsTreatedAsSuccess() {
+  @Test
+  func unknownItemDeleteIsTreatedAsSuccess() {
     // The record is already gone on the server — delete succeeded in effect.
     // It must NOT be re-queued (infinite loop) and NOT classified as zone-not-found.
     let recordID = Self.makeRecordID()
@@ -58,7 +61,8 @@ struct SyncErrorRecoveryTests {
     #expect(failures.requeueDeletes.isEmpty)
   }
 
-  @Test func serverRecordChangedDeleteIsRequeued() {
+  @Test
+  func serverRecordChangedDeleteIsRequeued() {
     let recordID = Self.makeRecordID()
     let failures = SyncErrorRecovery.classify(
       failedSaves: [],
@@ -69,7 +73,8 @@ struct SyncErrorRecoveryTests {
     #expect(failures.zoneNotFoundDeletes.isEmpty)
   }
 
-  @Test func limitExceededDeleteIsRequeued() {
+  @Test
+  func limitExceededDeleteIsRequeued() {
     let recordID = Self.makeRecordID()
     let failures = SyncErrorRecovery.classify(
       failedSaves: [],
@@ -79,7 +84,8 @@ struct SyncErrorRecoveryTests {
     #expect(failures.requeueDeletes == [recordID])
   }
 
-  @Test func unexpectedDeleteErrorIsRequeued() {
+  @Test
+  func unexpectedDeleteErrorIsRequeued() {
     let recordID = Self.makeRecordID()
     let failures = SyncErrorRecovery.classify(
       failedSaves: [],
@@ -90,7 +96,8 @@ struct SyncErrorRecoveryTests {
     #expect(failures.zoneNotFoundDeletes.isEmpty)
   }
 
-  @Test func mixedDeleteFailuresAreRoutedIndependently() {
+  @Test
+  func mixedDeleteFailuresAreRoutedIndependently() {
     let zoneMissing = Self.makeRecordID("zone-missing")
     let alreadyGone = Self.makeRecordID("already-gone")
     let conflict = Self.makeRecordID("conflict")

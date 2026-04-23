@@ -25,7 +25,8 @@ struct ExchangeRateServiceTests {
 
   // MARK: - Step 4a: Same-currency short-circuit
 
-  @Test func sameCurrencyReturnsIdentityRate() async throws {
+  @Test
+  func sameCurrencyReturnsIdentityRate() async throws {
     let service = makeService()
     let rate = try await service.rate(from: .AUD, to: .AUD, on: date("2025-01-15"))
     #expect(rate == Decimal(1))
@@ -33,7 +34,8 @@ struct ExchangeRateServiceTests {
 
   // MARK: - Step 4b: Cache miss and cache hit
 
-  @Test func cacheMissFetchesFromClient() async throws {
+  @Test
+  func cacheMissFetchesFromClient() async throws {
     let service = makeService(rates: [
       "2025-01-15": ["USD": Decimal(string: "0.6543")!]
     ])
@@ -41,7 +43,8 @@ struct ExchangeRateServiceTests {
     #expect(rate == Decimal(string: "0.6543")!)
   }
 
-  @Test func cacheHitDoesNotRefetch() async throws {
+  @Test
+  func cacheHitDoesNotRefetch() async throws {
     let service = makeService(rates: [
       "2025-01-15": ["USD": Decimal(string: "0.6543")!]
     ])
@@ -53,7 +56,8 @@ struct ExchangeRateServiceTests {
 
   // MARK: - Step 4c: Fallback and error paths
 
-  @Test func networkFailureFallsBackToMostRecentPriorDate() async throws {
+  @Test
+  func networkFailureFallsBackToMostRecentPriorDate() async throws {
     // Pre-populate cache by fetching Friday's rate successfully
     let fridayRates: [String: [String: Decimal]] = [
       "2025-01-17": ["USD": Decimal(string: "0.6500")!]
@@ -76,7 +80,8 @@ struct ExchangeRateServiceTests {
     #expect(saturdayRate == Decimal(string: "0.6500")!)
   }
 
-  @Test func networkFailureWithEmptyCacheThrows() async throws {
+  @Test
+  func networkFailureWithEmptyCacheThrows() async throws {
     let service = makeService(shouldFail: true)
     await #expect(throws: (any Error).self) {
       try await service.rate(from: .AUD, to: .USD, on: date("2025-01-15"))
@@ -85,7 +90,8 @@ struct ExchangeRateServiceTests {
 
   // MARK: - Date range lookup
 
-  @Test func rangeReturnsRatesForEachDay() async throws {
+  @Test
+  func rangeReturnsRatesForEachDay() async throws {
     let service = makeService(rates: [
       "2026-04-07": ["USD": Decimal(string: "0.630")!],
       "2026-04-08": ["USD": Decimal(string: "0.631")!],
@@ -101,7 +107,8 @@ struct ExchangeRateServiceTests {
     #expect(results[2].rate == Decimal(string: "0.632")!)
   }
 
-  @Test func rangeOnlyFetchesMissingSegments() async throws {
+  @Test
+  func rangeOnlyFetchesMissingSegments() async throws {
     let service = makeService(rates: [
       "2026-04-07": ["USD": Decimal(string: "0.630")!],
       "2026-04-08": ["USD": Decimal(string: "0.631")!],
@@ -122,7 +129,8 @@ struct ExchangeRateServiceTests {
     #expect(results[4].rate == Decimal(string: "0.634")!)
   }
 
-  @Test func sameCurrencyRangeReturnsIdentity() async throws {
+  @Test
+  func sameCurrencyRangeReturnsIdentity() async throws {
     let service = makeService()
     let results = try await service.rates(
       from: .AUD, to: .AUD,
@@ -134,7 +142,8 @@ struct ExchangeRateServiceTests {
 
   // MARK: - Convert
 
-  @Test func convertProducesCorrectAmount() async throws {
+  @Test
+  func convertProducesCorrectAmount() async throws {
     let service = makeService(rates: [
       "2026-04-11": ["USD": Decimal(string: "0.632")!]
     ])
@@ -145,7 +154,8 @@ struct ExchangeRateServiceTests {
     #expect(converted.instrument == .USD)
   }
 
-  @Test func convertSameCurrencyReturnsIdentical() async throws {
+  @Test
+  func convertSameCurrencyReturnsIdentical() async throws {
     let service = makeService()
     let amount = InstrumentAmount(quantity: Decimal(string: "100.00")!, instrument: .AUD)
     let converted = try await service.convert(amount, to: .AUD, on: date("2026-04-11"))
@@ -153,7 +163,8 @@ struct ExchangeRateServiceTests {
     #expect(converted.instrument == .AUD)
   }
 
-  @Test func convertUsesDecimalPrecision() async throws {
+  @Test
+  func convertUsesDecimalPrecision() async throws {
     let service = makeService(rates: [
       "2026-04-11": ["USD": Decimal(string: "0.5")!]
     ])
@@ -165,7 +176,8 @@ struct ExchangeRateServiceTests {
 
   // MARK: - Prefetch
 
-  @Test func prefetchUpdatesCache() async throws {
+  @Test
+  func prefetchUpdatesCache() async throws {
     let service = makeService(rates: [
       "2026-04-10": ["USD": Decimal(string: "0.629")!],
       "2026-04-11": ["USD": Decimal(string: "0.632")!],
@@ -175,7 +187,8 @@ struct ExchangeRateServiceTests {
     #expect(rate == Decimal(string: "0.632")!)
   }
 
-  @Test func gzipRoundTripPreservesData() async throws {
+  @Test
+  func gzipRoundTripPreservesData() async throws {
     let tempDir = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     defer { try? FileManager.default.removeItem(at: tempDir) }
@@ -202,7 +215,8 @@ struct ExchangeRateServiceTests {
     #expect(cachedEur == Decimal(string: "0.581")!)
   }
 
-  @Test func fallbackNeverUsesFutureDate() async throws {
+  @Test
+  func fallbackNeverUsesFutureDate() async throws {
     // Pre-populate cache with a future date only
     let futureRates: [String: [String: Decimal]] = [
       "2025-01-20": ["USD": Decimal(string: "0.6500")!]
@@ -231,7 +245,8 @@ struct ExchangeRateServiceTests {
   /// missing from the client (weekend / holiday / today's rate not posted),
   /// we still fetch a surrounding range wide enough to cover a recent trading
   /// day and fall back to the most-recent prior cached rate.
-  @Test func coldCacheFallsBackToPriorTradingDayWhenRequestedDateMissing() async throws {
+  @Test
+  func coldCacheFallsBackToPriorTradingDayWhenRequestedDateMissing() async throws {
     // Client has data for Jan 17 (Friday) but not Jan 18 (Saturday).
     let service = makeService(rates: [
       "2025-01-17": ["USD": Decimal(string: "0.6500")!]
@@ -244,7 +259,8 @@ struct ExchangeRateServiceTests {
     #expect(saturdayRate == Decimal(string: "0.6500")!)
   }
 
-  @Test func coldCacheWithNetworkErrorThrows() async throws {
+  @Test
+  func coldCacheWithNetworkErrorThrows() async throws {
     // shouldFail simulates a network error. With no prior cache and a failing
     // fetch we have nothing to fall back to, so we must throw.
     let service = makeService(shouldFail: true)
@@ -259,7 +275,8 @@ struct ExchangeRateServiceTests {
   /// should trigger a forward extension fetch. If the client returns no data
   /// for the new range (e.g., today's rate not yet posted), we fall back to
   /// the most-recent cached rate rather than throwing.
-  @Test func futureRequestExtendsForwardAndFallsBack() async throws {
+  @Test
+  func futureRequestExtendsForwardAndFallsBack() async throws {
     let service = makeService(rates: [
       "2025-01-10": ["USD": Decimal(string: "0.6400")!]
     ])
@@ -275,7 +292,8 @@ struct ExchangeRateServiceTests {
   /// Requesting a date before the earliest cached date should trigger a
   /// backward extension fetch and pull in data from the client for the
   /// missing historical range.
-  @Test func pastRequestExtendsBackwardAndReturnsRate() async throws {
+  @Test
+  func pastRequestExtendsBackwardAndReturnsRate() async throws {
     let service = makeService(rates: [
       "2025-01-15": ["USD": Decimal(string: "0.6480")!],
       "2025-01-25": ["USD": Decimal(string: "0.6600")!],
@@ -292,7 +310,8 @@ struct ExchangeRateServiceTests {
 
   /// Once the cache is primed, a network error on a subsequent extension
   /// fetch should still fall back to cached data rather than propagate.
-  @Test func extensionFetchErrorFallsBackToCache() async throws {
+  @Test
+  func extensionFetchErrorFallsBackToCache() async throws {
     // Step 1: populate cache with a successful fetch.
     let primingClient = FixedRateClient(rates: [
       "2025-01-10": ["USD": Decimal(string: "0.6400")!]

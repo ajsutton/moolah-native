@@ -36,7 +36,8 @@ struct TransactionRunningBalanceTests {
   }
 
   /// All legs convert successfully — every transaction gets a valid balance.
-  @Test func allLegsConvertibleYieldsBalancesForEveryTransaction() async {
+  @Test
+  func allLegsConvertibleYieldsBalancesForEveryTransaction() async {
     let accountId = UUID()
     // Target instrument differs from the default test instrument so make sure
     // we're using the ambient default.
@@ -63,7 +64,8 @@ struct TransactionRunningBalanceTests {
 
   /// A transaction with an unconvertible leg still appears in the result,
   /// but with a nil balance and nil displayAmount.
-  @Test func unconvertibleTransactionStillAppearsWithNilBalance() async {
+  @Test
+  func unconvertibleTransactionStillAppearsWithNilBalance() async {
     let accountId = UUID()
     let transactions = [
       tx(daysFromEpoch: 1, accountId: accountId, quantity: -10, instrument: foreign)
@@ -88,7 +90,8 @@ struct TransactionRunningBalanceTests {
   /// Earlier transactions (older — processed first in the reversed iteration)
   /// keep their balances even when a later (newer) transaction can't convert.
   /// Newer transactions after the failure point have nil balances.
-  @Test func conversionFailureBreaksBalanceChainForLaterTransactions() async {
+  @Test
+  func conversionFailureBreaksBalanceChainForLaterTransactions() async {
     let accountId = UUID()
     // Oldest first in source → in the newest-first returned list this is
     // the last entry. We list newest-first as the function expects.
@@ -126,7 +129,8 @@ struct TransactionRunningBalanceTests {
 
   /// When the FIRST (oldest) transaction can't convert, every subsequent
   /// (newer) transaction has nil balance — the running total is unrecoverable.
-  @Test func conversionFailureAtOldestBreaksAllBalances() async {
+  @Test
+  func conversionFailureAtOldestBreaksAllBalances() async {
     let accountId = UUID()
     let oldestId = UUID()
     let middleId = UUID()
@@ -153,7 +157,8 @@ struct TransactionRunningBalanceTests {
   /// Issue #48: conversion failures must be reported to the caller — no more
   /// silent `try?`-style swallow. Captures the first error encountered so a
   /// store can surface it to the user and log/diagnose in production.
-  @Test func conversionFailureReportsFirstError() async throws {
+  @Test
+  func conversionFailureReportsFirstError() async throws {
     let accountId = UUID()
     // Oldest fails first so it's the "first" error in chronological processing.
     let oldestFailingId = UUID()

@@ -10,8 +10,7 @@ final class CloudKitCSVImportProfileRepository: CSVImportProfileRepository, @unc
     self.modelContainer = modelContainer
   }
 
-  @MainActor
-  private var context: ModelContext { modelContainer.mainContext }
+  @MainActor private var context: ModelContext { modelContainer.mainContext }
 
   func fetchAll() async throws -> [CSVImportProfile] {
     try await MainActor.run {

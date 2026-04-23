@@ -11,7 +11,8 @@ struct TransactionStoreAccountBalanceTests {
 
   // MARK: - Cross-Store Balance Updates
 
-  @Test func testCreateUpdatesAccountBalance() async throws {
+  @Test
+  func testCreateUpdatesAccountBalance() async throws {
     let account = TransactionStoreTestSupport.acct(id: accountId, name: "Bank", balance: 1000)
     let (backend, container) = try TestBackend.create()
     let stores = await TransactionStoreTestSupport.makeStores(
@@ -40,7 +41,8 @@ struct TransactionStoreAccountBalanceTests {
     #expect(balance.quantity == Decimal(950))
   }
 
-  @Test func testUpdateUpdatesAccountBalance() async throws {
+  @Test
+  func testUpdateUpdatesAccountBalance() async throws {
     let account = TransactionStoreTestSupport.acct(id: accountId, name: "Bank", balance: 950)
     let transaction = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-15"),
@@ -81,7 +83,8 @@ struct TransactionStoreAccountBalanceTests {
     #expect(balance.quantity == Decimal(875))
   }
 
-  @Test func testDeleteUpdatesAccountBalance() async throws {
+  @Test
+  func testDeleteUpdatesAccountBalance() async throws {
     let account = TransactionStoreTestSupport.acct(id: accountId, name: "Bank", balance: 950)
     let transaction = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-15"),

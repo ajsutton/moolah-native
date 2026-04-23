@@ -11,14 +11,16 @@ struct SyncCoordinatorTests {
 
   // MARK: - Zone Parsing
 
-  @Test func parseZoneProfileIndex() {
+  @Test
+  func parseZoneProfileIndex() {
     let zoneID = CKRecordZone.ID(
       zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
     let result = SyncCoordinator.parseZone(zoneID)
     #expect(result == .profileIndex)
   }
 
-  @Test func parseZoneProfileData() {
+  @Test
+  func parseZoneProfileData() {
     let profileId = UUID()
     let zoneID = CKRecordZone.ID(
       zoneName: "profile-\(profileId.uuidString)",
@@ -27,14 +29,16 @@ struct SyncCoordinatorTests {
     #expect(result == .profileData(profileId))
   }
 
-  @Test func parseZoneUnknown() {
+  @Test
+  func parseZoneUnknown() {
     let zoneID = CKRecordZone.ID(
       zoneName: "some-other-zone", ownerName: CKCurrentUserDefaultName)
     let result = SyncCoordinator.parseZone(zoneID)
     #expect(result == .unknown)
   }
 
-  @Test func parseZoneInvalidProfileUUID() {
+  @Test
+  func parseZoneInvalidProfileUUID() {
     let zoneID = CKRecordZone.ID(
       zoneName: "profile-not-a-uuid", ownerName: CKCurrentUserDefaultName)
     let result = SyncCoordinator.parseZone(zoneID)
@@ -43,7 +47,8 @@ struct SyncCoordinatorTests {
 
   // MARK: - State File Path
 
-  @Test func stateFileUsesCorrectName() throws {
+  @Test
+  func stateFileUsesCorrectName() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     #expect(coordinator.stateFileURL.lastPathComponent == "Moolah-v2-sync.syncstate")
@@ -51,7 +56,8 @@ struct SyncCoordinatorTests {
 
   // MARK: - Observer Lifecycle
 
-  @Test func addObserverReturnsToken() throws {
+  @Test
+  func addObserverReturnsToken() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
@@ -60,7 +66,8 @@ struct SyncCoordinatorTests {
     #expect(token.profileId == profileId)
   }
 
-  @Test func removeObserverStopsCallbacks() throws {
+  @Test
+  func removeObserverStopsCallbacks() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
@@ -80,7 +87,8 @@ struct SyncCoordinatorTests {
     #expect(callCount == 1)
   }
 
-  @Test func multipleObserversForSameProfile() throws {
+  @Test
+  func multipleObserversForSameProfile() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
@@ -97,7 +105,8 @@ struct SyncCoordinatorTests {
 
   // MARK: - Index Observer
 
-  @Test func indexObserverFiresOnNotification() throws {
+  @Test
+  func indexObserverFiresOnNotification() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     var callCount = 0
@@ -108,7 +117,8 @@ struct SyncCoordinatorTests {
     #expect(callCount == 1)
   }
 
-  @Test func removeIndexObserverStopsCallbacks() throws {
+  @Test
+  func removeIndexObserverStopsCallbacks() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     var callCount = 0
@@ -125,7 +135,8 @@ struct SyncCoordinatorTests {
 
   // MARK: - Fetch Session Batching
 
-  @Test func fetchSessionBatchesDeferCallbacks() throws {
+  @Test
+  func fetchSessionBatchesDeferCallbacks() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
@@ -152,7 +163,8 @@ struct SyncCoordinatorTests {
     #expect(callbackTypes == Set(["Account", "Transaction"]))
   }
 
-  @Test func fetchSessionCallbackNotFiredWhenNoChanges() throws {
+  @Test
+  func fetchSessionCallbackNotFiredWhenNoChanges() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
@@ -169,7 +181,8 @@ struct SyncCoordinatorTests {
 
   // MARK: - Stuck Fetch Flag
 
-  @Test func stuckFetchFlagResetWhenNewSessionStartsWhileAlreadyFetching() throws {
+  @Test
+  func stuckFetchFlagResetWhenNewSessionStartsWhileAlreadyFetching() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
@@ -199,7 +212,8 @@ struct SyncCoordinatorTests {
 
   // MARK: - Queue Methods
 
-  @Test func queueSaveConstructsCorrectRecordID() throws {
+  @Test
+  func queueSaveConstructsCorrectRecordID() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let id = UUID()
@@ -212,7 +226,8 @@ struct SyncCoordinatorTests {
     // No assertion needed beyond "doesn't crash" since CKSyncEngine is not started
   }
 
-  @Test func queueSaveWithRecordNameConstructsCorrectRecordID() throws {
+  @Test
+  func queueSaveWithRecordNameConstructsCorrectRecordID() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let zoneID = CKRecordZone.ID(
@@ -223,7 +238,8 @@ struct SyncCoordinatorTests {
     // No assertion needed beyond "doesn't crash"
   }
 
-  @Test func queueDeletionConstructsCorrectRecordID() throws {
+  @Test
+  func queueDeletionConstructsCorrectRecordID() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let id = UUID()
@@ -236,7 +252,8 @@ struct SyncCoordinatorTests {
 
   // MARK: - Post-Migration / Import Record Queueing
 
-  @Test func queueAllRecordsAfterImportReturnsAllRecordsInProfileZone() async throws {
+  @Test
+  func queueAllRecordsAfterImportReturnsAllRecordsInProfileZone() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
@@ -263,7 +280,8 @@ struct SyncCoordinatorTests {
     }
   }
 
-  @Test func queueAllRecordsAfterImportReturnsEmptyForProfileWithNoData() async throws {
+  @Test
+  func queueAllRecordsAfterImportReturnsEmptyForProfileWithNoData() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
@@ -282,7 +300,8 @@ struct SyncCoordinatorTests {
     UserDefaults(suiteName: "sync-coordinator-test-\(UUID().uuidString)")!
   }
 
-  @Test func queueUnsyncedRecordsForAllProfilesSkipsSyncedRecords() throws {
+  @Test
+  func queueUnsyncedRecordsForAllProfilesSkipsSyncedRecords() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(
       containerManager: manager, userDefaults: makeDefaults())
@@ -337,7 +356,8 @@ struct SyncCoordinatorTests {
     }
   }
 
-  @Test func queueUnsyncedRecordsForAllProfilesReturnsEmptyWhenNoProfiles() throws {
+  @Test
+  func queueUnsyncedRecordsForAllProfilesReturnsEmptyWhenNoProfiles() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(
       containerManager: manager, userDefaults: makeDefaults())
@@ -511,7 +531,8 @@ struct SyncCoordinatorTests {
 
   // MARK: - ProfileContainerManager Extensions
 
-  @Test func allProfileIdsReturnsKnownProfiles() throws {
+  @Test
+  func allProfileIdsReturnsKnownProfiles() throws {
     let manager = try ProfileContainerManager.forTesting()
     let context = ModelContext(manager.indexContainer)
 
@@ -532,7 +553,8 @@ struct SyncCoordinatorTests {
     #expect(Set(ids) == Set([id1, id2]))
   }
 
-  @Test func allProfileIdsReturnsEmptyWhenNoProfiles() throws {
+  @Test
+  func allProfileIdsReturnsEmptyWhenNoProfiles() throws {
     let manager = try ProfileContainerManager.forTesting()
     let ids = manager.allProfileIds()
     #expect(ids.isEmpty)
@@ -540,14 +562,16 @@ struct SyncCoordinatorTests {
 
   // MARK: - Handler Access
 
-  @Test func profileIndexHandlerUsesIndexContainer() throws {
+  @Test
+  func profileIndexHandlerUsesIndexContainer() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let handler = coordinator.profileIndexHandler
     #expect(handler.zoneID.zoneName == "profile-index")
   }
 
-  @Test func profileDataHandlerCreatedOnDemand() throws {
+  @Test
+  func profileDataHandlerCreatedOnDemand() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     let profileId = UUID()
@@ -562,20 +586,24 @@ struct SyncCoordinatorTests {
 
   // MARK: - Batch Kind Selection (issue #61)
 
-  @Test func batchKindAtomicByZoneIsFalseForProfileIndex() {
+  @Test
+  func batchKindAtomicByZoneIsFalseForProfileIndex() {
     #expect(SyncCoordinator.BatchKind.profileIndex.atomicByZone == false)
   }
 
-  @Test func batchKindAtomicByZoneIsTrueForProfileData() {
+  @Test
+  func batchKindAtomicByZoneIsTrueForProfileData() {
     #expect(SyncCoordinator.BatchKind.profileData.atomicByZone == true)
   }
 
-  @Test func selectBatchKindReturnsNilWhenNoChanges() {
+  @Test
+  func selectBatchKindReturnsNilWhenNoChanges() {
     let kind = SyncCoordinator.selectBatchKind(from: [])
     #expect(kind == nil)
   }
 
-  @Test func selectBatchKindPrefersProfileIndexWhenMixed() {
+  @Test
+  func selectBatchKindPrefersProfileIndexWhenMixed() {
     let indexZone = CKRecordZone.ID(
       zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
     let dataZone = CKRecordZone.ID(
@@ -589,7 +617,8 @@ struct SyncCoordinatorTests {
     #expect(kind == .profileIndex)
   }
 
-  @Test func selectBatchKindReturnsProfileDataWhenOnlyDataZoneChanges() {
+  @Test
+  func selectBatchKindReturnsProfileDataWhenOnlyDataZoneChanges() {
     let dataZone1 = CKRecordZone.ID(
       zoneName: "profile-\(UUID().uuidString)", ownerName: CKCurrentUserDefaultName)
     let dataZone2 = CKRecordZone.ID(
@@ -602,7 +631,8 @@ struct SyncCoordinatorTests {
     #expect(kind == .profileData)
   }
 
-  @Test func selectBatchKindIgnoresUnknownZones() {
+  @Test
+  func selectBatchKindIgnoresUnknownZones() {
     let unknownZone = CKRecordZone.ID(
       zoneName: "some-other-zone", ownerName: CKCurrentUserDefaultName)
     let changes: [CKSyncEngine.PendingRecordZoneChange] = [
@@ -612,7 +642,8 @@ struct SyncCoordinatorTests {
     #expect(kind == nil)
   }
 
-  @Test func filterChangesMatchingProfileIndexKeepsOnlyIndexZone() {
+  @Test
+  func filterChangesMatchingProfileIndexKeepsOnlyIndexZone() {
     let indexZone = CKRecordZone.ID(
       zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
     let dataZone = CKRecordZone.ID(
@@ -629,11 +660,13 @@ struct SyncCoordinatorTests {
 
   // MARK: - Re-fetch Backoff (issue #77)
 
-  @Test func refetchBackoffFirstAttemptIsFiveSeconds() {
+  @Test
+  func refetchBackoffFirstAttemptIsFiveSeconds() {
     #expect(SyncCoordinator.refetchBackoff(forAttempt: 1) == .seconds(5))
   }
 
-  @Test func refetchBackoffDoublesEachAttempt() {
+  @Test
+  func refetchBackoffDoublesEachAttempt() {
     #expect(SyncCoordinator.refetchBackoff(forAttempt: 1) == .seconds(5))
     #expect(SyncCoordinator.refetchBackoff(forAttempt: 2) == .seconds(10))
     #expect(SyncCoordinator.refetchBackoff(forAttempt: 3) == .seconds(20))
@@ -641,27 +674,32 @@ struct SyncCoordinatorTests {
     #expect(SyncCoordinator.refetchBackoff(forAttempt: 5) == .seconds(80))
   }
 
-  @Test func refetchBackoffReturnsNilBeyondMaxAttempts() {
+  @Test
+  func refetchBackoffReturnsNilBeyondMaxAttempts() {
     #expect(SyncCoordinator.refetchBackoff(forAttempt: 0) == nil)
     #expect(SyncCoordinator.refetchBackoff(forAttempt: 6) == nil)
     #expect(SyncCoordinator.refetchBackoff(forAttempt: 100) == nil)
   }
 
-  @Test func refetchBackoffReturnsNilForNegativeAttempt() {
+  @Test
+  func refetchBackoffReturnsNilForNegativeAttempt() {
     #expect(SyncCoordinator.refetchBackoff(forAttempt: -1) == nil)
   }
 
-  @Test func maxRefetchAttemptsIsFive() {
+  @Test
+  func maxRefetchAttemptsIsFive() {
     #expect(SyncCoordinator.maxRefetchAttempts == 5)
   }
 
-  @Test func refetchAttemptsStartsAtZero() throws {
+  @Test
+  func refetchAttemptsStartsAtZero() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     #expect(coordinator.refetchAttempts == 0)
   }
 
-  @Test func resetRefetchAttemptsClearsCounter() throws {
+  @Test
+  func resetRefetchAttemptsClearsCounter() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
 
@@ -672,7 +710,8 @@ struct SyncCoordinatorTests {
     #expect(coordinator.refetchAttempts == 0)
   }
 
-  @Test func stopResetsRefetchAttempts() throws {
+  @Test
+  func stopResetsRefetchAttempts() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
 
@@ -683,17 +722,20 @@ struct SyncCoordinatorTests {
 
   // MARK: - Long-Retry (issue #77)
 
-  @Test func longRetryIntervalIsThirtyMinutes() {
+  @Test
+  func longRetryIntervalIsThirtyMinutes() {
     #expect(SyncCoordinator.longRetryInterval == .seconds(30 * 60))
   }
 
-  @Test func hasPendingLongRetryStartsFalse() throws {
+  @Test
+  func hasPendingLongRetryStartsFalse() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
     #expect(coordinator.hasPendingLongRetry == false)
   }
 
-  @Test func resetRefetchAttemptsCancelsPendingLongRetry() throws {
+  @Test
+  func resetRefetchAttemptsCancelsPendingLongRetry() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
 
@@ -704,7 +746,8 @@ struct SyncCoordinatorTests {
     #expect(coordinator.hasPendingLongRetry == false)
   }
 
-  @Test func stopCancelsPendingLongRetry() throws {
+  @Test
+  func stopCancelsPendingLongRetry() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(containerManager: manager)
 
@@ -714,7 +757,8 @@ struct SyncCoordinatorTests {
     #expect(coordinator.hasPendingLongRetry == false)
   }
 
-  @Test func filterChangesMatchingProfileDataKeepsOnlyDataZones() {
+  @Test
+  func filterChangesMatchingProfileDataKeepsOnlyDataZones() {
     let indexZone = CKRecordZone.ID(
       zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
     let dataZoneA = CKRecordZone.ID(

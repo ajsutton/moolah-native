@@ -11,13 +11,15 @@ struct AnalysisStoreCategoriesOverTimeTests {
     InstrumentAmount(quantity: quantity, instrument: .defaultTestInstrument)
   }
 
-  @Test func emptyBreakdownReturnsNoEntries() {
+  @Test
+  func emptyBreakdownReturnsNoEntries() {
     let result = AnalysisStore.buildCategoriesOverTime(
       from: [], categories: Categories(from: []))
     #expect(result.isEmpty)
   }
 
-  @Test func singleCategorySingleMonth() {
+  @Test
+  func singleCategorySingleMonth() {
     let catId = UUID()
     let breakdown = [
       ExpenseBreakdown(
@@ -36,7 +38,8 @@ struct AnalysisStoreCategoriesOverTimeTests {
     #expect(result[0].points[0].percentage == 100.0)
   }
 
-  @Test func multipleCategoriesPercentageComputation() {
+  @Test
+  func multipleCategoriesPercentageComputation() {
     let cat1 = UUID()
     let cat2 = UUID()
     let breakdown = [
@@ -62,7 +65,8 @@ struct AnalysisStoreCategoriesOverTimeTests {
     #expect(result[1].points[0].percentage == 25.0)
   }
 
-  @Test func subcategoriesRollUpToRootLevel() {
+  @Test
+  func subcategoriesRollUpToRootLevel() {
     let rootId = UUID()
     let childId = UUID()
     let breakdown = [
@@ -86,7 +90,8 @@ struct AnalysisStoreCategoriesOverTimeTests {
     #expect(result[0].points[0].actualAmount == Decimal(500))
   }
 
-  @Test func multipleMonthsOrdered() {
+  @Test
+  func multipleMonthsOrdered() {
     let catId = UUID()
     let breakdown = [
       ExpenseBreakdown(
@@ -111,7 +116,8 @@ struct AnalysisStoreCategoriesOverTimeTests {
     #expect(result[0].points[2].month == "202606")
   }
 
-  @Test func uncategorizedExpensesHandled() {
+  @Test
+  func uncategorizedExpensesHandled() {
     let catId = UUID()
     let breakdown = [
       ExpenseBreakdown(
@@ -133,7 +139,8 @@ struct AnalysisStoreCategoriesOverTimeTests {
     #expect(uncategorized?.points[0].percentage == 40.0)
   }
 
-  @Test func positiveExpenseValuesClampsToZero() {
+  @Test
+  func positiveExpenseValuesClampsToZero() {
     // If server somehow returns positive expenses, they negate to negative
     // and get clamped to 0 (matching web app's Math.max(0, ...) behavior)
     let catId = UUID()
@@ -152,7 +159,8 @@ struct AnalysisStoreCategoriesOverTimeTests {
     #expect(result[0].points[0].percentage == 0.0)
   }
 
-  @Test func allZeroMonthsHandled() {
+  @Test
+  func allZeroMonthsHandled() {
     let catId = UUID()
     let breakdown = [
       ExpenseBreakdown(

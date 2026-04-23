@@ -136,8 +136,7 @@ struct AddTokenSheet: View {
 
   // MARK: - Confirmation
 
-  @ViewBuilder
-  private var confirmationSection: some View {
+  @ViewBuilder private var confirmationSection: some View {
     if let registration = store.resolvedRegistration {
       let instrument = registration.instrument
       let mapping = registration.mapping

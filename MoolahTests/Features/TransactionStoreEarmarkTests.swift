@@ -11,7 +11,8 @@ struct TransactionStoreEarmarkTests {
 
   // MARK: - Cross-Store Balance Updates with Earmarks
 
-  @Test func testCreateWithEarmarkUpdatesEarmarkBalance() async throws {
+  @Test
+  func testCreateWithEarmarkUpdatesEarmarkBalance() async throws {
     let earmarkId = UUID()
     let account = TransactionStoreTestSupport.acct(id: accountId, name: "Bank", balance: 1000)
     let earmark = Earmark(
@@ -47,7 +48,8 @@ struct TransactionStoreEarmarkTests {
     #expect(updatedEarmark?.spentPositions.first?.quantity == Decimal(50))
   }
 
-  @Test func testUpdateChangingEarmarkId() async throws {
+  @Test
+  func testUpdateChangingEarmarkId() async throws {
     let earmarkId1 = UUID()
     let earmarkId2 = UUID()
     let account = TransactionStoreTestSupport.acct(id: accountId, name: "Bank", balance: 950)
@@ -101,7 +103,8 @@ struct TransactionStoreEarmarkTests {
     #expect(updatedEarmark2?.spentPositions.first?.quantity == Decimal(50))
   }
 
-  @Test func testTypeChangeExpenseToIncomeUpdatesAccountBalance() async throws {
+  @Test
+  func testTypeChangeExpenseToIncomeUpdatesAccountBalance() async throws {
     let account = TransactionStoreTestSupport.acct(id: accountId, name: "Bank", balance: 950)
     let transaction = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-15"),
@@ -141,7 +144,8 @@ struct TransactionStoreEarmarkTests {
     #expect(balance.quantity == Decimal(1000))
   }
 
-  @Test func testPayScheduledTransactionUpdatesAccountBalance() async throws {
+  @Test
+  func testPayScheduledTransactionUpdatesAccountBalance() async throws {
     let account = TransactionStoreTestSupport.acct(id: accountId, name: "Bank", balance: 1000)
     let scheduled = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-15"),
@@ -172,7 +176,8 @@ struct TransactionStoreEarmarkTests {
     #expect(balance.quantity == Decimal(-1000))
   }
 
-  @Test func testPayOneTimeScheduledTransactionUpdatesAccountBalance() async throws {
+  @Test
+  func testPayOneTimeScheduledTransactionUpdatesAccountBalance() async throws {
     let account = TransactionStoreTestSupport.acct(id: accountId, name: "Bank", balance: 1000)
     let scheduled = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-15"),
@@ -203,7 +208,8 @@ struct TransactionStoreEarmarkTests {
     #expect(balance.quantity == Decimal(500))
   }
 
-  @Test func testRunningBalancesUpdateAfterAmountChange() async throws {
+  @Test
+  func testRunningBalancesUpdateAfterAmountChange() async throws {
     let salary = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-01"),
       payee: "Salary",

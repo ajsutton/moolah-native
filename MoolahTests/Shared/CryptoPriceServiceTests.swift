@@ -59,7 +59,8 @@ struct CryptoPriceServiceTests {
 
   // MARK: - Cache miss and hit
 
-  @Test func cacheMissFetchesFromClient() async throws {
+  @Test
+  func cacheMissFetchesFromClient() async throws {
     let service = makeService(prices: [
       "1:native": ["2026-04-10": Decimal(string: "1623.45")!]
     ])
@@ -68,7 +69,8 @@ struct CryptoPriceServiceTests {
     #expect(price == Decimal(string: "1623.45")!)
   }
 
-  @Test func cacheHitDoesNotRefetch() async throws {
+  @Test
+  func cacheHitDoesNotRefetch() async throws {
     let service = makeService(prices: [
       "1:native": ["2026-04-10": Decimal(string: "1623.45")!]
     ])
@@ -81,7 +83,8 @@ struct CryptoPriceServiceTests {
 
   // MARK: - Provider fallback
 
-  @Test func firstClientFailsFallsToSecond() async throws {
+  @Test
+  func firstClientFailsFallsToSecond() async throws {
     let failing = FixedCryptoPriceClient(shouldFail: true)
     let working = FixedCryptoPriceClient(prices: [
       "1:native": ["2026-04-10": Decimal(string: "1623.45")!]
@@ -92,7 +95,8 @@ struct CryptoPriceServiceTests {
     #expect(price == Decimal(string: "1623.45")!)
   }
 
-  @Test func allClientsFail_fallsBackToCachedPriorDate() async throws {
+  @Test
+  func allClientsFail_fallsBackToCachedPriorDate() async throws {
     let working = FixedCryptoPriceClient(prices: [
       "1:native": ["2026-04-09": Decimal(string: "1600.00")!]
     ])
@@ -105,7 +109,8 @@ struct CryptoPriceServiceTests {
     #expect(price == Decimal(string: "1600.00")!)
   }
 
-  @Test func allClientsFailWithEmptyCacheThrows() async throws {
+  @Test
+  func allClientsFailWithEmptyCacheThrows() async throws {
     let service = makeService(shouldFail: true)
     await #expect(throws: (any Error).self) {
       try await service.price(
@@ -115,7 +120,8 @@ struct CryptoPriceServiceTests {
 
   // MARK: - Fallback never uses future dates
 
-  @Test func fallbackNeverUsesFutureDate() async throws {
+  @Test
+  func fallbackNeverUsesFutureDate() async throws {
     let working = FixedCryptoPriceClient(prices: [
       "1:native": ["2026-04-15": Decimal(string: "1700.00")!]
     ])
@@ -130,7 +136,8 @@ struct CryptoPriceServiceTests {
 
   // MARK: - Date range
 
-  @Test func rangeFetchReturnsPricesForEachDay() async throws {
+  @Test
+  func rangeFetchReturnsPricesForEachDay() async throws {
     let service = makeService(prices: [
       "1:native": [
         "2026-04-07": Decimal(string: "1600.00")!,
@@ -146,7 +153,8 @@ struct CryptoPriceServiceTests {
     #expect(results[2].price == Decimal(string: "1620.00")!)
   }
 
-  @Test func rangeFetchOnlyRequestsMissingSegments() async throws {
+  @Test
+  func rangeFetchOnlyRequestsMissingSegments() async throws {
     let service = makeService(prices: [
       "1:native": [
         "2026-04-07": Decimal(string: "1600.00")!,
@@ -166,7 +174,8 @@ struct CryptoPriceServiceTests {
     #expect(results[4].price == Decimal(string: "1640.00")!)
   }
 
-  @Test func rangeFillsWeekendGapsWithLastKnownPrice() async throws {
+  @Test
+  func rangeFillsWeekendGapsWithLastKnownPrice() async throws {
     let service = makeService(prices: [
       "1:native": [
         "2026-04-10": Decimal(string: "1630.00")!
@@ -182,7 +191,8 @@ struct CryptoPriceServiceTests {
 
   // MARK: - Batch current prices
 
-  @Test func currentPricesFetchesForAllMappings() async throws {
+  @Test
+  func currentPricesFetchesForAllMappings() async throws {
     let service = makeService(prices: [
       "1:native": ["2026-04-11": Decimal(string: "1640.00")!],
       "0:native": ["2026-04-11": Decimal(string: "67890.00")!],
@@ -194,7 +204,8 @@ struct CryptoPriceServiceTests {
 
   // MARK: - Gzip round-trip
 
-  @Test func gzipRoundTripPreservesData() async throws {
+  @Test
+  func gzipRoundTripPreservesData() async throws {
     let tempDir = FileManager.default.temporaryDirectory
       .appendingPathComponent("crypto-price-tests")
       .appendingPathComponent(UUID().uuidString)
@@ -216,7 +227,8 @@ struct CryptoPriceServiceTests {
 
   // MARK: - Prefetch
 
-  @Test func prefetchLatest_usesRegisteredItemsWhenNoneProvided() async throws {
+  @Test
+  func prefetchLatest_usesRegisteredItemsWhenNoneProvided() async throws {
     let repo = InMemoryTokenRepository()
     try await repo.saveRegistrations([ethRegistration, btcRegistration])
 
@@ -233,7 +245,8 @@ struct CryptoPriceServiceTests {
     #expect(ethPrice == Decimal(string: "1640.00")!)
   }
 
-  @Test func prefetchUpdatesCacheForRegisteredItems() async throws {
+  @Test
+  func prefetchUpdatesCacheForRegisteredItems() async throws {
     let service = makeService(prices: [
       "1:native": ["2026-04-11": Decimal(string: "1640.00")!],
       "0:native": ["2026-04-11": Decimal(string: "67890.00")!],
@@ -246,7 +259,8 @@ struct CryptoPriceServiceTests {
 
   // MARK: - Multiple tokens cached independently
 
-  @Test func differentTokensAreCachedIndependently() async throws {
+  @Test
+  func differentTokensAreCachedIndependently() async throws {
     let service = makeService(prices: [
       "1:native": ["2026-04-10": Decimal(string: "1623.45")!],
       "0:native": ["2026-04-10": Decimal(string: "67890.00")!],
@@ -261,7 +275,8 @@ struct CryptoPriceServiceTests {
 
   // MARK: - Registration management
 
-  @Test func registerAddsToList() async throws {
+  @Test
+  func registerAddsToList() async throws {
     let service = makeService()
     let registration = CryptoRegistration.builtInPresets[0]
     try await service.register(registration)
@@ -270,7 +285,8 @@ struct CryptoPriceServiceTests {
     #expect(items[0].id == registration.id)
   }
 
-  @Test func removeDeletesFromList() async throws {
+  @Test
+  func removeDeletesFromList() async throws {
     let service = makeService()
     let registration = CryptoRegistration.builtInPresets[0]
     try await service.register(registration)
@@ -279,7 +295,8 @@ struct CryptoPriceServiceTests {
     #expect(items.isEmpty)
   }
 
-  @Test func registrationsPersistViaRepository() async throws {
+  @Test
+  func registrationsPersistViaRepository() async throws {
     let repo = InMemoryTokenRepository()
     let service1 = makeService(tokenRepository: repo)
     try await service1.register(CryptoRegistration.builtInPresets[0])
@@ -291,7 +308,8 @@ struct CryptoPriceServiceTests {
 
   // MARK: - Token resolution
 
-  @Test func resolveRegistration_populatesProviderFields() async throws {
+  @Test
+  func resolveRegistration_populatesProviderFields() async throws {
     let result = TokenResolutionResult(
       coingeckoId: "uniswap",
       cryptocompareSymbol: "UNI",
@@ -314,7 +332,8 @@ struct CryptoPriceServiceTests {
     #expect(registration.instrument.name == "Uniswap")
   }
 
-  @Test func resolveRegistration_noProvidersMatch_returnsPartialRegistration() async throws {
+  @Test
+  func resolveRegistration_noProvidersMatch_returnsPartialRegistration() async throws {
     let service = makeService(
       resolutionClient: FixedTokenResolutionClient(result: TokenResolutionResult())
     )
@@ -330,7 +349,8 @@ struct CryptoPriceServiceTests {
     #expect(registration.instrument.ticker == "UNKNOWN")
   }
 
-  @Test func resolveRegistration_resolutionFails_throws() async throws {
+  @Test
+  func resolveRegistration_resolutionFails_throws() async throws {
     let service = makeService(
       resolutionClient: FixedTokenResolutionClient(shouldFail: true)
     )

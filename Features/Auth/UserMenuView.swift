@@ -75,8 +75,7 @@ struct UserMenuView: View {
   // MARK: - Profile Section (iOS only)
 
   #if os(iOS)
-    @ViewBuilder
-    private var profileSection: some View {
+    @ViewBuilder private var profileSection: some View {
       ProfileMenuItems()
 
       Button(String(localized: "Manage Profiles...")) {

@@ -8,7 +8,8 @@ import Testing
 @MainActor
 struct AccountStoreConversionTests {
 
-  @Test func singleCurrencyAccountPositions() async throws {
+  @Test
+  func singleCurrencyAccountPositions() async throws {
     let accountId = UUID()
     let account = Account(
       id: accountId, name: "Bank", type: .bank, instrument: .defaultTestInstrument)
@@ -42,7 +43,8 @@ struct AccountStoreConversionTests {
     #expect(positions.first?.quantity == Decimal(string: "1000.00")!)
   }
 
-  @Test func multiCurrencyAccountShowsMultiplePositions() async throws {
+  @Test
+  func multiCurrencyAccountShowsMultiplePositions() async throws {
     let accountId = UUID()
     let account = Account(
       id: accountId, name: "Revolut", type: .bank,
@@ -93,7 +95,8 @@ struct AccountStoreConversionTests {
       }))
   }
 
-  @Test func convertedTotalSumsAllPositionsInProfileCurrency() async throws {
+  @Test
+  func convertedTotalSumsAllPositionsInProfileCurrency() async throws {
     let accountId = UUID()
     let account = Account(
       id: accountId, name: "Revolut", type: .bank,
@@ -146,7 +149,8 @@ struct AccountStoreConversionTests {
     #expect(total.instrument == .AUD)
   }
 
-  @Test func positionsForUnknownAccountReturnsEmpty() async throws {
+  @Test
+  func positionsForUnknownAccountReturnsEmpty() async throws {
     let (backend, _) = try TestBackend.create()
     let store = AccountStore(
       repository: backend.accounts,
@@ -157,7 +161,8 @@ struct AccountStoreConversionTests {
     #expect(store.positions(for: UUID()).isEmpty)
   }
 
-  @Test func mixedKindAccountShowsFiatAndStockPositions() async throws {
+  @Test
+  func mixedKindAccountShowsFiatAndStockPositions() async throws {
     let accountId = UUID()
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
     let account = Account(
@@ -197,7 +202,8 @@ struct AccountStoreConversionTests {
     #expect(positions.contains { $0.instrument == bhp })
   }
 
-  @Test func mixedKindAccountShowsFiatStockAndCryptoPositions() async throws {
+  @Test
+  func mixedKindAccountShowsFiatStockAndCryptoPositions() async throws {
     let accountId = UUID()
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
     let eth = Instrument.crypto(
@@ -249,7 +255,8 @@ struct AccountStoreConversionTests {
 
   // MARK: - displayBalance
 
-  @Test func displayBalanceSumsAllPositionsInAccountInstrument() async throws {
+  @Test
+  func displayBalanceSumsAllPositionsInAccountInstrument() async throws {
     let accountId = UUID()
     let account = Account(
       id: accountId, name: "Revolut", type: .bank, instrument: .AUD)
@@ -287,7 +294,8 @@ struct AccountStoreConversionTests {
     #expect(balance.quantity == Decimal(string: "1300.00")!)
   }
 
-  @Test func displayBalanceForSingleCurrencyAccountReturnsPrimaryPosition() async throws {
+  @Test
+  func displayBalanceForSingleCurrencyAccountReturnsPrimaryPosition() async throws {
     let accountId = UUID()
     let account = Account(
       id: accountId, name: "Bank", type: .bank, instrument: .defaultTestInstrument)
@@ -315,7 +323,8 @@ struct AccountStoreConversionTests {
     #expect(balance.instrument == .defaultTestInstrument)
   }
 
-  @Test func displayBalanceForInvestmentAccountPrefersInvestmentValue() async throws {
+  @Test
+  func displayBalanceForInvestmentAccountPrefersInvestmentValue() async throws {
     let accountId = UUID()
     let account = Account(
       id: accountId, name: "Portfolio", type: .investment, instrument: .AUD)
@@ -350,7 +359,8 @@ struct AccountStoreConversionTests {
     #expect(override == externalValue)
   }
 
-  @Test func displayBalanceForUnknownAccountReturnsZero() async throws {
+  @Test
+  func displayBalanceForUnknownAccountReturnsZero() async throws {
     let (backend, _) = try TestBackend.create()
     let store = AccountStore(
       repository: backend.accounts,
@@ -366,7 +376,8 @@ struct AccountStoreConversionTests {
   /// When one account's conversion fails, other accounts whose conversions
   /// succeed still appear in `convertedBalances`. Aggregate totals stay nil
   /// because we cannot accurately sum a set with a missing value.
-  @Test func perAccountBalancePopulatesEvenWhenAnotherAccountFails() async throws {
+  @Test
+  func perAccountBalancePopulatesEvenWhenAnotherAccountFails() async throws {
     let aud = Instrument.AUD
     let usd = Instrument.USD
     let eur = Instrument.fiat(code: "EUR")
@@ -422,7 +433,8 @@ struct AccountStoreConversionTests {
 
   /// After conversion service recovers, a retry populates the previously
   /// failing account balance and the aggregate totals.
-  @Test func conversionFailuresAreRetriedAfterDelay() async throws {
+  @Test
+  func conversionFailuresAreRetriedAfterDelay() async throws {
     let aud = Instrument.AUD
     let eur = Instrument.fiat(code: "EUR")
     let bankAud = Account(name: "AUD Bank", type: .bank, instrument: aud)
@@ -479,7 +491,8 @@ struct AccountStoreConversionTests {
   /// actor and doubles the retry blast radius when the outer hop fails.
   /// The implementation should mirror `computeConvertedCurrentTotal` and
   /// convert each position directly to `target` in one pass.
-  @Test func computeConvertedInvestmentTotalDoesNotDoubleConvert() async throws {
+  @Test
+  func computeConvertedInvestmentTotalDoesNotDoubleConvert() async throws {
     let aud = Instrument.AUD
     let usd = Instrument.USD
     let eur = Instrument.fiat(code: "EUR")
@@ -543,7 +556,8 @@ struct AccountStoreConversionTests {
   /// positions directly to `target`. This test uses an asymmetric rate table
   /// where double-conversion and single-pass conversion produce distinct
   /// numerical answers and asserts the single-pass answer is returned.
-  @Test func computeConvertedInvestmentTotalSumsPositionsDirectlyToTarget()
+  @Test
+  func computeConvertedInvestmentTotalSumsPositionsDirectlyToTarget()
     async throws
   {
     let accountId = UUID()
@@ -599,7 +613,8 @@ struct AccountStoreConversionTests {
   /// `InvestmentStore.valuatePositions`), `computeConvertedInvestmentTotal`
   /// must use that value verbatim and convert it *once* to the target —
   /// never re-sum the raw positions, and never double-convert.
-  @Test func computeConvertedInvestmentTotalUsesExternalValueWhenProvided()
+  @Test
+  func computeConvertedInvestmentTotalUsesExternalValueWhenProvided()
     async throws
   {
     let accountId = UUID()
@@ -643,7 +658,8 @@ struct AccountStoreConversionTests {
   /// stacking spurious conversions. For a profile where account instrument,
   /// positions, and target all share a currency, the result equals the raw
   /// position sum.
-  @Test func computeConvertedInvestmentTotalFastPathSameInstrument()
+  @Test
+  func computeConvertedInvestmentTotalFastPathSameInstrument()
     async throws
   {
     let accountId = UUID()

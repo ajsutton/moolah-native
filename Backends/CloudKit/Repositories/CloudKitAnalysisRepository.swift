@@ -77,8 +77,7 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     self.conversionService = conversionService
   }
 
-  @MainActor
-  private var context: ModelContext {
+  @MainActor private var context: ModelContext {
     modelContainer.mainContext
   }
 

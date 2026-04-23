@@ -4,8 +4,7 @@ import SwiftData
 @Model
 final class ProfileRecord {
 
-  @Attribute(.preserveValueOnDeletion)
-  var id = UUID()
+  @Attribute(.preserveValueOnDeletion) var id = UUID()
 
   var label: String = ""
   var currencyCode: String = ""

@@ -7,7 +7,8 @@ import Testing
 @Suite("CompositeTokenResolutionClient")
 struct CompositeTokenResolutionClientTests {
 
-  @Test func resolve_contractToken_findsCryptoCompareAndBinance() async throws {
+  @Test
+  func resolve_contractToken_findsCryptoCompareAndBinance() async throws {
     let ccCoinList = Data(
       """
       {
@@ -46,7 +47,8 @@ struct CompositeTokenResolutionClientTests {
     #expect(result.binanceSymbol == "UNIUSDT")
   }
 
-  @Test func resolve_nativeToken_matchesBySymbol() async throws {
+  @Test
+  func resolve_nativeToken_matchesBySymbol() async throws {
     let ccCoinList = Data(
       """
       {
@@ -79,7 +81,8 @@ struct CompositeTokenResolutionClientTests {
     #expect(result.binanceSymbol == "BTCUSDT")
   }
 
-  @Test func resolve_unknownToken_returnsEmptyResult() async throws {
+  @Test
+  func resolve_unknownToken_returnsEmptyResult() async throws {
     let ccCoinList = Data(
       """
       { "Data": {} }
@@ -104,7 +107,8 @@ struct CompositeTokenResolutionClientTests {
     #expect(result.coingeckoId == nil)
   }
 
-  @Test func resolve_matchesContractAddressRegardlessOfCase() async throws {
+  @Test
+  func resolve_matchesContractAddressRegardlessOfCase() async throws {
     // CoinList uses lowercase addresses; callers may pass checksummed (mixed-case).
     let ccCoinList = Data(
       """
@@ -139,7 +143,8 @@ struct CompositeTokenResolutionClientTests {
     #expect(result.cryptocompareSymbol == "UNI")
   }
 
-  @Test func resolve_nativeOnDifferentChainsAreDistinct() async throws {
+  @Test
+  func resolve_nativeOnDifferentChainsAreDistinct() async throws {
     // Resolving native tokens on two different chainIds should not conflate them —
     // the chainId combined with symbol scopes the lookup.
     let ccCoinList = Data(

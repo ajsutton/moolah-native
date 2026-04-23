@@ -147,8 +147,7 @@ struct EarmarkDetailView: View {
     .accessibilityElement(children: .combine)
   }
 
-  @ViewBuilder
-  private var savingsDateRow: some View {
+  @ViewBuilder private var savingsDateRow: some View {
     let hasStart = earmark.savingsStartDate != nil
     let hasEnd = earmark.savingsEndDate != nil
 

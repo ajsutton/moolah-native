@@ -7,7 +7,8 @@ import Testing
 struct TransactionDraftAutofillTests {
   private let support = TransactionDraftTestSupport()
 
-  @Test func autofillCopiesEverythingExceptDate() throws {
+  @Test
+  func autofillCopiesEverythingExceptDate() throws {
     let categoryId = UUID()
     let earmarkId = UUID()
     let matchDate = Date(timeIntervalSince1970: 999_999)
@@ -42,7 +43,8 @@ struct TransactionDraftAutofillTests {
     #expect(draft.date != matchDate)
   }
 
-  @Test func autofillFromComplexTransactionSetsCustomMode() {
+  @Test
+  func autofillFromComplexTransactionSetsCustomMode() {
     let matchTx = Transaction(
       date: Date(),
       payee: "Split",
@@ -67,7 +69,8 @@ struct TransactionDraftAutofillTests {
     #expect(draft.payee == "Split")
   }
 
-  @Test func autofillPopulatesCategoryText() {
+  @Test
+  func autofillPopulatesCategoryText() {
     let categoryId = UUID()
     let matchTx = Transaction(
       date: Date(),
@@ -87,7 +90,8 @@ struct TransactionDraftAutofillTests {
     #expect(draft.legDrafts[0].categoryText == "Groceries")
   }
 
-  @Test func autofillPreservesViewingAccountForSimpleMatch() {
+  @Test
+  func autofillPreservesViewingAccountForSimpleMatch() {
     // Match was recorded against accountB, but the user is viewing accountA.
     let matchTx = Transaction(
       date: Date(),
@@ -107,7 +111,8 @@ struct TransactionDraftAutofillTests {
     #expect(draft.legDrafts[0].accountId == support.accountA)
   }
 
-  @Test func autofillRemapsInstrumentToViewingAccount() {
+  @Test
+  func autofillRemapsInstrumentToViewingAccount() {
     let usd = Instrument.fiat(code: "USD")
     let eur = Instrument.fiat(code: "EUR")
     let accounts = support.makeAccounts([
@@ -131,7 +136,8 @@ struct TransactionDraftAutofillTests {
     #expect(draft.legDrafts[0].instrumentId == usd.id)
   }
 
-  @Test func autofillWithoutViewingContextUsesMatchAccount() {
+  @Test
+  func autofillWithoutViewingContextUsesMatchAccount() {
     // When there's no viewing account (e.g. "All Transactions"), autofill
     // should adopt the match's account as before.
     let matchTx = Transaction(
@@ -150,7 +156,8 @@ struct TransactionDraftAutofillTests {
     #expect(draft.legDrafts[0].accountId == support.accountB)
   }
 
-  @Test func autofillPreservesViewingAccountForTransferMatch() {
+  @Test
+  func autofillPreservesViewingAccountForTransferMatch() {
     // Transfer match is A->B, but user is viewing accountC; the viewed-account
     // leg should be remapped to C while the counterpart leg is preserved.
     let accountC = UUID()

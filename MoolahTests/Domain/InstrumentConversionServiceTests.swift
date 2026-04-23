@@ -22,7 +22,8 @@ struct InstrumentConversionServiceTests {
     return FiatConversionService(exchangeRates: exchangeRates)
   }
 
-  @Test func sameCurrencyReturnsIdentity() async throws {
+  @Test
+  func sameCurrencyReturnsIdentity() async throws {
     let service = makeService()
     let result = try await service.convert(
       Decimal(string: "100.00")!,
@@ -32,7 +33,8 @@ struct InstrumentConversionServiceTests {
     #expect(result == Decimal(string: "100.00")!)
   }
 
-  @Test func convertsAUDtoUSD() async throws {
+  @Test
+  func convertsAUDtoUSD() async throws {
     let service = makeService(rates: [
       "2025-06-15": ["USD": Decimal(string: "0.6500")!]
     ])
@@ -44,7 +46,8 @@ struct InstrumentConversionServiceTests {
     #expect(result == Decimal(string: "650.00")!)
   }
 
-  @Test func convertsUSDtoAUD() async throws {
+  @Test
+  func convertsUSDtoAUD() async throws {
     let service = makeService(rates: [
       "2025-06-15": ["AUD": Decimal(string: "1.5385")!]
     ])
@@ -56,7 +59,8 @@ struct InstrumentConversionServiceTests {
     #expect(result == Decimal(string: "650.00")! * Decimal(string: "1.5385")!)
   }
 
-  @Test func convertAmount() async throws {
+  @Test
+  func convertAmount() async throws {
     let service = makeService(rates: [
       "2025-06-15": ["USD": Decimal(string: "0.6500")!]
     ])
@@ -71,7 +75,8 @@ struct InstrumentConversionServiceTests {
     #expect(result.quantity == Decimal(string: "650.00")!)
   }
 
-  @Test func convertAmountSameCurrency() async throws {
+  @Test
+  func convertAmountSameCurrency() async throws {
     let service = makeService()
     let amount = InstrumentAmount(
       quantity: Decimal(string: "1000.00")!,

@@ -6,14 +6,11 @@ struct GetMonthlySummaryIntent: AppIntent {
   static let description = IntentDescription(
     "Returns a summary of income, expenses, and net for a given month.")
 
-  @Parameter(title: "Profile")
-  var profile: ProfileEntity
+  @Parameter(title: "Profile") var profile: ProfileEntity
 
-  @Parameter(title: "Month", default: 1)
-  var month: Int
+  @Parameter(title: "Month", default: 1) var month: Int
 
-  @Parameter(title: "Year")
-  var year: Int?
+  @Parameter(title: "Year") var year: Int?
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<String> {

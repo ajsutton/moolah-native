@@ -28,7 +28,8 @@ struct TransactionDraftRoundTripTests {
   /// the same account but carry different instruments (an AUD<->NZD trade booked
   /// against a single AUD investment account). The round-trip must preserve each
   /// leg's instrument rather than silently re-deriving it from the account.
-  @Test func customTransactionMixedInstrumentsSameAccountRoundTrips() throws {
+  @Test
+  func customTransactionMixedInstrumentsSameAccountRoundTrips() throws {
     let accountId = UUID()
     let accounts = support.makeAccounts([support.makeAccount(id: accountId, instrument: .AUD)])
     let availableInstruments = [Instrument.AUD, Instrument.fiat(code: "NZD")]
@@ -57,7 +58,8 @@ struct TransactionDraftRoundTripTests {
     #expect(roundTripped.legs[1].accountId == accountId)
   }
 
-  @Test func customTransactionPreservesLegOrder() throws {
+  @Test
+  func customTransactionPreservesLegOrder() throws {
     let accountIds = [UUID(), UUID(), UUID()]
     let accounts = support.makeAccounts(accountIds.map { support.makeAccount(id: $0) })
     let original = Transaction(
@@ -89,7 +91,8 @@ struct TransactionDraftRoundTripTests {
     #expect(roundTripped.legs[2].quantity == Decimal(300))
   }
 
-  @Test func customTransactionPreservesPerLegFields() throws {
+  @Test
+  func customTransactionPreservesPerLegFields() throws {
     let categoryIdA = UUID()
     let categoryIdB = UUID()
     let earmarkIdA = UUID()
@@ -125,7 +128,8 @@ struct TransactionDraftRoundTripTests {
     #expect(roundTripped.legs[1].earmarkId == earmarkIdB)
   }
 
-  @Test func customTransactionPreservesDecimalPrecision() throws {
+  @Test
+  func customTransactionPreservesDecimalPrecision() throws {
     let jpy = Instrument.fiat(code: "JPY")  // 0 decimals
     #expect(jpy.decimals == 0)
     let accountJpy = UUID()
@@ -157,7 +161,8 @@ struct TransactionDraftRoundTripTests {
     #expect(roundTripped.legs[1].instrument == .AUD)
   }
 
-  @Test func customTransactionPreservesTransactionLevelFields() throws {
+  @Test
+  func customTransactionPreservesTransactionLevelFields() throws {
     let accounts = support.makeAccounts([
       support.makeAccount(id: support.accountA),
       support.makeAccount(id: support.accountB),
@@ -195,7 +200,8 @@ struct TransactionDraftRoundTripTests {
     #expect(roundTripped.recurEvery == 3)
   }
 
-  @Test func customTransactionEarmarkOnlyLegRoundTrips() throws {
+  @Test
+  func customTransactionEarmarkOnlyLegRoundTrips() throws {
     let earmarkId = UUID()
     let accounts = support.makeAccounts([
       support.makeAccount(id: support.accountA, instrument: support.instrument)
@@ -230,7 +236,8 @@ struct TransactionDraftRoundTripTests {
     #expect(roundTripped.legs[1].instrument == support.instrument)
   }
 
-  @Test func customTransactionMixedLegTypesRoundTrip() throws {
+  @Test
+  func customTransactionMixedLegTypesRoundTrip() throws {
     let accountC = UUID()
     let accounts = support.makeAccounts([
       support.makeAccount(id: support.accountA),

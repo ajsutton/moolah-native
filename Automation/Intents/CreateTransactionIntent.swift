@@ -6,23 +6,17 @@ struct CreateTransactionIntent: AppIntent {
   static let description = IntentDescription(
     "Creates a new transaction in the specified account.")
 
-  @Parameter(title: "Profile")
-  var profile: ProfileEntity
+  @Parameter(title: "Profile") var profile: ProfileEntity
 
-  @Parameter(title: "Payee")
-  var payee: String
+  @Parameter(title: "Payee") var payee: String
 
-  @Parameter(title: "Amount")
-  var amount: Double
+  @Parameter(title: "Amount") var amount: Double
 
-  @Parameter(title: "Account")
-  var account: AccountEntity
+  @Parameter(title: "Account") var account: AccountEntity
 
-  @Parameter(title: "Category", default: nil)
-  var category: CategoryEntity?
+  @Parameter(title: "Category", default: nil) var category: CategoryEntity?
 
-  @Parameter(title: "Date", default: nil)
-  var date: Date?
+  @Parameter(title: "Date", default: nil) var date: Date?
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<String> {

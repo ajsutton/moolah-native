@@ -65,7 +65,8 @@ struct AccountStoreMutationsTests {
 
   // MARK: - Instrument Persistence
 
-  @Test func testCreatePersistsInstrument() async throws {
+  @Test
+  func testCreatePersistsInstrument() async throws {
     let (backend, _) = try TestBackend.create()
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
@@ -89,7 +90,8 @@ struct AccountStoreMutationsTests {
   /// amount in the account's instrument. Without this, the sidebar row spins
   /// forever because `AccountSidebarRow` reads `convertedBalances[id]` and
   /// `SidebarRowView` renders a `ProgressView` whenever that entry is `nil`.
-  @Test func testCreateEmptyInvestmentAccountPopulatesConvertedBalance() async throws {
+  @Test
+  func testCreateEmptyInvestmentAccountPopulatesConvertedBalance() async throws {
     let (backend, _) = try TestBackend.create()
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
@@ -106,7 +108,8 @@ struct AccountStoreMutationsTests {
     #expect(balance?.instrument.id == Instrument.defaultTestInstrument.id)
   }
 
-  @Test func testUpdatePersistsChangedInstrument() async throws {
+  @Test
+  func testUpdatePersistsChangedInstrument() async throws {
     let (backend, container) = try TestBackend.create()
     let original = AccountStoreTestSupport.seedAccount(name: "Savings", in: container)
     let store = AccountStore(
@@ -127,7 +130,8 @@ struct AccountStoreMutationsTests {
 
   // MARK: - reorderAccounts
 
-  @Test func testReorderAccountsPersistsNewPositions() async throws {
+  @Test
+  func testReorderAccountsPersistsNewPositions() async throws {
     let firstId = UUID()
     let secondId = UUID()
     let thirdId = UUID()
@@ -153,7 +157,8 @@ struct AccountStoreMutationsTests {
     #expect(persisted.map(\.name) == ["C", "B", "A"])
   }
 
-  @Test func testReorderAccountsSurfacesErrorOnFailure() async throws {
+  @Test
+  func testReorderAccountsSurfacesErrorOnFailure() async throws {
     let idA = UUID()
     let idB = UUID()
     let repository = FailingAccountRepository(
@@ -182,7 +187,8 @@ struct AccountStoreMutationsTests {
     #expect(store.accounts.ordered.map(\.name) == ["A", "B"])
   }
 
-  @Test func testReorderAccountsRollsBackLocalStateOnFailure() async throws {
+  @Test
+  func testReorderAccountsRollsBackLocalStateOnFailure() async throws {
     let idA = UUID()
     let idB = UUID()
     let original = [

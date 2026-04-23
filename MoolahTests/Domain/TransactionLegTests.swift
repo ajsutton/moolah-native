@@ -8,7 +8,8 @@ struct TransactionLegTests {
   let accountId = UUID()
   let aud = Instrument.AUD
 
-  @Test func expenseLeg() {
+  @Test
+  func expenseLeg() {
     let leg = TransactionLeg(
       accountId: accountId,
       instrument: aud,
@@ -23,7 +24,8 @@ struct TransactionLegTests {
     #expect(leg.earmarkId == nil)
   }
 
-  @Test func legWithCategoryAndEarmark() {
+  @Test
+  func legWithCategoryAndEarmark() {
     let catId = UUID()
     let earId = UUID()
     let leg = TransactionLeg(
@@ -38,7 +40,8 @@ struct TransactionLegTests {
     #expect(leg.earmarkId == earId)
   }
 
-  @Test func codableRoundTrip() throws {
+  @Test
+  func codableRoundTrip() throws {
     let leg = TransactionLeg(
       accountId: accountId,
       instrument: aud,
@@ -51,7 +54,8 @@ struct TransactionLegTests {
     #expect(decoded == leg)
   }
 
-  @Test func amount() {
+  @Test
+  func amount() {
     let leg = TransactionLeg(
       accountId: accountId,
       instrument: aud,
@@ -61,7 +65,8 @@ struct TransactionLegTests {
     #expect(leg.amount == InstrumentAmount(quantity: Decimal(string: "-50.23")!, instrument: aud))
   }
 
-  @Test func nilAccountId() {
+  @Test
+  func nilAccountId() {
     let earId = UUID()
     let leg = TransactionLeg(
       accountId: nil,
@@ -75,7 +80,8 @@ struct TransactionLegTests {
     #expect(leg.quantity == 5)
   }
 
-  @Test func nilAccountIdCodableRoundTrip() throws {
+  @Test
+  func nilAccountIdCodableRoundTrip() throws {
     let leg = TransactionLeg(
       accountId: nil,
       instrument: aud,
@@ -91,7 +97,8 @@ struct TransactionLegTests {
 
   // MARK: - Multi-instrument leg behavior
 
-  @Test func stockLegCodableRoundTripPreservesInstrumentMetadata() throws {
+  @Test
+  func stockLegCodableRoundTripPreservesInstrumentMetadata() throws {
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
     let leg = TransactionLeg(
       accountId: accountId,
@@ -108,7 +115,8 @@ struct TransactionLegTests {
     #expect(decoded.quantity == Decimal(150))
   }
 
-  @Test func cryptoLegCodableRoundTripPreservesChainMetadata() throws {
+  @Test
+  func cryptoLegCodableRoundTripPreservesChainMetadata() throws {
     let usdc = Instrument.crypto(
       chainId: 1,
       contractAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
@@ -131,7 +139,8 @@ struct TransactionLegTests {
     #expect(decoded.quantity == Decimal(string: "1234.567890")!)
   }
 
-  @Test func amountPropertyReturnsInstrumentAmountForStock() {
+  @Test
+  func amountPropertyReturnsInstrumentAmountForStock() {
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
     let leg = TransactionLeg(
       accountId: accountId,
@@ -144,7 +153,8 @@ struct TransactionLegTests {
     #expect(leg.amount.instrument.kind == .stock)
   }
 
-  @Test func amountPropertyReturnsInstrumentAmountForCrypto() {
+  @Test
+  func amountPropertyReturnsInstrumentAmountForCrypto() {
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
     )

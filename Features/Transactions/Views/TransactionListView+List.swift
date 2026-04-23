@@ -1,8 +1,7 @@
 import SwiftUI
 
 extension TransactionListView {
-  @ViewBuilder
-  var listView: some View {
+  @ViewBuilder var listView: some View {
     if let positionsInput, !positionsInput.positions.isEmpty {
       PositionsTransactionsSplit(defaultTab: .transactions) {
         PositionsView(input: positionsInput, range: $positionsRange)
@@ -161,8 +160,7 @@ extension TransactionListView {
     }
   }
 
-  @ViewBuilder
-  private var loadMoreFooter: some View {
+  @ViewBuilder private var loadMoreFooter: some View {
     if transactionStore.isLoading {
       HStack {
         Spacer()
@@ -189,8 +187,7 @@ extension TransactionListView {
   ///   clear filters/search.
   /// - No transactions loaded at all with an active filter → filter excludes everything.
   /// - Otherwise (new / empty account) → encourage adding the first transaction.
-  @ViewBuilder
-  private var emptyStateOverlay: some View {
+  @ViewBuilder private var emptyStateOverlay: some View {
     if transactionStore.isLoading {
       EmptyView()
     } else if filteredTransactions.isEmpty {

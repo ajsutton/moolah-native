@@ -36,8 +36,7 @@ struct PositionsTable: View {
 
   // MARK: - Wide
 
-  @ViewBuilder
-  private var wideLayout: some View {
+  @ViewBuilder private var wideLayout: some View {
     let sortedRows = groups.flatMap(\.rows).sorted(using: sortOrder)
     Table(sortedRows, selection: rowSelectionBinding, sortOrder: $sortOrder) {
       TableColumn("Instrument", value: \.instrument.name) { row in
@@ -109,8 +108,7 @@ struct PositionsTable: View {
 
   // MARK: - Narrow
 
-  @ViewBuilder
-  private var narrowLayout: some View {
+  @ViewBuilder private var narrowLayout: some View {
     List(selection: narrowSelectionBinding) {
       ForEach(groups) { group in
         groupContent(for: group)

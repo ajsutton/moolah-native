@@ -8,7 +8,8 @@ import Testing
 @MainActor
 struct AccountStoreLoadingTests {
 
-  @Test func testPopulatesFromRepository() async throws {
+  @Test
+  func testPopulatesFromRepository() async throws {
     let (backend, container) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
       name: "Checking", balance: Decimal(100000) / 100, in: container)
@@ -22,7 +23,8 @@ struct AccountStoreLoadingTests {
     #expect(store.accounts.first?.name == "Checking")
   }
 
-  @Test func testSortingByPosition() async throws {
+  @Test
+  func testSortingByPosition() async throws {
     let (backend, container) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
       name: "A1", balance: Decimal(10000) / 100, position: 2, in: container)
@@ -39,7 +41,8 @@ struct AccountStoreLoadingTests {
     #expect(store.accounts[1].name == "A1")
   }
 
-  @Test func testCalculatesTotals() async throws {
+  @Test
+  func testCalculatesTotals() async throws {
     let (backend, container) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
       name: "Bank", balance: Decimal(100000) / 100, in: container)
@@ -74,7 +77,8 @@ struct AccountStoreLoadingTests {
     )
   }
 
-  @Test func testConvertedTotalsHandleMixedInstruments() async throws {
+  @Test
+  func testConvertedTotalsHandleMixedInstruments() async throws {
     let aud = Instrument.defaultTestInstrument  // AUD in tests
     let usd = Instrument.fiat(code: "USD")
     let (backend, container) = try TestBackend.create()

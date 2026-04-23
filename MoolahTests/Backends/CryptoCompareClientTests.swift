@@ -18,7 +18,8 @@ struct CryptoCompareClientTests {
 
   // MARK: - URL construction
 
-  @Test func dailyPricesURLIncludesSymbolAndDateRange() throws {
+  @Test
+  func dailyPricesURLIncludesSymbolAndDateRange() throws {
     let from = date("2026-04-01")
     let to = date("2026-04-10")
     let url = CryptoCompareClient.histodayURL(symbol: "ETH", from: from, to: to)
@@ -33,7 +34,8 @@ struct CryptoCompareClientTests {
     #expect(queryItems["toTs"] != nil)
   }
 
-  @Test func currentPricesURLIncludesMultipleSymbols() throws {
+  @Test
+  func currentPricesURLIncludesMultipleSymbols() throws {
     let url = CryptoCompareClient.priceMultiURL(symbols: ["ETH", "BTC"])
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
     let queryItems = Dictionary(
@@ -44,7 +46,8 @@ struct CryptoCompareClientTests {
 
   // MARK: - Response parsing
 
-  @Test func parseHistodayResponse() throws {
+  @Test
+  func parseHistodayResponse() throws {
     let json = Data(
       """
       {
@@ -64,7 +67,8 @@ struct CryptoCompareClientTests {
     #expect(prices.values.contains(Decimal(string: "1650")!))
   }
 
-  @Test func parsePriceMultiResponse() throws {
+  @Test
+  func parsePriceMultiResponse() throws {
     let json = Data(
       """
       {
@@ -80,7 +84,8 @@ struct CryptoCompareClientTests {
 
   // MARK: - Coin list parsing
 
-  @Test func parseCoinListResponse_extractsSymbolByContractAddress() throws {
+  @Test
+  func parseCoinListResponse_extractsSymbolByContractAddress() throws {
     let json = Data(
       """
       {
@@ -110,7 +115,8 @@ struct CryptoCompareClientTests {
     #expect(index["N/A"] == nil)
   }
 
-  @Test func parseCoinListResponse_nativeTokenHasNoContractEntry() throws {
+  @Test
+  func parseCoinListResponse_nativeTokenHasNoContractEntry() throws {
     let json = Data(
       """
       {
@@ -128,7 +134,8 @@ struct CryptoCompareClientTests {
     #expect(index.isEmpty)
   }
 
-  @Test func findNativeSymbol_matchesBySymbol() throws {
+  @Test
+  func findNativeSymbol_matchesBySymbol() throws {
     let json = Data(
       """
       {
@@ -146,7 +153,8 @@ struct CryptoCompareClientTests {
 
   // MARK: - Mapping without CryptoCompare symbol
 
-  @Test func mappingWithoutCryptoCompareSymbolThrows() async {
+  @Test
+  func mappingWithoutCryptoCompareSymbolThrows() async {
     let mapping = CryptoProviderMapping(
       instrumentId: "1:0xabc", coingeckoId: nil, cryptocompareSymbol: nil, binanceSymbol: nil
     )

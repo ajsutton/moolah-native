@@ -19,7 +19,8 @@ struct ProfileIndexSyncHandlerTests {
 
   // MARK: - Remote Insert
 
-  @Test func applyRemoteInsertCreatesProfileRecord() throws {
+  @Test
+  func applyRemoteInsertCreatesProfileRecord() throws {
     let (handler, container) = try makeHandler()
 
     let profileId = UUID()
@@ -47,7 +48,8 @@ struct ProfileIndexSyncHandlerTests {
 
   // MARK: - Remote Update
 
-  @Test func applyRemoteUpdateModifiesExistingRecord() throws {
+  @Test
+  func applyRemoteUpdateModifiesExistingRecord() throws {
     let (handler, container) = try makeHandler()
 
     let profileId = UUID()
@@ -81,7 +83,8 @@ struct ProfileIndexSyncHandlerTests {
 
   // MARK: - Remote Deletion
 
-  @Test func applyRemoteDeletionRemovesProfileRecord() throws {
+  @Test
+  func applyRemoteDeletionRemovesProfileRecord() throws {
     let (handler, container) = try makeHandler()
 
     let profileId = UUID()
@@ -102,7 +105,8 @@ struct ProfileIndexSyncHandlerTests {
     #expect(records.isEmpty)
   }
 
-  @Test func applyRemoteChangesSkipsNonProfileRecordTypes() throws {
+  @Test
+  func applyRemoteChangesSkipsNonProfileRecordTypes() throws {
     let (handler, container) = try makeHandler()
 
     let ckRecord = CKRecord(
@@ -120,7 +124,8 @@ struct ProfileIndexSyncHandlerTests {
 
   // MARK: - deleteLocalData
 
-  @Test func deleteLocalDataRemovesAllProfiles() throws {
+  @Test
+  func deleteLocalDataRemovesAllProfiles() throws {
     let (handler, container) = try makeHandler()
 
     let context = ModelContext(container)
@@ -138,7 +143,8 @@ struct ProfileIndexSyncHandlerTests {
 
   // MARK: - queueAllExistingRecords
 
-  @Test func queueAllExistingRecordsReturnsCorrectIDs() throws {
+  @Test
+  func queueAllExistingRecordsReturnsCorrectIDs() throws {
     let (handler, container) = try makeHandler()
 
     let id1 = UUID()
@@ -159,7 +165,8 @@ struct ProfileIndexSyncHandlerTests {
     }
   }
 
-  @Test func queueAllExistingRecordsReturnsEmptyWhenNoRecords() throws {
+  @Test
+  func queueAllExistingRecordsReturnsEmptyWhenNoRecords() throws {
     let (handler, _) = try makeHandler()
     let recordIDs = handler.queueAllExistingRecords()
     #expect(recordIDs.isEmpty)
@@ -167,7 +174,8 @@ struct ProfileIndexSyncHandlerTests {
 
   // MARK: - buildCKRecord
 
-  @Test func buildCKRecordProducesCorrectRecord() throws {
+  @Test
+  func buildCKRecordProducesCorrectRecord() throws {
     let (handler, container) = try makeHandler()
 
     let profileId = UUID()
@@ -189,7 +197,8 @@ struct ProfileIndexSyncHandlerTests {
     #expect(ckRecord["financialYearStartMonth"] as? Int == 7)
   }
 
-  @Test func buildCKRecordPreservesCachedSystemFields() throws {
+  @Test
+  func buildCKRecordPreservesCachedSystemFields() throws {
     let (handler, container) = try makeHandler()
 
     let profileId = UUID()
@@ -220,7 +229,8 @@ struct ProfileIndexSyncHandlerTests {
 
   // MARK: - recordToSave
 
-  @Test func recordToSaveFindsProfileByUUID() throws {
+  @Test
+  func recordToSaveFindsProfileByUUID() throws {
     let (handler, container) = try makeHandler()
 
     let profileId = UUID()
@@ -235,7 +245,8 @@ struct ProfileIndexSyncHandlerTests {
     #expect(result?["label"] as? String == "Found")
   }
 
-  @Test func recordToSaveReturnsNilForMissingProfile() throws {
+  @Test
+  func recordToSaveReturnsNilForMissingProfile() throws {
     let (handler, _) = try makeHandler()
 
     let recordID = CKRecord.ID(recordName: UUID().uuidString, zoneID: handler.zoneID)
@@ -245,7 +256,8 @@ struct ProfileIndexSyncHandlerTests {
 
   // MARK: - clearAllSystemFields
 
-  @Test func clearAllSystemFieldsClearsOnAllProfiles() throws {
+  @Test
+  func clearAllSystemFieldsClearsOnAllProfiles() throws {
     let (handler, container) = try makeHandler()
 
     let profileId = UUID()
@@ -278,7 +290,8 @@ struct ProfileIndexSyncHandlerTests {
 
   // MARK: - updateEncodedSystemFields / clearEncodedSystemFields
 
-  @Test func updateEncodedSystemFieldsSetsDataOnMatchingProfile() throws {
+  @Test
+  func updateEncodedSystemFieldsSetsDataOnMatchingProfile() throws {
     let (handler, container) = try makeHandler()
 
     let profileId = UUID()
@@ -297,7 +310,8 @@ struct ProfileIndexSyncHandlerTests {
     #expect(records.first?.encodedSystemFields == testData)
   }
 
-  @Test func clearEncodedSystemFieldsClearsDataOnMatchingProfile() throws {
+  @Test
+  func clearEncodedSystemFieldsClearsDataOnMatchingProfile() throws {
     let (handler, container) = try makeHandler()
 
     let profileId = UUID()
@@ -319,7 +333,8 @@ struct ProfileIndexSyncHandlerTests {
 
   // MARK: - handleSentRecordZoneChanges
 
-  @Test func handleSentRecordZoneChangesUpdatesSystemFieldsFromSavedRecords() throws {
+  @Test
+  func handleSentRecordZoneChangesUpdatesSystemFieldsFromSavedRecords() throws {
     let (handler, container) = try makeHandler()
 
     let profileId = UUID()
@@ -361,7 +376,8 @@ struct ProfileIndexSyncHandlerTests {
     #expect(records.first?.encodedSystemFields == expectedSystemFields)
   }
 
-  @Test func handleSentRecordZoneChangesWithNoRecordsReturnsEmptyFailures() throws {
+  @Test
+  func handleSentRecordZoneChangesWithNoRecordsReturnsEmptyFailures() throws {
     let (handler, _) = try makeHandler()
 
     let failures = handler.handleSentRecordZoneChanges(

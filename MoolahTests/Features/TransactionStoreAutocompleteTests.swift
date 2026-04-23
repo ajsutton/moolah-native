@@ -9,7 +9,8 @@ import Testing
 struct TransactionStoreAutocompleteTests {
   private let accountId = UUID()
 
-  @Test func testFetchPayeeSuggestionsReturnsMatchingPayees() async throws {
+  @Test
+  func testFetchPayeeSuggestionsReturnsMatchingPayees() async throws {
     let transactions = [
       Transaction(
         date: try TransactionStoreTestSupport.makeDate("2024-01-01"),
@@ -58,7 +59,8 @@ struct TransactionStoreAutocompleteTests {
     #expect(!suggestions.contains("Coles"))
   }
 
-  @Test func testPayeeSuggestionsAreSortedByFrequency() async throws {
+  @Test
+  func testPayeeSuggestionsAreSortedByFrequency() async throws {
     let transactions = [
       try expenseTransaction(
         date: "2024-01-01", payee: "Woolworths", amount: Decimal(-5000) / 100),
@@ -79,7 +81,8 @@ struct TransactionStoreAutocompleteTests {
     #expect(suggestions[1] == "Woollies Market")
   }
 
-  @Test func testFetchTransactionForAutofillReturnsMostRecent() async throws {
+  @Test
+  func testFetchTransactionForAutofillReturnsMostRecent() async throws {
     let categoryId = UUID()
     let transactions = [
       Transaction(
@@ -123,7 +126,8 @@ struct TransactionStoreAutocompleteTests {
     #expect(match?.legs.first?.quantity == Decimal(-7500) / 100)
   }
 
-  @Test func testDebouncedSaveOnlyCallsLastAction() async throws {
+  @Test
+  func testDebouncedSaveOnlyCallsLastAction() async throws {
     let (backend, _) = try TestBackend.create()
     let store = TransactionStore(
       repository: backend.transactions,
@@ -159,7 +163,8 @@ struct TransactionStoreAutocompleteTests {
   /// surfaced on the store so the UI can render a retry path, not silently
   /// swallowed. Target is AUD; seeded transaction is in USD and the conversion
   /// service refuses the USD pair.
-  @Test func testConversionFailureSurfacesErrorOnStore() async throws {
+  @Test
+  func testConversionFailureSurfacesErrorOnStore() async throws {
     let aud = Instrument.defaultTestInstrument
     let usd = Instrument.USD
     let (backend, container) = try TestBackend.create()
@@ -193,7 +198,8 @@ struct TransactionStoreAutocompleteTests {
     #expect(store.error != nil)
   }
 
-  @Test func testFetchPayeeSuggestionsEmptyPrefixReturnsEmpty() async throws {
+  @Test
+  func testFetchPayeeSuggestionsEmptyPrefixReturnsEmpty() async throws {
     let transactions = [
       Transaction(
         date: try TransactionStoreTestSupport.makeDate("2024-01-01"),

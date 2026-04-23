@@ -7,7 +7,8 @@ import Testing
 struct ProfitLossCalculatorTests {
   let aud = Instrument.fiat(code: "AUD")
 
-  @Test func singleInstrument_noSales_unrealizedOnly() async throws {
+  @Test
+  func singleInstrument_noSales_unrealizedOnly() async throws {
     let bhp = stockInstrument("BHP")
     let accountId = UUID()
 
@@ -41,7 +42,8 @@ struct ProfitLossCalculatorTests {
     #expect(bhpPL.currentQuantity == 100)
   }
 
-  @Test func partialSale_showsBothRealizedAndUnrealized() async throws {
+  @Test
+  func partialSale_showsBothRealizedAndUnrealized() async throws {
     let bhp = stockInstrument("BHP")
     let accountId = UUID()
 
@@ -86,7 +88,8 @@ struct ProfitLossCalculatorTests {
     #expect(bhpPL.unrealizedGain == 500)
   }
 
-  @Test func fullySold_onlyRealizedGain() async throws {
+  @Test
+  func fullySold_onlyRealizedGain() async throws {
     let bhp = stockInstrument("BHP")
     let accountId = UUID()
 
@@ -128,7 +131,8 @@ struct ProfitLossCalculatorTests {
     #expect(results[0].realizedGain == 1000)
   }
 
-  @Test func fiatOnlyTransactions_excludedFromResults() async throws {
+  @Test
+  func fiatOnlyTransactions_excludedFromResults() async throws {
     let accountId = UUID()
     let tx = LegTransaction(
       date: date(0),
@@ -150,7 +154,8 @@ struct ProfitLossCalculatorTests {
 
   // MARK: - Multi-instrument portfolios
 
-  @Test func multipleStocks_eachGetsOwnRow() async throws {
+  @Test
+  func multipleStocks_eachGetsOwnRow() async throws {
     let bhp = stockInstrument("BHP")
     let cba = stockInstrument("CBA")
     let accountId = UUID()
@@ -192,7 +197,8 @@ struct ProfitLossCalculatorTests {
     #expect(cbaPL?.unrealizedGain == 1000)
   }
 
-  @Test func portfolioMixesStockAndCrypto() async throws {
+  @Test
+  func portfolioMixesStockAndCrypto() async throws {
     let bhp = stockInstrument("BHP")
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
@@ -243,7 +249,8 @@ struct ProfitLossCalculatorTests {
   /// into the profile currency before contributing to `totalInvested`.
   /// Without the conversion, USD and AUD quantities would be summed as
   /// raw decimals and produce a meaningless 2100 rather than 3100 AUD.
-  @Test func mixedFiatLegs_totalInvestedConvertsEachLegToProfileCurrency() async throws {
+  @Test
+  func mixedFiatLegs_totalInvestedConvertsEachLegToProfileCurrency() async throws {
     let bhp = stockInstrument("BHP")
     let usd = Instrument.fiat(code: "USD")
     let accountId = UUID()
@@ -295,7 +302,8 @@ struct ProfitLossCalculatorTests {
   /// `currentValue` must convert the open position on `asOfDate`. The
   /// rate schedule below makes both choices observable: swapping the
   /// dates would yield different totals.
-  @Test func datesRouteCorrectly_costBasisOnTxDate_currentValueOnAsOfDate() async throws {
+  @Test
+  func datesRouteCorrectly_costBasisOnTxDate_currentValueOnAsOfDate() async throws {
     let bhp = stockInstrument("BHP")
     let usd = Instrument.fiat(code: "USD")
     let accountId = UUID()

@@ -20,7 +20,8 @@ struct RemoteEarmarkRepositoryTests {
     return RemoteEarmarkRepository(client: client, instrument: instrument)
   }
 
-  @Test func createRejectsEarmarkWithNonProfileInstrument() async throws {
+  @Test
+  func createRejectsEarmarkWithNonProfileInstrument() async throws {
     let repo = makeGuardOnlyRepository(instrument: .AUD)
     let earmark = Earmark(name: "USD Holiday", instrument: .USD)
     await #expect(throws: BackendError.self) {
@@ -28,7 +29,8 @@ struct RemoteEarmarkRepositoryTests {
     }
   }
 
-  @Test func updateRejectsEarmarkWithNonProfileInstrument() async throws {
+  @Test
+  func updateRejectsEarmarkWithNonProfileInstrument() async throws {
     let repo = makeGuardOnlyRepository(instrument: .AUD)
     let earmark = Earmark(name: "USD Holiday", instrument: .USD)
     await #expect(throws: BackendError.self) {
@@ -36,7 +38,8 @@ struct RemoteEarmarkRepositoryTests {
     }
   }
 
-  @Test func setBudgetRejectsAmountInForeignInstrument() async throws {
+  @Test
+  func setBudgetRejectsAmountInForeignInstrument() async throws {
     let repo = makeGuardOnlyRepository(instrument: .AUD)
     let foreignAmount = InstrumentAmount(quantity: 50, instrument: .USD)
     await #expect(throws: BackendError.self) {
@@ -44,7 +47,8 @@ struct RemoteEarmarkRepositoryTests {
     }
   }
 
-  @Test func testDecodesFixtureJSON() async throws {
+  @Test
+  func testDecodesFixtureJSON() async throws {
     // Given
     let bundle = Bundle(for: TestBundleMarker.self)
     guard let url = bundle.url(forResource: "earmarks", withExtension: "json") else {

@@ -30,14 +30,16 @@ struct CryptoTokenStoreTests {
     return CryptoTokenStore(cryptoPriceService: service)
   }
 
-  @Test func loadRegistrations_populatesList() async {
+  @Test
+  func loadRegistrations_populatesList() async {
     let presets = Array(CryptoRegistration.builtInPresets.prefix(2))
     let store = await makeStore(registrations: presets)
     await store.loadRegistrations()
     #expect(store.registrations.count == 2)
   }
 
-  @Test func loadRegistrations_populatesInstruments() async {
+  @Test
+  func loadRegistrations_populatesInstruments() async {
     let presets = Array(CryptoRegistration.builtInPresets.prefix(2))
     let store = await makeStore(registrations: presets)
     await store.loadRegistrations()
@@ -45,7 +47,8 @@ struct CryptoTokenStoreTests {
     #expect(store.instruments.allSatisfy { $0.kind == .cryptoToken })
   }
 
-  @Test func loadRegistrations_populatesProviderMappings() async {
+  @Test
+  func loadRegistrations_populatesProviderMappings() async {
     let presets = Array(CryptoRegistration.builtInPresets.prefix(2))
     let store = await makeStore(registrations: presets)
     await store.loadRegistrations()
@@ -54,7 +57,8 @@ struct CryptoTokenStoreTests {
     #expect(btcMapping?.coingeckoId == "bitcoin")
   }
 
-  @Test func removeRegistration_removesFromList() async {
+  @Test
+  func removeRegistration_removesFromList() async {
     let presets = Array(CryptoRegistration.builtInPresets.prefix(2))
     let store = await makeStore(registrations: presets)
     await store.loadRegistrations()
@@ -64,7 +68,8 @@ struct CryptoTokenStoreTests {
     #expect(store.instruments.count == 1)
   }
 
-  @Test func removeInstrument_removesFromAllCollections() async {
+  @Test
+  func removeInstrument_removesFromAllCollections() async {
     let presets = Array(CryptoRegistration.builtInPresets.prefix(2))
     let store = await makeStore(registrations: presets)
     await store.loadRegistrations()
@@ -75,7 +80,8 @@ struct CryptoTokenStoreTests {
     #expect(store.providerMappings[instrumentToRemove.id] == nil)
   }
 
-  @Test func resolveToken_populatesResolvedRegistration() async {
+  @Test
+  func resolveToken_populatesResolvedRegistration() async {
     let result = TokenResolutionResult(
       coingeckoId: "uniswap",
       cryptocompareSymbol: "UNI",
@@ -95,7 +101,8 @@ struct CryptoTokenStoreTests {
     #expect(store.resolvedRegistration?.mapping.coingeckoId == "uniswap")
   }
 
-  @Test func resolveToken_populatesInstrumentAndMapping() async {
+  @Test
+  func resolveToken_populatesInstrumentAndMapping() async {
     let result = TokenResolutionResult(
       coingeckoId: "uniswap",
       cryptocompareSymbol: "UNI",
@@ -115,7 +122,8 @@ struct CryptoTokenStoreTests {
     #expect(store.resolvedRegistration?.mapping.coingeckoId == "uniswap")
   }
 
-  @Test func resolveToken_failure_setsError() async {
+  @Test
+  func resolveToken_failure_setsError() async {
     let store = await makeStore(resolutionFails: true)
     await store.resolveToken(
       chainId: 1, contractAddress: "0xabc", symbol: nil, isNative: false
@@ -124,7 +132,8 @@ struct CryptoTokenStoreTests {
     #expect(store.error != nil)
   }
 
-  @Test func confirmRegistration_addsToList() async {
+  @Test
+  func confirmRegistration_addsToList() async {
     let result = TokenResolutionResult(
       cryptocompareSymbol: "UNI",
       resolvedName: "Uniswap",
@@ -146,7 +155,8 @@ struct CryptoTokenStoreTests {
 
   // MARK: - Multi-instrument / cross-chain
 
-  @Test func loadRegistrations_preservesMultipleChainsWithSamePrefix() async {
+  @Test
+  func loadRegistrations_preservesMultipleChainsWithSamePrefix() async {
     // All presets should load — presets include Bitcoin (chainId 0), Ethereum (1),
     // Optimism (10), and ERC20s on Ethereum. Store keeps them distinct.
     let store = await makeStore(registrations: CryptoRegistration.builtInPresets)
@@ -159,7 +169,8 @@ struct CryptoTokenStoreTests {
     #expect(chainIds.contains(10))
   }
 
-  @Test func loadRegistrations_keepsNativeAndErc20OnSameChainDistinct() async {
+  @Test
+  func loadRegistrations_keepsNativeAndErc20OnSameChainDistinct() async {
     // builtInPresets contains ETH (chainId 1, native) and UNI/ENS (chainId 1, ERC20).
     let store = await makeStore(registrations: CryptoRegistration.builtInPresets)
     await store.loadRegistrations()

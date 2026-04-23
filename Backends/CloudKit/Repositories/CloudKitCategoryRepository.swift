@@ -11,8 +11,7 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
     self.modelContainer = modelContainer
   }
 
-  @MainActor
-  private var context: ModelContext {
+  @MainActor private var context: ModelContext {
     modelContainer.mainContext
   }
 

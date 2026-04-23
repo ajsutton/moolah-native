@@ -30,7 +30,8 @@ struct RemoteTransactionRepositoryTests {
     return RemoteTransactionRepository(client: client, instrument: instrument)
   }
 
-  @Test func createRejectsTransactionWithForeignLeg() async throws {
+  @Test
+  func createRejectsTransactionWithForeignLeg() async throws {
     let repo = makeGuardOnlyRepository(instrument: .AUD)
     let leg = TransactionLeg(
       accountId: UUID(), instrument: .USD, quantity: 50, type: .expense)
@@ -40,7 +41,8 @@ struct RemoteTransactionRepositoryTests {
     }
   }
 
-  @Test func updateRejectsTransactionWhereAnyLegIsForeign() async throws {
+  @Test
+  func updateRejectsTransactionWhereAnyLegIsForeign() async throws {
     let repo = makeGuardOnlyRepository(instrument: .AUD)
     let nativeLeg = TransactionLeg(
       accountId: UUID(), instrument: .AUD, quantity: 100, type: .income)
@@ -52,7 +54,8 @@ struct RemoteTransactionRepositoryTests {
     }
   }
 
-  @Test func testDecodesFixtureJSON() async throws {
+  @Test
+  func testDecodesFixtureJSON() async throws {
     let bundle = Bundle(for: TestBundleMarker.self)
     guard let url = bundle.url(forResource: "transactions", withExtension: "json") else {
       fatalError("Could not find transactions.json fixture")
@@ -110,7 +113,8 @@ struct RemoteTransactionRepositoryTests {
     #expect(transactions[4].isScheduled == false)
   }
 
-  @Test func testConstructsCorrectURLParams() async throws {
+  @Test
+  func testConstructsCorrectURLParams() async throws {
     let emptyResponse = Data(
       #"{"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}"#
         .utf8)
@@ -146,7 +150,8 @@ struct RemoteTransactionRepositoryTests {
     #expect(queryDict["offset"] == "50")  // page 2 * pageSize 25
   }
 
-  @Test func testScheduledFilterParam() async throws {
+  @Test
+  func testScheduledFilterParam() async throws {
     let emptyResponse = Data(
       #"{"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}"#
         .utf8)
@@ -179,7 +184,8 @@ struct RemoteTransactionRepositoryTests {
     #expect(queryDict["scheduled"] == "true")
   }
 
-  @Test func testDateRangeFilterParam() async throws {
+  @Test
+  func testDateRangeFilterParam() async throws {
     let emptyResponse = Data(
       #"{"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}"#
         .utf8)
@@ -218,7 +224,8 @@ struct RemoteTransactionRepositoryTests {
     #expect(queryDict["to"] == BackendDateFormatter.string(from: endDate))
   }
 
-  @Test func testCategoryIdsFilterParam() async throws {
+  @Test
+  func testCategoryIdsFilterParam() async throws {
     let emptyResponse = Data(
       #"{"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}"#
         .utf8)
@@ -257,7 +264,8 @@ struct RemoteTransactionRepositoryTests {
     #expect(categoryParams.contains(category2.apiString))
   }
 
-  @Test func testPayeeFilterParam() async throws {
+  @Test
+  func testPayeeFilterParam() async throws {
     let emptyResponse = Data(
       #"{"transactions": [], "hasMore": false, "priorBalance": 0, "totalNumberOfTransactions": 0}"#
         .utf8)
@@ -290,7 +298,8 @@ struct RemoteTransactionRepositoryTests {
     #expect(queryDict["payee"] == "Woolworths")
   }
 
-  @Test func testNullAccountIdEarmarkDTO() {
+  @Test
+  func testNullAccountIdEarmarkDTO() {
     let earmarkId = UUID()
     let dto = TransactionDTO(
       id: ServerUUID(UUID()),

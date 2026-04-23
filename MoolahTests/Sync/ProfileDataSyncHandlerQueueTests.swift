@@ -9,7 +9,8 @@ import Testing
 @MainActor
 struct ProfileDataSyncHandlerQueueTests {
 
-  @Test func deleteLocalDataRemovesAllRecordTypes() throws {
+  @Test
+  func deleteLocalDataRemovesAllRecordTypes() throws {
     let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let context = ModelContext(container)
@@ -39,7 +40,8 @@ struct ProfileDataSyncHandlerQueueTests {
     #expect(changedTypes == Set(RecordTypeRegistry.allTypes.keys))
   }
 
-  @Test func queueAllExistingRecordsReturnsAllRecordIDs() throws {
+  @Test
+  func queueAllExistingRecordsReturnsAllRecordIDs() throws {
     let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let accountId = UUID()
@@ -70,7 +72,8 @@ struct ProfileDataSyncHandlerQueueTests {
     }
   }
 
-  @Test func queueUnsyncedRecordsReturnsRecordsWithNilSystemFields() throws {
+  @Test
+  func queueUnsyncedRecordsReturnsRecordsWithNilSystemFields() throws {
     let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let unsyncedAccountId = UUID()
@@ -112,7 +115,8 @@ struct ProfileDataSyncHandlerQueueTests {
     #expect(!recordNames.contains(syncedInstrumentId))
   }
 
-  @Test func queueUnsyncedRecordsReturnsEmptyWhenAllSynced() throws {
+  @Test
+  func queueUnsyncedRecordsReturnsEmptyWhenAllSynced() throws {
     let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let context = ModelContext(container)
@@ -126,7 +130,8 @@ struct ProfileDataSyncHandlerQueueTests {
     #expect(recordIDs.isEmpty)
   }
 
-  @Test func queueUnsyncedRecordsReturnsAllWhenNoneSynced() throws {
+  @Test
+  func queueUnsyncedRecordsReturnsAllWhenNoneSynced() throws {
     let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let accountId = UUID()
@@ -182,7 +187,8 @@ struct ProfileDataSyncHandlerQueueTests {
     }
   }
 
-  @Test func clearAllSystemFieldsClearsAllRecordTypes() throws {
+  @Test
+  func clearAllSystemFieldsClearsAllRecordTypes() throws {
     let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let accountId = UUID()

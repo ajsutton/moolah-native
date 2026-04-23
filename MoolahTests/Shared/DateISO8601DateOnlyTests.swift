@@ -12,7 +12,8 @@ import Testing
 @Suite("Date -- ISO8601 Date-Only")
 struct DateISO8601DateOnlyTests {
 
-  @Test func producesFullDateString() {
+  @Test
+  func producesFullDateString() {
     var components = DateComponents()
     components.year = 2025
     components.month = 6
@@ -25,7 +26,8 @@ struct DateISO8601DateOnlyTests {
     #expect(date.iso8601DateOnlyString == "2025-06-15")
   }
 
-  @Test func matchesISO8601DateFormatterWithFullDateOption() {
+  @Test
+  func matchesISO8601DateFormatterWithFullDateOption() {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withFullDate]
 
@@ -40,7 +42,8 @@ struct DateISO8601DateOnlyTests {
     }
   }
 
-  @Test func padsSingleDigitMonthAndDay() {
+  @Test
+  func padsSingleDigitMonthAndDay() {
     var components = DateComponents()
     components.year = 2026
     components.month = 1
@@ -51,7 +54,8 @@ struct DateISO8601DateOnlyTests {
     #expect(date.iso8601DateOnlyString == "2026-01-03")
   }
 
-  @Test func formatStyleIsReusableAcrossConcurrencyDomains() async {
+  @Test
+  func formatStyleIsReusableAcrossConcurrencyDomains() async {
     // Compiles only because `Date.ISO8601FormatStyle` is `Sendable` — the whole
     // point of the refactor. Call it from a detached task to exercise that.
     let style = Date.iso8601DateOnly

@@ -9,7 +9,8 @@ struct TransactionDraftCrossCurrencyTests {
 
   // MARK: - Cross-Currency Transfers
 
-  @Test func initFromCrossCurrencyTransferUsesSimpleMode() {
+  @Test
+  func initFromCrossCurrencyTransferUsesSimpleMode() {
     let transaction = Transaction(
       date: Date(),
       payee: "FX",
@@ -35,7 +36,8 @@ struct TransactionDraftCrossCurrencyTests {
     #expect(draft.legDrafts[1].amountText == "-65.00")
   }
 
-  @Test func initFromCrossCurrencyTransferFallsToCustomWhenInstrumentMismatchesAccount() {
+  @Test
+  func initFromCrossCurrencyTransferFallsToCustomWhenInstrumentMismatchesAccount() {
     let transaction = Transaction(
       date: Date(),
       legs: [
@@ -56,7 +58,8 @@ struct TransactionDraftCrossCurrencyTests {
     #expect(draft.isCustom == true)
   }
 
-  @Test func isCrossCurrencyTransferTrueWhenDifferentCurrencies() {
+  @Test
+  func isCrossCurrencyTransferTrueWhenDifferentCurrencies() {
     let accounts = support.makeAccounts([
       support.makeAccount(id: support.accountA, instrument: .AUD),
       support.makeAccount(id: support.accountB, instrument: .USD),
@@ -67,7 +70,8 @@ struct TransactionDraftCrossCurrencyTests {
     #expect(draft.isCrossCurrencyTransfer(accounts: accounts) == true)
   }
 
-  @Test func isCrossCurrencyTransferFalseWhenSameCurrency() {
+  @Test
+  func isCrossCurrencyTransferFalseWhenSameCurrency() {
     let accounts = support.makeAccounts([
       support.makeAccount(id: support.accountA, instrument: .AUD),
       support.makeAccount(id: support.accountB, instrument: .AUD),
@@ -78,7 +82,8 @@ struct TransactionDraftCrossCurrencyTests {
     #expect(draft.isCrossCurrencyTransfer(accounts: accounts) == false)
   }
 
-  @Test func isCrossCurrencyTransferFalseWhenNotTransfer() {
+  @Test
+  func isCrossCurrencyTransferFalseWhenNotTransfer() {
     let accounts = support.makeAccounts([
       support.makeAccount(id: support.accountA, instrument: .AUD)
     ])
@@ -86,7 +91,8 @@ struct TransactionDraftCrossCurrencyTests {
     #expect(draft.isCrossCurrencyTransfer(accounts: accounts) == false)
   }
 
-  @Test func setCounterpartAmountSetsCounterpartLeg() {
+  @Test
+  func setCounterpartAmountSetsCounterpartLeg() {
     let accounts = support.makeAccounts([
       support.makeAccount(id: support.accountA, instrument: .AUD),
       support.makeAccount(id: support.accountB, instrument: .USD),
@@ -99,7 +105,8 @@ struct TransactionDraftCrossCurrencyTests {
     #expect(draft.legDrafts[counterIdx].amountText == "65.00")
   }
 
-  @Test func setAmountDoesNotMirrorWhenCrossCurrency() {
+  @Test
+  func setAmountDoesNotMirrorWhenCrossCurrency() {
     let accounts = support.makeAccounts([
       support.makeAccount(id: support.accountA, instrument: .AUD),
       support.makeAccount(id: support.accountB, instrument: .USD),
@@ -113,7 +120,8 @@ struct TransactionDraftCrossCurrencyTests {
     #expect(draft.legDrafts[counterIdx].amountText == "65.00")  // unchanged
   }
 
-  @Test func setAmountStillMirrorsWhenSameCurrency() {
+  @Test
+  func setAmountStillMirrorsWhenSameCurrency() {
     let accounts = support.makeAccounts([
       support.makeAccount(id: support.accountA, instrument: .AUD),
       support.makeAccount(id: support.accountB, instrument: .AUD),
@@ -126,7 +134,8 @@ struct TransactionDraftCrossCurrencyTests {
     #expect(draft.legDrafts[counterIdx].amountText == "-200.00")
   }
 
-  @Test func canSwitchToSimpleAllowsCrossCurrencyAmounts() {
+  @Test
+  func canSwitchToSimpleAllowsCrossCurrencyAmounts() {
     let draft = TransactionDraft(
       payee: "", date: Date(), notes: "",
       isRepeating: false, recurPeriod: nil, recurEvery: 1,
@@ -144,7 +153,8 @@ struct TransactionDraftCrossCurrencyTests {
     #expect(draft.canSwitchToSimple == true)
   }
 
-  @Test func switchToAccountFromCrossCurrencyToSameCurrencySnapsMirror() {
+  @Test
+  func switchToAccountFromCrossCurrencyToSameCurrencySnapsMirror() {
     let accounts = support.makeAccounts([
       support.makeAccount(id: support.accountA, instrument: .AUD),
       support.makeAccount(id: support.accountB, instrument: .USD),
@@ -170,7 +180,8 @@ struct TransactionDraftCrossCurrencyTests {
 
   // MARK: - Cross-Currency Round-Trip
 
-  @Test func toTransactionRoundTripsCrossCurrencyTransfer() throws {
+  @Test
+  func toTransactionRoundTripsCrossCurrencyTransfer() throws {
     let id = UUID()
     let original = Transaction(
       id: id,
@@ -201,7 +212,8 @@ struct TransactionDraftCrossCurrencyTests {
     #expect(roundTripped.legs[1].instrument == .USD)
   }
 
-  @Test func crossCurrencyTransferFromDestinationPerspective() {
+  @Test
+  func crossCurrencyTransferFromDestinationPerspective() {
     let accounts = support.makeAccounts([
       support.makeAccount(id: support.accountA, instrument: .AUD),
       support.makeAccount(id: support.accountB, instrument: .USD),
@@ -224,7 +236,8 @@ struct TransactionDraftCrossCurrencyTests {
     #expect(draft.legDrafts[1].amountText == "-65.00")
   }
 
-  @Test func cannotSwitchToSimpleWhenTransferHasEarmarkOnlyLeg() {
+  @Test
+  func cannotSwitchToSimpleWhenTransferHasEarmarkOnlyLeg() {
     let draft = TransactionDraft(
       payee: "", date: Date(), notes: "",
       isRepeating: false, recurPeriod: nil, recurEvery: 1,

@@ -7,7 +7,8 @@ import Testing
 @Suite("CategoryStore")
 @MainActor
 struct CategoryStoreTests {
-  @Test func testLoadPopulatesCategories() async throws {
+  @Test
+  func testLoadPopulatesCategories() async throws {
     let cat = Moolah.Category(name: "Groceries")
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(categories: [cat], in: container)
@@ -19,7 +20,8 @@ struct CategoryStoreTests {
     #expect(store.categories.roots.first?.name == "Groceries")
   }
 
-  @Test func testLoadSetsErrorOnFailure() async throws {
+  @Test
+  func testLoadSetsErrorOnFailure() async throws {
     let store = CategoryStore(repository: FailingCategoryRepository())
 
     await store.load()
@@ -28,7 +30,8 @@ struct CategoryStoreTests {
     #expect(store.categories.roots.isEmpty)
   }
 
-  @Test func testCreateAddsCategory() async throws {
+  @Test
+  func testCreateAddsCategory() async throws {
     let (backend, _) = try TestBackend.create()
     let store = CategoryStore(repository: backend.categories)
 
@@ -41,7 +44,8 @@ struct CategoryStoreTests {
     #expect(store.categories.roots.first?.name == "Transport")
   }
 
-  @Test func testCreateReturnsNilOnFailure() async throws {
+  @Test
+  func testCreateReturnsNilOnFailure() async throws {
     let store = CategoryStore(repository: FailingCategoryRepository())
 
     let result = await store.create(Moolah.Category(name: "Fails"))
@@ -50,7 +54,8 @@ struct CategoryStoreTests {
     #expect(store.error != nil)
   }
 
-  @Test func testUpdateModifiesCategory() async throws {
+  @Test
+  func testUpdateModifiesCategory() async throws {
     let cat = Moolah.Category(name: "Groceries")
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(categories: [cat], in: container)
@@ -66,7 +71,8 @@ struct CategoryStoreTests {
     #expect(store.categories.by(id: cat.id)?.name == "Food & Groceries")
   }
 
-  @Test func testUpdateReturnsNilOnFailure() async throws {
+  @Test
+  func testUpdateReturnsNilOnFailure() async throws {
     let store = CategoryStore(repository: FailingCategoryRepository())
 
     let result = await store.update(Moolah.Category(name: "Fails"))
@@ -75,7 +81,8 @@ struct CategoryStoreTests {
     #expect(store.error != nil)
   }
 
-  @Test func testDeleteRemovesCategory() async throws {
+  @Test
+  func testDeleteRemovesCategory() async throws {
     let cat = Moolah.Category(name: "Groceries")
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(categories: [cat], in: container)
@@ -90,7 +97,8 @@ struct CategoryStoreTests {
     #expect(store.categories.roots.isEmpty)
   }
 
-  @Test func testDeleteWithReplacementId() async throws {
+  @Test
+  func testDeleteWithReplacementId() async throws {
     let cat1 = Moolah.Category(name: "Old Category")
     let cat2 = Moolah.Category(name: "New Category")
     let (backend, container) = try TestBackend.create()
@@ -105,7 +113,8 @@ struct CategoryStoreTests {
     #expect(store.categories.roots.first?.name == "New Category")
   }
 
-  @Test func testDeleteReturnsFalseOnFailure() async throws {
+  @Test
+  func testDeleteReturnsFalseOnFailure() async throws {
     let store = CategoryStore(repository: FailingCategoryRepository())
 
     let result = await store.delete(id: UUID(), withReplacement: nil)

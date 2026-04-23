@@ -11,7 +11,8 @@ struct TransactionStoreCreateDefaultsTests {
 
   // MARK: - createDefault
 
-  @Test func testCreateDefaultUsesFilterAccountId() async throws {
+  @Test
+  func testCreateDefaultUsesFilterAccountId() async throws {
     let filterAccountId = UUID()
     let fallbackAccountId = UUID()
     let (backend, _) = try TestBackend.create()
@@ -33,7 +34,8 @@ struct TransactionStoreCreateDefaultsTests {
     #expect(created?.accountIds.contains(filterAccountId) == true)
   }
 
-  @Test func testCreateDefaultFallsBackToFirstAccount() async throws {
+  @Test
+  func testCreateDefaultFallsBackToFirstAccount() async throws {
     let fallbackAccountId = UUID()
     let (backend, _) = try TestBackend.create()
     let store = TransactionStore(
@@ -54,7 +56,8 @@ struct TransactionStoreCreateDefaultsTests {
     #expect(created?.accountIds.contains(fallbackAccountId) == true)
   }
 
-  @Test func testCreateDefaultSetsExpenseTypeAndZeroAmount() async throws {
+  @Test
+  func testCreateDefaultSetsExpenseTypeAndZeroAmount() async throws {
     let (backend, _) = try TestBackend.create()
     let store = TransactionStore(
       repository: backend.transactions,
@@ -77,7 +80,8 @@ struct TransactionStoreCreateDefaultsTests {
     #expect(created?.payee?.isEmpty == true)
   }
 
-  @Test func testCreateDefaultReturnsNilOnFailure() async throws {
+  @Test
+  func testCreateDefaultReturnsNilOnFailure() async throws {
     // Use an error-injecting repository to force a failure
     let failingStore = TransactionStore(
       repository: FailingTransactionRepository(),
@@ -97,7 +101,8 @@ struct TransactionStoreCreateDefaultsTests {
 
   // MARK: - createDefaultScheduled
 
-  @Test func testCreateDefaultScheduledSetsMonthlyRecurrence() async throws {
+  @Test
+  func testCreateDefaultScheduledSetsMonthlyRecurrence() async throws {
     let (backend, _) = try TestBackend.create()
     let store = TransactionStore(
       repository: backend.transactions,
@@ -123,7 +128,8 @@ struct TransactionStoreCreateDefaultsTests {
     #expect(created?.payee?.isEmpty == true)
   }
 
-  @Test func testCreateDefaultScheduledFallsBackToFirstAccount() async throws {
+  @Test
+  func testCreateDefaultScheduledFallsBackToFirstAccount() async throws {
     let fallbackAccountId = UUID()
     let (backend, _) = try TestBackend.create()
     let store = TransactionStore(
@@ -145,7 +151,8 @@ struct TransactionStoreCreateDefaultsTests {
     #expect(created?.accountIds.contains(fallbackAccountId) == true)
   }
 
-  @Test func testCreateDefaultScheduledReturnsNilWhenNoAccount() async throws {
+  @Test
+  func testCreateDefaultScheduledReturnsNilWhenNoAccount() async throws {
     let (backend, _) = try TestBackend.create()
     let store = TransactionStore(
       repository: backend.transactions,
@@ -162,7 +169,8 @@ struct TransactionStoreCreateDefaultsTests {
     #expect(result == nil)
   }
 
-  @Test func testCreateDefaultScheduledReturnsNilOnFailure() async throws {
+  @Test
+  func testCreateDefaultScheduledReturnsNilOnFailure() async throws {
     let failingStore = TransactionStore(
       repository: FailingTransactionRepository(),
       conversionService: FixedConversionService(),

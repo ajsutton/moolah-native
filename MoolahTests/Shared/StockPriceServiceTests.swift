@@ -40,13 +40,15 @@ struct StockPriceServiceTests {
 
   // MARK: - Cache miss and cache hit
 
-  @Test func cacheMissFetchesFromClient() async throws {
+  @Test
+  func cacheMissFetchesFromClient() async throws {
     let service = makeService(responses: ["BHP.AX": bhpResponse()])
     let price = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
     #expect(price == Decimal(string: "38.50")!)
   }
 
-  @Test func cacheHitDoesNotRefetch() async throws {
+  @Test
+  func cacheHitDoesNotRefetch() async throws {
     let service = makeService(responses: ["BHP.AX": bhpResponse()])
     let first = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
     let second = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
@@ -56,14 +58,16 @@ struct StockPriceServiceTests {
 
   // MARK: - Currency discovery
 
-  @Test func currencyDiscoveredFromFirstFetch() async throws {
+  @Test
+  func currencyDiscoveredFromFirstFetch() async throws {
     let service = makeService(responses: ["BHP.AX": bhpResponse()])
     _ = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
     let instrument = try await service.instrument(for: "BHP.AX")
     #expect(instrument == .AUD)
   }
 
-  @Test func instrumentThrowsForUnknownTicker() async throws {
+  @Test
+  func instrumentThrowsForUnknownTicker() async throws {
     let service = makeService()
     await #expect(throws: (any Error).self) {
       try await service.instrument(for: "UNKNOWN.AX")
@@ -72,14 +76,16 @@ struct StockPriceServiceTests {
 
   // MARK: - Date fallback (weekends/holidays)
 
-  @Test func weekendFallsBackToFriday() async throws {
+  @Test
+  func weekendFallsBackToFriday() async throws {
     let service = makeService(responses: ["BHP.AX": bhpResponse()])
     _ = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
     let price = try await service.price(ticker: "BHP.AX", on: date("2026-04-12"))
     #expect(price == Decimal(string: "38.60")!)
   }
 
-  @Test func fallbackNeverUsesFutureDate() async throws {
+  @Test
+  func fallbackNeverUsesFutureDate() async throws {
     let futureOnly = StockPriceResponse(
       instrument: .AUD,
       prices: [
@@ -94,7 +100,8 @@ struct StockPriceServiceTests {
 
   // MARK: - Network failure
 
-  @Test func networkFailureWithCacheReturnsCachedData() async throws {
+  @Test
+  func networkFailureWithCacheReturnsCachedData() async throws {
     let tempDir = FileManager.default.temporaryDirectory
       .appendingPathComponent("stock-price-tests")
       .appendingPathComponent(UUID().uuidString)
@@ -108,7 +115,8 @@ struct StockPriceServiceTests {
     #expect(price == Decimal(string: "38.50")!)
   }
 
-  @Test func networkFailureWithEmptyCacheThrows() async throws {
+  @Test
+  func networkFailureWithEmptyCacheThrows() async throws {
     let service = makeService(shouldFail: true)
     await #expect(throws: (any Error).self) {
       try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
@@ -117,7 +125,8 @@ struct StockPriceServiceTests {
 
   // MARK: - Date range lookup
 
-  @Test func rangeReturnsOrderedPrices() async throws {
+  @Test
+  func rangeReturnsOrderedPrices() async throws {
     let service = makeService(responses: ["BHP.AX": bhpResponse()])
     let results = try await service.prices(
       ticker: "BHP.AX",
@@ -129,7 +138,8 @@ struct StockPriceServiceTests {
     #expect(results[2].price == Decimal(string: "39.00")!)
   }
 
-  @Test func rangeExpandsFetchForMissingDates() async throws {
+  @Test
+  func rangeExpandsFetchForMissingDates() async throws {
     let service = makeService(responses: ["BHP.AX": bhpResponse()])
     _ = try await service.prices(
       ticker: "BHP.AX",
@@ -144,7 +154,8 @@ struct StockPriceServiceTests {
     #expect(results[4].price == Decimal(string: "38.60")!)
   }
 
-  @Test func rangeFillsWeekendsWithLastKnownPrice() async throws {
+  @Test
+  func rangeFillsWeekendsWithLastKnownPrice() async throws {
     let service = makeService(responses: ["BHP.AX": bhpResponse()])
     let results = try await service.prices(
       ticker: "BHP.AX",
@@ -158,7 +169,8 @@ struct StockPriceServiceTests {
 
   // MARK: - Disk persistence (gzip round-trip)
 
-  @Test func gzipRoundTripPreservesData() async throws {
+  @Test
+  func gzipRoundTripPreservesData() async throws {
     let tempDir = FileManager.default.temporaryDirectory
       .appendingPathComponent("stock-price-tests")
       .appendingPathComponent(UUID().uuidString)
@@ -178,7 +190,8 @@ struct StockPriceServiceTests {
 
   // MARK: - Multiple tickers
 
-  @Test func differentTickersAreCachedIndependently() async throws {
+  @Test
+  func differentTickersAreCachedIndependently() async throws {
     let cbaResponse = StockPriceResponse(
       instrument: .AUD,
       prices: [

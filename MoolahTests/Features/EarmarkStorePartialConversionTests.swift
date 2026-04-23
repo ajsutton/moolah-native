@@ -11,7 +11,8 @@ struct EarmarkStorePartialConversionTests {
   /// other earmarks whose conversions succeed still appear in
   /// `convertedBalances`. The aggregate `convertedTotalBalance` stays nil
   /// because we cannot accurately sum a set with a missing value.
-  @Test func earmarkBalancePopulatesEvenWhenAnotherFails() async throws {
+  @Test
+  func earmarkBalancePopulatesEvenWhenAnotherFails() async throws {
     let aud = Instrument.AUD
     let usd = Instrument.USD
     let eur = Instrument.fiat(code: "EUR")
@@ -68,7 +69,8 @@ struct EarmarkStorePartialConversionTests {
 
   /// After conversion service recovers, retry populates the previously
   /// failing earmark balance and the aggregate total.
-  @Test func conversionFailuresAreRetriedAfterDelay() async throws {
+  @Test
+  func conversionFailuresAreRetriedAfterDelay() async throws {
     let aud = Instrument.AUD
     let eur = Instrument.fiat(code: "EUR")
     let accountId = UUID()

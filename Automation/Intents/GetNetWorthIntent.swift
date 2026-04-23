@@ -6,8 +6,7 @@ struct GetNetWorthIntent: AppIntent {
   static let description = IntentDescription(
     "Returns the net worth for a profile.")
 
-  @Parameter(title: "Profile")
-  var profile: ProfileEntity
+  @Parameter(title: "Profile") var profile: ProfileEntity
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<String> {

@@ -12,8 +12,7 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
     self.instrument = instrument
   }
 
-  @MainActor
-  private var context: ModelContext {
+  @MainActor private var context: ModelContext {
     modelContainer.mainContext
   }
 

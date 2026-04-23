@@ -12,11 +12,9 @@ struct OpenAccountIntent: AppIntent {
   static let description = IntentDescription(
     "Opens a specific account in the Moolah app.")
 
-  @Parameter(title: "Profile")
-  var profile: ProfileEntity
+  @Parameter(title: "Profile") var profile: ProfileEntity
 
-  @Parameter(title: "Account")
-  var account: AccountEntity
+  @Parameter(title: "Account") var account: AccountEntity
 
   static let openAppWhenRun = true
 

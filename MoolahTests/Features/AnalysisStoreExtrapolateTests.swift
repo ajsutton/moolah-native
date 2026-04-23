@@ -43,12 +43,14 @@ struct AnalysisStoreExtrapolateTests {
     )
   }
 
-  @Test func emptyBalancesReturnsEmpty() {
+  @Test
+  func emptyBalancesReturnsEmpty() {
     let result = AnalysisStore.extrapolateBalances([], today: Date(), forecastUntil: nil)
     #expect(result.isEmpty)
   }
 
-  @Test func extendsActualBalancesToToday() throws {
+  @Test
+  func extendsActualBalancesToToday() throws {
     let today = calendar.startOfDay(for: Date())
     let balances = [try balance(daysFromToday: -5, relativeTo: today)]
 
@@ -61,7 +63,8 @@ struct AnalysisStoreExtrapolateTests {
     #expect(!result[1].isForecast)
   }
 
-  @Test func doesNotExtendIfActualAlreadyAtToday() throws {
+  @Test
+  func doesNotExtendIfActualAlreadyAtToday() throws {
     let today = calendar.startOfDay(for: Date())
     let balances = [try balance(daysFromToday: 0, relativeTo: today)]
 
@@ -70,7 +73,8 @@ struct AnalysisStoreExtrapolateTests {
     #expect(result.count == 1)
   }
 
-  @Test func extendsForecastBackToToday() throws {
+  @Test
+  func extendsForecastBackToToday() throws {
     let today = calendar.startOfDay(for: Date())
     let balances = [
       try balance(daysFromToday: -3, quantity: Decimal(10), relativeTo: today),
@@ -89,7 +93,8 @@ struct AnalysisStoreExtrapolateTests {
     #expect(forecasts[0].balance.quantity == Decimal(10))  // Last actual balance value
   }
 
-  @Test func extendsForecastToEndDate() throws {
+  @Test
+  func extendsForecastToEndDate() throws {
     let today = calendar.startOfDay(for: Date())
     let forecastUntil = try date(30, relativeTo: today)
     let balances = [
@@ -107,7 +112,8 @@ struct AnalysisStoreExtrapolateTests {
     #expect(lastForecast.balance.quantity == Decimal(15))
   }
 
-  @Test func noForecastDataSkipsForecastExtension() throws {
+  @Test
+  func noForecastDataSkipsForecastExtension() throws {
     let today = calendar.startOfDay(for: Date())
     let forecastUntil = try date(30, relativeTo: today)
     let balances = [
@@ -121,7 +127,8 @@ struct AnalysisStoreExtrapolateTests {
     #expect(forecasts.isEmpty)
   }
 
-  @Test func resultIsSortedByDate() throws {
+  @Test
+  func resultIsSortedByDate() throws {
     let today = calendar.startOfDay(for: Date())
     let forecastUntil = try date(30, relativeTo: today)
     let balances = [

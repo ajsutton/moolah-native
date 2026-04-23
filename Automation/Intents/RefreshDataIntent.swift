@@ -6,8 +6,7 @@ struct RefreshDataIntent: AppIntent {
   static let description = IntentDescription(
     "Refreshes all data from the server for a profile.")
 
-  @Parameter(title: "Profile", default: nil)
-  var profile: ProfileEntity?
+  @Parameter(title: "Profile", default: nil) var profile: ProfileEntity?
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<String> {

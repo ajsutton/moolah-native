@@ -10,13 +10,15 @@ struct CryptoTokenRepositoryTests {
     InMemoryTokenRepository()
   }
 
-  @Test func emptyRepositoryReturnsEmptyArray() async throws {
+  @Test
+  func emptyRepositoryReturnsEmptyArray() async throws {
     let repo = makeRepository()
     let registrations = try await repo.loadRegistrations()
     #expect(registrations.isEmpty)
   }
 
-  @Test func roundTrip_saveAndLoad() async throws {
+  @Test
+  func roundTrip_saveAndLoad() async throws {
     let repo = makeRepository()
     let registrations = Array(CryptoRegistration.builtInPresets.prefix(2))
     try await repo.saveRegistrations(registrations)
@@ -26,7 +28,8 @@ struct CryptoTokenRepositoryTests {
     #expect(loaded[1].id == registrations[1].id)
   }
 
-  @Test func saveOverwritesPreviousList() async throws {
+  @Test
+  func saveOverwritesPreviousList() async throws {
     let repo = makeRepository()
     try await repo.saveRegistrations(Array(CryptoRegistration.builtInPresets.prefix(3)))
     try await repo.saveRegistrations(Array(CryptoRegistration.builtInPresets.prefix(1)))
@@ -34,7 +37,8 @@ struct CryptoTokenRepositoryTests {
     #expect(loaded.count == 1)
   }
 
-  @Test func registrationsOnDifferentChainsAreDistinct() async throws {
+  @Test
+  func registrationsOnDifferentChainsAreDistinct() async throws {
     // Same-symbol tokens on different chains (USDC-Ethereum vs hypothetical USDC-Polygon)
     // must be preserved as independent registrations — the chainId is part of the identity.
     let ethUsdc = CryptoRegistration(
@@ -74,7 +78,8 @@ struct CryptoTokenRepositoryTests {
     #expect(ethUsdc.id != polyUsdc.id)
   }
 
-  @Test func nativeAndErc20OnSameChainAreDistinct() async throws {
+  @Test
+  func nativeAndErc20OnSameChainAreDistinct() async throws {
     // Native ETH (chainId:1, no contract) vs ERC20 on chain 1 must be distinct registrations.
     let eth = CryptoRegistration(
       instrument: .crypto(

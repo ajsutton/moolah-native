@@ -17,7 +17,8 @@ struct StockPositionDisplayTests {
     return f.string(from: date)
   }
 
-  @Test func loadPositionsComputesFromLegs() async throws {
+  @Test
+  func loadPositionsComputesFromLegs() async throws {
     let accountId = UUID()
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
@@ -61,7 +62,8 @@ struct StockPositionDisplayTests {
     #expect(audPosition!.quantity == Decimal(string: "-6345.00")!)
   }
 
-  @Test func valuedPositionsIncludeMarketValue() async throws {
+  @Test
+  func valuedPositionsIncludeMarketValue() async throws {
     let accountId = UUID()
     let today = Date()
     let ds = dateString(today)
@@ -118,7 +120,8 @@ struct StockPositionDisplayTests {
     #expect(bhpValued!.value?.quantity == Decimal(string: "6750.00")!)
   }
 
-  @Test func totalPortfolioValueSumsAllPositions() async throws {
+  @Test
+  func totalPortfolioValueSumsAllPositions() async throws {
     let accountId = UUID()
     let today = Date()
     let ds = dateString(today)
@@ -191,7 +194,8 @@ struct StockPositionDisplayTests {
   /// must be marked unavailable (nil) — we must not display a partial
   /// sum as the portfolio total. Per-position valuations still render
   /// individually with `marketValue == nil` for the failing one.
-  @Test func totalPortfolioValueIsNilWhenAnyPositionConversionFails() async throws {
+  @Test
+  func totalPortfolioValueIsNilWhenAnyPositionConversionFails() async throws {
     let accountId = UUID()
     let today = Date()
 

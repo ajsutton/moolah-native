@@ -5,7 +5,8 @@ import Testing
 
 @Suite("RemoteCategoryRepository")
 struct RemoteCategoryRepositoryTests {
-  @Test func testDecodesFixtureJSON() async throws {
+  @Test
+  func testDecodesFixtureJSON() async throws {
     // Given
     let bundle = Bundle(for: TestBundleMarker.self)
     guard let url = bundle.url(forResource: "categories", withExtension: "json") else {

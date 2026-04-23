@@ -6,7 +6,8 @@ import Testing
 @Suite("EarmarkStore -- applyDelta")
 @MainActor
 struct EarmarkStoreApplyDeltaTests {
-  @Test func testApplyDeltaAdjustsPositionsAndBalance() async throws {
+  @Test
+  func testApplyDeltaAdjustsPositionsAndBalance() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
     let instrument = Instrument.defaultTestInstrument
@@ -36,7 +37,8 @@ struct EarmarkStoreApplyDeltaTests {
     #expect(store.earmarks.by(id: earmarkId)?.spentPositions.first?.quantity == 100)
   }
 
-  @Test func testApplyDeltaWithSavedIncreasesBalance() async throws {
+  @Test
+  func testApplyDeltaWithSavedIncreasesBalance() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
     let instrument = Instrument.defaultTestInstrument
@@ -65,7 +67,8 @@ struct EarmarkStoreApplyDeltaTests {
     #expect(store.earmarks.by(id: earmarkId)?.savedPositions.first?.quantity == 700)
   }
 
-  @Test func testApplyDeltaAffectsMultipleEarmarks() async throws {
+  @Test
+  func testApplyDeltaAffectsMultipleEarmarks() async throws {
     let earmark1Id = UUID()
     let earmark2Id = UUID()
     let accountId = UUID()

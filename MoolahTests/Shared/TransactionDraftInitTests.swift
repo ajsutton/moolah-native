@@ -9,7 +9,8 @@ struct TransactionDraftInitTests {
 
   // MARK: - Init from Transaction: Simple Expense
 
-  @Test func initFromSimpleExpense() throws {
+  @Test
+  func initFromSimpleExpense() throws {
     let categoryId = UUID()
     let earmarkId = UUID()
     let quantity = try #require(Decimal(string: "-42.50"))
@@ -47,7 +48,8 @@ struct TransactionDraftInitTests {
     #expect(draft.legDrafts[0].earmarkId == earmarkId)
   }
 
-  @Test func initFromSimpleIncome() throws {
+  @Test
+  func initFromSimpleIncome() throws {
     let quantity = try #require(Decimal(string: "3000.00"))
     let transaction = Transaction(
       date: Date(),
@@ -66,7 +68,8 @@ struct TransactionDraftInitTests {
     #expect(draft.legDrafts[0].amountText == "3000.00")
   }
 
-  @Test func initFromRefundExpense() throws {
+  @Test
+  func initFromRefundExpense() throws {
     // Refund: expense with positive quantity
     let quantity = try #require(Decimal(string: "10.00"))
     let transaction = Transaction(
@@ -84,7 +87,8 @@ struct TransactionDraftInitTests {
     #expect(draft.legDrafts[0].amountText == "-10.00")
   }
 
-  @Test func initFromZeroAmount() {
+  @Test
+  func initFromZeroAmount() {
     let transaction = Transaction(
       date: Date(),
       legs: [
@@ -100,7 +104,8 @@ struct TransactionDraftInitTests {
 
   // MARK: - Init from Transaction: Simple Transfer
 
-  @Test func initFromSimpleTransferNoContext() {
+  @Test
+  func initFromSimpleTransferNoContext() {
     let transaction = Transaction(
       date: Date(),
       payee: "Transfer",
@@ -127,7 +132,8 @@ struct TransactionDraftInitTests {
     #expect(draft.legDrafts[1].amountText == "-100.00")  // -(+100) = -100
   }
 
-  @Test func initFromSimpleTransferViewingFromSource() {
+  @Test
+  func initFromSimpleTransferViewingFromSource() {
     let transaction = Transaction(
       date: Date(),
       legs: [
@@ -147,7 +153,8 @@ struct TransactionDraftInitTests {
     #expect(draft.legDrafts[0].amountText == "100.00")
   }
 
-  @Test func initFromSimpleTransferViewingFromDestination() {
+  @Test
+  func initFromSimpleTransferViewingFromDestination() {
     let transaction = Transaction(
       date: Date(),
       legs: [
@@ -168,7 +175,8 @@ struct TransactionDraftInitTests {
     #expect(draft.legDrafts[draft.relevantLegIndex].amountText == "-100.00")
   }
 
-  @Test func initFromSimpleTransferWithCategoryOnFirstLeg() {
+  @Test
+  func initFromSimpleTransferWithCategoryOnFirstLeg() {
     let categoryId = UUID()
     let earmarkId = UUID()
     let transaction = Transaction(
@@ -197,7 +205,8 @@ struct TransactionDraftInitTests {
 
   // MARK: - Init from Transaction: Complex
 
-  @Test func initFromComplexTransaction() {
+  @Test
+  func initFromComplexTransaction() {
     let catId = UUID()
     let transaction = Transaction(
       date: Date(),
@@ -229,7 +238,8 @@ struct TransactionDraftInitTests {
 
   // MARK: - Init Blank
 
-  @Test func initBlankTransaction() {
+  @Test
+  func initBlankTransaction() {
     let draft = TransactionDraft(accountId: support.accountA)
 
     #expect(draft.isCustom == false)
@@ -245,7 +255,8 @@ struct TransactionDraftInitTests {
 
   // MARK: - Init with Instrument Precision
 
-  @Test func initPreservesCryptoPrecision() throws {
+  @Test
+  func initPreservesCryptoPrecision() throws {
     let btc = Instrument.crypto(
       chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8)
     let quantity = try #require(Decimal(string: "-0.00123456"))

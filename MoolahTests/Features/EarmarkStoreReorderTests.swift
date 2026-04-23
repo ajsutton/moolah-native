@@ -6,7 +6,8 @@ import Testing
 @Suite("EarmarkStore -- Reorder")
 @MainActor
 struct EarmarkStoreReorderTests {
-  @Test func testReorderEarmarksUpdatesPositions() async throws {
+  @Test
+  func testReorderEarmarksUpdatesPositions() async throws {
     let first = Earmark(name: "First", instrument: .defaultTestInstrument, position: 0)
     let second = Earmark(name: "Second", instrument: .defaultTestInstrument, position: 1)
     let third = Earmark(name: "Third", instrument: .defaultTestInstrument, position: 2)
@@ -27,7 +28,8 @@ struct EarmarkStoreReorderTests {
     #expect(store.visibleEarmarks[2].position == 2)
   }
 
-  @Test func testReorderEarmarksSkipsHiddenEarmarks() async throws {
+  @Test
+  func testReorderEarmarksSkipsHiddenEarmarks() async throws {
     let firstVisible = Earmark(name: "Visible1", instrument: .defaultTestInstrument, position: 0)
     let hidden = Earmark(
       name: "Hidden", instrument: .defaultTestInstrument, isHidden: true, position: 1)
@@ -47,7 +49,8 @@ struct EarmarkStoreReorderTests {
     #expect(hiddenAfter?.position == 1)
   }
 
-  @Test func testReorderSingleEarmarkIsNoOp() async throws {
+  @Test
+  func testReorderSingleEarmarkIsNoOp() async throws {
     let only = Earmark(name: "Only", instrument: .defaultTestInstrument, position: 0)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(earmarks: [only], in: container)
@@ -62,7 +65,8 @@ struct EarmarkStoreReorderTests {
     #expect(store.visibleEarmarks[0].position == 0)
   }
 
-  @Test func testReorderEmptyListIsNoOp() async throws {
+  @Test
+  func testReorderEmptyListIsNoOp() async throws {
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(earmarks: [], in: container)
     let store = EarmarkStore(
@@ -75,7 +79,8 @@ struct EarmarkStoreReorderTests {
     #expect(store.visibleEarmarks.isEmpty)
   }
 
-  @Test func testReorderPersistsToRepository() async throws {
+  @Test
+  func testReorderPersistsToRepository() async throws {
     let first = Earmark(name: "First", instrument: .defaultTestInstrument, position: 0)
     let second = Earmark(name: "Second", instrument: .defaultTestInstrument, position: 1)
     let third = Earmark(name: "Third", instrument: .defaultTestInstrument, position: 2)
@@ -97,7 +102,8 @@ struct EarmarkStoreReorderTests {
     #expect(persisted[2].position == 2)
   }
 
-  @Test func testReorderSurfacesErrorOnFailure() async throws {
+  @Test
+  func testReorderSurfacesErrorOnFailure() async throws {
     let first = Earmark(name: "First", instrument: .defaultTestInstrument, position: 0)
     let second = Earmark(name: "Second", instrument: .defaultTestInstrument, position: 1)
     let third = Earmark(name: "Third", instrument: .defaultTestInstrument, position: 2)
@@ -115,7 +121,8 @@ struct EarmarkStoreReorderTests {
     #expect(store.error != nil)
   }
 
-  @Test func testReorderRollsBackOnFailure() async throws {
+  @Test
+  func testReorderRollsBackOnFailure() async throws {
     let first = Earmark(name: "First", instrument: .defaultTestInstrument, position: 0)
     let second = Earmark(name: "Second", instrument: .defaultTestInstrument, position: 1)
     let third = Earmark(name: "Third", instrument: .defaultTestInstrument, position: 2)

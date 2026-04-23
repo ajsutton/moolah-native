@@ -1,7 +1,8 @@
 // Features/Settings/CryptoTokenStore.swift
 import Foundation
 
-@MainActor @Observable
+@MainActor
+@Observable
 final class CryptoTokenStore {
   private(set) var registrations: [CryptoRegistration] = []
   private(set) var instruments: [Instrument] = []

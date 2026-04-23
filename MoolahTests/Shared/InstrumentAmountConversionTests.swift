@@ -12,7 +12,8 @@ struct InstrumentAmountConversionTests {
     return formatter.date(from: string)!
   }
 
-  @Test func convertedDelegatesToService() async throws {
+  @Test
+  func convertedDelegatesToService() async throws {
     let client = FixedRateClient(rates: [
       "2026-04-11": ["GBP": Decimal(string: "0.497")!]
     ])
@@ -26,7 +27,8 @@ struct InstrumentAmountConversionTests {
     #expect(result.instrument.id == "GBP")
   }
 
-  @Test func convertedSameInstrumentReturnsOriginal() async throws {
+  @Test
+  func convertedSameInstrumentReturnsOriginal() async throws {
     let client = FixedRateClient()
     let service = ExchangeRateService(client: client)
     let amount = InstrumentAmount(quantity: Decimal(string: "123.45")!, instrument: .AUD)
@@ -37,7 +39,8 @@ struct InstrumentAmountConversionTests {
     #expect(result.instrument == .AUD)
   }
 
-  @Test func convertZeroDecimalFiatPreservesPrecision() async throws {
+  @Test
+  func convertZeroDecimalFiatPreservesPrecision() async throws {
     // JPY has 0 decimals; converting yields a multiplied quantity with normal Decimal precision.
     let client = FixedRateClient(rates: [
       "2026-04-11": ["JPY": Decimal(string: "95.50")!]
@@ -52,7 +55,8 @@ struct InstrumentAmountConversionTests {
     #expect(result.instrument.id == "JPY")
   }
 
-  @Test func convertRespectsSourceQuantitySign() async throws {
+  @Test
+  func convertRespectsSourceQuantitySign() async throws {
     let client = FixedRateClient(rates: [
       "2026-04-11": ["USD": Decimal(string: "0.65")!]
     ])

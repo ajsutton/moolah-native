@@ -56,8 +56,8 @@ struct URLSchemeHandlerTests {
 
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withFullDate]
-    let expectedFrom = formatter.date(from: "2026-01-01")!
-    let expectedTo = formatter.date(from: "2026-03-31")!
+    let expectedFrom = try #require(formatter.date(from: "2026-01-01"))
+    let expectedTo = try #require(formatter.date(from: "2026-03-31"))
 
     #expect(route.destination == .reports(from: expectedFrom, to: expectedTo))
   }

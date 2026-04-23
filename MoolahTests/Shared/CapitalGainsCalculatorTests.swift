@@ -7,7 +7,8 @@ import Testing
 struct CapitalGainsCalculatorTests {
   let aud = Instrument.fiat(code: "AUD")
 
-  @Test func stockPurchase_thenSale_producesGainEvent() async throws {
+  @Test
+  func stockPurchase_thenSale_producesGainEvent() async throws {
     let bhp = stockInstrument("BHP")
     let accountId = UUID()
 
@@ -47,7 +48,8 @@ struct CapitalGainsCalculatorTests {
     #expect(result.totalRealizedGain == 1000)
   }
 
-  @Test func noSales_noGainEvents() async throws {
+  @Test
+  func noSales_noGainEvents() async throws {
     let bhp = stockInstrument("BHP")
     let accountId = UUID()
 
@@ -73,7 +75,8 @@ struct CapitalGainsCalculatorTests {
     #expect(result.openLots[0].remainingQuantity == 100)
   }
 
-  @Test func cryptoSwap_tracksGainOnSoldToken() async throws {
+  @Test
+  func cryptoSwap_tracksGainOnSoldToken() async throws {
     let eth = cryptoInstrument("ETH")
     let uni = cryptoInstrument("UNI")
     let accountId = UUID()
@@ -115,7 +118,8 @@ struct CapitalGainsCalculatorTests {
     #expect(result.events[0].gain == 1000)
   }
 
-  @Test func financialYearFilter_onlyIncludesEventsInRange() async throws {
+  @Test
+  func financialYearFilter_onlyIncludesEventsInRange() async throws {
     let bhp = stockInstrument("BHP")
     let accountId = UUID()
 
@@ -160,7 +164,8 @@ struct CapitalGainsCalculatorTests {
 
   // MARK: - Multi-instrument scenarios
 
-  @Test func multipleStocks_produceIndependentGainEvents() async throws {
+  @Test
+  func multipleStocks_produceIndependentGainEvents() async throws {
     let bhp = stockInstrument("BHP")
     let cba = stockInstrument("CBA")
     let accountId = UUID()
@@ -220,7 +225,8 @@ struct CapitalGainsCalculatorTests {
     #expect(result.totalRealizedGain == 3000)
   }
 
-  @Test func sellingOneInstrumentDoesNotTouchCostBasisOfAnother() async throws {
+  @Test
+  func sellingOneInstrumentDoesNotTouchCostBasisOfAnother() async throws {
     // If a user sells BHP, CBA cost basis must not change.
     let bhp = stockInstrument("BHP")
     let cba = stockInstrument("CBA")
@@ -274,7 +280,8 @@ struct CapitalGainsCalculatorTests {
   /// convert each fiat leg to the profile currency before summing,
   /// producing a cost basis of AUD 3100 (not the raw 2100 from blending
   /// USD and AUD quantities).
-  @Test func mixedFiatLegs_convertToProfileCurrencyBeforeSumming() async throws {
+  @Test
+  func mixedFiatLegs_convertToProfileCurrencyBeforeSumming() async throws {
     let bhp = stockInstrument("BHP")
     let usd = Instrument.fiat(code: "USD")
     let accountId = UUID()
@@ -323,7 +330,8 @@ struct CapitalGainsCalculatorTests {
   /// fee is modelled as an inflow because the existing fiat-paired
   /// classifier only sums absolute inflow. Covers the sell-side symmetry
   /// of the fix.
-  @Test func mixedFiatLegs_sellSide_convertInflowToProfileCurrency() async throws {
+  @Test
+  func mixedFiatLegs_sellSide_convertInflowToProfileCurrency() async throws {
     let bhp = stockInstrument("BHP")
     let usd = Instrument.fiat(code: "USD")
     let accountId = UUID()
@@ -376,7 +384,8 @@ struct CapitalGainsCalculatorTests {
   /// the swap date than would be returned for "today" (`Date()`), so a
   /// regression that misrouted the lookup date would yield a different
   /// gain than the assertion permits.
-  @Test func cryptoSwap_conversionUsesTransactionDate() async throws {
+  @Test
+  func cryptoSwap_conversionUsesTransactionDate() async throws {
     let eth = cryptoInstrument("ETH")
     let uni = cryptoInstrument("UNI")
     let accountId = UUID()
@@ -470,7 +479,8 @@ struct CapitalGainsCalculatorTests {
   /// the conversion service so the sign convention is preserved end to
   /// end. An outflow leg (negative quantity) must arrive at the
   /// conversion service as a negative number; an inflow leg as positive.
-  @Test func fiatLegs_passSignedQuantityToConversionService() async throws {
+  @Test
+  func fiatLegs_passSignedQuantityToConversionService() async throws {
     let bhp = stockInstrument("BHP")
     let usd = Instrument.fiat(code: "USD")
     let accountId = UUID()
@@ -518,7 +528,8 @@ struct CapitalGainsCalculatorTests {
   /// conversion boundary. The outgoing leg of a swap is negative and must
   /// arrive at the conversion service as negative; the incoming leg as
   /// positive.
-  @Test func cryptoSwap_passesSignedQuantityToConversionService() async throws {
+  @Test
+  func cryptoSwap_passesSignedQuantityToConversionService() async throws {
     let eth = cryptoInstrument("ETH")
     let uni = cryptoInstrument("UNI")
     let accountId = UUID()

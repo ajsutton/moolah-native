@@ -6,7 +6,8 @@ import Testing
 
 @Suite("FrankfurterClient")
 struct FrankfurterClientTests {
-  @Test func parsesRangeResponseFormat() throws {
+  @Test
+  func parsesRangeResponseFormat() throws {
     // Shape returned by the real Frankfurter range endpoint
     // (api.frankfurter.app/<from>..<to>?base=<code>).
     let json = """
@@ -30,7 +31,8 @@ struct FrankfurterClientTests {
     #expect(result["2026-04-10"]?["USD"] == Decimal(string: "0.629")!)
   }
 
-  @Test func parsesEmptyRatesResponse() throws {
+  @Test
+  func parsesEmptyRatesResponse() throws {
     let json = """
       {
         "amount": 1.0,

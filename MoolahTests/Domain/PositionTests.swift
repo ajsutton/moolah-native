@@ -3,6 +3,12 @@ import Testing
 
 @testable import Moolah
 
+// Swift Testing's `@Test func foo()` is the documented idiom, and
+// swift-format's `lineBreakBetweenDeclarationAttributes: false` keeps the
+// attribute inline. Disable SwiftLint's `attributes` rule in this file so
+// the formatter and the linter don't fight over the same layout.
+// swiftlint:disable attributes
+
 @Suite("Position")
 struct PositionTests {
   let accountId = UUID()
@@ -276,3 +282,5 @@ struct PositionTests {
     #expect(positions.first?.quantity == Decimal(string: "2000.00")!)
   }
 }
+
+// swiftlint:enable attributes

@@ -13,8 +13,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
     self.instrument = instrument
   }
 
-  @MainActor
-  private var context: ModelContext {
+  @MainActor private var context: ModelContext {
     modelContainer.mainContext
   }
 

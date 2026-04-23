@@ -26,7 +26,8 @@ struct EarmarkBudgetTests {
 
   // MARK: - loadBudget
 
-  @Test func testLoadBudgetPopulatesBudgetItems() async throws {
+  @Test
+  func testLoadBudgetPopulatesBudgetItems() async throws {
     let earmarkId = UUID()
     let catId = UUID()
     let items = [
@@ -47,7 +48,8 @@ struct EarmarkBudgetTests {
     #expect(store.budgetItems.first?.amount.quantity == Decimal(80000) / 100)
   }
 
-  @Test func testLoadBudgetHandlesError() async throws {
+  @Test
+  func testLoadBudgetHandlesError() async throws {
     let (backend, _) = try TestBackend.create()
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
@@ -57,7 +59,8 @@ struct EarmarkBudgetTests {
     #expect(store.budgetItems.isEmpty)
   }
 
-  @Test func testLoadBudgetClearsPreviousItems() async throws {
+  @Test
+  func testLoadBudgetClearsPreviousItems() async throws {
     let earmark1Id = UUID()
     let earmark2Id = UUID()
     let cat1Id = UUID()
@@ -94,7 +97,8 @@ struct EarmarkBudgetTests {
 
   // MARK: - updateBudgetItem
 
-  @Test func testUpdateBudgetItemModifiesExistingItem() async throws {
+  @Test
+  func testUpdateBudgetItemModifiesExistingItem() async throws {
     let earmarkId = UUID()
     let catId = UUID()
     let items = [
@@ -125,7 +129,8 @@ struct EarmarkBudgetTests {
 
   // MARK: - addBudgetItem
 
-  @Test func testAddBudgetItemAppendsToList() async throws {
+  @Test
+  func testAddBudgetItemAppendsToList() async throws {
     let earmarkId = UUID()
     let catId = UUID()
     let (store, _) = try await makeStore(
@@ -144,7 +149,8 @@ struct EarmarkBudgetTests {
     #expect(store.budgetItems.first?.categoryId == catId)
   }
 
-  @Test func testAddBudgetItemCallsRepositoryWithFullList() async throws {
+  @Test
+  func testAddBudgetItemCallsRepositoryWithFullList() async throws {
     let earmarkId = UUID()
     let cat1Id = UUID()
     let cat2Id = UUID()
@@ -174,7 +180,8 @@ struct EarmarkBudgetTests {
 
   // MARK: - removeBudgetItem
 
-  @Test func testRemoveBudgetItemRemovesFromList() async throws {
+  @Test
+  func testRemoveBudgetItemRemovesFromList() async throws {
     let earmarkId = UUID()
     let catId = UUID()
     let (store, backend) = try await makeStore(

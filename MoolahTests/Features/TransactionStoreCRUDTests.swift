@@ -11,7 +11,8 @@ struct TransactionStoreCRUDTests {
 
   // MARK: - CRUD
 
-  @Test func testCreateAddsTransaction() async throws {
+  @Test
+  func testCreateAddsTransaction() async throws {
     let (backend, _) = try TestBackend.create()
     let store = TransactionStore(
       repository: backend.transactions,
@@ -47,7 +48,8 @@ struct TransactionStoreCRUDTests {
   /// inspector's `.id(selected.id)` otherwise forces a view recreation on
   /// every create, which would drop focus state. See
   /// `plans/2026-04-21-transaction-detail-focus-design.md`.
-  @Test func testCreatePreservesInputUUID() async throws {
+  @Test
+  func testCreatePreservesInputUUID() async throws {
     let (backend, _) = try TestBackend.create()
     let store = TransactionStore(
       repository: backend.transactions,
@@ -78,7 +80,8 @@ struct TransactionStoreCRUDTests {
     #expect(store.transactions[0].transaction.id == placeholderId)
   }
 
-  @Test func testUpdateModifiesTransaction() async throws {
+  @Test
+  func testUpdateModifiesTransaction() async throws {
     let transaction = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-15"),
       payee: "Coffee Shop",
@@ -120,7 +123,8 @@ struct TransactionStoreCRUDTests {
     #expect(store.error == nil)
   }
 
-  @Test func testDeleteRemovesTransaction() async throws {
+  @Test
+  func testDeleteRemovesTransaction() async throws {
     let transaction = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-15"),
       payee: "Coffee Shop",
@@ -150,7 +154,8 @@ struct TransactionStoreCRUDTests {
     #expect(store.error == nil)
   }
 
-  @Test func testCreateUpdateDeleteCycle() async throws {
+  @Test
+  func testCreateUpdateDeleteCycle() async throws {
     let (backend, _) = try TestBackend.create()
     let store = TransactionStore(
       repository: backend.transactions,
@@ -195,7 +200,8 @@ struct TransactionStoreCRUDTests {
     #expect(store.transactions.isEmpty)
   }
 
-  @Test func testRunningBalancesUpdateAfterCreate() async throws {
+  @Test
+  func testRunningBalancesUpdateAfterCreate() async throws {
     let existing = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-01"),
       payee: "Initial",
@@ -242,7 +248,8 @@ struct TransactionStoreCRUDTests {
     #expect(store.transactions[1].balance?.quantity == Decimal(100000) / 100)
   }
 
-  @Test func testRunningBalancesUpdateAfterDelete() async throws {
+  @Test
+  func testRunningBalancesUpdateAfterDelete() async throws {
     let salary = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-01"),
       payee: "Salary",

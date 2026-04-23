@@ -34,7 +34,8 @@ struct YahooFinanceClientTests {
     return formatter.date(from: string)!
   }
 
-  @Test func requestURLContainsTickerAndDateRange() async throws {
+  @Test
+  func requestURLContainsTickerAndDateRange() async throws {
     let fixtureData = try loadFixture("yahoo-finance-chart-response")
 
     let (client, _) = makeClient { request in
@@ -57,7 +58,8 @@ struct YahooFinanceClientTests {
     #expect(queryItems.contains { $0.name == "period2" })
   }
 
-  @Test func requestIncludesUserAgentHeader() async throws {
+  @Test
+  func requestIncludesUserAgentHeader() async throws {
     let fixtureData = try loadFixture("yahoo-finance-chart-response")
 
     let (client, _) = makeClient { request in
@@ -76,7 +78,8 @@ struct YahooFinanceClientTests {
     #expect(userAgent!.isEmpty == false)
   }
 
-  @Test func parsesAdjustedCloseAndCurrency() async throws {
+  @Test
+  func parsesAdjustedCloseAndCurrency() async throws {
     let fixtureData = try loadFixture("yahoo-finance-chart-response")
 
     let (client, _) = makeClient { request in
@@ -96,7 +99,8 @@ struct YahooFinanceClientTests {
     #expect(result.prices["2022-04-06"] == Decimal(string: "38.10")!)
   }
 
-  @Test func skipsNullAdjcloseValues() async throws {
+  @Test
+  func skipsNullAdjcloseValues() async throws {
     let fixtureData = try loadFixture("yahoo-finance-chart-response")
 
     let (client, _) = makeClient { request in
@@ -113,7 +117,8 @@ struct YahooFinanceClientTests {
     #expect(result.prices["2022-04-07"] == nil)
   }
 
-  @Test func errorResponseThrows() async throws {
+  @Test
+  func errorResponseThrows() async throws {
     let fixtureData = try loadFixture("yahoo-finance-error-response")
 
     let (client, _) = makeClient { request in
@@ -129,7 +134,8 @@ struct YahooFinanceClientTests {
     }
   }
 
-  @Test func httpErrorThrows() async throws {
+  @Test
+  func httpErrorThrows() async throws {
     let (client, _) = makeClient { request in
       let response = HTTPURLResponse(
         url: request.url!, statusCode: 404, httpVersion: nil,

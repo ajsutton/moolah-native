@@ -341,8 +341,7 @@ struct SettingsView: View {
   // MARK: - macOS Detail Pane
 
   #if os(macOS)
-    @ViewBuilder
-    private var detailPane: some View {
+    @ViewBuilder private var detailPane: some View {
       if let selectedID = selectedProfileID,
         let profile = profileStore.profiles.first(where: { $0.id == selectedID })
       {
@@ -494,8 +493,7 @@ struct SettingsView: View {
     return "Remove Profile?"
   }
 
-  @ViewBuilder
-  private var deleteAlertButtons: some View {
+  @ViewBuilder private var deleteAlertButtons: some View {
     Button(profileToDelete?.backendType == .cloudKit ? "Delete" : "Remove", role: .destructive) {
       if let profile = profileToDelete {
         profileStore.removeProfile(profile.id)
@@ -510,8 +508,7 @@ struct SettingsView: View {
     }
   }
 
-  @ViewBuilder
-  private var deleteAlertMessage: some View {
+  @ViewBuilder private var deleteAlertMessage: some View {
     if let profile = profileToDelete {
       if profile.backendType == .cloudKit {
         Text(

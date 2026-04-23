@@ -10,7 +10,8 @@ struct AccountStoreApplyDeltaTests {
 
   // MARK: - applyDelta
 
-  @Test func testApplyDeltaReducesAccountBalance() async throws {
+  @Test
+  func testApplyDeltaReducesAccountBalance() async throws {
     let acctId = UUID()
     let instrument = Instrument.defaultTestInstrument
     let (backend, container) = try TestBackend.create()
@@ -28,7 +29,8 @@ struct AccountStoreApplyDeltaTests {
     #expect(balance.quantity == Decimal(95000) / 100)
   }
 
-  @Test func testApplyDeltaIncreasesAccountBalance() async throws {
+  @Test
+  func testApplyDeltaIncreasesAccountBalance() async throws {
     let acctId = UUID()
     let instrument = Instrument.defaultTestInstrument
     let (backend, container) = try TestBackend.create()
@@ -46,7 +48,8 @@ struct AccountStoreApplyDeltaTests {
     #expect(balance.quantity == Decimal(150000) / 100)
   }
 
-  @Test func testApplyDeltaUpdatesBothAccounts() async throws {
+  @Test
+  func testApplyDeltaUpdatesBothAccounts() async throws {
     let checkingId = UUID()
     let savingsId = UUID()
     let instrument = Instrument.defaultTestInstrument
@@ -72,7 +75,8 @@ struct AccountStoreApplyDeltaTests {
     #expect(savings.quantity == Decimal(210000) / 100)
   }
 
-  @Test func testApplyDeltaUpdatesTotals() async throws {
+  @Test
+  func testApplyDeltaUpdatesTotals() async throws {
     let checkingId = UUID()
     let instrument = Instrument.defaultTestInstrument
     let (backend, container) = try TestBackend.create()
@@ -92,7 +96,8 @@ struct AccountStoreApplyDeltaTests {
     #expect(store.convertedNetWorth?.quantity == Decimal(95000) / 100)
   }
 
-  @Test func testApplyDeltaViaBalanceDeltaCalculator() async throws {
+  @Test
+  func testApplyDeltaViaBalanceDeltaCalculator() async throws {
     let acctId = UUID()
     let instrument = Instrument.defaultTestInstrument
     let (backend, container) = try TestBackend.create()
@@ -119,7 +124,8 @@ struct AccountStoreApplyDeltaTests {
     #expect(balance.quantity == Decimal(95000) / 100)
   }
 
-  @Test func testApplyDeltaIgnoresUnknownAccount() async throws {
+  @Test
+  func testApplyDeltaIgnoresUnknownAccount() async throws {
     let acctId = UUID()
     let unknownId = UUID()
     let instrument = Instrument.defaultTestInstrument
@@ -141,7 +147,8 @@ struct AccountStoreApplyDeltaTests {
 
   // MARK: - Converted Totals
 
-  @Test func testConvertedTotalsAreNilBeforeLoad() async throws {
+  @Test
+  func testConvertedTotalsAreNilBeforeLoad() async throws {
     let (backend, _) = try TestBackend.create()
     let store = AccountStore(
       repository: backend.accounts,
@@ -154,7 +161,8 @@ struct AccountStoreApplyDeltaTests {
     #expect(store.convertedNetWorth == nil)
   }
 
-  @Test func testConvertedTotalsPopulatedAfterLoad() async throws {
+  @Test
+  func testConvertedTotalsPopulatedAfterLoad() async throws {
     let instrument = Instrument.defaultTestInstrument
     let (backend, container) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
@@ -172,7 +180,8 @@ struct AccountStoreApplyDeltaTests {
     #expect(store.convertedNetWorth != nil)
   }
 
-  @Test func testConvertedTotalsUpdateAfterApplyDelta() async throws {
+  @Test
+  func testConvertedTotalsUpdateAfterApplyDelta() async throws {
     let acctId = UUID()
     let instrument = Instrument.defaultTestInstrument
     let (backend, container) = try TestBackend.create()

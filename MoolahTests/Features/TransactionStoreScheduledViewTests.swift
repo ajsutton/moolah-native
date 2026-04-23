@@ -10,7 +10,8 @@ struct TransactionStoreScheduledViewTests {
 
   // MARK: - Multi-instrument loading
 
-  @Test func testLoadsUSDAccountTransactionsInUSDInstrument() async throws {
+  @Test
+  func testLoadsUSDAccountTransactionsInUSDInstrument() async throws {
     // A USD-denominated account should load expense/income legs with USD instrument intact.
     let usdAccountId = UUID()
     let expectedAmount = try #require(Decimal(string: "-4.50"))
@@ -47,7 +48,8 @@ struct TransactionStoreScheduledViewTests {
     #expect(transaction.legs[0].quantity == expectedAmount)
   }
 
-  @Test func testLoadsTransactionSpanningMultipleInstruments() async throws {
+  @Test
+  func testLoadsTransactionSpanningMultipleInstruments() async throws {
     // Currency conversion transaction on the same account — leg instruments must be preserved.
     let revolutId = UUID()
     let audQuantity = try #require(Decimal(string: "-1000.00"))

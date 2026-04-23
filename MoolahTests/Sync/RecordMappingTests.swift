@@ -11,7 +11,8 @@ struct RecordMappingTests {
 
   // MARK: - ProfileRecord
 
-  @Test func profileRecordRoundTrip() {
+  @Test
+  func profileRecordRoundTrip() {
     let profile = ProfileRecord(
       id: UUID(),
       label: "My Budget",
@@ -40,7 +41,8 @@ struct RecordMappingTests {
 
   // MARK: - AccountRecord
 
-  @Test func accountRecordRoundTrip() {
+  @Test
+  func accountRecordRoundTrip() {
     let account = AccountRecord(
       id: UUID(),
       name: "Savings",
@@ -69,7 +71,8 @@ struct RecordMappingTests {
     #expect(restored.isHidden == true)
   }
 
-  @Test func accountRecordFieldValuesDefaultsInstrumentId() {
+  @Test
+  func accountRecordFieldValuesDefaultsInstrumentId() {
     // When instrumentId is missing from CKRecord, default to "AUD"
     let recordID = CKRecord.ID(recordName: UUID().uuidString, zoneID: zoneID)
     let ckRecord = CKRecord(recordType: "CD_AccountRecord", recordID: recordID)
@@ -83,7 +86,8 @@ struct RecordMappingTests {
 
   // MARK: - TransactionRecord
 
-  @Test func transactionRecordRoundTrip() {
+  @Test
+  func transactionRecordRoundTrip() {
     let txnDate = Date(timeIntervalSince1970: 1_700_000_000)
 
     let txn = TransactionRecord(
@@ -114,7 +118,8 @@ struct RecordMappingTests {
     #expect(restored.recurEvery == 1)
   }
 
-  @Test func transactionRecordNilOptionals() {
+  @Test
+  func transactionRecordNilOptionals() {
     let txn = TransactionRecord(
       id: UUID(),
       date: Date()
@@ -135,7 +140,8 @@ struct RecordMappingTests {
 
   // MARK: - TransactionLegRecord
 
-  @Test func transactionLegRecordRoundTrip() {
+  @Test
+  func transactionLegRecordRoundTrip() {
     let transactionId = UUID()
     let accountId = UUID()
     let categoryId = UUID()
@@ -178,7 +184,8 @@ struct RecordMappingTests {
     #expect(restored.sortOrder == 0)
   }
 
-  @Test func transactionLegRecordNilOptionals() {
+  @Test
+  func transactionLegRecordNilOptionals() {
     let leg = TransactionLegRecord(
       transactionId: UUID(),
       accountId: UUID(),
@@ -198,7 +205,8 @@ struct RecordMappingTests {
 
   // MARK: - InstrumentRecord
 
-  @Test func instrumentRecordRoundTrip() {
+  @Test
+  func instrumentRecordRoundTrip() {
     let instrument = InstrumentRecord(
       id: "AUD",
       kind: "fiatCurrency",
@@ -225,7 +233,8 @@ struct RecordMappingTests {
     #expect(restored.exchange == nil)
   }
 
-  @Test func instrumentRecordWithStockFields() {
+  @Test
+  func instrumentRecordWithStockFields() {
     let instrument = InstrumentRecord(
       id: "ASX:BHP",
       kind: "stock",
@@ -246,7 +255,8 @@ struct RecordMappingTests {
 
   // MARK: - CategoryRecord
 
-  @Test func categoryRecordRoundTrip() {
+  @Test
+  func categoryRecordRoundTrip() {
     let parentId = UUID()
     let category = CategoryRecord(id: UUID(), name: "Food", parentId: parentId)
 
@@ -262,7 +272,8 @@ struct RecordMappingTests {
     #expect(restored.parentId == parentId)
   }
 
-  @Test func categoryRecordNilParent() {
+  @Test
+  func categoryRecordNilParent() {
     let category = CategoryRecord(id: UUID(), name: "Root", parentId: nil)
 
     let ckRecord = category.toCKRecord(in: zoneID)
@@ -274,7 +285,8 @@ struct RecordMappingTests {
 
   // MARK: - EarmarkRecord
 
-  @Test func earmarkRecordRoundTrip() {
+  @Test
+  func earmarkRecordRoundTrip() {
     let startDate = Date(timeIntervalSince1970: 1_700_000_000)
     let endDate = Date(timeIntervalSince1970: 1_710_000_000)
     let earmark = EarmarkRecord(
@@ -310,7 +322,8 @@ struct RecordMappingTests {
     #expect(restored.savingsEndDate == endDate)
   }
 
-  @Test func earmarkRecordNilOptionals() {
+  @Test
+  func earmarkRecordNilOptionals() {
     let earmark = EarmarkRecord(
       id: UUID(),
       name: "Basic",
@@ -333,7 +346,8 @@ struct RecordMappingTests {
 
   // MARK: - EarmarkBudgetItemRecord
 
-  @Test func earmarkBudgetItemRecordRoundTrip() {
+  @Test
+  func earmarkBudgetItemRecordRoundTrip() {
     let earmarkId = UUID()
     let categoryId = UUID()
     let item = EarmarkBudgetItemRecord(
@@ -362,7 +376,8 @@ struct RecordMappingTests {
 
   // MARK: - InvestmentValueRecord
 
-  @Test func investmentValueRecordRoundTrip() {
+  @Test
+  func investmentValueRecordRoundTrip() {
     let accountId = UUID()
     let date = Date(timeIntervalSince1970: 1_700_000_000)
     let record = InvestmentValueRecord(
@@ -391,7 +406,8 @@ struct RecordMappingTests {
 
   // MARK: - Multi-instrument persistence
 
-  @Test func instrumentRecordCryptoFieldsRoundTrip() {
+  @Test
+  func instrumentRecordCryptoFieldsRoundTrip() {
     let instrument = InstrumentRecord(
       id: "1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
       kind: "cryptoToken",
@@ -420,7 +436,8 @@ struct RecordMappingTests {
     #expect(restored.contractAddress == "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
   }
 
-  @Test func instrumentRecordNativeCryptoHasNoContractAddress() {
+  @Test
+  func instrumentRecordNativeCryptoHasNoContractAddress() {
     // Bitcoin uses chainId = 0 and nil contractAddress; ETH native uses chainId = 1.
     let btc = InstrumentRecord(
       id: "0:native",
@@ -441,7 +458,8 @@ struct RecordMappingTests {
     #expect(restored.contractAddress == nil)
   }
 
-  @Test func instrumentRecordToDomainForStockAndCryptoKinds() {
+  @Test
+  func instrumentRecordToDomainForStockAndCryptoKinds() {
     let stock = InstrumentRecord(
       id: "ASX:BHP",
       kind: "stock",
@@ -469,7 +487,8 @@ struct RecordMappingTests {
     #expect(cryptoDomain.chainId == 1)
   }
 
-  @Test func instrumentRecordUnknownKindFallsBackToFiat() {
+  @Test
+  func instrumentRecordUnknownKindFallsBackToFiat() {
     // Defensive: if a future version writes an unknown kind, Record.toDomain should not crash.
     let record = InstrumentRecord(
       id: "XYZ",
@@ -481,7 +500,8 @@ struct RecordMappingTests {
     #expect(domain.kind == .fiatCurrency)
   }
 
-  @Test func accountRecordRoundTripForStockInstrumentId() {
+  @Test
+  func accountRecordRoundTripForStockInstrumentId() {
     let account = AccountRecord(
       id: UUID(),
       name: "Sharesight",
@@ -499,7 +519,8 @@ struct RecordMappingTests {
     #expect(restored.type == "investment")
   }
 
-  @Test func accountRecordRoundTripForCryptoInstrumentId() {
+  @Test
+  func accountRecordRoundTripForCryptoInstrumentId() {
     let account = AccountRecord(
       id: UUID(),
       name: "Wallet",
@@ -518,7 +539,8 @@ struct RecordMappingTests {
     #expect(restored.instrumentId == "1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
   }
 
-  @Test func transactionLegRecordRoundTripForStockInstrument() {
+  @Test
+  func transactionLegRecordRoundTripForStockInstrument() {
     let leg = TransactionLegRecord(
       id: UUID(),
       transactionId: UUID(),
@@ -539,7 +561,8 @@ struct RecordMappingTests {
     #expect(restored.quantity == 15_000_000_000)
   }
 
-  @Test func transactionLegRecordRoundTripForCryptoInstrument() {
+  @Test
+  func transactionLegRecordRoundTripForCryptoInstrument() {
     let leg = TransactionLegRecord(
       id: UUID(),
       transactionId: UUID(),
@@ -560,7 +583,8 @@ struct RecordMappingTests {
     #expect(restored.quantity == 50_000_000)
   }
 
-  @Test func earmarkRecordRoundTripForNonFiatSavingsTarget() {
+  @Test
+  func earmarkRecordRoundTripForNonFiatSavingsTarget() {
     // Earmark tracking a stock or crypto target for goals like "own 100 BHP".
     let earmark = EarmarkRecord(
       id: UUID(),
@@ -580,7 +604,8 @@ struct RecordMappingTests {
     #expect(restored.savingsTargetInstrumentId == "ASX:BHP")
   }
 
-  @Test func earmarkBudgetItemRecordRoundTripForForeignInstrument() {
+  @Test
+  func earmarkBudgetItemRecordRoundTripForForeignInstrument() {
     let item = EarmarkBudgetItemRecord(
       id: UUID(),
       earmarkId: UUID(),
@@ -600,7 +625,8 @@ struct RecordMappingTests {
 
   // MARK: - Record Type Strings
 
-  @Test func recordTypeStrings() {
+  @Test
+  func recordTypeStrings() {
     #expect(ProfileRecord.recordType == "CD_ProfileRecord")
     #expect(AccountRecord.recordType == "CD_AccountRecord")
     #expect(TransactionRecord.recordType == "CD_TransactionRecord")

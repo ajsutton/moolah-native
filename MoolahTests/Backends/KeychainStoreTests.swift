@@ -17,7 +17,8 @@ import Testing
 
     // MARK: - String values
 
-    @Test func saveAndRestoreString() throws {
+    @Test
+    func saveAndRestoreString() throws {
       let store = makeStore()
       defer { store.clear() }
 
@@ -26,13 +27,15 @@ import Testing
       #expect(restored == "my-api-key-123")
     }
 
-    @Test func restoreStringWhenEmpty() throws {
+    @Test
+    func restoreStringWhenEmpty() throws {
       let store = makeStore()
       let restored = try store.restoreString()
       #expect(restored == nil)
     }
 
-    @Test func saveStringOverwritesPrevious() throws {
+    @Test
+    func saveStringOverwritesPrevious() throws {
       let store = makeStore()
       defer { store.clear() }
 
@@ -42,7 +45,8 @@ import Testing
       #expect(restored == "key-2")
     }
 
-    @Test func clearRemovesString() throws {
+    @Test
+    func clearRemovesString() throws {
       let store = makeStore()
       try store.saveString("key")
       store.clear()
@@ -52,7 +56,8 @@ import Testing
 
     // MARK: - Data values
 
-    @Test func saveAndRestoreData() throws {
+    @Test
+    func saveAndRestoreData() throws {
       let store = makeStore()
       defer { store.clear() }
 
@@ -62,7 +67,8 @@ import Testing
       #expect(restored == data)
     }
 
-    @Test func restoreDataWhenEmpty() throws {
+    @Test
+    func restoreDataWhenEmpty() throws {
       let store = makeStore()
       let restored = try store.restoreData()
       #expect(restored == nil)

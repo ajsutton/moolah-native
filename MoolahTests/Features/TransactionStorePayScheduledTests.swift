@@ -9,7 +9,8 @@ import Testing
 struct TransactionStorePayScheduledTests {
   private let accountId = UUID()
 
-  @Test func testPayRecurringTransactionAdvancesDate() async throws {
+  @Test
+  func testPayRecurringTransactionAdvancesDate() async throws {
     let originalDate = try TransactionStoreTestSupport.makeDate("2024-01-15")
     let scheduled = Transaction(
       date: originalDate,
@@ -72,7 +73,8 @@ struct TransactionStorePayScheduledTests {
     #expect(scheduledPage.transactions[0].id == scheduled.id)
   }
 
-  @Test func testPayRecurringWeeklyTransactionAdvancesByWeek() async throws {
+  @Test
+  func testPayRecurringWeeklyTransactionAdvancesByWeek() async throws {
     let scheduled = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-15"),
       payee: "Groceries",
@@ -109,7 +111,8 @@ struct TransactionStorePayScheduledTests {
     #expect(updated?.date == expectedNextDate)
   }
 
-  @Test func testPayOneTimeScheduledTransactionDeletesIt() async throws {
+  @Test
+  func testPayOneTimeScheduledTransactionDeletesIt() async throws {
     let scheduled = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-15"),
       payee: "Annual Fee",
@@ -154,7 +157,8 @@ struct TransactionStorePayScheduledTests {
     #expect(allPage.transactions[0].payee == "Annual Fee")
   }
 
-  @Test func testPayPreservesAllTransactionFields() async throws {
+  @Test
+  func testPayPreservesAllTransactionFields() async throws {
     let categoryId = UUID()
     let earmarkId = UUID()
     let toAccountId = UUID()

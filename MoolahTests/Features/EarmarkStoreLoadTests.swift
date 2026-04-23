@@ -6,7 +6,8 @@ import Testing
 @Suite("EarmarkStore -- Load")
 @MainActor
 struct EarmarkStoreLoadTests {
-  @Test func testPopulatesFromRepository() async throws {
+  @Test
+  func testPopulatesFromRepository() async throws {
     let earmark = Earmark(name: "Holiday Fund", instrument: Instrument.defaultTestInstrument)
     let accountId = UUID()
     let (backend, container) = try TestBackend.create()
@@ -24,7 +25,8 @@ struct EarmarkStoreLoadTests {
     #expect(store.earmarks.first?.name == "Holiday Fund")
   }
 
-  @Test func testSortingByPosition() async throws {
+  @Test
+  func testSortingByPosition() async throws {
     let higher = Earmark(name: "E1", instrument: Instrument.defaultTestInstrument, position: 2)
     let lower = Earmark(name: "E2", instrument: Instrument.defaultTestInstrument, position: 1)
     let accountId = UUID()
@@ -47,7 +49,8 @@ struct EarmarkStoreLoadTests {
     #expect(store.earmarks[1].name == "E1")
   }
 
-  @Test func testEarmarkInstrumentSetCorrectly() async throws {
+  @Test
+  func testEarmarkInstrumentSetCorrectly() async throws {
     let holiday = Earmark(name: "Holiday", instrument: Instrument.defaultTestInstrument)
     let carRepair = Earmark(name: "Car Repair", instrument: Instrument.defaultTestInstrument)
     let accountId = UUID()

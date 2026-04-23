@@ -3,14 +3,16 @@ import Testing
 @testable import Moolah
 
 struct CategoriesTests {
-  @Test func categoryPathForRootCategory() {
+  @Test
+  func categoryPathForRootCategory() {
     let root = Category(name: "Groceries")
     let categories = Categories(from: [root])
 
     #expect(categories.path(for: root) == "Groceries")
   }
 
-  @Test func categoryPathForChildCategory() {
+  @Test
+  func categoryPathForChildCategory() {
     let root = Category(name: "Groceries")
     let child = Category(name: "Food", parentId: root.id)
     let categories = Categories(from: [root, child])
@@ -18,7 +20,8 @@ struct CategoriesTests {
     #expect(categories.path(for: child) == "Groceries:Food")
   }
 
-  @Test func categoryPathForDeeplyNestedCategory() {
+  @Test
+  func categoryPathForDeeplyNestedCategory() {
     let root = Category(name: "Income")
     let mid = Category(name: "Salary", parentId: root.id)
     let leaf = Category(name: "Janet", parentId: mid.id)
@@ -27,7 +30,8 @@ struct CategoriesTests {
     #expect(categories.path(for: leaf) == "Income:Salary:Janet")
   }
 
-  @Test func flattenedSortedAlphabeticallyByPath() {
+  @Test
+  func flattenedSortedAlphabeticallyByPath() {
     let groceries = Category(name: "Groceries")
     let food = Category(name: "Food", parentId: groceries.id)
     let drinks = Category(name: "Drinks", parentId: groceries.id)
@@ -40,7 +44,8 @@ struct CategoriesTests {
     #expect(paths == ["Groceries", "Groceries:Drinks", "Groceries:Food", "Income"])
   }
 
-  @Test func flattenedReturnsEmptyForEmptyCategories() {
+  @Test
+  func flattenedReturnsEmptyForEmptyCategories() {
     let categories = Categories(from: [])
     #expect(categories.flattenedByPath().isEmpty)
   }

@@ -7,35 +7,40 @@ import Testing
 struct TransactionDraftEarmarkOnlyTests {
   private let support = TransactionDraftTestSupport()
 
-  @Test func isEarmarkOnlyWithEarmarkAndNoAccount() {
+  @Test
+  func isEarmarkOnlyWithEarmarkAndNoAccount() {
     let leg = TransactionDraft.LegDraft(
       type: .income, accountId: nil, amountText: "100",
       categoryId: nil, categoryText: "", earmarkId: UUID())
     #expect(leg.isEarmarkOnly == true)
   }
 
-  @Test func isEarmarkOnlyWithAccountAndEarmark() {
+  @Test
+  func isEarmarkOnlyWithAccountAndEarmark() {
     let leg = TransactionDraft.LegDraft(
       type: .income, accountId: UUID(), amountText: "100",
       categoryId: nil, categoryText: "", earmarkId: UUID())
     #expect(leg.isEarmarkOnly == false)
   }
 
-  @Test func isEarmarkOnlyWithAccountNoEarmark() {
+  @Test
+  func isEarmarkOnlyWithAccountNoEarmark() {
     let leg = TransactionDraft.LegDraft(
       type: .expense, accountId: UUID(), amountText: "100",
       categoryId: nil, categoryText: "", earmarkId: nil)
     #expect(leg.isEarmarkOnly == false)
   }
 
-  @Test func isEarmarkOnlyWithNeitherAccountNorEarmark() {
+  @Test
+  func isEarmarkOnlyWithNeitherAccountNorEarmark() {
     let leg = TransactionDraft.LegDraft(
       type: .expense, accountId: nil, amountText: "100",
       categoryId: nil, categoryText: "", earmarkId: nil)
     #expect(leg.isEarmarkOnly == false)
   }
 
-  @Test func validEarmarkOnlyLeg() {
+  @Test
+  func validEarmarkOnlyLeg() {
     let draft = TransactionDraft(
       payee: "", date: Date(), notes: "",
       isRepeating: false, recurPeriod: nil, recurEvery: 1,
@@ -50,7 +55,8 @@ struct TransactionDraftEarmarkOnlyTests {
     #expect(draft.isValid == true)
   }
 
-  @Test func invalidLegWithNeitherAccountNorEarmark() {
+  @Test
+  func invalidLegWithNeitherAccountNorEarmark() {
     let draft = TransactionDraft(
       payee: "", date: Date(), notes: "",
       isRepeating: false, recurPeriod: nil, recurEvery: 1,
@@ -65,7 +71,8 @@ struct TransactionDraftEarmarkOnlyTests {
     #expect(draft.isValid == false)
   }
 
-  @Test func validCustomWithMixedAccountAndEarmarkOnlyLegs() {
+  @Test
+  func validCustomWithMixedAccountAndEarmarkOnlyLegs() {
     let draft = TransactionDraft(
       payee: "", date: Date(), notes: "",
       isRepeating: false, recurPeriod: nil, recurEvery: 1,
@@ -83,7 +90,8 @@ struct TransactionDraftEarmarkOnlyTests {
     #expect(draft.isValid == true)
   }
 
-  @Test func toTransactionEarmarkOnlyLeg() throws {
+  @Test
+  func toTransactionEarmarkOnlyLeg() throws {
     let emId = UUID()
     let draft = TransactionDraft(
       payee: "", date: Date(), notes: "",
@@ -114,7 +122,8 @@ struct TransactionDraftEarmarkOnlyTests {
     #expect(transaction.legs[0].instrument == .defaultTestInstrument)
   }
 
-  @Test func toTransactionMixedAccountAndEarmarkOnlyLegs() throws {
+  @Test
+  func toTransactionMixedAccountAndEarmarkOnlyLegs() throws {
     let emId = UUID()
     let acctId = UUID()
     let draft = TransactionDraft(
@@ -152,7 +161,8 @@ struct TransactionDraftEarmarkOnlyTests {
     #expect(transaction.legs[1].earmarkId == emId)
   }
 
-  @Test func earmarkOnlyLegEnforcesIncomeType() {
+  @Test
+  func earmarkOnlyLegEnforcesIncomeType() {
     var draft = TransactionDraft(
       payee: "", date: Date(), notes: "",
       isRepeating: false, recurPeriod: nil, recurEvery: 1,
@@ -172,7 +182,8 @@ struct TransactionDraftEarmarkOnlyTests {
     #expect(draft.legDrafts[0].categoryText.isEmpty)
   }
 
-  @Test func earmarkOnlyInvariantsNoOpWhenNotEarmarkOnly() {
+  @Test
+  func earmarkOnlyInvariantsNoOpWhenNotEarmarkOnly() {
     var draft = TransactionDraft(
       payee: "", date: Date(), notes: "",
       isRepeating: false, recurPeriod: nil, recurEvery: 1,
@@ -190,7 +201,8 @@ struct TransactionDraftEarmarkOnlyTests {
     #expect(draft.legDrafts[0].categoryId == originalCategoryId)
   }
 
-  @Test func initBlankEarmarkOnlyDraft() {
+  @Test
+  func initBlankEarmarkOnlyDraft() {
     let emId = UUID()
     let draft = TransactionDraft(earmarkId: emId)
     #expect(draft.legDrafts.count == 1)

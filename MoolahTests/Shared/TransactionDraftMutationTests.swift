@@ -3,6 +3,12 @@ import Testing
 
 @testable import Moolah
 
+// Swift Testing's `@Test func foo()` is the documented idiom, and
+// swift-format's `lineBreakBetweenDeclarationAttributes: false` keeps the
+// attribute inline. Disable SwiftLint's `attributes` rule in this file so
+// the formatter and the linter don't fight over the same layout.
+// swiftlint:disable attributes
+
 @Suite("TransactionDraft setType / setAmount / mode switching")
 struct TransactionDraftMutationTests {
   private let support = TransactionDraftTestSupport()
@@ -291,3 +297,5 @@ struct TransactionDraftMutationTests {
     #expect(draft.canSwitchToSimple == false)
   }
 }
+
+// swiftlint:enable attributes

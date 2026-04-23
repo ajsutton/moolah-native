@@ -7,7 +7,8 @@ import Testing
 struct TransactionDraftToTransactionTests {
   private let support = TransactionDraftTestSupport()
 
-  @Test func toTransactionSimpleExpense() throws {
+  @Test
+  func toTransactionSimpleExpense() throws {
     let draft = support.makeExpenseDraft(amountText: "25.00", accountId: support.accountA)
     let accounts = support.makeAccounts([support.makeAccount(id: support.accountA)])
     let transaction = try #require(
@@ -20,7 +21,8 @@ struct TransactionDraftToTransactionTests {
     #expect(transaction.legs[0].accountId == support.accountA)
   }
 
-  @Test func toTransactionSimpleIncome() throws {
+  @Test
+  func toTransactionSimpleIncome() throws {
     let draft = TransactionDraft(
       payee: "Salary", date: Date(), notes: "",
       isRepeating: false, recurPeriod: nil, recurEvery: 1,
@@ -41,7 +43,8 @@ struct TransactionDraftToTransactionTests {
     #expect(transaction.legs[0].quantity == Decimal(string: "3000.00"))  // income: as-is
   }
 
-  @Test func toTransactionRefundExpense() throws {
+  @Test
+  func toTransactionRefundExpense() throws {
     // Display value "-10" for expense -> quantity = -(-10) = +10
     let draft = support.makeExpenseDraft(amountText: "-10.00", accountId: support.accountA)
     let accounts = support.makeAccounts([support.makeAccount(id: support.accountA)])
@@ -52,7 +55,8 @@ struct TransactionDraftToTransactionTests {
     #expect(transaction.legs[0].quantity == Decimal(string: "10.00"))
   }
 
-  @Test func toTransactionSimpleTransfer() throws {
+  @Test
+  func toTransactionSimpleTransfer() throws {
     let accounts = support.makeAccounts([
       support.makeAccount(id: support.accountA),
       support.makeAccount(id: support.accountB),
@@ -68,7 +72,8 @@ struct TransactionDraftToTransactionTests {
     #expect(transaction.legs[1].quantity == Decimal(string: "100.00"))
   }
 
-  @Test func toTransactionRoundTripsExpense() throws {
+  @Test
+  func toTransactionRoundTripsExpense() throws {
     let id = UUID()
     let categoryId = UUID()
     let earmarkId = UUID()
@@ -107,7 +112,8 @@ struct TransactionDraftToTransactionTests {
     #expect(roundTripped.legs[0].earmarkId == original.legs[0].earmarkId)
   }
 
-  @Test func toTransactionRoundTripsTransfer() throws {
+  @Test
+  func toTransactionRoundTripsTransfer() throws {
     let id = UUID()
     let categoryId = UUID()
     let original = Transaction(
@@ -140,7 +146,8 @@ struct TransactionDraftToTransactionTests {
     #expect(roundTripped.legs[1].categoryId == nil)
   }
 
-  @Test func toTransactionRoundTripsTransferFromDestination() throws {
+  @Test
+  func toTransactionRoundTripsTransferFromDestination() throws {
     let id = UUID()
     let original = Transaction(
       id: id,
@@ -170,7 +177,8 @@ struct TransactionDraftToTransactionTests {
     #expect(roundTripped.legs[1].quantity == Decimal(string: "100"))
   }
 
-  @Test func toTransactionCustomModeMultiLeg() throws {
+  @Test
+  func toTransactionCustomModeMultiLeg() throws {
     let catId = UUID()
     let earmarkId = UUID()
     let accounts = support.makeAccounts([
@@ -204,13 +212,15 @@ struct TransactionDraftToTransactionTests {
     #expect(transaction.legs[1].earmarkId == earmarkId)
   }
 
-  @Test func toTransactionReturnsNilWhenInvalid() {
+  @Test
+  func toTransactionReturnsNilWhenInvalid() {
     let draft = support.makeExpenseDraft(amountText: "")
     let accounts = support.makeAccounts([support.makeAccount(id: support.accountA)])
     #expect(draft.toTransaction(id: UUID(), accounts: accounts) == nil)
   }
 
-  @Test func toTransactionClearsRecurrenceWhenNotRepeating() throws {
+  @Test
+  func toTransactionClearsRecurrenceWhenNotRepeating() throws {
     var draft = support.makeExpenseDraft(amountText: "10.00", accountId: support.accountA)
     draft.recurPeriod = .month
     draft.recurEvery = 2

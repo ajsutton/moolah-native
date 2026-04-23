@@ -7,7 +7,8 @@ import Testing
 struct TransactionDraftInstrumentIdTests {
   private let support = TransactionDraftTestSupport()
 
-  @Test func legDraftInstrumentIdOverridesToTransaction() throws {
+  @Test
+  func legDraftInstrumentIdOverridesToTransaction() throws {
     let acctId = UUID()
     let accounts = support.makeAccounts([support.makeAccount(id: acctId, instrument: .AUD)])
     let availableInstruments = ["AUD", "USD", "EUR", "GBP"].map { Instrument.fiat(code: $0) }
@@ -29,7 +30,8 @@ struct TransactionDraftInstrumentIdTests {
     #expect(transaction.legs[0].instrument.id == "USD")
   }
 
-  @Test func legDraftNilInstrumentIdReturnsNil() {
+  @Test
+  func legDraftNilInstrumentIdReturnsNil() {
     // instrumentId is the canonical source of truth; a leg without one can't
     // resolve to an instrument and the draft is considered invalid-to-save.
     let acctId = UUID()
@@ -50,7 +52,8 @@ struct TransactionDraftInstrumentIdTests {
     #expect(transaction == nil)
   }
 
-  @Test func legDraftInvalidInstrumentIdReturnsNil() {
+  @Test
+  func legDraftInvalidInstrumentIdReturnsNil() {
     let acctId = UUID()
     let accounts = support.makeAccounts([support.makeAccount(id: acctId, instrument: .AUD)])
     let draft = TransactionDraft(

@@ -21,8 +21,7 @@ struct CryptoSettingsView: View {
 
   // MARK: - Token List
 
-  @ViewBuilder
-  private var tokenListSection: some View {
+  @ViewBuilder private var tokenListSection: some View {
     Section {
       if store.isLoading && store.registrations.isEmpty {
         HStack {

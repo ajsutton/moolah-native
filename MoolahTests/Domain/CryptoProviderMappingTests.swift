@@ -5,7 +5,8 @@ import Testing
 
 @Suite("CryptoProviderMapping")
 struct CryptoProviderMappingTests {
-  @Test func initStoresAllFields() {
+  @Test
+  func initStoresAllFields() {
     let mapping = CryptoProviderMapping(
       instrumentId: "1:native",
       coingeckoId: "ethereum",
@@ -18,7 +19,8 @@ struct CryptoProviderMappingTests {
     #expect(mapping.binanceSymbol == "ETHUSDT")
   }
 
-  @Test func nilProviderFieldsAllowed() {
+  @Test
+  func nilProviderFieldsAllowed() {
     let mapping = CryptoProviderMapping(
       instrumentId: "1:native",
       coingeckoId: nil,
@@ -28,7 +30,8 @@ struct CryptoProviderMappingTests {
     #expect(mapping.coingeckoId == nil)
   }
 
-  @Test func codableRoundTrip() throws {
+  @Test
+  func codableRoundTrip() throws {
     let original = CryptoProviderMapping(
       instrumentId: "10:0x4200000000000000000000000000000000000042",
       coingeckoId: "optimism",
@@ -40,7 +43,8 @@ struct CryptoProviderMappingTests {
     #expect(decoded == original)
   }
 
-  @Test func identityBasedOnInstrumentId() {
+  @Test
+  func identityBasedOnInstrumentId() {
     let a = CryptoProviderMapping(
       instrumentId: "1:native", coingeckoId: "ethereum",
       cryptocompareSymbol: "ETH", binanceSymbol: "ETHUSDT"
@@ -54,7 +58,8 @@ struct CryptoProviderMappingTests {
 
   // MARK: - Built-in presets
 
-  @Test func builtInPresetsContainExpectedTokens() {
+  @Test
+  func builtInPresetsContainExpectedTokens() {
     let presets = CryptoProviderMapping.builtInPresets
     #expect(presets.count == 5)
 

@@ -8,7 +8,8 @@ import Testing
 struct EarmarkStoreConvertedBalanceTests {
   // MARK: - convertedTotalBalance
 
-  @Test func testConvertedTotalBalanceNilBeforeLoad() async throws {
+  @Test
+  func testConvertedTotalBalanceNilBeforeLoad() async throws {
     let (backend, _) = try TestBackend.create()
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
@@ -17,7 +18,8 @@ struct EarmarkStoreConvertedBalanceTests {
     #expect(store.convertedTotalBalance == nil)
   }
 
-  @Test func testConvertedTotalBalancePopulatedAfterLoad() async throws {
+  @Test
+  func testConvertedTotalBalancePopulatedAfterLoad() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
     let instrument = Instrument.defaultTestInstrument
@@ -40,7 +42,8 @@ struct EarmarkStoreConvertedBalanceTests {
     #expect(store.convertedTotalBalance?.quantity == 500)
   }
 
-  @Test func testConvertedTotalBalanceExcludesNegativeEarmarks() async throws {
+  @Test
+  func testConvertedTotalBalanceExcludesNegativeEarmarks() async throws {
     let positiveId = UUID()
     let negativeId = UUID()
     let accountId = UUID()
@@ -75,7 +78,8 @@ struct EarmarkStoreConvertedBalanceTests {
     #expect(store.convertedTotalBalance?.quantity == 500)
   }
 
-  @Test func testConvertedTotalBalanceUpdatesAfterApplyDelta() async throws {
+  @Test
+  func testConvertedTotalBalanceUpdatesAfterApplyDelta() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
     let instrument = Instrument.defaultTestInstrument
@@ -106,7 +110,8 @@ struct EarmarkStoreConvertedBalanceTests {
 
   // MARK: - Per-earmark converted amounts
 
-  @Test func testConvertedBalancePerEarmarkPopulatedAfterLoad() async throws {
+  @Test
+  func testConvertedBalancePerEarmarkPopulatedAfterLoad() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
     let instrument = Instrument.defaultTestInstrument
@@ -131,7 +136,8 @@ struct EarmarkStoreConvertedBalanceTests {
     #expect(store.convertedSpent(for: earmarkId)?.quantity == 0)
   }
 
-  @Test func testConvertedBalancePerEarmarkUpdatesAfterDelta() async throws {
+  @Test
+  func testConvertedBalancePerEarmarkUpdatesAfterDelta() async throws {
     let earmarkId = UUID()
     let accountId = UUID()
     let instrument = Instrument.defaultTestInstrument

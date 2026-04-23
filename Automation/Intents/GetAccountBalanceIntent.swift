@@ -6,11 +6,9 @@ struct GetAccountBalanceIntent: AppIntent {
   static let description = IntentDescription(
     "Returns the balance of a specific account.")
 
-  @Parameter(title: "Profile")
-  var profile: ProfileEntity
+  @Parameter(title: "Profile") var profile: ProfileEntity
 
-  @Parameter(title: "Account")
-  var account: AccountEntity
+  @Parameter(title: "Account") var account: AccountEntity
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<String> {

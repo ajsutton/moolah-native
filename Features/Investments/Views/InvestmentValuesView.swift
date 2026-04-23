@@ -59,8 +59,7 @@ struct InvestmentValuesView: View {
     }
   }
 
-  @ViewBuilder
-  private var investmentChart: some View {
+  @ViewBuilder private var investmentChart: some View {
     let chartValues = store.values.reversed()
     Chart {
       ForEach(chartValues) { value in

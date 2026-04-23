@@ -7,7 +7,8 @@ import Testing
 
 @Suite("BudgetLineItem Merge")
 struct BudgetLineItemMergeTests {
-  @Test func testMergeCombinesBudgetAndActuals() {
+  @Test
+  func testMergeCombinesBudgetAndActuals() {
     let catId = UUID()
     let categories = Categories(from: [Category(id: catId, name: "Flights")])
     let budgetItems = [
@@ -35,7 +36,8 @@ struct BudgetLineItemMergeTests {
     #expect(result.first?.remaining.quantity == Decimal(30000) / 100)
   }
 
-  @Test func testMergeIncludesBudgetOnlyCategories() {
+  @Test
+  func testMergeIncludesBudgetOnlyCategories() {
     let catId = UUID()
     let categories = Categories(from: [Category(id: catId, name: "Food")])
     let budgetItems = [
@@ -58,7 +60,8 @@ struct BudgetLineItemMergeTests {
     #expect(result.first?.remaining.quantity == Decimal(30000) / 100)
   }
 
-  @Test func testMergeIncludesActualOnlyCategories() {
+  @Test
+  func testMergeIncludesActualOnlyCategories() {
     let catId = UUID()
     let categories = Categories(from: [Category(id: catId, name: "Transport")])
     let budgetItems: [EarmarkBudgetItem] = []
@@ -79,7 +82,8 @@ struct BudgetLineItemMergeTests {
     #expect(result.first?.remaining.quantity == Decimal(-20000) / 100)
   }
 
-  @Test func testMergeCalculatesRemainingCorrectly() {
+  @Test
+  func testMergeCalculatesRemainingCorrectly() {
     let catId = UUID()
     let categories = Categories(from: [Category(id: catId, name: "Accommodation")])
     let budgetItems = [
@@ -105,7 +109,8 @@ struct BudgetLineItemMergeTests {
     #expect(result.first?.remaining.quantity == Decimal(-10000) / 100)
   }
 
-  @Test func testMergeSortsByCategoryName() {
+  @Test
+  func testMergeSortsByCategoryName() {
     let cat1 = Category(id: UUID(), name: "Zebra")
     let cat2 = Category(id: UUID(), name: "Alpha")
     let cat3 = Category(id: UUID(), name: "Middle")
@@ -135,7 +140,8 @@ struct BudgetLineItemMergeTests {
     #expect(result.map(\.categoryName) == ["Alpha", "Middle", "Zebra"])
   }
 
-  @Test func testUnallocatedBudgetCalculation() {
+  @Test
+  func testUnallocatedBudgetCalculation() {
     let catId = UUID()
     let budgetItems = [
       EarmarkBudgetItem(
@@ -155,7 +161,8 @@ struct BudgetLineItemMergeTests {
     #expect(unallocated?.quantity == Decimal(30000) / 100)
   }
 
-  @Test func testUnallocatedNilWhenNoSavingsGoal() {
+  @Test
+  func testUnallocatedNilWhenNoSavingsGoal() {
     let unallocated = BudgetLineItem.unallocatedAmount(
       budgetItems: [],
       savingsGoal: nil
@@ -163,7 +170,8 @@ struct BudgetLineItemMergeTests {
     #expect(unallocated == nil)
   }
 
-  @Test func testUnallocatedNegativeWhenOverAllocated() {
+  @Test
+  func testUnallocatedNegativeWhenOverAllocated() {
     let catId = UUID()
     let budgetItems = [
       EarmarkBudgetItem(
@@ -183,7 +191,8 @@ struct BudgetLineItemMergeTests {
     #expect(unallocated?.quantity == Decimal(-20000) / 100)
   }
 
-  @Test func testUnknownCategoryNameForDeletedCategory() {
+  @Test
+  func testUnknownCategoryNameForDeletedCategory() {
     let catId = UUID()
     let categories = Categories(from: [])  // Category not in lookup
     let budgetItems = [
@@ -205,7 +214,8 @@ struct BudgetLineItemMergeTests {
 
   // MARK: - Budget item instrument parity
 
-  @Test func budgetItemIsCoercedToEarmarkInstrumentInLineItem() {
+  @Test
+  func budgetItemIsCoercedToEarmarkInstrumentInLineItem() {
     // Budget items stored with a mismatched instrument label (e.g. from stale
     // CloudKit data) are re-expressed in the earmark's instrument so sums
     // across the list are instrument-safe.
@@ -229,7 +239,8 @@ struct BudgetLineItemMergeTests {
     #expect(result[0].budgeted.quantity == Decimal(500))
   }
 
-  @Test func allLineItemsShareEarmarkInstrument() {
+  @Test
+  func allLineItemsShareEarmarkInstrument() {
     let audCat = UUID()
     let usdCat = UUID()
     let categories = Categories(from: [

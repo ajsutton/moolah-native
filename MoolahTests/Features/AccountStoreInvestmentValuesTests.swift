@@ -68,7 +68,8 @@ struct AccountStoreInvestmentValuesTests {
 
   // MARK: - updateInvestmentValue
 
-  @Test func testUpdateInvestmentValueSetsValue() async throws {
+  @Test
+  func testUpdateInvestmentValueSetsValue() async throws {
     let (backend, container) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
       name: "Invest", type: .investment, balance: Decimal(100000) / 100, in: container)
@@ -87,7 +88,8 @@ struct AccountStoreInvestmentValuesTests {
     #expect(balance == newValue)
   }
 
-  @Test func testUpdateInvestmentValueClearsValue() async throws {
+  @Test
+  func testUpdateInvestmentValueClearsValue() async throws {
     let (backend, container) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
       name: "Invest", type: .investment, balance: Decimal(100000) / 100, in: container)
@@ -111,7 +113,8 @@ struct AccountStoreInvestmentValuesTests {
           quantity: Decimal(100000) / 100, instrument: Instrument.defaultTestInstrument))
   }
 
-  @Test func testUpdateInvestmentValueIgnoresUnknownAccount() async throws {
+  @Test
+  func testUpdateInvestmentValueIgnoresUnknownAccount() async throws {
     let (backend, container) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
       name: "Invest", type: .investment, balance: Decimal(100000) / 100, in: container)
@@ -131,7 +134,8 @@ struct AccountStoreInvestmentValuesTests {
 
   // MARK: - Display Balance
 
-  @Test func testDisplayBalanceReturnsInvestmentValueForInvestmentAccount() async throws {
+  @Test
+  func testDisplayBalanceReturnsInvestmentValueForInvestmentAccount() async throws {
     let acctId = UUID()
     let (backend, container) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
@@ -150,7 +154,8 @@ struct AccountStoreInvestmentValuesTests {
     #expect(balance == investmentValue)
   }
 
-  @Test func testCanDeleteReturnsTrueForZeroPositions() async throws {
+  @Test
+  func testCanDeleteReturnsTrueForZeroPositions() async throws {
     let acctId = UUID()
     let (backend, container) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(id: acctId, name: "Empty", in: container)
@@ -162,7 +167,8 @@ struct AccountStoreInvestmentValuesTests {
     #expect(store.canDelete(acctId))
   }
 
-  @Test func testCanDeleteReturnsFalseForNonZeroPositions() async throws {
+  @Test
+  func testCanDeleteReturnsFalseForNonZeroPositions() async throws {
     let acctId = UUID()
     let (backend, container) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(

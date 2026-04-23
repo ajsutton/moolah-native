@@ -11,7 +11,8 @@ struct ProfileDataSyncHandlerTests {
 
   // MARK: - Remote Insert
 
-  @Test func applyRemoteInsertCreatesLocalRecord() throws {
+  @Test
+  func applyRemoteInsertCreatesLocalRecord() throws {
     let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let accountId = UUID()
@@ -41,7 +42,8 @@ struct ProfileDataSyncHandlerTests {
 
   // MARK: - Remote Update
 
-  @Test func applyRemoteUpdateModifiesExistingRecord() throws {
+  @Test
+  func applyRemoteUpdateModifiesExistingRecord() throws {
     let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let accountId = UUID()
@@ -76,7 +78,8 @@ struct ProfileDataSyncHandlerTests {
 
   // MARK: - Remote Deletion
 
-  @Test func applyRemoteDeletionRemovesLocalRecord() throws {
+  @Test
+  func applyRemoteDeletionRemovesLocalRecord() throws {
     let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let accountId = UUID()
@@ -106,7 +109,8 @@ struct ProfileDataSyncHandlerTests {
 
   // MARK: - buildCKRecord
 
-  @Test func buildCKRecordProducesCorrectRecord() throws {
+  @Test
+  func buildCKRecordProducesCorrectRecord() throws {
     let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let account = AccountRecord(
@@ -166,7 +170,8 @@ struct ProfileDataSyncHandlerTests {
     #expect(built["name"] as? String == "Corrupt")
   }
 
-  @Test func buildCKRecordPreservesCachedSystemFields() throws {
+  @Test
+  func buildCKRecordPreservesCachedSystemFields() throws {
     let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let accountId = UUID()

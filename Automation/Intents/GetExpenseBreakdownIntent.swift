@@ -6,11 +6,9 @@ struct GetExpenseBreakdownIntent: AppIntent {
   static let description = IntentDescription(
     "Shows a breakdown of expenses by category for a given period.")
 
-  @Parameter(title: "Profile")
-  var profile: ProfileEntity
+  @Parameter(title: "Profile") var profile: ProfileEntity
 
-  @Parameter(title: "Period", default: .thisMonth)
-  var period: ExpensePeriod
+  @Parameter(title: "Period", default: .thisMonth) var period: ExpensePeriod
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<String> {

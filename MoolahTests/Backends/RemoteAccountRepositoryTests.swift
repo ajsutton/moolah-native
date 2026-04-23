@@ -23,7 +23,8 @@ struct RemoteAccountRepositoryTests {
     return RemoteAccountRepository(client: client, instrument: instrument)
   }
 
-  @Test func createRejectsAccountWithNonProfileInstrument() async throws {
+  @Test
+  func createRejectsAccountWithNonProfileInstrument() async throws {
     let repo = makeRepository(instrument: .AUD)
     let account = Account(name: "USD Savings", type: .bank, instrument: .USD)
     await #expect(throws: BackendError.self) {
@@ -31,7 +32,8 @@ struct RemoteAccountRepositoryTests {
     }
   }
 
-  @Test func createRejectsOpeningBalanceInForeignInstrument() async throws {
+  @Test
+  func createRejectsOpeningBalanceInForeignInstrument() async throws {
     let repo = makeRepository(instrument: .AUD)
     let account = Account(name: "AUD Savings", type: .bank, instrument: .AUD)
     let foreignOpening = InstrumentAmount(quantity: 100, instrument: .USD)
@@ -40,7 +42,8 @@ struct RemoteAccountRepositoryTests {
     }
   }
 
-  @Test func updateRejectsAccountWithNonProfileInstrument() async throws {
+  @Test
+  func updateRejectsAccountWithNonProfileInstrument() async throws {
     let repo = makeRepository(instrument: .AUD)
     let account = Account(name: "USD Savings", type: .bank, instrument: .USD)
     await #expect(throws: BackendError.self) {
@@ -48,7 +51,8 @@ struct RemoteAccountRepositoryTests {
     }
   }
 
-  @Test func testDecodesFixtureJSON() async throws {
+  @Test
+  func testDecodesFixtureJSON() async throws {
     // Given
     let bundle = Bundle(for: TestBundleMarker.self)
     guard let url = bundle.url(forResource: "accounts", withExtension: "json") else {
@@ -93,7 +97,8 @@ struct RemoteAccountRepositoryTests {
     #expect(investmentPosition?.quantity == Decimal(string: "15000.00")!)
   }
 
-  @Test func testCreateAccountCallsCorrectEndpoint() async throws {
+  @Test
+  func testCreateAccountCallsCorrectEndpoint() async throws {
     // Given
     let bundle = Bundle(for: TestBundleMarker.self)
     guard let url = bundle.url(forResource: "account_create_response", withExtension: "json") else {
@@ -140,7 +145,8 @@ struct RemoteAccountRepositoryTests {
     #expect(createdPosition?.quantity == Decimal(string: "1000.00")!)
   }
 
-  @Test func testUpdateAccountCallsCorrectEndpoint() async throws {
+  @Test
+  func testUpdateAccountCallsCorrectEndpoint() async throws {
     // Given
     let bundle = Bundle(for: TestBundleMarker.self)
     guard let url = bundle.url(forResource: "account_update_response", withExtension: "json") else {

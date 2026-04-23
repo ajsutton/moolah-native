@@ -6,14 +6,11 @@ struct GetRecentTransactionsIntent: AppIntent {
   static let description = IntentDescription(
     "Shows recent transactions, optionally filtered by account.")
 
-  @Parameter(title: "Profile")
-  var profile: ProfileEntity
+  @Parameter(title: "Profile") var profile: ProfileEntity
 
-  @Parameter(title: "Account", default: nil)
-  var account: AccountEntity?
+  @Parameter(title: "Account", default: nil) var account: AccountEntity?
 
-  @Parameter(title: "Count", default: 5)
-  var count: Int
+  @Parameter(title: "Count", default: 5) var count: Int
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<String> {

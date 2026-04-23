@@ -6,11 +6,9 @@ struct ListAccountsIntent: AppIntent {
   static let description = IntentDescription(
     "Lists accounts and their balances for a profile.")
 
-  @Parameter(title: "Profile")
-  var profile: ProfileEntity
+  @Parameter(title: "Profile") var profile: ProfileEntity
 
-  @Parameter(title: "Account Type", default: nil)
-  var accountType: AccountTypeEnum?
+  @Parameter(title: "Account Type", default: nil) var accountType: AccountTypeEnum?
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<String> {

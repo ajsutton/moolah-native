@@ -23,8 +23,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
     self.conversionService = conversionService
   }
 
-  @MainActor
-  var context: ModelContext {
+  @MainActor var context: ModelContext {
     modelContainer.mainContext
   }
 

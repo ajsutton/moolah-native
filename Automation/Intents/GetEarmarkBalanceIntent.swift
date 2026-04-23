@@ -6,11 +6,9 @@ struct GetEarmarkBalanceIntent: AppIntent {
   static let description = IntentDescription(
     "Returns the balance of a specific earmark.")
 
-  @Parameter(title: "Profile")
-  var profile: ProfileEntity
+  @Parameter(title: "Profile") var profile: ProfileEntity
 
-  @Parameter(title: "Earmark")
-  var earmark: EarmarkEntity
+  @Parameter(title: "Earmark") var earmark: EarmarkEntity
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<String> {

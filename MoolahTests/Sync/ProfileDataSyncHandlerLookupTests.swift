@@ -9,7 +9,8 @@ import Testing
 @MainActor
 struct ProfileDataSyncHandlerLookupTests {
 
-  @Test func buildBatchRecordLookupFindsRecordsByUUID() throws {
+  @Test
+  func buildBatchRecordLookupFindsRecordsByUUID() throws {
     let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let accountId = UUID()
@@ -31,7 +32,8 @@ struct ProfileDataSyncHandlerLookupTests {
     #expect(lookup[txnId]?.recordType == "CD_TransactionRecord")
   }
 
-  @Test func recordToSaveFindsAccountByUUID() throws {
+  @Test
+  func recordToSaveFindsAccountByUUID() throws {
     let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let accountId = UUID()
@@ -47,7 +49,8 @@ struct ProfileDataSyncHandlerLookupTests {
     #expect(result?["name"] as? String == "Found")
   }
 
-  @Test func recordToSaveFindsInstrumentByStringID() throws {
+  @Test
+  func recordToSaveFindsInstrumentByStringID() throws {
     let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let context = ModelContext(container)
@@ -64,7 +67,8 @@ struct ProfileDataSyncHandlerLookupTests {
     #expect(result?["name"] as? String == "BHP Group")
   }
 
-  @Test func recordToSaveReturnsNilForMissingRecord() throws {
+  @Test
+  func recordToSaveReturnsNilForMissingRecord() throws {
     let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let recordID = CKRecord.ID(recordName: UUID().uuidString, zoneID: handler.zoneID)

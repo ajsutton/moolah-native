@@ -28,8 +28,7 @@ struct PositionsChart: View {
 
   // MARK: - Header
 
-  @ViewBuilder
-  private var header: some View {
+  @ViewBuilder private var header: some View {
     if let selectedInstrument {
       HStack(spacing: 6) {
         KindBadge(kind: selectedInstrument.kind)
@@ -57,8 +56,7 @@ struct PositionsChart: View {
 
   // MARK: - Chart
 
-  @ViewBuilder
-  private var chartBody: some View {
+  @ViewBuilder private var chartBody: some View {
     let points = visiblePoints
     if points.isEmpty {
       ContentUnavailableView {
@@ -166,8 +164,7 @@ struct PositionsChart: View {
 
   // MARK: - Range picker
 
-  @ViewBuilder
-  private var rangePicker: some View {
+  @ViewBuilder private var rangePicker: some View {
     let picker =
       Picker("Range", selection: $range) {
         ForEach(PositionsTimeRange.allCases) { r in
@@ -224,7 +221,8 @@ extension PositionsChart: AXChartDescriptorRepresentable {
   }
 
   /// Snapshot of view state for the descriptor.
-  @MainActor private func chartSnapshot() -> ChartSnapshot {
+  @MainActor
+  private func chartSnapshot() -> ChartSnapshot {
     let points = visiblePoints
     let title =
       selectedInstrument.map { "Chart of \($0.displayLabel)" } ?? "Chart of all positions"

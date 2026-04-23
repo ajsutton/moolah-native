@@ -7,7 +7,8 @@ import Testing
 struct InstrumentCryptoTests {
   // MARK: - Factory
 
-  @Test func nativeTokenProperties() {
+  @Test
+  func nativeTokenProperties() {
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
     )
@@ -21,7 +22,8 @@ struct InstrumentCryptoTests {
     #expect(eth.exchange == nil)
   }
 
-  @Test func contractTokenProperties() {
+  @Test
+  func contractTokenProperties() {
     let op = Instrument.crypto(
       chainId: 10,
       contractAddress: "0x4200000000000000000000000000000000000042",
@@ -34,7 +36,8 @@ struct InstrumentCryptoTests {
     #expect(op.contractAddress == "0x4200000000000000000000000000000000000042")
   }
 
-  @Test func contractAddressNormalizedToLowercase() {
+  @Test
+  func contractAddressNormalizedToLowercase() {
     let ens = Instrument.crypto(
       chainId: 1,
       contractAddress: "0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72",
@@ -44,7 +47,8 @@ struct InstrumentCryptoTests {
     #expect(ens.contractAddress == "0xc18360217d8f7ab5e7c516566761ea12ce7f9d72")
   }
 
-  @Test func btcUsesChainIdZero() {
+  @Test
+  func btcUsesChainIdZero() {
     let btc = Instrument.crypto(
       chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8
     )
@@ -52,7 +56,8 @@ struct InstrumentCryptoTests {
     #expect(btc.decimals == 8)
   }
 
-  @Test func cryptoInstrumentIdUsesChainAndAddressScheme() {
+  @Test
+  func cryptoInstrumentIdUsesChainAndAddressScheme() {
     let instrument = Instrument.crypto(
       chainId: 10,
       contractAddress: "0x4200000000000000000000000000000000000042",
@@ -61,7 +66,8 @@ struct InstrumentCryptoTests {
     #expect(instrument.id == "10:0x4200000000000000000000000000000000000042")
   }
 
-  @Test func equality() {
+  @Test
+  func equality() {
     let a = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
     let b = Instrument.crypto(
@@ -72,7 +78,8 @@ struct InstrumentCryptoTests {
     #expect(a.id == b.id)
   }
 
-  @Test func codableRoundTrip() throws {
+  @Test
+  func codableRoundTrip() throws {
     let original = Instrument.crypto(
       chainId: 1,
       contractAddress: "0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72",
@@ -88,13 +95,15 @@ struct InstrumentCryptoTests {
 
   // MARK: - Display symbol
 
-  @Test func cryptoInstrumentHasNoCurrencySymbol() {
+  @Test
+  func cryptoInstrumentHasNoCurrencySymbol() {
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
     #expect(eth.currencySymbol == nil)
   }
 
-  @Test func cryptoDisplaySymbolUsesName() {
+  @Test
+  func cryptoDisplaySymbolUsesName() {
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
     #expect(eth.displaySymbol == "ETH")
@@ -102,7 +111,8 @@ struct InstrumentCryptoTests {
 
   // MARK: - Cross-chain / multi-chain edge cases
 
-  @Test func sameSymbolOnDifferentChainsAreDistinctInstruments() {
+  @Test
+  func sameSymbolOnDifferentChainsAreDistinctInstruments() {
     // USDC on Ethereum (chainId 1) vs USDC on Polygon (chainId 137) — different ids.
     let ethUsdc = Instrument.crypto(
       chainId: 1,
@@ -118,7 +128,8 @@ struct InstrumentCryptoTests {
     #expect(ethUsdc != polyUsdc)
   }
 
-  @Test func nativeAndErc20OnSameChainAreDistinct() {
+  @Test
+  func nativeAndErc20OnSameChainAreDistinct() {
     // Native ETH on chain 1 vs a ERC20 on chain 1 must be different.
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil,
@@ -134,7 +145,8 @@ struct InstrumentCryptoTests {
     #expect(eth != weth)
   }
 
-  @Test func optimismChainIdPersistedInInstrumentId() {
+  @Test
+  func optimismChainIdPersistedInInstrumentId() {
     let op = Instrument.crypto(
       chainId: 10,
       contractAddress: "0x4200000000000000000000000000000000000042",
@@ -144,7 +156,8 @@ struct InstrumentCryptoTests {
     #expect(op.chainId == 10)
   }
 
-  @Test func cryptoDecimalsDifferenceMakesInstrumentsNotEqual() {
+  @Test
+  func cryptoDecimalsDifferenceMakesInstrumentsNotEqual() {
     // Two instruments with the same id+address but different stated decimals must still
     // be considered unequal under Hashable/Equatable (all fields matter).
     let a = Instrument.crypto(

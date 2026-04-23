@@ -6,7 +6,8 @@ import Testing
 @Suite("EarmarkStore -- Create/Update/Hide")
 @MainActor
 struct EarmarkStoreMutationTests {
-  @Test func testCreateAddsEarmark() async throws {
+  @Test
+  func testCreateAddsEarmark() async throws {
     let (backend, _) = try TestBackend.create()
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
@@ -21,7 +22,8 @@ struct EarmarkStoreMutationTests {
     #expect(store.earmarks.first?.name == "New Fund")
   }
 
-  @Test func testCreateReturnsNilOnFailure() async throws {
+  @Test
+  func testCreateReturnsNilOnFailure() async throws {
     let store = EarmarkStore(
       repository: FailingEarmarkRepository(),
       conversionService: FixedConversionService(),
@@ -33,7 +35,8 @@ struct EarmarkStoreMutationTests {
     #expect(store.error != nil)
   }
 
-  @Test func testCreateReloadsAfterSuccess() async throws {
+  @Test
+  func testCreateReloadsAfterSuccess() async throws {
     let (backend, _) = try TestBackend.create()
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
@@ -49,7 +52,8 @@ struct EarmarkStoreMutationTests {
     #expect(store.earmarks.by(id: second.id) != nil)
   }
 
-  @Test func testUpdateModifiesEarmark() async throws {
+  @Test
+  func testUpdateModifiesEarmark() async throws {
     let earmark = Earmark(name: "Holiday Fund", instrument: .defaultTestInstrument)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(earmarks: [earmark], in: container)
@@ -67,7 +71,8 @@ struct EarmarkStoreMutationTests {
     #expect(store.earmarks.by(id: earmark.id)?.name == "Vacation Fund")
   }
 
-  @Test func testUpdateReturnsNilOnFailure() async throws {
+  @Test
+  func testUpdateReturnsNilOnFailure() async throws {
     let store = EarmarkStore(
       repository: FailingEarmarkRepository(),
       conversionService: FixedConversionService(),
@@ -79,7 +84,8 @@ struct EarmarkStoreMutationTests {
     #expect(store.error != nil)
   }
 
-  @Test func testHideMarksEarmarkHidden() async throws {
+  @Test
+  func testHideMarksEarmarkHidden() async throws {
     let earmark = Earmark(name: "Vacation", instrument: .defaultTestInstrument)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(earmarks: [earmark], in: container)

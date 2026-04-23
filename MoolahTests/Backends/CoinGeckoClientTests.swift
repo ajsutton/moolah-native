@@ -18,7 +18,8 @@ struct CoinGeckoClientTests {
 
   // MARK: - URL construction
 
-  @Test func marketChartURLIncludesCoinIdAndDays() {
+  @Test
+  func marketChartURLIncludesCoinIdAndDays() {
     let url = CoinGeckoClient.marketChartURL(
       coinId: "ethereum", days: 10, apiKey: "test-key"
     )
@@ -33,7 +34,8 @@ struct CoinGeckoClientTests {
     #expect(queryItems["x_cg_pro_api_key"] == "test-key")
   }
 
-  @Test func simplePriceURLIncludesMultipleIds() {
+  @Test
+  func simplePriceURLIncludesMultipleIds() {
     let url = CoinGeckoClient.simplePriceURL(
       coinIds: ["ethereum", "bitcoin"], apiKey: "test-key"
     )
@@ -47,7 +49,8 @@ struct CoinGeckoClientTests {
 
   // MARK: - Response parsing
 
-  @Test func parseMarketChartResponse() throws {
+  @Test
+  func parseMarketChartResponse() throws {
     let json = Data(
       """
       {
@@ -64,7 +67,8 @@ struct CoinGeckoClientTests {
     #expect(prices.values.contains(Decimal(string: "1650")!))
   }
 
-  @Test func parseSimplePriceResponse() throws {
+  @Test
+  func parseSimplePriceResponse() throws {
     let json = Data(
       """
       {
@@ -80,7 +84,8 @@ struct CoinGeckoClientTests {
 
   // MARK: - Asset platforms parsing
 
-  @Test func parseAssetPlatformsResponse_mapsChainIdToSlug() throws {
+  @Test
+  func parseAssetPlatformsResponse_mapsChainIdToSlug() throws {
     let json = Data(
       """
       [
@@ -100,7 +105,8 @@ struct CoinGeckoClientTests {
 
   // MARK: - Contract lookup parsing
 
-  @Test func parseContractLookupResponse_extractsTokenDetails() throws {
+  @Test
+  func parseContractLookupResponse_extractsTokenDetails() throws {
     let json = Data(
       """
       {
@@ -122,7 +128,8 @@ struct CoinGeckoClientTests {
 
   // MARK: - Mapping without CoinGecko ID
 
-  @Test func mappingWithoutCoinGeckoIdThrows() async {
+  @Test
+  func mappingWithoutCoinGeckoIdThrows() async {
     let mapping = CryptoProviderMapping(
       instrumentId: "1:0xabc", coingeckoId: nil, cryptocompareSymbol: nil, binanceSymbol: nil
     )

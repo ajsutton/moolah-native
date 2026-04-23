@@ -6,14 +6,11 @@ struct CreateEarmarkIntent: AppIntent {
   static let description = IntentDescription(
     "Creates a new earmark (savings goal).")
 
-  @Parameter(title: "Profile")
-  var profile: ProfileEntity
+  @Parameter(title: "Profile") var profile: ProfileEntity
 
-  @Parameter(title: "Name")
-  var name: String
+  @Parameter(title: "Name") var name: String
 
-  @Parameter(title: "Target Amount", default: nil)
-  var targetAmount: Double?
+  @Parameter(title: "Target Amount", default: nil) var targetAmount: Double?
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<String> {

@@ -9,7 +9,8 @@ struct TransactionDraftAccountTests {
 
   // MARK: - showFromAccount
 
-  @Test func showFromAccountFalseWhenViewingPrimaryLeg() {
+  @Test
+  func showFromAccountFalseWhenViewingPrimaryLeg() {
     let transaction = Transaction(
       date: Date(),
       legs: [
@@ -26,7 +27,8 @@ struct TransactionDraftAccountTests {
     #expect(draft.showFromAccount == false)
   }
 
-  @Test func showFromAccountTrueWhenViewingCounterpartLeg() {
+  @Test
+  func showFromAccountTrueWhenViewingCounterpartLeg() {
     let transaction = Transaction(
       date: Date(),
       legs: [
@@ -43,7 +45,8 @@ struct TransactionDraftAccountTests {
     #expect(draft.showFromAccount == true)
   }
 
-  @Test func showFromAccountFalseWhenNoContext() {
+  @Test
+  func showFromAccountFalseWhenNoContext() {
     let transaction = Transaction(
       date: Date(),
       legs: [
@@ -62,7 +65,8 @@ struct TransactionDraftAccountTests {
 
   // MARK: - Multi-instrument toTransaction
 
-  @Test func toTransactionExpenseUsesAccountInstrument() throws {
+  @Test
+  func toTransactionExpenseUsesAccountInstrument() throws {
     let usdAccount = support.makeAccount(id: support.accountA, instrument: .USD)
     let accounts = support.makeAccounts([usdAccount])
     let draft = TransactionDraft(
@@ -85,7 +89,8 @@ struct TransactionDraftAccountTests {
     #expect(transaction.legs[0].quantity == expectedQuantity)
   }
 
-  @Test func toTransactionCrossCurrencyTransferProducesMixedInstrumentLegs() throws {
+  @Test
+  func toTransactionCrossCurrencyTransferProducesMixedInstrumentLegs() throws {
     // Transfer from AUD account to USD account — leg 0 is AUD, leg 1 is USD.
     // Display convention negates transfer legs, so amountText is the negated quantity.
     let audAccount = support.makeAccount(id: support.accountA, instrument: .AUD)
@@ -121,7 +126,8 @@ struct TransactionDraftAccountTests {
     #expect(!transaction.isSimple)
   }
 
-  @Test func toTransactionStockTradeLegHasStockInstrument() throws {
+  @Test
+  func toTransactionStockTradeLegHasStockInstrument() throws {
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
     let audAccount = support.makeAccount(id: support.accountA, instrument: .AUD)
     let stockAccount = support.makeAccount(id: support.accountB, instrument: bhp)
@@ -154,7 +160,8 @@ struct TransactionDraftAccountTests {
 
   // MARK: - eligibleToAccounts
 
-  @Test func eligibleToAccountsFiltersByCurrency() {
+  @Test
+  func eligibleToAccountsFiltersByCurrency() {
     let aud = Instrument.AUD
     let usd = Instrument.USD
     let audAccount1 = support.makeAccount(id: support.accountA, instrument: aud)
@@ -171,7 +178,8 @@ struct TransactionDraftAccountTests {
 
   // MARK: - Custom Mode Operations
 
-  @Test func addLegAppendsBlankLeg() throws {
+  @Test
+  func addLegAppendsBlankLeg() throws {
     var draft = support.makeExpenseDraft()
     draft.isCustom = true
     let initialCount = draft.legDrafts.count
@@ -185,7 +193,8 @@ struct TransactionDraftAccountTests {
     #expect(newLeg.earmarkId == nil)
   }
 
-  @Test func removeLegRemovesCorrectIndex() {
+  @Test
+  func removeLegRemovesCorrectIndex() {
     var draft = support.makeExpenseDraft()
     draft.isCustom = true
     draft.legDrafts.append(

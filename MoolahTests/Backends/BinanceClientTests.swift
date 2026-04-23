@@ -14,7 +14,8 @@ struct BinanceClientTests {
 
   // MARK: - URL construction
 
-  @Test func klinesURLIncludesSymbolAndDateRange() {
+  @Test
+  func klinesURLIncludesSymbolAndDateRange() {
     let from = date("2026-04-01")
     let to = date("2026-04-10")
     let url = BinanceClient.klinesURL(symbol: "ETHUSDT", from: from, to: to)
@@ -31,7 +32,8 @@ struct BinanceClientTests {
 
   // MARK: - Response parsing
 
-  @Test func parseKlinesResponse() throws {
+  @Test
+  func parseKlinesResponse() throws {
     // Binance klines are arrays: [openTime, open, high, low, close, volume, closeTime, ...]
     let json = Data(
       """
@@ -49,13 +51,15 @@ struct BinanceClientTests {
 
   // MARK: - USDT to USD conversion
 
-  @Test func pricesAreMultipliedByUsdtRate() throws {
+  @Test
+  func pricesAreMultipliedByUsdtRate() throws {
     let usdtPrices: [String: Decimal] = ["2026-04-10": Decimal(string: "1000.00")!]
     let converted = BinanceClient.applyUsdtRate(usdtPrices, rate: Decimal(string: "0.999")!)
     #expect(converted["2026-04-10"] == Decimal(string: "999.000")!)
   }
 
-  @Test func defaultUsdtRateIsOne() throws {
+  @Test
+  func defaultUsdtRateIsOne() throws {
     let usdtPrices: [String: Decimal] = ["2026-04-10": Decimal(string: "1000.00")!]
     let converted = BinanceClient.applyUsdtRate(usdtPrices, rate: Decimal(1))
     #expect(converted["2026-04-10"] == Decimal(string: "1000.00")!)
@@ -63,7 +67,8 @@ struct BinanceClientTests {
 
   // MARK: - Closure-based init
 
-  @Test func initAcceptsDateAwareUsdtRateClosure() {
+  @Test
+  func initAcceptsDateAwareUsdtRateClosure() {
     let client = BinanceClient(session: .shared) { _ in
       Decimal(string: "0.998")!
     }
@@ -73,7 +78,8 @@ struct BinanceClientTests {
 
   // MARK: - Exchange info parsing
 
-  @Test func parseExchangeInfoResponse_findsUsdtPairs() throws {
+  @Test
+  func parseExchangeInfoResponse_findsUsdtPairs() throws {
     let json = Data(
       """
       {
@@ -95,7 +101,8 @@ struct BinanceClientTests {
 
   // MARK: - Mapping without Binance symbol
 
-  @Test func mappingWithoutBinanceSymbolThrows() async {
+  @Test
+  func mappingWithoutBinanceSymbolThrows() async {
     let mapping = CryptoProviderMapping(
       instrumentId: "1:0xabc", coingeckoId: nil, cryptocompareSymbol: nil, binanceSymbol: nil
     )

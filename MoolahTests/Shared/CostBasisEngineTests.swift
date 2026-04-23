@@ -8,7 +8,8 @@ struct CostBasisEngineTests {
 
   // MARK: - Buy lots
 
-  @Test func singleBuy_createsOneLot() {
+  @Test
+  func singleBuy_createsOneLot() {
     let bhp = stockInstrument("BHP")
     var engine = CostBasisEngine()
     engine.processBuy(instrument: bhp, quantity: 100, costPerUnit: Decimal(42), date: date(0))
@@ -19,7 +20,8 @@ struct CostBasisEngineTests {
     #expect(lots[0].costPerUnit == 42)
   }
 
-  @Test func multipleBuys_createsMultipleLots() {
+  @Test
+  func multipleBuys_createsMultipleLots() {
     let bhp = stockInstrument("BHP")
     var engine = CostBasisEngine()
     engine.processBuy(instrument: bhp, quantity: 100, costPerUnit: 40, date: date(0))
@@ -33,7 +35,8 @@ struct CostBasisEngineTests {
 
   // MARK: - FIFO sells
 
-  @Test func sellAll_fromSingleLot_producesOneGainEvent() {
+  @Test
+  func sellAll_fromSingleLot_producesOneGainEvent() {
     let bhp = stockInstrument("BHP")
     var engine = CostBasisEngine()
     engine.processBuy(instrument: bhp, quantity: 100, costPerUnit: 40, date: date(0))
@@ -51,7 +54,8 @@ struct CostBasisEngineTests {
     #expect(engine.openLots(for: bhp).isEmpty)
   }
 
-  @Test func partialSell_FIFO_consumesFirstLotFirst() {
+  @Test
+  func partialSell_FIFO_consumesFirstLotFirst() {
     let bhp = stockInstrument("BHP")
     var engine = CostBasisEngine()
     engine.processBuy(instrument: bhp, quantity: 100, costPerUnit: 40, date: date(0))
@@ -75,7 +79,8 @@ struct CostBasisEngineTests {
     #expect(remaining[0].costPerUnit == 45)
   }
 
-  @Test func sellAtLoss_negativeGain() {
+  @Test
+  func sellAtLoss_negativeGain() {
     let bhp = stockInstrument("BHP")
     var engine = CostBasisEngine()
     engine.processBuy(instrument: bhp, quantity: 100, costPerUnit: 50, date: date(0))
@@ -89,7 +94,8 @@ struct CostBasisEngineTests {
     #expect(events[0].holdingDays >= 180)
   }
 
-  @Test func holdingPeriod_underOneYear_shortTerm() {
+  @Test
+  func holdingPeriod_underOneYear_shortTerm() {
     let bhp = stockInstrument("BHP")
     var engine = CostBasisEngine()
     engine.processBuy(instrument: bhp, quantity: 10, costPerUnit: 100, date: date(0))
@@ -101,7 +107,8 @@ struct CostBasisEngineTests {
     #expect(events[0].isLongTerm == false)
   }
 
-  @Test func holdingPeriod_overOneYear_longTerm() {
+  @Test
+  func holdingPeriod_overOneYear_longTerm() {
     let bhp = stockInstrument("BHP")
     var engine = CostBasisEngine()
     engine.processBuy(instrument: bhp, quantity: 10, costPerUnit: 100, date: date(0))
@@ -113,7 +120,8 @@ struct CostBasisEngineTests {
     #expect(events[0].isLongTerm == true)
   }
 
-  @Test func multipleInstruments_trackedSeparately() {
+  @Test
+  func multipleInstruments_trackedSeparately() {
     let bhp = stockInstrument("BHP")
     let cba = stockInstrument("CBA")
     var engine = CostBasisEngine()
@@ -132,7 +140,8 @@ struct CostBasisEngineTests {
     #expect(cbaLots[0].remainingQuantity == 50)
   }
 
-  @Test func sellMoreThanOwned_processesAvailableOnly() {
+  @Test
+  func sellMoreThanOwned_processesAvailableOnly() {
     let bhp = stockInstrument("BHP")
     var engine = CostBasisEngine()
     engine.processBuy(instrument: bhp, quantity: 50, costPerUnit: 40, date: date(0))
@@ -148,7 +157,8 @@ struct CostBasisEngineTests {
 
   // MARK: - Mixed kinds (stock + crypto)
 
-  @Test func stockAndCryptoLotsTrackedSeparately() {
+  @Test
+  func stockAndCryptoLotsTrackedSeparately() {
     let bhp = stockInstrument("BHP")
     let eth = cryptoInstrument("ETH")
     var engine = CostBasisEngine()
@@ -164,7 +174,8 @@ struct CostBasisEngineTests {
     #expect(ethLots[0].remainingQuantity == Decimal(string: "1.0")!)
   }
 
-  @Test func cryptoPartialSellProducesFractionalEvents() {
+  @Test
+  func cryptoPartialSellProducesFractionalEvents() {
     let eth = cryptoInstrument("ETH")
     var engine = CostBasisEngine()
     engine.processBuy(
@@ -180,7 +191,8 @@ struct CostBasisEngineTests {
     #expect(remaining[0].remainingQuantity == Decimal(string: "1.5")!)
   }
 
-  @Test func sameSymbolOnDifferentChainsTrackedSeparately() {
+  @Test
+  func sameSymbolOnDifferentChainsTrackedSeparately() {
     // USDC-Ethereum and USDC-Polygon are different instruments.
     let ethUsdc = Instrument.crypto(
       chainId: 1,

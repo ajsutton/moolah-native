@@ -11,7 +11,8 @@ struct TransactionStoreTransferTests {
 
   // MARK: - Cross-Store Balance Updates with Transfers
 
-  @Test func testTransferUpdateAffectsBothAccounts() async throws {
+  @Test
+  func testTransferUpdateAffectsBothAccounts() async throws {
     let savingsId = UUID()
     let checking = TransactionStoreTestSupport.acct(id: accountId, name: "Checking", balance: 900)
     let savings = TransactionStoreTestSupport.acct(id: savingsId, name: "Savings", balance: 1100)
@@ -69,7 +70,8 @@ struct TransactionStoreTransferTests {
     #expect(savingsBalance.quantity == Decimal(1250))
   }
 
-  @Test func testChangingTransferToAccount() async throws {
+  @Test
+  func testChangingTransferToAccount() async throws {
     let savingsId = UUID()
     let investmentId = UUID()
     let seed = try await seedThreeAccountTransfer(

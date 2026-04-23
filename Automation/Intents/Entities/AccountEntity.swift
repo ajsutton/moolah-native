@@ -26,8 +26,7 @@ struct AccountEntity: AppEntity {
 }
 
 struct AccountQuery: EntityQuery {
-  @IntentParameter(title: "Profile")
-  var profile: ProfileEntity?
+  @IntentParameter(title: "Profile") var profile: ProfileEntity?
 
   @MainActor
   func entities(for identifiers: [UUID]) async throws -> [AccountEntity] {

@@ -6,14 +6,11 @@ struct AddInvestmentValueIntent: AppIntent {
   static let description = IntentDescription(
     "Records the current market value for an investment account.")
 
-  @Parameter(title: "Profile")
-  var profile: ProfileEntity
+  @Parameter(title: "Profile") var profile: ProfileEntity
 
-  @Parameter(title: "Account")
-  var account: AccountEntity
+  @Parameter(title: "Account") var account: AccountEntity
 
-  @Parameter(title: "Value")
-  var value: Double
+  @Parameter(title: "Value") var value: Double
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<String> {

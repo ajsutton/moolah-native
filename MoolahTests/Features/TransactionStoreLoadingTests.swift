@@ -9,7 +9,8 @@ import Testing
 struct TransactionStoreLoadingTests {
   private let accountId = UUID()
 
-  @Test func testLoadsFirstPage() async throws {
+  @Test
+  func testLoadsFirstPage() async throws {
     let transactions = try TransactionStoreTestSupport.seedTransactions(
       count: 3, accountId: accountId)
     let (backend, container) = try TestBackend.create()
@@ -31,7 +32,8 @@ struct TransactionStoreLoadingTests {
     }
   }
 
-  @Test func testPaginationAppendsSecondPage() async throws {
+  @Test
+  func testPaginationAppendsSecondPage() async throws {
     // Create more transactions than one page
     let transactions = try TransactionStoreTestSupport.seedTransactions(
       count: 5, accountId: accountId)
@@ -53,7 +55,8 @@ struct TransactionStoreLoadingTests {
     #expect(store.hasMore == false)
   }
 
-  @Test func testEndOfResultsDetection() async throws {
+  @Test
+  func testEndOfResultsDetection() async throws {
     let transactions = try TransactionStoreTestSupport.seedTransactions(
       count: 2, accountId: accountId)
     let (backend, container) = try TestBackend.create()
@@ -71,7 +74,8 @@ struct TransactionStoreLoadingTests {
     #expect(store.hasMore == false)
   }
 
-  @Test func testLoadMoreDoesNothingWhenNoMore() async throws {
+  @Test
+  func testLoadMoreDoesNothingWhenNoMore() async throws {
     let transactions = try TransactionStoreTestSupport.seedTransactions(
       count: 2, accountId: accountId)
     let (backend, container) = try TestBackend.create()
@@ -90,7 +94,8 @@ struct TransactionStoreLoadingTests {
     #expect(store.transactions.count == 2)  // No duplicates
   }
 
-  @Test func testFilterByAccountId() async throws {
+  @Test
+  func testFilterByAccountId() async throws {
     let otherAccountId = UUID()
     let transactions = [
       try singleLegTransaction(
@@ -134,7 +139,8 @@ struct TransactionStoreLoadingTests {
     #expect(payees.contains("Transfer In"))
   }
 
-  @Test func testSortedByDateDescending() async throws {
+  @Test
+  func testSortedByDateDescending() async throws {
     let transactions = [
       Transaction(
         date: try TransactionStoreTestSupport.makeDate("2024-01-01"),
@@ -188,7 +194,8 @@ struct TransactionStoreLoadingTests {
     #expect(store.transactions[2].transaction.payee == "Oldest")
   }
 
-  @Test func testRunningBalancesComputed() async throws {
+  @Test
+  func testRunningBalancesComputed() async throws {
     let transactions = [
       try singleLegTransaction(
         date: "2024-01-03", payee: "Salary", accountId: accountId,
@@ -231,7 +238,8 @@ struct TransactionStoreLoadingTests {
           quantity: Decimal(-10000) / 100, instrument: Instrument.defaultTestInstrument))  // After Groceries
   }
 
-  @Test func testReloadClearsExisting() async throws {
+  @Test
+  func testReloadClearsExisting() async throws {
     let transactions = try TransactionStoreTestSupport.seedTransactions(
       count: 5, accountId: accountId)
     let (backend, container) = try TestBackend.create()

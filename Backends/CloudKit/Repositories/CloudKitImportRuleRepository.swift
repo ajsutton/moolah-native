@@ -10,8 +10,7 @@ final class CloudKitImportRuleRepository: ImportRuleRepository, @unchecked Senda
     self.modelContainer = modelContainer
   }
 
-  @MainActor
-  private var context: ModelContext { modelContainer.mainContext }
+  @MainActor private var context: ModelContext { modelContainer.mainContext }
 
   func fetchAll() async throws -> [ImportRule] {
     try await MainActor.run {
