@@ -170,6 +170,8 @@ Apple's [Swift API Design Guidelines](https://www.swift.org/documentation/api-de
 
 - **Type names are UpperCamelCase, 3–40 characters.** Classes, structs, enums, protocols, actors, and type aliases use UpperCamelCase with no underscores or digits used as separators, and fit inside the 3-character minimum / 40-character warning range. SwiftLint's [`type_name`](https://realm.github.io/SwiftLint/type_name.html) rule enforces this — if a name wants to go longer, the type is almost always doing too much and should be split. Test types are not exempt: a test suite named `TransactionIsSimpleCrossCurrencyTransferTests` is a signal that the scenario wants its own helper fixture or a more focused `…Tests` file, not a longer identifier.
 
+- **Nest types at most one level deep.** SwiftLint's [`nesting`](https://realm.github.io/SwiftLint/nesting.html) rule caps type nesting at 1 level (and function nesting at 2). A single namespacing enum like `UITestIdentifiers.Sidebar` is the intended use — a second layer (`UITestIdentifiers.Detail.Leg`) is the signal to promote the inner type to a peer or to a top-level type in its own file. Prefer a flat namespace with descriptive compound names (`DetailLegIdentifiers`) or a sibling enum under the same parent over stacking enums to get a shorter call-site name. If a grouping truly needs two levels, that almost always means the parent is doing two jobs and wants to split.
+
 ### 4.1 Project suffix conventions
 
 - **OK as needed:** `Controller`, `ViewController`, `Delegate`, `Store` (the `@Observable` owner of UI-bound state).
