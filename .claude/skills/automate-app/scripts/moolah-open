@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Open a moolah:// URL against the Moolah app built in the current worktree.
+# Uses `open -a <abs-path>` so LaunchServices does not route to
+# /Applications/Moolah.app.
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+app="$root/.build/Build/Products/Debug/Moolah.app"
+
+if [ ! -d "$app" ]; then
+    echo "error: Moolah.app not built at $app" >&2
+    echo "       run 'just run-mac' in this worktree first" >&2
+    exit 1
+fi
+
+exec open -a "$app" "$@"
