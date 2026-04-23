@@ -124,26 +124,8 @@ struct StockPositionDisplayTests {
   func totalPortfolioValueSumsAllPositions() async throws {
     let accountId = UUID()
     let today = Date()
-    let dateKey = dateString(today)
 
-    let stockClient = FixedStockPriceClient(responses: [
-      "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: Decimal(string: "45.00")!]),
-      "CBA.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: Decimal(string: "120.00")!]),
-    ])
-    let stockCacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("stock-total-tests")
-      .appendingPathComponent(UUID().uuidString)
-    let stockService = StockPriceService(client: stockClient, cacheDirectory: stockCacheDir)
-    let rateClient = FixedRateClient(rates: [:])
-    let rateCacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("position-display-tests")
-      .appendingPathComponent(UUID().uuidString)
-    let rateService = ExchangeRateService(client: rateClient, cacheDirectory: rateCacheDir)
-    let conversionService = FullConversionService(
-      exchangeRates: rateService,
-      stockPrices: stockService
-    )
-
+    let conversionService = makeTotalPortfolioConversionService(today: today)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
@@ -151,28 +133,7 @@ struct StockPositionDisplayTests {
           id: accountId, name: "Invest", type: .investment, instrument: .defaultTestInstrument)
       ], in: container)
     TestBackend.seed(
-      transactions: [
-        // Buy 150 BHP for 6345 AUD
-        Transaction(
-          id: UUID(), date: today,
-          legs: [
-            TransactionLeg(
-              accountId: accountId, instrument: aud, quantity: Decimal(string: "-6345.00")!,
-              type: .transfer),
-            TransactionLeg(
-              accountId: accountId, instrument: bhp, quantity: Decimal(150), type: .transfer),
-          ]),
-        // Buy 20 CBA for 2400 AUD
-        Transaction(
-          id: UUID(), date: today,
-          legs: [
-            TransactionLeg(
-              accountId: accountId, instrument: aud, quantity: Decimal(string: "-2400.00")!,
-              type: .transfer),
-            TransactionLeg(
-              accountId: accountId, instrument: cba, quantity: Decimal(20), type: .transfer),
-          ]),
-      ], in: container)
+      transactions: buyBhpAndCbaTransactions(accountId: accountId, date: today), in: container)
 
     let store = InvestmentStore(
       repository: backend.investments,
@@ -187,6 +148,52 @@ struct StockPositionDisplayTests {
     // CBA: 20 * 120.00 = 2400 AUD
     // Total: -8745 + 6750 + 2400 = 405 AUD
     #expect(store.totalPortfolioValue == Decimal(string: "405.00")!)
+  }
+
+  private func makeTotalPortfolioConversionService(today: Date) -> FullConversionService {
+    let dateKey = dateString(today)
+    let stockClient = FixedStockPriceClient(responses: [
+      "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: Decimal(string: "45.00")!]),
+      "CBA.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: Decimal(string: "120.00")!]),
+    ])
+    let stockCacheDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("stock-total-tests")
+      .appendingPathComponent(UUID().uuidString)
+    let stockService = StockPriceService(client: stockClient, cacheDirectory: stockCacheDir)
+    let rateClient = FixedRateClient(rates: [:])
+    let rateCacheDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("position-display-tests")
+      .appendingPathComponent(UUID().uuidString)
+    let rateService = ExchangeRateService(client: rateClient, cacheDirectory: rateCacheDir)
+    return FullConversionService(
+      exchangeRates: rateService,
+      stockPrices: stockService
+    )
+  }
+
+  private func buyBhpAndCbaTransactions(accountId: UUID, date: Date) -> [Transaction] {
+    [
+      // Buy 150 BHP for 6345 AUD
+      Transaction(
+        id: UUID(), date: date,
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: aud, quantity: Decimal(string: "-6345.00")!,
+            type: .transfer),
+          TransactionLeg(
+            accountId: accountId, instrument: bhp, quantity: Decimal(150), type: .transfer),
+        ]),
+      // Buy 20 CBA for 2400 AUD
+      Transaction(
+        id: UUID(), date: date,
+        legs: [
+          TransactionLeg(
+            accountId: accountId, instrument: aud, quantity: Decimal(string: "-2400.00")!,
+            type: .transfer),
+          TransactionLeg(
+            accountId: accountId, instrument: cba, quantity: Decimal(20), type: .transfer),
+        ]),
+    ]
   }
 
   /// Per Rule 11 in `guides/INSTRUMENT_CONVERSION_GUIDE.md`: when a

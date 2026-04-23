@@ -170,46 +170,10 @@ struct CapitalGainsCalculatorTests {
     let cba = stockInstrument("CBA")
     let accountId = UUID()
 
-    let buyBHP = LegTransaction(
-      date: date(0),
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -4000, type: .transfer,
-          categoryId: nil, earmarkId: nil),
-        TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
-          categoryId: nil, earmarkId: nil),
-      ])
-    let sellBHP = LegTransaction(
-      date: date(400),
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: -100, type: .transfer,
-          categoryId: nil, earmarkId: nil),
-        TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: 5000, type: .transfer,
-          categoryId: nil, earmarkId: nil),
-      ])
-    let buyCBA = LegTransaction(
-      date: date(50),
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -5000, type: .transfer,
-          categoryId: nil, earmarkId: nil),
-        TransactionLeg(
-          accountId: accountId, instrument: cba, quantity: 50, type: .transfer,
-          categoryId: nil, earmarkId: nil),
-      ])
-    let sellCBA = LegTransaction(
-      date: date(500),
-      legs: [
-        TransactionLeg(
-          accountId: accountId, instrument: cba, quantity: -50, type: .transfer,
-          categoryId: nil, earmarkId: nil),
-        TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: 7000, type: .transfer,
-          categoryId: nil, earmarkId: nil),
-      ])
+    let buyBHP = buyTrade(on: 0, cash: -4000, qty: 100, of: bhp, accountId: accountId)
+    let sellBHP = sellTrade(on: 400, qty: -100, of: bhp, proceeds: 5000, accountId: accountId)
+    let buyCBA = buyTrade(on: 50, cash: -5000, qty: 50, of: cba, accountId: accountId)
+    let sellCBA = sellTrade(on: 500, qty: -50, of: cba, proceeds: 7000, accountId: accountId)
 
     let result = try await CapitalGainsCalculator.computeWithConversion(
       transactions: [buyBHP, buyCBA, sellBHP, sellCBA],
@@ -223,6 +187,40 @@ struct CapitalGainsCalculatorTests {
     #expect(bhpGain == 1000)
     #expect(cbaGain == 2000)
     #expect(result.totalRealizedGain == 3000)
+  }
+
+  /// Helper: buy `qty` of `instrument` on day `day`, funded by `cash` (negative)
+  /// from `accountId`.
+  private func buyTrade(
+    on day: Int, cash: Decimal, qty: Decimal, of instrument: Instrument, accountId: UUID
+  ) -> LegTransaction {
+    LegTransaction(
+      date: date(day),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: cash, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: instrument, quantity: qty, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
+  }
+
+  /// Helper: sell `qty` (negative) of `instrument` on day `day`, receiving
+  /// `proceeds` (positive) into `accountId`.
+  private func sellTrade(
+    on day: Int, qty: Decimal, of instrument: Instrument, proceeds: Decimal, accountId: UUID
+  ) -> LegTransaction {
+    LegTransaction(
+      date: date(day),
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: instrument, quantity: qty, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+        TransactionLeg(
+          accountId: accountId, instrument: aud, quantity: proceeds, type: .transfer,
+          categoryId: nil, earmarkId: nil),
+      ])
   }
 
   @Test

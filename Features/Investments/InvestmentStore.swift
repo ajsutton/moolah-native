@@ -204,47 +204,13 @@ final class InvestmentStore {
     var firstFailure: Error?
 
     for position in positions {
-      if position.instrument.id == profileCurrency.id {
-        valued.append(
-          ValuedPosition(
-            instrument: position.instrument,
-            quantity: position.quantity,
-            unitPrice: nil,
-            costBasis: nil,
-            value: InstrumentAmount(quantity: position.quantity, instrument: profileCurrency)
-          ))
-        total += position.quantity
-        continue
-      }
-      do {
-        let value = try await conversionService.convert(
-          position.quantity, from: position.instrument, to: profileCurrency, on: date
-        )
-        let unit =
-          position.quantity == 0
-          ? nil
-          : InstrumentAmount(quantity: value / position.quantity, instrument: profileCurrency)
-        valued.append(
-          ValuedPosition(
-            instrument: position.instrument,
-            quantity: position.quantity,
-            unitPrice: unit,
-            costBasis: nil,
-            value: InstrumentAmount(quantity: value, instrument: profileCurrency)
-          ))
+      let (entry, outcome) = await valuate(
+        position: position, profileCurrency: profileCurrency, on: date)
+      valued.append(entry)
+      switch outcome {
+      case .success(let value):
         total += value
-      } catch {
-        logger.warning(
-          "Failed to valuate position \(position.instrument.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
-        )
-        valued.append(
-          ValuedPosition(
-            instrument: position.instrument,
-            quantity: position.quantity,
-            unitPrice: nil,
-            costBasis: nil,
-            value: nil
-          ))
+      case .failure(let error):
         if firstFailure == nil { firstFailure = error }
       }
     }
@@ -255,6 +221,52 @@ final class InvestmentStore {
       self.error = firstFailure
     } else {
       totalPortfolioValue = total
+    }
+  }
+
+  private enum ValuationOutcome {
+    case success(Decimal)
+    case failure(Error)
+  }
+
+  private func valuate(
+    position: Position, profileCurrency: Instrument, on date: Date
+  ) async -> (ValuedPosition, ValuationOutcome) {
+    if position.instrument.id == profileCurrency.id {
+      let entry = ValuedPosition(
+        instrument: position.instrument,
+        quantity: position.quantity,
+        unitPrice: nil,
+        costBasis: nil,
+        value: InstrumentAmount(quantity: position.quantity, instrument: profileCurrency))
+      return (entry, .success(position.quantity))
+    }
+    do {
+      let value = try await conversionService.convert(
+        position.quantity, from: position.instrument, to: profileCurrency, on: date
+      )
+      let unit =
+        position.quantity == 0
+        ? nil
+        : InstrumentAmount(quantity: value / position.quantity, instrument: profileCurrency)
+      let entry = ValuedPosition(
+        instrument: position.instrument,
+        quantity: position.quantity,
+        unitPrice: unit,
+        costBasis: nil,
+        value: InstrumentAmount(quantity: value, instrument: profileCurrency))
+      return (entry, .success(value))
+    } catch {
+      logger.warning(
+        "Failed to valuate position \(position.instrument.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
+      )
+      let entry = ValuedPosition(
+        instrument: position.instrument,
+        quantity: position.quantity,
+        unitPrice: nil,
+        costBasis: nil,
+        value: nil)
+      return (entry, .failure(error))
     }
   }
 
@@ -491,10 +503,17 @@ func mergeChartData(
   period: TimePeriod
 ) -> [InvestmentChartDataPoint] {
   let startDate = period.startDate
+  let collected = collectChartDataByDate(
+    values: values, balances: balances, startDate: startDate)
+  return forwardFillChartData(dataByDate: collected)
+}
 
-  // Collect all data points keyed by date
+private func collectChartDataByDate(
+  values: [InvestmentValue],
+  balances: [AccountDailyBalance],
+  startDate: Date?
+) -> [Date: (value: Decimal?, balance: Decimal?)] {
   var dataByDate: [Date: (value: Decimal?, balance: Decimal?)] = [:]
-
   var startValue: InvestmentValue?
   var startBalance: AccountDailyBalance?
 
@@ -533,8 +552,12 @@ func mergeChartData(
       )
     }
   }
+  return dataByDate
+}
 
-  // Sort by date and forward-fill gaps
+private func forwardFillChartData(
+  dataByDate: [Date: (value: Decimal?, balance: Decimal?)]
+) -> [InvestmentChartDataPoint] {
   var sorted = dataByDate.map { (date: $0.key, value: $0.value.value, balance: $0.value.balance) }
   sorted.sort { $0.date < $1.date }
 

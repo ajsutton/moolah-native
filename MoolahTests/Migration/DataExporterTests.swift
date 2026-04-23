@@ -25,86 +25,69 @@ struct DataExporterTests {
 
   private func makeBackendWithData() async throws -> CloudKitBackend {
     let (backend, _) = try TestBackend.create(instrument: instrument)
-
-    // Create accounts
-    _ = try await backend.accounts.create(
-      Account(name: "Checking", type: .bank, instrument: instrument),
-      openingBalance: nil
-    )
-    _ = try await backend.accounts.create(
-      Account(name: "Savings", type: .bank, instrument: instrument),
-      openingBalance: nil
-    )
-    let investmentAccount = try await backend.accounts.create(
-      Account(name: "Portfolio", type: .investment, instrument: instrument),
-      openingBalance: nil
-    )
-
-    // Create categories
-    let food = try await backend.categories.create(Category(name: "Food"))
-    _ = try await backend.categories.create(Category(name: "Groceries", parentId: food.id))
-
-    // Create earmarks
-    let holiday = try await backend.earmarks.create(
-      Earmark(name: "Holiday", instrument: instrument)
-    )
-    let budgetAmount = InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
-    try await backend.earmarks.setBudget(
-      earmarkId: holiday.id, categoryId: food.id, amount: budgetAmount)
-
-    // Create transactions
-    let accounts = try await backend.accounts.fetchAll()
-    let checking = accounts.first { $0.name == "Checking" }!
-    _ = try await backend.transactions.create(
-      Transaction(
-        date: Date(),
-        payee: "Employer",
-        legs: [
-          TransactionLeg(
-            accountId: checking.id, instrument: instrument,
-            quantity: Decimal(string: "1000.00")!, type: .income
-          )
-        ]
-      )
-    )
-    _ = try await backend.transactions.create(
-      Transaction(
-        date: Date(),
-        payee: "Shop",
-        legs: [
-          TransactionLeg(
-            accountId: checking.id, instrument: instrument,
-            quantity: Decimal(string: "-25.00")!, type: .expense,
-            categoryId: food.id, earmarkId: holiday.id
-          )
-        ]
-      )
-    )
-
-    // Create a scheduled transaction
-    _ = try await backend.transactions.create(
-      Transaction(
-        date: Date(),
-        payee: "Streaming",
-        recurPeriod: .month,
-        recurEvery: 1,
-        legs: [
-          TransactionLeg(
-            accountId: checking.id, instrument: instrument,
-            quantity: Decimal(string: "-10.00")!, type: .expense
-          )
-        ]
-      )
-    )
-
-    // Create investment values
+    let investmentAccount = try await seedAccountsAndEarmarks(backend: backend)
+    try await seedBackendTransactions(backend: backend)
     try await backend.investments.setValue(
       accountId: investmentAccount.id,
       date: Date(),
       value: InstrumentAmount(quantity: Decimal(string: "5000.00")!, instrument: instrument)
     )
-
     return backend
+  }
+
+  private func seedAccountsAndEarmarks(backend: CloudKitBackend) async throws -> Account {
+    _ = try await backend.accounts.create(
+      Account(name: "Checking", type: .bank, instrument: instrument), openingBalance: nil)
+    _ = try await backend.accounts.create(
+      Account(name: "Savings", type: .bank, instrument: instrument), openingBalance: nil)
+    let investmentAccount = try await backend.accounts.create(
+      Account(name: "Portfolio", type: .investment, instrument: instrument), openingBalance: nil)
+
+    let food = try await backend.categories.create(Category(name: "Food"))
+    _ = try await backend.categories.create(Category(name: "Groceries", parentId: food.id))
+
+    let holiday = try await backend.earmarks.create(
+      Earmark(name: "Holiday", instrument: instrument))
+    let budgetAmount = InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
+    try await backend.earmarks.setBudget(
+      earmarkId: holiday.id, categoryId: food.id, amount: budgetAmount)
+    return investmentAccount
+  }
+
+  private func seedBackendTransactions(backend: CloudKitBackend) async throws {
+    let accounts = try await backend.accounts.fetchAll()
+    let checking = accounts.first { $0.name == "Checking" }!
+    let categories = try await backend.categories.fetchAll()
+    let food = categories.first { $0.name == "Food" && $0.parentId == nil }!
+    let earmarks = try await backend.earmarks.fetchAll()
+    let holiday = earmarks.first { $0.name == "Holiday" }!
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: Date(), payee: "Employer",
+        legs: [
+          TransactionLeg(
+            accountId: checking.id, instrument: instrument,
+            quantity: Decimal(string: "1000.00")!, type: .income)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: Date(), payee: "Shop",
+        legs: [
+          TransactionLeg(
+            accountId: checking.id, instrument: instrument,
+            quantity: Decimal(string: "-25.00")!, type: .expense,
+            categoryId: food.id, earmarkId: holiday.id)
+        ]))
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: Date(), payee: "Streaming",
+        recurPeriod: .month, recurEvery: 1,
+        legs: [
+          TransactionLeg(
+            accountId: checking.id, instrument: instrument,
+            quantity: Decimal(string: "-10.00")!, type: .expense)
+        ]))
   }
 
   @Test("exports all data from InMemory backend")

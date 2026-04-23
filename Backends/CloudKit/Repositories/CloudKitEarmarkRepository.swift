@@ -122,59 +122,76 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       os_signpost(
         .end, log: Signposts.repository, name: "EarmarkRepo.setBudget", signpostID: signpostID)
     }
+    try await MainActor.run {
+      try performSetBudget(earmarkId: earmarkId, categoryId: categoryId, amount: amount)
+    }
+  }
+
+  @MainActor
+  private func performSetBudget(
+    earmarkId: UUID, categoryId: UUID, amount: InstrumentAmount
+  ) throws {
     let earmarkDescriptor = FetchDescriptor<EarmarkRecord>(
       predicate: #Predicate { $0.id == earmarkId }
     )
-    let defaultInstrument = self.instrument
-
-    try await MainActor.run {
-      guard let earmarkRecord = try context.fetch(earmarkDescriptor).first else {
-        throw BackendError.serverError(404)
-      }
-      // Budget items must match the earmark's instrument. Zero-amount writes
-      // (used to remove an entry) are always accepted — the value has no
-      // instrument meaning. See `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 1/2.
-      let earmarkInstrument =
-        earmarkRecord.instrumentId
-        .map { Instrument.fiat(code: $0) } ?? defaultInstrument
-      if !amount.isZero, amount.instrument != earmarkInstrument {
-        throw BackendError.unsupportedInstrument(
-          "Budget amount uses \(amount.instrument.id); earmark uses \(earmarkInstrument.id). "
-            + "Budget items must share the earmark's instrument."
-        )
-      }
-
-      let budgetDescriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
-        predicate: #Predicate {
-          $0.earmarkId == earmarkId && $0.categoryId == categoryId
-        }
-      )
-      let existing = try context.fetch(budgetDescriptor).first
-
-      if amount.isZero {
-        if let existing {
-          let deletedId = existing.id
-          context.delete(existing)
-          try context.save()
-          onRecordDeleted(deletedId)
-        }
-      } else if let existing {
-        existing.amount = amount.storageValue
-        existing.instrumentId = amount.instrument.id
-        try context.save()
-        onRecordChanged(existing.id)
-      } else {
-        let record = EarmarkBudgetItemRecord(
-          earmarkId: earmarkId,
-          categoryId: categoryId,
-          amount: amount.storageValue,
-          instrumentId: amount.instrument.id
-        )
-        context.insert(record)
-        try context.save()
-        onRecordChanged(record.id)
-      }
+    guard let earmarkRecord = try context.fetch(earmarkDescriptor).first else {
+      throw BackendError.serverError(404)
     }
+    // Budget items must match the earmark's instrument. Zero-amount writes
+    // (used to remove an entry) are always accepted — the value has no
+    // instrument meaning. See `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 1/2.
+    let earmarkInstrument =
+      earmarkRecord.instrumentId
+      .map { Instrument.fiat(code: $0) } ?? instrument
+    if !amount.isZero, amount.instrument != earmarkInstrument {
+      throw BackendError.unsupportedInstrument(
+        "Budget amount uses \(amount.instrument.id); earmark uses \(earmarkInstrument.id). "
+          + "Budget items must share the earmark's instrument."
+      )
+    }
+
+    let budgetDescriptor = FetchDescriptor<EarmarkBudgetItemRecord>(
+      predicate: #Predicate {
+        $0.earmarkId == earmarkId && $0.categoryId == categoryId
+      }
+    )
+    let existing = try context.fetch(budgetDescriptor).first
+    try upsertBudgetRecord(
+      earmarkId: earmarkId, categoryId: categoryId, amount: amount, existing: existing)
+  }
+
+  @MainActor
+  private func upsertBudgetRecord(
+    earmarkId: UUID,
+    categoryId: UUID,
+    amount: InstrumentAmount,
+    existing: EarmarkBudgetItemRecord?
+  ) throws {
+    if amount.isZero {
+      if let existing {
+        let deletedId = existing.id
+        context.delete(existing)
+        try context.save()
+        onRecordDeleted(deletedId)
+      }
+      return
+    }
+    if let existing {
+      existing.amount = amount.storageValue
+      existing.instrumentId = amount.instrument.id
+      try context.save()
+      onRecordChanged(existing.id)
+      return
+    }
+    let record = EarmarkBudgetItemRecord(
+      earmarkId: earmarkId,
+      categoryId: categoryId,
+      amount: amount.storageValue,
+      instrumentId: amount.instrument.id
+    )
+    context.insert(record)
+    try context.save()
+    onRecordChanged(record.id)
   }
 
   /// Three position lists computed for a single earmark — one per flow

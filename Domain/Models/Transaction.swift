@@ -163,84 +163,40 @@ struct TransactionPage: Sendable {
     var firstConversionError: RunningBalanceConversionError?
 
     for transaction in transactions.reversed() {
-      let convertedLegs: [ConvertedTransactionLeg]?
-      do {
-        var legs: [ConvertedTransactionLeg] = []
-        legs.reserveCapacity(transaction.legs.count)
-        for leg in transaction.legs {
-          if leg.instrument == targetInstrument {
-            legs.append(ConvertedTransactionLeg(leg: leg, convertedAmount: leg.amount))
-          } else {
-            let converted = try await conversionService.convertAmount(
-              leg.amount, to: targetInstrument, on: transaction.date)
-            legs.append(ConvertedTransactionLeg(leg: leg, convertedAmount: converted))
-          }
+      let conversion = await convertLegs(
+        for: transaction,
+        targetInstrument: targetInstrument,
+        conversionService: conversionService)
+      switch conversion {
+      case .success(let convertedLegs):
+        let displayAmount = computeDisplayAmount(
+          for: transaction,
+          convertedLegs: convertedLegs,
+          accountId: accountId,
+          earmarkId: earmarkId,
+          targetInstrument: targetInstrument)
+        if let displayAmount, var runningBalance = balance {
+          runningBalance += displayAmount
+          balance = runningBalance
         }
-        convertedLegs = legs
-      } catch {
-        transactionLogger.warning(
-          """
-          Failed to convert leg to \(targetInstrument.id, privacy: .public) for transaction \
-          \(transaction.id, privacy: .public) on \(transaction.date, privacy: .public): \
-          \(error.localizedDescription, privacy: .public). Running balance will be unavailable \
-          from this point.
-          """)
+        result.append(
+          TransactionWithBalance(
+            transaction: transaction,
+            convertedLegs: convertedLegs,
+            displayAmount: displayAmount,
+            balance: balance))
+      case .failure(let error):
         if firstConversionError == nil {
-          firstConversionError = RunningBalanceConversionError(
-            transactionId: transaction.id,
-            targetInstrumentId: targetInstrument.id,
-            underlyingDescription: error.localizedDescription
-          )
+          firstConversionError = error
         }
-        convertedLegs = nil
-      }
-
-      let displayAmount: InstrumentAmount?
-      if let convertedLegs {
-        if let accountId {
-          displayAmount =
-            convertedLegs
-            .filter { $0.leg.accountId == accountId }
-            .reduce(InstrumentAmount.zero(instrument: targetInstrument)) { $0 + $1.convertedAmount }
-        } else if let earmarkId {
-          // Earmark context (no account): sum legs matching the viewing earmark
-          displayAmount =
-            convertedLegs
-            .filter { $0.leg.earmarkId == earmarkId }
-            .reduce(InstrumentAmount.zero(instrument: targetInstrument)) { $0 + $1.convertedAmount }
-        } else {
-          // No account context (scheduled view): use negative-quantity leg for transfers,
-          // otherwise sum all legs
-          let isTransfer = transaction.legs.contains { $0.type == .transfer }
-          if isTransfer {
-            let negativeLeg = convertedLegs.first { $0.leg.quantity < 0 }
-            displayAmount = negativeLeg?.convertedAmount ?? .zero(instrument: targetInstrument)
-          } else {
-            displayAmount =
-              convertedLegs
-              .reduce(InstrumentAmount.zero(instrument: targetInstrument)) {
-                $0 + $1.convertedAmount
-              }
-          }
-        }
-      } else {
-        displayAmount = nil
-      }
-
-      if let displayAmount, var runningBalance = balance {
-        runningBalance += displayAmount
-        balance = runningBalance
-      } else {
         balance = nil
+        result.append(
+          TransactionWithBalance(
+            transaction: transaction,
+            convertedLegs: [],
+            displayAmount: nil,
+            balance: nil))
       }
-
-      result.append(
-        TransactionWithBalance(
-          transaction: transaction,
-          convertedLegs: convertedLegs ?? [],
-          displayAmount: displayAmount,
-          balance: balance
-        ))
     }
 
     result.reverse()
@@ -248,5 +204,80 @@ struct TransactionPage: Sendable {
       rows: result,
       firstConversionError: firstConversionError
     )
+  }
+
+  private enum LegConversion {
+    case success([ConvertedTransactionLeg])
+    case failure(RunningBalanceConversionError)
+  }
+
+  /// Convert every leg of `transaction` into `targetInstrument`. Returns
+  /// `.failure` on the first leg that cannot be converted so callers can
+  /// mark the running balance unavailable from that row onward.
+  private static func convertLegs(
+    for transaction: Transaction,
+    targetInstrument: Instrument,
+    conversionService: InstrumentConversionService
+  ) async -> LegConversion {
+    var legs: [ConvertedTransactionLeg] = []
+    legs.reserveCapacity(transaction.legs.count)
+    do {
+      for leg in transaction.legs {
+        if leg.instrument == targetInstrument {
+          legs.append(ConvertedTransactionLeg(leg: leg, convertedAmount: leg.amount))
+        } else {
+          let converted = try await conversionService.convertAmount(
+            leg.amount, to: targetInstrument, on: transaction.date)
+          legs.append(ConvertedTransactionLeg(leg: leg, convertedAmount: converted))
+        }
+      }
+      return .success(legs)
+    } catch {
+      transactionLogger.warning(
+        """
+        Failed to convert leg to \(targetInstrument.id, privacy: .public) for transaction \
+        \(transaction.id, privacy: .public) on \(transaction.date, privacy: .public): \
+        \(error.localizedDescription, privacy: .public). Running balance will be unavailable \
+        from this point.
+        """)
+      return .failure(
+        RunningBalanceConversionError(
+          transactionId: transaction.id,
+          targetInstrumentId: targetInstrument.id,
+          underlyingDescription: error.localizedDescription))
+    }
+  }
+
+  /// Picks the amount to display on a row: per-account sum when viewing an
+  /// account, per-earmark sum when viewing an earmark, otherwise transfers
+  /// show the negative-quantity leg and non-transfers sum all legs.
+  private static func computeDisplayAmount(
+    for transaction: Transaction,
+    convertedLegs: [ConvertedTransactionLeg],
+    accountId: UUID?,
+    earmarkId: UUID?,
+    targetInstrument: Instrument
+  ) -> InstrumentAmount? {
+    let zero = InstrumentAmount.zero(instrument: targetInstrument)
+    if let accountId {
+      return
+        convertedLegs
+        .filter { $0.leg.accountId == accountId }
+        .reduce(zero) { $0 + $1.convertedAmount }
+    }
+    if let earmarkId {
+      return
+        convertedLegs
+        .filter { $0.leg.earmarkId == earmarkId }
+        .reduce(zero) { $0 + $1.convertedAmount }
+    }
+    // Scheduled view (no account context): transfers show the negative
+    // leg; everything else sums all legs.
+    let isTransfer = transaction.legs.contains { $0.type == .transfer }
+    if isTransfer {
+      let negativeLeg = convertedLegs.first { $0.leg.quantity < 0 }
+      return negativeLeg?.convertedAmount ?? zero
+    }
+    return convertedLegs.reduce(zero) { $0 + $1.convertedAmount }
   }
 }

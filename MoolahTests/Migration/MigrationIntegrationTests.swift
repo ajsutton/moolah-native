@@ -16,14 +16,25 @@ struct MigrationIntegrationTests {
   /// matching server behavior where balances are computed from transactions.
   private func makeSeededBackend() async throws -> CloudKitBackend {
     let (backend, _) = try TestBackend.create(instrument: instrument)
+    let seed = try await seedAccountsCategoriesAndEarmarks(backend: backend)
+    try await seedTransactions(
+      backend: backend, checking: seed.checking, foodId: seed.foodId, holidayId: seed.holidayId)
+    return backend
+  }
 
+  private struct SeededContext {
+    let checking: Account
+    let foodId: UUID
+    let holidayId: UUID
+  }
+
+  private func seedAccountsCategoriesAndEarmarks(
+    backend: CloudKitBackend
+  ) async throws -> SeededContext {
     // Accounts — set balance to match transaction totals below
     // Checking: +1000.00 - 25.00 = 975.00
     let checking = try await backend.accounts.create(
-      Account(
-        name: "Checking", type: .bank,
-        instrument: instrument
-      ),
+      Account(name: "Checking", type: .bank, instrument: instrument),
       openingBalance: InstrumentAmount(quantity: Decimal(string: "975.00")!, instrument: instrument)
     )
     _ = try await backend.accounts.create(
@@ -31,63 +42,49 @@ struct MigrationIntegrationTests {
       openingBalance: nil
     )
 
-    // Categories
     let food = try await backend.categories.create(Category(name: "Food"))
     _ = try await backend.categories.create(Category(name: "Groceries", parentId: food.id))
     _ = try await backend.categories.create(Category(name: "Transport"))
 
-    // Earmarks
     let holiday = try await backend.earmarks.create(
       Earmark(name: "Holiday", instrument: instrument)
     )
     let budgetAmount = InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
     try await backend.earmarks.setBudget(
       earmarkId: holiday.id, categoryId: food.id, amount: budgetAmount)
+    return SeededContext(checking: checking, foodId: food.id, holidayId: holiday.id)
+  }
 
-    // Transactions (non-scheduled)
+  private func seedTransactions(
+    backend: CloudKitBackend, checking: Account, foodId: UUID, holidayId: UUID
+  ) async throws {
     _ = try await backend.transactions.create(
       Transaction(
-        date: Date(),
-        payee: "Employer",
+        date: Date(), payee: "Employer",
         legs: [
           TransactionLeg(
             accountId: checking.id, instrument: instrument,
-            quantity: Decimal(string: "1000.00")!, type: .income
-          )
-        ]
-      )
-    )
+            quantity: Decimal(string: "1000.00")!, type: .income)
+        ]))
     _ = try await backend.transactions.create(
       Transaction(
-        date: Date(),
-        payee: "Shop",
+        date: Date(), payee: "Shop",
         legs: [
           TransactionLeg(
             accountId: checking.id, instrument: instrument,
             quantity: Decimal(string: "-25.00")!, type: .expense,
-            categoryId: food.id, earmarkId: holiday.id
-          )
-        ]
-      )
-    )
-
+            categoryId: foodId, earmarkId: holidayId)
+        ]))
     // Scheduled transaction (excluded from balance computation)
     _ = try await backend.transactions.create(
       Transaction(
-        date: Date(),
-        payee: "Netflix",
-        recurPeriod: .month,
-        recurEvery: 1,
+        date: Date(), payee: "Netflix",
+        recurPeriod: .month, recurEvery: 1,
         legs: [
           TransactionLeg(
             accountId: checking.id, instrument: instrument,
-            quantity: Decimal(string: "-10.00")!, type: .expense
-          )
-        ]
-      )
-    )
-
-    return backend
+            quantity: Decimal(string: "-10.00")!, type: .expense)
+        ]))
   }
 
   @Test("full migration round-trip: InMemory -> SwiftData -> verify")

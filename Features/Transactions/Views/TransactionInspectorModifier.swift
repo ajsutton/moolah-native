@@ -27,71 +27,63 @@ struct TransactionInspectorModifier: ViewModifier {
       #if os(macOS)
         .inspector(isPresented: isPresented) {
           if let selected = selectedTransaction {
-            TransactionDetailView(
-              transaction: selected,
-              accounts: accounts,
-              categories: categories,
-              earmarks: earmarks,
-              transactionStore: transactionStore,
-              showRecurrence: showRecurrence,
-              viewingAccountId: viewingAccountId,
-              supportsComplexTransactions: supportsComplexTransactions,
-              onUpdate: { updated in
-                Task { await transactionStore.update(updated) }
-                selectedTransaction = updated
-              },
-              onDelete: { id in
-                Task { await transactionStore.delete(id: id) }
-                selectedTransaction = nil
-              }
-            )
-            .id(selected.id)
+            detailView(for: selected).id(selected.id)
           }
         }
-        .toolbar {
-          ToolbarItem(placement: .primaryAction) {
-            if selectedTransaction != nil {
-              Button {
-                selectedTransaction = nil
-              } label: {
-                Label("Hide Details", systemImage: "sidebar.trailing")
-              }
-              .help("Hide Details")
-            }
-          }
-        }
+        .toolbar { hideDetailsToolbar }
       #else
         .sheet(item: $selectedTransaction) { selected in
           NavigationStack {
-            TransactionDetailView(
-              transaction: selected,
-              accounts: accounts,
-              categories: categories,
-              earmarks: earmarks,
-              transactionStore: transactionStore,
-              showRecurrence: showRecurrence,
-              viewingAccountId: viewingAccountId,
-              supportsComplexTransactions: supportsComplexTransactions,
-              onUpdate: { updated in
-                Task { await transactionStore.update(updated) }
-                selectedTransaction = updated
-              },
-              onDelete: { id in
-                Task { await transactionStore.delete(id: id) }
-                selectedTransaction = nil
-              }
-            )
-            .toolbar {
-              ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
-                  selectedTransaction = nil
-                }
-              }
-            }
+            detailView(for: selected).toolbar { doneToolbar }
           }
         }
       #endif
   }
+
+  @ViewBuilder
+  private func detailView(for transaction: Transaction) -> some View {
+    TransactionDetailView(
+      transaction: transaction,
+      accounts: accounts,
+      categories: categories,
+      earmarks: earmarks,
+      transactionStore: transactionStore,
+      showRecurrence: showRecurrence,
+      viewingAccountId: viewingAccountId,
+      supportsComplexTransactions: supportsComplexTransactions,
+      onUpdate: { updated in
+        Task { await transactionStore.update(updated) }
+        selectedTransaction = updated
+      },
+      onDelete: { id in
+        Task { await transactionStore.delete(id: id) }
+        selectedTransaction = nil
+      }
+    )
+  }
+
+  #if os(macOS)
+    @ToolbarContentBuilder private var hideDetailsToolbar: some ToolbarContent {
+      ToolbarItem(placement: .primaryAction) {
+        if selectedTransaction != nil {
+          Button {
+            selectedTransaction = nil
+          } label: {
+            Label("Hide Details", systemImage: "sidebar.trailing")
+          }
+          .help("Hide Details")
+        }
+      }
+    }
+  #else
+    @ToolbarContentBuilder private var doneToolbar: some ToolbarContent {
+      ToolbarItem(placement: .confirmationAction) {
+        Button("Done") {
+          selectedTransaction = nil
+        }
+      }
+    }
+  #endif
 }
 
 /// Conditionally applies the transaction inspector. When `enabled` is false,

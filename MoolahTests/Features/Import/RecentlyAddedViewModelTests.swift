@@ -85,6 +85,19 @@ struct RecentlyAddedViewModelTests {
       openingBalance: nil)
 
     let now = Date()
+    let txs = makeBadgeCountFixture(now: now, accountId: accountId)
+    TestBackend.seed(transactions: txs, in: container)
+
+    let viewModel = RecentlyAddedViewModel(backend: backend)
+    await viewModel.load(window: .last24Hours, now: now)
+    #expect(viewModel.badgeCount == 3)
+    #expect(viewModel.sessions.count == 1)
+    #expect(viewModel.sessions[0].transactions.count == 5)
+  }
+
+  /// Two categorised + three uncategorised txs inside the 24h window,
+  /// one txn outside the window (same session) to verify it's excluded.
+  private func makeBadgeCountFixture(now: Date, accountId: UUID) -> [Transaction] {
     let sessionId = UUID()
     let categorisedOrigin = origin(
       sessionId: sessionId, importedAt: now.addingTimeInterval(-60), filename: "cba.csv")
@@ -94,51 +107,27 @@ struct RecentlyAddedViewModelTests {
       sessionId: sessionId, importedAt: now.addingTimeInterval(-86_400 * 2),
       filename: "old.csv")
 
-    let categorisedTxs = [
+    let categorised = [-5, -10].map { (amount: Decimal) in
       Transaction(
         date: now,
         legs: [
           TransactionLeg(
-            accountId: accountId, instrument: .AUD, quantity: -5, type: .expense,
+            accountId: accountId, instrument: .AUD, quantity: amount, type: .expense,
             categoryId: UUID(), earmarkId: nil)
         ],
-        importOrigin: categorisedOrigin),
+        importOrigin: categorisedOrigin)
+    }
+    let uncategorised = [-3, -4, -2].map { (amount: Decimal) in
       Transaction(
         date: now,
         legs: [
           TransactionLeg(
-            accountId: accountId, instrument: .AUD, quantity: -10, type: .expense,
-            categoryId: UUID(), earmarkId: nil)
-        ],
-        importOrigin: categorisedOrigin),
-    ]
-    let uncategorisedTxs = [
-      Transaction(
-        date: now,
-        legs: [
-          TransactionLeg(
-            accountId: accountId, instrument: .AUD, quantity: -3, type: .expense,
+            accountId: accountId, instrument: .AUD, quantity: amount, type: .expense,
             categoryId: nil, earmarkId: nil)
         ],
-        importOrigin: uncategorisedOrigin),
-      Transaction(
-        date: now,
-        legs: [
-          TransactionLeg(
-            accountId: accountId, instrument: .AUD, quantity: -4, type: .expense,
-            categoryId: nil, earmarkId: nil)
-        ],
-        importOrigin: uncategorisedOrigin),
-      Transaction(
-        date: now,
-        legs: [
-          TransactionLeg(
-            accountId: accountId, instrument: .AUD, quantity: -2, type: .expense,
-            categoryId: nil, earmarkId: nil)
-        ],
-        importOrigin: uncategorisedOrigin),
-    ]
-    let outsideTx = Transaction(
+        importOrigin: uncategorisedOrigin)
+    }
+    let outside = Transaction(
       date: now.addingTimeInterval(-86_400 * 2),
       legs: [
         TransactionLeg(
@@ -146,13 +135,6 @@ struct RecentlyAddedViewModelTests {
           categoryId: nil, earmarkId: nil)
       ],
       importOrigin: outsideOrigin)
-    TestBackend.seed(
-      transactions: categorisedTxs + uncategorisedTxs + [outsideTx], in: container)
-
-    let viewModel = RecentlyAddedViewModel(backend: backend)
-    await viewModel.load(window: .last24Hours, now: now)
-    #expect(viewModel.badgeCount == 3)
-    #expect(viewModel.sessions.count == 1)
-    #expect(viewModel.sessions[0].transactions.count == 5)
+    return categorised + uncategorised + [outside]
   }
 }

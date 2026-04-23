@@ -109,61 +109,72 @@ struct GenericBankCSVParser: CSVParser, Sendable {
         results.append(.skip(reason: "blank row"))
         continue
       }
-      let dateString = safe(row, mapping.date)
-      guard let date = parseDate(dateString, format: mapping.dateFormat) else {
-        let descField = safe(row, mapping.description).lowercased()
-        if descField.contains("total") || descField.contains("summary") {
-          results.append(.skip(reason: "summary row"))
-          continue
-        }
-        throw CSVParserError.malformedRow(
-          index: rowIndex, reason: "invalid date: \(dateString)", row: row)
-      }
-      let amount: Decimal
-      if let amountIdx = mapping.amount {
-        let amountField = safe(row, amountIdx)
-        guard let parsed = parseAmount(amountField) else {
-          throw CSVParserError.malformedRow(
-            index: rowIndex, reason: "invalid amount: \(amountField)", row: row)
-        }
-        amount = parsed
-      } else {
-        let debitValue = mapping.debit.flatMap { parseAmount(safe(row, $0)) } ?? 0
-        let creditValue = mapping.credit.flatMap { parseAmount(safe(row, $0)) } ?? 0
-        if debitValue == 0 && creditValue == 0 {
-          // Row has neither debit nor credit — the opening-balance pattern
-          // (CBA includes an empty amount row with only a balance). Emit a
-          // skip so the file still parses.
-          results.append(.skip(reason: "row has no debit or credit value"))
-          continue
-        }
-        amount = creditValue != 0 ? creditValue : -abs(debitValue)
-      }
-      let desc = safe(row, mapping.description)
-      let balance = mapping.balance.flatMap { parseAmount(safe(row, $0)) }
-      let bankRef: String? = {
-        guard let idx = mapping.reference else { return nil }
-        let value = safe(row, idx).trimmingCharacters(in: .whitespaces)
-        return value.isEmpty ? nil : value
-      }()
-
-      let leg = ParsedLeg(
-        accountId: nil,
-        instrument: .AUD,
-        quantity: amount,
-        type: amount >= 0 ? .income : .expense,
-        isInstrumentPlaceholder: true)
-      let transaction = ParsedTransaction(
-        date: date,
-        legs: [leg],
-        rawRow: row,
-        rawDescription: desc,
-        rawAmount: amount,
-        rawBalance: balance,
-        bankReference: bankRef)
-      results.append(.transaction(transaction))
+      let record = try parseDataRow(row, mapping: mapping, rowIndex: rowIndex)
+      results.append(record)
     }
     return results
+  }
+
+  private func parseDataRow(
+    _ row: [String], mapping: ColumnMapping, rowIndex: Int
+  ) throws -> ParsedRecord {
+    let dateString = safe(row, mapping.date)
+    guard let date = parseDate(dateString, format: mapping.dateFormat) else {
+      let descField = safe(row, mapping.description).lowercased()
+      if descField.contains("total") || descField.contains("summary") {
+        return .skip(reason: "summary row")
+      }
+      throw CSVParserError.malformedRow(
+        index: rowIndex, reason: "invalid date: \(dateString)", row: row)
+    }
+    guard let amount = try parseRowAmount(row, mapping: mapping, rowIndex: rowIndex) else {
+      // Row has neither debit nor credit — the opening-balance pattern
+      // (CBA includes an empty amount row with only a balance). Emit a
+      // skip so the file still parses.
+      return .skip(reason: "row has no debit or credit value")
+    }
+    let desc = safe(row, mapping.description)
+    let balance = mapping.balance.flatMap { parseAmount(safe(row, $0)) }
+    let bankRef: String? = {
+      guard let idx = mapping.reference else { return nil }
+      let value = safe(row, idx).trimmingCharacters(in: .whitespaces)
+      return value.isEmpty ? nil : value
+    }()
+
+    let leg = ParsedLeg(
+      accountId: nil,
+      instrument: .AUD,
+      quantity: amount,
+      type: amount >= 0 ? .income : .expense,
+      isInstrumentPlaceholder: true)
+    let transaction = ParsedTransaction(
+      date: date,
+      legs: [leg],
+      rawRow: row,
+      rawDescription: desc,
+      rawAmount: amount,
+      rawBalance: balance,
+      bankReference: bankRef)
+    return .transaction(transaction)
+  }
+
+  private func parseRowAmount(
+    _ row: [String], mapping: ColumnMapping, rowIndex: Int
+  ) throws -> Decimal? {
+    if let amountIdx = mapping.amount {
+      let amountField = safe(row, amountIdx)
+      guard let parsed = parseAmount(amountField) else {
+        throw CSVParserError.malformedRow(
+          index: rowIndex, reason: "invalid amount: \(amountField)", row: row)
+      }
+      return parsed
+    }
+    let debitValue = mapping.debit.flatMap { parseAmount(safe(row, $0)) } ?? 0
+    let creditValue = mapping.credit.flatMap { parseAmount(safe(row, $0)) } ?? 0
+    if debitValue == 0 && creditValue == 0 {
+      return nil
+    }
+    return creditValue != 0 ? creditValue : -abs(debitValue)
   }
 
   // MARK: - Inference

@@ -78,41 +78,57 @@ enum CSVDeduplicator {
         dayKey: dayKey)
     }
 
+    let index = DedupIndex(
+      byRef: byRef,
+      byDate: byDate,
+      dayKey: dayKey,
+      balanceMatchedIndexes: balanceMatchedIndexes)
     var kept: [ParsedTransaction] = []
     var skipped: [CSVDedupResult.SkipEntry] = []
-
-    for (index, candidate) in candidates.enumerated() {
-      if let reference = candidate.bankReference,
-        !reference.isEmpty,
-        let match = byRef[reference]
-      {
-        skipped.append(
-          .init(
-            candidate: candidate, matchedExistingId: match.id, layer: .bankReference))
-        continue
+    for (offset, candidate) in candidates.enumerated() {
+      if let skip = classifyCandidate(candidate, offset: offset, index: index) {
+        skipped.append(skip)
+      } else {
+        kept.append(candidate)
       }
-      if let sameDay = byDate[dayKey(candidate.date)],
-        let match = sameDay.first(where: { transaction in
-          let origin = transaction.importOrigin
-          return normalise(origin?.rawDescription ?? "")
-            == normalise(candidate.rawDescription)
-            && (origin?.rawAmount ?? 0) == candidate.rawAmount
-        })
-      {
-        skipped.append(
-          .init(
-            candidate: candidate, matchedExistingId: match.id, layer: .sameDateExactMatch))
-        continue
-      }
-      if let matchedId = balanceMatchedIndexes[index] {
-        skipped.append(
-          .init(
-            candidate: candidate, matchedExistingId: matchedId, layer: .balanceAlignment))
-        continue
-      }
-      kept.append(candidate)
     }
     return CSVDedupResult(kept: kept, skipped: skipped)
+  }
+
+  /// Precomputed lookup tables reused across every candidate. Grouping the
+  /// inputs into one value keeps the per-candidate classifier's parameter
+  /// count low enough for SwiftLint's `function_parameter_count` rule.
+  private struct DedupIndex {
+    let byRef: [String: Transaction]
+    let byDate: [DateComponents: [Transaction]]
+    let dayKey: (Date) -> DateComponents
+    let balanceMatchedIndexes: [Int: UUID]
+  }
+
+  private static func classifyCandidate(
+    _ candidate: ParsedTransaction, offset: Int, index: DedupIndex
+  ) -> CSVDedupResult.SkipEntry? {
+    if let reference = candidate.bankReference,
+      !reference.isEmpty,
+      let match = index.byRef[reference]
+    {
+      return .init(candidate: candidate, matchedExistingId: match.id, layer: .bankReference)
+    }
+    if let sameDay = index.byDate[index.dayKey(candidate.date)],
+      let match = sameDay.first(where: { transaction in
+        let origin = transaction.importOrigin
+        return normalise(origin?.rawDescription ?? "")
+          == normalise(candidate.rawDescription)
+          && (origin?.rawAmount ?? 0) == candidate.rawAmount
+      })
+    {
+      return .init(
+        candidate: candidate, matchedExistingId: match.id, layer: .sameDateExactMatch)
+    }
+    if let matchedId = index.balanceMatchedIndexes[offset] {
+      return .init(candidate: candidate, matchedExistingId: matchedId, layer: .balanceAlignment)
+    }
+    return nil
   }
 
   /// Uppercase, trim, collapse all whitespace runs to a single space, and

@@ -147,9 +147,31 @@ final class AutomationService {
     let session = try resolveSession(for: profileIdentifier)
     let instrument = session.profile.instrument
 
+    let resolution = try resolveLegs(
+      legs, profileIdentifier: profileIdentifier, instrument: instrument)
+    let finalLegs = normaliseTransferLegs(resolution.legs, accountIds: resolution.accountIds)
+
+    let transaction = Transaction(
+      id: UUID(),
+      date: date,
+      payee: payee,
+      notes: notes,
+      recurPeriod: nil,
+      recurEvery: nil,
+      legs: finalLegs
+    )
+
+    guard let created = await session.transactionStore.create(transaction) else {
+      throw AutomationError.operationFailed("Failed to create transaction")
+    }
+    return created
+  }
+
+  private func resolveLegs(
+    _ legs: [LegSpec], profileIdentifier: String, instrument: Instrument
+  ) throws -> (legs: [TransactionLeg], accountIds: Set<UUID>) {
     var resolvedLegs: [TransactionLeg] = []
     var accountIds = Set<UUID>()
-
     for spec in legs {
       let account = try resolveAccount(
         named: spec.accountName, profileIdentifier: profileIdentifier)
@@ -170,7 +192,6 @@ final class AutomationService {
         }
 
       let legType: TransactionType = spec.amount >= 0 ? .income : .expense
-
       resolvedLegs.append(
         TransactionLeg(
           accountId: account.id,
@@ -181,32 +202,19 @@ final class AutomationService {
           earmarkId: earmarkId
         ))
     }
+    return (resolvedLegs, accountIds)
+  }
 
-    // Determine if this is a transfer (2+ legs with different account IDs)
-    let isTransfer = accountIds.count > 1
-    if isTransfer {
-      // All legs in a transfer use .expense type
-      resolvedLegs = resolvedLegs.map { leg in
-        var copy = leg
-        copy.type = .expense
-        return copy
-      }
+  private func normaliseTransferLegs(
+    _ legs: [TransactionLeg], accountIds: Set<UUID>
+  ) -> [TransactionLeg] {
+    // Transfers (2+ legs with different accounts) use .expense type on every leg.
+    guard accountIds.count > 1 else { return legs }
+    return legs.map { leg in
+      var copy = leg
+      copy.type = .expense
+      return copy
     }
-
-    let transaction = Transaction(
-      id: UUID(),
-      date: date,
-      payee: payee,
-      notes: notes,
-      recurPeriod: nil,
-      recurEvery: nil,
-      legs: resolvedLegs
-    )
-
-    guard let created = await session.transactionStore.create(transaction) else {
-      throw AutomationError.operationFailed("Failed to create transaction")
-    }
-    return created
   }
 
   /// Lists transactions, optionally filtered by account name and/or scheduled status.

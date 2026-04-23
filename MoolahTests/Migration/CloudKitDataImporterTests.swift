@@ -29,65 +29,63 @@ struct CloudKitDataImporterTests {
     let categoryId = UUID()
     let earmarkId = UUID()
     let budgetItemId = UUID()
-
     return ExportedData(
-      accounts: [
-        Account(
-          id: accountId, name: "Checking", type: .bank,
-          instrument: instrument
-        ),
-        Account(
-          id: UUID(), name: "Savings", type: .bank,
-          instrument: instrument
-        ),
-      ],
+      accounts: makeSampleAccounts(accountId: accountId),
       categories: [
         Category(id: categoryId, name: "Food"),
         Category(id: UUID(), name: "Groceries", parentId: categoryId),
       ],
-      earmarks: [
-        Earmark(
-          id: earmarkId, name: "Holiday",
-          instrument: instrument
-        )
-      ],
+      earmarks: [Earmark(id: earmarkId, name: "Holiday", instrument: instrument)],
       earmarkBudgets: [
         earmarkId: [
           EarmarkBudgetItem(
             id: budgetItemId, categoryId: categoryId,
-            amount: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
-          )
+            amount: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument))
         ]
       ],
-      transactions: [
-        Transaction(
-          date: Date(),
-          payee: "Test",
-          legs: [
-            TransactionLeg(
-              accountId: accountId,
-              instrument: instrument,
-              quantity: Decimal(string: "50.00")!,
-              type: .income
-            )
-          ]
-        ),
-        Transaction(
-          date: Date(),
-          legs: [
-            TransactionLeg(
-              accountId: accountId,
-              instrument: instrument,
-              quantity: Decimal(string: "-10.00")!,
-              type: .expense,
-              categoryId: categoryId,
-              earmarkId: earmarkId
-            )
-          ]
-        ),
-      ],
+      transactions: makeSampleTransactions(
+        accountId: accountId, categoryId: categoryId, earmarkId: earmarkId),
       investmentValues: [:]
     )
+  }
+
+  private func makeSampleAccounts(accountId: UUID) -> [Account] {
+    [
+      Account(id: accountId, name: "Checking", type: .bank, instrument: instrument),
+      Account(id: UUID(), name: "Savings", type: .bank, instrument: instrument),
+    ]
+  }
+
+  private func makeSampleTransactions(
+    accountId: UUID, categoryId: UUID, earmarkId: UUID
+  ) -> [Transaction] {
+    [
+      Transaction(
+        date: Date(),
+        payee: "Test",
+        legs: [
+          TransactionLeg(
+            accountId: accountId,
+            instrument: instrument,
+            quantity: Decimal(string: "50.00")!,
+            type: .income
+          )
+        ]
+      ),
+      Transaction(
+        date: Date(),
+        legs: [
+          TransactionLeg(
+            accountId: accountId,
+            instrument: instrument,
+            quantity: Decimal(string: "-10.00")!,
+            type: .expense,
+            categoryId: categoryId,
+            earmarkId: earmarkId
+          )
+        ]
+      ),
+    ]
   }
 
   @Test("imports all exported data preserving UUIDs")

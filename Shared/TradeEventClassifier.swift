@@ -60,6 +60,30 @@ enum TradeEventClassifier {
     let fiatLegs = legs.filter { $0.instrument.kind == .fiatCurrency }
     let nonFiatLegs = legs.filter { $0.instrument.kind != .fiatCurrency }
 
+    let (fiatOutflow, fiatInflow) = try await summariseFiatFlows(
+      fiatLegs, on: date, hostCurrency: hostCurrency, conversionService: conversionService)
+
+    let fiatPaired = classifyFiatPaired(
+      nonFiatLegs: nonFiatLegs, fiatOutflow: fiatOutflow, fiatInflow: fiatInflow)
+    if !fiatPaired.buys.isEmpty || !fiatPaired.sells.isEmpty {
+      return fiatPaired
+    }
+
+    // Non-fiat swap: every leg is non-fiat.
+    guard nonFiatLegs.count >= 2 else {
+      return TradeEventClassification(buys: [], sells: [])
+    }
+    return try await classifyNonFiatSwap(
+      nonFiatLegs: nonFiatLegs, on: date,
+      hostCurrency: hostCurrency, conversionService: conversionService)
+  }
+
+  private static func summariseFiatFlows(
+    _ fiatLegs: [TransactionLeg],
+    on date: Date,
+    hostCurrency: Instrument,
+    conversionService: any InstrumentConversionService
+  ) async throws -> (outflow: Decimal, inflow: Decimal) {
     var fiatOutflow: Decimal = 0
     var fiatInflow: Decimal = 0
     for leg in fiatLegs where leg.quantity != 0 {
@@ -72,7 +96,12 @@ enum TradeEventClassifier {
         fiatInflow += converted
       }
     }
+    return (fiatOutflow, fiatInflow)
+  }
 
+  private static func classifyFiatPaired(
+    nonFiatLegs: [TransactionLeg], fiatOutflow: Decimal, fiatInflow: Decimal
+  ) -> TradeEventClassification {
     var buys: [TradeBuyEvent] = []
     var sells: [TradeSellEvent] = []
     for leg in nonFiatLegs {
@@ -89,14 +118,17 @@ enum TradeEventClassifier {
             proceedsPerUnit: fiatInflow / sellQty))
       }
     }
-    if !buys.isEmpty || !sells.isEmpty {
-      return TradeEventClassification(buys: buys, sells: sells)
-    }
+    return TradeEventClassification(buys: buys, sells: sells)
+  }
 
-    // Non-fiat swap: every leg is non-fiat.
-    guard nonFiatLegs.count >= 2 else {
-      return TradeEventClassification(buys: [], sells: [])
-    }
+  private static func classifyNonFiatSwap(
+    nonFiatLegs: [TransactionLeg],
+    on date: Date,
+    hostCurrency: Instrument,
+    conversionService: any InstrumentConversionService
+  ) async throws -> TradeEventClassification {
+    var buys: [TradeBuyEvent] = []
+    var sells: [TradeSellEvent] = []
     for leg in nonFiatLegs {
       let profileValue = try await conversionService.convert(
         leg.quantity, from: leg.instrument, to: hostCurrency, on: date

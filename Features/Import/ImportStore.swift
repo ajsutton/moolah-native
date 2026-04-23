@@ -277,77 +277,12 @@ final class ImportStore {
     }
 
     // 1. Decode + tokenize.
-    let tokenizeSignpost = OSSignpostID(log: Signposts.importPipeline)
-    os_signpost(
-      .begin, log: Signposts.importPipeline, name: "tokenize",
-      signpostID: tokenizeSignpost)
-    let rows: [[String]]
-    do {
-      rows = try CSVTokenizer.parse(data)
-    } catch {
-      os_signpost(
-        .end, log: Signposts.importPipeline, name: "tokenize",
-        signpostID: tokenizeSignpost)
-      throw IngestError.decode(error.localizedDescription)
-    }
-    os_signpost(
-      .end, log: Signposts.importPipeline, name: "tokenize",
-      signpostID: tokenizeSignpost)
+    let rows = try tokenize(data)
     guard let headers = rows.first else { throw IngestError.empty }
 
-    // 2. Select parser. We do profile lookup first (when possible) so a
-    // saved `dateFormatRawValue` override can be threaded into the parser.
-    let parser = registry.select(for: headers)
-    let profileForOverride = try? await preExistingProfile(
-      parserIdentifier: parser.identifier, headers: headers,
-      forcedAccountId: source.forcedAccountId)
-    let dateFormatOverride = profileForOverride?.dateFormatRawValue
-      .flatMap(GenericBankCSVParser.DateFormat.fromRawValue)
-
-    // Column-role override: if the profile stored a user-edited column
-    // mapping, rebuild the ColumnMapping from it and pass as an explicit
-    // `overrideMapping` so the parser doesn't re-auto-detect. Without
-    // this, the user's first-time setup choice would be ignored on
-    // every subsequent import with the same header signature.
-    let columnMappingOverride = profileForOverride?.columnRoleRawValues.flatMap {
-      Self.buildColumnMapping(
-        headers: headers,
-        columnRoleRawValues: $0,
-        sampleRows: Array(rows.dropFirst().prefix(5)),
-        dateFormatOverride: dateFormatOverride)
-    }
-
-    // 3. Parse.
-    let parseSignpost = OSSignpostID(log: Signposts.importPipeline)
-    os_signpost(
-      .begin, log: Signposts.importPipeline, name: "parse", signpostID: parseSignpost)
-    let records: [ParsedRecord]
-    do {
-      if let genericParser = parser as? GenericBankCSVParser {
-        if let mapping = columnMappingOverride {
-          records = try genericParser.parse(
-            rows: rows, overrideMapping: mapping)
-        } else {
-          records = try genericParser.parse(
-            rows: rows, overrideDateFormat: dateFormatOverride)
-        }
-      } else {
-        records = try parser.parse(rows: rows)
-      }
-    } catch let error as CSVParserError {
-      os_signpost(
-        .end, log: Signposts.importPipeline, name: "parse", signpostID: parseSignpost)
-      throw IngestError.parse(error)
-    }
-    os_signpost(
-      .end, log: Signposts.importPipeline, name: "parse", signpostID: parseSignpost)
-    let candidates = records.compactMap { record -> ParsedTransaction? in
-      if case .transaction(let transaction) = record {
-        return transaction
-      } else {
-        return nil
-      }
-    }
+    // 2. Select parser + candidates.
+    let parsing = try await selectAndParse(rows: rows, headers: headers, source: source)
+    let candidates = parsing.candidates
     if candidates.isEmpty {
       // Every row skipped (summary-only fixture, empty file) — treat as a
       // successful no-op rather than failing.
@@ -358,7 +293,7 @@ final class ImportStore {
     let profile = try await resolveProfile(
       data: data,
       source: source,
-      parserIdentifier: parser.identifier,
+      parserIdentifier: parsing.parser.identifier,
       headers: headers,
       candidates: candidates)
     let resolvedProfile: CSVImportProfile
@@ -369,72 +304,18 @@ final class ImportStore {
       return .needsSetup(pendingId: pendingId)
     }
 
-    // 4. Dedup.
-    let dedupSignpost = OSSignpostID(log: Signposts.importPipeline)
-    os_signpost(
-      .begin, log: Signposts.importPipeline, name: "dedup", signpostID: dedupSignpost)
-    let existingPage = try await backend.transactions.fetch(
-      filter: TransactionFilter(accountId: resolvedProfile.accountId),
-      page: 0, pageSize: 1000)
-    let dedup = CSVDeduplicator.filter(
-      candidates,
-      against: existingPage.transactions,
-      accountId: resolvedProfile.accountId)
-    os_signpost(
-      .end, log: Signposts.importPipeline, name: "dedup", signpostID: dedupSignpost)
+    // 4. Dedup + 5. Rules + persist.
+    let dedup = try await runDedup(candidates: candidates, accountId: resolvedProfile.accountId)
+    let persisted = try await persistCandidates(
+      dedup: dedup,
+      resolvedProfile: resolvedProfile,
+      sessionId: sessionId,
+      source: source,
+      parserIdentifier: parsing.parser.identifier)
 
-    // 5. Rules engine + persist.
-    let rulesSignpost = OSSignpostID(log: Signposts.importPipeline)
-    os_signpost(
-      .begin, log: Signposts.importPipeline, name: "rules", signpostID: rulesSignpost)
-    let rules = try await backend.importRules.fetchAll()
-    // Fetch every account once and build a { id → instrument } map so
-    // `buildTransaction` can stamp each leg with its own account's
-    // instrument — in particular the destination leg of a `.markAsTransfer`
-    // rule, which may target an account in a different instrument than the
-    // source (Rule 11a — never write a leg with the wrong instrument).
-    let allAccounts = try await backend.accounts.fetchAll()
-    let accountInstruments: [UUID: Instrument] = Dictionary(
-      uniqueKeysWithValues: allAccounts.map { ($0.id, $0.instrument) })
-    guard let routedInstrument = accountInstruments[resolvedProfile.accountId]
-    else {
-      throw IngestError.other(
-        "Account \(resolvedProfile.accountId) not found; cannot resolve its instrument.")
-    }
-    var persisted: [Transaction] = []
-    for candidate in dedup.kept {
-      let evaluation = ImportRulesEngine.evaluate(
-        candidate, routedAccountId: resolvedProfile.accountId, rules: rules)
-      if evaluation.isSkipped { continue }
-      let transaction = buildTransaction(
-        from: evaluation,
-        routedAccountId: resolvedProfile.accountId,
-        accountInstrument: routedInstrument,
-        accountInstruments: accountInstruments,
-        sessionId: sessionId,
-        source: source,
-        parserIdentifier: parser.identifier)
-      do {
-        persisted.append(try await backend.transactions.create(transaction))
-      } catch {
-        logger.error(
-          "Create failed for candidate at \(candidate.date): \(error.localizedDescription)")
-      }
-    }
-    os_signpost(
-      .end, log: Signposts.importPipeline, name: "rules", signpostID: rulesSignpost)
-
-    // 6. Update profile lastUsedAt (best-effort — log on failure rather than
-    // silently swallow so a backend hiccup isn't invisible).
-    var updatedProfile = resolvedProfile
-    updatedProfile.lastUsedAt = Date()
-    do {
-      _ = try await backend.csvImportProfiles.update(updatedProfile)
-    } catch {
-      logger.warning(
-        "Profile lastUsedAt update failed (non-critical): \(error.localizedDescription, privacy: .public)"
-      )
-    }
+    // 6. Update profile lastUsedAt (best-effort — log on failure rather
+    // than silently swallow so a backend hiccup isn't invisible).
+    await touchProfileLastUsedAt(resolvedProfile)
 
     // 7. Optional delete source. Honour either the profile-level flag or
     // (for folder-watched files) the folder-level default.
@@ -454,6 +335,179 @@ final class ImportStore {
       sessionId: sessionId,
       imported: persisted,
       skippedAsDuplicate: dedup.skipped.count)
+  }
+
+  private func tokenize(_ data: Data) throws -> [[String]] {
+    let tokenizeSignpost = OSSignpostID(log: Signposts.importPipeline)
+    os_signpost(
+      .begin, log: Signposts.importPipeline, name: "tokenize",
+      signpostID: tokenizeSignpost)
+    defer {
+      os_signpost(
+        .end, log: Signposts.importPipeline, name: "tokenize",
+        signpostID: tokenizeSignpost)
+    }
+    do {
+      return try CSVTokenizer.parse(data)
+    } catch {
+      throw IngestError.decode(error.localizedDescription)
+    }
+  }
+
+  private struct ParseOutcome {
+    let parser: any CSVParser
+    let candidates: [ParsedTransaction]
+  }
+
+  /// Selects a parser via `registry.select` + pre-existing profile lookup
+  /// (so saved `dateFormatRawValue` and column-role overrides are threaded
+  /// into the parser), runs the parse, and projects parsed records down to
+  /// transaction candidates.
+  private func selectAndParse(
+    rows: [[String]], headers: [String], source: ImportSource
+  ) async throws -> ParseOutcome {
+    let parser = registry.select(for: headers)
+    let profileForOverride = try? await preExistingProfile(
+      parserIdentifier: parser.identifier, headers: headers,
+      forcedAccountId: source.forcedAccountId)
+    let dateFormatOverride = profileForOverride?.dateFormatRawValue
+      .flatMap(GenericBankCSVParser.DateFormat.fromRawValue)
+
+    // Column-role override: if the profile stored a user-edited column
+    // mapping, rebuild the ColumnMapping from it and pass as an explicit
+    // `overrideMapping` so the parser doesn't re-auto-detect. Without
+    // this, the user's first-time setup choice would be ignored on every
+    // subsequent import with the same header signature.
+    let columnMappingOverride = profileForOverride?.columnRoleRawValues.flatMap {
+      Self.buildColumnMapping(
+        headers: headers,
+        columnRoleRawValues: $0,
+        sampleRows: Array(rows.dropFirst().prefix(5)),
+        dateFormatOverride: dateFormatOverride)
+    }
+
+    let records = try runParse(
+      parser: parser, rows: rows,
+      columnMappingOverride: columnMappingOverride,
+      dateFormatOverride: dateFormatOverride)
+    let candidates = records.compactMap { record -> ParsedTransaction? in
+      if case .transaction(let transaction) = record {
+        return transaction
+      } else {
+        return nil
+      }
+    }
+    return ParseOutcome(parser: parser, candidates: candidates)
+  }
+
+  private func runParse(
+    parser: any CSVParser,
+    rows: [[String]],
+    columnMappingOverride: GenericBankCSVParser.ColumnMapping?,
+    dateFormatOverride: GenericBankCSVParser.DateFormat?
+  ) throws -> [ParsedRecord] {
+    let parseSignpost = OSSignpostID(log: Signposts.importPipeline)
+    os_signpost(
+      .begin, log: Signposts.importPipeline, name: "parse", signpostID: parseSignpost)
+    defer {
+      os_signpost(
+        .end, log: Signposts.importPipeline, name: "parse", signpostID: parseSignpost)
+    }
+    do {
+      if let genericParser = parser as? GenericBankCSVParser {
+        if let mapping = columnMappingOverride {
+          return try genericParser.parse(rows: rows, overrideMapping: mapping)
+        }
+        return try genericParser.parse(rows: rows, overrideDateFormat: dateFormatOverride)
+      }
+      return try parser.parse(rows: rows)
+    } catch let error as CSVParserError {
+      throw IngestError.parse(error)
+    }
+  }
+
+  private func runDedup(
+    candidates: [ParsedTransaction], accountId: UUID
+  ) async throws -> CSVDedupResult {
+    let dedupSignpost = OSSignpostID(log: Signposts.importPipeline)
+    os_signpost(
+      .begin, log: Signposts.importPipeline, name: "dedup", signpostID: dedupSignpost)
+    defer {
+      os_signpost(
+        .end, log: Signposts.importPipeline, name: "dedup", signpostID: dedupSignpost)
+    }
+    let existingPage = try await backend.transactions.fetch(
+      filter: TransactionFilter(accountId: accountId),
+      page: 0, pageSize: 1000)
+    return CSVDeduplicator.filter(
+      candidates,
+      against: existingPage.transactions,
+      accountId: accountId)
+  }
+
+  /// Evaluate import rules against each surviving candidate and persist
+  /// the resulting transactions. Fetches every account once and builds a
+  /// `{ id → instrument }` map so `buildTransaction` can stamp each leg
+  /// with its own account's instrument — in particular the destination
+  /// leg of a `.markAsTransfer` rule, which may target an account in a
+  /// different instrument than the source (Rule 11a — never write a leg
+  /// with the wrong instrument).
+  private func persistCandidates(
+    dedup: CSVDedupResult,
+    resolvedProfile: CSVImportProfile,
+    sessionId: UUID,
+    source: ImportSource,
+    parserIdentifier: String
+  ) async throws -> [Transaction] {
+    let rulesSignpost = OSSignpostID(log: Signposts.importPipeline)
+    os_signpost(
+      .begin, log: Signposts.importPipeline, name: "rules", signpostID: rulesSignpost)
+    defer {
+      os_signpost(
+        .end, log: Signposts.importPipeline, name: "rules", signpostID: rulesSignpost)
+    }
+    let rules = try await backend.importRules.fetchAll()
+    let allAccounts = try await backend.accounts.fetchAll()
+    let accountInstruments: [UUID: Instrument] = Dictionary(
+      uniqueKeysWithValues: allAccounts.map { ($0.id, $0.instrument) })
+    guard let routedInstrument = accountInstruments[resolvedProfile.accountId] else {
+      throw IngestError.other(
+        "Account \(resolvedProfile.accountId) not found; cannot resolve its instrument.")
+    }
+
+    var persisted: [Transaction] = []
+    for candidate in dedup.kept {
+      let evaluation = ImportRulesEngine.evaluate(
+        candidate, routedAccountId: resolvedProfile.accountId, rules: rules)
+      if evaluation.isSkipped { continue }
+      let transaction = buildTransaction(
+        from: evaluation,
+        routedAccountId: resolvedProfile.accountId,
+        accountInstrument: routedInstrument,
+        accountInstruments: accountInstruments,
+        sessionId: sessionId,
+        source: source,
+        parserIdentifier: parserIdentifier)
+      do {
+        persisted.append(try await backend.transactions.create(transaction))
+      } catch {
+        logger.error(
+          "Create failed for candidate at \(candidate.date): \(error.localizedDescription)")
+      }
+    }
+    return persisted
+  }
+
+  private func touchProfileLastUsedAt(_ resolvedProfile: CSVImportProfile) async {
+    var updatedProfile = resolvedProfile
+    updatedProfile.lastUsedAt = Date()
+    do {
+      _ = try await backend.csvImportProfiles.update(updatedProfile)
+    } catch {
+      logger.warning(
+        "Profile lastUsedAt update failed (non-critical): \(error.localizedDescription, privacy: .public)"
+      )
+    }
   }
 
   // MARK: - Profile resolution
@@ -558,52 +612,20 @@ final class ImportStore {
     source: ImportSource,
     parserIdentifier: String
   ) -> Transaction {
-    var legs = evaluation.transaction.legs.map { leg -> TransactionLeg in
-      let resolvedAccount = leg.accountId ?? routedAccountId
-      // Rewrite placeholder-instrument legs (cash legs from parsers) to the
-      // routed account's actual instrument. Explicit instrument legs (e.g.
-      // SelfWealth's ASX:BHP position leg) are left alone. The flag is set
-      // by the parser at the leg's point-of-origin, replacing the earlier
-      // fragile "is it AUD?" heuristic.
-      let resolvedInstrument =
-        leg.isInstrumentPlaceholder ? accountInstrument : leg.instrument
-      return TransactionLeg(
-        accountId: resolvedAccount,
-        instrument: resolvedInstrument,
-        quantity: leg.quantity,
-        type: leg.type,
-        categoryId: nil,
-        earmarkId: nil)
+    var legs = evaluation.transaction.legs.map { leg in
+      resolveParsedLeg(leg, routedAccountId: routedAccountId, accountInstrument: accountInstrument)
     }
-
     if let categoryId = evaluation.assignedCategoryId,
       let index = legs.firstIndex(where: { $0.type == .expense })
     {
       legs[index].categoryId = categoryId
     }
-
-    if let toId = evaluation.transferTargetAccountId,
-      let cash = legs.first
-    {
-      // Each side of a transfer carries ITS OWN account's instrument
-      // (Rule 11a). Fall back to the source leg's instrument if the
-      // destination account isn't in the lookup — that's a same-instrument
-      // transfer, which is the safe default when the map is incomplete.
-      let destinationInstrument = accountInstruments[toId] ?? cash.instrument
-      legs = [
-        TransactionLeg(
-          accountId: routedAccountId,
-          instrument: cash.instrument,
-          quantity: -abs(cash.quantity),
-          type: .transfer,
-          categoryId: nil, earmarkId: nil),
-        TransactionLeg(
-          accountId: toId,
-          instrument: destinationInstrument,
-          quantity: abs(cash.quantity),
-          type: .transfer,
-          categoryId: nil, earmarkId: nil),
-      ]
+    if let toId = evaluation.transferTargetAccountId, let cash = legs.first {
+      legs = makeTransferLegs(
+        from: cash,
+        fromAccountId: routedAccountId,
+        toAccountId: toId,
+        accountInstruments: accountInstruments)
     }
 
     let origin = ImportOrigin(
@@ -621,6 +643,54 @@ final class ImportStore {
       notes: evaluation.appendedNotes,
       legs: legs,
       importOrigin: origin)
+  }
+
+  /// Rewrite placeholder-instrument legs (cash legs from parsers) to the
+  /// routed account's actual instrument. Explicit instrument legs (e.g.
+  /// SelfWealth's `ASX:BHP` position leg) are left alone. The flag is set
+  /// by the parser at the leg's point-of-origin, replacing the earlier
+  /// fragile "is it AUD?" heuristic.
+  private func resolveParsedLeg(
+    _ leg: ParsedLeg, routedAccountId: UUID, accountInstrument: Instrument
+  ) -> TransactionLeg {
+    let resolvedAccount = leg.accountId ?? routedAccountId
+    let resolvedInstrument =
+      leg.isInstrumentPlaceholder ? accountInstrument : leg.instrument
+    return TransactionLeg(
+      accountId: resolvedAccount,
+      instrument: resolvedInstrument,
+      quantity: leg.quantity,
+      type: leg.type,
+      categoryId: nil,
+      earmarkId: nil)
+  }
+
+  /// Build the pair of legs for a `.markAsTransfer` evaluation. Each side
+  /// of a transfer carries ITS OWN account's instrument (Rule 11a). Falls
+  /// back to the source leg's instrument if the destination account isn't
+  /// in the lookup — that's a same-instrument transfer, which is the safe
+  /// default when the map is incomplete.
+  private func makeTransferLegs(
+    from cash: TransactionLeg,
+    fromAccountId: UUID,
+    toAccountId: UUID,
+    accountInstruments: [UUID: Instrument]
+  ) -> [TransactionLeg] {
+    let destinationInstrument = accountInstruments[toAccountId] ?? cash.instrument
+    return [
+      TransactionLeg(
+        accountId: fromAccountId,
+        instrument: cash.instrument,
+        quantity: -abs(cash.quantity),
+        type: .transfer,
+        categoryId: nil, earmarkId: nil),
+      TransactionLeg(
+        accountId: toAccountId,
+        instrument: destinationInstrument,
+        quantity: abs(cash.quantity),
+        type: .transfer,
+        categoryId: nil, earmarkId: nil),
+    ]
   }
 
   /// Rebuild a `GenericBankCSVParser.ColumnMapping` from the raw strings

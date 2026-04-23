@@ -302,122 +302,150 @@ struct MoolahApp: App {
     // shaped storage (in-memory `CloudKitBackend`) so XCUITest flows never
     // touch the user's iCloud. See guides/UI_TEST_GUIDE.md §6.
     let uiTestingSeed = Self.uiTestingSeed(from: CommandLine.arguments)
-    var uiTestingProfileId: UUID?
+    let setup = Self.makeContainerSetup(uiTestingSeed: uiTestingSeed)
+    let coordinator = SyncCoordinator(containerManager: setup.manager)
+    containerManager = setup.manager
+    syncCoordinator = coordinator
+    uiTestingProfileId = setup.uiTestingProfileId
 
+    let store = ProfileStore(validator: RemoteServerValidator(), containerManager: setup.manager)
+    _profileStore = State(initialValue: store)
+
+    Self.configureSyncCoordinator(
+      store: store,
+      coordinator: coordinator,
+      uiTestingProfileId: setup.uiTestingProfileId)
+
+    let sessionManager = SessionManager(
+      containerManager: setup.manager, syncCoordinator: coordinator)
+    // Clean up cached sessions when a profile is removed (locally or via
+    // remote sync).
+    store.onProfileRemoved = { [weak sessionManager] profileID in
+      sessionManager?.removeSession(for: profileID)
+    }
+    Self.configureAutomationService(
+      store: store,
+      sessionManager: sessionManager,
+      containerManager: setup.manager,
+      coordinator: coordinator)
+
+    #if os(macOS)
+      backupManager = StoreBackupManager()
+    #endif
+    _sessionManager = State(initialValue: sessionManager)
+  }
+
+  private struct ContainerSetup {
+    let manager: ProfileContainerManager
+    let uiTestingProfileId: UUID?
+  }
+
+  /// Build the `ProfileContainerManager` — either backed by the user's
+  /// on-disk profile index or, under UI testing, by an in-memory one
+  /// hydrated from the requested seed.
+  private static func makeContainerSetup(uiTestingSeed: UITestSeed?) -> ContainerSetup {
     do {
-      let manager: ProfileContainerManager
       if let seed = uiTestingSeed {
-        manager = try ProfileContainerManager.forTesting()
+        let manager = try ProfileContainerManager.forTesting()
         let profile = try UITestSeedHydrator.hydrate(seed, into: manager)
-        uiTestingProfileId = profile.id
-      } else {
-        let profileSchema = Schema([ProfileRecord.self])
-        let profileStoreURL = URL.applicationSupportDirectory.appending(path: "Moolah-v2.store")
-        let profileConfig = ModelConfiguration(
-          url: profileStoreURL,
-          cloudKitDatabase: .none
-        )
-        let indexContainer = try ModelContainer(
-          for: profileSchema, configurations: [profileConfig])
-
-        let dataSchema = Schema([
-          AccountRecord.self,
-          TransactionRecord.self,
-          TransactionLegRecord.self,
-          InstrumentRecord.self,
-          CategoryRecord.self,
-          EarmarkRecord.self,
-          EarmarkBudgetItemRecord.self,
-          InvestmentValueRecord.self,
-          CSVImportProfileRecord.self,
-          ImportRuleRecord.self,
-        ])
-
-        manager = ProfileContainerManager(
-          indexContainer: indexContainer,
-          dataSchema: dataSchema
-        )
+        return ContainerSetup(manager: manager, uiTestingProfileId: profile.id)
       }
-      containerManager = manager
-      syncCoordinator = SyncCoordinator(containerManager: manager)
-      self.uiTestingProfileId = uiTestingProfileId
+
+      let profileSchema = Schema([ProfileRecord.self])
+      let profileStoreURL = URL.applicationSupportDirectory.appending(path: "Moolah-v2.store")
+      let profileConfig = ModelConfiguration(
+        url: profileStoreURL,
+        cloudKitDatabase: .none
+      )
+      let indexContainer = try ModelContainer(
+        for: profileSchema, configurations: [profileConfig])
+
+      let dataSchema = Schema([
+        AccountRecord.self,
+        TransactionRecord.self,
+        TransactionLegRecord.self,
+        InstrumentRecord.self,
+        CategoryRecord.self,
+        EarmarkRecord.self,
+        EarmarkBudgetItemRecord.self,
+        InvestmentValueRecord.self,
+        CSVImportProfileRecord.self,
+        ImportRuleRecord.self,
+      ])
+
+      let manager = ProfileContainerManager(
+        indexContainer: indexContainer,
+        dataSchema: dataSchema
+      )
+      return ContainerSetup(manager: manager, uiTestingProfileId: nil)
     } catch {
       fatalError("Failed to initialize ModelContainer: \(error)")
     }
+  }
 
-    let store = ProfileStore(validator: RemoteServerValidator(), containerManager: containerManager)
-    _profileStore = State(initialValue: store)
-
-    let coordinator = syncCoordinator
-
-    // Wire sync coordinator to reload profiles on remote changes only for
-    // production launches. Test contexts must not reach for real iCloud:
-    //   - XCTest: the test binary is signed with the production iCloud
-    //     entitlement, so the coordinator would fetch real records from the
-    //     user's iCloud into on-disk profile stores; those records have bled
-    //     into tests' in-memory containers via SwiftData's shared process
-    //     state and caused intermittent balance failures.
-    //   - --ui-testing: the app is running against in-memory `TestBackend`-
-    //     shaped storage and must not reach for real iCloud. See
-    //     guides/UI_TEST_GUIDE.md §6.
+  /// Wire the sync coordinator to reload profiles on remote changes only
+  /// for production launches. Test contexts must not reach for real iCloud:
+  ///   - XCTest: the test binary is signed with the production iCloud
+  ///     entitlement, so the coordinator would fetch real records from the
+  ///     user's iCloud into on-disk profile stores; those records have bled
+  ///     into tests' in-memory containers via SwiftData's shared process
+  ///     state and caused intermittent balance failures.
+  ///   - --ui-testing: the app is running against in-memory `TestBackend`-
+  ///     shaped storage and must not reach for real iCloud. See
+  ///     guides/UI_TEST_GUIDE.md §6.
+  private static func configureSyncCoordinator(
+    store: ProfileStore, coordinator: SyncCoordinator, uiTestingProfileId: UUID?
+  ) {
+    let logger = Logger(subsystem: "com.moolah.app", category: "BackgroundSync")
     let isRunningTests = NSClassFromString("XCTestCase") != nil
     let isUITesting = uiTestingProfileId != nil
     if isUITesting {
       logger.info("Running under --ui-testing — skipping CloudKit sync coordinator")
-    } else if isRunningTests {
+      return
+    }
+    if isRunningTests {
       logger.info("Running under XCTest — skipping CloudKit sync coordinator")
-    } else if CloudKitAuthProvider.isCloudKitAvailable {
-      logger.info("CloudKit available — starting sync coordinator")
-      _ = coordinator.addIndexObserver { [weak store] in
-        store?.loadCloudProfiles()
-      }
-      store.onProfileChanged = { [weak coordinator] id in
-        let zoneID = CKRecordZone.ID(
-          zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
-        coordinator?.queueSave(id: id, zoneID: zoneID)
-      }
-      store.onProfileDeleted = { [weak coordinator] id in
-        let zoneID = CKRecordZone.ID(
-          zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
-        coordinator?.queueDeletion(id: id, zoneID: zoneID)
-      }
-      coordinator.start()
-
-      // Clean up the legacy CloudKit zone from SwiftData's automatic sync
-      LegacyZoneCleanup.performIfNeeded()
-    } else {
+      return
+    }
+    guard CloudKitAuthProvider.isCloudKitAvailable else {
       logger.warning(
         "CloudKit not available — profile sync disabled (NSUbiquitousContainers missing from Info.plist)"
       )
+      return
     }
+    logger.info("CloudKit available — starting sync coordinator")
+    _ = coordinator.addIndexObserver { [weak store] in
+      store?.loadCloudProfiles()
+    }
+    store.onProfileChanged = { [weak coordinator] id in
+      let zoneID = CKRecordZone.ID(
+        zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
+      coordinator?.queueSave(id: id, zoneID: zoneID)
+    }
+    store.onProfileDeleted = { [weak coordinator] id in
+      let zoneID = CKRecordZone.ID(
+        zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
+      coordinator?.queueDeletion(id: id, zoneID: zoneID)
+    }
+    coordinator.start()
+    // Clean up the legacy CloudKit zone from SwiftData's automatic sync.
+    LegacyZoneCleanup.performIfNeeded()
+  }
 
+  /// Configure the automation service locator. On macOS this also sets up
+  /// the AppleScript scripting context.
+  private static func configureAutomationService(
+    store: ProfileStore,
+    sessionManager: SessionManager,
+    containerManager: ProfileContainerManager,
+    coordinator: SyncCoordinator
+  ) {
     #if os(macOS)
-      backupManager = StoreBackupManager()
-      let sessionManager = SessionManager(
-        containerManager: containerManager, syncCoordinator: coordinator)
-      _sessionManager = State(initialValue: sessionManager)
-
-      // Clean up cached sessions when a profile is removed (locally or via remote sync)
-      store.onProfileRemoved = { [weak sessionManager] profileID in
-        sessionManager?.removeSession(for: profileID)
-      }
-
-      // Configure AppleScript scripting context and App Intents service locator
       let automationService = ScriptingContext.configure(
         sessionManager: sessionManager, profileStore: store,
         containerManager: containerManager, syncCoordinator: coordinator)
       AutomationServiceLocator.shared.service = automationService
     #else
-      let sessionManager = SessionManager(
-        containerManager: containerManager, syncCoordinator: coordinator)
-      _sessionManager = State(initialValue: sessionManager)
-
-      // Clean up cached sessions when a profile is removed (locally or via remote sync)
-      store.onProfileRemoved = { [weak sessionManager] profileID in
-        sessionManager?.removeSession(for: profileID)
-      }
-
-      // Configure App Intents service locator
       let automationService = AutomationService(sessionManager: sessionManager)
       AutomationServiceLocator.shared.service = automationService
     #endif

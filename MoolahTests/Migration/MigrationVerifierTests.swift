@@ -66,12 +66,26 @@ struct MigrationVerifierTests {
     let accountId = UUID()
 
     // Export claims 2 transactions
-    let exported = ExportedData(
+    let exported = makeCountMismatchExport(accountId: accountId)
+
+    // Import only 1 transaction manually via records
+    try insertSingleTransactionRecord(into: container, accountId: accountId)
+
+    let verifier = MigrationVerifier()
+    let result = try await verifier.verify(
+      exported: exported,
+      modelContainer: container
+    )
+
+    #expect(result.countMatch == false)
+    #expect(result.expectedCounts.transactions == 2)
+    #expect(result.actualCounts.transactions == 1)
+  }
+
+  private func makeCountMismatchExport(accountId: UUID) -> ExportedData {
+    ExportedData(
       accounts: [
-        Account(
-          id: accountId, name: "Checking", type: .bank,
-          instrument: instrument
-        )
+        Account(id: accountId, name: "Checking", type: .bank, instrument: instrument)
       ],
       categories: [],
       earmarks: [],
@@ -98,14 +112,13 @@ struct MigrationVerifierTests {
       ],
       investmentValues: [:]
     )
+  }
 
-    // Import only 1 transaction manually via records
+  private func insertSingleTransactionRecord(
+    into container: ModelContainer, accountId: UUID
+  ) throws {
     let context = ModelContext(container)
-    context.insert(
-      AccountRecord(
-        id: accountId, name: "Checking", type: "bank"
-      )
-    )
+    context.insert(AccountRecord(id: accountId, name: "Checking", type: "bank"))
     let txnRecord = TransactionRecord(
       id: UUID(), date: Date(), recurPeriod: nil, recurEvery: nil
     )
@@ -120,16 +133,6 @@ struct MigrationVerifierTests {
     )
     context.insert(legRecord)
     try context.save()
-
-    let verifier = MigrationVerifier()
-    let result = try await verifier.verify(
-      exported: exported,
-      modelContainer: container
-    )
-
-    #expect(result.countMatch == false)
-    #expect(result.expectedCounts.transactions == 2)
-    #expect(result.actualCounts.transactions == 1)
   }
 
   @Test("balance verification catches mismatches")

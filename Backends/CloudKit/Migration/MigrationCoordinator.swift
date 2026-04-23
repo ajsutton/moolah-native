@@ -112,113 +112,164 @@ final class MigrationCoordinator {
     lastRecordIDsQueuedForUpload = []
 
     do {
-      // 1. Export all data from the source backend
-      let exporter = DataExporter(backend: backend)
-      let exported = try await exporter.export(
-        profileLabel: sourceProfile.label,
-        currencyCode: sourceProfile.currencyCode,
-        financialYearStartMonth: sourceProfile.financialYearStartMonth
-      ) { [weak self] progress in
-        Task { @MainActor in
-          switch progress {
-          case .downloading(let step):
-            self?.state = .exporting(step: step)
-          default: break
-          }
-        }
-      }
+      let exported = try await exportForMigration(
+        sourceProfile: sourceProfile, backend: backend)
+      let (sourceLabel, newProfile) = addNewMigrationProfile(
+        sourceProfile: sourceProfile, profileStore: profileStore)
 
-      // 2. Create a new iCloud profile with migration naming
-      // Exclude the source profile from existing labels since it will be renamed in place
-      let existingLabels = profileStore.profiles
-        .filter { $0.id != sourceProfile.id }
-        .map(\.label)
-      let (sourceLabel, targetLabel) = MigrationProfileNaming.migratedLabels(
-        sourceLabel: sourceProfile.label,
-        existingLabels: existingLabels
-      )
-      let newProfileId = UUID()
-      let newProfile = Profile(
-        id: newProfileId,
-        label: targetLabel,
-        backendType: .cloudKit,
-        currencyCode: sourceProfile.currencyCode,
-        financialYearStartMonth: sourceProfile.financialYearStartMonth
-      )
-      profileStore.addProfile(newProfile)
-
-      // 3. Import data into the new profile
-      state = .importing(step: "starting", progress: 0)
-      let profileContainer = try containerManager.container(for: newProfileId)
-      let importer = CloudKitDataImporter(
-        modelContainer: profileContainer,
-        currencyCode: sourceProfile.currencyCode
-      )
-      let result: ImportResult
-      do {
-        result = try await importer.importData(exported) { [weak self] step, progress in
-          self?.state = .importing(step: step, progress: progress)
-        }
-      } catch {
-        // Import failed — clean up the partially created profile
-        profileStore.removeProfile(newProfileId)
-        containerManager.deleteStore(for: newProfileId)
-        throw error
-      }
-
-      // 4. Verify imported data
-      state = .verifying
-      let verifier = MigrationVerifier()
-      let verification = try await verifier.verify(
+      let imported = try await performMigrationImport(
         exported: exported,
-        modelContainer: profileContainer
-      )
+        sourceProfile: sourceProfile,
+        newProfile: newProfile,
+        containerManager: containerManager,
+        profileStore: profileStore)
 
-      // Log verification results
-      logger.info(
-        "Verification: counts match=\(verification.countMatch) accounts=\(verification.actualCounts.accounts)/\(verification.expectedCounts.accounts) categories=\(verification.actualCounts.categories)/\(verification.expectedCounts.categories) earmarks=\(verification.actualCounts.earmarks)/\(verification.expectedCounts.earmarks) transactions=\(verification.actualCounts.transactions)/\(verification.expectedCounts.transactions) investmentValues=\(verification.actualCounts.investmentValues)/\(verification.expectedCounts.investmentValues)"
-      )
-      for mismatch in verification.balanceMismatches {
-        logger.info(
-          "Balance mismatch: \(mismatch.accountName) server=\(mismatch.serverBalance) computed=\(mismatch.localBalance) diff=\(mismatch.serverBalance - mismatch.localBalance)"
-        )
-      }
+      let verification = try await verifyMigration(
+        exported: exported, container: imported.container)
 
       if !verification.countMatch {
-        // Mark the new profile as incomplete so the user knows it needs review
+        // Mark the new profile as incomplete so the user knows it needs review.
         var incompleteProfile = newProfile
         incompleteProfile.label = "\(sourceProfile.label) (Incomplete)"
         profileStore.updateProfile(incompleteProfile)
-        state = .verificationFailed(verification, newProfileId: newProfileId)
+        state = .verificationFailed(verification, newProfileId: newProfile.id)
         return
       }
 
-      // 5. Rename the source profile to indicate it is the remote copy
+      // Rename the source profile to indicate it is the remote copy, then
+      // switch to the new iCloud profile.
       var updatedSource = sourceProfile
       updatedSource.label = sourceLabel
       profileStore.updateProfile(updatedSource)
+      profileStore.setActiveProfile(newProfile.id)
 
-      // 6. Switch to the new iCloud profile
-      profileStore.setActiveProfile(newProfileId)
-
-      // 7. Queue the imported records with the sync coordinator so they upload to
-      // CloudKit and propagate to other devices. `CloudKitDataImporter` writes records
-      // directly to SwiftData and so bypasses the repository `onRecordChanged` hooks —
-      // without this step the new profile's data would only ever exist on the device
-      // that performed the migration.
-      if let syncCoordinator {
-        let queued = await syncCoordinator.queueAllRecordsAfterImport(for: newProfileId)
-        lastRecordIDsQueuedForUpload = queued
-        if !queued.isEmpty {
-          await syncCoordinator.sendChanges()
-        }
-      }
+      await queueImportedRecordsForUpload(
+        newProfileId: newProfile.id, syncCoordinator: syncCoordinator)
 
       state = .succeeded(
-        result, newProfileId: newProfileId, balanceWarnings: verification.balanceMismatches)
-
+        imported.result,
+        newProfileId: newProfile.id,
+        balanceWarnings: verification.balanceMismatches)
     } catch {
       state = .failed(error as? MigrationError ?? .unexpected(error))
+    }
+  }
+
+  /// Step 1: export every record from the source backend.
+  private func exportForMigration(
+    sourceProfile: Profile, backend: any BackendProvider
+  ) async throws -> ExportedData {
+    let exporter = DataExporter(backend: backend)
+    return try await exporter.export(
+      profileLabel: sourceProfile.label,
+      currencyCode: sourceProfile.currencyCode,
+      financialYearStartMonth: sourceProfile.financialYearStartMonth
+    ) { [weak self] progress in
+      Task { @MainActor in
+        switch progress {
+        case .downloading(let step):
+          self?.state = .exporting(step: step)
+        default: break
+        }
+      }
+    }
+  }
+
+  /// Step 2: compute the new profile label, register it with the profile
+  /// store, and return both the chosen source rename and the fresh profile.
+  /// Excludes the source profile from the existing-labels set since it's
+  /// about to be renamed in place.
+  private func addNewMigrationProfile(
+    sourceProfile: Profile, profileStore: ProfileStore
+  ) -> (sourceLabel: String, newProfile: Profile) {
+    let existingLabels = profileStore.profiles
+      .filter { $0.id != sourceProfile.id }
+      .map(\.label)
+    let (sourceLabel, targetLabel) = MigrationProfileNaming.migratedLabels(
+      sourceLabel: sourceProfile.label,
+      existingLabels: existingLabels
+    )
+    let newProfile = Profile(
+      id: UUID(),
+      label: targetLabel,
+      backendType: .cloudKit,
+      currencyCode: sourceProfile.currencyCode,
+      financialYearStartMonth: sourceProfile.financialYearStartMonth
+    )
+    profileStore.addProfile(newProfile)
+    return (sourceLabel, newProfile)
+  }
+
+  private struct MigrationImportOutput {
+    let container: ModelContainer
+    let result: ImportResult
+  }
+
+  /// Step 3: import the exported data into the new profile's container.
+  /// Cleans up the partially-created profile on failure.
+  private func performMigrationImport(
+    exported: ExportedData,
+    sourceProfile: Profile,
+    newProfile: Profile,
+    containerManager: ProfileContainerManager,
+    profileStore: ProfileStore
+  ) async throws -> MigrationImportOutput {
+    state = .importing(step: "starting", progress: 0)
+    let profileContainer = try containerManager.container(for: newProfile.id)
+    let importer = CloudKitDataImporter(
+      modelContainer: profileContainer,
+      currencyCode: sourceProfile.currencyCode
+    )
+    do {
+      let result = try await importer.importData(exported) { [weak self] step, progress in
+        self?.state = .importing(step: step, progress: progress)
+      }
+      return MigrationImportOutput(container: profileContainer, result: result)
+    } catch {
+      profileStore.removeProfile(newProfile.id)
+      containerManager.deleteStore(for: newProfile.id)
+      throw error
+    }
+  }
+
+  /// Step 4: verify the imported data. Logs the result and returns it to
+  /// the caller for the mismatch branch.
+  private func verifyMigration(
+    exported: ExportedData, container: ModelContainer
+  ) async throws -> VerificationResult {
+    state = .verifying
+    let verifier = MigrationVerifier()
+    let verification = try await verifier.verify(
+      exported: exported, modelContainer: container)
+    logVerification(verification)
+    return verification
+  }
+
+  private func logVerification(_ verification: VerificationResult) {
+    logger.info(
+      "Verification: counts match=\(verification.countMatch) accounts=\(verification.actualCounts.accounts)/\(verification.expectedCounts.accounts) categories=\(verification.actualCounts.categories)/\(verification.expectedCounts.categories) earmarks=\(verification.actualCounts.earmarks)/\(verification.expectedCounts.earmarks) transactions=\(verification.actualCounts.transactions)/\(verification.expectedCounts.transactions) investmentValues=\(verification.actualCounts.investmentValues)/\(verification.expectedCounts.investmentValues)"
+    )
+    for mismatch in verification.balanceMismatches {
+      logger.info(
+        "Balance mismatch: \(mismatch.accountName) server=\(mismatch.serverBalance) computed=\(mismatch.localBalance) diff=\(mismatch.serverBalance - mismatch.localBalance)"
+      )
+    }
+  }
+
+  /// Step 7: queue the imported records with the sync coordinator so they
+  /// upload to CloudKit and propagate to other devices.
+  /// `CloudKitDataImporter` writes records directly to SwiftData and so
+  /// bypasses the repository `onRecordChanged` hooks — without this step
+  /// the new profile's data would only ever exist on the device that
+  /// performed the migration.
+  private func queueImportedRecordsForUpload(
+    newProfileId: UUID, syncCoordinator: SyncCoordinator?
+  ) async {
+    guard let syncCoordinator else { return }
+    let queued = await syncCoordinator.queueAllRecordsAfterImport(for: newProfileId)
+    lastRecordIDsQueuedForUpload = queued
+    if !queued.isEmpty {
+      await syncCoordinator.sendChanges()
     }
   }
 

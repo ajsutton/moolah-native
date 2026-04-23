@@ -55,44 +55,8 @@
       watchedURL = resolved.url
       didStartAccess = resolved.startedAccess
 
-      let context = UnsafeMutablePointer<FSEventStreamContext>.allocate(capacity: 1)
-      context.initialize(
-        to: FSEventStreamContext(
-          version: 0,
-          info: Unmanaged<FolderWatchService>.passUnretained(self).toOpaque(),
-          retain: nil,
-          release: nil,
-          copyDescription: nil))
-
-      let callback: FSEventStreamCallback = { _, info, count, pathsRaw, _, _ in
-        guard let info else { return }
-        let unmanaged = Unmanaged<FolderWatchService>.fromOpaque(info)
-        let service = unmanaged.takeUnretainedValue()
-        let cfArray = unsafeBitCast(pathsRaw, to: CFArray.self)
-        let pathCount = CFArrayGetCount(cfArray)
-        var paths: [String] = []
-        paths.reserveCapacity(pathCount)
-        for i in 0..<min(pathCount, count) {
-          let ptr = CFArrayGetValueAtIndex(cfArray, i)
-          if let ptr {
-            let cfString = unsafeBitCast(ptr, to: CFString.self)
-            paths.append(cfString as String)
-          }
-        }
-        // `FSEventStreamSetDispatchQueue(newStream, .main)` (below) means
-        // this callback fires on the main queue — but it's a C function
-        // pointer with no actor isolation, so we still need the explicit
-        // `Task { @MainActor in }` hop. Tracking the task lets `stop()`
-        // cancel it if the watch is torn down mid-ingest.
-        let task: Task<Void, Never> = Task { @MainActor in
-          await service.handleEvents(paths: paths)
-        }
-        Task { @MainActor in
-          service.inFlightTasks.append(task)
-          await task.value
-          service.inFlightTasks.removeAll { $0.isCancelled }
-        }
-      }
+      let context = Self.makeStreamContext(for: self)
+      let callback = Self.makeStreamCallback()
 
       let flags = UInt32(kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents)
       guard
@@ -116,6 +80,52 @@
       FSEventStreamStart(newStream)
       let folderPath = resolved.url.path
       logger.info("Watching \(folderPath, privacy: .public) via FSEvents")
+    }
+
+    private static func makeStreamContext(
+      for service: FolderWatchService
+    ) -> UnsafeMutablePointer<FSEventStreamContext> {
+      let context = UnsafeMutablePointer<FSEventStreamContext>.allocate(capacity: 1)
+      context.initialize(
+        to: FSEventStreamContext(
+          version: 0,
+          info: Unmanaged<FolderWatchService>.passUnretained(service).toOpaque(),
+          retain: nil,
+          release: nil,
+          copyDescription: nil))
+      return context
+    }
+
+    private static func makeStreamCallback() -> FSEventStreamCallback {
+      { _, info, count, pathsRaw, _, _ in
+        guard let info else { return }
+        let unmanaged = Unmanaged<FolderWatchService>.fromOpaque(info)
+        let service = unmanaged.takeUnretainedValue()
+        let cfArray = unsafeBitCast(pathsRaw, to: CFArray.self)
+        let pathCount = CFArrayGetCount(cfArray)
+        var paths: [String] = []
+        paths.reserveCapacity(pathCount)
+        for i in 0..<min(pathCount, count) {
+          let ptr = CFArrayGetValueAtIndex(cfArray, i)
+          if let ptr {
+            let cfString = unsafeBitCast(ptr, to: CFString.self)
+            paths.append(cfString as String)
+          }
+        }
+        // `FSEventStreamSetDispatchQueue(newStream, .main)` (in `start()`)
+        // means this callback fires on the main queue — but it's a C
+        // function pointer with no actor isolation, so we still need the
+        // explicit `Task { @MainActor in }` hop. Tracking the task lets
+        // `stop()` cancel it if the watch is torn down mid-ingest.
+        let task: Task<Void, Never> = Task { @MainActor in
+          await service.handleEvents(paths: paths)
+        }
+        Task { @MainActor in
+          service.inFlightTasks.append(task)
+          await task.value
+          service.inFlightTasks.removeAll { $0.isCancelled }
+        }
+      }
     }
 
     /// Stop watching and release the security-scoped resource.
