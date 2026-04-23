@@ -453,6 +453,7 @@ These rules concern Swift-language patterns in SwiftUI code. Layout, colour, and
   ```
 
 - **DocC-compatible sections.** Use `- Parameters:`, `- Returns:`, `- Throws:` per [apple/swift DocumentationComments.md](https://github.com/apple/swift/blob/main/docs/DocumentationComments.md).
+- **Attach doc comments directly to the declaration they describe.** SwiftLint's [`orphaned_doc_comment`](https://realm.github.io/SwiftLint/orphaned_doc_comment.html) rule flags `///` blocks separated from the next declaration by a blank line or an intervening `//` comment — the compiler treats those as orphans and drops them from DocC / Xcode Quick Help. If a doc comment isn't documenting the declaration that immediately follows, demote it to `//` (it's narrative, not API docs) or move it adjacent to the declaration it's actually describing. Never leave a blank line between `///` and the `func` / `var` / `let` / `class` it documents.
 - **No block comments** (`/* */`). SwiftLint's `NoBlockComments` rule enforces this.
 - **No commented-out code.** Delete it — `git log` has the history. Commented-out code rots, lies about intent, and triggers false-positive diffs.
 - **`// MARK:` for sections** inside files longer than 300 lines (cross-ref §2).
