@@ -6,7 +6,7 @@
   private let logger = Logger(subsystem: "com.moolah.app", category: "CreateAccountCommand")
 
   /// Handles: `create account profile "X" name "Checking" type "bank"`
-  class CreateAccountCommand: NSScriptCommand {
+  class CreateAccountCommand: AppLevelScriptCommand {
     override func performDefaultImplementation() -> Any? {
       guard let profileName = resolveProfileName() else {
         scriptErrorNumber = -10000

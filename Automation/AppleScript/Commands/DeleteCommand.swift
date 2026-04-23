@@ -9,7 +9,7 @@
 
   /// Handles: `delete account "Checking" of profile "X"`
   /// Works for accounts, transactions, earmarks, and categories.
-  class DeleteCommand: NSScriptCommand {
+  class DeleteCommand: AppLevelScriptCommand {
     override func performDefaultImplementation() -> Any? {
       guard let specifier = directParameter as? NSScriptObjectSpecifier else {
         scriptErrorNumber = -10000

@@ -6,7 +6,7 @@
   private let logger = Logger(subsystem: "com.moolah.app", category: "CreateCategoryCommand")
 
   /// Handles: `create category profile "X" name "Groceries" parent "Food"`
-  class CreateCategoryCommand: NSScriptCommand {
+  class CreateCategoryCommand: AppLevelScriptCommand {
     override func performDefaultImplementation() -> Any? {
       guard let profileName = resolveProfileName() else {
         scriptErrorNumber = -10000

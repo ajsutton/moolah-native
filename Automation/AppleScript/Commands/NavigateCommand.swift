@@ -7,7 +7,7 @@
 
   /// Handles: `navigate to account "Checking" of profile "X"`
   /// Uses the URL scheme handler to trigger navigation in the UI.
-  class NavigateCommand: NSScriptCommand {
+  class NavigateCommand: AppLevelScriptCommand {
     override func performDefaultImplementation() -> Any? {
       guard let specifier = directParameter as? NSScriptObjectSpecifier else {
         scriptErrorNumber = -10000

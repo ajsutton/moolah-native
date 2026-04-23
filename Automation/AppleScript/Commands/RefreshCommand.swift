@@ -6,7 +6,7 @@
   private let logger = Logger(subsystem: "com.moolah.app", category: "RefreshCommand")
 
   /// Handles: `refresh profile "X"` or `refresh`
-  class RefreshCommand: NSScriptCommand {
+  class RefreshCommand: AppLevelScriptCommand {
     override func performDefaultImplementation() -> Any? {
       let profileName = resolveProfileName()
 

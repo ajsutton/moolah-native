@@ -6,7 +6,7 @@
   private let logger = Logger(subsystem: "com.moolah.app", category: "CreateTransactionCommand")
 
   /// Handles: `create transaction profile "X" with payee "Store" amount -42.50 account "Checking"`
-  class CreateTransactionCommand: NSScriptCommand {
+  class CreateTransactionCommand: AppLevelScriptCommand {
     override func performDefaultImplementation() -> Any? {
       guard let profileName = resolveProfileName() else {
         scriptErrorNumber = -10000

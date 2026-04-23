@@ -6,7 +6,7 @@
   private let logger = Logger(subsystem: "com.moolah.app", category: "NetWorthCommand")
 
   /// Handles: `net worth profile "X"` → returns a real number
-  class NetWorthCommand: NSScriptCommand {
+  class NetWorthCommand: AppLevelScriptCommand {
     override func performDefaultImplementation() -> Any? {
       guard let profileName = resolveProfileName() else {
         scriptErrorNumber = -10000

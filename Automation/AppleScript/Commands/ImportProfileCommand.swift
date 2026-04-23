@@ -4,7 +4,7 @@
   import OSLog
 
   /// Handles: `import from file "/path/to/file.json"`
-  class ImportProfileCommand: NSScriptCommand {
+  class ImportProfileCommand: AppLevelScriptCommand {
     override func performDefaultImplementation() -> Any? {
       guard let args = evaluatedArguments,
         let fromFile = args["fromFile"] as? String,
