@@ -3,6 +3,14 @@ import SwiftData
 
 @Model
 final class TransactionLegRecord {
+
+  #Index<TransactionLegRecord>(
+    [\.id],
+    [\.transactionId],
+    [\.accountId],
+    [\.earmarkId]
+  )
+
   var id = UUID()
   var transactionId = UUID()
   var accountId: UUID?

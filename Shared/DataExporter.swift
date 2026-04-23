@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Exports all data from repository protocols (works with any BackendProvider).
 actor DataExporter {
@@ -20,59 +21,133 @@ actor DataExporter {
     financialYearStartMonth: Int,
     progress: @escaping @Sendable (ExportProgress) -> Void
   ) async throws -> ExportedData {
-    // 1. Accounts
-    progress(.downloading(step: "accounts"))
+    let signpostID = OSSignpostID(log: Signposts.export)
+    os_signpost(.begin, log: Signposts.export, name: "DataExporter.export", signpostID: signpostID)
+    defer {
+      os_signpost(.end, log: Signposts.export, name: "DataExporter.export", signpostID: signpostID)
+    }
+
+    let stages = try await downloadAllStages(progress: progress, signpostID: signpostID)
+    let data = buildExportedData(
+      stages: stages,
+      profileLabel: profileLabel,
+      currencyCode: currencyCode,
+      financialYearStartMonth: financialYearStartMonth)
+    progress(.downloadComplete(data))
+    return data
+  }
+
+  /// Holds the raw per-stage download output before it's assembled into an
+  /// `ExportedData`. Exists so `export()` can stay within SwiftLint's
+  /// function-body-length limit by delegating the download fan-out to a
+  /// helper and the assembly to another.
+  private struct StagedDownloads {
     let accounts: [Account]
-    do {
-      accounts = try await backend.accounts.fetchAll()
-    } catch {
-      throw MigrationError.exportFailed(step: "accounts", underlying: error)
-    }
-
-    // 2. Categories
-    progress(.downloading(step: "categories"))
     let categories: [Category]
-    do {
-      categories = try await backend.categories.fetchAll()
-    } catch {
-      throw MigrationError.exportFailed(step: "categories", underlying: error)
+    let earmarks: [Earmark]
+    let earmarkBudgets: [UUID: [EarmarkBudgetItem]]
+    let transactions: [Transaction]
+    let investmentValues: [UUID: [InvestmentValue]]
+  }
+
+  private func downloadAllStages(
+    progress: @escaping @Sendable (ExportProgress) -> Void,
+    signpostID: OSSignpostID
+  ) async throws -> StagedDownloads {
+    progress(.downloading(step: "accounts"))
+    let accounts = try await runStage(
+      "accounts", signpost: "export.accounts", signpostID: signpostID
+    ) {
+      try await backend.accounts.fetchAll()
     }
 
-    // 3. Earmarks + budgets
+    progress(.downloading(step: "categories"))
+    let categories = try await runStage(
+      "categories", signpost: "export.categories", signpostID: signpostID
+    ) {
+      try await backend.categories.fetchAll()
+    }
+
     progress(.downloading(step: "earmarks"))
-    let earmarks: [Earmark]
-    var budgets: [UUID: [EarmarkBudgetItem]] = [:]
-    do {
-      earmarks = try await backend.earmarks.fetchAll()
+    let (earmarks, budgets) = try await runStage(
+      "earmarks", signpost: "export.earmarks", signpostID: signpostID
+    ) {
+      let earmarks = try await backend.earmarks.fetchAll()
+      var budgets: [UUID: [EarmarkBudgetItem]] = [:]
       for earmark in earmarks {
         budgets[earmark.id] = try await backend.earmarks.fetchBudget(earmarkId: earmark.id)
       }
-    } catch {
-      throw MigrationError.exportFailed(step: "earmarks", underlying: error)
+      return (earmarks, budgets)
     }
 
-    // 4. Transactions (paginated)
     progress(.downloading(step: "transactions"))
-    let transactions: [Transaction]
-    do {
-      transactions = try await fetchAllTransactions()
-    } catch {
-      throw MigrationError.exportFailed(step: "transactions", underlying: error)
+    let transactions = try await runStage(
+      "transactions", signpost: "export.transactions", signpostID: signpostID
+    ) {
+      try await fetchAllTransactions()
     }
 
-    // 5. Investment values (per investment account)
     progress(.downloading(step: "investment values"))
-    let investmentAccounts = accounts.filter { $0.type == .investment }
-    var investmentValues: [UUID: [InvestmentValue]] = [:]
-    do {
-      for account in investmentAccounts {
-        investmentValues[account.id] = try await fetchAllInvestmentValues(accountId: account.id)
+    let investmentValues = try await runStage(
+      "investment values", signpost: "export.investmentValues", signpostID: signpostID
+    ) {
+      var values: [UUID: [InvestmentValue]] = [:]
+      for account in accounts where account.type == .investment {
+        values[account.id] = try await fetchAllInvestmentValues(accountId: account.id)
       }
-    } catch {
-      throw MigrationError.exportFailed(step: "investment values", underlying: error)
+      return values
     }
 
-    // Collect all unique instruments from the exported data
+    return StagedDownloads(
+      accounts: accounts, categories: categories, earmarks: earmarks, earmarkBudgets: budgets,
+      transactions: transactions, investmentValues: investmentValues)
+  }
+
+  private func buildExportedData(
+    stages: StagedDownloads,
+    profileLabel: String,
+    currencyCode: String,
+    financialYearStartMonth: Int
+  ) -> ExportedData {
+    let instruments = collectInstruments(
+      currencyCode: currencyCode, transactions: stages.transactions)
+    return ExportedData(
+      version: 1,
+      exportedAt: Date(),
+      profileLabel: profileLabel,
+      currencyCode: currencyCode,
+      financialYearStartMonth: financialYearStartMonth,
+      instruments: instruments,
+      accounts: stages.accounts,
+      categories: stages.categories,
+      earmarks: stages.earmarks,
+      earmarkBudgets: stages.earmarkBudgets,
+      transactions: stages.transactions,
+      investmentValues: stages.investmentValues
+    )
+  }
+
+  /// Wraps `body` in a signpost region and maps any thrown error to
+  /// `MigrationError.exportFailed(step:)`. Keeps per-stage instrumentation
+  /// out of the main `export` function so it remains readable.
+  private func runStage<Value: Sendable>(
+    _ step: String,
+    signpost: StaticString,
+    signpostID: OSSignpostID,
+    _ body: @Sendable () async throws -> Value
+  ) async throws -> Value {
+    os_signpost(.begin, log: Signposts.export, name: signpost, signpostID: signpostID)
+    defer { os_signpost(.end, log: Signposts.export, name: signpost, signpostID: signpostID) }
+    do {
+      return try await body()
+    } catch {
+      throw MigrationError.exportFailed(step: step, underlying: error)
+    }
+  }
+
+  private func collectInstruments(
+    currencyCode: String, transactions: [Transaction]
+  ) -> [Instrument] {
     let profileInstrument = Instrument.fiat(code: currencyCode)
     var instrumentsById: [String: Instrument] = [profileInstrument.id: profileInstrument]
     for txn in transactions {
@@ -80,23 +155,7 @@ actor DataExporter {
         instrumentsById[leg.instrument.id] = leg.instrument
       }
     }
-
-    let data = ExportedData(
-      version: 1,
-      exportedAt: Date(),
-      profileLabel: profileLabel,
-      currencyCode: currencyCode,
-      financialYearStartMonth: financialYearStartMonth,
-      instruments: Array(instrumentsById.values),
-      accounts: accounts,
-      categories: categories,
-      earmarks: earmarks,
-      earmarkBudgets: budgets,
-      transactions: transactions,
-      investmentValues: investmentValues
-    )
-    progress(.downloadComplete(data))
-    return data
+    return Array(instrumentsById.values)
   }
 
   private func fetchAllTransactions() async throws -> [Transaction] {

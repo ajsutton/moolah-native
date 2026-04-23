@@ -8,6 +8,11 @@ enum Signposts {
   /// attribute time to `tokenize`, `parse`, `dedup`, `rules`, and the outer
   /// `ingest` range. See `guides/BENCHMARKING_GUIDE.md`.
   static let importPipeline = OSLog(subsystem: "com.moolah.app", category: "ImportPipeline")
+  /// Per-stage boundaries for the profile export pipeline
+  /// (`DataExporter.export`). Each step (accounts, categories, earmarks,
+  /// transactions, investmentValues) emits its own region so hangs surface
+  /// in Instruments rather than as a user-reported silent failure.
+  static let export = OSLog(subsystem: "com.moolah.app", category: "Export")
 }
 
 extension Duration {
