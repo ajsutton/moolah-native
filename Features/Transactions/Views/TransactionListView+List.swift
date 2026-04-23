@@ -73,8 +73,17 @@ extension TransactionListView {
       )
     }
     .task(id: baseFilter) {
-      // Reset filter and selection when switching accounts/contexts
+      // Always reset the applied filter so the toolbar reflects the current
+      // context, even on a spurious re-mount that short-circuits below.
       activeFilter = baseFilter
+      // SwiftUI re-mounts `TransactionListView` during some navigations (see
+      // #372) and fires `.task` again with the same `baseFilter`. When the
+      // store already has — or is still fetching — data for this filter, skip
+      // the redundant fetch. Toolbar Refresh and pull-to-refresh bypass this
+      // by calling `load(filter:)` directly.
+      guard !transactionStore.isLoaded(for: baseFilter) else { return }
+      // Genuine context change (or a first mount after a failed fetch):
+      // clear any stale selection from the previous context and load.
       selectedTransaction = nil
       await transactionStore.load(
         filter: baseFilter)

@@ -47,6 +47,14 @@ final class TransactionStore {
   /// load has superseded it — preventing a stale in-flight fetch (e.g. from a
   /// view that re-mounted mid-load; see #372) from appending page 0 twice.
   private var loadGeneration: Int = 0
+  /// True once a `fetchPage` call has successfully returned a page for
+  /// `currentFilter`. Combined with `isLoading` in `isLoaded(for:)` so an
+  /// in-flight load for the same filter also counts as "loaded" — a view
+  /// that re-mounts mid-load (see #372) then skips the redundant second
+  /// fetch. Reset to false at the start of every `load(filter:)` call and
+  /// never set in the error path, so a failed fetch lets a subsequent
+  /// re-mount retry instead of silently showing an empty list.
+  private var didSucceedLoadForCurrentFilter: Bool = false
 
   init(
     repository: TransactionRepository,
@@ -69,6 +77,7 @@ final class TransactionStore {
   func load(filter: TransactionFilter) async {
     loadGeneration &+= 1
     currentFilter = filter
+    didSucceedLoadForCurrentFilter = false
     currentTargetInstrument = targetInstrument
     currentPage = 0
     rawTransactions = []
@@ -79,6 +88,21 @@ final class TransactionStore {
     loadedCount = 0
     totalCount = nil
     await fetchPage()
+  }
+
+  /// Whether the store is already showing — or fetching — data for `filter`.
+  /// Call sites use this to suppress redundant `load(filter:)` calls when a
+  /// SwiftUI `.task` re-runs for reasons unrelated to the filter changing
+  /// (see #372 for the original motivating case, a view re-mounted during
+  /// Analysis → Account navigation). Explicit refresh (toolbar button,
+  /// pull-to-refresh) bypasses this by calling `load(filter:)` directly,
+  /// and a failed fetch leaves this `false` so re-mounts retry.
+  ///
+  /// Also returns `true` while the initial load for `filter` is still in
+  /// flight, so two `.task` fires back-to-back coalesce to a single fetch.
+  func isLoaded(for filter: TransactionFilter) -> Bool {
+    guard currentFilter == filter else { return false }
+    return isLoading || didSucceedLoadForCurrentFilter
   }
 
   func loadMore() async {
@@ -254,6 +278,10 @@ final class TransactionStore {
       if let total = page.totalCount {
         totalCount = total
       }
+      // Mark this filter as successfully loaded so `isLoaded(for:)` can
+      // suppress a redundant re-fetch on a spurious view re-mount (see #372).
+      // Idempotent on page-N>0 `loadMore` calls.
+      didSucceedLoadForCurrentFilter = true
       await recomputeBalances()
       logger.debug(
         "Loaded \(page.transactions.count) transactions (total: \(self.rawTransactions.count))")
