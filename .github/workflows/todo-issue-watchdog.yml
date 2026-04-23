@@ -27,7 +27,7 @@ jobs:
         run: |
           gh label create 'has-todos' \
             --color 'fbca04' \
-            --description 'Open issue is referenced by live TODO(#N) comments — do not close until references are removed.' \
+            --description 'Open issue is referenced by live TODO comments — do not close until references are removed.' \
             2>/dev/null || true
 
       - name: Reconcile labels and reopen closed issues

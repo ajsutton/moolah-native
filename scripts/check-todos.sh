@@ -40,7 +40,7 @@ main() {
             printf '    %s\n        %s\n' "$location" "$text"
         done <<< "$bare_lines"
         echo
-        echo "  Fix: rewrite as 'TODO(#N): reason' pointing at a tracked GitHub issue."
+        echo "  Fix: add an open GitHub issue reference in the form described in CODE_GUIDE §20."
         echo
         failed=1
     fi

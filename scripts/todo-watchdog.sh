@@ -73,7 +73,7 @@ reconcile_referenced_issue() {
         echo "→ Reopening #$num (referenced by live TODOs)"
         gh issue reopen "$num" >/dev/null
         local body
-        body=$(printf 'Reopened automatically: live `TODO(#%s)` / `FIXME(#%s)` comments still reference this issue.\n\nReferences on `main`:\n\n%s\n\nRemove the TODO(s), or if the work is still pending, leave the issue open. Closing while live references exist will be undone by the next run of the [TODO Issue Watchdog](.github/workflows/todo-issue-watchdog.yml).' "$num" "$num" "$locations")
+        body=$(printf 'Reopened automatically: live `TODO(#%s)` / `FIXME(#%s)` comments still reference this issue.\n\nReferences on `main`:\n\n%s\n\nRemove the TODOs, or if the work is still pending, leave the issue open. Closing while live references exist will be undone by the next run of the TODO Issue Watchdog workflow.' "$num" "$num" "$locations")
         gh issue comment "$num" --body "$body" >/dev/null
         gh issue edit "$num" --add-label "$LABEL" >/dev/null
         return 0

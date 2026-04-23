@@ -88,26 +88,32 @@ self_test() {
     # shellcheck disable=SC2064
     trap "rm -rf '$tmpdir'" RETURN
 
-    cat > "$tmpdir/valid.swift" <<'SWIFT'
-// TODO(#123): drop legacy sync path
-// FIXME(#456): race condition
+    # Build the literal markers with string concatenation so this source file
+    # itself doesn't contain the patterns the extractor is looking for — if it
+    # did, scanning the repo would false-positive on our own test fixtures.
+    local T="TO""DO"
+    local F="FI""XME"
+
+    cat > "$tmpdir/valid.swift" <<SWIFT
+// $T(#123): drop legacy sync path
+// $F(#456): race condition
 SWIFT
 
-    cat > "$tmpdir/bare.swift" <<'SWIFT'
-// TODO: needs rework
-// FIXME: needs a ticket
+    cat > "$tmpdir/bare.swift" <<SWIFT
+// $T: needs rework
+// $F: needs a ticket
 SWIFT
 
-    cat > "$tmpdir/innocuous.swift" <<'SWIFT'
-let TODOsCount = 0
+    cat > "$tmpdir/innocuous.swift" <<SWIFT
+let ${T}sCount = 0
 let statusBar = "task complete"
-let nope = "TODO"
+let nope = "$T"
 SWIFT
 
-    cat > "$tmpdir/docs.md" <<'MARKDOWN'
-Bare `TODO:` / `FIXME:` without a reference is disallowed.
-Mentions of TODO / FIXME in prose should not trip the check.
-Reference form: `TODO(#N)` format.
+    cat > "$tmpdir/docs.md" <<MARKDOWN
+Bare \`$T:\` / \`$F:\` without a reference is disallowed.
+Mentions of $T / $F in prose should not trip the check.
+Reference form: \`$T(#N)\` format.
 MARKDOWN
 
     local output valid_count bare_count
