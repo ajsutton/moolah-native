@@ -45,24 +45,24 @@ struct BinanceClientTests {
 
     let prices = try BinanceClient.parseKlinesResponse(json)
     #expect(prices.count == 2)
-    #expect(prices.values.contains(Decimal(string: "1623.45")!))
-    #expect(prices.values.contains(Decimal(string: "1650.00")!))
+    #expect(prices.values.contains(dec("1623.45")))
+    #expect(prices.values.contains(dec("1650.00")))
   }
 
   // MARK: - USDT to USD conversion
 
   @Test
   func pricesAreMultipliedByUsdtRate() throws {
-    let usdtPrices: [String: Decimal] = ["2026-04-10": Decimal(string: "1000.00")!]
-    let converted = BinanceClient.applyUsdtRate(usdtPrices, rate: Decimal(string: "0.999")!)
-    #expect(converted["2026-04-10"] == Decimal(string: "999.000")!)
+    let usdtPrices: [String: Decimal] = ["2026-04-10": dec("1000.00")]
+    let converted = BinanceClient.applyUsdtRate(usdtPrices, rate: dec("0.999"))
+    #expect(converted["2026-04-10"] == dec("999.000"))
   }
 
   @Test
   func defaultUsdtRateIsOne() throws {
-    let usdtPrices: [String: Decimal] = ["2026-04-10": Decimal(string: "1000.00")!]
+    let usdtPrices: [String: Decimal] = ["2026-04-10": dec("1000.00")]
     let converted = BinanceClient.applyUsdtRate(usdtPrices, rate: Decimal(1))
-    #expect(converted["2026-04-10"] == Decimal(string: "1000.00")!)
+    #expect(converted["2026-04-10"] == dec("1000.00"))
   }
 
   // MARK: - Closure-based init
@@ -70,7 +70,7 @@ struct BinanceClientTests {
   @Test
   func initAcceptsDateAwareUsdtRateClosure() {
     let client = BinanceClient(session: .shared) { _ in
-      Decimal(string: "0.998")!
+      dec("0.998")
     }
     // Validates the closure init compiles
     _ = client

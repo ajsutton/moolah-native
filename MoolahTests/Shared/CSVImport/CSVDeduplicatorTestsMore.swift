@@ -96,14 +96,14 @@ struct CSVDeduplicatorTestsMore {
     let existing = [
       existingTransaction(
         accountId: accountId, date: date(2024, 4, 2),
-        description: "COFFEE HUT SYDNEY", amount: Decimal(string: "-5.50")!,
-        balance: Decimal(string: "994.50")!)
+        description: "COFFEE HUT SYDNEY", amount: dec("-5.50"),
+        balance: dec("994.50"))
     ]
     let incoming = candidate(
       date: date(2024, 4, 2),
       description: "different wording",  // defeats layer 2
-      amount: Decimal(string: "-5.50")!,
-      balance: Decimal(string: "994.50")!)
+      amount: dec("-5.50"),
+      balance: dec("994.50"))
     let result = CSVDeduplicator.filter([incoming], against: existing, accountId: accountId)
     #expect(result.kept.isEmpty)
     #expect(result.skipped[0].layer == .balanceAlignment)
@@ -114,14 +114,14 @@ struct CSVDeduplicatorTestsMore {
     let existing = [
       existingTransaction(
         accountId: accountId, date: date(2024, 4, 2),
-        description: "MATCHING", amount: Decimal(string: "-5.50")!,
-        balance: Decimal(string: "994.50")!)
+        description: "MATCHING", amount: dec("-5.50"),
+        balance: dec("994.50"))
     ]
     let multiLeg = candidate(
       date: date(2024, 4, 2),
       description: "something else",  // defeats layer 2
-      amount: Decimal(string: "-5.50")!,
-      balance: Decimal(string: "994.50")!,
+      amount: dec("-5.50"),
+      balance: dec("994.50"),
       legs: [
         ParsedLeg(accountId: nil, instrument: .AUD, quantity: -10, type: .expense),
         ParsedLeg(accountId: nil, instrument: .AUD, quantity: 10, type: .income),
@@ -138,14 +138,14 @@ struct CSVDeduplicatorTestsMore {
     let existing = [
       existingTransaction(
         accountId: accountId, date: date(2024, 4, 2),
-        description: "MATCHING", amount: Decimal(string: "-5.50")!,
-        balance: Decimal(string: "994.50")!)
+        description: "MATCHING", amount: dec("-5.50"),
+        balance: dec("994.50"))
     ]
     let withBalance = candidate(
-      date: date(2024, 4, 2), description: "other", amount: Decimal(string: "-5.50")!,
-      balance: Decimal(string: "994.50")!)
+      date: date(2024, 4, 2), description: "other", amount: dec("-5.50"),
+      balance: dec("994.50"))
     let noBalance = candidate(
-      date: date(2024, 4, 3), description: "x", amount: Decimal(string: "-1.00")!)
+      date: date(2024, 4, 3), description: "x", amount: dec("-1.00"))
     let result = CSVDeduplicator.filter(
       [withBalance, noBalance], against: existing, accountId: accountId)
     // Layer 3 is off because one candidate has no balance; layer 2 won't

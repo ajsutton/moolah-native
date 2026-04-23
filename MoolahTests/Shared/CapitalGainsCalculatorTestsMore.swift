@@ -111,7 +111,7 @@ struct CapitalGainsCalculatorTestsMore {
           categoryId: nil, earmarkId: nil),
       ])
 
-    let service = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let service = FixedConversionService(rates: ["USD": dec("1.5")])
     let result = try await CapitalGainsCalculator.computeWithConversion(
       transactions: [buyTx, sellTx],
       profileCurrency: aud,
@@ -159,7 +159,7 @@ struct CapitalGainsCalculatorTestsMore {
           categoryId: nil, earmarkId: nil),
       ])
 
-    let service = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let service = FixedConversionService(rates: ["USD": dec("1.5")])
     let result = try await CapitalGainsCalculator.computeWithConversion(
       transactions: [buyTx, sellTx],
       profileCurrency: aud,

@@ -9,11 +9,11 @@ struct RemoteEarmarkRepositoryTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com"), session: session)
     URLProtocolStub.requestHandler = { _ in
       Issue.record("Network request should not be made when instrument guard fires")
       let response = HTTPURLResponse(
-        url: URL(string: "https://api.example.com")!, statusCode: 500, httpVersion: nil,
+        url: makeURL("https://api.example.com"), statusCode: 500, httpVersion: nil,
         headerFields: nil)!
       return (response, Data())
     }
@@ -59,7 +59,7 @@ struct RemoteEarmarkRepositoryTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com"), session: session)
     let repository = RemoteEarmarkRepository(client: client, instrument: .defaultTestInstrument)
 
     URLProtocolStub.requestHandler = { request in
@@ -80,13 +80,13 @@ struct RemoteEarmarkRepositoryTests {
     #expect(earmarks[0].name == "Holiday Fund")
     #expect(earmarks[0].position == 1)
     #expect(earmarks[0].isHidden == false)
-    #expect(earmarks[0].positions.first?.quantity == Decimal(string: "2500.00")!)
-    #expect(earmarks[0].savedPositions.first?.quantity == Decimal(string: "3000.00")!)
-    #expect(earmarks[0].spentPositions.first?.quantity == Decimal(string: "-500.00")!)
+    #expect(earmarks[0].positions.first?.quantity == dec("2500.00"))
+    #expect(earmarks[0].savedPositions.first?.quantity == dec("3000.00"))
+    #expect(earmarks[0].spentPositions.first?.quantity == dec("-500.00"))
     #expect(
       earmarks[0].savingsGoal
         == InstrumentAmount(
-          quantity: Decimal(string: "5000.00")!, instrument: .defaultTestInstrument))
+          quantity: dec("5000.00"), instrument: .defaultTestInstrument))
     #expect(earmarks[0].savingsStartDate != nil)
     #expect(earmarks[0].savingsEndDate != nil)
 

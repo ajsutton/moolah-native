@@ -22,7 +22,7 @@ struct AccountStoreConversionTests {
         TransactionLeg(
           accountId: accountId,
           instrument: .AUD,
-          quantity: Decimal(string: "1000.00")!,
+          quantity: dec("1000.00"),
           type: .openingBalance
         )
       ]
@@ -40,7 +40,7 @@ struct AccountStoreConversionTests {
     #expect(positions.count == 1)
     #expect(positions.first?.instrument == .AUD)
     // Quantity will be from storage (Int64 scaled), so compare with tolerance
-    #expect(positions.first?.quantity == Decimal(string: "1000.00")!)
+    #expect(positions.first?.quantity == dec("1000.00"))
   }
 
   @Test
@@ -58,7 +58,7 @@ struct AccountStoreConversionTests {
         TransactionLeg(
           accountId: accountId,
           instrument: .AUD,
-          quantity: Decimal(string: "1000.00")!,
+          quantity: dec("1000.00"),
           type: .openingBalance
         )
       ]
@@ -69,7 +69,7 @@ struct AccountStoreConversionTests {
         TransactionLeg(
           accountId: accountId,
           instrument: .USD,
-          quantity: Decimal(string: "500.00")!,
+          quantity: dec("500.00"),
           type: .openingBalance
         )
       ]
@@ -87,11 +87,11 @@ struct AccountStoreConversionTests {
     #expect(positions.count == 2)
     #expect(
       positions.contains(where: {
-        $0.instrument == .AUD && $0.quantity == Decimal(string: "1000.00")!
+        $0.instrument == .AUD && $0.quantity == dec("1000.00")
       }))
     #expect(
       positions.contains(where: {
-        $0.instrument == .USD && $0.quantity == Decimal(string: "500.00")!
+        $0.instrument == .USD && $0.quantity == dec("500.00")
       }))
   }
 
@@ -104,7 +104,7 @@ struct AccountStoreConversionTests {
     let todayString = Date().iso8601DateOnlyString
     let rates: [String: [String: Decimal]] = [
       todayString: [
-        "AUD": Decimal(string: "1.5385")!
+        "AUD": dec("1.5385")
       ]
     ]
     let (backend, container) = try TestBackend.create(exchangeRates: rates)
@@ -116,7 +116,7 @@ struct AccountStoreConversionTests {
         TransactionLeg(
           accountId: accountId,
           instrument: .AUD,
-          quantity: Decimal(string: "1000.00")!,
+          quantity: dec("1000.00"),
           type: .openingBalance
         )
       ]
@@ -127,7 +127,7 @@ struct AccountStoreConversionTests {
         TransactionLeg(
           accountId: accountId,
           instrument: .USD,
-          quantity: Decimal(string: "500.00")!,
+          quantity: dec("500.00"),
           type: .openingBalance
         )
       ]
@@ -143,8 +143,8 @@ struct AccountStoreConversionTests {
 
     // 1000 AUD + 500 USD converted to AUD (500 * 1.5385 = 769.25)
     let total = try await store.computeConvertedCurrentTotal(in: .AUD)
-    let expectedUsdInAud = Decimal(string: "500.00")! * Decimal(string: "1.5385")!
-    let expected = Decimal(string: "1000.00")! + expectedUsdInAud
+    let expectedUsdInAud = dec("500.00") * dec("1.5385")
+    let expected = dec("1000.00") + expectedUsdInAud
     #expect(total.quantity == expected)
     #expect(total.instrument == .AUD)
   }

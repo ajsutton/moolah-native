@@ -10,7 +10,7 @@ struct ProfileSessionTests {
     label: String = "Test",
     url: String = "https://moolah.rocks/api/"
   ) -> Profile {
-    Profile(label: label, serverURL: URL(string: url)!)
+    Profile(label: label, serverURL: makeURL(url))
   }
 
   @Test("session creates non-nil stores")

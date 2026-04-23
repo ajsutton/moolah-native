@@ -113,14 +113,14 @@ struct ExportedDataTestsMore {
       earmarks: [
         Earmark(
           id: ids.earmarkId, name: "US Trip", instrument: usd,
-          savingsGoal: InstrumentAmount(quantity: Decimal(string: "500")!, instrument: usd)
+          savingsGoal: InstrumentAmount(quantity: dec("500"), instrument: usd)
         )
       ],
       earmarkBudgets: [
         ids.earmarkId: [
           EarmarkBudgetItem(
             categoryId: ids.foodCategoryId,
-            amount: InstrumentAmount(quantity: Decimal(string: "50")!, instrument: usd)
+            amount: InstrumentAmount(quantity: dec("50"), instrument: usd)
           )
         ]
       ],
@@ -158,7 +158,7 @@ struct ExportedDataTestsMore {
         legs: [
           TransactionLeg(
             accountId: ids.usdAccountId, instrument: usd,
-            quantity: Decimal(string: "-4.50")!, type: .expense,
+            quantity: dec("-4.50"), type: .expense,
             categoryId: ids.foodCategoryId, earmarkId: ids.earmarkId
           )
         ]
@@ -169,11 +169,11 @@ struct ExportedDataTestsMore {
         legs: [
           TransactionLeg(
             accountId: ids.audAccountId, instrument: aud,
-            quantity: Decimal(string: "-1500.00")!, type: .transfer
+            quantity: dec("-1500.00"), type: .transfer
           ),
           TransactionLeg(
             accountId: ids.investmentAccountId, instrument: bhp,
-            quantity: Decimal(string: "10")!, type: .transfer
+            quantity: dec("10"), type: .transfer
           ),
         ]
       ),
@@ -183,7 +183,7 @@ struct ExportedDataTestsMore {
         legs: [
           TransactionLeg(
             accountId: ids.cryptoEarmarkAccountId, instrument: eth,
-            quantity: Decimal(string: "0.25")!, type: .income
+            quantity: dec("0.25"), type: .income
           )
         ]
       ),
@@ -197,13 +197,13 @@ struct ExportedDataTestsMore {
       ids.investmentAccountId: [
         InvestmentValue(
           date: Date(timeIntervalSince1970: 1_700_400_000),
-          value: InstrumentAmount(quantity: Decimal(string: "10")!, instrument: bhp)
+          value: InstrumentAmount(quantity: dec("10"), instrument: bhp)
         )
       ],
       ids.cryptoEarmarkAccountId: [
         InvestmentValue(
           date: Date(timeIntervalSince1970: 1_700_500_000),
-          value: InstrumentAmount(quantity: Decimal(string: "0.25")!, instrument: eth)
+          value: InstrumentAmount(quantity: dec("0.25"), instrument: eth)
         )
       ],
     ]

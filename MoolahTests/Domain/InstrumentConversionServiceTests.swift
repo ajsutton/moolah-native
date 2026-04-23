@@ -26,60 +26,60 @@ struct InstrumentConversionServiceTests {
   func sameCurrencyReturnsIdentity() async throws {
     let service = makeService()
     let result = try await service.convert(
-      Decimal(string: "100.00")!,
+      dec("100.00"),
       from: .AUD, to: .AUD,
       on: date("2025-06-15")
     )
-    #expect(result == Decimal(string: "100.00")!)
+    #expect(result == dec("100.00"))
   }
 
   @Test
   func convertsAUDtoUSD() async throws {
     let service = makeService(rates: [
-      "2025-06-15": ["USD": Decimal(string: "0.6500")!]
+      "2025-06-15": ["USD": dec("0.6500")]
     ])
     let result = try await service.convert(
-      Decimal(string: "1000.00")!,
+      dec("1000.00"),
       from: .AUD, to: .USD,
       on: date("2025-06-15")
     )
-    #expect(result == Decimal(string: "650.00")!)
+    #expect(result == dec("650.00"))
   }
 
   @Test
   func convertsUSDtoAUD() async throws {
     let service = makeService(rates: [
-      "2025-06-15": ["AUD": Decimal(string: "1.5385")!]
+      "2025-06-15": ["AUD": dec("1.5385")]
     ])
     let result = try await service.convert(
-      Decimal(string: "650.00")!,
+      dec("650.00"),
       from: .USD, to: .AUD,
       on: date("2025-06-15")
     )
-    #expect(result == Decimal(string: "650.00")! * Decimal(string: "1.5385")!)
+    #expect(result == dec("650.00") * dec("1.5385"))
   }
 
   @Test
   func convertAmount() async throws {
     let service = makeService(rates: [
-      "2025-06-15": ["USD": Decimal(string: "0.6500")!]
+      "2025-06-15": ["USD": dec("0.6500")]
     ])
     let amount = InstrumentAmount(
-      quantity: Decimal(string: "1000.00")!,
+      quantity: dec("1000.00"),
       instrument: .AUD
     )
     let result = try await service.convertAmount(
       amount, to: .USD, on: date("2025-06-15")
     )
     #expect(result.instrument == .USD)
-    #expect(result.quantity == Decimal(string: "650.00")!)
+    #expect(result.quantity == dec("650.00"))
   }
 
   @Test
   func convertAmountSameCurrency() async throws {
     let service = makeService()
     let amount = InstrumentAmount(
-      quantity: Decimal(string: "1000.00")!,
+      quantity: dec("1000.00"),
       instrument: .AUD
     )
     let result = try await service.convertAmount(
@@ -101,16 +101,16 @@ struct InstrumentConversionServiceTests {
     let pastDate = calendar.date(byAdding: .day, value: -15, to: today)!
     let pastKey = formatter.string(from: pastDate)
     let service = makeService(rates: [
-      pastKey: ["USD": Decimal(string: "0.6500")!]
+      pastKey: ["USD": dec("0.6500")]
     ])
 
     let future = calendar.date(byAdding: .day, value: 30, to: today)!
     let result = try await service.convert(
-      Decimal(string: "1000.00")!,
+      dec("1000.00"),
       from: .AUD, to: .USD,
       on: future
     )
-    #expect(result == Decimal(string: "650.00")!)
+    #expect(result == dec("650.00"))
   }
 
   @Test("convertAmount clamps future dates to today")
@@ -123,7 +123,7 @@ struct InstrumentConversionServiceTests {
       from: calendar.date(byAdding: .day, value: -3, to: today)!
     )
     let service = makeService(rates: [
-      pastKey: ["USD": Decimal(string: "0.6500")!]
+      pastKey: ["USD": dec("0.6500")]
     ])
 
     let future = calendar.date(byAdding: .day, value: 7, to: today)!

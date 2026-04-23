@@ -17,7 +17,7 @@ struct ProfileStoreTests {
   private func makeProfile(label: String = "Test", url: String = "https://moolah.rocks/api/")
     -> Profile
   {
-    Profile(label: label, serverURL: URL(string: url)!)
+    Profile(label: label, serverURL: makeURL(url))
   }
 
   // MARK: - Add

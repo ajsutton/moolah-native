@@ -10,7 +10,7 @@ struct RemoteInvestmentRepositoryTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com"), session: session)
     let repository = RemoteInvestmentRepository(client: client, instrument: .defaultTestInstrument)
 
     URLProtocolStub.requestHandler = { request in
@@ -40,9 +40,9 @@ struct RemoteInvestmentRepositoryTests {
 
     #expect(page.values.count == 3)
     #expect(page.hasMore == false)
-    #expect(page.values[0].value.quantity == Decimal(string: "125000.00")!)
-    #expect(page.values[1].value.quantity == Decimal(string: "123000.00")!)
-    #expect(page.values[2].value.quantity == Decimal(string: "121000.00")!)
+    #expect(page.values[0].value.quantity == dec("125000.00"))
+    #expect(page.values[1].value.quantity == dec("123000.00"))
+    #expect(page.values[2].value.quantity == dec("121000.00"))
   }
 
   @Test("Fetch values sends correct URL with query parameters")
@@ -55,7 +55,7 @@ struct RemoteInvestmentRepositoryTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com"), session: session)
     let repository = RemoteInvestmentRepository(client: client, instrument: .defaultTestInstrument)
 
     var capturedRequest: URLRequest?
@@ -84,7 +84,7 @@ struct RemoteInvestmentRepositoryTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com"), session: session)
     let repository = RemoteInvestmentRepository(client: client, instrument: .defaultTestInstrument)
 
     var capturedRequest: URLRequest?
@@ -102,7 +102,7 @@ struct RemoteInvestmentRepositoryTests {
     let accountId = UUID()
     let date = BackendDateFormatter.date(from: "2024-03-15")!
     let amount = InstrumentAmount(
-      quantity: Decimal(string: "125000.00")!, instrument: .defaultTestInstrument)
+      quantity: dec("125000.00"), instrument: .defaultTestInstrument)
 
     try await repository.setValue(accountId: accountId, date: date, value: amount)
 
@@ -124,9 +124,9 @@ struct RemoteInvestmentRepositoryTests {
     let balances = try await repository.fetchDailyBalances(accountId: accountId)
 
     #expect(balances.count == 3)
-    #expect(balances[0].balance.quantity == Decimal(string: "1000.00")!)
-    #expect(balances[1].balance.quantity == Decimal(string: "2000.00")!)
-    #expect(balances[2].balance.quantity == Decimal(string: "3000.00")!)
+    #expect(balances[0].balance.quantity == dec("1000.00"))
+    #expect(balances[1].balance.quantity == dec("2000.00"))
+    #expect(balances[2].balance.quantity == dec("3000.00"))
   }
 
   @Test("Fetch daily balances sends correct URL")
@@ -136,7 +136,7 @@ struct RemoteInvestmentRepositoryTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com"), session: session)
     let repository = RemoteInvestmentRepository(client: client, instrument: .defaultTestInstrument)
 
     var capturedRequest: URLRequest?
@@ -163,7 +163,7 @@ struct RemoteInvestmentRepositoryTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com"), session: session)
     let repository = RemoteInvestmentRepository(client: client, instrument: .defaultTestInstrument)
 
     var capturedRequest: URLRequest?

@@ -43,13 +43,13 @@ struct InstrumentConversionServiceStockTests {
     let dateKey = dateString(today)
     let service = makeService(
       stockPrices: [
-        "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: Decimal(string: "42.30")!])
+        "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: dec("42.30")])
       ]
     )
 
     let result = try await service.convert(Decimal(150), from: bhp, to: aud, on: today)
     // 150 shares * $42.30 = $6345.00
-    #expect(result == Decimal(string: "6345.00")!)
+    #expect(result == dec("6345.00"))
   }
 
   @Test
@@ -59,14 +59,14 @@ struct InstrumentConversionServiceStockTests {
     let dateKey = dateString(today)
     let service = makeService(
       stockPrices: [
-        "AAPL": StockPriceResponse(instrument: .USD, prices: [dateKey: Decimal(string: "185.50")!])
+        "AAPL": StockPriceResponse(instrument: .USD, prices: [dateKey: dec("185.50")])
       ],
-      exchangeRates: [dateKey: ["AUD": Decimal(string: "1.55")!]]  // 1 USD = 1.55 AUD
+      exchangeRates: [dateKey: ["AUD": dec("1.55")]]  // 1 USD = 1.55 AUD
     )
 
     let result = try await service.convert(Decimal(10), from: aapl, to: aud, on: today)
     // 10 shares * $185.50 USD * 1.55 AUD/USD = $2875.25 AUD
-    #expect(result == Decimal(string: "2875.25")!)
+    #expect(result == dec("2875.25"))
   }
 
   @Test
@@ -109,12 +109,12 @@ struct InstrumentConversionServiceStockTests {
     let dateKey = dateString(today)
     let service = makeService(
       stockPrices: [
-        "AAPL": StockPriceResponse(instrument: .USD, prices: [dateKey: Decimal(string: "185.50")!])
+        "AAPL": StockPriceResponse(instrument: .USD, prices: [dateKey: dec("185.50")])
       ]
     )
 
     let result = try await service.convert(Decimal(10), from: aapl, to: usd, on: today)
-    #expect(result == Decimal(string: "1855.00")!)
+    #expect(result == dec("1855.00"))
   }
 
   @Test
@@ -162,7 +162,7 @@ struct InstrumentConversionServiceStockTests {
     let today = calendar.startOfDay(for: Date())
     let pastKey = dateString(calendar.date(byAdding: .day, value: -10, to: today)!)
     let service = makeService(
-      exchangeRates: [pastKey: ["USD": Decimal(string: "0.6500")!]]
+      exchangeRates: [pastKey: ["USD": dec("0.6500")]]
     )
 
     let future = calendar.date(byAdding: .day, value: 30, to: today)!

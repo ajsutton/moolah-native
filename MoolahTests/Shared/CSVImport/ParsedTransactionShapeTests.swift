@@ -14,12 +14,12 @@ struct ParsedTransactionShapeTests {
         ParsedLeg(
           accountId: nil,
           instrument: .AUD,
-          quantity: Decimal(string: "-12.34")!,
+          quantity: dec("-12.34"),
           type: .expense)
       ],
       rawRow: ["2024-01-01", "-12.34", "Coffee"],
       rawDescription: "Coffee",
-      rawAmount: Decimal(string: "-12.34")!,
+      rawAmount: dec("-12.34"),
       rawBalance: nil,
       bankReference: "REF-1")
     #expect(transaction.legs.count == 1)

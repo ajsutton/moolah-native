@@ -30,11 +30,11 @@ struct StockPriceServiceTests {
     StockPriceResponse(
       instrument: .AUD,
       prices: [
-        "2026-04-07": Decimal(string: "38.50")!,
-        "2026-04-08": Decimal(string: "38.75")!,
-        "2026-04-09": Decimal(string: "39.00")!,
-        "2026-04-10": Decimal(string: "38.25")!,
-        "2026-04-11": Decimal(string: "38.60")!,
+        "2026-04-07": dec("38.50"),
+        "2026-04-08": dec("38.75"),
+        "2026-04-09": dec("39.00"),
+        "2026-04-10": dec("38.25"),
+        "2026-04-11": dec("38.60"),
       ])
   }
 
@@ -44,7 +44,7 @@ struct StockPriceServiceTests {
   func cacheMissFetchesFromClient() async throws {
     let service = makeService(responses: ["BHP.AX": bhpResponse()])
     let price = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
-    #expect(price == Decimal(string: "38.50")!)
+    #expect(price == dec("38.50"))
   }
 
   @Test
@@ -53,7 +53,7 @@ struct StockPriceServiceTests {
     let first = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
     let second = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
     #expect(first == second)
-    #expect(first == Decimal(string: "38.50")!)
+    #expect(first == dec("38.50"))
   }
 
   // MARK: - Currency discovery
@@ -81,7 +81,7 @@ struct StockPriceServiceTests {
     let service = makeService(responses: ["BHP.AX": bhpResponse()])
     _ = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
     let price = try await service.price(ticker: "BHP.AX", on: date("2026-04-12"))
-    #expect(price == Decimal(string: "38.60")!)
+    #expect(price == dec("38.60"))
   }
 
   @Test
@@ -89,7 +89,7 @@ struct StockPriceServiceTests {
     let futureOnly = StockPriceResponse(
       instrument: .AUD,
       prices: [
-        "2026-04-10": Decimal(string: "38.25")!
+        "2026-04-10": dec("38.25")
       ])
     let service = makeService(responses: ["BHP.AX": futureOnly])
     _ = try await service.price(ticker: "BHP.AX", on: date("2026-04-10"))
@@ -112,7 +112,7 @@ struct StockPriceServiceTests {
 
     let service2 = makeService(shouldFail: true, cacheDirectory: tempDir)
     let price = try await service2.price(ticker: "BHP.AX", on: date("2026-04-07"))
-    #expect(price == Decimal(string: "38.50")!)
+    #expect(price == dec("38.50"))
   }
 
   @Test
@@ -133,9 +133,9 @@ struct StockPriceServiceTests {
       in: date("2026-04-07")...date("2026-04-09")
     )
     #expect(results.count == 3)
-    #expect(results[0].price == Decimal(string: "38.50")!)
-    #expect(results[1].price == Decimal(string: "38.75")!)
-    #expect(results[2].price == Decimal(string: "39.00")!)
+    #expect(results[0].price == dec("38.50"))
+    #expect(results[1].price == dec("38.75"))
+    #expect(results[2].price == dec("39.00"))
   }
 
   @Test
@@ -150,8 +150,8 @@ struct StockPriceServiceTests {
       in: date("2026-04-07")...date("2026-04-11")
     )
     #expect(results.count == 5)
-    #expect(results[0].price == Decimal(string: "38.50")!)
-    #expect(results[4].price == Decimal(string: "38.60")!)
+    #expect(results[0].price == dec("38.50"))
+    #expect(results[4].price == dec("38.60"))
   }
 
   @Test
@@ -162,9 +162,9 @@ struct StockPriceServiceTests {
       in: date("2026-04-10")...date("2026-04-12")
     )
     #expect(results.count == 3)
-    #expect(results[0].price == Decimal(string: "38.25")!)
-    #expect(results[1].price == Decimal(string: "38.60")!)
-    #expect(results[2].price == Decimal(string: "38.60")!)
+    #expect(results[0].price == dec("38.25"))
+    #expect(results[1].price == dec("38.60"))
+    #expect(results[2].price == dec("38.60"))
   }
 
   // MARK: - Disk persistence (gzip round-trip)
@@ -178,11 +178,11 @@ struct StockPriceServiceTests {
 
     let service1 = makeService(responses: ["BHP.AX": bhpResponse()], cacheDirectory: tempDir)
     let price = try await service1.price(ticker: "BHP.AX", on: date("2026-04-07"))
-    #expect(price == Decimal(string: "38.50")!)
+    #expect(price == dec("38.50"))
 
     let service2 = makeService(shouldFail: true, cacheDirectory: tempDir)
     let cachedPrice = try await service2.price(ticker: "BHP.AX", on: date("2026-04-07"))
-    #expect(cachedPrice == Decimal(string: "38.50")!)
+    #expect(cachedPrice == dec("38.50"))
 
     let instrument = try await service2.instrument(for: "BHP.AX")
     #expect(instrument == .AUD)
@@ -195,7 +195,7 @@ struct StockPriceServiceTests {
     let cbaResponse = StockPriceResponse(
       instrument: .AUD,
       prices: [
-        "2026-04-07": Decimal(string: "115.20")!
+        "2026-04-07": dec("115.20")
       ])
     let service = makeService(responses: [
       "BHP.AX": bhpResponse(),
@@ -203,7 +203,7 @@ struct StockPriceServiceTests {
     ])
     let bhp = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
     let cba = try await service.price(ticker: "CBA.AX", on: date("2026-04-07"))
-    #expect(bhp == Decimal(string: "38.50")!)
-    #expect(cba == Decimal(string: "115.20")!)
+    #expect(bhp == dec("38.50"))
+    #expect(cba == dec("115.20"))
   }
 }

@@ -74,7 +74,7 @@ struct ExportedDataTests {
         earmarkId: [
           EarmarkBudgetItem(
             categoryId: categoryId,
-            amount: InstrumentAmount(quantity: Decimal(string: "10.00")!, instrument: instrument)
+            amount: InstrumentAmount(quantity: dec("10.00"), instrument: instrument)
           )
         ]
       ],
@@ -85,7 +85,7 @@ struct ExportedDataTests {
           legs: [
             TransactionLeg(
               accountId: accountId, instrument: instrument,
-              quantity: Decimal(string: "50.00")!, type: .income
+              quantity: dec("50.00"), type: .income
             )
           ]
         )

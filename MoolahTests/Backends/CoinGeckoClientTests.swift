@@ -63,8 +63,8 @@ struct CoinGeckoClientTests {
 
     let prices = try CoinGeckoClient.parseMarketChartResponse(json)
     #expect(prices.count == 2)
-    #expect(prices.values.contains(Decimal(string: "1623.45")!))
-    #expect(prices.values.contains(Decimal(string: "1650")!))
+    #expect(prices.values.contains(dec("1623.45")))
+    #expect(prices.values.contains(dec("1650")))
   }
 
   @Test
@@ -78,8 +78,8 @@ struct CoinGeckoClientTests {
       """.utf8)
 
     let prices = try CoinGeckoClient.parseSimplePriceResponse(json)
-    #expect(prices["ethereum"] == Decimal(string: "1623.45")!)
-    #expect(prices["bitcoin"] == Decimal(string: "67890.12")!)
+    #expect(prices["ethereum"] == dec("1623.45"))
+    #expect(prices["bitcoin"] == dec("67890.12"))
   }
 
   // MARK: - Asset platforms parsing

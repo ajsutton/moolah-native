@@ -63,8 +63,8 @@ struct CryptoCompareClientTests {
 
     let prices = try CryptoCompareClient.parseHistodayResponse(json)
     #expect(prices.count == 2)
-    #expect(prices.values.contains(Decimal(string: "1623.45")!))
-    #expect(prices.values.contains(Decimal(string: "1650")!))
+    #expect(prices.values.contains(dec("1623.45")))
+    #expect(prices.values.contains(dec("1650")))
   }
 
   @Test
@@ -78,8 +78,8 @@ struct CryptoCompareClientTests {
       """.utf8)
 
     let prices = try CryptoCompareClient.parsePriceMultiResponse(json)
-    #expect(prices["ETH"] == Decimal(string: "1623.45")!)
-    #expect(prices["BTC"] == Decimal(string: "67890.12")!)
+    #expect(prices["ETH"] == dec("1623.45"))
+    #expect(prices["BTC"] == dec("67890.12"))
   }
 
   // MARK: - Coin list parsing

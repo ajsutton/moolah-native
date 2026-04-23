@@ -26,9 +26,9 @@ struct FrankfurterClientTests {
     let result = try FrankfurterClient.parseResponse(data)
 
     #expect(result.count == 2)  // 2 dates
-    #expect(result["2026-04-11"]?["USD"] == Decimal(string: "0.632")!)
-    #expect(result["2026-04-11"]?["EUR"] == Decimal(string: "0.581")!)
-    #expect(result["2026-04-10"]?["USD"] == Decimal(string: "0.629")!)
+    #expect(result["2026-04-11"]?["USD"] == dec("0.632"))
+    #expect(result["2026-04-11"]?["EUR"] == dec("0.581"))
+    #expect(result["2026-04-10"]?["USD"] == dec("0.629"))
   }
 
   @Test

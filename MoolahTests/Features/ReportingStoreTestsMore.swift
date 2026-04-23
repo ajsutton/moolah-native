@@ -128,7 +128,7 @@ struct ReportingStoreTestsMore {
             accountId: account.id, instrument: aud, quantity: -2000, type: .transfer),
           TransactionLeg(
             accountId: account.id, instrument: eth,
-            quantity: Decimal(string: "1.0")!, type: .transfer),
+            quantity: dec("1.0"), type: .transfer),
         ]),
     ]
     TestBackend.seed(transactions: txns, in: container)

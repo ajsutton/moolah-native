@@ -16,48 +16,48 @@ struct PositionTests {
   let usd = Instrument.USD
 
   @Test func initStoresProperties() {
-    let pos = Position(instrument: aud, quantity: Decimal(string: "1500.00")!)
+    let pos = Position(instrument: aud, quantity: dec("1500.00"))
     #expect(pos.instrument == aud)
-    #expect(pos.quantity == Decimal(string: "1500.00")!)
+    #expect(pos.quantity == dec("1500.00"))
   }
 
   @Test func amount() {
-    let pos = Position(instrument: aud, quantity: Decimal(string: "1500.00")!)
-    #expect(pos.amount.quantity == Decimal(string: "1500.00")!)
+    let pos = Position(instrument: aud, quantity: dec("1500.00"))
+    #expect(pos.amount.quantity == dec("1500.00"))
     #expect(pos.amount.instrument == aud)
   }
 
   @Test func computeForAccountGroupsByInstrument() {
     let legs = [
       TransactionLeg(
-        accountId: accountId, instrument: aud, quantity: Decimal(string: "100.00")!, type: .income),
+        accountId: accountId, instrument: aud, quantity: dec("100.00"), type: .income),
       TransactionLeg(
-        accountId: accountId, instrument: usd, quantity: Decimal(string: "50.00")!, type: .income),
+        accountId: accountId, instrument: usd, quantity: dec("50.00"), type: .income),
       TransactionLeg(
-        accountId: accountId, instrument: aud, quantity: Decimal(string: "-30.00")!, type: .expense),
+        accountId: accountId, instrument: aud, quantity: dec("-30.00"), type: .expense),
     ]
     let positions = Position.computeForAccount(accountId, from: legs)
     #expect(positions.count == 2)
 
     let audPos = positions.first(where: { $0.instrument == aud })
-    #expect(audPos?.quantity == Decimal(string: "70.00")!)
+    #expect(audPos?.quantity == dec("70.00"))
 
     let usdPos = positions.first(where: { $0.instrument == usd })
-    #expect(usdPos?.quantity == Decimal(string: "50.00")!)
+    #expect(usdPos?.quantity == dec("50.00"))
   }
 
   @Test func computeForAccountFiltersToAccount() {
     let otherAccount = UUID()
     let legs = [
       TransactionLeg(
-        accountId: accountId, instrument: aud, quantity: Decimal(string: "100.00")!, type: .income),
+        accountId: accountId, instrument: aud, quantity: dec("100.00"), type: .income),
       TransactionLeg(
-        accountId: otherAccount, instrument: aud, quantity: Decimal(string: "200.00")!,
+        accountId: otherAccount, instrument: aud, quantity: dec("200.00"),
         type: .income),
     ]
     let positions = Position.computeForAccount(accountId, from: legs)
     #expect(positions.count == 1)
-    #expect(positions.first?.quantity == Decimal(string: "100.00")!)
+    #expect(positions.first?.quantity == dec("100.00"))
   }
 
   @Test func computeForAccountEmptyLegs() {
@@ -68,9 +68,9 @@ struct PositionTests {
   @Test func computeForAccountExcludesZeroQuantity() {
     let legs = [
       TransactionLeg(
-        accountId: accountId, instrument: aud, quantity: Decimal(string: "100.00")!, type: .income),
+        accountId: accountId, instrument: aud, quantity: dec("100.00"), type: .income),
       TransactionLeg(
-        accountId: accountId, instrument: aud, quantity: Decimal(string: "-100.00")!,
+        accountId: accountId, instrument: aud, quantity: dec("-100.00"),
         type: .expense),
     ]
     let positions = Position.computeForAccount(accountId, from: legs)
@@ -82,22 +82,22 @@ struct PositionTests {
     let legs = [
       TransactionLeg(
         accountId: accountId, instrument: aud,
-        quantity: Decimal(string: "100.00")!, type: .income, earmarkId: earmarkId),
+        quantity: dec("100.00"), type: .income, earmarkId: earmarkId),
       TransactionLeg(
         accountId: accountId, instrument: usd,
-        quantity: Decimal(string: "50.00")!, type: .income, earmarkId: earmarkId),
+        quantity: dec("50.00"), type: .income, earmarkId: earmarkId),
       TransactionLeg(
         accountId: accountId, instrument: aud,
-        quantity: Decimal(string: "-30.00")!, type: .expense, earmarkId: earmarkId),
+        quantity: dec("-30.00"), type: .expense, earmarkId: earmarkId),
     ]
     let positions = Position.computeForEarmark(earmarkId, from: legs)
     #expect(positions.count == 2)
 
     let audPos = positions.first(where: { $0.instrument == aud })
-    #expect(audPos?.quantity == Decimal(string: "70.00")!)
+    #expect(audPos?.quantity == dec("70.00"))
 
     let usdPos = positions.first(where: { $0.instrument == usd })
-    #expect(usdPos?.quantity == Decimal(string: "50.00")!)
+    #expect(usdPos?.quantity == dec("50.00"))
   }
 
   @Test func computeForEarmarkFiltersToEarmark() {
@@ -106,19 +106,19 @@ struct PositionTests {
     let legs = [
       TransactionLeg(
         accountId: accountId, instrument: aud,
-        quantity: Decimal(string: "100.00")!, type: .income, earmarkId: earmarkId),
+        quantity: dec("100.00"), type: .income, earmarkId: earmarkId),
       TransactionLeg(
         accountId: accountId, instrument: aud,
-        quantity: Decimal(string: "200.00")!, type: .income, earmarkId: otherEarmarkId),
+        quantity: dec("200.00"), type: .income, earmarkId: otherEarmarkId),
     ]
     let positions = Position.computeForEarmark(earmarkId, from: legs)
     #expect(positions.count == 1)
-    #expect(positions.first?.quantity == Decimal(string: "100.00")!)
+    #expect(positions.first?.quantity == dec("100.00"))
   }
 
   @Test func hashableAndEquatable() {
-    let first = Position(instrument: aud, quantity: Decimal(string: "100.00")!)
-    let second = Position(instrument: aud, quantity: Decimal(string: "100.00")!)
+    let first = Position(instrument: aud, quantity: dec("100.00"))
+    let second = Position(instrument: aud, quantity: dec("100.00"))
     #expect(first == second)
     #expect(first.hashValue == second.hashValue)
   }
@@ -127,40 +127,40 @@ struct PositionTests {
 
   @Test func applyingDeltasToEmptyPositionsCreatesNewPosition() {
     let positions: [Position] = []
-    let result = positions.applying(deltas: [aud: Decimal(string: "100.00")!])
+    let result = positions.applying(deltas: [aud: dec("100.00")])
     #expect(result.count == 1)
     #expect(result.first?.instrument == aud)
-    #expect(result.first?.quantity == Decimal(string: "100.00")!)
+    #expect(result.first?.quantity == dec("100.00"))
   }
 
   @Test func applyingDeltasToExistingPositionAdjustsQuantity() {
-    let positions = [Position(instrument: aud, quantity: Decimal(string: "100.00")!)]
-    let result = positions.applying(deltas: [aud: Decimal(string: "50.00")!])
+    let positions = [Position(instrument: aud, quantity: dec("100.00"))]
+    let result = positions.applying(deltas: [aud: dec("50.00")])
     #expect(result.count == 1)
-    #expect(result.first?.quantity == Decimal(string: "150.00")!)
+    #expect(result.first?.quantity == dec("150.00"))
   }
 
   @Test func applyingDeltaForNewInstrumentAddsIt() {
-    let positions = [Position(instrument: aud, quantity: Decimal(string: "100.00")!)]
-    let result = positions.applying(deltas: [usd: Decimal(string: "50.00")!])
+    let positions = [Position(instrument: aud, quantity: dec("100.00"))]
+    let result = positions.applying(deltas: [usd: dec("50.00")])
     #expect(result.count == 2)
     let audPos = result.first(where: { $0.instrument == aud })
     let usdPos = result.first(where: { $0.instrument == usd })
-    #expect(audPos?.quantity == Decimal(string: "100.00")!)
-    #expect(usdPos?.quantity == Decimal(string: "50.00")!)
+    #expect(audPos?.quantity == dec("100.00"))
+    #expect(usdPos?.quantity == dec("50.00"))
   }
 
   @Test func applyingDeltaThatZeroesOutRemovesPosition() {
-    let positions = [Position(instrument: aud, quantity: Decimal(string: "100.00")!)]
-    let result = positions.applying(deltas: [aud: Decimal(string: "-100.00")!])
+    let positions = [Position(instrument: aud, quantity: dec("100.00"))]
+    let result = positions.applying(deltas: [aud: dec("-100.00")])
     #expect(result.isEmpty)
   }
 
   @Test func applyingDeltasResultsSortedByInstrumentId() {
     let positions: [Position] = []
     let result = positions.applying(deltas: [
-      usd: Decimal(string: "50.00")!,
-      aud: Decimal(string: "100.00")!,
+      usd: dec("50.00"),
+      aud: dec("100.00"),
     ])
     #expect(result.count == 2)
     // AUD sorts before USD alphabetically
@@ -179,12 +179,12 @@ struct PositionTests {
     let legs = [
       TransactionLeg(
         accountId: accountId, instrument: aud,
-        quantity: Decimal(string: "1000.00")!, type: .openingBalance),
+        quantity: dec("1000.00"), type: .openingBalance),
       TransactionLeg(
         accountId: accountId, instrument: bhp, quantity: Decimal(150), type: .transfer),
       TransactionLeg(
         accountId: accountId, instrument: eth,
-        quantity: Decimal(string: "0.5")!, type: .transfer),
+        quantity: dec("0.5"), type: .transfer),
     ]
     let positions = Position.computeForAccount(accountId, from: legs)
     #expect(positions.count == 3)
@@ -192,9 +192,9 @@ struct PositionTests {
     let audPos = positions.first(where: { $0.instrument == aud })
     let bhpPos = positions.first(where: { $0.instrument == bhp })
     let ethPos = positions.first(where: { $0.instrument == eth })
-    #expect(audPos?.quantity == Decimal(string: "1000.00")!)
+    #expect(audPos?.quantity == dec("1000.00"))
     #expect(bhpPos?.quantity == Decimal(150))
-    #expect(ethPos?.quantity == Decimal(string: "0.5")!)
+    #expect(ethPos?.quantity == dec("0.5"))
   }
 
   @Test func computeForAccountSortsByInstrumentIdAcrossKinds() {
@@ -237,10 +237,10 @@ struct PositionTests {
     let legs = [
       TransactionLeg(
         accountId: accountId, instrument: usd,
-        quantity: Decimal(string: "100.00")!, type: .income),
+        quantity: dec("100.00"), type: .income),
       TransactionLeg(
         accountId: accountId, instrument: usdc,
-        quantity: Decimal(string: "100.00")!, type: .transfer),
+        quantity: dec("100.00"), type: .transfer),
     ]
     let positions = Position.computeForAccount(accountId, from: legs)
     #expect(positions.count == 2)
@@ -254,11 +254,11 @@ struct PositionTests {
       chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8
     )
     let positions = [
-      Position(instrument: aud, quantity: Decimal(string: "1000.00")!)
+      Position(instrument: aud, quantity: dec("1000.00"))
     ]
     let result = positions.applying(deltas: [
       bhp: Decimal(100),
-      btc: Decimal(string: "0.1")!,
+      btc: dec("0.1"),
     ])
     #expect(result.count == 3)
     #expect(result.map { $0.instrument.id } == ["0:native", "ASX:BHP", "AUD"])
@@ -270,7 +270,7 @@ struct PositionTests {
     let legs = [
       TransactionLeg(
         accountId: accountId, instrument: aud,
-        quantity: Decimal(string: "2000.00")!, type: .openingBalance),
+        quantity: dec("2000.00"), type: .openingBalance),
       TransactionLeg(
         accountId: accountId, instrument: bhp, quantity: Decimal(100), type: .transfer),
       TransactionLeg(
@@ -279,7 +279,7 @@ struct PositionTests {
     let positions = Position.computeForAccount(accountId, from: legs)
     #expect(positions.count == 1)
     #expect(positions.first?.instrument == aud)
-    #expect(positions.first?.quantity == Decimal(string: "2000.00")!)
+    #expect(positions.first?.quantity == dec("2000.00"))
   }
 }
 

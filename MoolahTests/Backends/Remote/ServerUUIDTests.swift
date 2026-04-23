@@ -4,7 +4,7 @@ import Testing
 @testable import Moolah
 
 struct ServerUUIDTests {
-  let testUUID = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+  let testUUID = makeUUID("E621E1F8-C36C-495A-93FC-0C247A3E6E5F")
 
   @Test
   func encodesToLowercaseJSON() throws {
@@ -84,7 +84,7 @@ struct ServerUUIDTests {
 
   @Test
   func apiStringExtensionIsLowercase() {
-    let uuid = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+    let uuid = makeUUID("E621E1F8-C36C-495A-93FC-0C247A3E6E5F")
     #expect(uuid.apiString == "e621e1f8-c36c-495a-93fc-0c247a3e6e5f")
   }
 }

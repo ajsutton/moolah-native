@@ -40,7 +40,7 @@ struct CloudKitDataImporterTests {
         earmarkId: [
           EarmarkBudgetItem(
             id: budgetItemId, categoryId: categoryId,
-            amount: InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument))
+            amount: InstrumentAmount(quantity: dec("50.00"), instrument: instrument))
         ]
       ],
       transactions: makeSampleTransactions(
@@ -67,7 +67,7 @@ struct CloudKitDataImporterTests {
           TransactionLeg(
             accountId: accountId,
             instrument: instrument,
-            quantity: Decimal(string: "50.00")!,
+            quantity: dec("50.00"),
             type: .income
           )
         ]
@@ -78,7 +78,7 @@ struct CloudKitDataImporterTests {
           TransactionLeg(
             accountId: accountId,
             instrument: instrument,
-            quantity: Decimal(string: "-10.00")!,
+            quantity: dec("-10.00"),
             type: .expense,
             categoryId: categoryId,
             earmarkId: earmarkId

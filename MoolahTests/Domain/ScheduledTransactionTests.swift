@@ -47,7 +47,7 @@ struct ScheduledTransactionTests {
       legs: [
         TransactionLeg(
           accountId: UUID(), instrument: usd,
-          quantity: Decimal(string: "-9.99")!, type: .expense)
+          quantity: dec("-9.99"), type: .expense)
       ]
     )
     #expect(transaction.isScheduled)
@@ -65,10 +65,10 @@ struct ScheduledTransactionTests {
       legs: [
         TransactionLeg(
           accountId: UUID(), instrument: .AUD,
-          quantity: Decimal(string: "-1000.00")!, type: .transfer),
+          quantity: dec("-1000.00"), type: .transfer),
         TransactionLeg(
           accountId: UUID(), instrument: .USD,
-          quantity: Decimal(string: "650.00")!, type: .transfer),
+          quantity: dec("650.00"), type: .transfer),
       ]
     )
     #expect(transaction.isScheduled)
@@ -95,7 +95,7 @@ struct ScheduledTransactionTests {
     let scheduled = makeTxn(
       date: Calendar.current.date(byAdding: .day, value: -5, to: Date())!,
       accountId: accountId,
-      quantity: Decimal(string: "-1000.00")!,
+      quantity: dec("-1000.00"),
       payee: "Rent",
       recurPeriod: .month,
       recurEvery: 1
@@ -120,14 +120,14 @@ struct ScheduledTransactionTests {
   @Test("Filter returns only scheduled transactions")
   func testFilterScheduledTransactions() async throws {
     let scheduled = makeTxn(
-      quantity: Decimal(string: "-1000.00")!,
+      quantity: dec("-1000.00"),
       recurPeriod: .month,
       recurEvery: 1
     )
 
     let oneTime = makeTxn(
       accountId: UUID(),
-      quantity: Decimal(string: "-500.00")!
+      quantity: dec("-500.00")
     )
 
     let (backend, container) = try TestBackend.create()

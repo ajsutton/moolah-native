@@ -46,7 +46,7 @@ struct CapitalGainsCalculatorTestsMoreExtra {
     // Mistake (`buyTx.date`=date(0)) → 1:1 fallback, proceeds 1 AUD, gain = −2999.
     let service = DateBasedFixedConversionService(rates: [
       date(100): [eth.id: 4000, uni.id: 8],
-      date(365): [eth.id: 10, uni.id: Decimal(string: "0.01")!],
+      date(365): [eth.id: 10, uni.id: dec("0.01")],
     ])
     let result = try await CapitalGainsCalculator.computeWithConversion(
       transactions: [buyTx, swapTx],
@@ -130,7 +130,7 @@ struct CapitalGainsCalculatorTestsMoreExtra {
           categoryId: nil, earmarkId: nil),
       ])
 
-    let service = SignRecordingConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let service = SignRecordingConversionService(rates: ["USD": dec("1.5")])
     _ = try await CapitalGainsCalculator.computeWithConversion(
       transactions: [buyTx, sellTx],
       profileCurrency: aud,

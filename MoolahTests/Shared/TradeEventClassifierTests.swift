@@ -66,7 +66,7 @@ struct TradeEventClassifierTests {
 
     #expect(result.buys.count == 1)
     #expect(result.buys[0].instrument == btc)
-    #expect(result.buys[0].quantity == Decimal(string: "0.1")!)
+    #expect(result.buys[0].quantity == dec("0.1"))
     #expect(result.buys[0].costPerUnit == 60_000)
   }
 

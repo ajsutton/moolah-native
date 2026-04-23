@@ -40,8 +40,8 @@ struct AccountStoreConversionTestsMoreExtra {
     TestBackend.seed(transactions: txns, in: container)
 
     let counter = CountingConversionService(rates: [
-      "USD": Decimal(string: "1.5")!,
-      "EUR": Decimal(string: "2.0")!,
+      "USD": dec("1.5"),
+      "EUR": dec("2.0"),
     ])
     let store = AccountStore(
       repository: backend.accounts,
@@ -98,20 +98,20 @@ struct AccountStoreConversionTestsMoreExtra {
       legs: [
         TransactionLeg(
           accountId: accountId, instrument: .AUD,
-          quantity: Decimal(string: "1000.00")!, type: .openingBalance)
+          quantity: dec("1000.00"), type: .openingBalance)
       ])
     let usdTx = Transaction(
       date: Date(),
       legs: [
         TransactionLeg(
           accountId: accountId, instrument: .USD,
-          quantity: Decimal(string: "100.00")!, type: .openingBalance)
+          quantity: dec("100.00"), type: .openingBalance)
       ])
     TestBackend.seed(transactions: [audTx, usdTx], in: container)
 
     let conversion = FixedConversionService(rates: [
-      "AUD": Decimal(string: "0.67")!,
-      "USD": Decimal(string: "1.5")!,
+      "AUD": dec("0.67"),
+      "USD": dec("1.5"),
     ])
     let store = AccountStore(
       repository: backend.accounts,
@@ -122,7 +122,7 @@ struct AccountStoreConversionTestsMoreExtra {
     let total = try await store.computeConvertedInvestmentTotal(in: .USD)
     #expect(total.instrument == .USD)
     // Single-pass: 100 USD + (1000 AUD * 0.67) = 100 + 670 = 770 USD
-    #expect(total.quantity == Decimal(string: "770.00")!)
+    #expect(total.quantity == dec("770.00"))
   }
 
   /// When an investment account has an externally-supplied value (e.g. from
@@ -146,12 +146,12 @@ struct AccountStoreConversionTestsMoreExtra {
       legs: [
         TransactionLeg(
           accountId: accountId, instrument: .AUD,
-          quantity: Decimal(string: "100.00")!, type: .openingBalance)
+          quantity: dec("100.00"), type: .openingBalance)
       ])
     TestBackend.seed(transactions: [rawTx], in: container)
 
     let conversion = FixedConversionService(rates: [
-      "AUD": Decimal(string: "0.5")!
+      "AUD": dec("0.5")
     ])
     let store = AccountStore(
       repository: backend.accounts,
@@ -161,13 +161,13 @@ struct AccountStoreConversionTestsMoreExtra {
 
     // External valuation in AUD (e.g. latest InvestmentValue): 2000 AUD.
     let externalValue = InstrumentAmount(
-      quantity: Decimal(string: "2000.00")!, instrument: .AUD)
+      quantity: dec("2000.00"), instrument: .AUD)
     await store.updateInvestmentValue(accountId: accountId, value: externalValue)
 
     let total = try await store.computeConvertedInvestmentTotal(in: .USD)
     // 2000 AUD -> USD at 0.5 = 1000 USD (external value converted once)
     #expect(total.instrument == .USD)
-    #expect(total.quantity == Decimal(string: "1000.00")!)
+    #expect(total.quantity == dec("1000.00"))
   }
 
   /// Same-instrument positions and target must hit the fast path without
@@ -190,7 +190,7 @@ struct AccountStoreConversionTestsMoreExtra {
       legs: [
         TransactionLeg(
           accountId: accountId, instrument: .defaultTestInstrument,
-          quantity: Decimal(string: "1234.56")!, type: .openingBalance)
+          quantity: dec("1234.56"), type: .openingBalance)
       ])
     TestBackend.seed(transactions: [transaction], in: container)
 
@@ -203,6 +203,6 @@ struct AccountStoreConversionTestsMoreExtra {
     let total = try await store.computeConvertedInvestmentTotal(
       in: .defaultTestInstrument)
     #expect(total.instrument == .defaultTestInstrument)
-    #expect(total.quantity == Decimal(string: "1234.56")!)
+    #expect(total.quantity == dec("1234.56"))
   }
 }

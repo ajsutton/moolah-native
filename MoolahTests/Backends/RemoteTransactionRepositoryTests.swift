@@ -9,7 +9,7 @@ struct RemoteTransactionRepositoryTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [TransactionURLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com/api/")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com/api/"), session: session)
     return (session, client)
   }
 
@@ -19,11 +19,11 @@ struct RemoteTransactionRepositoryTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [TransactionURLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com/api/")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com/api/"), session: session)
     TransactionURLProtocolStub.requestHandler = { _ in
       Issue.record("Network request should not be made when instrument guard fires")
       let response = HTTPURLResponse(
-        url: URL(string: "https://api.example.com")!, statusCode: 500, httpVersion: nil,
+        url: makeURL("https://api.example.com"), statusCode: 500, httpVersion: nil,
         headerFields: nil)!
       return (response, Data())
     }
@@ -89,20 +89,20 @@ struct RemoteTransactionRepositoryTests {
 
     // First transaction: expense
     #expect(transactions[0].legs.first?.type == .expense)
-    #expect(transactions[0].legs.first?.quantity == Decimal(string: "-50.23")!)
+    #expect(transactions[0].legs.first?.quantity == dec("-50.23"))
     #expect(transactions[0].payee == "Woolworths")
     #expect(transactions[0].notes == "Weekly groceries")
     #expect(transactions[0].legs.contains(where: { $0.categoryId != nil }))
 
     // Second transaction: income
     #expect(transactions[1].legs.first?.type == .income)
-    #expect(transactions[1].legs.first?.quantity == Decimal(string: "3500.00")!)
+    #expect(transactions[1].legs.first?.quantity == dec("3500.00"))
     #expect(transactions[1].payee == "Employer Pty Ltd")
 
     // Third transaction: transfer
     #expect(transactions[2].legs.first?.type == .transfer)
     #expect(transactions[2].legs.count == 2)
-    #expect(transactions[2].legs.first?.quantity == Decimal(string: "-1000.00")!)
+    #expect(transactions[2].legs.first?.quantity == dec("-1000.00"))
 
     // Fourth transaction: scheduled expense
     #expect(transactions[3].recurPeriod == .month)

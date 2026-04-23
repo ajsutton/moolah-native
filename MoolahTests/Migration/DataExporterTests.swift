@@ -30,7 +30,7 @@ struct DataExporterTests {
     try await backend.investments.setValue(
       accountId: investmentAccount.id,
       date: Date(),
-      value: InstrumentAmount(quantity: Decimal(string: "5000.00")!, instrument: instrument)
+      value: InstrumentAmount(quantity: dec("5000.00"), instrument: instrument)
     )
     return backend
   }
@@ -48,7 +48,7 @@ struct DataExporterTests {
 
     let holiday = try await backend.earmarks.create(
       Earmark(name: "Holiday", instrument: instrument))
-    let budgetAmount = InstrumentAmount(quantity: Decimal(string: "50.00")!, instrument: instrument)
+    let budgetAmount = InstrumentAmount(quantity: dec("50.00"), instrument: instrument)
     try await backend.earmarks.setBudget(
       earmarkId: holiday.id, categoryId: food.id, amount: budgetAmount)
     return investmentAccount
@@ -68,7 +68,7 @@ struct DataExporterTests {
         legs: [
           TransactionLeg(
             accountId: checking.id, instrument: instrument,
-            quantity: Decimal(string: "1000.00")!, type: .income)
+            quantity: dec("1000.00"), type: .income)
         ]))
     _ = try await backend.transactions.create(
       Transaction(
@@ -76,7 +76,7 @@ struct DataExporterTests {
         legs: [
           TransactionLeg(
             accountId: checking.id, instrument: instrument,
-            quantity: Decimal(string: "-25.00")!, type: .expense,
+            quantity: dec("-25.00"), type: .expense,
             categoryId: food.id, earmarkId: holiday.id)
         ]))
     _ = try await backend.transactions.create(
@@ -86,7 +86,7 @@ struct DataExporterTests {
         legs: [
           TransactionLeg(
             accountId: checking.id, instrument: instrument,
-            quantity: Decimal(string: "-10.00")!, type: .expense)
+            quantity: dec("-10.00"), type: .expense)
         ]))
   }
 
@@ -134,7 +134,7 @@ struct DataExporterTests {
     let budgetItems = data.earmarkBudgets[earmark.id]
     #expect(budgetItems != nil)
     #expect(budgetItems!.count == 1)
-    #expect(budgetItems!.first!.amount.quantity == Decimal(string: "50.00")!)
+    #expect(budgetItems!.first!.amount.quantity == dec("50.00"))
   }
 
   @Test("exports investment values per investment account")
@@ -152,7 +152,7 @@ struct DataExporterTests {
     let values = data.investmentValues[investmentAccount.id]
     #expect(values != nil)
     #expect(values!.count == 1)
-    #expect(values!.first!.value.quantity == Decimal(string: "5000.00")!)
+    #expect(values!.first!.value.quantity == dec("5000.00"))
   }
 
   @Test("exports empty data from empty backend")

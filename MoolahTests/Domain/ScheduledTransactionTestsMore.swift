@@ -89,7 +89,7 @@ struct ScheduledTransactionTestsMore {
     let scheduled = makeTxn(
       date: futureDate,
       accountId: accountId,
-      quantity: Decimal(string: "-500.00")!,
+      quantity: dec("-500.00"),
       payee: "One-time payment",
       recurPeriod: .once,
       recurEvery: 1
@@ -135,7 +135,7 @@ struct ScheduledTransactionTestsMore {
     let scheduled = makeTxn(
       date: startDate,
       accountId: accountId,
-      quantity: Decimal(string: "-1500.00")!,
+      quantity: dec("-1500.00"),
       payee: "Monthly rent",
       recurPeriod: .month,
       recurEvery: 1

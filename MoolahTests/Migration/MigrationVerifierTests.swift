@@ -20,7 +20,7 @@ struct MigrationVerifierTests {
         Account(
           id: accountId, name: "Checking", type: .bank,
           instrument: instrument,
-          positions: [Position(instrument: instrument, quantity: Decimal(string: "50.00")!)]
+          positions: [Position(instrument: instrument, quantity: dec("50.00"))]
         )
       ],
       categories: [Category(name: "Food")],
@@ -32,7 +32,7 @@ struct MigrationVerifierTests {
           legs: [
             TransactionLeg(
               accountId: accountId, instrument: instrument,
-              quantity: Decimal(string: "50.00")!, type: .income
+              quantity: dec("50.00"), type: .income
             )
           ]
         )
@@ -96,7 +96,7 @@ struct MigrationVerifierTests {
           legs: [
             TransactionLeg(
               accountId: accountId, instrument: instrument,
-              quantity: Decimal(string: "10.00")!, type: .income
+              quantity: dec("10.00"), type: .income
             )
           ]
         ),
@@ -105,7 +105,7 @@ struct MigrationVerifierTests {
           legs: [
             TransactionLeg(
               accountId: accountId, instrument: instrument,
-              quantity: Decimal(string: "-5.00")!, type: .expense
+              quantity: dec("-5.00"), type: .expense
             )
           ]
         ),
@@ -126,7 +126,7 @@ struct MigrationVerifierTests {
     let legRecord = TransactionLegRecord.from(
       TransactionLeg(
         accountId: accountId, instrument: instrument,
-        quantity: Decimal(string: "10.00")!, type: .income
+        quantity: dec("10.00"), type: .income
       ),
       transactionId: txnRecord.id,
       sortOrder: 0
@@ -146,7 +146,7 @@ struct MigrationVerifierTests {
         Account(
           id: accountId, name: "Checking", type: .bank,
           instrument: instrument,
-          positions: [Position(instrument: instrument, quantity: Decimal(string: "50.00")!)]
+          positions: [Position(instrument: instrument, quantity: dec("50.00"))]
         )
       ],
       categories: [],
@@ -158,7 +158,7 @@ struct MigrationVerifierTests {
           legs: [
             TransactionLeg(
               accountId: accountId, instrument: instrument,
-              quantity: Decimal(string: "30.00")!, type: .income
+              quantity: dec("30.00"), type: .income
             )
           ]
         )
@@ -196,7 +196,7 @@ struct MigrationVerifierTests {
         Account(
           id: accountId, name: "Checking", type: .bank,
           instrument: instrument,
-          positions: [Position(instrument: instrument, quantity: Decimal(string: "50.00")!)]
+          positions: [Position(instrument: instrument, quantity: dec("50.00"))]
         )
       ],
       categories: [],
@@ -208,7 +208,7 @@ struct MigrationVerifierTests {
           legs: [
             TransactionLeg(
               accountId: accountId, instrument: instrument,
-              quantity: Decimal(string: "50.00")!, type: .income
+              quantity: dec("50.00"), type: .income
             )
           ]
         ),
@@ -220,7 +220,7 @@ struct MigrationVerifierTests {
           legs: [
             TransactionLeg(
               accountId: accountId, instrument: instrument,
-              quantity: Decimal(string: "-10.00")!, type: .expense
+              quantity: dec("-10.00"), type: .expense
             )
           ]
         ),

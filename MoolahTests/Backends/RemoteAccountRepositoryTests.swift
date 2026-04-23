@@ -11,12 +11,12 @@ struct RemoteAccountRepositoryTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com"), session: session)
     // Fail the test if the guard doesn't short-circuit before the network call.
     URLProtocolStub.requestHandler = { _ in
       Issue.record("Network request should not be made when instrument guard fires")
       let response = HTTPURLResponse(
-        url: URL(string: "https://api.example.com")!, statusCode: 500, httpVersion: nil,
+        url: makeURL("https://api.example.com"), statusCode: 500, httpVersion: nil,
         headerFields: nil)!
       return (response, Data())
     }
@@ -63,7 +63,7 @@ struct RemoteAccountRepositoryTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com"), session: session)
     let repository = RemoteAccountRepository(client: client, instrument: .defaultTestInstrument)
 
     URLProtocolStub.requestHandler = { request in
@@ -87,14 +87,14 @@ struct RemoteAccountRepositoryTests {
     let checkingPosition = accounts[0].positions.first(where: {
       $0.instrument == .defaultTestInstrument
     })
-    #expect(checkingPosition?.quantity == Decimal(string: "1234.56")!)
+    #expect(checkingPosition?.quantity == dec("1234.56"))
     #expect(accounts[3].name == "Investment Portfolio")
     #expect(accounts[3].type == .investment)
     // balance is the transaction-based invested amount, now in positions
     let investmentPosition = accounts[3].positions.first(where: {
       $0.instrument == .defaultTestInstrument
     })
-    #expect(investmentPosition?.quantity == Decimal(string: "15000.00")!)
+    #expect(investmentPosition?.quantity == dec("15000.00"))
   }
 
   @Test
@@ -109,7 +109,7 @@ struct RemoteAccountRepositoryTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com"), session: session)
     let repository = RemoteAccountRepository(client: client, instrument: .defaultTestInstrument)
 
     var capturedRequest: URLRequest?
@@ -130,7 +130,7 @@ struct RemoteAccountRepositoryTests {
       instrument: .defaultTestInstrument
     )
     let openingBalance = InstrumentAmount(
-      quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)
+      quantity: dec("1000.00"), instrument: .defaultTestInstrument)
 
     // When
     let created = try await repository.create(newAccount, openingBalance: openingBalance)
@@ -142,7 +142,7 @@ struct RemoteAccountRepositoryTests {
     let createdPosition = created.positions.first(where: {
       $0.instrument == .defaultTestInstrument
     })
-    #expect(createdPosition?.quantity == Decimal(string: "1000.00")!)
+    #expect(createdPosition?.quantity == dec("1000.00"))
   }
 
   @Test
@@ -157,7 +157,7 @@ struct RemoteAccountRepositoryTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [URLProtocolStub.self]
     let session = URLSession(configuration: config)
-    let client = APIClient(baseURL: URL(string: "https://api.example.com")!, session: session)
+    let client = APIClient(baseURL: makeURL("https://api.example.com"), session: session)
     let repository = RemoteAccountRepository(client: client, instrument: .defaultTestInstrument)
 
     var capturedRequest: URLRequest?
@@ -172,7 +172,7 @@ struct RemoteAccountRepositoryTests {
       return (response, data)
     }
 
-    let accountId = UUID(uuidString: "550e8400-e29b-41d4-a716-446655440000")!
+    let accountId = makeUUID("550e8400-e29b-41d4-a716-446655440000")
     let updatedAccount = Account(
       id: accountId,
       name: "Updated Savings",
@@ -195,7 +195,7 @@ struct RemoteAccountRepositoryTests {
     let updatedPosition = updated.positions.first(where: {
       $0.instrument == .defaultTestInstrument
     })
-    #expect(updatedPosition?.quantity == Decimal(string: "1234.56")!)
+    #expect(updatedPosition?.quantity == dec("1234.56"))
     #expect(updated.isHidden == true)
   }
 }

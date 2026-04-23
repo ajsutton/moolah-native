@@ -34,14 +34,14 @@ struct InvestmentStoreTestsMore {
           legs: [
             TransactionLeg(
               accountId: accountId, instrument: .defaultTestInstrument,
-              quantity: Decimal(string: "1000.00")!, type: .income)
+              quantity: dec("1000.00"), type: .income)
           ]),
         Transaction(
           date: makeDate(year: 2024, month: 2, day: 1),
           legs: [
             TransactionLeg(
               accountId: accountId, instrument: .defaultTestInstrument,
-              quantity: Decimal(string: "1000.00")!, type: .income)
+              quantity: dec("1000.00"), type: .income)
           ]),
       ], in: container)
 
@@ -50,8 +50,8 @@ struct InvestmentStoreTestsMore {
     await store.loadDailyBalances(accountId: accountId)
 
     #expect(store.dailyBalances.count == 2)
-    #expect(store.dailyBalances[0].balance.quantity == Decimal(string: "1000.00")!)
-    #expect(store.dailyBalances[1].balance.quantity == Decimal(string: "2000.00")!)
+    #expect(store.dailyBalances[0].balance.quantity == dec("1000.00"))
+    #expect(store.dailyBalances[1].balance.quantity == dec("2000.00"))
   }
 
   // MARK: - Filtered Data
@@ -83,33 +83,33 @@ struct InvestmentStoreTestsMore {
       InvestmentValue(
         date: date2,
         value: InstrumentAmount(
-          quantity: Decimal(string: "1200.00")!, instrument: .defaultTestInstrument)),
+          quantity: dec("1200.00"), instrument: .defaultTestInstrument)),
       InvestmentValue(
         date: date1,
         value: InstrumentAmount(
-          quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)),
+          quantity: dec("1000.00"), instrument: .defaultTestInstrument)),
     ]
 
     let balances = [
       AccountDailyBalance(
         date: date1,
         balance: InstrumentAmount(
-          quantity: Decimal(string: "900.00")!, instrument: .defaultTestInstrument)),
+          quantity: dec("900.00"), instrument: .defaultTestInstrument)),
       AccountDailyBalance(
         date: date2,
         balance: InstrumentAmount(
-          quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)),
+          quantity: dec("1000.00"), instrument: .defaultTestInstrument)),
     ]
 
     let result = mergeChartData(values: values, balances: balances, period: .all)
 
     #expect(result.count == 2)
-    #expect(result[0].value == Decimal(string: "1000.00")!)
-    #expect(result[0].balance == Decimal(string: "900.00")!)
-    #expect(result[0].profitLoss == Decimal(string: "100.00")!)
-    #expect(result[1].value == Decimal(string: "1200.00")!)
-    #expect(result[1].balance == Decimal(string: "1000.00")!)
-    #expect(result[1].profitLoss == Decimal(string: "200.00")!)
+    #expect(result[0].value == dec("1000.00"))
+    #expect(result[0].balance == dec("900.00"))
+    #expect(result[0].profitLoss == dec("100.00"))
+    #expect(result[1].value == dec("1200.00"))
+    #expect(result[1].balance == dec("1000.00"))
+    #expect(result[1].profitLoss == dec("200.00"))
   }
 
   @Test("Chart data points forward-fill missing values")
@@ -123,36 +123,36 @@ struct InvestmentStoreTestsMore {
       InvestmentValue(
         date: date3,
         value: InstrumentAmount(
-          quantity: Decimal(string: "1300.00")!, instrument: .defaultTestInstrument)),
+          quantity: dec("1300.00"), instrument: .defaultTestInstrument)),
       InvestmentValue(
         date: date1,
         value: InstrumentAmount(
-          quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)),
+          quantity: dec("1000.00"), instrument: .defaultTestInstrument)),
     ]
 
     let balances = [
       AccountDailyBalance(
         date: date1,
         balance: InstrumentAmount(
-          quantity: Decimal(string: "900.00")!, instrument: .defaultTestInstrument)),
+          quantity: dec("900.00"), instrument: .defaultTestInstrument)),
       AccountDailyBalance(
         date: date2,
         balance: InstrumentAmount(
-          quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)),
+          quantity: dec("1000.00"), instrument: .defaultTestInstrument)),
     ]
 
     let result = mergeChartData(values: values, balances: balances, period: .all)
 
     #expect(result.count == 3)
     // date1: both present
-    #expect(result[0].value == Decimal(string: "1000.00")!)
-    #expect(result[0].balance == Decimal(string: "900.00")!)
+    #expect(result[0].value == dec("1000.00"))
+    #expect(result[0].balance == dec("900.00"))
     // date2: value forward-filled from date1
-    #expect(result[1].value == Decimal(string: "1000.00")!)
-    #expect(result[1].balance == Decimal(string: "1000.00")!)
+    #expect(result[1].value == dec("1000.00"))
+    #expect(result[1].balance == dec("1000.00"))
     // date3: balance forward-filled from date2
-    #expect(result[2].value == Decimal(string: "1300.00")!)
-    #expect(result[2].balance == Decimal(string: "1000.00")!)
+    #expect(result[2].value == dec("1300.00"))
+    #expect(result[2].balance == dec("1000.00"))
   }
 
   @Test("Chart data points with period filter includes pre-period anchor")
@@ -167,30 +167,30 @@ struct InvestmentStoreTestsMore {
       InvestmentValue(
         date: now,
         value: InstrumentAmount(
-          quantity: Decimal(string: "1500.00")!, instrument: .defaultTestInstrument)),
+          quantity: dec("1500.00"), instrument: .defaultTestInstrument)),
       InvestmentValue(
         date: oneMonthAgo,
         value: InstrumentAmount(
-          quantity: Decimal(string: "1300.00")!, instrument: .defaultTestInstrument)),
+          quantity: dec("1300.00"), instrument: .defaultTestInstrument)),
       InvestmentValue(
         date: sixMonthsAgo,
         value: InstrumentAmount(
-          quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)),
+          quantity: dec("1000.00"), instrument: .defaultTestInstrument)),
     ]
 
     let balances = [
       AccountDailyBalance(
         date: sixMonthsAgo,
         balance: InstrumentAmount(
-          quantity: Decimal(string: "800.00")!, instrument: .defaultTestInstrument)),
+          quantity: dec("800.00"), instrument: .defaultTestInstrument)),
       AccountDailyBalance(
         date: threeMonthsAgo,
         balance: InstrumentAmount(
-          quantity: Decimal(string: "900.00")!, instrument: .defaultTestInstrument)),
+          quantity: dec("900.00"), instrument: .defaultTestInstrument)),
       AccountDailyBalance(
         date: now,
         balance: InstrumentAmount(
-          quantity: Decimal(string: "1000.00")!, instrument: .defaultTestInstrument)),
+          quantity: dec("1000.00"), instrument: .defaultTestInstrument)),
     ]
 
     // Filter to 3 months: should include threeMonthsAgo and now,

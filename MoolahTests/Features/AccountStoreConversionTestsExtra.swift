@@ -22,7 +22,7 @@ struct AccountStoreConversionTestsExtra {
       legs: [
         TransactionLeg(
           accountId: accountId, instrument: .AUD,
-          quantity: Decimal(string: "5000.00")!, type: .openingBalance)
+          quantity: dec("5000.00"), type: .openingBalance)
       ]
     )
     let stockTx = Transaction(
@@ -67,7 +67,7 @@ struct AccountStoreConversionTestsExtra {
         legs: [
           TransactionLeg(
             accountId: accountId, instrument: .AUD,
-            quantity: Decimal(string: "1000.00")!, type: .openingBalance)
+            quantity: dec("1000.00"), type: .openingBalance)
         ]),
       Transaction(
         date: Date(),
@@ -81,7 +81,7 @@ struct AccountStoreConversionTestsExtra {
         legs: [
           TransactionLeg(
             accountId: accountId, instrument: eth,
-            quantity: Decimal(string: "0.5")!, type: .transfer)
+            quantity: dec("0.5"), type: .transfer)
         ]),
     ]
     TestBackend.seed(transactions: txns, in: container)
@@ -114,7 +114,7 @@ struct AccountStoreConversionTestsExtra {
       legs: [
         TransactionLeg(
           accountId: accountId, instrument: .AUD,
-          quantity: Decimal(string: "1000.00")!, type: .openingBalance)
+          quantity: dec("1000.00"), type: .openingBalance)
       ]
     )
     let usdTx = Transaction(
@@ -122,13 +122,13 @@ struct AccountStoreConversionTestsExtra {
       legs: [
         TransactionLeg(
           accountId: accountId, instrument: .USD,
-          quantity: Decimal(string: "200.00")!, type: .openingBalance)
+          quantity: dec("200.00"), type: .openingBalance)
       ]
     )
     TestBackend.seed(transactions: [audTx, usdTx], in: container)
 
     // 1 USD = 1.5 AUD
-    let conversion = FixedConversionService(rates: ["USD": Decimal(string: "1.5")!])
+    let conversion = FixedConversionService(rates: ["USD": dec("1.5")])
     let store = AccountStore(
       repository: backend.accounts, conversionService: conversion,
       targetInstrument: .AUD)
@@ -137,7 +137,7 @@ struct AccountStoreConversionTestsExtra {
     let balance = try await store.displayBalance(for: accountId)
     #expect(balance.instrument == .AUD)
     // 1000 AUD + 200 USD * 1.5 = 1300 AUD
-    #expect(balance.quantity == Decimal(string: "1300.00")!)
+    #expect(balance.quantity == dec("1300.00"))
   }
 
   @Test
@@ -153,7 +153,7 @@ struct AccountStoreConversionTestsExtra {
       legs: [
         TransactionLeg(
           accountId: accountId, instrument: .defaultTestInstrument,
-          quantity: Decimal(string: "750.00")!, type: .openingBalance)
+          quantity: dec("750.00"), type: .openingBalance)
       ]
     )
     TestBackend.seed(transactions: [transaction], in: container)
@@ -165,7 +165,7 @@ struct AccountStoreConversionTestsExtra {
     await store.load()
 
     let balance = try await store.displayBalance(for: accountId)
-    #expect(balance.quantity == Decimal(string: "750.00")!)
+    #expect(balance.quantity == dec("750.00"))
     #expect(balance.instrument == .defaultTestInstrument)
   }
 }

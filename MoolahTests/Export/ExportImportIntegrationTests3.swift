@@ -18,7 +18,7 @@ struct ExportImportIntegrationTests3 {
         name: "Checking", type: .bank,
         instrument: instrument
       ),
-      openingBalance: InstrumentAmount(quantity: Decimal(string: "500.00")!, instrument: instrument)
+      openingBalance: InstrumentAmount(quantity: dec("500.00"), instrument: instrument)
     )
 
     let food = try await backend.categories.create(Category(name: "Food"))
@@ -27,7 +27,7 @@ struct ExportImportIntegrationTests3 {
     let holiday = try await backend.earmarks.create(
       Earmark(name: "Holiday", instrument: instrument)
     )
-    let budgetAmount = InstrumentAmount(quantity: Decimal(string: "30.00")!, instrument: instrument)
+    let budgetAmount = InstrumentAmount(quantity: dec("30.00"), instrument: instrument)
     try await backend.earmarks.setBudget(
       earmarkId: holiday.id, categoryId: food.id, amount: budgetAmount)
 
@@ -38,7 +38,7 @@ struct ExportImportIntegrationTests3 {
         legs: [
           TransactionLeg(
             accountId: checking.id, instrument: instrument,
-            quantity: Decimal(string: "500.00")!, type: .income
+            quantity: dec("500.00"), type: .income
           )
         ]
       )
@@ -51,7 +51,7 @@ struct ExportImportIntegrationTests3 {
         legs: [
           TransactionLeg(
             accountId: checking.id, instrument: instrument,
-            quantity: Decimal(string: "-15.00")!, type: .expense,
+            quantity: dec("-15.00"), type: .expense,
             categoryId: food.id, earmarkId: holiday.id
           )
         ]
