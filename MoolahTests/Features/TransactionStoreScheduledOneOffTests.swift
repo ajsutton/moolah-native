@@ -1,0 +1,70 @@
+import Foundation
+import SwiftData
+import Testing
+
+@testable import Moolah
+
+/// End-to-end coverage for the "new scheduled transaction that doesn't repeat"
+/// flow: the user creates a scheduled transaction from the Upcoming view, opens
+/// the inspector, and turns off the Repeat toggle. The saved transaction must
+/// stay scheduled (appear in the Upcoming view) and must not leak into the
+/// regular account transactions list.
+@Suite("TransactionStore/ScheduledOneOff")
+@MainActor
+struct TransactionStoreScheduledOneOffTests {
+  @Test
+  func schedulingSurvivesTurningOffRepeat() async throws {
+    let accountId = UUID()
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(
+      accounts: [
+        Account(
+          id: accountId, name: "Everyday", type: .bank,
+          instrument: Instrument.defaultTestInstrument)
+      ],
+      in: container)
+
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
+
+    // Simulates the user tapping "+" in the Upcoming view: a placeholder
+    // scheduled transaction is created with a default monthly period.
+    let created = try #require(
+      await store.createDefaultScheduled(
+        accountId: accountId,
+        fallbackAccountId: nil,
+        instrument: Instrument.defaultTestInstrument))
+    #expect(created.isScheduled == true)
+    #expect(created.isRecurring == true)
+
+    // Simulates the user opening the inspector (draft from the saved record),
+    // flipping off "Repeat", and saving the update.
+    var draft = TransactionDraft(from: created)
+    draft.isRepeating = false
+    let updated = try #require(
+      draft.toTransaction(
+        id: created.id,
+        availableInstruments: [Instrument.defaultTestInstrument]))
+    await store.update(updated)
+
+    // The persisted transaction stays scheduled (period demoted to .once)
+    // and remains visible in the scheduled filter — not the regular one.
+    let scheduledPage = try await backend.transactions.fetch(
+      filter: TransactionFilter(scheduled: true), page: 0, pageSize: 50)
+    #expect(scheduledPage.transactions.count == 1)
+    let persisted = try #require(scheduledPage.transactions.first)
+    #expect(persisted.id == created.id)
+    #expect(persisted.recurPeriod == .once)
+    #expect(persisted.isScheduled == true)
+    #expect(persisted.isRecurring == false)
+
+    let regularPage = try await backend.transactions.fetch(
+      filter: TransactionFilter(accountId: accountId, scheduled: false),
+      page: 0,
+      pageSize: 50)
+    #expect(regularPage.transactions.isEmpty)
+  }
+}

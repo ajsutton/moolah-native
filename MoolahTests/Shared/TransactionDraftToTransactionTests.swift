@@ -222,7 +222,7 @@ struct TransactionDraftToTransactionTests {
   @Test
   func toTransactionClearsRecurrenceWhenNotRepeating() throws {
     var draft = support.makeExpenseDraft(amountText: "10.00", accountId: support.accountA)
-    draft.recurPeriod = .month
+    draft.isRepeating = true
     draft.recurEvery = 2
     draft.isRepeating = false
 

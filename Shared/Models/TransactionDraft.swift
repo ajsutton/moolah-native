@@ -14,7 +14,17 @@ struct TransactionDraft: Sendable, Equatable {
   var payee: String
   var date: Date
   var notes: String
-  var isRepeating: Bool
+  var isRepeating: Bool {
+    didSet {
+      if isRepeating {
+        if recurPeriod == nil || recurPeriod == .once {
+          recurPeriod = .month
+        }
+      } else {
+        recurPeriod = wasScheduledAtInit ? .once : nil
+      }
+    }
+  }
   var recurPeriod: RecurPeriod?
   var recurEvery: Int
 
@@ -30,6 +40,13 @@ struct TransactionDraft: Sendable, Equatable {
 
   /// The account perspective for this editing session. Set at init, does not change.
   let viewingAccountId: UUID?
+
+  /// Whether the transaction this draft was initialised from was scheduled
+  /// (i.e. `recurPeriod != nil`). Once a transaction is scheduled, toggling
+  /// off "Repeat" demotes it to `.once` (scheduled, non-recurring) rather
+  /// than clearing recurrence entirely — the inspector doesn't provide a
+  /// way to convert a scheduled transaction back to a regular one.
+  var wasScheduledAtInit: Bool = false
 
   // MARK: - LegDraft
 
@@ -156,7 +173,8 @@ extension TransactionDraft {
       isCustom: isCustom,
       legDrafts: drafts,
       relevantLegIndex: relevantIndex,
-      viewingAccountId: viewingAccountId
+      viewingAccountId: viewingAccountId,
+      wasScheduledAtInit: transaction.recurPeriod != nil
     )
   }
 
@@ -239,7 +257,7 @@ extension TransactionDraft {
       else { return false }
     }
     if isRepeating {
-      guard recurPeriod != nil, recurEvery >= 1 else { return false }
+      guard let period = recurPeriod, period != .once, recurEvery >= 1 else { return false }
     }
     return true
   }
@@ -289,61 +307,10 @@ extension TransactionDraft {
       date: date,
       payee: payee.isEmpty ? nil : payee,
       notes: notes.isEmpty ? nil : notes,
-      recurPeriod: isRepeating ? recurPeriod : nil,
-      recurEvery: isRepeating ? recurEvery : nil,
+      recurPeriod: recurPeriod,
+      recurEvery: recurPeriod == nil ? nil : recurEvery,
       legs: legs
     )
-  }
-}
-
-// MARK: - Autofill
-
-extension TransactionDraft {
-  /// Replace this draft with data from a matching transaction, preserving the current date.
-  /// Category text is populated from the categories collection.
-  ///
-  /// When the draft has a `viewingAccountId` (autofill was triggered while the
-  /// user was scoped to a specific account list), the relevant leg is pinned to
-  /// the viewed account so a past transaction from a different account can't
-  /// silently move the new transaction out of the list the user is working in.
-  /// Pass `accounts` to also realign the leg's instrument with the viewed
-  /// account's instrument.
-  mutating func applyAutofill(
-    from match: Transaction,
-    categories: Categories,
-    accounts: Accounts = Accounts(from: [])
-  ) {
-    let preservedDate = self.date
-    let preservedViewingAccountId = self.viewingAccountId
-
-    // Build a fresh draft from the match
-    var newDraft = TransactionDraft(
-      from: match, viewingAccountId: preservedViewingAccountId, accounts: accounts)
-    newDraft.date = preservedDate
-
-    // Populate category text for all legs
-    for i in newDraft.legDrafts.indices {
-      if let catId = newDraft.legDrafts[i].categoryId,
-        let cat = categories.by(id: catId)
-      {
-        newDraft.legDrafts[i].categoryText = categories.path(for: cat)
-      }
-    }
-
-    // Preserve the viewed account. Skip custom mode: a complex match has no
-    // single "viewed" leg, and adopting its structure means the user is
-    // already accepting whatever accounts it references.
-    if let viewingId = preservedViewingAccountId, !newDraft.isCustom {
-      let idx = newDraft.relevantLegIndex
-      if newDraft.legDrafts[idx].accountId != viewingId {
-        newDraft.legDrafts[idx].accountId = viewingId
-        if let viewedAccount = accounts.by(id: viewingId) {
-          newDraft.legDrafts[idx].instrumentId = viewedAccount.instrument.id
-        }
-      }
-    }
-
-    self = newDraft
   }
 }
 

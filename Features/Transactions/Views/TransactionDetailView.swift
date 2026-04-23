@@ -689,47 +689,44 @@ struct TransactionDetailView: View {
   private var recurrenceSection: some View {
     Section("Recurrence") {
       Toggle("Repeat", isOn: $draft.isRepeating)
-        .onChange(of: draft.isRepeating) { _, newValue in
-          if newValue {
-            if draft.recurPeriod == nil || draft.recurPeriod == .once {
-              draft.recurPeriod = .month
-            }
-          } else {
-            draft.recurPeriod = nil
-          }
-        }
-
       if draft.isRepeating {
-        HStack {
-          Text("Every")
-          Spacer()
-          TextField("", value: $draft.recurEvery, format: .number)
-            #if os(iOS)
-              .keyboardType(.numberPad)
-            #endif
-            .multilineTextAlignment(.trailing)
-            .frame(minWidth: 40, idealWidth: 60, maxWidth: 80)
-            .accessibilityLabel("Recurrence interval")
-        }
-
-        Picker(
-          "Period",
-          selection: Binding(
-            get: { draft.recurPeriod ?? .month },
-            set: { draft.recurPeriod = $0 }
-          )
-        ) {
-          ForEach(RecurPeriod.allCases.filter { $0 != .once }, id: \.self) { period in
-            Text(draft.recurEvery == 1 ? period.displayName : period.pluralDisplayName)
-              .tag(period)
-          }
-        }
-        .accessibilityLabel("Recurrence period")
-        #if os(macOS)
-          .pickerStyle(.menu)
-        #endif
+        recurrenceIntervalRow
+        recurrencePeriodPicker
       }
     }
+  }
+
+  private var recurrenceIntervalRow: some View {
+    HStack {
+      Text("Every")
+      Spacer()
+      TextField("", value: $draft.recurEvery, format: .number)
+        #if os(iOS)
+          .keyboardType(.numberPad)
+        #endif
+        .multilineTextAlignment(.trailing)
+        .frame(minWidth: 40, idealWidth: 60, maxWidth: 80)
+        .accessibilityLabel("Recurrence interval")
+    }
+  }
+
+  private var recurrencePeriodPicker: some View {
+    Picker(
+      "Period",
+      selection: Binding(
+        get: { draft.recurPeriod ?? .month },
+        set: { draft.recurPeriod = $0 }
+      )
+    ) {
+      ForEach(RecurPeriod.allCases.filter { $0 != .once }, id: \.self) { period in
+        Text(draft.recurEvery == 1 ? period.displayName : period.pluralDisplayName)
+          .tag(period)
+      }
+    }
+    .accessibilityLabel("Recurrence period")
+    #if os(macOS)
+      .pickerStyle(.menu)
+    #endif
   }
 
   private var notesSection: some View {
