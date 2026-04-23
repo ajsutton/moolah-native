@@ -90,10 +90,11 @@ extension CloudKitAnalysisRepository {
       do {
         dailyBalances[dayKey] = try await book.dailyBalance(
           on: txn.date,
-          investmentAccountIds: investmentAccountIds,
-          profileInstrument: context.instrument,
-          rule: .investmentTransfersOnly,
-          conversionService: context.conversionService,
+          context: PositionBook.BalanceContext(
+            investmentAccountIds: investmentAccountIds,
+            profileInstrument: context.instrument,
+            rule: .investmentTransfersOnly,
+            conversionService: context.conversionService),
           isForecast: false
         )
       } catch is CancellationError {

@@ -78,9 +78,7 @@ enum BenchmarkFixtures {
     let earmarkIds = seedEarmarks(scale: scale, in: context, instrument: instrument)
     seedTransactions(
       scale: scale,
-      accountIds: accountIds,
-      categoryIds: categoryIds,
-      earmarkIds: earmarkIds,
+      ids: SeedIds(accounts: accountIds, categories: categoryIds, earmarks: earmarkIds),
       in: context,
       instrument: instrument
     )

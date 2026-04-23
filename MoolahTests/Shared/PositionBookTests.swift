@@ -153,10 +153,11 @@ struct PositionBookTests {
 
     let result = try await book.dailyBalance(
       on: date,
-      investmentAccountIds: [],
-      profileInstrument: aud,
-      rule: .allLegs,
-      conversionService: conversion,
+      context: PositionBook.BalanceContext(
+        investmentAccountIds: [],
+        profileInstrument: aud,
+        rule: .allLegs,
+        conversionService: conversion),
       isForecast: false
     )
 
@@ -191,10 +192,11 @@ struct PositionBookTests {
 
     let result = try await book.dailyBalance(
       on: date,
-      investmentAccountIds: [],
-      profileInstrument: aud,
-      rule: .allLegs,
-      conversionService: conversion,
+      context: PositionBook.BalanceContext(
+        investmentAccountIds: [],
+        profileInstrument: aud,
+        rule: .allLegs,
+        conversionService: conversion),
       isForecast: false
     )
 
@@ -227,10 +229,11 @@ struct PositionBookTests {
 
     let result = try await book.dailyBalance(
       on: date,
-      investmentAccountIds: [],
-      profileInstrument: aud,
-      rule: .allLegs,
-      conversionService: conversion,
+      context: PositionBook.BalanceContext(
+        investmentAccountIds: [],
+        profileInstrument: aud,
+        rule: .allLegs,
+        conversionService: conversion),
       isForecast: false
     )
 

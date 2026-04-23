@@ -72,13 +72,7 @@ struct SelfWealthParser: CSVParser, Sendable {
 
     switch type.lowercased() {
     case "trade":
-      return try parseTrade(
-        date: date,
-        description: description,
-        cashAmount: cashAmount,
-        balance: balance,
-        row: row,
-        index: rowIndex)
+      return try parseTrade(fields: fields, row: row, index: rowIndex)
     case "dividend":
       return makeSimpleLegRecord(
         fields: fields, row: row, legType: .income, reference: dividendReference(for: description))
@@ -184,13 +178,12 @@ struct SelfWealthParser: CSVParser, Sendable {
   }()
 
   private func parseTrade(
-    date: Date,
-    description: String,
-    cashAmount: Decimal,
-    balance: Decimal?,
+    fields: ParsedFields,
     row: [String],
     index: Int
   ) throws -> ParsedRecord {
+    let description = fields.description
+    let cashAmount = fields.cashAmount
     let range = NSRange(description.startIndex..., in: description)
     guard
       let match = Self.tradeRegex.regex.firstMatch(in: description, options: [], range: range)
@@ -229,12 +222,12 @@ struct SelfWealthParser: CSVParser, Sendable {
       isInstrumentPlaceholder: false)
     return .transaction(
       ParsedTransaction(
-        date: date,
+        date: fields.date,
         legs: [cashLeg, positionLeg],
         rawRow: row,
         rawDescription: description,
         rawAmount: cashAmount,
-        rawBalance: balance,
+        rawBalance: fields.balance,
         bankReference: nil))
   }
 

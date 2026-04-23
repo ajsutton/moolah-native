@@ -13,17 +13,27 @@ extension ImportStore {
 
   // MARK: - Transaction construction
 
+  /// Per-session fields that every candidate in an ingest run shares. Bundled
+  /// into a struct so `buildTransaction` stays under SwiftLint's parameter
+  /// limit and call sites don't repeat them once per candidate.
+  struct ImportBuildContext {
+    let routedAccountId: UUID
+    let accountInstrument: Instrument
+    let accountInstruments: [UUID: Instrument]
+    let sessionId: UUID
+    let source: ImportSource
+    let parserIdentifier: String
+  }
+
   func buildTransaction(
     from evaluation: RuleEvaluation,
-    routedAccountId: UUID,
-    accountInstrument: Instrument,
-    accountInstruments: [UUID: Instrument],
-    sessionId: UUID,
-    source: ImportSource,
-    parserIdentifier: String
+    context: ImportBuildContext
   ) -> Transaction {
     var legs = evaluation.transaction.legs.map { leg in
-      resolveParsedLeg(leg, routedAccountId: routedAccountId, accountInstrument: accountInstrument)
+      resolveParsedLeg(
+        leg,
+        routedAccountId: context.routedAccountId,
+        accountInstrument: context.accountInstrument)
     }
     if let categoryId = evaluation.assignedCategoryId,
       let index = legs.firstIndex(where: { $0.type == .expense })
@@ -33,9 +43,9 @@ extension ImportStore {
     if let toId = evaluation.transferTargetAccountId, let cash = legs.first {
       legs = makeTransferLegs(
         from: cash,
-        fromAccountId: routedAccountId,
+        fromAccountId: context.routedAccountId,
         toAccountId: toId,
-        accountInstruments: accountInstruments)
+        accountInstruments: context.accountInstruments)
     }
 
     let origin = ImportOrigin(
@@ -44,9 +54,9 @@ extension ImportStore {
       rawAmount: evaluation.transaction.rawAmount,
       rawBalance: evaluation.transaction.rawBalance,
       importedAt: Date(),
-      importSessionId: sessionId,
-      sourceFilename: source.filename,
-      parserIdentifier: parserIdentifier)
+      importSessionId: context.sessionId,
+      sourceFilename: context.source.filename,
+      parserIdentifier: context.parserIdentifier)
     return Transaction(
       date: evaluation.transaction.date,
       payee: evaluation.assignedPayee,
