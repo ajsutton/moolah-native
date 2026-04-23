@@ -159,45 +159,12 @@ actor DataExporter {
   }
 
   private func fetchAllTransactions() async throws -> [Transaction] {
-    var allTransactions: [Transaction] = []
-    var page = 0
-    let pageSize = 200
-
-    // Fetch all non-scheduled transactions
-    while true {
-      let result = try await backend.transactions.fetch(
-        filter: TransactionFilter(),
-        page: page,
-        pageSize: pageSize
-      )
-      allTransactions.append(contentsOf: result.transactions)
-
-      if result.transactions.count < pageSize {
-        break
-      }
-      page += 1
-    }
-
-    // Also fetch scheduled transactions explicitly
-    var scheduledPage = 0
-    while true {
-      let result = try await backend.transactions.fetch(
-        filter: TransactionFilter(scheduled: true),
-        page: scheduledPage,
-        pageSize: pageSize
-      )
-
-      let existingIds = Set(allTransactions.map(\.id))
-      let newTransactions = result.transactions.filter { !existingIds.contains($0.id) }
-      allTransactions.append(contentsOf: newTransactions)
-
-      if result.transactions.count < pageSize {
-        break
-      }
-      scheduledPage += 1
-    }
-
-    return allTransactions
+    let nonScheduled = try await backend.transactions.fetchAll(
+      filter: TransactionFilter())
+    let scheduled = try await backend.transactions.fetchAll(
+      filter: TransactionFilter(scheduled: true))
+    let existingIds = Set(nonScheduled.map(\.id))
+    return nonScheduled + scheduled.filter { !existingIds.contains($0.id) }
   }
 
   private func fetchAllInvestmentValues(accountId: UUID) async throws -> [InvestmentValue] {

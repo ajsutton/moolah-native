@@ -66,6 +66,20 @@ final class RemoteTransactionRepository: TransactionRepository, Sendable {
     }
   }
 
+  func fetchAll(filter: TransactionFilter) async throws -> [Transaction] {
+    var all: [Transaction] = []
+    var page = 0
+    let pageSize = 500
+    while true {
+      let result = try await fetch(filter: filter, page: page, pageSize: pageSize)
+      try Task.checkCancellation()
+      all.append(contentsOf: result.transactions)
+      if result.transactions.count < pageSize { break }
+      page += 1
+    }
+    return all
+  }
+
   func create(_ transaction: Transaction) async throws -> Transaction {
     try requireAllLegsMatchProfile(transaction)
     let dto = try CreateTransactionDTO.fromDomain(transaction)
