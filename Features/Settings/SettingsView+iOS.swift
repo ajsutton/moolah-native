@@ -9,18 +9,6 @@
 
     // MARK: - iOS: NavigationStack layout
 
-    var cryptoTokenStoreForSettings: CryptoTokenStore {
-      if let session = activeSession {
-        return session.cryptoTokenStore
-      }
-      let fallbackService = CryptoPriceService(
-        clients: [CryptoCompareClient(), BinanceClient()],
-        tokenRepository: ICloudTokenRepository(),
-        resolutionClient: CompositeTokenResolutionClient()
-      )
-      return CryptoTokenStore(cryptoPriceService: fallbackService)
-    }
-
     var iOSLayout: some View {
       List {
         profilesSection
@@ -130,12 +118,14 @@
       }
     }
 
-    var cryptoSection: some View {
-      Section {
-        NavigationLink {
-          CryptoSettingsView(store: cryptoTokenStoreForSettings)
-        } label: {
-          Label("Crypto Tokens", systemImage: "bitcoinsign.circle")
+    @ViewBuilder var cryptoSection: some View {
+      if let store = activeSession?.cryptoTokenStore {
+        Section {
+          NavigationLink {
+            CryptoSettingsView(store: store)
+          } label: {
+            Label("Crypto Tokens", systemImage: "bitcoinsign.circle")
+          }
         }
       }
     }

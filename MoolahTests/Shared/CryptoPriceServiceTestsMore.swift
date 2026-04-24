@@ -34,7 +34,6 @@ struct CryptoPriceServiceTestsMore {
     prices: [String: [String: Decimal]] = [:],
     shouldFail: Bool = false,
     cacheDirectory: URL? = nil,
-    tokenRepository: CryptoTokenRepository? = nil,
     resolutionClient: (any TokenResolutionClient)? = nil
   ) -> CryptoPriceService {
     let clientList =
@@ -49,7 +48,6 @@ struct CryptoPriceServiceTestsMore {
     return CryptoPriceService(
       clients: clientList,
       cacheDirectory: cacheDir,
-      tokenRepository: tokenRepository ?? InMemoryTokenRepository(),
       resolutionClient: resolutionClient
     )
   }
@@ -84,24 +82,6 @@ struct CryptoPriceServiceTestsMore {
   // MARK: - Prefetch
 
   @Test
-  func prefetchLatest_usesRegisteredItemsWhenNoneProvided() async throws {
-    let repo = InMemoryTokenRepository()
-    try await repo.saveRegistrations([ethRegistration, btcRegistration])
-
-    let service = makeService(
-      prices: [
-        "1:native": ["2026-04-11": dec("1640.00")],
-        "0:native": ["2026-04-11": dec("67890.00")],
-      ],
-      tokenRepository: repo
-    )
-    await service.prefetchLatest()
-    let ethPrice = try await service.price(
-      for: ethInstrument, mapping: ethMapping, on: date("2026-04-11"))
-    #expect(ethPrice == dec("1640.00"))
-  }
-
-  @Test
   func prefetchUpdatesCacheForRegisteredItems() async throws {
     let service = makeService(prices: [
       "1:native": ["2026-04-11": dec("1640.00")],
@@ -127,39 +107,6 @@ struct CryptoPriceServiceTestsMore {
       for: btcInstrument, mapping: btcMapping, on: date("2026-04-10"))
     #expect(ethPrice == dec("1623.45"))
     #expect(btcPrice == dec("67890.00"))
-  }
-
-  // MARK: - Registration management
-
-  @Test
-  func registerAddsToList() async throws {
-    let service = makeService()
-    let registration = CryptoRegistration.builtInPresets[0]
-    try await service.register(registration)
-    let items = await service.registeredItems()
-    #expect(items.count == 1)
-    #expect(items[0].id == registration.id)
-  }
-
-  @Test
-  func removeDeletesFromList() async throws {
-    let service = makeService()
-    let registration = CryptoRegistration.builtInPresets[0]
-    try await service.register(registration)
-    try await service.remove(registration)
-    let items = await service.registeredItems()
-    #expect(items.isEmpty)
-  }
-
-  @Test
-  func registrationsPersistViaRepository() async throws {
-    let repo = InMemoryTokenRepository()
-    let service1 = makeService(tokenRepository: repo)
-    try await service1.register(CryptoRegistration.builtInPresets[0])
-
-    let service2 = makeService(tokenRepository: repo)
-    let items = await service2.registeredItems()
-    #expect(items.count == 1)
   }
 
   // MARK: - Token resolution

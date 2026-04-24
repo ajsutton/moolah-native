@@ -58,7 +58,6 @@ extension ProfileSession {
 
     return CryptoPriceService(
       clients: priceClients,
-      tokenRepository: ICloudTokenRepository(),
       resolutionClient: CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey)
     )
   }
@@ -69,6 +68,7 @@ extension ProfileSession {
   static func makeBackend(
     profile: Profile,
     containerManager: ProfileContainerManager?,
+    syncCoordinator: SyncCoordinator? = nil,
     exchangeRates: ExchangeRateService,
     stockPrices: StockPriceService,
     cryptoPrices: CryptoPriceService
@@ -103,25 +103,69 @@ extension ProfileSession {
       // every call site depends on the session existing so there's no recovery.
       // swiftlint:disable:next force_try
       let profileContainer = try! containerManager.container(for: profile.id)
+      let zoneID = CKRecordZone.ID(
+        zoneName: "profile-\(profile.id.uuidString)",
+        ownerName: CKCurrentUserDefaultName)
+      let registry = CloudKitInstrumentRegistryRepository(
+        modelContainer: profileContainer,
+        onRecordChanged: { [weak syncCoordinator] recordName in
+          // Registry callbacks may run off MainActor; hop onto MainActor to
+          // reach the actor-isolated SyncCoordinator.queueSave(_:zoneID:).
+          Task { @MainActor [weak syncCoordinator] in
+            syncCoordinator?.queueSave(recordName: recordName, zoneID: zoneID)
+          }
+        },
+        onRecordDeleted: { [weak syncCoordinator] recordName in
+          Task { @MainActor [weak syncCoordinator] in
+            syncCoordinator?.queueDeletion(recordName: recordName, zoneID: zoneID)
+          }
+        }
+      )
       // CloudKit profiles need full stock+crypto conversion support. The
-      // closure reads registered tokens from CryptoPriceService on each
-      // conversion so registrations added at runtime become usable without
-      // rebuilding the service. See issue #102.
+      // closure reads the profile's registry on each conversion so
+      // registrations added at runtime become usable without rebuilding the
+      // service. See issue #102.
       let conversionService = FullConversionService(
         exchangeRates: exchangeRates,
         stockPrices: stockPrices,
         cryptoPrices: cryptoPrices,
         providerMappings: {
-          await cryptoPrices.registeredItems().map(\.mapping)
+          try await registry.allCryptoRegistrations().map(\.mapping)
         }
       )
       return CloudKitBackend(
         modelContainer: profileContainer,
         instrument: profile.instrument,
         profileLabel: profile.label,
-        conversionService: conversionService
+        conversionService: conversionService,
+        instrumentRegistry: registry
       )
     }
+  }
+
+  /// Bundle of the optional instrument-registry pieces: only CloudKit
+  /// profiles expose a registry and crypto token store. Remote/moolah
+  /// profiles are single-instrument by server design and leave both nil.
+  struct RegistryWiring {
+    let registry: (any InstrumentRegistryRepository)?
+    let cryptoTokenStore: CryptoTokenStore?
+  }
+
+  /// Resolves the optional instrument-registry wiring for a profile. Returns
+  /// a populated pair for CloudKit profiles; returns nils for Remote/moolah
+  /// profiles so settings views can gate on `cryptoTokenStore != nil`.
+  @MainActor
+  static func makeRegistryWiring(
+    backend: BackendProvider, cryptoPriceService: CryptoPriceService
+  ) -> RegistryWiring {
+    guard let cloudBackend = backend as? CloudKitBackend else {
+      return RegistryWiring(registry: nil, cryptoTokenStore: nil)
+    }
+    let store = CryptoTokenStore(
+      registry: cloudBackend.instrumentRegistry,
+      cryptoPriceService: cryptoPriceService)
+    return RegistryWiring(
+      registry: cloudBackend.instrumentRegistry, cryptoTokenStore: store)
   }
 
   /// Bundle of the per-profile domain stores. Returned from

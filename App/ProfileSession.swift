@@ -21,7 +21,8 @@ final class ProfileSession: Identifiable {
   let exchangeRateService: ExchangeRateService
   let stockPriceService: StockPriceService
   let cryptoPriceService: CryptoPriceService
-  let cryptoTokenStore: CryptoTokenStore
+  let instrumentRegistry: (any InstrumentRegistryRepository)?
+  let cryptoTokenStore: CryptoTokenStore?
   let importStore: ImportStore
   let importRuleStore: ImportRuleStore
   let importPreferences: ImportPreferences
@@ -54,16 +55,21 @@ final class ProfileSession: Identifiable {
     self.exchangeRateService = services.exchangeRate
     self.stockPriceService = services.stockPrice
     self.cryptoPriceService = services.cryptoPrice
-    self.cryptoTokenStore = CryptoTokenStore(cryptoPriceService: services.cryptoPrice)
 
     let backend = Self.makeBackend(
       profile: profile,
       containerManager: containerManager,
+      syncCoordinator: syncCoordinator,
       exchangeRates: services.exchangeRate,
       stockPrices: services.stockPrice,
       cryptoPrices: services.cryptoPrice
     )
     self.backend = backend
+
+    let registryWiring = Self.makeRegistryWiring(
+      backend: backend, cryptoPriceService: services.cryptoPrice)
+    self.instrumentRegistry = registryWiring.registry
+    self.cryptoTokenStore = registryWiring.cryptoTokenStore
     let stores = Self.makeDomainStores(profile: profile, backend: backend)
     self.authStore = stores.auth
     self.accountStore = stores.account

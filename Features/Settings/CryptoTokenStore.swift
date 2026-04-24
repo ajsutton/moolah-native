@@ -1,5 +1,6 @@
 // Features/Settings/CryptoTokenStore.swift
 import Foundation
+import OSLog
 
 @MainActor
 @Observable
@@ -15,35 +16,51 @@ final class CryptoTokenStore {
 
   private(set) var error: String?
 
+  private let registry: any InstrumentRegistryRepository
   private let cryptoPriceService: CryptoPriceService
+  private let logger = Logger(
+    subsystem: "com.moolah.app", category: "CryptoTokenStore")
 
   private let apiKeyStore = KeychainStore(
     service: "com.moolah.api-keys", account: "coingecko", synchronizable: true
   )
 
-  init(cryptoPriceService: CryptoPriceService) {
+  init(
+    registry: any InstrumentRegistryRepository,
+    cryptoPriceService: CryptoPriceService
+  ) {
+    self.registry = registry
     self.cryptoPriceService = cryptoPriceService
   }
 
   func loadRegistrations() async {
     isLoading = true
     defer { isLoading = false }
-    let loaded = await cryptoPriceService.registeredItems()
-    registrations = loaded
-    instruments = loaded.map(\.instrument)
-    providerMappings = Dictionary(
-      loaded.map { ($0.mapping.instrumentId, $0.mapping) },
-      uniquingKeysWith: { _, last in last }
-    )
+    do {
+      let loaded = try await registry.allCryptoRegistrations()
+      registrations = loaded
+      instruments = loaded.map(\.instrument)
+      providerMappings = Dictionary(
+        loaded.map { ($0.mapping.instrumentId, $0.mapping) },
+        uniquingKeysWith: { _, last in last }
+      )
+      error = nil
+    } catch {
+      logger.error(
+        "Failed to load crypto registrations: \(error, privacy: .public)")
+      self.error = error.localizedDescription
+    }
   }
 
   func removeRegistration(_ registration: CryptoRegistration) async {
     do {
-      try await cryptoPriceService.remove(registration)
+      try await registry.remove(id: registration.id)
+      await cryptoPriceService.purgeCache(instrumentId: registration.id)
       registrations.removeAll { $0.id == registration.id }
       instruments.removeAll { $0.id == registration.id }
       providerMappings.removeValue(forKey: registration.id)
     } catch {
+      logger.error("Failed to remove registration: \(error, privacy: .public)")
       self.error = error.localizedDescription
     }
   }
@@ -77,12 +94,14 @@ final class CryptoTokenStore {
   func confirmRegistration() async {
     guard let registration = resolvedRegistration else { return }
     do {
-      try await cryptoPriceService.register(registration)
+      try await registry.registerCrypto(
+        registration.instrument, mapping: registration.mapping)
       registrations.append(registration)
       instruments.append(registration.instrument)
       providerMappings[registration.mapping.instrumentId] = registration.mapping
       resolvedRegistration = nil
     } catch {
+      logger.error("Failed to confirm registration: \(error, privacy: .public)")
       self.error = error.localizedDescription
     }
   }

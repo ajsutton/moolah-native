@@ -34,7 +34,8 @@ enum PreviewBackend {
     let backend = CloudKitBackend(
       modelContainer: container,
       instrument: instrument, profileLabel: "Preview",
-      conversionService: conversionService
+      conversionService: conversionService,
+      instrumentRegistry: CloudKitInstrumentRegistryRepository(modelContainer: container)
     )
     return (backend, container)
   }

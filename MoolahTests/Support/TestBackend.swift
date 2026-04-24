@@ -44,7 +44,8 @@ enum TestBackend {
       modelContainer: container,
       instrument: instrument,
       profileLabel: "Test",
-      conversionService: conversionService
+      conversionService: conversionService,
+      instrumentRegistry: CloudKitInstrumentRegistryRepository(modelContainer: container)
     )
     return (backend, container)
   }
