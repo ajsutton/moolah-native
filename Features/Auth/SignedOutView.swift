@@ -1,9 +1,14 @@
 import SwiftUI
 
-/// Shown when the user is signed out.
-/// The "Sign in with Google" button is hidden when requiresExplicitSignIn is false
-/// (e.g. a future CloudKit backend that authenticates implicitly via Apple ID).
-struct WelcomeView: View {
+/// Shown when a Moolah-server profile has lost its authentication
+/// (the session is signed out but the profile still exists).
+/// The "Sign in with Google" button is hidden when requiresExplicitSignIn is
+/// false (e.g. a future CloudKit backend that authenticates implicitly via
+/// Apple ID).
+///
+/// Distinct from `Features/Profiles/Views/WelcomeView` — that's the
+/// first-run profile-setup flow.
+struct SignedOutView: View {
   @Environment(AuthStore.self) private var authStore
   @Environment(ProfileStore.self) private var profileStore
 
