@@ -47,7 +47,11 @@ struct MoolahApp: App {
     syncCoordinator = coordinator
     uiTestingProfileId = setup.uiTestingProfileId
 
-    let store = ProfileStore(validator: RemoteServerValidator(), containerManager: setup.manager)
+    let store = ProfileStore(
+      validator: RemoteServerValidator(),
+      containerManager: setup.manager,
+      syncCoordinator: coordinator
+    )
     _profileStore = State(initialValue: store)
 
     Self.configureSyncCoordinator(
