@@ -41,7 +41,7 @@ extension MoolahApp {
       if let seed = uiTestingSeed {
         let manager = try ProfileContainerManager.forTesting()
         let profile = try UITestSeedHydrator.hydrate(seed, into: manager)
-        return ContainerSetup(manager: manager, uiTestingProfileId: profile.id)
+        return ContainerSetup(manager: manager, uiTestingProfileId: profile?.id)
       }
 
       let profileSchema = Schema([ProfileRecord.self])
@@ -87,11 +87,12 @@ extension MoolahApp {
   ///     shaped storage and must not reach for real iCloud. See
   ///     guides/UI_TEST_GUIDE.md §6.
   static func configureSyncCoordinator(
-    store: ProfileStore, coordinator: SyncCoordinator, uiTestingProfileId: UUID?
+    store: ProfileStore,
+    coordinator: SyncCoordinator,
+    isUITesting: Bool
   ) {
     let logger = Logger(subsystem: "com.moolah.app", category: "BackgroundSync")
     let isRunningTests = NSClassFromString("XCTestCase") != nil
-    let isUITesting = uiTestingProfileId != nil
     if isUITesting {
       logger.info("Running under --ui-testing — skipping CloudKit sync coordinator")
       return

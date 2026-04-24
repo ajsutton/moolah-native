@@ -57,7 +57,7 @@ struct MoolahApp: App {
     Self.configureSyncCoordinator(
       store: store,
       coordinator: coordinator,
-      uiTestingProfileId: setup.uiTestingProfileId)
+      isUITesting: uiTestingSeed != nil)
 
     let sessionManager = SessionManager(
       containerManager: setup.manager, syncCoordinator: coordinator)
