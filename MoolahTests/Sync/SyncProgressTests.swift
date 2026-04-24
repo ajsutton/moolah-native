@@ -72,6 +72,80 @@ struct SyncProgressTests {
     #expect(progress.moreComing == false)
   }
 
+  // MARK: - Settle
+
+  @Test
+  func endReceivingWithNoPendingSettlesPhase() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.beginReceiving()
+    progress.recordReceived(modifications: 4, deletions: 0, moreComing: false)
+    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
+    #expect(progress.phase == .upToDate)
+  }
+
+  @Test
+  func endReceivingWithNoPendingResetsCounter() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.beginReceiving()
+    progress.recordReceived(modifications: 4, deletions: 0, moreComing: false)
+    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
+    #expect(progress.recordsReceivedThisSession == 0)
+  }
+
+  @Test
+  func endReceivingWithNoPendingRecordsLastSettledAt() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.beginReceiving()
+    progress.recordReceived(modifications: 4, deletions: 0, moreComing: false)
+    let now = Date(timeIntervalSince1970: 1_000_000)
+    progress.endReceiving(now: now)
+    #expect(progress.lastSettledAt == now)
+  }
+
+  @Test
+  func endReceivingWithEmptySessionSettlesPhase() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.beginReceiving()
+    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
+    #expect(progress.phase == .upToDate)
+  }
+
+  @Test
+  func endReceivingWithEmptySessionRecordsLastSettledAt() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.beginReceiving()
+    let now = Date(timeIntervalSince1970: 1_000_000)
+    progress.endReceiving(now: now)
+    #expect(progress.lastSettledAt == now)
+  }
+
+  @Test
+  func endReceivingWithPendingUploadsTransitionsToSending() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.updatePendingUploads(7)
+    progress.beginReceiving()
+    progress.endReceiving(now: Date())
+    #expect(progress.phase == .sending)
+  }
+
+  @Test
+  func endReceivingWithPendingUploadsResetsCounter() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.updatePendingUploads(7)
+    progress.beginReceiving()
+    progress.endReceiving(now: Date())
+    #expect(progress.recordsReceivedThisSession == 0)
+  }
+
+  @Test
+  func endReceivingWithPendingUploadsDoesNotAdvanceLastSettledAt() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.updatePendingUploads(7)
+    progress.beginReceiving()
+    progress.endReceiving(now: Date())
+    #expect(progress.lastSettledAt == nil)
+  }
+
   // MARK: - Helpers
 
   private func makeDefaults() throws -> UserDefaults {

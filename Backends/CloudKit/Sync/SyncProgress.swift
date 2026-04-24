@@ -73,4 +73,34 @@ final class SyncProgress {
     recordsReceivedThisSession += modifications + deletions
     self.moreComing = moreComing
   }
+
+  /// Handles the `didFetchChanges` engine event.
+  ///
+  /// Resets the session counter and `moreComing` regardless of outcome.
+  /// Settles to `.upToDate` when no uploads are pending and no degraded
+  /// reason is active; routes to `.sending` when uploads still need to
+  /// drain. Does not overwrite an active `.degraded` phase — the caller
+  /// is responsible for clearing the degraded flag before settling.
+  func endReceiving(now: Date) {
+    recordsReceivedThisSession = 0
+    moreComing = false
+    if case .degraded = phase { return }
+    if pendingUploads > 0 {
+      phase = .sending
+      return
+    }
+    phase = .upToDate
+    lastSettledAt = now
+    persistLastSettledAt()
+  }
+
+  // MARK: - Persistence
+
+  private func persistLastSettledAt() {
+    if let lastSettledAt {
+      userDefaults.set(lastSettledAt, forKey: Self.lastSettledAtKey)
+    } else {
+      userDefaults.removeObject(forKey: Self.lastSettledAtKey)
+    }
+  }
 }
