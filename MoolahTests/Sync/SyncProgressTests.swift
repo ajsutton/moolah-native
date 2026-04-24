@@ -10,8 +10,8 @@ struct SyncProgressTests {
   // MARK: - Initial state
 
   @Test
-  func initialPhaseIsIdle() {
-    let progress = SyncProgress(userDefaults: ephemeralDefaults())
+  func initialPhaseIsIdle() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
     #expect(progress.phase == .idle)
     #expect(progress.recordsReceivedThisSession == 0)
     #expect(progress.pendingUploads == 0)
@@ -21,9 +21,9 @@ struct SyncProgressTests {
 
   // MARK: - Helpers
 
-  private func ephemeralDefaults() -> UserDefaults {
+  private func makeDefaults() throws -> UserDefaults {
     let suite = "test.\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
+    let defaults = try #require(UserDefaults(suiteName: suite))
     defaults.removePersistentDomain(forName: suite)
     return defaults
   }
