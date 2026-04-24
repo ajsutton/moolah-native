@@ -17,10 +17,10 @@ extension ProfileSession {
   ) {
     if let repo = backend.accounts as? CloudKitAccountRepository {
       repo.onRecordChanged = { [weak coordinator] id in
-        coordinator?.queueSave(id: id, zoneID: zoneID)
+        coordinator?.queueSave(id: id, recordType: AccountRecord.recordType, zoneID: zoneID)
       }
       repo.onRecordDeleted = { [weak coordinator] id in
-        coordinator?.queueDeletion(id: id, zoneID: zoneID)
+        coordinator?.queueDeletion(id: id, recordType: AccountRecord.recordType, zoneID: zoneID)
       }
       repo.onInstrumentChanged = { [weak coordinator] id in
         coordinator?.queueSave(recordName: id, zoneID: zoneID)
@@ -28,10 +28,11 @@ extension ProfileSession {
     }
     if let repo = backend.transactions as? CloudKitTransactionRepository {
       repo.onRecordChanged = { [weak coordinator] id in
-        coordinator?.queueSave(id: id, zoneID: zoneID)
+        coordinator?.queueSave(id: id, recordType: TransactionRecord.recordType, zoneID: zoneID)
       }
       repo.onRecordDeleted = { [weak coordinator] id in
-        coordinator?.queueDeletion(id: id, zoneID: zoneID)
+        coordinator?.queueDeletion(
+          id: id, recordType: TransactionRecord.recordType, zoneID: zoneID)
       }
       repo.onInstrumentChanged = { [weak coordinator] id in
         coordinator?.queueSave(recordName: id, zoneID: zoneID)
@@ -47,42 +48,47 @@ extension ProfileSession {
   ) {
     if let repo = backend.categories as? CloudKitCategoryRepository {
       repo.onRecordChanged = { [weak coordinator] id in
-        coordinator?.queueSave(id: id, zoneID: zoneID)
+        coordinator?.queueSave(id: id, recordType: CategoryRecord.recordType, zoneID: zoneID)
       }
       repo.onRecordDeleted = { [weak coordinator] id in
-        coordinator?.queueDeletion(id: id, zoneID: zoneID)
+        coordinator?.queueDeletion(id: id, recordType: CategoryRecord.recordType, zoneID: zoneID)
       }
     }
     if let repo = backend.earmarks as? CloudKitEarmarkRepository {
       repo.onRecordChanged = { [weak coordinator] id in
-        coordinator?.queueSave(id: id, zoneID: zoneID)
+        coordinator?.queueSave(id: id, recordType: EarmarkRecord.recordType, zoneID: zoneID)
       }
       repo.onRecordDeleted = { [weak coordinator] id in
-        coordinator?.queueDeletion(id: id, zoneID: zoneID)
+        coordinator?.queueDeletion(id: id, recordType: EarmarkRecord.recordType, zoneID: zoneID)
       }
     }
     if let repo = backend.investments as? CloudKitInvestmentRepository {
       repo.onRecordChanged = { [weak coordinator] id in
-        coordinator?.queueSave(id: id, zoneID: zoneID)
+        coordinator?.queueSave(
+          id: id, recordType: InvestmentValueRecord.recordType, zoneID: zoneID)
       }
       repo.onRecordDeleted = { [weak coordinator] id in
-        coordinator?.queueDeletion(id: id, zoneID: zoneID)
+        coordinator?.queueDeletion(
+          id: id, recordType: InvestmentValueRecord.recordType, zoneID: zoneID)
       }
     }
     if let repo = backend.csvImportProfiles as? CloudKitCSVImportProfileRepository {
       repo.onRecordChanged = { [weak coordinator] id in
-        coordinator?.queueSave(id: id, zoneID: zoneID)
+        coordinator?.queueSave(
+          id: id, recordType: CSVImportProfileRecord.recordType, zoneID: zoneID)
       }
       repo.onRecordDeleted = { [weak coordinator] id in
-        coordinator?.queueDeletion(id: id, zoneID: zoneID)
+        coordinator?.queueDeletion(
+          id: id, recordType: CSVImportProfileRecord.recordType, zoneID: zoneID)
       }
     }
     if let repo = backend.importRules as? CloudKitImportRuleRepository {
       repo.onRecordChanged = { [weak coordinator] id in
-        coordinator?.queueSave(id: id, zoneID: zoneID)
+        coordinator?.queueSave(id: id, recordType: ImportRuleRecord.recordType, zoneID: zoneID)
       }
       repo.onRecordDeleted = { [weak coordinator] id in
-        coordinator?.queueDeletion(id: id, zoneID: zoneID)
+        coordinator?.queueDeletion(
+          id: id, recordType: ImportRuleRecord.recordType, zoneID: zoneID)
       }
     }
   }

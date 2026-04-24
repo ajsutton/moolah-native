@@ -64,16 +64,16 @@ extension ProfileDataSyncHandler {
 
     var recordIDs: [CKRecord.ID] = []
     // Same dependency order as queueAllExistingRecords.
-    collectUnsynced(InstrumentRecord.self, into: &recordIDs) { $0.id }
-    collectUnsynced(CategoryRecord.self, into: &recordIDs) { $0.id.uuidString }
-    collectUnsynced(AccountRecord.self, into: &recordIDs) { $0.id.uuidString }
-    collectUnsynced(EarmarkRecord.self, into: &recordIDs) { $0.id.uuidString }
-    collectUnsynced(EarmarkBudgetItemRecord.self, into: &recordIDs) { $0.id.uuidString }
-    collectUnsynced(InvestmentValueRecord.self, into: &recordIDs) { $0.id.uuidString }
-    collectUnsynced(TransactionRecord.self, into: &recordIDs) { $0.id.uuidString }
-    collectUnsynced(TransactionLegRecord.self, into: &recordIDs) { $0.id.uuidString }
-    collectUnsynced(CSVImportProfileRecord.self, into: &recordIDs) { $0.id.uuidString }
-    collectUnsynced(ImportRuleRecord.self, into: &recordIDs) { $0.id.uuidString }
+    collectUnsyncedInstruments(into: &recordIDs)
+    collectUnsynced(CategoryRecord.self, into: &recordIDs) { $0.id }
+    collectUnsynced(AccountRecord.self, into: &recordIDs) { $0.id }
+    collectUnsynced(EarmarkRecord.self, into: &recordIDs) { $0.id }
+    collectUnsynced(EarmarkBudgetItemRecord.self, into: &recordIDs) { $0.id }
+    collectUnsynced(InvestmentValueRecord.self, into: &recordIDs) { $0.id }
+    collectUnsynced(TransactionRecord.self, into: &recordIDs) { $0.id }
+    collectUnsynced(TransactionLegRecord.self, into: &recordIDs) { $0.id }
+    collectUnsynced(CSVImportProfileRecord.self, into: &recordIDs) { $0.id }
+    collectUnsynced(ImportRuleRecord.self, into: &recordIDs) { $0.id }
 
     if !recordIDs.isEmpty {
       logger.info("Collected \(recordIDs.count) unsynced records for upload")
@@ -117,12 +117,14 @@ extension ProfileDataSyncHandler {
 
   // MARK: - Private Helpers
 
-  private func collectAllUUIDs<T: PersistentModel>(
+  private func collectAllUUIDs<T: PersistentModel & CloudKitRecordConvertible>(
     _ type: T.Type, into recordIDs: inout [CKRecord.ID], extract: (T) -> UUID
   ) {
     let context = ModelContext(modelContainer)
     for record in Self.fetchOrLog(FetchDescriptor<T>(), context: context) {
-      recordIDs.append(CKRecord.ID(recordName: extract(record).uuidString, zoneID: zoneID))
+      recordIDs.append(
+        CKRecord.ID(
+          recordType: T.recordType, uuid: extract(record), zoneID: zoneID))
     }
   }
 
@@ -135,13 +137,29 @@ extension ProfileDataSyncHandler {
     }
   }
 
-  private func collectUnsynced<T: PersistentModel & SystemFieldsCacheable>(
-    _ type: T.Type, into recordIDs: inout [CKRecord.ID], extract: (T) -> String
+  private func collectUnsynced<
+    T: PersistentModel & SystemFieldsCacheable & CloudKitRecordConvertible
+  >(
+    _ type: T.Type, into recordIDs: inout [CKRecord.ID], extract: (T) -> UUID
   ) {
     let context = ModelContext(modelContainer)
     for record in Self.fetchOrLog(FetchDescriptor<T>(), context: context)
     where record.encodedSystemFields == nil {
-      recordIDs.append(CKRecord.ID(recordName: extract(record), zoneID: zoneID))
+      recordIDs.append(
+        CKRecord.ID(
+          recordType: T.recordType, uuid: extract(record), zoneID: zoneID))
+    }
+  }
+
+  private func collectUnsyncedInstruments(
+    into recordIDs: inout [CKRecord.ID]
+  ) {
+    let context = ModelContext(modelContainer)
+    for record in Self.fetchOrLog(
+      FetchDescriptor<InstrumentRecord>(), context: context)
+    where record.encodedSystemFields == nil {
+      recordIDs.append(
+        CKRecord.ID(recordName: record.id, zoneID: zoneID))
     }
   }
 }
