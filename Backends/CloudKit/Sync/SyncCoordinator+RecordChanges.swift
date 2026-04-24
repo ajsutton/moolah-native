@@ -186,6 +186,9 @@ extension SyncCoordinator {
     defer {
       os_signpost(.end, log: Signposts.sync, name: "handleSentChanges", signpostID: signpostID)
     }
+    logger.info(
+      "sentRecordZoneChanges: saved=\(sentChanges.savedRecords.count) failedSaves=\(sentChanges.failedRecordSaves.count) failedDeletes=\(sentChanges.failedRecordDeletes.count)"
+    )
 
     // Group saved records by zone
     var savedByZone: [CKRecordZone.ID: [CKRecord]] = [:]
