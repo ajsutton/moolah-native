@@ -4,7 +4,7 @@
 
 **Goal:** Eliminate `NSUbiquitousKeyValueStore` usage and introduce a per-profile CloudKit-synced instrument registry covering stocks + crypto (fiat mix-in). Per the design at [`plans/2026-04-24-instrument-registry-design.md`](./2026-04-24-instrument-registry-design.md).
 
-**Architecture:** 16 tasks across five phases. **Phase A (1)** fixes the `Instrument.stock` id convention. **Phase B (2)** bumps `InstrumentRecord` schema and its CloudKit round-trip. **Phase C (3–8)** lays down the new Domain protocols, backend implementations, and the search service — additive, each independent. **Phase D (9–14)** rewires the existing services, stores, and views through the new registry. **Phase E (15–16)** deletes the obsolete code and does the post-merge sanity sweep. Each task lands as a separate PR via the merge queue skill.
+**Architecture:** 13 tasks across five phases. **Phase A (1)** fixes the `Instrument.stock` id convention. **Phase B (2)** bumps `InstrumentRecord` schema and its CloudKit round-trip. **Phase C (3–8)** lays down the new Domain protocols, backend implementations, and the search service — additive, each independent. **Phase D (9–11)** rewires the existing services, stores, and views through the new registry. Task 11 is intentionally large: the `CryptoTokenStore` init change, `CryptoPriceService` surface reduction, `ProfileSession` wiring update, and settings-view gating are all coupled and must land as a single atomic PR. **Phase E (12–13)** deletes the obsolete code and does the post-merge sanity sweep. Each task lands as a separate PR via the merge queue skill.
 
 **Tech Stack:** Swift 6.2, SwiftUI, SwiftData, CloudKit (`CKSyncEngine`), swift-testing (`@Suite`, `@Test`, `#expect`), XCUITest (macOS), `@Observable`, `@MainActor`, `@Model`, xcodegen, `just`.
 
@@ -2316,18 +2316,34 @@ EOF
 
 ---
 
-## Task 11: Rewire `CryptoTokenStore` to use `InstrumentRegistryRepository`
+## Task 11: Integration — wire registry through services, stores, and settings views
+
+This is the only large task in the plan. It bundles changes that must land atomically because they remove shared API surface (`CryptoPriceService.registeredItems/register/remove`) whose callers span multiple files. Splitting it would leave `main` with un-compilable intermediate states.
+
+**In this task:**
+1. Strip `CryptoPriceService` registration surface.
+2. Rewire `CryptoTokenStore` to use `InstrumentRegistryRepository`.
+3. Thread `instrumentRegistry` through `CloudKitBackend` and `ProfileSession`.
+4. Update `ProfileSession+Factories` wiring + gate the settings views.
 
 **Files:**
-- Modify: `Features/Settings/CryptoTokenStore.swift` — inject registry; update `loadRegistrations` / `confirmRegistration` / `removeRegistration` to route through it; surface errors via the existing `error` property.
-- Modify: `MoolahTests/Features/CryptoTokenStoreTests.swift` — switch from `InMemoryTokenRepository` to `CloudKitInstrumentRegistryRepository` on an in-memory `ModelContainer`; add error-path tests.
+- Modify: `Shared/CryptoPriceService.swift` — remove registration surface.
+- Modify: `Features/Settings/CryptoTokenStore.swift` — inject registry.
+- Modify: `Backends/CloudKit/CloudKitBackend.swift` — add `instrumentRegistry` property + init parameter.
+- Modify: `App/ProfileSession.swift` — add optional `instrumentRegistry`; make `cryptoTokenStore` optional.
+- Modify: `App/ProfileSession+Factories.swift` — CloudKit branch constructs the registry, wires sync-queue hooks, rewrites the `providerMappings` closure; `makeCryptoPriceService` loses `tokenRepository:` arg; session-load prefetch uses registry with logged failures.
+- Modify: `Features/Settings/SettingsView.swift` — macOS gating keyed on `activeProfileID`.
+- Modify: `Features/Settings/SettingsView+iOS.swift` — iOS gating; delete `cryptoTokenStoreForSettings`.
+- Modify: `App/UITestSeedHydrator+Upserts.swift` and any fixtures that construct `CryptoTokenStore` — guard on session having a registry.
+- Modify: `MoolahTests/Features/CryptoTokenStoreTests.swift` — switch from `InMemoryTokenRepository` to `CloudKitInstrumentRegistryRepository`; add error-path tests.
+- Modify: `MoolahTests/Shared/CryptoPriceServiceTests.swift`, `CryptoPriceServiceTestsMore.swift` — delete tests exercising removed methods.
+- Create: `MoolahTests/App/ProfileSessionInstrumentRegistryTests.swift` — wiring test.
 
-- [ ] **Step 1: Update the tests first (TDD)**
+- [ ] **Step 1: Write the failing tests for the end state (TDD)**
 
-Modify `MoolahTests/Features/CryptoTokenStoreTests.swift`:
+Modify `MoolahTests/Features/CryptoTokenStoreTests.swift` — replace the test fixture with:
 
 ```swift
-// Replace the existing test fixture with:
 @MainActor
 func makeStore(registrations: [CryptoRegistration] = []) async -> (
   CryptoTokenStore, CloudKitInstrumentRegistryRepository
@@ -2347,7 +2363,7 @@ func makeStore(registrations: [CryptoRegistration] = []) async -> (
 }
 ```
 
-Add a test for error-path surface:
+Add the error-path test and the FailingRegistry stub:
 
 ```swift
 @Test("loadRegistrations surfaces registry failure into error")
@@ -2362,7 +2378,6 @@ func loadRegistrationsSurfacesError() async {
   #expect(store.registrations.isEmpty)
 }
 
-// ... and at end of file:
 private struct FailingRegistry: InstrumentRegistryRepository, @unchecked Sendable {
   struct BoomError: Error {}
   func all() async throws -> [Instrument] { throw BoomError() }
@@ -2376,22 +2391,93 @@ private struct FailingRegistry: InstrumentRegistryRepository, @unchecked Sendabl
 }
 ```
 
-Also: the existing tests reference `tokenRepository:` argument — update every `makeStore(...)` call to the new signature.
+Update every existing `makeStore(...)` call in this file to the new signature (no more `tokenRepository:` argument).
+
+Create `MoolahTests/App/ProfileSessionInstrumentRegistryTests.swift`:
+
+```swift
+import Foundation
+import Testing
+
+@testable import Moolah
+
+@Suite("ProfileSession — instrumentRegistry wiring")
+@MainActor
+struct ProfileSessionInstrumentRegistryTests {
+  @Test
+  func cloudKitProfileHasRegistry() throws {
+    let session = try ProfileSession.makeForTest(backendType: .cloudKit)
+    #expect(session.instrumentRegistry != nil)
+    #expect(session.cryptoTokenStore != nil)
+  }
+
+  @Test
+  func remoteProfileHasNoRegistry() throws {
+    let session = try ProfileSession.makeForTest(backendType: .remote)
+    #expect(session.instrumentRegistry == nil)
+    #expect(session.cryptoTokenStore == nil)
+  }
+}
+```
+
+(If `ProfileSession.makeForTest` doesn't exist, build a minimal fixture that reaches the constructor — grep existing `ProfileSession` tests for the convention.)
+
+In `MoolahTests/Shared/CryptoPriceServiceTests.swift` and `CryptoPriceServiceTestsMore.swift`, delete every test calling `registeredItems`, `register(_:)`, `remove(_:)`, `removeById(_:)`, or the zero-arg `prefetchLatest()`. Keep tests for `price`, `prices`, `currentPrices`, `resolveRegistration`, disk cache, `prefetchLatest(for:)`, and `purgeCache` (from Task 5). Delete any `StubCryptoTokenRepository` test-double usage inside these files.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
+just generate
 just test CryptoTokenStoreTests 2>&1 | tee .agent-tmp/task11-pre.txt
 ```
 
-Expected: compile errors — `CryptoTokenStore.init(registry:cryptoPriceService:)` doesn't exist yet; `tokenRepository:` is still the init param.
+Expected: compile errors — the new init signature doesn't exist, `registerCrypto` method doesn't exist, etc.
 
-- [ ] **Step 3: Rewire `CryptoTokenStore`**
+- [ ] **Step 3: Strip `CryptoPriceService` registration surface**
+
+In `Shared/CryptoPriceService.swift`:
+
+```swift
+actor CryptoPriceService {
+  private let clients: [CryptoPriceClient]
+  private var caches: [String: CryptoPriceCache] = [:]
+  private let cacheDirectory: URL
+  private let dateFormatter: ISO8601DateFormatter
+  private let resolutionClient: TokenResolutionClient
+
+  init(
+    clients: [CryptoPriceClient],
+    cacheDirectory: URL? = nil,
+    resolutionClient: (any TokenResolutionClient)? = nil
+  ) {
+    self.clients = clients
+    self.resolutionClient = resolutionClient ?? NoOpTokenResolutionClient()
+    if let cacheDirectory {
+      self.cacheDirectory = cacheDirectory
+    } else {
+      let baseCaches =
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        ?? URL(fileURLWithPath: NSTemporaryDirectory())
+      self.cacheDirectory = baseCaches.appendingPathComponent("crypto-prices")
+    }
+    self.dateFormatter = ISO8601DateFormatter()
+    self.dateFormatter.formatOptions = [.withFullDate]
+  }
+
+  // DELETE: registeredItems(), register(_:), remove(_:), removeById(_:),
+  //         zero-arg prefetchLatest(), the tokenRepository stored property.
+  //
+  // Keep: resolveRegistration, price(for:mapping:on:), prices(for:mapping:in:),
+  //       currentPrices(for:), prefetchLatest(for:),
+  //       purgeCache(instrumentId:) (added in Task 5), and all private helpers.
+}
+```
+
+- [ ] **Step 4: Rewire `CryptoTokenStore`**
 
 In `Features/Settings/CryptoTokenStore.swift`:
 
 ```swift
-// Features/Settings/CryptoTokenStore.swift
 import Foundation
 import OSLog
 
@@ -2406,7 +2492,6 @@ final class CryptoTokenStore {
   private(set) var isResolving = false
 
   var resolvedRegistration: CryptoRegistration?
-
   private(set) var error: String?
 
   private let registry: any InstrumentRegistryRepository
@@ -2453,8 +2538,7 @@ final class CryptoTokenStore {
       instruments.removeAll { $0.id == registration.id }
       providerMappings.removeValue(forKey: registration.id)
     } catch {
-      logger.error(
-        "Failed to remove registration: \(error, privacy: .public)")
+      logger.error("Failed to remove registration: \(error, privacy: .public)")
       self.error = error.localizedDescription
     }
   }
@@ -2496,8 +2580,7 @@ final class CryptoTokenStore {
       providerMappings[registration.mapping.instrumentId] = registration.mapping
       resolvedRegistration = nil
     } catch {
-      logger.error(
-        "Failed to confirm registration: \(error, privacy: .public)")
+      logger.error("Failed to confirm registration: \(error, privacy: .public)")
       self.error = error.localizedDescription
     }
   }
@@ -2522,143 +2605,7 @@ final class CryptoTokenStore {
 }
 ```
 
-- [ ] **Step 4: Run tests**
-
-```bash
-just format
-just generate
-just test CryptoTokenStoreTests 2>&1 | tee .agent-tmp/task11-mid.txt
-```
-
-Expected: all pass.
-
-- [ ] **Step 5: Run reviews**
-
-Run `@code-review` and `@concurrency-review`. Note: there may be callers of the old `init(cryptoPriceService:)` elsewhere in `ProfileSession` / previews — those are updated in Task 14. For now, the project may not compile outside the test target; that is expected and will be resolved by Task 14.
-
-- [ ] **Step 6: Verify scoped tests still pass even while non-test modules have integration breakage**
-
-Scope the test run to the store tests only; full-project compilation is deferred to Task 14.
-
-- [ ] **Step 7: Commit**
-
-```bash
-rm .agent-tmp/task11-*.txt
-git add Features/Settings/CryptoTokenStore.swift MoolahTests/Features/CryptoTokenStoreTests.swift
-git commit -m "$(cat <<'EOF'
-refactor(settings): route CryptoTokenStore through InstrumentRegistryRepository
-
-Replaces direct CryptoPriceService.register/remove/registeredItems calls
-with registry.registerCrypto / remove / allCryptoRegistrations. Errors
-now surface into the store's error property and log via os.Logger,
-replacing the silent try? swallow in the previous implementation.
-
-NOTE: ProfileSession / SettingsView callers are updated in Task 14.
-This commit temporarily breaks app-target compilation until the
-wiring task lands. Scope tests to CryptoTokenStoreTests.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-EOF
-)"
-```
-
-If the project convention is that every commit must compile, bundle Tasks 11–14 into a single PR instead. In that case, skip committing here and continue to Task 14 on the same branch.
-
----
-
-## Task 12: Strip `CryptoPriceService` registration surface
-
-Remove `registeredItems`, `register(_:)`, `remove(_:)`, `removeById(_:)`, zero-arg `prefetchLatest()`, and the `tokenRepository` init parameter. Keep `resolveRegistration`, `price`, `prices`, `currentPrices`, `prefetchLatest(for:)`, and the new `purgeCache` from Task 5.
-
-**Files:**
-- Modify: `Shared/CryptoPriceService.swift`
-- Modify: `MoolahTests/Shared/CryptoPriceServiceTests.swift`, `MoolahTests/Shared/CryptoPriceServiceTestsMore.swift` — delete tests exercising the removed methods; keep tests exercising the kept methods.
-
-- [ ] **Step 1: Remove surface from `CryptoPriceService`**
-
-```swift
-// Shared/CryptoPriceService.swift (relevant portions)
-actor CryptoPriceService {
-  private let clients: [CryptoPriceClient]
-  private var caches: [String: CryptoPriceCache] = [:]
-  private let cacheDirectory: URL
-  private let dateFormatter: ISO8601DateFormatter
-  private let resolutionClient: TokenResolutionClient
-
-  init(
-    clients: [CryptoPriceClient],
-    cacheDirectory: URL? = nil,
-    resolutionClient: (any TokenResolutionClient)? = nil
-  ) {
-    self.clients = clients
-    self.resolutionClient = resolutionClient ?? NoOpTokenResolutionClient()
-    if let cacheDirectory {
-      self.cacheDirectory = cacheDirectory
-    } else {
-      let baseCaches =
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
-        ?? URL(fileURLWithPath: NSTemporaryDirectory())
-      self.cacheDirectory = baseCaches.appendingPathComponent("crypto-prices")
-    }
-    self.dateFormatter = ISO8601DateFormatter()
-    self.dateFormatter.formatOptions = [.withFullDate]
-  }
-
-  // DELETE: registeredItems(), register(_:), remove(_:), removeById(_:),
-  //         the zero-arg prefetchLatest().
-
-  // Keep prefetchLatest(for: [CryptoRegistration]) unchanged.
-  // Keep purgeCache(instrumentId:) unchanged (added in Task 5).
-  // Keep resolveRegistration, price, prices, currentPrices unchanged.
-}
-```
-
-- [ ] **Step 2: Delete tests for removed methods**
-
-In `CryptoPriceServiceTests.swift` / `CryptoPriceServiceTestsMore.swift`, delete every test that calls `registeredItems`, `register`, `remove`, `removeById`, or the zero-arg `prefetchLatest`. These are listed in §6.4 of the design doc. Keep tests for `price`, `prices`, `currentPrices`, `resolveRegistration`, disk cache, `prefetchLatest(for:)`, and `purgeCache`.
-
-Also delete or update any `StubCryptoTokenRepository` / `InMemoryTokenRepository` usages inside these test files — they'll be fully removed in Task 15.
-
-- [ ] **Step 3: Run scoped tests**
-
-```bash
-just format
-just test CryptoPriceServiceTests 2>&1 | tee .agent-tmp/task12-mid.txt
-just test CryptoPriceServiceTestsMore 2>&1 | tee .agent-tmp/task12-mid2.txt
-```
-
-Expected: all pass.
-
-- [ ] **Step 4: Commit (bundled with Task 11 if single-PR approach chosen)**
-
-```bash
-rm .agent-tmp/task12-*.txt
-git add Shared/CryptoPriceService.swift \
-        MoolahTests/Shared/CryptoPriceServiceTests.swift \
-        MoolahTests/Shared/CryptoPriceServiceTestsMore.swift
-git commit -m "$(cat <<'EOF'
-refactor(shared): strip registration surface from CryptoPriceService
-
-Remove registeredItems / register / remove / removeById / zero-arg
-prefetchLatest / tokenRepository init parameter. The registry is now
-the authoritative source for crypto registrations; this actor is a
-focused price-fetch + cache + resolver.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-EOF
-)"
-```
-
----
-
-## Task 13: Thread `instrumentRegistry` through `CloudKitBackend` and `ProfileSession`
-
-**Files:**
-- Modify: `Backends/CloudKit/CloudKitBackend.swift` — add `instrumentRegistry` stored property + init parameter.
-- Modify: `App/ProfileSession.swift` — add optional `instrumentRegistry` + make `cryptoTokenStore` optional.
-- Modify: `App/UITestSeedHydrator+Upserts.swift` or any fixture that constructs `CryptoTokenStore` — construct only when a registry is available.
-
-- [ ] **Step 1: Extend `CloudKitBackend`**
+- [ ] **Step 5: Extend `CloudKitBackend` with `instrumentRegistry`**
 
 In `Backends/CloudKit/CloudKitBackend.swift`:
 
@@ -2674,119 +2621,33 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
     conversionService: any InstrumentConversionService,
     instrumentRegistry: any InstrumentRegistryRepository
   ) {
-    // ...existing assignments...
+    // ...existing assignments unchanged...
     self.instrumentRegistry = instrumentRegistry
-    // ...rest of init...
+    // ...rest of init body unchanged...
   }
 }
 ```
 
-- [ ] **Step 2: Extend `ProfileSession`**
+- [ ] **Step 6: Extend `ProfileSession`**
 
-In `App/ProfileSession.swift`, add an optional stored property:
+In `App/ProfileSession.swift`:
 
 ```swift
 let instrumentRegistry: (any InstrumentRegistryRepository)?
 let cryptoTokenStore: CryptoTokenStore?   // was non-optional
 ```
 
-Update `ProfileSession.init` to assign `instrumentRegistry` from the backend when it's a `CloudKitBackend`, and nil otherwise. `cryptoTokenStore` is constructed with the registry when one exists; nil otherwise.
+In `ProfileSession.init`, after building the backend:
+- For CloudKit backends: `self.instrumentRegistry = (backend as? CloudKitBackend)?.instrumentRegistry`; construct `CryptoTokenStore` with the registry and `cryptoPriceService`.
+- For Remote/moolah backends: `self.instrumentRegistry = nil`; `self.cryptoTokenStore = nil`.
 
-- [ ] **Step 3: Update fixtures / hydrators**
+- [ ] **Step 7: Rewire `ProfileSession+Factories.makeBackend` (CloudKit branch)**
 
-Any place that constructs a `CryptoTokenStore` (grep `CryptoTokenStore(`) must:
-- Provide a registry (test fixtures already do in Task 11).
-- Or guard on the session's registry being non-nil (UI seed hydrator, previews).
-
-- [ ] **Step 4: Tests**
-
-Write or extend a test asserting:
-- A CloudKit-backed profile session has a non-nil `instrumentRegistry`.
-- A Remote-backed profile session has a nil `instrumentRegistry` and nil `cryptoTokenStore`.
-
-`MoolahTests/App/ProfileSessionInstrumentRegistryTests.swift`:
-
-```swift
-import Foundation
-import Testing
-
-@testable import Moolah
-
-@Suite("ProfileSession — instrumentRegistry wiring")
-@MainActor
-struct ProfileSessionInstrumentRegistryTests {
-  @Test
-  func cloudKitProfileHasRegistry() throws {
-    let session = try ProfileSession.makeForTest(
-      backendType: .cloudKit)
-    #expect(session.instrumentRegistry != nil)
-    #expect(session.cryptoTokenStore != nil)
-  }
-
-  @Test
-  func remoteProfileHasNoRegistry() throws {
-    let session = try ProfileSession.makeForTest(
-      backendType: .remote)
-    #expect(session.instrumentRegistry == nil)
-    #expect(session.cryptoTokenStore == nil)
-  }
-}
-```
-
-(If `ProfileSession.makeForTest` doesn't exist, build a minimal fixture that reaches the constructor.)
-
-- [ ] **Step 5: Run full suite**
-
-```bash
-just format
-just generate
-just test 2>&1 | tee .agent-tmp/task13-full.txt
-grep -iE 'failed|error:' .agent-tmp/task13-full.txt | head -30
-```
-
-Expected: clean.
-
-- [ ] **Step 6: Commit**
-
-```bash
-rm .agent-tmp/task13-*.txt
-git add Backends/CloudKit/CloudKitBackend.swift \
-        App/ProfileSession.swift \
-        App/UITestSeedHydrator+Upserts.swift \
-        MoolahTests/App/ProfileSessionInstrumentRegistryTests.swift
-git commit -m "$(cat <<'EOF'
-feat(app): thread instrumentRegistry through CloudKitBackend + ProfileSession
-
-CloudKitBackend gains an instrumentRegistry property; ProfileSession
-exposes it as an optional. CryptoTokenStore likewise becomes optional
-because it only makes sense for CloudKit-backed profiles (Remote is
-single-instrument and has no registry concept). All non-test callers
-that accessed session.cryptoTokenStore unconditionally are updated to
-guard on the optional.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-EOF
-)"
-```
-
----
-
-## Task 14: `ProfileSession+Factories` wiring + settings view gating
-
-**Files:**
-- Modify: `App/ProfileSession+Factories.swift` — CloudKit branch of `makeBackend` constructs the registry and passes it to `CloudKitBackend`; closure rewritten.
-- Modify: the `ProfileSession.makeCryptoPriceService()` helper — remove `tokenRepository:` argument.
-- Modify: `App/ProfileSession.swift` — on-load prefetch uses registry + new logging pattern.
-- Modify: `Features/Settings/SettingsView.swift` — macOS gating on active profile's registry.
-- Modify: `Features/Settings/SettingsView+iOS.swift` — iOS gating; delete `cryptoTokenStoreForSettings` fallback.
-
-- [ ] **Step 1: Update `makeCryptoPriceService`**
-
-In `App/ProfileSession+Factories.swift`, the `makeCryptoPriceService()` static method drops the `tokenRepository:` argument to match Task 12's init signature:
+In `App/ProfileSession+Factories.swift`:
 
 ```swift
 static func makeCryptoPriceService() -> CryptoPriceService {
-  // ... existing body up through priceClients build ...
+  // ...existing body unchanged up to the priceClients build...
   let apiKeyStore = KeychainStore(
     service: "com.moolah.api-keys", account: "coingecko", synchronizable: true)
   let coinGeckoApiKey = try? apiKeyStore.restoreString()
@@ -2805,7 +2666,7 @@ static func makeCryptoPriceService() -> CryptoPriceService {
 }
 ```
 
-- [ ] **Step 2: Update CloudKit branch of `makeBackend`**
+And in the CloudKit branch of `makeBackend`:
 
 ```swift
 case .cloudKit:
@@ -2814,15 +2675,17 @@ case .cloudKit:
   }
   // swiftlint:disable:next force_try
   let profileContainer = try! containerManager.container(for: profile.id)
+  let zoneID = profileZoneID(for: profile.id)   // use the existing helper; inspect
+                                                // Backends/CloudKit/Sync to find it
   let registry = CloudKitInstrumentRegistryRepository(
     modelContainer: profileContainer,
     onRecordChanged: { [weak containerManager, profileId = profile.id] id in
       containerManager?.syncCoordinator(for: profileId)?
-        .queueSave(recordName: id, zoneID: profileZoneID(for: profileId))
+        .queueSave(recordName: id, zoneID: zoneID)
     },
     onRecordDeleted: { [weak containerManager, profileId = profile.id] id in
       containerManager?.syncCoordinator(for: profileId)?
-        .queueDeletion(recordName: id, zoneID: profileZoneID(for: profileId))
+        .queueDeletion(recordName: id, zoneID: zoneID)
     }
   )
   let conversionService = FullConversionService(
@@ -2842,14 +2705,14 @@ case .cloudKit:
   )
 ```
 
-`profileZoneID(for:)` and `containerManager.syncCoordinator(for:)` must exist or be added based on the existing `SyncCoordinator` API. Inspect `ProfileContainerManager.swift` and `SyncCoordinator+Lifecycle.swift` to find the right accessors.
+Inspect `Backends/CloudKit/Sync/SyncCoordinator+Lifecycle.swift` (lines 172–177 per earlier grep) and `Shared/ProfileContainerManager.swift` for the actual helpers. If the `containerManager.syncCoordinator(for:)` accessor doesn't exist, add a minimal one rather than reach into internals.
 
-- [ ] **Step 3: Update on-load prefetch**
+- [ ] **Step 8: Update session-load prefetch**
 
-Wherever `ProfileSession` currently calls the zero-arg `cryptoPriceService.prefetchLatest()` (search for `prefetchLatest()`), replace with:
+Wherever `ProfileSession` currently calls zero-arg `cryptoPriceService.prefetchLatest()`, replace with:
 
 ```swift
-if let registry = self.instrumentRegistry {
+if let registry = instrumentRegistry {
   do {
     let regs = try await registry.allCryptoRegistrations()
     if !regs.isEmpty {
@@ -2863,9 +2726,9 @@ if let registry = self.instrumentRegistry {
 }
 ```
 
-- [ ] **Step 4: Gate iOS Crypto Settings**
+- [ ] **Step 9: Gate iOS Crypto Settings**
 
-In `Features/Settings/SettingsView+iOS.swift`, delete `cryptoTokenStoreForSettings`. Update `cryptoSection` to use the session's `cryptoTokenStore` and hide the link when it's nil:
+In `Features/Settings/SettingsView+iOS.swift`, delete `cryptoTokenStoreForSettings` entirely and replace `cryptoSection` with:
 
 ```swift
 var cryptoSection: some View {
@@ -2883,55 +2746,99 @@ var cryptoSection: some View {
 }
 ```
 
-- [ ] **Step 5: Gate macOS Crypto Settings**
+- [ ] **Step 10: Gate macOS Crypto Settings**
 
-In `Features/Settings/SettingsView.swift`, replace any `sessionManager.sessions.values.first` lookup for the crypto store with an `activeProfileID`-keyed lookup. If the existing code path constructs `CryptoTokenStore` on the fly via `ICloudTokenRepository()`, delete that path and pull from `activeSession.cryptoTokenStore`:
+In `Features/Settings/SettingsView.swift`, replace the existing `cryptoTokenStoreForSettings` computed property (if present) and its call site. Route through the active profile's session:
 
 ```swift
-// inside the settings content:
 if let activeId = profileStore.activeProfileID,
    let session = sessionManager.sessions[activeId],
    let store = session.cryptoTokenStore {
-  // show crypto settings
+  // show crypto settings using `store`
 } else {
-  // hide crypto settings
+  // hide the section
 }
 ```
 
-- [ ] **Step 6: Run tests and manually verify**
+- [ ] **Step 11: Update fixtures / seed hydrators**
+
+Grep `CryptoTokenStore(` across the codebase. Any construction outside `ProfileSession`:
+- In `UITestSeedHydrator+Upserts.swift` and related fixtures — guard on a registry being available for the seeded profile.
+- In previews — if a preview constructs a `CryptoTokenStore`, pass a `CloudKitInstrumentRegistryRepository` built over an in-memory container.
+
+- [ ] **Step 12: Run tests and manual smoke**
 
 ```bash
 just format
 just generate
-just test 2>&1 | tee .agent-tmp/task14-full.txt
-just run-mac    # manual smoke: settings → crypto only shows for active CloudKit profile
+just test 2>&1 | tee .agent-tmp/task11-full.txt
+grep -iE 'failed|error:' .agent-tmp/task11-full.txt | head -40
 ```
 
-- [ ] **Step 7: Run reviews**
+Expected: clean.
 
-`@code-review`, `@concurrency-review`, `@sync-review`, `@instrument-conversion-review`. This is the largest wiring change.
-
-- [ ] **Step 8: Commit**
+Manual smoke:
 
 ```bash
-rm .agent-tmp/task14-*.txt
-git add App/ProfileSession+Factories.swift \
-        App/ProfileSession.swift \
+just run-mac
+```
+
+Steps: Settings → verify Crypto Tokens link hidden when no CloudKit profile is active; switch to a CloudKit profile → link appears; open it → load succeeds; quit and relaunch → state persists.
+
+- [ ] **Step 13: Reviews**
+
+Run all four reviewers on this diff — it's the largest:
+- `@code-review`
+- `@concurrency-review`
+- `@sync-review`
+- `@instrument-conversion-review`
+
+Address Critical / Major findings before committing.
+
+- [ ] **Step 14: Commit**
+
+```bash
+rm .agent-tmp/task11-*.txt
+git add Shared/CryptoPriceService.swift \
+        Features/Settings/CryptoTokenStore.swift \
         Features/Settings/SettingsView.swift \
-        Features/Settings/SettingsView+iOS.swift
+        Features/Settings/SettingsView+iOS.swift \
+        Backends/CloudKit/CloudKitBackend.swift \
+        App/ProfileSession.swift \
+        App/ProfileSession+Factories.swift \
+        App/UITestSeedHydrator+Upserts.swift \
+        MoolahTests/Features/CryptoTokenStoreTests.swift \
+        MoolahTests/Shared/CryptoPriceServiceTests.swift \
+        MoolahTests/Shared/CryptoPriceServiceTestsMore.swift \
+        MoolahTests/App/ProfileSessionInstrumentRegistryTests.swift
 git commit -m "$(cat <<'EOF'
-feat(app): wire InstrumentRegistryRepository through ProfileSession
+feat(app): wire InstrumentRegistryRepository through services + views
 
-CloudKit profiles construct CloudKitInstrumentRegistryRepository in
-makeBackend and pass it to CloudKitBackend. The conversion service's
-providerMappings closure now reads throughs the registry directly;
-errors propagate rather than being silently collapsed.
+Integration task. Bundles four coupled changes that must land together
+to avoid leaving main in an uncompilable intermediate state:
 
-Settings views gate on the active session's cryptoTokenStore being
-non-nil, covering both "no active profile" and "active profile is
-Remote" cases in a single check. Removes the broken fallback path
-that constructed a CryptoPriceService with the now-deleted
-ICloudTokenRepository.
+1. CryptoPriceService loses its registration surface
+   (registeredItems/register/remove/removeById/zero-arg prefetchLatest
+   and the tokenRepository init parameter). Becomes a focused price-
+   fetch + cache + resolver actor.
+
+2. CryptoTokenStore routes through InstrumentRegistryRepository via
+   registerCrypto / remove / allCryptoRegistrations. Errors surface
+   into the existing `error` property and log via os.Logger rather
+   than being silently swallowed by try?.
+
+3. CloudKitBackend gains an instrumentRegistry property; ProfileSession
+   exposes it optionally (nil for Remote/moolah profiles) and
+   CryptoTokenStore follows suit.
+
+4. ProfileSession+Factories constructs the registry in the CloudKit
+   branch of makeBackend, wires sync-queue hooks so writes upload,
+   replaces the providerMappings closure with a throwing registry
+   read, and updates session-load prefetch. SettingsView and
+   SettingsView+iOS gate on the active profile's cryptoTokenStore —
+   covers both "no active profile" and "active profile is Remote"
+   cases. Removes the broken fallback path that constructed a
+   CryptoPriceService using the soon-deleted ICloudTokenRepository.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -2940,7 +2847,7 @@ EOF
 
 ---
 
-## Task 15: Delete `ICloudTokenRepository`, `CryptoTokenRepository`, and test doubles
+## Task 12: Delete `ICloudTokenRepository`, `CryptoTokenRepository`, and test doubles
 
 The final deletion PR — removes the sole user of `NSUbiquitousKeyValueStore`.
 
@@ -3007,7 +2914,7 @@ EOF
 
 ---
 
-## Task 16: Follow-up GitHub issue, final sanity sweep, post-merge verification
+## Task 13: Follow-up GitHub issue, final sanity sweep, post-merge verification
 
 **Files:** none (process task).
 
@@ -3107,13 +3014,13 @@ git commit -m "chore(plans): mark instrument-registry plan complete"
   - Scope & non-goals (spec §Scope) → set by this plan's scope statement.
   - Data model (spec §1) → Tasks 2, 3, 4.
   - Search service (spec §2) → Tasks 6, 7, 8.
-  - Service wiring (spec §3) → Tasks 10, 11, 12, 13, 14.
-  - Deletions (spec §4) → Task 15.
-  - Migration (spec §5) → Task 2 (schema), Task 14 (crypto settings gate), Task 16 (post-merge).
+  - Service wiring (spec §3) → Tasks 10, 11.
+  - Deletions (spec §4) → Task 12.
+  - Migration (spec §5) → Task 2 (schema), Task 11 (crypto settings gate), Task 13 (post-merge).
   - Testing (spec §6) → each task lists its tests inline.
-  - Rollout (spec §7) → Task 16, including CloudKit Dashboard deploy.
+  - Rollout (spec §7) → Task 13, including CloudKit Dashboard deploy.
   - `Instrument.stock` id formula (spec §1.2 + §6.1a) → Task 1.
-- ✅ No `TBD` / `TODO` placeholders in the plan (Task 16's schema-deploy step is imperative, not a placeholder).
+- ✅ No `TBD` / `TODO` placeholders in the plan (Task 13's schema-deploy step is imperative, not a placeholder).
 - ✅ Type and method names are consistent across tasks (`registerCrypto` / `registerStock` / `remove(instrumentId:)` / `observeChanges()` / `allCryptoRegistrations()` / `purgeCache(instrumentId:)`).
 - ✅ Test-first discipline throughout — every task that adds behaviour writes the failing test first.
-- ✅ Frequent commits — each task is one coherent commit.
+- ✅ Frequent commits — each task is one coherent commit. Task 11 is a single large commit covering four tightly-coupled changes because splitting would leave `main` uncompilable between commits.
