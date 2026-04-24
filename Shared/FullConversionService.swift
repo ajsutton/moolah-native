@@ -9,18 +9,21 @@ actor FullConversionService: InstrumentConversionService {
   private let exchangeRates: ExchangeRateService
   private let stockPrices: StockPriceService
   private let cryptoPrices: CryptoPriceService?
-  private let providerMappings: @Sendable () async -> [CryptoProviderMapping]
+  private let providerMappings: @Sendable () async throws -> [CryptoProviderMapping]
   private let logger = Logger(subsystem: "com.moolah.app", category: "CurrencyConversion")
 
   /// - Parameter providerMappings: Closure invoked on each crypto conversion
   ///   to obtain the current set of provider mappings. Tokens registered via
   ///   `CryptoPriceService` after service construction become resolvable on
-  ///   the next conversion without rebuilding the service.
+  ///   the next conversion without rebuilding the service. Errors thrown by
+  ///   the closure (e.g. registry read failures) propagate through
+  ///   `convert(_:from:to:on:)` rather than collapsing silently to an empty
+  ///   mapping table — see `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 11.
   init(
     exchangeRates: ExchangeRateService,
     stockPrices: StockPriceService,
     cryptoPrices: CryptoPriceService? = nil,
-    providerMappings: @Sendable @escaping () async -> [CryptoProviderMapping] = { [] }
+    providerMappings: @Sendable @escaping () async throws -> [CryptoProviderMapping] = { [] }
   ) {
     self.exchangeRates = exchangeRates
     self.stockPrices = stockPrices
@@ -134,7 +137,7 @@ actor FullConversionService: InstrumentConversionService {
     guard let cryptoPrices else {
       throw ConversionError.noCryptoPriceService
     }
-    let mappings = await providerMappings()
+    let mappings = try await providerMappings()
     guard let mapping = mappings.first(where: { $0.instrumentId == instrument.id }) else {
       throw ConversionError.noProviderMapping(instrumentId: instrument.id)
     }
