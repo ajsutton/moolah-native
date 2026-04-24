@@ -3,7 +3,7 @@
   import SwiftUI
 
   /// Routes between profile states (iOS only):
-  /// - No profiles → ProfileSetupView
+  /// - No profiles → WelcomeView (first-run state machine)
   /// - Has active session → SessionRootView
   /// - Loading (session not yet created) → ProgressView
   /// On macOS, ProfileWindowView handles this role.
@@ -18,7 +18,7 @@
     var body: some View {
       Group {
         if !profileStore.hasProfiles {
-          ProfileSetupView()
+          WelcomeView()
         } else if let session = activeSession {
           SessionRootView(session: session)
         } else {
