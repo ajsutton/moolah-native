@@ -1,0 +1,144 @@
+DEFINE SCHEMA
+
+    RECORD TYPE CD_AccountRecord (
+        CD_entityName           STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_id                   STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_instrumentId         STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_isHidden             INT64 QUERYABLE SORTABLE,
+        CD_name                 STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_position             INT64 QUERYABLE SORTABLE,
+        CD_type                 STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_usesPositionTracking INT64 QUERYABLE SORTABLE,
+        "___createTime"         TIMESTAMP,
+        "___createdBy"          REFERENCE,
+        "___etag"               STRING,
+        "___modTime"            TIMESTAMP,
+        "___modifiedBy"         REFERENCE,
+        "___recordID"           REFERENCE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE CD_EarmarkBudgetItemRecord (
+        CD_amount       INT64 QUERYABLE SORTABLE,
+        CD_categoryId   STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_earmarkId    STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_entityName   STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_id           STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_instrumentId STRING QUERYABLE SEARCHABLE SORTABLE,
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE CD_EarmarkRecord (
+        CD_entityName                STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_id                        STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_instrumentId              STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_isHidden                  INT64 QUERYABLE SORTABLE,
+        CD_name                      STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_position                  INT64 QUERYABLE SORTABLE,
+        CD_savingsTarget             INT64 QUERYABLE SORTABLE,
+        CD_savingsTargetInstrumentId STRING QUERYABLE SEARCHABLE SORTABLE,
+        "___createTime"              TIMESTAMP,
+        "___createdBy"               REFERENCE,
+        "___etag"                    STRING,
+        "___modTime"                 TIMESTAMP,
+        "___modifiedBy"              REFERENCE,
+        "___recordID"                REFERENCE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE CD_InstrumentRecord (
+        CD_decimals     INT64 QUERYABLE SORTABLE,
+        CD_entityName   STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_id           STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_kind         STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_name         STRING QUERYABLE SEARCHABLE SORTABLE,
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE CD_ProfileRecord (
+        CD_createdAt               TIMESTAMP QUERYABLE SORTABLE,
+        CD_currencyCode            STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_entityName              STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_financialYearStartMonth INT64 QUERYABLE SORTABLE,
+        CD_id                      STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_label                   STRING QUERYABLE SEARCHABLE SORTABLE,
+        "___createTime"            TIMESTAMP,
+        "___createdBy"             REFERENCE,
+        "___etag"                  STRING,
+        "___modTime"               TIMESTAMP,
+        "___modifiedBy"            REFERENCE,
+        "___recordID"              REFERENCE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE CD_TransactionLegRecord (
+        CD_accountId     STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_categoryId    STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_earmarkId     STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_entityName    STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_id            STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_instrumentId  STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_quantity      INT64 QUERYABLE SORTABLE,
+        CD_sortOrder     INT64 QUERYABLE SORTABLE,
+        CD_transactionId STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_type          STRING QUERYABLE SEARCHABLE SORTABLE,
+        "___createTime"  TIMESTAMP,
+        "___createdBy"   REFERENCE,
+        "___etag"        STRING,
+        "___modTime"     TIMESTAMP,
+        "___modifiedBy"  REFERENCE,
+        "___recordID"    REFERENCE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE CD_TransactionRecord (
+        CD_date         TIMESTAMP QUERYABLE SORTABLE,
+        CD_entityName   STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_id           STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_payee        STRING QUERYABLE SEARCHABLE SORTABLE,
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE Users (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        roles           LIST<INT64>,
+        GRANT WRITE TO "_creator",
+        GRANT READ TO "_world"
+    );
