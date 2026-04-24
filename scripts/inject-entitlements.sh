@@ -3,8 +3,9 @@
 #
 # 1. Writes .build/Moolah.entitlements with the full sandbox + CloudKit keys.
 # 2. Produces project-entitlements.yml — a copy of project.yml that:
-#    - Adds a Debug-only block to each app target wiring in
+#    - Augments each app target's existing Debug block with
 #      CODE_SIGN_ENTITLEMENTS and the CLOUDKIT_ENABLED compilation condition.
+#      (project.yml already carries a Debug block for CLOUDKIT_ENVIRONMENT.)
 #    - Appends CODE_SIGN_ENTITLEMENTS to each target's existing Release block.
 #      Release already bakes in CLOUDKIT_ENABLED via project.yml; without the
 #      matching entitlements file the signed binary calls CKContainer.default()
@@ -72,11 +73,11 @@ for target in ("Moolah_iOS", "Moolah_macOS"):
             f"inject-entitlements: could not find configs: block for {target}"
         )
 
-    # Prepend CODE_SIGN_ENTITLEMENTS and the CLOUDKIT_ENABLED compilation
-    # condition to the existing Debug: block. project.yml already carries a
-    # Debug: block (for CLOUDKIT_ENVIRONMENT: Development); inserting a second
-    # Debug: sibling would make xcodegen's YAML loader keep only the last
-    # occurrence and silently drop these keys.
+    # Insert CODE_SIGN_ENTITLEMENTS and the CLOUDKIT_ENABLED compilation
+    # condition at the top of the existing Debug: block. project.yml already
+    # carries a Debug: block (for CLOUDKIT_ENVIRONMENT: Development); inserting
+    # a second Debug: sibling would make xcodegen's YAML loader keep only the
+    # last occurrence and silently drop these keys.
     debug_header = "        Debug:\n"
     debug_pos = content.find(debug_header, configs_pos)
     if debug_pos == -1:
