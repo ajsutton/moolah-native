@@ -9,7 +9,7 @@ struct RecordMappingTestsMore {
   let zoneID = CKRecordZone.ID(zoneName: "profile-test", ownerName: CKCurrentUserDefaultName)
 
   @Test
-  func earmarkBudgetItemRecordRoundTrip() {
+  func earmarkBudgetItemRecordRoundTrip() throws {
     let earmarkId = UUID()
     let categoryId = UUID()
     let item = EarmarkBudgetItemRecord(
@@ -28,7 +28,7 @@ struct RecordMappingTestsMore {
     #expect(ckRecord["amount"] as? Int64 == 1_000_000_000)
     #expect(ckRecord["instrumentId"] as? String == "AUD")
 
-    let restored = EarmarkBudgetItemRecord.fieldValues(from: ckRecord)
+    let restored = try #require(EarmarkBudgetItemRecord.fieldValues(from: ckRecord))
     #expect(restored.id == item.id)
     #expect(restored.earmarkId == earmarkId)
     #expect(restored.categoryId == categoryId)
@@ -39,7 +39,7 @@ struct RecordMappingTestsMore {
   // MARK: - InvestmentValueRecord
 
   @Test
-  func investmentValueRecordRoundTrip() {
+  func investmentValueRecordRoundTrip() throws {
     let accountId = UUID()
     let date = Date(timeIntervalSince1970: 1_700_000_000)
     let record = InvestmentValueRecord(
@@ -58,7 +58,7 @@ struct RecordMappingTestsMore {
     #expect(ckRecord["value"] as? Int64 == 25_000_000_000)
     #expect(ckRecord["instrumentId"] as? String == "AUD")
 
-    let restored = InvestmentValueRecord.fieldValues(from: ckRecord)
+    let restored = try #require(InvestmentValueRecord.fieldValues(from: ckRecord))
     #expect(restored.id == record.id)
     #expect(restored.accountId == accountId)
     #expect(restored.date == date)
@@ -69,7 +69,7 @@ struct RecordMappingTestsMore {
   // MARK: - Multi-instrument persistence
 
   @Test
-  func instrumentRecordCryptoFieldsRoundTrip() {
+  func instrumentRecordCryptoFieldsRoundTrip() throws {
     let instrument = InstrumentRecord(
       id: "1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
       kind: "cryptoToken",
@@ -89,7 +89,7 @@ struct RecordMappingTestsMore {
       ckRecord["contractAddress"] as? String == "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
     #expect(ckRecord["exchange"] == nil)
 
-    let restored = InstrumentRecord.fieldValues(from: ckRecord)
+    let restored = try #require(InstrumentRecord.fieldValues(from: ckRecord))
     #expect(restored.id == "1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
     #expect(restored.kind == "cryptoToken")
     #expect(restored.decimals == 6)
@@ -99,7 +99,7 @@ struct RecordMappingTestsMore {
   }
 
   @Test
-  func instrumentRecordNativeCryptoHasNoContractAddress() {
+  func instrumentRecordNativeCryptoHasNoContractAddress() throws {
     // Bitcoin uses chainId = 0 and nil contractAddress; ETH native uses chainId = 1.
     let btc = InstrumentRecord(
       id: "0:native",
@@ -115,7 +115,7 @@ struct RecordMappingTestsMore {
     #expect(ckRecord["chainId"] as? Int == 0)
     #expect(ckRecord["contractAddress"] == nil)
 
-    let restored = InstrumentRecord.fieldValues(from: ckRecord)
+    let restored = try #require(InstrumentRecord.fieldValues(from: ckRecord))
     #expect(restored.chainId == 0)
     #expect(restored.contractAddress == nil)
   }
@@ -163,7 +163,7 @@ struct RecordMappingTestsMore {
   }
 
   @Test
-  func accountRecordRoundTripForStockInstrumentId() {
+  func accountRecordRoundTripForStockInstrumentId() throws {
     let account = AccountRecord(
       id: UUID(),
       name: "Sharesight",
@@ -176,13 +176,13 @@ struct RecordMappingTestsMore {
     let ckRecord = account.toCKRecord(in: zoneID)
     #expect(ckRecord["instrumentId"] as? String == "ASX:BHP")
 
-    let restored = AccountRecord.fieldValues(from: ckRecord)
+    let restored = try #require(AccountRecord.fieldValues(from: ckRecord))
     #expect(restored.instrumentId == "ASX:BHP")
     #expect(restored.type == "investment")
   }
 
   @Test
-  func accountRecordRoundTripForCryptoInstrumentId() {
+  func accountRecordRoundTripForCryptoInstrumentId() throws {
     let account = AccountRecord(
       id: UUID(),
       name: "Wallet",
@@ -197,12 +197,12 @@ struct RecordMappingTestsMore {
       ckRecord["instrumentId"] as? String
         == "1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
 
-    let restored = AccountRecord.fieldValues(from: ckRecord)
+    let restored = try #require(AccountRecord.fieldValues(from: ckRecord))
     #expect(restored.instrumentId == "1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
   }
 
   @Test
-  func transactionLegRecordRoundTripForStockInstrument() {
+  func transactionLegRecordRoundTripForStockInstrument() throws {
     let leg = TransactionLegRecord(
       id: UUID(),
       transactionId: UUID(),
@@ -218,13 +218,13 @@ struct RecordMappingTestsMore {
     #expect(ckRecord["instrumentId"] as? String == "ASX:BHP")
     #expect(ckRecord["quantity"] as? Int64 == 15_000_000_000)
 
-    let restored = TransactionLegRecord.fieldValues(from: ckRecord)
+    let restored = try #require(TransactionLegRecord.fieldValues(from: ckRecord))
     #expect(restored.instrumentId == "ASX:BHP")
     #expect(restored.quantity == 15_000_000_000)
   }
 
   @Test
-  func transactionLegRecordRoundTripForCryptoInstrument() {
+  func transactionLegRecordRoundTripForCryptoInstrument() throws {
     let leg = TransactionLegRecord(
       id: UUID(),
       transactionId: UUID(),
@@ -240,13 +240,13 @@ struct RecordMappingTestsMore {
     #expect(ckRecord["instrumentId"] as? String == "1:native")
     #expect(ckRecord["quantity"] as? Int64 == 50_000_000)
 
-    let restored = TransactionLegRecord.fieldValues(from: ckRecord)
+    let restored = try #require(TransactionLegRecord.fieldValues(from: ckRecord))
     #expect(restored.instrumentId == "1:native")
     #expect(restored.quantity == 50_000_000)
   }
 
   @Test
-  func earmarkRecordRoundTripForNonFiatSavingsTarget() {
+  func earmarkRecordRoundTripForNonFiatSavingsTarget() throws {
     // Earmark tracking a stock or crypto target for goals like "own 100 BHP".
     let earmark = EarmarkRecord(
       id: UUID(),
@@ -262,12 +262,12 @@ struct RecordMappingTestsMore {
     let ckRecord = earmark.toCKRecord(in: zoneID)
     #expect(ckRecord["savingsTargetInstrumentId"] as? String == "ASX:BHP")
 
-    let restored = EarmarkRecord.fieldValues(from: ckRecord)
+    let restored = try #require(EarmarkRecord.fieldValues(from: ckRecord))
     #expect(restored.savingsTargetInstrumentId == "ASX:BHP")
   }
 
   @Test
-  func earmarkBudgetItemRecordRoundTripForForeignInstrument() {
+  func earmarkBudgetItemRecordRoundTripForForeignInstrument() throws {
     let item = EarmarkBudgetItemRecord(
       id: UUID(),
       earmarkId: UUID(),
@@ -280,7 +280,7 @@ struct RecordMappingTestsMore {
     #expect(ckRecord["instrumentId"] as? String == "USD")
     #expect(ckRecord["amount"] as? Int64 == 100_000_000_000)
 
-    let restored = EarmarkBudgetItemRecord.fieldValues(from: ckRecord)
+    let restored = try #require(EarmarkBudgetItemRecord.fieldValues(from: ckRecord))
     #expect(restored.instrumentId == "USD")
     #expect(restored.amount == 100_000_000_000)
   }

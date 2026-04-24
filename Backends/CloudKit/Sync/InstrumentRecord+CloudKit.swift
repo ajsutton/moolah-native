@@ -19,7 +19,11 @@ extension InstrumentRecord: CloudKitRecordConvertible {
     return record
   }
 
-  static func fieldValues(from ckRecord: CKRecord) -> InstrumentRecord {
+  /// InstrumentRecord is keyed by `recordName` (e.g. "AUD", "ASX:BHP") rather than a
+  /// UUID. `recordName` is always non-nil on a valid `CKRecord.ID`, so this never
+  /// returns `nil`; the Optional return type exists to keep the protocol signature
+  /// uniform with UUID-keyed conformers.
+  static func fieldValues(from ckRecord: CKRecord) -> InstrumentRecord? {
     InstrumentRecord(
       id: ckRecord.recordID.recordName,
       kind: ckRecord["kind"] as? String ?? "fiatCurrency",

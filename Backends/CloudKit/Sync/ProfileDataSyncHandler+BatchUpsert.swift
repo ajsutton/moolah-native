@@ -8,12 +8,18 @@ extension ProfileDataSyncHandler {
   nonisolated static func batchUpsertInstruments(
     _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
-    let pairs: [(String, CKRecord)] = ckRecords.map { ($0.recordID.recordName, $0) }
     let existing = fetchOrLog(FetchDescriptor<InstrumentRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
-    for (id, ckRecord) in pairs {
-      let values = InstrumentRecord.fieldValues(from: ckRecord)
+    for ckRecord in ckRecords {
+      guard let values = InstrumentRecord.fieldValues(from: ckRecord) else {
+        logMalformed("batchUpsertInstruments", ckRecord)
+        continue
+      }
+      // `InstrumentRecord.id` is the raw `recordName` string (e.g. "AUD", "ASX:BHP"),
+      // not a UUID, so `systemFields` is keyed by the bare string here — unlike every
+      // other `batchUpsertX` below, which keys by `id.uuidString`.
+      let id = values.id
       if let existing = byID[id] {
         existing.kind = values.kind
         existing.name = values.name
@@ -34,7 +40,6 @@ extension ProfileDataSyncHandler {
   nonisolated static func batchUpsertAccounts(
     _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
-    let pairs = uuidPairs(from: ckRecords)
     let existing: [AccountRecord]
     do {
       existing = try context.fetch(FetchDescriptor<AccountRecord>())
@@ -45,9 +50,15 @@ extension ProfileDataSyncHandler {
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
     var insertCount = 0
     var updateCount = 0
+    var incomingCount = 0
 
-    for (id, ckRecord) in pairs {
-      let values = AccountRecord.fieldValues(from: ckRecord)
+    for ckRecord in ckRecords {
+      guard let values = AccountRecord.fieldValues(from: ckRecord) else {
+        logMalformed("batchUpsertAccounts", ckRecord)
+        continue
+      }
+      incomingCount += 1
+      let id = values.id
       if let existing = byID[id] {
         existing.name = values.name
         existing.type = values.type
@@ -64,19 +75,22 @@ extension ProfileDataSyncHandler {
       }
     }
     batchLogger.info(
-      "batchUpsertAccounts: \(pairs.count) incoming, \(existing.count) existing in store, \(insertCount) inserted, \(updateCount) updated"
+      "batchUpsertAccounts: \(incomingCount) incoming, \(existing.count) existing in store, \(insertCount) inserted, \(updateCount) updated"
     )
   }
 
   nonisolated static func batchUpsertTransactions(
     _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
-    let pairs = uuidPairs(from: ckRecords)
     let existing = fetchOrLog(FetchDescriptor<TransactionRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
-    for (id, ckRecord) in pairs {
-      let values = TransactionRecord.fieldValues(from: ckRecord)
+    for ckRecord in ckRecords {
+      guard let values = TransactionRecord.fieldValues(from: ckRecord) else {
+        logMalformed("batchUpsertTransactions", ckRecord)
+        continue
+      }
+      let id = values.id
       if let existing = byID[id] {
         existing.date = values.date
         existing.payee = values.payee
@@ -103,12 +117,15 @@ extension ProfileDataSyncHandler {
   nonisolated static func batchUpsertTransactionLegs(
     _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
-    let pairs = uuidPairs(from: ckRecords)
     let existing = fetchOrLog(FetchDescriptor<TransactionLegRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
-    for (id, ckRecord) in pairs {
-      let values = TransactionLegRecord.fieldValues(from: ckRecord)
+    for ckRecord in ckRecords {
+      guard let values = TransactionLegRecord.fieldValues(from: ckRecord) else {
+        logMalformed("batchUpsertTransactionLegs", ckRecord)
+        continue
+      }
+      let id = values.id
       if let existing = byID[id] {
         existing.transactionId = values.transactionId
         existing.accountId = values.accountId
@@ -130,12 +147,15 @@ extension ProfileDataSyncHandler {
   nonisolated static func batchUpsertCategories(
     _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
-    let pairs = uuidPairs(from: ckRecords)
     let existing = fetchOrLog(FetchDescriptor<CategoryRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
-    for (id, ckRecord) in pairs {
-      let values = CategoryRecord.fieldValues(from: ckRecord)
+    for ckRecord in ckRecords {
+      guard let values = CategoryRecord.fieldValues(from: ckRecord) else {
+        logMalformed("batchUpsertCategories", ckRecord)
+        continue
+      }
+      let id = values.id
       if let existing = byID[id] {
         existing.name = values.name
         existing.parentId = values.parentId
@@ -151,12 +171,15 @@ extension ProfileDataSyncHandler {
   nonisolated static func batchUpsertEarmarks(
     _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
-    let pairs = uuidPairs(from: ckRecords)
     let existing = fetchOrLog(FetchDescriptor<EarmarkRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
-    for (id, ckRecord) in pairs {
-      let values = EarmarkRecord.fieldValues(from: ckRecord)
+    for ckRecord in ckRecords {
+      guard let values = EarmarkRecord.fieldValues(from: ckRecord) else {
+        logMalformed("batchUpsertEarmarks", ckRecord)
+        continue
+      }
+      let id = values.id
       if let existing = byID[id] {
         existing.name = values.name
         existing.position = values.position
@@ -177,12 +200,15 @@ extension ProfileDataSyncHandler {
   nonisolated static func batchUpsertEarmarkBudgetItems(
     _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
-    let pairs = uuidPairs(from: ckRecords)
     let existing = fetchOrLog(FetchDescriptor<EarmarkBudgetItemRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
-    for (id, ckRecord) in pairs {
-      let values = EarmarkBudgetItemRecord.fieldValues(from: ckRecord)
+    for ckRecord in ckRecords {
+      guard let values = EarmarkBudgetItemRecord.fieldValues(from: ckRecord) else {
+        logMalformed("batchUpsertEarmarkBudgetItems", ckRecord)
+        continue
+      }
+      let id = values.id
       if let existing = byID[id] {
         existing.earmarkId = values.earmarkId
         existing.categoryId = values.categoryId
@@ -200,12 +226,15 @@ extension ProfileDataSyncHandler {
   nonisolated static func batchUpsertInvestmentValues(
     _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
-    let pairs = uuidPairs(from: ckRecords)
     let existing = fetchOrLog(FetchDescriptor<InvestmentValueRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
-    for (id, ckRecord) in pairs {
-      let values = InvestmentValueRecord.fieldValues(from: ckRecord)
+    for ckRecord in ckRecords {
+      guard let values = InvestmentValueRecord.fieldValues(from: ckRecord) else {
+        logMalformed("batchUpsertInvestmentValues", ckRecord)
+        continue
+      }
+      let id = values.id
       if let existing = byID[id] {
         existing.accountId = values.accountId
         existing.date = values.date
@@ -223,12 +252,15 @@ extension ProfileDataSyncHandler {
   nonisolated static func batchUpsertCSVImportProfiles(
     _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
-    let pairs = uuidPairs(from: ckRecords)
     let existing = fetchOrLog(FetchDescriptor<CSVImportProfileRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
-    for (id, ckRecord) in pairs {
-      let values = CSVImportProfileRecord.fieldValues(from: ckRecord)
+    for ckRecord in ckRecords {
+      guard let values = CSVImportProfileRecord.fieldValues(from: ckRecord) else {
+        logMalformed("batchUpsertCSVImportProfiles", ckRecord)
+        continue
+      }
+      let id = values.id
       if let existing = byID[id] {
         existing.accountId = values.accountId
         existing.parserIdentifier = values.parserIdentifier
@@ -251,12 +283,15 @@ extension ProfileDataSyncHandler {
   nonisolated static func batchUpsertImportRules(
     _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
-    let pairs = uuidPairs(from: ckRecords)
     let existing = fetchOrLog(FetchDescriptor<ImportRuleRecord>(), context: context)
     var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
 
-    for (id, ckRecord) in pairs {
-      let values = ImportRuleRecord.fieldValues(from: ckRecord)
+    for ckRecord in ckRecords {
+      guard let values = ImportRuleRecord.fieldValues(from: ckRecord) else {
+        logMalformed("batchUpsertImportRules", ckRecord)
+        continue
+      }
+      let id = values.id
       if let existing = byID[id] {
         existing.name = values.name
         existing.enabled = values.enabled
@@ -274,12 +309,12 @@ extension ProfileDataSyncHandler {
     }
   }
 
-  /// Converts `CKRecord`s whose record names are UUID strings into `(UUID, CKRecord)`
-  /// pairs, silently dropping any records whose name isn't a valid UUID.
-  nonisolated private static func uuidPairs(from ckRecords: [CKRecord]) -> [(UUID, CKRecord)] {
-    ckRecords.compactMap { record in
-      guard let uuid = record.recordID.uuid else { return nil }
-      return (uuid, record)
-    }
+  /// Logs a malformed incoming record (one whose `recordID` does not decode into a valid
+  /// id for its record type) at error level so the skip is visible in diagnostics
+  /// instead of being silently dropped.
+  nonisolated private static func logMalformed(_ site: String, _ ckRecord: CKRecord) {
+    batchLogger.error(
+      "\(site): malformed recordID '\(ckRecord.recordID.recordName)' (recordType \(ckRecord.recordType)) — skipping"
+    )
   }
 }

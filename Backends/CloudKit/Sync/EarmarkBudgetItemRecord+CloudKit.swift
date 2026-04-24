@@ -17,9 +17,10 @@ extension EarmarkBudgetItemRecord: CloudKitRecordConvertible {
     return record
   }
 
-  static func fieldValues(from ckRecord: CKRecord) -> EarmarkBudgetItemRecord {
-    EarmarkBudgetItemRecord(
-      id: ckRecord.recordID.uuid ?? UUID(),
+  static func fieldValues(from ckRecord: CKRecord) -> EarmarkBudgetItemRecord? {
+    guard let id = ckRecord.recordID.uuid else { return nil }
+    return EarmarkBudgetItemRecord(
+      id: id,
       earmarkId: (ckRecord["earmarkId"] as? String).flatMap { UUID(uuidString: $0) } ?? UUID(),
       categoryId: (ckRecord["categoryId"] as? String).flatMap { UUID(uuidString: $0) } ?? UUID(),
       amount: ckRecord["amount"] as? Int64 ?? 0,

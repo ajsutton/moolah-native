@@ -17,9 +17,10 @@ extension ProfileRecord: CloudKitRecordConvertible {
     return record
   }
 
-  static func fieldValues(from ckRecord: CKRecord) -> ProfileRecord {
-    ProfileRecord(
-      id: ckRecord.recordID.uuid ?? UUID(),
+  static func fieldValues(from ckRecord: CKRecord) -> ProfileRecord? {
+    guard let id = ckRecord.recordID.uuid else { return nil }
+    return ProfileRecord(
+      id: id,
       label: ckRecord["label"] as? String ?? "",
       currencyCode: ckRecord["currencyCode"] as? String ?? "",
       financialYearStartMonth: ckRecord["financialYearStartMonth"] as? Int ?? 7,

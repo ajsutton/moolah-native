@@ -24,9 +24,10 @@ extension CSVImportProfileRecord: CloudKitRecordConvertible {
     return record
   }
 
-  static func fieldValues(from ckRecord: CKRecord) -> CSVImportProfileRecord {
+  static func fieldValues(from ckRecord: CKRecord) -> CSVImportProfileRecord? {
+    guard let id = ckRecord.recordID.uuid else { return nil }
     let record = CSVImportProfileRecord(
-      id: ckRecord.recordID.uuid ?? UUID(),
+      id: id,
       accountId: (ckRecord["accountId"] as? String).flatMap { UUID(uuidString: $0) } ?? UUID(),
       parserIdentifier: ckRecord["parserIdentifier"] as? String ?? "",
       headerSignature: [],

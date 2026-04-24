@@ -20,8 +20,8 @@ extension ImportRuleRecord: CloudKitRecordConvertible {
     return record
   }
 
-  static func fieldValues(from ckRecord: CKRecord) -> ImportRuleRecord {
-    let id = ckRecord.recordID.uuid ?? UUID()
+  static func fieldValues(from ckRecord: CKRecord) -> ImportRuleRecord? {
+    guard let id = ckRecord.recordID.uuid else { return nil }
     // The convenience initializer re-encodes the conditions/actions arrays,
     // so to avoid a decode-then-re-encode round trip we go through the
     // synthesised property setters on a fresh record.

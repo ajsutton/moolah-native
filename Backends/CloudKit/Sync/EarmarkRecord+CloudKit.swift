@@ -23,9 +23,10 @@ extension EarmarkRecord: CloudKitRecordConvertible {
     return record
   }
 
-  static func fieldValues(from ckRecord: CKRecord) -> EarmarkRecord {
-    EarmarkRecord(
-      id: ckRecord.recordID.uuid ?? UUID(),
+  static func fieldValues(from ckRecord: CKRecord) -> EarmarkRecord? {
+    guard let id = ckRecord.recordID.uuid else { return nil }
+    return EarmarkRecord(
+      id: id,
       name: ckRecord["name"] as? String ?? "",
       position: ckRecord["position"] as? Int ?? 0,
       isHidden: (ckRecord["isHidden"] as? Int ?? 0) != 0,

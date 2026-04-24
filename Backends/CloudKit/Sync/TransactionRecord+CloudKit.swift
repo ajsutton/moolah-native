@@ -50,9 +50,10 @@ extension TransactionRecord: CloudKitRecordConvertible {
     }
   }
 
-  static func fieldValues(from ckRecord: CKRecord) -> TransactionRecord {
+  static func fieldValues(from ckRecord: CKRecord) -> TransactionRecord? {
+    guard let id = ckRecord.recordID.uuid else { return nil }
     let record = TransactionRecord(
-      id: ckRecord.recordID.uuid ?? UUID(),
+      id: id,
       date: ckRecord["date"] as? Date ?? Date(),
       payee: ckRecord["payee"] as? String,
       notes: ckRecord["notes"] as? String,

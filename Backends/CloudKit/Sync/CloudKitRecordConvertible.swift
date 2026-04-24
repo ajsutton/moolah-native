@@ -8,9 +8,17 @@ protocol CloudKitRecordConvertible {
   /// Converts this record to a CKRecord in the given zone.
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord
 
-  /// Extracts field values from a CKRecord. Returns a new instance with the extracted values.
+  /// Extracts field values from a CKRecord. Returns a new instance with the extracted values,
+  /// or `nil` if the `CKRecord` does not carry a valid identifier for this record type.
+  /// For UUID-keyed conformers (everything except `InstrumentRecord`) this means
+  /// `recordID.uuid == nil`. `InstrumentRecord` is keyed by `recordID.recordName`, which
+  /// is always present on a valid `CKRecord.ID`, so it never returns `nil`.
+  ///
+  /// Callers are expected to log and skip when this returns `nil` so a malformed incoming
+  /// record surfaces as an error rather than a phantom row with a fresh random id.
+  ///
   /// Note: This does not create a managed @Model instance — it returns field values only.
-  static func fieldValues(from ckRecord: CKRecord) -> Self
+  static func fieldValues(from ckRecord: CKRecord) -> Self?
 }
 
 /// Protocol for records that have a UUID `id` property.

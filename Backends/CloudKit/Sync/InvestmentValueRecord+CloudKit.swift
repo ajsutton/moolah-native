@@ -17,9 +17,10 @@ extension InvestmentValueRecord: CloudKitRecordConvertible {
     return record
   }
 
-  static func fieldValues(from ckRecord: CKRecord) -> InvestmentValueRecord {
-    InvestmentValueRecord(
-      id: ckRecord.recordID.uuid ?? UUID(),
+  static func fieldValues(from ckRecord: CKRecord) -> InvestmentValueRecord? {
+    guard let id = ckRecord.recordID.uuid else { return nil }
+    return InvestmentValueRecord(
+      id: id,
       accountId: (ckRecord["accountId"] as? String).flatMap { UUID(uuidString: $0) } ?? UUID(),
       date: ckRecord["date"] as? Date ?? Date(),
       value: ckRecord["value"] as? Int64 ?? 0,
