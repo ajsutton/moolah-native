@@ -50,7 +50,15 @@ final class ProfileStore {
   let defaults: UserDefaults
   let validator: (any ServerValidator)?
   let containerManager: ProfileContainerManager?
+  private let syncCoordinator: SyncCoordinator?
   let logger = Logger(subsystem: "com.moolah.app", category: "ProfileStore")
+
+  /// Pass-through to ``SyncCoordinator/iCloudAvailability``. `.unknown`
+  /// when no coordinator was injected (tests, previews). View code (e.g.
+  /// `WelcomeView`) reads this rather than reaching into the sync layer.
+  var iCloudAvailability: ICloudAvailability {
+    syncCoordinator?.iCloudAvailability ?? .unknown
+  }
 
   /// Combined list of all profiles from both backends.
   var profiles: [Profile] {
@@ -68,11 +76,13 @@ final class ProfileStore {
   init(
     defaults: UserDefaults = .standard,
     validator: (any ServerValidator)? = nil,
-    containerManager: ProfileContainerManager? = nil
+    containerManager: ProfileContainerManager? = nil,
+    syncCoordinator: SyncCoordinator? = nil
   ) {
     self.defaults = defaults
     self.validator = validator
     self.containerManager = containerManager
+    self.syncCoordinator = syncCoordinator
     loadFromDefaults()
     if containerManager != nil {
       loadCloudProfiles(isInitialLoad: true)
