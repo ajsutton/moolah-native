@@ -92,13 +92,6 @@ opt_in_rules:
   - vertical_parameter_alignment_on_call
   - yoda_condition
 
-# `swiftlint analyze` rules (require a compiler output file, not run by
-# `swiftlint lint`). Kept here so that when `analyze` is run it picks up the
-# same opt-in set the team cares about.
-analyzer_rules:
-  - unused_declaration
-  - unused_import
-
 # SwiftLint (0.63) rejects per-rule `excluded:` on `file_length` and
 # `type_body_length` (surfaces as "invalid key(s) 'excluded'"), and silently
 # ignores it on `function_body_length`. Path-scoping would require moving
