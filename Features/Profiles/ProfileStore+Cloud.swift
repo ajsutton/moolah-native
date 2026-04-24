@@ -29,15 +29,26 @@ extension ProfileStore {
         cancelPendingRetry()
       }
 
-      // Auto-select a profile when none is active (e.g. new device receiving
-      // its first cloud profile from another device). Suppressed when
-      // `WelcomeView` is mid-create — see design spec §3.3 race condition.
-      if activeProfileID == nil, let first = profiles.first, welcomePhase != .creating {
+      // Auto-select a profile when none is active AND there is exactly one
+      // profile in total (e.g. new device receiving its first cloud profile
+      // from another device). Suppressed when `WelcomeView` is mid-create —
+      // see design spec §3.3 race condition. With two or more profiles, the
+      // `WelcomeView` picker (state 5) lets the user choose explicitly.
+      if activeProfileID == nil,
+        profiles.count == 1,
+        let first = profiles.first,
+        welcomePhase != .creating
+      {
         self.activeProfileID = first.id
         saveActiveProfileID()
         logger.debug("Auto-selected profile: \(first.id)")
       } else if welcomePhase == .creating {
         logger.debug("Skipped auto-select — welcomePhase == .creating")
+      } else if activeProfileID == nil, profiles.count > 1 {
+        let profileCount = profiles.count
+        logger.debug(
+          "Skipped auto-select — \(profileCount) profiles present, picker will choose"
+        )
       }
 
       // Handle profiles deleted on another device.

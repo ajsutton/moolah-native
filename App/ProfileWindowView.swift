@@ -15,8 +15,11 @@
 
     @Environment(\.dismiss) private var dismiss
 
-    /// Resolve the profile to display: the window's profileID if it matches a known profile,
-    /// otherwise the active profile, otherwise the first profile.
+    /// Resolve the profile to display: the window's profileID if it matches a
+    /// known profile, otherwise the active profile. Falls back to the single
+    /// profile only when exactly one exists — with 2+ profiles and nothing
+    /// selected, `WelcomeView` shows its picker (state 5) instead of
+    /// silently opening one of them.
     private var resolvedProfile: Profile? {
       if let profileID,
         let profile = profileStore.profiles.first(where: { $0.id == profileID })
@@ -28,7 +31,7 @@
       {
         return profile
       }
-      return profileStore.profiles.first
+      return profileStore.profiles.count == 1 ? profileStore.profiles.first : nil
     }
 
     var body: some View {
@@ -40,24 +43,28 @@
             .onChange(of: profile.resolvedServerURL) { _, _ in
               sessionManager.rebuildSession(for: profile)
             }
-        } else if !profileStore.hasProfiles {
-          // `WelcomeView`'s `.heroChecking` state covers the
-          // `isCloudLoadPending` case too — the old bare `ProgressView`
-          // branch is subsumed by the new state machine.
-          WelcomeView()
-            .onChange(of: profileStore.profiles) { _, newProfiles in
-              if let first = newProfiles.first {
-                openWindow(value: first.id)
-              }
-            }
-        } else {
-          // Profile is genuinely gone — close this window
+        } else if profileID != nil {
+          // This window was opened for a specific profile that no longer
+          // exists. Close it — the user will land on whichever window
+          // SwiftUI brings forward next.
           Color.clear
             .onAppear {
               logger.warning(
                 "Dismissing window — profile not found. profileID=\(profileID?.uuidString ?? "nil", privacy: .public), profileCount=\(profileStore.profiles.count), profileIDs=\(profileStore.profiles.map(\.id).map(\.uuidString).joined(separator: ","), privacy: .public)"
               )
               dismiss()
+            }
+        } else {
+          // No specific profile requested AND no active profile. Covers
+          // both the empty first-run case (`!hasProfiles` → hero state 1)
+          // and the multi-profile-no-selection case (2+ profiles, none
+          // picked → picker state 5). `WelcomeView`'s state machine
+          // picks the right branch.
+          WelcomeView()
+            .onChange(of: profileStore.profiles) { _, newProfiles in
+              if newProfiles.count == 1, let first = newProfiles.first {
+                openWindow(value: first.id)
+              }
             }
         }
       }
