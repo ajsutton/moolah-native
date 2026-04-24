@@ -36,7 +36,7 @@ struct InstrumentRecordCryptoFieldsTests {
   }
 
   @Test
-  func ckRecordRoundTripWithMapping() {
+  func ckRecordRoundTripWithMapping() throws {
     let original = InstrumentRecord(
       id: "1:0xdac17f958d2ee523a2206206994597c13d831ec7",
       kind: "cryptoToken",
@@ -56,7 +56,7 @@ struct InstrumentRecordCryptoFieldsTests {
     #expect(ckRecord["cryptocompareSymbol"] as? String == "USDT")
     #expect(ckRecord["binanceSymbol"] as? String == "USDTUSDT")
 
-    let decoded = InstrumentRecord.fieldValues(from: ckRecord)
+    let decoded = try #require(InstrumentRecord.fieldValues(from: ckRecord))
     #expect(decoded.coingeckoId == "tether")
     #expect(decoded.cryptocompareSymbol == "USDT")
     #expect(decoded.binanceSymbol == "USDTUSDT")
@@ -80,7 +80,7 @@ struct InstrumentRecordCryptoFieldsTests {
   }
 
   @Test
-  func decodingPreMigrationCKRecordLeavesMappingFieldsNil() {
+  func decodingPreMigrationCKRecordLeavesMappingFieldsNil() throws {
     // Simulate a record saved by an older version that didn't know about
     // the three new fields. Only the legacy keys are present.
     let zoneID = CKRecordZone.ID(zoneName: "test", ownerName: CKCurrentUserDefaultName)
@@ -90,7 +90,7 @@ struct InstrumentRecordCryptoFieldsTests {
     ckRecord["name"] = "AUD" as CKRecordValue
     ckRecord["decimals"] = 2 as CKRecordValue
 
-    let decoded = InstrumentRecord.fieldValues(from: ckRecord)
+    let decoded = try #require(InstrumentRecord.fieldValues(from: ckRecord))
     #expect(decoded.coingeckoId == nil)
     #expect(decoded.cryptocompareSymbol == nil)
     #expect(decoded.binanceSymbol == nil)
