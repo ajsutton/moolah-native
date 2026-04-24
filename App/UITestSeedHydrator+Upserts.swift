@@ -35,6 +35,7 @@ extension UITestSeedHydrator {
     let date: Date
     let amount: InstrumentAmount
     let accountId: UUID
+    let categoryId: UUID?
   }
 
   struct CustomExpenseSplitSpec {
@@ -161,6 +162,7 @@ extension UITestSeedHydrator {
         instrumentId: spec.amount.instrument.id,
         quantity: outgoing.storageValue,
         type: TransactionType.expense.rawValue,
+        categoryId: spec.categoryId,
         sortOrder: 0
       )
     )

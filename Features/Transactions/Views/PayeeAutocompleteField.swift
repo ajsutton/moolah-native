@@ -37,8 +37,11 @@ struct PayeeSuggestionDropdown: View {
   let onSelect: (String) -> Void
 
   private var visibleSuggestions: [PayeeSuggestion] {
+    // Include exact matches: when the user has typed a known payee in
+    // full, seeing that payee highlighted in the dropdown is the
+    // confirmation that the app recognised it. Suppressing it made the
+    // suggestion look forgotten.
     suggestions
-      .filter { $0.localizedCaseInsensitiveCompare(searchText) != .orderedSame }
       .prefix(8)
       .enumerated()
       .map { PayeeSuggestion(id: $0.offset, name: $0.element) }

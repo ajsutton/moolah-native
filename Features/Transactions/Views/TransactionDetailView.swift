@@ -508,28 +508,13 @@ struct TransactionDetailView: View {
         text: $draft.categoryText,
         highlightedIndex: $categoryHighlightedIndex,
         suggestionCount: categoryVisibleSuggestionCount,
-        onTextChange: { _ in
-          if categoryJustSelected {
-            categoryJustSelected = false
-          } else {
-            showCategorySuggestions = true
-          }
-        },
+        onTextChange: { _ in openCategoryDropdownIfFocused() },
         onAcceptHighlighted: acceptHighlightedCategory
       )
       .focused($categoryFieldFocused)
+      .accessibilityIdentifier(UITestIdentifiers.Detail.category)
       .onChange(of: categoryFieldFocused) { _, focused in
-        if !focused {
-          categoryJustSelected = true
-          showCategorySuggestions = false
-          categoryHighlightedIndex = nil
-          if let id = draft.categoryId, let cat = categories.by(id: id) {
-            draft.categoryText = categories.path(for: cat)
-          } else {
-            draft.categoryText = ""
-            draft.categoryId = nil
-          }
-        }
+        if !focused { handleCategoryFieldBlur() }
       }
 
       Picker("Earmark", selection: $draft.earmarkId) {
@@ -542,6 +527,32 @@ struct TransactionDetailView: View {
         .pickerStyle(.menu)
       #endif
     }
+  }
+
+  /// Opens the category dropdown in response to a user-driven edit.
+  ///
+  /// Only a focused field's text change counts as a user edit. Programmatic
+  /// writes (payee-autofill, focus-out normalisation) also flow through
+  /// `onChange(of: text)`; without the focus guard they'd open the picker
+  /// the user never asked to browse.
+  private func openCategoryDropdownIfFocused() {
+    guard categoryFieldFocused else { return }
+    if categoryJustSelected {
+      categoryJustSelected = false
+    } else {
+      showCategorySuggestions = true
+    }
+  }
+
+  /// Resets picker UI state on blur and delegates the `categoryText` /
+  /// `categoryId` reconciliation to `TransactionDraft` so the rule — "text
+  /// that doesn't resolve to a known category is cleared" — is exercised
+  /// directly by `TransactionDraft` tests without a view host.
+  private func handleCategoryFieldBlur() {
+    categoryJustSelected = true
+    showCategorySuggestions = false
+    categoryHighlightedIndex = nil
+    draft.normaliseCategoryText(using: categories)
   }
 
   private var customDetailsSection: some View {
@@ -845,10 +856,10 @@ struct TransactionDetailView: View {
 
   private var payeeVisibleSuggestions: [String] {
     guard showPayeeSuggestions, !draft.payee.isEmpty else { return [] }
-    return Array(
-      transactionStore.payeeSuggestionSource.suggestions
-        .filter { $0.localizedCaseInsensitiveCompare(draft.payee) != .orderedSame }
-        .prefix(8))
+    // Exact matches are retained — see `PayeeSuggestionDropdown.visibleSuggestions`.
+    // Both layers filter the same source; keeping the logic aligned means
+    // arrow-Enter selection picks whatever the dropdown visibly highlights.
+    return Array(transactionStore.payeeSuggestionSource.suggestions.prefix(8))
   }
 
   private var payeeVisibleSuggestionCount: Int {
@@ -926,7 +937,9 @@ struct TransactionDetailView: View {
             draft.categoryText = selected.path
             showCategorySuggestions = false
             categoryHighlightedIndex = nil
-          }
+          },
+          identifier: UITestIdentifiers.Autocomplete.category,
+          rowIdentifier: UITestIdentifiers.Autocomplete.categorySuggestion(_:)
         )
         .frame(width: rect.width)
         .offset(x: rect.minX, y: rect.maxY + 4)

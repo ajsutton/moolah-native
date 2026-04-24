@@ -58,6 +58,10 @@ public enum UITestIdentifiers {
     /// "USD"). Rendered in the same row as `counterpartAmount`.
     public static let counterpartAmountInstrument = "detail.counterpartAmount.instrument"
 
+    /// Category text field in the simple-mode (single-leg) category section.
+    /// Only rendered when the transaction is in simple (`!isCustom`) mode.
+    public static let category = "detail.category"
+
     /// Category text field inside the given leg section. Only rendered when
     /// the transaction is in multi-leg (`isCustom`) mode.
     public static func legCategory(_ index: Int) -> String {
@@ -72,6 +76,15 @@ public enum UITestIdentifiers {
     /// Indexed payee suggestion row inside the dropdown.
     public static func payeeSuggestion(_ index: Int) -> String {
       "autocomplete.payee.suggestion.\(index)"
+    }
+
+    /// Container element of the simple-mode category autocomplete dropdown.
+    /// Only rendered when the transaction is in simple (`!isCustom`) mode.
+    public static let category = "autocomplete.category"
+
+    /// Indexed category suggestion row inside the simple-mode dropdown.
+    public static func categorySuggestion(_ index: Int) -> String {
+      "autocomplete.category.suggestion.\(index)"
     }
 
     /// Container element of the category autocomplete dropdown for the given
