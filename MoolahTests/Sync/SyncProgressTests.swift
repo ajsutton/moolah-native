@@ -36,6 +36,27 @@ struct SyncProgressTests {
     #expect(progress.phase == .syncing)
   }
 
+  // MARK: - Counter accumulation
+
+  @Test
+  func recordReceivedAdvancesCounter() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.beginReceiving()
+    progress.recordReceived(modifications: 10, deletions: 3, moreComing: true)
+    #expect(progress.recordsReceivedThisSession == 13)
+    #expect(progress.moreComing == true)
+  }
+
+  @Test
+  func recordReceivedIsAdditiveAcrossBatches() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.beginReceiving()
+    progress.recordReceived(modifications: 5, deletions: 0, moreComing: true)
+    progress.recordReceived(modifications: 7, deletions: 2, moreComing: false)
+    #expect(progress.recordsReceivedThisSession == 14)
+    #expect(progress.moreComing == false)
+  }
+
   // MARK: - Helpers
 
   private func makeDefaults() throws -> UserDefaults {
