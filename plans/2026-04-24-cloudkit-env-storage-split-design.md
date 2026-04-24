@@ -117,7 +117,7 @@ extension URL {
   /// Use for any on-disk state tied to a CloudKit container: SwiftData stores,
   /// sync-state files, CKSyncEngine serialisations, nightly backups.
   /// Creates the subdirectory on demand.
-  static var moolahEnvironmentScopedApplicationSupport: URL { … }
+  static var moolahScopedApplicationSupport: URL { … }
 }
 ```
 
@@ -185,7 +185,7 @@ There is no Swift‑side check that the embedded environment matches the entitle
 
 - **Unit**: `CloudKitEnvironmentTests` — resolver happy path for both values, `storageSubdirectory` mapping.
 - **Integration**: `ProfileContainerManagerScopedStorageTests` — `ProfileContainerManager.container(for:)` on a non‑in‑memory instance, with the Application Support root overridden to a temp directory, writes `Moolah-<uuid>.store` under `<tmp>/Development/`.
-- **Existing contract / store tests**: no change required. Tests build under `Debug-Tests`, the new `CLOUDKIT_ENVIRONMENT=Development` build setting feeds into the test host's Info.plist at build time, and the resolver returns `.development` — but the only code path that consumes it (`moolahEnvironmentScopedApplicationSupport`) isn't exercised by tests that use `inMemory: true` stores.
+- **Existing contract / store tests**: no change required. Tests build under `Debug-Tests`, the new `CLOUDKIT_ENVIRONMENT=Development` build setting feeds into the test host's Info.plist at build time, and the resolver returns `.development` — but the only code path that consumes it (`moolahScopedApplicationSupport`) isn't exercised by tests that use `inMemory: true` stores.
 - **Manual verification** (one‑shot):
   1. `ENABLE_ENTITLEMENTS=1 just generate`, run from Xcode → confirm `~/Library/Application Support/Development/` populates; Production subtree is absent or untouched.
   2. `just install-mac`, launch `/Applications/Moolah.app` → confirm `~/Library/Application Support/Production/` populates; Development subtree untouched.

@@ -4,7 +4,7 @@
 
 **Goal:** Pin each build's CloudKit environment explicitly via a per‑configuration `CLOUDKIT_ENVIRONMENT` build setting, expose it in the entitlement and Info.plist, and scope every piece of on‑disk state tied to a CloudKit container into a `Development/` or `Production/` subdirectory of Application Support.
 
-**Architecture:** Single source of truth — the `CLOUDKIT_ENVIRONMENT` build setting — drives both `com.apple.developer.icloud-container-environment` (entitlement) and `MoolahCloudKitEnvironment` (Info.plist). Swift code reads the Info.plist value through a new `CloudKitEnvironment` resolver and uses a `URL.moolahEnvironmentScopedApplicationSupport` helper for all CloudKit‑related on‑disk state. Missing or malformed Info.plist value aborts launch via `fatalError`.
+**Architecture:** Single source of truth — the `CLOUDKIT_ENVIRONMENT` build setting — drives both `com.apple.developer.icloud-container-environment` (entitlement) and `MoolahCloudKitEnvironment` (Info.plist). Swift code reads the Info.plist value through a new `CloudKitEnvironment` resolver and uses a `URL.moolahScopedApplicationSupport` helper for all CloudKit‑related on‑disk state. Missing or malformed Info.plist value aborts launch via `fatalError`.
 
 **Tech Stack:** Swift 6, Swift Testing (`@Suite`, `@Test`, `#expect`), SwiftData, `xcodegen` (`just generate`). Build via `just build-mac`, test via `just test-mac`. Pre‑commit: `just format` then `just format-check`.
 
@@ -341,7 +341,7 @@
 
 ---
 
-## Task 4: Add `URL.moolahEnvironmentScopedApplicationSupport` helper + test override (TDD)
+## Task 4: Add `URL.moolahScopedApplicationSupport` helper + test override (TDD)
 
 **Files:**
 - Create: `Shared/URL+MoolahStorage.swift`
@@ -369,7 +369,7 @@
       URL.moolahApplicationSupportOverride = root
       defer { URL.moolahApplicationSupportOverride = nil }
 
-      let scoped = URL.moolahEnvironmentScopedApplicationSupport
+      let scoped = URL.moolahScopedApplicationSupport
 
       let expected = root.appending(path: CloudKitEnvironment.resolved().storageSubdirectory)
       #expect(scoped.standardizedFileURL == expected.standardizedFileURL)
@@ -379,7 +379,7 @@
     @Test("falls back to Application Support when no override is set")
     func testScopedRootDefaultsToApplicationSupport() {
       URL.moolahApplicationSupportOverride = nil
-      let scoped = URL.moolahEnvironmentScopedApplicationSupport
+      let scoped = URL.moolahScopedApplicationSupport
       let expectedPrefix = URL.applicationSupportDirectory
         .appending(path: CloudKitEnvironment.resolved().storageSubdirectory)
       #expect(scoped.standardizedFileURL == expectedPrefix.standardizedFileURL)
@@ -393,7 +393,7 @@
   just test-mac URLMoolahStorageTests 2>&1 | tee .agent-tmp/test-output.txt | tail -20
   ```
 
-  Expected: compile error for missing `moolahApplicationSupportOverride` and `moolahEnvironmentScopedApplicationSupport`.
+  Expected: compile error for missing `moolahApplicationSupportOverride` and `moolahScopedApplicationSupport`.
 
 - [ ] **Step 3: Create the helper**
 
@@ -414,7 +414,7 @@
     /// stores, sync-state files, `CKSyncEngine` serialisations, nightly
     /// backups. The subdirectory is created on demand so callers never need to
     /// guard on its existence.
-    static var moolahEnvironmentScopedApplicationSupport: URL {
+    static var moolahScopedApplicationSupport: URL {
       let root = moolahApplicationSupportOverride ?? URL.applicationSupportDirectory
       let scoped = root.appending(path: CloudKitEnvironment.resolved().storageSubdirectory)
       try? FileManager.default.createDirectory(at: scoped, withIntermediateDirectories: true)
@@ -530,7 +530,7 @@
 
   ```swift
         let storeName = "Moolah-\(profileId.uuidString)"
-        let url = URL.moolahEnvironmentScopedApplicationSupport
+        let url = URL.moolahScopedApplicationSupport
           .appending(path: "Moolah-\(profileId.uuidString).store")
         config = ModelConfiguration(storeName, url: url, cloudKitDatabase: .none)
   ```
@@ -546,7 +546,7 @@
 
   ```swift
       let basePath = "Moolah-\(profileId.uuidString).store"
-      let baseURL = URL.moolahEnvironmentScopedApplicationSupport.appending(path: basePath)
+      let baseURL = URL.moolahScopedApplicationSupport.appending(path: basePath)
   ```
 
   Line 64–66 (also inside `deleteStore(for:)`), replace:
@@ -561,7 +561,7 @@
 
   ```swift
       // Delete the sync state file
-      let syncStateURL = URL.moolahEnvironmentScopedApplicationSupport
+      let syncStateURL = URL.moolahScopedApplicationSupport
         .appending(path: "Moolah-\(profileId.uuidString).syncstate")
   ```
 
@@ -609,7 +609,7 @@
   Replace with:
 
   ```swift
-        let profileStoreURL = URL.moolahEnvironmentScopedApplicationSupport
+        let profileStoreURL = URL.moolahScopedApplicationSupport
           .appending(path: "Moolah-v2.store")
   ```
 
@@ -649,7 +649,7 @@
   with:
 
   ```swift
-    let stateFileURL = URL.moolahEnvironmentScopedApplicationSupport
+    let stateFileURL = URL.moolahScopedApplicationSupport
       .appending(path: "Moolah-v2-sync.syncstate")
   ```
 
@@ -705,7 +705,7 @@ Context: `importStagingDirectory(for:)` returns `<ApplicationSupport>/Moolah/csv
 
   ```swift
     nonisolated static func importStagingDirectory(for profileId: UUID) -> URL {
-      URL.moolahEnvironmentScopedApplicationSupport
+      URL.moolahScopedApplicationSupport
         .appendingPathComponent("Moolah", isDirectory: true)
         .appendingPathComponent("csv-staging", isDirectory: true)
         .appendingPathComponent(profileId.uuidString, isDirectory: true)
@@ -814,7 +814,7 @@ Context: `importStagingDirectory(for:)` returns `<ApplicationSupport>/Moolah/csv
 
   ```swift
       init(
-        backupDirectory: URL = URL.moolahEnvironmentScopedApplicationSupport
+        backupDirectory: URL = URL.moolahScopedApplicationSupport
           .appending(path: "Moolah/Backups"),
   ```
 
