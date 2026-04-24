@@ -94,6 +94,16 @@ actor CryptoPriceService {
     try? FileManager.default.removeItem(at: url)
   }
 
+  /// Drops any cached price data for the given instrument id — removes
+  /// both the in-memory cache entry and the on-disk cache file. Called
+  /// when an instrument is un-registered so we don't retain stale prices
+  /// for something the user no longer cares about.
+  func purgeCache(instrumentId: String) {
+    caches.removeValue(forKey: instrumentId)
+    let url = cacheFileURL(tokenId: instrumentId)
+    try? FileManager.default.removeItem(at: url)
+  }
+
   // MARK: - Single price
 
   func price(

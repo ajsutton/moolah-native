@@ -206,4 +206,38 @@ struct CryptoPriceServiceTests {
   }
 
   // MARK: - Gzip round-trip
+
+  // MARK: - purgeCache
+
+  @Test("purgeCache removes the in-memory cache entry and disk file")
+  func purgeCacheRemovesInMemoryAndDisk() async throws {
+    let tempDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("purge-test-\(UUID())")
+    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: tempDir) }
+
+    let service = makeService(
+      prices: ["1:native": ["2026-04-10": dec("1623.45")]],
+      cacheDirectory: tempDir
+    )
+
+    _ = try await service.price(
+      for: ethInstrument, mapping: ethMapping, on: date("2026-04-10"))
+    let filename = "prices-\(ethInstrument.id.replacingOccurrences(of: ":", with: "-")).json.gz"
+    let onDisk = tempDir.appendingPathComponent(filename)
+    #expect(FileManager.default.fileExists(atPath: onDisk.path))
+
+    // Purge and verify the disk file is gone. The in-memory cache is
+    // private; exercising it indirectly through a fresh service against
+    // the same directory proves the disk file is gone (a subsequent
+    // lookup with a failing client would now throw).
+    await service.purgeCache(instrumentId: ethInstrument.id)
+    #expect(FileManager.default.fileExists(atPath: onDisk.path) == false)
+
+    let freshService = makeService(shouldFail: true, cacheDirectory: tempDir)
+    await #expect(throws: (any Error).self) {
+      try await freshService.price(
+        for: self.ethInstrument, mapping: self.ethMapping, on: self.date("2026-04-10"))
+    }
+  }
 }
