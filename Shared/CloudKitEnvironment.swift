@@ -8,8 +8,9 @@ enum CloudKitEnvironment: String, Sendable {
   case development = "Development"
   case production = "Production"
 
-  /// Name of the subdirectory under Application Support that this environment
-  /// writes to. Equal to the raw value.
+  /// Filesystem subdirectory name used to segregate on-disk state for this
+  /// environment. Stable across launches so an upgrade of the app reads back
+  /// exactly what the previous run wrote.
   var storageSubdirectory: String { rawValue }
 
   private static let cached: CloudKitEnvironment = {
@@ -36,5 +37,5 @@ enum CloudKitEnvironment: String, Sendable {
     return env
   }
 
-  static let infoPlistKey = "MoolahCloudKitEnvironment"
+  private static let infoPlistKey = "MoolahCloudKitEnvironment"
 }
