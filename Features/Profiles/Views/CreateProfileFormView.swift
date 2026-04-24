@@ -51,7 +51,9 @@ struct CreateProfileFormView: View {
         confirmationButton
       }
     }
-    .onAppear { focus = .name }
+    // Initial focus is declared via `.defaultFocus($focus, .name)` on
+    // the inner `Form` (see `form` below). Re-setting `focus` here in
+    // `onAppear` would race the declarative resolver.
   }
 
   @ViewBuilder private var bannerContent: some View {
@@ -74,6 +76,9 @@ struct CreateProfileFormView: View {
   private var form: some View {
     Form {
       Section {
+        // `.onSubmit` is attached to the TextField directly (not the
+        // parent `Form`) so Return inside the DisclosureGroup's
+        // CurrencyPicker / FY-month Picker doesn't also fire `submit`.
         TextField(String(localized: "Name"), text: $name)
           .focused($focus, equals: .name)
           .submitLabel(.done)
