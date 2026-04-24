@@ -257,6 +257,21 @@ final class SyncCoordinator {
   /// Whether the profile-index zone had changes during the current fetch session.
   var fetchSessionIndexChanged = false
 
+  /// True once the `profile-index` zone has been fetched (even empty-handed)
+  /// at least once since the last `start()`. `WelcomeView` uses this to
+  /// swap "Checking iCloud…" for "No profiles in iCloud yet." once we
+  /// know the answer. Must NOT flip on fetches that only touched
+  /// `profile-data` zones. See design spec §6.2.
+  /// Writable-internal because `+Lifecycle` (separate file) resets it
+  /// inside `stop()` and flips it inside `endFetchingChanges()`.
+  var profileIndexFetchedAtLeastOnce: Bool = false
+
+  /// Per-session flag — set true inside the delegate zone-fetch path
+  /// when the `profile-index` zone ID is observed, regardless of whether
+  /// records were applied. Flushed into `profileIndexFetchedAtLeastOnce`
+  /// inside `endFetchingChanges()`. Reset inside `beginFetchingChanges()`.
+  var fetchSessionTouchedIndexZone = false
+
   /// Cached profile data handlers, keyed by profile UUID.
   var dataHandlers: [UUID: ProfileDataSyncHandler] = [:]
 
