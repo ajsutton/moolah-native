@@ -77,6 +77,7 @@ struct CreateProfileFormView: View {
         TextField(String(localized: "Name"), text: $name)
           .focused($focus, equals: .name)
           .submitLabel(.done)
+          .onSubmit(submit)
           .accessibilityIdentifier(UITestIdentifiers.Welcome.nameField)
         advancedDisclosure
       } header: {
@@ -86,6 +87,11 @@ struct CreateProfileFormView: View {
       }
     }
     .formStyle(.grouped)
+    // `defaultFocus` is the canonical SwiftUI API for initial focus.
+    // `.onAppear { focus = .name }` alone was insufficient on macOS —
+    // the DisclosureGroup was claiming first-responder before the
+    // TextField was ready to accept focus.
+    .defaultFocus($focus, .name)
   }
 
   private var advancedDisclosure: some View {
@@ -148,6 +154,12 @@ struct CreateProfileFormView: View {
   }
 
   private func submit() {
+    // Guard here so keyboard submit (Return in the Name field) respects
+    // the same preconditions as the toolbar button — which disables
+    // itself via the modifier rather than hand-rolling a `guard`.
+    guard !isSubmitting,
+      !name.trimmingCharacters(in: .whitespaces).isEmpty
+    else { return }
     isSubmitting = true
     Task {
       await createAction()

@@ -47,7 +47,20 @@ struct MoolahApp: App {
     syncCoordinator = coordinator
     uiTestingProfileId = setup.uiTestingProfileId
 
+    // UI-testing mode must NOT read the user's real UserDefaults; remote
+    // profiles are persisted there by `ProfileStore.loadFromDefaults` and
+    // would bleed into the seeded container otherwise. A per-launch
+    // suite gives the store an isolated, ephemeral defaults store.
+    let storeDefaults: UserDefaults
+    if uiTestingSeed != nil {
+      let suiteName = "com.moolah.ui-testing.\(UUID().uuidString)"
+      storeDefaults = UserDefaults(suiteName: suiteName) ?? .standard
+      storeDefaults.removePersistentDomain(forName: suiteName)
+    } else {
+      storeDefaults = .standard
+    }
     let store = ProfileStore(
+      defaults: storeDefaults,
       validator: RemoteServerValidator(),
       containerManager: setup.manager,
       syncCoordinator: coordinator
