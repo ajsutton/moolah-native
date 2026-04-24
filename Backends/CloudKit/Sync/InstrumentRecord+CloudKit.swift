@@ -16,6 +16,11 @@ extension InstrumentRecord: CloudKitRecordConvertible {
     if let exchange { record["exchange"] = exchange as CKRecordValue }
     if let chainId { record["chainId"] = chainId as CKRecordValue }
     if let contractAddress { record["contractAddress"] = contractAddress as CKRecordValue }
+    if let coingeckoId { record["coingeckoId"] = coingeckoId as CKRecordValue }
+    if let cryptocompareSymbol {
+      record["cryptocompareSymbol"] = cryptocompareSymbol as CKRecordValue
+    }
+    if let binanceSymbol { record["binanceSymbol"] = binanceSymbol as CKRecordValue }
     return record
   }
 
@@ -32,7 +37,10 @@ extension InstrumentRecord: CloudKitRecordConvertible {
       ticker: ckRecord["ticker"] as? String,
       exchange: ckRecord["exchange"] as? String,
       chainId: ckRecord["chainId"] as? Int,
-      contractAddress: ckRecord["contractAddress"] as? String
+      contractAddress: ckRecord["contractAddress"] as? String,
+      coingeckoId: ckRecord["coingeckoId"] as? String,
+      cryptocompareSymbol: ckRecord["cryptocompareSymbol"] as? String,
+      binanceSymbol: ckRecord["binanceSymbol"] as? String
     )
   }
 }
