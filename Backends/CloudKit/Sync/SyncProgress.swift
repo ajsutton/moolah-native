@@ -63,8 +63,12 @@ final class SyncProgress {
     phase = pendingUploads > 0 ? .syncing : .receiving
   }
 
-  /// `fetchedRecordZoneChanges` event — accumulate counts and capture
-  /// `moreComing` from this batch.
+  /// Called for each `fetchedRecordZoneChanges` batch to accumulate
+  /// received-record counts and update the `moreComing` flag.
+  ///
+  /// `moreComing` is overwritten on every call; the value from the most
+  /// recent batch is the authoritative one. `recordsReceivedThisSession`
+  /// accumulates across all batches in a session.
   func recordReceived(modifications: Int, deletions: Int, moreComing: Bool) {
     recordsReceivedThisSession += modifications + deletions
     self.moreComing = moreComing

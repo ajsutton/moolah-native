@@ -44,16 +44,31 @@ struct SyncProgressTests {
     progress.beginReceiving()
     progress.recordReceived(modifications: 10, deletions: 3, moreComing: true)
     #expect(progress.recordsReceivedThisSession == 13)
+  }
+
+  @Test
+  func recordReceivedCapturesMoreComing() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.beginReceiving()
+    progress.recordReceived(modifications: 10, deletions: 3, moreComing: true)
     #expect(progress.moreComing == true)
   }
 
   @Test
-  func recordReceivedIsAdditiveAcrossBatches() throws {
+  func recordReceivedCounterIsAdditiveAcrossBatches() throws {
     let progress = SyncProgress(userDefaults: try makeDefaults())
     progress.beginReceiving()
     progress.recordReceived(modifications: 5, deletions: 0, moreComing: true)
     progress.recordReceived(modifications: 7, deletions: 2, moreComing: false)
     #expect(progress.recordsReceivedThisSession == 14)
+  }
+
+  @Test
+  func recordReceivedMoreComingIsOverwrittenEachBatch() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.beginReceiving()
+    progress.recordReceived(modifications: 5, deletions: 0, moreComing: true)
+    progress.recordReceived(modifications: 7, deletions: 2, moreComing: false)
     #expect(progress.moreComing == false)
   }
 
