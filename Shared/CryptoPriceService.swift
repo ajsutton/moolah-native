@@ -1,23 +1,23 @@
 // Shared/CryptoPriceService.swift
 
 import Foundation
+import OSLog
 
 actor CryptoPriceService {
   private let clients: [CryptoPriceClient]
   private var caches: [String: CryptoPriceCache] = [:]
   private let cacheDirectory: URL
   private let dateFormatter: ISO8601DateFormatter
-  private let tokenRepository: CryptoTokenRepository
   private let resolutionClient: TokenResolutionClient
+  private let logger = Logger(
+    subsystem: "com.moolah.app", category: "CryptoPriceService")
 
   init(
     clients: [CryptoPriceClient],
     cacheDirectory: URL? = nil,
-    tokenRepository: CryptoTokenRepository = ICloudTokenRepository(),
     resolutionClient: (any TokenResolutionClient)? = nil
   ) {
     self.clients = clients
-    self.tokenRepository = tokenRepository
     self.resolutionClient = resolutionClient ?? NoOpTokenResolutionClient()
     if let cacheDirectory {
       self.cacheDirectory = cacheDirectory
@@ -60,38 +60,6 @@ actor CryptoPriceService {
       binanceSymbol: result.binanceSymbol
     )
     return CryptoRegistration(instrument: instrument, mapping: mapping)
-  }
-
-  // MARK: - Registration management
-
-  func registeredItems() async -> [CryptoRegistration] {
-    (try? await tokenRepository.loadRegistrations()) ?? []
-  }
-
-  func register(_ registration: CryptoRegistration) async throws {
-    var registrations = try await tokenRepository.loadRegistrations()
-    registrations.removeAll { $0.id == registration.id }
-    registrations.append(registration)
-    try await tokenRepository.saveRegistrations(registrations)
-  }
-
-  func remove(_ registration: CryptoRegistration) async throws {
-    var registrations = try await tokenRepository.loadRegistrations()
-    registrations.removeAll { $0.id == registration.id }
-    try await tokenRepository.saveRegistrations(registrations)
-    // Remove cached price data
-    caches.removeValue(forKey: registration.id)
-    let url = cacheFileURL(tokenId: registration.id)
-    try? FileManager.default.removeItem(at: url)
-  }
-
-  func removeById(_ instrumentId: String) async throws {
-    var registrations = try await tokenRepository.loadRegistrations()
-    registrations.removeAll { $0.id == instrumentId }
-    try await tokenRepository.saveRegistrations(registrations)
-    caches.removeValue(forKey: instrumentId)
-    let url = cacheFileURL(tokenId: instrumentId)
-    try? FileManager.default.removeItem(at: url)
   }
 
   /// Drops any cached price data for the given instrument id — removes
@@ -225,13 +193,6 @@ actor CryptoPriceService {
 
   // MARK: - Prefetch
 
-  /// Prefetch latest prices for all registered items.
-  func prefetchLatest() async {
-    let items = await registeredItems()
-    guard !items.isEmpty else { return }
-    await prefetchLatest(for: items)
-  }
-
   func prefetchLatest(for registrations: [CryptoRegistration]) async {
     let mappings = registrations.map(\.mapping)
     do {
@@ -245,7 +206,9 @@ actor CryptoPriceService {
         saveCacheToDisk(tokenId: tokenId)
       }
     } catch {
-      // Prefetch is best-effort
+      logger.warning(
+        "Prefetch failed (best-effort): \(error.localizedDescription, privacy: .public)"
+      )
     }
   }
 }

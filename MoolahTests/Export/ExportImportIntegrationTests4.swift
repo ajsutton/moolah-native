@@ -51,7 +51,8 @@ struct ExportImportIntegrationTests4 {
       modelContainer: freshContainer,
       instrument: aud,
       profileLabel: profile.label,
-      conversionService: FixedConversionService()
+      conversionService: FixedConversionService(),
+      instrumentRegistry: CloudKitInstrumentRegistryRepository(modelContainer: freshContainer)
     )
 
     try await verifyMultiCurrencyRoundTrip(

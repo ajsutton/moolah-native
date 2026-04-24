@@ -34,7 +34,6 @@ struct CryptoPriceServiceTests {
     prices: [String: [String: Decimal]] = [:],
     shouldFail: Bool = false,
     cacheDirectory: URL? = nil,
-    tokenRepository: CryptoTokenRepository? = nil,
     resolutionClient: (any TokenResolutionClient)? = nil
   ) -> CryptoPriceService {
     let clientList =
@@ -49,7 +48,6 @@ struct CryptoPriceServiceTests {
     return CryptoPriceService(
       clients: clientList,
       cacheDirectory: cacheDir,
-      tokenRepository: tokenRepository ?? InMemoryTokenRepository(),
       resolutionClient: resolutionClient
     )
   }

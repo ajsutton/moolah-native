@@ -186,6 +186,11 @@ extension SyncCoordinator {
     syncEngine?.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
   }
 
+  func queueDeletion(recordName: String, zoneID: CKRecordZone.ID) {
+    let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID)
+    syncEngine?.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
+  }
+
   func sendChanges() async {
     guard let syncEngine, isRunning else { return }
     do {

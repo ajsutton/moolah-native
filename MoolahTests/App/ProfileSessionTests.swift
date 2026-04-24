@@ -76,7 +76,7 @@ struct ProfileSessionTests {
     let session = ProfileSession(profile: profile, containerManager: containerManager)
 
     // Store exists and starts empty (registrations load on demand).
-    #expect(session.cryptoTokenStore.registrations.isEmpty)
+    #expect(session.cryptoTokenStore?.registrations.isEmpty == true)
   }
 
   // MARK: - storesToReload (sync reload dispatch policy)

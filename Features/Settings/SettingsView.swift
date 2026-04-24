@@ -47,18 +47,6 @@ struct SettingsView: View {
   // MARK: - macOS: HSplitView layout
 
   #if os(macOS)
-    private var cryptoTokenStoreForSettings: CryptoTokenStore {
-      if let session = sessionForSettings {
-        return session.cryptoTokenStore
-      }
-      let fallbackService = CryptoPriceService(
-        clients: [CryptoCompareClient(), BinanceClient()],
-        tokenRepository: ICloudTokenRepository(),
-        resolutionClient: CompositeTokenResolutionClient()
-      )
-      return CryptoTokenStore(cryptoPriceService: fallbackService)
-    }
-
     /// The Settings scene lives outside `SessionRootView`, so the session
     /// stores aren't in its environment. Resolve one here for the tabs
     /// that depend on per-profile state. Prefer the active profile; fall
@@ -71,13 +59,26 @@ struct SettingsView: View {
       return sessionManager.sessions.values.first
     }
 
+    /// The Crypto Tokens tab's store, taken strictly from the *active* profile's
+    /// session — not any open session — so switching to a Remote/moolah active
+    /// profile correctly hides crypto settings even when a CloudKit session is
+    /// still open in another profile's window.
+    private var activeCryptoTokenStore: CryptoTokenStore? {
+      guard let id = profileStore.activeProfileID,
+        let session = sessionManager.sessions[id]
+      else { return nil }
+      return session.cryptoTokenStore
+    }
+
     private var macOSLayout: some View {
       TabView {
         Tab("Profiles", systemImage: "person.2") {
           profilesContent
         }
-        Tab("Crypto", systemImage: "bitcoinsign.circle") {
-          CryptoSettingsView(store: cryptoTokenStoreForSettings)
+        if let store = activeCryptoTokenStore {
+          Tab("Crypto", systemImage: "bitcoinsign.circle") {
+            CryptoSettingsView(store: store)
+          }
         }
         // macOS Settings tabs host the Form / List directly — the window
         // already supplies chrome and a title, so wrapping in a second

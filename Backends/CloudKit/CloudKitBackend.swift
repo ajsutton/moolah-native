@@ -14,12 +14,14 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
   let conversionService: any InstrumentConversionService
   let csvImportProfiles: any CSVImportProfileRepository
   let importRules: any ImportRuleRepository
+  let instrumentRegistry: any InstrumentRegistryRepository
 
   init(
     modelContainer: ModelContainer,
     instrument: Instrument,
     profileLabel: String,
-    conversionService: any InstrumentConversionService
+    conversionService: any InstrumentConversionService,
+    instrumentRegistry: any InstrumentRegistryRepository
   ) {
     self.auth = CloudKitAuthProvider(profileLabel: profileLabel)
     self.accounts = CloudKitAccountRepository(
@@ -40,5 +42,6 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
     self.csvImportProfiles = CloudKitCSVImportProfileRepository(
       modelContainer: modelContainer)
     self.importRules = CloudKitImportRuleRepository(modelContainer: modelContainer)
+    self.instrumentRegistry = instrumentRegistry
   }
 }

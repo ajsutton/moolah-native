@@ -67,6 +67,21 @@ struct ExportImportIntegrationTests {
       .appendingPathComponent("moolah-test-\(UUID().uuidString).json")
   }
 
+  /// Builds a `CloudKitBackend` over an existing `ModelContainer` for the
+  /// post-import verification step. Centralised so each test isn't repeating
+  /// the constructor boilerplate.
+  private func makeCloudBackend(
+    container: ModelContainer, label: String = "Test Profile"
+  ) -> CloudKitBackend {
+    CloudKitBackend(
+      modelContainer: container,
+      instrument: instrument,
+      profileLabel: label,
+      conversionService: FixedConversionService(),
+      instrumentRegistry: CloudKitInstrumentRegistryRepository(modelContainer: container)
+    )
+  }
+
   @Test("export to JSON file and verify contents")
   func exportToFileAndVerify() async throws {
     let backend = try await makeSeededBackend()
@@ -145,12 +160,7 @@ struct ExportImportIntegrationTests {
     #expect(result.budgetItemCount == 1)
 
     // Verify data is readable through CloudKit repositories
-    let cloudBackend = CloudKitBackend(
-      modelContainer: freshContainer,
-      instrument: instrument,
-      profileLabel: "Test Profile",
-      conversionService: FixedConversionService()
-    )
+    let cloudBackend = makeCloudBackend(container: freshContainer)
 
     let accounts = try await cloudBackend.accounts.fetchAll()
     #expect(accounts.count == 1)
