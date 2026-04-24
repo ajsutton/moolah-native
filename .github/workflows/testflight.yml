@@ -55,6 +55,12 @@ jobs:
         run: |
           sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: \"$APP_VERSION\"/" project.yml
 
+      - name: Promote CloudKit schema to Production
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          CKTOOL_MANAGEMENT_TOKEN: ${{ secrets.CKTOOL_MANAGEMENT_TOKEN }}
+        run: just promote-schema
+
       - name: Deploy to TestFlight
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
