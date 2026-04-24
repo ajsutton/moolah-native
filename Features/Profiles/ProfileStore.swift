@@ -23,6 +23,19 @@ final class ProfileStore {
   var isValidating = false
   var validationError: String?
 
+  /// Signal from `WelcomeView` about which interaction phase is on screen.
+  /// When `.creating`, `loadCloudProfiles` suppresses its auto-activate
+  /// behaviour so a single profile arriving from iCloud doesn't race the
+  /// user's in-flight "Create Profile" tap. Cleared (`nil`) when
+  /// `WelcomeView` unmounts. See design spec §3.3, §8.
+  enum WelcomePhase: Sendable {
+    case landing
+    case creating
+    case pickingProfile
+  }
+
+  var welcomePhase: WelcomePhase?
+
   /// True while the initial cloud profile load may still be retrying.
   /// SwiftData with CloudKit may not have its store ready on the first fetch.
   var isCloudLoadPending = false
