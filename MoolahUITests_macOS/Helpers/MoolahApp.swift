@@ -39,6 +39,9 @@ final class MoolahApp {
   /// Sidebar containing accounts, named views, and earmarks.
   var sidebar: SidebarScreen { SidebarScreen(app: self) }
 
+  /// First-run `WelcomeView` state machine (hero / form / picker).
+  var welcome: WelcomeScreen { WelcomeScreen(app: self) }
+
   /// Centre column listing transactions for the current sidebar selection.
   var transactionList: TransactionListScreen { TransactionListScreen(app: self) }
 

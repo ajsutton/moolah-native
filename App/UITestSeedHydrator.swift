@@ -22,11 +22,50 @@ enum UITestSeedHydrator {
   static func hydrate(
     _ seed: UITestSeed,
     into manager: ProfileContainerManager
-  ) throws -> Profile {
+  ) throws -> Profile? {
     switch seed {
     case .tradeBaseline:
       return try hydrateTradeBaseline(into: manager)
+    case .welcomeEmpty:
+      return nil
+    case .welcomeSingleCloudProfile:
+      try hydrateWelcomeProfile(
+        id: UITestWelcomeFixtures.householdProfileId,
+        label: UITestWelcomeFixtures.householdProfileLabel,
+        into: manager
+      )
+      // Return nil so `uiTestingProfileId` stays unset and the normal
+      // auto-activation flow in `ProfileStore.loadCloudProfiles` can fire.
+      return nil
+    case .welcomeMultipleCloudProfiles:
+      try hydrateWelcomeProfile(
+        id: UITestWelcomeFixtures.householdProfileId,
+        label: UITestWelcomeFixtures.householdProfileLabel,
+        into: manager
+      )
+      try hydrateWelcomeProfile(
+        id: UITestWelcomeFixtures.sideBusinessProfileId,
+        label: UITestWelcomeFixtures.sideBusinessProfileLabel,
+        into: manager
+      )
+      return nil
     }
+  }
+
+  private static func hydrateWelcomeProfile(
+    id: UUID,
+    label: String,
+    into manager: ProfileContainerManager
+  ) throws {
+    let profile = Profile(
+      id: id,
+      label: label,
+      backendType: .cloudKit,
+      currencyCode: UITestWelcomeFixtures.profileCurrencyCode,
+      financialYearStartMonth: 7,
+      createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+    )
+    try upsertProfile(profile, into: manager)
   }
 
   // MARK: - Seeds

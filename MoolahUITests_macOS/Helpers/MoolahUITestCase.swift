@@ -232,42 +232,75 @@ class MoolahUITestCase: XCTestCase {
     lines.append("")
     switch app.seed {
     case .tradeBaseline:
-      let fixtures = UITestFixtures.TradeBaseline.self
-      lines.append("# fixtures")
-      lines.append("profile.id      = \(fixtures.profileId)")
-      lines.append("profile.label   = \(fixtures.profileLabel)")
-      lines.append("profile.currency = \(fixtures.profileCurrencyCode)")
-      lines.append("checking.id     = \(fixtures.checkingAccountId)")
-      lines.append("checking.name   = \(fixtures.checkingAccountName)")
-      lines.append("brokerage.id    = \(fixtures.brokerageAccountId)")
-      lines.append("brokerage.name  = \(fixtures.brokerageAccountName)")
-      lines.append("usdSavings.id   = \(fixtures.usdAccountId)")
-      lines.append("usdSavings.name = \(fixtures.usdAccountName)")
-      lines.append("usdSavings.instrument = \(fixtures.usdAccountInstrumentCode)")
-      lines.append("trade.id        = \(fixtures.bhpPurchaseId)")
-      lines.append("trade.payee     = \(fixtures.bhpPurchasePayee)")
-      lines.append("trade.cents     = \(fixtures.bhpPurchaseAmountCents)")
-      lines.append("trade.date      = \(fixtures.bhpPurchaseDate)")
-      lines.append("historical.amount.cents = \(fixtures.historicalExpenseAmountCents)")
-      for (index, historical) in fixtures.historicalPayees.enumerated() {
-        lines.append(
-          "historical[\(index)].id/payee/date = "
-            + "\(historical.id) / \(historical.payee) / \(historical.date)"
-        )
-      }
-      lines.append(
-        "category.groceries.id/name = "
-          + "\(fixtures.groceriesCategoryId) / \(fixtures.groceriesCategoryName)")
-      lines.append("category.gym.id/name = \(fixtures.gymCategoryId) / \(fixtures.gymCategoryName)")
-      lines.append(
-        "splitShop.id/payee/date = "
-          + "\(fixtures.splitShopId) / \(fixtures.splitShopPayee) / \(fixtures.splitShopDate)")
-      lines.append(
-        "splitShop.legA.cents / legB.cents = "
-          + "\(fixtures.splitShopLegAAmountCents) / \(fixtures.splitShopLegBAmountCents)"
-      )
+      appendTradeBaselineFixtures(into: &lines)
+    case .welcomeEmpty:
+      lines.append("# fixtures — empty index, no profiles")
+    case .welcomeSingleCloudProfile:
+      appendWelcomeSingleProfileFixtures(into: &lines)
+    case .welcomeMultipleCloudProfiles:
+      appendWelcomeMultipleProfileFixtures(into: &lines)
     }
     return lines.joined(separator: "\n") + "\n"
+  }
+
+  private func appendTradeBaselineFixtures(into lines: inout [String]) {
+    let fixtures = UITestFixtures.TradeBaseline.self
+    lines.append("# fixtures")
+    lines.append("profile.id      = \(fixtures.profileId)")
+    lines.append("profile.label   = \(fixtures.profileLabel)")
+    lines.append("profile.currency = \(fixtures.profileCurrencyCode)")
+    lines.append("checking.id     = \(fixtures.checkingAccountId)")
+    lines.append("checking.name   = \(fixtures.checkingAccountName)")
+    lines.append("brokerage.id    = \(fixtures.brokerageAccountId)")
+    lines.append("brokerage.name  = \(fixtures.brokerageAccountName)")
+    lines.append("usdSavings.id   = \(fixtures.usdAccountId)")
+    lines.append("usdSavings.name = \(fixtures.usdAccountName)")
+    lines.append("usdSavings.instrument = \(fixtures.usdAccountInstrumentCode)")
+    lines.append("trade.id        = \(fixtures.bhpPurchaseId)")
+    lines.append("trade.payee     = \(fixtures.bhpPurchasePayee)")
+    lines.append("trade.cents     = \(fixtures.bhpPurchaseAmountCents)")
+    lines.append("trade.date      = \(fixtures.bhpPurchaseDate)")
+    lines.append("historical.amount.cents = \(fixtures.historicalExpenseAmountCents)")
+    for (index, historical) in fixtures.historicalPayees.enumerated() {
+      lines.append(
+        "historical[\(index)].id/payee/date = "
+          + "\(historical.id) / \(historical.payee) / \(historical.date)"
+      )
+    }
+    lines.append(
+      "category.groceries.id/name = "
+        + "\(fixtures.groceriesCategoryId) / \(fixtures.groceriesCategoryName)")
+    lines.append("category.gym.id/name = \(fixtures.gymCategoryId) / \(fixtures.gymCategoryName)")
+    lines.append(
+      "splitShop.id/payee/date = "
+        + "\(fixtures.splitShopId) / \(fixtures.splitShopPayee) / \(fixtures.splitShopDate)")
+    lines.append(
+      "splitShop.legA.cents / legB.cents = "
+        + "\(fixtures.splitShopLegAAmountCents) / \(fixtures.splitShopLegBAmountCents)"
+    )
+  }
+
+  private func appendWelcomeSingleProfileFixtures(into lines: inout [String]) {
+    lines.append("# fixtures")
+    lines.append(
+      "household.id/label = "
+        + "\(UITestWelcomeFixtures.householdProfileId) "
+        + "/ \(UITestWelcomeFixtures.householdProfileLabel)"
+    )
+  }
+
+  private func appendWelcomeMultipleProfileFixtures(into lines: inout [String]) {
+    lines.append("# fixtures")
+    lines.append(
+      "household.id/label = "
+        + "\(UITestWelcomeFixtures.householdProfileId) "
+        + "/ \(UITestWelcomeFixtures.householdProfileLabel)"
+    )
+    lines.append(
+      "sideBusiness.id/label = "
+        + "\(UITestWelcomeFixtures.sideBusinessProfileId) "
+        + "/ \(UITestWelcomeFixtures.sideBusinessProfileLabel)"
+    )
   }
 
   private func captureScreenshot(for app: MoolahApp, to url: URL) {

@@ -109,6 +109,12 @@ struct WelcomeView: View {
   private func heroOffView(
     reason: ICloudAvailability.UnavailableReason
   ) -> some View {
+    // `ICloudOffChip` already labels the iCloud-off state for VoiceOver, so
+    // the hero does not need its own overall `.accessibilityLabel(…)`. An
+    // outer label here also collapses the inner `WelcomeHero` — including
+    // its "Get started" `Button` — into a single accessibility element with
+    // that label, which hides the primary CTA from label-based queries and
+    // from individual VoiceOver focus.
     WelcomeHero(
       primaryAction: beginCreate,
       footer: {
@@ -118,7 +124,7 @@ struct WelcomeView: View {
           )
       }
     )
-    .accessibilityLabel(offHeroLabel(for: reason))
+    .accessibilityHint(offHeroHint(for: reason))
   }
 
   private func formView(
@@ -219,22 +225,18 @@ struct WelcomeView: View {
     }
   }
 
-  private func offHeroLabel(
+  private func offHeroHint(
     for reason: ICloudAvailability.UnavailableReason
   ) -> String {
     switch reason {
     case .notSignedIn:
-      return String(localized: "Welcome to Moolah. iCloud is not signed in.")
+      return String(localized: "iCloud is not signed in.")
     case .restricted:
-      return String(localized: "Welcome to Moolah. iCloud is restricted.")
+      return String(localized: "iCloud is restricted.")
     case .temporarilyUnavailable:
-      return String(
-        localized: "Welcome to Moolah. iCloud is temporarily unavailable."
-      )
+      return String(localized: "iCloud is temporarily unavailable.")
     case .entitlementsMissing:
-      return String(
-        localized: "Welcome to Moolah. iCloud is not available in this build."
-      )
+      return String(localized: "iCloud is not available in this build.")
     }
   }
 }

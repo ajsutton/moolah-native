@@ -47,7 +47,8 @@ final class UITestSeedHydratorTests: XCTestCase {
   }
 
   func testHydrateReturnsSeededProfile() throws {
-    let profile = try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager)
+    let profile = try XCTUnwrap(
+      try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager))
 
     XCTAssertEqual(profile.id, UITestFixtures.TradeBaseline.profileId)
     XCTAssertEqual(profile.backendType, .cloudKit)
@@ -57,7 +58,8 @@ final class UITestSeedHydratorTests: XCTestCase {
   // MARK: - Per-profile data
 
   func testHydrateTradeBaselineSeedsTheAccounts() throws {
-    let profile = try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager)
+    let profile = try XCTUnwrap(
+      try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager))
     let container = try containerManager.container(for: profile.id)
 
     let context = ModelContext(container)
@@ -79,7 +81,8 @@ final class UITestSeedHydratorTests: XCTestCase {
   }
 
   func testHydrateTradeBaselineSeedsTheTradeTransaction() throws {
-    let profile = try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager)
+    let profile = try XCTUnwrap(
+      try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager))
     let container = try containerManager.container(for: profile.id)
 
     let context = ModelContext(container)
@@ -111,7 +114,8 @@ final class UITestSeedHydratorTests: XCTestCase {
   }
 
   func testHydrateTradeBaselineSeedsTheCategories() throws {
-    let profile = try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager)
+    let profile = try XCTUnwrap(
+      try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager))
     let container = try containerManager.container(for: profile.id)
 
     let context = ModelContext(container)
@@ -126,7 +130,8 @@ final class UITestSeedHydratorTests: XCTestCase {
   }
 
   func testHydrateTradeBaselineSeedsTheCustomSplitTransaction() throws {
-    let profile = try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager)
+    let profile = try XCTUnwrap(
+      try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager))
     let container = try containerManager.container(for: profile.id)
 
     let context = ModelContext(container)
@@ -160,7 +165,8 @@ final class UITestSeedHydratorTests: XCTestCase {
   }
 
   func testHydrateTradeBaselineSeedsTheHistoricalPayees() throws {
-    let profile = try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager)
+    let profile = try XCTUnwrap(
+      try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager))
     let container = try containerManager.container(for: profile.id)
 
     let context = ModelContext(container)

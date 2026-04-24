@@ -20,6 +20,34 @@ public enum UITestSeed: String, CaseIterable, Sendable {
   /// for `TransactionDetailView` tests covering focus, payee
   /// autocomplete, and cross-currency.
   case tradeBaseline
+
+  /// Blank index container — no profiles. Drives the first-run
+  /// `WelcomeView` `.heroChecking` / `.heroNoneFound` branches.
+  case welcomeEmpty
+
+  /// One `ProfileRecord` seeded in the index. Triggers auto-activation
+  /// into `SessionRootView` via `WelcomeView`'s `.autoActivateSingle`
+  /// branch.
+  case welcomeSingleCloudProfile
+
+  /// Two `ProfileRecord`s seeded in the index. Drives the multi-profile
+  /// picker (`WelcomeView` state 5).
+  case welcomeMultipleCloudProfiles
+}
+
+/// Fixtures for the first-run Welcome seeds. Defined here so both the
+/// app (hydration) and UI-test drivers reference the same UUIDs.
+public enum UITestWelcomeFixtures {
+  // Constant UUIDs — `??` fallback keeps SwiftLint's `force_unwrapping`
+  // happy; the literal strings above parse successfully so the fallback
+  // never fires in practice.
+  public static let householdProfileId =
+    UUID(uuidString: "B0000000-0000-0000-0000-000000000001") ?? UUID()
+  public static let householdProfileLabel = "Household"
+  public static let sideBusinessProfileId =
+    UUID(uuidString: "B0000000-0000-0000-0000-000000000002") ?? UUID()
+  public static let sideBusinessProfileLabel = "Side business"
+  public static let profileCurrencyCode = "AUD"
 }
 
 /// A past single-leg expense used to seed payee suggestions.
