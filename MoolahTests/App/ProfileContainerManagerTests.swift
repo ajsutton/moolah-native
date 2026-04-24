@@ -58,4 +58,53 @@ struct ProfileContainerManagerTests {
     let container2 = try manager.container(for: profileId)
     #expect(container1 !== container2)
   }
+
+  @Test("configures per-profile store URL under the scoped Application Support root")
+  @MainActor
+  func testContainerUsesScopedStoreURL() throws {
+    let root = FileManager.default.temporaryDirectory
+      .appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    URL.moolahApplicationSupportOverride = root
+    defer { URL.moolahApplicationSupportOverride = nil }
+
+    let indexSchema = Schema([ProfileRecord.self])
+    let indexConfig = ModelConfiguration(isStoredInMemoryOnly: true)
+    let indexContainer = try ModelContainer(for: indexSchema, configurations: [indexConfig])
+    let dataSchema = Schema([
+      AccountRecord.self,
+      TransactionRecord.self,
+      TransactionLegRecord.self,
+      InstrumentRecord.self,
+      CategoryRecord.self,
+      EarmarkRecord.self,
+      EarmarkBudgetItemRecord.self,
+      InvestmentValueRecord.self,
+      CSVImportProfileRecord.self,
+      ImportRuleRecord.self,
+    ])
+
+    let manager = ProfileContainerManager(
+      indexContainer: indexContainer,
+      dataSchema: dataSchema,
+      inMemory: false
+    )
+
+    let profileId = UUID()
+    let container = try manager.container(for: profileId)
+
+    let envSubdir = CloudKitEnvironment.resolved().storageSubdirectory
+    let expectedStore =
+      root
+      .appending(path: envSubdir)
+      .appending(path: "Moolah-\(profileId.uuidString).store")
+    let actualURL = container.configurations.first?.url
+    #expect(actualURL?.standardizedFileURL == expectedStore.standardizedFileURL)
+
+    // Env subdir must have been created on demand by the scoped helper.
+    let envDir = root.appending(path: envSubdir)
+    #expect(FileManager.default.fileExists(atPath: envDir.path()))
+  }
 }
