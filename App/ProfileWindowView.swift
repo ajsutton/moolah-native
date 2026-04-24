@@ -41,14 +41,15 @@
               sessionManager.rebuildSession(for: profile)
             }
         } else if !profileStore.hasProfiles {
-          ProfileSetupView()
+          // `WelcomeView`'s `.heroChecking` state covers the
+          // `isCloudLoadPending` case too — the old bare `ProgressView`
+          // branch is subsumed by the new state machine.
+          WelcomeView()
             .onChange(of: profileStore.profiles) { _, newProfiles in
               if let first = newProfiles.first {
                 openWindow(value: first.id)
               }
             }
-        } else if profileStore.isCloudLoadPending {
-          ProgressView()
         } else {
           // Profile is genuinely gone — close this window
           Color.clear
