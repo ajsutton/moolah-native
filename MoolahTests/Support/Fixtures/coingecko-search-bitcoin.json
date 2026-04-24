@@ -1,0 +1,6 @@
+{
+  "coins": [
+    { "id": "bitcoin", "name": "Bitcoin", "symbol": "BTC", "thumb": "https://x/bitcoin.png" },
+    { "id": "wrapped-bitcoin", "name": "Wrapped Bitcoin", "symbol": "WBTC", "thumb": "" }
+  ]
+}
