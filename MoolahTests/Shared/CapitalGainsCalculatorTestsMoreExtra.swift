@@ -196,9 +196,7 @@ struct CapitalGainsCalculatorTestsMoreExtra {
   // MARK: - Helpers
 
   private func stockInstrument(_ name: String) -> Instrument {
-    Instrument(
-      id: "ASX:\(name)", kind: .stock, name: name, decimals: 0,
-      ticker: "\(name).AX", exchange: "ASX", chainId: nil, contractAddress: nil)
+    Instrument.stock(ticker: "\(name).AX", exchange: "ASX", name: name)
   }
 
   private func cryptoInstrument(_ symbol: String) -> Instrument {

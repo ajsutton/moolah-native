@@ -8,9 +8,7 @@ struct CapitalGainsCalculatorTestsMore {
   let aud = Instrument.fiat(code: "AUD")
 
   private func stockInstrument(_ name: String) -> Instrument {
-    Instrument(
-      id: "ASX:\(name)", kind: .stock, name: name, decimals: 0,
-      ticker: "\(name).AX", exchange: "ASX", chainId: nil, contractAddress: nil)
+    Instrument.stock(ticker: "\(name).AX", exchange: "ASX", name: name)
   }
 
   private func cryptoInstrument(_ symbol: String) -> Instrument {
@@ -71,7 +69,7 @@ struct CapitalGainsCalculatorTestsMore {
 
     // Only BHP sale produces an event; CBA is still held.
     #expect(result.events.count == 1)
-    #expect(result.events[0].instrument.id == "ASX:BHP")
+    #expect(result.events[0].instrument.id == "ASX:BHP.AX")
     #expect(result.events[0].gain == 1000)
   }
 

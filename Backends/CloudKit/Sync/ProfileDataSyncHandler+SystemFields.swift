@@ -48,7 +48,7 @@ extension ProfileDataSyncHandler {
   }
 
   /// Applies (or clears, when `data` is nil) the encoded system fields on an
-  /// `InstrumentRecord` identified by its string ID (e.g. "AUD", "ASX:BHP").
+  /// `InstrumentRecord` identified by its string ID (e.g. "AUD", "ASX:BHP.AX").
   nonisolated static func setInstrumentSystemFields(
     _ id: String, data: Data?, context: ModelContext
   ) {

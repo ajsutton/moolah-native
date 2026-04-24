@@ -123,7 +123,7 @@ struct RecordMappingTestsMore {
   @Test
   func instrumentRecordToDomainForStockAndCryptoKinds() {
     let stock = InstrumentRecord(
-      id: "ASX:BHP",
+      id: "ASX:BHP.AX",
       kind: "stock",
       name: "BHP",
       decimals: 0,
@@ -168,16 +168,16 @@ struct RecordMappingTestsMore {
       id: UUID(),
       name: "Sharesight",
       type: "investment",
-      instrumentId: "ASX:BHP",
+      instrumentId: "ASX:BHP.AX",
       position: 0,
       isHidden: false
     )
 
     let ckRecord = account.toCKRecord(in: zoneID)
-    #expect(ckRecord["instrumentId"] as? String == "ASX:BHP")
+    #expect(ckRecord["instrumentId"] as? String == "ASX:BHP.AX")
 
     let restored = try #require(AccountRecord.fieldValues(from: ckRecord))
-    #expect(restored.instrumentId == "ASX:BHP")
+    #expect(restored.instrumentId == "ASX:BHP.AX")
     #expect(restored.type == "investment")
   }
 
@@ -207,7 +207,7 @@ struct RecordMappingTestsMore {
       id: UUID(),
       transactionId: UUID(),
       accountId: UUID(),
-      instrumentId: "ASX:BHP",
+      instrumentId: "ASX:BHP.AX",
       // 150 shares × 10^8 scale
       quantity: 15_000_000_000,
       type: "transfer",
@@ -215,11 +215,11 @@ struct RecordMappingTestsMore {
     )
 
     let ckRecord = leg.toCKRecord(in: zoneID)
-    #expect(ckRecord["instrumentId"] as? String == "ASX:BHP")
+    #expect(ckRecord["instrumentId"] as? String == "ASX:BHP.AX")
     #expect(ckRecord["quantity"] as? Int64 == 15_000_000_000)
 
     let restored = try #require(TransactionLegRecord.fieldValues(from: ckRecord))
-    #expect(restored.instrumentId == "ASX:BHP")
+    #expect(restored.instrumentId == "ASX:BHP.AX")
     #expect(restored.quantity == 15_000_000_000)
   }
 
@@ -254,16 +254,16 @@ struct RecordMappingTestsMore {
       position: 0,
       isHidden: false,
       savingsTarget: 10_000_000_000,
-      savingsTargetInstrumentId: "ASX:BHP",
+      savingsTargetInstrumentId: "ASX:BHP.AX",
       savingsStartDate: nil,
       savingsEndDate: nil
     )
 
     let ckRecord = earmark.toCKRecord(in: zoneID)
-    #expect(ckRecord["savingsTargetInstrumentId"] as? String == "ASX:BHP")
+    #expect(ckRecord["savingsTargetInstrumentId"] as? String == "ASX:BHP.AX")
 
     let restored = try #require(EarmarkRecord.fieldValues(from: ckRecord))
-    #expect(restored.savingsTargetInstrumentId == "ASX:BHP")
+    #expect(restored.savingsTargetInstrumentId == "ASX:BHP.AX")
   }
 
   @Test

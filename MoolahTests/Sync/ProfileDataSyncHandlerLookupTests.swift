@@ -56,11 +56,11 @@ struct ProfileDataSyncHandlerLookupTests {
     let context = ModelContext(container)
     context.insert(
       InstrumentRecord(
-        id: "ASX:BHP", kind: "stock", name: "BHP Group", decimals: 2,
-        ticker: "BHP", exchange: "ASX"))
+        id: "ASX:BHP.AX", kind: "stock", name: "BHP Group", decimals: 2,
+        ticker: "BHP.AX", exchange: "ASX"))
     try context.save()
 
-    let recordID = CKRecord.ID(recordName: "ASX:BHP", zoneID: handler.zoneID)
+    let recordID = CKRecord.ID(recordName: "ASX:BHP.AX", zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)
     #expect(result != nil)
     #expect(result?.recordType == "CD_InstrumentRecord")

@@ -49,10 +49,10 @@ struct ReportingStoreTestsMore {
     TestBackend.seed(accounts: [account], in: container)
 
     let bhp = Instrument(
-      id: "ASX:BHP", kind: .stock, name: "BHP", decimals: 0,
+      id: "ASX:BHP.AX", kind: .stock, name: "BHP", decimals: 0,
       ticker: "BHP.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
     let cba = Instrument(
-      id: "ASX:CBA", kind: .stock, name: "CBA", decimals: 0,
+      id: "ASX:CBA.AX", kind: .stock, name: "CBA", decimals: 0,
       ticker: "CBA.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
 
     let buyBHP = Transaction(
@@ -78,7 +78,7 @@ struct ReportingStoreTestsMore {
     TestBackend.seed(transactions: [buyBHP, buyCBA], in: container)
 
     // BHP worth $50/share → 5000, CBA worth $120/share → 6000
-    let service = FixedConversionService(rates: ["ASX:BHP": 50, "ASX:CBA": 120])
+    let service = FixedConversionService(rates: ["ASX:BHP.AX": 50, "ASX:CBA.AX": 120])
     let store = ReportingStore(
       transactionRepository: backend.transactions,
       conversionService: service,
@@ -88,8 +88,8 @@ struct ReportingStoreTestsMore {
     await store.loadProfitLoss()
 
     #expect(store.profitLoss.count == 2)
-    let bhpPL = try #require(store.profitLoss.first { $0.instrument.id == "ASX:BHP" })
-    let cbaPL = try #require(store.profitLoss.first { $0.instrument.id == "ASX:CBA" })
+    let bhpPL = try #require(store.profitLoss.first { $0.instrument.id == "ASX:BHP.AX" })
+    let cbaPL = try #require(store.profitLoss.first { $0.instrument.id == "ASX:CBA.AX" })
     #expect(bhpPL.totalInvested == 4000)
     #expect(bhpPL.currentValue == 5000)
     #expect(cbaPL.totalInvested == 5000)
@@ -104,7 +104,7 @@ struct ReportingStoreTestsMore {
     TestBackend.seed(accounts: [account], in: container)
 
     let bhp = Instrument(
-      id: "ASX:BHP", kind: .stock, name: "BHP", decimals: 0,
+      id: "ASX:BHP.AX", kind: .stock, name: "BHP", decimals: 0,
       ticker: "BHP.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18
@@ -133,7 +133,7 @@ struct ReportingStoreTestsMore {
     ]
     TestBackend.seed(transactions: txns, in: container)
 
-    let service = FixedConversionService(rates: ["ASX:BHP": 50, eth.id: 2500])
+    let service = FixedConversionService(rates: ["ASX:BHP.AX": 50, eth.id: 2500])
     let store = ReportingStore(
       transactionRepository: backend.transactions,
       conversionService: service,
