@@ -48,7 +48,7 @@ struct SettingsView: View {
 
   #if os(macOS)
     private var cryptoTokenStoreForSettings: CryptoTokenStore {
-      if let session = sessionManager.sessions.values.first {
+      if let session = sessionForSettings {
         return session.cryptoTokenStore
       }
       let fallbackService = CryptoPriceService(
@@ -57,6 +57,18 @@ struct SettingsView: View {
         resolutionClient: CompositeTokenResolutionClient()
       )
       return CryptoTokenStore(cryptoPriceService: fallbackService)
+    }
+
+    /// The Settings scene lives outside `SessionRootView`, so the session
+    /// stores aren't in its environment. Resolve one here for the tabs
+    /// that depend on per-profile state. Prefer the active profile; fall
+    /// back to any open session so Settings still renders after a profile
+    /// switch.
+    private var sessionForSettings: ProfileSession? {
+      if let id = profileStore.activeProfileID, let session = sessionManager.sessions[id] {
+        return session
+      }
+      return sessionManager.sessions.values.first
     }
 
     private var macOSLayout: some View {
@@ -71,10 +83,10 @@ struct SettingsView: View {
         // already supplies chrome and a title, so wrapping in a second
         // `NavigationStack` would produce a duplicate navigation bar.
         Tab("Import", systemImage: "tray.and.arrow.down") {
-          ImportSettingsView()
+          importTabContent
         }
         Tab("Rules", systemImage: "list.bullet.rectangle") {
-          ImportRulesSettingsView()
+          rulesTabContent
         }
       }
       .frame(minWidth: 600, minHeight: 400)
@@ -141,6 +153,34 @@ struct SettingsView: View {
         }
         .buttonStyle(.bordered)
       }
+    }
+
+    @ViewBuilder private var importTabContent: some View {
+      if let session = sessionForSettings {
+        ImportSettingsView()
+          .environment(session)
+      } else {
+        noActiveProfilePlaceholder
+      }
+    }
+
+    @ViewBuilder private var rulesTabContent: some View {
+      if let session = sessionForSettings {
+        ImportRulesSettingsView()
+          .environment(session)
+          .environment(session.importRuleStore)
+          .environment(session.categoryStore)
+      } else {
+        noActiveProfilePlaceholder
+      }
+    }
+
+    private var noActiveProfilePlaceholder: some View {
+      ContentUnavailableView(
+        "No Profile",
+        systemImage: "person.crop.circle",
+        description: Text("Add a profile to configure this tab.")
+      )
     }
   #endif
 
