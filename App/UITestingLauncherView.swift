@@ -2,9 +2,13 @@
   import SwiftUI
 
   /// Hidden view hosted by the launcher Window. On `.task` it opens the
-  /// seeded profile's window via `openWindow(value:)` and immediately
-  /// dismisses the launcher, leaving only the profile window visible to
-  /// the UI test driver.
+  /// main `ProfileWindowView` window and immediately dismisses the
+  /// launcher, leaving only that window visible to the UI test driver.
+  /// When a specific profile was seeded (`profileId != nil`) the window is
+  /// opened with that value so the scene binds directly to it; when the
+  /// seed produced no profile (Welcome seeds) `openWindow()` opens the
+  /// default `WindowGroup(for:)` window with a nil binding so `WelcomeView`
+  /// renders inside it.
   ///
   /// The launcher Window is `.defaultLaunchBehavior(.suppressed)` in
   /// production, so this view is never instantiated outside `--ui-testing`.
@@ -23,13 +27,16 @@
       Color.clear
         .frame(width: 1, height: 1)
         .task {
-          guard let profileId else { return }
           // openWindow runs synchronously from the test's perspective but
           // its scene materialisation is asynchronous. Dismissing the
           // launcher immediately afterwards is intentional: drivers
           // tolerate a transient zero-windows gap because
           // `MoolahApp.expectMainWindowVisible` waits for the new window.
-          openWindow(value: profileId)
+          if let profileId {
+            openWindow(value: profileId)
+          } else {
+            openWindow(id: MoolahApp.mainWindowID)
+          }
           dismissWindow(id: "ui-testing-launcher")
         }
     }

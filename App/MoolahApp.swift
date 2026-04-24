@@ -19,6 +19,15 @@ struct MoolahApp: App {
   /// launches. Stored as `let` because `MoolahApp.init` runs once per
   /// process; the value is decided at launch and never changes.
   private let uiTestingProfileId: UUID?
+  /// True when the process was launched with `--ui-testing`, regardless of
+  /// whether the seed hydrates a profile. Welcome-view seeds intentionally
+  /// leave `uiTestingProfileId` unset (see `UITestSeedHydrator`) so we also
+  /// need a seed-agnostic flag to drive launcher presentation.
+  private let isUITesting: Bool
+  /// Stable identifier for the primary `WindowGroup(for:)`. Exposed so
+  /// `UITestingLauncherView` can call `openWindow(id:)` to open a default
+  /// instance with a nil binding (for Welcome seeds that have no profile).
+  static let mainWindowID = "profile-window"
   @State var profileStore: ProfileStore
   // internal (was private) so `+Lifecycle` can log under the shared
   // subsystem/category.
@@ -46,6 +55,7 @@ struct MoolahApp: App {
     containerManager = setup.manager
     syncCoordinator = coordinator
     uiTestingProfileId = setup.uiTestingProfileId
+    isUITesting = uiTestingSeed != nil
 
     let store = ProfileStore(
       validator: RemoteServerValidator(),
@@ -80,7 +90,7 @@ struct MoolahApp: App {
 
   var body: some Scene {
     #if os(macOS)
-      WindowGroup(for: Profile.ID.self) { $profileID in
+      WindowGroup(id: Self.mainWindowID, for: Profile.ID.self) { $profileID in
         // UI-testing mode pins the window to the seeded profile; the
         // per-window binding is used only in production launches.
         ProfileWindowView(profileID: uiTestingProfileId ?? profileID)
@@ -148,17 +158,19 @@ struct MoolahApp: App {
           .modelContainer(containerManager.indexContainer)
       }
 
-      // Auto-open the seeded profile window on `--ui-testing` launches.
+      // Auto-open the main window on `--ui-testing` launches.
       // `WindowGroup(for: Profile.ID.self)` does not present without an
       // explicit value, so a hidden launcher Window with
-      // `.defaultLaunchBehavior(.presented)` runs `openWindow(value:)`
-      // and immediately dismisses itself. In production the launcher is
-      // suppressed and never reachable from the UI.
+      // `.defaultLaunchBehavior(.presented)` calls `openWindow(…)` and
+      // immediately dismisses itself. Presented for every UI-testing launch
+      // — including Welcome seeds that leave `uiTestingProfileId` nil, so
+      // `WelcomeView` still gets a window to render into. Suppressed in
+      // production, where normal scene restoration opens the window.
       Window("UI Testing Launcher", id: "ui-testing-launcher") {
         UITestingLauncherView(profileId: uiTestingProfileId)
       }
       .windowResizability(.contentSize)
-      .defaultLaunchBehavior(uiTestingProfileId != nil ? .presented : .suppressed)
+      .defaultLaunchBehavior(isUITesting ? .presented : .suppressed)
     #else
       WindowGroup {
         ProfileRootView(activeSession: $activeSession)
