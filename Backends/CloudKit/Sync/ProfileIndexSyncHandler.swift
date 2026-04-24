@@ -48,10 +48,15 @@ final class ProfileIndexSyncHandler {
 
     for ckRecord in saved {
       guard ckRecord.recordType == ProfileRecord.recordType else { continue }
-      guard let profileId = ckRecord.recordID.uuid else { continue }
+      guard let values = ProfileRecord.fieldValues(from: ckRecord) else {
+        logger.error(
+          "applyRemoteChanges: malformed recordID '\(ckRecord.recordID.recordName)' (recordType \(ckRecord.recordType)) — skipping"
+        )
+        continue
+      }
 
+      let profileId = values.id
       let systemFieldsData = ckRecord.encodedSystemFields
-      let values = ProfileRecord.fieldValues(from: ckRecord)
       let descriptor = FetchDescriptor<ProfileRecord>(
         predicate: #Predicate { $0.id == profileId }
       )
@@ -68,7 +73,12 @@ final class ProfileIndexSyncHandler {
     }
 
     for recordID in deleted {
-      guard let profileId = recordID.uuid else { continue }
+      guard let profileId = recordID.uuid else {
+        logger.error(
+          "applyRemoteChanges: malformed deleted recordID '\(recordID.recordName)' — skipping"
+        )
+        continue
+      }
       let descriptor = FetchDescriptor<ProfileRecord>(
         predicate: #Predicate { $0.id == profileId }
       )

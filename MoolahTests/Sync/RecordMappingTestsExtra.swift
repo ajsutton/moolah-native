@@ -9,7 +9,7 @@ struct RecordMappingTestsExtra {
   let zoneID = CKRecordZone.ID(zoneName: "profile-test", ownerName: CKCurrentUserDefaultName)
 
   @Test
-  func transactionLegRecordNilOptionals() {
+  func transactionLegRecordNilOptionals() throws {
     let leg = TransactionLegRecord(
       transactionId: UUID(),
       accountId: UUID(),
@@ -22,7 +22,7 @@ struct RecordMappingTestsExtra {
     #expect(ckRecord["categoryId"] == nil)
     #expect(ckRecord["earmarkId"] == nil)
 
-    let restored = TransactionLegRecord.fieldValues(from: ckRecord)
+    let restored = try #require(TransactionLegRecord.fieldValues(from: ckRecord))
     #expect(restored.categoryId == nil)
     #expect(restored.earmarkId == nil)
   }
@@ -30,7 +30,7 @@ struct RecordMappingTestsExtra {
   // MARK: - InstrumentRecord
 
   @Test
-  func instrumentRecordRoundTrip() {
+  func instrumentRecordRoundTrip() throws {
     let instrument = InstrumentRecord(
       id: "AUD",
       kind: "fiatCurrency",
@@ -48,7 +48,7 @@ struct RecordMappingTestsExtra {
     #expect(ckRecord["ticker"] == nil)
     #expect(ckRecord["exchange"] == nil)
 
-    let restored = InstrumentRecord.fieldValues(from: ckRecord)
+    let restored = try #require(InstrumentRecord.fieldValues(from: ckRecord))
     #expect(restored.id == "AUD")
     #expect(restored.kind == "fiatCurrency")
     #expect(restored.name == "Australian Dollar")
@@ -58,7 +58,7 @@ struct RecordMappingTestsExtra {
   }
 
   @Test
-  func instrumentRecordWithStockFields() {
+  func instrumentRecordWithStockFields() throws {
     let instrument = InstrumentRecord(
       id: "ASX:BHP",
       kind: "stock",
@@ -72,7 +72,7 @@ struct RecordMappingTestsExtra {
     #expect(ckRecord["ticker"] as? String == "BHP")
     #expect(ckRecord["exchange"] as? String == "ASX")
 
-    let restored = InstrumentRecord.fieldValues(from: ckRecord)
+    let restored = try #require(InstrumentRecord.fieldValues(from: ckRecord))
     #expect(restored.ticker == "BHP")
     #expect(restored.exchange == "ASX")
   }
@@ -80,7 +80,7 @@ struct RecordMappingTestsExtra {
   // MARK: - CategoryRecord
 
   @Test
-  func categoryRecordRoundTrip() {
+  func categoryRecordRoundTrip() throws {
     let parentId = UUID()
     let category = CategoryRecord(id: UUID(), name: "Food", parentId: parentId)
 
@@ -90,27 +90,27 @@ struct RecordMappingTestsExtra {
     #expect(ckRecord["name"] as? String == "Food")
     #expect(ckRecord["parentId"] as? String == parentId.uuidString)
 
-    let restored = CategoryRecord.fieldValues(from: ckRecord)
+    let restored = try #require(CategoryRecord.fieldValues(from: ckRecord))
     #expect(restored.id == category.id)
     #expect(restored.name == "Food")
     #expect(restored.parentId == parentId)
   }
 
   @Test
-  func categoryRecordNilParent() {
+  func categoryRecordNilParent() throws {
     let category = CategoryRecord(id: UUID(), name: "Root", parentId: nil)
 
     let ckRecord = category.toCKRecord(in: zoneID)
     #expect(ckRecord["parentId"] == nil)
 
-    let restored = CategoryRecord.fieldValues(from: ckRecord)
+    let restored = try #require(CategoryRecord.fieldValues(from: ckRecord))
     #expect(restored.parentId == nil)
   }
 
   // MARK: - EarmarkRecord
 
   @Test
-  func earmarkRecordRoundTrip() {
+  func earmarkRecordRoundTrip() throws {
     let startDate = Date(timeIntervalSince1970: 1_700_000_000)
     let endDate = Date(timeIntervalSince1970: 1_710_000_000)
     let earmark = EarmarkRecord(
@@ -135,7 +135,7 @@ struct RecordMappingTestsExtra {
     #expect(ckRecord["savingsStartDate"] as? Date == startDate)
     #expect(ckRecord["savingsEndDate"] as? Date == endDate)
 
-    let restored = EarmarkRecord.fieldValues(from: ckRecord)
+    let restored = try #require(EarmarkRecord.fieldValues(from: ckRecord))
     #expect(restored.id == earmark.id)
     #expect(restored.name == "Holiday Fund")
     #expect(restored.position == 3)
@@ -147,7 +147,7 @@ struct RecordMappingTestsExtra {
   }
 
   @Test
-  func earmarkRecordNilOptionals() {
+  func earmarkRecordNilOptionals() throws {
     let earmark = EarmarkRecord(
       id: UUID(),
       name: "Basic",
@@ -161,7 +161,7 @@ struct RecordMappingTestsExtra {
     #expect(ckRecord["savingsStartDate"] == nil)
     #expect(ckRecord["savingsEndDate"] == nil)
 
-    let restored = EarmarkRecord.fieldValues(from: ckRecord)
+    let restored = try #require(EarmarkRecord.fieldValues(from: ckRecord))
     #expect(restored.savingsTarget == nil)
     #expect(restored.savingsTargetInstrumentId == nil)
     #expect(restored.savingsStartDate == nil)

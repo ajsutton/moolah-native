@@ -21,9 +21,10 @@ extension TransactionLegRecord: CloudKitRecordConvertible {
     return record
   }
 
-  static func fieldValues(from ckRecord: CKRecord) -> TransactionLegRecord {
-    TransactionLegRecord(
-      id: ckRecord.recordID.uuid ?? UUID(),
+  static func fieldValues(from ckRecord: CKRecord) -> TransactionLegRecord? {
+    guard let id = ckRecord.recordID.uuid else { return nil }
+    return TransactionLegRecord(
+      id: id,
       transactionId: (ckRecord["transactionId"] as? String).flatMap { UUID(uuidString: $0) }
         ?? UUID(),
       accountId: (ckRecord["accountId"] as? String).flatMap { UUID(uuidString: $0) },

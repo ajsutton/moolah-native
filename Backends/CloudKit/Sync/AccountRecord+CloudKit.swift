@@ -18,9 +18,10 @@ extension AccountRecord: CloudKitRecordConvertible {
     return record
   }
 
-  static func fieldValues(from ckRecord: CKRecord) -> AccountRecord {
-    AccountRecord(
-      id: ckRecord.recordID.uuid ?? UUID(),
+  static func fieldValues(from ckRecord: CKRecord) -> AccountRecord? {
+    guard let id = ckRecord.recordID.uuid else { return nil }
+    return AccountRecord(
+      id: id,
       name: ckRecord["name"] as? String ?? "",
       type: ckRecord["type"] as? String ?? "bank",
       instrumentId: ckRecord["instrumentId"] as? String ?? "AUD",
