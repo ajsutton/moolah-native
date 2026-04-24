@@ -54,12 +54,12 @@ final class SyncProgress {
     pendingUploads = count
   }
 
-  /// `willFetchChanges` event — enter receive (or syncing if already sending).
+  /// Handles the `willFetchChanges` engine event.
+  ///
+  /// Routes to `.syncing` rather than `.receiving` when local changes are
+  /// pending, so the UI accurately reflects that both directions are active
+  /// simultaneously.
   func beginReceiving() {
-    if pendingUploads > 0 {
-      phase = .syncing
-    } else {
-      phase = .receiving
-    }
+    phase = pendingUploads > 0 ? .syncing : .receiving
   }
 }
