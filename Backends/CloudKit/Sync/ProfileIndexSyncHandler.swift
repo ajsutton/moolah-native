@@ -48,7 +48,7 @@ final class ProfileIndexSyncHandler {
 
     for ckRecord in saved {
       guard ckRecord.recordType == ProfileRecord.recordType else { continue }
-      guard let profileId = UUID(uuidString: ckRecord.recordID.recordName) else { continue }
+      guard let profileId = ckRecord.recordID.uuid else { continue }
 
       let systemFieldsData = ckRecord.encodedSystemFields
       let values = ProfileRecord.fieldValues(from: ckRecord)
@@ -68,7 +68,7 @@ final class ProfileIndexSyncHandler {
     }
 
     for recordID in deleted {
-      guard let profileId = UUID(uuidString: recordID.recordName) else { continue }
+      guard let profileId = recordID.uuid else { continue }
       let descriptor = FetchDescriptor<ProfileRecord>(
         predicate: #Predicate { $0.id == profileId }
       )
@@ -108,7 +108,7 @@ final class ProfileIndexSyncHandler {
 
   /// Looks up a ProfileRecord by CKRecord.ID and builds a CKRecord for upload.
   func recordToSave(for recordID: CKRecord.ID) -> CKRecord? {
-    guard let profileId = UUID(uuidString: recordID.recordName) else { return nil }
+    guard let profileId = recordID.uuid else { return nil }
     let context = ModelContext(modelContainer)
     let descriptor = FetchDescriptor<ProfileRecord>(
       predicate: #Predicate { $0.id == profileId }
@@ -129,7 +129,8 @@ final class ProfileIndexSyncHandler {
     guard !records.isEmpty else { return [] }
 
     let recordIDs = records.map { record in
-      CKRecord.ID(recordName: record.id.uuidString, zoneID: zoneID)
+      CKRecord.ID(
+        recordType: ProfileRecord.recordType, uuid: record.id, zoneID: zoneID)
     }
     logger.info("Collected \(recordIDs.count) existing profiles for upload")
     return recordIDs
@@ -176,7 +177,7 @@ final class ProfileIndexSyncHandler {
 
   /// Updates `encodedSystemFields` on the ProfileRecord matching the given record ID.
   func updateEncodedSystemFields(_ recordID: CKRecord.ID, data: Data) {
-    guard let profileId = UUID(uuidString: recordID.recordName) else { return }
+    guard let profileId = recordID.uuid else { return }
     let context = ModelContext(modelContainer)
     let descriptor = FetchDescriptor<ProfileRecord>(
       predicate: #Predicate { $0.id == profileId }
@@ -195,7 +196,7 @@ final class ProfileIndexSyncHandler {
   /// Called on `.unknownItem` — the server deleted the record, so the stale change tag
   /// must be cleared so the next upload creates a fresh record.
   func clearEncodedSystemFields(_ recordID: CKRecord.ID) {
-    guard let profileId = UUID(uuidString: recordID.recordName) else { return }
+    guard let profileId = recordID.uuid else { return }
     let context = ModelContext(modelContainer)
     let descriptor = FetchDescriptor<ProfileRecord>(
       predicate: #Predicate { $0.id == profileId }
@@ -237,7 +238,7 @@ final class ProfileIndexSyncHandler {
     let context = ModelContext(modelContainer)
     for saved in savedRecords {
       updateSystemFields(
-        forProfileId: saved.recordID.recordName,
+        for: saved.recordID,
         context: context,
         to: saved.encodedSystemFields
       )
@@ -256,14 +257,14 @@ final class ProfileIndexSyncHandler {
     let context = ModelContext(modelContainer)
     for (_, serverRecord) in failures.conflicts {
       updateSystemFields(
-        forProfileId: serverRecord.recordID.recordName,
+        for: serverRecord.recordID,
         context: context,
         to: serverRecord.encodedSystemFields
       )
     }
     for (recordID, _) in failures.unknownItems {
       updateSystemFields(
-        forProfileId: recordID.recordName,
+        for: recordID,
         context: context,
         to: nil
       )
@@ -277,11 +278,11 @@ final class ProfileIndexSyncHandler {
 
   /// Look up a `ProfileRecord` by id string and replace its cached system fields.
   private func updateSystemFields(
-    forProfileId recordName: String,
+    for recordID: CKRecord.ID,
     context: ModelContext,
     to data: Data?
   ) {
-    guard let profileId = UUID(uuidString: recordName) else { return }
+    guard let profileId = recordID.uuid else { return }
     let descriptor = FetchDescriptor<ProfileRecord>(
       predicate: #Predicate { $0.id == profileId }
     )

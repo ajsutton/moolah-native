@@ -197,4 +197,100 @@ struct RecordNameCollisionTests {
     ).first
     #expect(reloaded?.encodedSystemFields != nil)
   }
+
+  // MARK: - 6. ProfileIndexSyncHandler dual-format
+
+  private func makeProfileIndexHandler() throws -> (ProfileIndexSyncHandler, ModelContainer) {
+    let schema = Schema([ProfileRecord.self])
+    let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+    let container = try ModelContainer(for: schema, configurations: [config])
+    let handler = ProfileIndexSyncHandler(modelContainer: container)
+    return (handler, container)
+  }
+
+  @Test("ProfileIndexSyncHandler.recordToSave accepts prefixed recordID")
+  func profileIndexRecordToSaveAcceptsPrefixedRecordID() throws {
+    let (handler, container) = try makeProfileIndexHandler()
+
+    let profileId = UUID()
+    let profile = ProfileRecord(
+      id: profileId, label: "Test", currencyCode: "AUD",
+      financialYearStartMonth: 7, createdAt: Date())
+    let context = ModelContext(container)
+    context.insert(profile)
+    try context.save()
+
+    let prefixedID = CKRecord.ID(
+      recordType: ProfileRecord.recordType,
+      uuid: profileId,
+      zoneID: handler.zoneID)
+
+    let result = try #require(handler.recordToSave(for: prefixedID))
+    #expect(result.recordType == ProfileRecord.recordType)
+    #expect(
+      result.recordID.recordName
+        == "\(ProfileRecord.recordType)|\(profileId.uuidString)")
+  }
+
+  @Test("ProfileIndexSyncHandler.applyRemoteChanges accepts prefixed ProfileRecord")
+  func profileIndexApplyRemoteChangesAcceptsPrefixedProfileRecord() throws {
+    let (handler, container) = try makeProfileIndexHandler()
+
+    let profileId = UUID()
+    let prefixedCK = CKRecord(
+      recordType: ProfileRecord.recordType,
+      recordID: CKRecord.ID(
+        recordType: ProfileRecord.recordType,
+        uuid: profileId,
+        zoneID: handler.zoneID))
+    prefixedCK["label"] = "Prefixed" as CKRecordValue
+    prefixedCK["currencyCode"] = "AUD" as CKRecordValue
+    prefixedCK["financialYearStartMonth"] = 7 as CKRecordValue
+    prefixedCK["createdAt"] = Date() as CKRecordValue
+
+    _ = handler.applyRemoteChanges(saved: [prefixedCK], deleted: [])
+
+    let context = ModelContext(container)
+    let records = try context.fetch(
+      FetchDescriptor<ProfileRecord>(
+        predicate: #Predicate { $0.id == profileId })
+    )
+    #expect(records.count == 1)
+    #expect(records.first?.label == "Prefixed")
+    #expect(records.first?.encodedSystemFields != nil)
+  }
+
+  @Test(
+    "ProfileIndexSyncHandler.handleSentRecordZoneChanges caches system fields for prefixed records"
+  )
+  func profileIndexHandleSentCachesSystemFieldsForPrefixedRecord() throws {
+    let (handler, container) = try makeProfileIndexHandler()
+
+    let profileId = UUID()
+    let context = ModelContext(container)
+    let profile = ProfileRecord(
+      id: profileId, label: "Test", currencyCode: "AUD",
+      financialYearStartMonth: 7, createdAt: Date())
+    context.insert(profile)
+    try context.save()
+    #expect(profile.encodedSystemFields == nil)
+
+    let savedCK = CKRecord(
+      recordType: ProfileRecord.recordType,
+      recordID: CKRecord.ID(
+        recordType: ProfileRecord.recordType,
+        uuid: profileId,
+        zoneID: handler.zoneID))
+    savedCK["label"] = "Test" as CKRecordValue
+
+    _ = handler.handleSentRecordZoneChanges(
+      savedRecords: [savedCK], failedSaves: [], failedDeletes: [])
+
+    let fresh = ModelContext(container)
+    let reloaded = try fresh.fetch(
+      FetchDescriptor<ProfileRecord>(
+        predicate: #Predicate { $0.id == profileId })
+    ).first
+    #expect(reloaded?.encodedSystemFields != nil)
+  }
 }
