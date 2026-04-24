@@ -70,13 +70,20 @@ targets:
         INFOPLIST_FILE: App/Info-iOS.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
+        Debug:
+          CLOUDKIT_ENVIRONMENT: Development
         Debug-Tests:
           # Tests must never pick up iCloud entitlements, even when a dev
           # runs `ENABLE_ENTITLEMENTS=1 just generate` to inject them into Debug.
           CODE_SIGN_ENTITLEMENTS: ""
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited)"
+          # Value is unused at runtime (test host has no iCloud entitlement
+          # and uses in-memory stores) but must be defined so Info.plist
+          # expansion yields a literal string rather than "$(CLOUDKIT_ENVIRONMENT)".
+          CLOUDKIT_ENVIRONMENT: Development
         Release:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CLOUDKIT_ENABLED"
+          CLOUDKIT_ENVIRONMENT: Production
 
   Moolah_macOS:
     type: application
@@ -101,14 +108,16 @@ targets:
         INFOPLIST_FILE: App/Info-macOS.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
+        Debug:
+          CLOUDKIT_ENVIRONMENT: Development
         Debug-Tests:
-          # Tests must never pick up iCloud entitlements, even when a dev
-          # runs `ENABLE_ENTITLEMENTS=1 just generate` to inject them into Debug.
           CODE_SIGN_ENTITLEMENTS: ""
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited)"
+          CLOUDKIT_ENVIRONMENT: Development
         Release:
           ENABLE_HARDENED_RUNTIME: YES
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CLOUDKIT_ENABLED"
+          CLOUDKIT_ENVIRONMENT: Production
 
   MoolahTests_iOS:
     type: bundle.unit-test

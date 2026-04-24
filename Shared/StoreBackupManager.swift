@@ -17,7 +17,8 @@
     }()
 
     init(
-      backupDirectory: URL = URL.applicationSupportDirectory.appending(path: "Moolah/Backups"),
+      backupDirectory: URL = URL.moolahScopedApplicationSupport
+        .appending(path: "Moolah/Backups"),
       retentionDays: Int = 7,
       fileManager: FileManager = .default
     ) {
@@ -91,5 +92,8 @@
         }
       }
     }
+
+    /// Test-only accessor for the configured backup directory. Read-only.
+    var testingBackupDirectory: URL { backupDirectory }
   }
 #endif

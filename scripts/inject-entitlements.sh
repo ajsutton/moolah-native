@@ -3,8 +3,9 @@
 #
 # 1. Writes .build/Moolah.entitlements with the full sandbox + CloudKit keys.
 # 2. Produces project-entitlements.yml — a copy of project.yml that:
-#    - Adds a Debug-only block to each app target wiring in
+#    - Augments each app target's existing Debug block with
 #      CODE_SIGN_ENTITLEMENTS and the CLOUDKIT_ENABLED compilation condition.
+#      (project.yml already carries a Debug block for CLOUDKIT_ENVIRONMENT.)
 #    - Appends CODE_SIGN_ENTITLEMENTS to each target's existing Release block.
 #      Release already bakes in CLOUDKIT_ENABLED via project.yml; without the
 #      matching entitlements file the signed binary calls CKContainer.default()
@@ -41,6 +42,8 @@ cat > "$ENTITLEMENTS_FILE" <<'PLIST'
     <array>
         <string>iCloud.rocks.moolah.app.v2</string>
     </array>
+    <key>com.apple.developer.icloud-container-environment</key>
+    <string>$(CLOUDKIT_ENVIRONMENT)</string>
 </dict>
 </plist>
 PLIST
@@ -52,13 +55,6 @@ with open("project.yml") as f:
     content = f.read()
 
 entitlements_path = os.environ["ENTITLEMENTS_FILE"]
-
-debug_block = "\n".join([
-    "        Debug:",
-    f"          CODE_SIGN_ENTITLEMENTS: {entitlements_path}",
-    '          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CLOUDKIT_ENABLED"',
-    "",
-])
 
 release_entitlements_line = (
     f"          CODE_SIGN_ENTITLEMENTS: {entitlements_path}\n"
@@ -77,14 +73,29 @@ for target in ("Moolah_iOS", "Moolah_macOS"):
             f"inject-entitlements: could not find configs: block for {target}"
         )
 
-    insert_at = configs_pos + len(configs_marker)
-    content = content[:insert_at] + debug_block + content[insert_at:]
+    # Insert CODE_SIGN_ENTITLEMENTS and the CLOUDKIT_ENABLED compilation
+    # condition at the top of the existing Debug: block. project.yml already
+    # carries a Debug: block (for CLOUDKIT_ENVIRONMENT: Development); inserting
+    # a second Debug: sibling would make xcodegen's YAML loader keep only the
+    # last occurrence and silently drop these keys.
+    debug_header = "        Debug:\n"
+    debug_pos = content.find(debug_header, configs_pos)
+    if debug_pos == -1:
+        raise SystemExit(
+            f"inject-entitlements: could not find Debug: block for {target}"
+        )
+    debug_insert_at = debug_pos + len(debug_header)
+    debug_injection = (
+        f"          CODE_SIGN_ENTITLEMENTS: {entitlements_path}\n"
+        '          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CLOUDKIT_ENABLED"\n'
+    )
+    content = content[:debug_insert_at] + debug_injection + content[debug_insert_at:]
 
     # Append CODE_SIGN_ENTITLEMENTS to this target's existing Release: block.
-    # Search forward from the Debug block we just inserted so we stay inside
+    # Search forward from the Debug block we just touched so we stay inside
     # this target's configs: section.
     release_header = "        Release:\n"
-    release_pos = content.find(release_header, insert_at)
+    release_pos = content.find(release_header, debug_insert_at)
     if release_pos == -1:
         raise SystemExit(
             f"inject-entitlements: could not find Release: block for {target}"

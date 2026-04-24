@@ -226,15 +226,7 @@ final class ProfileSession: Identifiable {
   /// lives. Not part of the SwiftData store because staging is device-local
   /// and doesn't sync.
   nonisolated static func importStagingDirectory(for profileId: UUID) -> URL {
-    let base =
-      (try? FileManager.default.url(
-        for: .applicationSupportDirectory,
-        in: .userDomainMask,
-        appropriateFor: nil,
-        create: true))
-      ?? FileManager.default.temporaryDirectory
-    return
-      base
+    URL.moolahScopedApplicationSupport
       .appendingPathComponent("Moolah", isDirectory: true)
       .appendingPathComponent("csv-staging", isDirectory: true)
       .appendingPathComponent(profileId.uuidString, isDirectory: true)

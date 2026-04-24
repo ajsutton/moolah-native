@@ -52,5 +52,7 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
+    <key>MoolahCloudKitEnvironment</key>
+    <string>$(CLOUDKIT_ENVIRONMENT)</string>
 </dict>
 </plist>

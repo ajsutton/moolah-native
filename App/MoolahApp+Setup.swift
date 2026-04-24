@@ -45,7 +45,8 @@ extension MoolahApp {
       }
 
       let profileSchema = Schema([ProfileRecord.self])
-      let profileStoreURL = URL.applicationSupportDirectory.appending(path: "Moolah-v2.store")
+      let profileStoreURL = URL.moolahScopedApplicationSupport
+        .appending(path: "Moolah-v2.store")
       let profileConfig = ModelConfiguration(
         url: profileStoreURL,
         cloudKitDatabase: .none

@@ -31,7 +31,7 @@ final class ProfileContainerManager {
       config = ModelConfiguration(isStoredInMemoryOnly: true)
     } else {
       let storeName = "Moolah-\(profileId.uuidString)"
-      let url = URL.applicationSupportDirectory
+      let url = URL.moolahScopedApplicationSupport
         .appending(path: "Moolah-\(profileId.uuidString).store")
       config = ModelConfiguration(storeName, url: url, cloudKitDatabase: .none)
     }
@@ -53,7 +53,7 @@ final class ProfileContainerManager {
     guard !inMemory else { return }
 
     let basePath = "Moolah-\(profileId.uuidString).store"
-    let baseURL = URL.applicationSupportDirectory.appending(path: basePath)
+    let baseURL = URL.moolahScopedApplicationSupport.appending(path: basePath)
     let fileManager = FileManager.default
     for suffix in ["", "-shm", "-wal"] {
       let url = baseURL.deletingLastPathComponent()
@@ -62,7 +62,7 @@ final class ProfileContainerManager {
     }
 
     // Delete the sync state file
-    let syncStateURL = URL.applicationSupportDirectory
+    let syncStateURL = URL.moolahScopedApplicationSupport
       .appending(path: "Moolah-\(profileId.uuidString).syncstate")
     try? fileManager.removeItem(at: syncStateURL)
 
