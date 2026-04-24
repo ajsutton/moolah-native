@@ -46,7 +46,34 @@ extension SyncCoordinator {
 
   // MARK: - Account Changes
 
+  /// Maps a CloudKit account-change type to ``ICloudAvailability`` and
+  /// applies it. Pure assignment — safe to call on every event, including
+  /// the synthetic first-launch `.signIn`.
+  ///
+  /// `.signIn` / `.switchAccounts` both mean "we now have a usable
+  /// account" → `.available`. `.signOut` → `.unavailable(.notSignedIn)`.
+  func applyAvailability(
+    from changeType: CKSyncEngine.Event.AccountChange.ChangeType
+  ) {
+    switch changeType {
+    case .signIn, .switchAccounts:
+      iCloudAvailability = .available
+    case .signOut:
+      iCloudAvailability = .unavailable(reason: .notSignedIn)
+    @unknown default:
+      logger.warning(
+        "Unhandled account-change type — iCloudAvailability not updated"
+      )
+    }
+  }
+
   func handleAccountChange(_ change: CKSyncEngine.Event.AccountChange) {
+    // Update observable availability first — pure assignment that is
+    // safe to fire on every event (including the synthetic first-launch
+    // `.signIn`), so views react immediately. The isFirstLaunch-gated
+    // zone-reset work below runs exactly as before.
+    applyAvailability(from: change.changeType)
+
     switch change.changeType {
     case .signIn:
       if isFirstLaunch {
