@@ -211,6 +211,39 @@ final class SyncCoordinator {
   /// Used to guard against the synthetic `.signIn` event.
   var isFirstLaunch = false
 
+  /// Observable iCloud account availability. `.unknown` while a probe is
+  /// outstanding; see `handleAccountChange` in `SyncCoordinator+Zones.swift`
+  /// for ongoing updates, and `completeStart` in `+Lifecycle.swift` for the
+  /// initial probe. Views bind via `ProfileStore.iCloudAvailability`.
+  var iCloudAvailability: ICloudAvailability = .unknown
+
+  /// Captured at init from `CloudKitAuthProvider.isCloudKitAvailable` (or a
+  /// test override). `false` short-circuits the initial probe in
+  /// `completeStart` because the build has no iCloud entitlements.
+  let isCloudKitAvailable: Bool
+
+  /// Maps `CKAccountStatus` to ``ICloudAvailability``.
+  /// `.couldNotDetermine` and thrown errors are treated as `.unknown`
+  /// (transient) per design spec §6.1.
+  nonisolated static func mapAccountStatus(
+    _ status: CKAccountStatus
+  ) -> ICloudAvailability {
+    switch status {
+    case .available:
+      return .available
+    case .noAccount:
+      return .unavailable(reason: .notSignedIn)
+    case .restricted:
+      return .unavailable(reason: .restricted)
+    case .temporarilyUnavailable:
+      return .unavailable(reason: .temporarilyUnavailable)
+    case .couldNotDetermine:
+      return .unknown
+    @unknown default:
+      return .unknown
+    }
+  }
+
   /// True while CKSyncEngine is fetching changes (between willFetchChanges and didFetchChanges).
   var isFetchingChanges = false
 
@@ -248,6 +281,10 @@ final class SyncCoordinator {
   /// a fetch so persistent failures don't leave local data silently incomplete.
   var longRetryTask: Task<Void, Never>?
 
+  /// Initial `CKContainer.accountStatus()` probe kicked off from
+  /// `completeStart`. Held so `stop()` can cancel it.
+  var availabilityProbeTask: Task<Void, Never>?
+
   /// Number of consecutive re-fetch attempts scheduled after a save failure.
   /// Reset to zero whenever a fetched-record-zone-changes batch applies successfully.
   /// Exposed for testing.
@@ -283,12 +320,17 @@ final class SyncCoordinator {
 
   init(
     containerManager: ProfileContainerManager,
-    userDefaults: UserDefaults = .standard
+    userDefaults: UserDefaults = .standard,
+    isCloudKitAvailable: Bool = CloudKitAuthProvider.isCloudKitAvailable
   ) {
     self.containerManager = containerManager
     self.userDefaults = userDefaults
     self.profileIndexHandler = ProfileIndexSyncHandler(
       modelContainer: containerManager.indexContainer)
+    self.isCloudKitAvailable = isCloudKitAvailable
+    if !isCloudKitAvailable {
+      self.iCloudAvailability = .unavailable(reason: .entitlementsMissing)
+    }
   }
 
   // MARK: - Fetch-Session Book-keeping
