@@ -17,12 +17,21 @@
 
     var body: some View {
       Group {
-        if !profileStore.hasProfiles {
-          WelcomeView()
-        } else if let session = activeSession {
+        // Show WelcomeView for both first-run (no profiles) and the
+        // multi-profile picker state (2+ profiles but none active).
+        // `activeSession` is only set once the user has explicitly
+        // selected a profile, so the else branch naturally handles
+        // the picker case.
+        if let session = activeSession {
           SessionRootView(session: session)
-        } else {
+        } else if profileStore.hasProfiles
+          && profileStore.activeProfileID != nil
+        {
+          // Has an active profile ID but the session hasn't been
+          // created yet (cloud store warming up). Brief transient.
           ProgressView()
+        } else {
+          WelcomeView()
         }
       }
       .onChange(of: profileStore.activeProfileID) { _, newID in
