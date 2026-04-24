@@ -152,6 +152,8 @@ extension SyncCoordinator {
     // remains correct — a rebuild of the coordinator would be needed to clear it.
     iCloudAvailability =
       isCloudKitAvailable ? .unknown : .unavailable(reason: .entitlementsMissing)
+    profileIndexFetchedAtLeastOnce = false
+    fetchSessionTouchedIndexZone = false
     logger.info("Stopped unified sync coordinator")
   }
 
@@ -211,6 +213,7 @@ extension SyncCoordinator {
     isFetchingChanges = true
     fetchSessionChangedTypes.removeAll()
     fetchSessionIndexChanged = false
+    fetchSessionTouchedIndexZone = false
   }
 
   func endFetchingChanges() {
