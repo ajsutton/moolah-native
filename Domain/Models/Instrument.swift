@@ -1,7 +1,7 @@
 import Foundation
 
 struct Instrument: Codable, Sendable, Hashable, Identifiable {
-  enum Kind: String, Codable, Sendable {
+  enum Kind: String, Codable, Sendable, CaseIterable {
     case fiatCurrency
     case stock
     case cryptoToken
