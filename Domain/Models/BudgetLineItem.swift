@@ -2,7 +2,7 @@ import Foundation
 
 struct BudgetLineItem: Identifiable, Sendable {
   let id: UUID
-  let categoryName: String
+  let categoryPath: String
   let actual: InstrumentAmount
   let budgeted: InstrumentAmount
 
@@ -27,13 +27,13 @@ struct BudgetLineItem: Identifiable, Sendable {
     // Add all budgeted categories
     for item in budgetItems {
       seen.insert(item.categoryId)
-      let name = categories.by(id: item.categoryId)?.name ?? "Unknown"
+      let path = categories.by(id: item.categoryId).map { categories.path(for: $0) } ?? "Unknown"
       let budgeted = item.inInstrument(earmarkInstrument).amount
       let actual = categoryBalances[item.categoryId] ?? zero
       result.append(
         BudgetLineItem(
           id: item.categoryId,
-          categoryName: name,
+          categoryPath: path,
           actual: actual,
           budgeted: budgeted
         ))
@@ -41,17 +41,17 @@ struct BudgetLineItem: Identifiable, Sendable {
 
     // Add categories with spending but no budget
     for (categoryId, actual) in categoryBalances where !seen.contains(categoryId) {
-      let name = categories.by(id: categoryId)?.name ?? "Unknown"
+      let path = categories.by(id: categoryId).map { categories.path(for: $0) } ?? "Unknown"
       result.append(
         BudgetLineItem(
           id: categoryId,
-          categoryName: name,
+          categoryPath: path,
           actual: actual,
           budgeted: zero
         ))
     }
 
-    return result.sorted { $0.categoryName < $1.categoryName }
+    return result.sorted { $0.categoryPath < $1.categoryPath }
   }
 
   /// Calculates the unallocated portion of a savings goal.

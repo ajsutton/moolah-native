@@ -30,7 +30,7 @@ struct BudgetLineItemMergeTests {
     )
 
     #expect(result.count == 1)
-    #expect(result.first?.categoryName == "Flights")
+    #expect(result.first?.categoryPath == "Flights")
     #expect(result.first?.actual.quantity == Decimal(-50000) / 100)
     #expect(result.first?.budgeted.quantity == Decimal(80000) / 100)
     #expect(result.first?.remaining.quantity == Decimal(30000) / 100)
@@ -110,7 +110,7 @@ struct BudgetLineItemMergeTests {
   }
 
   @Test
-  func testMergeSortsByCategoryName() {
+  func testMergeSortsByCategoryPath() {
     let cat1 = Category(id: UUID(), name: "Zebra")
     let cat2 = Category(id: UUID(), name: "Alpha")
     let cat3 = Category(id: UUID(), name: "Middle")
@@ -137,7 +137,7 @@ struct BudgetLineItemMergeTests {
       earmarkInstrument: .defaultTestInstrument
     )
 
-    #expect(result.map(\.categoryName) == ["Alpha", "Middle", "Zebra"])
+    #expect(result.map(\.categoryPath) == ["Alpha", "Middle", "Zebra"])
   }
 
   @Test
@@ -209,7 +209,32 @@ struct BudgetLineItemMergeTests {
       earmarkInstrument: .defaultTestInstrument
     )
 
-    #expect(result.first?.categoryName == "Unknown")
+    #expect(result.first?.categoryPath == "Unknown")
+  }
+
+  @Test
+  func testLineItemUsesFullCategoryPath() {
+    let parentId = UUID()
+    let childId = UUID()
+    let categories = Categories(from: [
+      Category(id: parentId, name: "Income"),
+      Category(id: childId, name: "Salary", parentId: parentId),
+    ])
+    let budgetItems = [
+      EarmarkBudgetItem(
+        categoryId: childId,
+        amount: InstrumentAmount(
+          quantity: Decimal(10000) / 100, instrument: Instrument.defaultTestInstrument))
+    ]
+
+    let result = BudgetLineItem.buildLineItems(
+      budgetItems: budgetItems,
+      categoryBalances: [:],
+      categories: categories,
+      earmarkInstrument: .defaultTestInstrument
+    )
+
+    #expect(result.first?.categoryPath == "Income:Salary")
   }
 
   // MARK: - Budget item instrument parity

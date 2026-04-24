@@ -155,7 +155,7 @@ struct TransactionFilterView: View {
       } else {
         ForEach(allCategories) { category in
           Toggle(
-            category.name,
+            categories.path(for: category),
             isOn: Binding(
               get: { selectedCategoryIds.contains(category.id) },
               set: { isOn in

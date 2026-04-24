@@ -128,7 +128,7 @@ struct TransactionRowView: View {
         transaction.legs.filter { $0.accountId == id }
       } ?? transaction.legs
     let uniqueIds = applicable.compactMap(\.categoryId).uniqued()
-    return uniqueIds.compactMap { categories.by(id: $0)?.name }
+    return uniqueIds.compactMap { id in categories.by(id: id).map { categories.path(for: $0) } }
   }
 
   private var earmarkNames: [String] {

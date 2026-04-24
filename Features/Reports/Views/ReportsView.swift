@@ -101,7 +101,8 @@ struct ReportsView: View {
 
   @ViewBuilder
   private func drillDownDestination(_ drillDown: CategoryDrillDown) -> some View {
-    let categoryName = categories.by(id: drillDown.categoryId)?.name ?? "Category"
+    let categoryName =
+      categories.by(id: drillDown.categoryId).map { categories.path(for: $0) } ?? "Category"
     TransactionListView(
       title: categoryName,
       filter: TransactionFilter(

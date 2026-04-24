@@ -72,7 +72,7 @@ struct EarmarkBudgetSectionView: View {
         }
       }
     } message: { item in
-      Text("Remove \(item.categoryName) from the budget?")
+      Text("Remove \(item.categoryPath) from the budget?")
     }
     .refreshable {
       await loadData()
@@ -158,7 +158,7 @@ struct EarmarkBudgetSectionView: View {
 
   private func budgetRow(_ lineItem: BudgetLineItem) -> some View {
     HStack(spacing: 0) {
-      Text(lineItem.categoryName)
+      Text(lineItem.categoryPath)
         .frame(maxWidth: .infinity, alignment: .leading)
         .font(.body)
 
@@ -174,7 +174,7 @@ struct EarmarkBudgetSectionView: View {
           .frame(minWidth: columnMinWidth, idealWidth: columnIdealWidth, alignment: .trailing)
       }
       .buttonStyle(.plain)
-      .accessibilityLabel("Edit budget for \(lineItem.categoryName)")
+      .accessibilityLabel("Edit budget for \(lineItem.categoryPath)")
 
       InstrumentAmountView(amount: lineItem.remaining)
         .font(.body)
@@ -182,7 +182,7 @@ struct EarmarkBudgetSectionView: View {
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(
-      "\(lineItem.categoryName): spent \(lineItem.actual.formatted), budget \(lineItem.budgeted.formatted), remaining \(lineItem.remaining.formatted)"
+      "\(lineItem.categoryPath): spent \(lineItem.actual.formatted), budget \(lineItem.budgeted.formatted), remaining \(lineItem.remaining.formatted)"
     )
   }
 
