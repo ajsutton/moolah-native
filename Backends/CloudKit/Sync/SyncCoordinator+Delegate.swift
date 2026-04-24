@@ -76,50 +76,95 @@ extension SyncCoordinator: CKSyncEngineDelegate {
       os_signpost(.end, log: Signposts.sync, name: "nextBatch", signpostID: signpostID)
     }
 
+    let rawPendingCount = syncEngine.state.pendingRecordZoneChanges.count
     let pendingChanges = dedupedPendingChanges(
       syncEngine: syncEngine, scope: context.options.scope)
-    guard !pendingChanges.isEmpty else { return nil }
-
-    // Partition by zone-kind so atomicByZone can be set correctly per kind.
-    // Profile-index records are independent (atomicByZone: false); profile-data
-    // records within a zone must commit together (atomicByZone: true). See issue #61.
-    guard let batchKind = Self.selectBatchKind(from: pendingChanges) else { return nil }
-    let kindChanges = Self.filterChanges(pendingChanges, matching: batchKind)
-
-    let batchLimit = 400
-    let batch = Array(kindChanges.prefix(batchLimit))
-
-    // Group saves by zone for efficient batch lookup
-    var savesByZone: [CKRecordZone.ID: [CKRecord.ID]] = [:]
-    var deletesByBatch: [CKRecord.ID] = []
-
-    for change in batch {
-      switch change {
-      case .saveRecord(let recordID):
-        savesByZone[recordID.zoneID, default: []].append(recordID)
-      case .deleteRecord(let recordID):
-        deletesByBatch.append(recordID)
-      @unknown default:
-        break
-      }
+    guard !pendingChanges.isEmpty else {
+      logBatchFilteredOut(rawPending: rawPendingCount, deduped: 0, reason: "dedup/zone-creation")
+      return nil
     }
-
+    guard let batchKind = Self.selectBatchKind(from: pendingChanges) else {
+      logBatchFilteredOut(
+        rawPending: rawPendingCount, deduped: pendingChanges.count,
+        reason: "no recognised zone kind")
+      return nil
+    }
+    let batch = Array(
+      Self.filterChanges(pendingChanges, matching: batchKind).prefix(400))
+    let (savesByZone, deletesByBatch) = partitionBatch(batch)
     let recordsToSave = buildRecordsToSave(savesByZone: savesByZone)
-
+    let expectedSaves = savesByZone.values.reduce(0) { $0 + $1.count }
+    logBatchOutcome(
+      BatchOutcome(
+        rawPending: rawPendingCount, deduped: pendingChanges.count,
+        kind: batchKind, batch: batch.count, built: recordsToSave.count,
+        expected: expectedSaves, deletes: deletesByBatch.count))
     guard !recordsToSave.isEmpty || !deletesByBatch.isEmpty else { return nil }
-
-    let zoneCount = Set(recordsToSave.map(\.recordID.zoneID)).union(deletesByBatch.map(\.zoneID))
-      .count
-    os_signpost(
-      .event, log: Signposts.sync, name: "nextBatch", signpostID: signpostID,
-      "%{public}d records across %{public}d zones", recordsToSave.count + deletesByBatch.count,
-      zoneCount)
-
     return CKSyncEngine.RecordZoneChangeBatch(
       recordsToSave: recordsToSave,
       recordIDsToDelete: deletesByBatch,
       atomicByZone: batchKind.atomicByZone
     )
+  }
+
+  /// Splits a batch of pending changes into per-zone save IDs and a flat list of
+  /// delete IDs. Extracted from `nextRecordZoneChangeBatchOnMain` to keep that
+  /// function under the SwiftLint body-length limit.
+  @MainActor
+  private func partitionBatch(
+    _ batch: [CKSyncEngine.PendingRecordZoneChange]
+  ) -> (savesByZone: [CKRecordZone.ID: [CKRecord.ID]], deletes: [CKRecord.ID]) {
+    var savesByZone: [CKRecordZone.ID: [CKRecord.ID]] = [:]
+    var deletes: [CKRecord.ID] = []
+    for change in batch {
+      switch change {
+      case .saveRecord(let recordID):
+        savesByZone[recordID.zoneID, default: []].append(recordID)
+      case .deleteRecord(let recordID):
+        deletes.append(recordID)
+      @unknown default:
+        break
+      }
+    }
+    return (savesByZone, deletes)
+  }
+
+  /// Emits a warning when the pending queue was non-empty but everything got
+  /// filtered out before a batch could be built — highlights scope / dedup /
+  /// zone-creation filters that are silently dropping work.
+  @MainActor
+  private func logBatchFilteredOut(rawPending: Int, deduped: Int, reason: String) {
+    guard rawPending > 0 else { return }
+    logger.warning(
+      "nextBatch: pending=\(rawPending) deduped=\(deduped) — all filtered (\(reason)); returning nil"
+    )
+  }
+
+  /// Counters captured at the end of one `nextBatch` call. Grouped so
+  /// `logBatchOutcome` can stay under the SwiftLint parameter-count limit.
+  struct BatchOutcome {
+    let rawPending: Int
+    let deduped: Int
+    let kind: BatchKind
+    let batch: Int
+    let built: Int
+    let expected: Int
+    let deletes: Int
+  }
+
+  /// Emits the per-call batch summary (always at info) and escalates to error
+  /// when the batch build collapsed expected saves to zero — that's the
+  /// signature of a silent record-drop during CKRecord construction.
+  @MainActor
+  private func logBatchOutcome(_ outcome: BatchOutcome) {
+    logger.info(
+      "nextBatch: pending=\(outcome.rawPending) deduped=\(outcome.deduped) kind=\(String(describing: outcome.kind)) batch=\(outcome.batch) saves=\(outcome.built)/\(outcome.expected) deletes=\(outcome.deletes)"
+    )
+    if outcome.built == 0 && outcome.expected > 0 {
+      logger.error(
+        "nextBatch: expected \(outcome.expected) saves but built 0 records — records remain pending"
+      )
+    }
   }
 
   /// Returns pending changes filtered to the delegate's scope, deduplicated by
@@ -210,8 +255,13 @@ extension SyncCoordinator: CKSyncEngineDelegate {
     recordIDs: [CKRecord.ID],
     into recordsToSave: inout [CKRecord]
   ) {
-    guard let handler = try? handlerForProfileZone(profileId: profileId, zoneID: zoneID)
-    else {
+    let handler: ProfileDataSyncHandler
+    do {
+      handler = try handlerForProfileZone(profileId: profileId, zoneID: zoneID)
+    } catch {
+      logger.error(
+        "Failed to build handler for profile \(profileId): \(error) — \(recordIDs.count) records remain pending for retry"
+      )
       return
     }
 

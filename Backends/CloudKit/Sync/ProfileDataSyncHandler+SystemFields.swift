@@ -36,13 +36,15 @@ extension ProfileDataSyncHandler {
   }
 
   /// Applies (or clears, when `data` is nil) the encoded system fields on the UUID-keyed
-  /// model record matching the given type. Replaces the former `update`/`clear`
-  /// per-UUID pair and reduces cyclomatic complexity by dispatching through
-  /// `systemFieldSetters`.
+  /// model record matching the given type. Returns `true` when a local row was found
+  /// and mutated; `false` when the dispatch table has no entry for the record type or
+  /// no local row matched the UUID.
+  @discardableResult
   nonisolated static func setEncodedSystemFields(
     _ id: UUID, data: Data?, recordType: String, context: ModelContext
-  ) {
-    systemFieldSetters[recordType]?(id, data, context)
+  ) -> Bool {
+    guard let setter = systemFieldSetters[recordType] else { return false }
+    return setter(id, data, context)
   }
 
   /// Applies (or clears, when `data` is nil) the encoded system fields on an
@@ -89,8 +91,12 @@ extension ProfileDataSyncHandler {
     for saved in savedRecords {
       applySystemFields(from: saved, in: context)
     }
+    let hadChanges = context.hasChanges
     do {
       try context.save()
+      logger.info(
+        "Applied system fields for \(savedRecords.count) saved records (hadChanges=\(hadChanges))"
+      )
     } catch {
       logger.error("Failed to save system fields after upload: \(error)")
     }
@@ -121,8 +127,13 @@ extension ProfileDataSyncHandler {
     let recordName = ckRecord.recordID.recordName
     let data = ckRecord.encodedSystemFields
     if let uuid = UUID(uuidString: recordName) {
-      Self.setEncodedSystemFields(
+      let applied = Self.setEncodedSystemFields(
         uuid, data: data, recordType: ckRecord.recordType, context: context)
+      if !applied {
+        logger.warning(
+          "No local row to cache system fields for \(ckRecord.recordType) \(recordName)"
+        )
+      }
     } else {
       Self.setInstrumentSystemFields(recordName, data: data, context: context)
     }
@@ -145,60 +156,49 @@ extension ProfileDataSyncHandler {
   /// `encodedSystemFields` on the matching record. Replaces the former ten-case
   /// switch statement, keeping `setEncodedSystemFields` at cyclomatic complexity 1.
   nonisolated(unsafe) private static let systemFieldSetters:
-    [String: (UUID, Data?, ModelContext) -> Void] = [
+    [String: (UUID, Data?, ModelContext) -> Bool] = [
       AccountRecord.recordType: { id, data, context in
-        let records = fetchOrLog(
-          FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == id }),
-          context: context)
-        records.first?.encodedSystemFields = data
+        applyByUUID(AccountRecord.self, id: id, data: data, context: context)
       },
       TransactionRecord.recordType: { id, data, context in
-        let records = fetchOrLog(
-          FetchDescriptor<TransactionRecord>(predicate: #Predicate { $0.id == id }),
-          context: context)
-        records.first?.encodedSystemFields = data
+        applyByUUID(TransactionRecord.self, id: id, data: data, context: context)
       },
       TransactionLegRecord.recordType: { id, data, context in
-        let records = fetchOrLog(
-          FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { $0.id == id }),
-          context: context)
-        records.first?.encodedSystemFields = data
+        applyByUUID(TransactionLegRecord.self, id: id, data: data, context: context)
       },
       CategoryRecord.recordType: { id, data, context in
-        let records = fetchOrLog(
-          FetchDescriptor<CategoryRecord>(predicate: #Predicate { $0.id == id }),
-          context: context)
-        records.first?.encodedSystemFields = data
+        applyByUUID(CategoryRecord.self, id: id, data: data, context: context)
       },
       EarmarkRecord.recordType: { id, data, context in
-        let records = fetchOrLog(
-          FetchDescriptor<EarmarkRecord>(predicate: #Predicate { $0.id == id }),
-          context: context)
-        records.first?.encodedSystemFields = data
+        applyByUUID(EarmarkRecord.self, id: id, data: data, context: context)
       },
       EarmarkBudgetItemRecord.recordType: { id, data, context in
-        let records = fetchOrLog(
-          FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { $0.id == id }),
-          context: context)
-        records.first?.encodedSystemFields = data
+        applyByUUID(EarmarkBudgetItemRecord.self, id: id, data: data, context: context)
       },
       InvestmentValueRecord.recordType: { id, data, context in
-        let records = fetchOrLog(
-          FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { $0.id == id }),
-          context: context)
-        records.first?.encodedSystemFields = data
+        applyByUUID(InvestmentValueRecord.self, id: id, data: data, context: context)
       },
       CSVImportProfileRecord.recordType: { id, data, context in
-        let records = fetchOrLog(
-          FetchDescriptor<CSVImportProfileRecord>(predicate: #Predicate { $0.id == id }),
-          context: context)
-        records.first?.encodedSystemFields = data
+        applyByUUID(CSVImportProfileRecord.self, id: id, data: data, context: context)
       },
       ImportRuleRecord.recordType: { id, data, context in
-        let records = fetchOrLog(
-          FetchDescriptor<ImportRuleRecord>(predicate: #Predicate { $0.id == id }),
-          context: context)
-        records.first?.encodedSystemFields = data
+        applyByUUID(ImportRuleRecord.self, id: id, data: data, context: context)
       },
     ]
+
+  /// Fetches the local row matching `id` and assigns `data` to its cached system
+  /// fields. Returns `true` when a row was found (and mutated), `false` when the
+  /// fetch returned empty. Shared helper so `systemFieldSetters` can signal
+  /// missing-row outcomes without repeating the two-line body per case.
+  nonisolated private static func applyByUUID<T>(
+    _ type: T.Type, id: UUID, data: Data?, context: ModelContext
+  ) -> Bool
+  where T: PersistentModel & IdentifiableRecord & SystemFieldsCacheable {
+    let records = fetchOrLog(
+      FetchDescriptor<T>(predicate: #Predicate { $0.id == id }),
+      context: context)
+    guard let record = records.first else { return false }
+    record.encodedSystemFields = data
+    return true
+  }
 }
