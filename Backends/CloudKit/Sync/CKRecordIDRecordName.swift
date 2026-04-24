@@ -22,15 +22,11 @@ extension CKRecord.ID {
     )
   }
 
-  /// Returns the UUID portion of a recordName regardless of format.
-  /// Accepts `"<TYPE>|<UUID>"` (new) and `"<UUID>"` (legacy).
-  /// Returns `nil` for non-UUID names (e.g. instrument IDs like `"AUD"`).
-  func uuidRecordName() -> UUID? {
-    if let sep = recordName.firstIndex(of: "|") {
-      let uuidPart = recordName[recordName.index(after: sep)...]
-      return UUID(uuidString: String(uuidPart))
-    }
-    return UUID(uuidString: recordName)
+  /// The UUID portion of the recordName, or `nil` for non-UUID names
+  /// (e.g. instrument IDs like `"AUD"`). Accepts both `"<TYPE>|<UUID>"`
+  /// (new) and `"<UUID>"` (legacy) by parsing `systemFieldsKey`.
+  var uuid: UUID? {
+    UUID(uuidString: systemFieldsKey)
   }
 
   /// The key used for per-record system-fields caching during batch upsert.

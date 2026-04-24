@@ -9,7 +9,7 @@ downlink readers.
 
 **Architecture:** New format is `"<recordType>|<uuid.uuidString>"`. Two helpers
 on `CKRecord.ID` centralize construction (`init(recordType:uuid:zoneID:)`) and
-parsing (`uuidRecordName()`). Legacy records stay under their bare-UUID
+parsing (`uuid: UUID?` computed property). Legacy records stay under their bare-UUID
 recordName via `buildCKRecord`'s cached-record reuse. No active migration in
 v1 — tracked as [#420](https://github.com/ajsutton/moolah-native/issues/420).
 
@@ -24,13 +24,13 @@ v1 — tracked as [#420](https://github.com/ajsutton/moolah-native/issues/420).
 
 **New:**
 
-- `Backends/CloudKit/Sync/CKRecordID+RecordName.swift` — `init(recordType:uuid:zoneID:)`, `uuidRecordName()`, `systemFieldsKey`.
+- `Backends/CloudKit/Sync/CKRecordIDRecordName.swift` — `init(recordType:uuid:zoneID:)`, `uuid: UUID?`, `systemFieldsKey`.
 - `MoolahTests/Sync/CKRecordIDRecordNameTests.swift` — unit tests for the three helpers.
 - `MoolahTests/Sync/RecordNameCollisionTests.swift` — five regression tests from the spec.
 
 **Modified (per-type × 10 — AccountRecord, TransactionRecord, TransactionLegRecord, CategoryRecord, EarmarkRecord, EarmarkBudgetItemRecord, InvestmentValueRecord, CSVImportProfileRecord, ImportRuleRecord, ProfileRecord):**
 
-- `Backends/CloudKit/Sync/<Type>Record+CloudKit.swift` — `toCKRecord` uses prefixed init; `fieldValues(from:)` uses `uuidRecordName()`.
+- `Backends/CloudKit/Sync/<Type>Record+CloudKit.swift` — `toCKRecord` uses prefixed init; `fieldValues(from:)` uses `recordID.uuid`.
 
 **Modified (single sites):**
 
@@ -99,7 +99,7 @@ struct CKRecordIDRecordNameTests {
     let recordID = CKRecord.ID(
       recordName: "CD_AccountRecord|1CAC9567-574B-481A-BADA-D595325CBE0C",
       zoneID: zoneID)
-    #expect(recordID.uuidRecordName() == uuid)
+    #expect(recordID.uuid == uuid)
   }
 
   @Test
@@ -108,7 +108,7 @@ struct CKRecordIDRecordNameTests {
     let recordID = CKRecord.ID(
       recordName: "1CAC9567-574B-481A-BADA-D595325CBE0C",
       zoneID: zoneID)
-    #expect(recordID.uuidRecordName() == uuid)
+    #expect(recordID.uuid == uuid)
   }
 
   @Test
@@ -126,7 +126,7 @@ struct CKRecordIDRecordNameTests {
     let recordID = CKRecord.ID(
       recordName: "CD_AccountRecord|not-a-uuid",
       zoneID: zoneID)
-    #expect(recordID.uuidRecordName() == nil)
+    #expect(recordID.uuid == nil)
   }
 
   // MARK: - systemFieldsKey
@@ -280,7 +280,7 @@ rm .agent-tmp/t1-*.txt
    ```
    with
    ```swift
-   id: ckRecord.recordID.uuidRecordName() ?? UUID(),
+   id: ckRecord.recordID.uuid ?? UUID(),
    ```
 
 `InstrumentRecord+CloudKit.swift` is NOT in the list — it uses a string ID
@@ -439,7 +439,7 @@ feat(sync): emit prefixed recordNames from per-type toCKRecord (#416)
 Every UUID-keyed <Type>Record+CloudKit.swift now constructs
 CKRecord.IDs via CKRecord.ID(recordType:uuid:zoneID:), producing
 "<recordType>|<UUID>" recordNames for brand-new records. The
-matching fieldValues(from:) uses CKRecord.ID.uuidRecordName() so the
+matching fieldValues(from:) uses ckRecord.recordID.uuid so the
 downlink half of the mapping accepts both the new format and the
 legacy bare-UUID form.
 
@@ -725,7 +725,7 @@ with
 ```swift
 nonisolated private static func uuidPairs(from ckRecords: [CKRecord]) -> [(UUID, CKRecord)] {
   ckRecords.compactMap { record in
-    guard let uuid = record.recordID.uuidRecordName() else { return nil }
+    guard let uuid = record.recordID.uuid else { return nil }
     return (uuid, record)
   }
 }
@@ -749,7 +749,7 @@ with
 
 ```swift
 for (recordID, recordType) in deletions {
-  if let uuid = recordID.uuidRecordName() {
+  if let uuid = recordID.uuid {
     uuidGrouped[recordType, default: []].append(uuid)
   } else {
     stringGrouped[recordType, default: []].append(recordID.recordName)
@@ -845,7 +845,7 @@ private func applySystemFields(from ckRecord: CKRecord, in context: ModelContext
       ckRecord.recordID.recordName, data: data, context: context)
     return
   }
-  guard let uuid = ckRecord.recordID.uuidRecordName() else {
+  guard let uuid = ckRecord.recordID.uuid else {
     logger.warning(
       "applySystemFields: recordName \(ckRecord.recordID.recordName) has no UUID component for \(ckRecord.recordType)"
     )
@@ -887,7 +887,7 @@ private func clearSystemFields(
       recordID.recordName, data: nil, context: context)
     return
   }
-  guard let uuid = recordID.uuidRecordName() else {
+  guard let uuid = recordID.uuid else {
     logger.warning(
       "clearSystemFields: recordName \(recordID.recordName) has no UUID component for \(recordType)"
     )
@@ -912,7 +912,7 @@ guard let uuid = UUID(uuidString: recordName) else {
 with
 
 ```swift
-guard let uuid = recordID.uuidRecordName() else {
+guard let uuid = recordID.uuid else {
   logger.warning("Could not find local record for non-UUID ID: \(recordName)")
   return nil
 }
@@ -940,7 +940,7 @@ with
 
 ```swift
 for recordID in recordIDs {
-  if let uuid = recordID.uuidRecordName() {
+  if let uuid = recordID.uuid {
     uuidRecordNames.append((recordID, uuid))
   } else {
     stringRecordIDs.append(recordID)
@@ -973,7 +973,7 @@ git -C /Users/aj/Documents/code/moolah-project/moolah-native/.claude/worktrees/f
 feat(sync): accept prefixed and legacy recordNames on downlink (#416)
 
 Five downlink sites that parsed recordID.recordName as a bare UUID
-now go through CKRecord.ID.uuidRecordName() which accepts both the
+now go through CKRecord.ID.uuid which accepts both the
 new "<recordType>|<UUID>" format and the legacy bare-UUID form:
 
 - ProfileDataSyncHandler+BatchUpsert uuidPairs(from:)
@@ -1367,7 +1367,7 @@ EOF
   Every code snippet is complete.
 - **Type consistency:** `queueSave`/`queueDeletion` signatures match across
   SyncCoordinator and all callers. `systemFieldsKey` is used consistently.
-  `uuidRecordName()` returns `UUID?` everywhere it's used.
+  `uuid` returns `UUID?` everywhere it's used.
 - **One known caveat:** Step 5.1 / Test #1 asserts `lookup.count == 2 || 1`
   because `buildBatchRecordLookup` returns `[UUID: CKRecord]`, which dedupes
   by UUID. The real regression coverage is the second test

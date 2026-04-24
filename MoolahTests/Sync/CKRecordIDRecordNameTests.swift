@@ -25,41 +25,38 @@ struct CKRecordIDRecordNameTests {
     #expect(recordID.zoneID == zoneID)
   }
 
-  // MARK: - uuidRecordName()
+  // MARK: - uuid
 
   @Test
-  func uuidRecordNameStripsPrefix() throws {
+  func uuidStripsPrefix() throws {
     let uuid = try #require(UUID(uuidString: "1CAC9567-574B-481A-BADA-D595325CBE0C"))
     let recordID = CKRecord.ID(
       recordName: "CD_AccountRecord|1CAC9567-574B-481A-BADA-D595325CBE0C",
       zoneID: zoneID)
-    #expect(recordID.uuidRecordName() == uuid)
+    #expect(recordID.uuid == uuid)
   }
 
   @Test
-  func uuidRecordNameAcceptsBareUUIDLegacyFormat() throws {
+  func uuidAcceptsBareUUIDLegacyFormat() throws {
     let uuid = try #require(UUID(uuidString: "1CAC9567-574B-481A-BADA-D595325CBE0C"))
     let recordID = CKRecord.ID(
       recordName: "1CAC9567-574B-481A-BADA-D595325CBE0C",
       zoneID: zoneID)
-    #expect(recordID.uuidRecordName() == uuid)
+    #expect(recordID.uuid == uuid)
   }
 
   @Test
-  func uuidRecordNameReturnsNilForInstrumentIDs() {
-    #expect(
-      CKRecord.ID(recordName: "AUD", zoneID: zoneID).uuidRecordName() == nil)
-    #expect(
-      CKRecord.ID(recordName: "ASX:BHP", zoneID: zoneID).uuidRecordName()
-        == nil)
+  func uuidReturnsNilForInstrumentIDs() {
+    #expect(CKRecord.ID(recordName: "AUD", zoneID: zoneID).uuid == nil)
+    #expect(CKRecord.ID(recordName: "ASX:BHP", zoneID: zoneID).uuid == nil)
   }
 
   @Test
-  func uuidRecordNameReturnsNilForNonUUIDAfterPrefix() {
+  func uuidReturnsNilForNonUUIDAfterPrefix() {
     let recordID = CKRecord.ID(
       recordName: "CD_AccountRecord|not-a-uuid",
       zoneID: zoneID)
-    #expect(recordID.uuidRecordName() == nil)
+    #expect(recordID.uuid == nil)
   }
 
   // MARK: - systemFieldsKey
