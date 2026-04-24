@@ -30,11 +30,14 @@ extension ProfileStore {
       }
 
       // Auto-select a profile when none is active (e.g. new device receiving
-      // its first cloud profile from another device).
-      if activeProfileID == nil, let first = profiles.first {
+      // its first cloud profile from another device). Suppressed when
+      // `WelcomeView` is mid-create — see design spec §3.3 race condition.
+      if activeProfileID == nil, let first = profiles.first, welcomePhase != .creating {
         self.activeProfileID = first.id
         saveActiveProfileID()
         logger.debug("Auto-selected profile: \(first.id)")
+      } else if welcomePhase == .creating {
+        logger.debug("Skipped auto-select — welcomePhase == .creating")
       }
 
       // Handle profiles deleted on another device.
