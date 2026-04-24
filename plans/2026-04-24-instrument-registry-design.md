@@ -38,6 +38,7 @@ Rather than adding the missing entitlement and living with a second sync mechani
 - Delete `Backends/ICloud/ICloudTokenRepository.swift`, the `Backends/ICloud/` directory, `Domain/Repositories/CryptoTokenRepository.swift`, and any test doubles implementing the deleted protocol.
 - Add `InstrumentSearchService` — a unified fan-out search over fiat (local ISO list), crypto (CoinGecko `/search` + contract-address path via the existing `TokenResolutionClient`), and stock (typed-ticker validated via `YahooFinanceClient`).
 - Contract tests for the registry, unit tests for the search service, and updates to `CryptoPriceServiceTests`, `CryptoPriceServiceTestsMore`, and `CryptoTokenStoreTests`.
+- Fix the `Instrument.stock(ticker:exchange:name:decimals:)` factory's id formula: change `id: "\(exchange):\(name)"` to `id: "\(exchange):\(ticker)"`. The canonical stock id becomes `EXCHANGE:TICKER` — consistent with the Yahoo API lookup key and with what the picker's search flow produces when it has a ticker but no short-name source. Update all ~30 call-sites in tests and `InvestmentAccountView`. No data migration needed — no user has stock records today.
 
 ### Out of scope
 
@@ -128,7 +129,8 @@ Without this update, device B silently drops the new fields when applying a remo
 
 - `CryptoRegistration` (Domain/Models) is kept as a value type pairing `Instrument` with `CryptoProviderMapping`. It is no longer a persistence entity — it is derived from `InstrumentRecord` on read.
 - `CryptoProviderMapping` is unchanged.
-- `Instrument` is unchanged — provider identifiers stay on the mapping side, not on the domain instrument. `coingeckoId`/`cryptocompareSymbol`/`binanceSymbol` exist only on `InstrumentRecord` (persistence) and `CryptoProviderMapping` (in-memory pairing).
+- `Instrument` — `stock(ticker:exchange:name:decimals:)` factory's id formula changes from `id: "\(exchange):\(name)"` to `id: "\(exchange):\(ticker)"`. The canonical stock id becomes `EXCHANGE:TICKER`, consistent with the Yahoo API lookup key and with what the picker's search flow produces when it has a ticker but no short-name source. All existing call-sites (~30 tests + `Features/Investments/Views/InvestmentAccountView.swift`) are updated — call-sites keep their `name:` argument for display purposes; only the derived id changes (e.g. from `"ASX:BHP"` to `"ASX:BHP.AX"`). Test expectations asserting the old id format are updated. No data migration is required because no user profile holds stock records today.
+- No other changes to `Instrument`. Provider identifiers (`coingeckoId` / `cryptocompareSymbol` / `binanceSymbol`) remain off the domain instrument and live only on `InstrumentRecord` (persistence) and `CryptoProviderMapping` (in-memory pairing).
 - `CryptoRegistration.builtInPresets` is kept for test fixtures; it is not auto-seeded into profiles.
 
 #### 1.3 `InstrumentRegistryRepository` protocol
@@ -515,6 +517,17 @@ New file `MoolahTests/Domain/InstrumentRegistryRepositoryContractTests.swift`, r
 - Read failure: seeding a failure-injecting in-memory context and calling `all()` produces a thrown error (propagation contract, not silent empty).
 - Corrupt row defence: an `InstrumentRecord` with `kind == "cryptoToken"` but all three provider-mapping fields `nil` (simulating an `ensureInstrument`-inserted row) is not returned from `allCryptoRegistrations()` and does not crash `all()`.
 
+#### 6.1a `Instrument.stock` id formula
+
+In `MoolahTests/Domain/InstrumentStockTests.swift`:
+
+- Assert `Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP", decimals: 0).id == "ASX:BHP.AX"`.
+- Assert two stocks with the same exchange + ticker but different names produce the same id (name is display-only, not identity).
+- Assert two stocks with the same exchange + name but different tickers produce *different* ids.
+- Existing `InstrumentStockTests` assertions that expect the old `"ASX:BHP"` form are updated to the new `"ASX:BHP.AX"` form.
+
+Call-sites elsewhere in the test suite are updated mechanically: anywhere a test previously asserted `instrument.id == "ASX:BHP"` becomes `"ASX:BHP.AX"` (and equivalents for CBA, AAPL, VAS, BRK.B, BHP.L). The fact that the id is derived from ticker+exchange — not name — becomes a Domain/InstrumentStockTests-level invariant so future callers can't regress it.
+
 #### 6.2 `InstrumentRecord` CloudKit round-trip
 
 Extend existing `InstrumentRecord` CloudKit tests (or add one) to cover:
@@ -619,8 +632,7 @@ Filed before the implementation PR opens. Working title: **"Instrument registry 
 >
 > **Separate technical-debt issues to file alongside this one**
 >
-> - Fix the `Instrument.stock(ticker:exchange:name:decimals:)` id formula: it currently produces `"\(exchange):\(name)"` but the canonical id used throughout the picker design and CSV flow is `"\(exchange):\(ticker)"`. Align the factory, update all existing tests and call sites.
-> - Remove `InstrumentRecord`'s hand-written init and `from(_:)` factory in favour of the synthesized memberwise init. After the three new fields land, the init has 11 parameters and is pure boilerplate.
+> - Remove `InstrumentRecord`'s hand-written init and `from(_:)` factory in favour of the synthesized memberwise init. After the three new fields land, the init has 11 parameters and is pure boilerplate. Deferred from this project because `@Model`-macro interactions with synthesized inits need to be verified in isolation, not bundled with a schema change.
 >
 > **Out of scope**
 >
@@ -635,6 +647,7 @@ The follow-up issue must be filed (and its number known) **before** the implemen
 - **Sync fan-out** — new fields are on an already-synced record type. The encode/decode extension and the `batchUpsertInstruments` field-copy block (§2 of the spec's sync notes and §1.1 encode/decode pattern) are the only sync-engine touches.
 - **Deletion of `ICloudTokenRepository`** is pure subtraction; the only caller is `CryptoPriceService`'s init, which is also being changed. Compiler enforces the caller update.
 - **Throwing `providerMappings` closure** changes the `FullConversionService.init` signature. All existing call sites of `FullConversionService.init` must be updated to pass a throwing closure (or `{ [] }` if they had no mappings source). This is surfaced as a compile error at every call site, so the migration cannot silently miss one.
+- **`Instrument.stock` id formula change** reshapes the canonical stock id from `EXCHANGE:NAME` to `EXCHANGE:TICKER`. This is bounded by the compiler — every existing call to `Instrument.stock(...)` continues to compile unchanged, but the resulting `id` differs. Impact is limited to ~30 test assertions that compare against literal id strings; production data is unaffected because no user has stock records today.
 - **Settings fallback gating** is the only user-visible behaviour change: crypto settings become unavailable when no CloudKit-backed profile is active.
 - **No entitlement changes** — fastlane / provisioning story unchanged.
 
@@ -654,3 +667,5 @@ None — resolved during brainstorming:
 - Search architecture: unified fan-out; stock limited to typed-ticker until a name source is found.
 - Picker UI migration: deferred to the follow-up issue above.
 - Preset seeding: not performed.
+- Stock id convention: `EXCHANGE:TICKER`. `Instrument.stock` factory updated in this project to produce this form.
+- `InstrumentRecord` hand-written init cleanup: deferred — `@Model`-macro synthesized-init interactions warrant isolated verification, not bundled with a schema change.
