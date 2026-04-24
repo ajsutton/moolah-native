@@ -243,6 +243,11 @@ extension SyncCoordinator {
       "Fetch session complete: \(profileCount) profiles changed, types: \(totalTypes), indexChanged: \(self.fetchSessionIndexChanged)"
     )
     flushFetchSessionChanges()
+    if fetchSessionTouchedIndexZone && !profileIndexFetchedAtLeastOnce {
+      profileIndexFetchedAtLeastOnce = true
+      logger.info("profileIndexFetchedAtLeastOnce flipped true")
+    }
+    fetchSessionTouchedIndexZone = false
   }
 
   private func flushFetchSessionChanges() {
