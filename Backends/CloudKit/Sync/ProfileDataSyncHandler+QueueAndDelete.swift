@@ -33,15 +33,15 @@ extension ProfileDataSyncHandler {
     // 9. CSV import profiles (reference accounts)
     // 10. Import rules (optionally reference accounts via accountScope)
     collectAllStringIDs(InstrumentRecord.self, into: &recordIDs) { $0.id }
-    collectAllUUIDs(CategoryRecord.self, into: &recordIDs) { $0.id }
-    collectAllUUIDs(AccountRecord.self, into: &recordIDs) { $0.id }
-    collectAllUUIDs(EarmarkRecord.self, into: &recordIDs) { $0.id }
-    collectAllUUIDs(EarmarkBudgetItemRecord.self, into: &recordIDs) { $0.id }
-    collectAllUUIDs(InvestmentValueRecord.self, into: &recordIDs) { $0.id }
-    collectAllUUIDs(TransactionRecord.self, into: &recordIDs) { $0.id }
-    collectAllUUIDs(TransactionLegRecord.self, into: &recordIDs) { $0.id }
-    collectAllUUIDs(CSVImportProfileRecord.self, into: &recordIDs) { $0.id }
-    collectAllUUIDs(ImportRuleRecord.self, into: &recordIDs) { $0.id }
+    collectAllUUIDs(CategoryRecord.self, into: &recordIDs)
+    collectAllUUIDs(AccountRecord.self, into: &recordIDs)
+    collectAllUUIDs(EarmarkRecord.self, into: &recordIDs)
+    collectAllUUIDs(EarmarkBudgetItemRecord.self, into: &recordIDs)
+    collectAllUUIDs(InvestmentValueRecord.self, into: &recordIDs)
+    collectAllUUIDs(TransactionRecord.self, into: &recordIDs)
+    collectAllUUIDs(TransactionLegRecord.self, into: &recordIDs)
+    collectAllUUIDs(CSVImportProfileRecord.self, into: &recordIDs)
+    collectAllUUIDs(ImportRuleRecord.self, into: &recordIDs)
 
     if !recordIDs.isEmpty {
       logger.info("Collected \(recordIDs.count) existing records for upload")
@@ -65,15 +65,15 @@ extension ProfileDataSyncHandler {
     var recordIDs: [CKRecord.ID] = []
     // Same dependency order as queueAllExistingRecords.
     collectUnsyncedInstruments(into: &recordIDs)
-    collectUnsynced(CategoryRecord.self, into: &recordIDs) { $0.id }
-    collectUnsynced(AccountRecord.self, into: &recordIDs) { $0.id }
-    collectUnsynced(EarmarkRecord.self, into: &recordIDs) { $0.id }
-    collectUnsynced(EarmarkBudgetItemRecord.self, into: &recordIDs) { $0.id }
-    collectUnsynced(InvestmentValueRecord.self, into: &recordIDs) { $0.id }
-    collectUnsynced(TransactionRecord.self, into: &recordIDs) { $0.id }
-    collectUnsynced(TransactionLegRecord.self, into: &recordIDs) { $0.id }
-    collectUnsynced(CSVImportProfileRecord.self, into: &recordIDs) { $0.id }
-    collectUnsynced(ImportRuleRecord.self, into: &recordIDs) { $0.id }
+    collectUnsynced(CategoryRecord.self, into: &recordIDs)
+    collectUnsynced(AccountRecord.self, into: &recordIDs)
+    collectUnsynced(EarmarkRecord.self, into: &recordIDs)
+    collectUnsynced(EarmarkBudgetItemRecord.self, into: &recordIDs)
+    collectUnsynced(InvestmentValueRecord.self, into: &recordIDs)
+    collectUnsynced(TransactionRecord.self, into: &recordIDs)
+    collectUnsynced(TransactionLegRecord.self, into: &recordIDs)
+    collectUnsynced(CSVImportProfileRecord.self, into: &recordIDs)
+    collectUnsynced(ImportRuleRecord.self, into: &recordIDs)
 
     if !recordIDs.isEmpty {
       logger.info("Collected \(recordIDs.count) unsynced records for upload")
@@ -117,14 +117,15 @@ extension ProfileDataSyncHandler {
 
   // MARK: - Private Helpers
 
-  private func collectAllUUIDs<T: PersistentModel & CloudKitRecordConvertible>(
-    _ type: T.Type, into recordIDs: inout [CKRecord.ID], extract: (T) -> UUID
+  private func collectAllUUIDs<
+    T: PersistentModel & CloudKitRecordConvertible & IdentifiableRecord
+  >(
+    _ type: T.Type, into recordIDs: inout [CKRecord.ID]
   ) {
     let context = ModelContext(modelContainer)
     for record in Self.fetchOrLog(FetchDescriptor<T>(), context: context) {
       recordIDs.append(
-        CKRecord.ID(
-          recordType: T.recordType, uuid: extract(record), zoneID: zoneID))
+        CKRecord.ID(recordType: T.recordType, uuid: record.id, zoneID: zoneID))
     }
   }
 
@@ -139,15 +140,15 @@ extension ProfileDataSyncHandler {
 
   private func collectUnsynced<
     T: PersistentModel & SystemFieldsCacheable & CloudKitRecordConvertible
+      & IdentifiableRecord
   >(
-    _ type: T.Type, into recordIDs: inout [CKRecord.ID], extract: (T) -> UUID
+    _ type: T.Type, into recordIDs: inout [CKRecord.ID]
   ) {
     let context = ModelContext(modelContainer)
     for record in Self.fetchOrLog(FetchDescriptor<T>(), context: context)
     where record.encodedSystemFields == nil {
       recordIDs.append(
-        CKRecord.ID(
-          recordType: T.recordType, uuid: extract(record), zoneID: zoneID))
+        CKRecord.ID(recordType: T.recordType, uuid: record.id, zoneID: zoneID))
     }
   }
 

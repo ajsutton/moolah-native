@@ -49,7 +49,7 @@ struct SyncCoordinatorTestsExtra {
       ownerName: CKCurrentUserDefaultName)
 
     // Should not crash — just adds to pending (no sync engine to actually process)
-    coordinator.queueSave(id: id, recordType: AccountRecord.recordType, zoneID: zoneID)
+    coordinator.queueSave(recordType: AccountRecord.recordType, id: id, zoneID: zoneID)
     // No assertion needed beyond "doesn't crash" since CKSyncEngine is not started
   }
 
@@ -74,7 +74,7 @@ struct SyncCoordinatorTestsExtra {
       zoneName: "profile-\(UUID().uuidString)",
       ownerName: CKCurrentUserDefaultName)
 
-    coordinator.queueDeletion(id: id, recordType: AccountRecord.recordType, zoneID: zoneID)
+    coordinator.queueDeletion(recordType: AccountRecord.recordType, id: id, zoneID: zoneID)
   }
 
   // MARK: - Post-Migration / Import Record Queueing

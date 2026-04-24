@@ -169,7 +169,7 @@ extension SyncCoordinator {
   // the UI is ready, and any already-persisted records are re-queued by
   // `queueAllExistingRecordsForAllZones` / `queueUnsyncedRecordsForAllProfiles`
   // inside `completeStart`.
-  func queueSave(id: UUID, recordType: String, zoneID: CKRecordZone.ID) {
+  func queueSave(recordType: String, id: UUID, zoneID: CKRecordZone.ID) {
     let recordID = CKRecord.ID(
       recordType: recordType, uuid: id, zoneID: zoneID)
     syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
@@ -180,7 +180,7 @@ extension SyncCoordinator {
     syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
   }
 
-  func queueDeletion(id: UUID, recordType: String, zoneID: CKRecordZone.ID) {
+  func queueDeletion(recordType: String, id: UUID, zoneID: CKRecordZone.ID) {
     let recordID = CKRecord.ID(
       recordType: recordType, uuid: id, zoneID: zoneID)
     syncEngine?.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
