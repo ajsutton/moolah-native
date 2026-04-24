@@ -3,7 +3,10 @@ import Testing
 
 @testable import Moolah
 
-@Suite("URL+MoolahStorage")
+// Serialised because both tests mutate `URL.moolahApplicationSupportOverride`,
+// a `nonisolated(unsafe)` static. Parallel execution would let one test's
+// override leak into the other's assertions.
+@Suite("URL+MoolahStorage", .serialized)
 struct URLMoolahStorageTests {
   @Test("returns <root>/<env>/ with env subdir created")
   func testScopedRootUsesEnvironmentSubdirectory() throws {

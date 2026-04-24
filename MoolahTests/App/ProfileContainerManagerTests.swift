@@ -4,7 +4,12 @@ import Testing
 
 @testable import Moolah
 
-@Suite("ProfileContainerManager")
+// Serialised because testContainerUsesScopedStoreURL mutates
+// `URL.moolahApplicationSupportOverride`, a `nonisolated(unsafe)` static.
+// The other tests in this suite use the in-memory forTesting() path and
+// would be safe to parallelise, but the suite is small enough that
+// serialisation is a cheap way to eliminate the override-leak hazard.
+@Suite("ProfileContainerManager", .serialized)
 struct ProfileContainerManagerTests {
   @Test("creates index container with ProfileRecord schema only")
   @MainActor
