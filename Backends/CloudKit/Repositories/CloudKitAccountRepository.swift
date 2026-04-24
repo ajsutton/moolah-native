@@ -183,6 +183,10 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
 
   @MainActor
   private func ensureInstrument(_ instrument: Instrument) throws {
+    guard instrument.kind != .fiatCurrency else {
+      instrumentCacheForAccount[instrument.id] = instrument
+      return
+    }
     let iid = instrument.id
     let descriptor = FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == iid })
     if try context.fetch(descriptor).isEmpty {
