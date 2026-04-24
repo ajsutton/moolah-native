@@ -39,6 +39,29 @@ struct WelcomeView: View {
     )
 
     content(for: state)
+      // macOS only: constrain the window to a compact range so the
+      // hero / form / picker have a sensible layout envelope. Without
+      // this, SwiftUI sizes the window from content ideal — unbounded
+      // `Spacer()`s in the hero let it grow to full-screen, and at
+      // small heights the CTA scrolls off the bottom.
+      //
+      // Minimum keeps the Get started button visible; ideal opens
+      // at a friendly splash size on first appearance. `maxHeight:
+      // .infinity` still lets the picker grow for long profile
+      // lists or accessibility-sized text.
+      //
+      // iOS uses device-level sizing and keyboard avoidance; a
+      // hard `minWidth: 420` would overflow iPhone widths.
+      #if os(macOS)
+        .frame(
+          minWidth: 420,
+          idealWidth: 500,
+          maxWidth: .infinity,
+          minHeight: 560,
+          idealHeight: 720,
+          maxHeight: .infinity
+        )
+      #endif
       .onAppear { profileStore.welcomePhase = phase }
       .onDisappear { profileStore.welcomePhase = nil }
       .onChange(of: phase) { _, newValue in
