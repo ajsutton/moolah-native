@@ -199,3 +199,27 @@ run-mac-with-logs predicate='subsystem == "com.moolah.app"' *args: generate
 # Open the project in Xcode
 open:
     open Moolah.xcodeproj
+
+# Export the CloudKit Development schema to CloudKit/schema.ckdb.
+# Requires DEVELOPMENT_TEAM and a management token (`xcrun cktool save-token
+# --type management` for local use, or CKTOOL_MANAGEMENT_TOKEN in CI).
+export-schema:
+    bash scripts/export-schema.sh
+
+# Verify the CloudKit Development schema matches CloudKit/schema.ckdb.
+# Non-destructive; exits non-zero on drift. Run by CI on every PR.
+verify-schema:
+    bash scripts/verify-schema.sh
+
+# Promote CloudKit/schema.ckdb to the Production environment.
+# Intended to run from the TestFlight workflow before each upload. Production
+# schema changes are one-way — to run locally, re-run with CKTOOL_PROMOTE_FORCE=1.
+promote-schema:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "${CI:-}" != "true" ] && [ "${CKTOOL_PROMOTE_FORCE:-}" != "1" ]; then
+        echo "promote-schema is intended to run only in CI (on release tags)." >&2
+        echo "Re-run with CKTOOL_PROMOTE_FORCE=1 to force a local promotion." >&2
+        exit 1
+    fi
+    bash scripts/promote-schema.sh
