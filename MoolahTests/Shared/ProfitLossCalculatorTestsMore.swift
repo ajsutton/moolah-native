@@ -35,7 +35,7 @@ struct ProfitLossCalculatorTestsMore {
       ])
 
     // BHP $50/share (100 * 50 = 5000). CBA $120/share (50 * 120 = 6000).
-    let service = FixedConversionService(rates: ["ASX:BHP": 50, "ASX:CBA": 120])
+    let service = FixedConversionService(rates: ["ASX:BHP.AX": 50, "ASX:CBA.AX": 120])
     let results = try await ProfitLossCalculator.compute(
       transactions: [buyBHP, buyCBA],
       profileCurrency: aud,
@@ -44,8 +44,8 @@ struct ProfitLossCalculatorTestsMore {
     )
 
     #expect(results.count == 2)
-    let bhpPL = results.first { $0.instrument.id == "ASX:BHP" }
-    let cbaPL = results.first { $0.instrument.id == "ASX:CBA" }
+    let bhpPL = results.first { $0.instrument.id == "ASX:BHP.AX" }
+    let cbaPL = results.first { $0.instrument.id == "ASX:CBA.AX" }
     #expect(bhpPL?.unrealizedGain == 1000)
     #expect(cbaPL?.unrealizedGain == 1000)
   }
@@ -80,7 +80,7 @@ struct ProfitLossCalculatorTestsMore {
           categoryId: nil, earmarkId: nil),
       ])
 
-    let service = FixedConversionService(rates: ["ASX:BHP": 50, eth.id: 2500])
+    let service = FixedConversionService(rates: ["ASX:BHP.AX": 50, eth.id: 2500])
     let results = try await ProfitLossCalculator.compute(
       transactions: [buyBHP, buyETH],
       profileCurrency: aud,
@@ -125,7 +125,7 @@ struct ProfitLossCalculatorTestsMore {
     // 1 USD = 1.5 AUD, BHP now worth AUD 50/share.
     let service = FixedConversionService(rates: [
       "USD": dec("1.5"),
-      "ASX:BHP": 50,
+      "ASX:BHP.AX": 50,
     ])
     let results = try await ProfitLossCalculator.compute(
       transactions: [buyTx],
@@ -178,8 +178,8 @@ struct ProfitLossCalculatorTestsMore {
     // Correct routing: totalInvested = 2000 × 1.5 = 3000; currentValue = 100 × 50 = 5000.
     // If dates were swapped: totalInvested = 2000 × 2.0 = 4000; currentValue = 100 × 30 = 3000.
     let service = DateBasedFixedConversionService(rates: [
-      date(0): ["USD": dec("1.5"), "ASX:BHP": 30],
-      date(365): ["USD": dec("2.0"), "ASX:BHP": 50],
+      date(0): ["USD": dec("1.5"), "ASX:BHP.AX": 30],
+      date(365): ["USD": dec("2.0"), "ASX:BHP.AX": 50],
     ])
     let results = try await ProfitLossCalculator.compute(
       transactions: [buyTx],
@@ -198,9 +198,7 @@ struct ProfitLossCalculatorTestsMore {
   // MARK: - Helpers
 
   private func stockInstrument(_ name: String) -> Instrument {
-    Instrument(
-      id: "ASX:\(name)", kind: .stock, name: name, decimals: 0,
-      ticker: "\(name).AX", exchange: "ASX", chainId: nil, contractAddress: nil)
+    Instrument.stock(ticker: "\(name).AX", exchange: "ASX", name: name)
   }
 
   private func date(_ daysFromBase: Int) -> Date {

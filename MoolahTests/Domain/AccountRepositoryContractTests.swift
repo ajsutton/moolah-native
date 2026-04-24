@@ -199,7 +199,7 @@ struct AccountRepositoryContractTests {
     let all = try await repository.fetchAll()
     let fetched = try #require(all.first { $0.id == account.id })
     #expect(fetched.instrument == bhp)
-    #expect(fetched.instrument.id == "ASX:BHP")
+    #expect(fetched.instrument.id == "ASX:BHP.AX")
     #expect(fetched.instrument.kind == .stock)
     #expect(fetched.instrument.ticker == "BHP.AX")
     #expect(fetched.instrument.exchange == "ASX")

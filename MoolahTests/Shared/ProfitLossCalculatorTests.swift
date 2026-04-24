@@ -8,9 +8,7 @@ struct ProfitLossCalculatorTests {
   let aud = Instrument.fiat(code: "AUD")
 
   private func stockInstrument(_ name: String) -> Instrument {
-    Instrument(
-      id: "ASX:\(name)", kind: .stock, name: name, decimals: 0,
-      ticker: "\(name).AX", exchange: "ASX", chainId: nil, contractAddress: nil)
+    Instrument.stock(ticker: "\(name).AX", exchange: "ASX", name: name)
   }
 
   private func date(_ daysFromBase: Int) -> Date {
@@ -36,7 +34,7 @@ struct ProfitLossCalculatorTests {
       ])
 
     // BHP now worth $50/share
-    let service = FixedConversionService(rates: ["ASX:BHP": 50])
+    let service = FixedConversionService(rates: ["ASX:BHP.AX": 50])
     let results = try await ProfitLossCalculator.compute(
       transactions: [buyTx],
       profileCurrency: aud,
@@ -46,7 +44,7 @@ struct ProfitLossCalculatorTests {
 
     #expect(results.count == 1)
     let bhpPL = results[0]
-    #expect(bhpPL.instrument.id == "ASX:BHP")
+    #expect(bhpPL.instrument.id == "ASX:BHP.AX")
     #expect(bhpPL.totalInvested == 4000)
     #expect(bhpPL.currentValue == 5000)
     #expect(bhpPL.unrealizedGain == 1000)
@@ -82,7 +80,7 @@ struct ProfitLossCalculatorTests {
       ])
 
     // BHP now worth $50/share
-    let service = FixedConversionService(rates: ["ASX:BHP": 50])
+    let service = FixedConversionService(rates: ["ASX:BHP.AX": 50])
     let results = try await ProfitLossCalculator.compute(
       transactions: [buyTx, sellTx],
       profileCurrency: aud,

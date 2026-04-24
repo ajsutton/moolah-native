@@ -8,7 +8,7 @@ struct InstrumentStockTests {
   @Test
   func stockInstrumentProperties() {
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
-    #expect(bhp.id == "ASX:BHP")
+    #expect(bhp.id == "ASX:BHP.AX")
     #expect(bhp.kind == .stock)
     #expect(bhp.name == "BHP")
     #expect(bhp.decimals == 0)
@@ -19,9 +19,29 @@ struct InstrumentStockTests {
   }
 
   @Test
-  func stockIdUsesExchangeColonName() {
+  func stockIdUsesExchangeColonTicker() {
     let aapl = Instrument.stock(ticker: "AAPL", exchange: "NASDAQ", name: "Apple")
-    #expect(aapl.id == "NASDAQ:Apple")
+    #expect(aapl.id == "NASDAQ:AAPL")
+  }
+
+  @Test
+  func stockIdIsIndependentOfName() {
+    // Identity is (exchange, ticker); name is display-only.
+    let short = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let long = Instrument.stock(
+      ticker: "BHP.AX", exchange: "ASX", name: "BHP Group Limited")
+    #expect(short.id == long.id)
+    #expect(short.name != long.name)
+  }
+
+  @Test
+  func stockIdChangesWithTickerEvenForSameName() {
+    // Two BHP listings on different exchanges with different tickers.
+    let aud = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let lon = Instrument.stock(ticker: "BHP.L", exchange: "LSE", name: "BHP")
+    #expect(aud.id != lon.id)
+    #expect(aud.id == "ASX:BHP.AX")
+    #expect(lon.id == "LSE:BHP.L")
   }
 
   @Test
@@ -72,11 +92,11 @@ struct InstrumentStockTests {
   // MARK: - Edge-case ticker formats
 
   @Test
-  func stockWithDottedTicker() {
+  func stockIdPreservesDotInTicker() {
     // Berkshire Hathaway Class B — ticker contains dot.
     let brkB = Instrument.stock(ticker: "BRK.B", exchange: "NYSE", name: "BRK-B")
     #expect(brkB.ticker == "BRK.B")
-    #expect(brkB.id == "NYSE:BRK-B")
+    #expect(brkB.id == "NYSE:BRK.B")
   }
 
   @Test
@@ -92,14 +112,5 @@ struct InstrumentStockTests {
     let cba = Instrument.stock(ticker: "CBA.AX", exchange: "ASX", name: "CBA")
     #expect(bhp.id != cba.id)
     #expect(bhp != cba)
-  }
-
-  @Test
-  func stockOnDifferentExchangesWithSameNameAreDistinct() {
-    // Same name on two exchanges must have distinct ids — the exchange is part of identity.
-    let aud = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
-    let lon = Instrument.stock(ticker: "BHP.L", exchange: "LSE", name: "BHP")
-    #expect(aud.id != lon.id)
-    #expect(aud != lon)
   }
 }

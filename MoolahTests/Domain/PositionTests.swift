@@ -199,7 +199,7 @@ struct PositionTests {
 
   @Test func computeForAccountSortsByInstrumentIdAcrossKinds() {
     // Sort is lexicographic over instrument.id — "0:native" (BTC), "1:native" (ETH),
-    // "ASX:BHP", "AUD", "JPY", "NASDAQ:AAPL", "USD" under ASCII ordering.
+    // "ASX:BHP.AX", "AUD", "JPY", "NASDAQ:AAPL", "USD" under ASCII ordering.
     let btc = Instrument.crypto(
       chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8
     )
@@ -261,7 +261,7 @@ struct PositionTests {
       btc: dec("0.1"),
     ])
     #expect(result.count == 3)
-    #expect(result.map { $0.instrument.id } == ["0:native", "ASX:BHP", "AUD"])
+    #expect(result.map { $0.instrument.id } == ["0:native", "ASX:BHP.AX", "AUD"])
   }
 
   @Test func zeroOutOneKindDoesNotRemoveOthers() {

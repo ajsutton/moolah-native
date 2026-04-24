@@ -8,9 +8,7 @@ struct CapitalGainsCalculatorTests {
   let aud = Instrument.fiat(code: "AUD")
 
   private func stockInstrument(_ name: String) -> Instrument {
-    Instrument(
-      id: "ASX:\(name)", kind: .stock, name: name, decimals: 0,
-      ticker: "\(name).AX", exchange: "ASX", chainId: nil, contractAddress: nil)
+    Instrument.stock(ticker: "\(name).AX", exchange: "ASX", name: name)
   }
 
   private func cryptoInstrument(_ symbol: String) -> Instrument {
@@ -200,8 +198,8 @@ struct CapitalGainsCalculatorTests {
     )
 
     #expect(result.events.count == 2)
-    let bhpGain = result.events.first { $0.instrument.id == "ASX:BHP" }?.gain
-    let cbaGain = result.events.first { $0.instrument.id == "ASX:CBA" }?.gain
+    let bhpGain = result.events.first { $0.instrument.id == "ASX:BHP.AX" }?.gain
+    let cbaGain = result.events.first { $0.instrument.id == "ASX:CBA.AX" }?.gain
     #expect(bhpGain == 1000)
     #expect(cbaGain == 2000)
     #expect(result.totalRealizedGain == 3000)

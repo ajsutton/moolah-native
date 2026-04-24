@@ -21,7 +21,7 @@ struct ReportingStoreTests {
     TestBackend.seed(accounts: [account], in: container)
 
     let bhp = Instrument(
-      id: "ASX:BHP", kind: .stock, name: "BHP", decimals: 0,
+      id: "ASX:BHP.AX", kind: .stock, name: "BHP", decimals: 0,
       ticker: "BHP.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
 
     let buyTx = Transaction(
@@ -36,7 +36,7 @@ struct ReportingStoreTests {
     )
     TestBackend.seed(transactions: [buyTx], in: container)
 
-    let service = FixedConversionService(rates: ["ASX:BHP": 50])
+    let service = FixedConversionService(rates: ["ASX:BHP.AX": 50])
     let store = ReportingStore(
       transactionRepository: backend.transactions,
       conversionService: service,
@@ -48,7 +48,7 @@ struct ReportingStoreTests {
     #expect(!store.isLoading)
     #expect(store.error == nil)
     #expect(store.profitLoss.count == 1)
-    #expect(store.profitLoss[0].instrument.id == "ASX:BHP")
+    #expect(store.profitLoss[0].instrument.id == "ASX:BHP.AX")
     #expect(store.profitLoss[0].totalInvested == 4000)
     #expect(store.profitLoss[0].currentValue == 5000)
     #expect(store.profitLoss[0].unrealizedGain == 1000)
@@ -62,7 +62,7 @@ struct ReportingStoreTests {
     TestBackend.seed(accounts: [account], in: container)
 
     let bhp = Instrument(
-      id: "ASX:BHP", kind: .stock, name: "BHP", decimals: 0,
+      id: "ASX:BHP.AX", kind: .stock, name: "BHP", decimals: 0,
       ticker: "BHP.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
 
     let calendar = Calendar(identifier: .gregorian)
@@ -140,10 +140,10 @@ struct ReportingStoreTests {
   /// short-term inside the window) both sold on the same day in FY2026.
   private func makeShortAndLongTermGainsFixture(accountId: UUID) -> [Transaction] {
     let bhp = Instrument(
-      id: "ASX:BHP", kind: .stock, name: "BHP", decimals: 0,
+      id: "ASX:BHP.AX", kind: .stock, name: "BHP", decimals: 0,
       ticker: "BHP.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
     let cba = Instrument(
-      id: "ASX:CBA", kind: .stock, name: "CBA", decimals: 0,
+      id: "ASX:CBA.AX", kind: .stock, name: "CBA", decimals: 0,
       ticker: "CBA.AX", exchange: "ASX", chainId: nil, contractAddress: nil)
 
     let calendar = Calendar(identifier: .gregorian)

@@ -60,20 +60,20 @@ struct RecordMappingTestsExtra {
   @Test
   func instrumentRecordWithStockFields() throws {
     let instrument = InstrumentRecord(
-      id: "ASX:BHP",
+      id: "ASX:BHP.AX",
       kind: "stock",
       name: "BHP Group",
       decimals: 2,
-      ticker: "BHP",
+      ticker: "BHP.AX",
       exchange: "ASX"
     )
 
     let ckRecord = instrument.toCKRecord(in: zoneID)
-    #expect(ckRecord["ticker"] as? String == "BHP")
+    #expect(ckRecord["ticker"] as? String == "BHP.AX")
     #expect(ckRecord["exchange"] as? String == "ASX")
 
     let restored = try #require(InstrumentRecord.fieldValues(from: ckRecord))
-    #expect(restored.ticker == "BHP")
+    #expect(restored.ticker == "BHP.AX")
     #expect(restored.exchange == "ASX")
   }
 

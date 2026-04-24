@@ -47,14 +47,17 @@ struct Instrument: Codable, Sendable, Hashable, Identifiable {
   }
 
   /// Factory for stock instruments.
-  /// `ticker` is the Yahoo Finance symbol (e.g., "BHP.AX").
-  /// `exchange` is the exchange code (e.g., "ASX", "NASDAQ").
-  /// `name` is the display name (e.g., "BHP", "Apple").
+  /// `ticker` is the Yahoo Finance symbol (e.g., "BHP.AX") and, together with
+  /// `exchange`, forms the canonical id as `"\(exchange):\(ticker)"`.
+  /// `exchange` is the exchange code (e.g., "ASX", "NASDAQ") and is part of identity.
+  /// `name` is the display name (e.g., "BHP", "Apple") and does not influence
+  /// identity — two rows with the same exchange and ticker but different names
+  /// are the same instrument.
   /// `decimals` defaults to 0 (whole shares); override for fractional instruments.
   static func stock(ticker: String, exchange: String, name: String, decimals: Int = 0) -> Instrument
   {
     Instrument(
-      id: "\(exchange):\(name)",
+      id: "\(exchange):\(ticker)",
       kind: .stock,
       name: name,
       decimals: decimals,

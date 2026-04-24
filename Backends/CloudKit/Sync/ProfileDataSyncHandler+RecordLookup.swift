@@ -39,7 +39,7 @@ extension ProfileDataSyncHandler {
     let context = ModelContext(modelContainer)
     let recordName = recordID.recordName
 
-    // InstrumentRecord uses String IDs (e.g. "AUD", "ASX:BHP"), not UUIDs.
+    // InstrumentRecord uses String IDs (e.g. "AUD", "ASX:BHP.AX"), not UUIDs.
     // Try it first before UUID-based lookups.
     if let record = fetchInstrument(id: recordName, context: context) {
       return buildCKRecord(for: record)
