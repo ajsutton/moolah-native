@@ -180,7 +180,7 @@ final class SyncCoordinator {
 
   // MARK: - State
 
-  let stateFileURL = URL.applicationSupportDirectory
+  let stateFileURL = URL.moolahScopedApplicationSupport
     .appending(path: "Moolah-v2-sync.syncstate")
 
   let containerManager: ProfileContainerManager
