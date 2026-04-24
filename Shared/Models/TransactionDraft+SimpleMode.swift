@@ -68,6 +68,20 @@ extension TransactionDraft {
     set { legDrafts[0].earmarkId = newValue }
   }
 
+  /// Reconcile `categoryText` with `categoryId` against the current
+  /// `Categories` snapshot. If the id resolves, `categoryText` is reset to
+  /// its canonical path; otherwise both fields are cleared. Called from the
+  /// view on category-field blur so partially-typed text that never
+  /// committed to a real category doesn't linger in the draft.
+  mutating func normaliseCategoryText(using categories: Categories) {
+    if let id = categoryId, let category = categories.by(id: id) {
+      categoryText = categories.path(for: category)
+    } else {
+      categoryText = ""
+      categoryId = nil
+    }
+  }
+
   /// Whether the "other account" label should read "From Account" instead of "To Account".
   /// True when viewing from the counterpart's perspective (the relevant leg is not the primary leg).
   var showFromAccount: Bool {

@@ -111,6 +111,14 @@ enum UITestSeedHydrator {
         toAccountId: fixtures.brokerageAccountId),
       in: context)
 
+    // Categories must exist before any leg references them by id, so
+    // upsert them ahead of the historical expense loop (one of those
+    // entries attaches `groceriesCategoryId`).
+    try upsertCategory(
+      id: fixtures.groceriesCategoryId, name: fixtures.groceriesCategoryName, in: context)
+    try upsertCategory(
+      id: fixtures.gymCategoryId, name: fixtures.gymCategoryName, in: context)
+
     let historicalAmount = InstrumentAmount(
       quantity: Decimal(fixtures.historicalExpenseAmountCents) / 100,
       instrument: instrument)
@@ -121,14 +129,10 @@ enum UITestSeedHydrator {
           payee: historical.payee,
           date: historical.date,
           amount: historicalAmount,
-          accountId: fixtures.checkingAccountId),
+          accountId: fixtures.checkingAccountId,
+          categoryId: historical.categoryId),
         in: context)
     }
-
-    try upsertCategory(
-      id: fixtures.groceriesCategoryId, name: fixtures.groceriesCategoryName, in: context)
-    try upsertCategory(
-      id: fixtures.gymCategoryId, name: fixtures.gymCategoryName, in: context)
 
     try upsertCustomExpenseSplit(
       CustomExpenseSplitSpec(

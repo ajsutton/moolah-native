@@ -68,4 +68,24 @@ final class TransactionDetailPayeeAutocompleteTests: MoolahUITestCase {
     app.transactionDetail.payee.expectValue("")
     app.transactionDetail.payee.expectSuggestionsHidden()
   }
+
+  /// Typing the exact text of a historical payee must still show that
+  /// payee in the dropdown. The seed contains two "Woolworths" expenses
+  /// plus one "Woolworths Metro", so after typing "Woolworths" the user
+  /// should see two suggestions — "Woolworths" (dedup-merged across the
+  /// two historical entries) and "Woolworths Metro". The previous bug
+  /// silently filtered the exact match out, surfacing only one option
+  /// and giving the impression the app had forgotten the payee the user
+  /// had just typed.
+  func testTypingExactPayeeIncludesItInSuggestions() {
+    let app = launch(seed: .tradeBaseline)
+
+    app.sidebar.switchToAccount(.checking)
+    app.transactionList.openTransaction(.bhpPurchase)
+    app.transactionDetail.payee.tap()
+    app.transactionDetail.payee.clear()
+    app.transactionDetail.payee.type("Woolworths")
+
+    app.transactionDetail.payee.expectSuggestionsVisible(count: 2)
+  }
 }

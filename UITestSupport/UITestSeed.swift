@@ -23,15 +23,23 @@ public enum UITestSeed: String, CaseIterable, Sendable {
 }
 
 /// A past single-leg expense used to seed payee suggestions.
+///
+/// `categoryId`, when set, is stored on the leg so the autofill flow
+/// (`TransactionDetailView.autofillFromPayee(_:)`) can copy it into a new
+/// draft. Most entries leave it `nil`; one entry per scenario carries a
+/// category so the test asserts both that autofill fires *and* that it
+/// does not open the category picker as a side-effect.
 public struct UITestHistoricalExpense: Sendable {
   public let id: UUID
   public let payee: String
   public let date: Date
+  public let categoryId: UUID?
 
-  public init(id: UUID, payee: String, date: Date) {
+  public init(id: UUID, payee: String, date: Date, categoryId: UUID? = nil) {
     self.id = id
     self.payee = payee
     self.date = date
+    self.categoryId = categoryId
   }
 }
 
@@ -115,6 +123,11 @@ public enum UITestFixtures {
     /// date. Payee frequency is the only axis `fetchPayeeSuggestions` sorts
     /// on; "Woolworths" appears twice so it ranks strictly above
     /// "Woolworths Metro" for the prefix "Wool".
+    ///
+    /// The most recent "Woolworths" (2026-03-20) carries `groceriesCategoryId`
+    /// so the autofill flow has a category to copy when a user selects the
+    /// "Woolworths" suggestion. The earlier entries leave the category nil so
+    /// the seed still exercises the common "no prior category" path.
     public static let historicalPayees: [UITestHistoricalExpense] = [
       UITestHistoricalExpense(
         id: UUID(uuidString: "A1000000-0000-0000-0000-000000000030")!,
@@ -134,7 +147,8 @@ public enum UITestFixtures {
       UITestHistoricalExpense(
         id: UUID(uuidString: "A1000000-0000-0000-0000-000000000033")!,
         payee: "Woolworths",
-        date: Date(timeIntervalSince1970: 1_773_964_800)  // 2026-03-20 UTC
+        date: Date(timeIntervalSince1970: 1_773_964_800),  // 2026-03-20 UTC
+        categoryId: groceriesCategoryId
       ),
     ]
   }

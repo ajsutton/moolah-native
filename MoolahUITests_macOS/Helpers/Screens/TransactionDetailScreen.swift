@@ -18,6 +18,18 @@ struct TransactionDetailScreen {
     )
   }
 
+  /// Driver for the simple-mode category field — a text field with
+  /// autocomplete dropdown. Only exposes the single-leg section; multi-leg
+  /// (custom) transactions use `leg(_:).category` instead.
+  var category: AutocompleteFieldDriver {
+    AutocompleteFieldDriver(
+      app: app,
+      fieldIdentifier: UITestIdentifiers.Detail.category,
+      dropdownIdentifier: UITestIdentifiers.Autocomplete.category,
+      suggestionIdentifier: UITestIdentifiers.Autocomplete.categorySuggestion(_:)
+    )
+  }
+
   /// Driver for a single sub-transaction (leg) section in a multi-leg
   /// (`isCustom`) transaction. Legs are ordered by `sortOrder`; index 0
   /// is the first leg the user sees.
