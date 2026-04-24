@@ -190,7 +190,9 @@ struct ProfileIndexSyncHandlerTests {
     let ckRecord = handler.buildCKRecord(for: profile)
 
     #expect(ckRecord.recordType == ProfileRecord.recordType)
-    #expect(ckRecord.recordID.recordName == profileId.uuidString)
+    #expect(
+      ckRecord.recordID.recordName
+        == "\(ProfileRecord.recordType)|\(profileId.uuidString)")
     #expect(ckRecord.recordID.zoneID == handler.zoneID)
     #expect(ckRecord["label"] as? String == "Test Profile")
     #expect(ckRecord["currencyCode"] as? String == "AUD")

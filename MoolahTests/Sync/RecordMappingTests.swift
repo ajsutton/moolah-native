@@ -24,7 +24,9 @@ struct RecordMappingTests {
     let ckRecord = profile.toCKRecord(in: zoneID)
 
     #expect(ckRecord.recordType == "CD_ProfileRecord")
-    #expect(ckRecord.recordID.recordName == profile.id.uuidString)
+    #expect(
+      ckRecord.recordID.recordName
+        == "\(ProfileRecord.recordType)|\(profile.id.uuidString)")
     #expect(ckRecord.recordID.zoneID == zoneID)
     #expect(ckRecord["label"] as? String == "My Budget")
     #expect(ckRecord["currencyCode"] as? String == "AUD")
@@ -55,7 +57,9 @@ struct RecordMappingTests {
     let ckRecord = account.toCKRecord(in: zoneID)
 
     #expect(ckRecord.recordType == "CD_AccountRecord")
-    #expect(ckRecord.recordID.recordName == account.id.uuidString)
+    #expect(
+      ckRecord.recordID.recordName
+        == "\(AccountRecord.recordType)|\(account.id.uuidString)")
     #expect(ckRecord["name"] as? String == "Savings")
     #expect(ckRecord["type"] as? String == "bank")
     #expect(ckRecord["instrumentId"] as? String == "USD")
@@ -102,7 +106,9 @@ struct RecordMappingTests {
     let ckRecord = txn.toCKRecord(in: zoneID)
 
     #expect(ckRecord.recordType == "CD_TransactionRecord")
-    #expect(ckRecord.recordID.recordName == txn.id.uuidString)
+    #expect(
+      ckRecord.recordID.recordName
+        == "\(TransactionRecord.recordType)|\(txn.id.uuidString)")
     #expect(ckRecord["date"] as? Date == txnDate)
     #expect(ckRecord["payee"] as? String == "Rent")
     #expect(ckRecord["notes"] as? String == "Monthly rent")
@@ -162,7 +168,9 @@ struct RecordMappingTests {
     let ckRecord = leg.toCKRecord(in: zoneID)
 
     #expect(ckRecord.recordType == "CD_TransactionLegRecord")
-    #expect(ckRecord.recordID.recordName == leg.id.uuidString)
+    #expect(
+      ckRecord.recordID.recordName
+        == "\(TransactionLegRecord.recordType)|\(leg.id.uuidString)")
     #expect(ckRecord["transactionId"] as? String == transactionId.uuidString)
     #expect(ckRecord["accountId"] as? String == accountId.uuidString)
     #expect(ckRecord["instrumentId"] as? String == "AUD")

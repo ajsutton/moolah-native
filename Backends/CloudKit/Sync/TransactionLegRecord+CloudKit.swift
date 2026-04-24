@@ -7,7 +7,8 @@ extension TransactionLegRecord: CloudKitRecordConvertible {
   static let recordType = "CD_TransactionLegRecord"
 
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
-    let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    let recordID = CKRecord.ID(
+      recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
     record["transactionId"] = transactionId.uuidString as CKRecordValue
     if let accountId { record["accountId"] = accountId.uuidString as CKRecordValue }
@@ -22,7 +23,7 @@ extension TransactionLegRecord: CloudKitRecordConvertible {
 
   static func fieldValues(from ckRecord: CKRecord) -> TransactionLegRecord {
     TransactionLegRecord(
-      id: UUID(uuidString: ckRecord.recordID.recordName) ?? UUID(),
+      id: ckRecord.recordID.uuid ?? UUID(),
       transactionId: (ckRecord["transactionId"] as? String).flatMap { UUID(uuidString: $0) }
         ?? UUID(),
       accountId: (ckRecord["accountId"] as? String).flatMap { UUID(uuidString: $0) },

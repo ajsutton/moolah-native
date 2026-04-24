@@ -7,7 +7,8 @@ extension InvestmentValueRecord: CloudKitRecordConvertible {
   static let recordType = "CD_InvestmentValueRecord"
 
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
-    let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    let recordID = CKRecord.ID(
+      recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
     record["accountId"] = accountId.uuidString as CKRecordValue
     record["date"] = date as CKRecordValue
@@ -18,7 +19,7 @@ extension InvestmentValueRecord: CloudKitRecordConvertible {
 
   static func fieldValues(from ckRecord: CKRecord) -> InvestmentValueRecord {
     InvestmentValueRecord(
-      id: UUID(uuidString: ckRecord.recordID.recordName) ?? UUID(),
+      id: ckRecord.recordID.uuid ?? UUID(),
       accountId: (ckRecord["accountId"] as? String).flatMap { UUID(uuidString: $0) } ?? UUID(),
       date: ckRecord["date"] as? Date ?? Date(),
       value: ckRecord["value"] as? Int64 ?? 0,

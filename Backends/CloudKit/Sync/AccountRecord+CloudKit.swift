@@ -7,7 +7,8 @@ extension AccountRecord: CloudKitRecordConvertible {
   static let recordType = "CD_AccountRecord"
 
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
-    let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    let recordID = CKRecord.ID(
+      recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
     record["name"] = name as CKRecordValue
     record["type"] = type as CKRecordValue
@@ -19,7 +20,7 @@ extension AccountRecord: CloudKitRecordConvertible {
 
   static func fieldValues(from ckRecord: CKRecord) -> AccountRecord {
     AccountRecord(
-      id: UUID(uuidString: ckRecord.recordID.recordName) ?? UUID(),
+      id: ckRecord.recordID.uuid ?? UUID(),
       name: ckRecord["name"] as? String ?? "",
       type: ckRecord["type"] as? String ?? "bank",
       instrumentId: ckRecord["instrumentId"] as? String ?? "AUD",
