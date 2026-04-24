@@ -45,7 +45,7 @@ extension ProfileDataSyncHandler {
       return buildCKRecord(for: record)
     }
 
-    guard let uuid = UUID(uuidString: recordName) else {
+    guard let uuid = recordID.uuid else {
       logger.warning("Could not find local record for non-UUID ID: \(recordName)")
       return nil
     }

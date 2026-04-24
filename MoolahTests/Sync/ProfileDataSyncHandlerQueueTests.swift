@@ -63,8 +63,8 @@ struct ProfileDataSyncHandlerQueueTests {
     #expect(recordIDs.count == 3)
 
     let recordNames = Set(recordIDs.map(\.recordName))
-    #expect(recordNames.contains(accountId.uuidString))
-    #expect(recordNames.contains(txnId.uuidString))
+    #expect(recordNames.contains("\(AccountRecord.recordType)|\(accountId.uuidString)"))
+    #expect(recordNames.contains("\(TransactionRecord.recordType)|\(txnId.uuidString)"))
     #expect(recordNames.contains(instrumentId))
 
     for recordID in recordIDs {
@@ -109,9 +109,11 @@ struct ProfileDataSyncHandlerQueueTests {
     let recordIDs = handler.queueUnsyncedRecords()
     let recordNames = Set(recordIDs.map(\.recordName))
 
-    #expect(recordNames.contains(unsyncedAccountId.uuidString))
+    #expect(
+      recordNames.contains("\(AccountRecord.recordType)|\(unsyncedAccountId.uuidString)"))
     #expect(recordNames.contains(unsyncedInstrumentId))
-    #expect(!recordNames.contains(syncedAccountId.uuidString))
+    #expect(
+      !recordNames.contains("\(AccountRecord.recordType)|\(syncedAccountId.uuidString)"))
     #expect(!recordNames.contains(syncedInstrumentId))
   }
 
@@ -130,10 +132,7 @@ struct ProfileDataSyncHandlerQueueTests {
     #expect(recordIDs.isEmpty)
   }
 
-  @Test
-  func queueUnsyncedRecordsReturnsAllWhenNoneSynced() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
-
+  private struct AllRecordSeed {
     let accountId = UUID()
     let txnId = UUID()
     let legId = UUID()
@@ -143,45 +142,52 @@ struct ProfileDataSyncHandlerQueueTests {
     let investmentValueId = UUID()
     let instrumentId = "AUD"
 
-    let context = ModelContext(container)
-    context.insert(
-      InstrumentRecord(
-        id: instrumentId, kind: "fiatCurrency",
-        name: "Australian Dollar", decimals: 2))
-    context.insert(
-      AccountRecord(id: accountId, name: "Acc", type: "bank", position: 0, isHidden: false))
-    context.insert(
-      CategoryRecord(id: categoryId, name: "Food", parentId: nil))
-    context.insert(
-      EarmarkRecord(id: earmarkId, name: "Holiday", instrumentId: instrumentId))
-    context.insert(
-      EarmarkBudgetItemRecord(
-        id: budgetItemId, earmarkId: earmarkId, categoryId: categoryId,
-        amount: 0, instrumentId: instrumentId))
-    context.insert(
-      InvestmentValueRecord(
-        id: investmentValueId, accountId: accountId, date: Date(),
-        value: 0, instrumentId: instrumentId))
-    context.insert(TransactionRecord(id: txnId, date: Date(), payee: "Test"))
-    context.insert(
-      TransactionLegRecord(
-        id: legId, transactionId: txnId, accountId: accountId,
-        instrumentId: instrumentId, quantity: 0, type: "income", sortOrder: 0))
-    try context.save()
+    func insert(into context: ModelContext) throws {
+      context.insert(
+        InstrumentRecord(id: instrumentId, kind: "fiatCurrency", name: "AUD Dollar", decimals: 2))
+      context.insert(
+        AccountRecord(id: accountId, name: "Acc", type: "bank", position: 0, isHidden: false))
+      context.insert(CategoryRecord(id: categoryId, name: "Food", parentId: nil))
+      context.insert(EarmarkRecord(id: earmarkId, name: "Holiday", instrumentId: instrumentId))
+      context.insert(
+        EarmarkBudgetItemRecord(
+          id: budgetItemId, earmarkId: earmarkId, categoryId: categoryId,
+          amount: 0, instrumentId: instrumentId))
+      context.insert(
+        InvestmentValueRecord(
+          id: investmentValueId, accountId: accountId, date: Date(),
+          value: 0, instrumentId: instrumentId))
+      context.insert(TransactionRecord(id: txnId, date: Date(), payee: "Test"))
+      context.insert(
+        TransactionLegRecord(
+          id: legId, transactionId: txnId, accountId: accountId,
+          instrumentId: instrumentId, quantity: 0, type: "income", sortOrder: 0))
+      try context.save()
+    }
+  }
+
+  @Test
+  func queueUnsyncedRecordsReturnsAllWhenNoneSynced() throws {
+    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+    let seed = AllRecordSeed()
+    try seed.insert(into: ModelContext(container))
 
     let recordIDs = handler.queueUnsyncedRecords()
     let recordNames = Set(recordIDs.map(\.recordName))
 
     #expect(recordNames.count == 8)
-    #expect(recordNames.contains(instrumentId))
-    #expect(recordNames.contains(accountId.uuidString))
-    #expect(recordNames.contains(categoryId.uuidString))
-    #expect(recordNames.contains(earmarkId.uuidString))
-    #expect(recordNames.contains(budgetItemId.uuidString))
-    #expect(recordNames.contains(investmentValueId.uuidString))
-    #expect(recordNames.contains(txnId.uuidString))
-    #expect(recordNames.contains(legId.uuidString))
-
+    #expect(recordNames.contains(seed.instrumentId))
+    #expect(recordNames.contains("\(AccountRecord.recordType)|\(seed.accountId.uuidString)"))
+    #expect(recordNames.contains("\(CategoryRecord.recordType)|\(seed.categoryId.uuidString)"))
+    #expect(recordNames.contains("\(EarmarkRecord.recordType)|\(seed.earmarkId.uuidString)"))
+    #expect(
+      recordNames.contains(
+        "\(EarmarkBudgetItemRecord.recordType)|\(seed.budgetItemId.uuidString)"))
+    #expect(
+      recordNames.contains(
+        "\(InvestmentValueRecord.recordType)|\(seed.investmentValueId.uuidString)"))
+    #expect(recordNames.contains("\(TransactionRecord.recordType)|\(seed.txnId.uuidString)"))
+    #expect(recordNames.contains("\(TransactionLegRecord.recordType)|\(seed.legId.uuidString)"))
     for recordID in recordIDs {
       #expect(recordID.zoneID == handler.zoneID)
     }

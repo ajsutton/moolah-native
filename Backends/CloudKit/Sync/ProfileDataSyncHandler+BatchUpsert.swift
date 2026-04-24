@@ -278,7 +278,7 @@ extension ProfileDataSyncHandler {
   /// pairs, silently dropping any records whose name isn't a valid UUID.
   nonisolated private static func uuidPairs(from ckRecords: [CKRecord]) -> [(UUID, CKRecord)] {
     ckRecords.compactMap { record in
-      guard let uuid = UUID(uuidString: record.recordID.recordName) else { return nil }
+      guard let uuid = record.recordID.uuid else { return nil }
       return (uuid, record)
     }
   }

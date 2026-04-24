@@ -274,7 +274,7 @@ extension SyncCoordinator: CKSyncEngineDelegate {
     var uuidRecordNames: [(CKRecord.ID, UUID)] = []
     var stringRecordIDs: [CKRecord.ID] = []
     for recordID in recordIDs {
-      if let uuid = UUID(uuidString: recordID.recordName) {
+      if let uuid = recordID.uuid {
         uuidRecordNames.append((recordID, uuid))
       } else {
         stringRecordIDs.append(recordID)

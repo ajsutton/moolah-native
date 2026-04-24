@@ -269,7 +269,9 @@ struct MigrationIntegrationTests {
     let context = ModelContext(container)
     let importedAccounts = try context.fetch(FetchDescriptor<AccountRecord>())
     for account in importedAccounts {
-      #expect(recordNames.contains(account.id.uuidString))
+      #expect(
+        recordNames.contains(
+          "\(AccountRecord.recordType)|\(account.id.uuidString)"))
     }
 
     // The startup backfill scan must skip this profile — migration has already queued

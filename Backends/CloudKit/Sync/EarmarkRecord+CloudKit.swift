@@ -7,7 +7,8 @@ extension EarmarkRecord: CloudKitRecordConvertible {
   static let recordType = "CD_EarmarkRecord"
 
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
-    let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    let recordID = CKRecord.ID(
+      recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
     record["name"] = name as CKRecordValue
     if let instrumentId { record["instrumentId"] = instrumentId as CKRecordValue }
@@ -24,7 +25,7 @@ extension EarmarkRecord: CloudKitRecordConvertible {
 
   static func fieldValues(from ckRecord: CKRecord) -> EarmarkRecord {
     EarmarkRecord(
-      id: UUID(uuidString: ckRecord.recordID.recordName) ?? UUID(),
+      id: ckRecord.recordID.uuid ?? UUID(),
       name: ckRecord["name"] as? String ?? "",
       position: ckRecord["position"] as? Int ?? 0,
       isHidden: (ckRecord["isHidden"] as? Int ?? 0) != 0,

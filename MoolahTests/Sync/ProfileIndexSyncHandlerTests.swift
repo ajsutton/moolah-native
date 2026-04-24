@@ -158,8 +158,12 @@ struct ProfileIndexSyncHandlerTests {
 
     #expect(recordIDs.count == 2)
     let recordNames = Set(recordIDs.map(\.recordName))
-    #expect(recordNames.contains(id1.uuidString))
-    #expect(recordNames.contains(id2.uuidString))
+    #expect(
+      recordNames.contains(
+        "\(ProfileRecord.recordType)|\(id1.uuidString)"))
+    #expect(
+      recordNames.contains(
+        "\(ProfileRecord.recordType)|\(id2.uuidString)"))
     for recordID in recordIDs {
       #expect(recordID.zoneID == handler.zoneID)
     }
@@ -190,7 +194,9 @@ struct ProfileIndexSyncHandlerTests {
     let ckRecord = handler.buildCKRecord(for: profile)
 
     #expect(ckRecord.recordType == ProfileRecord.recordType)
-    #expect(ckRecord.recordID.recordName == profileId.uuidString)
+    #expect(
+      ckRecord.recordID.recordName
+        == "\(ProfileRecord.recordType)|\(profileId.uuidString)")
     #expect(ckRecord.recordID.zoneID == handler.zoneID)
     #expect(ckRecord["label"] as? String == "Test Profile")
     #expect(ckRecord["currencyCode"] as? String == "AUD")

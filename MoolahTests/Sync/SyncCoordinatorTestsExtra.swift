@@ -49,7 +49,7 @@ struct SyncCoordinatorTestsExtra {
       ownerName: CKCurrentUserDefaultName)
 
     // Should not crash — just adds to pending (no sync engine to actually process)
-    coordinator.queueSave(id: id, zoneID: zoneID)
+    coordinator.queueSave(recordType: AccountRecord.recordType, id: id, zoneID: zoneID)
     // No assertion needed beyond "doesn't crash" since CKSyncEngine is not started
   }
 
@@ -74,7 +74,7 @@ struct SyncCoordinatorTestsExtra {
       zoneName: "profile-\(UUID().uuidString)",
       ownerName: CKCurrentUserDefaultName)
 
-    coordinator.queueDeletion(id: id, zoneID: zoneID)
+    coordinator.queueDeletion(recordType: AccountRecord.recordType, id: id, zoneID: zoneID)
   }
 
   // MARK: - Post-Migration / Import Record Queueing
@@ -101,7 +101,13 @@ struct SyncCoordinatorTestsExtra {
     let queued = await coordinator.queueAllRecordsAfterImport(for: profileId)
     let names = Set(queued.map(\.recordName))
 
-    #expect(names == Set([accountId.uuidString, txnId.uuidString, "AUD"]))
+    #expect(
+      names
+        == Set([
+          "\(AccountRecord.recordType)|\(accountId.uuidString)",
+          "\(TransactionRecord.recordType)|\(txnId.uuidString)",
+          "AUD",
+        ]))
     for recordID in queued {
       #expect(recordID.zoneID.zoneName == "profile-\(profileId.uuidString)")
     }
@@ -168,16 +174,21 @@ struct SyncCoordinatorTestsExtra {
     let queued = coordinator.queueUnsyncedRecordsForAllProfiles()
     let names = Set(queued.map(\.recordName))
 
-    #expect(names == Set([unsyncedA.uuidString, unsyncedB.uuidString]))
+    #expect(
+      names
+        == Set([
+          "\(AccountRecord.recordType)|\(unsyncedA.uuidString)",
+          "\(TransactionRecord.recordType)|\(unsyncedB.uuidString)",
+        ]))
 
     // Each record went to the matching profile's zone.
     let aZone = "profile-\(profileA.uuidString)"
     let bZone = "profile-\(profileB.uuidString)"
     for recordID in queued {
-      if recordID.recordName == unsyncedA.uuidString {
+      if recordID.recordName == "\(AccountRecord.recordType)|\(unsyncedA.uuidString)" {
         #expect(recordID.zoneID.zoneName == aZone)
       }
-      if recordID.recordName == unsyncedB.uuidString {
+      if recordID.recordName == "\(TransactionRecord.recordType)|\(unsyncedB.uuidString)" {
         #expect(recordID.zoneID.zoneName == bZone)
       }
     }
@@ -218,7 +229,7 @@ struct SyncCoordinatorTestsExtra {
 
     // First scan should find and queue the unsynced record.
     let first = coordinator.queueUnsyncedRecordsForAllProfiles()
-    #expect(first.map(\.recordName) == [accountId.uuidString])
+    #expect(first.map(\.recordName) == ["\(AccountRecord.recordType)|\(accountId.uuidString)"])
 
     // Second scan must NOT re-queue the same record — the profile has been marked
     // as scanned and is skipped. Avoids doing a SwiftData pass on every app launch.

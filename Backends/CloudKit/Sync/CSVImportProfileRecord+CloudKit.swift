@@ -7,7 +7,8 @@ extension CSVImportProfileRecord: CloudKitRecordConvertible {
   static let recordType = "CD_CSVImportProfileRecord"
 
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
-    let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    let recordID = CKRecord.ID(
+      recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
     record["accountId"] = accountId.uuidString as CKRecordValue
     record["parserIdentifier"] = parserIdentifier as CKRecordValue
@@ -25,7 +26,7 @@ extension CSVImportProfileRecord: CloudKitRecordConvertible {
 
   static func fieldValues(from ckRecord: CKRecord) -> CSVImportProfileRecord {
     let record = CSVImportProfileRecord(
-      id: UUID(uuidString: ckRecord.recordID.recordName) ?? UUID(),
+      id: ckRecord.recordID.uuid ?? UUID(),
       accountId: (ckRecord["accountId"] as? String).flatMap { UUID(uuidString: $0) } ?? UUID(),
       parserIdentifier: ckRecord["parserIdentifier"] as? String ?? "",
       headerSignature: [],

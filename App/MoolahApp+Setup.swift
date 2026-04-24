@@ -113,12 +113,14 @@ extension MoolahApp {
     store.onProfileChanged = { [weak coordinator] id in
       let zoneID = CKRecordZone.ID(
         zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
-      coordinator?.queueSave(id: id, zoneID: zoneID)
+      coordinator?.queueSave(
+        recordType: ProfileRecord.recordType, id: id, zoneID: zoneID)
     }
     store.onProfileDeleted = { [weak coordinator] id in
       let zoneID = CKRecordZone.ID(
         zoneName: "profile-index", ownerName: CKCurrentUserDefaultName)
-      coordinator?.queueDeletion(id: id, zoneID: zoneID)
+      coordinator?.queueDeletion(
+        recordType: ProfileRecord.recordType, id: id, zoneID: zoneID)
     }
     coordinator.start()
     // Clean up the legacy CloudKit zone from SwiftData's automatic sync.

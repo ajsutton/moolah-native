@@ -124,30 +124,47 @@ extension ProfileDataSyncHandler {
   }
 
   private func applySystemFields(from ckRecord: CKRecord, in context: ModelContext) {
-    let recordName = ckRecord.recordID.recordName
     let data = ckRecord.encodedSystemFields
-    if let uuid = UUID(uuidString: recordName) {
-      let applied = Self.setEncodedSystemFields(
-        uuid, data: data, recordType: ckRecord.recordType, context: context)
-      if !applied {
-        logger.warning(
-          "No local row to cache system fields for \(ckRecord.recordType) \(recordName)"
-        )
-      }
-    } else {
-      Self.setInstrumentSystemFields(recordName, data: data, context: context)
+    // Dispatch by ckRecord.recordType — the authoritative type from the
+    // server — rather than by parsing recordName. This avoids the
+    // historical collision where two record types with colliding UUIDs
+    // both matched the same recordName (issue #416).
+    if ckRecord.recordType == InstrumentRecord.recordType {
+      Self.setInstrumentSystemFields(
+        ckRecord.recordID.systemFieldsKey, data: data, context: context)
+      return
+    }
+    guard let uuid = ckRecord.recordID.uuid else {
+      logger.warning(
+        "applySystemFields: recordName \(ckRecord.recordID.recordName) has no UUID component for \(ckRecord.recordType)"
+      )
+      return
+    }
+    let applied = Self.setEncodedSystemFields(
+      uuid, data: data, recordType: ckRecord.recordType, context: context)
+    if !applied {
+      logger.warning(
+        "No local row to cache system fields for \(ckRecord.recordType) \(uuid.uuidString)"
+      )
     }
   }
 
   private func clearSystemFields(
     for recordID: CKRecord.ID, recordType: String, in context: ModelContext
   ) {
-    let recordName = recordID.recordName
-    if let uuid = UUID(uuidString: recordName) {
-      Self.setEncodedSystemFields(uuid, data: nil, recordType: recordType, context: context)
-    } else {
-      Self.setInstrumentSystemFields(recordName, data: nil, context: context)
+    if recordType == InstrumentRecord.recordType {
+      Self.setInstrumentSystemFields(
+        recordID.systemFieldsKey, data: nil, context: context)
+      return
     }
+    guard let uuid = recordID.uuid else {
+      logger.warning(
+        "clearSystemFields: recordName \(recordID.recordName) has no UUID component for \(recordType)"
+      )
+      return
+    }
+    Self.setEncodedSystemFields(
+      uuid, data: nil, recordType: recordType, context: context)
   }
 
   // MARK: - Dispatch Table

@@ -7,7 +7,8 @@ extension ImportRuleRecord: CloudKitRecordConvertible {
   static let recordType = "CD_ImportRuleRecord"
 
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
-    let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
+    let recordID = CKRecord.ID(
+      recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
     record["name"] = name as CKRecordValue
     record["enabled"] = (enabled ? 1 : 0) as CKRecordValue
@@ -20,7 +21,7 @@ extension ImportRuleRecord: CloudKitRecordConvertible {
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> ImportRuleRecord {
-    let id = UUID(uuidString: ckRecord.recordID.recordName) ?? UUID()
+    let id = ckRecord.recordID.uuid ?? UUID()
     // The convenience initializer re-encodes the conditions/actions arrays,
     // so to avoid a decode-then-re-encode round trip we go through the
     // synthesised property setters on a fresh record.

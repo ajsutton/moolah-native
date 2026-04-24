@@ -90,7 +90,7 @@ extension ProfileDataSyncHandler {
     var stringGrouped: [String: [String]] = [:]
 
     for (recordID, recordType) in deletions {
-      if let uuid = UUID(uuidString: recordID.recordName) {
+      if let uuid = recordID.uuid {
         uuidGrouped[recordType, default: []].append(uuid)
       } else {
         stringGrouped[recordType, default: []].append(recordID.recordName)
@@ -138,11 +138,21 @@ extension ProfileDataSyncHandler {
   nonisolated private static func systemFieldsLookup(
     saved: [CKRecord], preExtracted: [(String, Data)]
   ) -> [String: Data] {
+    // Both sources key by recordName, but the batchUpsertX methods look up
+    // by uuid.uuidString (for UUID records) or record.id (for instruments) —
+    // never by the full prefixed recordName. Normalize via the shared
+    // `CKRecordIDRecordName.systemFieldsKey(for:)` helper so the downstream
+    // lookup works for both the new and legacy recordName formats.
+    let keyFor = CKRecordIDRecordName.systemFieldsKey(for:)
     if !preExtracted.isEmpty {
-      return Dictionary(preExtracted, uniquingKeysWith: { _, last in last })
+      return Dictionary(
+        preExtracted.map { (keyFor($0.0), $0.1) },
+        uniquingKeysWith: { _, last in last })
     }
     return Dictionary(
-      uniqueKeysWithValues: saved.map { ($0.recordID.recordName, $0.encodedSystemFields) }
+      uniqueKeysWithValues: saved.map {
+        ($0.recordID.systemFieldsKey, $0.encodedSystemFields)
+      }
     )
   }
 

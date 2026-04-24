@@ -124,7 +124,9 @@ struct ProfileDataSyncHandlerTests {
     let ckRecord = handler.buildCKRecord(for: account)
 
     #expect(ckRecord.recordType == "CD_AccountRecord")
-    #expect(ckRecord.recordID.recordName == account.id.uuidString)
+    #expect(
+      ckRecord.recordID.recordName
+        == "\(AccountRecord.recordType)|\(account.id.uuidString)")
     #expect(ckRecord.recordID.zoneID == handler.zoneID)
     #expect(ckRecord["name"] as? String == "Savings")
   }
@@ -166,7 +168,9 @@ struct ProfileDataSyncHandlerTests {
     // A fresh (unsent) CKRecord has no change tag. Sending with the foreign
     // tag would be rejected with serverRecordChanged forever.
     #expect(built.recordChangeTag == nil)
-    #expect(built.recordID.recordName == accountId.uuidString)
+    #expect(
+      built.recordID.recordName
+        == "\(AccountRecord.recordType)|\(accountId.uuidString)")
     #expect(built["name"] as? String == "Corrupt")
   }
 
