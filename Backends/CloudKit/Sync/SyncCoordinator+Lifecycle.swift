@@ -111,6 +111,24 @@ extension SyncCoordinator {
         await self.sendChanges()
       }
     }
+
+    // Initial iCloud availability probe. Skip when entitlements are missing
+    // (already set synchronously in init). On `couldNotDetermine` or thrown
+    // error we stay `.unknown` and rely on the subsequent `.accountChange`
+    // delegate event. Stored so `stop()` can cancel a probe still in flight.
+    if isCloudKitAvailable && iCloudAvailability == .unknown {
+      availabilityProbeTask = Task { [weak self] in
+        do {
+          let status = try await CKContainer.default().accountStatus()
+          guard !Task.isCancelled else { return }
+          self?.iCloudAvailability = Self.mapAccountStatus(status)
+        } catch {
+          self?.logger.info(
+            "Initial accountStatus probe threw: \(error, privacy: .public) — staying .unknown"
+          )
+        }
+      }
+    }
   }
 
   func stop() {
@@ -118,6 +136,8 @@ extension SyncCoordinator {
     startTask = nil
     zoneSetupTask?.cancel()
     zoneSetupTask = nil
+    availabilityProbeTask?.cancel()
+    availabilityProbeTask = nil
     cancelRefetchTasks()
     for (_, task) in zoneCreationTasks {
       task.cancel()
@@ -127,6 +147,11 @@ extension SyncCoordinator {
     isRunning = false
     isFetchingChanges = false
     isQuotaExceeded = false
+    // Reset availability so a subsequent `start()` re-probes. When
+    // entitlements are missing the init-time `.unavailable(.entitlementsMissing)`
+    // remains correct — a rebuild of the coordinator would be needed to clear it.
+    iCloudAvailability =
+      isCloudKitAvailable ? .unknown : .unavailable(reason: .entitlementsMissing)
     logger.info("Stopped unified sync coordinator")
   }
 
