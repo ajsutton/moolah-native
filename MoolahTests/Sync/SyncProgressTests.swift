@@ -19,6 +19,23 @@ struct SyncProgressTests {
     #expect(progress.moreComing == false)
   }
 
+  // MARK: - Receive transitions
+
+  @Test
+  func beginReceivingFromIdleEntersReceiving() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.beginReceiving()
+    #expect(progress.phase == .receiving)
+  }
+
+  @Test
+  func beginReceivingWithPendingUploadsEntersSyncing() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.updatePendingUploads(5)
+    progress.beginReceiving()
+    #expect(progress.phase == .syncing)
+  }
+
   // MARK: - Helpers
 
   private func makeDefaults() throws -> UserDefaults {

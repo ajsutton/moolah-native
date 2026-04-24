@@ -45,4 +45,21 @@ final class SyncProgress {
       self.lastSettledAt = stored
     }
   }
+
+  // MARK: - Mutations (called by SyncCoordinator)
+
+  /// Update the mirror of `syncEngine.state.pendingRecordZoneChanges.count`.
+  /// Called whenever the coordinator queues or sends changes.
+  func updatePendingUploads(_ count: Int) {
+    pendingUploads = count
+  }
+
+  /// `willFetchChanges` event — enter receive (or syncing if already sending).
+  func beginReceiving() {
+    if pendingUploads > 0 {
+      phase = .syncing
+    } else {
+      phase = .receiving
+    }
+  }
 }
