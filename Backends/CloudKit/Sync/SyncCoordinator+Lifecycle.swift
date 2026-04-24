@@ -216,6 +216,23 @@ extension SyncCoordinator {
     fetchSessionTouchedIndexZone = false
   }
 
+  /// Called from the delegate zone-fetch event path. If the zone ID is the
+  /// profile-index zone, sets `fetchSessionTouchedIndexZone = true` so
+  /// `endFetchingChanges()` can flip `profileIndexFetchedAtLeastOnce`
+  /// once we've definitively heard back from iCloud (Task 7).
+  ///
+  /// Guarded on `isFetchingChanges` so a stray `.didFetchRecordZoneChanges`
+  /// outside a `willFetchChanges` / `didFetchChanges` envelope (e.g. a
+  /// recovery re-fetch after `.zoneNotFound`) doesn't land on a stale
+  /// session — the flag would otherwise be cleared by the next
+  /// `endFetchingChanges()` before Task 7's flip could observe it.
+  func markZoneFetched(_ zoneID: CKRecordZone.ID) {
+    guard isFetchingChanges else { return }
+    if SyncCoordinator.parseZone(zoneID) == .profileIndex {
+      fetchSessionTouchedIndexZone = true
+    }
+  }
+
   func endFetchingChanges() {
     isFetchingChanges = false
     let profileCount = fetchSessionChangedTypes.filter { !$0.value.isEmpty }.count

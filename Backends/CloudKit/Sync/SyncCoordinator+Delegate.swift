@@ -45,8 +45,13 @@ extension SyncCoordinator: CKSyncEngineDelegate {
     case .didFetchChanges:
       endFetchingChanges()
 
-    case .sentDatabaseChanges,
-      .willFetchRecordZoneChanges, .didFetchRecordZoneChanges,
+    case .didFetchRecordZoneChanges(let event):
+      // Fires even when the fetch returned zero changes, so the
+      // "Checking iCloud…" → "No profiles in iCloud yet." transition
+      // is possible for first-run users with an empty index zone.
+      markZoneFetched(event.zoneID)
+
+    case .sentDatabaseChanges, .willFetchRecordZoneChanges,
       .willSendChanges, .didSendChanges:
       break
 
