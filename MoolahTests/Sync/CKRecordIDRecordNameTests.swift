@@ -15,8 +15,8 @@ struct CKRecordIDRecordNameTests {
   // MARK: - init(recordType:uuid:zoneID:)
 
   @Test
-  func initBuildsPrefixedRecordName() {
-    let uuid = UUID(uuidString: "1CAC9567-574B-481A-BADA-D595325CBE0C")!
+  func initBuildsPrefixedRecordName() throws {
+    let uuid = try #require(UUID(uuidString: "1CAC9567-574B-481A-BADA-D595325CBE0C"))
     let recordID = CKRecord.ID(
       recordType: "CD_AccountRecord", uuid: uuid, zoneID: zoneID)
     #expect(
@@ -28,8 +28,8 @@ struct CKRecordIDRecordNameTests {
   // MARK: - uuidRecordName()
 
   @Test
-  func uuidRecordNameStripsPrefix() {
-    let uuid = UUID(uuidString: "1CAC9567-574B-481A-BADA-D595325CBE0C")!
+  func uuidRecordNameStripsPrefix() throws {
+    let uuid = try #require(UUID(uuidString: "1CAC9567-574B-481A-BADA-D595325CBE0C"))
     let recordID = CKRecord.ID(
       recordName: "CD_AccountRecord|1CAC9567-574B-481A-BADA-D595325CBE0C",
       zoneID: zoneID)
@@ -37,8 +37,8 @@ struct CKRecordIDRecordNameTests {
   }
 
   @Test
-  func uuidRecordNameAcceptsBareUUIDLegacyFormat() {
-    let uuid = UUID(uuidString: "1CAC9567-574B-481A-BADA-D595325CBE0C")!
+  func uuidRecordNameAcceptsBareUUIDLegacyFormat() throws {
+    let uuid = try #require(UUID(uuidString: "1CAC9567-574B-481A-BADA-D595325CBE0C"))
     let recordID = CKRecord.ID(
       recordName: "1CAC9567-574B-481A-BADA-D595325CBE0C",
       zoneID: zoneID)

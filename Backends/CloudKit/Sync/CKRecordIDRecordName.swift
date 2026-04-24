@@ -1,6 +1,10 @@
 import CloudKit
 import Foundation
 
+/// Filename-marker enum so SwiftLint's `file_name` rule has a declared type
+/// matching the filename. The extension on `CKRecord.ID` below does the work.
+enum CKRecordIDRecordName {}
+
 // `CKRecord.ID.recordName` is the primary key for a record in a zone. UUID-keyed
 // records in this app encode the SwiftData record type as a prefix so two
 // different types that happen to share a UUID can't collide on the server
