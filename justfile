@@ -85,16 +85,24 @@ build-mac: generate
     fi
     xcodebuild build "${args[@]}"
 
-# Build and launch the macOS app
-run-mac: generate
+# Build and launch the macOS app. Extra args are forwarded as launch
+# arguments to the app process (e.g. `just run-mac --ui-testing`).
+# Environment variables exported by the caller (e.g.
+# `UI_TESTING_SEED=welcomeEmpty just run-mac --ui-testing`) are
+# inherited by the launched process via `open`.
+run-mac *args: generate
     #!/usr/bin/env bash
     set -euo pipefail
-    args=(-scheme Moolah-macOS -destination 'platform=macOS' -derivedDataPath .build)
+    build=(-scheme Moolah-macOS -destination 'platform=macOS' -derivedDataPath .build)
     if [ -z "${DEVELOPMENT_TEAM:-}" ]; then
-        args+=(CODE_SIGN_IDENTITY="-" ENABLE_HARDENED_RUNTIME=NO)
+        build+=(CODE_SIGN_IDENTITY="-" ENABLE_HARDENED_RUNTIME=NO)
     fi
-    xcodebuild build "${args[@]}"
-    open .build/Build/Products/Debug/Moolah.app
+    xcodebuild build "${build[@]}"
+    if [ -n "{{args}}" ]; then
+        open .build/Build/Products/Debug/Moolah.app --args {{args}}
+    else
+        open .build/Build/Products/Debug/Moolah.app
+    fi
 
 # Build a Release macOS app and install to /Applications.
 # Forces ENABLE_ENTITLEMENTS=1 for the regenerate: Release bakes in
@@ -171,9 +179,12 @@ bump-version version:
     sed -i '' 's/MARKETING_VERSION: .*/MARKETING_VERSION: "{{version}}"/' project.yml
     just generate
 
-# Build, launch macOS app, and stream logs to .agent-tmp/app-logs.txt
-run-mac-with-logs predicate='subsystem == "com.moolah.app"': generate
-    bash scripts/run-with-logs.sh '{{predicate}}'
+# Build, launch macOS app, and stream logs to .agent-tmp/app-logs.txt.
+# Extra args after the predicate are forwarded as launch arguments to
+# the app process (e.g.
+# `just run-mac-with-logs 'subsystem == "com.moolah.app"' --ui-testing`).
+run-mac-with-logs predicate='subsystem == "com.moolah.app"' *args: generate
+    bash scripts/run-with-logs.sh '{{predicate}}' {{args}}
 
 # Open the project in Xcode
 open:

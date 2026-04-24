@@ -18,6 +18,10 @@
 set -euo pipefail
 
 PREDICATE="${1:-subsystem == \"com.moolah.app\"}"
+# Shift off the predicate so $@ holds any extra launch arguments for
+# the app binary (e.g. --ui-testing). `shift` fails on an empty list,
+# hence the `|| true` guard for the no-args case.
+shift || true
 LOG_DIR=".agent-tmp"
 LOG_FILE="$LOG_DIR/app-logs.txt"
 APP_PATH=".build/Build/Products/Debug/Moolah.app"
@@ -49,7 +53,11 @@ sleep 1
 
 # Launch
 echo "Launching app..."
-open "$APP_PATH"
+if [ $# -gt 0 ]; then
+    open "$APP_PATH" --args "$@"
+else
+    open "$APP_PATH"
+fi
 
 # Wait for app to appear (up to 10s)
 for i in $(seq 1 20); do
