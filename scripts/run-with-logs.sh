@@ -51,10 +51,15 @@ rm -f "$LOG_FILE"
 LOG_PID=$!
 sleep 1
 
-# Launch
+# Launch. When extra args are provided (typically `--ui-testing`),
+# launch the binary directly so environment variables exported by the
+# caller (e.g. `UI_TESTING_SEED=welcomeEmpty`) reach the child process.
+# Launch Services (`open --args`) does not reliably forward the shell
+# environment.
 echo "Launching app..."
 if [ $# -gt 0 ]; then
-    open "$APP_PATH" --args "$@"
+    nohup "$APP_PATH/Contents/MacOS/Moolah" "$@" >/dev/null 2>&1 &
+    disown
 else
     open "$APP_PATH"
 fi

@@ -87,9 +87,14 @@ build-mac: generate
 
 # Build and launch the macOS app. Extra args are forwarded as launch
 # arguments to the app process (e.g. `just run-mac --ui-testing`).
-# Environment variables exported by the caller (e.g.
-# `UI_TESTING_SEED=welcomeEmpty just run-mac --ui-testing`) are
-# inherited by the launched process via `open`.
+#
+# With args: launches the binary directly and backgrounds it so env
+# vars exported by the caller (e.g. `UI_TESTING_SEED=welcomeEmpty`)
+# reach the child process. Launch Services (`open --args`) does not
+# reliably forward the shell environment into the target app.
+#
+# Without args: uses `open` so the app activates through Launch
+# Services like a double-click (preserves Finder-style launch).
 run-mac *args: generate
     #!/usr/bin/env bash
     set -euo pipefail
@@ -99,7 +104,12 @@ run-mac *args: generate
     fi
     xcodebuild build "${build[@]}"
     if [ -n "{{args}}" ]; then
-        open .build/Build/Products/Debug/Moolah.app --args {{args}}
+        # Kill any running instance first; `open` would silently
+        # reuse it, skipping the new launch arguments entirely.
+        pkill -f "Moolah.app/Contents/MacOS/Moolah" 2>/dev/null || true
+        nohup .build/Build/Products/Debug/Moolah.app/Contents/MacOS/Moolah \
+            {{args}} >/dev/null 2>&1 &
+        disown
     else
         open .build/Build/Products/Debug/Moolah.app
     fi
