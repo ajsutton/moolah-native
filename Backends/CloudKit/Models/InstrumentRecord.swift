@@ -11,6 +11,9 @@ final class InstrumentRecord {
   var exchange: String?
   var chainId: Int?
   var contractAddress: String?
+  var coingeckoId: String?
+  var cryptocompareSymbol: String?
+  var binanceSymbol: String?
   var encodedSystemFields: Data?
 
   init(
@@ -21,7 +24,10 @@ final class InstrumentRecord {
     ticker: String? = nil,
     exchange: String? = nil,
     chainId: Int? = nil,
-    contractAddress: String? = nil
+    contractAddress: String? = nil,
+    coingeckoId: String? = nil,
+    cryptocompareSymbol: String? = nil,
+    binanceSymbol: String? = nil
   ) {
     self.id = id
     self.kind = kind
@@ -31,6 +37,9 @@ final class InstrumentRecord {
     self.exchange = exchange
     self.chainId = chainId
     self.contractAddress = contractAddress
+    self.coingeckoId = coingeckoId
+    self.cryptocompareSymbol = cryptocompareSymbol
+    self.binanceSymbol = binanceSymbol
   }
 
   func toDomain() -> Instrument {
@@ -46,6 +55,13 @@ final class InstrumentRecord {
     )
   }
 
+  /// Builds a minimal `InstrumentRecord` from a domain `Instrument`.
+  /// Provider-mapping fields (`coingeckoId`, `cryptocompareSymbol`, `binanceSymbol`)
+  /// are intentionally not copied — they live on the persistence side only, and
+  /// are populated via `InstrumentRegistryRepository.registerCrypto(_:mapping:)`
+  /// when a user registers a crypto instrument with its mapping. Callers using
+  /// `from(_:)` (e.g. `ensureInstrument`) produce rows without mappings, which
+  /// is the correct behaviour for auto-insertion.
   static func from(_ instrument: Instrument) -> InstrumentRecord {
     InstrumentRecord(
       id: instrument.id,

@@ -28,6 +28,9 @@ extension ProfileDataSyncHandler {
         existing.exchange = values.exchange
         existing.chainId = values.chainId
         existing.contractAddress = values.contractAddress
+        existing.coingeckoId = values.coingeckoId
+        existing.cryptocompareSymbol = values.cryptocompareSymbol
+        existing.binanceSymbol = values.binanceSymbol
         existing.encodedSystemFields = systemFields[id]
       } else {
         values.encodedSystemFields = systemFields[id]
