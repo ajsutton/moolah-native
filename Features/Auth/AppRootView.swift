@@ -10,7 +10,7 @@ struct AppRootView: View {
       ProgressView()
         .task { await authStore.load() }
     case .signedOut:
-      WelcomeView()
+      SignedOutView()
     case .signedIn:
       ContentView()
     }
