@@ -127,7 +127,7 @@ Fixed max-width on hero subhead (~320pt) so lines don't sprawl on wide macOS win
 | Primary CTA (form) | `Create Profile` |
 | Cancel (form) | `Cancel` |
 | Banner (single) | `Found '<label>' in iCloud.` / sub `You can open it instead of creating a new one.` / actions `Open` `Dismiss` |
-| Banner (multi) | `Found <N> profiles in iCloud.` / action `View` `Dismiss` — **open question**: reviewer suggested warmer phrasing ("Looks like you've got N profiles in iCloud." or "You've got N profiles waiting."). Defer to user — see §10. |
+| Banner (multi) | `Looks like you've got <N> profiles in iCloud.` / action `View` `Dismiss` |
 | Picker title | `Welcome back.` |
 | Picker subtitle | `You have profiles in iCloud. Pick one to open.` |
 | Picker row meta | `<currency code> · <account count> account(s)` — the count renders inside a `Text(...)` with `.monospacedDigit()` applied (per `guides/UI_GUIDE.md` §4) so incoming changes don't cause row-width jitter |
@@ -369,7 +369,7 @@ Each step lands as a separate PR through the merge queue.
 
 ## 10. Open Questions
 
-- **Banner (multi) copy.** Current: "Found N profiles in iCloud." Reviewer suggested warmer phrasing ("Looks like you've got N profiles in iCloud." or "You've got N profiles waiting."). To be decided by the user before implementation locks the copy. The single-profile banner retains "Found '<label>' in iCloud." in either case.
+None — all raised during brainstorming and review are resolved.
 
 Parked for future consideration:
 
