@@ -42,7 +42,7 @@ struct ExpenseBreakdownCard: View {
         innerRadius: .ratio(0.5),
         angularInset: 1.5
       )
-      .foregroundStyle(by: .value("Category", categoryName(for: item.categoryId)))
+      .foregroundStyle(by: .value("Category", categoryLabel(for: item.categoryId)))
       .annotation(position: .overlay) {
         if item.percentage > 5 {  // Only show label if >5%
           Text("\(Int(item.percentage))%")
@@ -67,7 +67,7 @@ struct ExpenseBreakdownCard: View {
             Circle()
               .fill(categoryColor(for: item.categoryId))
               .frame(width: 12, height: 12)
-            Text(categoryName(for: item.categoryId))
+            Text(categoryLabel(for: item.categoryId))
               .font(.caption)
               .foregroundStyle(.primary)
             Spacer()
@@ -79,7 +79,7 @@ struct ExpenseBreakdownCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(
-          "\(categoryName(for: item.categoryId)): \(item.totalExpenses.formatted)"
+          "\(categoryLabel(for: item.categoryId)): \(item.totalExpenses.formatted)"
         )
         .accessibilityHint(hasChildren(item.categoryId) ? "Double tap to drill down" : "")
       }
@@ -105,9 +105,9 @@ struct ExpenseBreakdownCard: View {
       from: breakdown, categories: categories, selectedCategoryId: selectedCategoryId)
   }
 
-  private func categoryName(for id: UUID?) -> String {
-    guard let id = id else { return "Uncategorized" }
-    return categories.by(id: id)?.name ?? "Unknown"
+  private func categoryLabel(for id: UUID?) -> String {
+    guard let id = id, let category = categories.by(id: id) else { return "Uncategorized" }
+    return categories.path(for: category)
   }
 
   /// Fixed palette of system-compatible colors for chart segments.

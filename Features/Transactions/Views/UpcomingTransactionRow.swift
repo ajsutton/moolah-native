@@ -61,7 +61,7 @@ struct UpcomingTransactionRow: View {
       ForEach(transaction.legs.compactMap(\.categoryId).uniqued(), id: \.self) { catId in
         if let category = categories.by(id: catId) {
           metaSeparator
-          Text(category.name).font(.caption).foregroundStyle(.secondary)
+          Text(categories.path(for: category)).font(.caption).foregroundStyle(.secondary)
         }
       }
 
@@ -116,7 +116,7 @@ struct UpcomingTransactionRow: View {
       parts.append("repeats \(recurrence)")
     }
     let categoryNames = transaction.legs.compactMap(\.categoryId).uniqued()
-      .compactMap { categories.by(id: $0)?.name }
+      .compactMap { id in categories.by(id: id).map { categories.path(for: $0) } }
     parts.append(contentsOf: categoryNames)
     let earmarkNames = transaction.legs.compactMap(\.earmarkId).uniqued()
       .compactMap { earmarks.by(id: $0)?.name }

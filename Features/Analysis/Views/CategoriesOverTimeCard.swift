@@ -53,7 +53,7 @@ struct CategoriesOverTimeCard: View {
   private var chart: some View {
     Chart {
       ForEach(entries) { entry in
-        let name = categoryName(for: entry.categoryId)
+        let name = categoryLabel(for: entry.categoryId)
         ForEach(entry.points) { point in
           AreaMark(
             x: .value("Month", point.monthDate),
@@ -74,7 +74,7 @@ struct CategoriesOverTimeCard: View {
       }
     }
     .chartForegroundStyleScale(
-      domain: entries.map { categoryName(for: $0.categoryId) },
+      domain: entries.map { categoryLabel(for: $0.categoryId) },
       range: entries.map { categoryColor(for: $0.categoryId) }
     )
     .chartXAxis {
@@ -116,7 +116,7 @@ struct CategoriesOverTimeCard: View {
           Circle()
             .fill(categoryColor(for: entry.categoryId))
             .frame(width: 10, height: 10)
-          Text(categoryName(for: entry.categoryId))
+          Text(categoryLabel(for: entry.categoryId))
             .font(.caption)
             .lineLimit(1)
           Spacer()
@@ -127,15 +127,15 @@ struct CategoriesOverTimeCard: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-          "\(categoryName(for: entry.categoryId)): \(InstrumentAmount(quantity: entry.totalAmount, instrument: instrument).formatted)"
+          "\(categoryLabel(for: entry.categoryId)): \(InstrumentAmount(quantity: entry.totalAmount, instrument: instrument).formatted)"
         )
       }
     }
   }
 
-  private func categoryName(for id: UUID?) -> String {
-    guard let id else { return "Uncategorized" }
-    return categories.by(id: id)?.name ?? "Unknown"
+  private func categoryLabel(for id: UUID?) -> String {
+    guard let id, let category = categories.by(id: id) else { return "Uncategorized" }
+    return categories.path(for: category)
   }
 
   private static let chartPalette: [Color] = [

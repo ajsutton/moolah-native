@@ -25,7 +25,7 @@ struct EditBudgetAmountSheet: View {
 
   private var form: some View {
     Form {
-      Section("Budget for \(lineItem.categoryName)") {
+      Section("Budget for \(lineItem.categoryPath)") {
         HStack {
           Text(lineItem.budgeted.instrument.currencySymbol ?? lineItem.budgeted.instrument.id)
             .foregroundStyle(.secondary)

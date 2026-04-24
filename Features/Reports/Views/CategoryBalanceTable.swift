@@ -24,7 +24,7 @@ struct CategoryBalanceTable: View {
         roots[rootId]
         ?? CategoryGroup(
           categoryId: rootId,
-          name: categories.by(id: rootId)?.name ?? "Unknown",
+          name: categories.by(id: rootId).map { categories.path(for: $0) } ?? "Unknown",
           totalAmount: .zero(instrument: amount.instrument),
           children: []
         )
@@ -37,7 +37,7 @@ struct CategoryBalanceTable: View {
         group.children.append(
           CategoryChild(
             categoryId: categoryId,
-            name: categories.by(id: categoryId)?.name ?? "Unknown",
+            name: categories.by(id: categoryId).map { categories.path(for: $0) } ?? "Unknown",
             amount: amount
           ))
         group.totalAmount += amount

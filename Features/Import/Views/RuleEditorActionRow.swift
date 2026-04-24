@@ -33,7 +33,7 @@ struct RuleEditorActionRow: View {
             set: { action = .setCategory($0) })
         ) {
           ForEach(flatCategories, id: \.id) { category in
-            Text(category.name).tag(category.id)
+            Text(categories.path(for: category)).tag(category.id)
           }
         }
         .labelsHidden()
