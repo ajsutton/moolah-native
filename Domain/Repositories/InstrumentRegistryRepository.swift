@@ -64,5 +64,11 @@ protocol InstrumentRegistryRepository: Sendable {
   /// and do NOT fan out through this stream — consumers that must react
   /// to remote changes also subscribe to the existing per-profile
   /// `SyncCoordinator` observer signal.
+  ///
+  /// `@MainActor`-isolated because the implementation registers the
+  /// continuation in a `@MainActor`-confined dictionary synchronously —
+  /// hopping via `Task { @MainActor in ... }` would let a mutation fired
+  /// immediately after this call miss the event.
+  @MainActor
   func observeChanges() -> AsyncStream<Void>
 }
