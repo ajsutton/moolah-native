@@ -140,15 +140,10 @@ extension ProfileDataSyncHandler {
   ) -> [String: Data] {
     // Both sources key by recordName, but the batchUpsertX methods look up
     // by uuid.uuidString (for UUID records) or record.id (for instruments) —
-    // never by the full prefixed recordName. Normalize by stripping the
-    // "<recordType>|" prefix when present so the downstream lookup works
-    // for both the new and legacy recordName formats.
-    func keyFor(_ recordName: String) -> String {
-      if let sep = recordName.firstIndex(of: "|") {
-        return String(recordName[recordName.index(after: sep)...])
-      }
-      return recordName
-    }
+    // never by the full prefixed recordName. Normalize via the shared
+    // `CKRecordIDRecordName.systemFieldsKey(for:)` helper so the downstream
+    // lookup works for both the new and legacy recordName formats.
+    let keyFor = CKRecordIDRecordName.systemFieldsKey(for:)
     if !preExtracted.isEmpty {
       return Dictionary(
         preExtracted.map { (keyFor($0.0), $0.1) },
@@ -156,7 +151,7 @@ extension ProfileDataSyncHandler {
     }
     return Dictionary(
       uniqueKeysWithValues: saved.map {
-        (keyFor($0.recordID.recordName), $0.encodedSystemFields)
+        ($0.recordID.systemFieldsKey, $0.encodedSystemFields)
       }
     )
   }

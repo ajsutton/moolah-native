@@ -1,9 +1,23 @@
 import CloudKit
 import Foundation
 
-/// Filename-marker enum so SwiftLint's `file_name` rule has a declared type
-/// matching the filename. The extension on `CKRecord.ID` below does the work.
-enum CKRecordIDRecordName {}
+/// Namespace for recordName helpers used on `CKRecord.ID` and on raw
+/// recordName strings. Also serves as the filename-marker type so
+/// SwiftLint's `file_name` rule matches this file's name.
+enum CKRecordIDRecordName {
+  /// The key used for per-record system-fields caching during batch upsert,
+  /// computed from a raw recordName string. See the `CKRecord.ID` extension
+  /// property of the same name for the typed version used throughout the
+  /// codebase; this static is for the downlink pipeline where the lookup
+  /// dictionary is built from `(String, Data)` tuples whose key is a
+  /// `CKRecord.ID.recordName` captured earlier off-main.
+  static func systemFieldsKey(for recordName: String) -> String {
+    if let sep = recordName.firstIndex(of: "|") {
+      return String(recordName[recordName.index(after: sep)...])
+    }
+    return recordName
+  }
+}
 
 // `CKRecord.ID.recordName` is the primary key for a record in a zone. UUID-keyed
 // records in this app encode the SwiftData record type as a prefix so two
@@ -37,9 +51,6 @@ extension CKRecord.ID {
   /// `systemFields[id.uuidString]` for UUID records and `systemFields[id]`
   /// for instruments.
   var systemFieldsKey: String {
-    if let sep = recordName.firstIndex(of: "|") {
-      return String(recordName[recordName.index(after: sep)...])
-    }
-    return recordName
+    CKRecordIDRecordName.systemFieldsKey(for: recordName)
   }
 }

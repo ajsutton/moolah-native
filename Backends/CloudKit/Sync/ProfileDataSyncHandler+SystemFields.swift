@@ -131,7 +131,7 @@ extension ProfileDataSyncHandler {
     // both matched the same recordName (issue #416).
     if ckRecord.recordType == InstrumentRecord.recordType {
       Self.setInstrumentSystemFields(
-        ckRecord.recordID.recordName, data: data, context: context)
+        ckRecord.recordID.systemFieldsKey, data: data, context: context)
       return
     }
     guard let uuid = ckRecord.recordID.uuid else {
@@ -154,7 +154,7 @@ extension ProfileDataSyncHandler {
   ) {
     if recordType == InstrumentRecord.recordType {
       Self.setInstrumentSystemFields(
-        recordID.recordName, data: nil, context: context)
+        recordID.systemFieldsKey, data: nil, context: context)
       return
     }
     guard let uuid = recordID.uuid else {
