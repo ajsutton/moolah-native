@@ -69,6 +69,30 @@ public enum UITestIdentifiers {
     }
   }
 
+  public enum Welcome {
+    /// "Get started" primary CTA on the first-run hero (states 1 and 4).
+    public static let heroGetStartedButton = "welcome.hero.getStarted"
+    /// Name text field in the create-profile form.
+    public static let nameField = "welcome.create.nameField"
+    /// "Create Profile" submit button in the create-profile form.
+    public static let createProfileButton = "welcome.create.createButton"
+    /// Profile row in the multi-profile picker. Suffix is the profile UUID,
+    /// lowercased.
+    public static func pickerRow(_ id: UUID) -> String {
+      "welcome.picker.row.\(id.uuidString.lowercased())"
+    }
+    /// "+ Create a new profile" footer row in the multi-profile picker.
+    public static let pickerCreateNewRow = "welcome.picker.createNew"
+    /// "Open" action on the single-profile arrival banner.
+    public static let bannerOpenAction = "welcome.banner.open"
+    /// "View" action on the multi-profile arrival banner.
+    public static let bannerViewAction = "welcome.banner.view"
+    /// "Dismiss" action on any arrival banner.
+    public static let bannerDismissAction = "welcome.banner.dismiss"
+    /// "Open System Settings" link on the iCloud-off hero chip.
+    public static let iCloudOffSystemSettingsLink = "welcome.off.systemSettings"
+  }
+
   public enum Autocomplete {
     /// Container element of the payee autocomplete dropdown.
     public static let payee = "autocomplete.payee"
