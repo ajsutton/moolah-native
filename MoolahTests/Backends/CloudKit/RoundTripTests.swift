@@ -172,4 +172,52 @@ struct RoundTripTests {
     #expect(decoded.value == original.value)
     #expect(decoded.instrumentId == original.instrumentId)
   }
+
+  @Test("TransactionRecord round-trips with all import-origin fields populated")
+  func transactionRoundTripFull() throws {
+    let original = TransactionRecord(
+      id: UUID(),
+      date: Date(),
+      payee: "Coles",
+      notes: "weekly shop",
+      recurPeriod: "month",
+      recurEvery: 1
+    )
+    original.importOriginRawDescription = "COLES 1234"
+    original.importOriginBankReference = "REF-1"
+    original.importOriginRawAmount = "-100.00"
+    original.importOriginRawBalance = "1000.00"
+    original.importOriginImportedAt = Date()
+    original.importOriginImportSessionId = UUID()
+    original.importOriginSourceFilename = "statement.csv"
+    original.importOriginParserIdentifier = "generic"
+
+    let record = original.toCKRecord(in: Self.zoneID)
+    let decoded = try #require(TransactionRecord.fieldValues(from: record))
+    #expect(decoded.id == original.id)
+    #expect(decoded.payee == original.payee)
+    #expect(decoded.notes == original.notes)
+    #expect(decoded.recurPeriod == original.recurPeriod)
+    #expect(decoded.recurEvery == original.recurEvery)
+    #expect(decoded.importOriginRawDescription == original.importOriginRawDescription)
+    #expect(decoded.importOriginBankReference == original.importOriginBankReference)
+    #expect(decoded.importOriginImportSessionId == original.importOriginImportSessionId)
+    #expect(decoded.importOriginParserIdentifier == original.importOriginParserIdentifier)
+  }
+
+  @Test("TransactionRecord round-trips with no import-origin fields")
+  func transactionRoundTripMinimal() throws {
+    let original = TransactionRecord(
+      id: UUID(),
+      date: Date(),
+      payee: nil,
+      notes: nil,
+      recurPeriod: nil,
+      recurEvery: nil
+    )
+    let record = original.toCKRecord(in: Self.zoneID)
+    let decoded = try #require(TransactionRecord.fieldValues(from: record))
+    #expect(decoded.payee == nil)
+    #expect(decoded.importOriginRawDescription == nil)
+  }
 }
