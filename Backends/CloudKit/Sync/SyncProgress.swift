@@ -72,8 +72,10 @@ final class SyncProgress {
   ///
   /// Routes to `.syncing` rather than `.receiving` when local changes are
   /// pending, so the UI accurately reflects that both directions are active
-  /// simultaneously.
+  /// simultaneously. No-op when in a degraded phase — the indicator should
+  /// keep showing the degraded reason while sync continues in the background.
   func beginReceiving() {
+    if case .degraded = phase { return }
     phase = pendingUploads > 0 ? .syncing : .receiving
   }
 
@@ -104,6 +106,52 @@ final class SyncProgress {
       return
     }
     settle(now: now)
+  }
+
+  // MARK: - Degraded reasons
+
+  /// Tracks the latest active degraded reason. Setters below toggle each
+  /// reason independently; `resolveDegradedPhase` picks the most specific
+  /// phase. When all flags are clear, we fall back to `.idle` — callers
+  /// re-enter receive/send via the normal events.
+  private var quotaExceeded = false
+  private var iCloudUnavailableReason: ICloudAvailability.UnavailableReason?
+  private var retrying = false
+
+  func setQuotaExceeded(_ active: Bool) {
+    quotaExceeded = active
+    resolveDegradedPhase()
+  }
+
+  func setICloudUnavailable(reason: ICloudAvailability.UnavailableReason?) {
+    iCloudUnavailableReason = reason
+    resolveDegradedPhase()
+  }
+
+  func setRetrying(_ active: Bool) {
+    retrying = active
+    resolveDegradedPhase()
+  }
+
+  /// Recompute `.phase` from the active degraded flags. Priority order:
+  /// quota wins over iCloud availability wins over retry, because each is
+  /// more actionable than the last.
+  private func resolveDegradedPhase() {
+    if quotaExceeded {
+      phase = .degraded(.quotaExceeded)
+      return
+    }
+    if let reason = iCloudUnavailableReason {
+      phase = .degraded(.iCloudUnavailable(reason))
+      return
+    }
+    if retrying {
+      phase = .degraded(.retrying)
+      return
+    }
+    if case .degraded = phase {
+      phase = .idle
+    }
   }
 
   // MARK: - Persistence

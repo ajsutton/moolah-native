@@ -208,6 +208,54 @@ struct SyncProgressTests {
     #expect(progress.lastSettledAt == nil)
   }
 
+  // MARK: - Degraded states
+
+  @Test
+  func quotaExceededEntersDegraded() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.setQuotaExceeded(true)
+    #expect(progress.phase == .degraded(.quotaExceeded))
+  }
+
+  @Test
+  func quotaClearedRestoresIdle() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.setQuotaExceeded(true)
+    progress.setQuotaExceeded(false)
+    #expect(progress.phase == .idle)
+  }
+
+  @Test
+  func iCloudUnavailableEntersDegraded() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.setICloudUnavailable(reason: .notSignedIn)
+    #expect(progress.phase == .degraded(.iCloudUnavailable(.notSignedIn)))
+  }
+
+  @Test
+  func retryingEntersDegraded() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.setRetrying(true)
+    #expect(progress.phase == .degraded(.retrying))
+  }
+
+  @Test
+  func beginReceivingDoesNotOverrideDegraded() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.setQuotaExceeded(true)
+    progress.beginReceiving()
+    #expect(progress.phase == .degraded(.quotaExceeded))
+  }
+
+  @Test
+  func endReceivingDoesNotOverrideDegraded() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.setQuotaExceeded(true)
+    progress.beginReceiving()
+    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
+    #expect(progress.phase == .degraded(.quotaExceeded))
+  }
+
   // MARK: - Helpers
 
   private func makeDefaults() throws -> UserDefaults {
