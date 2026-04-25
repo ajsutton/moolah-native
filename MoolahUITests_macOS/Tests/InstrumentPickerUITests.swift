@@ -1,0 +1,40 @@
+import XCTest
+
+/// Happy-path UI test for `InstrumentPickerField` + `InstrumentPickerSheet`.
+///
+/// Reaches the picker via `CreateAccountView`'s currency field, which is
+/// rendered when the profile uses the CloudKit backend
+/// (`supportsComplexTransactions == true`). The `.tradeBaseline` seed
+/// satisfies this condition; no new seed is needed.
+///
+/// The test verifies the full open → search → pick → dismiss → field-updates
+/// cycle that is only observable through the real SwiftUI event loop — the
+/// reason a store test cannot cover this. See `guides/UI_TEST_GUIDE.md` §1.
+@MainActor
+final class InstrumentPickerUITests: MoolahUITestCase {
+  /// Opening the picker, searching for "USD", tapping the USD row, and
+  /// asserting the field reflects the new selection.
+  func testPickingInstrumentUpdatesField() {
+    let app = launch(seed: .tradeBaseline)
+
+    // Open CreateAccountView — the currency field starts at AUD (the profile
+    // instrument). The form is only shown with the full searchable picker when
+    // supportsComplexTransactions is true, which tradeBaseline satisfies.
+    app.createAccount.open(initialCurrencyId: "AUD")
+
+    // Tap the field to open the sheet.
+    app.createAccount.currency.tap(currentId: "AUD")
+
+    // The sheet must now be on screen.
+    app.createAccount.currency.expectSheetVisible()
+
+    // Type "USD" into the searchable field and wait for the row to appear.
+    app.createAccount.currency.search("USD")
+
+    // Tap the USD row, which dismisses the sheet and updates the selection.
+    app.createAccount.currency.pickRow("USD")
+
+    // The field button identifier must now be instrumentPicker.field.USD.
+    app.createAccount.currency.expectFieldSelection("USD")
+  }
+}
