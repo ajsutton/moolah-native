@@ -34,6 +34,17 @@ extension SyncCoordinator {
     let preExtractedSystemFields: [(String, Data)] = changes.modifications
       .map { ($0.record.recordID.recordName, $0.record.encodedSystemFields) }
 
+    // Hop to main to update SyncProgress with this batch's counts. The
+    // CKSyncEngine.Event does not expose moreComing on FetchedRecordZoneChanges,
+    // so we pass false; progress will reflect the true settled state via
+    // endFetchingChanges.
+    let modCount = changes.modifications.count
+    let delCount = changes.deletions.count
+    await MainActor.run {
+      self.accumulateProgressCounts(
+        modifications: modCount, deletions: delCount, moreComing: false)
+    }
+
     let allZones = Set(savedByZone.keys).union(deletedByZone.keys)
     for zoneID in allZones {
       let saved = savedByZone[zoneID] ?? []
@@ -293,5 +304,15 @@ extension SyncCoordinator {
       // Only clear if we actually processed records (not an empty event)
       isQuotaExceeded = false
     }
+  }
+
+  /// Routes batch totals into `progress`. Internal so unit tests can drive
+  /// the counter without constructing a `CKSyncEngine.Event` value.
+  @MainActor
+  func accumulateProgressCounts(
+    modifications: Int, deletions: Int, moreComing: Bool
+  ) {
+    progress.recordReceived(
+      modifications: modifications, deletions: deletions, moreComing: moreComing)
   }
 }
