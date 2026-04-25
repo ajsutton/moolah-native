@@ -23,13 +23,13 @@ struct ProfileDataSyncHandlerLookupTests {
       TransactionRecord(id: txnId, date: Date(), payee: "Test"))
     try context.save()
 
-    let lookup = handler.buildBatchRecordLookup(for: [accountId, txnId])
+    let lookup = handler.buildBatchRecordLookup(byRecordType: [
+      AccountRecord.recordType: [accountId],
+      TransactionRecord.recordType: [txnId],
+    ])
 
-    #expect(lookup.count == 2)
-    #expect(lookup[accountId] != nil)
-    #expect(lookup[txnId] != nil)
-    #expect(lookup[accountId]?.recordType == "CD_AccountRecord")
-    #expect(lookup[txnId]?.recordType == "CD_TransactionRecord")
+    #expect(lookup[AccountRecord.recordType]?[accountId]?.recordType == "CD_AccountRecord")
+    #expect(lookup[TransactionRecord.recordType]?[txnId]?.recordType == "CD_TransactionRecord")
   }
 
   @Test
@@ -42,7 +42,8 @@ struct ProfileDataSyncHandlerLookupTests {
       AccountRecord(id: accountId, name: "Found", type: "bank", position: 0, isHidden: false))
     try context.save()
 
-    let recordID = CKRecord.ID(recordName: accountId.uuidString, zoneID: handler.zoneID)
+    let recordID = CKRecord.ID(
+      recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)
     #expect(result != nil)
     #expect(result?.recordType == "CD_AccountRecord")
@@ -71,7 +72,8 @@ struct ProfileDataSyncHandlerLookupTests {
   func recordToSaveReturnsNilForMissingRecord() throws {
     let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
-    let recordID = CKRecord.ID(recordName: UUID().uuidString, zoneID: handler.zoneID)
+    let recordID = CKRecord.ID(
+      recordType: AccountRecord.recordType, uuid: UUID(), zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)
     #expect(result == nil)
   }

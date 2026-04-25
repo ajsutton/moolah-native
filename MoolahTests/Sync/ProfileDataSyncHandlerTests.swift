@@ -18,7 +18,8 @@ struct ProfileDataSyncHandlerTests {
     let accountId = UUID()
     let ckRecord = CKRecord(
       recordType: "CD_AccountRecord",
-      recordID: CKRecord.ID(recordName: accountId.uuidString, zoneID: handler.zoneID)
+      recordID: CKRecord.ID(
+        recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
     )
     ckRecord["name"] = "Remote Account" as CKRecordValue
     ckRecord["type"] = "bank" as CKRecordValue
@@ -57,7 +58,8 @@ struct ProfileDataSyncHandlerTests {
 
     let ckRecord = CKRecord(
       recordType: "CD_AccountRecord",
-      recordID: CKRecord.ID(recordName: accountId.uuidString, zoneID: handler.zoneID)
+      recordID: CKRecord.ID(
+        recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
     )
     ckRecord["name"] = "Updated Name" as CKRecordValue
     ckRecord["type"] = "bank" as CKRecordValue
@@ -91,7 +93,8 @@ struct ProfileDataSyncHandlerTests {
     context.insert(existing)
     try context.save()
 
-    let recordID = CKRecord.ID(recordName: accountId.uuidString, zoneID: handler.zoneID)
+    let recordID = CKRecord.ID(
+      recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
     let result = handler.applyRemoteChanges(
       saved: [], deleted: [(recordID, "CD_AccountRecord")])
 
@@ -150,7 +153,8 @@ struct ProfileDataSyncHandlerTests {
     let accountId = UUID()
     let foreignCK = CKRecord(
       recordType: "CD_AccountRecord",
-      recordID: CKRecord.ID(recordName: accountId.uuidString, zoneID: foreignZone)
+      recordID: CKRecord.ID(
+        recordType: AccountRecord.recordType, uuid: accountId, zoneID: foreignZone)
     )
     let foreignSystemFields = foreignCK.encodedSystemFields
 
@@ -182,7 +186,8 @@ struct ProfileDataSyncHandlerTests {
     // Create a CKRecord to get system fields from
     let originalCK = CKRecord(
       recordType: "CD_AccountRecord",
-      recordID: CKRecord.ID(recordName: accountId.uuidString, zoneID: handler.zoneID)
+      recordID: CKRecord.ID(
+        recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
     )
     originalCK["name"] = "Test" as CKRecordValue
     originalCK["type"] = "bank" as CKRecordValue
@@ -200,9 +205,12 @@ struct ProfileDataSyncHandlerTests {
     let account = try #require(records.first)
     #expect(account.encodedSystemFields != nil)
 
-    // Build a CKRecord — should use cached system fields
+    // Build a CKRecord — should use cached system fields, which now hold a
+    // prefixed recordID since `applyRemoteChanges` ingested a prefixed CKRecord.
     let built = handler.buildCKRecord(for: account)
-    #expect(built.recordID.recordName == accountId.uuidString)
+    #expect(
+      built.recordID.recordName
+        == "\(AccountRecord.recordType)|\(accountId.uuidString)")
     #expect(built.recordID.zoneID == handler.zoneID)
     #expect(built["name"] as? String == "Test")
   }

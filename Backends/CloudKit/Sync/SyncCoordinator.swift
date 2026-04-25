@@ -381,7 +381,7 @@ final class SyncCoordinator {
       let data = try JSONEncoder().encode(serialization)
       try data.write(to: stateFileURL, options: .atomic)
     } catch {
-      logger.error("Failed to save sync state: \(error)")
+      logger.error("Failed to save sync state: \(error, privacy: .public)")
     }
   }
 

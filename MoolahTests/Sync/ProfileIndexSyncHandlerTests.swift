@@ -26,7 +26,8 @@ struct ProfileIndexSyncHandlerTests {
     let profileId = UUID()
     let ckRecord = CKRecord(
       recordType: ProfileRecord.recordType,
-      recordID: CKRecord.ID(recordName: profileId.uuidString, zoneID: handler.zoneID)
+      recordID: CKRecord.ID(
+        recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
     )
     ckRecord["label"] = "My Profile" as CKRecordValue
     ckRecord["currencyCode"] = "AUD" as CKRecordValue
@@ -62,7 +63,8 @@ struct ProfileIndexSyncHandlerTests {
 
     let ckRecord = CKRecord(
       recordType: ProfileRecord.recordType,
-      recordID: CKRecord.ID(recordName: profileId.uuidString, zoneID: handler.zoneID)
+      recordID: CKRecord.ID(
+        recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
     )
     ckRecord["label"] = "New Label" as CKRecordValue
     ckRecord["currencyCode"] = "EUR" as CKRecordValue
@@ -95,7 +97,8 @@ struct ProfileIndexSyncHandlerTests {
     context.insert(existing)
     try context.save()
 
-    let recordID = CKRecord.ID(recordName: profileId.uuidString, zoneID: handler.zoneID)
+    let recordID = CKRecord.ID(
+      recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
     _ = handler.applyRemoteChanges(saved: [], deleted: [recordID])
 
     let freshContext = ModelContext(container)

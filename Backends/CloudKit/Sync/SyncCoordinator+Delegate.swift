@@ -265,35 +265,46 @@ extension SyncCoordinator: CKSyncEngineDelegate {
       handler = try handlerForProfileZone(profileId: profileId, zoneID: zoneID)
     } catch {
       logger.error(
-        "Failed to build handler for profile \(profileId): \(error) — \(recordIDs.count) records remain pending for retry"
+        "Failed to build handler for profile \(profileId): \(error, privacy: .public) — \(recordIDs.count, privacy: .public) records remain pending for retry"
       )
       return
     }
 
-    // Separate UUID-based and string-based record names for batch lookup
-    var uuidRecordNames: [(CKRecord.ID, UUID)] = []
-    var stringRecordIDs: [CKRecord.ID] = []
+    // Group prefixed UUID-based recordIDs by their recordType so the batch
+    // lookup can dispatch to the correct SwiftData type per group. Records
+    // without a type prefix (instruments and stale legacy bare-UUIDs that
+    // weren't purged) go to the per-record path. Two record types that
+    // share a UUID land in different groups, which is what prevents the
+    // batch from emitting the same `CKRecord` twice (issue #416 follow-up).
+    var byRecordType: [String: [(CKRecord.ID, UUID)]] = [:]
+    var unprefixedIDs: [CKRecord.ID] = []
     for recordID in recordIDs {
-      if let uuid = recordID.uuid {
-        uuidRecordNames.append((recordID, uuid))
+      if let recordType = recordID.prefixedRecordType, let uuid = recordID.uuid {
+        byRecordType[recordType, default: []].append((recordID, uuid))
       } else {
-        stringRecordIDs.append(recordID)
+        unprefixedIDs.append(recordID)
       }
     }
 
-    // Batch-load UUID-based records
-    let recordLookup = handler.buildBatchRecordLookup(for: Set(uuidRecordNames.map(\.1)))
+    // One IN-predicate fetch per recordType; result is keyed by recordType
+    // and then by UUID, so cross-type collisions are impossible.
+    let groups = byRecordType.mapValues { Set($0.map(\.1)) }
+    let recordLookup = handler.buildBatchRecordLookup(byRecordType: groups)
 
-    for (recordID, uuid) in uuidRecordNames {
-      if let record = recordLookup[uuid] {
-        recordsToSave.append(record)
-      } else {
-        handleMissingRecordToSave(recordID)
+    for (recordType, items) in byRecordType {
+      let typeLookup = recordLookup[recordType] ?? [:]
+      for (recordID, uuid) in items {
+        if let record = typeLookup[uuid] {
+          recordsToSave.append(record)
+        } else {
+          handleMissingRecordToSave(recordID)
+        }
       }
     }
 
-    // Look up string-based records individually (InstrumentRecord)
-    for recordID in stringRecordIDs {
+    // String-keyed (InstrumentRecord) and any remaining unprefixed IDs go
+    // through the single-record path which detects strings vs UUIDs.
+    for recordID in unprefixedIDs {
       if let record = handler.recordToSave(for: recordID) {
         recordsToSave.append(record)
       } else {

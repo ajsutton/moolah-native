@@ -37,12 +37,18 @@ struct CKRecordIDRecordNameTests {
   }
 
   @Test
-  func uuidAcceptsBareUUIDLegacyFormat() throws {
-    let uuid = try #require(UUID(uuidString: "1CAC9567-574B-481A-BADA-D595325CBE0C"))
+  func uuidReturnsNilForBareUUIDLegacyFormat() {
+    // Pre-issue #416 records used `<UUID>` directly. Persisted CKSyncEngine
+    // state from that era could collide with the new `<TYPE>|<UUID>` form
+    // during batch build (both would resolve to the same SwiftData row,
+    // causing the same `CKRecord` to be appended twice and CloudKit to
+    // reject the entire batch). Treating bare UUIDs as non-UUID names
+    // breaks the collision and lets the lifecycle's purge routine drop the
+    // stale entries.
     let recordID = CKRecord.ID(
       recordName: "1CAC9567-574B-481A-BADA-D595325CBE0C",
       zoneID: zoneID)
-    #expect(recordID.uuid == uuid)
+    #expect(recordID.uuid == nil)
   }
 
   @Test
@@ -57,6 +63,30 @@ struct CKRecordIDRecordNameTests {
       recordName: "CD_AccountRecord|not-a-uuid",
       zoneID: zoneID)
     #expect(recordID.uuid == nil)
+  }
+
+  // MARK: - prefixedRecordType
+
+  @Test
+  func prefixedRecordTypeReturnsTypeFromPrefix() {
+    let recordID = CKRecord.ID(
+      recordName: "CD_AccountRecord|1CAC9567-574B-481A-BADA-D595325CBE0C",
+      zoneID: zoneID)
+    #expect(recordID.prefixedRecordType == "CD_AccountRecord")
+  }
+
+  @Test
+  func prefixedRecordTypeReturnsNilForBareUUID() {
+    let recordID = CKRecord.ID(
+      recordName: "1CAC9567-574B-481A-BADA-D595325CBE0C",
+      zoneID: zoneID)
+    #expect(recordID.prefixedRecordType == nil)
+  }
+
+  @Test
+  func prefixedRecordTypeReturnsNilForInstrumentID() {
+    #expect(CKRecord.ID(recordName: "AUD", zoneID: zoneID).prefixedRecordType == nil)
+    #expect(CKRecord.ID(recordName: "ASX:BHP", zoneID: zoneID).prefixedRecordType == nil)
   }
 
   // MARK: - systemFieldsKey

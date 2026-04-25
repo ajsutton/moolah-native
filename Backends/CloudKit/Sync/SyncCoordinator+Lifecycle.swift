@@ -80,6 +80,16 @@ extension SyncCoordinator {
     isRunning = true
     logger.info("Started unified sync coordinator")
 
+    // Purge any pending changes whose recordName is a bare UUID — these are
+    // stale entries persisted by CKSyncEngine before issue #416 added the
+    // `<recordType>|<UUID>` prefix. Post-fix `recordID.uuid` returns nil for
+    // them, which would loop forever in the `nextRecordZoneChangeBatch` /
+    // `handleMissingRecordToSave` cycle. Removing them outright is safe
+    // because every still-relevant record has been re-queued in prefixed form
+    // by the repository mutation hooks (or will be by the unsynced backfill
+    // below).
+    purgeStaleBareUUIDPendingChanges()
+
     // On first launch (migration or truly first launch), queue all existing records
     if isFirstLaunch {
       queueAllExistingRecordsForAllZones()
@@ -163,6 +173,36 @@ extension SyncCoordinator {
     syncEngine.map { !$0.state.pendingRecordZoneChanges.isEmpty } ?? false
   }
 
+  /// Removes any pending change whose recordName is a bare UUID (no `|`
+  /// separator and parses as a UUID). Such entries can only have been
+  /// persisted by a build that predated the `<recordType>|<UUID>` prefix
+  /// (issue #416). Post-prefix they collide with their prefixed counterparts
+  /// during batch build — both pass the `Set<CKRecord.ID>` dedup (different
+  /// recordNames) but resolve to the same UUID and the same SwiftData row,
+  /// so the same `CKRecord` instance gets appended to `recordsToSave` twice
+  /// and CloudKit rejects the entire batch with `.invalidArguments`
+  /// ("You can't save the same record twice").
+  ///
+  /// Instrument records use raw string IDs (`"AUD"`, `"ASX:BHP"`) which
+  /// don't parse as UUIDs, so they are correctly excluded by this check.
+  private func purgeStaleBareUUIDPendingChanges() {
+    guard let syncEngine else { return }
+    let stale = syncEngine.state.pendingRecordZoneChanges.filter { change in
+      let recordName: String
+      switch change {
+      case .saveRecord(let id): recordName = id.recordName
+      case .deleteRecord(let id): recordName = id.recordName
+      @unknown default: return false
+      }
+      return !recordName.contains("|") && UUID(uuidString: recordName) != nil
+    }
+    guard !stale.isEmpty else { return }
+    logger.warning(
+      "Purging \(stale.count, privacy: .public) stale bare-UUID pending changes left over from pre-prefixing CKSyncEngine state"
+    )
+    syncEngine.state.remove(pendingRecordZoneChanges: stale)
+  }
+
   // During the short window between `start()` returning and `completeStart`
   // installing the engine, these queue calls silently no-op. That's safe
   // because no user-driven edits can reach `queueSave`/`queueDeletion` before
@@ -196,7 +236,7 @@ extension SyncCoordinator {
     do {
       try await syncEngine.sendChanges()
     } catch {
-      logger.error("Failed to send changes: \(error)")
+      logger.error("Failed to send changes: \(error, privacy: .public)")
     }
   }
 
@@ -205,7 +245,7 @@ extension SyncCoordinator {
     do {
       try await syncEngine.fetchChanges()
     } catch {
-      logger.error("Failed to fetch changes: \(error)")
+      logger.error("Failed to fetch changes: \(error, privacy: .public)")
     }
   }
 

@@ -58,7 +58,7 @@ extension ProfileDataSyncHandler {
       return .success(changedTypes: Set(saved.map(\.recordType) + deleted.map(\.1)))
     } catch {
       os_signpost(.end, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
-      logger.error("Failed to save remote changes: \(error)")
+      logger.error("Failed to save remote changes: \(error, privacy: .public)")
       return .saveFailed(error.localizedDescription)
     }
   }

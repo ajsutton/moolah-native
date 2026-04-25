@@ -112,7 +112,8 @@ extension SyncCoordinator {
         }
       }
     case .saveFailed(let errorDescription):
-      logger.error("Profile index save failed, scheduling re-fetch: \(errorDescription)")
+      logger.error(
+        "Profile index save failed, scheduling re-fetch: \(errorDescription, privacy: .public)")
       await scheduleRefetch()
     }
   }
@@ -132,7 +133,7 @@ extension SyncCoordinator {
       do {
         return try handlerForProfileZone(profileId: profileId, zoneID: zoneID)
       } catch {
-        logger.error("Failed to get handler for profile \(profileId): \(error)")
+        logger.error("Failed to get handler for profile \(profileId): \(error, privacy: .public)")
         return nil
       }
     }
@@ -166,7 +167,8 @@ extension SyncCoordinator {
       }
     case .saveFailed(let errorDescription):
       logger.error(
-        "Profile data save failed for \(profileId), scheduling re-fetch: \(errorDescription)")
+        "Profile data save failed for \(profileId), scheduling re-fetch: \(errorDescription, privacy: .public)"
+      )
       await scheduleRefetch()
     }
   }

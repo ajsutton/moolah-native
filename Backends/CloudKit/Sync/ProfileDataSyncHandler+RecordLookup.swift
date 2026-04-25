@@ -5,219 +5,190 @@ import SwiftData
 extension ProfileDataSyncHandler {
   // MARK: - Batch Record Lookup
 
-  /// Looks up records by UUID for a batch of pending changes.
-  /// Uses IN-predicate fetches per record type, pruning the remaining set after each type.
-  /// Ordered by expected frequency: transactions and legs account for the majority of
-  /// pending changes in a typical batch.
-  func buildBatchRecordLookup(for uuids: Set<UUID>) -> [UUID: CKRecord] {
+  /// Looks up records grouped by their CKRecord recordType. Each group does
+  /// one IN-predicate fetch over its own SwiftData type, so two different
+  /// record types that happen to share a UUID don't collide in the result —
+  /// the previous UUID-only lookup returned the same `CKRecord` for both,
+  /// which CloudKit then rejected with `.invalidArguments` (issue #416 +
+  /// follow-up). Returns `[recordType: [UUID: CKRecord]]`.
+  func buildBatchRecordLookup(
+    byRecordType groups: [String: Set<UUID>]
+  ) -> [String: [UUID: CKRecord]] {
     let context = ModelContext(modelContainer)
-    var lookup: [UUID: CKRecord] = [:]
-    var remaining = uuids
-
-    lookupTransactions(in: &remaining, lookup: &lookup, context: context)
-    lookupTransactionLegs(in: &remaining, lookup: &lookup, context: context)
-    lookupInvestmentValues(in: &remaining, lookup: &lookup, context: context)
-    lookupAccounts(in: &remaining, lookup: &lookup, context: context)
-    lookupCategories(in: &remaining, lookup: &lookup, context: context)
-    lookupEarmarks(in: &remaining, lookup: &lookup, context: context)
-    lookupEarmarkBudgetItems(in: &remaining, lookup: &lookup, context: context)
-    lookupCSVImportProfiles(in: &remaining, lookup: &lookup, context: context)
-    lookupImportRules(in: &remaining, lookup: &lookup, context: context)
-
-    if !remaining.isEmpty {
-      logger.warning(
-        "Batch lookup: \(remaining.count) of \(uuids.count) records not found in local store")
+    var result: [String: [UUID: CKRecord]] = [:]
+    for (recordType, uuids) in groups {
+      guard !uuids.isEmpty else { continue }
+      result[recordType] = batchFetchByType(
+        recordType: recordType, uuids: uuids, context: context)
     }
-    return lookup
+    return result
   }
 
   // MARK: - Record Lookup for Upload
 
-  /// Looks up a single record by CKRecord.ID and builds a CKRecord for upload.
-  /// Tries InstrumentRecord (string ID) first, then UUID-based types.
+  /// Looks up a single record by `CKRecord.ID` and builds the `CKRecord` for
+  /// upload. Dispatches by the recordType prefix encoded in the recordName
+  /// (`<recordType>|<UUID>`); unprefixed recordNames are treated as string
+  /// IDs and routed to the InstrumentRecord lookup.
   func recordToSave(for recordID: CKRecord.ID) -> CKRecord? {
     let context = ModelContext(modelContainer)
-    let recordName = recordID.recordName
-
-    // InstrumentRecord uses String IDs (e.g. "AUD", "ASX:BHP.AX"), not UUIDs.
-    // Try it first before UUID-based lookups.
-    if let record = fetchInstrument(id: recordName, context: context) {
-      return buildCKRecord(for: record)
+    if let recordType = recordID.prefixedRecordType, let uuid = recordID.uuid {
+      return fetchAndBuild(recordType: recordType, uuid: uuid, context: context)
     }
+    return fetchInstrument(id: recordID.recordName, context: context)
+      .map(buildCKRecord)
+  }
 
-    guard let uuid = recordID.uuid else {
-      logger.warning("Could not find local record for non-UUID ID: \(recordName)")
+  // MARK: - Per-Type Dispatch
+
+  /// Single-record dispatcher. Returns nil for unknown recordType strings.
+  private func fetchAndBuild(
+    recordType: String, uuid: UUID, context: ModelContext
+  ) -> CKRecord? {
+    switch recordType {
+    case AccountRecord.recordType:
+      return fetchAccount(id: uuid, context: context).map(buildCKRecord)
+    case TransactionRecord.recordType:
+      return fetchTransaction(id: uuid, context: context).map(buildCKRecord)
+    case TransactionLegRecord.recordType:
+      return fetchTransactionLeg(id: uuid, context: context).map(buildCKRecord)
+    case CategoryRecord.recordType:
+      return fetchCategory(id: uuid, context: context).map(buildCKRecord)
+    case EarmarkRecord.recordType:
+      return fetchEarmark(id: uuid, context: context).map(buildCKRecord)
+    case EarmarkBudgetItemRecord.recordType:
+      return fetchEarmarkBudgetItem(id: uuid, context: context).map(buildCKRecord)
+    case InvestmentValueRecord.recordType:
+      return fetchInvestmentValue(id: uuid, context: context).map(buildCKRecord)
+    case CSVImportProfileRecord.recordType:
+      return fetchCSVImportProfile(id: uuid, context: context).map(buildCKRecord)
+    case ImportRuleRecord.recordType:
+      return fetchImportRule(id: uuid, context: context).map(buildCKRecord)
+    default:
+      logger.warning(
+        "Unknown recordType '\(recordType, privacy: .public)' in prefixed recordID — skipping"
+      )
       return nil
     }
-
-    if let ckRecord = ckRecordForUUID(uuid, context: context) {
-      return ckRecord
-    }
-
-    logger.warning("Could not find local record for ID: \(recordName)")
-    return nil
   }
 
-  /// Tries each UUID-based record type until it finds a matching record, then returns
-  /// its CKRecord representation. Returns `nil` if no type matches.
-  ///
-  /// Each finder closure applies `buildCKRecord` itself so the finder list can be
-  /// `[(UUID, ModelContext) -> CKRecord?]` — a single concrete signature — instead of
-  /// leaking an existential (`any CloudKitRecordConvertible & SystemFieldsCacheable`)
-  /// that Swift can't forward back into the generic `buildCKRecord` parameter.
-  private func ckRecordForUUID(_ uuid: UUID, context: ModelContext) -> CKRecord? {
-    let finders: [(UUID, ModelContext) -> CKRecord?] = [
-      { uuid, context in self.fetchAccount(id: uuid, context: context).map(self.buildCKRecord) },
-      { uuid, context in self.fetchTransaction(id: uuid, context: context).map(self.buildCKRecord)
-      },
-      { uuid, context in
-        self.fetchTransactionLeg(id: uuid, context: context).map(self.buildCKRecord)
-      },
-      { uuid, context in self.fetchCategory(id: uuid, context: context).map(self.buildCKRecord) },
-      { uuid, context in self.fetchEarmark(id: uuid, context: context).map(self.buildCKRecord) },
-      { uuid, context in
-        self.fetchEarmarkBudgetItem(id: uuid, context: context).map(self.buildCKRecord)
-      },
-      { uuid, context in
-        self.fetchInvestmentValue(id: uuid, context: context).map(self.buildCKRecord)
-      },
-      { uuid, context in
-        self.fetchCSVImportProfile(id: uuid, context: context).map(self.buildCKRecord)
-      },
-      { uuid, context in self.fetchImportRule(id: uuid, context: context).map(self.buildCKRecord) },
-    ]
-    return finders.lazy.compactMap { $0(uuid, context) }.first
-  }
-
-  // MARK: - Per-Type Batch Lookups
-
-  private func lookupTransactions(
-    in remaining: inout Set<UUID>, lookup: inout [UUID: CKRecord], context: ModelContext
-  ) {
-    lookupAndRemove(
-      TransactionRecord.self, in: &remaining, lookup: &lookup, context: context
-    ) { ids in
-      Self.fetchOrLog(
-        FetchDescriptor<TransactionRecord>(predicate: #Predicate { ids.contains($0.id) }),
-        context: context)
+  /// Batch-fetch dispatcher. One IN-predicate fetch per type, mapped into
+  /// `[UUID: CKRecord]` via `buildCKRecord`. Per-type because `#Predicate`
+  /// cannot be generic.
+  private func batchFetchByType(
+    recordType: String, uuids: Set<UUID>, context: ModelContext
+  ) -> [UUID: CKRecord] {
+    switch recordType {
+    case AccountRecord.recordType:
+      return mapBuilt(fetchAccountsBatch(uuids: uuids, context: context))
+    case TransactionRecord.recordType:
+      return mapBuilt(fetchTransactionsBatch(uuids: uuids, context: context))
+    case TransactionLegRecord.recordType:
+      return mapBuilt(fetchTransactionLegsBatch(uuids: uuids, context: context))
+    case CategoryRecord.recordType:
+      return mapBuilt(fetchCategoriesBatch(uuids: uuids, context: context))
+    case EarmarkRecord.recordType:
+      return mapBuilt(fetchEarmarksBatch(uuids: uuids, context: context))
+    case EarmarkBudgetItemRecord.recordType:
+      return mapBuilt(fetchEarmarkBudgetItemsBatch(uuids: uuids, context: context))
+    case InvestmentValueRecord.recordType:
+      return mapBuilt(fetchInvestmentValuesBatch(uuids: uuids, context: context))
+    case CSVImportProfileRecord.recordType:
+      return mapBuilt(fetchCSVImportProfilesBatch(uuids: uuids, context: context))
+    case ImportRuleRecord.recordType:
+      return mapBuilt(fetchImportRulesBatch(uuids: uuids, context: context))
+    default:
+      logger.warning(
+        "Unknown recordType '\(recordType, privacy: .public)' in batch lookup — skipping"
+      )
+      return [:]
     }
   }
 
-  private func lookupTransactionLegs(
-    in remaining: inout Set<UUID>, lookup: inout [UUID: CKRecord], context: ModelContext
-  ) {
-    lookupAndRemove(
-      TransactionLegRecord.self, in: &remaining, lookup: &lookup, context: context
-    ) { ids in
-      Self.fetchOrLog(
-        FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { ids.contains($0.id) }),
-        context: context)
-    }
-  }
-
-  private func lookupInvestmentValues(
-    in remaining: inout Set<UUID>, lookup: inout [UUID: CKRecord], context: ModelContext
-  ) {
-    lookupAndRemove(
-      InvestmentValueRecord.self, in: &remaining, lookup: &lookup, context: context
-    ) { ids in
-      Self.fetchOrLog(
-        FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { ids.contains($0.id) }),
-        context: context)
-    }
-  }
-
-  private func lookupAccounts(
-    in remaining: inout Set<UUID>, lookup: inout [UUID: CKRecord], context: ModelContext
-  ) {
-    lookupAndRemove(
-      AccountRecord.self, in: &remaining, lookup: &lookup, context: context
-    ) { ids in
-      Self.fetchOrLog(
-        FetchDescriptor<AccountRecord>(predicate: #Predicate { ids.contains($0.id) }),
-        context: context)
-    }
-  }
-
-  private func lookupCategories(
-    in remaining: inout Set<UUID>, lookup: inout [UUID: CKRecord], context: ModelContext
-  ) {
-    lookupAndRemove(
-      CategoryRecord.self, in: &remaining, lookup: &lookup, context: context
-    ) { ids in
-      Self.fetchOrLog(
-        FetchDescriptor<CategoryRecord>(predicate: #Predicate { ids.contains($0.id) }),
-        context: context)
-    }
-  }
-
-  private func lookupEarmarks(
-    in remaining: inout Set<UUID>, lookup: inout [UUID: CKRecord], context: ModelContext
-  ) {
-    lookupAndRemove(
-      EarmarkRecord.self, in: &remaining, lookup: &lookup, context: context
-    ) { ids in
-      Self.fetchOrLog(
-        FetchDescriptor<EarmarkRecord>(predicate: #Predicate { ids.contains($0.id) }),
-        context: context)
-    }
-  }
-
-  private func lookupEarmarkBudgetItems(
-    in remaining: inout Set<UUID>, lookup: inout [UUID: CKRecord], context: ModelContext
-  ) {
-    lookupAndRemove(
-      EarmarkBudgetItemRecord.self, in: &remaining, lookup: &lookup, context: context
-    ) { ids in
-      Self.fetchOrLog(
-        FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { ids.contains($0.id) }),
-        context: context)
-    }
-  }
-
-  private func lookupCSVImportProfiles(
-    in remaining: inout Set<UUID>, lookup: inout [UUID: CKRecord], context: ModelContext
-  ) {
-    lookupAndRemove(
-      CSVImportProfileRecord.self, in: &remaining, lookup: &lookup, context: context
-    ) { ids in
-      Self.fetchOrLog(
-        FetchDescriptor<CSVImportProfileRecord>(predicate: #Predicate { ids.contains($0.id) }),
-        context: context)
-    }
-  }
-
-  private func lookupImportRules(
-    in remaining: inout Set<UUID>, lookup: inout [UUID: CKRecord], context: ModelContext
-  ) {
-    lookupAndRemove(
-      ImportRuleRecord.self, in: &remaining, lookup: &lookup, context: context
-    ) { ids in
-      Self.fetchOrLog(
-        FetchDescriptor<ImportRuleRecord>(predicate: #Predicate { ids.contains($0.id) }),
-        context: context)
-    }
-  }
-
-  /// Runs the given fetch when `remaining` is non-empty, adds built `CKRecord`s to
-  /// `lookup`, and prunes matched IDs from `remaining`.
-  private func lookupAndRemove<T>(
-    _ type: T.Type,
-    in remaining: inout Set<UUID>,
-    lookup: inout [UUID: CKRecord],
-    context: ModelContext,
-    fetch: ([UUID]) -> [T]
-  )
+  /// Reduces a fetched batch into a `[UUID: CKRecord]` keyed by the model's
+  /// own `id`, with each value built via `buildCKRecord`.
+  private func mapBuilt<T>(_ records: [T]) -> [UUID: CKRecord]
   where
-    T: PersistentModel & IdentifiableRecord & CloudKitRecordConvertible
-      & SystemFieldsCacheable
+    T: IdentifiableRecord & CloudKitRecordConvertible & SystemFieldsCacheable
   {
-    guard !remaining.isEmpty else { return }
-    let ids = Array(remaining)
-    for record in fetch(ids) {
-      lookup[record.id] = buildCKRecord(for: record)
-      remaining.remove(record.id)
+    var built: [UUID: CKRecord] = [:]
+    built.reserveCapacity(records.count)
+    for record in records {
+      built[record.id] = buildCKRecord(for: record)
     }
+    return built
+  }
+
+  // MARK: - Per-Type Batch Fetches
+  //
+  // `#Predicate` requires a concrete model type, so each type gets its own
+  // tiny batch fetcher. They're all the same shape: IN-predicate over
+  // `uuids` against `id`.
+
+  private func fetchAccountsBatch(uuids: Set<UUID>, context: ModelContext) -> [AccountRecord] {
+    Self.fetchOrLog(
+      FetchDescriptor<AccountRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      context: context)
+  }
+
+  private func fetchTransactionsBatch(
+    uuids: Set<UUID>, context: ModelContext
+  ) -> [TransactionRecord] {
+    Self.fetchOrLog(
+      FetchDescriptor<TransactionRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      context: context)
+  }
+
+  private func fetchTransactionLegsBatch(
+    uuids: Set<UUID>, context: ModelContext
+  ) -> [TransactionLegRecord] {
+    Self.fetchOrLog(
+      FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      context: context)
+  }
+
+  private func fetchCategoriesBatch(uuids: Set<UUID>, context: ModelContext) -> [CategoryRecord] {
+    Self.fetchOrLog(
+      FetchDescriptor<CategoryRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      context: context)
+  }
+
+  private func fetchEarmarksBatch(uuids: Set<UUID>, context: ModelContext) -> [EarmarkRecord] {
+    Self.fetchOrLog(
+      FetchDescriptor<EarmarkRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      context: context)
+  }
+
+  private func fetchEarmarkBudgetItemsBatch(
+    uuids: Set<UUID>, context: ModelContext
+  ) -> [EarmarkBudgetItemRecord] {
+    Self.fetchOrLog(
+      FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      context: context)
+  }
+
+  private func fetchInvestmentValuesBatch(
+    uuids: Set<UUID>, context: ModelContext
+  ) -> [InvestmentValueRecord] {
+    Self.fetchOrLog(
+      FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      context: context)
+  }
+
+  private func fetchCSVImportProfilesBatch(
+    uuids: Set<UUID>, context: ModelContext
+  ) -> [CSVImportProfileRecord] {
+    Self.fetchOrLog(
+      FetchDescriptor<CSVImportProfileRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      context: context)
+  }
+
+  private func fetchImportRulesBatch(
+    uuids: Set<UUID>, context: ModelContext
+  ) -> [ImportRuleRecord] {
+    Self.fetchOrLog(
+      FetchDescriptor<ImportRuleRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      context: context)
   }
 
   // MARK: - Per-Type Fetch Methods

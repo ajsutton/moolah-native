@@ -28,14 +28,22 @@ struct RecordNameCollisionTests {
         id: sharedId, date: Date(), payee: "Opening balance"))
     try context.save()
 
-    let lookup = handler.buildBatchRecordLookup(for: [sharedId])
+    // The lookup is keyed by recordType and then by UUID, so two record
+    // types sharing a UUID produce two independent entries — preventing
+    // the same `CKRecord` from being appended to a batch twice.
+    let lookup = handler.buildBatchRecordLookup(byRecordType: [
+      AccountRecord.recordType: [sharedId],
+      TransactionRecord.recordType: [sharedId],
+    ])
 
-    // buildBatchRecordLookup returns [UUID: CKRecord] — dedupes by UUID.
-    // The distinction between the two record types is carried on the
-    // recordName prefix, which we assert next.
-    let record = try #require(lookup[sharedId])
-    let expectedPrefix = "\(record.recordType)|\(sharedId.uuidString)"
-    #expect(record.recordID.recordName == expectedPrefix)
+    let accountRecord = try #require(lookup[AccountRecord.recordType]?[sharedId])
+    let transactionRecord = try #require(lookup[TransactionRecord.recordType]?[sharedId])
+    #expect(
+      accountRecord.recordID.recordName
+        == "\(AccountRecord.recordType)|\(sharedId.uuidString)")
+    #expect(
+      transactionRecord.recordID.recordName
+        == "\(TransactionRecord.recordType)|\(sharedId.uuidString)")
   }
 
   @Test("queueUnsyncedRecords produces prefixed recordNames per type")
@@ -86,18 +94,20 @@ struct RecordNameCollisionTests {
         == "\(AccountRecord.recordType)|\(accountId.uuidString)")
   }
 
-  // MARK: - 3. Uplink preserves legacy bare-UUID name for already-synced records
+  // MARK: - 3. Uplink ignores stale bare-UUID cached system fields
 
-  @Test("buildCKRecord keeps legacy bare-UUID recordName when cached system fields exist")
-  func buildCKRecordReusesLegacyRecordNameFromCachedSystemFields() throws {
+  @Test("buildCKRecord ignores legacy bare-UUID recordName in cached system fields")
+  func buildCKRecordIgnoresLegacyBareUUIDCachedSystemFields() throws {
     let (handler, container) =
       try ProfileDataSyncHandlerTestSupport
       .makeHandler()
 
     let accountId = UUID()
     // Seed an encodedSystemFields blob whose recordID uses the legacy
-    // bare-UUID recordName. Simulates a row already synced under the
-    // old format.
+    // bare-UUID recordName. Reusing this would re-upload the record under
+    // the legacy form and round-trip nowhere (the downlink path drops it),
+    // so `buildCKRecord` must ignore the stale cache and emit a fresh
+    // prefixed recordID.
     let legacyRecord = CKRecord(
       recordType: "CD_AccountRecord",
       recordID: CKRecord.ID(
@@ -112,17 +122,18 @@ struct RecordNameCollisionTests {
     context.insert(account)
     try context.save()
 
-    // Mutate and rebuild — should reuse the legacy recordID (no prefix).
     account.name = "Updated"
     let built = handler.buildCKRecord(for: account)
-    #expect(built.recordID.recordName == accountId.uuidString)
+    #expect(
+      built.recordID.recordName
+        == "\(AccountRecord.recordType)|\(accountId.uuidString)")
     #expect(built["name"] as? String == "Updated")
   }
 
-  // MARK: - 4. Downlink accepts both formats
+  // MARK: - 4. Downlink rejects bare-UUID CKRecords
 
-  @Test("applyRemoteChanges ingests both prefixed and bare-UUID CKRecords")
-  func applyRemoteChangesAcceptsBothRecordNameFormats() throws {
+  @Test("applyRemoteChanges drops bare-UUID CKRecords and ingests prefixed ones")
+  func applyRemoteChangesRejectsBareUUIDAcceptsPrefixed() throws {
     let (handler, container) =
       try ProfileDataSyncHandlerTestSupport
       .makeHandler()
@@ -154,9 +165,8 @@ struct RecordNameCollisionTests {
     let context = ModelContext(container)
     let all = try context.fetch(FetchDescriptor<AccountRecord>())
     let byId = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
-    #expect(byId[legacyId]?.name == "Legacy")
+    #expect(byId[legacyId] == nil, "bare-UUID record should not be ingested")
     #expect(byId[newId]?.name == "Prefixed")
-    #expect(byId[legacyId]?.encodedSystemFields != nil)
     #expect(byId[newId]?.encodedSystemFields != nil)
   }
 
