@@ -38,6 +38,17 @@ struct CreateProfileFormView: View {
     return formatter.monthSymbols ?? []
   }()
 
+  private static let commonCurrencyCodes: [String] = [
+    "AUD", "CAD", "CHF", "CNY", "EUR", "GBP", "HKD", "INR", "JPY", "KRW",
+    "MXN", "NOK", "NZD", "SEK", "SGD", "USD", "ZAR",
+  ]
+
+  private static let sortedCurrencyCodes: [String] = commonCurrencyCodes.sorted {
+    Instrument.localizedName(for: $0).localizedCaseInsensitiveCompare(
+      Instrument.localizedName(for: $1)
+    ) == .orderedAscending
+  }
+
   var body: some View {
     VStack(spacing: 0) {
       bannerContent
@@ -78,7 +89,7 @@ struct CreateProfileFormView: View {
       Section {
         // `.onSubmit` is attached to the TextField directly (not the
         // parent `Form`) so Return inside the DisclosureGroup's
-        // CurrencyPicker / FY-month Picker doesn't also fire `submit`.
+        // Currency / FY-month Picker doesn't also fire `submit`.
         TextField(String(localized: "Name"), text: $name)
           .focused($focus, equals: .name)
           .submitLabel(.done)
@@ -103,7 +114,18 @@ struct CreateProfileFormView: View {
     DisclosureGroup(
       String(localized: "Advanced", comment: "Form advanced disclosure")
     ) {
-      CurrencyPicker(selection: $currency)
+      Picker(
+        String(localized: "Currency", comment: "Form currency picker"),
+        selection: Binding(
+          get: { currency.id },
+          set: { currency = Instrument.fiat(code: $0) }
+        )
+      ) {
+        ForEach(Self.sortedCurrencyCodes, id: \.self) { code in
+          Text("\(code) — \(Instrument.localizedName(for: code))").tag(code)
+        }
+      }
+      .pickerStyle(.menu)
       Picker(
         String(localized: "Financial year starts", comment: "Form FY month"),
         selection: $financialYearStartMonth
