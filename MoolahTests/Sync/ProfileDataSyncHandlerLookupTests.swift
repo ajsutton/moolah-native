@@ -23,13 +23,13 @@ struct ProfileDataSyncHandlerLookupTests {
       TransactionRecord(id: txnId, date: Date(), payee: "Test"))
     try context.save()
 
-    let lookup = handler.buildBatchRecordLookup(for: [accountId, txnId])
+    let lookup = handler.buildBatchRecordLookup(byRecordType: [
+      AccountRecord.recordType: [accountId],
+      TransactionRecord.recordType: [txnId],
+    ])
 
-    #expect(lookup.count == 2)
-    #expect(lookup[accountId] != nil)
-    #expect(lookup[txnId] != nil)
-    #expect(lookup[accountId]?.recordType == "CD_AccountRecord")
-    #expect(lookup[txnId]?.recordType == "CD_TransactionRecord")
+    #expect(lookup[AccountRecord.recordType]?[accountId]?.recordType == "CD_AccountRecord")
+    #expect(lookup[TransactionRecord.recordType]?[txnId]?.recordType == "CD_TransactionRecord")
   }
 
   @Test

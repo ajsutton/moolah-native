@@ -65,6 +65,30 @@ struct CKRecordIDRecordNameTests {
     #expect(recordID.uuid == nil)
   }
 
+  // MARK: - prefixedRecordType
+
+  @Test
+  func prefixedRecordTypeReturnsTypeFromPrefix() {
+    let recordID = CKRecord.ID(
+      recordName: "CD_AccountRecord|1CAC9567-574B-481A-BADA-D595325CBE0C",
+      zoneID: zoneID)
+    #expect(recordID.prefixedRecordType == "CD_AccountRecord")
+  }
+
+  @Test
+  func prefixedRecordTypeReturnsNilForBareUUID() {
+    let recordID = CKRecord.ID(
+      recordName: "1CAC9567-574B-481A-BADA-D595325CBE0C",
+      zoneID: zoneID)
+    #expect(recordID.prefixedRecordType == nil)
+  }
+
+  @Test
+  func prefixedRecordTypeReturnsNilForInstrumentID() {
+    #expect(CKRecord.ID(recordName: "AUD", zoneID: zoneID).prefixedRecordType == nil)
+    #expect(CKRecord.ID(recordName: "ASX:BHP", zoneID: zoneID).prefixedRecordType == nil)
+  }
+
   // MARK: - systemFieldsKey
 
   @Test

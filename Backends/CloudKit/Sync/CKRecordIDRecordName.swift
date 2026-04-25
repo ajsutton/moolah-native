@@ -54,6 +54,19 @@ extension CKRecord.ID {
     return UUID(uuidString: systemFieldsKey)
   }
 
+  /// The recordType portion of the recordName for prefixed UUID-keyed
+  /// records, or `nil` for instrument-style string IDs and stale legacy
+  /// bare-UUID entries. Used to disambiguate batch lookups when two record
+  /// types share a UUID (different prefix, same UUID) — a UUID-only lookup
+  /// returns the same CKRecord for both pending changes, so the same
+  /// CKRecord ends up in `recordsToSave` twice and CloudKit rejects the
+  /// batch with `.invalidArguments` ("You can't save the same record twice").
+  var prefixedRecordType: String? {
+    guard let sep = recordName.firstIndex(of: "|") else { return nil }
+    let prefix = String(recordName[..<sep])
+    return prefix.isEmpty ? nil : prefix
+  }
+
   /// The key used for per-record system-fields caching during batch upsert.
   /// - For UUID-keyed records: the bare UUID string (prefix stripped).
   /// - For string-keyed records (instruments): the full recordName.

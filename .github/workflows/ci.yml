@@ -75,8 +75,14 @@ jobs:
   schema-drift:
     name: CloudKit schema drift
     runs-on: macos-26
-    # Secrets are withheld from fork PRs — skip rather than fail spuriously.
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    # Disabled while CloudKit schema management is being reworked. The
+    # committed `CloudKit/schema.ckdb` is being inverted from "exported
+    # from Dev" to "hand-authored manifest" (see
+    # plans/2026-04-25-cloudkit-schema-as-source-of-truth.md). Until
+    # that lands, Dev contents are unstable while sync fixes land and
+    # this diff would fail spuriously on every PR. Re-enable once the
+    # new pipeline is in place.
+    if: false
     timeout-minutes: 10
     env:
       DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}

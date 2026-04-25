@@ -28,14 +28,22 @@ struct RecordNameCollisionTests {
         id: sharedId, date: Date(), payee: "Opening balance"))
     try context.save()
 
-    let lookup = handler.buildBatchRecordLookup(for: [sharedId])
+    // The lookup is keyed by recordType and then by UUID, so two record
+    // types sharing a UUID produce two independent entries — preventing
+    // the same `CKRecord` from being appended to a batch twice.
+    let lookup = handler.buildBatchRecordLookup(byRecordType: [
+      AccountRecord.recordType: [sharedId],
+      TransactionRecord.recordType: [sharedId],
+    ])
 
-    // buildBatchRecordLookup returns [UUID: CKRecord] — dedupes by UUID.
-    // The distinction between the two record types is carried on the
-    // recordName prefix, which we assert next.
-    let record = try #require(lookup[sharedId])
-    let expectedPrefix = "\(record.recordType)|\(sharedId.uuidString)"
-    #expect(record.recordID.recordName == expectedPrefix)
+    let accountRecord = try #require(lookup[AccountRecord.recordType]?[sharedId])
+    let transactionRecord = try #require(lookup[TransactionRecord.recordType]?[sharedId])
+    #expect(
+      accountRecord.recordID.recordName
+        == "\(AccountRecord.recordType)|\(sharedId.uuidString)")
+    #expect(
+      transactionRecord.recordID.recordName
+        == "\(TransactionRecord.recordType)|\(sharedId.uuidString)")
   }
 
   @Test("queueUnsyncedRecords produces prefixed recordNames per type")
