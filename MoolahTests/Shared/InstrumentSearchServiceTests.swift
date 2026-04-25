@@ -150,6 +150,47 @@ struct InstrumentSearchServiceTests {
     #expect(results.contains { $0.instrument.id == "ASX:BHP.AX" })
     #expect(results.allSatisfy { $0.isRegistered })
   }
+
+  @Test("providerSources: .stocksOnly suppresses crypto provider hits")
+  func stocksOnlyExcludesCryptoHits() async throws {
+    let hits = [
+      CryptoSearchHit(coingeckoId: "bitcoin", symbol: "BTC", name: "Bitcoin", thumbnail: nil)
+    ]
+    let service = makeSubject(cryptoHits: hits)
+    let results = await service.search(
+      query: "bitcoin",
+      kinds: [.cryptoToken],
+      providerSources: .stocksOnly
+    )
+    #expect(results.allSatisfy { $0.requiresResolution == false })
+    #expect(results.contains { $0.instrument.ticker == "BTC" } == false)
+  }
+
+  @Test("providerSources: .stocksOnly still allows Yahoo stock hits")
+  func stocksOnlyAllowsStockHits() async throws {
+    let validated = ValidatedStockTicker(ticker: "AAPL", exchange: "NASDAQ")
+    let service = makeSubject(stockValidated: validated)
+    let results = await service.search(
+      query: "AAPL",
+      kinds: [.stock],
+      providerSources: .stocksOnly
+    )
+    #expect(results.contains { $0.instrument.ticker == "AAPL" })
+  }
+
+  @Test("providerSources: .all preserves existing behaviour")
+  func allPreservesExistingBehaviour() async throws {
+    let hits = [
+      CryptoSearchHit(coingeckoId: "ethereum", symbol: "ETH", name: "Ethereum", thumbnail: nil)
+    ]
+    let service = makeSubject(cryptoHits: hits)
+    let results = await service.search(
+      query: "ethereum",
+      kinds: [.cryptoToken],
+      providerSources: .all
+    )
+    #expect(results.contains { $0.instrument.ticker == "ETH" && $0.requiresResolution })
+  }
 }
 
 // MARK: - Stubs

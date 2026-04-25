@@ -1,6 +1,17 @@
 import Foundation
 import OSLog
 
+/// Controls which provider-search APIs the picker fans out to.
+/// `.all` — registry + fiat + Yahoo + CoinGecko (current behaviour).
+/// `.stocksOnly` — registry + fiat + Yahoo. Used by the multi-instrument
+/// picker so unregistered crypto hits never surface (token registration
+/// flows through `AddTokenSheet` instead, which defends against scam
+/// tokens that share names with established ones).
+enum ProviderSources: Sendable {
+  case all
+  case stocksOnly
+}
+
 struct InstrumentSearchService: Sendable {
   private let registry: any InstrumentRegistryRepository
   private let cryptoSearchClient: any CryptoSearchClient
@@ -25,7 +36,8 @@ struct InstrumentSearchService: Sendable {
 
   func search(
     query: String,
-    kinds: Set<Instrument.Kind> = Set(Instrument.Kind.allCases)
+    kinds: Set<Instrument.Kind> = Set(Instrument.Kind.allCases),
+    providerSources: ProviderSources = .all
   ) async -> [InstrumentSearchResult] {
     let trimmed = query.trimmingCharacters(in: .whitespaces)
     let registered = await loadRegisteredOrLog()
@@ -43,7 +55,8 @@ struct InstrumentSearchService: Sendable {
     async let fiatResults: [InstrumentSearchResult] =
       kinds.contains(.fiatCurrency) ? fiatMatches(query: trimmed) : []
     async let cryptoResults: [InstrumentSearchResult] =
-      kinds.contains(.cryptoToken) ? cryptoMatches(query: trimmed) : []
+      (kinds.contains(.cryptoToken) && providerSources == .all)
+      ? cryptoMatches(query: trimmed) : []
     async let stockResults: [InstrumentSearchResult] =
       kinds.contains(.stock) ? stockMatches(query: trimmed) : []
 
