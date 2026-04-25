@@ -16,11 +16,7 @@ struct ICloudStatusLine: View {
 
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 8) {
-      if state == .checking {
-        ProgressView()
-          .controlSize(.small)
-          .tint(WelcomeBrandColors.lightBlue)
-      } else if case .checkingActive = state {
+      if isActivelyChecking {
         ProgressView()
           .controlSize(.small)
           .tint(WelcomeBrandColors.lightBlue)
@@ -31,23 +27,37 @@ struct ICloudStatusLine: View {
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(label)
-    .accessibilityAddTraits(
-      {
-        switch state {
-        case .checking, .checkingActive: return [.updatesFrequently]
-        case .noneFound: return []
-        }
-      }())
+    .accessibilityAddTraits(accessibilityTraits)
   }
+
+  private var isActivelyChecking: Bool {
+    switch state {
+    case .checking, .checkingActive: return true
+    case .noneFound: return false
+    }
+  }
+
+  private var accessibilityTraits: AccessibilityTraits {
+    switch state {
+    case .checking, .checkingActive: return [.updatesFrequently]
+    case .noneFound: return []
+    }
+  }
+
+  private static let receivedCountFormatter: NumberFormatter = {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .decimal
+    return formatter
+  }()
 
   private var label: String {
     switch state {
     case .checking:
       return String(localized: "Checking iCloud for your profiles…")
     case .checkingActive(let received):
-      let formatter = NumberFormatter()
-      formatter.numberStyle = .decimal
-      let receivedString = formatter.string(from: NSNumber(value: received)) ?? "\(received)"
+      let receivedString =
+        Self.receivedCountFormatter.string(from: NSNumber(value: received))
+        ?? "\(received)"
       return String(
         localized: "Found data on iCloud · \(receivedString) records downloaded")
     case .noneFound:
