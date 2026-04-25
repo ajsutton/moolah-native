@@ -201,6 +201,11 @@ final class SyncCoordinator {
   /// `"\(backfillScanCompleteKeyPrefix).\(profileId.uuidString)"`.
   static let backfillScanCompleteKeyPrefix = "com.moolah.sync.backfillScanComplete"
 
+  /// Observable sync progress consumed by the sidebar footer and the
+  /// `.heroDownloading` Welcome arm. Always non-nil; SyncCoordinator
+  /// drives transitions from its existing event hooks (Tasks 9-13).
+  let progress: SyncProgress
+
   let logger = Logger(subsystem: "com.moolah.app", category: "SyncCoordinator")
 
   var syncEngine: CKSyncEngine?
@@ -340,6 +345,7 @@ final class SyncCoordinator {
   ) {
     self.containerManager = containerManager
     self.userDefaults = userDefaults
+    self.progress = SyncProgress(userDefaults: userDefaults)
     self.profileIndexHandler = ProfileIndexSyncHandler(
       modelContainer: containerManager.indexContainer)
     self.isCloudKitAvailable = isCloudKitAvailable

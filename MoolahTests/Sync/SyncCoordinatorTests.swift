@@ -180,4 +180,13 @@ struct SyncCoordinatorTests {
   }
 
   // MARK: - Stuck Fetch Flag
+
+  // MARK: - Progress wiring
+
+  @Test
+  func coordinatorExposesSyncProgress() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+    #expect(coordinator.progress.phase == .idle)
+  }
 }
