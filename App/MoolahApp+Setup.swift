@@ -143,15 +143,27 @@ extension MoolahApp {
     case .tradeBaseline:
       break
     case .welcomeDownloading:
+      // Override iCloudAvailability to `.available` so the WelcomeStateResolver
+      // can reach `.heroDownloading`. Without this, `SyncCoordinator.init` sets
+      // `.unavailable(.entitlementsMissing)` in the test environment (no real
+      // iCloud entitlement), which routes the resolver to `.heroOff` first.
+      coordinator.applyICloudAvailability(.available)
       coordinator.progress.beginReceiving()
       coordinator.progress.recordReceived(modifications: 1234, deletions: 0)
     case .sidebarFooterUpToDate:
+      // Override iCloudAvailability so the progress calls are not no-ops.
+      // `SyncCoordinator.init` sets `.unavailable(.entitlementsMissing)` in
+      // test environments (no real iCloud entitlement), which keeps the
+      // progress phase as `.degraded` and blocks `beginReceiving` / `endReceiving`.
+      coordinator.applyICloudAvailability(.available)
       coordinator.progress.beginReceiving()
       coordinator.progress.endReceiving(now: Date(timeIntervalSinceNow: -300))
     case .sidebarFooterReceiving:
+      coordinator.applyICloudAvailability(.available)
       coordinator.progress.beginReceiving()
       coordinator.progress.recordReceived(modifications: 1234, deletions: 0)
     case .sidebarFooterSending:
+      coordinator.applyICloudAvailability(.available)
       coordinator.progress.updatePendingUploads(12)
       coordinator.progress.beginReceiving()
       coordinator.progress.endReceiving(now: Date())

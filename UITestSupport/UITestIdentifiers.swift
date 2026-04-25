@@ -78,6 +78,15 @@ public enum UITestIdentifiers {
   public enum Welcome {
     /// "Get started" primary CTA on the first-run hero (states 1 and 4).
     public static let heroGetStartedButton = "welcome.hero.getStarted"
+    /// "Create a new profile" alternate CTA shown while iCloud data is
+    /// downloading (`.heroDownloading` state). De-emphasised relative to the
+    /// normal "Get started" button.
+    public static let heroCreateNewButton = "welcome.hero.createNew"
+    /// Status line under the hero CTA showing iCloud download progress.
+    /// Rendered by `ICloudStatusLine` in the `.checkingActive` state.
+    public static let heroDownloadingStatus = "welcome.hero.downloadingStatus"
+    /// Footnote below the hero CTA in the `.heroDownloading` state.
+    public static let heroDownloadFootnote = "welcome.hero.downloadFootnote"
     /// Name text field in the create-profile form.
     public static let nameField = "welcome.create.nameField"
     /// "Create Profile" submit button in the create-profile form.

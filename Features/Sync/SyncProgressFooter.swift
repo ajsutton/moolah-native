@@ -37,6 +37,7 @@ struct SyncProgressFooter: View {
         Image(systemName: viewModel.iconName)
           .foregroundStyle(viewModel.iconTint)
           .frame(width: 20)
+          .accessibilityHidden(true)
         VStack(alignment: .leading, spacing: 2) {
           Text(viewModel.title)
             .font(.subheadline)
@@ -61,11 +62,12 @@ struct SyncProgressFooter: View {
           }
         }
         Spacer()
+          .accessibilityHidden(true)
       }
       .padding(.horizontal, 12)
       .padding(.vertical, 8)
       .background(.regularMaterial)
-      .accessibilityElement(children: .combine)
+      .accessibilityElement(children: .contain)
       .accessibilityIdentifier(UITestIdentifiers.SyncFooter.container)
     }
   #endif

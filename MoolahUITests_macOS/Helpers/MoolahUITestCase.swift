@@ -239,6 +239,15 @@ class MoolahUITestCase: XCTestCase {
       appendWelcomeSingleProfileFixtures(into: &lines)
     case .welcomeMultipleCloudProfiles:
       appendWelcomeMultipleProfileFixtures(into: &lines)
+    case .welcomeDownloading:
+      lines.append("# SyncProgress driven to .receiving with recordsReceivedThisSession=1234")
+      lines.append("# WelcomeView resolves to .heroDownloading(count: 1234)")
+    case .sidebarFooterUpToDate:
+      lines.append("# SyncProgress driven to .upToDate, lastSettledAt ~5 minutes ago")
+    case .sidebarFooterReceiving:
+      lines.append("# SyncProgress driven to .receiving with recordsReceivedThisSession=1234")
+    case .sidebarFooterSending:
+      lines.append("# SyncProgress driven to .upToDate with pendingUploads=12 then settled")
     }
     return lines.joined(separator: "\n") + "\n"
   }

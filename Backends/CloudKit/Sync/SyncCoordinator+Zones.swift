@@ -58,8 +58,8 @@ extension SyncCoordinator {
     let wasAvailable = iCloudAvailability == .available
     iCloudAvailability = availability
     let reason: ICloudAvailability.UnavailableReason?
-    if case .unavailable(let r) = availability {
-      reason = r
+    if case .unavailable(let unavailableReason) = availability {
+      reason = unavailableReason
     } else {
       reason = nil
     }

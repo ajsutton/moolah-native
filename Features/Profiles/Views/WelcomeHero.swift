@@ -127,7 +127,15 @@ struct WelcomeHero<Footer: View>: View {
       primaryAction()
       return .handled
     }
+    .accessibilityIdentifier(ctaIdentifier)
     .padding(.bottom, 12)
+  }
+
+  private var ctaIdentifier: String {
+    switch mode {
+    case .checking: return UITestIdentifiers.Welcome.heroGetStartedButton
+    case .downloading: return UITestIdentifiers.Welcome.heroCreateNewButton
+    }
   }
 
   private var buttonLabel: LocalizedStringKey {
@@ -145,6 +153,7 @@ struct WelcomeHero<Footer: View>: View {
     .font(.footnote)
     .foregroundStyle(WelcomeBrandColors.muted)
     .padding(.top, 8)
+    .accessibilityIdentifier(UITestIdentifiers.Welcome.heroDownloadFootnote)
   }
 }
 

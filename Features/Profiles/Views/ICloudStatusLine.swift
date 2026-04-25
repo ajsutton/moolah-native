@@ -28,6 +28,16 @@ struct ICloudStatusLine: View {
     .accessibilityElement(children: .combine)
     .accessibilityLabel(label)
     .accessibilityAddTraits(accessibilityTraits)
+    .accessibilityIdentifier(downloadingStatusIdentifier)
+  }
+
+  private var downloadingStatusIdentifier: String {
+    switch state {
+    case .checkingActive:
+      return UITestIdentifiers.Welcome.heroDownloadingStatus
+    default:
+      return ""
+    }
   }
 
   private var isActivelyChecking: Bool {

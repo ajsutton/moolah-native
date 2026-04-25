@@ -11,7 +11,8 @@ import Foundation
 /// `pendingUploads` mirrors `syncEngine.state.pendingRecordZoneChanges.count`;
 /// the engine state remains authoritative. Storing the mirror keeps SwiftUI
 /// Observation invalidations reliable.
-@Observable @MainActor
+@Observable
+@MainActor
 final class SyncProgress {
   enum Phase: Equatable {
     case idle
