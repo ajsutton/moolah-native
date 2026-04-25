@@ -78,25 +78,26 @@ extension ProfileDataSyncHandler {
   private func batchFetchByType(
     recordType: String, uuids: Set<UUID>, context: ModelContext
   ) -> [UUID: CKRecord] {
+    let ids = Array(uuids)
     switch recordType {
     case AccountRecord.recordType:
-      return mapBuilt(fetchAccountsBatch(uuids: uuids, context: context))
+      return mapBuilt(fetchAccountsBatch(ids: ids, context: context))
     case TransactionRecord.recordType:
-      return mapBuilt(fetchTransactionsBatch(uuids: uuids, context: context))
+      return mapBuilt(fetchTransactionsBatch(ids: ids, context: context))
     case TransactionLegRecord.recordType:
-      return mapBuilt(fetchTransactionLegsBatch(uuids: uuids, context: context))
+      return mapBuilt(fetchTransactionLegsBatch(ids: ids, context: context))
     case CategoryRecord.recordType:
-      return mapBuilt(fetchCategoriesBatch(uuids: uuids, context: context))
+      return mapBuilt(fetchCategoriesBatch(ids: ids, context: context))
     case EarmarkRecord.recordType:
-      return mapBuilt(fetchEarmarksBatch(uuids: uuids, context: context))
+      return mapBuilt(fetchEarmarksBatch(ids: ids, context: context))
     case EarmarkBudgetItemRecord.recordType:
-      return mapBuilt(fetchEarmarkBudgetItemsBatch(uuids: uuids, context: context))
+      return mapBuilt(fetchEarmarkBudgetItemsBatch(ids: ids, context: context))
     case InvestmentValueRecord.recordType:
-      return mapBuilt(fetchInvestmentValuesBatch(uuids: uuids, context: context))
+      return mapBuilt(fetchInvestmentValuesBatch(ids: ids, context: context))
     case CSVImportProfileRecord.recordType:
-      return mapBuilt(fetchCSVImportProfilesBatch(uuids: uuids, context: context))
+      return mapBuilt(fetchCSVImportProfilesBatch(ids: ids, context: context))
     case ImportRuleRecord.recordType:
-      return mapBuilt(fetchImportRulesBatch(uuids: uuids, context: context))
+      return mapBuilt(fetchImportRulesBatch(ids: ids, context: context))
     default:
       logger.warning(
         "Unknown recordType '\(recordType, privacy: .public)' in batch lookup — skipping"
@@ -123,71 +124,75 @@ extension ProfileDataSyncHandler {
   //
   // `#Predicate` requires a concrete model type, so each type gets its own
   // tiny batch fetcher. They're all the same shape: IN-predicate over
-  // `uuids` against `id`.
+  // `ids` against `id`. SwiftData's `#Predicate` macro requires
+  // `[UUID].contains(_:)` (Array, not Set) — the equivalent
+  // `Set<UUID>.contains` silently returns no matches at runtime, so the
+  // batch fetcher would treat every record as "deleted locally" and the
+  // upload would never happen.
 
-  private func fetchAccountsBatch(uuids: Set<UUID>, context: ModelContext) -> [AccountRecord] {
+  private func fetchAccountsBatch(ids: [UUID], context: ModelContext) -> [AccountRecord] {
     Self.fetchOrLog(
-      FetchDescriptor<AccountRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      FetchDescriptor<AccountRecord>(predicate: #Predicate { ids.contains($0.id) }),
       context: context)
   }
 
   private func fetchTransactionsBatch(
-    uuids: Set<UUID>, context: ModelContext
+    ids: [UUID], context: ModelContext
   ) -> [TransactionRecord] {
     Self.fetchOrLog(
-      FetchDescriptor<TransactionRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      FetchDescriptor<TransactionRecord>(predicate: #Predicate { ids.contains($0.id) }),
       context: context)
   }
 
   private func fetchTransactionLegsBatch(
-    uuids: Set<UUID>, context: ModelContext
+    ids: [UUID], context: ModelContext
   ) -> [TransactionLegRecord] {
     Self.fetchOrLog(
-      FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      FetchDescriptor<TransactionLegRecord>(predicate: #Predicate { ids.contains($0.id) }),
       context: context)
   }
 
-  private func fetchCategoriesBatch(uuids: Set<UUID>, context: ModelContext) -> [CategoryRecord] {
+  private func fetchCategoriesBatch(ids: [UUID], context: ModelContext) -> [CategoryRecord] {
     Self.fetchOrLog(
-      FetchDescriptor<CategoryRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      FetchDescriptor<CategoryRecord>(predicate: #Predicate { ids.contains($0.id) }),
       context: context)
   }
 
-  private func fetchEarmarksBatch(uuids: Set<UUID>, context: ModelContext) -> [EarmarkRecord] {
+  private func fetchEarmarksBatch(ids: [UUID], context: ModelContext) -> [EarmarkRecord] {
     Self.fetchOrLog(
-      FetchDescriptor<EarmarkRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      FetchDescriptor<EarmarkRecord>(predicate: #Predicate { ids.contains($0.id) }),
       context: context)
   }
 
   private func fetchEarmarkBudgetItemsBatch(
-    uuids: Set<UUID>, context: ModelContext
+    ids: [UUID], context: ModelContext
   ) -> [EarmarkBudgetItemRecord] {
     Self.fetchOrLog(
-      FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      FetchDescriptor<EarmarkBudgetItemRecord>(predicate: #Predicate { ids.contains($0.id) }),
       context: context)
   }
 
   private func fetchInvestmentValuesBatch(
-    uuids: Set<UUID>, context: ModelContext
+    ids: [UUID], context: ModelContext
   ) -> [InvestmentValueRecord] {
     Self.fetchOrLog(
-      FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      FetchDescriptor<InvestmentValueRecord>(predicate: #Predicate { ids.contains($0.id) }),
       context: context)
   }
 
   private func fetchCSVImportProfilesBatch(
-    uuids: Set<UUID>, context: ModelContext
+    ids: [UUID], context: ModelContext
   ) -> [CSVImportProfileRecord] {
     Self.fetchOrLog(
-      FetchDescriptor<CSVImportProfileRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      FetchDescriptor<CSVImportProfileRecord>(predicate: #Predicate { ids.contains($0.id) }),
       context: context)
   }
 
   private func fetchImportRulesBatch(
-    uuids: Set<UUID>, context: ModelContext
+    ids: [UUID], context: ModelContext
   ) -> [ImportRuleRecord] {
     Self.fetchOrLog(
-      FetchDescriptor<ImportRuleRecord>(predicate: #Predicate { uuids.contains($0.id) }),
+      FetchDescriptor<ImportRuleRecord>(predicate: #Predicate { ids.contains($0.id) }),
       context: context)
   }
 
