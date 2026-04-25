@@ -24,18 +24,22 @@ struct WelcomeView: View {
 
   @State private var phase: ProfileStore.WelcomePhase = .landing
   @State private var bannerDismissed = false
+  @State private var hasEverDownloaded = false
 
   @State private var name = ""
   @State private var currencyCode = Locale.current.currency?.identifier ?? "AUD"
   @State private var financialYearStartMonth = 7
 
   var body: some View {
+    let received = syncCoordinator.progress.recordsReceivedThisSession
     let state = WelcomeStateResolver.resolve(
       phase: phase,
       cloudProfilesCount: profileStore.cloudProfiles.count,
       iCloudAvailability: profileStore.iCloudAvailability,
       indexFetchedAtLeastOnce: syncCoordinator.profileIndexFetchedAtLeastOnce,
-      bannerDismissed: bannerDismissed
+      bannerDismissed: bannerDismissed,
+      recordsReceivedThisSession: received,
+      wasDownloading: hasEverDownloaded
     )
 
     content(for: state)
@@ -67,6 +71,9 @@ struct WelcomeView: View {
       .onChange(of: phase) { _, newValue in
         profileStore.welcomePhase = newValue
       }
+      .onChange(of: received) { _, newValue in
+        if newValue > 0 { hasEverDownloaded = true }
+      }
   }
 
   @ViewBuilder
@@ -74,8 +81,8 @@ struct WelcomeView: View {
     switch state {
     case .heroChecking:
       heroView(state: .checking)
-    case .heroDownloading:
-      heroView(state: .checking)
+    case .heroDownloading(let count):
+      heroDownloadingView(received: count)
     case .heroNoneFound:
       heroView(state: .noneFound)
     case .heroOff(let reason):
@@ -105,6 +112,14 @@ struct WelcomeView: View {
     WelcomeHero(
       primaryAction: beginCreate,
       footer: { ICloudStatusLine(state: state) }
+    )
+  }
+
+  @ViewBuilder
+  private func heroDownloadingView(received: Int) -> some View {
+    WelcomeHero(
+      primaryAction: beginCreate,
+      footer: { ICloudStatusLine(state: .checkingActive(received: received)) }
     )
   }
 
