@@ -24,6 +24,7 @@ struct InstrumentPickerSheet: View {
             set: { store.updateQuery($0) }
           )
         )
+        .accessibilityIdentifier("instrumentPicker.searchField")
         .navigationTitle("Choose \(String(localized: label))")
         #if os(iOS)
           .navigationBarTitleDisplayMode(.inline)
