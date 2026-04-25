@@ -41,6 +41,19 @@ final class InstrumentPickerStore {
     }
   }
 
+  func select(_ result: InstrumentSearchResult) async -> Instrument? {
+    if result.isRegistered { return result.instrument }
+    do {
+      try await registry.registerStock(result.instrument)
+      return result.instrument
+    } catch {
+      logger.error(
+        "Stock registration failed: \(error, privacy: .public)")
+      self.error = "Couldn't add \(result.instrument.displayLabel)."
+      return nil
+    }
+  }
+
   private func runSearch() async {
     isLoading = true
     defer { isLoading = false }
