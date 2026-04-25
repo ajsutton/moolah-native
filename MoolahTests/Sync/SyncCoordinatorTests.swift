@@ -189,4 +189,30 @@ struct SyncCoordinatorTests {
     let coordinator = SyncCoordinator(containerManager: manager)
     #expect(coordinator.progress.phase == .idle)
   }
+
+  @Test
+  func beginFetchingChangesEntersReceivingPhase() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+    coordinator.beginFetchingChanges()
+    #expect(coordinator.progress.phase == .receiving)
+  }
+
+  @Test
+  func endFetchingChangesSettlesProgress() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+    coordinator.beginFetchingChanges()
+    coordinator.endFetchingChanges()
+    #expect(coordinator.progress.phase == .upToDate)
+  }
+
+  @Test
+  func endFetchingChangesAdvancesLastSettledAt() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+    coordinator.beginFetchingChanges()
+    coordinator.endFetchingChanges()
+    #expect(coordinator.progress.lastSettledAt != nil)
+  }
 }

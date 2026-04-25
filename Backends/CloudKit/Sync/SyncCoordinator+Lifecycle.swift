@@ -141,6 +141,7 @@ extension SyncCoordinator {
         }
       }
     }
+    progress.didStart(iCloudAvailable: iCloudAvailability == .available)
   }
 
   func stop() {
@@ -167,6 +168,7 @@ extension SyncCoordinator {
     profileIndexFetchedAtLeastOnce = false
     fetchSessionTouchedIndexZone = false
     logger.info("Stopped unified sync coordinator")
+    progress.didStop()
   }
 
   // MARK: - Pending Changes
@@ -263,6 +265,7 @@ extension SyncCoordinator {
     fetchSessionChangedTypes.removeAll()
     fetchSessionIndexChanged = false
     fetchSessionTouchedIndexZone = false
+    progress.beginReceiving()
   }
 
   /// Called from the delegate zone-fetch event path. If the zone ID is the
@@ -297,6 +300,7 @@ extension SyncCoordinator {
       logger.info("profileIndexFetchedAtLeastOnce flipped true")
     }
     fetchSessionTouchedIndexZone = false
+    progress.endReceiving(now: Date())
   }
 
   private func flushFetchSessionChanges() {
