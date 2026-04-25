@@ -74,6 +74,27 @@ struct InstrumentPickerStoreTests {
     #expect(registered.allSatisfy { $0.kind == .fiatCurrency })
   }
 
+  @Test("kinds: [.fiatCurrency] excludes registered stocks")
+  func kindsFilterExcludesStocks() async throws {
+    let (backend, _) = try TestBackend.create()
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    try await backend.instrumentRegistry.registerStock(bhp)
+    let service = InstrumentSearchService(
+      registry: backend.instrumentRegistry,
+      cryptoSearchClient: StubCryptoSearchClient(),
+      resolutionClient: StubTokenResolutionClient(),
+      stockValidator: StubStockTickerValidator()
+    )
+    let store = InstrumentPickerStore(
+      searchService: service,
+      registry: backend.instrumentRegistry,
+      kinds: [.fiatCurrency]
+    )
+    await store.start()
+    #expect(store.results.allSatisfy { $0.instrument.kind == .fiatCurrency })
+    #expect(store.results.contains { $0.instrument.id == "ASX:BHP.AX" } == false)
+  }
+
   @Test("select of unregistered Yahoo stock auto-registers and returns")
   func selectStockAutoRegisters() async throws {
     let (backend, _) = try TestBackend.create()
