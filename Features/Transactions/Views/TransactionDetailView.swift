@@ -2,6 +2,14 @@
 
 import SwiftUI
 
+// Common fiat instruments available to leg-instrument resolution when the
+// instrument registry has not yet loaded (e.g. on first render). Registered
+// stocks/crypto are supplied by `knownInstruments` loaded via `.task`.
+private let commonFiatInstruments: [Instrument] = [
+  "AUD", "CAD", "CHF", "CNY", "EUR", "GBP", "HKD", "INR", "JPY", "KRW",
+  "MXN", "NOK", "NZD", "SEK", "SGD", "USD", "ZAR",
+].map { Instrument.fiat(code: $0) }
+
 // Refactor pending — see https://github.com/ajsutton/moolah-native/issues/309
 // for the planned subview extraction that lets these suppressions go away.
 // swiftlint:disable:next type_body_length
@@ -14,11 +22,13 @@ struct TransactionDetailView: View {
   let showRecurrence: Bool
   let viewingAccountId: UUID?
   let supportsComplexTransactions: Bool
-  let availableInstruments: [Instrument]
   let onUpdate: (Transaction) -> Void
   let onDelete: (UUID) -> Void
 
+  @Environment(ProfileSession.self) private var session
+
   @State private var draft: TransactionDraft
+  @State private var knownInstruments: [Instrument] = []
   @State private var showDeleteConfirmation = false
   @State private var showPayeeSuggestions = false
   @State private var payeeHighlightedIndex: Int?
@@ -123,9 +133,6 @@ struct TransactionDetailView: View {
     showRecurrence: Bool = false,
     viewingAccountId: UUID? = nil,
     supportsComplexTransactions: Bool = false,
-    availableInstruments: [Instrument] = CurrencyPicker.commonCurrencyCodes.map {
-      Instrument.fiat(code: $0)
-    },
     onUpdate: @escaping (Transaction) -> Void,
     onDelete: @escaping (UUID) -> Void
   ) {
@@ -137,7 +144,6 @@ struct TransactionDetailView: View {
     self.showRecurrence = showRecurrence
     self.viewingAccountId = viewingAccountId
     self.supportsComplexTransactions = supportsComplexTransactions
-    self.availableInstruments = availableInstruments
     self.onUpdate = onUpdate
     self.onDelete = onDelete
 
@@ -277,6 +283,9 @@ struct TransactionDetailView: View {
             draft.legDrafts[i].categoryId = nil
           }
         }
+      }
+      .task {
+        knownInstruments = (try? await session.instrumentRegistry?.all()) ?? []
       }
       .confirmationDialog(
         "Delete Transaction",
@@ -633,20 +642,24 @@ struct TransactionDetailView: View {
     }
   }
 
+  private func resolveInstrument(_ id: String) -> Instrument {
+    knownInstruments.first { $0.id == id } ?? Instrument.fiat(code: id)
+  }
+
   @ViewBuilder
   private func legCurrencyPicker(at index: Int) -> some View {
-    Picker(
-      "Currency",
-      selection: Binding(
-        get: { draft.legDrafts[index].instrumentId ?? legInstrumentId(at: index) },
-        set: { draft.legDrafts[index].instrumentId = $0 }
-      )
-    ) {
-      ForEach(availableInstruments) { instrument in
-        Text("\(instrument.id) — \(CurrencyPicker.currencyName(for: instrument.id))")
-          .tag(instrument.id)
-      }
-    }
+    let binding = Binding<Instrument>(
+      get: {
+        let id = draft.legDrafts[index].instrumentId ?? legInstrumentId(at: index)
+        return resolveInstrument(id)
+      },
+      set: { draft.legDrafts[index].instrumentId = $0.id }
+    )
+    InstrumentPickerField(
+      label: "Asset",
+      kinds: Set(Instrument.Kind.allCases),
+      selection: binding
+    )
     .accessibilityLabel("Currency for sub-transaction \(index + 1)")
     .accessibilityHint("Overrides the currency derived from the account")
   }
@@ -1015,10 +1028,11 @@ struct TransactionDetailView: View {
   }
 
   private func saveIfValid() {
+    let allKnownInstruments = knownInstruments + commonFiatInstruments
     guard
       let updated = draft.toTransaction(
         id: transaction.id, accounts: accounts, earmarks: earmarks,
-        availableInstruments: availableInstruments)
+        availableInstruments: allKnownInstruments)
     else { return }
     onUpdate(updated)
   }
