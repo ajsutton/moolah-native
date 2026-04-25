@@ -256,6 +256,75 @@ struct SyncProgressTests {
     #expect(progress.phase == .degraded(.quotaExceeded))
   }
 
+  // MARK: - Start / Stop
+
+  @Test
+  func didStartWithICloudAvailableEntersConnecting() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.didStart(iCloudAvailable: true)
+    #expect(progress.phase == .connecting)
+  }
+
+  @Test
+  func didStartWithICloudUnavailableStaysIdle() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.didStart(iCloudAvailable: false)
+    #expect(progress.phase == .idle)
+  }
+
+  @Test
+  func didStartDoesNotOverrideDegraded() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.setQuotaExceeded(true)
+    progress.didStart(iCloudAvailable: true)
+    #expect(progress.phase == .degraded(.quotaExceeded))
+  }
+
+  @Test
+  func didStopReturnsToIdle() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.beginReceiving()
+    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
+    try #require(progress.phase == .upToDate)
+    progress.didStop()
+    #expect(progress.phase == .idle)
+  }
+
+  @Test
+  func didStopClearsLastSettledAt() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.beginReceiving()
+    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
+    progress.didStop()
+    #expect(progress.lastSettledAt == nil)
+  }
+
+  @Test
+  func didStopClearsPersistedLastSettledAt() throws {
+    // Verify via observable behaviour: after didStop(), a fresh SyncProgress
+    // with the same UserDefaults hydrates nothing — meaning the persisted
+    // entry was removed.
+    let defaults = try makeDefaults()
+    let progress = SyncProgress(userDefaults: defaults)
+    progress.beginReceiving()
+    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
+    progress.didStop()
+    let rehydrated = SyncProgress(userDefaults: defaults)
+    #expect(rehydrated.lastSettledAt == nil)
+  }
+
+  @Test
+  func lastSettledAtRoundTripsThroughUserDefaults() throws {
+    let defaults = try makeDefaults()
+    let original = SyncProgress(userDefaults: defaults)
+    original.beginReceiving()
+    let stamp = Date(timeIntervalSince1970: 5_000_000)
+    original.endReceiving(now: stamp)
+
+    let rehydrated = SyncProgress(userDefaults: defaults)
+    #expect(rehydrated.lastSettledAt == stamp)
+  }
+
   // MARK: - Helpers
 
   private func makeDefaults() throws -> UserDefaults {

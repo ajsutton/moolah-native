@@ -157,6 +157,30 @@ final class SyncProgress {
     }
   }
 
+  // MARK: - Start / Stop
+
+  /// `SyncCoordinator.start()` finished priming `CKSyncEngine`. Enters
+  /// `.connecting` when iCloud is available; stays `.idle` otherwise.
+  /// Preserves any active degraded reason.
+  func didStart(iCloudAvailable: Bool) {
+    if case .degraded = phase { return }
+    phase = iCloudAvailable ? .connecting : .idle
+  }
+
+  /// `SyncCoordinator.stop()` — discard all session state and the
+  /// persisted timestamp so a fresh sign-in starts clean.
+  func didStop() {
+    phase = .idle
+    recordsReceivedThisSession = 0
+    pendingUploads = 0
+    moreComing = false
+    quotaExceeded = false
+    iCloudUnavailableReason = nil
+    retrying = false
+    lastSettledAt = nil
+    persistLastSettledAt()
+  }
+
   // MARK: - Persistence
 
   /// Single settle transition — used by both the `didFetchChanges` settle
