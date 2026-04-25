@@ -322,7 +322,8 @@ extension SyncCoordinator: CKSyncEngineDelegate {
       .deleteRecord(recordID))
     if !hasPendingDelete {
       logger.info(
-        "Record \(recordID.recordName) deleted locally before batch — queueing server deletion")
+        "Record \(recordID.recordName, privacy: .public) deleted locally before batch — queueing server deletion"
+      )
       syncEngine.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
     }
   }
