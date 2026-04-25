@@ -78,7 +78,7 @@ struct CreateProfileFormView: View {
       Section {
         // `.onSubmit` is attached to the TextField directly (not the
         // parent `Form`) so Return inside the DisclosureGroup's
-        // CurrencyPicker / FY-month Picker doesn't also fire `submit`.
+        // Currency / FY-month Picker doesn't also fire `submit`.
         TextField(String(localized: "Name"), text: $name)
           .focused($focus, equals: .name)
           .submitLabel(.done)
@@ -103,7 +103,7 @@ struct CreateProfileFormView: View {
     DisclosureGroup(
       String(localized: "Advanced", comment: "Form advanced disclosure")
     ) {
-      CurrencyPicker(selection: $currency)
+      InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
       Picker(
         String(localized: "Financial year starts", comment: "Form FY month"),
         selection: $financialYearStartMonth

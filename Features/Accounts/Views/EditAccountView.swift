@@ -90,7 +90,7 @@ struct EditAccountView: View {
         }
       }
       if supportsComplexTransactions {
-        CurrencyPicker(selection: $currency)
+        InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
       }
       LabeledContent("Current Balance") {
         currentBalanceDisplay

@@ -46,4 +46,26 @@ struct InstrumentSymbolTests {
     let stock = Instrument.stock(ticker: "AAPL", exchange: "NASDAQ", name: "Apple")
     #expect(stock.currencySymbol == nil)
   }
+
+  @Test("localizedName falls back to the ISO code for unknown currencies")
+  func localizedNameFallback() {
+    #expect(Instrument.localizedName(for: "ZZZ") == "ZZZ")
+  }
+
+  @Test("localizedName resolves common currencies")
+  func localizedNameKnown() {
+    // Don't assert exact strings — locale-dependent. Just assert non-empty,
+    // not equal to the ISO code (a real localised name was returned).
+    let name = Instrument.localizedName(for: "USD")
+    #expect(!name.isEmpty)
+    #expect(name != "USD")
+  }
+
+  @Test("commonFiatCodes contains the major currencies and is alphabetically sorted")
+  func commonFiatCodesAreSorted() {
+    let codes = Instrument.commonFiatCodes
+    #expect(codes == codes.sorted())
+    #expect(codes.contains("USD"))
+    #expect(codes.contains("AUD"))
+  }
 }

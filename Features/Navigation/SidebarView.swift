@@ -81,6 +81,7 @@ struct SidebarView: View {
             Label("New Account", systemImage: "plus")
           }
           .help("Create new account")
+          .accessibilityIdentifier(UITestIdentifiers.Sidebar.newAccountButton)
         }
       }
     #endif

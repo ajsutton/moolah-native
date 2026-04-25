@@ -107,7 +107,7 @@ struct ProfileFormView: View {
   private var cloudKitSection: some View {
     Section("Profile") {
       TextField("Name", text: $cloudName)
-      CurrencyPicker(selection: $cloudCurrency)
+      InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $cloudCurrency)
       Picker("Financial Year Starts", selection: $cloudFinancialYearStartMonth) {
         ForEach(1...12, id: \.self) { month in
           if month <= Self.monthNames.count {

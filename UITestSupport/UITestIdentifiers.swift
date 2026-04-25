@@ -30,6 +30,9 @@ public enum UITestIdentifiers {
     public static func view(_ name: String) -> String {
       "sidebar.view.\(name)"
     }
+
+    /// "New Account" toolbar button in the sidebar (macOS only).
+    public static let newAccountButton = "sidebar.toolbar.newAccount"
   }
 
   public enum TransactionList {
@@ -106,6 +109,33 @@ public enum UITestIdentifiers {
     public static let bannerDismissAction = "welcome.banner.dismiss"
     /// "Open System Settings" link on the iCloud-off hero chip.
     public static let iCloudOffSystemSettingsLink = "welcome.off.systemSettings"
+  }
+
+  public enum InstrumentPicker {
+    /// The field button that opens the instrument picker sheet. The qualifier
+    /// is the currently selected instrument's id (e.g. `"AUD"`, `"USD"`).
+    /// When the selection changes the identifier changes, so the post-condition
+    /// check after a pick uses the *new* id.
+    public static func field(_ id: String) -> String {
+      "instrumentPicker.field.\(id)"
+    }
+
+    /// The sheet root presented by `InstrumentPickerSheet`. Appears when the
+    /// field button is tapped and the CloudKit-backed picker is active.
+    public static let sheet = "instrumentPicker.sheet"
+
+    /// The search text field inside the macOS picker popover.
+    /// On macOS the picker uses a custom VStack layout with an explicit
+    /// `TextField` (so the search input is accessible by identifier) rather
+    /// than `.searchable` on a `NavigationStack`, which does not surface an
+    /// accessible search field inside a popover.
+    public static let searchField = "instrumentPicker.searchField"
+
+    /// A row inside the sheet for a specific instrument. The qualifier is the
+    /// instrument id (e.g. `"USD"`).
+    public static func row(_ id: String) -> String {
+      "instrumentPicker.row.\(id)"
+    }
   }
 
   public enum Autocomplete {

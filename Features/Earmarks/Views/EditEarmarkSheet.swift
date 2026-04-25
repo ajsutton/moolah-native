@@ -54,7 +54,7 @@ struct EditEarmarkSheet: View {
         TextField("Name", text: $name)
           .accessibilityLabel("Earmark name")
         if supportsComplexTransactions {
-          CurrencyPicker(selection: $currency)
+          InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
         } else {
           LabeledContent("Currency") {
             Text(earmark.instrument.displayLabel)

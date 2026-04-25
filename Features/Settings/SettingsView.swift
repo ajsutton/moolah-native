@@ -280,9 +280,19 @@ struct SettingsView: View {
 
     switch profile.backendType {
     case .moolah:
-      MoolahProfileDetailView(profile: profile, authStore: authStore, session: session)
+      if let session {
+        MoolahProfileDetailView(profile: profile, authStore: authStore, session: session)
+          .environment(session)
+      } else {
+        MoolahProfileDetailView(profile: profile, authStore: authStore, session: session)
+      }
     case .remote:
-      CustomServerProfileDetailView(profile: profile, authStore: authStore, session: session)
+      if let session {
+        CustomServerProfileDetailView(profile: profile, authStore: authStore, session: session)
+          .environment(session)
+      } else {
+        CustomServerProfileDetailView(profile: profile, authStore: authStore, session: session)
+      }
     case .cloudKit:
       CloudKitProfileDetailView(profile: profile)
     }
@@ -291,5 +301,6 @@ struct SettingsView: View {
 }
 
 // `MoolahProfileDetailView`, `CustomServerProfileDetailView`,
-// `CloudKitProfileDetailView`, `ProfileAuthStatusView`, and the iOS
-// `ShareSheetView` live in `MoolahProfileDetailView.swift`.
+// `CloudKitProfileDetailView`, and `ProfileAuthStatusView` live in
+// `MoolahProfileDetailView.swift`. `ShareSheetView` lives in
+// `SettingsView+iOS.swift`.

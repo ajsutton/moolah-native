@@ -41,7 +41,7 @@ struct MoolahProfileDetailView: View {
       }
 
       Section("Settings") {
-        CurrencyPicker(selection: $currency)
+        InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
           .onChange(of: currency) { _, _ in saveChanges() }
 
         Picker("Financial Year Starts", selection: $financialYearStartMonth) {
@@ -142,7 +142,7 @@ struct CustomServerProfileDetailView: View {
       }
 
       Section("Settings") {
-        CurrencyPicker(selection: $currency)
+        InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
           .onChange(of: currency) { _, _ in saveChanges() }
 
         Picker("Financial Year Starts", selection: $financialYearStartMonth) {
@@ -258,7 +258,7 @@ struct CloudKitProfileDetailView: View {
       }
 
       Section("Settings") {
-        CurrencyPicker(selection: $currency)
+        InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
           .onChange(of: currency) { _, _ in saveChanges() }
 
         Picker("Financial Year Starts", selection: $financialYearStartMonth) {
@@ -382,18 +382,3 @@ struct ProfileAuthStatusView: View {
     .accessibilityElement(children: .combine)
   }
 }
-
-#if os(iOS)
-  /// Wraps UIActivityViewController for presenting a share sheet with a file URL.
-  struct ShareSheetView: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-      UIActivityViewController(activityItems: [url], applicationActivities: nil)
-    }
-
-    func updateUIViewController(
-      _ uiViewController: UIActivityViewController, context: Context
-    ) {}
-  }
-#endif

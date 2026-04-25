@@ -14,23 +14,34 @@ extension ProfileSession {
     let exchangeRate: ExchangeRateService
     let stockPrice: StockPriceService
     let cryptoPrice: CryptoPriceService
+    let yahooPriceFetcher: any YahooFinancePriceFetcher
+    let coinGeckoApiKey: String?
   }
 
   /// Builds the fiat/stock/crypto market-data services used throughout the
   /// profile session. Standalone helper so `ProfileSession.init` can build
   /// and assign the trio in one step.
   static func makeMarketDataServices() -> MarketDataServices {
-    MarketDataServices(
+    let yahooClient = YahooFinanceClient()
+    let apiKeyStore = KeychainStore(
+      service: "com.moolah.api-keys", account: "coingecko", synchronizable: true
+    )
+    let coinGeckoApiKey = try? apiKeyStore.restoreString()
+    return MarketDataServices(
       exchangeRate: ExchangeRateService(client: FrankfurterClient()),
-      stockPrice: StockPriceService(client: YahooFinanceClient()),
-      cryptoPrice: Self.makeCryptoPriceService()
+      stockPrice: StockPriceService(client: yahooClient),
+      cryptoPrice: Self.makeCryptoPriceService(coinGeckoApiKey: coinGeckoApiKey),
+      yahooPriceFetcher: yahooClient,
+      coinGeckoApiKey: coinGeckoApiKey
     )
   }
 
   /// Builds the crypto-price service with its configured clients
   /// (CoinGecko when an API key is present in the keychain, plus
   /// CryptoCompare and Binance as fallbacks) and the token resolver.
-  static func makeCryptoPriceService() -> CryptoPriceService {
+  static func makeCryptoPriceService(
+    coinGeckoApiKey: String?
+  ) -> CryptoPriceService {
     let cryptoCompareClient = CryptoCompareClient()
     let binanceClient = BinanceClient { date in
       let usdtMapping = CryptoProviderMapping(
@@ -43,11 +54,6 @@ extension ProfileSession {
         return Decimal(1)
       }
     }
-
-    let apiKeyStore = KeychainStore(
-      service: "com.moolah.api-keys", account: "coingecko", synchronizable: true
-    )
-    let coinGeckoApiKey = try? apiKeyStore.restoreString()
 
     var priceClients: [CryptoPriceClient] = []
     if let coinGeckoApiKey, !coinGeckoApiKey.isEmpty {
@@ -149,23 +155,36 @@ extension ProfileSession {
   struct RegistryWiring {
     let registry: (any InstrumentRegistryRepository)?
     let cryptoTokenStore: CryptoTokenStore?
+    let searchService: InstrumentSearchService?
   }
 
   /// Resolves the optional instrument-registry wiring for a profile. Returns
-  /// a populated pair for CloudKit profiles; returns nils for Remote/moolah
+  /// a populated bundle for CloudKit profiles; returns nils for Remote/moolah
   /// profiles so settings views can gate on `cryptoTokenStore != nil`.
   @MainActor
   static func makeRegistryWiring(
-    backend: BackendProvider, cryptoPriceService: CryptoPriceService
+    backend: BackendProvider,
+    cryptoPriceService: CryptoPriceService,
+    yahooPriceFetcher: any YahooFinancePriceFetcher,
+    coinGeckoApiKey: String?
   ) -> RegistryWiring {
     guard let cloudBackend = backend as? CloudKitBackend else {
-      return RegistryWiring(registry: nil, cryptoTokenStore: nil)
+      return RegistryWiring(registry: nil, cryptoTokenStore: nil, searchService: nil)
     }
     let store = CryptoTokenStore(
       registry: cloudBackend.instrumentRegistry,
       cryptoPriceService: cryptoPriceService)
+    let searchService = InstrumentSearchService(
+      registry: cloudBackend.instrumentRegistry,
+      cryptoSearchClient: CoinGeckoSearchClient(apiKey: coinGeckoApiKey),
+      resolutionClient: CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey),
+      stockValidator: YahooFinanceStockTickerValidator(priceFetcher: yahooPriceFetcher)
+    )
     return RegistryWiring(
-      registry: cloudBackend.instrumentRegistry, cryptoTokenStore: store)
+      registry: cloudBackend.instrumentRegistry,
+      cryptoTokenStore: store,
+      searchService: searchService
+    )
   }
 
   /// Bundle of the per-profile domain stores. Returned from
@@ -220,6 +239,50 @@ extension ProfileSession {
       auth: auth, account: account, category: category, earmark: earmark,
       transaction: transaction, analysis: analysis, investment: investment,
       reporting: reporting
+    )
+  }
+
+  /// Bundle of the full CSV import pipeline: the `ImportStore`, the import-rule
+  /// store, and the three folder-watch pieces. Returned from `makeImportPipeline`
+  /// so `ProfileSession.init` can assign all five fields in one step.
+  struct ImportPipeline {
+    let importStore: ImportStore
+    let importRuleStore: ImportRuleStore
+    let preferences: ImportPreferences
+    let scanner: FolderScanService
+    let watcher: FolderWatchService
+  }
+
+  /// Builds the complete CSV import pipeline for a profile: staging store,
+  /// import rules, folder watch, and wires the delete-after-import default
+  /// closure into `ImportStore` before returning.
+  static func makeImportPipeline(
+    backend: BackendProvider,
+    profileId: UUID,
+    logger: Logger
+  ) -> ImportPipeline {
+    let stagingDirectory = ProfileSession.importStagingDirectory(for: profileId)
+    let importStore = Self.makeImportStore(
+      backend: backend,
+      stagingDirectory: stagingDirectory,
+      profileId: profileId,
+      logger: logger
+    )
+    let importRuleStore = ImportRuleStore(repository: backend.importRules)
+    let folderWatch = Self.makeFolderWatch(
+      stagingDirectory: stagingDirectory,
+      profileId: profileId,
+      importStore: importStore
+    )
+    importStore.folderWatchDeleteAfterImport = { [preferences = folderWatch.preferences] in
+      preferences.deleteAfterImportFolderDefault
+    }
+    return ImportPipeline(
+      importStore: importStore,
+      importRuleStore: importRuleStore,
+      preferences: folderWatch.preferences,
+      scanner: folderWatch.scanner,
+      watcher: folderWatch.watcher
     )
   }
 
