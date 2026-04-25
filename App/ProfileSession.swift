@@ -23,6 +23,7 @@ final class ProfileSession: Identifiable {
   let cryptoPriceService: CryptoPriceService
   let instrumentRegistry: (any InstrumentRegistryRepository)?
   let cryptoTokenStore: CryptoTokenStore?
+  let instrumentSearchService: InstrumentSearchService?
   let importStore: ImportStore
   let importRuleStore: ImportRuleStore
   let importPreferences: ImportPreferences
@@ -67,9 +68,14 @@ final class ProfileSession: Identifiable {
     self.backend = backend
 
     let registryWiring = Self.makeRegistryWiring(
-      backend: backend, cryptoPriceService: services.cryptoPrice)
+      backend: backend,
+      cryptoPriceService: services.cryptoPrice,
+      yahooPriceFetcher: services.yahooPriceFetcher,
+      coinGeckoApiKey: services.coinGeckoApiKey
+    )
     self.instrumentRegistry = registryWiring.registry
     self.cryptoTokenStore = registryWiring.cryptoTokenStore
+    self.instrumentSearchService = registryWiring.searchService
     let stores = Self.makeDomainStores(profile: profile, backend: backend)
     self.authStore = stores.auth
     self.accountStore = stores.account
@@ -83,29 +89,13 @@ final class ProfileSession: Identifiable {
     // CSV import: ImportStore owns the pipeline orchestration; the staging
     // store lives per-profile on disk so pending/failed files follow the
     // profile across app restarts.
-    let stagingDirectory = ProfileSession.importStagingDirectory(for: profile.id)
-    self.importStore = Self.makeImportStore(
-      backend: backend,
-      stagingDirectory: stagingDirectory,
-      profileId: profile.id,
-      logger: logger
-    )
-    self.importRuleStore = ImportRuleStore(repository: backend.importRules)
-    let folderWatch = Self.makeFolderWatch(
-      stagingDirectory: stagingDirectory,
-      profileId: profile.id,
-      importStore: self.importStore
-    )
-    self.importPreferences = folderWatch.preferences
-    self.folderScanner = folderWatch.scanner
-    self.folderWatcher = folderWatch.watcher
-    // Wire the folder-watch delete-after-import default into ImportStore so a
-    // `.folderWatch` ingest honours it even when the matched profile's own
-    // `deleteAfterImport` is off.
-    let preferences = folderWatch.preferences
-    self.importStore.folderWatchDeleteAfterImport = { [preferences] in
-      preferences.deleteAfterImportFolderDefault
-    }
+    let importPipeline = Self.makeImportPipeline(
+      backend: backend, profileId: profile.id, logger: logger)
+    self.importStore = importPipeline.importStore
+    self.importRuleStore = importPipeline.importRuleStore
+    self.importPreferences = importPipeline.preferences
+    self.folderScanner = importPipeline.scanner
+    self.folderWatcher = importPipeline.watcher
 
     wireCrossStoreSideEffects()
     registerWithSyncCoordinator(syncCoordinator)
