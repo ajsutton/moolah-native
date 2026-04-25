@@ -74,6 +74,8 @@ struct WelcomeView: View {
     switch state {
     case .heroChecking:
       heroView(state: .checking)
+    case .heroDownloading:
+      heroView(state: .checking)
     case .heroNoneFound:
       heroView(state: .noneFound)
     case .heroOff(let reason):

@@ -6,6 +6,7 @@ import Foundation
 enum WelcomeStateResolver {
   enum ResolvedState: Equatable {
     case heroChecking
+    case heroDownloading(received: Int)
     case heroNoneFound
     case heroOff(reason: ICloudAvailability.UnavailableReason)
     case form(banner: BannerKind?)
@@ -23,7 +24,9 @@ enum WelcomeStateResolver {
     cloudProfilesCount: Int,
     iCloudAvailability: ICloudAvailability,
     indexFetchedAtLeastOnce: Bool,
-    bannerDismissed: Bool
+    bannerDismissed: Bool,
+    recordsReceivedThisSession: Int = 0,
+    wasDownloading: Bool = false
   ) -> ResolvedState {
     switch phase {
     case .pickingProfile:
@@ -39,7 +42,9 @@ enum WelcomeStateResolver {
       return resolveLanding(
         cloudProfilesCount: cloudProfilesCount,
         iCloudAvailability: iCloudAvailability,
-        indexFetchedAtLeastOnce: indexFetchedAtLeastOnce
+        indexFetchedAtLeastOnce: indexFetchedAtLeastOnce,
+        recordsReceivedThisSession: recordsReceivedThisSession,
+        wasDownloading: wasDownloading
       )
     }
   }
@@ -60,7 +65,9 @@ enum WelcomeStateResolver {
   private static func resolveLanding(
     cloudProfilesCount: Int,
     iCloudAvailability: ICloudAvailability,
-    indexFetchedAtLeastOnce: Bool
+    indexFetchedAtLeastOnce: Bool,
+    recordsReceivedThisSession: Int,
+    wasDownloading: Bool
   ) -> ResolvedState {
     if cloudProfilesCount == 1 {
       return .autoActivateSingle
@@ -71,6 +78,12 @@ enum WelcomeStateResolver {
     if case .unavailable(let reason) = iCloudAvailability {
       return .heroOff(reason: reason)
     }
-    return indexFetchedAtLeastOnce ? .heroNoneFound : .heroChecking
+    if indexFetchedAtLeastOnce {
+      return .heroNoneFound
+    }
+    if wasDownloading || recordsReceivedThisSession > 0 {
+      return .heroDownloading(received: recordsReceivedThisSession)
+    }
+    return .heroChecking
   }
 }

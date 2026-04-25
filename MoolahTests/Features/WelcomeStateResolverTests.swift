@@ -125,4 +125,63 @@ struct WelcomeStateResolverTests {
     )
     #expect(state == .picker)
   }
+
+  // MARK: - heroDownloading
+
+  @Test
+  func resolveLandingShowsDownloadingWhenRecordsArrive() {
+    let result = WelcomeStateResolver.resolve(
+      phase: .landing,
+      cloudProfilesCount: 0,
+      iCloudAvailability: .available,
+      indexFetchedAtLeastOnce: false,
+      bannerDismissed: false,
+      recordsReceivedThisSession: 47,
+      wasDownloading: false
+    )
+    #expect(result == .heroDownloading(received: 47))
+  }
+
+  @Test
+  func resolveLandingStaysCheckingWhenNoRecordsYet() {
+    let result = WelcomeStateResolver.resolve(
+      phase: .landing,
+      cloudProfilesCount: 0,
+      iCloudAvailability: .available,
+      indexFetchedAtLeastOnce: false,
+      bannerDismissed: false,
+      recordsReceivedThisSession: 0,
+      wasDownloading: false
+    )
+    #expect(result == .heroChecking)
+  }
+
+  @Test
+  func resolveLandingStaysDownloadingOnceSeen() {
+    // wasDownloading sticks even if the counter is zero (between sessions).
+    let result = WelcomeStateResolver.resolve(
+      phase: .landing,
+      cloudProfilesCount: 0,
+      iCloudAvailability: .available,
+      indexFetchedAtLeastOnce: false,
+      bannerDismissed: false,
+      recordsReceivedThisSession: 0,
+      wasDownloading: true
+    )
+    #expect(result == .heroDownloading(received: 0))
+  }
+
+  @Test
+  func resolveLandingICloudOffOverridesDownloading() {
+    let result = WelcomeStateResolver.resolve(
+      phase: .landing,
+      cloudProfilesCount: 0,
+      iCloudAvailability: .unavailable(reason: .notSignedIn),
+      indexFetchedAtLeastOnce: false,
+      bannerDismissed: false,
+      recordsReceivedThisSession: 47,
+      wasDownloading: true
+    )
+    #expect(result == .heroOff(reason: .notSignedIn))
+  }
 }
