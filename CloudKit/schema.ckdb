@@ -1,131 +1,206 @@
 DEFINE SCHEMA
 
-    RECORD TYPE CD_AccountRecord (
-        CD_entityName           STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_id                   STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_instrumentId         STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_isHidden             INT64 QUERYABLE SORTABLE,
-        CD_name                 STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_position             INT64 QUERYABLE SORTABLE,
-        CD_type                 STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_usesPositionTracking INT64 QUERYABLE SORTABLE,
-        "___createTime"         TIMESTAMP,
-        "___createdBy"          REFERENCE,
-        "___etag"               STRING,
-        "___modTime"            TIMESTAMP,
-        "___modifiedBy"         REFERENCE,
-        "___recordID"           REFERENCE,
-        GRANT WRITE TO "_creator",
-        GRANT CREATE TO "_icloud",
-        GRANT READ TO "_world"
-    );
-
-    RECORD TYPE CD_EarmarkBudgetItemRecord (
-        CD_amount       INT64 QUERYABLE SORTABLE,
-        CD_categoryId   STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_earmarkId    STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_entityName   STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_id           STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_instrumentId STRING QUERYABLE SEARCHABLE SORTABLE,
+    RECORD TYPE AccountRecord (
         "___createTime" TIMESTAMP,
         "___createdBy"  REFERENCE,
         "___etag"       STRING,
         "___modTime"    TIMESTAMP,
         "___modifiedBy" REFERENCE,
-        "___recordID"   REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        instrumentId    STRING QUERYABLE SEARCHABLE SORTABLE,
+        isHidden        INT64 QUERYABLE SORTABLE,
+        name            STRING QUERYABLE SEARCHABLE SORTABLE,
+        position        INT64 QUERYABLE SORTABLE,
+        type            STRING QUERYABLE SEARCHABLE SORTABLE,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud",
         GRANT READ TO "_world"
     );
 
-    RECORD TYPE CD_EarmarkRecord (
-        CD_entityName                STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_id                        STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_instrumentId              STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_isHidden                  INT64 QUERYABLE SORTABLE,
-        CD_name                      STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_position                  INT64 QUERYABLE SORTABLE,
-        CD_savingsTarget             INT64 QUERYABLE SORTABLE,
-        CD_savingsTargetInstrumentId STRING QUERYABLE SEARCHABLE SORTABLE,
-        "___createTime"              TIMESTAMP,
-        "___createdBy"               REFERENCE,
-        "___etag"                    STRING,
-        "___modTime"                 TIMESTAMP,
-        "___modifiedBy"              REFERENCE,
-        "___recordID"                REFERENCE,
-        GRANT WRITE TO "_creator",
-        GRANT CREATE TO "_icloud",
-        GRANT READ TO "_world"
-    );
-
-    RECORD TYPE CD_InstrumentRecord (
-        CD_decimals     INT64 QUERYABLE SORTABLE,
-        CD_entityName   STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_id           STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_kind         STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_name         STRING QUERYABLE SEARCHABLE SORTABLE,
+    RECORD TYPE CategoryRecord (
         "___createTime" TIMESTAMP,
         "___createdBy"  REFERENCE,
         "___etag"       STRING,
         "___modTime"    TIMESTAMP,
         "___modifiedBy" REFERENCE,
-        "___recordID"   REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        name            STRING QUERYABLE SEARCHABLE SORTABLE,
+        parentId        STRING QUERYABLE SEARCHABLE SORTABLE,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud",
         GRANT READ TO "_world"
     );
 
-    RECORD TYPE CD_ProfileRecord (
-        CD_createdAt               TIMESTAMP QUERYABLE SORTABLE,
-        CD_currencyCode            STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_entityName              STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_financialYearStartMonth INT64 QUERYABLE SORTABLE,
-        CD_id                      STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_label                   STRING QUERYABLE SEARCHABLE SORTABLE,
+    RECORD TYPE CSVImportProfileRecord (
         "___createTime"            TIMESTAMP,
         "___createdBy"             REFERENCE,
         "___etag"                  STRING,
         "___modTime"               TIMESTAMP,
         "___modifiedBy"            REFERENCE,
-        "___recordID"              REFERENCE,
+        "___recordID"              REFERENCE QUERYABLE,
+        accountId                  STRING QUERYABLE SEARCHABLE SORTABLE,
+        columnRoleRawValuesEncoded STRING QUERYABLE SEARCHABLE SORTABLE,
+        createdAt                  TIMESTAMP QUERYABLE SORTABLE,
+        dateFormatRawValue         STRING QUERYABLE SEARCHABLE SORTABLE,
+        deleteAfterImport          INT64 QUERYABLE SORTABLE,
+        filenamePattern            STRING QUERYABLE SEARCHABLE SORTABLE,
+        headerSignature            STRING QUERYABLE SEARCHABLE SORTABLE,
+        lastUsedAt                 TIMESTAMP QUERYABLE SORTABLE,
+        parserIdentifier           STRING QUERYABLE SEARCHABLE SORTABLE,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud",
         GRANT READ TO "_world"
     );
 
-    RECORD TYPE CD_TransactionLegRecord (
-        CD_accountId     STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_categoryId    STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_earmarkId     STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_entityName    STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_id            STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_instrumentId  STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_quantity      INT64 QUERYABLE SORTABLE,
-        CD_sortOrder     INT64 QUERYABLE SORTABLE,
-        CD_transactionId STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_type          STRING QUERYABLE SEARCHABLE SORTABLE,
-        "___createTime"  TIMESTAMP,
-        "___createdBy"   REFERENCE,
-        "___etag"        STRING,
-        "___modTime"     TIMESTAMP,
-        "___modifiedBy"  REFERENCE,
-        "___recordID"    REFERENCE,
-        GRANT WRITE TO "_creator",
-        GRANT CREATE TO "_icloud",
-        GRANT READ TO "_world"
-    );
-
-    RECORD TYPE CD_TransactionRecord (
-        CD_date         TIMESTAMP QUERYABLE SORTABLE,
-        CD_entityName   STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_id           STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_payee        STRING QUERYABLE SEARCHABLE SORTABLE,
+    RECORD TYPE EarmarkBudgetItemRecord (
         "___createTime" TIMESTAMP,
         "___createdBy"  REFERENCE,
         "___etag"       STRING,
         "___modTime"    TIMESTAMP,
         "___modifiedBy" REFERENCE,
-        "___recordID"   REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        amount          INT64 QUERYABLE SORTABLE,
+        categoryId      STRING QUERYABLE SEARCHABLE SORTABLE,
+        earmarkId       STRING QUERYABLE SEARCHABLE SORTABLE,
+        instrumentId    STRING QUERYABLE SEARCHABLE SORTABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE EarmarkRecord (
+        "___createTime"           TIMESTAMP,
+        "___createdBy"            REFERENCE,
+        "___etag"                 STRING,
+        "___modTime"              TIMESTAMP,
+        "___modifiedBy"           REFERENCE,
+        "___recordID"             REFERENCE QUERYABLE,
+        instrumentId              STRING QUERYABLE SEARCHABLE SORTABLE,
+        isHidden                  INT64 QUERYABLE SORTABLE,
+        name                      STRING QUERYABLE SEARCHABLE SORTABLE,
+        position                  INT64 QUERYABLE SORTABLE,
+        savingsEndDate            TIMESTAMP QUERYABLE SORTABLE,
+        savingsStartDate          TIMESTAMP QUERYABLE SORTABLE,
+        savingsTarget             INT64 QUERYABLE SORTABLE,
+        savingsTargetInstrumentId STRING QUERYABLE SEARCHABLE SORTABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE ImportRuleRecord (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        accountScope   STRING QUERYABLE SEARCHABLE SORTABLE,
+        actionsJSON     BYTES,
+        conditionsJSON  BYTES,
+        enabled         INT64 QUERYABLE SORTABLE,
+        matchMode       STRING QUERYABLE SEARCHABLE SORTABLE,
+        name            STRING QUERYABLE SEARCHABLE SORTABLE,
+        position        INT64 QUERYABLE SORTABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE InstrumentRecord (
+        "___createTime"     TIMESTAMP,
+        "___createdBy"      REFERENCE,
+        "___etag"           STRING,
+        "___modTime"        TIMESTAMP,
+        "___modifiedBy"     REFERENCE,
+        "___recordID"       REFERENCE QUERYABLE,
+        binanceSymbol       STRING QUERYABLE SEARCHABLE SORTABLE,
+        chainId             INT64 QUERYABLE SORTABLE,
+        coingeckoId         STRING QUERYABLE SEARCHABLE SORTABLE,
+        contractAddress     STRING QUERYABLE SEARCHABLE SORTABLE,
+        cryptocompareSymbol STRING QUERYABLE SEARCHABLE SORTABLE,
+        decimals            INT64 QUERYABLE SORTABLE,
+        exchange            STRING QUERYABLE SEARCHABLE SORTABLE,
+        kind                STRING QUERYABLE SEARCHABLE SORTABLE,
+        name                STRING QUERYABLE SEARCHABLE SORTABLE,
+        ticker              STRING QUERYABLE SEARCHABLE SORTABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE InvestmentValueRecord (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        accountId       STRING QUERYABLE SEARCHABLE SORTABLE,
+        date            TIMESTAMP QUERYABLE SORTABLE,
+        instrumentId    STRING QUERYABLE SEARCHABLE SORTABLE,
+        value           INT64 QUERYABLE SORTABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE ProfileRecord (
+        "___createTime"         TIMESTAMP,
+        "___createdBy"          REFERENCE,
+        "___etag"               STRING,
+        "___modTime"            TIMESTAMP,
+        "___modifiedBy"         REFERENCE,
+        "___recordID"           REFERENCE QUERYABLE,
+        createdAt               TIMESTAMP QUERYABLE SORTABLE,
+        currencyCode            STRING QUERYABLE SEARCHABLE SORTABLE,
+        financialYearStartMonth INT64 QUERYABLE SORTABLE,
+        label                   STRING QUERYABLE SEARCHABLE SORTABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE TransactionLegRecord (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        accountId       STRING QUERYABLE SEARCHABLE SORTABLE,
+        categoryId      STRING QUERYABLE SEARCHABLE SORTABLE,
+        earmarkId       STRING QUERYABLE SEARCHABLE SORTABLE,
+        instrumentId    STRING QUERYABLE SEARCHABLE SORTABLE,
+        quantity        INT64 QUERYABLE SORTABLE,
+        sortOrder       INT64 QUERYABLE SORTABLE,
+        transactionId   STRING QUERYABLE SEARCHABLE SORTABLE,
+        type            STRING QUERYABLE SEARCHABLE SORTABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE TransactionRecord (
+        "___createTime"               TIMESTAMP,
+        "___createdBy"                REFERENCE,
+        "___etag"                     STRING,
+        "___modTime"                  TIMESTAMP,
+        "___modifiedBy"               REFERENCE,
+        "___recordID"                 REFERENCE QUERYABLE,
+        date                          TIMESTAMP QUERYABLE SORTABLE,
+        importOriginBankReference     STRING QUERYABLE SEARCHABLE SORTABLE,
+        importOriginImportSessionId   STRING QUERYABLE SEARCHABLE SORTABLE,
+        importOriginImportedAt        TIMESTAMP QUERYABLE SORTABLE,
+        importOriginParserIdentifier  STRING QUERYABLE SEARCHABLE SORTABLE,
+        importOriginRawAmount         STRING QUERYABLE SEARCHABLE SORTABLE,
+        importOriginRawBalance        STRING QUERYABLE SEARCHABLE SORTABLE,
+        importOriginRawDescription    STRING QUERYABLE SEARCHABLE SORTABLE,
+        importOriginSourceFilename    STRING QUERYABLE SEARCHABLE SORTABLE,
+        notes                         STRING QUERYABLE SEARCHABLE SORTABLE,
+        payee                         STRING QUERYABLE SEARCHABLE SORTABLE,
+        recurEvery                    INT64 QUERYABLE SORTABLE,
+        recurPeriod                   STRING QUERYABLE SEARCHABLE SORTABLE,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud",
         GRANT READ TO "_world"
@@ -137,7 +212,7 @@ DEFINE SCHEMA
         "___etag"       STRING,
         "___modTime"    TIMESTAMP,
         "___modifiedBy" REFERENCE,
-        "___recordID"   REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
         roles           LIST<INT64>,
         GRANT WRITE TO "_creator",
         GRANT READ TO "_world"
