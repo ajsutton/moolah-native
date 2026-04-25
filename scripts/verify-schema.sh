@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+#
+# Manual local convenience: imports CloudKit/schema.ckdb to the developer's
+# personal Development container with --validate. Not run in CI.
+#
+# Use this when you want belt-and-braces verification before opening a PR
+# that touches the schema. It will surface any cktool import-side issues
+# (syntax, conflicts with what your Dev currently has) that the static
+# additivity check cannot catch.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=scripts/cloudkit-config.sh
@@ -7,26 +15,11 @@ source "$HERE/cloudkit-config.sh"
 cloudkit_require_env
 
 [ -f "$CLOUDKIT_SCHEMA_FILE" ] \
-    || cloudkit_fail "$CLOUDKIT_SCHEMA_FILE is missing. Run 'just export-schema' to create it."
+    || cloudkit_fail "$CLOUDKIT_SCHEMA_FILE is missing."
 
-tmp="$(mktemp -t cloudkit-schema)"
-trap 'rm -f "$tmp"' EXIT
-
-cloudkit_cktool export-schema \
+cloudkit_cktool import-schema \
     --environment development \
-    --output-file "$tmp"
+    --validate \
+    --file "$CLOUDKIT_SCHEMA_FILE"
 
-if diff -u "$CLOUDKIT_SCHEMA_FILE" "$tmp"; then
-    echo "CloudKit development schema matches $CLOUDKIT_SCHEMA_FILE"
-    exit 0
-fi
-
-cat >&2 <<EOF
-
-error: CloudKit development schema has drifted from $CLOUDKIT_SCHEMA_FILE.
-
-Run 'just export-schema' and commit the updated file. If the drift was caused
-by experimentation in CloudKit Console, use 'Reset Development Environment'
-there and re-run.
-EOF
-exit 1
+echo "$CLOUDKIT_SCHEMA_FILE imported into your CloudKit Development container."

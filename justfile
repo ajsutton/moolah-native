@@ -142,10 +142,15 @@ build-ios: generate
         -destination "platform=iOS Simulator,name=$SIM" \
         CODE_SIGNING_ALLOWED=NO
 
-# Regenerate Moolah.xcodeproj from project.yml (run after editing project.yml)
+# Regenerate the CloudKit wire-struct layer from CloudKit/schema.ckdb,
+# then regenerate Moolah.xcodeproj from project.yml.
 generate:
     #!/usr/bin/env bash
     set -euo pipefail
+
+    swift run --package-path tools/CKDBSchemaGen ckdb-schema-gen generate \
+        --input CloudKit/schema.ckdb \
+        --output Backends/CloudKit/Sync/Generated
 
     # Provide default
     export CODE_SIGN_STYLE="${CODE_SIGN_STYLE:-Automatic}"
@@ -158,6 +163,13 @@ generate:
     else
         xcodegen generate
     fi
+
+# Verify CloudKit/schema.ckdb is additive over the committed Production
+# baseline. Pure-text check: no CloudKit calls. Run in CI on every PR.
+check-schema-additive:
+    swift run --package-path tools/CKDBSchemaGen ckdb-schema-gen check-additive \
+        --proposed CloudKit/schema.ckdb \
+        --baseline CloudKit/schema-prod-baseline.ckdb
 
 # Sync code signing certificates (runs Match)
 certificates:
@@ -206,14 +218,28 @@ open:
 export-schema:
     bash scripts/export-schema.sh
 
-# Verify the CloudKit Development schema matches CloudKit/schema.ckdb.
-# Non-destructive; exits non-zero on drift. Run by CI on every PR.
+# Manual local convenience: import CloudKit/schema.ckdb to the developer's
+# personal Development container with --validate. Not used by CI.
 verify-schema:
     bash scripts/verify-schema.sh
 
-# Promote CloudKit/schema.ckdb to the Production environment.
-# Intended to run from the TestFlight workflow before each upload. Production
-# schema changes are one-way — to run locally, re-run with CKTOOL_PROMOTE_FORCE=1.
+# Manual local convenience: Apple's recommended Production-equivalent
+# dry-run. Resets your personal Dev container to match Prod, then imports
+# the proposed schema with --validate. DESTRUCTIVE — set
+# CKTOOL_ALLOW_DEV_RESET=1 to confirm. Not used by CI.
+dryrun-promote-schema:
+    bash scripts/dryrun-promote-schema.sh
+
+# Release-tag CI: verifies the live Production schema matches
+# CloudKit/schema-prod-baseline.ckdb before promote-schema runs.
+verify-prod-matches-baseline:
+    bash scripts/verify-prod-matches-baseline.sh
+
+# Release-tag CI: imports CloudKit/schema.ckdb to Production with --validate,
+# refreshes CloudKit/schema-prod-baseline.ckdb from live Production, and
+# opens a follow-up PR with the new baseline. Run via the testflight workflow.
+# Production schema changes are one-way — to run locally, re-run with
+# CKTOOL_PROMOTE_FORCE=1.
 promote-schema:
     #!/usr/bin/env bash
     set -euo pipefail

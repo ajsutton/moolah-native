@@ -10,21 +10,24 @@ extension ProfileRecord: CloudKitRecordConvertible {
     let recordID = CKRecord.ID(
       recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
-    record["label"] = label as CKRecordValue
-    record["currencyCode"] = currencyCode as CKRecordValue
-    record["financialYearStartMonth"] = financialYearStartMonth as CKRecordValue
-    record["createdAt"] = createdAt as CKRecordValue
+    ProfileRecordCloudKitFields(
+      createdAt: createdAt,
+      currencyCode: currencyCode,
+      financialYearStartMonth: Int64(financialYearStartMonth),
+      label: label
+    ).write(to: record)
     return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> ProfileRecord? {
     guard let id = ckRecord.recordID.uuid else { return nil }
+    let fields = ProfileRecordCloudKitFields(from: ckRecord)
     return ProfileRecord(
       id: id,
-      label: ckRecord["label"] as? String ?? "",
-      currencyCode: ckRecord["currencyCode"] as? String ?? "",
-      financialYearStartMonth: ckRecord["financialYearStartMonth"] as? Int ?? 7,
-      createdAt: ckRecord["createdAt"] as? Date ?? Date()
+      label: fields.label ?? "",
+      currencyCode: fields.currencyCode ?? "",
+      financialYearStartMonth: Int(fields.financialYearStartMonth ?? 7),
+      createdAt: fields.createdAt ?? Date()
     )
   }
 }

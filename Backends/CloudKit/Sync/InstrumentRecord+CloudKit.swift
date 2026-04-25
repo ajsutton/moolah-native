@@ -9,38 +9,39 @@ extension InstrumentRecord: CloudKitRecordConvertible {
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(recordName: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
-    record["kind"] = kind as CKRecordValue
-    record["name"] = name as CKRecordValue
-    record["decimals"] = decimals as CKRecordValue
-    if let ticker { record["ticker"] = ticker as CKRecordValue }
-    if let exchange { record["exchange"] = exchange as CKRecordValue }
-    if let chainId { record["chainId"] = chainId as CKRecordValue }
-    if let contractAddress { record["contractAddress"] = contractAddress as CKRecordValue }
-    if let coingeckoId { record["coingeckoId"] = coingeckoId as CKRecordValue }
-    if let cryptocompareSymbol {
-      record["cryptocompareSymbol"] = cryptocompareSymbol as CKRecordValue
-    }
-    if let binanceSymbol { record["binanceSymbol"] = binanceSymbol as CKRecordValue }
+    InstrumentRecordCloudKitFields(
+      binanceSymbol: binanceSymbol,
+      chainId: chainId.map(Int64.init),
+      coingeckoId: coingeckoId,
+      contractAddress: contractAddress,
+      cryptocompareSymbol: cryptocompareSymbol,
+      decimals: Int64(decimals),
+      exchange: exchange,
+      kind: kind,
+      name: name,
+      ticker: ticker
+    ).write(to: record)
     return record
   }
 
-  /// InstrumentRecord is keyed by `recordName` (e.g. "AUD", "ASX:BHP") rather than a
-  /// UUID. `recordName` is always non-nil on a valid `CKRecord.ID`, so this never
-  /// returns `nil`; the Optional return type exists to keep the protocol signature
-  /// uniform with UUID-keyed conformers.
+  /// `InstrumentRecord` is keyed by `recordName` (e.g. `"AUD"`, `"ASX:BHP"`)
+  /// rather than a UUID. `recordName` is always non-nil on a valid
+  /// `CKRecord.ID`, so this never returns `nil`; the Optional return type
+  /// exists to keep the protocol signature uniform with UUID-keyed conformers.
   static func fieldValues(from ckRecord: CKRecord) -> InstrumentRecord? {
-    InstrumentRecord(
+    let fields = InstrumentRecordCloudKitFields(from: ckRecord)
+    return InstrumentRecord(
       id: ckRecord.recordID.recordName,
-      kind: ckRecord["kind"] as? String ?? "fiatCurrency",
-      name: ckRecord["name"] as? String ?? "",
-      decimals: ckRecord["decimals"] as? Int ?? 2,
-      ticker: ckRecord["ticker"] as? String,
-      exchange: ckRecord["exchange"] as? String,
-      chainId: ckRecord["chainId"] as? Int,
-      contractAddress: ckRecord["contractAddress"] as? String,
-      coingeckoId: ckRecord["coingeckoId"] as? String,
-      cryptocompareSymbol: ckRecord["cryptocompareSymbol"] as? String,
-      binanceSymbol: ckRecord["binanceSymbol"] as? String
+      kind: fields.kind ?? "fiatCurrency",
+      name: fields.name ?? "",
+      decimals: fields.decimals.map(Int.init) ?? 2,
+      ticker: fields.ticker,
+      exchange: fields.exchange,
+      chainId: fields.chainId.map(Int.init),
+      contractAddress: fields.contractAddress,
+      coingeckoId: fields.coingeckoId,
+      cryptocompareSymbol: fields.cryptocompareSymbol,
+      binanceSymbol: fields.binanceSymbol
     )
   }
 }

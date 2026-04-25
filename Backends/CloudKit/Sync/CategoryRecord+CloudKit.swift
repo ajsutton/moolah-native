@@ -10,17 +10,20 @@ extension CategoryRecord: CloudKitRecordConvertible {
     let recordID = CKRecord.ID(
       recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
-    record["name"] = name as CKRecordValue
-    if let parentId { record["parentId"] = parentId.uuidString as CKRecordValue }
+    CategoryRecordCloudKitFields(
+      name: name,
+      parentId: parentId?.uuidString
+    ).write(to: record)
     return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> CategoryRecord? {
     guard let id = ckRecord.recordID.uuid else { return nil }
+    let fields = CategoryRecordCloudKitFields(from: ckRecord)
     return CategoryRecord(
       id: id,
-      name: ckRecord["name"] as? String ?? "",
-      parentId: (ckRecord["parentId"] as? String).flatMap { UUID(uuidString: $0) }
+      name: fields.name ?? "",
+      parentId: fields.parentId.flatMap(UUID.init(uuidString:))
     )
   }
 }
