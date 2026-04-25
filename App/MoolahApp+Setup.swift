@@ -129,6 +129,35 @@ extension MoolahApp {
     LegacyZoneCleanup.performIfNeeded()
   }
 
+  /// Apply any `SyncProgress` mutations required by a UI test seed.
+  ///
+  /// Called immediately after `SyncCoordinator` is created and before
+  /// `configureSyncCoordinator` wires any real CloudKit observers. Under
+  /// `--ui-testing` the coordinator is never started, so these mutations
+  /// are the only writes that drive the progress state seen by the test.
+  ///
+  /// Seeds that do not need custom progress state are a no-op.
+  static func applySeedProgressFixtures(seed: UITestSeed?, coordinator: SyncCoordinator) {
+    guard let seed else { return }
+    switch seed {
+    case .tradeBaseline:
+      break
+    case .welcomeDownloading:
+      coordinator.progress.beginReceiving()
+      coordinator.progress.recordReceived(modifications: 1234, deletions: 0)
+    case .sidebarFooterUpToDate:
+      coordinator.progress.beginReceiving()
+      coordinator.progress.endReceiving(now: Date(timeIntervalSinceNow: -300))
+    case .sidebarFooterReceiving:
+      coordinator.progress.beginReceiving()
+      coordinator.progress.recordReceived(modifications: 1234, deletions: 0)
+    case .sidebarFooterSending:
+      coordinator.progress.updatePendingUploads(12)
+      coordinator.progress.beginReceiving()
+      coordinator.progress.endReceiving(now: Date())
+    }
+  }
+
   /// Configure the automation service locator. On macOS this also sets up
   /// the AppleScript scripting context.
   static func configureAutomationService(

@@ -33,6 +33,23 @@ public enum UITestSeed: String, CaseIterable, Sendable {
   /// Two `ProfileRecord`s seeded in the index. Drives the multi-profile
   /// picker (`WelcomeView` state 5).
   case welcomeMultipleCloudProfiles
+
+  /// Forces the Welcome screen into `.heroDownloading(received: 1234)` so
+  /// the new "Found data on iCloud · 1,234 records downloaded" copy and
+  /// the de-emphasized "Create a new profile" button can be verified.
+  case welcomeDownloading
+
+  /// Drives `SyncProgress` into `.upToDate` with a `lastSettledAt` ~5
+  /// minutes in the past so the macOS sidebar footer renders
+  /// "Up to date · Updated 5 minutes ago".
+  case sidebarFooterUpToDate
+
+  /// Drives `SyncProgress` into `.receiving` with a non-zero count so the
+  /// sidebar footer renders the receive label and count.
+  case sidebarFooterReceiving
+
+  /// Drives `SyncProgress` into `.sending` with `pendingUploads = 12`.
+  case sidebarFooterSending
 }
 
 /// Fixtures for the first-run Welcome seeds. Defined here so both the

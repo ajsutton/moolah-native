@@ -49,6 +49,11 @@ enum UITestSeedHydrator {
         into: manager
       )
       return nil
+    case .welcomeDownloading, .sidebarFooterUpToDate, .sidebarFooterReceiving,
+      .sidebarFooterSending:
+      // These seeds only exercise SyncProgress states; the profile itself is
+      // the same minimal fixture used by tradeBaseline.
+      return try hydrateTradeBaseline(into: manager)
     }
   }
 
