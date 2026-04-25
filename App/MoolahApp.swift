@@ -56,6 +56,7 @@ struct MoolahApp: App {
     syncCoordinator = coordinator
     uiTestingProfileId = setup.uiTestingProfileId
     isUITesting = uiTestingSeed != nil
+    Self.applySeedProgressFixtures(seed: uiTestingSeed, coordinator: coordinator)
 
     // UI-testing mode must NOT read the user's real UserDefaults; remote
     // profiles are persisted there by `ProfileStore.loadFromDefaults` and

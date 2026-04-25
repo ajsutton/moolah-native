@@ -129,6 +129,50 @@ extension MoolahApp {
     LegacyZoneCleanup.performIfNeeded()
   }
 
+  /// Apply any `SyncProgress` mutations required by a UI test seed.
+  ///
+  /// Called immediately after `SyncCoordinator` is created and before
+  /// `configureSyncCoordinator` wires any real CloudKit observers. Under
+  /// `--ui-testing` the coordinator is never started, so these mutations
+  /// are the only writes that drive the progress state seen by the test.
+  ///
+  /// Seeds that do not need custom progress state are a no-op.
+  static func applySeedProgressFixtures(seed: UITestSeed?, coordinator: SyncCoordinator) {
+    guard let seed else { return }
+    switch seed {
+    case .tradeBaseline,
+      .welcomeEmpty,
+      .welcomeSingleCloudProfile,
+      .welcomeMultipleCloudProfiles:
+      break
+    case .welcomeDownloading:
+      // Override iCloudAvailability to `.available` so the WelcomeStateResolver
+      // can reach `.heroDownloading`. Without this, `SyncCoordinator.init` sets
+      // `.unavailable(.entitlementsMissing)` in the test environment (no real
+      // iCloud entitlement), which routes the resolver to `.heroOff` first.
+      coordinator.applyICloudAvailability(.available)
+      coordinator.progress.beginReceiving()
+      coordinator.progress.recordReceived(modifications: 1234, deletions: 0)
+    case .sidebarFooterUpToDate:
+      // Override iCloudAvailability so the progress calls are not no-ops.
+      // `SyncCoordinator.init` sets `.unavailable(.entitlementsMissing)` in
+      // test environments (no real iCloud entitlement), which keeps the
+      // progress phase as `.degraded` and blocks `beginReceiving` / `endReceiving`.
+      coordinator.applyICloudAvailability(.available)
+      coordinator.progress.beginReceiving()
+      coordinator.progress.endReceiving(now: Date(timeIntervalSinceNow: -300))
+    case .sidebarFooterReceiving:
+      coordinator.applyICloudAvailability(.available)
+      coordinator.progress.beginReceiving()
+      coordinator.progress.recordReceived(modifications: 1234, deletions: 0)
+    case .sidebarFooterSending:
+      coordinator.applyICloudAvailability(.available)
+      coordinator.progress.updatePendingUploads(12)
+      coordinator.progress.beginReceiving()
+      coordinator.progress.endReceiving(now: Date())
+    }
+  }
+
   /// Configure the automation service locator. On macOS this also sets up
   /// the AppleScript scripting context.
   static func configureAutomationService(

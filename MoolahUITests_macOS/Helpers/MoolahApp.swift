@@ -51,6 +51,14 @@ final class MoolahApp {
   /// System dialogs (alerts, delete confirmations, error sheets).
   var dialogs: DialogScreen { DialogScreen(app: self) }
 
+  /// First-run hero surface (`WelcomeHero`). Available when the app is in
+  /// a welcome / first-run state (no active profile yet).
+  var welcomeHero: WelcomeHeroScreen { WelcomeHeroScreen(app: self) }
+
+  /// Sidebar sync-progress footer (`SyncProgressFooter`). Available when a
+  /// profile is active and the sidebar is visible.
+  var syncFooter: SyncFooterScreen { SyncFooterScreen(app: self) }
+
   // MARK: - Single element resolver
 
   /// All identifier lookups in the driver layer go through this method, by

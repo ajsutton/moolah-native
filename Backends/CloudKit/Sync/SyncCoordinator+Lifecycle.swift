@@ -133,7 +133,7 @@ extension SyncCoordinator {
         do {
           let status = try await CloudKitContainer.app.accountStatus()
           guard !Task.isCancelled else { return }
-          self?.iCloudAvailability = Self.mapAccountStatus(status)
+          self?.applyICloudAvailability(Self.mapAccountStatus(status))
         } catch {
           self?.logger.info(
             "Initial accountStatus probe threw: \(error, privacy: .public) — staying .unknown"
@@ -162,11 +162,13 @@ extension SyncCoordinator {
     // Reset availability so a subsequent `start()` re-probes. When
     // entitlements are missing the init-time `.unavailable(.entitlementsMissing)`
     // remains correct — a rebuild of the coordinator would be needed to clear it.
-    iCloudAvailability =
+    applyICloudAvailability(
       isCloudKitAvailable ? .unknown : .unavailable(reason: .entitlementsMissing)
+    )
     profileIndexFetchedAtLeastOnce = false
     fetchSessionTouchedIndexZone = false
     logger.info("Stopped unified sync coordinator")
+    progress.didStop()
   }
 
   // MARK: - Pending Changes
@@ -215,17 +217,20 @@ extension SyncCoordinator {
     let recordID = CKRecord.ID(
       recordType: recordType, uuid: id, zoneID: zoneID)
     syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+    refreshPendingUploadsMirror()
   }
 
   func queueSave(recordName: String, zoneID: CKRecordZone.ID) {
     let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID)
     syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+    refreshPendingUploadsMirror()
   }
 
   func queueDeletion(recordType: String, id: UUID, zoneID: CKRecordZone.ID) {
     let recordID = CKRecord.ID(
       recordType: recordType, uuid: id, zoneID: zoneID)
     syncEngine?.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
+    refreshPendingUploadsMirror()
   }
 
   func queueDeletion(recordName: String, zoneID: CKRecordZone.ID) {
@@ -263,6 +268,7 @@ extension SyncCoordinator {
     fetchSessionChangedTypes.removeAll()
     fetchSessionIndexChanged = false
     fetchSessionTouchedIndexZone = false
+    progress.beginReceiving()
   }
 
   /// Called from the delegate zone-fetch event path. If the zone ID is the
@@ -297,6 +303,7 @@ extension SyncCoordinator {
       logger.info("profileIndexFetchedAtLeastOnce flipped true")
     }
     fetchSessionTouchedIndexZone = false
+    progress.endReceiving(now: Date())
   }
 
   private func flushFetchSessionChanges() {

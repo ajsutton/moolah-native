@@ -8,6 +8,7 @@ import SwiftUI
 struct ICloudStatusLine: View {
   enum State: Equatable {
     case checking
+    case checkingActive(received: Int)
     case noneFound
   }
 
@@ -15,7 +16,7 @@ struct ICloudStatusLine: View {
 
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 8) {
-      if state == .checking {
+      if isActivelyChecking {
         ProgressView()
           .controlSize(.small)
           .tint(WelcomeBrandColors.lightBlue)
@@ -26,15 +27,51 @@ struct ICloudStatusLine: View {
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(label)
-    .accessibilityAddTraits(state == .checking ? .updatesFrequently : [])
+    .accessibilityAddTraits(accessibilityTraits)
+    .accessibilityIdentifier(downloadingStatusIdentifier)
   }
+
+  private var downloadingStatusIdentifier: String {
+    switch state {
+    case .checkingActive:
+      return UITestIdentifiers.Welcome.heroDownloadingStatus
+    default:
+      return ""
+    }
+  }
+
+  private var isActivelyChecking: Bool {
+    switch state {
+    case .checking, .checkingActive: return true
+    case .noneFound: return false
+    }
+  }
+
+  private var accessibilityTraits: AccessibilityTraits {
+    switch state {
+    case .checking, .checkingActive: return [.updatesFrequently]
+    case .noneFound: return []
+    }
+  }
+
+  private static let receivedCountFormatter: NumberFormatter = {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .decimal
+    return formatter
+  }()
 
   private var label: String {
     switch state {
     case .checking:
-      String(localized: "Checking iCloud for your profiles…")
+      return String(localized: "Checking iCloud for your profiles…")
+    case .checkingActive(let received):
+      let receivedString =
+        Self.receivedCountFormatter.string(from: NSNumber(value: received))
+        ?? "\(received)"
+      return String(
+        localized: "Found data on iCloud · \(receivedString) records downloaded")
     case .noneFound:
-      String(localized: "No profiles in iCloud yet.")
+      return String(localized: "No profiles in iCloud yet.")
     }
   }
 }
@@ -71,4 +108,12 @@ struct ICloudStatusLine: View {
   }
   .frame(width: 520, height: 180)
   .dynamicTypeSize(.accessibility5)
+}
+
+#Preview("Downloading") {
+  ZStack {
+    WelcomeBrandColors.space.ignoresSafeArea()
+    ICloudStatusLine(state: .checkingActive(received: 1234)).padding()
+  }
+  .frame(width: 360, height: 100)
 }

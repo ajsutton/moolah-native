@@ -69,6 +69,9 @@ struct SidebarView: View {
       async let earmarksLoad: Void = earmarkStore.load()
       _ = await (accountsLoad, earmarksLoad)
     }
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+      SyncProgressFooter()
+    }
     #if os(macOS)
       .toolbar {
         ToolbarItem(placement: .primaryAction) {

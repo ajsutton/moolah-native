@@ -34,6 +34,14 @@ extension SyncCoordinator {
     let preExtractedSystemFields: [(String, Data)] = changes.modifications
       .map { ($0.record.recordID.recordName, $0.record.encodedSystemFields) }
 
+    // Hop to main to update SyncProgress with this batch's counts.
+    // Settled state is tracked separately via endFetchingChanges.
+    let modCount = changes.modifications.count
+    let delCount = changes.deletions.count
+    await MainActor.run {
+      self.accumulateProgressCounts(modifications: modCount, deletions: delCount)
+    }
+
     let allZones = Set(savedByZone.keys).union(deletedByZone.keys)
     for zoneID in allZones {
       let saved = savedByZone[zoneID] ?? []
@@ -288,10 +296,34 @@ extension SyncCoordinator {
   ) {
     let hasQuotaErrors = sentChanges.failedRecordSaves.contains { $0.error.code == .quotaExceeded }
     if hasQuotaErrors {
-      isQuotaExceeded = true
+      applyQuotaState(true)
     } else if !sentChanges.failedRecordSaves.isEmpty || !sentChanges.savedRecords.isEmpty {
       // Only clear if we actually processed records (not an empty event)
-      isQuotaExceeded = false
+      applyQuotaState(false)
     }
+    refreshPendingUploadsMirror()
+  }
+
+  /// Routes batch totals into `progress`. Internal so unit tests can drive
+  /// the counter without constructing a `CKSyncEngine.Event` value.
+  @MainActor
+  func accumulateProgressCounts(modifications: Int, deletions: Int) {
+    progress.recordReceived(modifications: modifications, deletions: deletions)
+  }
+
+  /// Single setter for the quota-exceeded flag and its `progress` mirror.
+  /// Replaces direct writes to `isQuotaExceeded` from the send path.
+  @MainActor
+  func applyQuotaState(_ exceeded: Bool) {
+    isQuotaExceeded = exceeded
+    progress.setQuotaExceeded(exceeded)
+  }
+
+  /// Pushes the live `pendingRecordZoneChanges.count` into `progress`.
+  /// Called after every send event and after queueing changes.
+  @MainActor
+  func refreshPendingUploadsMirror() {
+    let count = syncEngine?.state.pendingRecordZoneChanges.count ?? 0
+    progress.updatePendingUploads(count)
   }
 }

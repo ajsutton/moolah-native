@@ -180,4 +180,124 @@ struct SyncCoordinatorTests {
   }
 
   // MARK: - Stuck Fetch Flag
+
+  // MARK: - Progress wiring
+
+  @Test
+  func coordinatorExposesSyncProgress() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(
+      containerManager: manager, isCloudKitAvailable: true)
+    #expect(coordinator.progress.phase == .idle)
+  }
+
+  @Test
+  func beginFetchingChangesEntersReceivingPhase() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(
+      containerManager: manager, isCloudKitAvailable: true)
+    coordinator.beginFetchingChanges()
+    #expect(coordinator.progress.phase == .receiving)
+  }
+
+  @Test
+  func endFetchingChangesSettlesProgress() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(
+      containerManager: manager, isCloudKitAvailable: true)
+    coordinator.beginFetchingChanges()
+    coordinator.endFetchingChanges()
+    #expect(coordinator.progress.phase == .upToDate)
+  }
+
+  @Test
+  func endFetchingChangesAdvancesLastSettledAt() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(
+      containerManager: manager, isCloudKitAvailable: true)
+    coordinator.beginFetchingChanges()
+    coordinator.endFetchingChanges()
+    #expect(coordinator.progress.lastSettledAt != nil)
+  }
+
+  @Test
+  func fetchedRecordZoneChangesAdvancesReceivedCount() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(
+      containerManager: manager, isCloudKitAvailable: true)
+    coordinator.beginFetchingChanges()
+
+    // accumulateProgressCounts is the test seam — driving it directly avoids
+    // constructing a real CKSyncEngine.Event.FetchedRecordZoneChanges value.
+    coordinator.accumulateProgressCounts(modifications: 8, deletions: 2)
+
+    #expect(coordinator.progress.recordsReceivedThisSession == 10)
+  }
+
+  @Test
+  func quotaFlagDrivesProgressDegraded() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(
+      containerManager: manager, isCloudKitAvailable: true)
+    coordinator.applyQuotaState(true)
+    #expect(coordinator.progress.phase == .degraded(.quotaExceeded))
+  }
+
+  @Test
+  func quotaFlagClearedRestoresProgressIdle() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(
+      containerManager: manager, isCloudKitAvailable: true)
+    coordinator.applyQuotaState(true)
+    coordinator.applyQuotaState(false)
+    #expect(coordinator.progress.phase == .idle)
+  }
+
+  @Test
+  func iCloudUnavailableDrivesProgressDegraded() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+    coordinator.applyICloudAvailability(.unavailable(reason: .notSignedIn))
+    #expect(
+      coordinator.progress.phase
+        == .degraded(.iCloudUnavailable(.notSignedIn)))
+  }
+
+  @Test
+  func iCloudAvailabilityRestoredEntersConnecting() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+    coordinator.applyICloudAvailability(.unavailable(reason: .notSignedIn))
+    coordinator.applyICloudAvailability(.available)
+    #expect(coordinator.progress.phase == .connecting)
+  }
+
+  @Test
+  func iCloudAvailableFromUnknownEntersConnecting() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+    // Simulate the late-probe-completion path: iCloudAvailability starts
+    // .unknown, then resolves to .available.
+    coordinator.applyICloudAvailability(.available)
+    #expect(coordinator.progress.phase == .connecting)
+  }
+
+  @Test
+  func bumpRefetchAttemptsEntersRetrying() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(
+      containerManager: manager, isCloudKitAvailable: true)
+    coordinator.bumpRefetchAttempts()
+    #expect(coordinator.progress.phase == .degraded(.retrying))
+  }
+
+  @Test
+  func resetRefetchAttemptsClearsRetrying() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(
+      containerManager: manager, isCloudKitAvailable: true)
+    coordinator.bumpRefetchAttempts()
+    coordinator.resetRefetchAttempts()
+    #expect(coordinator.progress.phase == .idle)
+  }
 }

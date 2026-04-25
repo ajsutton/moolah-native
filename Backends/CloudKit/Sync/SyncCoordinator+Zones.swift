@@ -37,6 +37,7 @@ extension SyncCoordinator {
       // Re-queue the stored records
       if let changes = self.pendingZoneCreation.removeValue(forKey: zoneID) {
         self.syncEngine?.state.add(pendingRecordZoneChanges: changes)
+        self.refreshPendingUploadsMirror()
         self.logger.info(
           "Re-queued \(changes.count) changes after zone creation for \(zoneID.zoneName)")
       }
@@ -45,6 +46,28 @@ extension SyncCoordinator {
   }
 
   // MARK: - Account Changes
+
+  /// Single setter for iCloud availability and its `progress` mirror.
+  /// Replaces direct writes to `iCloudAvailability` from `handleAccountChange`
+  /// and `completeStart`. When transitioning to `.available` the call also
+  /// fires `progress.didStart(iCloudAvailable: true)` so the indicator
+  /// enters `.connecting` once the async availability probe resolves —
+  /// `completeStart` runs before the probe returns.
+  @MainActor
+  func applyICloudAvailability(_ availability: ICloudAvailability) {
+    let wasAvailable = iCloudAvailability == .available
+    iCloudAvailability = availability
+    let reason: ICloudAvailability.UnavailableReason?
+    if case .unavailable(let unavailableReason) = availability {
+      reason = unavailableReason
+    } else {
+      reason = nil
+    }
+    progress.setICloudUnavailable(reason: reason)
+    if availability == .available && !wasAvailable {
+      progress.didStart(iCloudAvailable: true)
+    }
+  }
 
   /// Maps a CloudKit account-change type to ``ICloudAvailability`` and
   /// applies it. Pure assignment — safe to call on every event, including
@@ -57,9 +80,9 @@ extension SyncCoordinator {
   ) {
     switch changeType {
     case .signIn, .switchAccounts:
-      iCloudAvailability = .available
+      applyICloudAvailability(.available)
     case .signOut:
-      iCloudAvailability = .unavailable(reason: .notSignedIn)
+      applyICloudAvailability(.unavailable(reason: .notSignedIn))
     @unknown default:
       logger.warning(
         "Unhandled account-change type — iCloudAvailability not updated"
@@ -208,6 +231,7 @@ extension SyncCoordinator {
       if !recordIDs.isEmpty {
         syncEngine?.state.add(
           pendingRecordZoneChanges: recordIDs.map { .saveRecord($0) })
+        refreshPendingUploadsMirror()
       }
 
     case .profileData(let profileId):
@@ -218,6 +242,7 @@ extension SyncCoordinator {
         if !recordIDs.isEmpty {
           syncEngine?.state.add(
             pendingRecordZoneChanges: recordIDs.map { .saveRecord($0) })
+          refreshPendingUploadsMirror()
         }
       }
       // System fields were cleared; if a later crash happens before the re-upload

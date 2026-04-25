@@ -17,6 +17,7 @@ extension SyncCoordinator {
   /// The attempt counter is reset by `resetRefetchAttempts()` whenever a fetch batch applies
   /// successfully.
   func scheduleRefetch() {
+    progress.setRetrying(true)
     let nextAttempt = refetchAttempts + 1
     guard let delay = Self.refetchBackoff(forAttempt: nextAttempt) else {
       logger.error(
@@ -72,6 +73,14 @@ extension SyncCoordinator {
     refetchAttempts = 0
     longRetryTask?.cancel()
     longRetryTask = nil
+    progress.setRetrying(false)
+  }
+
+  /// Test seam: bump the attempt counter and flag retrying. Production code
+  /// invokes the same effect via `scheduleRefetch()`.
+  func bumpRefetchAttempts() {
+    refetchAttempts += 1
+    progress.setRetrying(true)
   }
 
   /// Cancels any pending short-retry and long-retry tasks and resets the attempt

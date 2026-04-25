@@ -12,12 +12,15 @@ import SwiftData
 /// which keeps re-launches during driver iteration robust.
 @MainActor
 enum UITestSeedHydrator {
-  /// Seeds `manager` from the given seed and returns the resulting `Profile`.
+  /// Seeds `manager` from the given seed and returns the resulting `Profile`,
+  /// or `nil` for seeds that start without an active profile (e.g. Welcome
+  /// seeds that exercise the first-run experience before any profile is open).
   ///
   /// - Parameter seed: the named data set to hydrate.
   /// - Parameter manager: an in-memory `ProfileContainerManager` (see
   ///   `ProfileContainerManager.forTesting()`).
-  /// - Returns: the seeded profile, ready to drive a window.
+  /// - Returns: the seeded profile ready to drive a window, or `nil` when the
+  ///   seed starts from a no-profile state and relies on `WelcomeView`.
   @discardableResult
   static func hydrate(
     _ seed: UITestSeed,
@@ -49,6 +52,16 @@ enum UITestSeedHydrator {
         into: manager
       )
       return nil
+    case .welcomeDownloading:
+      // No profile is created: the launcher opens the window with a nil
+      // binding so `ProfileWindowView` routes to `WelcomeView`. The
+      // `applySeedProgressFixtures` call in `MoolahApp.init` drives
+      // `SyncProgress` into the downloading state for the test to verify.
+      return nil
+    case .sidebarFooterUpToDate, .sidebarFooterReceiving, .sidebarFooterSending:
+      // These seeds exercise the sidebar footer; the profile itself is the
+      // same minimal fixture used by tradeBaseline.
+      return try hydrateTradeBaseline(into: manager)
     }
   }
 
