@@ -595,7 +595,7 @@ struct TransactionDetailView: View {
         legTypePicker(at: index)
       }
       legAccountPicker(at: index)
-      legCurrencyPicker(at: index)
+      legInstrumentPicker(at: index)
       legAmountRow(at: index)
       if !isLegEarmarkOnly {
         legCategoryField(at: index)
@@ -647,7 +647,7 @@ struct TransactionDetailView: View {
   }
 
   @ViewBuilder
-  private func legCurrencyPicker(at index: Int) -> some View {
+  private func legInstrumentPicker(at index: Int) -> some View {
     let binding = Binding<Instrument>(
       get: {
         let id = draft.legDrafts[index].instrumentId ?? legInstrumentId(at: index)

@@ -37,29 +37,30 @@ struct InstrumentPickerSheet: View {
   }
 
   @ViewBuilder private var listContent: some View {
-    List {
-      if let error = store.error {
-        Section {
-          Label(error, systemImage: "exclamationmark.triangle.fill")
-            .foregroundStyle(.red)
+    if store.results.isEmpty && !store.query.isEmpty {
+      ContentUnavailableView(
+        "No matches",
+        systemImage: "magnifyingglass",
+        description: Text(
+          "No matching currencies, stocks, or registered tokens for \"\(store.query)\".")
+      )
+    } else {
+      List {
+        if let error = store.error {
+          Section {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+              .foregroundStyle(.red)
+          }
         }
-      }
-      ForEach(store.results) { result in
-        row(for: result)
-      }
-      if store.results.isEmpty && !store.query.isEmpty {
-        ContentUnavailableView(
-          "No matches",
-          systemImage: "magnifyingglass",
-          description: Text(
-            "No matching currencies, stocks, or registered tokens for \"\(store.query)\".")
-        )
-      }
-      if store.kinds.contains(.cryptoToken) {
-        Section {
-          Text("Add a crypto token in Settings → Crypto Tokens.")
-            .font(.footnote)
-            .foregroundStyle(.secondary)
+        ForEach(store.results) { result in
+          row(for: result)
+        }
+        if store.kinds.contains(.cryptoToken) {
+          Section {
+            Text("Add a crypto token in Settings → Crypto Tokens.")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+          }
         }
       }
     }
@@ -77,6 +78,7 @@ struct InstrumentPickerSheet: View {
     } label: {
       HStack(spacing: 10) {
         glyph(for: result.instrument)
+          .accessibilityHidden(true)
         VStack(alignment: .leading, spacing: 1) {
           Text(result.instrument.id).fontWeight(.medium)
           Text(result.instrument.name)
@@ -90,14 +92,23 @@ struct InstrumentPickerSheet: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(.tint.opacity(0.15), in: Capsule())
+            .accessibilityHidden(true)
         }
         if result.instrument == selection {
           Image(systemName: "checkmark").foregroundStyle(.tint)
+            .accessibilityHidden(true)
         }
       }
     }
     .buttonStyle(.plain)
     .accessibilityIdentifier("instrumentPicker.row.\(result.instrument.id)")
+    .accessibilityLabel(
+      Text(
+        result.isRegistered
+          ? "\(result.instrument.id), \(result.instrument.name)"
+          : "\(result.instrument.id), \(result.instrument.name), new")
+    )
+    .accessibilityAddTraits(result.instrument == selection ? .isSelected : [])
   }
 
   private func glyph(for instrument: Instrument) -> some View {

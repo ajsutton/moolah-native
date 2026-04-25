@@ -35,8 +35,11 @@ final class InstrumentPickerStore {
     query = newQuery
     searchTask?.cancel()
     searchTask = Task { [weak self] in
-      try? await Task.sleep(for: .milliseconds(250))
-      if Task.isCancelled { return }
+      do {
+        try await Task.sleep(for: .milliseconds(250))
+      } catch {
+        return
+      }
       await self?.runSearch()
     }
   }
