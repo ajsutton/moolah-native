@@ -124,7 +124,7 @@ struct SyncProgressTests {
     let progress = SyncProgress(userDefaults: try makeDefaults())
     progress.updatePendingUploads(7)
     progress.beginReceiving()
-    progress.endReceiving(now: Date())
+    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
     #expect(progress.phase == .sending)
   }
 
@@ -133,7 +133,7 @@ struct SyncProgressTests {
     let progress = SyncProgress(userDefaults: try makeDefaults())
     progress.updatePendingUploads(7)
     progress.beginReceiving()
-    progress.endReceiving(now: Date())
+    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
     #expect(progress.recordsReceivedThisSession == 0)
   }
 
@@ -142,8 +142,27 @@ struct SyncProgressTests {
     let progress = SyncProgress(userDefaults: try makeDefaults())
     progress.updatePendingUploads(7)
     progress.beginReceiving()
-    progress.endReceiving(now: Date())
+    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
     #expect(progress.lastSettledAt == nil)
+  }
+
+  @Test
+  func endReceivingResetsMoreComing() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.beginReceiving()
+    progress.recordReceived(modifications: 1, deletions: 0, moreComing: true)
+    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
+    #expect(progress.moreComing == false)
+  }
+
+  @Test
+  func endReceivingWithPendingUploadsResetsMoreComing() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.updatePendingUploads(3)
+    progress.beginReceiving()
+    progress.recordReceived(modifications: 1, deletions: 0, moreComing: true)
+    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
+    #expect(progress.moreComing == false)
   }
 
   // MARK: - Helpers
