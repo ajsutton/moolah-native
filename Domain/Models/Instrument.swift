@@ -93,6 +93,12 @@ struct Instrument: Codable, Sendable, Hashable, Identifiable {
 }
 
 extension Instrument {
+  /// Locale-localised currency name for an ISO code, or the code itself
+  /// if the locale can't resolve it. Replaces `CurrencyPicker.currencyName(for:)`.
+  static func localizedName(for code: String) -> String {
+    Locale.current.localizedString(forCurrencyCode: code) ?? code
+  }
+
   /// Currency symbol from the currency's primary locale, not the user's.
   /// Returns nil when no representative locale produces a distinctive
   /// symbol (the result would just echo the ISO code).
