@@ -224,19 +224,8 @@ struct SyncCoordinatorTests {
 
     // accumulateProgressCounts is the test seam — driving it directly avoids
     // constructing a real CKSyncEngine.Event.FetchedRecordZoneChanges value.
-    coordinator.accumulateProgressCounts(
-      modifications: 8, deletions: 2, moreComing: false)
+    coordinator.accumulateProgressCounts(modifications: 8, deletions: 2)
 
     #expect(coordinator.progress.recordsReceivedThisSession == 10)
-  }
-
-  @Test
-  func fetchedRecordZoneChangesCapturesMoreComing() throws {
-    let manager = try ProfileContainerManager.forTesting()
-    let coordinator = SyncCoordinator(containerManager: manager)
-    coordinator.beginFetchingChanges()
-    coordinator.accumulateProgressCounts(
-      modifications: 5, deletions: 0, moreComing: true)
-    #expect(coordinator.progress.moreComing == true)
   }
 }

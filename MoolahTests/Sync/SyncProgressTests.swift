@@ -16,7 +16,6 @@ struct SyncProgressTests {
     #expect(progress.recordsReceivedThisSession == 0)
     #expect(progress.pendingUploads == 0)
     #expect(progress.lastSettledAt == nil)
-    #expect(progress.moreComing == false)
   }
 
   // MARK: - Receive transitions
@@ -42,34 +41,17 @@ struct SyncProgressTests {
   func recordReceivedAdvancesCounter() throws {
     let progress = SyncProgress(userDefaults: try makeDefaults())
     progress.beginReceiving()
-    progress.recordReceived(modifications: 10, deletions: 3, moreComing: true)
+    progress.recordReceived(modifications: 10, deletions: 3)
     #expect(progress.recordsReceivedThisSession == 13)
-  }
-
-  @Test
-  func recordReceivedCapturesMoreComing() throws {
-    let progress = SyncProgress(userDefaults: try makeDefaults())
-    progress.beginReceiving()
-    progress.recordReceived(modifications: 10, deletions: 3, moreComing: true)
-    #expect(progress.moreComing == true)
   }
 
   @Test
   func recordReceivedCounterIsAdditiveAcrossBatches() throws {
     let progress = SyncProgress(userDefaults: try makeDefaults())
     progress.beginReceiving()
-    progress.recordReceived(modifications: 5, deletions: 0, moreComing: true)
-    progress.recordReceived(modifications: 7, deletions: 2, moreComing: false)
+    progress.recordReceived(modifications: 5, deletions: 0)
+    progress.recordReceived(modifications: 7, deletions: 2)
     #expect(progress.recordsReceivedThisSession == 14)
-  }
-
-  @Test
-  func recordReceivedMoreComingIsOverwrittenEachBatch() throws {
-    let progress = SyncProgress(userDefaults: try makeDefaults())
-    progress.beginReceiving()
-    progress.recordReceived(modifications: 5, deletions: 0, moreComing: true)
-    progress.recordReceived(modifications: 7, deletions: 2, moreComing: false)
-    #expect(progress.moreComing == false)
   }
 
   // MARK: - Settle
@@ -78,7 +60,7 @@ struct SyncProgressTests {
   func endReceivingWithNoPendingSettlesPhase() throws {
     let progress = SyncProgress(userDefaults: try makeDefaults())
     progress.beginReceiving()
-    progress.recordReceived(modifications: 4, deletions: 0, moreComing: false)
+    progress.recordReceived(modifications: 4, deletions: 0)
     progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
     #expect(progress.phase == .upToDate)
   }
@@ -87,7 +69,7 @@ struct SyncProgressTests {
   func endReceivingWithNoPendingResetsCounter() throws {
     let progress = SyncProgress(userDefaults: try makeDefaults())
     progress.beginReceiving()
-    progress.recordReceived(modifications: 4, deletions: 0, moreComing: false)
+    progress.recordReceived(modifications: 4, deletions: 0)
     progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
     #expect(progress.recordsReceivedThisSession == 0)
   }
@@ -96,7 +78,7 @@ struct SyncProgressTests {
   func endReceivingWithNoPendingRecordsLastSettledAt() throws {
     let progress = SyncProgress(userDefaults: try makeDefaults())
     progress.beginReceiving()
-    progress.recordReceived(modifications: 4, deletions: 0, moreComing: false)
+    progress.recordReceived(modifications: 4, deletions: 0)
     let now = Date(timeIntervalSince1970: 1_000_000)
     progress.endReceiving(now: now)
     #expect(progress.lastSettledAt == now)
@@ -144,25 +126,6 @@ struct SyncProgressTests {
     progress.beginReceiving()
     progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
     #expect(progress.lastSettledAt == nil)
-  }
-
-  @Test
-  func endReceivingResetsMoreComing() throws {
-    let progress = SyncProgress(userDefaults: try makeDefaults())
-    progress.beginReceiving()
-    progress.recordReceived(modifications: 1, deletions: 0, moreComing: true)
-    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
-    #expect(progress.moreComing == false)
-  }
-
-  @Test
-  func endReceivingWithPendingUploadsResetsMoreComing() throws {
-    let progress = SyncProgress(userDefaults: try makeDefaults())
-    progress.updatePendingUploads(3)
-    progress.beginReceiving()
-    progress.recordReceived(modifications: 1, deletions: 0, moreComing: true)
-    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
-    #expect(progress.moreComing == false)
   }
 
   // MARK: - Sending → settle

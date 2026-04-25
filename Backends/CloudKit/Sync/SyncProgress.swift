@@ -33,7 +33,6 @@ final class SyncProgress {
   private(set) var recordsReceivedThisSession: Int = 0
   private(set) var pendingUploads: Int = 0
   private(set) var lastSettledAt: Date?
-  private(set) var moreComing: Bool = false
 
   private let userDefaults: UserDefaults
 
@@ -80,26 +79,21 @@ final class SyncProgress {
   }
 
   /// Called for each `fetchedRecordZoneChanges` batch to accumulate
-  /// received-record counts and update the `moreComing` flag.
-  ///
-  /// `moreComing` is overwritten on every call; the value from the most
-  /// recent batch is the authoritative one. `recordsReceivedThisSession`
-  /// accumulates across all batches in a session.
-  func recordReceived(modifications: Int, deletions: Int, moreComing: Bool) {
+  /// received-record counts. `recordsReceivedThisSession` accumulates across
+  /// all batches in a session and is reset by `endReceiving`.
+  func recordReceived(modifications: Int, deletions: Int) {
     recordsReceivedThisSession += modifications + deletions
-    self.moreComing = moreComing
   }
 
   /// Handles the `didFetchChanges` engine event.
   ///
-  /// Resets the session counter and `moreComing` regardless of outcome.
-  /// Settles to `.upToDate` when no uploads are pending and no degraded
-  /// reason is active; routes to `.sending` when uploads still need to
-  /// drain. Does not overwrite an active `.degraded` phase — the caller
-  /// is responsible for clearing the degraded flag before settling.
+  /// Resets the session counter regardless of outcome. Settles to
+  /// `.upToDate` when no uploads are pending and no degraded reason is
+  /// active; routes to `.sending` when uploads still need to drain. Does
+  /// not overwrite an active `.degraded` phase — the caller is responsible
+  /// for clearing the degraded flag before settling.
   func endReceiving(now: Date) {
     recordsReceivedThisSession = 0
-    moreComing = false
     if case .degraded = phase { return }
     if pendingUploads > 0 {
       phase = .sending
@@ -173,7 +167,6 @@ final class SyncProgress {
     phase = .idle
     recordsReceivedThisSession = 0
     pendingUploads = 0
-    moreComing = false
     quotaExceeded = false
     iCloudUnavailableReason = nil
     retrying = false
