@@ -31,7 +31,7 @@ extension ProfileDataSyncHandler {
       try context.save()
       logger.info("Cleared all system fields for profile \(self.profileId)")
     } catch {
-      logger.error("Failed to save after clearing system fields: \(error)")
+      logger.error("Failed to save after clearing system fields: \(error, privacy: .public)")
     }
   }
 
@@ -98,7 +98,7 @@ extension ProfileDataSyncHandler {
         "Applied system fields for \(savedRecords.count) saved records (hadChanges=\(hadChanges))"
       )
     } catch {
-      logger.error("Failed to save system fields after upload: \(error)")
+      logger.error("Failed to save system fields after upload: \(error, privacy: .public)")
     }
   }
 
@@ -119,7 +119,8 @@ extension ProfileDataSyncHandler {
     do {
       try context.save()
     } catch {
-      logger.error("Failed to save system fields after conflict resolution: \(error)")
+      logger.error(
+        "Failed to save system fields after conflict resolution: \(error, privacy: .public)")
     }
   }
 

@@ -87,7 +87,9 @@ final class ProfileDataSyncHandler {
     do {
       return try context.fetch(descriptor)
     } catch {
-      batchLogger.error("SwiftData fetch failed for \(T.self): \(error)")
+      batchLogger.error(
+        "SwiftData fetch failed for \(String(describing: T.self), privacy: .public): \(error, privacy: .public)"
+      )
       return []
     }
   }

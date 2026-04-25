@@ -196,7 +196,7 @@ extension SyncCoordinator {
     do {
       try await syncEngine.sendChanges()
     } catch {
-      logger.error("Failed to send changes: \(error)")
+      logger.error("Failed to send changes: \(error, privacy: .public)")
     }
   }
 
@@ -205,7 +205,7 @@ extension SyncCoordinator {
     do {
       try await syncEngine.fetchChanges()
     } catch {
-      logger.error("Failed to fetch changes: \(error)")
+      logger.error("Failed to fetch changes: \(error, privacy: .public)")
     }
   }
 

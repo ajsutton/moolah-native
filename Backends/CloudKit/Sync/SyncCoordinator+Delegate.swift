@@ -265,7 +265,7 @@ extension SyncCoordinator: CKSyncEngineDelegate {
       handler = try handlerForProfileZone(profileId: profileId, zoneID: zoneID)
     } catch {
       logger.error(
-        "Failed to build handler for profile \(profileId): \(error) — \(recordIDs.count) records remain pending for retry"
+        "Failed to build handler for profile \(profileId): \(error, privacy: .public) — \(recordIDs.count, privacy: .public) records remain pending for retry"
       )
       return
     }

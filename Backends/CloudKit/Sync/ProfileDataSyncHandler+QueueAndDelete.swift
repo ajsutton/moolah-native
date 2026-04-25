@@ -110,7 +110,7 @@ extension ProfileDataSyncHandler {
       logger.info("Deleted all local data for profile \(self.profileId)")
       return Set(RecordTypeRegistry.allTypes.keys)
     } catch {
-      logger.error("Failed to delete local data: \(error)")
+      logger.error("Failed to delete local data: \(error, privacy: .public)")
       return []
     }
   }

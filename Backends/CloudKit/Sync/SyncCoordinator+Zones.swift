@@ -16,7 +16,7 @@ extension SyncCoordinator {
       _ = try await CKContainer.default().privateCloudDatabase.save(zone)
       logger.info("Ensured zone exists: \(zoneID.zoneName)")
     } catch {
-      logger.error("Failed to ensure zone exists \(zoneID.zoneName): \(error)")
+      logger.error("Failed to ensure zone exists \(zoneID.zoneName): \(error, privacy: .public)")
     }
   }
 
