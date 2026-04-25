@@ -48,12 +48,11 @@ struct InstrumentPickerFieldDriver {
       XCTFail("InstrumentPickerSheet did not appear before searching")
       return
     }
-    // ui-test-review: single-resolver escape-hatch — SwiftUI .searchable does not
-    // expose its underlying NSSearchField via accessibilityIdentifier; identifier
-    // is attached to the surrounding container and traversed here. The container
-    // is resolved through MoolahApp.element(for:).
-    let container = app.element(for: UITestIdentifiers.InstrumentPicker.searchField)
-    let searchField = container.searchFields.firstMatch
+    // ui-test-review escape-hatch: SwiftUI .searchable does not expose its
+    // underlying NSSearchField via accessibilityIdentifier on macOS without
+    // colliding with the sheet identifier; scope is narrowed to the sheet
+    // element resolved through MoolahApp.element(for:).
+    let searchField = sheet.searchFields.firstMatch
     if !searchField.waitForExistence(timeout: 3) {
       Trace.recordFailure("search field inside instrumentPicker.sheet did not appear")
       XCTFail("InstrumentPickerSheet search field did not appear within 3s")

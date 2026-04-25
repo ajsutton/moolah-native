@@ -60,4 +60,12 @@ struct InstrumentSymbolTests {
     #expect(!name.isEmpty)
     #expect(name != "USD")
   }
+
+  @Test("commonFiatCodes contains the major currencies and is alphabetically sorted")
+  func commonFiatCodesAreSorted() {
+    let codes = Instrument.commonFiatCodes
+    #expect(codes == codes.sorted())
+    #expect(codes.contains("USD"))
+    #expect(codes.contains("AUD"))
+  }
 }

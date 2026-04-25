@@ -93,6 +93,15 @@ struct Instrument: Codable, Sendable, Hashable, Identifiable {
 }
 
 extension Instrument {
+  /// The 17 most-used fiat currency codes; the canonical seed list for any
+  /// fiat-only picker fallback. Sorted by ISO code so order is deterministic.
+  static let commonFiatCodes: [String] = [
+    "AUD", "CAD", "CHF", "CNY", "EUR", "GBP", "HKD", "INR", "JPY", "KRW",
+    "MXN", "NOK", "NZD", "SEK", "SGD", "USD", "ZAR",
+  ]
+}
+
+extension Instrument {
   /// Locale-localised currency name for an ISO code, or the code itself
   /// if the locale can't resolve it. Replaces `CurrencyPicker.currencyName(for:)`.
   static func localizedName(for code: String) -> String {

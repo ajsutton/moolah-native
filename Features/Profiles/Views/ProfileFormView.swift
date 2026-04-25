@@ -28,17 +28,6 @@ struct ProfileFormView: View {
     return formatter.monthSymbols ?? []
   }()
 
-  private static let commonCurrencyCodes: [String] = [
-    "AUD", "CAD", "CHF", "CNY", "EUR", "GBP", "HKD", "INR", "JPY", "KRW",
-    "MXN", "NOK", "NZD", "SEK", "SGD", "USD", "ZAR",
-  ]
-
-  private static let sortedCurrencyCodes: [String] = commonCurrencyCodes.sorted {
-    Instrument.localizedName(for: $0).localizedCaseInsensitiveCompare(
-      Instrument.localizedName(for: $1)
-    ) == .orderedAscending
-  }
-
   var body: some View {
     NavigationStack {
       form
@@ -118,18 +107,7 @@ struct ProfileFormView: View {
   private var cloudKitSection: some View {
     Section("Profile") {
       TextField("Name", text: $cloudName)
-      Picker(
-        "Currency",
-        selection: Binding(
-          get: { cloudCurrency.id },
-          set: { cloudCurrency = Instrument.fiat(code: $0) }
-        )
-      ) {
-        ForEach(Self.sortedCurrencyCodes, id: \.self) { code in
-          Text("\(code) — \(Instrument.localizedName(for: code))").tag(code)
-        }
-      }
-      .pickerStyle(.menu)
+      InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $cloudCurrency)
       Picker("Financial Year Starts", selection: $cloudFinancialYearStartMonth) {
         ForEach(1...12, id: \.self) { month in
           if month <= Self.monthNames.count {

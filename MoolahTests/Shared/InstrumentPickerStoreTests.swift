@@ -95,6 +95,36 @@ struct InstrumentPickerStoreTests {
     #expect(store.results.contains { $0.instrument.id == "ASX:BHP.AX" } == false)
   }
 
+  @Test("no-service mode returns Instrument.commonFiatCodes filtered by kinds")
+  func noServiceFiatList() async {
+    let store = InstrumentPickerStore(kinds: [.fiatCurrency])
+    await store.start()
+    for code in Instrument.commonFiatCodes {
+      #expect(store.results.contains { $0.instrument.id == code })
+    }
+  }
+
+  @Test("no-service mode narrows by typed query")
+  func noServiceTypedQuery() async throws {
+    let store = InstrumentPickerStore(kinds: [.fiatCurrency])
+    await store.start()
+    store.updateQuery("usd")
+    try? await Task.sleep(for: .milliseconds(350))
+    #expect(store.results.contains { $0.instrument.id == "USD" })
+    #expect(
+      store.results.allSatisfy {
+        $0.instrument.id == "USD"
+          || $0.instrument.name.localizedCaseInsensitiveContains("dollar")
+      })
+  }
+
+  @Test("no-service mode returns empty when kinds excludes fiat")
+  func noServiceNonFiatKinds() async {
+    let store = InstrumentPickerStore(kinds: [.stock])
+    await store.start()
+    #expect(store.results.isEmpty)
+  }
+
   @Test("select of unregistered Yahoo stock auto-registers and returns")
   func selectStockAutoRegisters() async throws {
     let (backend, _) = try TestBackend.create()

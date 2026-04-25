@@ -11,15 +11,15 @@ final class InstrumentPickerStore {
 
   let kinds: Set<Instrument.Kind>
 
-  private let searchService: InstrumentSearchService
-  private let registry: any InstrumentRegistryRepository
+  private let searchService: InstrumentSearchService?
+  private let registry: (any InstrumentRegistryRepository)?
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "InstrumentPickerStore")
   private var searchTask: Task<Void, Never>?
 
   init(
-    searchService: InstrumentSearchService,
-    registry: any InstrumentRegistryRepository,
+    searchService: InstrumentSearchService? = nil,
+    registry: (any InstrumentRegistryRepository)? = nil,
     kinds: Set<Instrument.Kind>
   ) {
     self.searchService = searchService
@@ -46,6 +46,12 @@ final class InstrumentPickerStore {
 
   func select(_ result: InstrumentSearchResult) async -> Instrument? {
     if result.isRegistered { return result.instrument }
+    guard let registry else {
+      // No registry: only fiat is reachable in this mode, and fiat is
+      // always pre-registered, so this branch shouldn't fire — but if it
+      // does, return the instrument as-is rather than silently failing.
+      return result.instrument
+    }
     do {
       try await registry.registerStock(result.instrument)
       return result.instrument
@@ -60,11 +66,34 @@ final class InstrumentPickerStore {
   private func runSearch() async {
     isLoading = true
     defer { isLoading = false }
-    let snapshot = await searchService.search(
-      query: query,
-      kinds: kinds,
-      providerSources: .stocksOnly
-    )
-    results = snapshot
+    if let searchService {
+      let snapshot = await searchService.search(
+        query: query,
+        kinds: kinds,
+        providerSources: .stocksOnly
+      )
+      results = snapshot
+      return
+    }
+    results = staticFiatResults(for: query)
+  }
+
+  private func staticFiatResults(for query: String) -> [InstrumentSearchResult] {
+    guard kinds.contains(.fiatCurrency) else { return [] }
+    let trimmed = query.trimmingCharacters(in: .whitespaces).lowercased()
+    return Instrument.commonFiatCodes
+      .filter { code in
+        trimmed.isEmpty
+          || code.lowercased().contains(trimmed)
+          || Instrument.localizedName(for: code).localizedCaseInsensitiveContains(trimmed)
+      }
+      .map { code in
+        InstrumentSearchResult(
+          instrument: Instrument.fiat(code: code),
+          cryptoMapping: nil,
+          isRegistered: true,
+          requiresResolution: false
+        )
+      }
   }
 }

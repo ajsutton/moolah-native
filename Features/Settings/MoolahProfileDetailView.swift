@@ -41,7 +41,7 @@ struct MoolahProfileDetailView: View {
       }
 
       Section("Settings") {
-        ProfileCurrencyPicker(selection: $currency)
+        InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
           .onChange(of: currency) { _, _ in saveChanges() }
 
         Picker("Financial Year Starts", selection: $financialYearStartMonth) {
@@ -142,7 +142,7 @@ struct CustomServerProfileDetailView: View {
       }
 
       Section("Settings") {
-        ProfileCurrencyPicker(selection: $currency)
+        InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
           .onChange(of: currency) { _, _ in saveChanges() }
 
         Picker("Financial Year Starts", selection: $financialYearStartMonth) {
@@ -258,7 +258,7 @@ struct CloudKitProfileDetailView: View {
       }
 
       Section("Settings") {
-        ProfileCurrencyPicker(selection: $currency)
+        InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
           .onChange(of: currency) { _, _ in saveChanges() }
 
         Picker("Financial Year Starts", selection: $financialYearStartMonth) {

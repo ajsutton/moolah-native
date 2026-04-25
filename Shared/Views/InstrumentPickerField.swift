@@ -5,29 +5,25 @@ struct InstrumentPickerField: View {
   let kinds: Set<Instrument.Kind>
   @Binding var selection: Instrument
 
-  @Environment(ProfileSession.self) private var session
+  @Environment(ProfileSession.self) private var session: ProfileSession?
   @State private var isPresented = false
   @State private var store: InstrumentPickerStore?
 
   var body: some View {
-    if session.instrumentSearchService != nil, session.instrumentRegistry != nil {
-      pickerButton
-        .sheet(
-          isPresented: $isPresented,
-          onDismiss: { store = nil },
-          content: {
-            if let store {
-              InstrumentPickerSheet(
-                store: store,
-                label: label,
-                selection: $selection,
-                isPresented: $isPresented)
-            }
+    pickerButton
+      .sheet(
+        isPresented: $isPresented,
+        onDismiss: { store = nil },
+        content: {
+          if let store {
+            InstrumentPickerSheet(
+              store: store,
+              label: label,
+              selection: $selection,
+              isPresented: $isPresented)
           }
-        )
-    } else {
-      fallbackPicker
-    }
+        }
+      )
   }
 
   // MARK: - Subviews
@@ -53,29 +49,6 @@ struct InstrumentPickerField: View {
     .accessibilityHint(Text("Activate to choose a different \(String(localized: label))"))
   }
 
-  @ViewBuilder private var fallbackPicker: some View {
-    Picker(
-      String(localized: label),
-      selection: Binding(
-        get: { selection.id },
-        set: { selection = Instrument.fiat(code: $0) }
-      )
-    ) {
-      ForEach(Self.fallbackCodes, id: \.self) { code in
-        Text("\(code) — \(Instrument.localizedName(for: code))").tag(code)
-      }
-    }
-    .pickerStyle(.menu)
-  }
-
-  private static let fallbackCodes: [String] = [
-    "AUD", "CAD", "CHF", "CNY", "EUR", "GBP", "HKD", "INR", "JPY", "KRW",
-    "MXN", "NOK", "NZD", "SEK", "SGD", "USD", "ZAR",
-  ].sorted {
-    Instrument.localizedName(for: $0).localizedCaseInsensitiveCompare(
-      Instrument.localizedName(for: $1)) == .orderedAscending
-  }
-
   // MARK: - Helpers
 
   private var glyph: some View {
@@ -90,13 +63,10 @@ struct InstrumentPickerField: View {
   }
 
   private func ensureStore() {
-    guard store == nil,
-      let service = session.instrumentSearchService,
-      let registry = session.instrumentRegistry
-    else { return }
+    guard store == nil else { return }
     store = InstrumentPickerStore(
-      searchService: service,
-      registry: registry,
+      searchService: session?.instrumentSearchService,
+      registry: session?.instrumentRegistry,
       kinds: kinds
     )
   }

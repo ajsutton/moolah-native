@@ -124,11 +124,6 @@ public enum UITestIdentifiers {
     /// field button is tapped and the CloudKit-backed picker is active.
     public static let sheet = "instrumentPicker.sheet"
 
-    /// The search field inside `InstrumentPickerSheet`. The identifier is
-    /// applied to the container wrapping the `.searchable` modifier; on macOS
-    /// SwiftUI propagates the identifier onto the rendered `NSSearchField`.
-    public static let searchField = "instrumentPicker.searchField"
-
     /// A row inside the sheet for a specific instrument. The qualifier is the
     /// instrument id (e.g. `"USD"`).
     public static func row(_ id: String) -> String {
