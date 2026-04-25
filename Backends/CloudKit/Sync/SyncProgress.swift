@@ -123,6 +123,9 @@ final class SyncProgress {
     resolveDegradedPhase()
   }
 
+  /// Pass a concrete `reason` to enter the degraded-unavailable phase; pass
+  /// `nil` to clear. The optional flavour is asymmetric with the `Bool`
+  /// setters because the reason itself is the payload.
   func setICloudUnavailable(reason: ICloudAvailability.UnavailableReason?) {
     iCloudUnavailableReason = reason
     resolveDegradedPhase()
