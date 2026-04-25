@@ -228,4 +228,21 @@ struct SyncCoordinatorTests {
 
     #expect(coordinator.progress.recordsReceivedThisSession == 10)
   }
+
+  @Test
+  func quotaFlagDrivesProgressDegraded() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+    coordinator.applyQuotaState(true)
+    #expect(coordinator.progress.phase == .degraded(.quotaExceeded))
+  }
+
+  @Test
+  func quotaFlagClearedRestoresProgressIdle() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(containerManager: manager)
+    coordinator.applyQuotaState(true)
+    coordinator.applyQuotaState(false)
+    #expect(coordinator.progress.phase == .idle)
+  }
 }

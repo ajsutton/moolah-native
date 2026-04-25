@@ -37,6 +37,7 @@ extension SyncCoordinator {
       // Re-queue the stored records
       if let changes = self.pendingZoneCreation.removeValue(forKey: zoneID) {
         self.syncEngine?.state.add(pendingRecordZoneChanges: changes)
+        self.refreshPendingUploadsMirror()
         self.logger.info(
           "Re-queued \(changes.count) changes after zone creation for \(zoneID.zoneName)")
       }
@@ -208,6 +209,7 @@ extension SyncCoordinator {
       if !recordIDs.isEmpty {
         syncEngine?.state.add(
           pendingRecordZoneChanges: recordIDs.map { .saveRecord($0) })
+        refreshPendingUploadsMirror()
       }
 
     case .profileData(let profileId):
@@ -218,6 +220,7 @@ extension SyncCoordinator {
         if !recordIDs.isEmpty {
           syncEngine?.state.add(
             pendingRecordZoneChanges: recordIDs.map { .saveRecord($0) })
+          refreshPendingUploadsMirror()
         }
       }
       // System fields were cleared; if a later crash happens before the re-upload

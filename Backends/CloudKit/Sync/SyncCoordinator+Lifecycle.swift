@@ -217,17 +217,20 @@ extension SyncCoordinator {
     let recordID = CKRecord.ID(
       recordType: recordType, uuid: id, zoneID: zoneID)
     syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+    refreshPendingUploadsMirror()
   }
 
   func queueSave(recordName: String, zoneID: CKRecordZone.ID) {
     let recordID = CKRecord.ID(recordName: recordName, zoneID: zoneID)
     syncEngine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
+    refreshPendingUploadsMirror()
   }
 
   func queueDeletion(recordType: String, id: UUID, zoneID: CKRecordZone.ID) {
     let recordID = CKRecord.ID(
       recordType: recordType, uuid: id, zoneID: zoneID)
     syncEngine?.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
+    refreshPendingUploadsMirror()
   }
 
   func queueDeletion(recordName: String, zoneID: CKRecordZone.ID) {

@@ -325,6 +325,7 @@ extension SyncCoordinator: CKSyncEngineDelegate {
         "Record \(recordID.recordName, privacy: .public) deleted locally before batch — queueing server deletion"
       )
       syncEngine.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID)])
+      refreshPendingUploadsMirror()
     }
   }
 }

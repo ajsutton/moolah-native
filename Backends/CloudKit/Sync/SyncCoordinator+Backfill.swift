@@ -43,6 +43,7 @@ extension SyncCoordinator {
     if !recordIDs.isEmpty {
       syncEngine?.state.add(
         pendingRecordZoneChanges: recordIDs.map { .saveRecord($0) })
+      refreshPendingUploadsMirror()
       logger.info(
         "Queued \(recordIDs.count) records for upload after import, profile \(profileId)")
     }
@@ -88,6 +89,7 @@ extension SyncCoordinator {
       if !recordIDs.isEmpty {
         syncEngine?.state.add(
           pendingRecordZoneChanges: recordIDs.map { .saveRecord($0) })
+        refreshPendingUploadsMirror()
         queued.append(contentsOf: recordIDs)
       }
       markBackfillScanComplete(for: profileId)
@@ -107,6 +109,7 @@ extension SyncCoordinator {
     if !indexRecordIDs.isEmpty {
       syncEngine?.state.add(
         pendingRecordZoneChanges: indexRecordIDs.map { .saveRecord($0) })
+      refreshPendingUploadsMirror()
     }
 
     // Queue per-profile records
@@ -120,6 +123,7 @@ extension SyncCoordinator {
         if !recordIDs.isEmpty {
           syncEngine?.state.add(
             pendingRecordZoneChanges: recordIDs.map { .saveRecord($0) })
+          refreshPendingUploadsMirror()
         }
       } catch {
         logger.error("Failed to queue records for profile \(profileId): \(error, privacy: .public)")
