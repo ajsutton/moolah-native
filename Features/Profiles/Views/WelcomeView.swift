@@ -110,6 +110,7 @@ struct WelcomeView: View {
     // `UITestSupport/` for Task 17's screen driver to use if WelcomeHero
     // later exposes a tag parameter.
     WelcomeHero(
+      mode: .checking,
       primaryAction: beginCreate,
       footer: { ICloudStatusLine(state: state) }
     )
@@ -118,6 +119,7 @@ struct WelcomeView: View {
   @ViewBuilder
   private func heroDownloadingView(received: Int) -> some View {
     WelcomeHero(
+      mode: .downloading(received: received),
       primaryAction: beginCreate,
       footer: { ICloudStatusLine(state: .checkingActive(received: received)) }
     )
@@ -133,6 +135,7 @@ struct WelcomeView: View {
     // that label, which hides the primary CTA from label-based queries and
     // from individual VoiceOver focus.
     WelcomeHero(
+      mode: .checking,
       primaryAction: beginCreate,
       footer: {
         ICloudOffChip(openSettingsAction: openSystemSettings)

@@ -24,13 +24,30 @@ enum WelcomeBrandColors {
 /// Colour tokens come from `guides/BRAND_GUIDE.md` §3. Hardcoded hex is
 /// scoped to this file per design spec §4.1.
 struct WelcomeHero<Footer: View>: View {
+  enum Mode: Equatable {
+    case checking
+    case downloading(received: Int)
+  }
+
+  let mode: Mode
   let primaryAction: () -> Void
   @ViewBuilder let footer: () -> Footer
 
   @FocusState private var focus: Focus?
+  @Namespace private var heroNamespace
 
   private enum Focus: Hashable {
     case primaryCTA
+  }
+
+  init(
+    mode: Mode = .checking,
+    primaryAction: @escaping () -> Void,
+    @ViewBuilder footer: @escaping () -> Footer
+  ) {
+    self.mode = mode
+    self.primaryAction = primaryAction
+    self.footer = footer
   }
 
   var body: some View {
@@ -39,17 +56,19 @@ struct WelcomeHero<Footer: View>: View {
       heroContent
     }
     .task { focus = .primaryCTA }
+    .animation(.easeInOut(duration: 0.4), value: mode)
   }
 
   private var heroContent: some View {
     VStack(alignment: .leading, spacing: 0) {
-      Spacer(minLength: 48)
+      Spacer(minLength: mode == .checking ? 48 : 24)
       eyebrow
       titleBlock
-      subhead
+      if case .checking = mode { subhead }
       Spacer()
       ctaButton
       footer().frame(maxWidth: 320, alignment: .leading)
+      if case .downloading = mode { downloadFootnote }
       Spacer(minLength: 28)
     }
     .padding(.horizontal, 32)
@@ -61,6 +80,7 @@ struct WelcomeHero<Footer: View>: View {
       .tracking(1.8)
       .textCase(.uppercase)
       .foregroundStyle(WelcomeBrandColors.balanceGold)
+      .matchedGeometryEffect(id: "eyebrow", in: heroNamespace)
       .accessibilityHidden(true)
   }
 
@@ -71,7 +91,8 @@ struct WelcomeHero<Footer: View>: View {
       Text("rock solid.", comment: "First-run hero title line 2")
         .foregroundStyle(WelcomeBrandColors.balanceGold)
     }
-    .font(.largeTitle.bold())
+    .font(mode == .checking ? .largeTitle.bold() : .title.bold())
+    .matchedGeometryEffect(id: "title", in: heroNamespace)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("Your money, rock solid.")
     .accessibilityAddTraits(.isHeader)
@@ -93,34 +114,59 @@ struct WelcomeHero<Footer: View>: View {
 
   private var ctaButton: some View {
     Button(action: primaryAction) {
-      Text("Get started", comment: "First-run primary CTA")
-        .font(.headline)
+      Text(buttonLabel, comment: "First-run primary CTA")
+        .font(mode == .checking ? .headline : .subheadline)
         .frame(maxWidth: 280)
-        .frame(minHeight: 44)
+        .frame(minHeight: mode == .checking ? 44 : 36)
     }
-    .buttonStyle(PrimaryHeroButtonStyle())
+    .buttonStyle(PrimaryHeroButtonStyle(prominent: mode == .checking))
     .focusable(true)
     .focused($focus, equals: .primaryCTA)
+    .matchedGeometryEffect(id: "cta", in: heroNamespace)
     .onKeyPress(.return) {
       primaryAction()
       return .handled
     }
     .padding(.bottom, 12)
   }
+
+  private var buttonLabel: LocalizedStringKey {
+    switch mode {
+    case .checking: return "Get started"
+    case .downloading: return "Create a new profile"
+    }
+  }
+
+  private var downloadFootnote: some View {
+    Text(
+      "Download from iCloud will continue in the background.",
+      comment: "First-run footnote shown while iCloud data is downloading"
+    )
+    .font(.footnote)
+    .foregroundStyle(WelcomeBrandColors.muted)
+    .padding(.top, 8)
+  }
 }
 
 private struct PrimaryHeroButtonStyle: ButtonStyle {
+  let prominent: Bool
+
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .foregroundStyle(.white)
-      .padding(.vertical, 12)
-      .padding(.horizontal, 24)
+      .padding(.vertical, prominent ? 12 : 8)
+      .padding(.horizontal, prominent ? 24 : 18)
       .background(
         WelcomeBrandColors.incomeBlue
-          .opacity(configuration.isPressed ? 0.85 : 1.0)
+          .opacity(buttonOpacity(pressed: configuration.isPressed))
       )
       .clipShape(.rect(cornerRadius: 10))
       .contentShape(.rect)
+  }
+
+  private func buttonOpacity(pressed: Bool) -> Double {
+    let base = prominent ? 1.0 : 0.6
+    return pressed ? base * 0.85 : base
   }
 }
 
@@ -150,4 +196,13 @@ private struct PrimaryHeroButtonStyle: ButtonStyle {
   )
   .frame(width: 500, height: 720)
   .dynamicTypeSize(.accessibility5)
+}
+
+#Preview("WelcomeHero — downloading") {
+  WelcomeHero(
+    mode: .downloading(received: 1234),
+    primaryAction: {},
+    footer: { ICloudStatusLine(state: .checkingActive(received: 1234)) }
+  )
+  .frame(width: 420, height: 560)
 }
