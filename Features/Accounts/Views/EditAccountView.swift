@@ -4,7 +4,7 @@ struct EditAccountView: View {
   @Environment(\.dismiss) private var dismiss
   @State private var name: String
   @State private var type: AccountType
-  @State private var currencyCode: String
+  @State private var currency: Instrument
   @State private var isHidden: Bool
   @State private var isSubmitting = false
   @State private var errorMessage: String?
@@ -25,7 +25,7 @@ struct EditAccountView: View {
     self.supportsComplexTransactions = supportsComplexTransactions
     _name = State(initialValue: account.name)
     _type = State(initialValue: account.type)
-    _currencyCode = State(initialValue: account.instrument.id)
+    _currency = State(initialValue: account.instrument)
     _isHidden = State(initialValue: account.isHidden)
   }
 
@@ -90,7 +90,7 @@ struct EditAccountView: View {
         }
       }
       if supportsComplexTransactions {
-        CurrencyPicker(selection: $currencyCode)
+        CurrencyPicker(selection: $currency)
       }
       LabeledContent("Current Balance") {
         currentBalanceDisplay
@@ -175,7 +175,7 @@ struct EditAccountView: View {
     updated.name = name.trimmingCharacters(in: .whitespaces)
     updated.type = type
     if supportsComplexTransactions {
-      updated.instrument = Instrument.fiat(code: currencyCode)
+      updated.instrument = currency
     }
     updated.isHidden = isHidden
 

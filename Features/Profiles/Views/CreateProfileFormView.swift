@@ -16,7 +16,7 @@ import SwiftUI
 /// haptic when the async create completes (design spec §4.3).
 struct CreateProfileFormView: View {
   @Binding var name: String
-  @Binding var currencyCode: String
+  @Binding var currency: Instrument
   @Binding var financialYearStartMonth: Int
   let banner: ICloudArrivalBanner.Kind?
   let onBannerPrimary: () -> Void
@@ -103,7 +103,7 @@ struct CreateProfileFormView: View {
     DisclosureGroup(
       String(localized: "Advanced", comment: "Form advanced disclosure")
     ) {
-      CurrencyPicker(selection: $currencyCode)
+      CurrencyPicker(selection: $currency)
       Picker(
         String(localized: "Financial year starts", comment: "Form FY month"),
         selection: $financialYearStartMonth
@@ -187,12 +187,12 @@ extension ICloudArrivalBanner.Kind {
 
 #Preview("Create — default") {
   @Previewable @State var name = ""
-  @Previewable @State var currency = "AUD"
+  @Previewable @State var currency: Instrument = .AUD
   @Previewable @State var month = 7
   NavigationStack {
     CreateProfileFormView(
       name: $name,
-      currencyCode: $currency,
+      currency: $currency,
       financialYearStartMonth: $month,
       banner: nil,
       onBannerPrimary: {},
@@ -207,12 +207,12 @@ extension ICloudArrivalBanner.Kind {
 
 #Preview("Create — with banner") {
   @Previewable @State var name = "Hous"
-  @Previewable @State var currency = "AUD"
+  @Previewable @State var currency: Instrument = .AUD
   @Previewable @State var month = 7
   NavigationStack {
     CreateProfileFormView(
       name: $name,
-      currencyCode: $currency,
+      currency: $currency,
       financialYearStartMonth: $month,
       banner: .single(label: "Household"),
       onBannerPrimary: {},
@@ -227,12 +227,12 @@ extension ICloudArrivalBanner.Kind {
 
 #Preview("Create — dark") {
   @Previewable @State var name = "Household"
-  @Previewable @State var currency = "AUD"
+  @Previewable @State var currency: Instrument = .AUD
   @Previewable @State var month = 7
   NavigationStack {
     CreateProfileFormView(
       name: $name,
-      currencyCode: $currency,
+      currency: $currency,
       financialYearStartMonth: $month,
       banner: nil,
       onBannerPrimary: {},
@@ -248,12 +248,12 @@ extension ICloudArrivalBanner.Kind {
 
 #Preview("Create — AX5") {
   @Previewable @State var name = "Household"
-  @Previewable @State var currency = "AUD"
+  @Previewable @State var currency: Instrument = .AUD
   @Previewable @State var month = 7
   NavigationStack {
     CreateProfileFormView(
       name: $name,
-      currencyCode: $currency,
+      currency: $currency,
       financialYearStartMonth: $month,
       banner: nil,
       onBannerPrimary: {},

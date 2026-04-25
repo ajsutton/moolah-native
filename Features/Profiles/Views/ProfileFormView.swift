@@ -18,7 +18,8 @@ struct ProfileFormView: View {
 
   // iCloud profile fields
   @State private var cloudName = ""
-  @State private var cloudCurrencyCode = Locale.current.currency?.identifier ?? "AUD"
+  @State private var cloudCurrency = Instrument.fiat(
+    code: Locale.current.currency?.identifier ?? "AUD")
   @State private var cloudFinancialYearStartMonth = 7
 
   private static let monthNames: [String] = {
@@ -106,7 +107,7 @@ struct ProfileFormView: View {
   private var cloudKitSection: some View {
     Section("Profile") {
       TextField("Name", text: $cloudName)
-      CurrencyPicker(selection: $cloudCurrencyCode)
+      CurrencyPicker(selection: $cloudCurrency)
       Picker("Financial Year Starts", selection: $cloudFinancialYearStartMonth) {
         ForEach(1...12, id: \.self) { month in
           if month <= Self.monthNames.count {
@@ -163,7 +164,7 @@ struct ProfileFormView: View {
       profile = Profile(
         label: trimmedName,
         backendType: .cloudKit,
-        currencyCode: cloudCurrencyCode,
+        currencyCode: cloudCurrency.id,
         financialYearStartMonth: cloudFinancialYearStartMonth
       )
     }

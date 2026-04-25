@@ -6,7 +6,7 @@ struct CreateEarmarkSheet: View {
   let onCreate: (Earmark) -> Void
 
   @State private var name: String = ""
-  @State private var currencyCode: String
+  @State private var currency: Instrument
   @State private var savingsGoal: String = ""
   @State private var startDate = Date()
   @State private var endDate: Date =
@@ -22,11 +22,11 @@ struct CreateEarmarkSheet: View {
     self.instrument = instrument
     self.supportsComplexTransactions = supportsComplexTransactions
     self.onCreate = onCreate
-    _currencyCode = State(initialValue: instrument.id)
+    _currency = State(initialValue: instrument)
   }
 
   private var selectedInstrument: Instrument {
-    supportsComplexTransactions ? Instrument.fiat(code: currencyCode) : instrument
+    supportsComplexTransactions ? currency : instrument
   }
 
   var body: some View {
@@ -44,7 +44,7 @@ struct CreateEarmarkSheet: View {
         TextField("Name", text: $name)
           .accessibilityLabel("Earmark name")
         if supportsComplexTransactions {
-          CurrencyPicker(selection: $currencyCode)
+          CurrencyPicker(selection: $currency)
         }
       }
       Section("Savings Goal") {
