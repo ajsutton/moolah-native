@@ -86,18 +86,20 @@ struct RecordNameCollisionTests {
         == "\(AccountRecord.recordType)|\(accountId.uuidString)")
   }
 
-  // MARK: - 3. Uplink preserves legacy bare-UUID name for already-synced records
+  // MARK: - 3. Uplink ignores stale bare-UUID cached system fields
 
-  @Test("buildCKRecord keeps legacy bare-UUID recordName when cached system fields exist")
-  func buildCKRecordReusesLegacyRecordNameFromCachedSystemFields() throws {
+  @Test("buildCKRecord ignores legacy bare-UUID recordName in cached system fields")
+  func buildCKRecordIgnoresLegacyBareUUIDCachedSystemFields() throws {
     let (handler, container) =
       try ProfileDataSyncHandlerTestSupport
       .makeHandler()
 
     let accountId = UUID()
     // Seed an encodedSystemFields blob whose recordID uses the legacy
-    // bare-UUID recordName. Simulates a row already synced under the
-    // old format.
+    // bare-UUID recordName. Reusing this would re-upload the record under
+    // the legacy form and round-trip nowhere (the downlink path drops it),
+    // so `buildCKRecord` must ignore the stale cache and emit a fresh
+    // prefixed recordID.
     let legacyRecord = CKRecord(
       recordType: "CD_AccountRecord",
       recordID: CKRecord.ID(
@@ -112,17 +114,18 @@ struct RecordNameCollisionTests {
     context.insert(account)
     try context.save()
 
-    // Mutate and rebuild — should reuse the legacy recordID (no prefix).
     account.name = "Updated"
     let built = handler.buildCKRecord(for: account)
-    #expect(built.recordID.recordName == accountId.uuidString)
+    #expect(
+      built.recordID.recordName
+        == "\(AccountRecord.recordType)|\(accountId.uuidString)")
     #expect(built["name"] as? String == "Updated")
   }
 
-  // MARK: - 4. Downlink accepts both formats
+  // MARK: - 4. Downlink rejects bare-UUID CKRecords
 
-  @Test("applyRemoteChanges ingests both prefixed and bare-UUID CKRecords")
-  func applyRemoteChangesAcceptsBothRecordNameFormats() throws {
+  @Test("applyRemoteChanges drops bare-UUID CKRecords and ingests prefixed ones")
+  func applyRemoteChangesRejectsBareUUIDAcceptsPrefixed() throws {
     let (handler, container) =
       try ProfileDataSyncHandlerTestSupport
       .makeHandler()
@@ -154,9 +157,8 @@ struct RecordNameCollisionTests {
     let context = ModelContext(container)
     let all = try context.fetch(FetchDescriptor<AccountRecord>())
     let byId = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
-    #expect(byId[legacyId]?.name == "Legacy")
+    #expect(byId[legacyId] == nil, "bare-UUID record should not be ingested")
     #expect(byId[newId]?.name == "Prefixed")
-    #expect(byId[legacyId]?.encodedSystemFields != nil)
     #expect(byId[newId]?.encodedSystemFields != nil)
   }
 

@@ -104,7 +104,8 @@ final class ProfileIndexSyncHandler {
   func buildCKRecord(for record: ProfileRecord) -> CKRecord {
     let freshRecord = record.toCKRecord(in: zoneID)
     if let cachedData = record.encodedSystemFields,
-      let cachedRecord = CKRecord.fromEncodedSystemFields(cachedData)
+      let cachedRecord = CKRecord.fromEncodedSystemFields(cachedData),
+      ProfileDataSyncHandler.isUsableCachedRecordName(cachedRecord.recordID.recordName)
     {
       for key in freshRecord.allKeys() {
         cachedRecord[key] = freshRecord[key]

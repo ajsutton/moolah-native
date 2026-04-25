@@ -22,9 +22,18 @@ enum CKRecordIDRecordName {
 // `CKRecord.ID.recordName` is the primary key for a record in a zone. UUID-keyed
 // records in this app encode the SwiftData record type as a prefix so two
 // different types that happen to share a UUID can't collide on the server
-// (issue #416). Format: `"<recordType>|<uuid.uuidString>"` for new records.
-// Legacy records already on the server continue to use bare `<uuid.uuidString>`;
-// these helpers accept both formats.
+// (issue #416). Format: `"<recordType>|<uuid.uuidString>"` for UUID records,
+// `"<id>"` for string-keyed records (e.g. instruments like `"AUD"`).
+//
+// Bare-UUID recordNames are NOT accepted: prior to issue #416 records used
+// `"<uuid.uuidString>"` directly. Persisted CKSyncEngine state from that era
+// could contain bare-UUID pending changes that would parse as a UUID via
+// `systemFieldsKey` and collide with the new prefixed entries during batch
+// build (the dedup compares whole recordName but the lookup keys by UUID),
+// causing CloudKit to reject the entire batch with `.invalidArguments` —
+// "You can't save the same record twice". Treating bare UUIDs as non-UUID
+// names is what breaks the collision; stale bare-UUID pending changes get
+// purged on coordinator start (see SyncCoordinator+Lifecycle).
 extension CKRecord.ID {
   /// Constructs a prefixed recordName from a record type and UUID.
   convenience init(
@@ -37,10 +46,12 @@ extension CKRecord.ID {
   }
 
   /// The UUID portion of the recordName, or `nil` for non-UUID names
-  /// (e.g. instrument IDs like `"AUD"`). Accepts both `"<TYPE>|<UUID>"`
-  /// (new) and `"<UUID>"` (legacy) by parsing `systemFieldsKey`.
+  /// (e.g. instrument IDs like `"AUD"`, or stale legacy bare-UUID entries
+  /// from before issue #416). Requires the `"<TYPE>|<UUID>"` form — bare
+  /// UUID strings deliberately return `nil`.
   var uuid: UUID? {
-    UUID(uuidString: systemFieldsKey)
+    guard recordName.contains("|") else { return nil }
+    return UUID(uuidString: systemFieldsKey)
   }
 
   /// The key used for per-record system-fields caching during batch upsert.

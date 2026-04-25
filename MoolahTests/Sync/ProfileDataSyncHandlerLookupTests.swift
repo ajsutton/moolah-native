@@ -42,7 +42,8 @@ struct ProfileDataSyncHandlerLookupTests {
       AccountRecord(id: accountId, name: "Found", type: "bank", position: 0, isHidden: false))
     try context.save()
 
-    let recordID = CKRecord.ID(recordName: accountId.uuidString, zoneID: handler.zoneID)
+    let recordID = CKRecord.ID(
+      recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)
     #expect(result != nil)
     #expect(result?.recordType == "CD_AccountRecord")
@@ -71,7 +72,8 @@ struct ProfileDataSyncHandlerLookupTests {
   func recordToSaveReturnsNilForMissingRecord() throws {
     let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
-    let recordID = CKRecord.ID(recordName: UUID().uuidString, zoneID: handler.zoneID)
+    let recordID = CKRecord.ID(
+      recordType: AccountRecord.recordType, uuid: UUID(), zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)
     #expect(result == nil)
   }

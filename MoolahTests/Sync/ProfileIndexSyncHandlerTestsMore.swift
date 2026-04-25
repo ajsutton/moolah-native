@@ -24,7 +24,8 @@ struct ProfileIndexSyncHandlerTestsMore {
     let profileId = UUID()
     let originalCK = CKRecord(
       recordType: ProfileRecord.recordType,
-      recordID: CKRecord.ID(recordName: profileId.uuidString, zoneID: handler.zoneID)
+      recordID: CKRecord.ID(
+        recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
     )
     originalCK["label"] = "Test" as CKRecordValue
     originalCK["currencyCode"] = "AUD" as CKRecordValue
@@ -42,7 +43,9 @@ struct ProfileIndexSyncHandlerTestsMore {
     #expect(profile.encodedSystemFields != nil)
 
     let built = handler.buildCKRecord(for: profile)
-    #expect(built.recordID.recordName == profileId.uuidString)
+    #expect(
+      built.recordID.recordName
+        == "\(ProfileRecord.recordType)|\(profileId.uuidString)")
     #expect(built.recordID.zoneID == handler.zoneID)
     #expect(built["label"] as? String == "Test")
   }
@@ -58,7 +61,8 @@ struct ProfileIndexSyncHandlerTestsMore {
     context.insert(ProfileRecord(id: profileId, label: "Found", currencyCode: "AUD"))
     try context.save()
 
-    let recordID = CKRecord.ID(recordName: profileId.uuidString, zoneID: handler.zoneID)
+    let recordID = CKRecord.ID(
+      recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)
     #expect(result != nil)
     #expect(result?.recordType == ProfileRecord.recordType)
@@ -69,7 +73,8 @@ struct ProfileIndexSyncHandlerTestsMore {
   func recordToSaveReturnsNilForMissingProfile() throws {
     let (handler, _) = try makeHandler()
 
-    let recordID = CKRecord.ID(recordName: UUID().uuidString, zoneID: handler.zoneID)
+    let recordID = CKRecord.ID(
+      recordType: ProfileRecord.recordType, uuid: UUID(), zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)
     #expect(result == nil)
   }
@@ -83,7 +88,8 @@ struct ProfileIndexSyncHandlerTestsMore {
     let profileId = UUID()
     let ckRecord = CKRecord(
       recordType: ProfileRecord.recordType,
-      recordID: CKRecord.ID(recordName: profileId.uuidString, zoneID: handler.zoneID)
+      recordID: CKRecord.ID(
+        recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
     )
     ckRecord["label"] = "Test" as CKRecordValue
     ckRecord["currencyCode"] = "AUD" as CKRecordValue
@@ -120,7 +126,8 @@ struct ProfileIndexSyncHandlerTestsMore {
     try context.save()
 
     let testData = Data([0x01, 0x02, 0x03])
-    let recordID = CKRecord.ID(recordName: profileId.uuidString, zoneID: handler.zoneID)
+    let recordID = CKRecord.ID(
+      recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
     handler.updateEncodedSystemFields(recordID, data: testData)
 
     let freshContext = ModelContext(container)
@@ -141,7 +148,8 @@ struct ProfileIndexSyncHandlerTestsMore {
     context.insert(profile)
     try context.save()
 
-    let recordID = CKRecord.ID(recordName: profileId.uuidString, zoneID: handler.zoneID)
+    let recordID = CKRecord.ID(
+      recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
     handler.clearEncodedSystemFields(recordID)
 
     let freshContext = ModelContext(container)
@@ -166,7 +174,8 @@ struct ProfileIndexSyncHandlerTestsMore {
     // real record so the system fields blob is valid).
     let ckRecord = CKRecord(
       recordType: ProfileRecord.recordType,
-      recordID: CKRecord.ID(recordName: profileId.uuidString, zoneID: handler.zoneID)
+      recordID: CKRecord.ID(
+        recordType: ProfileRecord.recordType, uuid: profileId, zoneID: handler.zoneID)
     )
     ckRecord["label"] = "Test" as CKRecordValue
     ckRecord["currencyCode"] = "AUD" as CKRecordValue
