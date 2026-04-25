@@ -124,6 +124,13 @@ public enum UITestIdentifiers {
     /// field button is tapped and the CloudKit-backed picker is active.
     public static let sheet = "instrumentPicker.sheet"
 
+    /// The search text field inside the macOS picker popover.
+    /// On macOS the picker uses a custom VStack layout with an explicit
+    /// `TextField` (so the search input is accessible by identifier) rather
+    /// than `.searchable` on a `NavigationStack`, which does not surface an
+    /// accessible search field inside a popover.
+    public static let searchField = "instrumentPicker.searchField"
+
     /// A row inside the sheet for a specific instrument. The qualifier is the
     /// instrument id (e.g. `"USD"`).
     public static func row(_ id: String) -> String {

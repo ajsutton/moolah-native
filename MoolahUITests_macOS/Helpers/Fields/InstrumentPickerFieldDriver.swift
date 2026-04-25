@@ -38,23 +38,17 @@ struct InstrumentPickerFieldDriver {
     }
   }
 
-  /// Types `query` into the sheet's `.searchable` field. Returns once the
-  /// row for `query` exists in the list (proving the search result propagated).
+  /// Types `query` into the picker's search field. Returns once the row for
+  /// `query` exists in the list (proving the search result propagated).
   func search(_ query: String) {
     Trace.record(#function, detail: "query=\(query)")
-    let sheet = app.element(for: UITestIdentifiers.InstrumentPicker.sheet)
-    if !sheet.waitForExistence(timeout: 3) {
-      Trace.recordFailure("instrumentPicker.sheet not present for search")
-      XCTFail("InstrumentPickerSheet did not appear before searching")
-      return
-    }
-    // ui-test-review escape-hatch: SwiftUI .searchable does not expose its
-    // underlying NSSearchField via accessibilityIdentifier on macOS without
-    // colliding with the sheet identifier; scope is narrowed to the sheet
-    // element resolved through MoolahApp.element(for:).
-    let searchField = sheet.searchFields.firstMatch
+    // The macOS picker uses a custom VStack layout with an explicit TextField
+    // (`instrumentPicker.searchField`) rather than `.searchable` on a
+    // NavigationStack; the latter does not expose an accessible search field
+    // inside a popover on macOS.
+    let searchField = app.element(for: UITestIdentifiers.InstrumentPicker.searchField)
     if !searchField.waitForExistence(timeout: 3) {
-      Trace.recordFailure("search field inside instrumentPicker.sheet did not appear")
+      Trace.recordFailure("instrumentPicker.searchField did not appear")
       XCTFail("InstrumentPickerSheet search field did not appear within 3s")
       return
     }
