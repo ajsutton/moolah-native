@@ -28,8 +28,8 @@ struct ProfileDataSyncHandlerLookupTests {
       TransactionRecord.recordType: [txnId],
     ])
 
-    #expect(lookup[AccountRecord.recordType]?[accountId]?.recordType == "CD_AccountRecord")
-    #expect(lookup[TransactionRecord.recordType]?[txnId]?.recordType == "CD_TransactionRecord")
+    #expect(lookup[AccountRecord.recordType]?[accountId]?.recordType == "AccountRecord")
+    #expect(lookup[TransactionRecord.recordType]?[txnId]?.recordType == "TransactionRecord")
   }
 
   @Test
@@ -46,7 +46,7 @@ struct ProfileDataSyncHandlerLookupTests {
       recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)
     #expect(result != nil)
-    #expect(result?.recordType == "CD_AccountRecord")
+    #expect(result?.recordType == "AccountRecord")
     #expect(result?["name"] as? String == "Found")
   }
 
@@ -64,7 +64,7 @@ struct ProfileDataSyncHandlerLookupTests {
     let recordID = CKRecord.ID(recordName: "ASX:BHP.AX", zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)
     #expect(result != nil)
-    #expect(result?.recordType == "CD_InstrumentRecord")
+    #expect(result?.recordType == "InstrumentRecord")
     #expect(result?["name"] as? String == "BHP Group")
   }
 

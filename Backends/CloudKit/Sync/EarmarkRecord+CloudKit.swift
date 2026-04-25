@@ -4,7 +4,7 @@ import Foundation
 // MARK: - EarmarkRecord + CloudKitRecordConvertible
 
 extension EarmarkRecord: CloudKitRecordConvertible {
-  static let recordType = "CD_EarmarkRecord"
+  static let recordType = "EarmarkRecord"
 
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(

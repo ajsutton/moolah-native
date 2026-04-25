@@ -4,7 +4,7 @@ import Foundation
 // MARK: - AccountRecord + CloudKitRecordConvertible
 
 extension AccountRecord: CloudKitRecordConvertible {
-  static let recordType = "CD_AccountRecord"
+  static let recordType = "AccountRecord"
 
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(

@@ -40,5 +40,7 @@
     </dict>
     <key>MoolahCloudKitEnvironment</key>
     <string>$(CLOUDKIT_ENVIRONMENT)</string>
+    <key>MoolahCloudKitContainer</key>
+    <string>$(CLOUDKIT_CONTAINER_ID)</string>
 </dict>
 </plist>

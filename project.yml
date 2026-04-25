@@ -21,6 +21,12 @@ settings:
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
     GCC_TREAT_WARNINGS_AS_ERRORS: YES
 
+    # ---- CloudKit container ----
+    # Surfaced to Swift via the MoolahCloudKitContainer Info.plist key and
+    # read by CloudKitContainer.app. Must stay in sync with
+    # fastlane/Moolah.entitlements and scripts/cloudkit-config.sh.
+    CLOUDKIT_CONTAINER_ID: iCloud.rocks.moolah.app.v2
+
     # ---- Versioning ----
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"

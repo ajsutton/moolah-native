@@ -13,7 +13,7 @@ extension SyncCoordinator {
   func ensureZoneExists(_ zoneID: CKRecordZone.ID) async {
     do {
       let zone = CKRecordZone(zoneID: zoneID)
-      _ = try await CKContainer.default().privateCloudDatabase.save(zone)
+      _ = try await CloudKitContainer.app.privateCloudDatabase.save(zone)
       logger.info("Ensured zone exists: \(zoneID.zoneName)")
     } catch {
       logger.error("Failed to ensure zone exists \(zoneID.zoneName): \(error, privacy: .public)")

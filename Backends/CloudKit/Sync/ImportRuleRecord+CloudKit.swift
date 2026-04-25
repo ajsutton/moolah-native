@@ -4,7 +4,7 @@ import Foundation
 // MARK: - ImportRuleRecord + CloudKitRecordConvertible
 
 extension ImportRuleRecord: CloudKitRecordConvertible {
-  static let recordType = "CD_ImportRuleRecord"
+  static let recordType = "ImportRuleRecord"
 
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(

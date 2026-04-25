@@ -199,7 +199,7 @@ struct ProfileDataSyncHandlerQueueTests {
 
     let accountId = UUID()
     let ckRecord = CKRecord(
-      recordType: "CD_AccountRecord",
+      recordType: "AccountRecord",
       recordID: CKRecord.ID(
         recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
     )

@@ -25,7 +25,7 @@ enum LegacyZoneCleanup {
   }
 
   private static func deleteLegacyZone() async {
-    let database = CKContainer.default().privateCloudDatabase
+    let database = CloudKitContainer.app.privateCloudDatabase
     let legacyZoneID = CKRecordZone.ID(
       zoneName: legacyZoneName,
       ownerName: CKCurrentUserDefaultName
