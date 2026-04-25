@@ -9,7 +9,6 @@ import XCTest
 ///
 /// Usage:
 ///   app.createAccount.currency.tap(currentId: "AUD")
-///   app.createAccount.currency.expectSheetVisible()
 ///   app.createAccount.currency.search("USD")
 ///   app.createAccount.currency.pickRow("USD")
 ///   app.createAccount.currency.expectFieldSelection("USD")
@@ -49,9 +48,12 @@ struct InstrumentPickerFieldDriver {
       XCTFail("InstrumentPickerSheet did not appear before searching")
       return
     }
-    // The searchable modifier renders a search field inside the sheet.
-    // On macOS the search field is accessible via the sheet's descendants.
-    let searchField = sheet.searchFields.firstMatch
+    // ui-test-review: single-resolver escape-hatch — SwiftUI .searchable does not
+    // expose its underlying NSSearchField via accessibilityIdentifier; identifier
+    // is attached to the surrounding container and traversed here. The container
+    // is resolved through MoolahApp.element(for:).
+    let container = app.element(for: UITestIdentifiers.InstrumentPicker.searchField)
+    let searchField = container.searchFields.firstMatch
     if !searchField.waitForExistence(timeout: 3) {
       Trace.recordFailure("search field inside instrumentPicker.sheet did not appear")
       XCTFail("InstrumentPickerSheet search field did not appear within 3s")
@@ -70,9 +72,10 @@ struct InstrumentPickerFieldDriver {
     }
   }
 
-  /// Taps the row for `instrumentId` inside the sheet. Returns once the
-  /// sheet has dismissed (proven by `instrumentPicker.sheet` disappearing
-  /// from the accessibility tree).
+  /// Taps the row for `instrumentId` inside the sheet. Returns once both
+  /// the sheet has dismissed (proven by `instrumentPicker.sheet` disappearing)
+  /// AND the field button has updated to show the new selection (proven by
+  /// `instrumentPicker.field.<instrumentId>` appearing).
   func pickRow(_ instrumentId: String) {
     Trace.record(#function, detail: "instrumentId=\(instrumentId)")
     let row = app.element(for: UITestIdentifiers.InstrumentPicker.row(instrumentId))
@@ -83,42 +86,38 @@ struct InstrumentPickerFieldDriver {
     }
     row.click()
 
-    // Post-condition: the sheet must dismiss after the pick.
+    // Post-condition 1: the sheet must dismiss after the pick.
     let sheet = app.element(for: UITestIdentifiers.InstrumentPicker.sheet)
     let deadline = Date().addingTimeInterval(3)
     while Date() < deadline {
-      if !sheet.exists { return }
+      if !sheet.exists { break }
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     }
-    Trace.recordFailure("instrumentPicker.sheet did not dismiss after picking '\(instrumentId)'")
-    XCTFail("InstrumentPickerSheet did not dismiss within 3s of picking '\(instrumentId)'")
+    if sheet.exists {
+      Trace.recordFailure("instrumentPicker.sheet did not dismiss after picking '\(instrumentId)'")
+      XCTFail("InstrumentPickerSheet did not dismiss within 3s of picking '\(instrumentId)'")
+      return
+    }
+
+    // Post-condition 2: field button updates to the new selection.
+    let updatedField = app.element(for: UITestIdentifiers.InstrumentPicker.field(instrumentId))
+    if !updatedField.waitForExistence(timeout: 3) {
+      Trace.recordFailure("field did not update to '\(instrumentId)' after sheet dismissed")
+      XCTFail("InstrumentPickerField did not update to '\(instrumentId)' within 3s of picking")
+    }
   }
 
   // MARK: - Expectations (read-only)
 
-  /// Asserts the picker sheet is currently visible.
-  func expectSheetVisible() {
-    let sheet = app.element(for: UITestIdentifiers.InstrumentPicker.sheet)
-    if !sheet.waitForExistence(timeout: 3) {
-      Trace.recordFailure("instrumentPicker.sheet not visible")
-      XCTFail("InstrumentPickerSheet was not visible within 3s")
-    }
-  }
-
   /// Asserts the field button now shows `instrumentId` as the selection —
   /// i.e. `instrumentPicker.field.<instrumentId>` exists in the tree.
-  /// Polls for up to 3 s for the SwiftUI state binding to propagate.
+  /// Since `pickRow()` already guarantees propagation, this is a snapshot
+  /// assertion (no polling needed when called after `pickRow`).
   func expectFieldSelection(_ instrumentId: String) {
     let identifier = UITestIdentifiers.InstrumentPicker.field(instrumentId)
     let button = app.element(for: identifier)
-    let deadline = Date().addingTimeInterval(3)
-    while Date() < deadline {
-      if button.exists { return }
-      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-    }
-    Trace.recordFailure(
-      "field button 'instrumentPicker.field.\(instrumentId)' did not appear after pick")
-    XCTFail(
-      "InstrumentPickerField did not update to '\(instrumentId)' within 3s of picking")
+    XCTAssertTrue(
+      button.exists,
+      "InstrumentPickerField did not show '\(instrumentId)' — expected after pickRow()")
   }
 }

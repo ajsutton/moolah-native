@@ -22,11 +22,9 @@ final class InstrumentPickerUITests: MoolahUITestCase {
     // supportsComplexTransactions is true, which tradeBaseline satisfies.
     app.createAccount.open(initialCurrencyId: "AUD")
 
-    // Tap the field to open the sheet.
+    // Tap the field to open the sheet. tap() waits for sheet appearance as
+    // its post-condition, so no separate expectSheetVisible() call is needed.
     app.createAccount.currency.tap(currentId: "AUD")
-
-    // The sheet must now be on screen.
-    app.createAccount.currency.expectSheetVisible()
 
     // Type "USD" into the searchable field and wait for the row to appear.
     app.createAccount.currency.search("USD")
