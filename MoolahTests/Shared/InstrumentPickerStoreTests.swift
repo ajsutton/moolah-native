@@ -24,6 +24,32 @@ struct InstrumentPickerStoreTests {
     #expect(store.results.contains { $0.instrument.id == "USD" })
     #expect(store.results.allSatisfy { $0.instrument.kind == .fiatCurrency })
   }
+
+  @Test("typed query narrows to matching ISO codes")
+  func typedQueryNarrows() async throws {
+    let (backend, _) = try TestBackend.create()
+    let service = InstrumentSearchService(
+      registry: backend.instrumentRegistry,
+      cryptoSearchClient: StubCryptoSearchClient(),
+      resolutionClient: StubTokenResolutionClient(),
+      stockValidator: StubStockTickerValidator()
+    )
+    let store = InstrumentPickerStore(
+      searchService: service,
+      registry: backend.instrumentRegistry,
+      kinds: [.fiatCurrency]
+    )
+    await store.start()
+    store.updateQuery("usd")
+    // Wait one debounce tick.
+    try? await Task.sleep(for: .milliseconds(350))
+    #expect(store.results.contains { $0.instrument.id == "USD" })
+    #expect(
+      store.results.allSatisfy {
+        $0.instrument.id.lowercased().contains("usd")
+          || $0.instrument.name.localizedCaseInsensitiveContains("dollar")
+      })
+  }
 }
 
 private struct StubCryptoSearchClient: CryptoSearchClient {

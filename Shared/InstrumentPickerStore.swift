@@ -15,6 +15,7 @@ final class InstrumentPickerStore {
   private let registry: any InstrumentRegistryRepository
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "InstrumentPickerStore")
+  private var searchTask: Task<Void, Never>?
 
   init(
     searchService: InstrumentSearchService,
@@ -28,6 +29,16 @@ final class InstrumentPickerStore {
 
   func start() async {
     await runSearch()
+  }
+
+  func updateQuery(_ newQuery: String) {
+    query = newQuery
+    searchTask?.cancel()
+    searchTask = Task { [weak self] in
+      try? await Task.sleep(for: .milliseconds(250))
+      if Task.isCancelled { return }
+      await self?.runSearch()
+    }
   }
 
   private func runSearch() async {
