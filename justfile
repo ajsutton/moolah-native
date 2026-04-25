@@ -142,10 +142,15 @@ build-ios: generate
         -destination "platform=iOS Simulator,name=$SIM" \
         CODE_SIGNING_ALLOWED=NO
 
-# Regenerate Moolah.xcodeproj from project.yml (run after editing project.yml)
+# Regenerate the CloudKit wire-struct layer from CloudKit/schema.ckdb,
+# then regenerate Moolah.xcodeproj from project.yml.
 generate:
     #!/usr/bin/env bash
     set -euo pipefail
+
+    swift run --package-path tools/CKDBSchemaGen ckdb-schema-gen generate \
+        --input CloudKit/schema.ckdb \
+        --output Backends/CloudKit/Sync/Generated
 
     # Provide default
     export CODE_SIGN_STYLE="${CODE_SIGN_STYLE:-Automatic}"
@@ -158,6 +163,13 @@ generate:
     else
         xcodegen generate
     fi
+
+# Verify CloudKit/schema.ckdb is additive over the committed Production
+# baseline. Pure-text check: no CloudKit calls. Run in CI on every PR.
+check-schema-additive:
+    swift run --package-path tools/CKDBSchemaGen ckdb-schema-gen check-additive \
+        --proposed CloudKit/schema.ckdb \
+        --baseline CloudKit/schema-prod-baseline.ckdb
 
 # Sync code signing certificates (runs Match)
 certificates:
