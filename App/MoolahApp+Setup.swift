@@ -140,7 +140,10 @@ extension MoolahApp {
   static func applySeedProgressFixtures(seed: UITestSeed?, coordinator: SyncCoordinator) {
     guard let seed else { return }
     switch seed {
-    case .tradeBaseline:
+    case .tradeBaseline,
+      .welcomeEmpty,
+      .welcomeSingleCloudProfile,
+      .welcomeMultipleCloudProfiles:
       break
     case .welcomeDownloading:
       // Override iCloudAvailability to `.available` so the WelcomeStateResolver
