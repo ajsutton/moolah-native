@@ -59,6 +59,9 @@ final class MoolahApp {
   /// profile is active and the sidebar is visible.
   var syncFooter: SyncFooterScreen { SyncFooterScreen(app: self) }
 
+  /// `CreateAccountView` sheet. Open it by calling `createAccount.open(...)`.
+  var createAccount: CreateAccountScreen { CreateAccountScreen(app: self) }
+
   // MARK: - Single element resolver
 
   /// All identifier lookups in the driver layer go through this method, by
