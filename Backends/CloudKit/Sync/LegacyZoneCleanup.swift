@@ -46,7 +46,7 @@ enum LegacyZoneCleanup {
       UserDefaults.standard.set(true, forKey: cleanupKey)
     } catch {
       // Don't mark as done on failure — will retry next launch
-      logger.error("Failed to delete legacy zone: \(error)")
+      logger.error("Failed to delete legacy zone: \(error, privacy: .public)")
     }
   }
 }

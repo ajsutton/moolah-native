@@ -34,7 +34,9 @@ final class ProfileIndexSyncHandler {
     do {
       return try context.fetch(descriptor)
     } catch {
-      logger.error("SwiftData fetch failed for \(T.self): \(error)")
+      logger.error(
+        "SwiftData fetch failed for \(String(describing: T.self), privacy: .public): \(error, privacy: .public)"
+      )
       return []
     }
   }
@@ -50,7 +52,7 @@ final class ProfileIndexSyncHandler {
       guard ckRecord.recordType == ProfileRecord.recordType else { continue }
       guard let values = ProfileRecord.fieldValues(from: ckRecord) else {
         logger.error(
-          "applyRemoteChanges: malformed recordID '\(ckRecord.recordID.recordName)' (recordType \(ckRecord.recordType)) — skipping"
+          "applyRemoteChanges: malformed recordID '\(ckRecord.recordID.recordName)' (recordType \(ckRecord.recordType, privacy: .public)) — skipping"
         )
         continue
       }
@@ -91,7 +93,7 @@ final class ProfileIndexSyncHandler {
       try context.save()
       return .success(changedTypes: Set(saved.map(\.recordType)))
     } catch {
-      logger.error("Failed to save remote profile changes: \(error)")
+      logger.error("Failed to save remote profile changes: \(error, privacy: .public)")
       return .saveFailed(error.localizedDescription)
     }
   }
@@ -163,7 +165,7 @@ final class ProfileIndexSyncHandler {
       try context.save()
       logger.info("Deleted all local profile index data")
     } catch {
-      logger.error("Failed to delete local profile data: \(error)")
+      logger.error("Failed to delete local profile data: \(error, privacy: .public)")
     }
   }
 
@@ -181,7 +183,7 @@ final class ProfileIndexSyncHandler {
       do {
         try context.save()
       } catch {
-        logger.error("Failed to save cleared system fields: \(error)")
+        logger.error("Failed to save cleared system fields: \(error, privacy: .public)")
       }
     }
   }
@@ -198,7 +200,7 @@ final class ProfileIndexSyncHandler {
       do {
         try context.save()
       } catch {
-        logger.error("Failed to save updated system fields: \(error)")
+        logger.error("Failed to save updated system fields: \(error, privacy: .public)")
       }
     }
   }
@@ -217,7 +219,8 @@ final class ProfileIndexSyncHandler {
       do {
         try context.save()
       } catch {
-        logger.error("Failed to save cleared system fields for record: \(error)")
+        logger.error(
+          "Failed to save cleared system fields for record: \(error, privacy: .public)")
       }
     }
   }
@@ -257,7 +260,7 @@ final class ProfileIndexSyncHandler {
     do {
       try context.save()
     } catch {
-      logger.error("Failed to save system fields after upload: \(error)")
+      logger.error("Failed to save system fields after upload: \(error, privacy: .public)")
     }
   }
 
@@ -283,7 +286,8 @@ final class ProfileIndexSyncHandler {
     do {
       try context.save()
     } catch {
-      logger.error("Failed to save system fields after conflict resolution: \(error)")
+      logger.error(
+        "Failed to save system fields after conflict resolution: \(error, privacy: .public)")
     }
   }
 

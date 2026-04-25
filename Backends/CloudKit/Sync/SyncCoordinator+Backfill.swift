@@ -122,7 +122,7 @@ extension SyncCoordinator {
             pendingRecordZoneChanges: recordIDs.map { .saveRecord($0) })
         }
       } catch {
-        logger.error("Failed to queue records for profile \(profileId): \(error)")
+        logger.error("Failed to queue records for profile \(profileId): \(error, privacy: .public)")
       }
       // This path queued every record for the profile, so there is nothing left for
       // the per-launch backfill scan to find.
