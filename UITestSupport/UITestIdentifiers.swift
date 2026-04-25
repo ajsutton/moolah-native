@@ -69,6 +69,12 @@ public enum UITestIdentifiers {
     }
   }
 
+  public enum SyncFooter {
+    public static let container = "sync.footer.container"
+    public static let label = "sync.footer.label"
+    public static let detail = "sync.footer.detail"
+  }
+
   public enum Welcome {
     /// "Get started" primary CTA on the first-run hero (states 1 and 4).
     public static let heroGetStartedButton = "welcome.hero.getStarted"
