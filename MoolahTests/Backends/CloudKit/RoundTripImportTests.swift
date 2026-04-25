@@ -5,6 +5,7 @@ import Testing
 @testable import Moolah
 
 @Suite("CloudKit record round trip — import adapters")
+@MainActor
 struct RoundTripImportTests {
 
   private static let zoneID = CKRecordZone.ID(

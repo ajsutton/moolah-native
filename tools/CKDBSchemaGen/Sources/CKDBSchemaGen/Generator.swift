@@ -104,7 +104,7 @@ enum Generator {
     case .double: return "Double"
     case .timestamp: return "Date"
     case .bytes: return "Data"
-    case .reference: return "CKRecord.Reference"  // not currently used by user fields
+    case .reference: fatalError("REFERENCE not supported in user fields")
     case .listInt64: return "[Int64]"
     }
   }

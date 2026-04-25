@@ -81,7 +81,7 @@ enum CKDBSchemaGenCLI {
     let proposedSource = try String(contentsOfFile: proposed, encoding: .utf8)
     let baselineSource = try String(contentsOfFile: baseline, encoding: .utf8)
     let proposedSchema = try Parser.parse(proposedSource)
-    let baselineSchema = try Parser.parse(baselineSource).addingSystemTypesIfMissing()
+    let baselineSchema = try Parser.parse(baselineSource)
     let result = Additivity.check(proposed: proposedSchema, baseline: baselineSchema)
     if result.violations.isEmpty {
       print("ckdb-schema-gen: \(proposed) is additive over \(baseline)")
@@ -120,16 +120,5 @@ enum CKDBSchemaGenCLI {
       """,
       stderr)
     fputs("\n", stderr)
-  }
-}
-
-extension Schema {
-  /// An empty baseline (e.g. the very first run before Production has been
-  /// promoted) may contain only `DEFINE SCHEMA`. The Parser rejects that
-  /// outright, so the baseline file is always at least a `Users` block. This
-  /// hook is reserved for any future normalisation needed when comparing
-  /// against an absent baseline; today it's the identity function.
-  func addingSystemTypesIfMissing() -> Schema {
-    self
   }
 }

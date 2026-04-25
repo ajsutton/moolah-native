@@ -11,14 +11,14 @@ enum Parser {
 
   enum Error: Swift.Error, CustomStringConvertible {
     case malformed(String)
-    case unknownFieldType(String, line: Int)
+    case unknownFieldType(String)
 
     var description: String {
       switch self {
       case .malformed(let message):
         return "malformed schema: \(message)"
-      case .unknownFieldType(let raw, let line):
-        return "unknown field type '\(raw)' at line \(line)"
+      case .unknownFieldType(let raw):
+        return "unknown field type '\(raw)'"
       }
     }
   }
@@ -78,7 +78,7 @@ enum Parser {
     let rawType = tokens.removeFirst()
     let normalisedType = rawType.uppercased()
     guard let type = FieldType(rawValue: normalisedType) else {
-      throw Error.unknownFieldType(rawType, line: 0)
+      throw Error.unknownFieldType(rawType)
     }
     var indexes: Set<FieldIndex> = []
     for token in tokens {

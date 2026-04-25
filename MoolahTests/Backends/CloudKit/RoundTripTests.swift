@@ -5,6 +5,7 @@ import Testing
 @testable import Moolah
 
 @Suite("CloudKit record round trip")
+@MainActor
 struct RoundTripTests {
 
   private static let zoneID = CKRecordZone.ID(
@@ -156,6 +157,28 @@ struct RoundTripTests {
     #expect(decoded.earmarkId == original.earmarkId)
   }
 
+  @Test("TransactionLegRecord round-trips with all optional fields nil")
+  func transactionLegRoundTripWithNilOptionals() throws {
+    let original = TransactionLegRecord(
+      id: UUID(),
+      transactionId: UUID(),
+      accountId: nil,
+      instrumentId: "AUD",
+      quantity: -100,
+      type: "expense",
+      categoryId: nil,
+      earmarkId: nil,
+      sortOrder: 0
+    )
+    let record = original.toCKRecord(in: Self.zoneID)
+    let decoded = try #require(TransactionLegRecord.fieldValues(from: record))
+    #expect(decoded.id == original.id)
+    #expect(decoded.transactionId == original.transactionId)
+    #expect(decoded.accountId == nil)
+    #expect(decoded.categoryId == nil)
+    #expect(decoded.earmarkId == nil)
+  }
+
   @Test("InvestmentValueRecord round-trips")
   func investmentValueRoundTrip() throws {
     let original = InvestmentValueRecord(
@@ -195,6 +218,7 @@ struct RoundTripTests {
     let record = original.toCKRecord(in: Self.zoneID)
     let decoded = try #require(TransactionRecord.fieldValues(from: record))
     #expect(decoded.id == original.id)
+    #expect(abs(decoded.date.timeIntervalSince(original.date)) < 1)
     #expect(decoded.payee == original.payee)
     #expect(decoded.notes == original.notes)
     #expect(decoded.recurPeriod == original.recurPeriod)
@@ -217,6 +241,7 @@ struct RoundTripTests {
     )
     let record = original.toCKRecord(in: Self.zoneID)
     let decoded = try #require(TransactionRecord.fieldValues(from: record))
+    #expect(abs(decoded.date.timeIntervalSince(original.date)) < 1)
     #expect(decoded.payee == nil)
     #expect(decoded.importOriginRawDescription == nil)
   }

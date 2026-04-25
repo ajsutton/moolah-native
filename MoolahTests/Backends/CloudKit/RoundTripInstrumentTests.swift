@@ -5,6 +5,7 @@ import Testing
 @testable import Moolah
 
 @Suite("CloudKit record round trip — InstrumentRecord (recordName-keyed)")
+@MainActor
 struct RoundTripInstrumentTests {
 
   private static let zoneID = CKRecordZone.ID(
@@ -35,6 +36,9 @@ struct RoundTripInstrumentTests {
     #expect(decoded.exchange == original.exchange)
     #expect(decoded.chainId == original.chainId)
     #expect(decoded.contractAddress == original.contractAddress)
+    #expect(decoded.coingeckoId == original.coingeckoId)
+    #expect(decoded.cryptocompareSymbol == original.cryptocompareSymbol)
+    #expect(decoded.binanceSymbol == original.binanceSymbol)
   }
 
   @Test("InstrumentRecord round-trips with optional fields nil")
