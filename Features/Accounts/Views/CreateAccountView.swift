@@ -7,7 +7,7 @@ struct CreateAccountView: View {
 
   @State private var name = ""
   @State private var type: AccountType = .bank
-  @State private var currencyCode: String
+  @State private var currency: Instrument
   @State private var balanceDecimal: Decimal = 0
   @State private var date = Date()
   @State private var isSubmitting = false
@@ -31,7 +31,7 @@ struct CreateAccountView: View {
     self.instrument = instrument
     self.accountStore = accountStore
     self.supportsComplexTransactions = supportsComplexTransactions
-    _currencyCode = State(initialValue: instrument.id)
+    _currency = State(initialValue: instrument)
   }
 
   var body: some View {
@@ -87,11 +87,11 @@ struct CreateAccountView: View {
     }
 
     if supportsComplexTransactions {
-      CurrencyPicker(selection: $currencyCode)
+      CurrencyPicker(selection: $currency)
     }
 
     LabeledContent("Initial Balance") {
-      TextField("Amount", value: $balanceDecimal, format: .currency(code: currencyCode))
+      TextField("Amount", value: $balanceDecimal, format: .currency(code: currency.id))
         .monospacedDigit()
         .focused($focusedField, equals: .balance)
         #if os(iOS)
@@ -116,7 +116,7 @@ struct CreateAccountView: View {
 
     let selectedInstrument =
       supportsComplexTransactions
-      ? Instrument.fiat(code: currencyCode) : instrument
+      ? currency : instrument
     let openingBalance = InstrumentAmount(quantity: balanceDecimal, instrument: selectedInstrument)
     let newAccount = Account(
       id: UUID(),

@@ -27,7 +27,8 @@ struct WelcomeView: View {
   @State private var hasEverDownloaded = false
 
   @State private var name = ""
-  @State private var currencyCode = Locale.current.currency?.identifier ?? "AUD"
+  @State private var currency = Instrument.fiat(
+    code: Locale.current.currency?.identifier ?? "AUD")
   @State private var financialYearStartMonth = 7
 
   var body: some View {
@@ -156,7 +157,7 @@ struct WelcomeView: View {
 
     return CreateProfileFormView(
       name: $name,
-      currencyCode: $currencyCode,
+      currency: $currency,
       financialYearStartMonth: $financialYearStartMonth,
       banner: banner.map(mapBanner),
       onBannerPrimary: handleBannerPrimary,
@@ -198,7 +199,7 @@ struct WelcomeView: View {
     let profile = Profile(
       label: trimmedName,
       backendType: .cloudKit,
-      currencyCode: currencyCode,
+      currencyCode: currency.id,
       financialYearStartMonth: financialYearStartMonth
     )
     _ = await profileStore.validateAndAddProfile(profile)

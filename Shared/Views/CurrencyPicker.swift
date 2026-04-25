@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct CurrencyPicker: View {
-  @Binding var selection: String
+  @Binding var selection: Instrument
 
   static let commonCurrencyCodes: [String] = [
     "AUD", "CAD", "CHF", "CNY", "EUR", "GBP", "HKD", "INR", "JPY", "KRW",
@@ -12,14 +12,19 @@ struct CurrencyPicker: View {
     Locale.current.localizedString(forCurrencyCode: code) ?? code
   }
 
-  /// Currency codes sorted by their localized display name.
   private static let sortedCodes: [String] = commonCurrencyCodes.sorted {
     currencyName(for: $0).localizedCaseInsensitiveCompare(currencyName(for: $1))
       == .orderedAscending
   }
 
   var body: some View {
-    Picker("Currency", selection: $selection) {
+    Picker(
+      "Currency",
+      selection: Binding(
+        get: { selection.id },
+        set: { selection = Instrument.fiat(code: $0) }
+      )
+    ) {
       ForEach(Self.sortedCodes, id: \.self) { code in
         Text("\(code) — \(Self.currencyName(for: code))").tag(code)
       }
@@ -29,7 +34,7 @@ struct CurrencyPicker: View {
 }
 
 #Preview {
-  @Previewable @State var selection = "AUD"
+  @Previewable @State var selection: Instrument = .AUD
   Form {
     CurrencyPicker(selection: $selection)
   }
