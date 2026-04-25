@@ -77,7 +77,7 @@ final class ProfileContainerManager {
     )
     Task {
       do {
-        try await CKContainer.default().privateCloudDatabase.deleteRecordZone(withID: zoneID)
+        try await CloudKitContainer.app.privateCloudDatabase.deleteRecordZone(withID: zoneID)
         logger.info("Deleted CloudKit zone for profile \(profileId)")
       } catch {
         logger.error("Failed to delete CloudKit zone for profile \(profileId): \(error)")

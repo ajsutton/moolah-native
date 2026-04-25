@@ -18,10 +18,10 @@ struct CKRecordIDRecordNameTests {
   func initBuildsPrefixedRecordName() throws {
     let uuid = try #require(UUID(uuidString: "1CAC9567-574B-481A-BADA-D595325CBE0C"))
     let recordID = CKRecord.ID(
-      recordType: "CD_AccountRecord", uuid: uuid, zoneID: zoneID)
+      recordType: "AccountRecord", uuid: uuid, zoneID: zoneID)
     #expect(
       recordID.recordName
-        == "CD_AccountRecord|1CAC9567-574B-481A-BADA-D595325CBE0C")
+        == "AccountRecord|1CAC9567-574B-481A-BADA-D595325CBE0C")
     #expect(recordID.zoneID == zoneID)
   }
 
@@ -31,7 +31,7 @@ struct CKRecordIDRecordNameTests {
   func uuidStripsPrefix() throws {
     let uuid = try #require(UUID(uuidString: "1CAC9567-574B-481A-BADA-D595325CBE0C"))
     let recordID = CKRecord.ID(
-      recordName: "CD_AccountRecord|1CAC9567-574B-481A-BADA-D595325CBE0C",
+      recordName: "AccountRecord|1CAC9567-574B-481A-BADA-D595325CBE0C",
       zoneID: zoneID)
     #expect(recordID.uuid == uuid)
   }
@@ -60,7 +60,7 @@ struct CKRecordIDRecordNameTests {
   @Test
   func uuidReturnsNilForNonUUIDAfterPrefix() {
     let recordID = CKRecord.ID(
-      recordName: "CD_AccountRecord|not-a-uuid",
+      recordName: "AccountRecord|not-a-uuid",
       zoneID: zoneID)
     #expect(recordID.uuid == nil)
   }
@@ -70,9 +70,9 @@ struct CKRecordIDRecordNameTests {
   @Test
   func prefixedRecordTypeReturnsTypeFromPrefix() {
     let recordID = CKRecord.ID(
-      recordName: "CD_AccountRecord|1CAC9567-574B-481A-BADA-D595325CBE0C",
+      recordName: "AccountRecord|1CAC9567-574B-481A-BADA-D595325CBE0C",
       zoneID: zoneID)
-    #expect(recordID.prefixedRecordType == "CD_AccountRecord")
+    #expect(recordID.prefixedRecordType == "AccountRecord")
   }
 
   @Test
@@ -94,7 +94,7 @@ struct CKRecordIDRecordNameTests {
   @Test
   func systemFieldsKeyStripsTypePrefixForPrefixedRecord() {
     let recordID = CKRecord.ID(
-      recordName: "CD_AccountRecord|1CAC9567-574B-481A-BADA-D595325CBE0C",
+      recordName: "AccountRecord|1CAC9567-574B-481A-BADA-D595325CBE0C",
       zoneID: zoneID)
     #expect(recordID.systemFieldsKey == "1CAC9567-574B-481A-BADA-D595325CBE0C")
   }

@@ -109,7 +109,7 @@ struct RecordNameCollisionTests {
     // so `buildCKRecord` must ignore the stale cache and emit a fresh
     // prefixed recordID.
     let legacyRecord = CKRecord(
-      recordType: "CD_AccountRecord",
+      recordType: "AccountRecord",
       recordID: CKRecord.ID(
         recordName: accountId.uuidString, zoneID: handler.zoneID))
     let legacySystemFields = legacyRecord.encodedSystemFields
@@ -140,7 +140,7 @@ struct RecordNameCollisionTests {
 
     let legacyId = UUID()
     let legacyCK = CKRecord(
-      recordType: "CD_AccountRecord",
+      recordType: "AccountRecord",
       recordID: CKRecord.ID(
         recordName: legacyId.uuidString, zoneID: handler.zoneID))
     legacyCK["name"] = "Legacy" as CKRecordValue
@@ -150,9 +150,9 @@ struct RecordNameCollisionTests {
 
     let newId = UUID()
     let newCK = CKRecord(
-      recordType: "CD_AccountRecord",
+      recordType: "AccountRecord",
       recordID: CKRecord.ID(
-        recordType: "CD_AccountRecord",
+        recordType: "AccountRecord",
         uuid: newId,
         zoneID: handler.zoneID))
     newCK["name"] = "Prefixed" as CKRecordValue
@@ -190,9 +190,9 @@ struct RecordNameCollisionTests {
     // Simulate a CK round-trip where the server returns a prefixed
     // CKRecord as "saved".
     let savedCK = CKRecord(
-      recordType: "CD_AccountRecord",
+      recordType: "AccountRecord",
       recordID: CKRecord.ID(
-        recordType: "CD_AccountRecord",
+        recordType: "AccountRecord",
         uuid: accountId,
         zoneID: handler.zoneID))
     savedCK["name"] = "Test" as CKRecordValue

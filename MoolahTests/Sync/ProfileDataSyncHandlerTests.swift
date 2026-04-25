@@ -17,7 +17,7 @@ struct ProfileDataSyncHandlerTests {
 
     let accountId = UUID()
     let ckRecord = CKRecord(
-      recordType: "CD_AccountRecord",
+      recordType: "AccountRecord",
       recordID: CKRecord.ID(
         recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
     )
@@ -38,7 +38,7 @@ struct ProfileDataSyncHandlerTests {
       Issue.record("Expected .success but got \(result)")
       return
     }
-    #expect(changedTypes.contains("CD_AccountRecord"))
+    #expect(changedTypes.contains("AccountRecord"))
   }
 
   // MARK: - Remote Update
@@ -57,7 +57,7 @@ struct ProfileDataSyncHandlerTests {
     try context.save()
 
     let ckRecord = CKRecord(
-      recordType: "CD_AccountRecord",
+      recordType: "AccountRecord",
       recordID: CKRecord.ID(
         recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
     )
@@ -96,7 +96,7 @@ struct ProfileDataSyncHandlerTests {
     let recordID = CKRecord.ID(
       recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
     let result = handler.applyRemoteChanges(
-      saved: [], deleted: [(recordID, "CD_AccountRecord")])
+      saved: [], deleted: [(recordID, "AccountRecord")])
 
     let freshContext = ModelContext(container)
     let records = try freshContext.fetch(
@@ -107,7 +107,7 @@ struct ProfileDataSyncHandlerTests {
       Issue.record("Expected .success but got \(result)")
       return
     }
-    #expect(changedTypes.contains("CD_AccountRecord"))
+    #expect(changedTypes.contains("AccountRecord"))
   }
 
   // MARK: - buildCKRecord
@@ -126,7 +126,7 @@ struct ProfileDataSyncHandlerTests {
 
     let ckRecord = handler.buildCKRecord(for: account)
 
-    #expect(ckRecord.recordType == "CD_AccountRecord")
+    #expect(ckRecord.recordType == "AccountRecord")
     #expect(
       ckRecord.recordID.recordName
         == "\(AccountRecord.recordType)|\(account.id.uuidString)")
@@ -152,7 +152,7 @@ struct ProfileDataSyncHandlerTests {
     )
     let accountId = UUID()
     let foreignCK = CKRecord(
-      recordType: "CD_AccountRecord",
+      recordType: "AccountRecord",
       recordID: CKRecord.ID(
         recordType: AccountRecord.recordType, uuid: accountId, zoneID: foreignZone)
     )
@@ -185,7 +185,7 @@ struct ProfileDataSyncHandlerTests {
     let accountId = UUID()
     // Create a CKRecord to get system fields from
     let originalCK = CKRecord(
-      recordType: "CD_AccountRecord",
+      recordType: "AccountRecord",
       recordID: CKRecord.ID(
         recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
     )

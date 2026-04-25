@@ -23,7 +23,7 @@ struct RecordMappingTests {
 
     let ckRecord = profile.toCKRecord(in: zoneID)
 
-    #expect(ckRecord.recordType == "CD_ProfileRecord")
+    #expect(ckRecord.recordType == "ProfileRecord")
     #expect(
       ckRecord.recordID.recordName
         == "\(ProfileRecord.recordType)|\(profile.id.uuidString)")
@@ -56,7 +56,7 @@ struct RecordMappingTests {
 
     let ckRecord = account.toCKRecord(in: zoneID)
 
-    #expect(ckRecord.recordType == "CD_AccountRecord")
+    #expect(ckRecord.recordType == "AccountRecord")
     #expect(
       ckRecord.recordID.recordName
         == "\(AccountRecord.recordType)|\(account.id.uuidString)")
@@ -80,7 +80,7 @@ struct RecordMappingTests {
     // When instrumentId is missing from CKRecord, default to "AUD"
     let recordID = CKRecord.ID(
       recordType: AccountRecord.recordType, uuid: UUID(), zoneID: zoneID)
-    let ckRecord = CKRecord(recordType: "CD_AccountRecord", recordID: recordID)
+    let ckRecord = CKRecord(recordType: "AccountRecord", recordID: recordID)
     ckRecord["name"] = "Test" as CKRecordValue
     ckRecord["type"] = "bank" as CKRecordValue
     // No instrumentId set
@@ -106,7 +106,7 @@ struct RecordMappingTests {
 
     let ckRecord = txn.toCKRecord(in: zoneID)
 
-    #expect(ckRecord.recordType == "CD_TransactionRecord")
+    #expect(ckRecord.recordType == "TransactionRecord")
     #expect(
       ckRecord.recordID.recordName
         == "\(TransactionRecord.recordType)|\(txn.id.uuidString)")
@@ -168,7 +168,7 @@ struct RecordMappingTests {
 
     let ckRecord = leg.toCKRecord(in: zoneID)
 
-    #expect(ckRecord.recordType == "CD_TransactionLegRecord")
+    #expect(ckRecord.recordType == "TransactionLegRecord")
     #expect(
       ckRecord.recordID.recordName
         == "\(TransactionLegRecord.recordType)|\(leg.id.uuidString)")

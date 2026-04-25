@@ -18,7 +18,7 @@ final class CloudKitAuthProvider: AuthProvider, Sendable {
         pictureURL: nil
       )
     }
-    let status = try await CKContainer.default().accountStatus()
+    let status = try await CloudKitContainer.app.accountStatus()
     guard status == .available else { return nil }
     return UserProfile(
       id: "icloud-user",
@@ -33,7 +33,7 @@ final class CloudKitAuthProvider: AuthProvider, Sendable {
         pictureURL: nil
       )
     }
-    let status = try await CKContainer.default().accountStatus()
+    let status = try await CloudKitContainer.app.accountStatus()
     guard status == .available else {
       throw BackendError.unauthenticated
     }

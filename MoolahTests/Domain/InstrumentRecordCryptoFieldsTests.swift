@@ -85,7 +85,7 @@ struct InstrumentRecordCryptoFieldsTests {
     // the three new fields. Only the legacy keys are present.
     let zoneID = CKRecordZone.ID(zoneName: "test", ownerName: CKCurrentUserDefaultName)
     let recordID = CKRecord.ID(recordName: "AUD", zoneID: zoneID)
-    let ckRecord = CKRecord(recordType: "CD_InstrumentRecord", recordID: recordID)
+    let ckRecord = CKRecord(recordType: "InstrumentRecord", recordID: recordID)
     ckRecord["kind"] = "fiatCurrency" as CKRecordValue
     ckRecord["name"] = "AUD" as CKRecordValue
     ckRecord["decimals"] = 2 as CKRecordValue

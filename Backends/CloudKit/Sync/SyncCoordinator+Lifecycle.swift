@@ -55,7 +55,7 @@ extension SyncCoordinator {
         try? JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0)
       }
       let configuration = CKSyncEngine.Configuration(
-        database: CKContainer.default().privateCloudDatabase,
+        database: CloudKitContainer.app.privateCloudDatabase,
         stateSerialization: savedState,
         delegate: delegate
       )
@@ -78,7 +78,9 @@ extension SyncCoordinator {
     syncEngine = prepared.engine
     isFirstLaunch = prepared.isFirstLaunch
     isRunning = true
+    let containerID = CloudKitContainer.app.containerIdentifier ?? "<nil>"
     logger.info("Started unified sync coordinator")
+    logger.info("Sync container: \(containerID, privacy: .public)")
 
     // Purge any pending changes whose recordName is a bare UUID — these are
     // stale entries persisted by CKSyncEngine before issue #416 added the
@@ -129,7 +131,7 @@ extension SyncCoordinator {
     if isCloudKitAvailable && iCloudAvailability == .unknown {
       availabilityProbeTask = Task { [weak self] in
         do {
-          let status = try await CKContainer.default().accountStatus()
+          let status = try await CloudKitContainer.app.accountStatus()
           guard !Task.isCancelled else { return }
           self?.iCloudAvailability = Self.mapAccountStatus(status)
         } catch {

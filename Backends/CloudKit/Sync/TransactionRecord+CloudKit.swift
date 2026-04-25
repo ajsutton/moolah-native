@@ -4,7 +4,7 @@ import Foundation
 // MARK: - TransactionRecord + CloudKitRecordConvertible
 
 extension TransactionRecord: CloudKitRecordConvertible {
-  static let recordType = "CD_TransactionRecord"
+  static let recordType = "TransactionRecord"
 
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(

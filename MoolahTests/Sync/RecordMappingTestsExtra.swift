@@ -40,7 +40,7 @@ struct RecordMappingTestsExtra {
 
     let ckRecord = instrument.toCKRecord(in: zoneID)
 
-    #expect(ckRecord.recordType == "CD_InstrumentRecord")
+    #expect(ckRecord.recordType == "InstrumentRecord")
     #expect(ckRecord.recordID.recordName == "AUD")
     #expect(ckRecord["kind"] as? String == "fiatCurrency")
     #expect(ckRecord["name"] as? String == "Australian Dollar")
@@ -86,7 +86,7 @@ struct RecordMappingTestsExtra {
 
     let ckRecord = category.toCKRecord(in: zoneID)
 
-    #expect(ckRecord.recordType == "CD_CategoryRecord")
+    #expect(ckRecord.recordType == "CategoryRecord")
     #expect(ckRecord["name"] as? String == "Food")
     #expect(ckRecord["parentId"] as? String == parentId.uuidString)
 
@@ -126,7 +126,7 @@ struct RecordMappingTestsExtra {
 
     let ckRecord = earmark.toCKRecord(in: zoneID)
 
-    #expect(ckRecord.recordType == "CD_EarmarkRecord")
+    #expect(ckRecord.recordType == "EarmarkRecord")
     #expect(ckRecord["name"] as? String == "Holiday Fund")
     #expect(ckRecord["position"] as? Int == 3)
     #expect(ckRecord["isHidden"] as? Int == 0)

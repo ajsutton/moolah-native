@@ -91,7 +91,7 @@ extension ProfileStore {
     }
 
     do {
-      let status = try await CKContainer.default().accountStatus()
+      let status = try await CloudKitContainer.app.accountStatus()
       if status == .available {
         return true
       } else {

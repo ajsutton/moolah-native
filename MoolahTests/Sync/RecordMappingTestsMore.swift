@@ -22,7 +22,7 @@ struct RecordMappingTestsMore {
 
     let ckRecord = item.toCKRecord(in: zoneID)
 
-    #expect(ckRecord.recordType == "CD_EarmarkBudgetItemRecord")
+    #expect(ckRecord.recordType == "EarmarkBudgetItemRecord")
     #expect(ckRecord["earmarkId"] as? String == earmarkId.uuidString)
     #expect(ckRecord["categoryId"] as? String == categoryId.uuidString)
     #expect(ckRecord["amount"] as? Int64 == 1_000_000_000)
@@ -52,7 +52,7 @@ struct RecordMappingTestsMore {
 
     let ckRecord = record.toCKRecord(in: zoneID)
 
-    #expect(ckRecord.recordType == "CD_InvestmentValueRecord")
+    #expect(ckRecord.recordType == "InvestmentValueRecord")
     #expect(ckRecord["accountId"] as? String == accountId.uuidString)
     #expect(ckRecord["date"] as? Date == date)
     #expect(ckRecord["value"] as? Int64 == 25_000_000_000)
@@ -289,14 +289,14 @@ struct RecordMappingTestsMore {
 
   @Test
   func recordTypeStrings() {
-    #expect(ProfileRecord.recordType == "CD_ProfileRecord")
-    #expect(AccountRecord.recordType == "CD_AccountRecord")
-    #expect(TransactionRecord.recordType == "CD_TransactionRecord")
-    #expect(TransactionLegRecord.recordType == "CD_TransactionLegRecord")
-    #expect(InstrumentRecord.recordType == "CD_InstrumentRecord")
-    #expect(CategoryRecord.recordType == "CD_CategoryRecord")
-    #expect(EarmarkRecord.recordType == "CD_EarmarkRecord")
-    #expect(EarmarkBudgetItemRecord.recordType == "CD_EarmarkBudgetItemRecord")
-    #expect(InvestmentValueRecord.recordType == "CD_InvestmentValueRecord")
+    #expect(ProfileRecord.recordType == "ProfileRecord")
+    #expect(AccountRecord.recordType == "AccountRecord")
+    #expect(TransactionRecord.recordType == "TransactionRecord")
+    #expect(TransactionLegRecord.recordType == "TransactionLegRecord")
+    #expect(InstrumentRecord.recordType == "InstrumentRecord")
+    #expect(CategoryRecord.recordType == "CategoryRecord")
+    #expect(EarmarkRecord.recordType == "EarmarkRecord")
+    #expect(EarmarkBudgetItemRecord.recordType == "EarmarkBudgetItemRecord")
+    #expect(InvestmentValueRecord.recordType == "InvestmentValueRecord")
   }
 }

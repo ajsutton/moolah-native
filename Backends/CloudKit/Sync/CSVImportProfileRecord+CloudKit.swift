@@ -4,7 +4,7 @@ import Foundation
 // MARK: - CSVImportProfileRecord + CloudKitRecordConvertible
 
 extension CSVImportProfileRecord: CloudKitRecordConvertible {
-  static let recordType = "CD_CSVImportProfileRecord"
+  static let recordType = "CSVImportProfileRecord"
 
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(
