@@ -49,9 +49,25 @@ final class SyncProgress {
   // MARK: - Mutations (called by SyncCoordinator)
 
   /// Update the mirror of `syncEngine.state.pendingRecordZoneChanges.count`.
-  /// Called whenever the coordinator queues or sends changes.
-  func updatePendingUploads(_ count: Int) {
+  /// Called whenever the coordinator queues or sends changes. When the count
+  /// drops to 0:
+  ///   - from `.sending`: settle (no fetch active).
+  ///   - from `.syncing`: drop back to `.receiving` (fetch still going).
+  ///   - otherwise: just update the mirror.
+  func updatePendingUploads(_ count: Int, now: Date = Date()) {
+    let wasNonzero = pendingUploads > 0
     pendingUploads = count
+    guard count == 0, wasNonzero else { return }
+    switch phase {
+    case .sending:
+      phase = .upToDate
+      lastSettledAt = now
+      persistLastSettledAt()
+    case .syncing:
+      phase = .receiving
+    default:
+      break
+    }
   }
 
   /// Handles the `willFetchChanges` engine event.

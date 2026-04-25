@@ -165,6 +165,49 @@ struct SyncProgressTests {
     #expect(progress.moreComing == false)
   }
 
+  // MARK: - Sending → settle
+
+  @Test
+  func uploadsDrainingFromSendingEntersUpToDate() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.updatePendingUploads(3)
+    progress.beginReceiving()
+    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
+    #expect(progress.phase == .sending)
+    progress.updatePendingUploads(0, now: Date(timeIntervalSince1970: 2_000_000))
+    #expect(progress.phase == .upToDate)
+  }
+
+  @Test
+  func uploadsDrainingFromSendingRecordsLastSettledAt() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.updatePendingUploads(3)
+    progress.beginReceiving()
+    progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
+    let drainTime = Date(timeIntervalSince1970: 2_000_000)
+    progress.updatePendingUploads(0, now: drainTime)
+    #expect(progress.lastSettledAt == drainTime)
+  }
+
+  @Test
+  func uploadsDrainingDuringFetchDropsSyncingToReceiving() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.updatePendingUploads(3)
+    progress.beginReceiving()
+    #expect(progress.phase == .syncing)
+    progress.updatePendingUploads(0, now: Date(timeIntervalSince1970: 1_000_000))
+    #expect(progress.phase == .receiving)
+  }
+
+  @Test
+  func uploadsDrainingDuringFetchDoesNotAdvanceLastSettledAt() throws {
+    let progress = SyncProgress(userDefaults: try makeDefaults())
+    progress.updatePendingUploads(3)
+    progress.beginReceiving()
+    progress.updatePendingUploads(0, now: Date(timeIntervalSince1970: 1_000_000))
+    #expect(progress.lastSettledAt == nil)
+  }
+
   // MARK: - Helpers
 
   private func makeDefaults() throws -> UserDefaults {
