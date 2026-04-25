@@ -678,32 +678,73 @@ Use the [CloudKit Dashboard](https://icloud.developer.apple.com/) to:
 
 ---
 
-## 11. Schema Evolution
+## 11. Schema Management
 
-### CloudKit Production Constraints
+`CloudKit/schema.ckdb` is the canonical source of truth for the CloudKit
+schema. It is hand-authored, reviewed in PRs as plain text, and is the only
+file a developer hand-edits when CloudKit fields change. The Swift wire
+layer (`Backends/CloudKit/Sync/Generated/<RecordType>CloudKitFields.swift`)
+is generated from it by `tools/CKDBSchemaGen` as part of `just generate`,
+and CloudKit Development and Production are populated from it by `cktool`.
+**Never** treat a live CloudKit environment, an exported file, or a
+generated Swift file as the source of truth.
 
-Once a schema is deployed to CloudKit Production:
-- **Fields can only be added**, never removed or changed in type.
-- **Record types can only be added**, never removed.
-- **Indexes can be added or removed.**
+For procedural detail (how to add/remove/rename a field, what to do about
+specific compile errors), see the `modifying-cloudkit-schema` skill in
+`.claude/skills/`.
 
-### Safe Schema Changes
+### Pipeline
 
-```swift
-// Adding a new optional field -- safe
-record["newField"] = value as CKRecordValue
-
-// Reading with a fallback -- safe for older records that don't have the field
-let value = ckRecord["newField"] as? String ?? defaultValue
+```
+schema.ckdb ──► ckdb-schema-gen ──► Generated/  ──► *Record+CloudKit.swift  ──► CKRecord
+            │                       (wire struct)    (adapter, thin)
+            │
+            │ cktool import-schema
+            ▼
+       CloudKit Production
+            │
+            │ cktool export-schema (after promote)
+            ▼
+       schema-prod-baseline.ckdb (committed)
 ```
 
-### Unsafe Schema Changes (Require Migration)
+### Production additive-only
 
-- Changing a field's type (e.g., String to Int)
-- Renaming a field (old field stays, new field added)
-- Removing a field (old field stays in existing records forever)
+Production schema only grows. Once a field or record type is in
+Production, it is in Production forever. The Swift wire layer can forget
+about a field via `// DEPRECATED` (the generator skips deprecated lines),
+but the `.ckdb` line stays so `cktool import-schema` keeps re-declaring
+the field on Production. Type changes are not allowed; rename = add new
++ deprecate old.
 
-**Migration approach:** Add the new field alongside the old one. Read from new field first, fall back to old field. Write to both fields during a transition period.
+### CI gates
+
+- **PR-time:** `just check-schema-additive` is a pure-text comparison of
+  `CloudKit/schema.ckdb` against `CloudKit/schema-prod-baseline.ckdb`.
+  Fails on any non-additive change. No CloudKit calls.
+- **Release-tag:** `just verify-prod-matches-baseline` exports the live
+  Production schema and diffs it against the committed baseline (catches
+  manual dashboard edits or partial prior promotes); `just promote-schema`
+  imports the new manifest to Production with `--validate`, exports the
+  result back into the baseline file, and opens a follow-up PR with the
+  refreshed baseline.
+
+### `dryrun-promote-schema` and `verify-schema`
+
+Both are manual local affordances, not CI gates. `verify-schema` imports
+`.ckdb` to the developer's personal Dev container with `--validate`.
+`dryrun-promote-schema` is Apple's Prod-equivalent dry-run
+(`reset-schema && import-schema --validate`) and is destructive to the
+developer's personal Dev — set `CKTOOL_ALLOW_DEV_RESET=1` to confirm.
+
+### Constraints summary
+
+- Production additive-only forever.
+- No type changes.
+- Indexes are one-way too: `QUERYABLE SEARCHABLE SORTABLE` on STRING is
+  the safe default; narrowing in Production is brittle.
+- The wire layer uses CloudKit-native types only (`String?`, `Int64?`,
+  `Date?`, `Data?`). Domain richness lives in adapters.
 
 ---
 
