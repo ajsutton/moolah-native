@@ -8,6 +8,7 @@ import SwiftUI
 struct ICloudStatusLine: View {
   enum State: Equatable {
     case checking
+    case checkingActive(received: Int)
     case noneFound
   }
 
@@ -19,6 +20,10 @@ struct ICloudStatusLine: View {
         ProgressView()
           .controlSize(.small)
           .tint(WelcomeBrandColors.lightBlue)
+      } else if case .checkingActive = state {
+        ProgressView()
+          .controlSize(.small)
+          .tint(WelcomeBrandColors.lightBlue)
       }
       Text(label)
         .font(.footnote)
@@ -26,15 +31,27 @@ struct ICloudStatusLine: View {
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(label)
-    .accessibilityAddTraits(state == .checking ? .updatesFrequently : [])
+    .accessibilityAddTraits(
+      {
+        switch state {
+        case .checking, .checkingActive: return [.updatesFrequently]
+        case .noneFound: return []
+        }
+      }())
   }
 
   private var label: String {
     switch state {
     case .checking:
-      String(localized: "Checking iCloud for your profiles…")
+      return String(localized: "Checking iCloud for your profiles…")
+    case .checkingActive(let received):
+      let formatter = NumberFormatter()
+      formatter.numberStyle = .decimal
+      let receivedString = formatter.string(from: NSNumber(value: received)) ?? "\(received)"
+      return String(
+        localized: "Found data on iCloud · \(receivedString) records downloaded")
     case .noneFound:
-      String(localized: "No profiles in iCloud yet.")
+      return String(localized: "No profiles in iCloud yet.")
     }
   }
 }
@@ -71,4 +88,12 @@ struct ICloudStatusLine: View {
   }
   .frame(width: 520, height: 180)
   .dynamicTypeSize(.accessibility5)
+}
+
+#Preview("Downloading") {
+  ZStack {
+    WelcomeBrandColors.space.ignoresSafeArea()
+    ICloudStatusLine(state: .checkingActive(received: 1234)).padding()
+  }
+  .frame(width: 360, height: 100)
 }
