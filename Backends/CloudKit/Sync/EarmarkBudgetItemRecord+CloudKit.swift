@@ -10,21 +10,24 @@ extension EarmarkBudgetItemRecord: CloudKitRecordConvertible {
     let recordID = CKRecord.ID(
       recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
-    record["earmarkId"] = earmarkId.uuidString as CKRecordValue
-    record["categoryId"] = categoryId.uuidString as CKRecordValue
-    record["amount"] = amount as CKRecordValue
-    record["instrumentId"] = instrumentId as CKRecordValue
+    EarmarkBudgetItemRecordCloudKitFields(
+      amount: amount,
+      categoryId: categoryId.uuidString,
+      earmarkId: earmarkId.uuidString,
+      instrumentId: instrumentId
+    ).write(to: record)
     return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> EarmarkBudgetItemRecord? {
     guard let id = ckRecord.recordID.uuid else { return nil }
+    let fields = EarmarkBudgetItemRecordCloudKitFields(from: ckRecord)
     return EarmarkBudgetItemRecord(
       id: id,
-      earmarkId: (ckRecord["earmarkId"] as? String).flatMap { UUID(uuidString: $0) } ?? UUID(),
-      categoryId: (ckRecord["categoryId"] as? String).flatMap { UUID(uuidString: $0) } ?? UUID(),
-      amount: ckRecord["amount"] as? Int64 ?? 0,
-      instrumentId: ckRecord["instrumentId"] as? String ?? ""
+      earmarkId: fields.earmarkId.flatMap(UUID.init(uuidString:)) ?? UUID(),
+      categoryId: fields.categoryId.flatMap(UUID.init(uuidString:)) ?? UUID(),
+      amount: fields.amount ?? 0,
+      instrumentId: fields.instrumentId ?? ""
     )
   }
 }
