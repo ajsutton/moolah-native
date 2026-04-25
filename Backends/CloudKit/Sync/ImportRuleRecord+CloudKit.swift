@@ -10,32 +10,36 @@ extension ImportRuleRecord: CloudKitRecordConvertible {
     let recordID = CKRecord.ID(
       recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
-    record["name"] = name as CKRecordValue
-    record["enabled"] = (enabled ? 1 : 0) as CKRecordValue
-    record["position"] = position as CKRecordValue
-    record["matchMode"] = matchMode as CKRecordValue
-    record["conditionsJSON"] = conditionsJSON as CKRecordValue
-    record["actionsJSON"] = actionsJSON as CKRecordValue
-    if let value = accountScope { record["accountScope"] = value.uuidString as CKRecordValue }
+    ImportRuleRecordCloudKitFields(
+      accountScope: accountScope?.uuidString,
+      actionsJSON: actionsJSON,
+      conditionsJSON: conditionsJSON,
+      enabled: enabled ? 1 : 0,
+      matchMode: matchMode,
+      name: name,
+      position: Int64(position)
+    ).write(to: record)
     return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> ImportRuleRecord? {
     guard let id = ckRecord.recordID.uuid else { return nil }
+    let fields = ImportRuleRecordCloudKitFields(from: ckRecord)
     // The convenience initializer re-encodes the conditions/actions arrays,
     // so to avoid a decode-then-re-encode round trip we go through the
     // synthesised property setters on a fresh record.
     let record = ImportRuleRecord(
       id: id,
-      name: ckRecord["name"] as? String ?? "",
-      enabled: (ckRecord["enabled"] as? Int ?? 0) != 0,
-      position: ckRecord["position"] as? Int ?? 0,
-      matchMode: MatchMode(rawValue: ckRecord["matchMode"] as? String ?? "all") ?? .all,
+      name: fields.name ?? "",
+      enabled: (fields.enabled ?? 0) != 0,
+      position: Int(fields.position ?? 0),
+      matchMode: MatchMode(rawValue: fields.matchMode ?? "all") ?? .all,
       conditions: [],
       actions: [],
-      accountScope: (ckRecord["accountScope"] as? String).flatMap { UUID(uuidString: $0) })
-    record.conditionsJSON = ckRecord["conditionsJSON"] as? Data ?? Data()
-    record.actionsJSON = ckRecord["actionsJSON"] as? Data ?? Data()
+      accountScope: fields.accountScope.flatMap(UUID.init(uuidString:))
+    )
+    record.conditionsJSON = fields.conditionsJSON ?? Data()
+    record.actionsJSON = fields.actionsJSON ?? Data()
     return record
   }
 }

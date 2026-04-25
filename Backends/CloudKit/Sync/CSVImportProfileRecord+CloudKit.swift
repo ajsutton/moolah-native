@@ -10,36 +10,38 @@ extension CSVImportProfileRecord: CloudKitRecordConvertible {
     let recordID = CKRecord.ID(
       recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
-    record["accountId"] = accountId.uuidString as CKRecordValue
-    record["parserIdentifier"] = parserIdentifier as CKRecordValue
-    record["headerSignature"] = headerSignature as CKRecordValue
-    if let value = filenamePattern { record["filenamePattern"] = value as CKRecordValue }
-    record["deleteAfterImport"] = (deleteAfterImport ? 1 : 0) as CKRecordValue
-    record["createdAt"] = createdAt as CKRecordValue
-    if let value = lastUsedAt { record["lastUsedAt"] = value as CKRecordValue }
-    if let value = dateFormatRawValue { record["dateFormatRawValue"] = value as CKRecordValue }
-    if let value = columnRoleRawValuesEncoded {
-      record["columnRoleRawValuesEncoded"] = value as CKRecordValue
-    }
+    CSVImportProfileRecordCloudKitFields(
+      accountId: accountId.uuidString,
+      columnRoleRawValuesEncoded: columnRoleRawValuesEncoded,
+      createdAt: createdAt,
+      dateFormatRawValue: dateFormatRawValue,
+      deleteAfterImport: deleteAfterImport ? 1 : 0,
+      filenamePattern: filenamePattern,
+      headerSignature: headerSignature,
+      lastUsedAt: lastUsedAt,
+      parserIdentifier: parserIdentifier
+    ).write(to: record)
     return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> CSVImportProfileRecord? {
     guard let id = ckRecord.recordID.uuid else { return nil }
+    let fields = CSVImportProfileRecordCloudKitFields(from: ckRecord)
     let record = CSVImportProfileRecord(
       id: id,
-      accountId: (ckRecord["accountId"] as? String).flatMap { UUID(uuidString: $0) } ?? UUID(),
-      parserIdentifier: ckRecord["parserIdentifier"] as? String ?? "",
+      accountId: fields.accountId.flatMap(UUID.init(uuidString:)) ?? UUID(),
+      parserIdentifier: fields.parserIdentifier ?? "",
       headerSignature: [],
-      filenamePattern: ckRecord["filenamePattern"] as? String,
-      deleteAfterImport: (ckRecord["deleteAfterImport"] as? Int ?? 0) != 0,
-      createdAt: ckRecord["createdAt"] as? Date ?? Date(),
-      lastUsedAt: ckRecord["lastUsedAt"] as? Date,
-      dateFormatRawValue: ckRecord["dateFormatRawValue"] as? String,
-      columnRoleRawValuesEncoded: ckRecord["columnRoleRawValuesEncoded"] as? String)
+      filenamePattern: fields.filenamePattern,
+      deleteAfterImport: (fields.deleteAfterImport ?? 0) != 0,
+      createdAt: fields.createdAt ?? Date(),
+      lastUsedAt: fields.lastUsedAt,
+      dateFormatRawValue: fields.dateFormatRawValue,
+      columnRoleRawValuesEncoded: fields.columnRoleRawValuesEncoded
+    )
     // Store the joined headerSignature directly (init normalises via joining,
     // but the CK value already arrives pre-joined).
-    record.headerSignature = ckRecord["headerSignature"] as? String ?? ""
+    record.headerSignature = fields.headerSignature ?? ""
     return record
   }
 }

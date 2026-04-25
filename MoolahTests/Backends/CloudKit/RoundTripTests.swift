@@ -220,4 +220,5 @@ struct RoundTripTests {
     #expect(decoded.payee == nil)
     #expect(decoded.importOriginRawDescription == nil)
   }
+
 }
