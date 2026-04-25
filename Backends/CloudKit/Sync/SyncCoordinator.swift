@@ -350,7 +350,7 @@ final class SyncCoordinator {
       modelContainer: containerManager.indexContainer)
     self.isCloudKitAvailable = isCloudKitAvailable
     if !isCloudKitAvailable {
-      self.iCloudAvailability = .unavailable(reason: .entitlementsMissing)
+      applyICloudAvailability(.unavailable(reason: .entitlementsMissing))
     }
   }
 

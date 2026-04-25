@@ -133,7 +133,7 @@ extension SyncCoordinator {
         do {
           let status = try await CloudKitContainer.app.accountStatus()
           guard !Task.isCancelled else { return }
-          self?.iCloudAvailability = Self.mapAccountStatus(status)
+          self?.applyICloudAvailability(Self.mapAccountStatus(status))
         } catch {
           self?.logger.info(
             "Initial accountStatus probe threw: \(error, privacy: .public) — staying .unknown"
@@ -141,7 +141,6 @@ extension SyncCoordinator {
         }
       }
     }
-    progress.didStart(iCloudAvailable: iCloudAvailability == .available)
   }
 
   func stop() {
@@ -163,8 +162,9 @@ extension SyncCoordinator {
     // Reset availability so a subsequent `start()` re-probes. When
     // entitlements are missing the init-time `.unavailable(.entitlementsMissing)`
     // remains correct — a rebuild of the coordinator would be needed to clear it.
-    iCloudAvailability =
+    applyICloudAvailability(
       isCloudKitAvailable ? .unknown : .unavailable(reason: .entitlementsMissing)
+    )
     profileIndexFetchedAtLeastOnce = false
     fetchSessionTouchedIndexZone = false
     logger.info("Stopped unified sync coordinator")

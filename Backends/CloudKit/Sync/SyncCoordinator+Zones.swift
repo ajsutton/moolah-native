@@ -47,6 +47,28 @@ extension SyncCoordinator {
 
   // MARK: - Account Changes
 
+  /// Single setter for iCloud availability and its `progress` mirror.
+  /// Replaces direct writes to `iCloudAvailability` from `handleAccountChange`
+  /// and `completeStart`. When transitioning to `.available` the call also
+  /// fires `progress.didStart(iCloudAvailable: true)` so the indicator
+  /// enters `.connecting` once the async availability probe resolves —
+  /// `completeStart` runs before the probe returns.
+  @MainActor
+  func applyICloudAvailability(_ availability: ICloudAvailability) {
+    let wasAvailable = iCloudAvailability == .available
+    iCloudAvailability = availability
+    let reason: ICloudAvailability.UnavailableReason?
+    if case .unavailable(let r) = availability {
+      reason = r
+    } else {
+      reason = nil
+    }
+    progress.setICloudUnavailable(reason: reason)
+    if availability == .available && !wasAvailable {
+      progress.didStart(iCloudAvailable: true)
+    }
+  }
+
   /// Maps a CloudKit account-change type to ``ICloudAvailability`` and
   /// applies it. Pure assignment — safe to call on every event, including
   /// the synthetic first-launch `.signIn`.
@@ -58,9 +80,9 @@ extension SyncCoordinator {
   ) {
     switch changeType {
     case .signIn, .switchAccounts:
-      iCloudAvailability = .available
+      applyICloudAvailability(.available)
     case .signOut:
-      iCloudAvailability = .unavailable(reason: .notSignedIn)
+      applyICloudAvailability(.unavailable(reason: .notSignedIn))
     @unknown default:
       logger.warning(
         "Unhandled account-change type — iCloudAvailability not updated"
