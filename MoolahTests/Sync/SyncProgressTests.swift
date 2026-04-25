@@ -173,7 +173,7 @@ struct SyncProgressTests {
     progress.updatePendingUploads(3)
     progress.beginReceiving()
     progress.endReceiving(now: Date(timeIntervalSince1970: 1_000_000))
-    #expect(progress.phase == .sending)
+    try #require(progress.phase == .sending)
     progress.updatePendingUploads(0, now: Date(timeIntervalSince1970: 2_000_000))
     #expect(progress.phase == .upToDate)
   }
@@ -194,7 +194,7 @@ struct SyncProgressTests {
     let progress = SyncProgress(userDefaults: try makeDefaults())
     progress.updatePendingUploads(3)
     progress.beginReceiving()
-    #expect(progress.phase == .syncing)
+    try #require(progress.phase == .syncing)
     progress.updatePendingUploads(0, now: Date(timeIntervalSince1970: 1_000_000))
     #expect(progress.phase == .receiving)
   }

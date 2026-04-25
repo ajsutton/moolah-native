@@ -60,9 +60,7 @@ final class SyncProgress {
     guard count == 0, wasNonzero else { return }
     switch phase {
     case .sending:
-      phase = .upToDate
-      lastSettledAt = now
-      persistLastSettledAt()
+      settle(now: now)
     case .syncing:
       phase = .receiving
     default:
@@ -105,12 +103,19 @@ final class SyncProgress {
       phase = .sending
       return
     }
+    settle(now: now)
+  }
+
+  // MARK: - Persistence
+
+  /// Single settle transition — used by both the `didFetchChanges` settle
+  /// path and the upload-drain path. Centralised so any future settle
+  /// side-effect (telemetry, notifications, extra fields) lands in one place.
+  private func settle(now: Date) {
     phase = .upToDate
     lastSettledAt = now
     persistLastSettledAt()
   }
-
-  // MARK: - Persistence
 
   private func persistLastSettledAt() {
     if let lastSettledAt {
