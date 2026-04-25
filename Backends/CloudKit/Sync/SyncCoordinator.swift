@@ -203,7 +203,7 @@ final class SyncCoordinator {
 
   /// Observable sync progress consumed by the sidebar footer and the
   /// `.heroDownloading` Welcome arm. Always non-nil; SyncCoordinator
-  /// drives transitions from its existing event hooks (Tasks 9-13).
+  /// drives transitions from its existing CKSyncEngine event hooks.
   let progress: SyncProgress
 
   let logger = Logger(subsystem: "com.moolah.app", category: "SyncCoordinator")
