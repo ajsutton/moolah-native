@@ -281,4 +281,23 @@ struct SyncCoordinatorTests {
     coordinator.applyICloudAvailability(.available)
     #expect(coordinator.progress.phase == .connecting)
   }
+
+  @Test
+  func bumpRefetchAttemptsEntersRetrying() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(
+      containerManager: manager, isCloudKitAvailable: true)
+    coordinator.bumpRefetchAttempts()
+    #expect(coordinator.progress.phase == .degraded(.retrying))
+  }
+
+  @Test
+  func resetRefetchAttemptsClearsRetrying() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let coordinator = SyncCoordinator(
+      containerManager: manager, isCloudKitAvailable: true)
+    coordinator.bumpRefetchAttempts()
+    coordinator.resetRefetchAttempts()
+    #expect(coordinator.progress.phase == .idle)
+  }
 }

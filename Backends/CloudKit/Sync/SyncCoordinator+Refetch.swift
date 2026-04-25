@@ -33,6 +33,7 @@ extension SyncCoordinator {
       return
     }
     refetchAttempts = nextAttempt
+    progress.setRetrying(true)
     refetchTask?.cancel()
     refetchTask = Task { [delay, nextAttempt] in
       try? await Task.sleep(for: delay)
@@ -72,6 +73,14 @@ extension SyncCoordinator {
     refetchAttempts = 0
     longRetryTask?.cancel()
     longRetryTask = nil
+    progress.setRetrying(false)
+  }
+
+  /// Test seam: bump the attempt counter and flag retrying. Production code
+  /// invokes the same effect via `scheduleRefetch()`.
+  func bumpRefetchAttempts() {
+    refetchAttempts += 1
+    progress.setRetrying(true)
   }
 
   /// Cancels any pending short-retry and long-retry tasks and resets the attempt
