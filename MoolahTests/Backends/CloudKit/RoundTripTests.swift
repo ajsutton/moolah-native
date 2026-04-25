@@ -89,4 +89,87 @@ struct RoundTripTests {
     #expect(decoded.amount == original.amount)
     #expect(decoded.instrumentId == original.instrumentId)
   }
+
+  @Test("EarmarkRecord round-trips with all optionals set")
+  func earmarkRoundTripFull() throws {
+    let original = EarmarkRecord(
+      id: UUID(),
+      name: "Holiday",
+      position: 0,
+      isHidden: false,
+      instrumentId: "AUD",
+      savingsTarget: 5_000_00,
+      savingsTargetInstrumentId: "AUD",
+      savingsStartDate: Date(),
+      savingsEndDate: Date()
+    )
+    let record = original.toCKRecord(in: Self.zoneID)
+    let decoded = try #require(EarmarkRecord.fieldValues(from: record))
+    #expect(decoded.name == original.name)
+    #expect(decoded.position == original.position)
+    #expect(decoded.isHidden == original.isHidden)
+    #expect(decoded.instrumentId == original.instrumentId)
+    #expect(decoded.savingsTarget == original.savingsTarget)
+    #expect(decoded.savingsTargetInstrumentId == original.savingsTargetInstrumentId)
+  }
+
+  @Test("EarmarkRecord round-trips with all optionals nil")
+  func earmarkRoundTripMinimal() throws {
+    let original = EarmarkRecord(
+      id: UUID(),
+      name: "Empty",
+      position: 0,
+      isHidden: false,
+      instrumentId: nil,
+      savingsTarget: nil,
+      savingsTargetInstrumentId: nil,
+      savingsStartDate: nil,
+      savingsEndDate: nil
+    )
+    let record = original.toCKRecord(in: Self.zoneID)
+    let decoded = try #require(EarmarkRecord.fieldValues(from: record))
+    #expect(decoded.savingsTarget == nil)
+    #expect(decoded.instrumentId == nil)
+  }
+
+  @Test("TransactionLegRecord round-trips")
+  func transactionLegRoundTrip() throws {
+    let original = TransactionLegRecord(
+      id: UUID(),
+      transactionId: UUID(),
+      accountId: UUID(),
+      instrumentId: "AUD",
+      quantity: -100,
+      type: "expense",
+      categoryId: UUID(),
+      earmarkId: UUID(),
+      sortOrder: 0
+    )
+    let record = original.toCKRecord(in: Self.zoneID)
+    let decoded = try #require(TransactionLegRecord.fieldValues(from: record))
+    #expect(decoded.id == original.id)
+    #expect(decoded.transactionId == original.transactionId)
+    #expect(decoded.accountId == original.accountId)
+    #expect(decoded.quantity == original.quantity)
+    #expect(decoded.type == original.type)
+    #expect(decoded.categoryId == original.categoryId)
+    #expect(decoded.earmarkId == original.earmarkId)
+  }
+
+  @Test("InvestmentValueRecord round-trips")
+  func investmentValueRoundTrip() throws {
+    let original = InvestmentValueRecord(
+      id: UUID(),
+      accountId: UUID(),
+      date: Date(),
+      value: 12345,
+      instrumentId: "ASX:BHP"
+    )
+    let record = original.toCKRecord(in: Self.zoneID)
+    let decoded = try #require(InvestmentValueRecord.fieldValues(from: record))
+    #expect(decoded.id == original.id)
+    #expect(decoded.accountId == original.accountId)
+    #expect(decoded.value == original.value)
+    #expect(decoded.instrumentId == original.instrumentId)
+  }
 }

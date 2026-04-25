@@ -10,30 +10,32 @@ extension TransactionLegRecord: CloudKitRecordConvertible {
     let recordID = CKRecord.ID(
       recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
-    record["transactionId"] = transactionId.uuidString as CKRecordValue
-    if let accountId { record["accountId"] = accountId.uuidString as CKRecordValue }
-    record["instrumentId"] = instrumentId as CKRecordValue
-    record["quantity"] = quantity as CKRecordValue
-    record["type"] = type as CKRecordValue
-    if let categoryId { record["categoryId"] = categoryId.uuidString as CKRecordValue }
-    if let earmarkId { record["earmarkId"] = earmarkId.uuidString as CKRecordValue }
-    record["sortOrder"] = sortOrder as CKRecordValue
+    TransactionLegRecordCloudKitFields(
+      accountId: accountId?.uuidString,
+      categoryId: categoryId?.uuidString,
+      earmarkId: earmarkId?.uuidString,
+      instrumentId: instrumentId,
+      quantity: quantity,
+      sortOrder: Int64(sortOrder),
+      transactionId: transactionId.uuidString,
+      type: type
+    ).write(to: record)
     return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> TransactionLegRecord? {
     guard let id = ckRecord.recordID.uuid else { return nil }
+    let fields = TransactionLegRecordCloudKitFields(from: ckRecord)
     return TransactionLegRecord(
       id: id,
-      transactionId: (ckRecord["transactionId"] as? String).flatMap { UUID(uuidString: $0) }
-        ?? UUID(),
-      accountId: (ckRecord["accountId"] as? String).flatMap { UUID(uuidString: $0) },
-      instrumentId: ckRecord["instrumentId"] as? String ?? "",
-      quantity: ckRecord["quantity"] as? Int64 ?? 0,
-      type: ckRecord["type"] as? String ?? "expense",
-      categoryId: (ckRecord["categoryId"] as? String).flatMap { UUID(uuidString: $0) },
-      earmarkId: (ckRecord["earmarkId"] as? String).flatMap { UUID(uuidString: $0) },
-      sortOrder: ckRecord["sortOrder"] as? Int ?? 0
+      transactionId: fields.transactionId.flatMap(UUID.init(uuidString:)) ?? UUID(),
+      accountId: fields.accountId.flatMap(UUID.init(uuidString:)),
+      instrumentId: fields.instrumentId ?? "",
+      quantity: fields.quantity ?? 0,
+      type: fields.type ?? "expense",
+      categoryId: fields.categoryId.flatMap(UUID.init(uuidString:)),
+      earmarkId: fields.earmarkId.flatMap(UUID.init(uuidString:)),
+      sortOrder: Int(fields.sortOrder ?? 0)
     )
   }
 }

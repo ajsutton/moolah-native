@@ -10,31 +10,32 @@ extension EarmarkRecord: CloudKitRecordConvertible {
     let recordID = CKRecord.ID(
       recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
-    record["name"] = name as CKRecordValue
-    if let instrumentId { record["instrumentId"] = instrumentId as CKRecordValue }
-    record["position"] = position as CKRecordValue
-    record["isHidden"] = (isHidden ? 1 : 0) as CKRecordValue
-    if let savingsTarget { record["savingsTarget"] = savingsTarget as CKRecordValue }
-    if let savingsTargetInstrumentId {
-      record["savingsTargetInstrumentId"] = savingsTargetInstrumentId as CKRecordValue
-    }
-    if let savingsStartDate { record["savingsStartDate"] = savingsStartDate as CKRecordValue }
-    if let savingsEndDate { record["savingsEndDate"] = savingsEndDate as CKRecordValue }
+    EarmarkRecordCloudKitFields(
+      instrumentId: instrumentId,
+      isHidden: isHidden ? 1 : 0,
+      name: name,
+      position: Int64(position),
+      savingsEndDate: savingsEndDate,
+      savingsStartDate: savingsStartDate,
+      savingsTarget: savingsTarget,
+      savingsTargetInstrumentId: savingsTargetInstrumentId
+    ).write(to: record)
     return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> EarmarkRecord? {
     guard let id = ckRecord.recordID.uuid else { return nil }
+    let fields = EarmarkRecordCloudKitFields(from: ckRecord)
     return EarmarkRecord(
       id: id,
-      name: ckRecord["name"] as? String ?? "",
-      position: ckRecord["position"] as? Int ?? 0,
-      isHidden: (ckRecord["isHidden"] as? Int ?? 0) != 0,
-      instrumentId: ckRecord["instrumentId"] as? String,
-      savingsTarget: ckRecord["savingsTarget"] as? Int64,
-      savingsTargetInstrumentId: ckRecord["savingsTargetInstrumentId"] as? String,
-      savingsStartDate: ckRecord["savingsStartDate"] as? Date,
-      savingsEndDate: ckRecord["savingsEndDate"] as? Date
+      name: fields.name ?? "",
+      position: Int(fields.position ?? 0),
+      isHidden: (fields.isHidden ?? 0) != 0,
+      instrumentId: fields.instrumentId,
+      savingsTarget: fields.savingsTarget,
+      savingsTargetInstrumentId: fields.savingsTargetInstrumentId,
+      savingsStartDate: fields.savingsStartDate,
+      savingsEndDate: fields.savingsEndDate
     )
   }
 }
