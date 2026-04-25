@@ -14,7 +14,7 @@ struct MoolahProfileDetailView: View {
   let session: ProfileSession?
 
   @State private var label: String
-  @State private var currencyCode: String
+  @State private var currency: Instrument
   @State private var financialYearStartMonth: Int
   @State private var showMigration = false
 
@@ -29,7 +29,7 @@ struct MoolahProfileDetailView: View {
     self.authStore = authStore
     self.session = session
     _label = State(initialValue: profile.label)
-    _currencyCode = State(initialValue: profile.currencyCode)
+    _currency = State(initialValue: Instrument.fiat(code: profile.currencyCode))
     _financialYearStartMonth = State(initialValue: profile.financialYearStartMonth)
   }
 
@@ -41,8 +41,8 @@ struct MoolahProfileDetailView: View {
       }
 
       Section("Settings") {
-        CurrencyPicker(selection: $currencyCode)
-          .onChange(of: currencyCode) { _, _ in saveChanges() }
+        CurrencyPicker(selection: $currency)
+          .onChange(of: currency) { _, _ in saveChanges() }
 
         Picker("Financial Year Starts", selection: $financialYearStartMonth) {
           ForEach(1...12, id: \.self) { month in
@@ -79,8 +79,8 @@ struct MoolahProfileDetailView: View {
       updated.label = trimmedLabel
       changed = true
     }
-    if currencyCode != profile.currencyCode {
-      updated.currencyCode = currencyCode
+    if currency.id != profile.currencyCode {
+      updated.currencyCode = currency.id
       changed = true
     }
     if financialYearStartMonth != profile.financialYearStartMonth {
@@ -103,7 +103,7 @@ struct CustomServerProfileDetailView: View {
 
   @State private var label: String
   @State private var serverURL: String
-  @State private var currencyCode: String
+  @State private var currency: Instrument
   @State private var financialYearStartMonth: Int
   @State private var showMigration = false
 
@@ -119,7 +119,7 @@ struct CustomServerProfileDetailView: View {
     self.session = session
     _label = State(initialValue: profile.label)
     _serverURL = State(initialValue: profile.serverURL?.absoluteString ?? "")
-    _currencyCode = State(initialValue: profile.currencyCode)
+    _currency = State(initialValue: Instrument.fiat(code: profile.currencyCode))
     _financialYearStartMonth = State(initialValue: profile.financialYearStartMonth)
   }
 
@@ -142,8 +142,8 @@ struct CustomServerProfileDetailView: View {
       }
 
       Section("Settings") {
-        CurrencyPicker(selection: $currencyCode)
-          .onChange(of: currencyCode) { _, _ in saveChanges() }
+        CurrencyPicker(selection: $currency)
+          .onChange(of: currency) { _, _ in saveChanges() }
 
         Picker("Financial Year Starts", selection: $financialYearStartMonth) {
           ForEach(1...12, id: \.self) { month in
@@ -196,8 +196,8 @@ struct CustomServerProfileDetailView: View {
       updated.label = trimmedLabel
       changed = true
     }
-    if currencyCode != profile.currencyCode {
-      updated.currencyCode = currencyCode
+    if currency.id != profile.currencyCode {
+      updated.currencyCode = currency.id
       changed = true
     }
     if financialYearStartMonth != profile.financialYearStartMonth {
@@ -227,7 +227,7 @@ struct CloudKitProfileDetailView: View {
   let profile: Profile
 
   @State private var label: String
-  @State private var currencyCode: String
+  @State private var currency: Instrument
   @State private var financialYearStartMonth: Int
 
   private static let monthNames: [String] = {
@@ -239,7 +239,7 @@ struct CloudKitProfileDetailView: View {
   init(profile: Profile) {
     self.profile = profile
     _label = State(initialValue: profile.label)
-    _currencyCode = State(initialValue: profile.currencyCode)
+    _currency = State(initialValue: Instrument.fiat(code: profile.currencyCode))
     _financialYearStartMonth = State(initialValue: profile.financialYearStartMonth)
   }
 
@@ -258,8 +258,8 @@ struct CloudKitProfileDetailView: View {
       }
 
       Section("Settings") {
-        CurrencyPicker(selection: $currencyCode)
-          .onChange(of: currencyCode) { _, _ in saveChanges() }
+        CurrencyPicker(selection: $currency)
+          .onChange(of: currency) { _, _ in saveChanges() }
 
         Picker("Financial Year Starts", selection: $financialYearStartMonth) {
           ForEach(1...12, id: \.self) { month in
@@ -286,8 +286,8 @@ struct CloudKitProfileDetailView: View {
       updated.label = trimmedLabel
       changed = true
     }
-    if currencyCode != profile.currencyCode {
-      updated.currencyCode = currencyCode
+    if currency.id != profile.currencyCode {
+      updated.currencyCode = currency.id
       changed = true
     }
     if financialYearStartMonth != profile.financialYearStartMonth {

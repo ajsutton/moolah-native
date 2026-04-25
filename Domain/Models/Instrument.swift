@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 struct Instrument: Codable, Sendable, Hashable, Identifiable {
   enum Kind: String, Codable, Sendable, CaseIterable {
@@ -36,14 +37,11 @@ struct Instrument: Codable, Sendable, Hashable, Identifiable {
     )
   }
 
-  /// Derive the currency symbol from system locale (fiat only).
+  /// Derive the currency symbol from the currency's representative locale (fiat only).
   /// Returns nil for non-fiat instruments.
   var currencySymbol: String? {
     guard kind == .fiatCurrency else { return nil }
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .currency
-    formatter.currencyCode = id
-    return formatter.currencySymbol
+    return Self.preferredCurrencySymbol(for: id)
   }
 
   /// Factory for stock instruments.
@@ -92,6 +90,36 @@ struct Instrument: Codable, Sendable, Hashable, Identifiable {
   // Convenience constants
   static let AUD = Instrument.fiat(code: "AUD")
   static let USD = Instrument.fiat(code: "USD")
+}
+
+extension Instrument {
+  /// Currency symbol from the currency's primary locale, not the user's.
+  /// Returns nil when no representative locale produces a distinctive
+  /// symbol (the result would just echo the ISO code).
+  static func preferredCurrencySymbol(for code: String) -> String? {
+    symbolCache.withLock { cache in
+      if let hit = cache[code] { return hit.value }
+      let resolved = Self.shortestCurrencySymbol(for: code)
+      cache[code] = SymbolCacheEntry(value: resolved)
+      return resolved
+    }
+  }
+
+  private static func shortestCurrencySymbol(for code: String) -> String? {
+    Locale.availableIdentifiers
+      .lazy
+      .map(Locale.init(identifier:))
+      .filter { $0.currency?.identifier == code }
+      .compactMap { $0.currencySymbol }
+      .filter { !$0.isEmpty && $0 != code }
+      .min(by: { $0.count < $1.count })
+  }
+
+  private struct SymbolCacheEntry: Sendable { let value: String? }
+
+  private static let symbolCache = OSAllocatedUnfairLock<[String: SymbolCacheEntry]>(
+    initialState: [:]
+  )
 }
 
 extension Instrument {
