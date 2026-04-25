@@ -41,8 +41,9 @@ struct InstrumentSearchService: Sendable {
   ) async -> [InstrumentSearchResult] {
     let trimmed = query.trimmingCharacters(in: .whitespaces)
     let registered = await loadRegisteredOrLog()
+    let filteredRegistered = registered.filter { kinds.contains($0.kind) }
     if trimmed.isEmpty {
-      return registered.map {
+      return filteredRegistered.map {
         InstrumentSearchResult(
           instrument: $0,
           cryptoMapping: nil,
@@ -61,7 +62,7 @@ struct InstrumentSearchService: Sendable {
       kinds.contains(.stock) ? stockMatches(query: trimmed) : []
 
     let provider = await (fiatResults + cryptoResults + stockResults)
-    let registeredMatches = registeredMatches(query: trimmed, all: registered)
+    let registeredMatches = registeredMatches(query: trimmed, all: filteredRegistered)
     return merge(registered: registeredMatches, provider: provider)
   }
 
