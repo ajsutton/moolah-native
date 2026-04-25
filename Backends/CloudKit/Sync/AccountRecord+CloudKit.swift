@@ -10,23 +10,26 @@ extension AccountRecord: CloudKitRecordConvertible {
     let recordID = CKRecord.ID(
       recordType: Self.recordType, uuid: id, zoneID: zoneID)
     let record = CKRecord(recordType: Self.recordType, recordID: recordID)
-    record["name"] = name as CKRecordValue
-    record["type"] = type as CKRecordValue
-    record["instrumentId"] = instrumentId as CKRecordValue
-    record["position"] = position as CKRecordValue
-    record["isHidden"] = (isHidden ? 1 : 0) as CKRecordValue
+    AccountRecordCloudKitFields(
+      instrumentId: instrumentId,
+      isHidden: isHidden ? 1 : 0,
+      name: name,
+      position: Int64(position),
+      type: type
+    ).write(to: record)
     return record
   }
 
   static func fieldValues(from ckRecord: CKRecord) -> AccountRecord? {
     guard let id = ckRecord.recordID.uuid else { return nil }
+    let fields = AccountRecordCloudKitFields(from: ckRecord)
     return AccountRecord(
       id: id,
-      name: ckRecord["name"] as? String ?? "",
-      type: ckRecord["type"] as? String ?? "bank",
-      instrumentId: ckRecord["instrumentId"] as? String ?? "AUD",
-      position: ckRecord["position"] as? Int ?? 0,
-      isHidden: (ckRecord["isHidden"] as? Int ?? 0) != 0
+      name: fields.name ?? "",
+      type: fields.type ?? "bank",
+      instrumentId: fields.instrumentId ?? "AUD",
+      position: Int(fields.position ?? 0),
+      isHidden: (fields.isHidden ?? 0) != 0
     )
   }
 }
