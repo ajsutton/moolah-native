@@ -255,6 +255,15 @@ final class TransactionStore {
     let myGeneration = loadGeneration
     isLoading = true
     logger.debug("Loading transactions page \(self.currentPage)...")
+    // Cancellation can early-return below; without `defer` the live load
+    // would leak `isLoading = true`, making `isLoaded(for: filter)` true
+    // and the next `.task` mount skip its own load. Sibling of #412. The
+    // generation guard avoids stomping on a newer load that owns the flag.
+    defer {
+      if myGeneration == loadGeneration {
+        isLoading = false
+      }
+    }
 
     do {
       let page = try await repository.fetch(
@@ -291,12 +300,6 @@ final class TransactionStore {
       guard myGeneration == loadGeneration else { return }
       logger.error("Failed to load transactions: \(error.localizedDescription)")
       self.error = error
-    }
-
-    // Only clear isLoading for the live load; the newer load owns the flag
-    // otherwise and will clear it when it finishes.
-    if myGeneration == loadGeneration {
-      isLoading = false
     }
   }
 

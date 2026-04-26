@@ -17,6 +17,14 @@ Drive the running Moolah macOS app via AppleScript (`osascript`). Data operation
 
 The app must be built and running in **this worktree**. Use `just run-mac` to build and launch, or `just run-mac-with-logs` to also capture logs.
 
+### CRITICAL: Run the wrapper from inside the worktree
+
+**Your shell's current working directory must be inside the worktree before invoking `moolah-tell`.** The wrapper picks the target Moolah.app via `git rev-parse --show-toplevel` of CWD, then `tell application "<that-path>"`.
+
+If you call the wrapper from a different checkout (e.g. the main repo while the worktree has the running app), AppleScript resolves the path you gave it — the **main checkout's bundle** — and LaunchServices launches a *second* instance of the app from that path. Two Moolahs end up running with the same CloudKit container, which is the recipe for a corrupted profile. The wrapper's path is the only signal AppleScript looks at; it does not notice that a worktree binary is already up.
+
+Always invoke the wrapper as `cd <worktree> && moolah-tell …` (or, if you can't `cd` in your harness, see the absolute-path fallback below). Do not call it via a relative `.worktrees/<branch>/.claude/skills/automate-app/scripts/moolah-tell` path from a sibling checkout — the wrapper's location does not change which app is targeted; only your CWD does.
+
 ### Why the wrapper
 
 Do **not** use raw `osascript -e 'tell application "Moolah" to …'` for Moolah automation. `osascript` resolves "Moolah" through LaunchServices, which picks `/Applications/Moolah.app` (the installed release build) over the worktree's debug build. Your automation will silently read from and write to the wrong app.
@@ -25,19 +33,33 @@ Use the wrapper bundled with this skill instead:
 
 - `.claude/skills/automate-app/scripts/moolah-tell` — AppleScript runner; auto-wraps the body in `tell application "<worktree-abs-path>" … end tell`.
 
-It resolves the bundle via `git rev-parse --show-toplevel` + `/.build/Build/Products/Debug/Moolah.app`, and fails fast with `error: Moolah.app not built at <path>; run 'just run-mac' in this worktree first` if the build is missing. The wrapper never builds on your behalf — run `just run-mac` yourself first.
+It resolves the bundle via `git rev-parse --show-toplevel` + `/.build/Build/Products/Debug/Moolah.app`, prints the resolved path on stderr (so you can spot a wrong-CWD mistake immediately), and fails fast with `error: Moolah.app not built at <path>; run 'just run-mac' in this worktree first` if the build is missing. The wrapper never builds on your behalf — run `just run-mac` yourself first.
 
-Examples below use the short name `moolah-tell` for readability. When copy-pasting, prefix it with the full relative path from the worktree root:
+Examples below use the short name `moolah-tell` for readability. When copy-pasting, prefix it with the full relative path from inside the worktree:
 
 ```bash
+cd /path/to/<worktree>
 .claude/skills/automate-app/scripts/moolah-tell 'get name of every profile'
 ```
 
 Or add the scripts dir to `$PATH` for the session:
 
 ```bash
+cd /path/to/<worktree>
 export PATH="$PWD/.claude/skills/automate-app/scripts:$PATH"
+moolah-tell 'get name of every profile'
 ```
+
+#### Absolute-path fallback (no `cd` available)
+
+If your environment cannot `cd` into the worktree (some agent harnesses), bypass the wrapper and write the bundle path explicitly:
+
+```bash
+APP="/abs/path/to/<worktree>/.build/Build/Products/Debug/Moolah.app"
+osascript -e "tell application \"$APP\" to navigate to profile \"Test\""
+```
+
+This is the same shape the wrapper produces — just sidestepping its CWD-based resolution.
 
 ## AppleScript Reference
 

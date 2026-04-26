@@ -132,4 +132,69 @@ struct TransactionStoreLoadRaceTests {
     #expect(store.error != nil)
     #expect(!store.isLoaded(for: filter))
   }
+
+  /// A `load(filter:)` cancelled mid-fetch must not leave the store reporting
+  /// itself as loading or as loaded for that filter. Otherwise the new
+  /// `.task` mount that triggered the cancellation (e.g. from a structural
+  /// branch flip when an asynchronously-resolved positions panel appears
+  /// alongside the transactions list) sees `isLoaded(for: filter) == true`
+  /// and short-circuits its own load — leaving the user staring at an empty
+  /// transaction list. Sibling of #412.
+  @Test
+  func cancelledLoadAllowsRetryOnRemount() async throws {
+    let repo = FirstFetchGatedTransactionRepository()
+    let store = TransactionStore(
+      repository: repo,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
+    let filter = TransactionFilter(accountId: accountId)
+
+    let task = Task { @MainActor in
+      await store.load(filter: filter)
+    }
+    await repo.waitUntilFetchStarted()
+    task.cancel()
+    await repo.releaseFetch()
+    await task.value
+
+    #expect(!store.isLoading)
+    #expect(!store.isLoaded(for: filter))
+  }
+}
+
+/// Minimal `TransactionRepository` that suspends inside `fetch` until the
+/// test releases it, giving the test a deterministic window in which to
+/// cancel the surrounding `Task`. Distinct from
+/// `CancellablePagingTransactionRepository`, which gates the *second* page
+/// for pagination tests; this one gates the *first* fetch so we can model
+/// an initial-load cancellation.
+actor FirstFetchGatedTransactionRepository: TransactionRepository {
+  private let fetchStarted = AsyncGate()
+  private let fetchRelease = AsyncGate()
+
+  func waitUntilFetchStarted() async {
+    await fetchStarted.wait()
+  }
+
+  func releaseFetch() async {
+    await fetchRelease.open()
+  }
+
+  func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> TransactionPage {
+    await fetchStarted.open()
+    await fetchRelease.wait()
+    return TransactionPage(
+      transactions: [],
+      targetInstrument: .defaultTestInstrument,
+      priorBalance: nil,
+      totalCount: nil
+    )
+  }
+
+  func fetchAll(filter: TransactionFilter) async throws -> [Transaction] { [] }
+  func create(_ transaction: Transaction) async throws -> Transaction { transaction }
+  func update(_ transaction: Transaction) async throws -> Transaction { transaction }
+  func delete(id: UUID) async throws {}
+  func fetchPayeeSuggestions(prefix: String) async throws -> [String] { [] }
 }
