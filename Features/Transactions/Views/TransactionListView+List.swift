@@ -3,10 +3,28 @@
 import SwiftUI
 
 extension TransactionListView {
+  /// Stable structural-branch guard: pins `transactionsList` to a fixed
+  /// view-tree position so the asynchronous resolution of `positionsInput`
+  /// can't flip the layout mid-load and cancel the initial transactions
+  /// fetch. Same root cause as #412.
+  var shouldShowPositionsSplit: Bool {
+    guard !positions.isEmpty else { return false }
+    let nonZeroInstruments = Set(
+      positions.lazy.filter { $0.quantity != 0 }.map(\.instrument)
+    )
+    return nonZeroInstruments != [positionsHostCurrency]
+  }
+
   @ViewBuilder var listView: some View {
-    if let positionsInput, !positionsInput.shouldHide {
+    if shouldShowPositionsSplit {
       PositionsTransactionsSplit(defaultTab: .transactions) {
-        PositionsView(input: positionsInput, range: $positionsRange)
+        if let positionsInput {
+          PositionsView(input: positionsInput, range: $positionsRange)
+        } else {
+          ProgressView()
+            .frame(maxWidth: .infinity)
+            .padding()
+        }
       } transactions: {
         transactionsList
       }
