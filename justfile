@@ -264,3 +264,9 @@ release-preflight:
 # KIND=rc|final. Emits JSON to stdout (see scripts/lib/release-common.sh).
 release-next-version KIND:
     bash scripts/release-next-version.sh {{KIND}}
+
+# Create the GH pre-release for an RC. Creates the tag at HEAD of main,
+# which fires release-rc.yml. NOTES_FILE is a path to a markdown file
+# containing the user-facing release notes (see guides/RELEASE_GUIDE.md).
+release-create-rc VERSION NOTES_FILE:
+    bash scripts/release-create-rc.sh {{VERSION}} {{NOTES_FILE}}
