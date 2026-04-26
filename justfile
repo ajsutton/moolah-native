@@ -275,3 +275,13 @@ release-create-rc VERSION NOTES_FILE:
 # the named RC, which fires release-final.yml.
 release-create-final VERSION RC_TAG NOTES_FILE:
     bash scripts/release-create-final.sh {{VERSION}} {{RC_TAG}} {{NOTES_FILE}}
+
+# Wait for the workflow run associated with a release tag to finish.
+# Exits zero if the run succeeded, non-zero with the conclusion otherwise.
+release-wait TAG:
+    bash scripts/release-wait.sh {{TAG}}
+
+# Print a summary of a release: GH release state, workflow run state,
+# attached assets.
+release-status TAG:
+    bash scripts/release-status.sh {{TAG}}
