@@ -30,9 +30,9 @@ extension CloudKitTransactionRepository {
       }
 
       try context.save()
-      onRecordChanged(transaction.id)
+      onRecordChanged(TransactionRecord.recordType, transaction.id)
       for legRecord in legRecords {
-        onRecordChanged(legRecord.id)
+        onRecordChanged(TransactionLegRecord.recordType, legRecord.id)
       }
     }
     return transaction
@@ -76,12 +76,12 @@ extension CloudKitTransactionRepository {
       }
 
       try context.save()
-      onRecordChanged(transaction.id)
+      onRecordChanged(TransactionRecord.recordType, transaction.id)
       for legRecord in newLegRecords {
-        onRecordChanged(legRecord.id)
+        onRecordChanged(TransactionLegRecord.recordType, legRecord.id)
       }
       for oldLegId in oldLegIds {
-        onRecordDeleted(oldLegId)
+        onRecordDeleted(TransactionLegRecord.recordType, oldLegId)
       }
     }
     return transaction
@@ -115,9 +115,9 @@ extension CloudKitTransactionRepository {
 
       context.delete(record)
       try context.save()
-      onRecordDeleted(id)
+      onRecordDeleted(TransactionRecord.recordType, id)
       for legId in legIds {
-        onRecordDeleted(legId)
+        onRecordDeleted(TransactionLegRecord.recordType, legId)
       }
     }
   }

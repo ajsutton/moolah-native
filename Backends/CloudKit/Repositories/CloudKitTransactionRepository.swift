@@ -9,8 +9,13 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
   let conversionService: any InstrumentConversionService
   let logger = Logger(
     subsystem: "com.moolah.app", category: "CloudKitTransactionRepository")
-  var onRecordChanged: (UUID) -> Void = { _ in }
-  var onRecordDeleted: (UUID) -> Void = { _ in }
+  /// Receives `(recordType, id)` so legs and parent transactions tag their
+  /// own CloudKit `recordName` correctly. The transaction repo emits both
+  /// `TransactionRecord` (parent) and `TransactionLegRecord` (per leg) ids
+  /// from the same mutation, so the callback must carry the type — see the
+  /// regression in `RepositoryHookRecordTypeTests`.
+  var onRecordChanged: (String, UUID) -> Void = { _, _ in }
+  var onRecordDeleted: (String, UUID) -> Void = { _, _ in }
   var onInstrumentChanged: (String) -> Void = { _ in }
 
   init(

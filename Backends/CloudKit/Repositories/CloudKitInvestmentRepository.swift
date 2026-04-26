@@ -6,8 +6,8 @@ import SwiftData
 final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
   private let instrument: Instrument
-  var onRecordChanged: (UUID) -> Void = { _ in }
-  var onRecordDeleted: (UUID) -> Void = { _ in }
+  var onRecordChanged: (String, UUID) -> Void = { _, _ in }
+  var onRecordDeleted: (String, UUID) -> Void = { _, _ in }
 
   init(modelContainer: ModelContainer, instrument: Instrument) {
     self.modelContainer = modelContainer
@@ -52,14 +52,14 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
         existing.value = value.storageValue
         existing.instrumentId = value.instrument.id
         try context.save()
-        onRecordChanged(existing.id)
+        onRecordChanged(InvestmentValueRecord.recordType, existing.id)
       } else {
         let record = InvestmentValueRecord(
           accountId: accountId, date: normalizedDate,
           value: value.storageValue, instrumentId: value.instrument.id)
         context.insert(record)
         try context.save()
-        onRecordChanged(record.id)
+        onRecordChanged(InvestmentValueRecord.recordType, record.id)
       }
     }
   }
@@ -79,7 +79,7 @@ final class CloudKitInvestmentRepository: InvestmentRepository, @unchecked Senda
       let deletedId = record.id
       context.delete(record)
       try context.save()
-      onRecordDeleted(deletedId)
+      onRecordDeleted(InvestmentValueRecord.recordType, deletedId)
     }
   }
 

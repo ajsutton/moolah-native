@@ -5,6 +5,16 @@ extension ProfileSession {
   /// Wires each `CloudKit*Repository`'s change/delete callbacks to the
   /// given sync coordinator so local mutations queue the corresponding
   /// CloudKit send. Called from `init` for iCloud profiles.
+  ///
+  /// Each repository hands the wiring `(recordType, id)` so the coordinator
+  /// can build the prefixed `<recordType>|<UUID>` recordName (issue #416).
+  /// The repos that emit ids of more than one record type per call —
+  /// transactions (txn + leg), accounts (account + opening-balance txn +
+  /// leg), categories (category + reassigned legs + budget items), and
+  /// earmarks (earmark + budget items) — all rely on the type travelling
+  /// with the id; otherwise the wiring would mis-tag downstream records and
+  /// `nextRecordZoneChangeBatch` would convert their save into a phantom
+  /// delete (regression covered by `RepositoryHookRecordTypeTests`).
   func wireRepositorySync(coordinator: SyncCoordinator, zoneID: CKRecordZone.ID) {
     wireAccountsAndTransactionsSync(coordinator: coordinator, zoneID: zoneID)
     wireSimpleRepositorySync(coordinator: coordinator, zoneID: zoneID)
@@ -16,23 +26,22 @@ extension ProfileSession {
     coordinator: SyncCoordinator, zoneID: CKRecordZone.ID
   ) {
     if let repo = backend.accounts as? CloudKitAccountRepository {
-      repo.onRecordChanged = { [weak coordinator] id in
-        coordinator?.queueSave(recordType: AccountRecord.recordType, id: id, zoneID: zoneID)
+      repo.onRecordChanged = { [weak coordinator] recordType, id in
+        coordinator?.queueSave(recordType: recordType, id: id, zoneID: zoneID)
       }
-      repo.onRecordDeleted = { [weak coordinator] id in
-        coordinator?.queueDeletion(recordType: AccountRecord.recordType, id: id, zoneID: zoneID)
+      repo.onRecordDeleted = { [weak coordinator] recordType, id in
+        coordinator?.queueDeletion(recordType: recordType, id: id, zoneID: zoneID)
       }
       repo.onInstrumentChanged = { [weak coordinator] id in
         coordinator?.queueSave(recordName: id, zoneID: zoneID)
       }
     }
     if let repo = backend.transactions as? CloudKitTransactionRepository {
-      repo.onRecordChanged = { [weak coordinator] id in
-        coordinator?.queueSave(recordType: TransactionRecord.recordType, id: id, zoneID: zoneID)
+      repo.onRecordChanged = { [weak coordinator] recordType, id in
+        coordinator?.queueSave(recordType: recordType, id: id, zoneID: zoneID)
       }
-      repo.onRecordDeleted = { [weak coordinator] id in
-        coordinator?.queueDeletion(
-          recordType: TransactionRecord.recordType, id: id, zoneID: zoneID)
+      repo.onRecordDeleted = { [weak coordinator] recordType, id in
+        coordinator?.queueDeletion(recordType: recordType, id: id, zoneID: zoneID)
       }
       repo.onInstrumentChanged = { [weak coordinator] id in
         coordinator?.queueSave(recordName: id, zoneID: zoneID)
@@ -47,48 +56,43 @@ extension ProfileSession {
     coordinator: SyncCoordinator, zoneID: CKRecordZone.ID
   ) {
     if let repo = backend.categories as? CloudKitCategoryRepository {
-      repo.onRecordChanged = { [weak coordinator] id in
-        coordinator?.queueSave(recordType: CategoryRecord.recordType, id: id, zoneID: zoneID)
+      repo.onRecordChanged = { [weak coordinator] recordType, id in
+        coordinator?.queueSave(recordType: recordType, id: id, zoneID: zoneID)
       }
-      repo.onRecordDeleted = { [weak coordinator] id in
-        coordinator?.queueDeletion(recordType: CategoryRecord.recordType, id: id, zoneID: zoneID)
+      repo.onRecordDeleted = { [weak coordinator] recordType, id in
+        coordinator?.queueDeletion(recordType: recordType, id: id, zoneID: zoneID)
       }
     }
     if let repo = backend.earmarks as? CloudKitEarmarkRepository {
-      repo.onRecordChanged = { [weak coordinator] id in
-        coordinator?.queueSave(recordType: EarmarkRecord.recordType, id: id, zoneID: zoneID)
+      repo.onRecordChanged = { [weak coordinator] recordType, id in
+        coordinator?.queueSave(recordType: recordType, id: id, zoneID: zoneID)
       }
-      repo.onRecordDeleted = { [weak coordinator] id in
-        coordinator?.queueDeletion(recordType: EarmarkRecord.recordType, id: id, zoneID: zoneID)
+      repo.onRecordDeleted = { [weak coordinator] recordType, id in
+        coordinator?.queueDeletion(recordType: recordType, id: id, zoneID: zoneID)
       }
     }
     if let repo = backend.investments as? CloudKitInvestmentRepository {
-      repo.onRecordChanged = { [weak coordinator] id in
-        coordinator?.queueSave(
-          recordType: InvestmentValueRecord.recordType, id: id, zoneID: zoneID)
+      repo.onRecordChanged = { [weak coordinator] recordType, id in
+        coordinator?.queueSave(recordType: recordType, id: id, zoneID: zoneID)
       }
-      repo.onRecordDeleted = { [weak coordinator] id in
-        coordinator?.queueDeletion(
-          recordType: InvestmentValueRecord.recordType, id: id, zoneID: zoneID)
+      repo.onRecordDeleted = { [weak coordinator] recordType, id in
+        coordinator?.queueDeletion(recordType: recordType, id: id, zoneID: zoneID)
       }
     }
     if let repo = backend.csvImportProfiles as? CloudKitCSVImportProfileRepository {
-      repo.onRecordChanged = { [weak coordinator] id in
-        coordinator?.queueSave(
-          recordType: CSVImportProfileRecord.recordType, id: id, zoneID: zoneID)
+      repo.onRecordChanged = { [weak coordinator] recordType, id in
+        coordinator?.queueSave(recordType: recordType, id: id, zoneID: zoneID)
       }
-      repo.onRecordDeleted = { [weak coordinator] id in
-        coordinator?.queueDeletion(
-          recordType: CSVImportProfileRecord.recordType, id: id, zoneID: zoneID)
+      repo.onRecordDeleted = { [weak coordinator] recordType, id in
+        coordinator?.queueDeletion(recordType: recordType, id: id, zoneID: zoneID)
       }
     }
     if let repo = backend.importRules as? CloudKitImportRuleRepository {
-      repo.onRecordChanged = { [weak coordinator] id in
-        coordinator?.queueSave(recordType: ImportRuleRecord.recordType, id: id, zoneID: zoneID)
+      repo.onRecordChanged = { [weak coordinator] recordType, id in
+        coordinator?.queueSave(recordType: recordType, id: id, zoneID: zoneID)
       }
-      repo.onRecordDeleted = { [weak coordinator] id in
-        coordinator?.queueDeletion(
-          recordType: ImportRuleRecord.recordType, id: id, zoneID: zoneID)
+      repo.onRecordDeleted = { [weak coordinator] recordType, id in
+        coordinator?.queueDeletion(recordType: recordType, id: id, zoneID: zoneID)
       }
     }
   }

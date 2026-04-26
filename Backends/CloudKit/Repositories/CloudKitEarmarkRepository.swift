@@ -7,8 +7,11 @@ import os
 final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
   private let instrument: Instrument
-  var onRecordChanged: (UUID) -> Void = { _ in }
-  var onRecordDeleted: (UUID) -> Void = { _ in }
+  /// Receives `(recordType, id)` so budget-item upserts emit the
+  /// `EarmarkBudgetItemRecord` type rather than being mis-tagged as
+  /// `EarmarkRecord`. See `RepositoryHookRecordTypeTests`.
+  var onRecordChanged: (String, UUID) -> Void = { _, _ in }
+  var onRecordDeleted: (String, UUID) -> Void = { _, _ in }
 
   init(modelContainer: ModelContainer, instrument: Instrument) {
     self.modelContainer = modelContainer
@@ -54,7 +57,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
     try await MainActor.run {
       context.insert(record)
       try context.save()
-      onRecordChanged(earmark.id)
+      onRecordChanged(EarmarkRecord.recordType, earmark.id)
     }
     return earmark
   }
@@ -84,7 +87,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       record.savingsStartDate = earmark.savingsStartDate
       record.savingsEndDate = earmark.savingsEndDate
       try context.save()
-      onRecordChanged(earmark.id)
+      onRecordChanged(EarmarkRecord.recordType, earmark.id)
     }
     return earmark
   }
@@ -172,7 +175,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
         let deletedId = existing.id
         context.delete(existing)
         try context.save()
-        onRecordDeleted(deletedId)
+        onRecordDeleted(EarmarkBudgetItemRecord.recordType, deletedId)
       }
       return
     }
@@ -180,7 +183,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       existing.amount = amount.storageValue
       existing.instrumentId = amount.instrument.id
       try context.save()
-      onRecordChanged(existing.id)
+      onRecordChanged(EarmarkBudgetItemRecord.recordType, existing.id)
       return
     }
     let record = EarmarkBudgetItemRecord(
@@ -191,7 +194,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
     )
     context.insert(record)
     try context.save()
-    onRecordChanged(record.id)
+    onRecordChanged(EarmarkBudgetItemRecord.recordType, record.id)
   }
 
   /// Three position lists computed for a single earmark — one per flow

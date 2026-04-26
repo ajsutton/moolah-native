@@ -3,8 +3,8 @@ import SwiftData
 
 final class CloudKitImportRuleRepository: ImportRuleRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
-  var onRecordChanged: (UUID) -> Void = { _ in }
-  var onRecordDeleted: (UUID) -> Void = { _ in }
+  var onRecordChanged: (String, UUID) -> Void = { _, _ in }
+  var onRecordDeleted: (String, UUID) -> Void = { _, _ in }
 
   init(modelContainer: ModelContainer) {
     self.modelContainer = modelContainer
@@ -25,7 +25,7 @@ final class CloudKitImportRuleRepository: ImportRuleRepository, @unchecked Senda
       let record = ImportRuleRecord.from(rule)
       context.insert(record)
       try context.save()
-      onRecordChanged(rule.id)
+      onRecordChanged(ImportRuleRecord.recordType, rule.id)
       return record.toDomain()
     }
   }
@@ -47,7 +47,7 @@ final class CloudKitImportRuleRepository: ImportRuleRepository, @unchecked Senda
       record.actionsJSON = updated.actionsJSON
       record.accountScope = updated.accountScope
       try context.save()
-      onRecordChanged(rule.id)
+      onRecordChanged(ImportRuleRecord.recordType, rule.id)
       return record.toDomain()
     }
   }
@@ -61,7 +61,7 @@ final class CloudKitImportRuleRepository: ImportRuleRepository, @unchecked Senda
       }
       context.delete(record)
       try context.save()
-      onRecordDeleted(id)
+      onRecordDeleted(ImportRuleRecord.recordType, id)
     }
   }
 
@@ -90,7 +90,7 @@ final class CloudKitImportRuleRepository: ImportRuleRepository, @unchecked Senda
         }
       }
       try context.save()
-      for id in changedIds { onRecordChanged(id) }
+      for id in changedIds { onRecordChanged(ImportRuleRecord.recordType, id) }
     }
   }
 }
