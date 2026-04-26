@@ -6,8 +6,11 @@ import os
 final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
   private let logger = Logger(subsystem: "com.moolah.app", category: "AccountRepository")
   let modelContainer: ModelContainer
-  var onRecordChanged: (UUID) -> Void = { _ in }
-  var onRecordDeleted: (UUID) -> Void = { _ in }
+  /// Receives `(recordType, id)` so the opening-balance create path can tag
+  /// its txn and leg writes with `TransactionRecord` / `TransactionLegRecord`
+  /// instead of the account's own type — see `RepositoryHookRecordTypeTests`.
+  var onRecordChanged: (String, UUID) -> Void = { _, _ in }
+  var onRecordDeleted: (String, UUID) -> Void = { _, _ in }
   var onInstrumentChanged: (String) -> Void = { _ in }
 
   init(modelContainer: ModelContainer) {
@@ -95,12 +98,12 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
         )
         context.insert(legRecord)
         try context.save()
-        onRecordChanged(account.id)
-        onRecordChanged(txnRecord.id)
-        onRecordChanged(legRecord.id)
+        onRecordChanged(AccountRecord.recordType, account.id)
+        onRecordChanged(TransactionRecord.recordType, txnRecord.id)
+        onRecordChanged(TransactionLegRecord.recordType, legRecord.id)
       } else {
         try context.save()
-        onRecordChanged(account.id)
+        onRecordChanged(AccountRecord.recordType, account.id)
       }
     }
 
@@ -134,7 +137,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       record.position = account.position
       record.isHidden = account.isHidden
       try context.save()
-      onRecordChanged(account.id)
+      onRecordChanged(AccountRecord.recordType, account.id)
 
       let instruments = try fetchInstrumentMap()
       let allPositions = try computeAllPositions(instruments: instruments)
@@ -173,7 +176,7 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
       // Soft delete
       record.isHidden = true
       try context.save()
-      onRecordChanged(id)
+      onRecordChanged(AccountRecord.recordType, id)
     }
   }
 

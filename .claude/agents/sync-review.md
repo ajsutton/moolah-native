@@ -27,11 +27,27 @@ Key files are in `Backends/CloudKit/Sync/` and `Backends/CloudKit/Repositories/`
 ## What to Check
 
 ### Sync Change Queueing
-- Repository mutation methods (create, update, delete) call `onRecordChanged(id)` or `onRecordDeleted(id)` after saving (Rule 2, Rule 4)
+- Repository mutation methods (create, update, delete) call `onRecordChanged(recordType, id)` or `onRecordDeleted(recordType, id)` after saving (Rule 2, Rule 4)
 - Derived-data updates (`recomputeAllBalances`, `invalidateCachedBalances`, `computeBalance`) do NOT call sync closures (Rule 2)
 - No use of `NSManagedObjectContextDidSave` notifications for sync queueing -- this pattern was removed (Rule 2)
 - New syncable record types have closure calls in all mutation methods
 - `queueAllExistingRecords` includes the new record type in dependency order (Rule 14)
+
+### Record Type Tagging on Hook Calls (regression class -- PR #416 / fix #483)
+
+The `onRecordChanged` / `onRecordDeleted` hooks on every multi-emit repository carry the `recordType` of the record being mutated -- not the repository's "primary" type. Mismatch causes CloudKit to receive a save under the wrong `<recordType>|<UUID>` recordName; the next downlink lookup misses, `handleMissingRecordToSave` converts the save into a phantom delete, and the record is silently lost on every other device.
+
+For each mutation method, verify:
+
+- **Every call to `onRecordChanged(...)` / `onRecordDeleted(...)` passes the `XxxRecord.recordType` constant for the record whose UUID it is emitting**, not a hard-coded constant or the repository's primary type. If a `TransactionLegRecord.id` is being emitted, the call MUST pass `TransactionLegRecord.recordType` -- not `TransactionRecord.recordType`.
+- **Multi-type emit paths are tagged consistently** -- when one mutation persists records of more than one type and emits a hook for each, every emit names its own type. Watch especially for:
+  - `CloudKitTransactionRepository.create/update/delete` -- emits `TransactionRecord` (parent) + `TransactionLegRecord` (per leg)
+  - `CloudKitAccountRepository.create` with opening balance -- emits `AccountRecord` + `TransactionRecord` + `TransactionLegRecord`
+  - `CloudKitCategoryRepository.delete` cascade -- emits `CategoryRecord` (deleted + orphaned children) + `TransactionLegRecord` (reassigned legs) + `EarmarkBudgetItemRecord` (deleted/updated budgets)
+  - `CloudKitEarmarkRepository.setBudget` -- emits `EarmarkBudgetItemRecord`, never `EarmarkRecord`
+- **Wiring closures in `App/ProfileSession+SyncWiring.swift` forward the received `recordType` verbatim** -- they must read `{ recordType, id in coordinator?.queueSave(recordType: recordType, id: id, zoneID: zoneID) }`. Any wiring that hard-codes a single `recordType` constant for a multi-type repo is the regression. (Single-type repos may forward the same way; uniform pattern is the goal.)
+- **`InstrumentRecord` is intentionally NOT prefixed** -- it uses string recordNames (`"AUD"`, `"ASX:BHP"`) and routes via `queueSave(recordName:zoneID:)`. Don't flag the absence of a `(String, UUID)` hook on `CloudKitInstrumentRegistryRepository`.
+- **A regression test must pin the `(recordType, id)` contract per multi-type method** -- see `MoolahTests/Sync/RepositoryHookRecordTypeTests.swift`. New multi-type emit paths need a new test that captures the (recordType, id) pairs and asserts both the type tag and the count, not just "some emit happened".
 
 ### Zone Management
 - `ensureZoneExists()` called proactively in `start()`, followed by `sendChanges()` (Rule 3)
@@ -105,7 +121,7 @@ Produce a detailed report with:
 ### Issues Found
 
 Categorize by severity:
-- **Critical:** Missing conflict resolution, missing account change handling, repository mutation missing sync closure call, silently dropping records in default error case, returning >400 records from nextRecordZoneChangeBatch
+- **Critical:** Missing conflict resolution, missing account change handling, repository mutation missing sync closure call, **mismatched `recordType` passed to `onRecordChanged` / `onRecordDeleted` (e.g. emitting a leg's UUID under `TransactionRecord.recordType`)**, **wiring closure that hard-codes a single `recordType` for a repo whose mutations emit ids of multiple record types**, silently dropping records in default error case, returning >400 records from nextRecordZoneChangeBatch
 - **Important:** Missing error handling for specific codes, not preserving system fields, incomplete zone deletion handling, missing proactive zone creation
 - **Minor:** Missing logging, suboptimal patterns, missing defensive defaults in record mapping
 

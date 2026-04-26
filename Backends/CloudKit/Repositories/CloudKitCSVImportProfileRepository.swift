@@ -3,8 +3,8 @@ import SwiftData
 
 final class CloudKitCSVImportProfileRepository: CSVImportProfileRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
-  var onRecordChanged: (UUID) -> Void = { _ in }
-  var onRecordDeleted: (UUID) -> Void = { _ in }
+  var onRecordChanged: (String, UUID) -> Void = { _, _ in }
+  var onRecordDeleted: (String, UUID) -> Void = { _, _ in }
 
   init(modelContainer: ModelContainer) {
     self.modelContainer = modelContainer
@@ -25,7 +25,7 @@ final class CloudKitCSVImportProfileRepository: CSVImportProfileRepository, @unc
       let record = CSVImportProfileRecord.from(profile)
       context.insert(record)
       try context.save()
-      onRecordChanged(profile.id)
+      onRecordChanged(CSVImportProfileRecord.recordType, profile.id)
       return record.toDomain()
     }
   }
@@ -49,7 +49,7 @@ final class CloudKitCSVImportProfileRepository: CSVImportProfileRepository, @unc
       record.columnRoleRawValuesEncoded = CSVImportProfileRecord.encodeColumnRoles(
         profile.columnRoleRawValues)
       try context.save()
-      onRecordChanged(profile.id)
+      onRecordChanged(CSVImportProfileRecord.recordType, profile.id)
       return record.toDomain()
     }
   }
@@ -63,7 +63,7 @@ final class CloudKitCSVImportProfileRepository: CSVImportProfileRepository, @unc
       }
       context.delete(record)
       try context.save()
-      onRecordDeleted(id)
+      onRecordDeleted(CSVImportProfileRecord.recordType, id)
     }
   }
 }

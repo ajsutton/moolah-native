@@ -4,8 +4,12 @@ import os
 
 final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable {
   private let modelContainer: ModelContainer
-  var onRecordChanged: (UUID) -> Void = { _ in }
-  var onRecordDeleted: (UUID) -> Void = { _ in }
+  /// Receives `(recordType, id)` so deleting a category — which fans out to
+  /// orphaned children, reassigned legs, and budget-item upserts/deletes —
+  /// tags each downstream emit with its own type. See
+  /// `RepositoryHookRecordTypeTests`.
+  var onRecordChanged: (String, UUID) -> Void = { _, _ in }
+  var onRecordDeleted: (String, UUID) -> Void = { _, _ in }
 
   init(modelContainer: ModelContainer) {
     self.modelContainer = modelContainer
@@ -44,7 +48,7 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
     try await MainActor.run {
       context.insert(record)
       try context.save()
-      onRecordChanged(category.id)
+      onRecordChanged(CategoryRecord.recordType, category.id)
     }
     return category
   }
@@ -68,7 +72,7 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
       record.name = category.name
       record.parentId = category.parentId
       try context.save()
-      onRecordChanged(category.id)
+      onRecordChanged(CategoryRecord.recordType, category.id)
     }
     return category
   }
@@ -106,12 +110,17 @@ final class CloudKitCategoryRepository: CategoryRepository, @unchecked Sendable 
     context.delete(record)
     try context.save()
 
-    // Queue sync changes for all affected records
-    onRecordDeleted(id)
-    for child in children { onRecordChanged(child.id) }
-    for leg in affectedLegs { onRecordChanged(leg.id) }
-    for budgetId in deletedBudgetIds { onRecordDeleted(budgetId) }
-    for budgetId in updatedBudgetIds { onRecordChanged(budgetId) }
+    // Queue sync changes for all affected records — each emit names its own
+    // type so the wiring queues the right `<recordType>|<UUID>` (issue #416).
+    onRecordDeleted(CategoryRecord.recordType, id)
+    for child in children { onRecordChanged(CategoryRecord.recordType, child.id) }
+    for leg in affectedLegs { onRecordChanged(TransactionLegRecord.recordType, leg.id) }
+    for budgetId in deletedBudgetIds {
+      onRecordDeleted(EarmarkBudgetItemRecord.recordType, budgetId)
+    }
+    for budgetId in updatedBudgetIds {
+      onRecordChanged(EarmarkBudgetItemRecord.recordType, budgetId)
+    }
   }
 
   /// Orphan child categories of `targetId` (server always sets parent_id = NULL).
