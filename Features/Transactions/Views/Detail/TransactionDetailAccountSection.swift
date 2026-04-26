@@ -1,0 +1,65 @@
+import SwiftUI
+
+/// Account picker for the relevant leg, plus — when the draft is a
+/// transfer — the counterpart-account picker. When the resulting transfer
+/// is cross-currency the section also embeds
+/// `TransactionDetailCrossCurrencyRow` for the counterpart amount and the
+/// derived exchange-rate caption.
+struct TransactionDetailAccountSection: View {
+  @Binding var draft: TransactionDraft
+  let accounts: Accounts
+  let sortedAccounts: [Account]
+  let relevantInstrument: Instrument?
+  let counterpartInstrument: Instrument?
+  let counterpartAmountBinding: Binding<String>
+  let isCrossCurrency: Bool
+  @FocusState.Binding var focusedField: TransactionDetailFocus?
+
+  var body: some View {
+    Section {
+      Picker("Account", selection: $draft.legDrafts[draft.relevantLegIndex].accountId) {
+        Text("None").tag(UUID?.none)
+        ForEach(sortedAccounts) { account in
+          Text(account.name).tag(UUID?.some(account.id))
+        }
+      }
+
+      if draft.type == .transfer {
+        transferRows
+      }
+    }
+  }
+
+  @ViewBuilder private var transferRows: some View {
+    let counterpartIndex = draft.relevantLegIndex == 0 ? 1 : 0
+    let toAccountLabel = draft.showFromAccount ? "From Account" : "To Account"
+    let currentAccountId = draft.legDrafts[draft.relevantLegIndex].accountId
+    let eligibleAccounts = eligibleTransferAccounts(excluding: currentAccountId)
+
+    Picker(toAccountLabel, selection: $draft.legDrafts[counterpartIndex].accountId) {
+      Text("Select...").tag(UUID?.none)
+      ForEach(eligibleAccounts) { account in
+        Text(account.name).tag(UUID?.some(account.id))
+      }
+    }
+    .accessibilityIdentifier(UITestIdentifiers.Detail.toAccountPicker)
+    .onChange(of: draft.legDrafts[counterpartIndex].accountId) { _, _ in
+      draft.snapToSameCurrencyIfNeeded(accounts: accounts)
+    }
+
+    if isCrossCurrency {
+      TransactionDetailCrossCurrencyRow(
+        draft: $draft,
+        relevantInstrument: relevantInstrument,
+        counterpartInstrument: counterpartInstrument,
+        counterpartAmountBinding: counterpartAmountBinding,
+        focusedField: $focusedField
+      )
+    }
+  }
+
+  /// Filter transfer account options, excluding the current account and hidden accounts.
+  private func eligibleTransferAccounts(excluding currentAccountId: UUID?) -> [Account] {
+    sortedAccounts.filter { $0.id != currentAccountId && !$0.isHidden }
+  }
+}

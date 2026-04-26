@@ -82,6 +82,19 @@ extension TransactionDraft {
     }
   }
 
+  /// Per-leg variant of `normaliseCategoryText(using:)`. Reconciles the
+  /// leg at `index` so its `categoryText` matches the canonical path of
+  /// its `categoryId`, or clears both when the id is gone. Called from
+  /// each leg's category-field blur handler.
+  mutating func normaliseLegCategoryText(at index: Int, using categories: Categories) {
+    if let id = legDrafts[index].categoryId, let category = categories.by(id: id) {
+      legDrafts[index].categoryText = categories.path(for: category)
+    } else {
+      legDrafts[index].categoryText = ""
+      legDrafts[index].categoryId = nil
+    }
+  }
+
   /// Whether the "other account" label should read "From Account" instead of "To Account".
   /// True when viewing from the counterpart's perspective (the relevant leg is not the primary leg).
   var showFromAccount: Bool {
