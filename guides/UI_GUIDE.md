@@ -299,6 +299,36 @@ Follow this standard order for transaction forms:
 - Use `TextEditor` with `.frame(height:)` for longer content (>6 lines)
 - Always set bounds to prevent layout issues
 
+#### Placeholder Text (`prompt:`)
+
+Placeholder text inside an empty input field is a **hint about the expected content**, not a label substitute and not a default value. The first arg of `TextField(_:text:)` is already the leading row label in a grouped Form on macOS; the `prompt:` parameter is the placeholder shown in the input area when the field is empty.
+
+**The rule:** the placeholder must clearly read as guidance, never as data the user can submit. If the field is empty and the placeholder looks like a value, users will mistake it for a pre-filled default and not understand why the submit button is still disabled.
+
+**Decision tree:**
+1. **Row already labelled and the input type is obvious** → no placeholder. (`TextField("Name", text: $name)` is fine on its own; Apple's own forms do this for most fields.)
+2. **Placeholder adds genuinely new information** → use it, phrased as a clear hint:
+   - **Example:** `prompt: Text("e.g. Everyday")` — the `e.g.` framing is unambiguous.
+   - **Format:** `prompt: Text("yyyy-mm-dd")` for an unformatted text date.
+   - **Type:** `prompt: Text("Required")` when the empty state needs flagging.
+3. **There is a sensible default the form would accept** → pre-fill the field with that default and select it (`TextSelection`), so the user can type to overwrite. **Don't put it in `prompt:`.**
+
+```swift
+// ✅ Hint — clearly an example
+TextField("Name", text: $name, prompt: Text("e.g. Everyday"))
+
+// ✅ No placeholder — label is sufficient
+TextField("Name", text: $name)
+
+// ❌ Looks like a default the form would accept
+TextField("Name", text: $name, prompt: Text("New Account"))
+
+// ❌ Placeholder used as the only label (disappears on focus, hurts a11y)
+TextField("", text: $name, prompt: Text("Name"))
+```
+
+**Sources:** [Apple HIG — Text fields](https://developer.apple.com/design/human-interface-guidelines/text-fields), Nielsen Norman Group's [Placeholders in Form Fields Are Harmful](https://www.nngroup.com/articles/form-design-placeholders/).
+
 #### Custom Transaction Form
 
 When a profile supports custom (multi-leg) transactions, the form uses a different section order to accommodate sub-transaction sections:
@@ -816,6 +846,8 @@ var animation: Animation? {
 ---
 
 ## 13. Focus, Tab Order & Selection
+
+> **See also: `guides/FOCUS_GUIDE.md` for the canonical focus rules.** This section gives the Moolah-specific patterns; `FOCUS_GUIDE.md` covers the underlying SwiftUI focus model in depth (focus containers, `@FocusState` semantics, when `defaultFocus` silently no-ops, macOS popover key-window behaviour, the `.buttonStyle(.plain)` activation gap, anti-patterns, and a quick-reference table). Read it before touching any view that uses `@FocusState`, `.focused`, `.focusable`, `.defaultFocus`, `.focusSection`, or `.focusedSceneValue`.
 
 macOS users expect full keyboard-driven workflows. Focus management, tab order, and selection behavior are first-class interaction concerns — not accessibility afterthoughts. This section covers the patterns and rules for making Moolah feel like a native Mac app under the keyboard.
 
@@ -1582,6 +1614,8 @@ Prefer `focusedSceneValue` over `focusedValue` — scene-wide availability is al
 ---
 
 ## Version History
+- **1.5** (2026-04-26): Section 13 now opens with a prominent pointer to `guides/FOCUS_GUIDE.md`, the canonical reference for SwiftUI focus management (focus containers, `@FocusState` semantics, `defaultFocus` no-op cases, macOS popover key-window behaviour, anti-patterns).
+- **1.4** (2026-04-26): Add "Placeholder Text (`prompt:`)" subsection to Section 6 — placeholders are hints, never default values; decision tree (no placeholder when label suffices; "e.g." / format / "Required" hints; pre-fill defaults instead of placeholdering them); Apple HIG and NN/g citations.
 - **1.3** (2026-04-20): Add "Sheets & Dialogs" subsection to Section 6 — content padding rules (24pt macOS custom / 20pt iOS / 16pt popover, system handles `Form` and `.alert`), macOS minimum-frame table, button placement, examples and anti-patterns. Extended Section 3 spacing table and Section 11 layout anti-patterns with sheet padding rules.
 - **1.2** (2026-04-17): Add Section 14 — Menu Bar & Commands (macOS), covering top-level menu structure, naming, keyboard shortcuts, icons, grouping, dynamic menus, toolbar/context-menu parity, SwiftUI wiring. Trimmed Section 9's shortcut list in favor of Section 14.
 - **1.1** (2026-04-15): Add Section 13 — Focus, Tab Order & Selection (form focus, list selection, focus sections, focused values, keyboard expectations)
