@@ -253,3 +253,9 @@ promote-schema:
         exit 1
     fi
     bash scripts/promote-schema.sh
+
+# === Release ===
+# Verify the local repo is on main, clean, in sync with origin, gh
+# authenticated, and CI green. Used by both RC and final flows.
+release-preflight:
+    bash scripts/release-preflight.sh
