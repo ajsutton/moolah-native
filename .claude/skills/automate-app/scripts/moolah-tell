@@ -2,6 +2,13 @@
 # Run AppleScript against the Moolah app built in the current worktree.
 # Auto-wraps the body in `tell application "<abs-path>" ... end tell` so the
 # command targets the worktree's debug build, not /Applications/Moolah.app.
+#
+# CWD matters: the bundle path is derived from `git rev-parse --show-toplevel`
+# of the SHELL'S working directory. Calling this wrapper from a sibling
+# checkout (e.g. `cd main && .worktrees/foo/.../moolah-tell …`) targets the
+# CWD's checkout, NOT the script's. Symptom: a SECOND Moolah launches from
+# the wrong path while the worktree's app keeps running, and both fight
+# over the same CloudKit container. Always `cd` into the worktree first.
 set -euo pipefail
 
 root=$(git rev-parse --show-toplevel 2>/dev/null) || {
@@ -13,6 +20,43 @@ app="$root/.build/Build/Products/Debug/Moolah.app"
 if [ ! -d "$app" ]; then
     echo "error: Moolah.app not built at $app" >&2
     echo "       run 'just run-mac' in this worktree first" >&2
+    exit 1
+fi
+
+# Echo the resolved bundle so a wrong-CWD invocation is visible at the
+# call site instead of being discovered later via duplicate-instance
+# corruption. Goes to stderr so it doesn't pollute AppleScript stdout.
+echo "moolah-tell → $app" >&2
+
+# Refuse to launch a duplicate: if some other Moolah.app is already
+# running from a different path, telling our path would spawn a second
+# instance against the same CloudKit container. Better to fail loudly
+# than to corrupt profile data. (We allow our own bundle being already
+# up — that's the normal case.) `pgrep` reports each process's launch
+# command, which is often a relative path (e.g. `just run-mac` runs
+# from the worktree CWD so `ps` shows `.build/...`); we resolve each
+# PID's text-segment path via `lsof -d txt` to get an absolute bundle
+# location for comparison.
+target_exec="$app/Contents/MacOS/Moolah"
+foreign=()
+for pid in $(pgrep -f "Moolah.app/Contents/MacOS/Moolah" 2>/dev/null || true); do
+    pid_path=$(
+        lsof -p "$pid" -d txt -Fn 2>/dev/null \
+        | sed -n 's|^n||p' \
+        | grep -E "Moolah\.app/Contents/MacOS/Moolah$" \
+        | head -1
+    )
+    if [ -n "$pid_path" ] && [ "$pid_path" != "$target_exec" ]; then
+        foreign+=("[pid $pid] $pid_path")
+    fi
+done
+if [ "${#foreign[@]}" -gt 0 ]; then
+    echo "error: a different Moolah is already running:" >&2
+    printf '       %s\n' "${foreign[@]}" >&2
+    echo "       targeting $target_exec would launch a second instance" >&2
+    echo "       and both apps would share the CloudKit container." >&2
+    echo "       Quit the foreign instance, or 'cd' into its worktree" >&2
+    echo "       and re-run moolah-tell from there." >&2
     exit 1
 fi
 
