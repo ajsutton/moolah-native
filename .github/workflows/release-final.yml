@@ -67,9 +67,11 @@ jobs:
               exit 1
           fi
 
-          echo "rc_tag=$RC_TAG" >> "$GITHUB_OUTPUT"
-          echo "marketing_version=$MV" >> "$GITHUB_OUTPUT"
-          echo "final_sha=$FINAL_SHA" >> "$GITHUB_OUTPUT"
+          {
+              echo "rc_tag=$RC_TAG"
+              echo "marketing_version=$MV"
+              echo "final_sha=$FINAL_SHA"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Read RC's TestFlight build number
         id: build

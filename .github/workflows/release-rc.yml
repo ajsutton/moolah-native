@@ -34,9 +34,12 @@ jobs:
         id: version
         run: |
           # v1.2.0-rc.1 → 1.2.0
-          BASE_VERSION=$(echo "${GITHUB_REF_NAME#v}" | sed 's/-rc\..*//')
-          echo "base=$BASE_VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          BASE_VERSION="${GITHUB_REF_NAME#v}"
+          BASE_VERSION="${BASE_VERSION%%-rc.*}"
+          {
+              echo "base=$BASE_VERSION"
+              echo "tag=$GITHUB_REF_NAME"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Update marketing version
         run: |
