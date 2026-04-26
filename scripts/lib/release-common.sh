@@ -4,8 +4,15 @@
 
 set -euo pipefail
 
-# json_escape: escape a string for safe JSON inclusion (basic — handles
-# the chars a tag or commit might contain).
+# Dependencies: bash 4+, GNU `sort -V` (version sort) — both present on
+# macos-26 and ubuntu-latest GitHub-hosted runners. macOS shipping coreutils
+# (BSD) provides `sort -V` since 10.8.
+
+# json_escape: escape backslash and double-quote in a string for safe
+# inclusion as a JSON string value. Scoped to the kinds of values that
+# release-* scripts emit (tag names, short SHAs, marketing versions —
+# none of which contain control characters). Do NOT use for arbitrary
+# user input; control characters and unicode are not handled.
 json_escape() {
     local s="$1"
     s="${s//\\/\\\\}"

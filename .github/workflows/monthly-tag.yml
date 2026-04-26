@@ -29,6 +29,10 @@ jobs:
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create GH pre-release with auto-generated notes
+        # Doesn't go through scripts/release-create-rc.sh because that script
+        # requires a `--notes-file`, and the cron path uses `--generate-notes`
+        # (mutually exclusive). The version is computed by the same library
+        # used in release-create-rc and is well-formed by construction.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

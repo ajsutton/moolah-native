@@ -122,14 +122,12 @@ jobs:
           git commit -m "build: bump marketing version to ${NEXT} (post-v${MV})"
           git push --force-with-lease origin "$BRANCH"
 
-          PR_BODY=$(cat <<EOF
-          Default minor bump after \`v${MV}\` shipped. The next RC will read marketing version \`${NEXT}\` from \`project.yml\`.
-
-          If you want a different bump (major \`$((MAJOR + 1)).0.0\`, patch \`${MAJOR}.${MINOR}.$((PATCH + 1))\`, or an explicit version), edit \`project.yml\` in this PR before automerge fires.
-
-          Auto-opened by \`release-final.yml\`.
-          EOF
-          )
+          MAJOR_NEXT=$((MAJOR + 1))
+          PATCH_NEXT=$((PATCH + 1))
+          PR_BODY=$(printf '%s\n\n%s\n\n%s\n' \
+              "Default minor bump after \`v${MV}\` shipped. The next RC will read marketing version \`${NEXT}\` from \`project.yml\`." \
+              "If you want a different bump (major \`${MAJOR_NEXT}.0.0\`, patch \`${MAJOR}.${MINOR}.${PATCH_NEXT}\`, or an explicit version), edit \`project.yml\` in this PR before automerge fires." \
+              "Auto-opened by \`release-final.yml\`.")
 
           if existing=$(gh pr view "$BRANCH" --json number --jq .number 2>/dev/null) && [[ -n "$existing" ]]; then
               echo "PR for $BRANCH already exists (#$existing); enabling automerge"

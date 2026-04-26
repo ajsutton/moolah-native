@@ -27,7 +27,7 @@ Before cutting any release, confirm these are in place. They are one-time setup 
 2. **Determine the version.** Run `just release-next-version rc`. Read the JSON output:
    - `version` — the proposed RC version (e.g. `1.2.0-rc.2`).
    - `confirm_marketing` — `true` when the previous tag was a final release. When true, confirm the marketing version in `project.yml` is right for the new RC. If wrong, run `just bump-version <X.Y.Z>`, open a PR to land it, then return to step 1.
-   - `notes_base` — the previous RC tag (or previous final, if this is `rc.1`). Use this as the comparison base when authoring release notes.
+   - `notes_base` — the previous RC tag (or previous final, if this is `rc.1`). Use this as the comparison base when authoring release notes. If this is the first release ever for the project (no prior tags), `notes_base` will be empty — in that case, summarise the project's purpose and headline features rather than describing a delta.
 
 3. **Author release notes.** RC notes describe what changed since `notes_base` — the audience is testers; they want the delta from the previous RC. See "Authoring release notes" below for the procedure. Save the draft to `.agent-tmp/release-notes-<version>.md`.
 
