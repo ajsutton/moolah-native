@@ -19,6 +19,19 @@ Before cutting any release, confirm these are in place. They are one-time setup 
 - [ ] Match secrets are present: `MATCH_GIT_URL`, `MATCH_PASSWORD`, `MATCH_GIT_BASIC_AUTHORIZATION`.
 - [ ] CloudKit secrets are present: `DEVELOPMENT_TEAM`, `CKTOOL_MANAGEMENT_TOKEN`.
 - [ ] GitHub repo allows auto-merge (Settings → General → "Allow auto-merge").
+- [ ] GitHub Environment `prod-schema-deploy` exists with the release operator as a required reviewer (Settings → Environments → New environment). The release pipeline pauses here when a CloudKit Production schema deploy is needed.
+
+## Schema deploys
+
+CloudKit Production schema changes can only be deployed via the **CloudKit Console** ("Schema → Deploy Schema Changes to Production"). Apple's API does not expose a CLI/CI path. The release pipeline handles this with a manual-approval gate:
+
+1. The pipeline checks whether live Production already matches `CloudKit/schema.ckdb`.
+2. If it does, the pipeline proceeds without intervention.
+3. If it doesn't, the pipeline imports `schema.ckdb` to the team's CloudKit Development environment (so the Console diff view shows exactly what will be promoted) and pauses for approval on the `prod-schema-deploy` environment.
+4. The operator opens the [CloudKit Console](https://icloud.developer.apple.com/dashboard/), reviews the diff, clicks **Deploy Schema Changes to Production**, then approves the workflow run on GitHub.
+5. The pipeline re-verifies that Production matches `schema.ckdb`. If it does, the build proceeds; if not, the pipeline fails (the deploy didn't actually take effect, or the schema in Console doesn't match).
+
+The pipeline writes detailed instructions to the workflow run's job summary when it pauses — follow those.
 
 ## Cut a release candidate
 
@@ -33,7 +46,7 @@ Before cutting any release, confirm these are in place. They are one-time setup 
 
 4. **Cut the GH pre-release.** Run `just release-create-rc <version> .agent-tmp/release-notes-<version>.md`. This creates the tag, which fires `release-rc.yml`.
 
-5. **Wait + verify.** Run `just release-wait v<version>`. When it returns successfully, run `just release-status v<version>` to confirm the workflow concluded green and the DMG is attached to the GH pre-release. The workflow's green conclusion implies the IPA reached TestFlight and the CloudKit schema was promoted (those are individual steps in `release-rc.yml`); cross-check in App Store Connect and the CloudKit dashboard if anything looks off.
+5. **Wait + verify.** Run `just release-wait v<version>`. The workflow may pause on the `await-prod-deploy` job — if so, follow the "Schema deploys" procedure above (open Console → Deploy → approve the GH job). When the workflow concludes green, run `just release-status v<version>` to confirm the DMG is attached to the GH pre-release and the IPA reached TestFlight.
 
 6. **Smoke-test.** Install the TestFlight build (iOS device + simulator) and the DMG (Mac). If anything is broken, document the issue, fix on `main`, and cut a fresh RC. Don't delete the bad RC; mark its release body to note it is obsolete.
 
@@ -85,8 +98,14 @@ Follow `guides/BRAND_GUIDE.md`:
 
 ## Recovery
 
-### Schema promoted, build failed mid-RC
-The schema is in Production permanently. Diagnose the build failure on `main`, fix it, cut a new RC. The next RC's schema verify step will pass because the prod baseline now matches the proposed schema. The bad RC's GH pre-release stays as a record; edit its body to note it is obsolete.
+### Workflow paused on `await-prod-deploy` and you need to abandon
+If you click "Reject" on the manual-approval gate (or the 6-hour timeout fires before approval), the build job is skipped. The Dev environment still has the staged schema — that's fine; the next release run will overwrite it cleanly. The GH pre-release tag stays per the never-delete rule; mark its body obsolete.
+
+### Console deploy didn't take effect
+If you click Deploy in the Console and approve the workflow but `await-prod-deploy` still fails the re-verify step: the Console operation either didn't complete, or the schema you deployed differs from `CloudKit/schema.ckdb` for some reason. Open the Console, check Production's current schema, and either repeat the Deploy or fix the discrepancy. Then re-run the failed `await-prod-deploy` job (Actions → Run → Re-run failed jobs).
+
+### Schema deploy succeeded, build failed mid-RC
+The Production schema change is permanent. Diagnose the build failure on `main`, fix it, cut a new RC. The next RC's preflight will see Prod already matches `schema.ckdb` and skip straight to the build. The bad RC's GH pre-release stays as a record; edit its body to note it is obsolete.
 
 ### iOS upload succeeded, Mac DMG step failed
 Re-run the workflow run from the failed step (Actions → Run → Re-run failed jobs). Notarisation hiccups are usually transient. If a config issue, fix on `main` and cut a new RC.

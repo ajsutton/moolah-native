@@ -13,6 +13,7 @@ The runbook is written so a human can execute it solo. The reasons a human might
 
 1. **Drafting release notes.** This is the step that benefits most from analysis: read merged PRs since `notes_base`, read the diffs that actually shipped, separate user-facing changes from internal ones, and write something that respects `guides/BRAND_GUIDE.md`.
 2. **Surfacing surprises during the run.** If `release-preflight` fails, if `release-wait` reports a workflow failure, or if `release-status` shows missing assets, summarise the situation and propose a recovery path from the runbook's Recovery section.
+3. **Surfacing the schema-deploy gate.** If the workflow pauses on `await-prod-deploy`, the user needs to manually click Deploy in the CloudKit Console (per the runbook's "Schema deploys" section) and then approve the GH workflow run. Tell them the workflow has paused, point them at the Console, and wait. Don't try to bypass the gate.
 
 Everything else is just running `just` targets in order.
 

@@ -10,8 +10,86 @@ permissions:
   pull-requests: write
 
 jobs:
+  preflight:
+    name: Preflight schema check
+    runs-on: macos-26
+    timeout-minutes: 15
+    environment: testflight
+    outputs:
+      deploy_needed: ${{ steps.check.outputs.deploy_needed }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Install tools
+        run: brew install just
+
+      - name: Verify Production schema matches schema.ckdb
+        id: check
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          CKTOOL_MANAGEMENT_TOKEN: ${{ secrets.CKTOOL_MANAGEMENT_TOKEN }}
+        run: |
+          if just verify-prod-deployed; then
+              echo "Production schema matches CloudKit/schema.ckdb."
+              echo "deploy_needed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+          fi
+
+          echo "Production schema differs from CloudKit/schema.ckdb — staging Dev for manual deploy."
+          just import-schema-to-dev
+          echo "deploy_needed=true" >> "$GITHUB_OUTPUT"
+
+          {
+              echo "## Manual schema deploy required"
+              echo
+              echo "The proposed schema in \`CloudKit/schema.ckdb\` does not match live Production. The Development environment has been staged with the proposed schema."
+              echo
+              echo "### To proceed"
+              echo
+              echo "1. Open the [CloudKit Console](https://icloud.developer.apple.com/dashboard/) for container \`iCloud.rocks.moolah.app.v2\`."
+              echo "2. Schema → **Deploy Schema Changes to Production**."
+              echo "3. Review the diff (it should match what you see in this commit's \`CloudKit/schema.ckdb\`)."
+              echo "4. Confirm Deploy."
+              echo "5. Return to this workflow run and approve the **await-prod-deploy** job."
+              echo
+              echo "If the diff in the Console looks wrong, do NOT click Deploy. Instead, fix \`CloudKit/schema.ckdb\` on \`main\` and cut a new RC."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  await-prod-deploy:
+    name: Await manual production schema deploy
+    needs: preflight
+    if: needs.preflight.outputs.deploy_needed == 'true'
+    runs-on: macos-26
+    timeout-minutes: 360  # gives the operator up to 6 hours to perform the manual Console deploy and approve
+    environment: prod-schema-deploy
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Install tools
+        run: brew install just
+
+      - name: Re-verify Production schema is now deployed
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          CKTOOL_MANAGEMENT_TOKEN: ${{ secrets.CKTOOL_MANAGEMENT_TOKEN }}
+        run: |
+          if ! just verify-prod-deployed; then
+              echo "::error::Production schema still does not match CloudKit/schema.ckdb after approval. Did the Console deploy succeed?" >&2
+              exit 1
+          fi
+
   build:
     name: Build & Upload RC artefacts
+    needs: [preflight, await-prod-deploy]
+    if: |
+      always() &&
+      needs.preflight.result == 'success' &&
+      (needs.preflight.outputs.deploy_needed == 'false' ||
+       needs.await-prod-deploy.result == 'success')
     runs-on: macos-26
     timeout-minutes: 60
     environment: testflight
@@ -44,19 +122,6 @@ jobs:
       - name: Update marketing version
         run: |
           sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: \"${{ steps.version.outputs.base }}\"/" project.yml
-
-      - name: Verify Production schema matches committed baseline
-        env:
-          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
-          CKTOOL_MANAGEMENT_TOKEN: ${{ secrets.CKTOOL_MANAGEMENT_TOKEN }}
-        run: just verify-prod-matches-baseline
-
-      - name: Promote CloudKit schema to Production
-        env:
-          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
-          CKTOOL_MANAGEMENT_TOKEN: ${{ secrets.CKTOOL_MANAGEMENT_TOKEN }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: just promote-schema
 
       - name: Build & upload iOS to TestFlight
         env:
@@ -104,6 +169,13 @@ jobs:
               "build/Moolah-${{ steps.version.outputs.base }}.dmg" \
               build/build-number.txt \
               --clobber
+
+      - name: Refresh schema-prod-baseline if changed
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          CKTOOL_MANAGEMENT_TOKEN: ${{ secrets.CKTOOL_MANAGEMENT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: just refresh-prod-baseline
 
       - name: Upload IPA workflow artefact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
