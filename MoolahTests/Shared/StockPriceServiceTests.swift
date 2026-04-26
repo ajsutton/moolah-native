@@ -98,6 +98,27 @@ struct StockPriceServiceTests {
     }
   }
 
+  // MARK: - Cold-cache non-trading-day fallback
+
+  @Test
+  func coldCacheNonTradingDayFallsBackToPriorTradingDay() async throws {
+    // Reproduces the "Yahoo error 2 / noData" failure: opening the app on a
+    // Sunday for an uncached ticker. The provider has no data for the
+    // requested Sunday but has data for the prior trading day; the service
+    // should populate cache with a wide cold-start window and fall back.
+    let weekdayPrices = StockPriceResponse(
+      instrument: .AUD,
+      prices: [
+        "2026-04-09": dec("39.00"),  // Thursday
+        "2026-04-10": dec("38.25"),  // Friday — last trading day before request
+        // Sat 2026-04-11 and Sun 2026-04-12 deliberately absent
+      ]
+    )
+    let service = makeService(responses: ["BHP.AX": weekdayPrices])
+    let price = try await service.price(ticker: "BHP.AX", on: date("2026-04-12"))
+    #expect(price == dec("38.25"))
+  }
+
   // MARK: - Network failure
 
   @Test

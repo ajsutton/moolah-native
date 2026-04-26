@@ -49,22 +49,7 @@ actor StockPriceService {
 
     // Fetch from client — expand range to fill gap between cache and requested date
     do {
-      let gregorian = Calendar(identifier: .gregorian)
-      if let cache = caches[ticker] {
-        if dateString > cache.latestDate,
-          let latestDate = dateFormatter.date(from: cache.latestDate),
-          let fetchStart = gregorian.date(byAdding: .day, value: 1, to: latestDate)
-        {
-          try await fetchInChunks(ticker: ticker, from: fetchStart, to: date)
-        } else if dateString < cache.earliestDate,
-          let earliestDate = dateFormatter.date(from: cache.earliestDate),
-          let fetchEnd = gregorian.date(byAdding: .day, value: -1, to: earliestDate)
-        {
-          try await fetchInChunks(ticker: ticker, from: date, to: fetchEnd)
-        }
-      } else {
-        try await fetchAndMerge(ticker: ticker, from: date, to: date)
-      }
+      try await fetchToCoverDate(ticker: ticker, date: date, dateString: dateString)
       if let cached = lookupPrice(ticker: ticker, dateString: dateString) {
         return cached
       }
@@ -144,6 +129,35 @@ actor StockPriceService {
   }
 
   // MARK: - Private helpers
+
+  /// Fetches the surrounding window needed to cover `date`. Cold cache fetches
+  /// a month-wide window so a request on a weekend / holiday can still resolve
+  /// via `fallbackPrice`. Warm cache extends only the gap between the cache
+  /// edge and the requested date.
+  ///
+  /// Unlike `ExchangeRateService.fetchToCoverDate`, this method propagates
+  /// fetch errors so `price(ticker:on:)` can surface network failures when
+  /// the fallback cache is also empty.
+  private func fetchToCoverDate(ticker: String, date: Date, dateString: String) async throws {
+    let gregorian = Calendar(identifier: .gregorian)
+    if let cache = caches[ticker] {
+      if dateString > cache.latestDate,
+        let latestDate = dateFormatter.date(from: cache.latestDate),
+        let fetchStart = gregorian.date(byAdding: .day, value: 1, to: latestDate)
+      {
+        try await fetchInChunks(ticker: ticker, from: fetchStart, to: date)
+      } else if dateString < cache.earliestDate,
+        let earliestDate = dateFormatter.date(from: cache.earliestDate),
+        let fetchEnd = gregorian.date(byAdding: .day, value: -1, to: earliestDate)
+      {
+        try await fetchInChunks(ticker: ticker, from: date, to: fetchEnd)
+      }
+    } else if let fetchStart = gregorian.date(byAdding: .day, value: -30, to: date) {
+      try await fetchInChunks(ticker: ticker, from: fetchStart, to: date)
+    } else {
+      try await fetchAndMerge(ticker: ticker, from: date, to: date)
+    }
+  }
 
   private func lookupPrice(ticker: String, dateString: String) -> Decimal? {
     caches[ticker]?.prices[dateString]
