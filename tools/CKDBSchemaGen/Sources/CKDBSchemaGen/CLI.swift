@@ -11,6 +11,8 @@ enum CKDBSchemaGenCLI {
         try runGenerate(args: Array(args.dropFirst()))
       case "check-additive":
         try runCheckAdditive(args: Array(args.dropFirst()))
+      case "check-equal":
+        try runCheckEqual(args: Array(args.dropFirst()))
       default:
         printUsage()
         exit(2)
@@ -94,6 +96,31 @@ enum CKDBSchemaGenCLI {
     exit(1)
   }
 
+  // MARK: - check-equal
+
+  private static func runCheckEqual(args: [String]) throws {
+    let opts = parseOptions(args, allowed: ["--a", "--b"])
+    guard let aPath = opts["--a"], let bPath = opts["--b"] else {
+      fputs(
+        "ckdb-schema-gen check-equal: --a <ckdb> --b <ckdb> required\n", stderr)
+      exit(2)
+    }
+    let aSource = try String(contentsOfFile: aPath, encoding: .utf8)
+    let bSource = try String(contentsOfFile: bPath, encoding: .utf8)
+    let aSchema = try Parser.parse(aSource)
+    let bSchema = try Parser.parse(bSource)
+    let result = Equality.check(aSchema, bSchema, aLabel: aPath, bLabel: bPath)
+    if result.isEqual {
+      print("ckdb-schema-gen: \(aPath) and \(bPath) are semantically equal")
+      return
+    }
+    fputs("ckdb-schema-gen: schemas differ semantically:\n", stderr)
+    for difference in result.differences {
+      fputs("  - \(difference)\n", stderr)
+    }
+    exit(1)
+  }
+
   // MARK: - shared
 
   private static func parseOptions(_ args: [String], allowed: Set<String>) -> [String: String] {
@@ -117,6 +144,7 @@ enum CKDBSchemaGenCLI {
       Usage:
         ckdb-schema-gen generate --input <schema.ckdb> --output <dir>
         ckdb-schema-gen check-additive --proposed <schema.ckdb> --baseline <baseline.ckdb>
+        ckdb-schema-gen check-equal --a <schema.ckdb> --b <schema.ckdb>
       """,
       stderr)
     fputs("\n", stderr)
