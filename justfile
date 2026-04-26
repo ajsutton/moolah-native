@@ -235,26 +235,33 @@ dryrun-promote-schema:
     bash scripts/dryrun-promote-schema.sh
 
 # Release-tag CI: verifies the live Production schema matches
-# CloudKit/schema-prod-baseline.ckdb before promote-schema runs.
+# CloudKit/schema-prod-baseline.ckdb. Used as a sanity check that the
+# committed baseline is up to date.
 verify-prod-matches-baseline:
     bash scripts/verify-prod-matches-baseline.sh
 
-# Release-tag CI: validates CloudKit/schema.ckdb against Development as a
-# sanity check, imports it to Production, refreshes
-# CloudKit/schema-prod-baseline.ckdb from live Production, and opens a
-# follow-up PR with the new baseline. See the script header for why
-# Apple's API requires the validate-against-Dev / import-to-Prod split.
-# Production schema changes are one-way — to run locally, re-run with
-# CKTOOL_PROMOTE_FORCE=1.
-promote-schema:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ "${CI:-}" != "true" ] && [ "${CKTOOL_PROMOTE_FORCE:-}" != "1" ]; then
-        echo "promote-schema is intended to run only in CI (on release tags)." >&2
-        echo "Re-run with CKTOOL_PROMOTE_FORCE=1 to force a local promotion." >&2
-        exit 1
-    fi
-    bash scripts/promote-schema.sh
+# Release-tag CI: verifies the live Production schema matches
+# CloudKit/schema.ckdb (the source of truth). Apple's API does not expose
+# a way to write schema to Production via cktool — deploy via the CloudKit
+# Console (Schema → Deploy Schema Changes to Production). This target is
+# the gate that confirms the Console deploy has been performed.
+verify-prod-deployed:
+    bash scripts/verify-prod-deployed.sh
+
+# Release-tag CI: imports CloudKit/schema.ckdb to the Development
+# environment as a staging step before a manual Console deploy. Resets Dev
+# first to match Production so the Console's diff view is clean.
+# DESTRUCTIVE on Dev — wipes any developer experiments in the team's Dev
+# CloudKit container. See issue #495 for separating dev/test from the
+# release-pipeline container.
+import-schema-to-dev:
+    bash scripts/import-schema-to-dev.sh
+
+# Release-tag CI: refreshes CloudKit/schema-prod-baseline.ckdb from live
+# Production after a successful release. Opens a follow-up PR if the
+# baseline file changed.
+refresh-prod-baseline:
+    bash scripts/refresh-prod-baseline.sh
 
 # === Release ===
 # Verify the local repo is on main, clean, in sync with origin, gh
