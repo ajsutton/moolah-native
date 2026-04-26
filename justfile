@@ -75,6 +75,10 @@ benchmark *FILTER: generate
 test-ui *FILTERS: generate
     bash scripts/test-ui.sh {{ FILTERS }}
 
+# Run unit tests for release-script helpers (no git/network side effects).
+test-release-scripts:
+    bash scripts/tests/test-release-common.sh
+
 # Build the app for macOS
 build-mac: generate
     #!/usr/bin/env bash
