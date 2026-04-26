@@ -239,9 +239,11 @@ dryrun-promote-schema:
 verify-prod-matches-baseline:
     bash scripts/verify-prod-matches-baseline.sh
 
-# Release-tag CI: imports CloudKit/schema.ckdb to Production with --validate,
-# refreshes CloudKit/schema-prod-baseline.ckdb from live Production, and
-# opens a follow-up PR with the new baseline. Run via the testflight workflow.
+# Release-tag CI: validates CloudKit/schema.ckdb against Development as a
+# sanity check, imports it to Production, refreshes
+# CloudKit/schema-prod-baseline.ckdb from live Production, and opens a
+# follow-up PR with the new baseline. See the script header for why
+# Apple's API requires the validate-against-Dev / import-to-Prod split.
 # Production schema changes are one-way — to run locally, re-run with
 # CKTOOL_PROMOTE_FORCE=1.
 promote-schema:
