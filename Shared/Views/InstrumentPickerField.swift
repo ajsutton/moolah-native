@@ -75,6 +75,11 @@ struct InstrumentPickerField: View {
             .font(.caption)
         }
       }
+      // Make the entire row hittable, not just the trailing content slot —
+      // otherwise clicking on the row's leading "Currency" label or the gap
+      // between label and value doesn't activate the Button (LabeledContent
+      // hit-tests its halves separately).
+      .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     #if os(macOS)
