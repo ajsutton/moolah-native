@@ -32,7 +32,7 @@ fi
 # Workflow run.
 printf '\nWorkflow:\n'
 run_status=$(gh run list --workflow="$workflow" --branch="$tag" \
-    --limit 1 --json status,conclusion,databaseId,createdAt --jq '.[0]')
+    --limit 1 --json status,conclusion,databaseId,createdAt --jq '.[0]' 2>/dev/null || true)
 if [[ -z "$run_status" || "$run_status" == "null" ]]; then
     printf '  no run found for %s\n' "$workflow"
 else
