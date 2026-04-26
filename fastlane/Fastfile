@@ -190,7 +190,10 @@ platform :mac do
       is_key_content_base64: true
     )
 
-    profile_name = ENV["sigh_rocks.moolah.app_developer_id_profile-name"]
+    # match exports this with `_macos` infix because we passed `platform: "macos"`.
+    # iOS appstore uses `sigh_<bundle>_appstore_profile-name` (no platform suffix)
+    # because iOS is fastlane's default platform.
+    profile_name = ENV["sigh_rocks.moolah.app_developer_id_macos_profile-name"]
     entitlements_path = File.expand_path("Moolah-mac.entitlements", __dir__)
 
     build_app(
