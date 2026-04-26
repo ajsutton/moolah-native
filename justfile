@@ -270,3 +270,8 @@ release-next-version KIND:
 # containing the user-facing release notes (see guides/RELEASE_GUIDE.md).
 release-create-rc VERSION NOTES_FILE:
     bash scripts/release-create-rc.sh {{VERSION}} {{NOTES_FILE}}
+
+# Create the final GH release. Creates the tag at the same commit as
+# the named RC, which fires release-final.yml.
+release-create-final VERSION RC_TAG NOTES_FILE:
+    bash scripts/release-create-final.sh {{VERSION}} {{RC_TAG}} {{NOTES_FILE}}
