@@ -184,9 +184,13 @@ struct InstrumentPickerSheet: View {
       ContentUnavailableView(
         "No matches",
         systemImage: "magnifyingglass",
-        description: Text(
-          "No matching currencies, stocks, or registered tokens for \"\(store.query)\".")
+        description: Text(store.noMatchesDescription)
       )
+      // The populated branch returns a `List`, which fills available space.
+      // ContentUnavailableView is intrinsically sized — without this, the
+      // parent VStack would shrink and the popover would centre the whole
+      // header + search + empty-state column vertically.
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     } else {
       ScrollViewReader { proxy in
         List {
@@ -287,4 +291,35 @@ struct InstrumentPickerSheet: View {
       .frame(width: 28, height: 28)
       .background(.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
   }
+}
+
+#Preview("Default (single result)") {
+  // Multi-row static rendering of this view crashes the previewer with
+  // SIGTRAP (corpse incomplete, no usable backtrace; ruled out
+  // preferredCurrencySymbol, .listRowBackground, and store stability).
+  // Use a single-result query for snapshot review; for multi-row review,
+  // interact with the canvas (clear the search to see all 17 fiat codes).
+  let store = InstrumentPickerStore(kinds: [.fiatCurrency])
+  store.updateQuery("AUD")
+  return InstrumentPickerSheet(
+    store: store,
+    label: "Currency",
+    selection: .constant(.AUD),
+    isPresented: .constant(true)
+  )
+  .frame(width: 460, height: 480)
+}
+
+#Preview("No matches") {
+  let store = InstrumentPickerStore(kinds: [.fiatCurrency])
+  // Seed a query that doesn't match any common fiat code so the empty-state
+  // view is what renders. The 250ms debounce settles inside the preview.
+  store.updateQuery("zxqy")
+  return InstrumentPickerSheet(
+    store: store,
+    label: "Currency",
+    selection: .constant(.AUD),
+    isPresented: .constant(true)
+  )
+  .frame(width: 460, height: 480)
 }

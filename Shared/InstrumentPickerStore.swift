@@ -97,3 +97,17 @@ final class InstrumentPickerStore {
       }
   }
 }
+
+extension InstrumentPickerStore {
+  /// Empty-state description for the picker, phrased to the kinds the picker
+  /// is filtering on (so a fiat-only picker doesn't tell the user about
+  /// stocks or tokens). Surfaced by `InstrumentPickerSheet.listContent`.
+  var noMatchesDescription: String {
+    var parts: [String] = []
+    if kinds.contains(.fiatCurrency) { parts.append("currencies") }
+    if kinds.contains(.stock) { parts.append("stocks") }
+    if kinds.contains(.cryptoToken) { parts.append("registered tokens") }
+    let kindsLabel = parts.formatted(.list(type: .or))
+    return "No matching \(kindsLabel) for \"\(query)\"."
+  }
+}
