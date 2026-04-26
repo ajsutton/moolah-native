@@ -19,7 +19,7 @@ Before cutting any release, confirm these are in place. They are one-time setup 
 - [ ] Match secrets are present: `MATCH_GIT_URL`, `MATCH_PASSWORD`, `MATCH_GIT_BASIC_AUTHORIZATION`.
 - [ ] CloudKit secrets are present: `DEVELOPMENT_TEAM`, `CKTOOL_MANAGEMENT_TOKEN`.
 - [ ] GitHub repo allows auto-merge (Settings → General → "Allow auto-merge").
-- [ ] GitHub Environment `prod-schema-deploy` exists with the release operator as a required reviewer (Settings → Environments → New environment). The release pipeline pauses here when a CloudKit Production schema deploy is needed.
+- [ ] GitHub Environment `await-prod-deploy` exists with the release operator as a required reviewer (Settings → Environments → New environment). The release pipeline pauses here when a CloudKit Production schema deploy is needed.
 
 ## Schema deploys
 
@@ -27,7 +27,7 @@ CloudKit Production schema changes can only be deployed via the **CloudKit Conso
 
 1. The pipeline checks whether live Production already matches `CloudKit/schema.ckdb`.
 2. If it does, the pipeline proceeds without intervention.
-3. If it doesn't, the pipeline imports `schema.ckdb` to the team's CloudKit Development environment (so the Console diff view shows exactly what will be promoted) and pauses for approval on the `prod-schema-deploy` environment.
+3. If it doesn't, the pipeline imports `schema.ckdb` to the team's CloudKit Development environment (so the Console diff view shows exactly what will be promoted) and pauses for approval on the `await-prod-deploy` environment.
 4. The operator opens the [CloudKit Console](https://icloud.developer.apple.com/dashboard/), reviews the diff, clicks **Deploy Schema Changes to Production**, then approves the workflow run on GitHub.
 5. The pipeline re-verifies that Production matches `schema.ckdb`. If it does, the build proceeds; if not, the pipeline fails (the deploy didn't actually take effect, or the schema in Console doesn't match).
 
