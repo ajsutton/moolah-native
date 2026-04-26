@@ -66,32 +66,34 @@ struct InstrumentPickerField: View {
     } label: {
       LabeledContent(String(localized: label)) {
         HStack(spacing: 6) {
-          glyph
-          Text(selection.id).fontWeight(.medium)
+          Text(selection.pickerLabel)
+            .fontWeight(.medium)
+            .lineLimit(1)
+            .truncationMode(.tail)
           Image(systemName: "chevron.right")
             .foregroundStyle(.tertiary)
             .font(.caption)
         }
       }
+      // Make the entire row hittable, not just the trailing content slot —
+      // otherwise clicking on the row's leading "Currency" label or the gap
+      // between label and value doesn't activate the Button (LabeledContent
+      // hit-tests its halves separately).
+      .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    #if os(macOS)
+      .onKeyPress(.rightArrow) {
+        openPicker()
+        return .handled
+      }
+    #endif
     .accessibilityIdentifier("instrumentPicker.field.\(selection.id)")
-    .accessibilityLabel(Text("\(String(localized: label)): \(selection.id)"))
+    .accessibilityLabel(Text("\(String(localized: label)): \(selection.pickerLabel)"))
     .accessibilityHint(Text("Activate to choose a different \(String(localized: label))"))
   }
 
   // MARK: - Helpers
-
-  private var glyph: some View {
-    let labelText: String =
-      selection.kind == .fiatCurrency
-      ? (Instrument.preferredCurrencySymbol(for: selection.id) ?? selection.id)
-      : (selection.ticker ?? selection.id)
-    return Text(labelText)
-      .font(.system(size: 11, weight: .semibold))
-      .frame(width: 22, height: 22)
-      .background(.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
-  }
 
   private func openPicker() {
     store = InstrumentPickerStore(

@@ -56,6 +56,7 @@ struct CreateAccountView: View {
         }
       }
     }
+    .formStyle(.grouped)
     .navigationTitle("Create Account")
     #if os(iOS)
       .navigationBarTitleDisplayMode(.inline)
@@ -75,7 +76,7 @@ struct CreateAccountView: View {
   }
 
   @ViewBuilder private var detailsFields: some View {
-    TextField("Name", text: $name)
+    TextField("Name", text: $name, prompt: Text("e.g. MyBank - Savings"))
       .focused($focusedField, equals: .name)
       .onSubmit { focusedField = .balance }
       .accessibilityLabel("Account name")
@@ -90,18 +91,19 @@ struct CreateAccountView: View {
       InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
     }
 
-    LabeledContent("Initial Balance") {
-      TextField("Amount", value: $balanceDecimal, format: .currency(code: currency.id))
-        .monospacedDigit()
-        .focused($focusedField, equals: .balance)
-        #if os(iOS)
-          .keyboardType(.decimalPad)
-          .multilineTextAlignment(.trailing)
-        #endif
-        .accessibilityLabel("Initial balance")
-    }
+    TextField(
+      "Initial Balance", value: $balanceDecimal,
+      format: .number.precision(.fractionLength(currency.decimals))
+    )
+    .monospacedDigit()
+    .focused($focusedField, equals: .balance)
+    #if os(iOS)
+      .keyboardType(.decimalPad)
+      .multilineTextAlignment(.trailing)
+    #endif
+    .accessibilityLabel("Initial balance")
 
-    DatePicker("Date", selection: $date, displayedComponents: .date)
+    DatePicker("Opening Date", selection: $date, displayedComponents: .date)
   }
 
   private var isValid: Bool {

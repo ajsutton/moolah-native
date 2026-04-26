@@ -102,6 +102,40 @@ extension Instrument {
 }
 
 extension Instrument {
+  /// Short identifier used as the primary label in pickers and inline displays.
+  /// - Fiat: ISO code ("AUD").
+  /// - Stock/crypto: ticker if present, otherwise the canonical id.
+  var shortCode: String {
+    switch kind {
+    case .fiatCurrency: id
+    case .stock, .cryptoToken: ticker ?? id
+    }
+  }
+
+  /// Full human-readable name shown alongside `shortCode` in pickers, when one
+  /// is available and meaningfully different from the code itself.
+  /// - Fiat: locale-localised currency name (e.g. "Australian Dollar"); `nil`
+  ///   when the locale only echoes the ISO code.
+  /// - Stock/crypto: the instrument's `name`; `nil` when it matches the ticker.
+  var longDisplayName: String? {
+    switch kind {
+    case .fiatCurrency:
+      let resolved = Self.localizedName(for: id)
+      return resolved == id ? nil : resolved
+    case .stock, .cryptoToken:
+      return name == shortCode ? nil : name
+    }
+  }
+
+  /// Single-line picker label: "Long Name (CODE)" when a long name is
+  /// available, otherwise just the short code.
+  var pickerLabel: String {
+    if let long = longDisplayName {
+      return "\(long) (\(shortCode))"
+    }
+    return shortCode
+  }
+
   /// Locale-localised currency name for an ISO code, or the code itself
   /// if the locale can't resolve it. Replaces `CurrencyPicker.currencyName(for:)`.
   static func localizedName(for code: String) -> String {
