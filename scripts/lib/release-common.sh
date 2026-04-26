@@ -2,6 +2,8 @@
 # Shared helpers for release-* scripts. Pure functions where possible.
 # Sourced by scripts/release-*.sh and tests/test-release-common.sh.
 
+set -euo pipefail
+
 # json_escape: escape a string for safe JSON inclusion (basic — handles
 # the chars a tag or commit might contain).
 json_escape() {
@@ -91,7 +93,7 @@ compute_final_version() {
 # Reads MARKETING_VERSION from project.yml. Path defaults to ./project.yml.
 read_marketing_version_from_project_yml() {
     local path="${1:-project.yml}"
-    grep 'MARKETING_VERSION:' "$path" | head -1 | sed 's/.*"\(.*\)".*/\1/'
+    grep -E '^[[:space:]]*MARKETING_VERSION:' "$path" | head -1 | sed 's/.*"\([^"]*\)".*/\1/'
 }
 
 # read_all_tags
