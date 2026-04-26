@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The icloud-container-environment is hardcoded to Production because the
+     mac_dmg lane only runs in CI for direct-distribution builds. Local
+     developer macOS builds go through `ENABLE_ENTITLEMENTS=1 just generate`,
+     which uses the iOS-style $(CLOUDKIT_ENVIRONMENT) entitlement on the
+     project target rather than this fastlane file. -->
+<plist version="1.0">
+<dict>
+  <key>com.apple.developer.icloud-container-identifiers</key>
+  <array><string>iCloud.rocks.moolah.app.v2</string></array>
+  <key>com.apple.developer.icloud-services</key>
+  <array><string>CloudKit</string></array>
+  <key>com.apple.developer.icloud-container-environment</key>
+  <string>Production</string>
+  <key>com.apple.security.app-sandbox</key>
+  <true/>
+  <key>com.apple.security.network.client</key>
+  <true/>
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+</dict>
+</plist>

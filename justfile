@@ -75,6 +75,10 @@ benchmark *FILTER: generate
 test-ui *FILTERS: generate
     bash scripts/test-ui.sh {{ FILTERS }}
 
+# Run unit tests for release-script helpers (no git/network side effects).
+test-release-scripts:
+    bash scripts/tests/test-release-common.sh
+
 # Build the app for macOS
 build-mac: generate
     #!/usr/bin/env bash
@@ -249,3 +253,35 @@ promote-schema:
         exit 1
     fi
     bash scripts/promote-schema.sh
+
+# === Release ===
+# Verify the local repo is on main, clean, in sync with origin, gh
+# authenticated, and CI green. Used by both RC and final flows.
+release-preflight:
+    bash scripts/release-preflight.sh
+
+# Compute the proposed version for the next release tag.
+# KIND=rc|final. Emits JSON to stdout (see scripts/lib/release-common.sh).
+release-next-version KIND:
+    bash scripts/release-next-version.sh {{KIND}}
+
+# Create the GH pre-release for an RC. Creates the tag at HEAD of main,
+# which fires release-rc.yml. NOTES_FILE is a path to a markdown file
+# containing the user-facing release notes (see guides/RELEASE_GUIDE.md).
+release-create-rc VERSION NOTES_FILE:
+    bash scripts/release-create-rc.sh {{VERSION}} {{NOTES_FILE}}
+
+# Create the final GH release. Creates the tag at the same commit as
+# the named RC, which fires release-final.yml.
+release-create-final VERSION RC_TAG NOTES_FILE:
+    bash scripts/release-create-final.sh {{VERSION}} {{RC_TAG}} {{NOTES_FILE}}
+
+# Wait for the workflow run associated with a release tag to finish.
+# Exits zero if the run succeeded, non-zero with the conclusion otherwise.
+release-wait TAG:
+    bash scripts/release-wait.sh {{TAG}}
+
+# Print a summary of a release: GH release state, workflow run state,
+# attached assets.
+release-status TAG:
+    bash scripts/release-status.sh {{TAG}}

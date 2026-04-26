@@ -1,0 +1,112 @@
+name: Release RC
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build:
+    name: Build & Upload RC artefacts
+    runs-on: macos-26
+    timeout-minutes: 60
+    environment: testflight
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Install tools
+        run: brew install xcodegen just create-dmg
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@e65c17d16e57e481586a6a5a0282698790062f92 # v1.300.0
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Extract base version from tag
+        id: version
+        run: |
+          # v1.2.0-rc.1 → 1.2.0
+          BASE_VERSION="${GITHUB_REF_NAME#v}"
+          BASE_VERSION="${BASE_VERSION%%-rc.*}"
+          {
+              echo "base=$BASE_VERSION"
+              echo "tag=$GITHUB_REF_NAME"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update marketing version
+        run: |
+          sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: \"${{ steps.version.outputs.base }}\"/" project.yml
+
+      - name: Verify Production schema matches committed baseline
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          CKTOOL_MANAGEMENT_TOKEN: ${{ secrets.CKTOOL_MANAGEMENT_TOKEN }}
+        run: just verify-prod-matches-baseline
+
+      - name: Promote CloudKit schema to Production
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          CKTOOL_MANAGEMENT_TOKEN: ${{ secrets.CKTOOL_MANAGEMENT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: just promote-schema
+
+      - name: Build & upload iOS to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          CODE_SIGN_STYLE: "Manual"
+        run: bundle exec fastlane ios beta
+
+      - name: Capture TestFlight build number
+        run: |
+          # Fastlane writes the new build number into project.pbxproj.
+          # Read it back so we can attach it to the GH release.
+          BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION' Moolah.xcodeproj/project.pbxproj \
+              | head -1 \
+              | sed 's/.*= \([0-9]*\);/\1/')
+          if [[ -z "$BUILD" ]]; then
+              echo "Could not read CURRENT_PROJECT_VERSION from pbxproj" >&2
+              exit 1
+          fi
+          echo "$BUILD" > build/build-number.txt
+          echo "Build number: $BUILD"
+
+      - name: Build & notarise Mac DMG
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          CODE_SIGN_STYLE: "Manual"
+        run: bundle exec fastlane mac dmg version:${{ steps.version.outputs.base }}
+
+      - name: Attach DMG and build-number to GH pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ steps.version.outputs.tag }}" \
+              "build/Moolah-${{ steps.version.outputs.base }}.dmg" \
+              build/build-number.txt \
+              --clobber
+
+      - name: Upload IPA workflow artefact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Moolah-${{ steps.version.outputs.tag }}.ipa
+          path: build/Moolah.ipa

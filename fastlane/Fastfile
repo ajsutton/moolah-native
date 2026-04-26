@@ -119,4 +119,129 @@ platform :ios do
       skip_waiting_for_build_processing: true
     )
   end
+
+  desc "Submit an existing TestFlight build for App Store review (auto-release after approval)"
+  lane :submit_review do |options|
+    build_number = options[:build_number] or UI.user_error!("missing :build_number")
+    version = options[:version] or UI.user_error!("missing :version")
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+
+    deliver(
+      api_key: api_key,
+      app_version: version,
+      build_number: build_number.to_s,
+      submit_for_review: true,
+      automatic_release: true,
+      force: true,
+      skip_binary_upload: true,
+      skip_metadata: true,
+      skip_screenshots: true,
+      precheck_include_in_app_purchases: false,
+      submission_information: {
+        add_id_info_uses_idfa: false,
+        export_compliance_uses_encryption: false,
+        export_compliance_encryption_updated: false
+      }
+    )
+
+    UI.success("Submitted build #{build_number} (#{version}) for App Store review with auto-release")
+  end
+end
+
+platform :mac do
+  before_all do
+    setup_ci
+  end
+
+  desc "Sync Developer ID certificates and profiles for Mac distribution"
+  lane :certificates do
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+
+    match(
+      type: "developer_id",
+      app_identifier: "rocks.moolah.app",
+      platform: "macos",
+      api_key: api_key,
+      readonly: is_ci
+    )
+  end
+
+  desc "Build, sign, notarise, and DMG-package the Mac app for direct distribution"
+  lane :dmg do |options|
+    version = options[:version] or UI.user_error!("missing :version (e.g. 1.2.0)")
+
+    certificates
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+
+    profile_name = ENV["sigh_rocks.moolah.app_developer_id_profile-name"]
+    entitlements_path = File.expand_path("Moolah-mac.entitlements", __dir__)
+
+    build_app(
+      scheme: "Moolah-macOS",
+      configuration: "Release",
+      export_method: "developer-id",
+      output_directory: "./build",
+      output_name: "Moolah",
+      xcargs: [
+        "CODE_SIGN_ENTITLEMENTS=#{entitlements_path}",
+        "CODE_SIGN_STYLE=Manual",
+        "DEVELOPMENT_TEAM=#{ENV['DEVELOPMENT_TEAM']}",
+        "'CODE_SIGN_IDENTITY=Developer ID Application'",
+        "'PROVISIONING_PROFILE_SPECIFIER=#{profile_name}'",
+        "ENABLE_HARDENED_RUNTIME=YES",
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) CLOUDKIT_ENABLED'"
+      ].join(" ")
+    )
+
+    app_path = "./build/Moolah.app"
+    UI.user_error!("Moolah.app not found at #{app_path}") unless File.directory?(app_path)
+
+    # Notarise the .app first (faster turnaround than notarising the DMG alone).
+    sh "xcrun notarytool submit '#{app_path}' " \
+       "--key '#{api_key[:key_filepath]}' " \
+       "--key-id '#{api_key[:key_id]}' " \
+       "--issuer '#{api_key[:issuer_id]}' " \
+       "--wait"
+    sh "xcrun stapler staple '#{app_path}'"
+
+    # Build the DMG with create-dmg (assumed installed via brew on the runner).
+    dmg_path = "./build/Moolah-#{version}.dmg"
+    sh "rm -f '#{dmg_path}'"
+    sh "create-dmg " \
+       "--volname 'Moolah #{version}' " \
+       "--window-size 540 380 " \
+       "--icon-size 96 " \
+       "--icon 'Moolah.app' 140 190 " \
+       "--app-drop-link 400 190 " \
+       "--no-internet-enable " \
+       "'#{dmg_path}' '#{app_path}'"
+
+    # Sign + notarise + staple the DMG itself.
+    sh "codesign --sign 'Developer ID Application' --timestamp '#{dmg_path}'"
+    sh "xcrun notarytool submit '#{dmg_path}' " \
+       "--key '#{api_key[:key_filepath]}' " \
+       "--key-id '#{api_key[:key_id]}' " \
+       "--issuer '#{api_key[:issuer_id]}' " \
+       "--wait"
+    sh "xcrun stapler staple '#{dmg_path}'"
+
+    UI.success("Notarised DMG ready at #{dmg_path}")
+  end
 end
