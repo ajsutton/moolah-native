@@ -24,7 +24,10 @@ cloudkit_require_env
     || cloudkit_fail "$CLOUDKIT_SCHEMA_FILE is missing."
 
 echo "Resetting Development schema to match Production…"
-cloudkit_cktool reset-schema --environment development
+# cktool reset-schema only operates on the development environment by
+# definition (per `cktool reset-schema --help`); passing --environment is
+# rejected as an unknown option.
+cloudkit_cktool reset-schema
 
 echo "Validating $CLOUDKIT_SCHEMA_FILE against Development (dry-run)…"
 cloudkit_cktool import-schema \
