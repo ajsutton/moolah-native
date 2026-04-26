@@ -95,10 +95,15 @@ actor CryptoPriceService {
     }
 
     let symbol = instrument.ticker ?? instrument.name
+    // Cold cache: fetch a month-wide surrounding window so a request on a
+    // day the provider has not (yet) published can still fall back to a
+    // recent prior price. Mirrors ExchangeRateService.fetchToCoverDate.
+    let calendar = Calendar(identifier: .gregorian)
+    let fetchStart = calendar.date(byAdding: .day, value: -30, to: date) ?? date
     var lastError: (any Error)?
     for client in clients {
       do {
-        let fetched = try await client.dailyPrices(for: mapping, in: date...date)
+        let fetched = try await client.dailyPrices(for: mapping, in: fetchStart...date)
         if !fetched.isEmpty {
           merge(tokenId: tokenId, symbol: symbol, newPrices: fetched)
           saveCacheToDisk(tokenId: tokenId)

@@ -119,6 +119,21 @@ struct CryptoPriceServiceTests {
     }
   }
 
+  @Test
+  func coldCacheMissingCurrentDateFallsBackToPriorDay() async throws {
+    // Mirrors the stock-side cold-cache fix: when the provider has no data
+    // for the requested date but does have data for prior days, a cold-start
+    // lookup must populate cache with a wider window and fall back instead
+    // of throwing.
+    let working = FixedCryptoPriceClient(prices: [
+      "1:native": ["2026-04-09": dec("1600.00")]  // 2026-04-10 deliberately absent
+    ])
+    let service = makeService(clients: [working])
+    let price = try await service.price(
+      for: ethInstrument, mapping: ethMapping, on: date("2026-04-10"))
+    #expect(price == dec("1600.00"))
+  }
+
   // MARK: - Fallback never uses future dates
 
   @Test
