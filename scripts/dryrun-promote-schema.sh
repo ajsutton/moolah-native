@@ -29,7 +29,7 @@ EOF
     exit 1
 fi
 
-cloudkit_cktool reset-schema --environment development
+cloudkit_cktool reset-schema
 cloudkit_cktool import-schema \
     --environment development \
     --validate \
