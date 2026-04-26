@@ -259,3 +259,8 @@ promote-schema:
 # authenticated, and CI green. Used by both RC and final flows.
 release-preflight:
     bash scripts/release-preflight.sh
+
+# Compute the proposed version for the next release tag.
+# KIND=rc|final. Emits JSON to stdout (see scripts/lib/release-common.sh).
+release-next-version KIND:
+    bash scripts/release-next-version.sh {{KIND}}
