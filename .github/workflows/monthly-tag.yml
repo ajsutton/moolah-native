@@ -1,30 +1,40 @@
-name: Monthly TestFlight Build
+name: Monthly RC
 
 on:
   schedule:
     - cron: "0 9 1 * *"  # 9 AM UTC on the 1st of each month
-  workflow_dispatch: {}    # Allow manual trigger
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
 
 jobs:
-  get-version:
-    name: Determine Version
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
+  cut-rc:
+    name: Cut monthly RC
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
 
-      - name: Get version
+      - name: Install just
+        run: brew install just
+
+      - name: Compute next RC version
         id: version
         run: |
-          VERSION=$(grep 'MARKETING_VERSION:' project.yml | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          MONTH=$(date -u +%Y%m)
-          echo "version=${VERSION}-monthly.${MONTH}" >> "$GITHUB_OUTPUT"
+          JSON=$(just release-next-version rc)
+          VERSION=$(echo "$JSON" | jq -r .version)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
-  testflight:
-    name: TestFlight
-    needs: get-version
-    uses: ./.github/workflows/testflight.yml
-    with:
-      version: ${{ needs.get-version.outputs.version }}
-    secrets: inherit
+      - name: Create GH pre-release with auto-generated notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+              --target main \
+              --title "${{ steps.version.outputs.tag }}" \
+              --prerelease \
+              --generate-notes
+          # release-rc.yml fires from the tag push that gh release just created.
