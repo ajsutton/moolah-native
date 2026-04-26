@@ -33,6 +33,22 @@ notes_file="$3"
     exit 1
 }
 
+# Ensure the supplied RC is the latest for this marketing version.
+# The release-final.yml workflow looks up the latest RC and verifies the
+# final tag points at the same commit; promoting an older RC would fail
+# in CI. Catch it locally with a clearer error.
+latest_rc=$(git tag -l "v${version}-rc.*" | sort -V | tail -1)
+if [[ -z "$latest_rc" ]]; then
+    printf 'no RC tag exists for marketing version %s — cut an RC first\n' \
+        "$version" >&2
+    exit 1
+fi
+if [[ "$rc_tag" != "$latest_rc" ]]; then
+    printf 'cannot promote %s: latest RC for %s is %s. Either smoke-test the latest RC or cut a fresh one.\n' \
+        "$rc_tag" "$version" "$latest_rc" >&2
+    exit 1
+fi
+
 # Resolve the RC's commit. git rev-list errors if the tag is unknown.
 rc_commit=$(git rev-list -n 1 "$rc_tag")
 

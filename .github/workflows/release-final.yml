@@ -39,7 +39,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install tools
-        run: brew install just
+        run: brew install xcodegen just
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@e65c17d16e57e481586a6a5a0282698790062f92 # v1.300.0
@@ -131,9 +131,13 @@ jobs:
           EOF
           )
 
-          gh pr create \
-              --base main \
-              --head "$BRANCH" \
-              --title "build: bump marketing version to ${NEXT}" \
-              --body "$PR_BODY"
+          if existing=$(gh pr view "$BRANCH" --json number --jq .number 2>/dev/null) && [[ -n "$existing" ]]; then
+              echo "PR for $BRANCH already exists (#$existing); enabling automerge"
+          else
+              gh pr create \
+                  --base main \
+                  --head "$BRANCH" \
+                  --title "build: bump marketing version to ${NEXT}" \
+                  --body "$PR_BODY"
+          fi
           gh pr merge "$BRANCH" --auto --squash

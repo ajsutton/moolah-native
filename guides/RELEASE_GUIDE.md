@@ -33,7 +33,7 @@ Before cutting any release, confirm these are in place. They are one-time setup 
 
 4. **Cut the GH pre-release.** Run `just release-create-rc <version> .agent-tmp/release-notes-<version>.md`. This creates the tag, which fires `release-rc.yml`.
 
-5. **Wait + verify.** Run `just release-wait v<version>`. When it returns successfully, run `just release-status v<version>` to confirm the IPA reached TestFlight, the DMG is attached to the GH pre-release, and the CloudKit schema was promoted.
+5. **Wait + verify.** Run `just release-wait v<version>`. When it returns successfully, run `just release-status v<version>` to confirm the workflow concluded green and the DMG is attached to the GH pre-release. The workflow's green conclusion implies the IPA reached TestFlight and the CloudKit schema was promoted (those are individual steps in `release-rc.yml`); cross-check in App Store Connect and the CloudKit dashboard if anything looks off.
 
 6. **Smoke-test.** Install the TestFlight build (iOS device + simulator) and the DMG (Mac). If anything is broken, document the issue, fix on `main`, and cut a fresh RC. Don't delete the bad RC; mark its release body to note it is obsolete.
 
@@ -49,11 +49,7 @@ Before cutting any release, confirm these are in place. They are one-time setup 
 
 5. **Wait.** Run `just release-wait v<version>`.
 
-6. **Verify.** Run `just release-status v<version>`. Confirm:
-   - Workflow concluded successfully.
-   - The DMG asset on the final release is the same DMG from the RC release.
-   - A version-bump PR was opened (with automerge enabled).
-   - App Store Connect shows the existing TestFlight build was submitted for review with auto-release after approval enabled.
+6. **Verify.** Run `just release-status v<version>`. Confirm the workflow concluded green and the DMG asset is attached to the final release. The workflow's green conclusion implies the App Store submission was made (auto-release on) and the bump PR was opened with automerge enabled — but cross-check both in App Store Connect and the GitHub PR list. If you see a workflow failure, jump to "Recovery" → "Final workflow fails after submission".
 
 7. **Review the bump PR.** It is opened with the default minor bump and automerge enabled. If you want a different bump (major / patch / explicit version), edit `project.yml` in the PR before automerge fires; otherwise let it merge.
 
