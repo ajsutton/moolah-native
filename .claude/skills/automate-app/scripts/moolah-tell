@@ -1,25 +1,53 @@
 #!/usr/bin/env bash
-# Run AppleScript against the Moolah app built in the current worktree.
-# Auto-wraps the body in `tell application "<abs-path>" ... end tell` so the
-# command targets the worktree's debug build, not /Applications/Moolah.app.
+# Run AppleScript against a specific Moolah.app bundle. The wrapper picks
+# the bundle from `--app <path>` if given, otherwise from
+# `git rev-parse --show-toplevel` of CWD + `.build/Build/Products/Debug`.
+# Either way it then auto-wraps the body in `tell application "<abs-path>"
+# ... end tell` so AppleScript targets that exact bundle, never
+# `/Applications/Moolah.app` via LaunchServices name resolution.
 #
-# CWD matters: the bundle path is derived from `git rev-parse --show-toplevel`
-# of the SHELL'S working directory. Calling this wrapper from a sibling
-# checkout (e.g. `cd main && .worktrees/foo/.../moolah-tell …`) targets the
-# CWD's checkout, NOT the script's. Symptom: a SECOND Moolah launches from
-# the wrong path while the worktree's app keeps running, and both fight
-# over the same CloudKit container. Always `cd` into the worktree first.
+# Usage:
+#   moolah-tell 'get name of every profile'             # CWD-resolved
+#   moolah-tell --app /abs/path/Moolah.app 'body'       # explicit bundle
+#   moolah-tell - <<<'body'                             # body on stdin
+#   moolah-tell --app /abs/path/Moolah.app -            # both
+#
+# CWD matters when --app is omitted: the bundle path is derived from
+# `git rev-parse --show-toplevel` of the SHELL'S working directory.
+# Calling this wrapper from a sibling checkout (e.g.
+# `cd main && .worktrees/foo/.../moolah-tell …`) targets the CWD's
+# checkout, NOT the script's. Symptom: a SECOND Moolah launches from
+# the wrong path while the worktree's app keeps running, and both
+# fight over the same CloudKit container. Either `cd` into the
+# worktree first, or pass `--app` with the absolute bundle path.
 set -euo pipefail
 
-root=$(git rev-parse --show-toplevel 2>/dev/null) || {
-    echo "error: moolah-tell must be run from inside a Moolah worktree" >&2
-    exit 1
-}
-app="$root/.build/Build/Products/Debug/Moolah.app"
+app=""
+app_explicit=0
+if [ "${1:-}" = "--app" ]; then
+    if [ "$#" -lt 2 ]; then
+        echo "error: --app requires a path argument" >&2
+        exit 1
+    fi
+    app="$2"
+    app_explicit=1
+    shift 2
+fi
+
+if [ -z "$app" ]; then
+    root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+        echo "error: moolah-tell must be run from inside a Moolah worktree" >&2
+        echo "       (or pass --app /path/to/Moolah.app for an explicit bundle)" >&2
+        exit 1
+    }
+    app="$root/.build/Build/Products/Debug/Moolah.app"
+fi
 
 if [ ! -d "$app" ]; then
-    echo "error: Moolah.app not built at $app" >&2
-    echo "       run 'just run-mac' in this worktree first" >&2
+    echo "error: Moolah.app not found at $app" >&2
+    if [ "$app_explicit" -eq 0 ]; then
+        echo "       run 'just run-mac' in this worktree first" >&2
+    fi
     exit 1
 fi
 
@@ -55,12 +83,12 @@ if [ "${#foreign[@]}" -gt 0 ]; then
     printf '       %s\n' "${foreign[@]}" >&2
     echo "       targeting $target_exec would launch a second instance" >&2
     echo "       and both apps would share the CloudKit container." >&2
-    echo "       Quit the foreign instance, or 'cd' into its worktree" >&2
-    echo "       and re-run moolah-tell from there." >&2
+    echo "       Quit the foreign instance, 'cd' into its worktree, or" >&2
+    echo "       pass --app pointing at the running bundle." >&2
     exit 1
 fi
 
-# No args or `-` means read the AppleScript body from stdin.
+# No args (after any --app) or `-` means read the AppleScript body from stdin.
 if [ "$#" -eq 0 ] || [ "$1" = "-" ]; then
     body=$(cat)
 else
