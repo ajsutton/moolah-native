@@ -1,0 +1,137 @@
+name: Release Final
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  guard-not-rc:
+    name: Skip if tag is an RC
+    runs-on: ubuntu-latest
+    outputs:
+      is_final: ${{ steps.check.outputs.is_final }}
+    steps:
+      - id: check
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == *-rc.* ]]; then
+            echo "Skipping: tag ${GITHUB_REF_NAME} is an RC"
+            echo "is_final=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_final=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  promote:
+    name: Promote RC to final
+    needs: guard-not-rc
+    if: needs.guard-not-rc.outputs.is_final == 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+    environment: testflight
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Install tools
+        run: brew install just
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@e65c17d16e57e481586a6a5a0282698790062f92 # v1.300.0
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Resolve RC tag pairing
+        id: pair
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MV="${GITHUB_REF_NAME#v}"     # 1.2.0
+          FINAL_SHA=$(git rev-list -n 1 "$GITHUB_REF_NAME")
+
+          # Latest RC tag for this marketing version.
+          RC_TAG=$(git tag -l "v${MV}-rc.*" | sort -V | tail -1)
+          if [[ -z "$RC_TAG" ]]; then
+              echo "No RC tag found for $MV" >&2
+              exit 1
+          fi
+          RC_SHA=$(git rev-list -n 1 "$RC_TAG")
+          if [[ "$FINAL_SHA" != "$RC_SHA" ]]; then
+              echo "Final tag $GITHUB_REF_NAME ($FINAL_SHA) does not point at the same commit as $RC_TAG ($RC_SHA)" >&2
+              exit 1
+          fi
+
+          echo "rc_tag=$RC_TAG" >> "$GITHUB_OUTPUT"
+          echo "marketing_version=$MV" >> "$GITHUB_OUTPUT"
+          echo "final_sha=$FINAL_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Read RC's TestFlight build number
+        id: build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ steps.pair.outputs.rc_tag }}" \
+              -p "build-number.txt" -D build
+          BUILD=$(cat build/build-number.txt)
+          echo "Build number from RC: $BUILD"
+          echo "build_number=$BUILD" >> "$GITHUB_OUTPUT"
+
+      - name: Submit existing TestFlight build for App Store review
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+        run: |
+          bundle exec fastlane ios submit_review \
+              version:${{ steps.pair.outputs.marketing_version }} \
+              build_number:${{ steps.build.outputs.build_number }}
+
+      - name: Copy DMG from RC release to final release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ steps.pair.outputs.rc_tag }}" \
+              -p "*.dmg" -D build
+          gh release upload "$GITHUB_REF_NAME" build/*.dmg --clobber
+
+      - name: Open version-bump PR with automerge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MV="${{ steps.pair.outputs.marketing_version }}"
+          # Default minor bump.
+          IFS=. read -r MAJOR MINOR PATCH <<< "$MV"
+          NEXT="${MAJOR}.$((MINOR + 1)).0"
+
+          BRANCH="release/post-v${MV}-bump"
+          git config user.name "moolah-release-bot"
+          git config user.email "release-bot@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B "$BRANCH" origin/main
+          sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: \"${NEXT}\"/" project.yml
+          git add project.yml
+          git commit -m "build: bump marketing version to ${NEXT} (post-v${MV})"
+          git push --force-with-lease origin "$BRANCH"
+
+          PR_BODY=$(cat <<EOF
+          Default minor bump after \`v${MV}\` shipped. The next RC will read marketing version \`${NEXT}\` from \`project.yml\`.
+
+          If you want a different bump (major \`$((MAJOR + 1)).0.0\`, patch \`${MAJOR}.${MINOR}.$((PATCH + 1))\`, or an explicit version), edit \`project.yml\` in this PR before automerge fires.
+
+          Auto-opened by \`release-final.yml\`.
+          EOF
+          )
+
+          gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "build: bump marketing version to ${NEXT}" \
+              --body "$PR_BODY"
+          gh pr merge "$BRANCH" --auto --squash
