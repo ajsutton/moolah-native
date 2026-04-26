@@ -1,3 +1,8 @@
+// swift-format wraps `TransactionLeg(...)` calls with one argument per line
+// inside the previews; SwiftLint's multiline_arguments rule (which expects
+// "all on one line OR one per line including the first") then trips on the
+// formatter's chosen style. The formatter wins per project policy
+// (.swift-format is the layout source of truth), so suppress the lint here.
 // swiftlint:disable multiline_arguments
 
 import SwiftUI
@@ -10,9 +15,6 @@ private let commonFiatInstruments: [Instrument] = [
   "MXN", "NOK", "NZD", "SEK", "SGD", "USD", "ZAR",
 ].map { Instrument.fiat(code: $0) }
 
-// Refactor pending — see https://github.com/ajsutton/moolah-native/issues/309
-// for the planned subview extraction that lets these suppressions go away.
-// swiftlint:disable:next type_body_length
 struct TransactionDetailView: View {
   let transaction: Transaction
   let accounts: Accounts
@@ -30,19 +32,10 @@ struct TransactionDetailView: View {
   @State private var draft: TransactionDraft
   @State private var knownInstruments: [Instrument] = []
   @State private var showDeleteConfirmation = false
-  @State private var showPayeeSuggestions = false
-  @State private var payeeHighlightedIndex: Int?
-  /// Mirrors `categoryJustSelected` — set when a payee is accepted so the
-  /// resulting `onTextChange` (from binding update) does not immediately
-  /// re-open the dropdown and re-trigger a prefix fetch.
-  @State private var payeeJustSelected = false
-  @State private var showCategorySuggestions = false
-  @State private var categoryHighlightedIndex: Int?
-  @State private var categoryJustSelected = false
+  @State private var payeeState = PayeeAutocompleteState()
+  @State private var categoryState = CategoryAutocompleteState()
+  @State private var legCategoryStates: [Int: CategoryAutocompleteState] = [:]
   @State private var legPendingDeletion: Int?
-  @State private var legCategoryJustSelected: [Int: Bool] = [:]
-  @State private var showLegCategorySuggestions: [Int: Bool] = [:]
-  @State private var legCategoryHighlightedIndex: [Int: Int] = [:]
   /// Snapshot of whether the transaction was a blank/new draft at open
   /// time (empty payee + all-zero legs). Captured once at init so that
   /// `autofillFromPayee` only copies fields from a matched transaction
@@ -51,78 +44,7 @@ struct TransactionDetailView: View {
   /// from the dropdown while editing a $5,000 transfer would clobber the
   /// amount, type, and category.
   @State private var openedAsNewTransaction: Bool
-  @FocusState private var focusedField: Field?
-
-  private enum Field: Hashable {
-    case payee
-    case amount
-    case counterpartAmount
-    case legAmount(Int)
-  }
-
-  private enum TransactionMode: Hashable {
-    case income, expense, transfer, custom
-
-    var displayName: String {
-      switch self {
-      case .income: return "Income"
-      case .expense: return "Expense"
-      case .transfer: return "Transfer"
-      case .custom: return "Custom"
-      }
-    }
-  }
-
-  private var availableModes: [TransactionMode] {
-    supportsComplexTransactions
-      ? [.income, .expense, .transfer, .custom]
-      : [.income, .expense, .transfer]
-  }
-
-  private var modeBinding: Binding<TransactionMode> {
-    Binding(
-      get: {
-        if draft.isCustom { return .custom }
-        switch draft.type {
-        case .income: return .income
-        case .expense: return .expense
-        case .transfer: return .transfer
-        case .openingBalance: return .expense
-        }
-      },
-      set: { newMode in
-        switch newMode {
-        case .custom:
-          draft.isCustom = true
-        case .income:
-          if draft.isCustom { draft.switchToSimple() }
-          draft.setType(.income, accounts: accounts)
-        case .expense:
-          if draft.isCustom { draft.switchToSimple() }
-          draft.setType(.expense, accounts: accounts)
-        case .transfer:
-          if draft.isCustom { draft.switchToSimple() }
-          draft.setType(.transfer, accounts: accounts)
-        }
-      }
-    )
-  }
-
-  private var amountBinding: Binding<String> {
-    Binding(
-      get: { draft.amountText },
-      set: { draft.setAmount($0, accounts: accounts) }
-    )
-  }
-
-  private var isEditable: Bool {
-    transaction.isSimple || draft.isCustom
-  }
-
-  /// Whether the current draft is a simple earmark-only transaction.
-  private var isSimpleEarmarkOnly: Bool {
-    !draft.isCustom && draft.relevantLeg.isEarmarkOnly
-  }
+  @FocusState private var focusedField: TransactionDetailFocus?
 
   init(
     transaction: Transaction,
@@ -163,93 +85,33 @@ struct TransactionDetailView: View {
     _openedAsNewTransaction = State(initialValue: payeeEmpty && allLegsZero)
   }
 
-  private var sortedAccounts: [Account] {
-    accounts.ordered.sorted { lhs, rhs in
-      if lhs.type.isCurrent != rhs.type.isCurrent {
-        return lhs.type.isCurrent
-      }
-      return lhs.position < rhs.position
-    }
-  }
-
-  /// Filter transfer account options, excluding the current account and hidden accounts.
-  private func eligibleTransferAccounts(excluding currentAccountId: UUID?) -> [Account] {
-    sortedAccounts.filter { $0.id != currentAccountId && !$0.isHidden }
-  }
-
-  /// Resolve the instrument ID for a leg, checking account first then earmark.
-  private func legInstrumentId(at index: Int) -> String {
-    let leg = draft.legDrafts[index]
-    if let acctId = leg.accountId, let account = accounts.by(id: acctId) {
-      return account.instrument.id
-    }
-    if let emId = leg.earmarkId, let earmark = earmarks.by(id: emId) {
-      return earmark.instrument.id
-    }
-    return ""
-  }
-
-  /// The instrument for the relevant leg's account (for displaying currency symbol).
-  private var relevantInstrument: Instrument? {
-    draft.legDrafts[draft.relevantLegIndex].accountId
-      .flatMap { accounts.by(id: $0) }?
-      .instrument
-  }
-
-  /// Whether the current draft is a cross-currency simple transfer.
-  private var isCrossCurrency: Bool {
-    !draft.isCustom && draft.type == .transfer && draft.isCrossCurrencyTransfer(accounts: accounts)
-  }
-
-  /// The instrument for the counterpart leg's account.
-  private var counterpartInstrument: Instrument? {
-    draft.counterpartLeg?.accountId
-      .flatMap { accounts.by(id: $0) }?
-      .instrument
-  }
-
-  /// Binding for counterpart amount text.
-  private var counterpartAmountBinding: Binding<String> {
-    Binding(
-      get: { draft.counterpartLeg?.amountText ?? "" },
-      set: { draft.setCounterpartAmount($0) }
-    )
-  }
-
-  /// Derived exchange rate (display text + accessibility label), or nil when not computable.
-  private var derivedRate: (displayText: String, accessibilityText: String)? {
-    guard let relevantInst = relevantInstrument,
-      let counterpartInst = counterpartInstrument,
-      let primaryQty = InstrumentAmount.parseQuantity(
-        from: draft.amountText, decimals: relevantInst.decimals),
-      let counterQty = InstrumentAmount.parseQuantity(
-        from: draft.counterpartLeg?.amountText ?? "", decimals: counterpartInst.decimals),
-      primaryQty != .zero && counterQty != .zero
-    else { return nil }
-    // abs() used only for display rate computation — stored amounts preserve their signs
-    let absPrimary = abs(primaryQty)
-    let absCounter = abs(counterQty)
-    let rate = absCounter / absPrimary
-    let rateFormatted = rate.formatted(
-      .number.precision(.significantDigits(2...4)).grouping(.never))
-    return (
-      displayText: "≈ 1 \(relevantInst.id) = \(rateFormatted) \(counterpartInst.id)",
-      accessibilityText:
-        "Approximate exchange rate: 1 \(relevantInst.id) equals \(rateFormatted) \(counterpartInst.id)"
-    )
-  }
-
   var body: some View {
     formContent
       .formStyle(.grouped)
       .overlayPreferenceValue(PayeeFieldAnchorKey.self) { anchor in
-        payeeOverlay(anchor: anchor)
+        PayeeAutocompleteOverlay(
+          anchor: anchor,
+          payee: $draft.payee,
+          state: $payeeState,
+          suggestionSource: transactionStore.payeeSuggestionSource,
+          onAutofill: autofillFromPayee
+        )
       }
       .overlayPreferenceValue(CategoryPickerAnchorKey.self) { anchor in
-        categoryOverlay(anchor: anchor)
+        TransactionDetailCategoryOverlay(
+          anchor: anchor,
+          draft: $draft,
+          categories: categories,
+          state: $categoryState
+        )
       }
       .overlayPreferenceValue(LegCategoryPickerAnchorKey.self) { anchors in
-        legCategoryOverlay(anchors: anchors)
+        TransactionDetailLegCategoryOverlay(
+          anchors: anchors,
+          draft: $draft,
+          categories: categories,
+          legStates: $legCategoryStates
+        )
       }
       .navigationTitle("Transaction Details")
       #if os(iOS)
@@ -268,22 +130,6 @@ struct TransactionDetailView: View {
         }
       #endif
       .onChange(of: draft) { _, _ in debouncedSave() }
-      .onChange(of: legCategoryFieldFocused) { _, focused in
-        for i in draft.legDrafts.indices where i != focused {
-          showLegCategorySuggestions[i] = false
-          legCategoryHighlightedIndex[i] = nil
-          if let catId = draft.legDrafts[i].categoryId, let cat = categories.by(id: catId) {
-            if draft.legDrafts[i].categoryText != categories.path(for: cat) {
-              legCategoryJustSelected[i] = true
-              draft.legDrafts[i].categoryText = categories.path(for: cat)
-            }
-          } else if !draft.legDrafts[i].categoryText.isEmpty {
-            legCategoryJustSelected[i] = true
-            draft.legDrafts[i].categoryText = ""
-            draft.legDrafts[i].categoryId = nil
-          }
-        }
-      }
       .task {
         knownInstruments = (try? await session.instrumentRegistry?.all()) ?? []
       }
@@ -309,6 +155,7 @@ struct TransactionDetailView: View {
         Button("Delete", role: .destructive) {
           if let index = legPendingDeletion {
             draft.removeLeg(at: index)
+            shiftLegCategoryStates(after: index)
             legPendingDeletion = nil
           }
         }
@@ -316,580 +163,202 @@ struct TransactionDetailView: View {
         Text("Are you sure you want to delete this sub-transaction?")
       }
   }
+}
 
+// MARK: - Form Content & Section Composition
+
+extension TransactionDetailView {
   private var formContent: some View {
     Form {
-      if isSimpleEarmarkOnly {
-        earmarkOnlyDetailsSection
-        if showRecurrence {
-          recurrenceSection
-        }
-        notesSection
-      } else if draft.isCustom {
-        typeSection.disabled(!isEditable)
-        customDetailsSection
-        ForEach(draft.legDrafts.indices, id: \.self) { index in
-          subTransactionSection(index: index)
-        }
-        addSubTransactionSection
-        if showRecurrence {
-          recurrenceSection
-        }
-        notesSection
-      } else {
-        typeSection.disabled(!isEditable)
-        detailsSection.disabled(!isEditable)
-        accountSection.disabled(!isEditable)
-        categorySection.disabled(!isEditable)
-        if showRecurrence {
-          recurrenceSection.disabled(!isEditable)
-        }
-        notesSection
-      }
+      modeAwareSections
       if isScheduled {
-        paySection
-      }
-      deleteSection
-    }
-  }
-
-  @ViewBuilder
-  private func payeeOverlay(anchor: Anchor<CGRect>?) -> some View {
-    if showPayeeSuggestions, !draft.payee.isEmpty,
-      !transactionStore.payeeSuggestionSource.suggestions.isEmpty, let anchor
-    {
-      GeometryReader { proxy in
-        let rect = proxy[anchor]
-        PayeeSuggestionDropdown(
-          suggestions: transactionStore.payeeSuggestionSource.suggestions,
-          searchText: draft.payee,
-          highlightedIndex: $payeeHighlightedIndex,
-          onSelect: { selected in
-            payeeJustSelected = true
-            showPayeeSuggestions = false
-            payeeHighlightedIndex = nil
-            draft.payee = selected
-            transactionStore.payeeSuggestionSource.clear()
-            autofillFromPayee(selected)
-          }
+        TransactionDetailPaySection(
+          transaction: transaction,
+          transactionStore: transactionStore,
+          onUpdate: onUpdate,
+          onDelete: onDelete
         )
-        .frame(width: rect.width)
-        .offset(x: rect.minX, y: rect.maxY + 4)
       }
+      TransactionDetailDeleteSection(onRequestDelete: { showDeleteConfirmation = true })
     }
   }
 
-  // MARK: - Sections
-
-  private var typeSection: some View {
-    Section {
-      if transaction.legs.contains(where: { $0.type == .openingBalance }) {
-        LabeledContent("Type") {
-          Text(TransactionType.openingBalance.displayName)
-            .foregroundStyle(.secondary)
-        }
-      } else if !transaction.isSimple {
-        LabeledContent("Type") {
-          Text("Custom")
-            .foregroundStyle(.secondary)
-        }
-        .accessibilityHint(
-          "This transaction has custom sub-transactions and cannot be changed to a simpler type.")
-      } else {
-        Picker("Type", selection: modeBinding) {
-          ForEach(availableModes, id: \.self) { mode in
-            Text(mode.displayName).tag(mode)
-          }
-        }
-        .accessibilityLabel("Transaction type")
-        #if os(iOS)
-          .pickerStyle(.segmented)
-        #endif
-      }
-    }
-  }
-
-  private var detailsSection: some View {
-    Section {
-      PayeeAutocompleteField(
-        text: $draft.payee,
-        highlightedIndex: $payeeHighlightedIndex,
-        suggestionCount: payeeVisibleSuggestionCount,
-        onTextChange: { newValue in
-          if payeeJustSelected {
-            payeeJustSelected = false
-          } else {
-            showPayeeSuggestions = !newValue.isEmpty
-            transactionStore.payeeSuggestionSource.fetch(prefix: newValue)
-          }
-        },
-        onAcceptHighlighted: acceptHighlightedPayee
-      )
-      .focused($focusedField, equals: .payee)
-      .accessibilityIdentifier(UITestIdentifiers.Detail.payee)
-
-      HStack {
-        TextField("Amount", text: amountBinding)
-          .multilineTextAlignment(.trailing)
-          .monospacedDigit()
-          #if os(iOS)
-            .keyboardType(.decimalPad)
-          #endif
-          .focused($focusedField, equals: .amount)
-          .onSubmit {
-            if isCrossCurrency {
-              focusedField = .counterpartAmount
-            }
-          }
-        Text(relevantInstrument?.id ?? "").foregroundStyle(.secondary)
-          .monospacedDigit()
-      }
-
-      DatePicker("Date", selection: $draft.date, displayedComponents: .date)
-    }
-  }
-
-  private var accountSection: some View {
-    Section {
-      Picker("Account", selection: $draft.legDrafts[draft.relevantLegIndex].accountId) {
-        Text("None").tag(UUID?.none)
-        ForEach(sortedAccounts) { account in
-          Text(account.name).tag(UUID?.some(account.id))
-        }
-      }
-
-      if draft.type == .transfer {
-        let counterpartIndex = draft.relevantLegIndex == 0 ? 1 : 0
-        let toAccountLabel = draft.showFromAccount ? "From Account" : "To Account"
-        let currentAccountId = draft.legDrafts[draft.relevantLegIndex].accountId
-        let eligibleAccounts = eligibleTransferAccounts(excluding: currentAccountId)
-
-        Picker(toAccountLabel, selection: $draft.legDrafts[counterpartIndex].accountId) {
-          Text("Select...").tag(UUID?.none)
-          ForEach(eligibleAccounts) { account in
-            Text(account.name).tag(UUID?.some(account.id))
-          }
-        }
-        .accessibilityIdentifier(UITestIdentifiers.Detail.toAccountPicker)
-        .onChange(of: draft.legDrafts[counterpartIndex].accountId) { _, _ in
-          draft.snapToSameCurrencyIfNeeded(accounts: accounts)
-        }
-
-        if isCrossCurrency {
-          let fieldLabel = draft.showFromAccount ? "Sent" : "Received"
-          HStack {
-            Text(fieldLabel)
-            Spacer()
-            TextField(fieldLabel, text: counterpartAmountBinding)
-              .multilineTextAlignment(.trailing)
-              .monospacedDigit()
-              .accessibilityLabel(draft.showFromAccount ? "Sent amount" : "Received amount")
-              #if os(iOS)
-                .keyboardType(.decimalPad)
-              #endif
-              .focused($focusedField, equals: .counterpartAmount)
-              .onSubmit { focusedField = nil }
-              .accessibilityIdentifier(UITestIdentifiers.Detail.counterpartAmount)
-            Text(counterpartInstrument?.id ?? "")
-              .foregroundStyle(.secondary)
-              .monospacedDigit()
-              .accessibilityIdentifier(UITestIdentifiers.Detail.counterpartAmountInstrument)
-          }
-
-          if let rate = derivedRate {
-            Text(rate.displayText)
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .monospacedDigit()
-              .accessibilityLabel(rate.accessibilityText)
-          }
-        }
-      }
-    }
-  }
-
-  @FocusState private var categoryFieldFocused: Bool
-  @FocusState private var legCategoryFieldFocused: Int?
-
-  private var categorySection: some View {
-    Section {
-      CategoryAutocompleteField(
-        text: $draft.categoryText,
-        highlightedIndex: $categoryHighlightedIndex,
-        suggestionCount: categoryVisibleSuggestionCount,
-        onTextChange: { _ in openCategoryDropdownIfFocused() },
-        onAcceptHighlighted: acceptHighlightedCategory
-      )
-      .focused($categoryFieldFocused)
-      .accessibilityIdentifier(UITestIdentifiers.Detail.category)
-      .onChange(of: categoryFieldFocused) { _, focused in
-        if !focused { handleCategoryFieldBlur() }
-      }
-
-      Picker("Earmark", selection: $draft.earmarkId) {
-        Text("None").tag(UUID?.none)
-        ForEach(earmarks.ordered.filter { !$0.isHidden }) { earmark in
-          Text(earmark.name).tag(UUID?.some(earmark.id))
-        }
-      }
-      #if os(macOS)
-        .pickerStyle(.menu)
-      #endif
-    }
-  }
-
-  /// Opens the category dropdown in response to a user-driven edit.
-  ///
-  /// Only a focused field's text change counts as a user edit. Programmatic
-  /// writes (payee-autofill, focus-out normalisation) also flow through
-  /// `onChange(of: text)`; without the focus guard they'd open the picker
-  /// the user never asked to browse.
-  private func openCategoryDropdownIfFocused() {
-    guard categoryFieldFocused else { return }
-    if categoryJustSelected {
-      categoryJustSelected = false
+  @ViewBuilder private var modeAwareSections: some View {
+    if isSimpleEarmarkOnly {
+      earmarkOnlyContent
+    } else if draft.isCustom {
+      customModeContent
     } else {
-      showCategorySuggestions = true
+      simpleModeContent
     }
   }
 
-  /// Resets picker UI state on blur and delegates the `categoryText` /
-  /// `categoryId` reconciliation to `TransactionDraft` so the rule — "text
-  /// that doesn't resolve to a known category is cleared" — is exercised
-  /// directly by `TransactionDraft` tests without a view host.
-  private func handleCategoryFieldBlur() {
-    categoryJustSelected = true
-    showCategorySuggestions = false
-    categoryHighlightedIndex = nil
-    draft.normaliseCategoryText(using: categories)
+  @ViewBuilder private var earmarkOnlyContent: some View {
+    TransactionDetailEarmarkOnlySection(
+      draft: $draft, earmarks: earmarks, amountBinding: amountBinding)
+    if showRecurrence {
+      TransactionDetailRecurrenceSection(draft: $draft)
+    }
+    TransactionDetailNotesSection(notes: $draft.notes)
   }
 
-  private var customDetailsSection: some View {
-    Section {
-      PayeeAutocompleteField(
-        text: $draft.payee,
-        highlightedIndex: $payeeHighlightedIndex,
-        suggestionCount: payeeVisibleSuggestionCount,
-        onTextChange: { newValue in
-          if payeeJustSelected {
-            payeeJustSelected = false
-          } else {
-            showPayeeSuggestions = !newValue.isEmpty
-            transactionStore.payeeSuggestionSource.fetch(prefix: newValue)
-          }
-        },
-        onAcceptHighlighted: acceptHighlightedPayee
+  @ViewBuilder private var simpleModeContent: some View {
+    modeSection.disabled(!isEditable)
+    TransactionDetailDetailsSection(
+      draft: $draft,
+      amountBinding: amountBinding,
+      relevantInstrument: relevantInstrument,
+      isCrossCurrency: isCrossCurrency,
+      suggestionSource: transactionStore.payeeSuggestionSource,
+      payeeState: $payeeState,
+      onAutofill: autofillFromPayee,
+      focusedField: $focusedField
+    )
+    .disabled(!isEditable)
+    TransactionDetailAccountSection(
+      draft: $draft,
+      accounts: accounts,
+      sortedAccounts: sortedAccounts,
+      relevantInstrument: relevantInstrument,
+      counterpartInstrument: counterpartInstrument,
+      counterpartAmountBinding: counterpartAmountBinding,
+      isCrossCurrency: isCrossCurrency,
+      focusedField: $focusedField
+    )
+    .disabled(!isEditable)
+    TransactionDetailCategorySection(
+      draft: $draft, categories: categories, earmarks: earmarks, state: $categoryState
+    )
+    .disabled(!isEditable)
+    if showRecurrence {
+      TransactionDetailRecurrenceSection(draft: $draft).disabled(!isEditable)
+    }
+    TransactionDetailNotesSection(notes: $draft.notes)
+  }
+
+  @ViewBuilder private var customModeContent: some View {
+    modeSection.disabled(!isEditable)
+    TransactionDetailCustomDetailsSection(
+      draft: $draft,
+      suggestionSource: transactionStore.payeeSuggestionSource,
+      payeeState: $payeeState,
+      onAutofill: autofillFromPayee,
+      focusedField: $focusedField
+    )
+    ForEach(draft.legDrafts.indices, id: \.self) { index in
+      TransactionDetailLegRow(
+        index: index,
+        totalLegCount: draft.legDrafts.count,
+        draft: $draft,
+        accounts: accounts,
+        categories: categories,
+        earmarks: earmarks,
+        knownInstruments: knownInstruments,
+        sortedAccounts: sortedAccounts,
+        categoryState: legCategoryStateBinding(for: index),
+        focusedField: $focusedField,
+        onRequestDelete: { legPendingDeletion = index }
       )
-      .focused($focusedField, equals: .payee)
-      .accessibilityIdentifier(UITestIdentifiers.Detail.payee)
-
-      DatePicker("Date", selection: $draft.date, displayedComponents: .date)
     }
+    TransactionDetailAddLegSection(draft: $draft, sortedAccounts: sortedAccounts)
+    if showRecurrence {
+      TransactionDetailRecurrenceSection(draft: $draft)
+    }
+    TransactionDetailNotesSection(notes: $draft.notes)
   }
 
-  @ViewBuilder
-  private func subTransactionSection(index: Int) -> some View {
-    let isLegEarmarkOnly = draft.legDrafts[index].isEarmarkOnly
-    Section("Sub-transaction \(index + 1) of \(draft.legDrafts.count)") {
-      if !isLegEarmarkOnly {
-        legTypePicker(at: index)
-      }
-      legAccountPicker(at: index)
-      legInstrumentPicker(at: index)
-      legAmountRow(at: index)
-      if !isLegEarmarkOnly {
-        legCategoryField(at: index)
-      }
-      legEarmarkPicker(at: index, isLegEarmarkOnly: isLegEarmarkOnly)
-      if draft.legDrafts.count > 1 {
-        Button(role: .destructive) {
-          legPendingDeletion = index
-        } label: {
-          Text("Delete Sub-transaction")
-            .frame(maxWidth: .infinity)
-        }
-        .accessibilityLabel("Delete Sub-transaction")
-      }
-    }
-  }
-
-  @ViewBuilder
-  private func legTypePicker(at index: Int) -> some View {
-    Picker("Type", selection: $draft.legDrafts[index].type) {
-      Text(TransactionType.income.displayName).tag(TransactionType.income)
-      Text(TransactionType.expense.displayName).tag(TransactionType.expense)
-      Text(TransactionType.transfer.displayName).tag(TransactionType.transfer)
-    }
-  }
-
-  @ViewBuilder
-  private func legAccountPicker(at index: Int) -> some View {
-    Picker("Account", selection: $draft.legDrafts[index].accountId) {
-      Text("None").tag(UUID?.none)
-      ForEach(sortedAccounts) { account in
-        Text(account.name).tag(UUID?.some(account.id))
-      }
-    }
-    .onChange(of: draft.legDrafts[index].accountId) { _, newAccountId in
-      draft.enforceEarmarkOnlyInvariants(at: index)
-      if let newAccountId, let account = accounts.by(id: newAccountId) {
-        draft.legDrafts[index].instrumentId = account.instrument.id
-      } else if let emId = draft.legDrafts[index].earmarkId,
-        let earmark = earmarks.by(id: emId)
-      {
-        draft.legDrafts[index].instrumentId = earmark.instrument.id
-      }
-    }
-  }
-
-  private func resolveInstrument(_ id: String) -> Instrument {
-    knownInstruments.first { $0.id == id } ?? Instrument.fiat(code: id)
-  }
-
-  @ViewBuilder
-  private func legInstrumentPicker(at index: Int) -> some View {
-    let binding = Binding<Instrument>(
-      get: {
-        let id = draft.legDrafts[index].instrumentId ?? legInstrumentId(at: index)
-        return resolveInstrument(id)
-      },
-      set: { draft.legDrafts[index].instrumentId = $0.id }
+  private var modeSection: some View {
+    TransactionDetailModeSection(
+      transaction: transaction,
+      draft: $draft,
+      accounts: accounts,
+      supportsComplexTransactions: supportsComplexTransactions
     )
-    InstrumentPickerField(
-      label: "Asset",
-      kinds: Set(Instrument.Kind.allCases),
-      selection: binding
+  }
+
+  private func legCategoryStateBinding(
+    for index: Int
+  ) -> Binding<CategoryAutocompleteState> {
+    Binding(
+      get: { legCategoryStates[index] ?? CategoryAutocompleteState() },
+      set: { legCategoryStates[index] = $0 }
     )
-    .accessibilityLabel("Currency for sub-transaction \(index + 1)")
-    .accessibilityHint("Overrides the currency derived from the account")
   }
 
-  @ViewBuilder
-  private func legAmountRow(at index: Int) -> some View {
-    HStack {
-      TextField("Amount", text: $draft.legDrafts[index].amountText)
-        .multilineTextAlignment(.trailing)
-        .monospacedDigit()
-        #if os(iOS)
-          .keyboardType(.decimalPad)
-        #endif
-        .focused($focusedField, equals: .legAmount(index))
-      Text(draft.legDrafts[index].instrumentId ?? legInstrumentId(at: index))
-        .foregroundStyle(.secondary)
-        .monospacedDigit()
+  /// Re-key the per-leg dropdown state dict after the leg at `removedIndex`
+  /// is removed. Without this, an open dropdown on a higher-indexed leg
+  /// would re-bind to the *new* leg at that shifted index — e.g.
+  /// deleting leg 0 with three legs would leak leg 1's open-dropdown
+  /// flag onto the new leg 0.
+  private func shiftLegCategoryStates(after removedIndex: Int) {
+    var shifted: [Int: CategoryAutocompleteState] = [:]
+    for (key, state) in legCategoryStates where key != removedIndex {
+      shifted[key < removedIndex ? key : key - 1] = state
+    }
+    legCategoryStates = shifted
+  }
+}
+
+// MARK: - Computed Helpers
+
+extension TransactionDetailView {
+  private var sortedAccounts: [Account] {
+    accounts.ordered.sorted { lhs, rhs in
+      if lhs.type.isCurrent != rhs.type.isCurrent {
+        return lhs.type.isCurrent
+      }
+      return lhs.position < rhs.position
     }
   }
 
-  @ViewBuilder
-  private func legCategoryField(at index: Int) -> some View {
-    LegCategoryAutocompleteField(
-      legIndex: index,
-      text: $draft.legDrafts[index].categoryText,
-      highlightedIndex: Binding(
-        get: { legCategoryHighlightedIndex[index] },
-        set: { legCategoryHighlightedIndex[index] = $0 }
-      ),
-      suggestionCount: legCategoryVisibleSuggestions(for: index).count,
-      onTextChange: { _ in
-        if legCategoryJustSelected[index] == true {
-          legCategoryJustSelected[index] = false
-        } else {
-          showLegCategorySuggestions[index] = true
-        }
-      },
-      onAcceptHighlighted: { acceptHighlightedLegCategory(at: index) }
+  private var isEditable: Bool { transaction.isSimple || draft.isCustom }
+
+  /// Whether the current draft is a simple earmark-only transaction.
+  private var isSimpleEarmarkOnly: Bool {
+    !draft.isCustom && draft.relevantLeg.isEarmarkOnly
+  }
+
+  /// The instrument for the relevant leg's account (for displaying currency symbol).
+  private var relevantInstrument: Instrument? {
+    draft.legDrafts[draft.relevantLegIndex].accountId
+      .flatMap { accounts.by(id: $0) }?
+      .instrument
+  }
+
+  /// Whether the current draft is a cross-currency simple transfer.
+  private var isCrossCurrency: Bool {
+    !draft.isCustom && draft.type == .transfer && draft.isCrossCurrencyTransfer(accounts: accounts)
+  }
+
+  /// The instrument for the counterpart leg's account.
+  private var counterpartInstrument: Instrument? {
+    draft.counterpartLeg?.accountId
+      .flatMap { accounts.by(id: $0) }?
+      .instrument
+  }
+
+  private var counterpartAmountBinding: Binding<String> {
+    Binding(
+      get: { draft.counterpartLeg?.amountText ?? "" },
+      set: { draft.setCounterpartAmount($0) }
     )
-    .focused($legCategoryFieldFocused, equals: index)
-    .accessibilityIdentifier(UITestIdentifiers.Detail.legCategory(index))
   }
 
-  @ViewBuilder
-  private func legEarmarkPicker(at index: Int, isLegEarmarkOnly: Bool) -> some View {
-    Picker("Earmark", selection: $draft.legDrafts[index].earmarkId) {
-      if !isLegEarmarkOnly {
-        Text("None").tag(UUID?.none)
-      }
-      ForEach(earmarks.ordered.filter { !$0.isHidden }) { earmark in
-        Text(earmark.name).tag(UUID?.some(earmark.id))
-      }
-    }
-    #if os(macOS)
-      .pickerStyle(.menu)
-    #endif
-    .onChange(of: draft.legDrafts[index].earmarkId) { _, _ in
-      draft.enforceEarmarkOnlyInvariants(at: index)
-    }
-  }
-
-  private var addSubTransactionSection: some View {
-    Section {
-      Button("Add Sub-transaction") {
-        let defaultAccount = sortedAccounts.first
-        draft.addLeg(
-          defaultAccountId: defaultAccount?.id,
-          instrumentId: defaultAccount?.instrument.id
-        )
-      }
-      .accessibilityLabel("Add Sub-transaction")
-    }
-  }
-
-  private var recurrenceSection: some View {
-    Section("Recurrence") {
-      Toggle("Repeat", isOn: $draft.isRepeating)
-      if draft.isRepeating {
-        recurrenceIntervalRow
-        recurrencePeriodPicker
-      }
-    }
-  }
-
-  private var recurrenceIntervalRow: some View {
-    HStack {
-      Text("Every")
-      Spacer()
-      TextField("", value: $draft.recurEvery, format: .number)
-        #if os(iOS)
-          .keyboardType(.numberPad)
-        #endif
-        .multilineTextAlignment(.trailing)
-        .frame(minWidth: 40, idealWidth: 60, maxWidth: 80)
-        .accessibilityLabel("Recurrence interval")
-    }
-  }
-
-  private var recurrencePeriodPicker: some View {
-    Picker(
-      "Period",
-      selection: Binding(
-        get: { draft.recurPeriod ?? .month },
-        set: { draft.recurPeriod = $0 }
-      )
-    ) {
-      ForEach(RecurPeriod.allCases.filter { $0 != .once }, id: \.self) { period in
-        Text(draft.recurEvery == 1 ? period.displayName : period.pluralDisplayName)
-          .tag(period)
-      }
-    }
-    .accessibilityLabel("Recurrence period")
-    #if os(macOS)
-      .pickerStyle(.menu)
-    #endif
-  }
-
-  private var notesSection: some View {
-    Section("Notes") {
-      TextEditor(text: $draft.notes)
-        .accessibilityLabel("Notes")
-        .frame(minHeight: 60, maxHeight: 120)
-    }
+  private var amountBinding: Binding<String> {
+    Binding(
+      get: { draft.amountText },
+      set: { draft.setAmount($0, accounts: accounts) }
+    )
   }
 
   private var isScheduled: Bool {
     showRecurrence && transaction.recurPeriod != nil
   }
+}
 
-  private var paySection: some View {
-    Section {
-      Button {
-        Task {
-          switch await transactionStore.payScheduledTransaction(transaction) {
-          case .paid(let updated?): onUpdate(updated)
-          case .paid(.none), .deleted: onDelete(transaction.id)
-          case .failed: break
-          }
-        }
-      } label: {
-        HStack {
-          Spacer()
-          if transactionStore.isPayingScheduled {
-            ProgressView()
-              .controlSize(.small)
-          } else {
-            Text("Pay Now")
-          }
-          Spacer()
-        }
-      }
-      .disabled(transactionStore.isPayingScheduled)
-      .accessibilityLabel("Pay \(transaction.payee ?? "transaction") now")
-    }
-  }
+// MARK: - Actions
 
-  private var deleteSection: some View {
-    Section {
-      Button(role: .destructive) {
-        showDeleteConfirmation = true
-      } label: {
-        Text("Delete")
-          .frame(maxWidth: .infinity)
-      }
-    }
-  }
-
-  private var earmarkOnlyDetailsSection: some View {
-    Section {
-      LabeledContent("Type") {
-        Text("Earmark funds")
-          .foregroundStyle(.secondary)
-      }
-
-      Picker("Earmark", selection: $draft.earmarkId) {
-        ForEach(earmarks.ordered.filter { !$0.isHidden }) { earmark in
-          Text(earmark.name).tag(UUID?.some(earmark.id))
-        }
-      }
-      #if os(macOS)
-        .pickerStyle(.menu)
-      #endif
-
-      HStack {
-        TextField("Amount", text: amountBinding)
-          .multilineTextAlignment(.trailing)
-          .monospacedDigit()
-          #if os(iOS)
-            .keyboardType(.decimalPad)
-          #endif
-        Text(earmarkInstrumentId ?? "").foregroundStyle(.secondary)
-          .monospacedDigit()
-      }
-
-      DatePicker("Date", selection: $draft.date, displayedComponents: .date)
-    }
-  }
-
-  /// The instrument ID for the earmark on the relevant leg.
-  private var earmarkInstrumentId: String? {
-    draft.relevantLeg.earmarkId
-      .flatMap { earmarks.by(id: $0) }?
-      .instrument.id
-  }
-
-  // MARK: - Actions
-
-  private var payeeVisibleSuggestions: [String] {
-    guard showPayeeSuggestions, !draft.payee.isEmpty else { return [] }
-    // Exact matches are retained — see `PayeeSuggestionDropdown.visibleSuggestions`.
-    // Both layers filter the same source; keeping the logic aligned means
-    // arrow-Enter selection picks whatever the dropdown visibly highlights.
-    return Array(transactionStore.payeeSuggestionSource.suggestions.prefix(8))
-  }
-
-  private var payeeVisibleSuggestionCount: Int {
-    payeeVisibleSuggestions.count
-  }
-
-  private func acceptHighlightedPayee() {
-    guard let index = payeeHighlightedIndex, index < payeeVisibleSuggestions.count else { return }
-    let selected = payeeVisibleSuggestions[index]
-    payeeJustSelected = true
-    showPayeeSuggestions = false
-    payeeHighlightedIndex = nil
-    draft.payee = selected
-    transactionStore.payeeSuggestionSource.clear()
-    autofillFromPayee(selected)
-  }
-
+extension TransactionDetailView {
   private func autofillFromPayee(_ selectedPayee: String) {
     // Only auto-copy amount/type/category from a past transaction when
     // the user is filling in a fresh draft. Editing an existing
@@ -902,122 +371,6 @@ struct TransactionDetailView: View {
           payee: selectedPayee)
       else { return }
       draft.applyAutofill(from: match, categories: categories, accounts: accounts)
-    }
-  }
-
-  // MARK: - Category Suggestions
-
-  private var categoryVisibleSuggestions: [CategorySuggestion] {
-    guard showCategorySuggestions else { return [] }
-    let allEntries = categories.flattenedByPath()
-    let filtered: [Categories.FlatEntry]
-    if draft.categoryText.trimmingCharacters(in: .whitespaces).isEmpty {
-      filtered = allEntries
-    } else {
-      filtered = allEntries.filter { matchesCategorySearch($0.path, query: draft.categoryText) }
-    }
-    return filtered.prefix(8).map { CategorySuggestion(id: $0.category.id, path: $0.path) }
-  }
-
-  private var categoryVisibleSuggestionCount: Int {
-    categoryVisibleSuggestions.count
-  }
-
-  private func acceptHighlightedCategory() {
-    guard let index = categoryHighlightedIndex, index < categoryVisibleSuggestions.count else {
-      return
-    }
-    let selected = categoryVisibleSuggestions[index]
-    categoryJustSelected = true
-    draft.categoryId = selected.id
-    draft.categoryText = selected.path
-    showCategorySuggestions = false
-    categoryHighlightedIndex = nil
-  }
-
-  @ViewBuilder
-  private func categoryOverlay(anchor: Anchor<CGRect>?) -> some View {
-    if showCategorySuggestions, !categoryVisibleSuggestions.isEmpty, let anchor {
-      GeometryReader { proxy in
-        let rect = proxy[anchor]
-        CategorySuggestionDropdown(
-          suggestions: categoryVisibleSuggestions,
-          searchText: draft.categoryText,
-          highlightedIndex: $categoryHighlightedIndex,
-          onSelect: { selected in
-            categoryJustSelected = true
-            draft.categoryId = selected.id
-            draft.categoryText = selected.path
-            showCategorySuggestions = false
-            categoryHighlightedIndex = nil
-          },
-          identifier: UITestIdentifiers.Autocomplete.category,
-          rowIdentifier: UITestIdentifiers.Autocomplete.categorySuggestion(_:)
-        )
-        .frame(width: rect.width)
-        .offset(x: rect.minX, y: rect.maxY + 4)
-      }
-    }
-  }
-
-  // MARK: - Leg Category Suggestions
-
-  private func legCategoryVisibleSuggestions(for index: Int) -> [CategorySuggestion] {
-    guard showLegCategorySuggestions[index] == true else { return [] }
-    let text = draft.legDrafts[index].categoryText
-    let allEntries = categories.flattenedByPath()
-    let filtered: [Categories.FlatEntry]
-    if text.trimmingCharacters(in: .whitespaces).isEmpty {
-      filtered = allEntries
-    } else {
-      filtered = allEntries.filter { matchesCategorySearch($0.path, query: text) }
-    }
-    return filtered.prefix(8).map { CategorySuggestion(id: $0.category.id, path: $0.path) }
-  }
-
-  private func acceptHighlightedLegCategory(at index: Int) {
-    let suggestions = legCategoryVisibleSuggestions(for: index)
-    guard let highlighted = legCategoryHighlightedIndex[index],
-      highlighted < suggestions.count
-    else { return }
-    let selected = suggestions[highlighted]
-    legCategoryJustSelected[index] = true
-    draft.legDrafts[index].categoryId = selected.id
-    draft.legDrafts[index].categoryText = selected.path
-    showLegCategorySuggestions[index] = false
-    legCategoryHighlightedIndex[index] = nil
-  }
-
-  @ViewBuilder
-  private func legCategoryOverlay(anchors: [Int: Anchor<CGRect>]) -> some View {
-    if let activeIndex = anchors.keys.sorted().first(where: { index in
-      showLegCategorySuggestions[index] == true
-        && !legCategoryVisibleSuggestions(for: index).isEmpty
-    }), let anchor = anchors[activeIndex] {
-      GeometryReader { proxy in
-        let rect = proxy[anchor]
-        CategorySuggestionDropdown(
-          suggestions: legCategoryVisibleSuggestions(for: activeIndex),
-          searchText: draft.legDrafts[activeIndex].categoryText,
-          highlightedIndex: Binding(
-            get: { legCategoryHighlightedIndex[activeIndex] },
-            set: { legCategoryHighlightedIndex[activeIndex] = $0 }
-          ),
-          onSelect: { selected in
-            legCategoryJustSelected[activeIndex] = true
-            draft.legDrafts[activeIndex].categoryId = selected.id
-            draft.legDrafts[activeIndex].categoryText = selected.path
-            showLegCategorySuggestions[activeIndex] = false
-            legCategoryHighlightedIndex[activeIndex] = nil
-          },
-          identifier: UITestIdentifiers.Autocomplete.legCategory(activeIndex),
-          rowIdentifier: { rowIndex in
-            UITestIdentifiers.Autocomplete.legCategorySuggestion(activeIndex, rowIndex)
-          }
-        )
-        .frame(width: rect.width)
-        .offset(x: rect.minX, y: rect.maxY + 4)
-      }
     }
   }
 
@@ -1037,191 +390,3 @@ struct TransactionDetailView: View {
     onUpdate(updated)
   }
 }
-
-@MainActor
-private func previewStore() -> TransactionStore {
-  let (backend, _) = PreviewBackend.create()
-  return TransactionStore(
-    repository: backend.transactions,
-    conversionService: backend.conversionService,
-    targetInstrument: .AUD
-  )
-}
-
-#Preview {
-  let accountId = UUID()
-  return NavigationStack {
-    TransactionDetailView(
-      transaction: Transaction(
-        date: Date(),
-        payee: "Woolworths",
-        legs: [
-          TransactionLeg(accountId: accountId, instrument: .AUD, quantity: -50.23, type: .expense)
-        ]
-      ),
-      accounts: Accounts(from: [
-        Account(id: accountId, name: "Checking", type: .bank, instrument: .AUD),
-        Account(name: "Savings", type: .bank, instrument: .AUD),
-      ]),
-      categories: Categories(from: [
-        Category(name: "Groceries"),
-        Category(name: "Transport"),
-      ]),
-      earmarks: Earmarks(from: [Earmark(name: "Holiday Fund", instrument: .AUD)]),
-      transactionStore: previewStore(),
-      viewingAccountId: accountId,
-      supportsComplexTransactions: true,
-      onUpdate: { _ in },
-      onDelete: { _ in }
-    )
-  }
-}
-
-#Preview("Custom Transaction") {
-  let accountId1 = UUID()
-  let accountId2 = UUID()
-  return NavigationStack {
-    TransactionDetailView(
-      transaction: Transaction(
-        date: Date(),
-        payee: "Split Purchase",
-        legs: [
-          TransactionLeg(
-            accountId: accountId1, instrument: .AUD, quantity: -30.00, type: .expense,
-            categoryId: nil),
-          TransactionLeg(
-            accountId: accountId2, instrument: .AUD, quantity: -20.00, type: .expense,
-            categoryId: nil),
-        ]
-      ),
-      accounts: Accounts(from: [
-        Account(id: accountId1, name: "Checking", type: .bank, instrument: .AUD),
-        Account(id: accountId2, name: "Credit Card", type: .creditCard, instrument: .AUD),
-      ]),
-      categories: Categories(from: [
-        Category(name: "Groceries"), Category(name: "Transport"),
-      ]),
-      earmarks: Earmarks(from: [Earmark(name: "Holiday Fund", instrument: .AUD)]),
-      transactionStore: previewStore(),
-      supportsComplexTransactions: true,
-      onUpdate: { _ in },
-      onDelete: { _ in }
-    )
-  }
-}
-
-#Preview("Earmark-Only Transaction") {
-  let earmarkId = UUID()
-  return NavigationStack {
-    TransactionDetailView(
-      transaction: Transaction(
-        date: Date(),
-        legs: [
-          TransactionLeg(
-            accountId: nil, instrument: .AUD, quantity: 500, type: .income,
-            earmarkId: earmarkId)
-        ]
-      ),
-      accounts: Accounts(from: [
-        Account(name: "Checking", type: .bank, instrument: .AUD),
-        Account(name: "Savings", type: .bank, instrument: .AUD),
-      ]),
-      categories: Categories(from: []),
-      earmarks: Earmarks(from: [
-        Earmark(id: earmarkId, name: "Income Tax FY2025", instrument: .AUD),
-        Earmark(name: "Holiday Fund", instrument: .AUD),
-      ]),
-      transactionStore: previewStore(),
-      supportsComplexTransactions: true,
-      onUpdate: { _ in },
-      onDelete: { _ in }
-    )
-  }
-}
-
-#Preview("Cross-Currency Transfer") {
-  let accountId1 = UUID()
-  let accountId2 = UUID()
-  return NavigationStack {
-    TransactionDetailView(
-      transaction: Transaction(
-        date: Date(),
-        payee: "Currency Exchange",
-        legs: [
-          TransactionLeg(accountId: accountId1, instrument: .USD, quantity: -100, type: .transfer),
-          TransactionLeg(accountId: accountId2, instrument: .AUD, quantity: 155, type: .transfer),
-        ]
-      ),
-      accounts: Accounts(from: [
-        Account(id: accountId1, name: "US Checking", type: .bank, instrument: .USD),
-        Account(id: accountId2, name: "AU Savings", type: .bank, instrument: .AUD),
-        Account(name: "Credit Card", type: .creditCard, instrument: .USD),
-      ]),
-      categories: Categories(from: []),
-      earmarks: Earmarks(from: []),
-      transactionStore: previewStore(),
-      viewingAccountId: accountId1,
-      supportsComplexTransactions: true,
-      onUpdate: { _ in },
-      onDelete: { _ in }
-    )
-  }
-}
-
-#Preview("Cross-Currency Transfer (Sent)") {
-  let accountId1 = UUID()
-  let accountId2 = UUID()
-  return NavigationStack {
-    TransactionDetailView(
-      transaction: Transaction(
-        date: Date(),
-        payee: "Currency Exchange",
-        legs: [
-          TransactionLeg(accountId: accountId1, instrument: .USD, quantity: -100, type: .transfer),
-          TransactionLeg(accountId: accountId2, instrument: .AUD, quantity: 155, type: .transfer),
-        ]
-      ),
-      accounts: Accounts(from: [
-        Account(id: accountId1, name: "US Checking", type: .bank, instrument: .USD),
-        Account(id: accountId2, name: "AU Savings", type: .bank, instrument: .AUD),
-      ]),
-      categories: Categories(from: []),
-      earmarks: Earmarks(from: []),
-      transactionStore: previewStore(),
-      viewingAccountId: accountId2,
-      supportsComplexTransactions: true,
-      onUpdate: { _ in },
-      onDelete: { _ in }
-    )
-  }
-}
-
-#Preview("Scheduled (Recurring)") {
-  let accountId = UUID()
-  return NavigationStack {
-    TransactionDetailView(
-      transaction: Transaction(
-        date: Date().addingTimeInterval(60 * 60 * 24 * 3),
-        payee: "Rent",
-        recurPeriod: .month,
-        recurEvery: 1,
-        legs: [
-          TransactionLeg(accountId: accountId, instrument: .AUD, quantity: -1800, type: .expense)
-        ]
-      ),
-      accounts: Accounts(from: [
-        Account(id: accountId, name: "Checking", type: .bank, instrument: .AUD)
-      ]),
-      categories: Categories(from: [Category(name: "Housing")]),
-      earmarks: Earmarks(from: []),
-      transactionStore: previewStore(),
-      showRecurrence: true,
-      viewingAccountId: accountId,
-      supportsComplexTransactions: true,
-      onUpdate: { _ in },
-      onDelete: { _ in }
-    )
-  }
-}
-
-// swiftlint:disable:this file_length
