@@ -196,11 +196,17 @@ platform :mac do
     profile_name = ENV["sigh_rocks.moolah.app_developer_id_macos_profile-name"]
     entitlements_path = File.expand_path("Moolah-mac.entitlements", __dir__)
 
+    # Resolve build dir to an absolute path off the repo root. gym/build_app
+    # writes outputs to <repo_root>/build/ regardless of fastlane's own cwd,
+    # but Ruby File.* calls and `sh` here resolve relative paths against
+    # fastlane/ — so anything we pass to those needs to be absolute.
+    build_dir = File.expand_path("../build", __dir__)
+
     build_app(
       scheme: "Moolah-macOS",
       configuration: "Release",
       export_method: "developer-id",
-      output_directory: "./build",
+      output_directory: build_dir,
       output_name: "Moolah",
       xcargs: [
         "CODE_SIGN_ENTITLEMENTS=#{entitlements_path}",
@@ -213,7 +219,7 @@ platform :mac do
       ].join(" ")
     )
 
-    app_path = "./build/Moolah.app"
+    app_path = File.join(build_dir, "Moolah.app")
     UI.user_error!("Moolah.app not found at #{app_path}") unless File.directory?(app_path)
 
     # Notarise the .app first (faster turnaround than notarising the DMG alone).
@@ -225,7 +231,7 @@ platform :mac do
     sh "xcrun stapler staple '#{app_path}'"
 
     # Build the DMG with create-dmg (assumed installed via brew on the runner).
-    dmg_path = "./build/Moolah-#{version}.dmg"
+    dmg_path = File.join(build_dir, "Moolah-#{version}.dmg")
     sh "rm -f '#{dmg_path}'"
     sh "create-dmg " \
        "--volname 'Moolah #{version}' " \
