@@ -33,6 +33,11 @@ extension CloudKitAccountRepository {
   // MARK: - Background-Context Helpers (used by fetchAll)
 
   /// Fetches all non-scheduled legs using the provided context.
+  ///
+  /// Pushes the scheduled-exclusion into the SwiftData predicate so the
+  /// driver returns only the legs we actually need rather than materialising
+  /// the full set into Swift just to filter ~16 of 20k out. See #519 Phase 3
+  /// for the measured impact.
   func fetchNonScheduledLegs(context: ModelContext) throws -> (
     Set<UUID>, [TransactionLegRecord]
   ) {
@@ -41,10 +46,15 @@ extension CloudKitAccountRepository {
     )
     let scheduledIds = Set(try context.fetch(scheduledDescriptor).map(\.id))
 
-    let legDescriptor = FetchDescriptor<TransactionLegRecord>()
-    let allLegs = try context.fetch(legDescriptor).filter {
-      !scheduledIds.contains($0.transactionId)
+    let legDescriptor: FetchDescriptor<TransactionLegRecord>
+    if scheduledIds.isEmpty {
+      legDescriptor = FetchDescriptor<TransactionLegRecord>()
+    } else {
+      legDescriptor = FetchDescriptor<TransactionLegRecord>(
+        predicate: #Predicate { !scheduledIds.contains($0.transactionId) }
+      )
     }
+    let allLegs = try context.fetch(legDescriptor)
     return (scheduledIds, allLegs)
   }
 
