@@ -11,9 +11,9 @@ struct InstrumentPickerStoreTests {
     let (backend, _) = try TestBackend.create()
     let service = InstrumentSearchService(
       registry: backend.instrumentRegistry,
-      cryptoSearchClient: StubCryptoSearchClient(),
+      catalog: nil,
       resolutionClient: StubTokenResolutionClient(),
-      stockValidator: StubStockTickerValidator()
+      stockSearchClient: StubStockSearchClient()
     )
     let store = InstrumentPickerStore(
       searchService: service,
@@ -30,9 +30,9 @@ struct InstrumentPickerStoreTests {
     let (backend, _) = try TestBackend.create()
     let service = InstrumentSearchService(
       registry: backend.instrumentRegistry,
-      cryptoSearchClient: StubCryptoSearchClient(),
+      catalog: nil,
       resolutionClient: StubTokenResolutionClient(),
-      stockValidator: StubStockTickerValidator()
+      stockSearchClient: StubStockSearchClient()
     )
     let store = InstrumentPickerStore(
       searchService: service,
@@ -55,9 +55,9 @@ struct InstrumentPickerStoreTests {
     let (backend, _) = try TestBackend.create()
     let service = InstrumentSearchService(
       registry: backend.instrumentRegistry,
-      cryptoSearchClient: StubCryptoSearchClient(),
+      catalog: nil,
       resolutionClient: StubTokenResolutionClient(),
-      stockValidator: StubStockTickerValidator()
+      stockSearchClient: StubStockSearchClient()
     )
     let store = InstrumentPickerStore(
       searchService: service,
@@ -80,9 +80,9 @@ struct InstrumentPickerStoreTests {
     try await backend.instrumentRegistry.registerStock(bhp)
     let service = InstrumentSearchService(
       registry: backend.instrumentRegistry,
-      cryptoSearchClient: StubCryptoSearchClient(),
+      catalog: nil,
       resolutionClient: StubTokenResolutionClient(),
-      stockValidator: StubStockTickerValidator()
+      stockSearchClient: StubStockSearchClient()
     )
     let store = InstrumentPickerStore(
       searchService: service,
@@ -127,12 +127,13 @@ struct InstrumentPickerStoreTests {
   @Test("select of unregistered Yahoo stock auto-registers and returns")
   func selectStockAutoRegisters() async throws {
     let (backend, _) = try TestBackend.create()
-    let validated = ValidatedStockTicker(ticker: "AAPL", exchange: "NASDAQ")
+    let stockHit = StockSearchHit(
+      symbol: "AAPL", name: "Apple Inc.", exchange: "NASDAQ", quoteType: .equity)
     let service = InstrumentSearchService(
       registry: backend.instrumentRegistry,
-      cryptoSearchClient: StubCryptoSearchClient(),
+      catalog: nil,
       resolutionClient: StubTokenResolutionClient(),
-      stockValidator: StubStockTickerValidator(validated: validated)
+      stockSearchClient: StubStockSearchClient(hits: [stockHit])
     )
     let store = InstrumentPickerStore(
       searchService: service,
@@ -150,8 +151,12 @@ struct InstrumentPickerStoreTests {
   }
 }
 
-private struct StubCryptoSearchClient: CryptoSearchClient {
-  func search(query: String) async throws -> [CryptoSearchHit] { [] }
+private struct StubStockSearchClient: StockSearchClient {
+  let hits: [StockSearchHit]
+
+  init(hits: [StockSearchHit] = []) { self.hits = hits }
+
+  func search(query: String) async throws -> [StockSearchHit] { hits }
 }
 
 private struct StubTokenResolutionClient: TokenResolutionClient {
@@ -160,12 +165,4 @@ private struct StubTokenResolutionClient: TokenResolutionClient {
   ) async throws -> TokenResolutionResult {
     .init()
   }
-}
-
-private struct StubStockTickerValidator: StockTickerValidator {
-  let validated: ValidatedStockTicker?
-
-  init(validated: ValidatedStockTicker? = nil) { self.validated = validated }
-
-  func validate(query: String) async throws -> ValidatedStockTicker? { validated }
 }

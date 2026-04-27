@@ -1,22 +1,11 @@
 import Foundation
 import OSLog
 
-/// Controls which provider-search APIs the picker fans out to.
-/// `.all` — registry + fiat + Yahoo + CoinGecko (current behaviour).
-/// `.stocksOnly` — registry + fiat + Yahoo. Used by the multi-instrument
-/// picker so unregistered crypto hits never surface (token registration
-/// flows through `AddTokenSheet` instead, which defends against scam
-/// tokens that share names with established ones).
-enum ProviderSources: Sendable {
-  case all
-  case stocksOnly
-}
-
 struct InstrumentSearchService: Sendable {
   private let registry: any InstrumentRegistryRepository
-  private let cryptoSearchClient: any CryptoSearchClient
+  private let catalog: (any CoinGeckoCatalog)?
   private let resolutionClient: any TokenResolutionClient
-  private let stockValidator: any StockTickerValidator
+  private let stockSearchClient: any StockSearchClient
   private let logger = Logger(
     subsystem: "com.moolah.app",
     category: "InstrumentSearch"
@@ -24,23 +13,23 @@ struct InstrumentSearchService: Sendable {
 
   init(
     registry: any InstrumentRegistryRepository,
-    cryptoSearchClient: any CryptoSearchClient,
+    catalog: (any CoinGeckoCatalog)?,
     resolutionClient: any TokenResolutionClient,
-    stockValidator: any StockTickerValidator
+    stockSearchClient: any StockSearchClient
   ) {
     self.registry = registry
-    self.cryptoSearchClient = cryptoSearchClient
+    self.catalog = catalog
     self.resolutionClient = resolutionClient
-    self.stockValidator = stockValidator
+    self.stockSearchClient = stockSearchClient
   }
 
   func search(
     query: String,
-    kinds: Set<Instrument.Kind> = Set(Instrument.Kind.allCases),
-    providerSources: ProviderSources = .all
+    kinds: Set<Instrument.Kind> = Set(Instrument.Kind.allCases)
   ) async -> [InstrumentSearchResult] {
     let trimmed = query.trimmingCharacters(in: .whitespaces)
     let registered = await loadRegisteredOrLog()
+    let cryptoRegistrations = await loadCryptoRegistrationsOrLog()
     let filteredRegistered = registered.filter { kinds.contains($0.kind) }
     if trimmed.isEmpty {
       return filteredRegistered.map {
@@ -56,13 +45,15 @@ struct InstrumentSearchService: Sendable {
     async let fiatResults: [InstrumentSearchResult] =
       kinds.contains(.fiatCurrency) ? fiatMatches(query: trimmed) : []
     async let cryptoResults: [InstrumentSearchResult] =
-      (kinds.contains(.cryptoToken) && providerSources == .all)
-      ? cryptoMatches(query: trimmed) : []
+      kinds.contains(.cryptoToken)
+      ? cryptoMatches(
+        query: trimmed, registered: registered, mappings: cryptoRegistrations) : []
     async let stockResults: [InstrumentSearchResult] =
-      kinds.contains(.stock) ? stockMatches(query: trimmed) : []
+      kinds.contains(.stock) ? stockMatches(query: trimmed, registered: registered) : []
 
     let provider = await (fiatResults + cryptoResults + stockResults)
-    let registeredMatches = registeredMatches(query: trimmed, all: filteredRegistered)
+    let registeredMatches = registeredMatches(
+      query: trimmed, all: filteredRegistered, cryptoMappings: cryptoRegistrations)
     return merge(registered: registeredMatches, provider: provider)
   }
 
@@ -72,6 +63,17 @@ struct InstrumentSearchService: Sendable {
     } catch {
       logger.warning(
         "Registry fetch failed; returning empty registered set: \(error, privacy: .public)"
+      )
+      return []
+    }
+  }
+
+  private func loadCryptoRegistrationsOrLog() async -> [CryptoRegistration] {
+    do {
+      return try await registry.allCryptoRegistrations()
+    } catch {
+      logger.warning(
+        "Registry crypto registrations fetch failed: \(error, privacy: .public)"
       )
       return []
     }
@@ -108,39 +110,71 @@ struct InstrumentSearchService: Sendable {
 
   // MARK: - Crypto
 
-  private func cryptoMatches(query: String) async -> [InstrumentSearchResult] {
+  /// Crypto search path.
+  ///
+  /// Routes through the local CoinGecko `CatalogEntry` snapshot rather than a
+  /// live network search. Each catalogue entry maps to one synthetic
+  /// `Instrument` keyed on `(chainId, contractAddress)`. Hits whose id already
+  /// exists in the registry are dropped here — the merge step replaces them
+  /// with the registered row, which carries the persisted `CryptoProviderMapping`.
+  ///
+  /// `requiresResolution: true` signals to the picker that this row must call
+  /// `TokenResolutionClient.resolve(...)` before it can be persisted (decimals
+  /// and the cryptocompare/binance ids are resolved at registration time).
+  ///
+  /// When `catalog` is `nil` (e.g. a `RemoteBackend` profile), this returns
+  /// the empty list — crypto search is unavailable on those profiles by design.
+  private func cryptoMatches(
+    query: String,
+    registered: [Instrument],
+    mappings: [CryptoRegistration]
+  ) async -> [InstrumentSearchResult] {
     if isContractAddress(query) {
       return await cryptoContractLookup(address: query)
     }
-    do {
-      let hits = try await cryptoSearchClient.search(query: query)
-      return hits.map { hit in
-        let placeholder = Instrument.crypto(
-          chainId: 0,
-          contractAddress: nil,
-          symbol: hit.symbol,
-          name: hit.name,
-          decimals: 18
-        )
-        let mapping = CryptoProviderMapping(
-          instrumentId: placeholder.id,
-          coingeckoId: hit.coingeckoId,
-          cryptocompareSymbol: nil,
-          binanceSymbol: nil
-        )
+    guard let catalog else { return [] }
+    let entries = await catalog.search(query: query, limit: 20)
+    return entries.map { entry in
+      let placeholder = makePlaceholderCryptoInstrument(from: entry)
+      if let registration = mappings.first(where: { $0.id == placeholder.id }) {
         return InstrumentSearchResult(
-          instrument: placeholder,
-          cryptoMapping: mapping,
-          isRegistered: false,
-          requiresResolution: true
+          instrument: registration.instrument,
+          cryptoMapping: registration.mapping,
+          isRegistered: true,
+          requiresResolution: false
         )
       }
-    } catch {
-      logger.warning(
-        "Crypto search failed for query=\(query, privacy: .public): \(error, privacy: .public)"
+      return InstrumentSearchResult(
+        instrument: placeholder,
+        cryptoMapping: nil,
+        isRegistered: mappings.contains { $0.instrument.id == placeholder.id },
+        requiresResolution: true
       )
-      return []
     }
+  }
+
+  /// Builds the synthetic `Instrument` for an unregistered catalog hit. The
+  /// `decimals` value is a placeholder (18 for EVM-style platforms, 8 for
+  /// platformless natives — both are the most common values for their
+  /// classes). Resolution at registration time replaces it with the real
+  /// decimals from the price provider.
+  private func makePlaceholderCryptoInstrument(from entry: CatalogEntry) -> Instrument {
+    if let platform = entry.preferredPlatform, let chainId = platform.chainId {
+      return Instrument.crypto(
+        chainId: chainId,
+        contractAddress: platform.contractAddress,
+        symbol: entry.symbol,
+        name: entry.name,
+        decimals: 18
+      )
+    }
+    return Instrument.crypto(
+      chainId: 0,
+      contractAddress: nil,
+      symbol: entry.symbol,
+      name: entry.name,
+      decimals: 8
+    )
   }
 
   private func cryptoContractLookup(address: String) async -> [InstrumentSearchResult] {
@@ -196,28 +230,32 @@ struct InstrumentSearchService: Sendable {
 
   // MARK: - Stock
 
-  private func stockMatches(query: String) async -> [InstrumentSearchResult] {
+  /// Stock search path.
+  ///
+  /// Routes through `StockSearchClient` (Yahoo Finance `/v1/finance/search`).
+  /// Each hit maps to a synthetic `Instrument` keyed on `"\(exchange):\(ticker)"`.
+  /// Hits whose id already exists in the registry are marked `isRegistered: true`
+  /// so the picker doesn't redundantly offer to register them; the merge step
+  /// then replaces the synthetic row with the persisted one.
+  private func stockMatches(
+    query: String, registered: [Instrument]
+  ) async -> [InstrumentSearchResult] {
     do {
-      guard let validated = try await stockValidator.validate(query: query) else {
-        return []
-      }
-      let stock = Instrument.stock(
-        ticker: validated.ticker,
-        exchange: validated.exchange,
-        name: validated.ticker,
-        decimals: 0
-      )
-      return [
-        InstrumentSearchResult(
-          instrument: stock,
+      let hits = try await stockSearchClient.search(query: query)
+      return hits.map { hit in
+        let instrument = Instrument.stock(
+          ticker: hit.symbol, exchange: hit.exchange, name: hit.name)
+        let isRegistered = registered.contains { $0.id == instrument.id }
+        return InstrumentSearchResult(
+          instrument: instrument,
           cryptoMapping: nil,
-          isRegistered: false,
-          requiresResolution: false
+          isRegistered: isRegistered,
+          requiresResolution: !isRegistered
         )
-      ]
+      }
     } catch {
       logger.warning(
-        "Stock validator failed for query=\(query, privacy: .public): \(error, privacy: .public)"
+        "Stock search failed for query=\(query, privacy: .public): \(error, privacy: .public)"
       )
       return []
     }
@@ -227,9 +265,12 @@ struct InstrumentSearchService: Sendable {
 
   private func registeredMatches(
     query: String,
-    all: [Instrument]
+    all: [Instrument],
+    cryptoMappings: [CryptoRegistration]
   ) -> [InstrumentSearchResult] {
     let lowered = query.lowercased()
+    let mappingsById = Dictionary(
+      uniqueKeysWithValues: cryptoMappings.map { ($0.instrument.id, $0.mapping) })
     return all.compactMap { instrument in
       let id = instrument.id.lowercased()
       let ticker = instrument.ticker?.lowercased() ?? ""
@@ -238,7 +279,7 @@ struct InstrumentSearchService: Sendable {
       else { return nil }
       return InstrumentSearchResult(
         instrument: instrument,
-        cryptoMapping: nil,
+        cryptoMapping: mappingsById[instrument.id],
         isRegistered: true,
         requiresResolution: false
       )

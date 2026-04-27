@@ -9,22 +9,22 @@ struct InstrumentSearchServiceTests {
   @MainActor
   func makeSubject(
     registered: [Instrument] = [],
-    cryptoHits: [CryptoSearchHit] = [],
-    cryptoSearchThrows: Bool = false,
-    stockValidated: ValidatedStockTicker? = nil,
-    stockValidatorThrows: Bool = false,
+    cryptoRegistrations: [CryptoRegistration] = [],
+    catalogEntries: [CatalogEntry] = [],
+    stockHits: [StockSearchHit] = [],
+    stockSearchThrows: Bool = false,
     resolvedRegistration: CryptoRegistration? = nil
   ) -> InstrumentSearchService {
-    let registry = StubRegistry(instruments: registered)
-    let crypto = StubCryptoSearchClient(hits: cryptoHits, shouldThrow: cryptoSearchThrows)
-    let stock = StubStockTickerValidator(
-      validated: stockValidated, shouldThrow: stockValidatorThrows)
+    let registry = StubRegistry(
+      instruments: registered, cryptoRegistrations: cryptoRegistrations)
+    let catalog = StubCatalog(entries: catalogEntries)
+    let stock = StubStockSearchClient(hits: stockHits, shouldThrow: stockSearchThrows)
     let resolver = StubTokenResolutionClient(resolved: resolvedRegistration)
     return InstrumentSearchService(
       registry: registry,
-      cryptoSearchClient: crypto,
+      catalog: catalog,
       resolutionClient: resolver,
-      stockValidator: stock
+      stockSearchClient: stock
     )
   }
 
@@ -40,106 +40,185 @@ struct InstrumentSearchServiceTests {
   func fiatNameMatch() async throws {
     let service = makeSubject()
     let results = await service.search(query: "dollar")
-    // At minimum USD and AUD should surface; asserting "at least one" keeps
-    // the test robust against locale variation.
     let ids = results.map(\.instrument.id)
     #expect(ids.contains("USD") || ids.contains("AUD"))
   }
 
-  @Test("crypto hits marked requiresResolution = true with populated coingeckoId")
-  func cryptoHitsMarkedForResolution() async throws {
-    let hits = [
-      CryptoSearchHit(
-        coingeckoId: "bitcoin", symbol: "BTC", name: "Bitcoin", thumbnail: nil),
-      CryptoSearchHit(
-        coingeckoId: "ethereum", symbol: "ETH", name: "Ethereum", thumbnail: nil),
-    ]
-    let service = makeSubject(cryptoHits: hits)
-    let results = await service.search(query: "bitcoin", kinds: [.cryptoToken])
-    #expect(results.contains { $0.instrument.ticker == "BTC" && $0.requiresResolution })
-    #expect(
-      results.contains {
-        $0.cryptoMapping?.coingeckoId == "bitcoin"
-      }
+  @Test("crypto results loaded from catalog with platform binding")
+  func cryptoResultsCarryCatalogPlatform() async throws {
+    let entry = CatalogEntry(
+      coingeckoId: "uniswap",
+      symbol: "UNI",
+      name: "Uniswap",
+      platforms: [
+        PlatformBinding(
+          slug: "ethereum",
+          chainId: 1,
+          contractAddress: "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984"
+        )
+      ]
     )
+    let service = makeSubject(catalogEntries: [entry])
+    let results = await service.search(query: "uni", kinds: [.cryptoToken])
+    let hit = try #require(results.first)
+    #expect(hit.instrument.kind == .cryptoToken)
+    #expect(hit.instrument.chainId == 1)
+    #expect(hit.instrument.contractAddress == "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984")
+    #expect(hit.instrument.ticker == "UNI")
+    #expect(hit.requiresResolution == true)
+    #expect(hit.cryptoMapping == nil)
+    #expect(hit.isRegistered == false)
   }
 
-  @Test("crypto query matching contract-address pattern bypasses search and calls resolver")
-  func contractAddressBypassesSearch() async throws {
-    let eth = Instrument.crypto(
+  @Test("crypto results for platformless entries fall back to native id")
+  func cryptoNativeEntryMaps() async throws {
+    let entry = CatalogEntry(
+      coingeckoId: "bitcoin",
+      symbol: "BTC",
+      name: "Bitcoin",
+      platforms: []
+    )
+    let service = makeSubject(catalogEntries: [entry])
+    let results = await service.search(query: "btc", kinds: [.cryptoToken])
+    let hit = try #require(results.first)
+    #expect(hit.instrument.kind == .cryptoToken)
+    #expect(hit.instrument.contractAddress == nil)
+    #expect(hit.instrument.ticker == "BTC")
+    #expect(hit.requiresResolution == true)
+  }
+
+  @Test("registered crypto overrides catalog hit and carries mapping")
+  func registeredCryptoOverridesCatalogResult() async throws {
+    let registeredInstrument = Instrument.crypto(
       chainId: 1,
-      contractAddress: "0xdac17f958d2ee523a2206206994597c13d831ec7",
-      symbol: "USDT", name: "Tether", decimals: 6)
-    let mapping = CryptoProviderMapping(
-      instrumentId: eth.id,
-      coingeckoId: "tether",
-      cryptocompareSymbol: "USDT",
-      binanceSymbol: "USDTUSDT")
-    let service = makeSubject(
-      cryptoHits: [],  // would cause the test to fail if the search path was used
-      resolvedRegistration: CryptoRegistration(instrument: eth, mapping: mapping)
+      contractAddress: "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+      symbol: "UNI",
+      name: "Uniswap",
+      decimals: 18
     )
-    let results = await service.search(
-      query: "0xdAC17F958D2ee523a2206206994597C13D831ec7", kinds: [.cryptoToken])
-    #expect(results.count == 1)
-    #expect(results.first?.requiresResolution == false)
-    #expect(results.first?.cryptoMapping?.cryptocompareSymbol == "USDT")
+    let mapping = CryptoProviderMapping(
+      instrumentId: registeredInstrument.id,
+      coingeckoId: "uniswap",
+      cryptocompareSymbol: "UNI",
+      binanceSymbol: "UNIUSDT"
+    )
+    let registration = CryptoRegistration(
+      instrument: registeredInstrument, mapping: mapping)
+    let entry = CatalogEntry(
+      coingeckoId: "uniswap",
+      symbol: "UNI",
+      name: "Uniswap",
+      platforms: [
+        PlatformBinding(
+          slug: "ethereum",
+          chainId: 1,
+          contractAddress: "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984"
+        )
+      ]
+    )
+    let service = makeSubject(
+      registered: [registeredInstrument],
+      cryptoRegistrations: [registration],
+      catalogEntries: [entry]
+    )
+    let results = await service.search(query: "uni", kinds: [.cryptoToken])
+    let matching = results.filter { $0.instrument.id == registeredInstrument.id }
+    #expect(matching.count == 1)
+    let hit = try #require(matching.first)
+    #expect(hit.isRegistered == true)
+    #expect(hit.requiresResolution == false)
+    #expect(hit.cryptoMapping?.coingeckoId == "uniswap")
   }
 
-  @Test("valid typed stock ticker yields one result")
-  func stockValidTypedTicker() async throws {
-    let validated = ValidatedStockTicker(ticker: "BHP.AX", exchange: "ASX")
-    let service = makeSubject(stockValidated: validated)
-    let results = await service.search(query: "BHP.AX", kinds: [.stock])
-    #expect(results.count == 1)
-    #expect(results.first?.instrument.id == "ASX:BHP.AX")
-    #expect(results.first?.requiresResolution == false)
+  @Test("crypto in registered but without a mapping is treated as unregistered")
+  func cryptoInRegisteredButNoMappingTreatedAsUnregistered() async throws {
+    // A crypto Instrument can exist in the registry without a mapping when
+    // CSV import landed it before the picker had a chance to resolve(). On
+    // the catalog path that case must surface as `isRegistered: false,
+    // requiresResolution: true` — the picker will then run resolve() and
+    // promote it to a fully registered row. The legacy code marked it as
+    // `isRegistered: true` while still asking for resolution, which is a
+    // contradictory state.
+    let preMappingInst = Instrument.crypto(
+      chainId: 1,
+      contractAddress: "0xfoo",
+      symbol: "FOO",
+      name: "Foo Token",
+      decimals: 18
+    )
+    let entry = CatalogEntry(
+      coingeckoId: "foo",
+      symbol: "FOO",
+      name: "Foo Token",
+      platforms: [
+        PlatformBinding(slug: "ethereum", chainId: 1, contractAddress: "0xfoo")
+      ]
+    )
+    // A query that matches the catalog entry (the stub catalog returns all
+    // its entries regardless of query) but does NOT match the registered
+    // Instrument's id, ticker, or name — so `registeredMatches` skips it
+    // and the catalog branch's result survives the merge.
+    let service = makeSubject(
+      registered: [preMappingInst],
+      cryptoRegistrations: [],
+      catalogEntries: [entry]
+    )
+    let results = await service.search(query: "abc", kinds: [.cryptoToken])
+    let foo = try #require(results.first { $0.instrument.id == "1:0xfoo" })
+    #expect(foo.isRegistered == false)
+    #expect(foo.requiresResolution == true)
+    #expect(foo.cryptoMapping == nil)
   }
 
-  @Test("invalid stock ticker yields no stock results")
-  func stockInvalidTicker() async throws {
-    let service = makeSubject(stockValidated: nil)
-    let results = await service.search(query: "UNKNOWN", kinds: [.stock])
+  @Test("nil catalog returns no crypto results")
+  func nilCatalogYieldsEmptyCrypto() async {
+    let registry = StubRegistry()
+    let service = InstrumentSearchService(
+      registry: registry,
+      catalog: nil,
+      resolutionClient: StubTokenResolutionClient(),
+      stockSearchClient: StubStockSearchClient()
+    )
+    let results = await service.search(query: "btc", kinds: [.cryptoToken])
     #expect(results.isEmpty)
   }
 
-  @Test("stock validator throw is absorbed; other kinds still return")
-  func stockValidatorThrowAbsorbed() async throws {
-    let service = makeSubject(stockValidatorThrows: true)
-    let results = await service.search(query: "usd")
-    // Fiat results still surface.
-    #expect(results.contains { $0.instrument.id == "USD" })
+  @Test("stock results loaded from search client with quoteType-derived ids")
+  func stockResultsAreLoadedFromSearchClient() async throws {
+    let hits = [
+      StockSearchHit(
+        symbol: "AAPL", name: "Apple Inc.", exchange: "NASDAQ", quoteType: .equity),
+      StockSearchHit(
+        symbol: "MSFT", name: "Microsoft Corp.", exchange: "NASDAQ", quoteType: .equity),
+    ]
+    let service = makeSubject(stockHits: hits)
+    let results = await service.search(query: "apple", kinds: [.stock])
+    let aapl = try #require(results.first { $0.instrument.ticker == "AAPL" })
+    #expect(aapl.instrument.id == "NASDAQ:AAPL")
+    #expect(aapl.instrument.kind == .stock)
+    #expect(aapl.instrument.name == "Apple Inc.")
+    #expect(aapl.requiresResolution == true)
+    #expect(aapl.isRegistered == false)
   }
 
-  @Test("registered instruments marked isRegistered = true and ranked first")
-  func registeredRankFirst() async throws {
-    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
-    let service = makeSubject(registered: [bhp])
-    let results = await service.search(query: "BHP", kinds: [.stock])
-    let bhpResult = try #require(results.first { $0.instrument.id == "ASX:BHP.AX" })
-    #expect(bhpResult.isRegistered == true)
-    // It appears before any non-registered stock result.
-    let idx = results.firstIndex { $0.instrument.id == "ASX:BHP.AX" } ?? 0
-    let otherStockIdx =
-      results.firstIndex {
-        $0.instrument.kind == .stock && !$0.isRegistered
-      } ?? Int.max
-    #expect(idx < otherStockIdx)
-  }
-
-  @Test("provider hit sharing an id with a registered entry is dropped")
-  func dedupePreferRegistered() async throws {
-    let eth = Instrument.crypto(
-      chainId: 1, contractAddress: nil, symbol: "ETH",
-      name: "Ethereum", decimals: 18)
-    // registered ETH exists; crypto search hit also claims ETH (same id).
-    let hit = CryptoSearchHit(
-      coingeckoId: "ethereum", symbol: "ETH", name: "Ethereum", thumbnail: nil)
-    let service = makeSubject(registered: [eth], cryptoHits: [hit])
-    let results = await service.search(query: "ETH", kinds: [.cryptoToken])
-    let matching = results.filter { $0.instrument.id == eth.id }
+  @Test("registered stock overrides Yahoo hit")
+  func registeredStockOverridesSearchHit() async throws {
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP Group")
+    let hit = StockSearchHit(
+      symbol: "BHP.AX", name: "BHP Group", exchange: "ASX", quoteType: .equity)
+    let service = makeSubject(registered: [bhp], stockHits: [hit])
+    let results = await service.search(query: "bhp", kinds: [.stock])
+    let matching = results.filter { $0.instrument.id == "ASX:BHP.AX" }
     #expect(matching.count == 1)
     #expect(matching.first?.isRegistered == true)
+    #expect(matching.first?.requiresResolution == false)
+  }
+
+  @Test("stock search throw is absorbed; other kinds still return")
+  func stockSearchThrowAbsorbed() async throws {
+    let service = makeSubject(stockSearchThrows: true)
+    let results = await service.search(query: "usd")
+    #expect(results.contains { $0.instrument.id == "USD" })
   }
 
   @Test("empty query returns the registered set")
@@ -151,45 +230,19 @@ struct InstrumentSearchServiceTests {
     #expect(results.allSatisfy { $0.isRegistered })
   }
 
-  @Test("providerSources: .stocksOnly suppresses crypto provider hits")
-  func stocksOnlyExcludesCryptoHits() async throws {
-    let hits = [
-      CryptoSearchHit(coingeckoId: "bitcoin", symbol: "BTC", name: "Bitcoin", thumbnail: nil)
-    ]
-    let service = makeSubject(cryptoHits: hits)
-    let results = await service.search(
-      query: "bitcoin",
-      kinds: [.cryptoToken],
-      providerSources: .stocksOnly
-    )
-    #expect(results.allSatisfy { $0.requiresResolution == false })
-    #expect(results.contains { $0.instrument.ticker == "BTC" } == false)
-  }
-
-  @Test("providerSources: .stocksOnly still allows Yahoo stock hits")
-  func stocksOnlyAllowsStockHits() async throws {
-    let validated = ValidatedStockTicker(ticker: "AAPL", exchange: "NASDAQ")
-    let service = makeSubject(stockValidated: validated)
-    let results = await service.search(
-      query: "AAPL",
-      kinds: [.stock],
-      providerSources: .stocksOnly
-    )
-    #expect(results.contains { $0.instrument.ticker == "AAPL" })
-  }
-
-  @Test("providerSources: .all preserves existing behaviour")
-  func allPreservesExistingBehaviour() async throws {
-    let hits = [
-      CryptoSearchHit(coingeckoId: "ethereum", symbol: "ETH", name: "Ethereum", thumbnail: nil)
-    ]
-    let service = makeSubject(cryptoHits: hits)
-    let results = await service.search(
-      query: "ethereum",
-      kinds: [.cryptoToken],
-      providerSources: .all
-    )
-    #expect(results.contains { $0.instrument.ticker == "ETH" && $0.requiresResolution })
+  @Test("registered instruments ranked first")
+  func registeredRankFirst() async throws {
+    let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
+    let extraHit = StockSearchHit(
+      symbol: "BHP.NS", name: "BHP", exchange: "NSE", quoteType: .equity)
+    let service = makeSubject(registered: [bhp], stockHits: [extraHit])
+    let results = await service.search(query: "BHP", kinds: [.stock])
+    let bhpResult = try #require(results.first { $0.instrument.id == "ASX:BHP.AX" })
+    #expect(bhpResult.isRegistered == true)
+    let registeredIdx = results.firstIndex { $0.instrument.id == "ASX:BHP.AX" } ?? 0
+    let providerIdx =
+      results.firstIndex { $0.instrument.kind == .stock && !$0.isRegistered } ?? Int.max
+    #expect(registeredIdx < providerIdx)
   }
 }
 
@@ -197,9 +250,17 @@ struct InstrumentSearchServiceTests {
 
 private struct StubRegistry: InstrumentRegistryRepository, @unchecked Sendable {
   let instruments: [Instrument]
+  let cryptoRegistrations: [CryptoRegistration]
+
+  init(instruments: [Instrument] = [], cryptoRegistrations: [CryptoRegistration] = []) {
+    self.instruments = instruments
+    self.cryptoRegistrations = cryptoRegistrations
+  }
 
   func all() async throws -> [Instrument] { instruments }
-  func allCryptoRegistrations() async throws -> [CryptoRegistration] { [] }
+  func allCryptoRegistrations() async throws -> [CryptoRegistration] {
+    cryptoRegistrations
+  }
   func registerCrypto(
     _ instrument: Instrument, mapping: CryptoProviderMapping
   ) async throws {}
@@ -209,28 +270,36 @@ private struct StubRegistry: InstrumentRegistryRepository, @unchecked Sendable {
   func observeChanges() -> AsyncStream<Void> { AsyncStream { _ in } }
 }
 
-private struct StubCryptoSearchClient: CryptoSearchClient {
-  let hits: [CryptoSearchHit]
+private struct StubCatalog: CoinGeckoCatalog {
+  let entries: [CatalogEntry]
+
+  init(entries: [CatalogEntry] = []) { self.entries = entries }
+
+  func search(query: String, limit: Int) async -> [CatalogEntry] {
+    Array(entries.prefix(limit))
+  }
+  func refreshIfStale() async {}
+}
+
+private struct StubStockSearchClient: StockSearchClient {
+  let hits: [StockSearchHit]
   let shouldThrow: Bool
 
-  func search(query: String) async throws -> [CryptoSearchHit] {
+  init(hits: [StockSearchHit] = [], shouldThrow: Bool = false) {
+    self.hits = hits
+    self.shouldThrow = shouldThrow
+  }
+
+  func search(query: String) async throws -> [StockSearchHit] {
     if shouldThrow { throw URLError(.cannotConnectToHost) }
     return hits
   }
 }
 
-private struct StubStockTickerValidator: StockTickerValidator {
-  let validated: ValidatedStockTicker?
-  let shouldThrow: Bool
-
-  func validate(query: String) async throws -> ValidatedStockTicker? {
-    if shouldThrow { throw URLError(.cannotConnectToHost) }
-    return validated
-  }
-}
-
 private struct StubTokenResolutionClient: TokenResolutionClient {
   let resolved: CryptoRegistration?
+
+  init(resolved: CryptoRegistration? = nil) { self.resolved = resolved }
 
   func resolve(
     chainId: Int, contractAddress: String?, symbol: String?, isNative: Bool
