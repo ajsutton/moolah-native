@@ -105,7 +105,7 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
 // Shared across CloudKitTransactionRepository+FetchPipeline.swift and the
 // class's public `fetch` entry point. Kept at file scope (not nested in the
 // class) so the extension file can see them without a cross-file private
-// widening; the three types are otherwise purely internal to the fetch
+// widening; otherwise these types are purely internal to the fetch
 // pipeline.
 
 /// Per-instrument subtotal carried across the `MainActor`/async-conversion
@@ -144,4 +144,14 @@ struct FetchResult: Sendable {
 struct DescriptorResult: Sendable {
   let pushedScheduled: Bool
   let pushedDateRange: Bool
+}
+
+/// Snapshot of the (date, id) tuple used to order `TransactionRecord`s without
+/// re-faulting the SwiftData persisted properties for every comparison. The
+/// `offset` indexes back into the original record array so the sorted result
+/// can be reconstructed. See `sortedByDateDescThenId` and #517.
+struct RecordSortKey: Sendable {
+  let date: Date
+  let id: UUID
+  let offset: Int
 }
