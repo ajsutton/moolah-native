@@ -210,4 +210,15 @@ final class CloudKitInstrumentRegistryRepository:
       continuation.yield()
     }
   }
+
+  /// Yields a `Void` to every active `observeChanges()` subscriber without
+  /// performing a local write. Intended to be called from the sync layer when
+  /// a remote pull touches `InstrumentRecord` rows so picker UIs refresh
+  /// without waiting for an app relaunch. Concrete-only — not part of the
+  /// `InstrumentRegistryRepository` protocol because it is implementation
+  /// plumbing, not a domain contract.
+  @MainActor
+  func notifyExternalChange() {
+    notifySubscribers()
+  }
 }
