@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import os
 
 @testable import Moolah
 
@@ -149,6 +150,7 @@ struct InstrumentPickerStoreTests {
     let registered = try await backend.instrumentRegistry.all()
     #expect(registered.contains { $0.id == "NASDAQ:AAPL" })
   }
+
 }
 
 private struct StubStockSearchClient: StockSearchClient {
