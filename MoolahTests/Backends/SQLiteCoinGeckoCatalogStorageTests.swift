@@ -1,0 +1,94 @@
+// MoolahTests/Backends/SQLiteCoinGeckoCatalogStorageTests.swift
+import Foundation
+import Testing
+
+@testable import Moolah
+
+/// Class-based suite so `deinit` can deterministically remove the per-test
+/// temp directory. Each `@Test` method runs on its own instance, mirroring
+/// the XCTest setUp/tearDown pattern from the plan.
+@Suite("SQLiteCoinGeckoCatalog storage")
+final class SQLiteCoinGeckoCatalogStorageTests {
+  private let tempDir: URL
+
+  init() throws {
+    tempDir = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("catalog-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+  }
+
+  deinit {
+    try? FileManager.default.removeItem(at: tempDir)
+  }
+
+  @Test
+  func openCreatesFreshSchema() async throws {
+    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    let dbURL = tempDir.appendingPathComponent("catalog.sqlite")
+    #expect(FileManager.default.fileExists(atPath: dbURL.path))
+    let meta = try await catalog.readMetaForTesting()
+    #expect(meta.schemaVersion == CoinGeckoCatalogSchema.version)
+    #expect(meta.lastFetched == nil)
+    #expect(meta.coinsEtag == nil)
+    #expect(meta.platformsEtag == nil)
+  }
+
+  @Test
+  func replaceAllCoinsAndPlatformsCommitsAtomically() async throws {
+    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    let coins: [SQLiteCoinGeckoCatalog.RawCoin] = [
+      .init(id: "bitcoin", symbol: "BTC", name: "Bitcoin", platforms: [:]),
+      .init(
+        id: "uniswap", symbol: "UNI", name: "Uniswap",
+        platforms: ["ethereum": "0x1F9840a85d5aF5bf1D1762F925BDADdC4201F984"]
+      ),
+    ]
+    let platforms: [SQLiteCoinGeckoCatalog.RawPlatform] = [
+      .init(slug: "ethereum", chainId: 1, name: "Ethereum")
+    ]
+    try await catalog.replaceAllForTesting(coins: coins, platforms: platforms)
+
+    let count = try await catalog.coinCountForTesting()
+    #expect(count == 2)
+    let platformCount = try await catalog.platformCountForTesting()
+    #expect(platformCount == 1)
+    let coinPlatformCount = try await catalog.coinPlatformCountForTesting()
+    #expect(coinPlatformCount == 1)
+  }
+
+  @Test
+  func replaceAllReplacesPriorContent() async throws {
+    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    let first: [SQLiteCoinGeckoCatalog.RawCoin] = [
+      .init(id: "bitcoin", symbol: "BTC", name: "Bitcoin", platforms: [:])
+    ]
+    let second: [SQLiteCoinGeckoCatalog.RawCoin] = [
+      .init(id: "ethereum", symbol: "ETH", name: "Ethereum", platforms: [:]),
+      .init(id: "tether", symbol: "USDT", name: "Tether", platforms: [:]),
+    ]
+    try await catalog.replaceAllForTesting(coins: first, platforms: [])
+    try await catalog.replaceAllForTesting(coins: second, platforms: [])
+
+    let count = try await catalog.coinCountForTesting()
+    #expect(count == 2)
+  }
+
+  @Test
+  func schemaVersionMismatchRecreatesFile() async throws {
+    _ = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    let dbURL = tempDir.appendingPathComponent("catalog.sqlite")
+    let creationOriginal =
+      try FileManager.default.attributesOfItem(atPath: dbURL.path)[.creationDate] as? Date
+
+    let stale = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    try await stale.writeMetaSchemaVersionForTesting(999)
+
+    let reopened = try SQLiteCoinGeckoCatalog(directory: tempDir)
+    let metaAfter = try await reopened.readMetaForTesting()
+    #expect(metaAfter.schemaVersion == CoinGeckoCatalogSchema.version)
+
+    let creationNew =
+      try FileManager.default.attributesOfItem(atPath: dbURL.path)[.creationDate] as? Date
+    #expect(creationOriginal != creationNew)
+  }
+}
