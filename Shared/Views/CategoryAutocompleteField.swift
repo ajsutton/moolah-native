@@ -9,12 +9,6 @@ struct CategoryPickerAnchorKey: PreferenceKey {
   }
 }
 
-/// Identifiable wrapper for a category suggestion in the dropdown.
-struct CategorySuggestion: Identifiable {
-  let id: UUID
-  let path: String
-}
-
 /// A category autocomplete field using the same pattern as PayeeAutocompleteField.
 ///
 /// The text field shows the selected category path. Typing filters suggestions.
@@ -26,6 +20,7 @@ struct CategoryAutocompleteField: View {
   let suggestionCount: Int
   let onTextChange: (String) -> Void
   let onAcceptHighlighted: () -> Void
+  let onCancel: () -> Void
 
   var body: some View {
     AutocompleteField(
@@ -34,7 +29,8 @@ struct CategoryAutocompleteField: View {
       highlightedIndex: $highlightedIndex,
       suggestionCount: suggestionCount,
       onTextChange: onTextChange,
-      onAcceptHighlighted: onAcceptHighlighted
+      onAcceptHighlighted: onAcceptHighlighted,
+      onCancel: onCancel
     )
     .anchorPreference(key: CategoryPickerAnchorKey.self, value: .bounds) { $0 }
   }
@@ -106,6 +102,7 @@ struct LegCategoryAutocompleteField: View {
   let suggestionCount: Int
   let onTextChange: (String) -> Void
   let onAcceptHighlighted: () -> Void
+  let onCancel: () -> Void
 
   var body: some View {
     AutocompleteField(
@@ -114,7 +111,8 @@ struct LegCategoryAutocompleteField: View {
       highlightedIndex: $highlightedIndex,
       suggestionCount: suggestionCount,
       onTextChange: onTextChange,
-      onAcceptHighlighted: onAcceptHighlighted
+      onAcceptHighlighted: onAcceptHighlighted,
+      onCancel: onCancel
     )
     .anchorPreference(key: LegCategoryPickerAnchorKey.self, value: .bounds) { anchor in
       [legIndex: anchor]

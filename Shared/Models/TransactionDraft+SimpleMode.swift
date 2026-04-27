@@ -95,6 +95,38 @@ extension TransactionDraft {
     }
   }
 
+  /// Commits the currently-highlighted suggestion to the simple-mode
+  /// category, falling back to `normaliseCategoryText(using:)` when no
+  /// suggestion is highlighted. Called from the category field's blur
+  /// handler so the suggestion the user navigated to with arrow keys is
+  /// captured even when they Tab or click out instead of pressing Enter
+  /// (#509). Without this, blurring with a highlight pending dropped the
+  /// suggestion and then cleared the typed text because the unmatched
+  /// path didn't resolve to any `categoryId`.
+  mutating func commitHighlightedCategoryOrNormalise(
+    highlighted: CategorySuggestion?, using categories: Categories
+  ) {
+    if let highlighted {
+      categoryId = highlighted.id
+      categoryText = highlighted.path
+    } else {
+      normaliseCategoryText(using: categories)
+    }
+  }
+
+  /// Per-leg variant of `commitHighlightedCategoryOrNormalise(...)`. See
+  /// that method's note for the motivation.
+  mutating func commitHighlightedLegCategoryOrNormalise(
+    at index: Int, highlighted: CategorySuggestion?, using categories: Categories
+  ) {
+    if let highlighted {
+      legDrafts[index].categoryId = highlighted.id
+      legDrafts[index].categoryText = highlighted.path
+    } else {
+      normaliseLegCategoryText(at: index, using: categories)
+    }
+  }
+
   /// Whether the "other account" label should read "From Account" instead of "To Account".
   /// True when viewing from the counterpart's perspective (the relevant leg is not the primary leg).
   var showFromAccount: Bool {

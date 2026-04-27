@@ -27,6 +27,15 @@ extension CategoryAutocompleteState {
     highlightedIndex = nil
   }
 
+  /// Closes the dropdown without arming `justSelected`. Used when the user
+  /// dismisses the picker without changing the field text — Escape — so
+  /// the next character they type is still recognised as user-driven
+  /// editing and re-opens the dropdown.
+  mutating func cancel() {
+    showSuggestions = false
+    highlightedIndex = nil
+  }
+
   /// Visible category suggestions for the current `query`. Returns up to
   /// 8 entries to match the dropdown's render budget; an empty/whitespace
   /// query returns the full (capped) list so users can browse without

@@ -26,7 +26,8 @@ struct TransactionDetailCategorySection: View {
         highlightedIndex: $state.highlightedIndex,
         suggestionCount: visibleSuggestions.count,
         onTextChange: { _ in openDropdownIfFocused() },
-        onAcceptHighlighted: acceptHighlighted
+        onAcceptHighlighted: acceptHighlighted,
+        onCancel: { state.cancel() }
       )
       .focused($fieldFocused)
       .accessibilityIdentifier(UITestIdentifiers.Detail.category)
@@ -59,13 +60,19 @@ struct TransactionDetailCategorySection: View {
     }
   }
 
-  /// Resets picker UI state on blur and delegates the
-  /// `categoryText`/`categoryId` reconciliation to `TransactionDraft` so
-  /// the rule — "text that doesn't resolve to a known category is
-  /// cleared" — is exercised directly by `TransactionDraft` tests.
+  /// Resets picker UI state on blur and either commits the highlighted
+  /// suggestion or normalises the typed text against the category tree —
+  /// whichever applies. Delegated to `TransactionDraft` so the rules are
+  /// exercised directly by `TransactionDraft` tests. Without committing
+  /// the highlighted suggestion before normalising, Tab from a highlighted
+  /// suggestion would clear the field (#509).
   private func handleBlur() {
+    let highlighted = state.highlightedIndex.flatMap { index in
+      visibleSuggestions.indices.contains(index) ? visibleSuggestions[index] : nil
+    }
     state.dismiss()
-    draft.normaliseCategoryText(using: categories)
+    draft.commitHighlightedCategoryOrNormalise(
+      highlighted: highlighted, using: categories)
   }
 
   private func acceptHighlighted() {

@@ -63,7 +63,8 @@ struct AddBudgetLineItemSheet: View {
             showCategorySuggestions = true
           }
         },
-        onAcceptHighlighted: acceptHighlightedCategory
+        onAcceptHighlighted: acceptHighlightedCategory,
+        onCancel: cancelCategorySuggestions
       )
       .focused($categoryFieldFocused)
       .onChange(of: categoryFieldFocused) { _, focused in
@@ -117,6 +118,14 @@ struct AddBudgetLineItemSheet: View {
       categoryText = ""
       selectedCategoryId = nil
     }
+  }
+
+  /// Closes the dropdown without clearing typed text — Escape (#510). The
+  /// next keystroke is left free to re-open the dropdown, so
+  /// `categoryJustSelected` stays unset.
+  private func cancelCategorySuggestions() {
+    showCategorySuggestions = false
+    categoryHighlightedIndex = nil
   }
 
   private var categoryVisibleSuggestions: [CategorySuggestion] {

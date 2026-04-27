@@ -34,4 +34,13 @@ extension PayeeAutocompleteState {
     showSuggestions = false
     highlightedIndex = nil
   }
+
+  /// Closes the dropdown without arming `justSelected`. Used when the user
+  /// dismisses the picker without changing the field text — Escape, or
+  /// moving focus away — so the next character they type is still
+  /// recognised as user-driven editing and re-opens the dropdown.
+  mutating func cancel() {
+    showSuggestions = false
+    highlightedIndex = nil
+  }
 }
