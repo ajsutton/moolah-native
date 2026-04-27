@@ -18,13 +18,20 @@ final class StubInstrumentRegistry: InstrumentRegistryRepository, Sendable {
     var registeredStocks: [Instrument]
     var registeredCryptos: [CryptoRegistration]
     var removedIds: [String]
+    var shouldThrowOnRegister: Bool
   }
+
+  /// Errors thrown by the stub when `shouldThrowOnRegister` is set. Lets
+  /// tests exercise the picker's "registry write failed after a successful
+  /// resolve" path without needing a separate stub class.
+  enum RegisterError: Error { case stockFailed, cryptoFailed }
 
   private let state: OSAllocatedUnfairLock<State>
 
   init(
     instruments: [Instrument] = [],
-    cryptoRegistrations: [CryptoRegistration] = []
+    cryptoRegistrations: [CryptoRegistration] = [],
+    shouldThrowOnRegister: Bool = false
   ) {
     self.state = OSAllocatedUnfairLock(
       initialState: State(
@@ -32,7 +39,8 @@ final class StubInstrumentRegistry: InstrumentRegistryRepository, Sendable {
         cryptoRegistrations: cryptoRegistrations,
         registeredStocks: [],
         registeredCryptos: [],
-        removedIds: []
+        removedIds: [],
+        shouldThrowOnRegister: shouldThrowOnRegister
       )
     )
   }
@@ -57,7 +65,8 @@ extension StubInstrumentRegistry {
   func registerCrypto(
     _ instrument: Instrument, mapping: CryptoProviderMapping
   ) async throws {
-    state.withLock { state in
+    try state.withLock { state in
+      if state.shouldThrowOnRegister { throw RegisterError.cryptoFailed }
       let registration = CryptoRegistration(instrument: instrument, mapping: mapping)
       state.registeredCryptos.append(registration)
       state.cryptoRegistrations.removeAll { $0.id == registration.id }
@@ -68,7 +77,8 @@ extension StubInstrumentRegistry {
   }
 
   func registerStock(_ instrument: Instrument) async throws {
-    state.withLock { state in
+    try state.withLock { state in
+      if state.shouldThrowOnRegister { throw RegisterError.stockFailed }
       state.registeredStocks.append(instrument)
       state.instruments.removeAll { $0.id == instrument.id }
       state.instruments.append(instrument)

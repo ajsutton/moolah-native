@@ -84,6 +84,7 @@ final class InstrumentPickerStore {
 
   private func registerStock(_ instrument: Instrument) async -> Instrument? {
     guard let registry else { return instrument }
+    error = nil
     do {
       try await registry.registerStock(instrument)
       return instrument
