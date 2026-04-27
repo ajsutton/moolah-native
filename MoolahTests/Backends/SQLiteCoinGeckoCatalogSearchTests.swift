@@ -36,6 +36,8 @@ final class SQLiteCoinGeckoCatalogSearchTests {
       ),
       .init(id: "tether", symbol: "USDT", name: "Tether", platforms: [:]),
       .init(id: "blockstack", symbol: "STX", name: "Stacks", platforms: [:]),
+      .init(id: "eos", symbol: "EOS", name: "EOS", platforms: [:]),
+      .init(id: "electroneum", symbol: "ETN", name: "Electroneum", platforms: [:]),
     ]
     let platforms: [SQLiteCoinGeckoCatalog.RawPlatform] = [
       .init(slug: "ethereum", chainId: 1, name: "Ethereum"),
@@ -90,7 +92,7 @@ final class SQLiteCoinGeckoCatalogSearchTests {
   @Test
   func limitIsRespected() async throws {
     try await seedFixture()
-    let results = await catalog.search(query: "e*", limit: 2)
-    #expect(results.count <= 2)
+    let results = await catalog.search(query: "e", limit: 2)
+    #expect(results.count == 2)
   }
 }

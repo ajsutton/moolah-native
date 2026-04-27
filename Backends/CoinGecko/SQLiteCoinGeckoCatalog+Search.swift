@@ -7,6 +7,15 @@ import SQLite3
 /// replace-all writes (see CLAUDE.md and `guides/CODE_GUIDE.md` §7 on
 /// extension grouping).
 extension SQLiteCoinGeckoCatalog {
+  /// FTS5 prefix search over coin id/symbol/name, ranked by BM25, with
+  /// platform bindings attached per hit. Platforms are ordered by
+  /// `CoinGeckoCatalogSchema.platformPriority`, then alphabetical by slug.
+  ///
+  /// Infallible by design (see design §4.1): an unavailable database, an
+  /// FTS query parse error, or any underlying SQLite failure is logged via
+  /// `os_log` and swallowed — the picker degrades to "no results" rather
+  /// than crashing on a corrupted snapshot. An empty/whitespace-only
+  /// `query` or `limit <= 0` short-circuits to `[]` without touching SQLite.
   func search(query: String, limit: Int) async -> [CatalogEntry] {
     let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty, limit > 0 else { return [] }
@@ -31,6 +40,8 @@ extension SQLiteCoinGeckoCatalog {
     }
   }
 }
+
+// MARK: - Private helpers
 
 extension SQLiteCoinGeckoCatalog {
   private struct RankedCoin: Sendable {

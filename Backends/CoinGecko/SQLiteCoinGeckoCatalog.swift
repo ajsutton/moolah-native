@@ -13,10 +13,18 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
   let log = Logger(subsystem: "moolah.instrument-registry", category: "catalog")
   private(set) var database: OpaquePointer?
 
-  // Note: `log` and `database` are module-internal (no explicit modifier
-  // per CODE_GUIDE §7) so the `+Search.swift` extension can read them.
-  // Helpers like `prepare`, `bind`, and `readText` below are also
-  // module-internal for the same reason.
+  // MARK: - Cross-extension internals
+  //
+  // `private` declarations are not visible to extensions in other files,
+  // so members called from `SQLiteCoinGeckoCatalog+Search.swift` (and any
+  // future `+…` extension) drop their `private` keyword and become module-
+  // internal: `log`, `database` (read-only via `private(set)`), and the
+  // low-level SQLite helpers `prepare`, `bind` (both overloads), and
+  // `readText` further down the file.
+  //
+  // These remain implementation details of the actor — callers outside
+  // `Backends/CoinGecko/` MUST NOT use them. New backend extensions on
+  // the actor should treat this list as the closed surface of helpers.
 
   init(
     directory: URL,
