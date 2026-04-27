@@ -10,8 +10,13 @@ import os
 actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
   private let directory: URL
   private let session: URLSession
-  private let log = Logger(subsystem: "moolah.instrument-registry", category: "catalog")
-  private var database: OpaquePointer?
+  let log = Logger(subsystem: "moolah.instrument-registry", category: "catalog")
+  private(set) var database: OpaquePointer?
+
+  // Note: `log` and `database` are module-internal (no explicit modifier
+  // per CODE_GUIDE §7) so the `+Search.swift` extension can read them.
+  // Helpers like `prepare`, `bind`, and `readText` below are also
+  // module-internal for the same reason.
 
   init(
     directory: URL,
@@ -30,10 +35,8 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
   }
 
   // MARK: - CoinGeckoCatalog
-
-  func search(query: String, limit: Int) async -> [CatalogEntry] {
-    []  // Implemented in Task 4.
-  }
+  //
+  // `search(query:limit:)` lives in `SQLiteCoinGeckoCatalog+Search.swift`.
 
   func refreshIfStale() async {
     // Implemented in Task 5.
@@ -205,7 +208,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     }
   }
 
-  private static func prepare(
+  static func prepare(
     database: OpaquePointer?,
     _ sql: String,
     _ statement: inout OpaquePointer?
@@ -216,7 +219,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     }
   }
 
-  private static func bind(
+  static func bind(
     _ statement: OpaquePointer?,
     _ index: Int32,
     _ value: String
@@ -231,7 +234,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     guard result == SQLITE_OK else { throw CatalogError.sqlite("bind text \(result)") }
   }
 
-  private static func bind(
+  static func bind(
     _ statement: OpaquePointer?,
     _ index: Int32,
     _ value: Int
@@ -257,7 +260,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     return Int(sqlite3_column_int64(statement, 0))
   }
 
-  private static func readText(_ statement: OpaquePointer?, column: Int32) -> String? {
+  static func readText(_ statement: OpaquePointer?, column: Int32) -> String? {
     guard let cString = sqlite3_column_text(statement, column) else { return nil }
     return String(cString: cString)
   }
