@@ -150,17 +150,26 @@ extension ProfileSession {
   }
 
   /// Bundle of the optional instrument-registry pieces: only CloudKit
-  /// profiles expose a registry and crypto token store. Remote/moolah
-  /// profiles are single-instrument by server design and leave both nil.
+  /// profiles expose a registry, crypto token store, search service, and
+  /// CoinGecko catalogue. Remote/moolah profiles are single-instrument by
+  /// server design and leave all four nil.
   struct RegistryWiring {
     let registry: (any InstrumentRegistryRepository)?
     let cryptoTokenStore: CryptoTokenStore?
     let searchService: InstrumentSearchService?
+    let coinGeckoCatalog: (any CoinGeckoCatalog)?
   }
 
   /// Resolves the optional instrument-registry wiring for a profile. Returns
   /// a populated bundle for CloudKit profiles; returns nils for Remote/moolah
   /// profiles so settings views can gate on `cryptoTokenStore != nil`.
+  ///
+  /// CloudKit profiles also build a `SQLiteCoinGeckoCatalog` and fire its
+  /// `refreshIfStale()` once per session on a background task so the on-disk
+  /// snapshot honours the 24 h max-age + ETag guards without blocking
+  /// session init. A catalog construction failure (e.g. the SQLite file
+  /// can't be opened) is logged and the catalogue is left `nil` — search
+  /// degrades to the registry/Yahoo paths only.
   @MainActor
   static func makeRegistryWiring(
     backend: BackendProvider,
@@ -169,22 +178,48 @@ extension ProfileSession {
     coinGeckoApiKey: String?
   ) -> RegistryWiring {
     guard let cloudBackend = backend as? CloudKitBackend else {
-      return RegistryWiring(registry: nil, cryptoTokenStore: nil, searchService: nil)
+      return RegistryWiring(
+        registry: nil, cryptoTokenStore: nil, searchService: nil, coinGeckoCatalog: nil)
     }
+
+    let catalog = makeCoinGeckoCatalog()
     let store = CryptoTokenStore(
       registry: cloudBackend.instrumentRegistry,
       cryptoPriceService: cryptoPriceService)
     let searchService = InstrumentSearchService(
       registry: cloudBackend.instrumentRegistry,
-      catalog: nil,
+      catalog: catalog,
       resolutionClient: CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey),
       stockSearchClient: YahooFinanceStockSearchClient()
     )
     return RegistryWiring(
       registry: cloudBackend.instrumentRegistry,
       cryptoTokenStore: store,
-      searchService: searchService
+      searchService: searchService,
+      coinGeckoCatalog: catalog
     )
+  }
+
+  /// Builds the per-profile CoinGecko catalogue and kicks off a background
+  /// `refreshIfStale()` so the SQLite snapshot is brought up to date once per
+  /// session without blocking init. Returns `nil` (and logs) when the
+  /// SQLite file can't be opened — the caller treats that as a degraded
+  /// search path.
+  @MainActor
+  private static func makeCoinGeckoCatalog() -> (any CoinGeckoCatalog)? {
+    let directory = URL.moolahScopedApplicationSupport
+      .appending(path: "InstrumentRegistry", directoryHint: .isDirectory)
+    do {
+      let catalog = try SQLiteCoinGeckoCatalog(directory: directory)
+      Task(priority: .background) { [catalog] in
+        await catalog.refreshIfStale()
+      }
+      return catalog
+    } catch {
+      Logger(subsystem: "com.moolah.app", category: "ProfileSession")
+        .error("CoinGecko catalog init failed: \(error.localizedDescription, privacy: .public)")
+      return nil
+    }
   }
 
   /// Bundle of the per-profile domain stores. Returned from

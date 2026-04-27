@@ -24,6 +24,7 @@ final class ProfileSession: Identifiable {
   let instrumentRegistry: (any InstrumentRegistryRepository)?
   let cryptoTokenStore: CryptoTokenStore?
   let instrumentSearchService: InstrumentSearchService?
+  let coinGeckoCatalog: (any CoinGeckoCatalog)?
   let importStore: ImportStore
   let importRuleStore: ImportRuleStore
   let importPreferences: ImportPreferences
@@ -76,6 +77,7 @@ final class ProfileSession: Identifiable {
     self.instrumentRegistry = registryWiring.registry
     self.cryptoTokenStore = registryWiring.cryptoTokenStore
     self.instrumentSearchService = registryWiring.searchService
+    self.coinGeckoCatalog = registryWiring.coinGeckoCatalog
     let stores = Self.makeDomainStores(profile: profile, backend: backend)
     self.authStore = stores.auth
     self.accountStore = stores.account
