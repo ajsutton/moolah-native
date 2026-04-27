@@ -44,6 +44,14 @@ final class InstrumentPickerStore {
     }
   }
 
+  /// Awaits the in-flight debounced search, if one is scheduled. Returns
+  /// immediately when no search is pending. Tests use this instead of a
+  /// time-based sleep so they don't race the debounce on slow CI runners.
+  func waitForPendingSearch() async {
+    guard let task = searchTask else { return }
+    await task.value
+  }
+
   func select(_ result: InstrumentSearchResult) async -> Instrument? {
     if result.isRegistered { return result.instrument }
     guard let registry else {

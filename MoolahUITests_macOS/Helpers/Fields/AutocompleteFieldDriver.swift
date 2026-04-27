@@ -35,6 +35,7 @@ struct AutocompleteFieldDriver {
       if (field.value(forKey: "hasKeyboardFocus") as? Bool) ?? false { return }
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     }
+    app.testCase?.captureFailureSnapshot(reason: "tap-no-focus-\(fieldIdentifier)")
     Trace.recordFailure("tap on '\(fieldIdentifier)' did not produce focus")
     XCTFail("Autocomplete field '\(fieldIdentifier)' did not focus after tap")
   }
@@ -60,6 +61,7 @@ struct AutocompleteFieldDriver {
       if let value = field.value as? String, value.contains(text) { return }
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     }
+    app.testCase?.captureFailureSnapshot(reason: "type-no-value-\(fieldIdentifier)")
     Trace.recordFailure("field value did not propagate after typing")
     XCTFail("Autocomplete field value did not contain '\(text)' within 3s")
   }
@@ -85,6 +87,7 @@ struct AutocompleteFieldDriver {
       if let value = field.value as? String, value.isEmpty { return }
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     }
+    app.testCase?.captureFailureSnapshot(reason: "clear-not-empty-\(fieldIdentifier)")
     Trace.recordFailure("field did not empty after clear")
     XCTFail("Autocomplete field '\(fieldIdentifier)' did not clear within 3s")
   }

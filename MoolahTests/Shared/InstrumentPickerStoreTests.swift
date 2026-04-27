@@ -41,8 +41,7 @@ struct InstrumentPickerStoreTests {
     )
     await store.start()
     store.updateQuery("usd")
-    // Wait one debounce tick.
-    try? await Task.sleep(for: .milliseconds(350))
+    await store.waitForPendingSearch()
     #expect(store.results.contains { $0.instrument.id == "USD" })
     #expect(
       store.results.allSatisfy {
@@ -109,7 +108,7 @@ struct InstrumentPickerStoreTests {
     let store = InstrumentPickerStore(kinds: [.fiatCurrency])
     await store.start()
     store.updateQuery("usd")
-    try? await Task.sleep(for: .milliseconds(350))
+    await store.waitForPendingSearch()
     #expect(store.results.contains { $0.instrument.id == "USD" })
     #expect(
       store.results.allSatisfy {
@@ -141,7 +140,7 @@ struct InstrumentPickerStoreTests {
       kinds: Set(Instrument.Kind.allCases)
     )
     store.updateQuery("AAPL")
-    try? await Task.sleep(for: .milliseconds(350))
+    await store.waitForPendingSearch()
     let hit = try #require(store.results.first { $0.instrument.ticker == "AAPL" })
     #expect(hit.isRegistered == false)
     let picked = await store.select(hit)

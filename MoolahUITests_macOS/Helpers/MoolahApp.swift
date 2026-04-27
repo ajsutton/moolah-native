@@ -11,6 +11,13 @@ import XCTest
 final class MoolahApp {
   let application: XCUIApplication
   let seed: UITestSeed
+  /// Back-reference set by `MoolahUITestCase.launch(seed:)` so drivers can
+  /// request an immediate failure snapshot via
+  /// `app.testCase?.captureFailureSnapshot(reason:)` before calling
+  /// `XCTFail` — useful when a click silently misses the target and the
+  /// regular `tearDown` snapshot fires too late to show what was on
+  /// screen at the click.
+  weak var testCase: MoolahUITestCase?
 
   /// The standard launch entrypoint used by tests:
   ///
@@ -96,7 +103,16 @@ final class MoolahApp {
   /// briefly hand activation back to the test runner).
   /// Called automatically from `launch(seed:)`; drivers reuse it after
   /// actions that re-create the window.
-  func expectMainWindowVisible(timeout: TimeInterval = 5) {
+  ///
+  /// The 30 s default is the standard CI-friendly waiting budget — GitHub-
+  /// hosted macos-26 runners are slow on cold start, often taking 15 s+
+  /// before SwiftUI's launcher → profile-window handoff completes (issue
+  /// #493). The deterministic part of the fix is in
+  /// `UITestingLauncherView`: keeping the launcher around eliminates the
+  /// open/dismiss race that previously left the app windowless. This
+  /// timeout is then the upper bound on launch-plus-render, not on a
+  /// race recovery window.
+  func expectMainWindowVisible(timeout: TimeInterval = 30) {
     if !application.windows.firstMatch.waitForExistence(timeout: timeout) {
       Trace.recordFailure("main window did not appear within \(timeout)s")
       XCTFail("Moolah main window did not appear within \(timeout)s of launch")

@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 
 /// Failure-artefact collection for `MoolahUITestCase`. Split out so the
@@ -9,6 +10,72 @@ import XCTest
 /// invoked from the base class's `tearDown` — every other helper here
 /// is private to this file.
 extension MoolahUITestCase {
+
+  // MARK: - Driver-callable: in-flight failure snapshot
+
+  /// Counter so each `captureFailureSnapshot` call writes to a distinct
+  /// filename (`failure-1-<reason>.png/.txt`, `failure-2-...`). Reset
+  /// implicitly per test by `setUp` reassigning the case instance.
+  private static let failureSnapshotCounters = NSMapTable<XCTestCase, NSNumber>
+    .weakToStrongObjects()
+
+  /// Captures an immediate screenshot + accessibility-tree dump at the
+  /// point a driver action determined it could not proceed (e.g.
+  /// `tap()` clicked at the field's coordinates but no element ever
+  /// reported `hasKeyboardFocus`).
+  ///
+  /// Drivers call this **before** `XCTFail` so the snapshot reflects the
+  /// pixels that were on screen at the failure point — by the time the
+  /// `tearDown` snapshot fires, dropdowns may have dismissed, the form
+  /// may have scrolled, and the screen no longer reflects what the user
+  /// would have seen at the moment the action gave up.
+  ///
+  /// Files land under the test's failure-artefact directory using a
+  /// per-test counter so multiple captures in the same test do not
+  /// overwrite each other.
+  func captureFailureSnapshot(reason: String) {
+    guard let app = lastApp else { return }
+    let dir = artefactDirectory(for: name)
+    do {
+      try FileManager.default.createDirectory(
+        at: dir, withIntermediateDirectories: true)
+    } catch {
+      add(XCTAttachment(string: "Failed to create snapshot dir: \(error)"))
+      return
+    }
+    print("[MoolahUITestCase] ARTEFACT_DIR \(dir.path)")
+    let counter = nextSnapshotCounter()
+    let safeReason =
+      reason
+      .replacingOccurrences(of: "/", with: "_")
+      .replacingOccurrences(of: " ", with: "_")
+    let basename = "failure-\(counter)-\(safeReason)"
+    // Take the screenshot first — `XCUIApplication.frame` triggers a full
+    // accessibility snapshot and has been observed to hang for tens of
+    // seconds in the failure path on slow runners. The screenshot
+    // doesn't, so it's our priority artefact.
+    let png = app.application.screenshot().pngRepresentation
+    let pngURL = dir.appendingPathComponent("\(basename).png")
+    do { try png.write(to: pngURL) } catch {
+      add(XCTAttachment(string: "Failed to write \(pngURL.lastPathComponent): \(error)"))
+    }
+    let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
+    attachment.lifetime = .keepAlways
+    attachment.name = "\(basename).png"
+    add(attachment)
+    let screenSize = NSScreen.main?.frame.size ?? .zero
+    print(
+      "[MoolahUITestCase] CAPTURE \(basename) "
+        + "screen=\(Int(screenSize.width))x\(Int(screenSize.height))"
+    )
+  }
+
+  private func nextSnapshotCounter() -> Int {
+    let table = Self.failureSnapshotCounters
+    let next = ((table.object(forKey: self)?.intValue) ?? 0) + 1
+    table.setObject(NSNumber(value: next), forKey: self)
+    return next
+  }
 
   // MARK: - Internal: artefact collection
 
@@ -67,6 +134,10 @@ extension MoolahUITestCase {
   private func treeText(for app: MoolahApp) -> String {
     var lines: [String] = []
     lines.append("# accessibility tree (identifier | type | label | value | frame)")
+    let screenSize = NSScreen.main?.frame.size ?? .zero
+    lines.append(
+      "# screen size: \(Int(screenSize.width))x\(Int(screenSize.height))"
+    )
     if let focusedIdentifier = currentFocusedIdentifier(in: app) {
       lines.append("# focused element: \(focusedIdentifier)")
     } else {
