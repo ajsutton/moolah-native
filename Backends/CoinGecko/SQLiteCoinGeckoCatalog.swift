@@ -15,18 +15,17 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
 
   // MARK: - Cross-extension internals
   //
-  // `private` declarations are not visible to extensions in other files,
-  // so members called from `SQLiteCoinGeckoCatalog+Search.swift` and
-  // `SQLiteCoinGeckoCatalog+Refresh.swift` drop their `private` keyword and
-  // become module-internal: `log`, `session`, `database` (read-only via
-  // `private(set)`), the low-level SQLite helpers `exec`, `prepare`, `bind`
-  // (both overloads), `step`, and `readText` further down the file, the
-  // replace-all writers `replaceAll`, `insertCoins`, `insertPlatforms`, and
-  // the meta reader `readMeta`.
+  // Swift's `private` doesn't reach across files, so members called from
+  // `+Search.swift` or `+Refresh.swift` drop their `private` keyword and
+  // become module-internal. This is the closed surface — callers outside
+  // `Backends/CoinGecko/` MUST NOT use them.
   //
-  // These remain implementation details of the actor — callers outside
-  // `Backends/CoinGecko/` MUST NOT use them. New backend extensions on
-  // the actor should treat this list as the closed surface of helpers.
+  // Used by +Search.swift only:    `readText`
+  // Used by +Refresh.swift only:   `session`, `exec`, `step`,
+  //                                `replaceAll`, `insertCoins`,
+  //                                `insertPlatforms`, `readMeta`
+  // Used by both extensions:       `log`, `database` (read-only),
+  //                                `prepare`, `bind` (×2)
 
   init(
     directory: URL,
@@ -278,6 +277,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
 
   enum CatalogError: Error, Equatable {
     case sqlite(String)
+    case network(String)
   }
 }
 

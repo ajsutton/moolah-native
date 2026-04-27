@@ -25,10 +25,12 @@ extension SQLiteCoinGeckoCatalog {
       {
         return
       }
-      let coinsResult = try await Self.fetchConditional(
+      async let coinsRequest = Self.fetchConditional(
         session: session, url: Self.coinsListURL, ifNoneMatch: meta.coinsEtag)
-      let platformsResult = try await Self.fetchConditional(
+      async let platformsRequest = Self.fetchConditional(
         session: session, url: Self.assetPlatformsURL, ifNoneMatch: meta.platformsEtag)
+      let coinsResult = try await coinsRequest
+      let platformsResult = try await platformsRequest
 
       var newCoinsEtag = meta.coinsEtag
       var newPlatformsEtag = meta.platformsEtag
@@ -67,12 +69,18 @@ extension SQLiteCoinGeckoCatalog {
 // MARK: - Constants and fetch primitives
 
 extension SQLiteCoinGeckoCatalog {
-  static let coinsListURL: URL =
-    URL(string: "https://api.coingecko.com/api/v3/coins/list?include_platform=true")
-    ?? URL(fileURLWithPath: "/")
-  static let assetPlatformsURL: URL =
-    URL(string: "https://api.coingecko.com/api/v3/asset_platforms")
-    ?? URL(fileURLWithPath: "/")
+  static let coinsListURL: URL = {
+    guard
+      let url = URL(string: "https://api.coingecko.com/api/v3/coins/list?include_platform=true")
+    else { preconditionFailure("malformed CoinGecko coins-list URL — fix the literal") }
+    return url
+  }()
+
+  static let assetPlatformsURL: URL = {
+    guard let url = URL(string: "https://api.coingecko.com/api/v3/asset_platforms")
+    else { preconditionFailure("malformed CoinGecko asset-platforms URL — fix the literal") }
+    return url
+  }()
   /// 24-hour stale-fetch guard. Refresh callers are no-ops within this
   /// window even if the previous fetch returned 304.
   static let maxAge: TimeInterval = 24 * 3600
@@ -86,12 +94,12 @@ extension SQLiteCoinGeckoCatalog {
   /// a fresh body (`.replace`) or a 304 (`.unchanged`). Modeled as an enum
   /// so the SQLite write path doesn't conflate "no change" with "empty
   /// list".
-  enum CoinsUpdate {
+  enum CoinsUpdate: Sendable {
     case unchanged
     case replace([RawCoin])
   }
 
-  enum PlatformsUpdate {
+  enum PlatformsUpdate: Sendable {
     case unchanged
     case replace([RawPlatform])
   }
@@ -108,7 +116,7 @@ extension SQLiteCoinGeckoCatalog {
     request.setValue("gzip", forHTTPHeaderField: "Accept-Encoding")
     let (data, response) = try await session.data(for: request)
     guard let http = response as? HTTPURLResponse else {
-      throw CatalogError.sqlite("non-HTTP response from \(url.absoluteString)")
+      throw CatalogError.network("non-HTTP response from \(url.absoluteString)")
     }
     switch http.statusCode {
     case 200:
@@ -116,7 +124,7 @@ extension SQLiteCoinGeckoCatalog {
     case 304:
       return .notModified
     default:
-      throw CatalogError.sqlite("status \(http.statusCode) for \(url.absoluteString)")
+      throw CatalogError.network("status \(http.statusCode) for \(url.absoluteString)")
     }
   }
 }

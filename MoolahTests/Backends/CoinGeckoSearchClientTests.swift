@@ -4,7 +4,7 @@ import Testing
 
 @testable import Moolah
 
-@Suite("CoinGeckoSearchClient")
+@Suite("CoinGeckoSearchClient", .serialized)
 struct CoinGeckoSearchClientTests {
   @Test
   func searchReturnsHitsFromFixture() async throws {
@@ -114,23 +114,4 @@ private class CoinGeckoSearchURLProtocolStub: URLProtocol {
   }
 
   override func stopLoading() {}
-}
-
-private final class LockedBox<Value>: @unchecked Sendable {
-  private let lock = NSLock()
-  private var value: Value
-
-  init(_ initial: Value) { self.value = initial }
-
-  func get() -> Value {
-    lock.lock()
-    defer { lock.unlock() }
-    return value
-  }
-
-  func set(_ newValue: Value) {
-    lock.lock()
-    defer { lock.unlock() }
-    value = newValue
-  }
 }

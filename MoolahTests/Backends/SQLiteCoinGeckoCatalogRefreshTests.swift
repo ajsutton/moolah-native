@@ -7,7 +7,7 @@ import Testing
 /// Class-based suite so `deinit` can deterministically clean up the per-test
 /// temp directory and the shared `StubURLProtocol` handlers map. Each
 /// `@Test` instantiates a fresh suite, so handlers don't leak across tests.
-@Suite("SQLiteCoinGeckoCatalog refresh")
+@Suite("SQLiteCoinGeckoCatalog refresh", .serialized)
 final class SQLiteCoinGeckoCatalogRefreshTests {
   private let tempDir: URL
 
@@ -85,6 +85,13 @@ final class SQLiteCoinGeckoCatalogRefreshTests {
     await catalog.refreshIfStale()
 
     #expect(capturedHeaders.get()["If-None-Match"] == "W/\"a1\"")
+
+    let meta = try await catalog.readMetaForTesting()
+    let lastFetched = try #require(meta.lastFetched)
+    // 304/304 round-trip should bump last_fetched forward (within the last few
+    // seconds) — without this, a regression that skipped `writeMeta` on the
+    // all-304 path would let the catalog re-fetch on every launch.
+    #expect(lastFetched.timeIntervalSinceNow > -60)
   }
 
   @Test
@@ -158,27 +165,5 @@ final class SQLiteCoinGeckoCatalogRefreshTests {
     #expect(pepe.first?.coingeckoId == "pepe")
     let meta = try await catalog.readMetaForTesting()
     #expect(meta.coinsEtag == "W/\"a2\"")
-  }
-}
-
-/// Mutex-protected box for shared mutable state captured into a stub
-/// `URLProtocol` handler. The handler closure is `@Sendable`, so any captured
-/// state must be safely shareable.
-private final class LockedBox<Value>: @unchecked Sendable {
-  private let lock = NSLock()
-  private var value: Value
-
-  init(_ initial: Value) { self.value = initial }
-
-  func get() -> Value {
-    lock.lock()
-    defer { lock.unlock() }
-    return value
-  }
-
-  func set(_ newValue: Value) {
-    lock.lock()
-    defer { lock.unlock() }
-    value = newValue
   }
 }

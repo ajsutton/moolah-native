@@ -56,18 +56,22 @@ extension HTTPURLResponse {
   /// returns a non-optional URL, so we get a force-unwrap-free constant.
   private static let stubResponseURL = URL(fileURLWithPath: "/")
 
+  // swiftlint:disable force_unwrapping
+  // `HTTPURLResponse(url:statusCode:httpVersion:headerFields:)` only fails on
+  // a malformed `httpVersion`, and `"HTTP/1.1"` is a hardcoded literal — so
+  // the force-unwraps below are provably safe. The previous
+  // `?? HTTPURLResponse()` fallback would have papered over a programmer
+  // error rather than handling a real failure mode, so force-unwrap is the
+  // honest spelling. CODE_GUIDE §9 explicitly permits this in test code.
+
   /// Convenience for tests building 200 responses with an `ETag` header.
-  /// Returns a non-optional value via the same `URL(fileURLWithPath:)`
-  /// fallback as `stubResponseURL`; the underlying `HTTPURLResponse`
-  /// initialiser only fails on malformed `httpVersion`, which is a literal
-  /// here.
   static func ok(etag: String) -> HTTPURLResponse {
     HTTPURLResponse(
       url: stubResponseURL,
       statusCode: 200,
       httpVersion: "HTTP/1.1",
       headerFields: ["ETag": etag, "Content-Type": "application/json"]
-    ) ?? HTTPURLResponse()
+    )!
   }
 
   /// 304 Not Modified for conditional GETs returning no body.
@@ -77,6 +81,7 @@ extension HTTPURLResponse {
       statusCode: 304,
       httpVersion: "HTTP/1.1",
       headerFields: [:]
-    ) ?? HTTPURLResponse()
+    )!
   }
+  // swiftlint:enable force_unwrapping
 }
