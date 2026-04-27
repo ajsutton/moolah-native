@@ -23,7 +23,11 @@ enum QuoteType: String, Sendable, CaseIterable {
 }
 
 /// Abstract name-search service for investable stock-like instruments.
-/// Production: `YahooFinanceStockSearchClient`.
 protocol StockSearchClient: Sendable {
+  /// Searches for stock-like instruments by free-text query (ticker or company name).
+  ///
+  /// - Returns: Hits ranked by the underlying provider; empty when nothing matches.
+  /// - Throws: `URLError` (or equivalent) on network/HTTP failure. Callers should
+  ///   surface a transient-failure UX rather than propagate the error to the user.
   func search(query: String) async throws -> [StockSearchHit]
 }

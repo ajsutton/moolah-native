@@ -49,7 +49,7 @@ final class YahooFinanceStockSearchClientTests {
 
     let hits = try await client.search(query: "apple")
 
-    let trimmed = "Apple Inc.                    R".trimmingCharacters(in: .whitespaces)
+    let trimmed = "Apple Inc.                    R".trimmingCharacters(in: .whitespacesAndNewlines)
     #expect(hits.first { $0.symbol == "APC.DE" }?.name == trimmed)
   }
 
