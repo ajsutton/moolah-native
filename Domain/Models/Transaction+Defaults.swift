@@ -43,13 +43,17 @@ extension Transaction {
     )
   }
 
-  /// A non-scheduled copy of `scheduled` dated today. Used by
-  /// `TransactionStore.payScheduledTransaction` to record the actual payment
-  /// without altering the scheduled template.
+  /// A non-scheduled copy of `scheduled` dated as of its scheduled date.
+  /// Used by `TransactionStore.payScheduledTransaction` to record the actual
+  /// payment without altering the scheduled template. Keeping the scheduled
+  /// date — not the click time — means a batch of bills paid in one sitting
+  /// lands on the dates the user budgeted for, so reports and running
+  /// balances reflect the schedule rather than when the user happened to
+  /// click pay.
   static func paidCopy(of scheduled: Transaction) -> Transaction {
     Transaction(
       id: UUID(),
-      date: Date(),
+      date: scheduled.date,
       payee: scheduled.payee,
       notes: scheduled.notes,
       legs: scheduled.legs
