@@ -39,6 +39,7 @@ class MoolahUITestCase: XCTestCase {
   ///   let app = launch(seed: .tradeBaseline)
   func launch(seed: UITestSeed) -> MoolahApp {
     let app = MoolahApp.launch(seed: seed)
+    app.testCase = self
     lastApp = app
     return app
   }

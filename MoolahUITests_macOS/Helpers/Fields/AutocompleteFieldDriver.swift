@@ -29,12 +29,13 @@ struct AutocompleteFieldDriver {
       XCTFail("Autocomplete field '\(fieldIdentifier)' did not appear within 3s")
       return
     }
-    clickByCoordinate(field)
+    field.click()
     let deadline = Date().addingTimeInterval(3)
     while Date() < deadline {
       if (field.value(forKey: "hasKeyboardFocus") as? Bool) ?? false { return }
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     }
+    app.testCase?.captureFailureSnapshot(reason: "tap-no-focus-\(fieldIdentifier)")
     Trace.recordFailure("tap on '\(fieldIdentifier)' did not produce focus")
     XCTFail("Autocomplete field '\(fieldIdentifier)' did not focus after tap")
   }
@@ -49,7 +50,7 @@ struct AutocompleteFieldDriver {
       XCTFail("Autocomplete field '\(fieldIdentifier)' did not appear within 3s")
       return
     }
-    clickByCoordinate(field)
+    field.click()
     field.typeText(text)
 
     // Post-condition: the field reports back a value containing the typed
@@ -60,6 +61,7 @@ struct AutocompleteFieldDriver {
       if let value = field.value as? String, value.contains(text) { return }
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     }
+    app.testCase?.captureFailureSnapshot(reason: "type-no-value-\(fieldIdentifier)")
     Trace.recordFailure("field value did not propagate after typing")
     XCTFail("Autocomplete field value did not contain '\(text)' within 3s")
   }
@@ -76,7 +78,7 @@ struct AutocompleteFieldDriver {
       XCTFail("Autocomplete field '\(fieldIdentifier)' did not appear within 3s")
       return
     }
-    clickByCoordinate(field)
+    field.click()
     app.application.typeKey("a", modifierFlags: .command)
     app.application.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
 
@@ -85,6 +87,7 @@ struct AutocompleteFieldDriver {
       if let value = field.value as? String, value.isEmpty { return }
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     }
+    app.testCase?.captureFailureSnapshot(reason: "clear-not-empty-\(fieldIdentifier)")
     Trace.recordFailure("field did not empty after clear")
     XCTFail("Autocomplete field '\(fieldIdentifier)' did not clear within 3s")
   }
@@ -149,24 +152,6 @@ struct AutocompleteFieldDriver {
   }
 
   // MARK: - Internal: post-condition waits
-
-  /// Sends a click at `element`'s centre using a normalized-offset
-  /// coordinate, which does **not** gate on `XCUIElement.isHittable`.
-  /// Earlier versions of this driver polled `isHittable` before
-  /// `element.click()` to tolerate the brief overlay-settle window
-  /// where a sibling leg's dropdown can cover the target field's
-  /// frame; on the slowest macos-26 CI runners this turned into a
-  /// deadlock — the dropdown stays open until the user clicks
-  /// somewhere else, but the click can't fire until the dropdown
-  /// dismisses. Coordinate-click sidesteps the gate by sending the
-  /// hit at a screen position regardless of which element is on top.
-  /// If something else *is* on top (e.g. a stale overlay), the click
-  /// hits that instead and the test's next post-condition (focus
-  /// transferred, value typed, etc.) fails with a clear diagnostic
-  /// rather than burning 30 s waiting for hittability.
-  private func clickByCoordinate(_ element: XCUIElement) {
-    element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
-  }
 
   private func waitUntilDropdownHidden(timeout: TimeInterval) -> Bool {
     let dropdown = app.element(for: dropdownIdentifier)

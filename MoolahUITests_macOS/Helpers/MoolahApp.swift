@@ -11,6 +11,13 @@ import XCTest
 final class MoolahApp {
   let application: XCUIApplication
   let seed: UITestSeed
+  /// Back-reference set by `MoolahUITestCase.launch(seed:)` so drivers can
+  /// request an immediate failure snapshot via
+  /// `app.testCase?.captureFailureSnapshot(reason:)` before calling
+  /// `XCTFail` — useful when a click silently misses the target and the
+  /// regular `tearDown` snapshot fires too late to show what was on
+  /// screen at the click.
+  weak var testCase: MoolahUITestCase?
 
   /// The standard launch entrypoint used by tests:
   ///
