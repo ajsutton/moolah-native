@@ -211,13 +211,13 @@ extension ProfileSession {
       .appending(path: "InstrumentRegistry", directoryHint: .isDirectory)
     do {
       let catalog = try SQLiteCoinGeckoCatalog(directory: directory)
-      Task.detached(priority: .background) { [catalog] in
+      Task(priority: .background) { [catalog] in
         await catalog.refreshIfStale()
       }
       return catalog
     } catch {
-      Logger(subsystem: "moolah.instrument-registry", category: "session")
-        .error("CoinGecko catalog init failed: \(String(describing: error), privacy: .public)")
+      Logger(subsystem: "com.moolah.app", category: "ProfileSession")
+        .error("CoinGecko catalog init failed: \(error.localizedDescription, privacy: .public)")
       return nil
     }
   }
