@@ -1,295 +1,151 @@
 import SwiftUI
 
+/// Search-and-select sheet for fiat / stock / crypto instruments.
+///
+/// Two initialisers:
+/// - `init(store:label:selection:isPresented:)` — callers own a selection
+///   binding (e.g. `InstrumentPickerField`) and dismiss via the sheet's own
+///   `isPresented`. This is the canonical embedding inside a popover/sheet
+///   driven by an `InstrumentPickerField`.
+/// - `init(kinds:onCompletion:)` — self-contained variant: builds its own
+///   `InstrumentPickerStore` from the ambient `ProfileSession`, manages its
+///   own state, and reports the registered instrument (or `nil` for cancel)
+///   through a completion handler. Used by Settings flows like
+///   `AddTokenSheet` where there's no pre-existing selection to bind.
+///
+/// The actual rendering lives in `InstrumentPickerSheetCore`; this file
+/// dispatches between the two modes. The split keeps either file under the
+/// SwiftLint `file_length` ceiling.
 struct InstrumentPickerSheet: View {
-  @Bindable var store: InstrumentPickerStore
-  let label: LocalizedStringResource
-  @Binding var selection: Instrument
-  @Binding var isPresented: Bool
+  private let mode: Mode
 
-  #if os(macOS)
-    private enum FocusTarget: Hashable {
-      case search
-    }
+  init(
+    store: InstrumentPickerStore,
+    label: LocalizedStringResource,
+    selection: Binding<Instrument>,
+    isPresented: Binding<Bool>
+  ) {
+    self.mode = .bound(
+      store: store,
+      label: label,
+      selection: selection,
+      isPresented: isPresented
+    )
+  }
 
-    @FocusState private var focusedField: FocusTarget?
-    @State private var highlightedID: String?
-  #endif
+  /// Self-contained convenience initialiser used by callers that don't have
+  /// an existing `selection` binding. Builds an `InstrumentPickerStore` from
+  /// the ambient `ProfileSession`. `onCompletion` fires with the registered
+  /// instrument on a successful pick, or `nil` when the user cancels.
+  init(
+    kinds: Set<Instrument.Kind>,
+    onCompletion: @escaping (Instrument?) -> Void
+  ) {
+    self.mode = .callback(kinds: kinds, onCompletion: onCompletion)
+  }
 
   var body: some View {
-    #if os(macOS)
-      macOSContent
-    #else
-      navigationStack
-        .accessibilityIdentifier("instrumentPicker.sheet")
-    #endif
-  }
-
-  // MARK: - Platform layouts
-
-  #if os(macOS)
-    /// macOS: custom VStack layout.
-    ///
-    /// A NavigationStack inside a popover does not render an accessible
-    /// search field on macOS (`.searchable` is suppressed in that context),
-    /// so we use an explicit `TextField` whose identifier surfaces in the
-    /// XCUITest tree. The `instrumentPicker.sheet` driver sentinel sits on
-    /// the title `Text` (`macOSHeader`) — a child element rather than the
-    /// container, since SwiftUI propagates container-level identifiers to
-    /// all descendants and would override child identifiers.
-    private var macOSContent: some View {
-      // No Cancel button on macOS — popovers auto-dismiss on outside click
-      // and Esc (handled below). Removing Cancel makes the search field
-      // the only focusable in the header area, so AppKit's first-responder
-      // walk lands on it naturally without focus gymnastics.
-      VStack(spacing: 0) {
-        macOSHeader
-        Divider()
-        macOSSearchField
-        Divider()
-        listContent
-      }
-      // Use ObjectIdentifier as task id so the task re-runs whenever the store
-      // instance is replaced (e.g. when the picker is reopened via openPicker()).
-      .task(id: ObjectIdentifier(store)) { await store.start() }
-      .defaultFocus($focusedField, .search, priority: .userInitiated)
-      .onChange(of: store.results.count) { _, _ in
-        // Drop the highlight if the result it pointed at is no longer visible.
-        if let current = highlightedID,
-          !store.results.contains(where: { $0.instrument.id == current })
-        {
-          highlightedID = nil
-        }
-      }
-    }
-
-    private var macOSHeader: some View {
-      Text("Choose \(String(localized: label))")
-        .font(.headline)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        // Drives present/dismissed detection in InstrumentPickerFieldDriver:
-        // the title text exists iff the popover is open. Replaces the
-        // previous Cancel-button-as-sentinel approach (Cancel removed in
-        // line with macOS popover convention — popovers auto-dismiss).
-        .accessibilityIdentifier("instrumentPicker.sheet")
-    }
-
-    private var macOSSearchField: some View {
-      HStack {
-        Image(systemName: "magnifyingglass")
-          .foregroundStyle(.secondary)
-        searchTextField
-        if !store.query.isEmpty {
-          Button {
-            store.updateQuery("")
-          } label: {
-            Image(systemName: "xmark.circle.fill")
-              .foregroundStyle(.secondary)
-          }
-          .buttonStyle(.plain)
-        }
-      }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 8)
-    }
-
-    private var searchTextField: some View {
-      TextField(
-        "Search",
-        text: Binding(
-          get: { store.query },
-          set: { store.updateQuery($0) }
-        )
+    switch mode {
+    case let .bound(store, label, selection, isPresented):
+      InstrumentPickerSheetCore(
+        store: store,
+        label: label,
+        selection: selection,
+        isPresented: isPresented
       )
-      .textFieldStyle(.plain)
-      .focused($focusedField, equals: .search)
-      .accessibilityIdentifier("instrumentPicker.searchField")
-      .onSubmit { commitHighlightedOrFirst() }
-      .onKeyPress(.downArrow) {
-        moveHighlight(by: 1)
-        return .handled
-      }
-      .onKeyPress(.upArrow) {
-        moveHighlight(by: -1)
-        return .handled
-      }
-      .onKeyPress(.escape) {
-        isPresented = false
-        return .handled
-      }
-    }
-
-    private func moveHighlight(by delta: Int) {
-      let ids = store.results.map { $0.instrument.id }
-      guard !ids.isEmpty else { return }
-      if let current = highlightedID, let index = ids.firstIndex(of: current) {
-        let next = max(0, min(ids.count - 1, index + delta))
-        highlightedID = ids[next]
-      } else {
-        highlightedID = delta > 0 ? ids.first : ids.last
-      }
-    }
-
-    private func commitHighlightedOrFirst() {
-      let target =
-        highlightedID
-        .flatMap { id in store.results.first { $0.instrument.id == id } }
-        ?? store.results.first
-      guard let target else { return }
-      commit(target)
-    }
-  #endif
-
-  private func commit(_ result: InstrumentSearchResult) {
-    if result.isRegistered {
-      selection = result.instrument
-      isPresented = false
-    } else {
-      Task {
-        if let chosen = await store.select(result) {
-          selection = chosen
-          isPresented = false
-        }
-      }
+    case let .callback(kinds, onCompletion):
+      CallbackSheet(kinds: kinds, onCompletion: onCompletion)
     }
   }
 
-  // MARK: - Shared layouts
+  // MARK: - Mode
 
-  private var navigationStack: some View {
-    NavigationStack {
-      listContent
-        .searchable(
-          text: Binding(
-            get: { store.query },
-            set: { store.updateQuery($0) }
-          )
-        )
-        .navigationTitle("Choose \(String(localized: label))")
-        #if os(iOS)
-          .navigationBarTitleDisplayMode(.inline)
-        #endif
-        .toolbar {
-          ToolbarItem(placement: .cancellationAction) {
-            Button("Cancel") { isPresented = false }
-          }
-        }
-    }
-    .task { await store.start() }
-  }
-
-  @ViewBuilder private var listContent: some View {
-    if store.results.isEmpty && !store.query.isEmpty {
-      ContentUnavailableView(
-        "No matches",
-        systemImage: "magnifyingglass",
-        description: Text(store.noMatchesDescription)
-      )
-      // The populated branch returns a `List`, which fills available space.
-      // ContentUnavailableView is intrinsically sized — without this, the
-      // parent VStack would shrink and the popover would centre the whole
-      // header + search + empty-state column vertically.
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-    } else {
-      ScrollViewReader { proxy in
-        List {
-          if let error = store.error {
-            Section {
-              Label(error, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
-            }
-          }
-          ForEach(store.results) { result in
-            highlightedRow(for: result)
-          }
-          if store.kinds.contains(.cryptoToken) {
-            Section {
-              Text("Add a crypto token in Settings → Crypto Tokens.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            }
-          }
-        }
-        #if os(macOS)
-          .onChange(of: highlightedID) { _, newID in
-            guard let id = newID else { return }
-            withAnimation(.easeInOut(duration: 0.1)) {
-              proxy.scrollTo(id, anchor: .center)
-            }
-          }
-        #endif
-      }
-    }
-  }
-
-  @ViewBuilder
-  private func highlightedRow(for result: InstrumentSearchResult) -> some View {
-    #if os(macOS)
-      row(for: result)
-        .listRowBackground(
-          highlightedID == result.instrument.id
-            ? Color.accentColor.opacity(0.18)
-            : Color.clear
-        )
-    #else
-      row(for: result)
-    #endif
-  }
-
-  @ViewBuilder
-  private func row(for result: InstrumentSearchResult) -> some View {
-    Button {
-      commit(result)
-    } label: {
-      HStack(spacing: 10) {
-        glyph(for: result.instrument)
-          .accessibilityHidden(true)
-        VStack(alignment: .leading, spacing: 1) {
-          Text(result.instrument.longDisplayName ?? result.instrument.shortCode)
-            .fontWeight(.medium)
-          if result.instrument.longDisplayName != nil {
-            Text(result.instrument.shortCode)
-              .font(.caption)
-              .foregroundStyle(.secondary)
-          }
-        }
-        Spacer()
-        if !result.isRegistered {
-          Text("Add")
-            .font(.caption)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(.tint.opacity(0.15), in: Capsule())
-            .accessibilityHidden(true)
-        }
-        if result.instrument == selection {
-          Image(systemName: "checkmark").foregroundStyle(.tint)
-            .accessibilityHidden(true)
-        }
-      }
-      .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-    .accessibilityIdentifier("instrumentPicker.row.\(result.instrument.id)")
-    .accessibilityLabel(
-      Text(
-        result.isRegistered
-          ? result.instrument.pickerLabel
-          : "\(result.instrument.pickerLabel), new")
+  private enum Mode {
+    case bound(
+      store: InstrumentPickerStore,
+      label: LocalizedStringResource,
+      selection: Binding<Instrument>,
+      isPresented: Binding<Bool>
     )
-    .accessibilityAddTraits(result.instrument == selection ? .isSelected : [])
+    case callback(
+      kinds: Set<Instrument.Kind>,
+      onCompletion: (Instrument?) -> Void
+    )
+  }
+}
+
+// MARK: - Callback sheet
+
+/// Self-contained variant. Owns its own `store`, `selection` placeholder,
+/// and `isPresented` flag; reports the picked instrument (or `nil` on
+/// cancel/dismiss) through `onCompletion`. The store is built from the
+/// ambient `ProfileSession` on first appearance — matches the construction
+/// pattern used by `InstrumentPickerField.openPicker()`.
+private struct CallbackSheet: View {
+  let kinds: Set<Instrument.Kind>
+  let onCompletion: (Instrument?) -> Void
+
+  @Environment(ProfileSession.self) private var session: ProfileSession?
+
+  // The bound sheet uses `selection` to render a checkmark on the
+  // currently-selected row. In callback mode there is no pre-existing
+  // selection; we hold a sentinel that no live instrument matches
+  // (id is "" — every real instrument has a non-empty id).
+  @State private var sentinelSelection: Instrument = Self.sentinel
+  @State private var isPresented: Bool = true
+  @State private var lastPickedInstrument: Instrument?
+  @State private var store: InstrumentPickerStore
+
+  init(kinds: Set<Instrument.Kind>, onCompletion: @escaping (Instrument?) -> Void) {
+    self.kinds = kinds
+    self.onCompletion = onCompletion
+    // Placeholder store — replaced on appear once `session` is in scope.
+    self._store = State(initialValue: InstrumentPickerStore(kinds: kinds))
   }
 
-  private func glyph(for instrument: Instrument) -> some View {
-    let label: String =
-      instrument.kind == .fiatCurrency
-      ? (Instrument.preferredCurrencySymbol(for: instrument.id) ?? instrument.id)
-      : (instrument.ticker ?? instrument.id)
-    return Text(label)
-      .font(.system(size: 12, weight: .semibold))
-      .frame(width: 28, height: 28)
-      .background(.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+  var body: some View {
+    InstrumentPickerSheetCore(
+      store: store,
+      label: Self.label(for: kinds),
+      selection: Binding(
+        get: { sentinelSelection },
+        set: { newValue in
+          sentinelSelection = newValue
+          // The bound sheet writes `selection` only on a successful pick,
+          // so a non-sentinel value here is the registered instrument.
+          if newValue != Self.sentinel {
+            lastPickedInstrument = newValue
+          }
+        }
+      ),
+      isPresented: $isPresented
+    )
+    .onAppear {
+      // Rebuild the store with the live session's services. Mirrors
+      // `InstrumentPickerField.openPicker()` so search and registration
+      // both have the right wiring.
+      store = InstrumentPickerStore(
+        searchService: session?.instrumentSearchService,
+        registry: session?.instrumentRegistry,
+        resolutionClient: session?.tokenResolutionClient,
+        kinds: kinds
+      )
+    }
+    .onChange(of: isPresented) { _, presented in
+      guard !presented else { return }
+      onCompletion(lastPickedInstrument)
+    }
+  }
+
+  // Empty-id sentinel that can never collide with a real instrument since
+  // every `Instrument.id` is non-empty (e.g. BTC = "0:native", USD = "USD").
+  private static let sentinel = Instrument.fiat(code: "")
+
+  private static func label(for kinds: Set<Instrument.Kind>) -> LocalizedStringResource {
+    if kinds == [.cryptoToken] { return "Token" }
+    if kinds == [.stock] { return "Stock" }
+    if kinds == [.fiatCurrency] { return "Currency" }
+    return "Instrument"
   }
 }
 

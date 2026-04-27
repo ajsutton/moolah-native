@@ -15,7 +15,9 @@ struct CryptoSettingsView: View {
     .navigationTitle("Crypto Tokens")
     .task { await store.loadRegistrations() }
     .sheet(isPresented: $showAddToken) {
-      AddTokenSheet(store: store, isPresented: $showAddToken)
+      AddTokenSheet {
+        Task { await store.loadRegistrations() }
+      }
     }
   }
 
