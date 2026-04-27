@@ -257,6 +257,14 @@ verify-prod-deployed:
 import-schema-to-dev:
     bash scripts/import-schema-to-dev.sh
 
+# Manual local convenience: bootstraps the test container's Development
+# schema from CloudKit/schema.ckdb. Run once after creating the test
+# container in App Store Connect, or to wipe the test container back to a
+# known-good state. DESTRUCTIVE — set CKTOOL_ALLOW_DEV_RESET=1 to confirm.
+# Not used by CI.
+import-schema-to-test:
+    bash scripts/import-schema-to-test.sh
+
 # Release-tag CI: refreshes CloudKit/schema-prod-baseline.ckdb from live
 # Production after a successful release. Opens a follow-up PR if the
 # baseline file changed.
