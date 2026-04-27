@@ -67,9 +67,8 @@ struct TransactionDetailCategorySection: View {
   /// the highlighted suggestion before normalising, Tab from a highlighted
   /// suggestion would clear the field (#509).
   private func handleBlur() {
-    let highlighted = state.highlightedIndex.flatMap { index in
-      visibleSuggestions.indices.contains(index) ? visibleSuggestions[index] : nil
-    }
+    let highlighted = state.highlightedSuggestion(
+      for: draft.categoryText, in: categories)
     state.dismiss()
     draft.commitHighlightedCategoryOrNormalise(
       highlighted: highlighted, using: categories)

@@ -177,9 +177,8 @@ struct TransactionDetailLegRow: View {
   }
 
   private func handleBlur() {
-    let highlighted = categoryState.highlightedIndex.flatMap { idx in
-      visibleSuggestions.indices.contains(idx) ? visibleSuggestions[idx] : nil
-    }
+    let highlighted = categoryState.highlightedSuggestion(
+      for: draft.legDrafts[index].categoryText, in: categories)
     categoryState.dismiss()
     draft.commitHighlightedLegCategoryOrNormalise(
       at: index, highlighted: highlighted, using: categories)
