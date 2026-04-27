@@ -13,8 +13,7 @@ struct InstrumentPickerStoreTests {
       registry: backend.instrumentRegistry,
       catalog: nil,
       resolutionClient: StubTokenResolutionClient(),
-      stockSearchClient: StubStockSearchClient(),
-      stockValidator: StubStockTickerValidator()
+      stockSearchClient: StubStockSearchClient()
     )
     let store = InstrumentPickerStore(
       searchService: service,
@@ -33,8 +32,7 @@ struct InstrumentPickerStoreTests {
       registry: backend.instrumentRegistry,
       catalog: nil,
       resolutionClient: StubTokenResolutionClient(),
-      stockSearchClient: StubStockSearchClient(),
-      stockValidator: StubStockTickerValidator()
+      stockSearchClient: StubStockSearchClient()
     )
     let store = InstrumentPickerStore(
       searchService: service,
@@ -59,8 +57,7 @@ struct InstrumentPickerStoreTests {
       registry: backend.instrumentRegistry,
       catalog: nil,
       resolutionClient: StubTokenResolutionClient(),
-      stockSearchClient: StubStockSearchClient(),
-      stockValidator: StubStockTickerValidator()
+      stockSearchClient: StubStockSearchClient()
     )
     let store = InstrumentPickerStore(
       searchService: service,
@@ -85,8 +82,7 @@ struct InstrumentPickerStoreTests {
       registry: backend.instrumentRegistry,
       catalog: nil,
       resolutionClient: StubTokenResolutionClient(),
-      stockSearchClient: StubStockSearchClient(),
-      stockValidator: StubStockTickerValidator()
+      stockSearchClient: StubStockSearchClient()
     )
     let store = InstrumentPickerStore(
       searchService: service,
@@ -137,8 +133,7 @@ struct InstrumentPickerStoreTests {
       registry: backend.instrumentRegistry,
       catalog: nil,
       resolutionClient: StubTokenResolutionClient(),
-      stockSearchClient: StubStockSearchClient(hits: [stockHit]),
-      stockValidator: StubStockTickerValidator()
+      stockSearchClient: StubStockSearchClient(hits: [stockHit])
     )
     let store = InstrumentPickerStore(
       searchService: service,
@@ -170,8 +165,4 @@ private struct StubTokenResolutionClient: TokenResolutionClient {
   ) async throws -> TokenResolutionResult {
     .init()
   }
-}
-
-private struct StubStockTickerValidator: StockTickerValidator {
-  func validate(query: String) async throws -> ValidatedStockTicker? { nil }
 }

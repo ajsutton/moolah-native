@@ -6,7 +6,6 @@ struct InstrumentSearchService: Sendable {
   private let catalog: (any CoinGeckoCatalog)?
   private let resolutionClient: any TokenResolutionClient
   private let stockSearchClient: any StockSearchClient
-  private let stockValidator: any StockTickerValidator
   private let logger = Logger(
     subsystem: "com.moolah.app",
     category: "InstrumentSearch"
@@ -16,14 +15,12 @@ struct InstrumentSearchService: Sendable {
     registry: any InstrumentRegistryRepository,
     catalog: (any CoinGeckoCatalog)?,
     resolutionClient: any TokenResolutionClient,
-    stockSearchClient: any StockSearchClient,
-    stockValidator: any StockTickerValidator
+    stockSearchClient: any StockSearchClient
   ) {
     self.registry = registry
     self.catalog = catalog
     self.resolutionClient = resolutionClient
     self.stockSearchClient = stockSearchClient
-    self.stockValidator = stockValidator
   }
 
   func search(
@@ -150,7 +147,7 @@ struct InstrumentSearchService: Sendable {
       return InstrumentSearchResult(
         instrument: placeholder,
         cryptoMapping: nil,
-        isRegistered: registered.contains { $0.id == placeholder.id },
+        isRegistered: mappings.contains { $0.instrument.id == placeholder.id },
         requiresResolution: true
       )
     }

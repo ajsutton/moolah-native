@@ -20,13 +20,11 @@ struct InstrumentSearchServiceTests {
     let catalog = StubCatalog(entries: catalogEntries)
     let stock = StubStockSearchClient(hits: stockHits, shouldThrow: stockSearchThrows)
     let resolver = StubTokenResolutionClient(resolved: resolvedRegistration)
-    let validator = StubStockTickerValidator()
     return InstrumentSearchService(
       registry: registry,
       catalog: catalog,
       resolutionClient: resolver,
-      stockSearchClient: stock,
-      stockValidator: validator
+      stockSearchClient: stock
     )
   }
 
@@ -132,6 +130,46 @@ struct InstrumentSearchServiceTests {
     #expect(hit.cryptoMapping?.coingeckoId == "uniswap")
   }
 
+  @Test("crypto in registered but without a mapping is treated as unregistered")
+  func cryptoInRegisteredButNoMappingTreatedAsUnregistered() async throws {
+    // A crypto Instrument can exist in the registry without a mapping when
+    // CSV import landed it before the picker had a chance to resolve(). On
+    // the catalog path that case must surface as `isRegistered: false,
+    // requiresResolution: true` — the picker will then run resolve() and
+    // promote it to a fully registered row. The legacy code marked it as
+    // `isRegistered: true` while still asking for resolution, which is a
+    // contradictory state.
+    let preMappingInst = Instrument.crypto(
+      chainId: 1,
+      contractAddress: "0xfoo",
+      symbol: "FOO",
+      name: "Foo Token",
+      decimals: 18
+    )
+    let entry = CatalogEntry(
+      coingeckoId: "foo",
+      symbol: "FOO",
+      name: "Foo Token",
+      platforms: [
+        PlatformBinding(slug: "ethereum", chainId: 1, contractAddress: "0xfoo")
+      ]
+    )
+    // A query that matches the catalog entry (the stub catalog returns all
+    // its entries regardless of query) but does NOT match the registered
+    // Instrument's id, ticker, or name — so `registeredMatches` skips it
+    // and the catalog branch's result survives the merge.
+    let service = makeSubject(
+      registered: [preMappingInst],
+      cryptoRegistrations: [],
+      catalogEntries: [entry]
+    )
+    let results = await service.search(query: "abc", kinds: [.cryptoToken])
+    let foo = try #require(results.first { $0.instrument.id == "1:0xfoo" })
+    #expect(foo.isRegistered == false)
+    #expect(foo.requiresResolution == true)
+    #expect(foo.cryptoMapping == nil)
+  }
+
   @Test("nil catalog returns no crypto results")
   func nilCatalogYieldsEmptyCrypto() async {
     let registry = StubRegistry()
@@ -139,8 +177,7 @@ struct InstrumentSearchServiceTests {
       registry: registry,
       catalog: nil,
       resolutionClient: StubTokenResolutionClient(),
-      stockSearchClient: StubStockSearchClient(),
-      stockValidator: StubStockTickerValidator()
+      stockSearchClient: StubStockSearchClient()
     )
     let results = await service.search(query: "btc", kinds: [.cryptoToken])
     #expect(results.isEmpty)
@@ -257,10 +294,6 @@ private struct StubStockSearchClient: StockSearchClient {
     if shouldThrow { throw URLError(.cannotConnectToHost) }
     return hits
   }
-}
-
-private struct StubStockTickerValidator: StockTickerValidator {
-  func validate(query: String) async throws -> ValidatedStockTicker? { nil }
 }
 
 private struct StubTokenResolutionClient: TokenResolutionClient {

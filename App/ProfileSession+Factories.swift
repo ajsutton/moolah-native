@@ -178,8 +178,7 @@ extension ProfileSession {
       registry: cloudBackend.instrumentRegistry,
       catalog: nil,
       resolutionClient: CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey),
-      stockSearchClient: YahooFinanceStockSearchClient(),
-      stockValidator: YahooFinanceStockTickerValidator(priceFetcher: yahooPriceFetcher)
+      stockSearchClient: YahooFinanceStockSearchClient()
     )
     return RegistryWiring(
       registry: cloudBackend.instrumentRegistry,
