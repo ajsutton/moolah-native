@@ -29,12 +29,7 @@ struct AutocompleteFieldDriver {
       XCTFail("Autocomplete field '\(fieldIdentifier)' did not appear within 3s")
       return
     }
-    if !waitUntilHittable(field, timeout: 3) {
-      Trace.recordFailure("field '\(fieldIdentifier)' did not become hittable")
-      XCTFail("Autocomplete field '\(fieldIdentifier)' was not hittable within 3s")
-      return
-    }
-    field.click()
+    clickByCoordinate(field)
     let deadline = Date().addingTimeInterval(3)
     while Date() < deadline {
       if (field.value(forKey: "hasKeyboardFocus") as? Bool) ?? false { return }
@@ -54,12 +49,7 @@ struct AutocompleteFieldDriver {
       XCTFail("Autocomplete field '\(fieldIdentifier)' did not appear within 3s")
       return
     }
-    if !waitUntilHittable(field, timeout: 3) {
-      Trace.recordFailure("field '\(fieldIdentifier)' did not become hittable")
-      XCTFail("Autocomplete field '\(fieldIdentifier)' was not hittable within 3s")
-      return
-    }
-    field.click()
+    clickByCoordinate(field)
     field.typeText(text)
 
     // Post-condition: the field reports back a value containing the typed
@@ -86,12 +76,7 @@ struct AutocompleteFieldDriver {
       XCTFail("Autocomplete field '\(fieldIdentifier)' did not appear within 3s")
       return
     }
-    if !waitUntilHittable(field, timeout: 3) {
-      Trace.recordFailure("field '\(fieldIdentifier)' did not become hittable")
-      XCTFail("Autocomplete field '\(fieldIdentifier)' was not hittable within 3s")
-      return
-    }
-    field.click()
+    clickByCoordinate(field)
     app.application.typeKey("a", modifierFlags: .command)
     app.application.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
 
@@ -165,20 +150,22 @@ struct AutocompleteFieldDriver {
 
   // MARK: - Internal: post-condition waits
 
-  /// Polls until `element` reports `isHittable`. The autocomplete dropdown
-  /// for a sibling field can briefly cover this field's frame on slow CI
-  /// runners while SwiftUI settles the overlay's geometry; once the
-  /// dropdown finishes laying out (or the user's click later dismisses
-  /// it), the underlying field becomes hittable. Returning early here
-  /// avoids a misleading "Not hittable" XCUITest abort during that
-  /// settle window.
-  private func waitUntilHittable(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
-    let deadline = Date().addingTimeInterval(timeout)
-    while Date() < deadline {
-      if element.isHittable { return true }
-      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-    }
-    return false
+  /// Sends a click at `element`'s centre using a normalized-offset
+  /// coordinate, which does **not** gate on `XCUIElement.isHittable`.
+  /// Earlier versions of this driver polled `isHittable` before
+  /// `element.click()` to tolerate the brief overlay-settle window
+  /// where a sibling leg's dropdown can cover the target field's
+  /// frame; on the slowest macos-26 CI runners this turned into a
+  /// deadlock — the dropdown stays open until the user clicks
+  /// somewhere else, but the click can't fire until the dropdown
+  /// dismisses. Coordinate-click sidesteps the gate by sending the
+  /// hit at a screen position regardless of which element is on top.
+  /// If something else *is* on top (e.g. a stale overlay), the click
+  /// hits that instead and the test's next post-condition (focus
+  /// transferred, value typed, etc.) fails with a clear diagnostic
+  /// rather than burning 30 s waiting for hittability.
+  private func clickByCoordinate(_ element: XCUIElement) {
+    element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
   }
 
   private func waitUntilDropdownHidden(timeout: TimeInterval) -> Bool {

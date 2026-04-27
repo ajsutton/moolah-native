@@ -97,12 +97,15 @@ final class MoolahApp {
   /// Called automatically from `launch(seed:)`; drivers reuse it after
   /// actions that re-create the window.
   ///
-  /// The 15 s default tolerates cold-start `xcodebuild`-launched runs on
-  /// GitHub-hosted macos-26 runners, where the first launch after a fresh
-  /// provisioning can take several seconds beyond a warm-cache developer
-  /// machine. A shorter budget produced merge-queue-spec flakes on PRs
-  /// that touched no UI code (issue #493).
-  func expectMainWindowVisible(timeout: TimeInterval = 15) {
+  /// The 30 s default is the standard CI-friendly waiting budget — GitHub-
+  /// hosted macos-26 runners are slow on cold start, often taking 15 s+
+  /// before SwiftUI's launcher → profile-window handoff completes (issue
+  /// #493). The deterministic part of the fix is in
+  /// `UITestingLauncherView`: keeping the launcher around eliminates the
+  /// open/dismiss race that previously left the app windowless. This
+  /// timeout is then the upper bound on launch-plus-render, not on a
+  /// race recovery window.
+  func expectMainWindowVisible(timeout: TimeInterval = 30) {
     if !application.windows.firstMatch.waitForExistence(timeout: timeout) {
       Trace.recordFailure("main window did not appear within \(timeout)s")
       XCTFail("Moolah main window did not appear within \(timeout)s of launch")
