@@ -22,10 +22,16 @@ settings:
     GCC_TREAT_WARNINGS_AS_ERRORS: YES
 
     # ---- CloudKit container ----
-    # Surfaced to Swift via the MoolahCloudKitContainer Info.plist key and
-    # read by CloudKitContainer.app. Must stay in sync with
-    # fastlane/Moolah.entitlements and scripts/cloudkit-config.sh.
-    CLOUDKIT_CONTAINER_ID: iCloud.rocks.moolah.app.v2
+    # CLOUDKIT_CONTAINER_ID is set per-configuration on each app target
+    # below (Debug/Debug-Tests → iCloud.rocks.moolah.app.test, Release →
+    # iCloud.rocks.moolah.app.v2). Surfaced to Swift via the
+    # MoolahCloudKitContainer Info.plist key and read by
+    # CloudKitContainer.app. Must stay in sync with
+    # fastlane/Moolah.entitlements (Release-only, app.v2),
+    # fastlane/Moolah-mac.entitlements (Release-only, app.v2),
+    # scripts/inject-entitlements.sh (lists both for local Debug+Release),
+    # and scripts/cloudkit-config.sh (CLOUDKIT_CONTAINER_ID_RELEASE /
+    # CLOUDKIT_CONTAINER_ID_TEST). Refs issue #495.
 
     # ---- Versioning ----
     MARKETING_VERSION: "1.1.0"
@@ -78,18 +84,22 @@ targets:
       configs:
         Debug:
           CLOUDKIT_ENVIRONMENT: Development
+          CLOUDKIT_CONTAINER_ID: iCloud.rocks.moolah.app.test
         Debug-Tests:
           # Tests must never pick up iCloud entitlements, even when a dev
           # runs `ENABLE_ENTITLEMENTS=1 just generate` to inject them into Debug.
           CODE_SIGN_ENTITLEMENTS: ""
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited)"
-          # Value is unused at runtime (test host has no iCloud entitlement
+          # Values are unused at runtime (test host has no iCloud entitlement
           # and uses in-memory stores) but must be defined so Info.plist
-          # expansion yields a literal string rather than "$(CLOUDKIT_ENVIRONMENT)".
+          # expansion yields literal strings rather than e.g.
+          # "$(CLOUDKIT_ENVIRONMENT)".
           CLOUDKIT_ENVIRONMENT: Development
+          CLOUDKIT_CONTAINER_ID: iCloud.rocks.moolah.app.test
         Release:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CLOUDKIT_ENABLED"
           CLOUDKIT_ENVIRONMENT: Production
+          CLOUDKIT_CONTAINER_ID: iCloud.rocks.moolah.app.v2
 
   Moolah_macOS:
     type: application
@@ -116,14 +126,17 @@ targets:
       configs:
         Debug:
           CLOUDKIT_ENVIRONMENT: Development
+          CLOUDKIT_CONTAINER_ID: iCloud.rocks.moolah.app.test
         Debug-Tests:
           CODE_SIGN_ENTITLEMENTS: ""
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited)"
           CLOUDKIT_ENVIRONMENT: Development
+          CLOUDKIT_CONTAINER_ID: iCloud.rocks.moolah.app.test
         Release:
           ENABLE_HARDENED_RUNTIME: YES
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CLOUDKIT_ENABLED"
           CLOUDKIT_ENVIRONMENT: Production
+          CLOUDKIT_CONTAINER_ID: iCloud.rocks.moolah.app.v2
 
   MoolahTests_iOS:
     type: bundle.unit-test
