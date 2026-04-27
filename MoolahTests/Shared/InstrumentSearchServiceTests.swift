@@ -15,7 +15,7 @@ struct InstrumentSearchServiceTests {
     stockSearchThrows: Bool = false,
     resolvedRegistration: CryptoRegistration? = nil
   ) -> InstrumentSearchService {
-    let registry = StubRegistry(
+    let registry = StubInstrumentRegistry(
       instruments: registered, cryptoRegistrations: cryptoRegistrations)
     let catalog = StubCatalog(entries: catalogEntries)
     let stock = StubStockSearchClient(hits: stockHits, shouldThrow: stockSearchThrows)
@@ -172,7 +172,7 @@ struct InstrumentSearchServiceTests {
 
   @Test("nil catalog returns no crypto results")
   func nilCatalogYieldsEmptyCrypto() async {
-    let registry = StubRegistry()
+    let registry = StubInstrumentRegistry()
     let service = InstrumentSearchService(
       registry: registry,
       catalog: nil,
@@ -247,28 +247,6 @@ struct InstrumentSearchServiceTests {
 }
 
 // MARK: - Stubs
-
-private struct StubRegistry: InstrumentRegistryRepository, @unchecked Sendable {
-  let instruments: [Instrument]
-  let cryptoRegistrations: [CryptoRegistration]
-
-  init(instruments: [Instrument] = [], cryptoRegistrations: [CryptoRegistration] = []) {
-    self.instruments = instruments
-    self.cryptoRegistrations = cryptoRegistrations
-  }
-
-  func all() async throws -> [Instrument] { instruments }
-  func allCryptoRegistrations() async throws -> [CryptoRegistration] {
-    cryptoRegistrations
-  }
-  func registerCrypto(
-    _ instrument: Instrument, mapping: CryptoProviderMapping
-  ) async throws {}
-  func registerStock(_ instrument: Instrument) async throws {}
-  func remove(id: String) async throws {}
-  @MainActor
-  func observeChanges() -> AsyncStream<Void> { AsyncStream { _ in } }
-}
 
 private struct StubCatalog: CoinGeckoCatalog {
   let entries: [CatalogEntry]

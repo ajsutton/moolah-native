@@ -150,14 +150,15 @@ extension ProfileSession {
   }
 
   /// Bundle of the optional instrument-registry pieces: only CloudKit
-  /// profiles expose a registry, crypto token store, search service, and
-  /// CoinGecko catalogue. Remote/moolah profiles are single-instrument by
-  /// server design and leave all four nil.
+  /// profiles expose a registry, crypto token store, search service,
+  /// CoinGecko catalogue, and token resolution client. Remote/moolah
+  /// profiles are single-instrument by server design and leave all five nil.
   struct RegistryWiring {
     let registry: (any InstrumentRegistryRepository)?
     let cryptoTokenStore: CryptoTokenStore?
     let searchService: InstrumentSearchService?
     let coinGeckoCatalog: (any CoinGeckoCatalog)?
+    let tokenResolutionClient: (any TokenResolutionClient)?
   }
 
   /// Resolves the optional instrument-registry wiring for a profile. Returns
@@ -179,24 +180,27 @@ extension ProfileSession {
   ) -> RegistryWiring {
     guard let cloudBackend = backend as? CloudKitBackend else {
       return RegistryWiring(
-        registry: nil, cryptoTokenStore: nil, searchService: nil, coinGeckoCatalog: nil)
+        registry: nil, cryptoTokenStore: nil, searchService: nil,
+        coinGeckoCatalog: nil, tokenResolutionClient: nil)
     }
 
     let catalog = makeCoinGeckoCatalog()
     let store = CryptoTokenStore(
       registry: cloudBackend.instrumentRegistry,
       cryptoPriceService: cryptoPriceService)
+    let resolutionClient = CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey)
     let searchService = InstrumentSearchService(
       registry: cloudBackend.instrumentRegistry,
       catalog: catalog,
-      resolutionClient: CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey),
+      resolutionClient: resolutionClient,
       stockSearchClient: YahooFinanceStockSearchClient()
     )
     return RegistryWiring(
       registry: cloudBackend.instrumentRegistry,
       cryptoTokenStore: store,
       searchService: searchService,
-      coinGeckoCatalog: catalog
+      coinGeckoCatalog: catalog,
+      tokenResolutionClient: resolutionClient
     )
   }
 

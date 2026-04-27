@@ -99,6 +99,7 @@ struct InstrumentPickerField: View {
     store = InstrumentPickerStore(
       searchService: session?.instrumentSearchService,
       registry: session?.instrumentRegistry,
+      resolutionClient: session?.tokenResolutionClient,
       kinds: kinds
     )
     isPresented = true
