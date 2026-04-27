@@ -41,9 +41,17 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     let fetchMs = (ContinuousClock.now - fetchStart).inMilliseconds
 
     let positionStart = ContinuousClock.now
+    let legsStart = ContinuousClock.now
     let (_, allLegs) = try fetchNonScheduledLegs(context: bgContext)
+    let legsMs = (ContinuousClock.now - legsStart).inMilliseconds
+
+    let instrumentsStart = ContinuousClock.now
     let instruments = try fetchInstrumentMap(context: bgContext)
+    let instrumentsMs = (ContinuousClock.now - instrumentsStart).inMilliseconds
+
+    let computeStart = ContinuousClock.now
     let allPositions = computePositions(from: allLegs, instruments: instruments)
+    let computeMs = (ContinuousClock.now - computeStart).inMilliseconds
     let positionMs = (ContinuousClock.now - positionStart).inMilliseconds
 
     let result = records.map { record in
@@ -55,7 +63,12 @@ final class CloudKitAccountRepository: AccountRepository, @unchecked Sendable {
     let totalMs = fetchMs + positionMs
     if totalMs > 100 {
       logger.info(
-        "AccountRepo.fetchAll took \(totalMs)ms off-main (records: \(fetchMs)ms, positions: \(positionMs)ms, \(records.count) accounts)"
+        """
+        AccountRepo.fetchAll took \(totalMs)ms off-main \
+        (records: \(fetchMs)ms, legs.fetch: \(legsMs)ms, \
+        instruments.fetch: \(instrumentsMs)ms, positions.compute: \(computeMs)ms, \
+        \(records.count) accounts, \(allLegs.count) legs)
+        """
       )
     }
     return result

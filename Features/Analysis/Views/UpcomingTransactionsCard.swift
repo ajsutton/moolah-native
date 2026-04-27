@@ -1,4 +1,41 @@
+import OSLog
 import SwiftUI
+
+/// Tracks the first time the Analysis Dashboard's Upcoming card paints with
+/// data after launch. Logged once per process to `Perf.UpcomingCard` so
+/// before/after benchmarks can read the cold-load latency directly from the
+/// log stream.
+///
+/// `MoolahApp.init` calls `anchorLaunchTime()` so `launchTime` resolves at
+/// process start instead of lazily on first card render — without that anchor
+/// the elapsed measurement collapses to zero. See
+/// `plans/2026-04-27-upcoming-card-cold-load-plan.md`.
+@MainActor
+enum UpcomingFirstPaintTracker {
+  private static let launchTime = ContinuousClock.now
+  private static var didLog = false
+  private static let logger = Logger(
+    subsystem: "com.moolah.app", category: "Perf.UpcomingCard")
+
+  /// Force `launchTime` to initialize now. No-op if already initialized.
+  static func anchorLaunchTime() {
+    _ = launchTime
+  }
+
+  /// Logs the first-paint elapsed time exactly once per process. Subsequent
+  /// calls are no-ops, so it's safe to invoke from a `.task(id:)` body that
+  /// re-fires on count changes.
+  static func logFirstPaintIfNeeded(count: Int) {
+    guard !didLog else { return }
+    didLog = true
+    let elapsedMs = (ContinuousClock.now - launchTime).inMilliseconds
+    logger.log(
+      """
+      📊 first-paint of upcoming card: \(elapsedMs, privacy: .public)ms \
+      (count: \(count, privacy: .public))
+      """)
+  }
+}
 
 struct UpcomingTransactionsCard: View {
   let accounts: Accounts
@@ -17,6 +54,10 @@ struct UpcomingTransactionsCard: View {
         emptyState
       } else {
         transactionList
+          .task(id: shortTermTransactions.count) {
+            UpcomingFirstPaintTracker.logFirstPaintIfNeeded(
+              count: shortTermTransactions.count)
+          }
       }
     }
     .padding()

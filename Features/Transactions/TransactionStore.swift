@@ -266,11 +266,13 @@ final class TransactionStore {
     }
 
     do {
+      let fetchStart = ContinuousClock.now
       let page = try await repository.fetch(
         filter: currentFilter,
         page: currentPage,
         pageSize: pageSize
       )
+      let fetchMs = (ContinuousClock.now - fetchStart).inMilliseconds
       // Skip publishing if a newer `load(filter:)` has superseded us or the
       // SwiftUI task hosting this fetch was cancelled (view torn down).
       // Without this guard, a stale in-flight fetch from a re-mounted view
@@ -291,9 +293,15 @@ final class TransactionStore {
       // suppress a redundant re-fetch on a spurious view re-mount (see #372).
       // Idempotent on page-N>0 `loadMore` calls.
       didSucceedLoadForCurrentFilter = true
+      let recomputeStart = ContinuousClock.now
       await recomputeBalances()
-      logger.debug(
-        "Loaded \(page.transactions.count) transactions (total: \(self.rawTransactions.count))")
+      let recomputeMs = (ContinuousClock.now - recomputeStart).inMilliseconds
+      Self.logFetchPageTiming(
+        logger: logger,
+        fetchMs: fetchMs,
+        recomputeMs: recomputeMs,
+        count: page.transactions.count,
+        totalLoaded: rawTransactions.count)
     } catch {
       // Only surface the error for the live load — a superseded one's
       // failure isn't user-actionable because the newer load is running.
