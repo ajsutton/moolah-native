@@ -29,6 +29,11 @@ struct AutocompleteFieldDriver {
       XCTFail("Autocomplete field '\(fieldIdentifier)' did not appear within 3s")
       return
     }
+    if !waitUntilHittable(field, timeout: 3) {
+      Trace.recordFailure("field '\(fieldIdentifier)' did not become hittable")
+      XCTFail("Autocomplete field '\(fieldIdentifier)' was not hittable within 3s")
+      return
+    }
     field.click()
     let deadline = Date().addingTimeInterval(3)
     while Date() < deadline {
@@ -47,6 +52,11 @@ struct AutocompleteFieldDriver {
     if !field.waitForExistence(timeout: 3) {
       Trace.recordFailure("field '\(fieldIdentifier)' did not appear")
       XCTFail("Autocomplete field '\(fieldIdentifier)' did not appear within 3s")
+      return
+    }
+    if !waitUntilHittable(field, timeout: 3) {
+      Trace.recordFailure("field '\(fieldIdentifier)' did not become hittable")
+      XCTFail("Autocomplete field '\(fieldIdentifier)' was not hittable within 3s")
       return
     }
     field.click()
@@ -74,6 +84,11 @@ struct AutocompleteFieldDriver {
     if !field.waitForExistence(timeout: 3) {
       Trace.recordFailure("field '\(fieldIdentifier)' did not appear for clear")
       XCTFail("Autocomplete field '\(fieldIdentifier)' did not appear within 3s")
+      return
+    }
+    if !waitUntilHittable(field, timeout: 3) {
+      Trace.recordFailure("field '\(fieldIdentifier)' did not become hittable")
+      XCTFail("Autocomplete field '\(fieldIdentifier)' was not hittable within 3s")
       return
     }
     field.click()
@@ -149,6 +164,22 @@ struct AutocompleteFieldDriver {
   }
 
   // MARK: - Internal: post-condition waits
+
+  /// Polls until `element` reports `isHittable`. The autocomplete dropdown
+  /// for a sibling field can briefly cover this field's frame on slow CI
+  /// runners while SwiftUI settles the overlay's geometry; once the
+  /// dropdown finishes laying out (or the user's click later dismisses
+  /// it), the underlying field becomes hittable. Returning early here
+  /// avoids a misleading "Not hittable" XCUITest abort during that
+  /// settle window.
+  private func waitUntilHittable(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if element.isHittable { return true }
+      RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+    return false
+  }
 
   private func waitUntilDropdownHidden(timeout: TimeInterval) -> Bool {
     let dropdown = app.element(for: dropdownIdentifier)
