@@ -176,8 +176,9 @@ extension ProfileSession {
       cryptoPriceService: cryptoPriceService)
     let searchService = InstrumentSearchService(
       registry: cloudBackend.instrumentRegistry,
-      cryptoSearchClient: CoinGeckoSearchClient(apiKey: coinGeckoApiKey),
+      catalog: nil,
       resolutionClient: CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey),
+      stockSearchClient: YahooFinanceStockSearchClient(),
       stockValidator: YahooFinanceStockTickerValidator(priceFetcher: yahooPriceFetcher)
     )
     return RegistryWiring(

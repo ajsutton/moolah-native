@@ -77,8 +77,7 @@ final class InstrumentPickerStore {
     if let searchService {
       let snapshot = await searchService.search(
         query: query,
-        kinds: kinds,
-        providerSources: .stocksOnly
+        kinds: kinds
       )
       results = snapshot
       return
