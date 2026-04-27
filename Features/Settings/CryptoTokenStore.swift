@@ -10,9 +10,6 @@ final class CryptoTokenStore {
   private(set) var providerMappings: [String: CryptoProviderMapping] = [:]
 
   private(set) var isLoading = false
-  private(set) var isResolving = false
-
-  var resolvedRegistration: CryptoRegistration?
 
   private(set) var error: String?
 
@@ -69,41 +66,6 @@ final class CryptoTokenStore {
     guard let registration = registrations.first(where: { $0.instrument.id == instrument.id })
     else { return }
     await removeRegistration(registration)
-  }
-
-  func resolveToken(
-    chainId: Int, contractAddress: String?, symbol: String?, isNative: Bool
-  ) async {
-    isResolving = true
-    resolvedRegistration = nil
-    error = nil
-    defer { isResolving = false }
-
-    do {
-      resolvedRegistration = try await cryptoPriceService.resolveRegistration(
-        chainId: chainId,
-        contractAddress: contractAddress,
-        symbol: symbol,
-        isNative: isNative
-      )
-    } catch {
-      self.error = "Resolution failed: \(error.localizedDescription)"
-    }
-  }
-
-  func confirmRegistration() async {
-    guard let registration = resolvedRegistration else { return }
-    do {
-      try await registry.registerCrypto(
-        registration.instrument, mapping: registration.mapping)
-      registrations.append(registration)
-      instruments.append(registration.instrument)
-      providerMappings[registration.mapping.instrumentId] = registration.mapping
-      resolvedRegistration = nil
-    } catch {
-      logger.error("Failed to confirm registration: \(error, privacy: .public)")
-      self.error = error.localizedDescription
-    }
   }
 
   // MARK: - API Key

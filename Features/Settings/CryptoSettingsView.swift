@@ -15,7 +15,9 @@ struct CryptoSettingsView: View {
     .navigationTitle("Crypto Tokens")
     .task { await store.loadRegistrations() }
     .sheet(isPresented: $showAddToken) {
-      AddTokenSheet(store: store, isPresented: $showAddToken)
+      AddTokenSheet {
+        Task { await store.loadRegistrations() }
+      }
     }
   }
 
@@ -82,7 +84,9 @@ struct CryptoSettingsView: View {
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(
-      "\(instrument.ticker ?? instrument.name), \(instrument.name), \(Instrument.chainName(for: instrument.chainId ?? 0))"
+      "\(instrument.ticker ?? instrument.name), \(instrument.name), "
+        + "\(Instrument.chainName(for: instrument.chainId ?? 0))"
+        + providersAccessibilityFragment(for: mapping)
     )
     .contextMenu {
       Button(role: .destructive) {
@@ -91,6 +95,19 @@ struct CryptoSettingsView: View {
         Label("Remove", systemImage: "trash")
       }
     }
+  }
+
+  /// VoiceOver fragment listing the active price providers for a mapping.
+  /// The visual `CG`/`CC`/`BN` badges in `providerIndicators` would otherwise
+  /// be silent — a combined-element row reads only the outer label, so each
+  /// badge's individual `accessibilityLabel` doesn't surface.
+  private func providersAccessibilityFragment(for mapping: CryptoProviderMapping) -> String {
+    let names: [String] = [
+      mapping.coingeckoId != nil ? "CoinGecko" : nil,
+      mapping.cryptocompareSymbol != nil ? "CryptoCompare" : nil,
+      mapping.binanceSymbol != nil ? "Binance" : nil,
+    ].compactMap { $0 }
+    return names.isEmpty ? "" : ", priced via " + names.joined(separator: ", ")
   }
 
   private func providerIndicators(for mapping: CryptoProviderMapping) -> some View {

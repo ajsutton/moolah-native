@@ -9,9 +9,7 @@ import Testing
 @MainActor
 struct CryptoTokenStoreTests {
   private func makeStore(
-    registrations: [CryptoRegistration] = [],
-    resolutionResult: TokenResolutionResult = TokenResolutionResult(),
-    resolutionFails: Bool = false
+    registrations: [CryptoRegistration] = []
   ) async -> (CryptoTokenStore, CloudKitInstrumentRegistryRepository) {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let schema = Schema([InstrumentRecord.self])
@@ -31,14 +29,20 @@ struct CryptoTokenStoreTests {
       clients: [FixedCryptoPriceClient()],
       cacheDirectory: FileManager.default.temporaryDirectory
         .appendingPathComponent("crypto-store-tests")
-        .appendingPathComponent(UUID().uuidString),
-      resolutionClient: FixedTokenResolutionClient(
-        result: resolutionResult,
-        shouldFail: resolutionFails
-      )
+        .appendingPathComponent(UUID().uuidString)
     )
     let store = CryptoTokenStore(registry: registry, cryptoPriceService: service)
     return (store, registry)
+  }
+
+  @Test("Store is constructible from the trimmed dependency set")
+  func initializerAcceptsTrimmedDependencies() async {
+    let (store, _) = await makeStore()
+    #expect(store.isLoading == false)
+    #expect(store.error == nil)
+    #expect(store.registrations.isEmpty)
+    #expect(store.instruments.isEmpty)
+    #expect(store.providerMappings.isEmpty)
   }
 
   @Test
@@ -78,15 +82,17 @@ struct CryptoTokenStoreTests {
     #expect(store.registrations.isEmpty)
   }
 
-  @Test
-  func removeRegistration_removesFromList() async {
+  @Test("removeRegistration delegates to the registry and trims local state")
+  func removeRegistration_removesFromList() async throws {
     let presets = Array(CryptoRegistration.builtInPresets.prefix(2))
     let (store, _) = await makeStore(registrations: presets)
     await store.loadRegistrations()
-    await store.removeRegistration(presets[0])
+    let registration = try #require(store.registrations.first)
+    await store.removeRegistration(registration)
     #expect(store.registrations.count == 1)
-    #expect(store.registrations[0].id == presets[1].id)
     #expect(store.instruments.count == 1)
+    #expect(store.registrations.allSatisfy { $0.id != registration.id })
+    #expect(store.providerMappings[registration.id] == nil)
   }
 
   @Test
@@ -99,79 +105,6 @@ struct CryptoTokenStoreTests {
     #expect(store.registrations.count == 1)
     #expect(store.instruments.count == 1)
     #expect(store.providerMappings[instrumentToRemove.id] == nil)
-  }
-
-  @Test
-  func resolveToken_populatesResolvedRegistration() async {
-    let result = TokenResolutionResult(
-      coingeckoId: "uniswap",
-      cryptocompareSymbol: "UNI",
-      binanceSymbol: "UNIUSDT",
-      resolvedName: "Uniswap",
-      resolvedSymbol: "UNI",
-      resolvedDecimals: 18
-    )
-    let (store, _) = await makeStore(resolutionResult: result)
-    await store.resolveToken(
-      chainId: 1,
-      contractAddress: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
-      symbol: nil,
-      isNative: false
-    )
-    #expect(store.resolvedRegistration != nil)
-    #expect(store.resolvedRegistration?.mapping.coingeckoId == "uniswap")
-  }
-
-  @Test
-  func resolveToken_populatesInstrumentAndMapping() async {
-    let result = TokenResolutionResult(
-      coingeckoId: "uniswap",
-      cryptocompareSymbol: "UNI",
-      binanceSymbol: "UNIUSDT",
-      resolvedName: "Uniswap",
-      resolvedSymbol: "UNI",
-      resolvedDecimals: 18
-    )
-    let (store, _) = await makeStore(resolutionResult: result)
-    await store.resolveToken(
-      chainId: 1,
-      contractAddress: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
-      symbol: nil,
-      isNative: false
-    )
-    #expect(store.resolvedRegistration?.instrument.kind == .cryptoToken)
-    #expect(store.resolvedRegistration?.mapping.coingeckoId == "uniswap")
-  }
-
-  @Test
-  func resolveToken_failure_setsError() async {
-    let (store, _) = await makeStore(resolutionFails: true)
-    await store.resolveToken(
-      chainId: 1, contractAddress: "0xabc", symbol: nil, isNative: false
-    )
-    #expect(store.resolvedRegistration == nil)
-    #expect(store.error != nil)
-  }
-
-  @Test
-  func confirmRegistration_addsToList() async {
-    let result = TokenResolutionResult(
-      cryptocompareSymbol: "UNI",
-      resolvedName: "Uniswap",
-      resolvedSymbol: "UNI",
-      resolvedDecimals: 18
-    )
-    let (store, _) = await makeStore(resolutionResult: result)
-    await store.resolveToken(
-      chainId: 1,
-      contractAddress: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
-      symbol: nil,
-      isNative: false
-    )
-    await store.confirmRegistration()
-    #expect(store.registrations.count == 1)
-    #expect(store.instruments.count == 1)
-    #expect(store.resolvedRegistration == nil)
   }
 
   // MARK: - Multi-instrument / cross-chain
