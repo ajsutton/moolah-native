@@ -118,9 +118,26 @@ struct AutocompleteFieldDriver {
     }
   }
 
+  /// Sends a single Tab key press to the field. Returns once the
+  /// dropdown has hidden — by then focus has moved off the field, so the
+  /// blur handler has run. For category fields, that handler commits a
+  /// highlighted suggestion (#509); for payee, it preserves the user's
+  /// typed text (#510). Callers assert the resulting field value
+  /// separately.
+  func pressTab() {
+    Trace.record(detail: "field=\(fieldIdentifier)")
+    app.application.typeKey("\t", modifierFlags: [])
+    if !waitUntilDropdownHidden(timeout: 3) {
+      Trace.recordFailure("dropdown '\(dropdownIdentifier)' did not hide after Tab")
+      XCTFail(
+        "Autocomplete dropdown '\(dropdownIdentifier)' did not hide within 3s of Tab")
+    }
+  }
+
   /// Sends a single Escape key press to the field. Returns once the
-  /// dropdown has hidden. `AutocompleteField`'s escape handler also clears
-  /// the field binding — tests that care assert the value separately.
+  /// dropdown has hidden. The user's typed text is **not** cleared —
+  /// callers asserting the field value should still expect whatever the
+  /// user typed before pressing Escape (#510).
   func pressEscape() {
     Trace.record(detail: "field=\(fieldIdentifier)")
     app.application.typeKey(.escape, modifierFlags: [])

@@ -2,31 +2,16 @@ import SwiftUI
 
 /// Bundled state for the simple-mode category autocomplete dropdown.
 /// Shared between `TransactionDetailCategorySection` (the field row) and
-/// `TransactionDetailCategoryOverlay` (the floating dropdown).
-struct CategoryAutocompleteState: Equatable {
-  /// `true` while the dropdown should render (subject to having
-  /// suggestions to show).
+/// `TransactionDetailCategoryOverlay` (the floating dropdown). Conforms
+/// to `AutocompleteDropdownState`, which supplies `dismiss()` and
+/// `cancel()`.
+struct CategoryAutocompleteState: AutocompleteDropdownState {
   var showSuggestions: Bool = false
-  /// Index of the visible suggestion that ↑/↓ have moved through and that
-  /// `Enter` will accept. `nil` means nothing is highlighted yet.
   var highlightedIndex: Int?
-  /// Set when a suggestion is accepted so the resulting binding-driven
-  /// `onTextChange` does not immediately re-open the dropdown.
   var justSelected: Bool = false
 }
 
 extension CategoryAutocompleteState {
-  /// Closes the dropdown and arms `justSelected` so the next
-  /// binding-driven `onTextChange` (caused by us writing the accepted
-  /// path back into the field, or by the blur handler normalising stray
-  /// text against the canonical path) does not immediately re-open the
-  /// picker.
-  mutating func dismiss() {
-    justSelected = true
-    showSuggestions = false
-    highlightedIndex = nil
-  }
-
   /// Visible category suggestions for the current `query`. Returns up to
   /// 8 entries to match the dropdown's render budget; an empty/whitespace
   /// query returns the full (capped) list so users can browse without
@@ -44,5 +29,19 @@ extension CategoryAutocompleteState {
       filtered = allEntries.filter { matchesCategorySearch($0.path, query: query) }
     }
     return filtered.prefix(8).map { CategorySuggestion(id: $0.category.id, path: $0.path) }
+  }
+
+  /// The `CategorySuggestion` the user has arrow-keyed to, or `nil` if
+  /// nothing is highlighted, the dropdown is hidden, or the index has
+  /// drifted out of bounds. Lets blur handlers commit the highlight in
+  /// one call without re-doing the index-bounds check at the call site.
+  func highlightedSuggestion(
+    for query: String, in categories: Categories
+  ) -> CategorySuggestion? {
+    let visible = visibleSuggestions(for: query, in: categories)
+    guard let index = highlightedIndex, visible.indices.contains(index) else {
+      return nil
+    }
+    return visible[index]
   }
 }

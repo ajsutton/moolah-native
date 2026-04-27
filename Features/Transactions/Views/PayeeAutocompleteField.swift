@@ -10,6 +10,7 @@ struct PayeeAutocompleteField: View {
   let suggestionCount: Int
   let onTextChange: (String) -> Void
   let onAcceptHighlighted: () -> Void
+  let onCancel: () -> Void
 
   var body: some View {
     AutocompleteField(
@@ -18,7 +19,8 @@ struct PayeeAutocompleteField: View {
       highlightedIndex: $highlightedIndex,
       suggestionCount: suggestionCount,
       onTextChange: onTextChange,
-      onAcceptHighlighted: onAcceptHighlighted
+      onAcceptHighlighted: onAcceptHighlighted,
+      onCancel: onCancel
     )
   }
 }
@@ -77,7 +79,8 @@ private struct AutocompletePreviewForm: View {
           highlightedIndex: $highlighted,
           suggestionCount: autocompletePreviewSuggestions.count,
           onTextChange: { _ in },
-          onAcceptHighlighted: {}
+          onAcceptHighlighted: {},
+          onCancel: {}
         )
         HStack {
           TextField("Amount", text: .constant("0.00"))

@@ -17,6 +17,10 @@ struct AutocompleteField: View {
   let suggestionCount: Int
   let onTextChange: (String) -> Void
   let onAcceptHighlighted: () -> Void
+  /// Invoked when the user presses Escape with the dropdown visible. The
+  /// consumer should close the dropdown but **must not** clear the field
+  /// text — the user's typed content is what they want kept (#510).
+  let onCancel: () -> Void
 
   var body: some View {
     TextField(placeholder, text: $text)
@@ -42,12 +46,12 @@ struct AutocompleteField: View {
           return .handled
         }
         .onKeyPress(.escape) {
-          guard suggestionCount > 0 else { return .ignored }
-          highlightedIndex = nil
-          // Clear the binding directly — `.onChange(of: text)` will fire
-          // `onTextChange("")` as a side effect, propagating dropdown
-          // dismissal to the consumer.
-          text = ""
+          // Only consume Escape when there's something to dismiss; otherwise
+          // let the responder chain handle it (e.g. close the inspector).
+          guard suggestionCount > 0 || highlightedIndex != nil else {
+            return .ignored
+          }
+          onCancel()
           return .handled
         }
       #endif

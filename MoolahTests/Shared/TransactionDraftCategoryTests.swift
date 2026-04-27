@@ -50,4 +50,80 @@ struct TransactionDraftCategoryTests {
     #expect(draft.categoryId == nil)
     #expect(draft.categoryText.isEmpty)
   }
+
+  // swiftlint:disable:next attributes
+  @Test func commitHighlightedAdoptsSuggestion() {
+    let catId = UUID()
+    let categories = Categories(from: [Category(id: catId, name: "Groceries")])
+    let suggestion = CategorySuggestion(id: catId, path: "Groceries")
+
+    var draft = support.makeExpenseDraft()
+    draft.categoryText = "groc"
+
+    draft.commitHighlightedCategoryOrNormalise(
+      highlighted: suggestion, using: categories)
+
+    #expect(draft.categoryId == catId)
+    #expect(draft.categoryText == "Groceries")
+  }
+
+  // swiftlint:disable:next attributes
+  @Test func commitFallsBackToNormaliseWhenNothingHighlighted() {
+    let catId = UUID()
+    let categories = Categories(from: [Category(id: catId, name: "Groceries")])
+
+    var draft = support.makeExpenseDraft()
+    draft.categoryId = catId
+    draft.categoryText = "groc"
+
+    draft.commitHighlightedCategoryOrNormalise(
+      highlighted: nil, using: categories)
+
+    #expect(draft.categoryId == catId)
+    #expect(draft.categoryText == "Groceries")
+  }
+
+  // swiftlint:disable:next attributes
+  @Test func commitFallsBackToNormaliseClearsUnknownText() {
+    let categories = Categories(from: [])
+
+    var draft = support.makeExpenseDraft()
+    draft.categoryText = "Made up"
+
+    draft.commitHighlightedCategoryOrNormalise(
+      highlighted: nil, using: categories)
+
+    #expect(draft.categoryId == nil)
+    #expect(draft.categoryText.isEmpty)
+  }
+
+  // swiftlint:disable:next attributes
+  @Test func commitHighlightedLegAdoptsSuggestion() {
+    let catId = UUID()
+    let categories = Categories(from: [Category(id: catId, name: "Groceries")])
+    let suggestion = CategorySuggestion(id: catId, path: "Groceries")
+
+    var draft = support.makeExpenseDraft()
+    draft.legDrafts[0].categoryText = "groc"
+
+    draft.commitHighlightedLegCategoryOrNormalise(
+      at: 0, highlighted: suggestion, using: categories)
+
+    #expect(draft.legDrafts[0].categoryId == catId)
+    #expect(draft.legDrafts[0].categoryText == "Groceries")
+  }
+
+  // swiftlint:disable:next attributes
+  @Test func commitFallsBackToLegNormaliseWhenNothingHighlighted() {
+    let categories = Categories(from: [])
+
+    var draft = support.makeExpenseDraft()
+    draft.legDrafts[0].categoryText = "Made up"
+
+    draft.commitHighlightedLegCategoryOrNormalise(
+      at: 0, highlighted: nil, using: categories)
+
+    #expect(draft.legDrafts[0].categoryId == nil)
+    #expect(draft.legDrafts[0].categoryText.isEmpty)
+  }
 }

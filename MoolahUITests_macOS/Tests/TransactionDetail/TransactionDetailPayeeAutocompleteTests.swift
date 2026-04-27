@@ -53,7 +53,12 @@ final class TransactionDetailPayeeAutocompleteTests: MoolahUITestCase {
     app.transactionDetail.payee.expectSuggestionsHidden()
   }
 
-  func testEscapeClearsPayeeAndClosesDropdown() {
+  /// Escape closes the dropdown but must leave the user's typed text
+  /// alone. Per [#510](https://github.com/ajsutton/moolah-native/issues/510),
+  /// the user is in control of what is in the payee field — autocomplete
+  /// is an aid, not a constraint, so dismissing the dropdown without a
+  /// commit must not also wipe what the user has typed.
+  func testEscapeKeepsTypedTextAndClosesDropdown() {
     let app = launch(seed: .tradeBaseline)
 
     app.sidebar.switchToAccount(.checking)
@@ -65,7 +70,7 @@ final class TransactionDetailPayeeAutocompleteTests: MoolahUITestCase {
 
     app.transactionDetail.payee.pressEscape()
 
-    app.transactionDetail.payee.expectValue("")
+    app.transactionDetail.payee.expectValue("Wool")
     app.transactionDetail.payee.expectSuggestionsHidden()
   }
 

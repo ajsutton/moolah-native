@@ -7,9 +7,7 @@ struct AddBudgetLineItemSheet: View {
   @State private var selectedCategoryId: UUID?
   @State private var amountText = ""
   @State private var categoryText = ""
-  @State private var showCategorySuggestions = false
-  @State private var categoryHighlightedIndex: Int?
-  @State private var categoryJustSelected = false
+  @State private var categoryState = CategoryAutocompleteState()
   @FocusState private var categoryFieldFocused: Bool
   @Environment(EarmarkStore.self) private var earmarkStore
   @Environment(\.dismiss) private var dismiss
@@ -31,7 +29,7 @@ struct AddBudgetLineItemSheet: View {
     }
     .formStyle(.grouped)
     .overlayPreferenceValue(CategoryPickerAnchorKey.self) { anchor in
-      if showCategorySuggestions, !categoryVisibleSuggestions.isEmpty, let anchor {
+      if categoryState.showSuggestions, !categoryVisibleSuggestions.isEmpty, let anchor {
         suggestionDropdown(anchor: anchor)
       }
     }
@@ -54,16 +52,11 @@ struct AddBudgetLineItemSheet: View {
     Section("Category") {
       CategoryAutocompleteField(
         text: $categoryText,
-        highlightedIndex: $categoryHighlightedIndex,
+        highlightedIndex: $categoryState.highlightedIndex,
         suggestionCount: categoryVisibleSuggestionCount,
-        onTextChange: { _ in
-          if categoryJustSelected {
-            categoryJustSelected = false
-          } else {
-            showCategorySuggestions = true
-          }
-        },
-        onAcceptHighlighted: acceptHighlightedCategory
+        onTextChange: { _ in handleTextChange() },
+        onAcceptHighlighted: acceptHighlightedCategory,
+        onCancel: { categoryState.cancel() }
       )
       .focused($categoryFieldFocused)
       .onChange(of: categoryFieldFocused) { _, focused in
@@ -93,25 +86,35 @@ struct AddBudgetLineItemSheet: View {
       CategorySuggestionDropdown(
         suggestions: categoryVisibleSuggestions,
         searchText: categoryText,
-        highlightedIndex: $categoryHighlightedIndex,
-        onSelect: { selected in
-          categoryJustSelected = true
-          selectedCategoryId = selected.id
-          categoryText = selected.path
-          showCategorySuggestions = false
-          categoryHighlightedIndex = nil
-        }
+        highlightedIndex: $categoryState.highlightedIndex,
+        onSelect: { selected in commit(suggestion: selected) }
       )
       .frame(width: rect.width)
       .offset(x: rect.minX, y: rect.maxY + 4)
     }
   }
 
+  private func handleTextChange() {
+    if categoryState.justSelected {
+      categoryState.justSelected = false
+    } else {
+      categoryState.showSuggestions = true
+    }
+  }
+
+  /// On focus loss, commit a highlighted suggestion if there is one
+  /// (#509 — same blur-loses-highlight bug as the transaction-detail
+  /// category field), otherwise reconcile typed text against
+  /// `selectedCategoryId` so partially-typed input that never resolved
+  /// to a known category doesn't linger in the field.
   private func handleCategoryFieldUnfocused() {
-    categoryJustSelected = true
-    showCategorySuggestions = false
-    categoryHighlightedIndex = nil
-    if let id = selectedCategoryId, let cat = categories.by(id: id) {
+    let highlighted = categoryState.highlightedSuggestion(
+      for: categoryText, in: categories)
+    categoryState.dismiss()
+    if let highlighted {
+      selectedCategoryId = highlighted.id
+      categoryText = highlighted.path
+    } else if let id = selectedCategoryId, let cat = categories.by(id: id) {
       categoryText = categories.path(for: cat)
     } else {
       categoryText = ""
@@ -120,15 +123,7 @@ struct AddBudgetLineItemSheet: View {
   }
 
   private var categoryVisibleSuggestions: [CategorySuggestion] {
-    guard showCategorySuggestions else { return [] }
-    let allEntries = categories.flattenedByPath()
-    let filtered: [Categories.FlatEntry]
-    if categoryText.trimmingCharacters(in: .whitespaces).isEmpty {
-      filtered = allEntries
-    } else {
-      filtered = allEntries.filter { matchesCategorySearch($0.path, query: categoryText) }
-    }
-    return filtered.prefix(8).map { CategorySuggestion(id: $0.category.id, path: $0.path) }
+    categoryState.visibleSuggestions(for: categoryText, in: categories)
   }
 
   private var categoryVisibleSuggestionCount: Int {
@@ -136,15 +131,17 @@ struct AddBudgetLineItemSheet: View {
   }
 
   private func acceptHighlightedCategory() {
-    guard let index = categoryHighlightedIndex, index < categoryVisibleSuggestions.count else {
-      return
-    }
-    let selected = categoryVisibleSuggestions[index]
-    categoryJustSelected = true
-    selectedCategoryId = selected.id
-    categoryText = selected.path
-    showCategorySuggestions = false
-    categoryHighlightedIndex = nil
+    guard
+      let selected = categoryState.highlightedSuggestion(
+        for: categoryText, in: categories)
+    else { return }
+    commit(suggestion: selected)
+  }
+
+  private func commit(suggestion: CategorySuggestion) {
+    categoryState.dismiss()
+    selectedCategoryId = suggestion.id
+    categoryText = suggestion.path
   }
 
   private func save() {

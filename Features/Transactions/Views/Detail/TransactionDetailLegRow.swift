@@ -120,7 +120,8 @@ struct TransactionDetailLegRow: View {
       highlightedIndex: $categoryState.highlightedIndex,
       suggestionCount: visibleSuggestions.count,
       onTextChange: { _ in openDropdownIfFocused() },
-      onAcceptHighlighted: acceptHighlighted
+      onAcceptHighlighted: acceptHighlighted,
+      onCancel: { categoryState.cancel() }
     )
     .focused($categoryFieldFocused)
     .accessibilityIdentifier(UITestIdentifiers.Detail.legCategory(index))
@@ -176,8 +177,11 @@ struct TransactionDetailLegRow: View {
   }
 
   private func handleBlur() {
+    let highlighted = categoryState.highlightedSuggestion(
+      for: draft.legDrafts[index].categoryText, in: categories)
     categoryState.dismiss()
-    draft.normaliseLegCategoryText(at: index, using: categories)
+    draft.commitHighlightedLegCategoryOrNormalise(
+      at: index, highlighted: highlighted, using: categories)
   }
 
   private func acceptHighlighted() {
