@@ -51,9 +51,13 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
   private static func open(dbURL: URL) throws -> OpaquePointer {
     if FileManager.default.fileExists(atPath: dbURL.path) {
       let handle = try connect(dbURL: dbURL)
+      var shouldClose = true
+      defer { if shouldClose { sqlite3_close_v2(handle) } }
+
       let storedVersion = try readMeta(database: handle).schemaVersion
       if storedVersion != CoinGeckoCatalogSchema.version {
-        sqlite3_close_v2(handle)
+        // `shouldClose` is true; the defer closes the stale handle before
+        // we recreate the file.
         try FileManager.default.removeItem(at: dbURL)
         // SQLite's WAL mode produces `<db>-wal` and `<db>-shm` sidecar
         // files; drop them too so the recreated database starts clean.
@@ -63,6 +67,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
           at: URL(fileURLWithPath: dbURL.path + "-shm"))
         return try createFresh(dbURL: dbURL)
       }
+      shouldClose = false  // caller takes ownership
       return handle
     } else {
       return try createFresh(dbURL: dbURL)
@@ -85,59 +90,6 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
       try exec(database: handle, stmt)
     }
     return handle
-  }
-
-  // MARK: - Test seams
-  //
-  // The `RawCoin` / `RawPlatform` / `MetaSnapshot` value types and the
-  // `*ForTesting` accessors are exposed as `internal` so storage tests can
-  // exercise replace-all and meta read/write without depending on the
-  // network refresh path (which lands in Task 5). Production callers go
-  // through `search(query:limit:)` and `refreshIfStale()`.
-
-  internal struct RawCoin: Sendable {
-    let id: String
-    let symbol: String
-    let name: String
-    /// platform slug → contract address (verbatim, normalised on insert)
-    let platforms: [String: String]
-  }
-
-  internal struct RawPlatform: Sendable {
-    let slug: String
-    let chainId: Int?
-    let name: String
-  }
-
-  internal struct MetaSnapshot: Sendable, Equatable {
-    let schemaVersion: Int
-    let lastFetched: Date?
-    let coinsEtag: String?
-    let platformsEtag: String?
-  }
-
-  internal func replaceAllForTesting(coins: [RawCoin], platforms: [RawPlatform]) throws {
-    try replaceAll(coins: coins, platforms: platforms)
-  }
-
-  internal func readMetaForTesting() throws -> MetaSnapshot {
-    try Self.readMeta(database: database)
-  }
-
-  internal func coinCountForTesting() throws -> Int {
-    try Self.scalarInt(database: database, "SELECT COUNT(*) FROM coin")
-  }
-
-  internal func platformCountForTesting() throws -> Int {
-    try Self.scalarInt(database: database, "SELECT COUNT(*) FROM platform")
-  }
-
-  internal func coinPlatformCountForTesting() throws -> Int {
-    try Self.scalarInt(database: database, "SELECT COUNT(*) FROM coin_platform")
-  }
-
-  internal func writeMetaSchemaVersionForTesting(_ version: Int) throws {
-    try Self.exec(database: database, "UPDATE meta SET schema_version = \(version);")
   }
 
   // MARK: - Replace-all
@@ -312,5 +264,66 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
 
   enum CatalogError: Error, Equatable {
     case sqlite(String)
+  }
+}
+
+// MARK: - Test seams
+//
+// The `RawCoin` / `RawPlatform` / `MetaSnapshot` value types and the
+// `*ForTesting` accessors are module-internal so storage tests can
+// exercise replace-all and meta read/write without depending on the
+// network refresh path (which lands in Task 5). Production callers go
+// through `search(query:limit:)` and `refreshIfStale()`. Hosting them in
+// an extension keeps the actor body focused on production code paths.
+
+extension SQLiteCoinGeckoCatalog {
+  struct RawCoin: Sendable {
+    let id: String
+    let symbol: String
+    let name: String
+    /// platform slug → contract address (verbatim, normalised on insert)
+    let platforms: [String: String]
+  }
+
+  struct RawPlatform: Sendable {
+    let slug: String
+    let chainId: Int?
+    let name: String
+  }
+
+  struct MetaSnapshot: Sendable, Equatable {
+    let schemaVersion: Int
+    let lastFetched: Date?
+    let coinsEtag: String?
+    let platformsEtag: String?
+  }
+
+  func replaceAllForTesting(coins: [RawCoin], platforms: [RawPlatform]) throws {
+    try replaceAll(coins: coins, platforms: platforms)
+  }
+
+  func readMetaForTesting() throws -> MetaSnapshot {
+    try Self.readMeta(database: database)
+  }
+
+  func coinCountForTesting() throws -> Int {
+    try Self.scalarInt(database: database, "SELECT COUNT(*) FROM coin")
+  }
+
+  func platformCountForTesting() throws -> Int {
+    try Self.scalarInt(database: database, "SELECT COUNT(*) FROM platform")
+  }
+
+  func coinPlatformCountForTesting() throws -> Int {
+    try Self.scalarInt(database: database, "SELECT COUNT(*) FROM coin_platform")
+  }
+
+  func writeMetaSchemaVersionForTesting(_ version: Int) throws {
+    var statement: OpaquePointer?
+    try Self.prepare(
+      database: database, "UPDATE meta SET schema_version = ?;", &statement)
+    defer { sqlite3_finalize(statement) }
+    try Self.bind(statement, 1, version)
+    try Self.step(statement)
   }
 }

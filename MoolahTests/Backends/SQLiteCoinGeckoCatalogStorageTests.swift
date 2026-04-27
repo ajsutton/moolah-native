@@ -74,6 +74,36 @@ final class SQLiteCoinGeckoCatalogStorageTests {
   }
 
   @Test
+  func replaceAllRollsBackOnConstraintFailure() async throws {
+    let catalog = try SQLiteCoinGeckoCatalog(directory: tempDir)
+
+    // Seed a successful first batch so we have prior state to preserve.
+    let first: [SQLiteCoinGeckoCatalog.RawCoin] = [
+      .init(id: "bitcoin", symbol: "BTC", name: "Bitcoin", platforms: [:]),
+      .init(id: "ethereum", symbol: "ETH", name: "Ethereum", platforms: [:]),
+    ]
+    try await catalog.replaceAllForTesting(coins: first, platforms: [])
+    let seededCount = try await catalog.coinCountForTesting()
+    #expect(seededCount == 2)
+
+    // Second batch contains a duplicate id — the UNIQUE constraint on
+    // `coingecko_id` fires on the second insert, so `replaceAll`'s catch
+    // must ROLLBACK and rethrow.
+    let withDuplicate: [SQLiteCoinGeckoCatalog.RawCoin] = [
+      .init(id: "tether", symbol: "USDT", name: "Tether", platforms: [:]),
+      .init(id: "tether", symbol: "USDT", name: "Tether (dup)", platforms: [:]),
+    ]
+    await #expect(throws: (any Error).self) {
+      try await catalog.replaceAllForTesting(coins: withDuplicate, platforms: [])
+    }
+
+    // Rollback restored the prior two coins; without rollback the count
+    // would be 0 (the DELETEs ran before the failing INSERT).
+    let countAfter = try await catalog.coinCountForTesting()
+    #expect(countAfter == 2)
+  }
+
+  @Test
   func schemaVersionMismatchRecreatesFile() async throws {
     _ = try SQLiteCoinGeckoCatalog(directory: tempDir)
     let dbURL = tempDir.appendingPathComponent("catalog.sqlite")
