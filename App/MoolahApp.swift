@@ -44,6 +44,13 @@ struct MoolahApp: App {
   #endif
 
   init() {
+    // Anchor the upcoming-card first-paint timer at process start. Without
+    // this eager reference, the tracker's `launchTime` lazy global only
+    // initializes when the view first reads it (after the data has loaded),
+    // making the measured elapsed time uselessly close to zero. See
+    // `plans/2026-04-27-upcoming-card-cold-load-plan.md`.
+    UpcomingFirstPaintTracker.anchorLaunchTime()
+
     // UI-testing launch mode: swap the on-disk profile index for an
     // in-memory one and hydrate it from UI_TESTING_SEED. CloudKit sync and
     // telemetry are skipped entirely — the app runs against `TestBackend`
