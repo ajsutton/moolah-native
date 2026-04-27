@@ -66,10 +66,15 @@ struct AnalysisView: View {
       }
     }
     .task {
-      async let transactions: Void = transactionStore.load(
-        filter: TransactionFilter(scheduled: .scheduledOnly))
-      async let analysis: Void = store.loadAll()
-      _ = await (transactions, analysis)
+      // Win the SwiftData SQL connection race for the upcoming-card data
+      // before the heavier analysis loads start, so the visible card paints
+      // in well under a second on cold launch. The previous `async let`
+      // form started both concurrently, which let AccountStore's
+      // 20k-leg full-table scan steal the SQL connection ahead of the
+      // 36-row scheduled-only fetch. See
+      // `plans/2026-04-27-upcoming-card-cold-load-plan.md`.
+      await transactionStore.load(filter: TransactionFilter(scheduled: .scheduledOnly))
+      await store.loadAll()
     }
     .onChange(of: store.historyMonths) { _, _ in
       Task { await store.loadAll() }
