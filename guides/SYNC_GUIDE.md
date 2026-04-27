@@ -708,6 +708,47 @@ schema.ckdb ──► ckdb-schema-gen ──► Generated/  ──► *Record+Cl
        schema-prod-baseline.ckdb (committed)
 ```
 
+### Two containers: release vs test
+
+Per issue #495, two CloudKit containers are in play:
+
+- `iCloud.rocks.moolah.app.v2` — the **release container**. Holds production
+  user data (Production environment) and is the staging area used by the
+  release pipeline before a Console Deploy (Development environment). Reached
+  only by fastlane-signed shipped builds (the App Store / TestFlight /
+  Developer-ID Mac binary distributed via the GitHub release artefact) and
+  by the four release-pipeline schema scripts: `verify-prod-deployed.sh`,
+  `verify-prod-matches-baseline.sh`, `refresh-prod-baseline.sh`,
+  `import-schema-to-dev.sh`. Each of those scripts pins
+  `CLOUDKIT_CONTAINER_ID="$CLOUDKIT_CONTAINER_ID_RELEASE"`.
+
+- `iCloud.rocks.moolah.app.test` — the **test container**. Reached by every
+  locally-signed binary — i.e. every Debug build (`just run-mac`,
+  `just build-mac` after `ENABLE_ENTITLEMENTS=1 just generate`) — and by
+  the local-only convenience scripts `export-schema.sh`, `verify-schema.sh`,
+  `dryrun-promote-schema.sh`, and `import-schema-to-test.sh`. Each of those
+  scripts pins `CLOUDKIT_CONTAINER_ID="$CLOUDKIT_CONTAINER_ID_TEST"`.
+
+There is no local Release path. To run a Release-signed copy of the app,
+download the `Moolah-x.y.z.zip` artefact from the matching GitHub release.
+This makes the local-vs-shipped split mechanical: anything you build on
+your machine is Debug + test container; anything signed with the
+production container is fastlane-built and shipped through the release
+pipeline.
+
+Container selection at runtime is driven by the `CLOUDKIT_CONTAINER_ID`
+build setting in `project.yml`, which is per-configuration: Debug and
+Debug-Tests resolve to the test container; Release resolves to the release
+container. The setting is surfaced via the `MoolahCloudKitContainer`
+Info.plist key and read by `Backends/CloudKit/CloudKitContainer.swift`.
+
+This split exists so that the release pipeline's "import schema.ckdb to
+the release container's Dev environment, pause for the developer to click
+Deploy in the Console" handoff is safe: nothing else writes to the release
+container's Dev between the import step and the manual deploy. Local
+developer experimentation runs against a separate container that the
+release pipeline never touches.
+
 ### Production additive-only
 
 Production schema only grows. Once a field or record type is in
@@ -729,13 +770,21 @@ the field on Production. Type changes are not allowed; rename = add new
   result back into the baseline file, and opens a follow-up PR with the
   refreshed baseline.
 
-### `dryrun-promote-schema` and `verify-schema`
+### `dryrun-promote-schema`, `verify-schema`, `import-schema-to-test`
 
-Both are manual local affordances, not CI gates. `verify-schema` imports
-`.ckdb` to the developer's personal Dev container with `--validate`.
-`dryrun-promote-schema` is Apple's Prod-equivalent dry-run
-(`reset-schema && import-schema --validate`) and is destructive to the
-developer's personal Dev — set `CKTOOL_ALLOW_DEV_RESET=1` to confirm.
+All three are manual local affordances, not CI gates, and all three target
+the **test** container (`CLOUDKIT_CONTAINER_ID_TEST`).
+
+- `verify-schema` imports `.ckdb` to the test container's Dev with
+  `--validate`. Use this for belt-and-braces verification before opening
+  a schema-touching PR.
+- `dryrun-promote-schema` is Apple's Prod-equivalent dry-run
+  (`reset-schema && import-schema --validate`) and is destructive to the
+  test container's Dev — set `CKTOOL_ALLOW_DEV_RESET=1` to confirm.
+- `import-schema-to-test` resets the test container's Dev and re-imports
+  `.ckdb`. Use this once after creating the test container in App Store
+  Connect, or any time you want to wipe the test container back to a
+  known-good state. Same `CKTOOL_ALLOW_DEV_RESET=1` gate.
 
 ### Constraints summary
 
