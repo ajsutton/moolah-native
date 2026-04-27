@@ -24,6 +24,14 @@ struct ExportImportIntegrationTests4 {
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
 
     let (backend, _) = try TestBackend.create(instrument: aud)
+    // ensureInstrument now refuses to write an unmapped crypto leg, so
+    // register ETH with a provider mapping before seeding the crypto income
+    // transaction below.
+    try await backend.instrumentRegistry.registerCrypto(
+      eth,
+      mapping: CryptoProviderMapping(
+        instrumentId: eth.id, coingeckoId: "ethereum",
+        cryptocompareSymbol: nil, binanceSymbol: nil))
     let seeded = try await seedMultiCurrencyBackend(
       backend: backend, aud: aud, usd: usd, bhp: bhp, eth: eth)
 
