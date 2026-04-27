@@ -25,13 +25,10 @@ extension CloudKitTransactionRepository {
     }
     return try await MainActor.run {
       let scheduled = filter.scheduled == .scheduledOnly
-      var filteredRecords = try loadAndFilter(
+      let filteredRecords = try loadAndFilter(
         filter: filter, scheduled: scheduled, signpostID: signpostID)
-      filteredRecords.sort { lhs, rhs in
-        if lhs.date != rhs.date { return lhs.date > rhs.date }
-        return lhs.id < rhs.id
-      }
-      return try loadPageTransactions(filteredRecords[...], signpostID: signpostID)
+      let sortedRecords = sortedByDateDescThenId(filteredRecords)
+      return try loadPageTransactions(sortedRecords[...], signpostID: signpostID)
     }
   }
 
@@ -47,12 +44,9 @@ extension CloudKitTransactionRepository {
     signpostID: OSSignpostID
   ) throws -> FetchResult {
     let scheduled = filter.scheduled == .scheduledOnly
-    var filteredRecords = try loadAndFilter(
+    let unsortedRecords = try loadAndFilter(
       filter: filter, scheduled: scheduled, signpostID: signpostID)
-    filteredRecords.sort { lhs, rhs in
-      if lhs.date != rhs.date { return lhs.date > rhs.date }
-      return lhs.id < rhs.id
-    }
+    let filteredRecords = sortedByDateDescThenId(unsortedRecords)
 
     let resolvedTarget = resolveTargetInstrument(for: filter.accountId)
     let offset = page * pageSize
@@ -88,6 +82,30 @@ extension CloudKitTransactionRepository {
       hasAccountFilter: filter.accountId != nil,
       totalCount: totalCount,
       isEmpty: false)
+  }
+
+  // MARK: - Ordering
+
+  /// Sorts records by date descending, with `id` ascending as a stable
+  /// tiebreaker so pagination doesn't reshuffle when several transactions
+  /// share a date. The contract is pinned by `TransactionRepositoryOrderingTests`.
+  ///
+  /// Snapshots `(date, id)` into a value-type key per record so the comparator
+  /// reads Swift fields rather than re-faulting the persisted properties on
+  /// every comparison. The previous in-memory sort closure paid the SwiftData
+  /// `_PersistedProperty` + `swift_dynamicCast` cost on each `record.date`
+  /// access — ~333 ms on the cold-launch scheduled-only path with 36 rows.
+  /// See #517 for the profile.
+  @MainActor
+  func sortedByDateDescThenId(_ records: [TransactionRecord]) -> [TransactionRecord] {
+    let keys = records.enumerated().map { offset, record in
+      RecordSortKey(date: record.date, id: record.id, offset: offset)
+    }
+    let ordered = keys.sorted { lhs, rhs in
+      if lhs.date != rhs.date { return lhs.date > rhs.date }
+      return lhs.id < rhs.id
+    }
+    return ordered.map { records[$0.offset] }
   }
 
   // MARK: - Filtering
