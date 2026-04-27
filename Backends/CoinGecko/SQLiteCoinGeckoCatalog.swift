@@ -10,8 +10,21 @@ import os
 actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
   private let directory: URL
   private let session: URLSession
-  private let log = Logger(subsystem: "moolah.instrument-registry", category: "catalog")
-  private var database: OpaquePointer?
+  let log = Logger(subsystem: "moolah.instrument-registry", category: "catalog")
+  private(set) var database: OpaquePointer?
+
+  // MARK: - Cross-extension internals
+  //
+  // `private` declarations are not visible to extensions in other files,
+  // so members called from `SQLiteCoinGeckoCatalog+Search.swift` (and any
+  // future `+…` extension) drop their `private` keyword and become module-
+  // internal: `log`, `database` (read-only via `private(set)`), and the
+  // low-level SQLite helpers `prepare`, `bind` (both overloads), and
+  // `readText` further down the file.
+  //
+  // These remain implementation details of the actor — callers outside
+  // `Backends/CoinGecko/` MUST NOT use them. New backend extensions on
+  // the actor should treat this list as the closed surface of helpers.
 
   init(
     directory: URL,
@@ -30,10 +43,8 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
   }
 
   // MARK: - CoinGeckoCatalog
-
-  func search(query: String, limit: Int) async -> [CatalogEntry] {
-    []  // Implemented in Task 4.
-  }
+  //
+  // `search(query:limit:)` lives in `SQLiteCoinGeckoCatalog+Search.swift`.
 
   func refreshIfStale() async {
     // Implemented in Task 5.
@@ -205,7 +216,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     }
   }
 
-  private static func prepare(
+  static func prepare(
     database: OpaquePointer?,
     _ sql: String,
     _ statement: inout OpaquePointer?
@@ -216,7 +227,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     }
   }
 
-  private static func bind(
+  static func bind(
     _ statement: OpaquePointer?,
     _ index: Int32,
     _ value: String
@@ -231,7 +242,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     guard result == SQLITE_OK else { throw CatalogError.sqlite("bind text \(result)") }
   }
 
-  private static func bind(
+  static func bind(
     _ statement: OpaquePointer?,
     _ index: Int32,
     _ value: Int
@@ -257,7 +268,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     return Int(sqlite3_column_int64(statement, 0))
   }
 
-  private static func readText(_ statement: OpaquePointer?, column: Int32) -> String? {
+  static func readText(_ statement: OpaquePointer?, column: Int32) -> String? {
     guard let cString = sqlite3_column_text(statement, column) else { return nil }
     return String(cString: cString)
   }
