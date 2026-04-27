@@ -575,7 +575,7 @@
       exit 1
   fi
 
-  echo "Resetting Development schema on $CLOUDKIT_CONTAINER_ID…"
+  echo "Resetting Development schema on ${CLOUDKIT_CONTAINER_ID}…"
   cloudkit_cktool reset-schema
 
   echo "Validating $CLOUDKIT_SCHEMA_FILE against $CLOUDKIT_CONTAINER_ID Development (dry-run)…"
