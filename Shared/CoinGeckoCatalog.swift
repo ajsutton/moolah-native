@@ -2,13 +2,11 @@ import Foundation
 
 /// One coin from the cached CoinGecko catalogue snapshot. Carries every
 /// platform binding the picker needs to call `TokenResolutionClient.resolve()`.
-struct CatalogEntry: Sendable, Hashable, Identifiable {
+struct CatalogEntry: Sendable {
   let coingeckoId: String
   let symbol: String
   let name: String
   let platforms: [PlatformBinding]
-
-  var id: String { coingeckoId }
 
   /// First platform binding by canonical priority — used by the picker to
   /// resolve a search hit to a `(chainId, contractAddress)` pair. `nil`
@@ -16,9 +14,15 @@ struct CatalogEntry: Sendable, Hashable, Identifiable {
   var preferredPlatform: PlatformBinding? { platforms.first }
 }
 
+extension CatalogEntry: Hashable {}
+
+extension CatalogEntry: Identifiable {
+  var id: String { coingeckoId }
+}
+
 /// One coin's binding to a single chain. `chainId` is `nil` when the
 /// platform slug isn't known to `/asset_platforms` (typically non-EVM).
-struct PlatformBinding: Sendable, Hashable {
+struct PlatformBinding: Sendable {
   let slug: String
   let chainId: Int?
   let contractAddress: String
@@ -30,9 +34,10 @@ struct PlatformBinding: Sendable, Hashable {
   }
 }
 
+extension PlatformBinding: Hashable {}
+
 /// Read-only catalogue of CoinGecko coins. Backed by a refreshable SQLite
-/// snapshot of `/coins/list?include_platform=true`. See
-/// `plans/2026-04-27-instrument-registry-ui-design.md` §4.1 / §6 for shape.
+/// snapshot of `/coins/list?include_platform=true`.
 protocol CoinGeckoCatalog: Sendable {
   /// Returns up to `limit` matching entries with their full platform list
   /// attached, ordered by FTS BM25 rank. Empty when the snapshot is missing

@@ -1,14 +1,17 @@
-import XCTest
+import Testing
 
 @testable import Moolah
 
-final class CoinGeckoCatalogTypesTests: XCTestCase {
-  func testPlatformBindingNormalisesContractAddressToLowercase() {
+@Suite("CoinGeckoCatalog types")
+struct CoinGeckoCatalogTypesTests {
+  @Test
+  func platformBindingNormalisesContractAddressToLowercase() {
     let binding = PlatformBinding(slug: "ethereum", chainId: 1, contractAddress: "0xABCDef1234")
-    XCTAssertEqual(binding.contractAddress, "0xabcdef1234")
+    #expect(binding.contractAddress == "0xabcdef1234")
   }
 
-  func testCatalogEntryReturnsHighestPriorityPlatform() {
+  @Test
+  func catalogEntryReturnsHighestPriorityPlatform() {
     let entry = CatalogEntry(
       coingeckoId: "usd-coin",
       symbol: "USDC",
@@ -18,11 +21,12 @@ final class CoinGeckoCatalogTypesTests: XCTestCase {
         PlatformBinding(slug: "polygon-pos", chainId: 137, contractAddress: "0xpolygon"),
       ]
     )
-    XCTAssertEqual(entry.preferredPlatform?.slug, "ethereum")
+    #expect(entry.preferredPlatform?.slug == "ethereum")
   }
 
-  func testCatalogEntryWithoutPlatformsReturnsNilPreferred() {
+  @Test
+  func catalogEntryWithoutPlatformsReturnsNilPreferred() {
     let entry = CatalogEntry(coingeckoId: "btc", symbol: "BTC", name: "Bitcoin", platforms: [])
-    XCTAssertNil(entry.preferredPlatform)
+    #expect(entry.preferredPlatform == nil)
   }
 }
