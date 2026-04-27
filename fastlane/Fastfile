@@ -177,8 +177,8 @@ platform :mac do
     )
   end
 
-  desc "Build, sign, notarise, and DMG-package the Mac app for direct distribution"
-  lane :dmg do |options|
+  desc "Build, sign, notarise, and zip the Mac app for direct distribution"
+  lane :zip do |options|
     version = options[:version] or UI.user_error!("missing :version (e.g. 1.2.0)")
 
     certificates
@@ -189,6 +189,19 @@ platform :mac do
       key_content: ENV["ASC_KEY_CONTENT"],
       is_key_content_base64: true
     )
+
+    # `app_store_connect_api_key` returns a hash with the raw PEM content in
+    # `:key` (base64-encoded if `is_key_content_base64`), but no `:key_filepath`
+    # when constructed from `key_content`. notarytool needs a .p8 file path,
+    # so persist the decoded PEM to a tempfile.
+    require "tempfile"
+    require "base64"
+    asc_key_pem = api_key[:key]
+    asc_key_pem = Base64.decode64(asc_key_pem) if api_key[:is_key_content_base64]
+    asc_key_p8 = Tempfile.new(["asc_api_key", ".p8"])
+    asc_key_p8.write(asc_key_pem)
+    asc_key_p8.flush
+    asc_key_p8.close
 
     # match exports this with `_macos` infix because we passed `platform: "macos"`.
     # iOS appstore uses `sigh_<bundle>_appstore_profile-name` (no platform suffix)
@@ -222,35 +235,29 @@ platform :mac do
     app_path = File.join(build_dir, "Moolah.app")
     UI.user_error!("Moolah.app not found at #{app_path}") unless File.directory?(app_path)
 
-    # Notarise the .app first (faster turnaround than notarising the DMG alone).
-    sh "xcrun notarytool submit '#{app_path}' " \
-       "--key '#{api_key[:key_filepath]}' " \
+    # notarytool requires a .zip/.pkg/.dmg, not a bare .app bundle. Wrap with
+    # `ditto -c -k --keepParent` (the only zip format Apple's notarization
+    # service accepts for an .app), submit, then staple the original .app.
+    notarize_zip = File.join(build_dir, "Moolah.app.notarize.zip")
+    sh "rm -f '#{notarize_zip}'"
+    sh "ditto -c -k --keepParent '#{app_path}' '#{notarize_zip}'"
+    sh "xcrun notarytool submit '#{notarize_zip}' " \
+       "--key '#{asc_key_p8.path}' " \
        "--key-id '#{api_key[:key_id]}' " \
        "--issuer '#{api_key[:issuer_id]}' " \
        "--wait"
     sh "xcrun stapler staple '#{app_path}'"
+    sh "rm -f '#{notarize_zip}'"
 
-    # Build the DMG with create-dmg (assumed installed via brew on the runner).
-    dmg_path = File.join(build_dir, "Moolah-#{version}.dmg")
-    sh "rm -f '#{dmg_path}'"
-    sh "create-dmg " \
-       "--volname 'Moolah #{version}' " \
-       "--window-size 540 380 " \
-       "--icon-size 96 " \
-       "--icon 'Moolah.app' 140 190 " \
-       "--app-drop-link 400 190 " \
-       "--no-internet-enable " \
-       "'#{dmg_path}' '#{app_path}'"
+    # Re-zip the now-stapled .app for distribution. The .zip itself can't be
+    # stapled, but Gatekeeper reads the staple from the .app inside, so users
+    # get full offline verification.
+    zip_path = File.join(build_dir, "Moolah-#{version}.zip")
+    sh "rm -f '#{zip_path}'"
+    sh "ditto -c -k --keepParent '#{app_path}' '#{zip_path}'"
 
-    # Sign + notarise + staple the DMG itself.
-    sh "codesign --sign 'Developer ID Application' --timestamp '#{dmg_path}'"
-    sh "xcrun notarytool submit '#{dmg_path}' " \
-       "--key '#{api_key[:key_filepath]}' " \
-       "--key-id '#{api_key[:key_id]}' " \
-       "--issuer '#{api_key[:issuer_id]}' " \
-       "--wait"
-    sh "xcrun stapler staple '#{dmg_path}'"
+    asc_key_p8.unlink
 
-    UI.success("Notarised DMG ready at #{dmg_path}")
+    UI.success("Notarised zip ready at #{zip_path}")
   end
 end

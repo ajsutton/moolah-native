@@ -6,7 +6,7 @@
 
 - **RC tag:** `v<MAJOR>.<MINOR>.<PATCH>-rc.<N>`. Example: `v1.2.0-rc.1`, `v1.2.0-rc.2`.
 - **Final tag:** `v<MAJOR>.<MINOR>.<PATCH>`. Example: `v1.2.0`.
-- The final tag points at the **same commit** as the RC being promoted. The same iOS binary that was beta-tested ships to the App Store; the same notarised DMG that RC users downloaded is the one attached to the final GitHub Release.
+- The final tag points at the **same commit** as the RC being promoted. The same iOS binary that was beta-tested ships to the App Store; the same notarised Mac zip that RC users downloaded is the one attached to the final GitHub Release.
 - Tags are never deleted once pushed. Abandoned RCs and final releases stay as historical record.
 - Channel signals carry the RC vs final distinction (TestFlight badge, GitHub "Pre-release" label). The binary itself is identical.
 
@@ -46,9 +46,9 @@ The pipeline writes detailed instructions to the workflow run's job summary when
 
 4. **Cut the GH pre-release.** Run `just release-create-rc <version> .agent-tmp/release-notes-<version>.md`. This creates the tag, which fires `release-rc.yml`.
 
-5. **Wait + verify.** Run `just release-wait v<version>`. The workflow may pause on the `await-prod-deploy` job — if so, follow the "Schema deploys" procedure above (open Console → Deploy → approve the GH job). When the workflow concludes green, run `just release-status v<version>` to confirm the DMG is attached to the GH pre-release and the IPA reached TestFlight.
+5. **Wait + verify.** Run `just release-wait v<version>`. The workflow may pause on the `await-prod-deploy` job — if so, follow the "Schema deploys" procedure above (open Console → Deploy → approve the GH job). When the workflow concludes green, run `just release-status v<version>` to confirm the Mac zip is attached to the GH pre-release and the IPA reached TestFlight.
 
-6. **Smoke-test.** Install the TestFlight build (iOS device + simulator) and the DMG (Mac). If anything is broken, document the issue, fix on `main`, and cut a fresh RC. Don't delete the bad RC; mark its release body to note it is obsolete.
+6. **Smoke-test.** Install the TestFlight build (iOS device + simulator) and the Mac zip (extract, drag `Moolah.app` to `/Applications`, run). If anything is broken, document the issue, fix on `main`, and cut a fresh RC. Don't delete the bad RC; mark its release body to note it is obsolete.
 
 ## Promote an RC to final
 
@@ -62,7 +62,7 @@ The pipeline writes detailed instructions to the workflow run's job summary when
 
 5. **Wait.** Run `just release-wait v<version>`.
 
-6. **Verify.** Run `just release-status v<version>`. Confirm the workflow concluded green and the DMG asset is attached to the final release. The workflow's green conclusion implies the App Store submission was made (auto-release on) and the bump PR was opened with automerge enabled — but cross-check both in App Store Connect and the GitHub PR list. If you see a workflow failure, jump to "Recovery" → "Final workflow fails after submission".
+6. **Verify.** Run `just release-status v<version>`. Confirm the workflow concluded green and the Mac zip asset is attached to the final release. The workflow's green conclusion implies the App Store submission was made (auto-release on) and the bump PR was opened with automerge enabled — but cross-check both in App Store Connect and the GitHub PR list. If you see a workflow failure, jump to "Recovery" → "Final workflow fails after submission".
 
 7. **Review the bump PR.** It is opened with the default minor bump and automerge enabled. If you want a different bump (major / patch / explicit version), edit `project.yml` in the PR before automerge fires; otherwise let it merge.
 
@@ -107,7 +107,7 @@ If you click Deploy in the Console and approve the workflow but `await-prod-depl
 ### Schema deploy succeeded, build failed mid-RC
 The Production schema change is permanent. Diagnose the build failure on `main`, fix it, cut a new RC. The next RC's preflight will see Prod already matches `schema.ckdb` and skip straight to the build. The bad RC's GH pre-release stays as a record; edit its body to note it is obsolete.
 
-### iOS upload succeeded, Mac DMG step failed
+### iOS upload succeeded, Mac zip step failed
 Re-run the workflow run from the failed step (Actions → Run → Re-run failed jobs). Notarisation hiccups are usually transient. If a config issue, fix on `main` and cut a new RC.
 
 ### Notarisation timeout
@@ -120,7 +120,7 @@ Don't promote it. Cut a new RC. The bad RC's GH pre-release stays for traceabili
 Open a PR that bumps `MARKETING_VERSION` past it (or back, if you really need to). Land through the merge-queue. The next RC reads the new value.
 
 ### Final workflow fails after submission
-Re-run the workflow. The build is unchanged; idempotent steps (DMG copy, bump PR creation) are safe to retry.
+Re-run the workflow. The build is unchanged; idempotent steps (Mac zip copy, bump PR creation) are safe to retry.
 
 ### Apple rejects the App Store submission
 Address feedback on `main`, cut a new RC + final cycle. Auto-release is per-submission, so the rejected submission has no live effect.

@@ -37,5 +37,5 @@ Point at the relevant heading under "Recovery" in the runbook. Don't invent reco
 
 ## Hand-off
 
-- After an RC: tell the user how to install the TestFlight build and the DMG, and what to look for in smoke-testing.
+- After an RC: tell the user how to install the TestFlight build and the Mac zip (extract, drag `Moolah.app` to `/Applications`), and what to look for in smoke-testing.
 - After a final: tell the user the App Store submission has been made (auto-release after approval) and that the bump PR is in flight; remind them to edit `project.yml` in the PR if they want a non-default bump.

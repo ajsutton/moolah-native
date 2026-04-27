@@ -95,13 +95,13 @@ jobs:
               version:${{ steps.pair.outputs.marketing_version }} \
               build_number:${{ steps.build.outputs.build_number }}
 
-      - name: Copy DMG from RC release to final release
+      - name: Copy Mac zip from RC release to final release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release download "${{ steps.pair.outputs.rc_tag }}" \
-              -p "*.dmg" -D build
-          gh release upload "$GITHUB_REF_NAME" build/*.dmg --clobber
+              -p "Moolah-*.zip" -D build
+          gh release upload "$GITHUB_REF_NAME" build/Moolah-*.zip --clobber
 
       - name: Open version-bump PR with automerge
         env:
