@@ -118,23 +118,6 @@ run-mac *args: generate
         open .build/Build/Products/Debug/Moolah.app
     fi
 
-# Build a Release macOS app and install to /Applications.
-# Forces ENABLE_ENTITLEMENTS=1 for the regenerate: Release bakes in
-# CLOUDKIT_ENABLED, so an un-entitled binary is killed silently at launch
-# by the hardened runtime when it calls CKContainer.default().
-install-mac:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ENABLE_ENTITLEMENTS=1 just generate
-    xcodebuild build \
-        -scheme Moolah-macOS \
-        -destination 'platform=macOS' \
-        -configuration Release \
-        -derivedDataPath .build
-    rm -rf /Applications/Moolah.app
-    cp -R .build/Build/Products/Release/Moolah.app /Applications/Moolah.app
-    echo "Installed Moolah.app to /Applications"
-
 # Build the app for the iOS Simulator
 build-ios: generate
     #!/usr/bin/env bash
@@ -159,7 +142,11 @@ generate:
     # Provide default
     export CODE_SIGN_STYLE="${CODE_SIGN_STYLE:-Automatic}"
 
-    # Optionally inject entitlements for local CloudKit development
+    # Optionally inject Debug-config entitlements for local CloudKit development.
+    # Set ENABLE_ENTITLEMENTS=1 to make `just build-mac` / `just run-mac` produce
+    # a Debug binary signed with the test container's iCloud entitlement. Release
+    # builds are produced by fastlane lanes (no entitlement injection here) and
+    # shipped via the GitHub release artefact — there is no local Release path.
     if [ "${ENABLE_ENTITLEMENTS:-}" = "1" ]; then
         SPEC=$(bash scripts/inject-entitlements.sh)
         trap "rm -f $SPEC" EXIT
@@ -178,9 +165,6 @@ check-schema-additive:
 # Sync code signing certificates (runs Match)
 certificates:
     bundle exec fastlane ios certificates
-
-# Build and install macOS app, then upload iOS app to TestFlight
-test-release: install-mac testflight
 
 # Check App Store requirements without signing (Info.plist, icons, etc.)
 validate-appstore:
@@ -256,6 +240,14 @@ verify-prod-deployed:
 # release-pipeline container.
 import-schema-to-dev:
     bash scripts/import-schema-to-dev.sh
+
+# Manual local convenience: bootstraps the test container's Development
+# schema from CloudKit/schema.ckdb. Run once after creating the test
+# container in App Store Connect, or to wipe the test container back to a
+# known-good state. DESTRUCTIVE — set CKTOOL_ALLOW_DEV_RESET=1 to confirm.
+# Not used by CI.
+import-schema-to-test:
+    bash scripts/import-schema-to-test.sh
 
 # Release-tag CI: refreshes CloudKit/schema-prod-baseline.ckdb from live
 # Production after a successful release. Opens a follow-up PR if the

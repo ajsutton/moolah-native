@@ -5,12 +5,16 @@
 # CloudKit/schema-prod-baseline.ckdb. Halts the release on mismatch
 # (manual dashboard edit, partial prior promote, etc.) so a human can
 # investigate before promote-schema runs.
+#
+# Targets the release container (CLOUDKIT_CONTAINER_ID_RELEASE) — see issue
+# #495.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=scripts/cloudkit-config.sh
 source "$HERE/cloudkit-config.sh"
 
 cloudkit_require_env
+CLOUDKIT_CONTAINER_ID="$CLOUDKIT_CONTAINER_ID_RELEASE"
 
 baseline="CloudKit/schema-prod-baseline.ckdb"
 [ -f "$baseline" ] || cloudkit_fail "$baseline is missing."
