@@ -146,20 +146,6 @@ struct InstrumentPickerSheetCore: View {
     }
   #endif
 
-  private func commit(_ result: InstrumentSearchResult) {
-    if result.isRegistered {
-      selection = result.instrument
-      isPresented = false
-    } else {
-      Task {
-        if let chosen = await store.select(result) {
-          selection = chosen
-          isPresented = false
-        }
-      }
-    }
-  }
-
   // MARK: - Shared layouts
 
   private var navigationStack: some View {
@@ -216,6 +202,15 @@ struct InstrumentPickerSheetCore: View {
             }
           }
         }
+        // While `store.isResolving` is true, the user has tapped an
+        // unregistered crypto token and we're awaiting the network
+        // round-trip in `TokenResolutionClient.resolve()`. Disable the
+        // list (no duplicate `select(_:)` calls from a second tap) and
+        // surface a progress overlay so the wait isn't silent. The
+        // search field sits outside this list (macOS sibling /
+        // iOS navigation-level `.searchable`) and stays interactive.
+        .disabled(store.isResolving)
+        .overlay { resolvingOverlay }
         #if os(macOS)
           .onChange(of: highlightedID) { _, newID in
             guard let id = newID else { return }
@@ -295,5 +290,39 @@ struct InstrumentPickerSheetCore: View {
       .font(.system(size: 12, weight: .semibold))
       .frame(width: 28, height: 28)
       .background(.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+  }
+}
+
+// MARK: - Selection + resolution helpers
+
+extension InstrumentPickerSheetCore {
+  /// Commits the user's pick. Registered hits return immediately; an
+  /// unregistered crypto token is resolved via the store (network call),
+  /// which surfaces the progress overlay below until it returns.
+  func commit(_ result: InstrumentSearchResult) {
+    if result.isRegistered {
+      selection = result.instrument
+      isPresented = false
+    } else {
+      Task {
+        if let chosen = await store.select(result) {
+          selection = chosen
+          isPresented = false
+        }
+      }
+    }
+  }
+
+  /// Progress overlay shown while `store.isResolving == true`.
+  /// Sits on top of the disabled list so a crypto resolve round-trip is
+  /// visible feedback (and a duplicate tap can't queue a second `select`).
+  @ViewBuilder var resolvingOverlay: some View {
+    if store.isResolving {
+      ProgressView()
+        .progressViewStyle(.circular)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.regularMaterial)
+        .accessibilityLabel("Resolving token…")
+    }
   }
 }
