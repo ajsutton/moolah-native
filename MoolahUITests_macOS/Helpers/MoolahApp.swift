@@ -96,7 +96,13 @@ final class MoolahApp {
   /// briefly hand activation back to the test runner).
   /// Called automatically from `launch(seed:)`; drivers reuse it after
   /// actions that re-create the window.
-  func expectMainWindowVisible(timeout: TimeInterval = 5) {
+  ///
+  /// The 15 s default tolerates cold-start `xcodebuild`-launched runs on
+  /// GitHub-hosted macos-26 runners, where the first launch after a fresh
+  /// provisioning can take several seconds beyond a warm-cache developer
+  /// machine. A shorter budget produced merge-queue-spec flakes on PRs
+  /// that touched no UI code (issue #493).
+  func expectMainWindowVisible(timeout: TimeInterval = 15) {
     if !application.windows.firstMatch.waitForExistence(timeout: timeout) {
       Trace.recordFailure("main window did not appear within \(timeout)s")
       XCTFail("Moolah main window did not appear within \(timeout)s of launch")
