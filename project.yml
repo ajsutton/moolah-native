@@ -29,7 +29,7 @@ settings:
     # CloudKitContainer.app. Must stay in sync with
     # fastlane/Moolah.entitlements (Release-only, app.v2),
     # fastlane/Moolah-mac.entitlements (Release-only, app.v2),
-    # scripts/inject-entitlements.sh (lists both for local Debug+Release),
+    # scripts/inject-entitlements.sh (Debug-only, lists only app.test),
     # and scripts/cloudkit-config.sh (CLOUDKIT_CONTAINER_ID_RELEASE /
     # CLOUDKIT_CONTAINER_ID_TEST). Refs issue #495.
 
