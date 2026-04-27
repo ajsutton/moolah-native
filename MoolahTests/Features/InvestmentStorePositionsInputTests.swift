@@ -41,6 +41,18 @@ struct InvestmentStorePositionsInputTests {
     #expect(bhpRow.costBasis == InstrumentAmount(quantity: 4_000, instrument: aud))
   }
 
+  /// Registers a crypto instrument with a coingecko-only provider mapping
+  /// so writes against it satisfy `ensureInstrument`'s tightening (Task 14).
+  private func registerCoingeckoOnly(
+    _ instrument: Instrument, coingeckoId: String, in backend: CloudKitBackend
+  ) async throws {
+    try await backend.instrumentRegistry.registerCrypto(
+      instrument,
+      mapping: CryptoProviderMapping(
+        instrumentId: instrument.id, coingeckoId: coingeckoId,
+        cryptocompareSymbol: nil, binanceSymbol: nil))
+  }
+
   @Test("crypto-to-crypto swap shifts cost basis correctly")
   func swapShiftsCostBasis() async throws {
     let (backend, _) = try TestBackend.create()
@@ -48,6 +60,8 @@ struct InvestmentStorePositionsInputTests {
       chainId: 1, contractAddress: nil, symbol: "ETH", name: "Ethereum", decimals: 18)
     let btc = Instrument.crypto(
       chainId: 0, contractAddress: nil, symbol: "BTC", name: "Bitcoin", decimals: 8)
+    try await registerCoingeckoOnly(eth, coingeckoId: "ethereum", in: backend)
+    try await registerCoingeckoOnly(btc, coingeckoId: "bitcoin", in: backend)
 
     // Use FixedConversionService so the swap-date rates are deterministic
     // (TestBackend's default conversion service may not have ETH/BTC fixtures).

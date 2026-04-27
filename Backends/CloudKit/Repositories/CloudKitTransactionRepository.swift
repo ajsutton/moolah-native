@@ -53,17 +53,43 @@ final class CloudKitTransactionRepository: TransactionRepository, @unchecked Sen
 
   @MainActor
   func ensureInstrument(_ instrument: Instrument) throws {
-    guard instrument.kind != .fiatCurrency else {
+    switch instrument.kind {
+    case .fiatCurrency:
+      // Fiat is ambient — synthesised from `Locale.Currency.isoCurrencies`
+      // by the registry. No row is required.
       instrumentCache[instrument.id] = instrument
-      return
+    case .stock:
+      // Stock path intentionally unchanged in this plan. CSV imports do
+      // not currently produce unmapped stock rows in the same way the
+      // crypto path does, so tightening this without a clear motivating
+      // failure risks regressing imports. See design plan §4.8.
+      let iid = instrument.id
+      let descriptor = FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == iid })
+      if try context.fetch(descriptor).isEmpty {
+        context.insert(InstrumentRecord.from(instrument))
+        onInstrumentChanged(instrument.id)
+      }
+      instrumentCache[instrument.id] = instrument
+    case .cryptoToken:
+      // A crypto write must reference an instrument the registry has seen
+      // and assigned at least one provider mapping (CoinGecko, CryptoCompare,
+      // or Binance). Auto-inserting an unmapped row here would defer the
+      // failure to conversion time as `ConversionError.noProviderMapping`.
+      // Routing the user through `InstrumentPickerStore.resolve(_:)` (or
+      // the Add Token flow) is the contract; throwing here surfaces the
+      // programmer error early.
+      let iid = instrument.id
+      let descriptor = FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == iid })
+      let existing = try context.fetch(descriptor).first
+      let isMapped =
+        existing?.coingeckoId != nil
+        || existing?.cryptocompareSymbol != nil
+        || existing?.binanceSymbol != nil
+      guard isMapped else {
+        throw UnmappedCryptoInstrumentError(instrumentId: instrument.id)
+      }
+      instrumentCache[instrument.id] = instrument
     }
-    let iid = instrument.id
-    let descriptor = FetchDescriptor<InstrumentRecord>(predicate: #Predicate { $0.id == iid })
-    if try context.fetch(descriptor).isEmpty {
-      context.insert(InstrumentRecord.from(instrument))
-      onInstrumentChanged(instrument.id)
-    }
-    instrumentCache[instrument.id] = instrument
   }
 
   /// Returns the instrument associated with the given account, falling back
