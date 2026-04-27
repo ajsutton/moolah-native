@@ -158,6 +158,41 @@ struct TransactionStorePayScheduledTests {
   }
 
   @Test
+  func testPaidCopyKeepsScheduledDate() async throws {
+    let scheduledDate = try TransactionStoreTestSupport.makeDate("2024-01-15")
+    let scheduled = Transaction(
+      date: scheduledDate,
+      payee: "Rent",
+      recurPeriod: .month,
+      recurEvery: 1,
+      legs: [
+        TransactionLeg(
+          accountId: accountId,
+          instrument: Instrument.defaultTestInstrument,
+          quantity: Decimal(-200000) / 100,
+          type: .expense
+        )
+      ]
+    )
+    let (backend, container) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: container)
+    let store = TransactionStore(
+      repository: backend.transactions,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
+
+    await store.load(filter: TransactionFilter(scheduled: .scheduledOnly))
+    _ = await store.payScheduledTransaction(scheduled)
+
+    let allPage = try await backend.transactions.fetch(
+      filter: TransactionFilter(), page: 0, pageSize: 50)
+    let paid = allPage.transactions.first { $0.id != scheduled.id }
+    #expect(paid != nil)
+    #expect(paid?.date == scheduledDate)
+  }
+
+  @Test
   func testPayPreservesAllTransactionFields() async throws {
     let categoryId = UUID()
     let earmarkId = UUID()
