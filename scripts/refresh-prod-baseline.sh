@@ -5,12 +5,16 @@
 # PR. Run by release-rc.yml after a successful release so that
 # `just check-schema-additive` on subsequent PRs runs against an
 # up-to-date baseline.
+#
+# Targets the release container (CLOUDKIT_CONTAINER_ID_RELEASE) — see issue
+# #495.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=scripts/cloudkit-config.sh
 source "$HERE/cloudkit-config.sh"
 
 cloudkit_require_env
+CLOUDKIT_CONTAINER_ID="$CLOUDKIT_CONTAINER_ID_RELEASE"
 
 baseline="CloudKit/schema-prod-baseline.ckdb"
 

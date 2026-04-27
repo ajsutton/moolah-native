@@ -1,24 +1,22 @@
 #!/usr/bin/env bash
 #
-# Imports CloudKit/schema.ckdb to the Development environment as a staging
-# step before a manual CloudKit Console "Deploy Schema Changes to
-# Production" click.
+# Imports CloudKit/schema.ckdb to the Development environment of the
+# release container (CLOUDKIT_CONTAINER_ID_RELEASE = iCloud.rocks.moolah.app.v2)
+# as a staging step before a manual CloudKit Console "Deploy Schema Changes
+# to Production" click.
 #
-# The release pipeline runs this when verify-prod-deployed reports the
-# Production schema is behind. Resetting Dev first ensures the Console's
-# diff view shows exactly what would be promoted, with no developer-side
-# pollution.
-#
-# DESTRUCTIVE side-effect on the team's Development CloudKit container —
-# any pending dev experiments will be wiped. See plans/2026-04-26-release-
-# process-design.md and issue for separating the test/dev container from
-# the release-pipeline container.
+# Resetting Dev first ensures the Console's diff view shows exactly what
+# would be promoted, with no developer-side pollution. Per issue #495 the
+# release container's Dev environment is touched only by this script and
+# by the release pipeline — local dev runs and manual cktool experimentation
+# use the separate test container (CLOUDKIT_CONTAINER_ID_TEST).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=scripts/cloudkit-config.sh
 source "$HERE/cloudkit-config.sh"
 
 cloudkit_require_env
+CLOUDKIT_CONTAINER_ID="$CLOUDKIT_CONTAINER_ID_RELEASE"
 
 [ -f "$CLOUDKIT_SCHEMA_FILE" ] \
     || cloudkit_fail "$CLOUDKIT_SCHEMA_FILE is missing."
@@ -42,7 +40,8 @@ cloudkit_cktool import-schema \
 
 cat <<EOF
 
-✓ Development now mirrors $CLOUDKIT_SCHEMA_FILE.
+✓ Development now mirrors $CLOUDKIT_SCHEMA_FILE on container
+  $CLOUDKIT_CONTAINER_ID.
 
 Open https://icloud.developer.apple.com/dashboard/ for container
 $CLOUDKIT_CONTAINER_ID and click Schema → Deploy Schema Changes to

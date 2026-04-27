@@ -17,6 +17,9 @@
 # their parsed AST (record types, fields, types, indexes, deprecation flags)
 # regardless of source-file order or whitespace.
 #
+# Targets the release container (CLOUDKIT_CONTAINER_ID_RELEASE) — see issue
+# #495.
+#
 # Exits 0 if Production is semantically equal to schema.ckdb; non-zero with
 # a descriptive list of differences (printed by the Swift tool) if not.
 set -euo pipefail
@@ -25,6 +28,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/cloudkit-config.sh"
 
 cloudkit_require_env
+CLOUDKIT_CONTAINER_ID="$CLOUDKIT_CONTAINER_ID_RELEASE"
 
 [ -f "$CLOUDKIT_SCHEMA_FILE" ] \
     || cloudkit_fail "$CLOUDKIT_SCHEMA_FILE is missing."
