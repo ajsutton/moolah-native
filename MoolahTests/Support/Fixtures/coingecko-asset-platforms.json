@@ -1,0 +1,5 @@
+[
+  {"id": "ethereum", "chain_identifier": 1, "name": "Ethereum"},
+  {"id": "polygon-pos", "chain_identifier": 137, "name": "Polygon POS"},
+  {"id": "solana", "chain_identifier": null, "name": "Solana"}
+]

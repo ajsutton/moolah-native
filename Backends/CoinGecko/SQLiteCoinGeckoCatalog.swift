@@ -9,22 +9,23 @@ import os
 /// shared across threads. See design §4.1 / §6.
 actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
   private let directory: URL
-  private let session: URLSession
+  let session: URLSession
   let log = Logger(subsystem: "moolah.instrument-registry", category: "catalog")
   private(set) var database: OpaquePointer?
 
   // MARK: - Cross-extension internals
   //
-  // `private` declarations are not visible to extensions in other files,
-  // so members called from `SQLiteCoinGeckoCatalog+Search.swift` (and any
-  // future `+…` extension) drop their `private` keyword and become module-
-  // internal: `log`, `database` (read-only via `private(set)`), and the
-  // low-level SQLite helpers `prepare`, `bind` (both overloads), and
-  // `readText` further down the file.
+  // Swift's `private` doesn't reach across files, so members called from
+  // `+Search.swift` or `+Refresh.swift` drop their `private` keyword and
+  // become module-internal. This is the closed surface — callers outside
+  // `Backends/CoinGecko/` MUST NOT use them.
   //
-  // These remain implementation details of the actor — callers outside
-  // `Backends/CoinGecko/` MUST NOT use them. New backend extensions on
-  // the actor should treat this list as the closed surface of helpers.
+  // Used by +Search.swift only:    `readText`
+  // Used by +Refresh.swift only:   `session`, `exec`, `step`,
+  //                                `replaceAll`, `insertCoins`,
+  //                                `insertPlatforms`, `readMeta`
+  // Used by both extensions:       `log`, `database` (read-only),
+  //                                `prepare`, `bind` (×2)
 
   init(
     directory: URL,
@@ -45,10 +46,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
   // MARK: - CoinGeckoCatalog
   //
   // `search(query:limit:)` lives in `SQLiteCoinGeckoCatalog+Search.swift`.
-
-  func refreshIfStale() async {
-    // Implemented in Task 5.
-  }
+  // `refreshIfStale()` lives in `SQLiteCoinGeckoCatalog+Refresh.swift`.
 
   // MARK: - Schema bootstrap
   //
@@ -105,21 +103,25 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
 
   // MARK: - Replace-all
 
-  private func replaceAll(coins: [RawCoin], platforms: [RawPlatform]) throws {
-    try Self.exec(database: database, "BEGIN IMMEDIATE;")
+  static func replaceAll(
+    database: OpaquePointer?,
+    coins: [RawCoin],
+    platforms: [RawPlatform]
+  ) throws {
+    try exec(database: database, "BEGIN IMMEDIATE;")
     do {
-      try Self.exec(database: database, "DELETE FROM coin;")
-      try Self.exec(database: database, "DELETE FROM platform;")
-      try Self.insertCoins(database: database, coins: coins)
-      try Self.insertPlatforms(database: database, platforms: platforms)
-      try Self.exec(database: database, "COMMIT;")
+      try exec(database: database, "DELETE FROM coin;")
+      try exec(database: database, "DELETE FROM platform;")
+      try insertCoins(database: database, coins: coins)
+      try insertPlatforms(database: database, platforms: platforms)
+      try exec(database: database, "COMMIT;")
     } catch {
-      try? Self.exec(database: database, "ROLLBACK;")
+      try? exec(database: database, "ROLLBACK;")
       throw error
     }
   }
 
-  private static func insertCoins(database: OpaquePointer?, coins: [RawCoin]) throws {
+  static func insertCoins(database: OpaquePointer?, coins: [RawCoin]) throws {
     guard !coins.isEmpty else { return }
     var insertCoin: OpaquePointer?
     try prepare(
@@ -152,7 +154,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     }
   }
 
-  private static func insertPlatforms(
+  static func insertPlatforms(
     database: OpaquePointer?,
     platforms: [RawPlatform]
   ) throws {
@@ -178,7 +180,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
 
   // MARK: - Meta read / write
 
-  private static func readMeta(database: OpaquePointer?) throws -> MetaSnapshot {
+  static func readMeta(database: OpaquePointer?) throws -> MetaSnapshot {
     var statement: OpaquePointer?
     try prepare(
       database: database,
@@ -206,7 +208,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
 
   // MARK: - Low-level SQLite helpers
 
-  private static func exec(database: OpaquePointer?, _ sql: String) throws {
+  static func exec(database: OpaquePointer?, _ sql: String) throws {
     var error: UnsafeMutablePointer<CChar>?
     let result = sqlite3_exec(database, sql, nil, nil, &error)
     if result != SQLITE_OK {
@@ -251,7 +253,7 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
     guard result == SQLITE_OK else { throw CatalogError.sqlite("bind int \(result)") }
   }
 
-  private static func step(_ statement: OpaquePointer?) throws {
+  static func step(_ statement: OpaquePointer?) throws {
     let result = sqlite3_step(statement)
     guard result == SQLITE_DONE || result == SQLITE_ROW else {
       throw CatalogError.sqlite("step \(result)")
@@ -275,15 +277,16 @@ actor SQLiteCoinGeckoCatalog: CoinGeckoCatalog {
 
   enum CatalogError: Error, Equatable {
     case sqlite(String)
+    case network(String)
   }
 }
 
 // MARK: - Test seams
 //
 // The `RawCoin` / `RawPlatform` / `MetaSnapshot` value types and the
-// `*ForTesting` accessors are module-internal so storage tests can
-// exercise replace-all and meta read/write without depending on the
-// network refresh path (which lands in Task 5). Production callers go
+// `*ForTesting` accessors are module-internal so storage and refresh tests
+// can exercise replace-all, meta read/write, and the stale-fetch guard
+// without depending on the network refresh path. Production callers go
 // through `search(query:limit:)` and `refreshIfStale()`. Hosting them in
 // an extension keeps the actor body focused on production code paths.
 
@@ -310,7 +313,14 @@ extension SQLiteCoinGeckoCatalog {
   }
 
   func replaceAllForTesting(coins: [RawCoin], platforms: [RawPlatform]) throws {
-    try replaceAll(coins: coins, platforms: platforms)
+    try Self.replaceAll(database: database, coins: coins, platforms: platforms)
+  }
+
+  func bumpLastFetchedBackwardForTesting(by seconds: TimeInterval) throws {
+    try Self.exec(
+      database: database,
+      "UPDATE meta SET last_fetched = COALESCE(last_fetched, 0) - \(seconds);"
+    )
   }
 
   func readMetaForTesting() throws -> MetaSnapshot {

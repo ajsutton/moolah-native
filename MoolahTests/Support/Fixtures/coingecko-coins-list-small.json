@@ -1,0 +1,6 @@
+[
+  {"id": "bitcoin", "symbol": "btc", "name": "Bitcoin", "platforms": {}},
+  {"id": "ethereum", "symbol": "eth", "name": "Ethereum", "platforms": {}},
+  {"id": "uniswap", "symbol": "uni", "name": "Uniswap",
+   "platforms": {"ethereum": "0x1F9840a85d5aF5bf1D1762F925BDADdC4201F984"}}
+]
