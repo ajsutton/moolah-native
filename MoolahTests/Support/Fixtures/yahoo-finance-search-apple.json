@@ -1,0 +1,13 @@
+{
+  "explains": [],
+  "count": 6,
+  "quotes": [
+    {"symbol":"AAPL","shortname":"Apple Inc.","exchange":"NMS","quoteType":"EQUITY"},
+    {"symbol":"APC.DE","shortname":"Apple Inc.                    R","exchange":"GER","quoteType":"EQUITY"},
+    {"symbol":"APLE.TO","shortname":"HARVEST APPLE ENHNCD HIGH INCM  ","exchange":"TOR","quoteType":"ETF"},
+    {"symbol":"AAPY.DE","shortname":"Leverage Shares PLC           E","exchange":"GER","quoteType":"OPTION"},
+    {"symbol":"^GSPC","shortname":"S&P 500","exchange":"SNP","quoteType":"INDEX"},
+    {"symbol":"FXAIX","shortname":"Fidelity 500 Index Fund","exchange":"NAS","quoteType":"MUTUALFUND"}
+  ],
+  "news": []
+}
