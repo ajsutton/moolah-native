@@ -57,7 +57,7 @@ This design addresses both directly: an identifier discipline plus a failure-art
 
 When `CommandLine.arguments.contains("--ui-testing")`, the app:
 
-- Uses `TestBackend` (existing: `CloudKitBackend` + in-memory `ModelContainer`) instead of `RemoteBackend`.
+- Uses `TestBackend` (`CloudKitBackend` + in-memory `ModelContainer`) for fast, network-free test runs.
 - Skips sync, telemetry, and login flows. A profile is pre-seeded as signed-in.
 - Reads a seed name from `ProcessInfo.processInfo.environment["UI_TESTING_SEED"]` and hydrates the backend from `UITestSeeds` with fixed-UUID fixtures.
 

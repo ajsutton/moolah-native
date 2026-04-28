@@ -13,7 +13,7 @@
 - **Tax calculation**: estimated liability with marginal rates, Medicare levy, CGT discount, franking credits, offsets. Not a lodgeable return — data for accountants plus actionable estimates.
 - **Rate tables**: bundled per financial year so historical reports stay accurate.
 - **Multi-instrument**: all tax totals roll up to the profile's reporting instrument (`Profile.instrument`, derived from `Profile.currencyCode` — typically AUD for Australian tax). Per-instrument amounts are converted via `InstrumentConversionService` following `guides/INSTRUMENT_CONVERSION_GUIDE.md`. Rule 11 applies: if any conversion fails, the dependent total is marked unavailable — never show partial sums or native-instrument fallbacks.
-- **CloudKit backend**: full support. Remote backend (moolah-server): sensible defaults, tax features effectively read-only/inert. Remote is single-instrument (`Profile.supportsComplexTransactions == false`), so multi-instrument concerns apply only to CloudKit profiles.
+- **CloudKit backend**: full support. All profiles are multi-instrument (`CloudKitBackend` is the only production backend).
 
 ## Non-Goals
 
@@ -39,7 +39,6 @@ Owner
 
 - `OwnerRepository` protocol (or grouped under `TaxRepository` — see below) for CRUD: `fetchAll`, `create`, `update`, `delete`
 - CloudKit backend: full CRUD
-- Remote (moolah-server) backend: returns a single default person owner (the profile holder, name = `profile.cachedUserName`); mutations are no-ops
 - InMemory backend: full implementation for tests
 
 ### Account changes
@@ -47,7 +46,6 @@ Owner
 - `Account` already has an `instrument: Instrument` field (used for multi-instrument support). No change needed for currency handling.
 - New field: `ownerId: UUID?` — references an Owner. Nil defaults to the profile's default owner.
 - CloudKit backend stores and syncs this field
-- Remote backend: always nil (all accounts belong to profile holder)
 
 ### Category changes
 
@@ -350,16 +348,6 @@ When determining which owner a transaction's category belongs to:
 - `BeneficiaryDistribution` stored as a nested/child record or serialised within adjustments
 - Category record gains `taxCategory` (string) and `ownerId` (reference) fields
 - Account record gains `ownerId` (reference) field; its existing `instrument` field is untouched
-
-### Remote backend (moolah-server)
-
-Remote is single-instrument (`Profile.supportsComplexTransactions == false`) so tax features are inert:
-
-- `fetchOwners()`: returns a single default person owner whose name is `profile.cachedUserName`
-- `createOwner/updateOwner/deleteOwner`: no-op
-- Category and Account tax fields: always nil on fetch, ignored on update
-- `fetchAdjustments`: returns nil
-- `saveAdjustments`: no-op
 
 ### InMemory backend
 

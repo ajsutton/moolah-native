@@ -86,14 +86,14 @@ Full per-account / per-earmark / per-leg currency support, building on the excha
 - `InstrumentConversionService` protocol with `FiatConversionService` and `FullConversionService`.
 - `Account.instrument` field and `AccountRecord.instrumentId` storage — persisted and read back from SwiftData. Legacy `balance`/`investmentValue` fields removed; accounts are fully position-based.
 - Aggregation — `AccountStore` converts foreign-currency accounts to profile currency for sidebar totals, net worth, and available funds. `displayBalance` replaces the old sync `balance(for:)`.
-- Per-account currency picker in create/edit account UI (gated on `supportsComplexTransactions`).
+- Per-account currency picker in create/edit account UI.
 - Per-earmark currency picker in create/edit earmark UI (`c6eda0d`), with `EarmarkStore` re-running `recomputeConvertedTotals` when the instrument changes.
 - Cross-currency transfers — `TransactionDetailView` shows independent Sent/Received amount fields with a derived exchange-rate hint; `TransactionDraft` supports per-leg instrument overrides.
 - Analysis views — `CloudKitAnalysisRepository` converts every leg at the transaction's date before aggregating expense breakdown, income/expense totals, and daily balances.
 - Forecast — scheduled foreign-currency transactions are pre-converted on `Date()` before entering the forecast accumulator (`c31b6af`).
 - Graceful degradation — per-unit isolation + retry for sidebar conversion failures (`61460a1`), transactions still display when conversion fails (`1dc622a`), per-account sidebar rows show the converted balance (`2331571`), `ExchangeRateService` falls back for missing dates and cold caches (`704825b`). Codified as Rule 11 in `guides/INSTRUMENT_CONVERSION_GUIDE.md`.
 - Import / export round-trip preserves earmark instrument (`b9a084f`).
-- Single-instrument backend enforcement — `Remote*Repository` write paths reject foreign-instrument writes with `BackendError.unsupportedInstrument`; UI gates currency pickers and the custom transaction mode on `Profile.supportsComplexTransactions`. Codified as Rule 11a in the guide.
+- Single-instrument backend enforcement — formerly Rule 11a in `guides/INSTRUMENT_CONVERSION_GUIDE.md`. Superseded: the Remote backend was deleted in `feature/remove-moolah-server`; all profiles are now multi-instrument.
 
 ### Known minor follow-ups (not blockers)
 

@@ -473,71 +473,21 @@ Everything below is only needed if you decide to publish Moolah on the App Store
 
 ## Phase 6: Disable Remote Backend for App Store Builds
 
-App Store builds must be iCloud/CloudKit only. This eliminates several App Store compliance requirements: Sign in with Apple (Guideline 4.8), complex account deletion flows, demo account preparation, IPv6 testing for custom servers, and simplifies the privacy policy.
+> **Superseded.** The Remote (moolah-server) backend was deleted entirely in PR `feature/remove-moolah-server`. All profiles are now CloudKit-only in every build configuration. Steps 6.1–6.6 below are retained for historical reference only and must not be executed.
 
-### 6.1 — Add `APPSTORE_BUILD` Compilation Condition
+~~App Store builds must be iCloud/CloudKit only. This eliminates several App Store compliance requirements: Sign in with Apple (Guideline 4.8), complex account deletion flows, demo account preparation, IPv6 testing for custom servers, and simplifies the privacy policy.~~
 
-**File: `project.yml`**
+### ~~6.1 — Add `APPSTORE_BUILD` Compilation Condition~~ (superseded)
 
-Add `APPSTORE_BUILD` to `SWIFT_ACTIVE_COMPILATION_CONDITIONS` for Release builds on both iOS and macOS targets. This condition gates all remote backend UI and instantiation.
+### ~~6.2 — Gate Profile Setup UI~~ (superseded)
 
-**What to change in `project.yml`:**
-- In `Moolah_iOS` target settings, add a `configs` block under `settings` with a `Release` configuration that sets `SWIFT_ACTIVE_COMPILATION_CONDITIONS: APPSTORE_BUILD`
-- Do the same for `Moolah_macOS`
+### ~~6.3 — Gate Profile Form UI~~ (superseded)
 
-**Result:** In Debug builds, the full app (CloudKit + remote) is available for development. In Release builds (App Store), only CloudKit profiles can be created.
+### ~~6.4 — Guard Backend Instantiation~~ (superseded)
 
-**Note:** This will also affect TestFlight builds since they use the Release configuration. If you want to keep both backends available on TestFlight while gating for App Store, consider adding a separate `AppStore` build configuration instead of using `Release`. Alternatively, accept that TestFlight builds will also be iCloud-only once this is enabled.
+### ~~6.5 — Compile-Time Exclusion of Remote Backend Code (Optional)~~ (superseded)
 
-### 6.2 — Gate Profile Setup UI
-
-**File: `Features/Profiles/Views/ProfileSetupView.swift`**
-
-Wrap the "Connect to Moolah" button and "Use a custom server" button/fields in `#if !APPSTORE_BUILD` blocks. In App Store builds, only the "Store in iCloud" button and its form fields should appear.
-
-**What to change:**
-- The "Connect to Moolah" button (both the `showICloudForm` and `!showICloudForm` branches) → wrap in `#if !APPSTORE_BUILD`
-- The "Use a custom server" button → wrap in `#if !APPSTORE_BUILD`
-- The `customServerFields` section → wrap in `#if !APPSTORE_BUILD`
-- In App Store builds, auto-expand the iCloud form (since it's the only option) — set `showICloudForm = true` by default or skip the initial button and show the form directly
-
-### 6.3 — Gate Profile Form UI
-
-**File: `Features/Profiles/Views/ProfileFormView.swift`**
-
-Wrap the "Moolah" and "Custom Server" buttons in the backend type selection section in `#if !APPSTORE_BUILD`. In App Store builds, auto-select `.cloudKit` and hide the type picker entirely.
-
-**What to change:**
-- The `.moolah` Button → wrap in `#if !APPSTORE_BUILD`
-- The `.remote` Button → wrap in `#if !APPSTORE_BUILD`
-- The custom server form fields section (`if selectedType == .remote`) → wrap in `#if !APPSTORE_BUILD`
-- Set `selectedType` default to `.cloudKit` in App Store builds
-- In `save()`, the `.moolah` and `.remote` switch cases → wrap in `#if !APPSTORE_BUILD`
-- In `canAdd`, the `.moolah` and `.remote` cases → wrap in `#if !APPSTORE_BUILD`
-
-### 6.4 — Guard Backend Instantiation
-
-**File: `App/ProfileSession.swift`**
-
-Add a compile-time guard in `ProfileSession.init` to prevent `RemoteBackend` instantiation in App Store builds. This is a safety net in case a remote profile somehow exists.
-
-**What to change:**
-- In the `switch profile.backendType` block, wrap the `.remote, .moolah` case body in `#if !APPSTORE_BUILD` / `#else fatalError("Remote backend is not available in App Store builds")` / `#endif`
-- Alternatively, fall back to a read-only error state rather than crashing
-
-### 6.5 — Compile-Time Exclusion of Remote Backend Code (Optional)
-
-**Files: `Backends/Remote/` directory**
-
-Optionally, wrap the entire `RemoteBackend` implementation files with `#if !APPSTORE_BUILD` to reduce binary size. Not strictly required since the UI and instantiation guards prevent usage, but it's a clean approach.
-
-### 6.6 — Verify the Gate Works
-
-**Verification steps:**
-1. Run `just generate` to regenerate the Xcode project
-2. Build in Debug configuration → confirm all three profile types are available in UI
-3. Build in Release configuration → confirm only iCloud profile creation is available
-4. Run tests (which use Debug config) → confirm all existing tests still pass
+### ~~6.6 — Verify the Gate Works~~ (superseded)
 
 ---
 
@@ -839,9 +789,9 @@ Files to modify:
 | File | Purpose | Phase |
 |------|---------|-------|
 | `.github/workflows/release.yml` | App Store deployment (manual trigger) | 8.3 |
-| `Features/Profiles/Views/ProfileSetupView.swift` | Gate remote backend UI with `#if !APPSTORE_BUILD` | 6.2 |
-| `Features/Profiles/Views/ProfileFormView.swift` | Gate remote backend UI with `#if !APPSTORE_BUILD` | 6.3 |
-| `App/ProfileSession.swift` | Guard against RemoteBackend instantiation in App Store builds | 6.4 |
+| `Features/Profiles/Views/ProfileSetupView.swift` | ~~Gate remote backend UI with `#if !APPSTORE_BUILD`~~ (superseded — Remote backend deleted) | ~~6.2~~ |
+| `Features/Profiles/Views/ProfileFormView.swift` | ~~Gate remote backend UI with `#if !APPSTORE_BUILD`~~ (superseded — Remote backend deleted) | ~~6.3~~ |
+| `App/ProfileSession.swift` | ~~Guard against RemoteBackend instantiation in App Store builds~~ (superseded — Remote backend deleted) | ~~6.4~~ |
 | Settings view (TBD) | Privacy policy link and support/contact info | 7.1, 7.2 |
 
 ---

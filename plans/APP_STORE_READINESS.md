@@ -112,12 +112,7 @@ iPhone apps should provide a good experience on iPad.
 
 Apps must work on IPv6-only networks. This is a common rejection reason.
 
-**TODO:**
-- [ ] Test using macOS "Create NAT64 Network" (System Settings > Sharing > Internet Sharing)
-- [ ] Verify all network calls to `moolah.rocks` work over IPv6-only
-- [ ] Ensure no hardcoded IPv4 addresses in networking code
-
-> **If remote backend is disabled:** Not a concern. CloudKit networking is handled by Apple and is guaranteed IPv6 compatible.
+**Status:** Not a concern. CloudKit networking is handled by Apple and is guaranteed IPv6 compatible. The app makes no direct network calls outside of CloudKit and third-party price APIs (Frankfurter, CoinGecko, Yahoo Finance) — no `moolah.rocks` API traffic.
 
 ---
 

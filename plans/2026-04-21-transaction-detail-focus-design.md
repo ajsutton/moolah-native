@@ -22,10 +22,7 @@ Two focus failures in `TransactionDetailView`, each gated by a different race:
 
 ## 2. Scope: CloudKit only
 
-`moolah-server` will not be changed, and the `Remote` backend is being retired
-soon. **This design targets the CloudKit path only.** On the way out we will
-let `Remote` keep whatever focus behaviour falls out of the CloudKit-shaped
-fix — any residual race there is acceptable given its lifespan.
+**This design targets the CloudKit path only.** CloudKit is the only production backend.
 
 ## 3. Why the current fix is hacky
 
@@ -117,9 +114,9 @@ UUID straight back.
 1. Restore the invariant in `guides/UI_GUIDE.md §13`: opening the inspector
    places first-responder on payee (or amount, for simple earmark-only).
 2. No `Task.sleep`, no retry loops.
-3. Works on CloudKit (Remote is out of scope; it will be retired).
+3. Works on CloudKit (the only production backend).
 4. Stable across the 20-run UI-test gate.
-5. No change to backend DTOs, no change to `moolah-server`.
+5. No change to backend DTOs.
 
 ## 6. Proposed approach — two independent changes
 
