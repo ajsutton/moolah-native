@@ -11,7 +11,7 @@ struct TransactionDetailView: View {
   let onUpdate: (Transaction) -> Void
   let onDelete: (UUID) -> Void
 
-  @Environment(ProfileSession.self) private var session
+  @Environment(ProfileSession.self) private var session: ProfileSession?
 
   // `draft`, `knownInstruments`, and `openedAsNewTransaction` use internal
   // access (no `private`) so that extension files in this module
@@ -118,7 +118,7 @@ struct TransactionDetailView: View {
       #endif
       .onChange(of: draft) { _, _ in debouncedSave() }
       .task {
-        knownInstruments = (try? await session.instrumentRegistry?.all()) ?? []
+        knownInstruments = (try? await session?.instrumentRegistry?.all()) ?? []
       }
       .confirmationDialog(
         "Delete Transaction",

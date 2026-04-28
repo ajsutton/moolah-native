@@ -37,23 +37,24 @@ struct TransactionDetailFeeSection: View {
       },
       set: { draft.legDrafts[legIndex].instrumentId = $0.id })
 
-    return HStack {
+    return LabeledContent {
+      HStack(spacing: 8) {
+        TextField("Amount", text: amountBinding)
+          .labelsHidden()
+          .multilineTextAlignment(.trailing)
+          .monospacedDigit()
+          #if os(iOS)
+            .keyboardType(.decimalPad)
+          #endif
+          .focused($focusedField, equals: .tradeFeeAmount(legIndex))
+          .accessibilityIdentifier(UITestIdentifiers.Detail.tradeFeeAmount(displayNumber - 1))
+        CompactInstrumentPickerButton(
+          selection: instrumentBinding,
+          knownInstruments: knownInstruments
+        )
+      }
+    } label: {
       Text("Amount")
-      Spacer()
-      TextField("Amount", text: amountBinding)
-        .multilineTextAlignment(.trailing)
-        .monospacedDigit()
-        #if os(iOS)
-          .keyboardType(.decimalPad)
-        #endif
-        .focused($focusedField, equals: .tradeFeeAmount(legIndex))
-        .accessibilityIdentifier(UITestIdentifiers.Detail.tradeFeeAmount(displayNumber - 1))
-      InstrumentPickerField(
-        label: "",
-        kinds: Set(Instrument.Kind.allCases),
-        selection: instrumentBinding
-      )
-      .labelsHidden()
     }
   }
 

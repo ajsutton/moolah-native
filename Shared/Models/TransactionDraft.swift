@@ -153,7 +153,7 @@ extension TransactionDraft {
         else { return false }
         return leg.instrument == account.instrument
       }
-    let isCustom = !(transaction.isSimple || isCrossCurrency)
+    let isCustom = !(transaction.isSimple || isCrossCurrency || transaction.isTrade)
 
     // Pin relevantLegIndex for simple transactions
     let relevantIndex: Int

@@ -83,7 +83,7 @@ struct TransactionDetailTradeSection: View {
 
   @ViewBuilder
   private func legAmountRow(
-    label: String,
+    label: LocalizedStringKey,
     indexAccessor: () -> Int?,
     focus: TransactionDetailFocus,
     identifier: String,
@@ -100,24 +100,25 @@ struct TransactionDetailTradeSection: View {
         },
         set: { draft.legDrafts[idx].instrumentId = $0.id })
 
-      HStack {
+      LabeledContent {
+        HStack(spacing: 8) {
+          TextField(label, text: amountBinding)
+            .labelsHidden()
+            .multilineTextAlignment(.trailing)
+            .monospacedDigit()
+            #if os(iOS)
+              .keyboardType(.decimalPad)
+            #endif
+            .focused($focusedField, equals: focus)
+            .accessibilityIdentifier(identifier)
+          CompactInstrumentPickerButton(
+            selection: instrumentBinding,
+            knownInstruments: knownInstruments
+          )
+          .accessibilityIdentifier(instrumentIdentifier)
+        }
+      } label: {
         Text(label)
-        Spacer()
-        TextField(label, text: amountBinding)
-          .multilineTextAlignment(.trailing)
-          .monospacedDigit()
-          #if os(iOS)
-            .keyboardType(.decimalPad)
-          #endif
-          .focused($focusedField, equals: focus)
-          .accessibilityIdentifier(identifier)
-        InstrumentPickerField(
-          label: "",
-          kinds: Set(Instrument.Kind.allCases),
-          selection: instrumentBinding
-        )
-        .labelsHidden()
-        .accessibilityIdentifier(instrumentIdentifier)
       }
     }
   }
@@ -145,9 +146,11 @@ struct TransactionDetailTradeSection: View {
         from: received.amountText, decimals: receivedInst.decimals),
       paidQty != 0, receivedQty != 0
     else { return nil }
-    let rate = paidQty / receivedQty
+    // `abs()` here applies to derived display ratios only; stored leg
+    // quantities keep their signs untouched per the project sign convention.
+    let rate = abs(paidQty / receivedQty)
     let rateFormatted = rate.formatted(
       .number.precision(.significantDigits(2...4)).grouping(.never))
-    return "≈ 1 \(receivedInst.id) = \(rateFormatted) \(paidInst.id)"
+    return "≈ 1 \(receivedInst.shortCode) = \(rateFormatted) \(paidInst.shortCode)"
   }
 }
