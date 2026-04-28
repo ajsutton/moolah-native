@@ -70,6 +70,42 @@ public enum UITestIdentifiers {
     public static func legCategory(_ index: Int) -> String {
       "detail.leg.\(index).category"
     }
+
+    /// Picker that selects the transaction type (Income / Expense / Transfer /
+    /// Trade / Custom). Only rendered when the transaction is editable (i.e.
+    /// not an opening balance and not an irrecoverable custom shape).
+    public static let modeTypePicker = "detail.modeTypePicker"
+
+    // MARK: Trade mode identifiers
+
+    /// Account picker in the trade-mode section. Applies to both `.trade` legs
+    /// and any fee legs.
+    public static let tradeAccount = "transactionDetail.trade.account"
+
+    /// Paid amount text field in the trade-mode section.
+    public static let tradePaidAmount = "transactionDetail.trade.paidAmount"
+
+    /// Instrument picker button next to the Paid amount field.
+    public static let tradePaidInstrument = "transactionDetail.trade.paidInstrument"
+
+    /// Received amount text field in the trade-mode section.
+    public static let tradeReceivedAmount = "transactionDetail.trade.receivedAmount"
+
+    /// Instrument picker button next to the Received amount field.
+    public static let tradeReceivedInstrument = "transactionDetail.trade.receivedInstrument"
+
+    /// "+ Add fee" button in the trade-mode section. Added by Task 15.
+    public static let tradeAddFeeButton = "transactionDetail.trade.addFee"
+
+    /// Amount text field for fee leg at `index` (absolute index into `legDrafts`).
+    public static func tradeFeeAmount(_ index: Int) -> String {
+      "transactionDetail.trade.feeAmount.\(index)"
+    }
+
+    /// Remove button for fee leg at `index` (absolute index into `legDrafts`).
+    public static func tradeFeeRemove(_ index: Int) -> String {
+      "transactionDetail.trade.feeRemove.\(index)"
+    }
   }
 
   public enum SyncFooter {

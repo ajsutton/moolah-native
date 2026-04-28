@@ -202,4 +202,15 @@ struct TransactionIsSimpleTests {
     let transaction = makeTransaction(legs: legs)
     #expect(transaction.isTransfer == true)
   }
+
+  @Test("trade-shaped transaction is not isSimple")
+  func tradeIsNotSimple() {
+    let vgs = Instrument.stock(ticker: "VGS.AX", exchange: "ASX", name: "VGS")
+    let account = UUID()
+    let transaction = makeTransaction(legs: [
+      TransactionLeg(accountId: account, instrument: aud, quantity: -300, type: .trade),
+      TransactionLeg(accountId: account, instrument: vgs, quantity: 20, type: .trade),
+    ])
+    #expect(transaction.isSimple == false)
+  }
 }

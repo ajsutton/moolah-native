@@ -38,6 +38,17 @@ enum ProfitLossCalculator {
   /// transaction's date before summing so `totalInvested` is expressed
   /// in a single currency. See guides/INSTRUMENT_CONVERSION_GUIDE.md
   /// Rules 1 and 5.
+  /// Process all transactions to compute total invested.
+  ///
+  /// Only `.trade` legs contribute to cost basis, consistent with
+  /// `TradeEventClassifier`. Fiat legs of other types (e.g. `.expense`
+  /// brokerage fees) are intentionally excluded.
+  ///
+  /// Fiat `.trade` legs can span multiple currencies (e.g. a USD payment
+  /// in a cross-currency buy). We convert each fiat outflow leg to
+  /// `profileCurrency` on the transaction's date before summing so
+  /// `totalInvested` is expressed in a single currency. See
+  /// guides/INSTRUMENT_CONVERSION_GUIDE.md Rules 1 and 5.
   private static func accumulateInvested(
     into instrumentData: inout [String: InstrumentData],
     transactions: [LegTransaction],
@@ -46,8 +57,9 @@ enum ProfitLossCalculator {
   ) async throws {
     let sorted = transactions.sorted { $0.date < $1.date }
     for transaction in sorted {
-      let fiatLegs = transaction.legs.filter { $0.instrument.kind == .fiatCurrency }
-      let nonFiatLegs = transaction.legs.filter { $0.instrument.kind != .fiatCurrency }
+      let tradeLegs = transaction.legs.filter { $0.type == .trade }
+      let fiatLegs = tradeLegs.filter { $0.instrument.kind == .fiatCurrency }
+      let nonFiatLegs = tradeLegs.filter { $0.instrument.kind != .fiatCurrency }
 
       var fiatOutflow: Decimal = 0
       for leg in fiatLegs where leg.quantity < 0 {

@@ -34,6 +34,14 @@ struct RunningBalanceConversionError: LocalizedError, Sendable {
 struct TransactionWithBalance: Sendable, Identifiable {
   let transaction: Transaction
   let convertedLegs: [ConvertedTransactionLeg]
+  /// Per-instrument leg sums in the legs' native instruments, restricted
+  /// to the legs that match the row's scope (account / earmark filter, or
+  /// all legs when unfiltered). Empty when conversion failed (paired with
+  /// `displayAmount == nil`). See design §4.2.
+  let displayAmounts: [InstrumentAmount]
+  /// Single scalar in the running-balance target instrument. Retained for
+  /// backwards-compatible diagnostics and any consumer that wants the
+  /// converted total; the row no longer reads it for rendering.
   let displayAmount: InstrumentAmount?
   let balance: InstrumentAmount?
 

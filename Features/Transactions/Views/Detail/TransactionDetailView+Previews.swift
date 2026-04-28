@@ -165,6 +165,60 @@ private func previewStore() -> TransactionStore {
   }
 }
 
+#Preview("Trade") {
+  let accountId = UUID()
+  let vgs = Instrument.stock(ticker: "VGS.AX", exchange: "ASX", name: "VGS")
+  return NavigationStack {
+    TransactionDetailView(
+      transaction: Transaction(
+        date: Date(),
+        payee: "SelfWealth",
+        legs: [
+          TransactionLeg(accountId: accountId, instrument: .AUD, quantity: -300, type: .trade),
+          TransactionLeg(accountId: accountId, instrument: vgs, quantity: 20, type: .trade),
+          TransactionLeg(accountId: accountId, instrument: .AUD, quantity: -10, type: .expense),
+        ]
+      ),
+      accounts: Accounts(from: [
+        Account(id: accountId, name: "Brokerage", type: .bank, instrument: .AUD)
+      ]),
+      categories: Categories(from: [Category(name: "Brokerage")]),
+      earmarks: Earmarks(from: []),
+      transactionStore: previewStore(),
+      viewingAccountId: accountId,
+
+      onUpdate: { _ in },
+      onDelete: { _ in }
+    )
+  }
+}
+
+#Preview("Trade (No Fee)") {
+  let accountId = UUID()
+  let vgs = Instrument.stock(ticker: "VGS.AX", exchange: "ASX", name: "VGS")
+  return NavigationStack {
+    TransactionDetailView(
+      transaction: Transaction(
+        date: Date(),
+        legs: [
+          TransactionLeg(accountId: accountId, instrument: .AUD, quantity: -300, type: .trade),
+          TransactionLeg(accountId: accountId, instrument: vgs, quantity: 20, type: .trade),
+        ]
+      ),
+      accounts: Accounts(from: [
+        Account(id: accountId, name: "Brokerage", type: .bank, instrument: .AUD)
+      ]),
+      categories: Categories(from: []),
+      earmarks: Earmarks(from: []),
+      transactionStore: previewStore(),
+      viewingAccountId: accountId,
+
+      onUpdate: { _ in },
+      onDelete: { _ in }
+    )
+  }
+}
+
 #Preview("Scheduled (Recurring)") {
   let accountId = UUID()
   return NavigationStack {

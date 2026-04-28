@@ -199,6 +199,55 @@ final class UITestSeedHydratorTests: XCTestCase {
     }
   }
 
+  // MARK: - tradeReady seed
+
+  func testHydrateTradeReadySeedsTheProfile() throws {
+    let profile = try XCTUnwrap(
+      try UITestSeedHydrator.hydrate(.tradeReady, into: containerManager))
+
+    XCTAssertEqual(profile.id, UITestFixtures.TradeReady.profileId)
+    XCTAssertEqual(profile.currencyCode, UITestFixtures.TradeReady.profileCurrencyCode)
+  }
+
+  func testHydrateTradeReadySeedsBrokerageAccount() throws {
+    let profile = try XCTUnwrap(
+      try UITestSeedHydrator.hydrate(.tradeReady, into: containerManager))
+    let container = try containerManager.container(for: profile.id)
+    let context = ModelContext(container)
+
+    let accounts = try context.fetch(FetchDescriptor<AccountRecord>())
+    XCTAssertEqual(accounts.count, 1, "expected exactly one account")
+    let account = try XCTUnwrap(accounts.first)
+    XCTAssertEqual(account.id, UITestFixtures.TradeReady.brokerageAccountId)
+    XCTAssertEqual(account.name, UITestFixtures.TradeReady.brokerageAccountName)
+  }
+
+  func testHydrateTradeReadySeedsVgsaxInstrument() throws {
+    let profile = try XCTUnwrap(
+      try UITestSeedHydrator.hydrate(.tradeReady, into: containerManager))
+    let container = try containerManager.container(for: profile.id)
+    let context = ModelContext(container)
+
+    let instruments = try context.fetch(FetchDescriptor<InstrumentRecord>())
+    let ids = Set(instruments.map(\.id))
+    XCTAssertTrue(
+      ids.contains(UITestFixtures.TradeReady.vgsaxInstrumentId),
+      "VGS.AX instrument must be registered")
+  }
+
+  func testHydrateTradeReadySeedsBrokerageCategory() throws {
+    let profile = try XCTUnwrap(
+      try UITestSeedHydrator.hydrate(.tradeReady, into: containerManager))
+    let container = try containerManager.container(for: profile.id)
+    let context = ModelContext(container)
+
+    let categories = try context.fetch(FetchDescriptor<CategoryRecord>())
+    XCTAssertEqual(categories.count, 1, "expected exactly one category")
+    let cat = try XCTUnwrap(categories.first)
+    XCTAssertEqual(cat.id, UITestFixtures.TradeReady.brokerageCategoryId)
+    XCTAssertEqual(cat.name, UITestFixtures.TradeReady.brokerageCategoryName)
+  }
+
   // MARK: - Determinism
 
   func testHydrateIsIdempotentWhenRunTwice() throws {

@@ -24,8 +24,8 @@ struct InvestmentStorePositionsInputTests {
       Transaction(
         date: Date(),
         legs: [
-          TransactionLeg(accountId: account.id, instrument: bhp, quantity: 100, type: .income),
-          TransactionLeg(accountId: account.id, instrument: aud, quantity: -4_000, type: .expense),
+          TransactionLeg(accountId: account.id, instrument: bhp, quantity: 100, type: .trade),
+          TransactionLeg(accountId: account.id, instrument: aud, quantity: -4_000, type: .trade),
         ]
       )
     )
@@ -83,8 +83,8 @@ struct InvestmentStorePositionsInputTests {
       Transaction(
         date: Date(timeIntervalSinceNow: -86_400 * 10),
         legs: [
-          TransactionLeg(accountId: account.id, instrument: eth, quantity: 4, type: .income),
-          TransactionLeg(accountId: account.id, instrument: aud, quantity: -12_000, type: .expense),
+          TransactionLeg(accountId: account.id, instrument: eth, quantity: 4, type: .trade),
+          TransactionLeg(accountId: account.id, instrument: aud, quantity: -12_000, type: .trade),
         ]
       )
     )
@@ -96,10 +96,10 @@ struct InvestmentStorePositionsInputTests {
       Transaction(
         date: Date(timeIntervalSinceNow: -86_400 * 5),
         legs: [
-          TransactionLeg(accountId: account.id, instrument: eth, quantity: -2, type: .income),
+          TransactionLeg(accountId: account.id, instrument: eth, quantity: -2, type: .trade),
           TransactionLeg(
             accountId: account.id, instrument: btc, quantity: dec("0.1"),
-            type: .income),
+            type: .trade),
         ]
       )
     )

@@ -17,10 +17,10 @@ struct CapitalGainsCalculatorTestsMoreExtra {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -3000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -3000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: eth, quantity: 1, type: .transfer,
+          accountId: accountId, instrument: eth, quantity: 1, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -28,10 +28,10 @@ struct CapitalGainsCalculatorTestsMoreExtra {
       date: date(200),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: eth, quantity: -1, type: .transfer,
+          accountId: accountId, instrument: eth, quantity: -1, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: uni, quantity: 500, type: .transfer,
+          accountId: accountId, instrument: uni, quantity: 500, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -112,10 +112,10 @@ struct CapitalGainsCalculatorTestsMoreExtra {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: usd, quantity: -2000, type: .transfer,
+          accountId: accountId, instrument: usd, quantity: -2000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -123,10 +123,10 @@ struct CapitalGainsCalculatorTestsMoreExtra {
       date: date(400),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: -100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: -100, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: usd, quantity: 3000, type: .transfer,
+          accountId: accountId, instrument: usd, quantity: 3000, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -161,10 +161,10 @@ struct CapitalGainsCalculatorTestsMoreExtra {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -3000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -3000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: eth, quantity: 1, type: .transfer,
+          accountId: accountId, instrument: eth, quantity: 1, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -172,10 +172,10 @@ struct CapitalGainsCalculatorTestsMoreExtra {
       date: date(200),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: eth, quantity: -1, type: .transfer,
+          accountId: accountId, instrument: eth, quantity: -1, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: uni, quantity: 500, type: .transfer,
+          accountId: accountId, instrument: uni, quantity: 500, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 

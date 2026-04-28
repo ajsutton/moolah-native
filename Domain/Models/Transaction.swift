@@ -52,7 +52,7 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
     return accounts.count > 1 || instruments.count > 1
   }
 
-  // MARK: - Structure Queries
+  // MARK: - Structure Queries (simple/transfer shape)
 
   /// Whether this transaction has simple structure: a single leg, or exactly
   /// two legs forming a basic transfer (amounts negate, same type, second leg
@@ -84,6 +84,7 @@ struct Transaction: Codable, Sendable, Identifiable, Hashable {
     guard second.categoryId == nil && second.earmarkId == nil else { return false }
     return first.instrument != second.instrument
   }
+
 }
 
 struct TransactionFilter: Sendable, Equatable {
@@ -292,6 +293,8 @@ struct TransactionPage: Sendable {
           TransactionWithBalance(
             transaction: transaction,
             convertedLegs: convertedLegs,
+            displayAmounts: Transaction.computeDisplayAmounts(
+              for: transaction, accountId: accountId, earmarkId: earmarkId),
             displayAmount: displayAmount,
             balance: balance))
       case .failure(let underlyingDescription):
@@ -306,6 +309,7 @@ struct TransactionPage: Sendable {
           TransactionWithBalance(
             transaction: transaction,
             convertedLegs: [],
+            displayAmounts: [],
             displayAmount: nil,
             balance: nil))
       }

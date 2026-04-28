@@ -5,6 +5,9 @@ import XCTest
 enum SidebarAccount {
   case checking
   case brokerage
+  /// The Brokerage account from the `.tradeReady` seed (different UUID from
+  /// `.brokerage`, which uses the `.tradeBaseline` seed fixture).
+  case tradeReadyBrokerage
 
   /// The fixed UUID written to the seeded `ProfileContainerManager` by
   /// `UITestSeedHydrator`.
@@ -12,6 +15,7 @@ enum SidebarAccount {
     switch self {
     case .checking: return UITestFixtures.TradeBaseline.checkingAccountId
     case .brokerage: return UITestFixtures.TradeBaseline.brokerageAccountId
+    case .tradeReadyBrokerage: return UITestFixtures.TradeReady.brokerageAccountId
     }
   }
 }

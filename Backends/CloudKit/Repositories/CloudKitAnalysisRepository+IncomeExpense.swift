@@ -199,8 +199,8 @@ extension CloudKitAnalysisRepository {
       if classified.isEarmarked {
         data.earmarkedIncome += classified.amount
       }
-    case .openingBalance:
-      // Server excludes openingBalance from income/expense reports.
+    case .openingBalance, .trade:
+      // Server excludes openingBalance and trade from income/expense reports.
       break
     case .expense:
       // Server: SUM(IF(type='expense' AND account_id IS NOT NULL, amount, 0))

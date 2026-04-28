@@ -34,30 +34,30 @@ struct CapitalGainsCalculatorTestsMore {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -4000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -4000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
     let buyCBA = LegTransaction(
       date: date(50),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -5000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -5000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: cba, quantity: 50, type: .transfer,
+          accountId: accountId, instrument: cba, quantity: 50, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
     let sellAllBHP = LegTransaction(
       date: date(400),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: -100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: -100, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: 5000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: 5000, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -73,13 +73,17 @@ struct CapitalGainsCalculatorTestsMore {
     #expect(result.events[0].gain == 1000)
   }
 
-  /// Mixed-fiat buy: 100 BHP paid for with USD 2000 + AUD 100 fee,
-  /// profile currency = AUD at 1 USD = 1.5 AUD. The calculator must
-  /// convert each fiat leg to the profile currency before summing,
-  /// producing a cost basis of AUD 3100 (not the raw 2100 from blending
-  /// USD and AUD quantities).
+  /// Cross-currency buy with a fee in the profile currency: 100 BHP paid
+  /// for with USD 2000 plus an AUD 100 brokerage fee. Profile currency =
+  /// AUD at 1 USD = 1.5 AUD. The two `.trade` legs price the position
+  /// (USD outflow → BHP) and the AUD fee leg is `.expense` so it does
+  /// **not** participate in cost basis under the current design.
+  ///
+  /// Cost basis is therefore the converted USD outflow only (AUD 3000),
+  /// proceeds AUD 4000, gain AUD 1000. Folding the fee into cost basis
+  /// is tracked in https://github.com/ajsutton/moolah-native/issues/558.
   @Test
-  func mixedFiatLegs_convertToProfileCurrencyBeforeSumming() async throws {
+  func crossCurrencyBuyWithFeeExcludesFeeFromCostBasis() async throws {
     let bhp = stockInstrument("BHP")
     let usd = Instrument.fiat(code: "USD")
     let accountId = UUID()
@@ -88,13 +92,13 @@ struct CapitalGainsCalculatorTestsMore {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: usd, quantity: -2000, type: .transfer,
+          accountId: accountId, instrument: usd, quantity: -2000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -100, type: .expense,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -102,10 +106,10 @@ struct CapitalGainsCalculatorTestsMore {
       date: date(400),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: -100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: -100, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: 4000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: 4000, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -116,10 +120,10 @@ struct CapitalGainsCalculatorTestsMore {
       conversionService: service
     )
 
-    // Cost basis AUD 3100 (USD 2000 × 1.5 = 3000 plus AUD 100 fee),
-    // proceeds AUD 4000. Gain 900.
+    // Cost basis AUD 3000 (USD 2000 × 1.5; fee leg ignored),
+    // proceeds AUD 4000. Gain 1000.
     #expect(result.events.count == 1)
-    #expect(result.events[0].gain == 900)
+    #expect(result.events[0].gain == 1000)
   }
 
   /// Mixed-fiat sell: 100 BHP sold for USD 3000 with AUD 50 fee,
@@ -138,10 +142,10 @@ struct CapitalGainsCalculatorTestsMore {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -3000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -3000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -150,10 +154,10 @@ struct CapitalGainsCalculatorTestsMore {
       date: date(400),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: -100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: -100, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: usd, quantity: 3000, type: .transfer,
+          accountId: accountId, instrument: usd, quantity: 3000, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 

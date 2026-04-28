@@ -29,9 +29,9 @@ struct ReportingStoreTests {
       payee: "Buy BHP",
       legs: [
         TransactionLeg(
-          accountId: account.id, instrument: aud, quantity: -4000, type: .transfer),
+          accountId: account.id, instrument: aud, quantity: -4000, type: .trade),
         TransactionLeg(
-          accountId: account.id, instrument: bhp, quantity: 100, type: .transfer),
+          accountId: account.id, instrument: bhp, quantity: 100, type: .trade),
       ]
     )
     TestBackend.seed(transactions: [buyTx], in: container)
@@ -73,9 +73,9 @@ struct ReportingStoreTests {
       payee: "Buy BHP",
       legs: [
         TransactionLeg(
-          accountId: account.id, instrument: aud, quantity: -4000, type: .transfer),
+          accountId: account.id, instrument: aud, quantity: -4000, type: .trade),
         TransactionLeg(
-          accountId: account.id, instrument: bhp, quantity: 100, type: .transfer),
+          accountId: account.id, instrument: bhp, quantity: 100, type: .trade),
       ]
     )
 
@@ -86,9 +86,9 @@ struct ReportingStoreTests {
       payee: "Sell BHP",
       legs: [
         TransactionLeg(
-          accountId: account.id, instrument: bhp, quantity: -100, type: .transfer),
+          accountId: account.id, instrument: bhp, quantity: -100, type: .trade),
         TransactionLeg(
-          accountId: account.id, instrument: aud, quantity: 5000, type: .transfer),
+          accountId: account.id, instrument: aud, quantity: 5000, type: .trade),
       ]
     )
     TestBackend.seed(transactions: [buyTx, sellTx], in: container)
@@ -156,33 +156,33 @@ struct ReportingStoreTests {
         date: buyBHPDate, payee: "Buy BHP",
         legs: [
           TransactionLeg(
-            accountId: accountId, instrument: aud, quantity: -4000, type: .transfer),
+            accountId: accountId, instrument: aud, quantity: -4000, type: .trade),
           TransactionLeg(
-            accountId: accountId, instrument: bhp, quantity: 100, type: .transfer),
+            accountId: accountId, instrument: bhp, quantity: 100, type: .trade),
         ]),
       Transaction(
         date: buyCBADate, payee: "Buy CBA",
         legs: [
           TransactionLeg(
-            accountId: accountId, instrument: aud, quantity: -5000, type: .transfer),
+            accountId: accountId, instrument: aud, quantity: -5000, type: .trade),
           TransactionLeg(
-            accountId: accountId, instrument: cba, quantity: 50, type: .transfer),
+            accountId: accountId, instrument: cba, quantity: 50, type: .trade),
         ]),
       Transaction(
         date: sellDate, payee: "Sell BHP",
         legs: [
           TransactionLeg(
-            accountId: accountId, instrument: bhp, quantity: -100, type: .transfer),
+            accountId: accountId, instrument: bhp, quantity: -100, type: .trade),
           TransactionLeg(
-            accountId: accountId, instrument: aud, quantity: 5000, type: .transfer),
+            accountId: accountId, instrument: aud, quantity: 5000, type: .trade),
         ]),
       Transaction(
         date: sellDate, payee: "Sell CBA",
         legs: [
           TransactionLeg(
-            accountId: accountId, instrument: cba, quantity: -50, type: .transfer),
+            accountId: accountId, instrument: cba, quantity: -50, type: .trade),
           TransactionLeg(
-            accountId: accountId, instrument: aud, quantity: 6000, type: .transfer),
+            accountId: accountId, instrument: aud, quantity: 6000, type: .trade),
         ]),
     ]
   }

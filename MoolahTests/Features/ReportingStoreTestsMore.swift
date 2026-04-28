@@ -60,9 +60,9 @@ struct ReportingStoreTestsMore {
       payee: "Buy BHP",
       legs: [
         TransactionLeg(
-          accountId: account.id, instrument: aud, quantity: -4000, type: .transfer),
+          accountId: account.id, instrument: aud, quantity: -4000, type: .trade),
         TransactionLeg(
-          accountId: account.id, instrument: bhp, quantity: 100, type: .transfer),
+          accountId: account.id, instrument: bhp, quantity: 100, type: .trade),
       ]
     )
     let buyCBA = Transaction(
@@ -70,9 +70,9 @@ struct ReportingStoreTestsMore {
       payee: "Buy CBA",
       legs: [
         TransactionLeg(
-          accountId: account.id, instrument: aud, quantity: -5000, type: .transfer),
+          accountId: account.id, instrument: aud, quantity: -5000, type: .trade),
         TransactionLeg(
-          accountId: account.id, instrument: cba, quantity: 50, type: .transfer),
+          accountId: account.id, instrument: cba, quantity: 50, type: .trade),
       ]
     )
     TestBackend.seed(transactions: [buyBHP, buyCBA], in: container)
@@ -116,19 +116,19 @@ struct ReportingStoreTestsMore {
         payee: "Buy BHP",
         legs: [
           TransactionLeg(
-            accountId: account.id, instrument: aud, quantity: -4000, type: .transfer),
+            accountId: account.id, instrument: aud, quantity: -4000, type: .trade),
           TransactionLeg(
-            accountId: account.id, instrument: bhp, quantity: 100, type: .transfer),
+            accountId: account.id, instrument: bhp, quantity: 100, type: .trade),
         ]),
       Transaction(
         date: Date(),
         payee: "Buy ETH",
         legs: [
           TransactionLeg(
-            accountId: account.id, instrument: aud, quantity: -2000, type: .transfer),
+            accountId: account.id, instrument: aud, quantity: -2000, type: .trade),
           TransactionLeg(
             accountId: account.id, instrument: eth,
-            quantity: dec("1.0"), type: .transfer),
+            quantity: dec("1.0"), type: .trade),
         ]),
     ]
     TestBackend.seed(transactions: txns, in: container)
