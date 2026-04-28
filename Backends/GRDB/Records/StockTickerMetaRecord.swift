@@ -9,7 +9,7 @@ import GRDB
 ///
 /// Mirrors the `instrument` / `earliestDate` / `latestDate` fields on the
 /// legacy `StockPriceCache` JSON struct.
-struct StockTickerMetaRecord: Codable, Sendable, FetchableRecord, PersistableRecord {
+struct StockTickerMetaRecord {
   static let databaseTableName = "stock_ticker_meta"
 
   enum Columns: String, ColumnExpression, CaseIterable {
@@ -37,3 +37,8 @@ struct StockTickerMetaRecord: Codable, Sendable, FetchableRecord, PersistableRec
   var earliestDate: String
   var latestDate: String
 }
+
+extension StockTickerMetaRecord: Codable {}
+extension StockTickerMetaRecord: Sendable {}
+extension StockTickerMetaRecord: FetchableRecord {}
+extension StockTickerMetaRecord: PersistableRecord {}

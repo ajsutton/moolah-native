@@ -8,7 +8,7 @@ import GRDB
 ///
 /// Mirrors the `symbol` / `earliestDate` / `latestDate` fields on the
 /// legacy `CryptoPriceCache` JSON struct.
-struct CryptoTokenMetaRecord: Codable, Sendable, FetchableRecord, PersistableRecord {
+struct CryptoTokenMetaRecord {
   static let databaseTableName = "crypto_token_meta"
 
   enum Columns: String, ColumnExpression, CaseIterable {
@@ -36,3 +36,8 @@ struct CryptoTokenMetaRecord: Codable, Sendable, FetchableRecord, PersistableRec
   var earliestDate: String
   var latestDate: String
 }
+
+extension CryptoTokenMetaRecord: Codable {}
+extension CryptoTokenMetaRecord: Sendable {}
+extension CryptoTokenMetaRecord: FetchableRecord {}
+extension CryptoTokenMetaRecord: PersistableRecord {}

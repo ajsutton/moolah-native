@@ -208,8 +208,16 @@ actor CryptoPriceService {
         }
         if result.count == mappings.count { break }
       } catch {
+        // Best-effort: try the next client. Log so a silent total miss
+        // (all clients failed → empty dict) is diagnosable.
+        logger.debug(
+          "currentPrices: client \(type(of: client), privacy: .public) failed: \(error.localizedDescription, privacy: .public)"
+        )
         continue
       }
+    }
+    if result.isEmpty && !mappings.isEmpty {
+      logger.warning("currentPrices: all clients failed; returning empty result")
     }
     return result
   }
@@ -229,9 +237,8 @@ actor CryptoPriceService {
     }
     let dateString = dateFormatter.string(from: Date())
     for (tokenId, price) in prices {
-      let symbol =
-        registrations.first { $0.id == tokenId }?.instrument.ticker
-        ?? registrations.first { $0.id == tokenId }?.instrument.name ?? ""
+      let registration = registrations.first { $0.id == tokenId }
+      let symbol = registration?.instrument.ticker ?? registration?.instrument.name ?? ""
       merge(tokenId: tokenId, symbol: symbol, newPrices: [dateString: price])
       do {
         try await saveCache(tokenId: tokenId)

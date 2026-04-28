@@ -308,6 +308,8 @@ private func seedPositionValuations(backend: CloudKitBackend, account: Account) 
     repository: backend.transactions,
     conversionService: backend.conversionService,
     targetInstrument: .AUD)
+  // In-memory preview session can't fail in practice: opens an ephemeral
+  // GRDB queue with no disk access. A trap here is acceptable in #Preview.
   // swiftlint:disable:next force_try
   let session = try! ProfileSession.preview()
   let account = Account(name: "Brokerage", type: .investment, instrument: .AUD)
@@ -336,6 +338,8 @@ private func seedPositionValuations(backend: CloudKitBackend, account: Account) 
     repository: backend.transactions,
     conversionService: backend.conversionService,
     targetInstrument: .AUD)
+  // In-memory preview session can't fail in practice: opens an ephemeral
+  // GRDB queue with no disk access. A trap here is acceptable in #Preview.
   // swiftlint:disable:next force_try
   let session = try! ProfileSession.preview()
   let account = Account(name: "Brokerage", type: .investment, instrument: .AUD)

@@ -206,12 +206,26 @@ extension MoolahApp {
   static func cleanupLegacyRateCachesOnce(defaults: UserDefaults = .standard) {
     let key = "v2.rates.cache.cleared"
     guard !defaults.bool(forKey: key) else { return }
+    let logger = Logger(subsystem: "com.moolah.app", category: "LegacyCacheCleanup")
     if let caches = FileManager.default
       .urls(for: .cachesDirectory, in: .userDomainMask)
       .first
     {
+      let fileManager = FileManager.default
       for sub in ["exchange-rates", "stock-prices", "crypto-prices"] {
-        try? FileManager.default.removeItem(at: caches.appendingPathComponent(sub))
+        let url = caches.appendingPathComponent(sub)
+        do {
+          try fileManager.removeItem(at: url)
+        } catch let error as NSError
+          where error.domain == NSCocoaErrorDomain
+          && error.code == NSFileNoSuchFileError
+        {
+          // Already absent (e.g. fresh install or prior partial cleanup) — fine.
+        } catch {
+          logger.warning(
+            "Failed to delete legacy rate cache \(sub, privacy: .public): \(error.localizedDescription, privacy: .public)"
+          )
+        }
       }
     }
     defaults.set(true, forKey: key)

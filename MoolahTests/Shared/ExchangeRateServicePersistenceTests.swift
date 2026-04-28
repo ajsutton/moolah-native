@@ -11,11 +11,10 @@ import Testing
 /// contract for `ExchangeRateService.saveCache`.
 @Suite("ExchangeRateService — Persistence")
 struct ExchangeRateServicePersistenceTests {
-  private func date(_ string: String) -> Date {
+  private func date(_ string: String) throws -> Date {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withFullDate]
-    // swiftlint:disable:next force_unwrapping
-    return formatter.date(from: string)!
+    return try #require(formatter.date(from: string))
   }
 
   /// Two service instances sharing the same `DatabaseQueue` — the second
@@ -39,7 +38,7 @@ struct ExchangeRateServicePersistenceTests {
     let service = ExchangeRateService(client: client, database: database)
 
     // Fetch to populate cache and write to SQL
-    let rate = try await service.rate(from: .AUD, to: .USD, on: date("2026-04-11"))
+    let rate = try await service.rate(from: .AUD, to: .USD, on: try date("2026-04-11"))
     #expect(rate == dec("0.632"))
 
     // New service reading from the same database (fresh in-memory state)
@@ -47,11 +46,11 @@ struct ExchangeRateServicePersistenceTests {
     let service2 = ExchangeRateService(client: failingClient, database: database)
 
     // Should load from the SQL cache, not network
-    let cachedRate = try await service2.rate(from: .AUD, to: .USD, on: date("2026-04-11"))
+    let cachedRate = try await service2.rate(from: .AUD, to: .USD, on: try date("2026-04-11"))
     #expect(approximatelyEqual(cachedRate, dec("0.632")))
 
     let cachedEur = try await service2.rate(
-      from: .AUD, to: Instrument.fiat(code: "EUR"), on: date("2026-04-11"))
+      from: .AUD, to: Instrument.fiat(code: "EUR"), on: try date("2026-04-11"))
     #expect(approximatelyEqual(cachedEur, dec("0.581")))
   }
 
@@ -87,9 +86,9 @@ struct ExchangeRateServicePersistenceTests {
       "2026-04-07": ["USD": dec("1.234"), "EUR": dec("0.5900")]
     ])
     let service = ExchangeRateService(client: primingClient, database: database)
-    _ = try await service.rate(from: .AUD, to: .USD, on: date("2026-04-07"))
+    _ = try await service.rate(from: .AUD, to: .USD, on: try date("2026-04-07"))
     _ = try await service.rate(
-      from: .AUD, to: Instrument.fiat(code: "EUR"), on: date("2026-04-07"))
+      from: .AUD, to: Instrument.fiat(code: "EUR"), on: try date("2026-04-07"))
 
     // Sanity: rows landed via the production save path.
     let beforeCount = try await database.read { database in
@@ -129,7 +128,7 @@ struct ExchangeRateServicePersistenceTests {
     ])
     let failingService = ExchangeRateService(client: failingClient, database: database)
     _ = try? await failingService.rate(
-      from: .AUD, to: Instrument.fiat(code: "___FAIL___"), on: date("2025-02-15"))
+      from: .AUD, to: Instrument.fiat(code: "___FAIL___"), on: try date("2025-02-15"))
 
     // Prior state survived: row count matches AND the specific priming
     // row is still present. The exact-row probe defends against future

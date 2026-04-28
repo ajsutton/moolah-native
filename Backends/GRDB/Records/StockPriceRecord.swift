@@ -8,7 +8,7 @@ import GRDB
 ///
 /// The instrument denomination is recorded once per ticker in
 /// `stock_ticker_meta` rather than duplicated on every price row.
-struct StockPriceRecord: Codable, Sendable, FetchableRecord, PersistableRecord {
+struct StockPriceRecord {
   static let databaseTableName = "stock_price"
 
   enum Columns: String, ColumnExpression, CaseIterable {
@@ -22,3 +22,8 @@ struct StockPriceRecord: Codable, Sendable, FetchableRecord, PersistableRecord {
   /// Adjusted close price in the ticker's native instrument.
   var price: Double
 }
+
+extension StockPriceRecord: Codable {}
+extension StockPriceRecord: Sendable {}
+extension StockPriceRecord: FetchableRecord {}
+extension StockPriceRecord: PersistableRecord {}

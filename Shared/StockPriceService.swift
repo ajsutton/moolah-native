@@ -71,7 +71,7 @@ actor StockPriceService {
 
   func prices(
     ticker: String, in range: ClosedRange<Date>
-  ) async throws -> [(date: String, price: Decimal)] {
+  ) async throws -> [(date: Date, price: Decimal)] {
     // Hydrate cache if not already in memory
     if !hydratedTickers.contains(ticker) {
       try await loadCache(ticker: ticker)
@@ -101,16 +101,16 @@ actor StockPriceService {
 
     // Build result series
     let dates = generateDateSeries(in: range)
-    var results: [(date: String, price: Decimal)] = []
+    var results: [(date: Date, price: Decimal)] = []
     var lastKnownPrice: Decimal?
 
     for date in dates {
       let dateString = dateFormatter.string(from: date)
       if let price = caches[ticker]?.prices[dateString] {
         lastKnownPrice = price
-        results.append((dateString, price))
+        results.append((date, price))
       } else if let fallback = lastKnownPrice {
-        results.append((dateString, fallback))
+        results.append((date, fallback))
       }
     }
 

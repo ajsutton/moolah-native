@@ -8,7 +8,7 @@ import GRDB
 /// Rates are `Double` (SQL `REAL`) per `guides/DATABASE_CODE_GUIDE.md` §3.
 /// `Decimal` is forbidden in record structs; conversion to/from `Decimal`
 /// for use by `ExchangeRateService` happens at the service boundary.
-struct ExchangeRateRecord: Codable, Sendable, FetchableRecord, PersistableRecord {
+struct ExchangeRateRecord {
   static let databaseTableName = "exchange_rate"
 
   enum Columns: String, ColumnExpression, CaseIterable {
@@ -24,3 +24,8 @@ struct ExchangeRateRecord: Codable, Sendable, FetchableRecord, PersistableRecord
   /// Price of one unit of `base` in `quote` on `date`.
   var rate: Double
 }
+
+extension ExchangeRateRecord: Codable {}
+extension ExchangeRateRecord: Sendable {}
+extension ExchangeRateRecord: FetchableRecord {}
+extension ExchangeRateRecord: PersistableRecord {}

@@ -8,7 +8,7 @@ import GRDB
 ///
 /// Mirrors the `earliestDate` / `latestDate` fields on the legacy
 /// `ExchangeRateCache` JSON struct.
-struct ExchangeRateMetaRecord: Codable, Sendable, FetchableRecord, PersistableRecord {
+struct ExchangeRateMetaRecord {
   static let databaseTableName = "exchange_rate_meta"
 
   enum Columns: String, ColumnExpression, CaseIterable {
@@ -33,3 +33,8 @@ struct ExchangeRateMetaRecord: Codable, Sendable, FetchableRecord, PersistableRe
   /// ISO-8601 date string of the latest cached rate.
   var latestDate: String
 }
+
+extension ExchangeRateMetaRecord: Codable {}
+extension ExchangeRateMetaRecord: Sendable {}
+extension ExchangeRateMetaRecord: FetchableRecord {}
+extension ExchangeRateMetaRecord: PersistableRecord {}

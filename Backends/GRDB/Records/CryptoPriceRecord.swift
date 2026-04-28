@@ -9,7 +9,7 @@ import GRDB
 /// Crypto prices are always denominated in USD (`CoinGeckoCatalog`'s
 /// canonical anchor). Multi-step conversion to other reporting instruments
 /// happens in Swift via the conversion service.
-struct CryptoPriceRecord: Codable, Sendable, FetchableRecord, PersistableRecord {
+struct CryptoPriceRecord {
   static let databaseTableName = "crypto_price"
 
   enum Columns: String, ColumnExpression, CaseIterable {
@@ -35,3 +35,8 @@ struct CryptoPriceRecord: Codable, Sendable, FetchableRecord, PersistableRecord 
   /// Daily closing price in USD.
   var priceUsd: Double
 }
+
+extension CryptoPriceRecord: Codable {}
+extension CryptoPriceRecord: Sendable {}
+extension CryptoPriceRecord: FetchableRecord {}
+extension CryptoPriceRecord: PersistableRecord {}
