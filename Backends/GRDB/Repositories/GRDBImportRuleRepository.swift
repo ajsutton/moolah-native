@@ -37,12 +37,12 @@ final class GRDBImportRuleRepository: ImportRuleRepository, @unchecked Sendable 
   // MARK: - ImportRuleRepository conformance
 
   func fetchAll() async throws -> [ImportRule] {
-    let rows = try await database.read { database in
+    try await database.read { database in
       try ImportRuleRow
         .order(ImportRuleRow.Columns.position.asc)
         .fetchAll(database)
+        .map { $0.toDomain() }
     }
-    return rows.map { $0.toDomain() }
   }
 
   func create(_ rule: ImportRule) async throws -> ImportRule {
@@ -119,6 +119,13 @@ final class GRDBImportRuleRepository: ImportRuleRepository, @unchecked Sendable 
   }
 
   // MARK: - Sync entry points (synchronous, GRDB-queue-blocking)
+  //
+  // Mirrors `GRDBCSVImportProfileRepository`'s sync section. See that
+  // file for the full doc-block on threading semantics: each `…Sync`
+  // entry point is called from `ProfileDataSyncHandler` on the
+  // CKSyncEngine delegate executor and uses the synchronous
+  // `DatabaseWriter.write { … }` overload. Never call these from
+  // `@MainActor`.
 
   func applyRemoteChangesSync(saved rows: [ImportRuleRow], deleted ids: [UUID]) throws {
     try database.write { database in

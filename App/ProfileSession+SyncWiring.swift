@@ -147,10 +147,10 @@ extension ProfileSession {
     if changedTypes.contains(ImportRuleRow.recordType) {
       plan.insert(.importRules)
     }
-    // NOTE: CSVImportProfileRow has no dedicated store — the setup form
-    // fetches profiles directly via `backend.csvImportProfiles`. Remote
-    // changes land in GRDB; the setup form reads through to the fresh
-    // values on its own `task`.
+    // CSVImportProfileRow has no dedicated store — the setup form fetches
+    // profiles directly via `backend.csvImportProfiles`. Remote changes
+    // land in GRDB; the setup form reads through to the fresh values on
+    // its own `task`.
     return plan
   }
 }

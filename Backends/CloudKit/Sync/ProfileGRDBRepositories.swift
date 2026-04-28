@@ -14,15 +14,13 @@ import Foundation
 /// production all build the GRDB repos eagerly during backend
 /// construction.
 ///
-/// **Sendable.** `@unchecked Sendable` because the bundle is captured by
-/// reference into `ProfileDataSyncHandler.grdbRepositories` (a
-/// `nonisolated let`) and read from CKSyncEngine's delegate executor.
-/// The two members are themselves classes annotated `@unchecked
-/// Sendable`, the bundle's stored properties are `let`, and nothing
-/// mutates the struct after init — the `@unchecked` waiver is the
-/// pragmatic shape that mirrors the existing CloudKit repository
-/// classes.
-struct ProfileGRDBRepositories: @unchecked Sendable {
+/// **Sendable.** Plain `Sendable` synthesis. Every stored property is
+/// `let` and itself `Sendable` — the GRDB repositories are
+/// `final class … : @unchecked Sendable`, which satisfies the
+/// `Sendable` protocol requirement. The struct has no escape hatches,
+/// so the compiler derives `Sendable` automatically and no
+/// `@unchecked` waiver is needed.
+struct ProfileGRDBRepositories: Sendable {
   let csvImportProfiles: GRDBCSVImportProfileRepository
   let importRules: GRDBImportRuleRepository
 }

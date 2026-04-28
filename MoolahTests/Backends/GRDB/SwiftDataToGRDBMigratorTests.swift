@@ -13,7 +13,7 @@ import Testing
 ///
 /// Each test runs against an isolated `UserDefaults` suite so the
 /// per-record-type migration flags don't bleed across tests.
-@Suite("SwiftData → GRDB migrator")
+@Suite("SwiftData → GRDB migrator", .serialized)
 @MainActor
 struct SwiftDataToGRDBMigratorTests {
 
@@ -182,5 +182,87 @@ struct SwiftDataToGRDBMigratorTests {
     #expect(ruleCount == 0)
     #expect(defaults.bool(forKey: SwiftDataToGRDBMigrator.csvImportProfilesFlag))
     #expect(defaults.bool(forKey: SwiftDataToGRDBMigrator.importRulesFlag))
+  }
+
+  // MARK: - Failure paths
+  //
+  // These tests force the GRDB write to throw and assert the
+  // `committed` defer-flag invariant: the `UserDefaults` flag must NOT
+  // be set when the write fails, so the next launch retries the
+  // migration. A regression where `committed = true` moves above the
+  // write block would silently fail without these tests.
+
+  @Test("CSV migration: GRDB write failure leaves the flag unset for retry")
+  func csvImportProfileMigrationFailureKeepsFlagUnset() async throws {
+    let container = try TestModelContainer.create()
+    let database = try ProfileDatabase.openInMemory()
+    let context = ModelContext(container)
+    context.insert(
+      CSVImportProfileRecord(
+        id: UUID(), accountId: UUID(),
+        parserIdentifier: "p", headerSignature: ["a"]))
+    try context.save()
+
+    // Force the inserts inside `migrateCSVImportProfilesIfNeeded` to fail
+    // by installing a BEFORE-INSERT trigger that aborts. The migrator's
+    // `committed = true` line runs *after* the write block; if the write
+    // throws, the flag must stay false.
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER abort_csv_migration
+          BEFORE INSERT ON csv_import_profile
+          BEGIN SELECT RAISE(ABORT, 'forced'); END;
+          """)
+    }
+
+    let defaults = makeIsolatedDefaults()
+    let migrator = SwiftDataToGRDBMigrator()
+    #expect(throws: (any Error).self) {
+      try migrator.migrateIfNeeded(
+        modelContainer: container, database: database, defaults: defaults)
+    }
+    #expect(
+      !defaults.bool(forKey: SwiftDataToGRDBMigrator.csvImportProfilesFlag),
+      "CSV flag must remain false so the next launch retries")
+    #expect(
+      !defaults.bool(forKey: SwiftDataToGRDBMigrator.importRulesFlag),
+      "Rules flag must also remain false — CSV step throws before rules step runs")
+  }
+
+  @Test("Import-rule migration: GRDB write failure leaves the flag unset for retry")
+  func importRuleMigrationFailureKeepsFlagUnset() async throws {
+    let container = try TestModelContainer.create()
+    let database = try ProfileDatabase.openInMemory()
+    let context = ModelContext(container)
+    context.insert(
+      ImportRuleRecord(
+        id: UUID(), name: "X", enabled: true, position: 0,
+        matchMode: .all, conditions: [], actions: [],
+        accountScope: nil))
+    try context.save()
+
+    // Trigger only on the import_rule table so the CSV migration
+    // succeeds and the rule step is the one that throws.
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER abort_rule_migration
+          BEFORE INSERT ON import_rule
+          BEGIN SELECT RAISE(ABORT, 'forced'); END;
+          """)
+    }
+
+    let defaults = makeIsolatedDefaults()
+    let migrator = SwiftDataToGRDBMigrator()
+    #expect(throws: (any Error).self) {
+      try migrator.migrateIfNeeded(
+        modelContainer: container, database: database, defaults: defaults)
+    }
+    // CSV step succeeded (no CSV source rows); flag set is allowed.
+    // Rules step threw; its flag MUST stay false for retry.
+    #expect(
+      !defaults.bool(forKey: SwiftDataToGRDBMigrator.importRulesFlag),
+      "Rules flag must remain false so the next launch retries")
   }
 }
