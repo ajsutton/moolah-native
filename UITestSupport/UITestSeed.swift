@@ -285,5 +285,17 @@ public enum UITestFixtures {
     public static let brokerageCategoryId =
       UUID(uuidString: "A3000000-0000-0000-0000-000000000040") ?? UUID()
     public static let brokerageCategoryName = "Brokerage"
+
+    // MARK: - Trade transactions
+
+    /// 14-Apr-26 buy: −$300 AUD → +20 VGS.AX, $10 brokerage fee.
+    public static let trade1Id =
+      UUID(uuidString: "A3000000-0000-0000-0000-000000000020") ?? UUID()
+    /// 21-Apr-26 buy: −$160 AUD → +10 VGS.AX, no fee.
+    public static let trade2Id =
+      UUID(uuidString: "A3000000-0000-0000-0000-000000000021") ?? UUID()
+    /// 28-Apr-26 sell: +$425 AUD → −10 VGS.AX, $5 brokerage fee.
+    public static let trade3Id =
+      UUID(uuidString: "A3000000-0000-0000-0000-000000000022") ?? UUID()
   }
 }

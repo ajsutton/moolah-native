@@ -15,7 +15,6 @@ struct TransactionDetailTradeSection: View {
   @Binding var draft: TransactionDraft
   let accounts: Accounts
   let sortedAccounts: [Account]
-  let knownInstruments: [Instrument]
   @FocusState.Binding var focusedField: TransactionDetailFocus?
 
   var body: some View {
@@ -43,8 +42,8 @@ struct TransactionDetailTradeSection: View {
             draft.legDrafts[index].type == .expense
           {
             // Default new fee instruments to the account's currency.
-            draft.legDrafts[index].instrumentId =
-              draft.legDrafts[index].instrumentId ?? account.instrument.id
+            draft.legDrafts[index].instrument =
+              draft.legDrafts[index].instrument ?? account.instrument
           }
         }
       }
@@ -94,11 +93,8 @@ struct TransactionDetailTradeSection: View {
         get: { draft.legDrafts[idx].amountText },
         set: { draft.legDrafts[idx].amountText = $0 })
       let instrumentBinding = Binding<Instrument>(
-        get: {
-          let id = draft.legDrafts[idx].instrumentId ?? Instrument.AUD.id
-          return knownInstruments.first { $0.id == id } ?? Instrument.fiat(code: id)
-        },
-        set: { draft.legDrafts[idx].instrumentId = $0.id })
+        get: { draft.legDrafts[idx].instrument ?? Instrument.AUD },
+        set: { draft.legDrafts[idx].instrument = $0 })
 
       LabeledContent {
         HStack(spacing: 8) {
@@ -111,11 +107,8 @@ struct TransactionDetailTradeSection: View {
             #endif
             .focused($focusedField, equals: focus)
             .accessibilityIdentifier(identifier)
-          CompactInstrumentPickerButton(
-            selection: instrumentBinding,
-            knownInstruments: knownInstruments
-          )
-          .accessibilityIdentifier(instrumentIdentifier)
+          CompactInstrumentPickerButton(selection: instrumentBinding)
+            .accessibilityIdentifier(instrumentIdentifier)
         }
       } label: {
         Text(label)
@@ -131,14 +124,8 @@ struct TransactionDetailTradeSection: View {
     else { return nil }
     let paid = draft.legDrafts[paidIdx]
     let received = draft.legDrafts[receivedIdx]
-    let paidInst =
-      paid.instrumentId.flatMap { id in
-        knownInstruments.first { $0.id == id } ?? Instrument.fiat(code: id)
-      } ?? Instrument.AUD
-    let receivedInst =
-      received.instrumentId.flatMap { id in
-        knownInstruments.first { $0.id == id } ?? Instrument.fiat(code: id)
-      } ?? Instrument.AUD
+    let paidInst = paid.instrument ?? Instrument.AUD
+    let receivedInst = received.instrument ?? Instrument.AUD
     guard
       let paidQty = InstrumentAmount.parseQuantity(
         from: paid.amountText, decimals: paidInst.decimals),

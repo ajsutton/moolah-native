@@ -27,7 +27,7 @@ extension TransactionDraft {
 extension TransactionDraft {
   /// Append a new fee leg defaulting to amount `0` in the supplied
   /// instrument and the current trade account.
-  mutating func appendFee(defaultInstrumentId: String) {
+  mutating func appendFee(defaultInstrument: Instrument) {
     legDrafts.append(
       LegDraft(
         type: .expense,
@@ -36,7 +36,7 @@ extension TransactionDraft {
         categoryId: nil,
         categoryText: "",
         earmarkId: nil,
-        instrumentId: defaultInstrumentId
+        instrument: defaultInstrument
       ))
   }
 
@@ -87,15 +87,15 @@ extension TransactionDraft {
 
     let existing = relevantLeg
     let acct = existing.accountId
-    let acctInstrumentId =
-      acct.flatMap { accounts.by(id: $0) }?.instrument.id ?? existing.instrumentId
+    let acctInstrument =
+      acct.flatMap { accounts.by(id: $0) }?.instrument ?? existing.instrument
     let carriedText = Self.adjustAmountText(
       existing.amountText, from: existing.type, to: .trade)
 
     let carried = Self.tradeLeg(
-      accountId: acct, amountText: carriedText, instrumentId: existing.instrumentId)
+      accountId: acct, amountText: carriedText, instrument: existing.instrument)
     let blank = Self.tradeLeg(
-      accountId: acct, amountText: "0", instrumentId: acctInstrumentId)
+      accountId: acct, amountText: "0", instrument: acctInstrument)
 
     // Income's positive leg becomes Received; everything else (Expense,
     // Transfer-after-counterpart-drop) becomes Paid. Counterpart transfer
@@ -110,7 +110,7 @@ extension TransactionDraft {
   /// the forward switch helpers. Trade legs are constrained to no category
   /// or earmark per design §1.2.
   private static func tradeLeg(
-    accountId: UUID?, amountText: String, instrumentId: String?
+    accountId: UUID?, amountText: String, instrument: Instrument?
   ) -> LegDraft {
     LegDraft(
       type: .trade,
@@ -119,7 +119,7 @@ extension TransactionDraft {
       categoryId: nil,
       categoryText: "",
       earmarkId: nil,
-      instrumentId: instrumentId
+      instrument: instrument
     )
   }
 }
@@ -165,7 +165,7 @@ extension TransactionDraft {
         categoryId: nil,
         categoryText: "",
         earmarkId: nil,
-        instrumentId: source.instrumentId)
+        instrument: source.instrument)
     ]
     relevantLegIndex = 0
   }
@@ -179,7 +179,7 @@ extension TransactionDraft {
         categoryId: nil,
         categoryText: "",
         earmarkId: nil,
-        instrumentId: source.instrumentId)
+        instrument: source.instrument)
     ]
     relevantLegIndex = 0
   }
@@ -194,7 +194,7 @@ extension TransactionDraft {
       categoryId: nil,
       categoryText: "",
       earmarkId: nil,
-      instrumentId: other?.instrument.id ?? paidLeg.instrumentId)
+      instrument: other?.instrument ?? paidLeg.instrument)
     let primary = LegDraft(
       type: .transfer,
       accountId: paidLeg.accountId,
@@ -202,7 +202,7 @@ extension TransactionDraft {
       categoryId: nil,
       categoryText: "",
       earmarkId: nil,
-      instrumentId: paidLeg.instrumentId)
+      instrument: paidLeg.instrument)
     legDrafts = [primary, counterpart]
     relevantLegIndex = 0
   }

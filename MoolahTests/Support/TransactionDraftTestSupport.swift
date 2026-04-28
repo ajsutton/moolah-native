@@ -15,7 +15,7 @@ struct TransactionDraftTestSupport {
   func makeExpenseDraft(
     amountText: String = "10.00",
     accountId: UUID? = nil,
-    instrumentId: String? = Instrument.defaultTestInstrument.id
+    instrument: Instrument? = Instrument.defaultTestInstrument
   ) -> TransactionDraft {
     TransactionDraft(
       payee: "Test",
@@ -29,7 +29,7 @@ struct TransactionDraftTestSupport {
         TransactionDraft.LegDraft(
           type: .expense, accountId: accountId ?? accountA,
           amountText: amountText, categoryId: nil, categoryText: "", earmarkId: nil,
-          instrumentId: instrumentId)
+          instrument: instrument)
       ],
       relevantLegIndex: 0,
       viewingAccountId: nil

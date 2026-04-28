@@ -40,7 +40,7 @@ extension TransactionDraft {
       if newDraft.legDrafts[idx].accountId != viewingId {
         newDraft.legDrafts[idx].accountId = viewingId
         if let viewedAccount = accounts.by(id: viewingId) {
-          newDraft.legDrafts[idx].instrumentId = viewedAccount.instrument.id
+          newDraft.legDrafts[idx].instrument = viewedAccount.instrument
         }
       }
     }

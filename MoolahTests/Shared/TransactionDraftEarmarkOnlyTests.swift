@@ -48,7 +48,8 @@ struct TransactionDraftEarmarkOnlyTests {
       legDrafts: [
         TransactionDraft.LegDraft(
           type: .income, accountId: nil, amountText: "100",
-          categoryId: nil, categoryText: "", earmarkId: UUID())
+          categoryId: nil, categoryText: "", earmarkId: UUID(),
+          instrument: support.instrument)
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
@@ -80,10 +81,12 @@ struct TransactionDraftEarmarkOnlyTests {
       legDrafts: [
         TransactionDraft.LegDraft(
           type: .expense, accountId: UUID(), amountText: "50",
-          categoryId: nil, categoryText: "", earmarkId: nil),
+          categoryId: nil, categoryText: "", earmarkId: nil,
+          instrument: support.instrument),
         TransactionDraft.LegDraft(
           type: .income, accountId: nil, amountText: "50",
-          categoryId: nil, categoryText: "", earmarkId: UUID()),
+          categoryId: nil, categoryText: "", earmarkId: UUID(),
+          instrument: support.instrument),
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
@@ -101,7 +104,7 @@ struct TransactionDraftEarmarkOnlyTests {
         TransactionDraft.LegDraft(
           type: .income, accountId: nil, amountText: "500",
           categoryId: nil, categoryText: "", earmarkId: emId,
-          instrumentId: Instrument.defaultTestInstrument.id)
+          instrument: Instrument.defaultTestInstrument)
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
@@ -112,8 +115,7 @@ struct TransactionDraftEarmarkOnlyTests {
     ])
     let transaction = try #require(
       draft.toTransaction(
-        id: UUID(), accounts: Accounts(from: []), earmarks: earmarks,
-        availableInstruments: [support.instrument]))
+        id: UUID(), accounts: Accounts(from: []), earmarks: earmarks))
     #expect(transaction.legs.count == 1)
     #expect(transaction.legs[0].accountId == nil)
     #expect(transaction.legs[0].earmarkId == emId)
@@ -134,11 +136,11 @@ struct TransactionDraftEarmarkOnlyTests {
         TransactionDraft.LegDraft(
           type: .expense, accountId: acctId, amountText: "50",
           categoryId: nil, categoryText: "", earmarkId: nil,
-          instrumentId: Instrument.defaultTestInstrument.id),
+          instrument: Instrument.defaultTestInstrument),
         TransactionDraft.LegDraft(
           type: .income, accountId: nil, amountText: "50",
           categoryId: nil, categoryText: "", earmarkId: emId,
-          instrumentId: Instrument.defaultTestInstrument.id),
+          instrument: Instrument.defaultTestInstrument),
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
@@ -153,8 +155,7 @@ struct TransactionDraftEarmarkOnlyTests {
     ])
     let transaction = try #require(
       draft.toTransaction(
-        id: UUID(), accounts: accounts, earmarks: earmarks,
-        availableInstruments: [support.instrument]))
+        id: UUID(), accounts: accounts, earmarks: earmarks))
     #expect(transaction.legs.count == 2)
     #expect(transaction.legs[0].accountId == acctId)
     #expect(transaction.legs[1].accountId == nil)

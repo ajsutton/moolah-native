@@ -45,9 +45,7 @@ struct TransactionStoreScheduledOneOffTests {
     var draft = TransactionDraft(from: created)
     draft.isRepeating = false
     let updated = try #require(
-      draft.toTransaction(
-        id: created.id,
-        availableInstruments: [Instrument.defaultTestInstrument]))
+      draft.toTransaction(id: created.id))
     await store.update(updated)
 
     // The persisted transaction stays scheduled (period demoted to .once)

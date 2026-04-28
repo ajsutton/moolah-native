@@ -203,8 +203,7 @@ struct TransactionDraftCrossCurrencyTests {
     let draft = TransactionDraft(
       from: original, viewingAccountId: support.accountA, accounts: accounts)
     let roundTripped = try #require(
-      draft.toTransaction(
-        id: id, accounts: accounts, availableInstruments: [.AUD, .USD]))
+      draft.toTransaction(id: id, accounts: accounts))
     #expect(roundTripped.legs.count == 2)
     #expect(roundTripped.legs[0].quantity == Decimal(string: "-100"))
     #expect(roundTripped.legs[0].instrument == .AUD)

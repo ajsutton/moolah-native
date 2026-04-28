@@ -1,13 +1,5 @@
 import SwiftUI
 
-// Common fiat instruments available to leg-instrument resolution when the
-// instrument registry has not yet loaded (e.g. on first render). Registered
-// stocks/crypto are supplied by `knownInstruments` loaded via `.task`.
-private let commonFiatInstruments: [Instrument] = [
-  "AUD", "CAD", "CHF", "CNY", "EUR", "GBP", "HKD", "INR", "JPY", "KRW",
-  "MXN", "NOK", "NZD", "SEK", "SGD", "USD", "ZAR",
-].map { Instrument.fiat(code: $0) }
-
 // MARK: - Actions
 
 extension TransactionDetailView {
@@ -33,13 +25,11 @@ extension TransactionDetailView {
   }
 
   func saveIfValid() {
-    let allKnownInstruments = knownInstruments + commonFiatInstruments
     guard
       let updated = draft.toTransaction(
         id: transaction.id,
         accounts: accounts,
-        earmarks: earmarks,
-        availableInstruments: allKnownInstruments)
+        earmarks: earmarks)
     else { return }
     onUpdate(updated)
   }

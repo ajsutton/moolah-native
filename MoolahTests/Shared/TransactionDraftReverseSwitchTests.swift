@@ -20,20 +20,20 @@ struct TransactionDraftReverseSwitchTests {
   private func tradeDraft(withFee: Bool = false) -> TransactionDraft {
     // Buy-shaped fixture: cash leg quantity -300 (literal in amountText since
     // `displaysNegated(.trade) == false`), position leg quantity +20.
-    var draft = TransactionDraft(accountId: acctA, instrumentId: aud.id)
+    var draft = TransactionDraft(accountId: acctA, instrument: aud)
     draft.legDrafts = [
       TransactionDraft.LegDraft(
         type: .trade, accountId: acctA, amountText: "-300",
-        categoryId: nil, categoryText: "", earmarkId: nil, instrumentId: aud.id),
+        categoryId: nil, categoryText: "", earmarkId: nil, instrument: aud),
       TransactionDraft.LegDraft(
         type: .trade, accountId: acctA, amountText: "20",
-        categoryId: nil, categoryText: "", earmarkId: nil, instrumentId: vgs.id),
+        categoryId: nil, categoryText: "", earmarkId: nil, instrument: vgs),
     ]
     if withFee {
       draft.legDrafts.append(
         TransactionDraft.LegDraft(
           type: .expense, accountId: acctA, amountText: "10",
-          categoryId: nil, categoryText: "", earmarkId: nil, instrumentId: aud.id))
+          categoryId: nil, categoryText: "", earmarkId: nil, instrument: aud))
     }
     return draft
   }
@@ -45,7 +45,7 @@ struct TransactionDraftReverseSwitchTests {
     #expect(draft.legDrafts.count == 1)
     #expect(draft.legDrafts[0].type == .income)
     #expect(draft.legDrafts[0].amountText == "20")
-    #expect(draft.legDrafts[0].instrumentId == vgs.id)
+    #expect(draft.legDrafts[0].instrument == vgs)
     #expect(draft.legDrafts[0].accountId == acctA)
   }
 
@@ -56,7 +56,7 @@ struct TransactionDraftReverseSwitchTests {
     #expect(draft.legDrafts.count == 1)
     #expect(draft.legDrafts[0].type == .expense)
     #expect(draft.legDrafts[0].amountText == "300")
-    #expect(draft.legDrafts[0].instrumentId == aud.id)
+    #expect(draft.legDrafts[0].instrument == aud)
   }
 
   @Test("Trade → Transfer: keep Paid leg + add counterpart on a different account")

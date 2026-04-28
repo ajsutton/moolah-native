@@ -9,27 +9,38 @@ struct TransactionDetailFeeSection: View {
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
-  let knownInstruments: [Instrument]
   @Binding var categoryState: CategoryAutocompleteState
   @FocusState.Binding var focusedField: TransactionDetailFocus?
   let onRequestRemove: () -> Void
 
   @FocusState private var categoryFieldFocused: Bool
 
+  /// True when `legIndex` still refers to an `.expense` leg in `legDrafts`.
+  /// SwiftUI re-evaluates this view's body once after `removeFee(at:)` has
+  /// shrunk `legDrafts` but before the surrounding `ForEach` finishes
+  /// removing the row, so a naive subscript would trap.
+  private var isLive: Bool {
+    draft.legDrafts.indices.contains(legIndex)
+      && draft.legDrafts[legIndex].type == .expense
+  }
+
   private var visibleSuggestions: [CategorySuggestion] {
-    categoryState.visibleSuggestions(
+    guard isLive else { return [] }
+    return categoryState.visibleSuggestions(
       for: draft.legDrafts[legIndex].categoryText, in: categories)
   }
 
   var body: some View {
-    Section("Fee \(displayNumber)") {
-      amountRow
-      categoryField
-      earmarkPicker
-      Button(role: .destructive, action: onRequestRemove) {
-        Text("Remove Fee").frame(maxWidth: .infinity)
+    if isLive {
+      Section("Fee \(displayNumber)") {
+        amountRow
+        categoryField
+        earmarkPicker
+        Button(role: .destructive, action: onRequestRemove) {
+          Text("Remove Fee").frame(maxWidth: .infinity)
+        }
+        .accessibilityIdentifier(UITestIdentifiers.Detail.tradeFeeRemove(displayNumber - 1))
       }
-      .accessibilityIdentifier(UITestIdentifiers.Detail.tradeFeeRemove(displayNumber - 1))
     }
   }
 
@@ -38,11 +49,8 @@ struct TransactionDetailFeeSection: View {
       get: { draft.legDrafts[legIndex].amountText },
       set: { draft.legDrafts[legIndex].amountText = $0 })
     let instrumentBinding = Binding<Instrument>(
-      get: {
-        let id = draft.legDrafts[legIndex].instrumentId ?? Instrument.AUD.id
-        return knownInstruments.first { $0.id == id } ?? Instrument.fiat(code: id)
-      },
-      set: { draft.legDrafts[legIndex].instrumentId = $0.id })
+      get: { draft.legDrafts[legIndex].instrument ?? Instrument.AUD },
+      set: { draft.legDrafts[legIndex].instrument = $0 })
 
     return LabeledContent {
       HStack(spacing: 8) {
@@ -55,10 +63,7 @@ struct TransactionDetailFeeSection: View {
           #endif
           .focused($focusedField, equals: .tradeFeeAmount(legIndex))
           .accessibilityIdentifier(UITestIdentifiers.Detail.tradeFeeAmount(displayNumber - 1))
-        CompactInstrumentPickerButton(
-          selection: instrumentBinding,
-          knownInstruments: knownInstruments
-        )
+        CompactInstrumentPickerButton(selection: instrumentBinding)
       }
     } label: {
       Text("Amount")

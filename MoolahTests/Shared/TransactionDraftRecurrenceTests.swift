@@ -57,7 +57,7 @@ struct TransactionDraftRecurrenceTests {
     let accounts = support.makeAccounts([support.makeAccount(id: support.accountA)])
     let transaction = try #require(
       draft.toTransaction(
-        id: UUID(), accounts: accounts, availableInstruments: [support.instrument]))
+        id: UUID(), accounts: accounts))
 
     #expect(transaction.recurPeriod == .once)
     #expect(transaction.isScheduled == true)
@@ -126,7 +126,7 @@ struct TransactionDraftRecurrenceTests {
     let accounts = support.makeAccounts([support.makeAccount(id: support.accountA)])
     let roundTripped = try #require(
       draft.toTransaction(
-        id: id, accounts: accounts, availableInstruments: [support.instrument]))
+        id: id, accounts: accounts))
 
     #expect(roundTripped.recurPeriod == .once)
     #expect(roundTripped.isScheduled == true)

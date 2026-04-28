@@ -76,13 +76,13 @@ struct TransactionDraftAccountTests {
         TransactionDraft.LegDraft(
           type: .expense, accountId: support.accountA, amountText: "4.50",
           categoryId: nil, categoryText: "", earmarkId: nil,
-          instrumentId: Instrument.USD.id)
+          instrument: Instrument.USD)
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
 
     let transaction = try #require(
-      draft.toTransaction(id: UUID(), accounts: accounts, availableInstruments: [.USD]))
+      draft.toTransaction(id: UUID(), accounts: accounts))
     let expectedQuantity = try #require(Decimal(string: "-4.50"))
     #expect(transaction.legs.count == 1)
     #expect(transaction.legs[0].instrument == .USD)
@@ -103,17 +103,17 @@ struct TransactionDraftAccountTests {
         TransactionDraft.LegDraft(
           type: .transfer, accountId: support.accountA, amountText: "1000.00",
           categoryId: nil, categoryText: "", earmarkId: nil,
-          instrumentId: Instrument.AUD.id),
+          instrument: Instrument.AUD),
         TransactionDraft.LegDraft(
           type: .transfer, accountId: support.accountB, amountText: "-650.00",
           categoryId: nil, categoryText: "", earmarkId: nil,
-          instrumentId: Instrument.USD.id),
+          instrument: Instrument.USD),
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
 
     let transaction = try #require(
-      draft.toTransaction(id: UUID(), accounts: accounts, availableInstruments: [.AUD, .USD]))
+      draft.toTransaction(id: UUID(), accounts: accounts))
     let audQuantity = try #require(Decimal(string: "-1000.00"))
     let usdQuantity = try #require(Decimal(string: "650.00"))
     #expect(transaction.legs.count == 2)
@@ -139,17 +139,17 @@ struct TransactionDraftAccountTests {
         TransactionDraft.LegDraft(
           type: .transfer, accountId: support.accountA, amountText: "6345.00",
           categoryId: nil, categoryText: "", earmarkId: nil,
-          instrumentId: Instrument.AUD.id),
+          instrument: Instrument.AUD),
         TransactionDraft.LegDraft(
           type: .transfer, accountId: support.accountB, amountText: "-150",
           categoryId: nil, categoryText: "", earmarkId: nil,
-          instrumentId: bhp.id),
+          instrument: bhp),
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
 
     let transaction = try #require(
-      draft.toTransaction(id: UUID(), accounts: accounts, availableInstruments: [.AUD, bhp]))
+      draft.toTransaction(id: UUID(), accounts: accounts))
     let audQuantity = try #require(Decimal(string: "-6345.00"))
     #expect(transaction.legs.count == 2)
     #expect(transaction.legs[0].instrument == .AUD)

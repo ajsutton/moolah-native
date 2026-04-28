@@ -13,13 +13,12 @@ struct TransactionDetailView: View {
 
   @Environment(ProfileSession.self) private var session: ProfileSession?
 
-  // `draft`, `knownInstruments`, and `openedAsNewTransaction` use internal
-  // access (no `private`) so that extension files in this module
+  // `draft` and `openedAsNewTransaction` use internal access (no `private`)
+  // so that extension files in this module
   // (TransactionDetailView+Helpers.swift, TransactionDetailView+Actions.swift)
   // can reference them. SwiftLint's strict_fileprivate rule disallows
   // `fileprivate`, making internal the smallest legal cross-file scope.
   @State var draft: TransactionDraft
-  @State var knownInstruments: [Instrument] = []
   @State private var showDeleteConfirmation = false
   @State private var payeeState = PayeeAutocompleteState()
   @State private var categoryState = CategoryAutocompleteState()
@@ -117,9 +116,6 @@ struct TransactionDetailView: View {
         }
       #endif
       .onChange(of: draft) { _, _ in debouncedSave() }
-      .task {
-        knownInstruments = (try? await session?.instrumentRegistry?.all()) ?? []
-      }
       .confirmationDialog(
         "Delete Transaction",
         isPresented: $showDeleteConfirmation,
@@ -198,11 +194,22 @@ extension TransactionDetailView {
 
   @ViewBuilder private var tradeModeContent: some View {
     modeSection.disabled(!isEditable)
+    // Payee + date sit at the top alongside the type picker, mirroring the
+    // simple income / expense / transfer layout so the form reads
+    // consistently across modes.
+    TransactionDetailCustomDetailsSection(
+      draft: $draft,
+      suggestionSource: transactionStore.payeeSuggestionSource,
+      payeeState: $payeeState,
+      onAutofill: autofillFromPayee,
+      focusedField: $focusedField
+    )
+    .disabled(!isEditable)
+
     TransactionDetailTradeSection(
       draft: $draft,
       accounts: accounts,
       sortedAccounts: sortedAccounts,
-      knownInstruments: knownInstruments,
       focusedField: $focusedField
     )
     .disabled(!isEditable)
@@ -215,7 +222,6 @@ extension TransactionDetailView {
         accounts: accounts,
         categories: categories,
         earmarks: earmarks,
-        knownInstruments: knownInstruments,
         categoryState: legCategoryStateBinding(for: legIndex),
         focusedField: $focusedField,
         onRequestRemove: { draft.removeFee(at: legIndex) }
@@ -224,24 +230,16 @@ extension TransactionDetailView {
 
     Section {
       Button {
-        let fallback =
+        let defaultInstrument =
           draft.legDrafts.first?.accountId
-          .flatMap { accounts.by(id: $0) }?.instrument.id ?? Instrument.AUD.id
-        draft.appendFee(defaultInstrumentId: fallback)
+          .flatMap { accounts.by(id: $0) }?.instrument ?? Instrument.AUD
+        draft.appendFee(defaultInstrument: defaultInstrument)
       } label: {
         Label("Add Fee", systemImage: "plus")
           .frame(maxWidth: .infinity)
       }
       .accessibilityIdentifier(UITestIdentifiers.Detail.tradeAddFeeButton)
     }
-
-    TransactionDetailCustomDetailsSection(
-      draft: $draft,
-      suggestionSource: transactionStore.payeeSuggestionSource,
-      payeeState: $payeeState,
-      onAutofill: autofillFromPayee,
-      focusedField: $focusedField
-    )
 
     if showRecurrence {
       TransactionDetailRecurrenceSection(draft: $draft).disabled(!isEditable)
@@ -300,7 +298,6 @@ extension TransactionDetailView {
         accounts: accounts,
         categories: categories,
         earmarks: earmarks,
-        knownInstruments: knownInstruments,
         sortedAccounts: sortedAccounts,
         categoryState: legCategoryStateBinding(for: index),
         focusedField: $focusedField,
