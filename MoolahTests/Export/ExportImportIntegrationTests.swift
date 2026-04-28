@@ -90,7 +90,6 @@ struct ExportImportIntegrationTests {
 
     let profile = Profile(
       label: "Test Profile",
-      backendType: .cloudKit,
       currencyCode: instrument.id,
       financialYearStartMonth: 7
     )
@@ -133,7 +132,6 @@ struct ExportImportIntegrationTests {
     // Export to file
     let profile = Profile(
       label: "Test Profile",
-      backendType: .cloudKit,
       currencyCode: instrument.id,
       financialYearStartMonth: 7
     )

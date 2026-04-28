@@ -155,7 +155,7 @@ struct InvestmentAccountView: View {
       earmarks: earmarks,
       transactionStore: transactionStore,
       viewingAccountId: account.id,
-      supportsComplexTransactions: session.profile.supportsComplexTransactions
+      supportsComplexTransactions: true
     )
     .profileNavigationTitle(account.name)
     .sheet(isPresented: $showingAddValue) {
@@ -309,7 +309,7 @@ private func seedPositionValuations(backend: CloudKitBackend, account: Account) 
     repository: backend.transactions,
     conversionService: backend.conversionService,
     targetInstrument: .AUD)
-  let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
+  let session = ProfileSession(profile: Profile(label: "Preview"))
   let account = Account(name: "Brokerage", type: .investment, instrument: .AUD)
   return NavigationStack {
     InvestmentAccountView(
@@ -336,7 +336,7 @@ private func seedPositionValuations(backend: CloudKitBackend, account: Account) 
     repository: backend.transactions,
     conversionService: backend.conversionService,
     targetInstrument: .AUD)
-  let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
+  let session = ProfileSession(profile: Profile(label: "Preview"))
   let account = Account(name: "Brokerage", type: .investment, instrument: .AUD)
   return NavigationStack {
     InvestmentAccountView(

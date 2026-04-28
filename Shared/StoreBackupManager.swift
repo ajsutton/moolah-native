@@ -77,8 +77,7 @@
     }
 
     func performDailyBackup(profiles: [Profile], containerManager: ProfileContainerManager) {
-      let cloudProfiles = profiles.filter { $0.backendType == .cloudKit }
-      for profile in cloudProfiles {
+      for profile in profiles {
         do {
           let container = try containerManager.container(for: profile.id)
           guard let storeURL = container.configurations.first?.url else {

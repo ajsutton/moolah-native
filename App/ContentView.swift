@@ -82,7 +82,7 @@ struct ContentView: View {
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
         instrument: session.profile.instrument,
-        supportsComplexTransactions: session.profile.supportsComplexTransactions,
+        supportsComplexTransactions: true,
         onCreate: { newEarmark in
           Task {
             _ = await earmarkStore.create(newEarmark)
@@ -165,7 +165,7 @@ struct ContentView: View {
         categories: categoryStore.categories,
         earmarks: earmarkStore.earmarks,
         transactionStore: transactionStore,
-        supportsComplexTransactions: session.profile.supportsComplexTransactions)
+        supportsComplexTransactions: true)
     case .upcomingTransactions:
       UpcomingView(
         accounts: accountStore.accounts,
@@ -287,7 +287,7 @@ extension ContentView {
           positionsHostCurrency: account.instrument,
           positionsTitle: account.name,
           conversionService: session.backend.conversionService,
-          supportsComplexTransactions: session.profile.supportsComplexTransactions)
+          supportsComplexTransactions: true)
       }
     }
   }

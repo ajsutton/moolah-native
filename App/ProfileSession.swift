@@ -37,7 +37,7 @@ final class ProfileSession: Identifiable {
   /// (see issue #359). `nil` when idle so the sheet dismisses automatically.
   var activeExport: ActiveExport?
 
-  /// Observer token for sync coordinator notifications (nil for remote profiles).
+  /// Observer token for sync coordinator notifications.
   private var syncObserverToken: SyncCoordinator.ObserverToken?
 
   nonisolated var id: UUID { profile.id }
@@ -119,13 +119,11 @@ final class ProfileSession: Identifiable {
     }
   }
 
-  /// Registers the session with the `SyncCoordinator` for iCloud profiles:
+  /// Registers the session with the `SyncCoordinator`:
   /// installs the per-profile reload observer and wires the repository
-  /// sync callbacks for the profile's zone. No-op for non-CloudKit profiles;
-  /// logs a warning when the profile is CloudKit but the coordinator is
-  /// unavailable.
+  /// sync callbacks for the profile's zone. Logs a warning when the
+  /// coordinator is unavailable.
   private func registerWithSyncCoordinator(_ coordinator: SyncCoordinator?) {
-    guard profile.backendType == .cloudKit else { return }
     let profileId = profile.id
     guard let coordinator else {
       logger.warning("CloudKit not available — profile sync disabled for \(profileId)")

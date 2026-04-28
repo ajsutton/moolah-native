@@ -131,7 +131,6 @@ final class MigrationCoordinator {
     let newProfile = Profile(
       id: UUID(),
       label: targetLabel,
-      backendType: .cloudKit,
       currencyCode: sourceProfile.currencyCode,
       financialYearStartMonth: sourceProfile.financialYearStartMonth
     )

@@ -237,7 +237,6 @@ struct MigrationIntegrationTests {
     let sourceProfile = Profile(
       id: UUID(),
       label: "Source",
-      backendType: .remote,
       currencyCode: instrument.id,
       financialYearStartMonth: 7
     )

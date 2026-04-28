@@ -122,8 +122,8 @@ struct InstrumentSearchService: Sendable {
   /// `TokenResolutionClient.resolve(...)` before it can be persisted (decimals
   /// and the cryptocompare/binance ids are resolved at registration time).
   ///
-  /// When `catalog` is `nil` (e.g. a `RemoteBackend` profile), this returns
-  /// the empty list — crypto search is unavailable on those profiles by design.
+  /// When `catalog` is `nil` (e.g. catalog init failed), this returns
+  /// the empty list — crypto search degrades to the registry/Yahoo paths only.
   private func cryptoMatches(
     query: String,
     registered: [Instrument],

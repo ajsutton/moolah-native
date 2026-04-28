@@ -82,9 +82,7 @@
             profileRow(profile)
           }
           .swipeActions(edge: .leading) {
-            if profile.backendType == .cloudKit,
-              profile.id == profileStore.activeProfileID
-            {
+            if profile.id == profileStore.activeProfileID {
               Button {
                 Task { await handleExport(profile: profile) }
               } label: {

@@ -40,7 +40,6 @@ struct ExportImportIntegrationTests4 {
 
     let profile = Profile(
       label: "Multi-Currency Profile",
-      backendType: .cloudKit,
       currencyCode: aud.id,
       financialYearStartMonth: 7
     )

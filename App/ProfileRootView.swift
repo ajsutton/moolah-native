@@ -37,15 +37,11 @@
       .onChange(of: profileStore.activeProfileID) { _, newID in
         updateSession(for: newID)
       }
-      .onChange(of: profileStore.activeProfile?.resolvedServerURL) { _, _ in
-        // Recreate session when the active profile's URL changes (e.g. edited in Settings)
-        rebuildSessionIfNeeded()
-      }
       .onChange(of: profileStore.activeProfile?.label) { _, _ in
         // Update cached profile in session when label changes
         rebuildSessionIfNeeded()
       }
-      .onChange(of: profileStore.cloudProfiles) { _, _ in
+      .onChange(of: profileStore.profiles) { _, _ in
         // Cloud profiles may arrive late (SwiftData/CloudKit not ready at startup).
         // Retry session creation once they appear.
         if activeSession == nil, let id = profileStore.activeProfileID {
@@ -85,13 +81,10 @@
       }
     }
 
-    /// Recreates the session if the active profile's properties changed (e.g. URL edited in Settings).
+    /// Recreates the session if the active profile's properties changed (e.g. label edited in Settings).
     private func rebuildSessionIfNeeded() {
       guard let profile = profileStore.activeProfile else { return }
-      // Rebuild if the URL changed (needs new backend) or if we have no session yet
-      if let session = activeSession,
-        session.profile.resolvedServerURL != profile.resolvedServerURL
-      {
+      if let session = activeSession, session.profile.id == profile.id {
         sessionManager.rebuildSession(for: profile)
         activeSession = sessionManager.session(for: profile)
       }

@@ -10,7 +10,7 @@ struct WelcomeStateResolverTests {
   func heroChecking() {
     let state = WelcomeStateResolver.resolve(
       phase: .landing,
-      cloudProfilesCount: 0,
+      profileCount: 0,
       iCloudAvailability: .available,
       indexFetchedAtLeastOnce: false,
       bannerDismissed: false
@@ -22,7 +22,7 @@ struct WelcomeStateResolverTests {
   func heroNoneFound() {
     let state = WelcomeStateResolver.resolve(
       phase: .landing,
-      cloudProfilesCount: 0,
+      profileCount: 0,
       iCloudAvailability: .available,
       indexFetchedAtLeastOnce: true,
       bannerDismissed: false
@@ -34,7 +34,7 @@ struct WelcomeStateResolverTests {
   func heroOff() {
     let state = WelcomeStateResolver.resolve(
       phase: .landing,
-      cloudProfilesCount: 0,
+      profileCount: 0,
       iCloudAvailability: .unavailable(reason: .notSignedIn),
       indexFetchedAtLeastOnce: false,
       bannerDismissed: false
@@ -46,7 +46,7 @@ struct WelcomeStateResolverTests {
   func autoActivateSingle() {
     let state = WelcomeStateResolver.resolve(
       phase: .landing,
-      cloudProfilesCount: 1,
+      profileCount: 1,
       iCloudAvailability: .available,
       indexFetchedAtLeastOnce: true,
       bannerDismissed: false
@@ -58,7 +58,7 @@ struct WelcomeStateResolverTests {
   func pickerFromLanding() {
     let state = WelcomeStateResolver.resolve(
       phase: .landing,
-      cloudProfilesCount: 2,
+      profileCount: 2,
       iCloudAvailability: .available,
       indexFetchedAtLeastOnce: true,
       bannerDismissed: false
@@ -70,7 +70,7 @@ struct WelcomeStateResolverTests {
   func formNoBanner() {
     let state = WelcomeStateResolver.resolve(
       phase: .creating,
-      cloudProfilesCount: 0,
+      profileCount: 0,
       iCloudAvailability: .available,
       indexFetchedAtLeastOnce: false,
       bannerDismissed: false
@@ -82,7 +82,7 @@ struct WelcomeStateResolverTests {
   func formSingleBanner() {
     let state = WelcomeStateResolver.resolve(
       phase: .creating,
-      cloudProfilesCount: 1,
+      profileCount: 1,
       iCloudAvailability: .available,
       indexFetchedAtLeastOnce: true,
       bannerDismissed: false
@@ -94,7 +94,7 @@ struct WelcomeStateResolverTests {
   func formMultiBanner() {
     let state = WelcomeStateResolver.resolve(
       phase: .creating,
-      cloudProfilesCount: 3,
+      profileCount: 3,
       iCloudAvailability: .available,
       indexFetchedAtLeastOnce: true,
       bannerDismissed: false
@@ -106,7 +106,7 @@ struct WelcomeStateResolverTests {
   func formSuppressesDismissedBanner() {
     let state = WelcomeStateResolver.resolve(
       phase: .creating,
-      cloudProfilesCount: 1,
+      profileCount: 1,
       iCloudAvailability: .available,
       indexFetchedAtLeastOnce: true,
       bannerDismissed: true
@@ -118,7 +118,7 @@ struct WelcomeStateResolverTests {
   func pickerFromPickingPhase() {
     let state = WelcomeStateResolver.resolve(
       phase: .pickingProfile,
-      cloudProfilesCount: 1,
+      profileCount: 1,
       iCloudAvailability: .available,
       indexFetchedAtLeastOnce: true,
       bannerDismissed: true
@@ -132,7 +132,7 @@ struct WelcomeStateResolverTests {
   func resolveLandingShowsDownloadingWhenRecordsArrive() {
     let result = WelcomeStateResolver.resolve(
       phase: .landing,
-      cloudProfilesCount: 0,
+      profileCount: 0,
       iCloudAvailability: .available,
       indexFetchedAtLeastOnce: false,
       bannerDismissed: false,
@@ -146,7 +146,7 @@ struct WelcomeStateResolverTests {
   func resolveLandingStaysCheckingWhenNoRecordsYet() {
     let result = WelcomeStateResolver.resolve(
       phase: .landing,
-      cloudProfilesCount: 0,
+      profileCount: 0,
       iCloudAvailability: .available,
       indexFetchedAtLeastOnce: false,
       bannerDismissed: false,
@@ -161,7 +161,7 @@ struct WelcomeStateResolverTests {
     // wasDownloading sticks even if the counter is zero (between sessions).
     let result = WelcomeStateResolver.resolve(
       phase: .landing,
-      cloudProfilesCount: 0,
+      profileCount: 0,
       iCloudAvailability: .available,
       indexFetchedAtLeastOnce: false,
       bannerDismissed: false,
@@ -175,7 +175,7 @@ struct WelcomeStateResolverTests {
   func resolveLandingICloudOffOverridesDownloading() {
     let result = WelcomeStateResolver.resolve(
       phase: .landing,
-      cloudProfilesCount: 0,
+      profileCount: 0,
       iCloudAvailability: .unavailable(reason: .notSignedIn),
       indexFetchedAtLeastOnce: false,
       bannerDismissed: false,

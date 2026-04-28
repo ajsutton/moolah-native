@@ -72,9 +72,7 @@ extension ProfileSession {
 
   // MARK: - Backend
 
-  /// Builds the `BackendProvider` for the profile based on its backend type.
-  /// iCloud profiles get the full conversion service (stock + crypto + fiat);
-  /// remote profiles use their own internal fiat-only conversion.
+  /// Builds the CloudKit `BackendProvider` for the profile.
   static func makeBackend(
     profile: Profile,
     containerManager: ProfileContainerManager?,
@@ -83,49 +81,25 @@ extension ProfileSession {
     stockPrices: StockPriceService,
     cryptoPrices: CryptoPriceService
   ) -> BackendProvider {
-    switch profile.backendType {
-    case .remote, .moolah:
-      // Each profile gets its own cookie storage and URLSession.
-      // Ephemeral config provides an isolated cookie storage that URLSession
-      // actually integrates with for automatic Set-Cookie handling.
-      let config = URLSessionConfiguration.ephemeral
-      // URLSessionConfiguration.ephemeral always has a non-nil httpCookieStorage.
-      // swiftlint:disable:next force_unwrapping
-      let cookieStorage = config.httpCookieStorage!
-      let session = URLSession(configuration: config)
-      let cookieKeychain = CookieKeychain(account: profile.id.uuidString)
-      // RemoteBackend uses its own FiatConversionService internally;
-      // moolah-server is fiat-only so stock/crypto conversion via remote is
-      // out of scope. See issue #102 for the CloudKit fix.
-      return RemoteBackend(
-        baseURL: profile.resolvedServerURL,
-        instrument: profile.instrument,
-        session: session,
-        cookieKeychain: cookieKeychain,
-        cookieStorage: cookieStorage
-      )
-
-    case .cloudKit:
-      guard let containerManager else {
-        fatalError("ProfileContainerManager is required for CloudKit profiles")
-      }
-      return makeCloudKitBackend(
-        profile: profile,
-        containerManager: containerManager,
-        syncCoordinator: syncCoordinator,
-        marketData: CloudKitMarketDataServices(
-          exchangeRates: exchangeRates,
-          stockPrices: stockPrices,
-          cryptoPrices: cryptoPrices))
+    guard let containerManager else {
+      fatalError("ProfileContainerManager is required for CloudKit profiles")
     }
+    return makeCloudKitBackend(
+      profile: profile,
+      containerManager: containerManager,
+      syncCoordinator: syncCoordinator,
+      marketData: CloudKitMarketDataServices(
+        exchangeRates: exchangeRates,
+        stockPrices: stockPrices,
+        cryptoPrices: cryptoPrices))
   }
 
   // MARK: - Registry Wiring
 
-  /// Bundle of the optional instrument-registry pieces: only CloudKit
-  /// profiles expose a registry, crypto token store, search service,
-  /// CoinGecko catalog, and token resolution client. Remote/moolah
-  /// profiles are single-instrument by server design and leave all five nil.
+  /// Bundle of the optional instrument-registry pieces: the registry,
+  /// crypto token store, search service, CoinGecko catalog, and token
+  /// resolution client. Populated for CloudKit profiles; nil fields indicate
+  /// a degraded state (e.g. catalog init failure).
   struct RegistryWiring {
     let registry: (any InstrumentRegistryRepository)?
     let cryptoTokenStore: CryptoTokenStore?
@@ -134,9 +108,9 @@ extension ProfileSession {
     let tokenResolutionClient: (any TokenResolutionClient)?
   }
 
-  /// Resolves the optional instrument-registry wiring for a profile. Returns
-  /// a populated bundle for CloudKit profiles; returns nils for Remote/moolah
-  /// profiles so settings views can gate on `cryptoTokenStore != nil`.
+  /// Resolves the instrument-registry wiring for a CloudKit profile. Returns
+  /// a populated bundle; nil fields indicate a degraded state (e.g. catalog
+  /// init failure).
   ///
   /// CloudKit profiles also build a `SQLiteCoinGeckoCatalog` and fire its
   /// `refreshIfStale()` once per session on a background task so the on-disk
@@ -158,9 +132,7 @@ extension ProfileSession {
     coinGeckoApiKey: String?
   ) -> RegistryWiring {
     guard let cloudBackend = backend as? CloudKitBackend else {
-      return RegistryWiring(
-        registry: nil, cryptoTokenStore: nil, searchService: nil,
-        coinGeckoCatalog: nil, tokenResolutionClient: nil)
+      fatalError("makeBackend only constructs CloudKitBackend")
     }
 
     let catalog: (any CoinGeckoCatalog)?

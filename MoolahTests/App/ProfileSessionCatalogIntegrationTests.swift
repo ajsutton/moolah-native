@@ -25,20 +25,11 @@ struct ProfileSessionCatalogIntegrationTests {
 
     let containerManager = try ProfileContainerManager.forTesting()
     let profile = Profile(
-      label: "iCloud", backendType: .cloudKit,
+      label: "iCloud",
       currencyCode: "AUD", financialYearStartMonth: 7
     )
     let session = ProfileSession(profile: profile, containerManager: containerManager)
 
     #expect(session.coinGeckoCatalog != nil)
-  }
-
-  @Test("Remote profile has no CoinGecko catalog")
-  func remoteProfileHasNoCatalog() throws {
-    let url = try #require(URL(string: "https://moolah.rocks/api/"))
-    let profile = Profile(label: "Remote", serverURL: url)
-    let session = ProfileSession(profile: profile)
-
-    #expect(session.coinGeckoCatalog == nil)
   }
 }

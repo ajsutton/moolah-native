@@ -65,7 +65,6 @@
 
       let newProfile = Profile(
         label: exported.profileLabel,
-        backendType: .cloudKit,
         currencyCode: exported.currencyCode,
         financialYearStartMonth: exported.financialYearStartMonth
       )

@@ -109,8 +109,8 @@ struct ICloudProfilePickerView: View {
 #Preview("Two profiles") {
   ICloudProfilePickerView(
     profiles: [
-      Profile(label: "Household", backendType: .cloudKit, currencyCode: "AUD"),
-      Profile(label: "Side business", backendType: .cloudKit, currencyCode: "AUD"),
+      Profile(label: "Household", currencyCode: "AUD"),
+      Profile(label: "Side business", currencyCode: "AUD"),
     ],
     accountCounts: [:],
     selectAction: { _ in },
@@ -120,8 +120,8 @@ struct ICloudProfilePickerView: View {
 }
 
 #Preview("With counts — dark") {
-  let household = Profile(label: "Household", backendType: .cloudKit, currencyCode: "AUD")
-  let business = Profile(label: "Side business", backendType: .cloudKit, currencyCode: "AUD")
+  let household = Profile(label: "Household", currencyCode: "AUD")
+  let business = Profile(label: "Side business", currencyCode: "AUD")
   ICloudProfilePickerView(
     profiles: [household, business],
     accountCounts: [household.id: 12, business.id: 3],
@@ -133,7 +133,7 @@ struct ICloudProfilePickerView: View {
 }
 
 #Preview("AX5") {
-  let household = Profile(label: "Household", backendType: .cloudKit, currencyCode: "AUD")
+  let household = Profile(label: "Household", currencyCode: "AUD")
   ICloudProfilePickerView(
     profiles: [household],
     accountCounts: [household.id: 12],

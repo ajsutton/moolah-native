@@ -14,54 +14,8 @@ struct ProfileStoreTestsMore {
     return defaults
   }
 
-  private func makeProfile(label: String = "Test", url: String = "https://moolah.rocks/api/")
-    -> Profile
-  {
-    Profile(label: label, serverURL: makeURL(url))
-  }
-
-  @Test("validateAndUpdateProfile updates profile when validation succeeds")
-  func validateAndUpdateSuccess() async {
-    let validator = InMemoryServerValidator()
-    let store = ProfileStore(defaults: makeDefaults(), validator: validator)
-    var profile = makeProfile(label: "Old")
-    store.addProfile(profile)
-
-    profile.label = "New"
-    let result = await store.validateAndUpdateProfile(profile)
-
-    #expect(result == true)
-    #expect(store.profiles[0].label == "New")
-    #expect(store.validationError == nil)
-  }
-
-  @Test("validateAndUpdateProfile does not update profile when validation fails")
-  func validateAndUpdateFailure() async {
-    let validator = InMemoryServerValidator()
-    let store = ProfileStore(defaults: makeDefaults(), validator: validator)
-    var profile = makeProfile(label: "Old")
-    store.addProfile(profile)
-
-    validator.shouldSucceed = false
-    profile.label = "New"
-    let result = await store.validateAndUpdateProfile(profile)
-
-    #expect(result == false)
-    #expect(store.profiles[0].label == "Old")
-    #expect(store.validationError != nil)
-  }
-
-  // MARK: - Validation: nil validator
-
-  @Test("validateAndAddProfile skips validation when no validator is set")
-  func validateAndAddWithoutValidator() async {
-    let store = ProfileStore(defaults: makeDefaults())
-    let profile = makeProfile()
-
-    let result = await store.validateAndAddProfile(profile)
-
-    #expect(result == true)
-    #expect(store.profiles.count == 1)
+  private func makeProfile(label: String = "Test") -> Profile {
+    Profile(label: label)
   }
 
   // MARK: - Cloud profile initial load
@@ -80,7 +34,7 @@ struct ProfileStoreTestsMore {
 
     // The active profile ID should be preserved even though no cloud profiles loaded
     #expect(store.activeProfileID == cloudProfileID)
-    #expect(store.cloudProfiles.isEmpty)
+    #expect(store.profiles.isEmpty)
   }
 
   @Test("remote change resets activeProfileID when cloud profile was deleted")
@@ -89,23 +43,17 @@ struct ProfileStoreTestsMore {
     let containerManager = try ProfileContainerManager.forTesting()
     let store = ProfileStore(defaults: defaults, containerManager: containerManager)
 
-    // Add a cloud profile and a remote fallback
-    let remoteProfile = makeProfile(label: "Remote")
-    store.addProfile(remoteProfile)
+    // Add two cloud profiles
+    let firstProfile = makeProfile(label: "First")
+    let secondProfile = makeProfile(label: "Second")
+    store.addProfile(firstProfile)
+    store.addProfile(secondProfile)
+    store.setActiveProfile(secondProfile.id)
+    #expect(store.activeProfileID == secondProfile.id)
 
-    let cloudProfile = Profile(
-      label: "Cloud",
-      backendType: .cloudKit,
-      currencyCode: "AUD",
-      financialYearStartMonth: 7
-    )
-    store.addProfile(cloudProfile)
-    store.setActiveProfile(cloudProfile.id)
-    #expect(store.activeProfileID == cloudProfile.id)
-
-    // Delete the cloud profile record from SwiftData directly (simulates remote deletion)
+    // Delete the second profile record from SwiftData directly (simulates remote deletion)
     let context = ModelContext(containerManager.indexContainer)
-    let profileId = cloudProfile.id
+    let profileId = secondProfile.id
     let descriptor = FetchDescriptor<ProfileRecord>(
       predicate: #Predicate { $0.id == profileId }
     )
@@ -114,10 +62,10 @@ struct ProfileStoreTestsMore {
       try context.save()
     }
 
-    // Simulate a remote change reload — should reset active to fallback
+    // Simulate a remote change reload — should reset active to remaining profile
     store.loadCloudProfiles(isInitialLoad: false)
 
-    #expect(store.activeProfileID == remoteProfile.id)
+    #expect(store.activeProfileID == firstProfile.id)
   }
 
   // MARK: - Remote deletion cleanup
@@ -128,12 +76,7 @@ struct ProfileStoreTestsMore {
     let containerManager = try ProfileContainerManager.forTesting()
     let store = ProfileStore(defaults: defaults, containerManager: containerManager)
 
-    let cloudProfile = Profile(
-      label: "Cloud",
-      backendType: .cloudKit,
-      currencyCode: "AUD",
-      financialYearStartMonth: 7
-    )
+    let cloudProfile = makeProfile(label: "Cloud")
     store.addProfile(cloudProfile)
     store.setActiveProfile(cloudProfile.id)
 
@@ -163,12 +106,7 @@ struct ProfileStoreTestsMore {
     let containerManager = try ProfileContainerManager.forTesting()
     let store = ProfileStore(defaults: defaults, containerManager: containerManager)
 
-    let cloudProfile = Profile(
-      label: "Cloud",
-      backendType: .cloudKit,
-      currencyCode: "AUD",
-      financialYearStartMonth: 7
-    )
+    let cloudProfile = makeProfile(label: "Cloud")
     store.addProfile(cloudProfile)
 
     // Force creation of the per-profile container (simulates normal app usage)
@@ -203,12 +141,7 @@ struct ProfileStoreTestsMore {
     var changedIDs: [UUID] = []
     store.onProfileChanged = { id in changedIDs.append(id) }
 
-    let profile = Profile(
-      label: "Cloud",
-      backendType: .cloudKit,
-      currencyCode: "AUD",
-      financialYearStartMonth: 7
-    )
+    let profile = makeProfile(label: "Cloud")
     store.addProfile(profile)
 
     #expect(changedIDs == [profile.id])

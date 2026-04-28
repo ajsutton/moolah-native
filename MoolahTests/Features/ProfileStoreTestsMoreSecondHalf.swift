@@ -14,23 +14,8 @@ struct ProfileStoreTestsMoreSecondHalf {
     return defaults
   }
 
-  private func makeProfile(label: String = "Test", url: String = "https://moolah.rocks/api/")
-    -> Profile
-  {
-    Profile(label: label, serverURL: makeURL(url))
-  }
-
-  @Test("addProfile does not call onProfileChanged for remote profiles")
-  func addRemoteProfileDoesNotCallOnProfileChanged() throws {
-    let defaults = makeDefaults()
-    let store = ProfileStore(defaults: defaults)
-
-    var changedIDs: [UUID] = []
-    store.onProfileChanged = { id in changedIDs.append(id) }
-
-    store.addProfile(makeProfile())
-
-    #expect(changedIDs.isEmpty)
+  private func makeProfile(label: String = "Test") -> Profile {
+    Profile(label: label)
   }
 
   @Test("updateProfile calls onProfileChanged for CloudKit profiles")
@@ -39,12 +24,7 @@ struct ProfileStoreTestsMoreSecondHalf {
     let containerManager = try ProfileContainerManager.forTesting()
     let store = ProfileStore(defaults: defaults, containerManager: containerManager)
 
-    var profile = Profile(
-      label: "Cloud",
-      backendType: .cloudKit,
-      currencyCode: "AUD",
-      financialYearStartMonth: 7
-    )
+    var profile = makeProfile(label: "Cloud")
     store.addProfile(profile)
 
     var changedIDs: [UUID] = []
@@ -62,12 +42,7 @@ struct ProfileStoreTestsMoreSecondHalf {
     let containerManager = try ProfileContainerManager.forTesting()
     let store = ProfileStore(defaults: defaults, containerManager: containerManager)
 
-    let profile = Profile(
-      label: "Cloud",
-      backendType: .cloudKit,
-      currencyCode: "AUD",
-      financialYearStartMonth: 7
-    )
+    let profile = makeProfile(label: "Cloud")
     store.addProfile(profile)
 
     var deletedIDs: [UUID] = []
@@ -76,21 +51,6 @@ struct ProfileStoreTestsMoreSecondHalf {
     store.removeProfile(profile.id)
 
     #expect(deletedIDs == [profile.id])
-  }
-
-  @Test("removeProfile does not call onProfileDeleted for remote profiles")
-  func removeRemoteProfileDoesNotCallOnProfileDeleted() throws {
-    let defaults = makeDefaults()
-    let store = ProfileStore(defaults: defaults)
-    let profile = makeProfile()
-    store.addProfile(profile)
-
-    var deletedIDs: [UUID] = []
-    store.onProfileDeleted = { id in deletedIDs.append(id) }
-
-    store.removeProfile(profile.id)
-
-    #expect(deletedIDs.isEmpty)
   }
 
   @Test("loadCloudProfiles does not clean up profiles on initial load")
@@ -127,20 +87,6 @@ struct ProfileStoreTestsMoreSecondHalf {
     #expect(store.isCloudLoadPending == true)
   }
 
-  @Test("no retry is scheduled when a remote profile already satisfies activeProfileID")
-  func noRetryWhenRemoteProfilePresent() throws {
-    let defaults = makeDefaults()
-    let remote = makeProfile(label: "Remote")
-    let encoded = try JSONEncoder().encode([remote])
-    defaults.set(encoded, forKey: "com.moolah.profiles")
-    defaults.set(remote.id.uuidString, forKey: "com.moolah.activeProfileID")
-
-    let containerManager = try ProfileContainerManager.forTesting()
-    let store = ProfileStore(defaults: defaults, containerManager: containerManager)
-
-    #expect(store.isCloudLoadPending == false)
-  }
-
   @Test("loadCloudProfiles cancels the pending retry once profiles are found")
   func loadCloudProfilesCancelsPendingRetry() throws {
     let defaults = makeDefaults()
@@ -159,7 +105,6 @@ struct ProfileStoreTestsMoreSecondHalf {
     let profile = Profile(
       id: cloudProfileID,
       label: "Cloud",
-      backendType: .cloudKit,
       currencyCode: "AUD",
       financialYearStartMonth: 7
     )
@@ -170,7 +115,7 @@ struct ProfileStoreTestsMoreSecondHalf {
     // pending retry so we don't do redundant work.
     store.loadCloudProfiles(isInitialLoad: false)
 
-    #expect(store.cloudProfiles.count == 1)
+    #expect(store.profiles.count == 1)
     #expect(store.isCloudLoadPending == false)
   }
 }

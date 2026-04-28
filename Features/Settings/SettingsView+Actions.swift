@@ -30,7 +30,6 @@ extension SettingsView {
 
       let newProfile = Profile(
         label: exported.profileLabel,
-        backendType: .cloudKit,
         currencyCode: exported.currencyCode,
         financialYearStartMonth: exported.financialYearStartMonth
       )
@@ -94,33 +93,22 @@ extension SettingsView {
     VStack(alignment: .leading, spacing: 2) {
       Text(profile.label)
         .font(.headline)
-      switch profile.backendType {
-      case .moolah:
-        Text("moolah.rocks")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      case .remote:
-        Text(profile.resolvedServerURL.host() ?? profile.resolvedServerURL.absoluteString)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      case .cloudKit:
-        Text("iCloud")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
+      Text("iCloud")
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
     .accessibilityElement(children: .combine)
   }
 
   var deleteAlertTitle: String {
-    if let profile = profileToDelete, profile.backendType == .cloudKit {
+    if let profile = profileToDelete {
       return "Delete \(profile.label)?"
     }
-    return "Remove Profile?"
+    return "Delete Profile?"
   }
 
   @ViewBuilder var deleteAlertButtons: some View {
-    Button(profileToDelete?.backendType == .cloudKit ? "Delete" : "Remove", role: .destructive) {
+    Button("Delete", role: .destructive) {
       if let profile = profileToDelete {
         profileStore.removeProfile(profile.id)
         if selectedProfileID == profile.id {
@@ -136,15 +124,9 @@ extension SettingsView {
 
   @ViewBuilder var deleteAlertMessage: some View {
     if let profile = profileToDelete {
-      if profile.backendType == .cloudKit {
-        Text(
-          "This will permanently delete all accounts, transactions, and other data in this profile across all your devices. This cannot be undone."
-        )
-      } else {
-        Text(
-          "Are you sure you want to remove \"\(profile.label)\"? You will need to sign in again if you re-add it."
-        )
-      }
+      Text(
+        "This will permanently delete all accounts, transactions, and other data in \"\(profile.label)\" across all your devices. This cannot be undone."
+      )
     }
   }
 }

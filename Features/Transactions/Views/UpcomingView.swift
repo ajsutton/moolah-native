@@ -22,7 +22,7 @@ struct UpcomingView: View {
         earmarks: earmarks,
         transactionStore: transactionStore,
         showRecurrence: true,
-        supportsComplexTransactions: session.profile.supportsComplexTransactions
+        supportsComplexTransactions: true
       )
       .focusedSceneValue(\.selectedTransaction, $selectedTransaction)
       .focusedSceneValue(\.newTransactionAction, createNewScheduledTransaction)

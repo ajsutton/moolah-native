@@ -54,7 +54,6 @@ struct ExportProgressTests {
 
     let profile = Profile(
       label: "Progress Test",
-      backendType: .cloudKit,
       currencyCode: instrument.id,
       financialYearStartMonth: 7
     )

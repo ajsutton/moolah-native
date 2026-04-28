@@ -51,39 +51,11 @@ struct SettingsView: View {
   // layouts.
   @ViewBuilder
   func profileDetailView(for profile: Profile) -> some View {
-    #if os(macOS)
-      let session = sessionManager.sessions[profile.id]
-      let authStore = session?.authStore
-    #else
-      let isActive = profile.id == profileStore.activeProfileID
-      let session = isActive ? activeSession : nil
-      let authStore = session?.authStore
-    #endif
-
-    switch profile.backendType {
-    case .moolah:
-      if let session {
-        MoolahProfileDetailView(profile: profile, authStore: authStore, session: session)
-          .environment(session)
-      } else {
-        MoolahProfileDetailView(profile: profile, authStore: authStore, session: session)
-      }
-    case .remote:
-      if let session {
-        CustomServerProfileDetailView(profile: profile, authStore: authStore, session: session)
-          .environment(session)
-      } else {
-        CustomServerProfileDetailView(profile: profile, authStore: authStore, session: session)
-      }
-    case .cloudKit:
-      CloudKitProfileDetailView(profile: profile)
-    }
+    CloudKitProfileDetailView(profile: profile)
   }
 
 }
 
-// `MoolahProfileDetailView`, `CustomServerProfileDetailView`,
-// `CloudKitProfileDetailView`, and `ProfileAuthStatusView` live in
-// `MoolahProfileDetailView.swift`. `ShareSheetView` lives in
-// `SettingsView+iOS.swift`. The macOS HSplitView/TabView layout lives in
-// `SettingsView+macOS.swift`.
+// `CloudKitProfileDetailView` lives in `CloudKitProfileDetailView.swift`.
+// `ShareSheetView` lives in `SettingsView+iOS.swift`. The macOS
+// HSplitView/TabView layout lives in `SettingsView+macOS.swift`.

@@ -20,7 +20,6 @@ struct ProfileStoreAutoActivateGuardTests {
     let profile = Profile(
       id: UUID(),
       label: "Household",
-      backendType: .cloudKit,
       currencyCode: "AUD",
       financialYearStartMonth: 7
     )
@@ -58,7 +57,7 @@ struct ProfileStoreAutoActivateGuardTests {
     store.loadCloudProfiles()
 
     #expect(store.activeProfileID == nil)
-    #expect(store.cloudProfiles.count == 1)
+    #expect(store.profiles.count == 1)
   }
 
   @Test("loadCloudProfiles auto-activates when welcomePhase is nil")

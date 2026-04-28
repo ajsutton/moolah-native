@@ -5,20 +5,18 @@ import Observation
 import SwiftData
 
 /// Manages the list of profiles and which one is active.
-/// Remote profiles persist in UserDefaults; iCloud profiles persist in SwiftData (ProfileRecord).
-/// Active profile ID is per-device via UserDefaults.
+/// Profiles persist as CloudKit `ProfileRecord` rows in SwiftData; the active
+/// profile ID is per-device via UserDefaults.
 @Observable
 @MainActor
 final class ProfileStore {
   // internal (was private) so the `+Cloud` extension can key UserDefaults
   // lookups under the same constants.
-  static let profilesKey = "com.moolah.profiles"
   static let activeProfileKey = "com.moolah.activeProfileID"
 
   // Setters widened from `private(set)` to default (internal) so the
   // `+Cloud` extension file can mutate them while loading / validating.
-  var remoteProfiles: [Profile] = []
-  var cloudProfiles: [Profile] = []
+  var profiles: [Profile] = []
   var activeProfileID: UUID?
   var isValidating = false
   var validationError: String?
@@ -61,7 +59,6 @@ final class ProfileStore {
   // internal (was private) so the `+Cloud` extension can reach the injected
   // dependencies and logger.
   let defaults: UserDefaults
-  let validator: (any ServerValidator)?
   let containerManager: ProfileContainerManager?
   private let syncCoordinator: SyncCoordinator?
   let logger = Logger(subsystem: "com.moolah.app", category: "ProfileStore")
@@ -71,11 +68,6 @@ final class ProfileStore {
   /// `WelcomeView`) reads this rather than reaching into the sync layer.
   var iCloudAvailability: ICloudAvailability {
     syncCoordinator?.iCloudAvailability ?? .unknown
-  }
-
-  /// Combined list of all profiles from both backends.
-  var profiles: [Profile] {
-    remoteProfiles + cloudProfiles
   }
 
   var activeProfile: Profile? {
@@ -88,12 +80,10 @@ final class ProfileStore {
 
   init(
     defaults: UserDefaults = .standard,
-    validator: (any ServerValidator)? = nil,
     containerManager: ProfileContainerManager? = nil,
     syncCoordinator: SyncCoordinator? = nil
   ) {
     self.defaults = defaults
-    self.validator = validator
     self.containerManager = containerManager
     self.syncCoordinator = syncCoordinator
     loadFromDefaults()
@@ -107,26 +97,20 @@ final class ProfileStore {
   }
 
   func addProfile(_ profile: Profile) {
-    switch profile.backendType {
-    case .remote, .moolah:
-      remoteProfiles.append(profile)
-      saveToDefaults()
-    case .cloudKit:
-      guard let containerManager else {
-        logger.error("Cannot add CloudKit profile without ProfileContainerManager")
-        return
-      }
-      let context = ModelContext(containerManager.indexContainer)
-      let record = ProfileRecord.from(profile: profile)
-      context.insert(record)
-      do {
-        try context.save()
-        onProfileChanged?(profile.id)
-      } catch {
-        logger.error("Failed to save CloudKit profile: \(error)")
-      }
-      cloudProfiles.append(profile)
+    guard let containerManager else {
+      logger.error("Cannot add CloudKit profile without ProfileContainerManager")
+      return
     }
+    let context = ModelContext(containerManager.indexContainer)
+    let record = ProfileRecord.from(profile: profile)
+    context.insert(record)
+    do {
+      try context.save()
+      onProfileChanged?(profile.id)
+    } catch {
+      logger.error("Failed to save CloudKit profile: \(error)")
+    }
+    profiles.append(profile)
 
     if profiles.count == 1 {
       activeProfileID = profile.id
@@ -136,16 +120,8 @@ final class ProfileStore {
   }
 
   func removeProfile(_ id: UUID) {
-    if let index = remoteProfiles.firstIndex(where: { $0.id == id }) {
-      remoteProfiles.remove(at: index)
-
-      // Clean up the profile's keychain cookies
-      let keychain = CookieKeychain(account: id.uuidString)
-      keychain.clear()
-
-      saveToDefaults()
-    } else if let index = cloudProfiles.firstIndex(where: { $0.id == id }) {
-      cloudProfiles.remove(at: index)
+    if let index = profiles.firstIndex(where: { $0.id == id }) {
+      profiles.remove(at: index)
 
       if let containerManager {
         containerManager.deleteStore(for: id)
@@ -172,31 +148,24 @@ final class ProfileStore {
   }
 
   func updateProfile(_ profile: Profile) {
-    switch profile.backendType {
-    case .remote, .moolah:
-      guard let index = remoteProfiles.firstIndex(where: { $0.id == profile.id }) else { return }
-      remoteProfiles[index] = profile
-      saveToDefaults()
-    case .cloudKit:
-      guard let containerManager else { return }
-      guard let index = cloudProfiles.firstIndex(where: { $0.id == profile.id }) else { return }
-      cloudProfiles[index] = profile
+    guard let containerManager else { return }
+    guard let index = profiles.firstIndex(where: { $0.id == profile.id }) else { return }
+    profiles[index] = profile
 
-      let context = ModelContext(containerManager.indexContainer)
-      let profileId = profile.id
-      let descriptor = FetchDescriptor<ProfileRecord>(
-        predicate: #Predicate { $0.id == profileId }
-      )
-      if let record = try? context.fetch(descriptor).first {
-        record.label = profile.label
-        record.currencyCode = profile.currencyCode
-        record.financialYearStartMonth = profile.financialYearStartMonth
-        do {
-          try context.save()
-          onProfileChanged?(profile.id)
-        } catch {
-          logger.error("Failed to save CloudKit profile update: \(error)")
-        }
+    let context = ModelContext(containerManager.indexContainer)
+    let profileId = profile.id
+    let descriptor = FetchDescriptor<ProfileRecord>(
+      predicate: #Predicate { $0.id == profileId }
+    )
+    if let record = try? context.fetch(descriptor).first {
+      record.label = profile.label
+      record.currencyCode = profile.currencyCode
+      record.financialYearStartMonth = profile.financialYearStartMonth
+      do {
+        try context.save()
+        onProfileChanged?(profile.id)
+      } catch {
+        logger.error("Failed to save CloudKit profile update: \(error)")
       }
     }
     logger.debug("Updated profile: \(profile.label)")
@@ -204,28 +173,10 @@ final class ProfileStore {
 
   // MARK: - Validated mutations
 
-  /// Validates the server URL then adds the profile. Returns true on success.
+  /// Validates iCloud availability then adds the profile. Returns true on success.
   func validateAndAddProfile(_ profile: Profile) async -> Bool {
-    switch profile.backendType {
-    case .remote, .moolah:
-      guard await validateServer(url: profile.resolvedServerURL) else { return false }
-    case .cloudKit:
-      guard await validateiCloudAvailability() else { return false }
-    }
+    guard await validateiCloudAvailability() else { return false }
     addProfile(profile)
-    return true
-  }
-
-  /// Validates the server URL then updates the profile. Returns true on success.
-  func validateAndUpdateProfile(_ profile: Profile) async -> Bool {
-    switch profile.backendType {
-    case .remote, .moolah:
-      guard await validateServer(url: profile.resolvedServerURL) else { return false }
-    case .cloudKit:
-      // No validation needed for updating an existing CloudKit profile
-      break
-    }
-    updateProfile(profile)
     return true
   }
 
