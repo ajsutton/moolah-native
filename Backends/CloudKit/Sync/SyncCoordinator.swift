@@ -280,6 +280,13 @@ final class SyncCoordinator {
   /// Cached profile data handlers, keyed by profile UUID.
   var dataHandlers: [UUID: ProfileDataSyncHandler] = [:]
 
+  /// Per-profile callback fired by the handler whenever a remote pull touches
+  /// any `InstrumentRecord` row. Registered by `ProfileSession` ahead of the
+  /// first sync session so it is available when the handler is lazily created
+  /// in `handlerForProfileZone(profileId:zoneID:)`. Sendable so the closure
+  /// can be captured into the handler's `nonisolated` storage.
+  var instrumentRemoteChangeCallbacks: [UUID: @Sendable () -> Void] = [:]
+
   /// Zones with pending zone creation — records in these zones are skipped in nextRecordZoneChangeBatch.
   var pendingZoneCreation: [CKRecordZone.ID: [CKSyncEngine.PendingRecordZoneChange]] = [:]
 
@@ -364,20 +371,8 @@ final class SyncCoordinator {
   }
 
   // MARK: - Handler Access
-
-  /// Returns (or creates) a `ProfileDataSyncHandler` for the given profile zone.
-  func handlerForProfileZone(
-    profileId: UUID, zoneID: CKRecordZone.ID
-  ) throws -> ProfileDataSyncHandler {
-    if let existing = dataHandlers[profileId] {
-      return existing
-    }
-    let container = try containerManager.container(for: profileId)
-    let handler = ProfileDataSyncHandler(
-      profileId: profileId, zoneID: zoneID, modelContainer: container)
-    dataHandlers[profileId] = handler
-    return handler
-  }
+  // (Lazy `ProfileDataSyncHandler` creation and the per-profile
+  // instrument-change callback registry live on `+HandlerAccess`.)
 
   // MARK: - State Persistence
   // (Load of the state serialization happens off-actor in `prepareEngine`, on `+Lifecycle`.)
