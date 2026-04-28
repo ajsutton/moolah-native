@@ -1,7 +1,7 @@
 # Instrument Registry UI — Design
 
-> Resolves [#461](https://github.com/ajsutton/moolah-native/issues/461). Builds on the backend foundation in
-> [`plans/completed/2026-04-24-instrument-registry-design.md`](completed/2026-04-24-instrument-registry-design.md). The CSV-import counterpart is tracked separately in [#515](https://github.com/ajsutton/moolah-native/issues/515).
+> **Status:** Completed (2026-04-27). Resolves [#461](https://github.com/ajsutton/moolah-native/issues/461). Builds on the backend foundation in
+> [`plans/completed/2026-04-24-instrument-registry-design.md`](2026-04-24-instrument-registry-design.md). The CSV-import counterpart is tracked separately in [#515](https://github.com/ajsutton/moolah-native/issues/515).
 
 ## 1. Goal
 
