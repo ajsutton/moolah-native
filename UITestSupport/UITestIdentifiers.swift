@@ -71,6 +71,11 @@ public enum UITestIdentifiers {
       "detail.leg.\(index).category"
     }
 
+    /// Picker that selects the transaction type (Income / Expense / Transfer /
+    /// Trade / Custom). Only rendered when the transaction is editable (i.e.
+    /// not an opening balance and not an irrecoverable custom shape).
+    public static let modeTypePicker = "detail.modeTypePicker"
+
     // MARK: Trade mode identifiers
 
     /// Account picker in the trade-mode section. Applies to both `.trade` legs

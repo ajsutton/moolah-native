@@ -208,6 +208,8 @@ extension MoolahUITestCase {
       lines.append("# SyncProgress driven to .upToDate with pendingUploads=12 then settled")
     case .cryptoCatalogPreloaded:
       appendCryptoCatalogPreloadedFixtures(into: &lines)
+    case .tradeReady:
+      appendTradeReadyFixtures(into: &lines)
     }
     return lines.joined(separator: "\n") + "\n"
   }
@@ -230,6 +232,21 @@ extension MoolahUITestCase {
     lines.append("resolve.coingeckoId        = \(fixtures.coingeckoMappingId)")
     lines.append("resolve.cryptocompareSymbol = \(fixtures.cryptocompareSymbol)")
     lines.append("resolve.binanceSymbol      = \(fixtures.binanceSymbol)")
+  }
+
+  private func appendTradeReadyFixtures(into lines: inout [String]) {
+    let fixtures = UITestFixtures.TradeReady.self
+    lines.append("# fixtures")
+    lines.append("profile.id       = \(fixtures.profileId)")
+    lines.append("profile.label    = \(fixtures.profileLabel)")
+    lines.append("profile.currency = \(fixtures.profileCurrencyCode)")
+    lines.append("brokerage.id     = \(fixtures.brokerageAccountId)")
+    lines.append("brokerage.name   = \(fixtures.brokerageAccountName)")
+    lines.append("instrument.id    = \(fixtures.vgsaxInstrumentId)")
+    lines.append("instrument.ticker = \(fixtures.vgsaxTicker)")
+    lines.append("instrument.exchange = \(fixtures.vgsaxExchange)")
+    lines.append("category.id      = \(fixtures.brokerageCategoryId)")
+    lines.append("category.name    = \(fixtures.brokerageCategoryName)")
   }
 
   private func appendTradeBaselineFixtures(into lines: inout [String]) {
