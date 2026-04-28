@@ -159,7 +159,7 @@ struct TradeFormDriver {
     while Date() < deadline {
       let matches = app.application.staticTexts.matching(
         NSPredicate(format: "label BEGINSWITH %@", prefix))
-      if matches.count > 0, matches.firstMatch.exists { return }
+      if matches.firstMatch.exists { return }
       RunLoop.current.run(until: Date().addingTimeInterval(0.1))
     }
     Trace.recordFailure("no row starting with '\(prefix)' after \(timeout)s")
