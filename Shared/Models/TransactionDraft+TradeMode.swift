@@ -130,3 +130,86 @@ extension TransactionDraft {
     isCustom = false
   }
 }
+
+// MARK: - Mode Switching (Reverse from Trade)
+
+extension TransactionDraft {
+  /// Convert a trade-shaped draft into one of the simpler modes. Pass
+  /// `nil` for `to` to flip to Custom (lossless escape hatch).
+  mutating func switchFromTrade(to target: TransactionType?, accounts: Accounts) {
+    if target == nil {
+      isCustom = true
+      return
+    }
+    guard let paidIdx = paidLegIndex, let receivedIdx = receivedLegIndex else {
+      // Not actually a trade — defensive no-op.
+      return
+    }
+    let paidLeg = legDrafts[paidIdx]
+    let receivedLeg = legDrafts[receivedIdx]
+
+    switch target {
+    case .income:
+      applyIncomeLeg(from: receivedLeg)
+    case .expense:
+      applyExpenseLeg(from: paidLeg)
+    case .transfer:
+      applyTransferLegs(paidLeg: paidLeg, accounts: accounts)
+    case .openingBalance, .trade, .none:
+      // .openingBalance not user-selectable; .trade is a no-op; nil
+      // handled above. Defensive default.
+      break
+    }
+    isCustom = false
+  }
+
+  private mutating func applyIncomeLeg(from source: LegDraft) {
+    legDrafts = [
+      LegDraft(
+        type: .income,
+        accountId: source.accountId,
+        amountText: source.amountText,
+        categoryId: nil,
+        categoryText: "",
+        earmarkId: nil,
+        instrumentId: source.instrumentId)
+    ]
+    relevantLegIndex = 0
+  }
+
+  private mutating func applyExpenseLeg(from source: LegDraft) {
+    legDrafts = [
+      LegDraft(
+        type: .expense,
+        accountId: source.accountId,
+        amountText: source.amountText,
+        categoryId: nil,
+        categoryText: "",
+        earmarkId: nil,
+        instrumentId: source.instrumentId)
+    ]
+    relevantLegIndex = 0
+  }
+
+  private mutating func applyTransferLegs(paidLeg: LegDraft, accounts: Accounts) {
+    let other = accounts.ordered.first { $0.id != paidLeg.accountId }
+    let counterpart = LegDraft(
+      type: .transfer,
+      accountId: other?.id,
+      amountText: negatedAmountText(paidLeg.amountText),
+      categoryId: nil,
+      categoryText: "",
+      earmarkId: nil,
+      instrumentId: other?.instrument.id ?? paidLeg.instrumentId)
+    let primary = LegDraft(
+      type: .transfer,
+      accountId: paidLeg.accountId,
+      amountText: paidLeg.amountText,
+      categoryId: nil,
+      categoryText: "",
+      earmarkId: nil,
+      instrumentId: paidLeg.instrumentId)
+    legDrafts = [primary, counterpart]
+    relevantLegIndex = 0
+  }
+}
