@@ -133,14 +133,11 @@ extension TransactionDraft {
     // differs from its account's instrument (e.g. a cross-currency trade booked
     // against a single investment account).
     let drafts = transaction.legs.map { leg in
-      // For .trade legs, amountText always holds the absolute quantity (positive).
-      // The sign is re-derived from leg position when serialising back to a Transaction.
-      let displayQuantity = leg.type == .trade ? abs(leg.quantity) : leg.quantity
-      return LegDraft(
+      LegDraft(
         type: leg.type,
         accountId: leg.accountId,
         amountText: Self.displayText(
-          quantity: displayQuantity, type: leg.type, decimals: leg.instrument.decimals),
+          quantity: leg.quantity, type: leg.type, decimals: leg.instrument.decimals),
         categoryId: leg.categoryId,
         categoryText: "",
         earmarkId: leg.earmarkId,
@@ -288,7 +285,6 @@ extension TransactionDraft {
     guard isValid else { return nil }
 
     var legs: [TransactionLeg] = []
-    var tradeLegOrdinal = 0
     for legDraft in legDrafts {
       guard let overrideId = legDraft.instrumentId,
         let instrument = availableInstruments.first(where: { $0.id == overrideId })
@@ -297,20 +293,9 @@ extension TransactionDraft {
       }
 
       guard
-        let parsedQty = Self.parseDisplayText(
+        let quantity = Self.parseDisplayText(
           legDraft.amountText, type: legDraft.type, decimals: instrument.decimals)
       else { return nil }
-
-      // For .trade legs, sign is determined by position: first leg is Paid (negative),
-      // subsequent legs are Received (positive). Defensive abs handles user-typed negatives.
-      let quantity: Decimal
-      if legDraft.type == .trade {
-        let absQty = abs(parsedQty)
-        quantity = (tradeLegOrdinal == 0) ? -absQty : absQty
-        tradeLegOrdinal += 1
-      } else {
-        quantity = parsedQty
-      }
 
       legs.append(
         TransactionLeg(

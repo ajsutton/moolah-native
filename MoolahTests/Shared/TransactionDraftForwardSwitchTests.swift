@@ -39,8 +39,11 @@ struct TransactionDraftForwardSwitchTests {
     #expect(paid.instrumentId == aud.id)
   }
 
-  @Test("Expense → Trade: existing leg becomes Paid, Received added at 0")
+  @Test("Expense → Trade: existing leg becomes Paid; sign re-emitted for trade display")
   func expenseToTrade() throws {
+    // Expense's `displaysNegated == true` means amountText "300" represents
+    // a stored quantity of -300. `.trade` doesn't negate, so the carried
+    // amountText flips to "-300" so the same -300 round-trips through trade.
     var draft = TransactionDraft(accountId: acctA, instrumentId: aud.id)
     draft.legDrafts = [
       TransactionDraft.LegDraft(
@@ -52,7 +55,7 @@ struct TransactionDraftForwardSwitchTests {
     let receivedIndex = try #require(draft.receivedLegIndex)
     let paid = draft.legDrafts[paidIndex]
     let received = draft.legDrafts[receivedIndex]
-    #expect(paid.amountText == "300")
+    #expect(paid.amountText == "-300")
     #expect(received.amountText == "0")
   }
 

@@ -74,6 +74,7 @@ struct TransactionDetailFeeSection: View {
       onAcceptHighlighted: {},
       onCancel: { categoryState.cancel() }
     )
+    .accessibilityIdentifier(UITestIdentifiers.Detail.legCategory(legIndex))
   }
 
   private var earmarkPicker: some View {

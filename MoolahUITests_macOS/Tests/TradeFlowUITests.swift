@@ -24,7 +24,8 @@ final class TradeFlowUITests: MoolahUITestCase {
 
     app.tradeForm.switchToTradeMode()
     app.tradeForm.setPaid(amount: "300", instrumentId: "AUD")
-    app.tradeForm.setReceived(amount: "20", instrumentId: UITestFixtures.TradeReady.vgsaxTicker)
+    app.tradeForm.setReceived(
+      amount: "20", instrumentId: UITestFixtures.TradeReady.vgsaxInstrumentId)
     app.tradeForm.addFee(
       amount: "10",
       instrumentId: "AUD",

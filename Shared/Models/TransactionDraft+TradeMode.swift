@@ -74,6 +74,11 @@ extension TransactionDraft {
   /// Convert the draft into trade shape. Mirrors the rules in design §3.3
   /// "Forward". Caller is responsible for ensuring `canSwitchToTrade` is
   /// true; otherwise the result is ill-defined.
+  ///
+  /// `.trade` legs preserve user-entered signs (`displaysNegated(.trade) == false`).
+  /// When the existing leg's display rule differs from `.trade`'s, the carried
+  /// `amountText` is re-formatted via `adjustAmountText` so the underlying
+  /// signed quantity round-trips unchanged into trade storage.
   mutating func switchToTrade(accounts: Accounts) {
     if isCustom {
       isCustom = false
@@ -82,52 +87,40 @@ extension TransactionDraft {
 
     let existing = relevantLeg
     let acct = existing.accountId
-    let acctInstrument =
+    let acctInstrumentId =
       acct.flatMap { accounts.by(id: $0) }?.instrument.id ?? existing.instrumentId
+    let carriedText = Self.adjustAmountText(
+      existing.amountText, from: existing.type, to: .trade)
 
+    let carried = Self.tradeLeg(
+      accountId: acct, amountText: carriedText, instrumentId: existing.instrumentId)
+    let blank = Self.tradeLeg(
+      accountId: acct, amountText: "0", instrumentId: acctInstrumentId)
+
+    // Income's positive leg becomes Received; everything else (Expense,
+    // Transfer-after-counterpart-drop) becomes Paid. Counterpart transfer
+    // legs are intentionally discarded.
     let isReceivedFromIncome = (existing.type == .income)
-    let received: LegDraft
-    let paid: LegDraft
-
-    if isReceivedFromIncome {
-      received = LegDraft(
-        type: .trade,
-        accountId: acct,
-        amountText: existing.amountText,
-        categoryId: nil,
-        categoryText: "",
-        earmarkId: nil,
-        instrumentId: existing.instrumentId)
-      paid = LegDraft(
-        type: .trade,
-        accountId: acct,
-        amountText: "0",
-        categoryId: nil,
-        categoryText: "",
-        earmarkId: nil,
-        instrumentId: acctInstrument)
-    } else {
-      paid = LegDraft(
-        type: .trade,
-        accountId: acct,
-        amountText: existing.amountText,
-        categoryId: nil,
-        categoryText: "",
-        earmarkId: nil,
-        instrumentId: existing.instrumentId)
-      received = LegDraft(
-        type: .trade,
-        accountId: acct,
-        amountText: "0",
-        categoryId: nil,
-        categoryText: "",
-        earmarkId: nil,
-        instrumentId: acctInstrument)
-    }
-    // Counterpart legs (transfer) are intentionally discarded here.
-    legDrafts = [paid, received]
+    legDrafts = isReceivedFromIncome ? [blank, carried] : [carried, blank]
     relevantLegIndex = 0
     isCustom = false
+  }
+
+  /// Builds a fresh `.trade` `LegDraft` with no category or earmark, used by
+  /// the forward switch helpers. Trade legs are constrained to no category
+  /// or earmark per design §1.2.
+  private static func tradeLeg(
+    accountId: UUID?, amountText: String, instrumentId: String?
+  ) -> LegDraft {
+    LegDraft(
+      type: .trade,
+      accountId: accountId,
+      amountText: amountText,
+      categoryId: nil,
+      categoryText: "",
+      earmarkId: nil,
+      instrumentId: instrumentId
+    )
   }
 }
 
@@ -168,7 +161,7 @@ extension TransactionDraft {
       LegDraft(
         type: .income,
         accountId: source.accountId,
-        amountText: source.amountText,
+        amountText: Self.adjustAmountText(source.amountText, from: .trade, to: .income),
         categoryId: nil,
         categoryText: "",
         earmarkId: nil,
@@ -182,7 +175,7 @@ extension TransactionDraft {
       LegDraft(
         type: .expense,
         accountId: source.accountId,
-        amountText: source.amountText,
+        amountText: Self.adjustAmountText(source.amountText, from: .trade, to: .expense),
         categoryId: nil,
         categoryText: "",
         earmarkId: nil,
@@ -192,11 +185,12 @@ extension TransactionDraft {
   }
 
   private mutating func applyTransferLegs(paidLeg: LegDraft, accounts: Accounts) {
+    let primaryText = Self.adjustAmountText(paidLeg.amountText, from: .trade, to: .transfer)
     let other = accounts.ordered.first { $0.id != paidLeg.accountId }
     let counterpart = LegDraft(
       type: .transfer,
       accountId: other?.id,
-      amountText: negatedAmountText(paidLeg.amountText),
+      amountText: negatedAmountText(primaryText),
       categoryId: nil,
       categoryText: "",
       earmarkId: nil,
@@ -204,12 +198,43 @@ extension TransactionDraft {
     let primary = LegDraft(
       type: .transfer,
       accountId: paidLeg.accountId,
-      amountText: paidLeg.amountText,
+      amountText: primaryText,
       categoryId: nil,
       categoryText: "",
       earmarkId: nil,
       instrumentId: paidLeg.instrumentId)
     legDrafts = [primary, counterpart]
     relevantLegIndex = 0
+  }
+}
+
+// MARK: - Type Conversion Helpers
+
+extension TransactionDraft {
+  /// Re-formats `text` so the same underlying signed quantity that `text`
+  /// represents under `fromType`'s display rule round-trips into `toType`'s
+  /// display rule. When the two types share `displaysNegated(_:)`, the text
+  /// is returned unchanged; otherwise the value is parsed and re-emitted with
+  /// the opposite sign (preserving the user's decimal-place precision).
+  static func adjustAmountText(
+    _ text: String, from fromType: TransactionType, to toType: TransactionType
+  ) -> String {
+    if displaysNegated(fromType) == displaysNegated(toType) {
+      return text
+    }
+    guard let value = InstrumentAmount.parseQuantity(from: text, decimals: 10) else {
+      return text
+    }
+    let negated = -value
+    if negated == .zero {
+      return "0"
+    }
+    let decimalPlaces: Int
+    if let dotIndex = text.firstIndex(of: ".") {
+      decimalPlaces = text.distance(from: text.index(after: dotIndex), to: text.endIndex)
+    } else {
+      decimalPlaces = 0
+    }
+    return negated.formatted(.number.precision(.fractionLength(decimalPlaces)).grouping(.never))
   }
 }

@@ -18,10 +18,12 @@ struct TransactionDraftReverseSwitchTests {
   }
 
   private func tradeDraft(withFee: Bool = false) -> TransactionDraft {
+    // Buy-shaped fixture: cash leg quantity -300 (literal in amountText since
+    // `displaysNegated(.trade) == false`), position leg quantity +20.
     var draft = TransactionDraft(accountId: acctA, instrumentId: aud.id)
     draft.legDrafts = [
       TransactionDraft.LegDraft(
-        type: .trade, accountId: acctA, amountText: "300",
+        type: .trade, accountId: acctA, amountText: "-300",
         categoryId: nil, categoryText: "", earmarkId: nil, instrumentId: aud.id),
       TransactionDraft.LegDraft(
         type: .trade, accountId: acctA, amountText: "20",

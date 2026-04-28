@@ -1,15 +1,12 @@
 import SwiftUI
 
 // Sign-handling note:
-// `TransactionDraft.displaysNegated(.trade) == false`, so `amountText` stores
-// the value exactly as the user types it. The serialisation path in
-// `TransactionDraft.toTransaction` applies `abs()` and re-signs `.trade` legs
-// by position (first → Paid / negative, second → Received / positive), so
-// stored signs are always correct regardless of what the user types. The
-// remaining UX gap — stripping a leading "-" so the displayed value matches
-// the field label — is tracked separately:
-// TODO(#563): enforce positive-only input on Trade Paid/Received fields
-//   — https://github.com/ajsutton/moolah-native/issues/563
+// `TransactionDraft.displaysNegated(.trade) == false`, so the user enters
+// signed quantities directly into Paid and Received and the storage matches
+// 1:1. Trade reversals legitimately have unconventional signs, so the editor
+// preserves whatever the user types — see CLAUDE.md "Monetary Sign
+// Convention" and `feedback_no_abs_on_trade_legs.md` (no abs, no sign-by-
+// position).
 /// Trade-mode primary section. Mirrors the structure of
 /// `TransactionDetailDetailsSection` + `TransactionDetailAccountSection` for
 /// transfers, but with a single shared account picker and dual amount
