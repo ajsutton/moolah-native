@@ -135,20 +135,46 @@ struct TransactionPage: Sendable {
   let totalCount: Int?
 
   /// Computes the running balance after each transaction, converting each leg
-  /// to the target instrument and computing a display amount per transaction.
-  /// Transactions must be ordered newest-first (as returned by the repository).
-  /// `priorBalance` is the account balance before the oldest transaction in the list.
+  /// to the target instrument. Transactions must be ordered newest-first (as
+  /// returned by the repository). `priorBalance` is the account balance
+  /// before the oldest transaction in the list.
   ///
-  /// Graceful degradation: when a leg cannot be converted (e.g. exchange rate
-  /// unavailable), that transaction is returned with `displayAmount == nil` and
-  /// `balance == nil`, and every subsequent (newer) transaction also has
-  /// `balance == nil` since the running total can no longer be tracked.
-  /// The transactions themselves are always returned.
+  /// All legs are converted at `Date()` — *not* `transaction.date`. The
+  /// running balance has to tie out to the live account balance (which is
+  /// also computed at "now"); using historic per-date rates would make
+  /// the balance column drift from the account header. Treat the display
+  /// amount on each row as "what this transaction is worth at today's
+  /// rate," not "what it was worth when it happened." See #530.
   ///
-  /// The result also carries the first conversion error encountered (if any) so
-  /// callers can surface a retryable error state to the user. Per Rule 11 of
-  /// `guides/INSTRUMENT_CONVERSION_GUIDE.md`, every failure is logged via
-  /// `os.Logger` at `warning` level, not silently swallowed.
+  /// The algorithm is single-pass:
+  ///   1. Walk every leg once to enumerate the unique source instruments
+  ///      that need a rate.
+  ///   2. Fetch one rate per instrument from `conversionService` in a single
+  ///      `TaskGroup` batch — the parent only suspends once for the whole
+  ///      batch, regardless of how many instruments are involved.
+  ///   3. Apply rates per leg synchronously. For all-target-instrument data
+  ///      (the common scheduled / native-account case) phase 1 yields an
+  ///      empty set, phase 2 is a no-op, and phase 3 has zero suspension
+  ///      points.
+  ///
+  /// Graceful degradation: if a rate fetch fails for instrument X, every
+  /// transaction with an X leg is returned with `displayAmount == nil` and
+  /// `balance == nil`, and the running balance is broken from that row
+  /// onward. The first such failure is exposed as `firstConversionError`
+  /// so callers can surface a retry path. Per Rule 11 of
+  /// `guides/INSTRUMENT_CONVERSION_GUIDE.md`, each failure is logged via
+  /// `os.Logger` at `warning` level — once per failed instrument, not once
+  /// per affected leg.
+  ///
+  /// `@MainActor`-annotated so calls from a `@MainActor` caller (the
+  /// `TransactionStore`) take the same-isolation fast path. For all-target
+  /// data (the upcoming-card / scheduled cases) the `await` resolves
+  /// without suspending and the function is effectively a synchronous
+  /// call. Without this, hopping off main and back is dominated on cold
+  /// launch by waiting for the main actor to drain its queue of other
+  /// stores' bg-fetch domain conversions — measured ~600 ms even when the
+  /// loop body itself is < 5 ms. See #530.
+  @MainActor
   static func withRunningBalances(
     transactions: [Transaction],
     priorBalance: InstrumentAmount?,
@@ -157,17 +183,100 @@ struct TransactionPage: Sendable {
     targetInstrument: Instrument,
     conversionService: InstrumentConversionService
   ) async -> RunningBalanceResult {
+    let prefetched = await prefetchRates(
+      for: transactions,
+      targetInstrument: targetInstrument,
+      conversionService: conversionService)
+    return accumulateRunningBalances(
+      transactions: transactions,
+      priorBalance: priorBalance,
+      accountId: accountId,
+      earmarkId: earmarkId,
+      targetInstrument: targetInstrument,
+      prefetched: prefetched)
+  }
+
+  /// Outcome of a single per-instrument rate prefetch. Sendable so it can
+  /// flow out of a `TaskGroup` child task.
+  private enum RatePrefetch: Sendable {
+    case rate(Decimal)
+    case failure(String)
+  }
+
+  /// Fetched rates and per-instrument failures, keyed by source instrument.
+  /// Returned by `prefetchRates(...)` and consumed by
+  /// `accumulateRunningBalances(...)`.
+  private struct PrefetchedRates {
+    let rates: [Instrument: Decimal]
+    let failures: [Instrument: String]
+  }
+
+  @MainActor
+  private static func prefetchRates(
+    for transactions: [Transaction],
+    targetInstrument: Instrument,
+    conversionService: InstrumentConversionService
+  ) async -> PrefetchedRates {
+    var sources: Set<Instrument> = []
+    for transaction in transactions {
+      for leg in transaction.legs where leg.instrument != targetInstrument {
+        sources.insert(leg.instrument)
+      }
+    }
+    if sources.isEmpty { return PrefetchedRates(rates: [:], failures: [:]) }
+
+    let asOf = Date()
+    return await withTaskGroup(of: (Instrument, RatePrefetch).self) { group in
+      for instrument in sources {
+        group.addTask {
+          do {
+            let rate = try await conversionService.convert(
+              Decimal(1), from: instrument, to: targetInstrument, on: asOf)
+            return (instrument, .rate(rate))
+          } catch {
+            transactionLogger.warning(
+              """
+              Failed to fetch rate \(instrument.id, privacy: .public) → \
+              \(targetInstrument.id, privacy: .public): \
+              \(error.localizedDescription, privacy: .public). Every \
+              transaction with a \(instrument.id, privacy: .public) leg will \
+              have an unavailable running balance until the rate source recovers.
+              """)
+            return (instrument, .failure(error.localizedDescription))
+          }
+        }
+      }
+      var rates: [Instrument: Decimal] = [:]
+      var failures: [Instrument: String] = [:]
+      for await (instrument, outcome) in group {
+        switch outcome {
+        case .rate(let rate): rates[instrument] = rate
+        case .failure(let description): failures[instrument] = description
+        }
+      }
+      return PrefetchedRates(rates: rates, failures: failures)
+    }
+  }
+
+  private static func accumulateRunningBalances(
+    transactions: [Transaction],
+    priorBalance: InstrumentAmount?,
+    accountId: UUID?,
+    earmarkId: UUID? = nil,
+    targetInstrument: Instrument,
+    prefetched: PrefetchedRates
+  ) -> RunningBalanceResult {
     var balance: InstrumentAmount? = priorBalance
-    var result: [TransactionWithBalance] = []
-    result.reserveCapacity(transactions.count)
+    var rows: [TransactionWithBalance] = []
+    rows.reserveCapacity(transactions.count)
     var firstConversionError: RunningBalanceConversionError?
 
     for transaction in transactions.reversed() {
-      let conversion = await convertLegs(
-        for: transaction,
+      let outcome = convert(
+        legsOf: transaction,
         targetInstrument: targetInstrument,
-        conversionService: conversionService)
-      switch conversion {
+        prefetched: prefetched)
+      switch outcome {
       case .success(let convertedLegs):
         let displayAmount = computeDisplayAmount(
           for: transaction,
@@ -179,18 +288,21 @@ struct TransactionPage: Sendable {
           runningBalance += displayAmount
           balance = runningBalance
         }
-        result.append(
+        rows.append(
           TransactionWithBalance(
             transaction: transaction,
             convertedLegs: convertedLegs,
             displayAmount: displayAmount,
             balance: balance))
-      case .failure(let error):
+      case .failure(let underlyingDescription):
         if firstConversionError == nil {
-          firstConversionError = error
+          firstConversionError = RunningBalanceConversionError(
+            transactionId: transaction.id,
+            targetInstrumentId: targetInstrument.id,
+            underlyingDescription: underlyingDescription)
         }
         balance = nil
-        result.append(
+        rows.append(
           TransactionWithBalance(
             transaction: transaction,
             convertedLegs: [],
@@ -199,53 +311,40 @@ struct TransactionPage: Sendable {
       }
     }
 
-    result.reverse()
-    return RunningBalanceResult(
-      rows: result,
-      firstConversionError: firstConversionError
-    )
+    rows.reverse()
+    return RunningBalanceResult(rows: rows, firstConversionError: firstConversionError)
   }
 
   private enum LegConversion {
     case success([ConvertedTransactionLeg])
-    case failure(RunningBalanceConversionError)
+    case failure(String)
   }
 
-  /// Convert every leg of `transaction` into `targetInstrument`. Returns
-  /// `.failure` on the first leg that cannot be converted so callers can
-  /// mark the running balance unavailable from that row onward.
-  private static func convertLegs(
-    for transaction: Transaction,
+  /// Apply prefetched rates to each leg of `transaction`. Returns
+  /// `.failure` on the first leg whose source instrument has no rate
+  /// (failed prefetch) so the caller can mark the row unavailable.
+  private static func convert(
+    legsOf transaction: Transaction,
     targetInstrument: Instrument,
-    conversionService: InstrumentConversionService
-  ) async -> LegConversion {
+    prefetched: PrefetchedRates
+  ) -> LegConversion {
     var legs: [ConvertedTransactionLeg] = []
     legs.reserveCapacity(transaction.legs.count)
-    do {
-      for leg in transaction.legs {
-        if leg.instrument == targetInstrument {
-          legs.append(ConvertedTransactionLeg(leg: leg, convertedAmount: leg.amount))
-        } else {
-          let converted = try await conversionService.convertAmount(
-            leg.amount, to: targetInstrument, on: transaction.date)
-          legs.append(ConvertedTransactionLeg(leg: leg, convertedAmount: converted))
-        }
+    for leg in transaction.legs {
+      if leg.instrument == targetInstrument {
+        legs.append(ConvertedTransactionLeg(leg: leg, convertedAmount: leg.amount))
+      } else if let rate = prefetched.rates[leg.instrument] {
+        let amount = InstrumentAmount(
+          quantity: leg.amount.quantity * rate, instrument: targetInstrument)
+        legs.append(ConvertedTransactionLeg(leg: leg, convertedAmount: amount))
+      } else {
+        let description =
+          prefetched.failures[leg.instrument]
+          ?? "No rate available for \(leg.instrument.id)"
+        return .failure(description)
       }
-      return .success(legs)
-    } catch {
-      transactionLogger.warning(
-        """
-        Failed to convert leg to \(targetInstrument.id, privacy: .public) for transaction \
-        \(transaction.id, privacy: .public) on \(transaction.date, privacy: .public): \
-        \(error.localizedDescription, privacy: .public). Running balance will be unavailable \
-        from this point.
-        """)
-      return .failure(
-        RunningBalanceConversionError(
-          transactionId: transaction.id,
-          targetInstrumentId: targetInstrument.id,
-          underlyingDescription: error.localizedDescription))
     }
+    return .success(legs)
   }
 
   /// Picks the amount to display on a row: per-account sum when viewing an
