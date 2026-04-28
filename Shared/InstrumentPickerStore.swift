@@ -119,7 +119,7 @@ final class InstrumentPickerStore {
         symbol: instrument.ticker,
         isNative: isNative
       )
-      guard hasAnyProviderId(resolution) else {
+      guard resolution.hasAnyProviderId else {
         self.error = "Could not find a price source for this token."
         return nil
       }
@@ -136,12 +136,6 @@ final class InstrumentPickerStore {
       self.error = "Couldn't add \(instrument.displayLabel)."
       return nil
     }
-  }
-
-  private func hasAnyProviderId(_ resolution: TokenResolutionResult) -> Bool {
-    resolution.coingeckoId != nil
-      || resolution.cryptocompareSymbol != nil
-      || resolution.binanceSymbol != nil
   }
 
   private func runSearch() async {
