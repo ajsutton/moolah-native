@@ -146,7 +146,7 @@ extension TransactionListView {
   private func transactionRow(for entry: TransactionWithBalance) -> some View {
     TransactionRowView(
       transaction: entry.transaction, accounts: accounts,
-      categories: categories, earmarks: earmarks, displayAmount: entry.displayAmount,
+      categories: categories, earmarks: earmarks, displayAmounts: entry.displayAmounts,
       balance: entry.balance, hideEarmark: filter.earmarkId != nil,
       viewingAccountId: filter.accountId
     )
