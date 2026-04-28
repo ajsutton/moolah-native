@@ -98,8 +98,11 @@ CREATE TABLE account (
     id                    BLOB NOT NULL PRIMARY KEY,
     record_name           TEXT NOT NULL UNIQUE,
     name                  TEXT NOT NULL,
+    -- Raw values mirror Domain/Models/Account.swift `AccountType`. Note
+    -- creditCard's raw value is `"cc"`, not `"creditCard"` — keep CHECK
+    -- in lock-step with the enum if it ever changes.
     type                  TEXT NOT NULL
-        CHECK (type IN ('bank', 'creditCard', 'asset', 'investment')),
+        CHECK (type IN ('bank', 'cc', 'asset', 'investment')),
     instrument_id         TEXT NOT NULL,
     position              INTEGER NOT NULL CHECK (position >= 0),
     is_hidden             INTEGER NOT NULL CHECK (is_hidden IN (0, 1)),
@@ -116,7 +119,8 @@ CREATE TABLE earmark (
     position                        INTEGER NOT NULL CHECK (position >= 0),
     is_hidden                       INTEGER NOT NULL CHECK (is_hidden IN (0, 1)),
     instrument_id                   TEXT,                       -- nullable: legacy rows defaulted to profile instrument
-    savings_target                  INTEGER,                    -- storage cents (Decimal × 10^8 storageValue)
+    savings_target                  INTEGER
+        CHECK (savings_target IS NULL OR savings_target >= 0),  -- storage cents (Decimal × 10^8 storageValue); savings target is non-negative when set
     savings_target_instrument_id    TEXT,                       -- legacy compat; coerced to instrument_id on read
     savings_start_date              TEXT,
     savings_end_date                TEXT,
@@ -130,7 +134,9 @@ CREATE TABLE earmark_budget_item (
     record_name           TEXT NOT NULL UNIQUE,
     earmark_id            BLOB NOT NULL REFERENCES earmark(id)  ON DELETE CASCADE,
     category_id           BLOB NOT NULL REFERENCES category(id) ON DELETE NO ACTION,
-    amount                INTEGER NOT NULL,                 -- storageValue
+    -- Sign preserved (see CLAUDE.md "Monetary Sign Convention"); a budget
+    -- amount is the *target*, never zero. Domain code disallows 0 budgets.
+    amount                INTEGER NOT NULL CHECK (amount <> 0), -- storageValue (Decimal × 10^8)
     instrument_id         TEXT NOT NULL,                    -- legacy compat; coerced to earmark's instrument_id on read
     encoded_system_fields BLOB
 ) STRICT;
@@ -144,10 +150,13 @@ CREATE TABLE "transaction" (
     date                              TEXT NOT NULL,
     payee                             TEXT,
     notes                             TEXT,
+    -- Raw values mirror Domain/Models/RecurPeriod.swift. Note the values
+    -- are uppercase (`ONCE`, `DAY`, …) — these are the actual Swift enum
+    -- raw values that round-trip through `toCKRecord` / `fieldValues`.
+    -- Keep CHECK in lock-step with the enum if it ever changes.
     recur_period                      TEXT
         CHECK (recur_period IS NULL OR
-               recur_period IN ('once','daily','weekly','monthly',
-                                'quarterly','semiAnnual','annual')),
+               recur_period IN ('ONCE','DAY','WEEK','MONTH','YEAR')),
     recur_every                       INTEGER CHECK (recur_every IS NULL OR recur_every > 0),
     -- Denormalised ImportOrigin (nine fields). Mirrors the existing SwiftData
     -- shape (one column per struct field) so the CKRecord wire format stays
@@ -161,7 +170,12 @@ CREATE TABLE "transaction" (
     import_origin_import_session_id   BLOB,
     import_origin_source_filename     TEXT,
     import_origin_parser_identifier   TEXT,
-    encoded_system_fields             BLOB
+    encoded_system_fields             BLOB,
+    -- Pair invariant: recur_period and recur_every are both non-NULL or
+    -- both NULL. Forecast extrapolation gates on `recur_period IS NOT
+    -- NULL`; without this table-level constraint a half-initialised row
+    -- (one set, the other null) silently misbehaves.
+    CHECK ((recur_period IS NULL) = (recur_every IS NULL))
 ) STRICT;
 CREATE INDEX transaction_by_date          ON "transaction"(date);
 -- Partial index: scheduled rows are rare; non-NULL recur_period is the
@@ -181,9 +195,15 @@ CREATE TABLE transaction_leg (
     transaction_id        BLOB NOT NULL REFERENCES "transaction"(id) ON DELETE CASCADE,
     account_id            BLOB         REFERENCES account(id)        ON DELETE SET NULL,
     instrument_id         TEXT NOT NULL,                  -- no FK; ambient fiat has no row
-    quantity              INTEGER NOT NULL,               -- storageValue (Decimal × 10^8)
+    -- Sign preserved (CLAUDE.md "Monetary Sign Convention"); zero-quantity
+    -- legs serve no purpose and indicate a write bug. Domain code never
+    -- emits one.
+    quantity              INTEGER NOT NULL CHECK (quantity <> 0), -- storageValue (Decimal × 10^8)
+    -- Raw values mirror Domain/Models/TransactionType.swift. `'trade'` is
+    -- a real case used by stock / crypto buy-sell pairs — keep it in the
+    -- list. Keep CHECK in lock-step with the enum if it ever changes.
     type                  TEXT NOT NULL
-        CHECK (type IN ('income','expense','transfer','openingBalance')),
+        CHECK (type IN ('income','expense','transfer','openingBalance','trade')),
     category_id           BLOB         REFERENCES category(id) ON DELETE SET NULL,
     earmark_id            BLOB         REFERENCES earmark(id)  ON DELETE SET NULL,
     sort_order            INTEGER NOT NULL CHECK (sort_order >= 0),
@@ -216,16 +236,19 @@ CREATE TABLE investment_value (
     record_name           TEXT NOT NULL UNIQUE,
     account_id            BLOB NOT NULL REFERENCES account(id) ON DELETE CASCADE,
     date                  TEXT NOT NULL,
+    -- Sign preserved per CLAUDE.md. Investment positions can theoretically
+    -- be negative (short positions) — no sign CHECK; domain validation
+    -- is responsible for any policy decisions about non-negativity.
     value                 INTEGER NOT NULL,            -- storageValue
     instrument_id         TEXT NOT NULL,
     encoded_system_fields BLOB
 ) STRICT;
-CREATE INDEX iv_by_account_date
-    ON investment_value(account_id, date);
--- Covering index for "value as of date for each account" lookups
--- driven by `fetchDailyBalances` (§3.4.1) and `fetchValues(accountId:)`
--- (§3.3.5). Includes `value` in the index so plan-pinning tests can
--- assert COVERING INDEX.
+-- Covering index for `fetchValues(accountId:)` (§3.3.5),
+-- `fetchDailyBalances` (§3.4.1) per-account joins, and the
+-- composite-uniqueness SELECT in `setValue` (§3.3.5). Includes
+-- `value` and `instrument_id` so plan-pinning tests can assert
+-- COVERING INDEX. A second index `(account_id, date)` would be a
+-- prefix-duplicate per DATABASE_SCHEMA_GUIDE.md §4 — drop it.
 CREATE INDEX iv_by_account_date_value
     ON investment_value(account_id, date, value, instrument_id);
 ```
@@ -272,10 +295,9 @@ Indexes are sized for the analysis hot paths in §3.4. The decisions are recorde
 | `leg_analysis_by_type_account` | `fetchIncomeAndExpense`, `computePositions` (sidebar) — covering for `(type, account, instrument)` GROUP BY | Composite |
 | `leg_analysis_by_type_category` | `fetchExpenseBreakdown`, `fetchCategoryBalances` — covering for `(type, category, instrument)` GROUP BY; partial because category-less legs (e.g. transfers) don't participate | Partial covering |
 | `leg_analysis_by_earmark_type` | Earmark-filtered category balances; partial because earmark-less legs dominate | Partial covering |
-| `iv_by_account_date` | `fetchValues(accountId:)` paginated reads | Composite |
-| `iv_by_account_date_value` | Daily-balance latest-value-per-account-per-date — covering | Composite covering |
+| `iv_by_account_date_value` | `fetchValues(accountId:)` paginated reads + daily-balance latest-value-per-account-per-date — covering | Composite covering |
 
-Storage cost: ~17 indexes across 8 tables. The transaction_leg table carries five (one PK, three FK child partials, three composite covering). Write amplification is acceptable because the analysis read pattern dominates the user's experience; the upsert path is sync-batched and tolerates the cost. **No prefix-duplicate indexes.** Verify by inspection during review.
+Storage cost: ~16 indexes across 8 tables. The transaction_leg table carries seven (one PK, four FK child partials, three composite covering — note the `leg_by_account` partial is _not_ a prefix-duplicate of `leg_analysis_by_type_account` because the latter leads with `type` and is unconditional). Write amplification is acceptable because the analysis read pattern dominates the user's experience; the upsert path is sync-batched and tolerates the cost. **No prefix-duplicate indexes.** Verify by inspection during review (one was caught during review: `iv_by_account_date` was a strict prefix of `iv_by_account_date_value` and has been removed).
 
 ### 3.2 GRDB record types
 
@@ -379,67 +401,110 @@ Conforms to `InstrumentRegistryRepository` (`Domain/Repositories/InstrumentRegis
 
 Conforms to `CategoryRepository`. Methods: `fetchAll`, `create`, `update`, `delete(id:withReplacement:)`.
 
-`delete(id:withReplacement:)` is the only non-trivial method:
+`delete(id:withReplacement:)` is the only non-trivial method. Capture the affected ids **before** the UPDATE inside the same transaction so the post-commit hook fan-out can emit `onRecordChanged` for each affected row under its correct record type. Use the typed `Columns` enums on each row, **not** `Column("category_id")` raw strings — a future column rename must produce a compile error, not a silent runtime miss.
 
 ```swift
 func delete(id: UUID, withReplacement replacementId: UUID?) async throws {
-  try await database.write { database in
+  // Capture before mutating; the transaction's tuple is consumed below
+  // for hook fan-out.
+  let (legIds, budgetItemIds): ([UUID], [UUID]) = try await database.write { database in
+    var changedLegIds: [UUID] = []
+    var changedBudgetItemIds: [UUID] = []
     if let replacementId {
+      changedLegIds =
+        try TransactionLegRow
+          .filter(TransactionLegRow.Columns.categoryId == id)
+          .select(TransactionLegRow.Columns.id, as: UUID.self)
+          .fetchAll(database)
+      changedBudgetItemIds =
+        try EarmarkBudgetItemRow
+          .filter(EarmarkBudgetItemRow.Columns.categoryId == id)
+          .select(EarmarkBudgetItemRow.Columns.id, as: UUID.self)
+          .fetchAll(database)
       _ = try TransactionLegRow
-        .filter(Column("category_id") == id)
-        .updateAll(database,
-          Column("category_id").set(to: replacementId))
+        .filter(TransactionLegRow.Columns.categoryId == id)
+        .updateAll(
+          database,
+          [TransactionLegRow.Columns.categoryId.set(to: replacementId)])
       _ = try EarmarkBudgetItemRow
-        .filter(Column("category_id") == id)
-        .updateAll(database,
-          Column("category_id").set(to: replacementId))
+        .filter(EarmarkBudgetItemRow.Columns.categoryId == id)
+        .updateAll(
+          database,
+          [EarmarkBudgetItemRow.Columns.categoryId.set(to: replacementId)])
     }
     _ = try CategoryRow.deleteOne(database, key: id)
+    return (changedLegIds, changedBudgetItemIds)
+  }
+  // Selective fan-out post-commit. Fire one onRecordChanged per affected
+  // row under its OWN record type — TransactionLegRow.recordType for
+  // legs, EarmarkBudgetItemRow.recordType for budget items — so
+  // CKSyncEngine queues each correctly. (Mirrors
+  // GRDBImportRuleRepository.reorder in slice 0; sync correctness > IPC
+  // count.)
+  for legId in legIds {
+    onRecordChanged(TransactionLegRow.recordType, legId)
+  }
+  for budgetItemId in budgetItemIds {
+    onRecordChanged(EarmarkBudgetItemRow.recordType, budgetItemId)
   }
   onRecordDeleted(CategoryRow.recordType, id)
-  // Re-emit changed records for any leg / budget-item the UPDATE touched.
-  // (Selective fan-out: fire one onRecordChanged per affected row, not
-  // one blanket fire — sync correctness > minor IPC count, mirrors
-  // GRDBImportRuleRepository.reorder in slice 0.)
 }
 ```
 
-The "fire one `onRecordChanged` per affected row" path requires fetching the affected ids before the UPDATE. Match the existing `CloudKitCategoryRepository.delete` semantics exactly — read the source as the contract.
+Match the existing `CloudKitCategoryRepository.delete` semantics exactly — read the source as the contract. Mandatory regression test: pass a recording closure for `onRecordChanged` and assert the emitted `(recordType, id)` pairs match the expected legs and budget items (§3.9).
 
 #### 3.3.3 `GRDBAccountRepository`
 
-Conforms to `AccountRepository`. `create(_:openingBalance:)` is the multi-statement write — insert the account row, and (when `openingBalance != .zero`) insert a paired `transaction` + `transaction_leg` with type `openingBalance`. **One transaction. Rollback test mandatory.**
+Conforms to `AccountRepository`. `create(_:openingBalance:)` is the multi-statement write — insert the account row, and (when `openingBalance != .zero`) insert a paired `transaction` + `transaction_leg` with type `openingBalance`. **One transaction. Rollback test mandatory.** Three sync emissions, one per inserted row — fire all three with their own `recordType` strings post-commit, otherwise the implicit transaction and leg never reach CKSyncEngine and the second device sees an account opened with no balance.
 
 ```swift
-func create(_ account: Account, openingBalance: InstrumentAmount?) async throws -> Account {
-  try await database.write { database in
+func create(
+  _ account: Account,
+  openingBalance: InstrumentAmount?,
+  date: Date  // boundary parameter; clock read at the call site, not the repo
+) async throws -> Account {
+  let openingTxnId: UUID? = try await database.write { database in
     try AccountRow(domain: account).insert(database)
-    if let openingBalance, !openingBalance.isZero {
-      let txn = TransactionRow(
-        id: UUID(), recordName: …,
-        date: Date(), recurPeriod: nil, recurEvery: nil,
-        // import_origin columns all nil
-        encodedSystemFields: nil)
-      try txn.insert(database)
-      let leg = TransactionLegRow(
-        id: UUID(), recordName: …,
-        transactionId: txn.id,
-        accountId: account.id,
-        instrumentId: account.instrument.id,
-        quantity: openingBalance.storageValue,
-        type: TransactionType.openingBalance.rawValue,
-        categoryId: nil, earmarkId: nil,
-        sortOrder: 0,
-        encodedSystemFields: nil)
-      try leg.insert(database)
-    }
+    guard let openingBalance, !openingBalance.isZero else { return nil }
+    let txnId = UUID()
+    let txn = TransactionRow(
+      id: txnId,
+      recordName: TransactionRow.recordName(for: txnId),
+      date: date,
+      recurPeriod: nil, recurEvery: nil,
+      // import_origin columns all nil
+      encodedSystemFields: nil)
+    try txn.insert(database)
+    let legId = UUID()
+    let leg = TransactionLegRow(
+      id: legId,
+      recordName: TransactionLegRow.recordName(for: legId),
+      transactionId: txnId,
+      accountId: account.id,
+      instrumentId: account.instrument.id,
+      quantity: openingBalance.storageValue,
+      type: TransactionType.openingBalance.rawValue,
+      categoryId: nil, earmarkId: nil,
+      sortOrder: 0,
+      encodedSystemFields: nil)
+    try leg.insert(database)
+    return txnId
   }
+  // Fan out hooks for every row written. The implicit txn + leg need
+  // their own emissions under their OWN record types — without these,
+  // CKSyncEngine never queues them and a second device sees an account
+  // with no opening balance. Capture the leg id back from the closure
+  // if needed; sketch elides for brevity.
   onRecordChanged(AccountRow.recordType, account.id)
-  // (the implicit transaction + leg also need their own change emissions —
-  // the existing CloudKit repo emits all three; mirror the call sequence exactly)
+  if let openingTxnId {
+    onRecordChanged(TransactionRow.recordType, openingTxnId)
+    onRecordChanged(TransactionLegRow.recordType, /* legId from closure */)
+  }
   return account
 }
 ```
+
+**Boundary discipline (`CODE_GUIDE.md` §17):** the `date` parameter is added so the repo doesn't read `Date()` itself — the call site (an `AccountStore` action triggered from a view, or `TestBackend.seed`) supplies the clock value and tests can pin it. Verify the existing `CloudKitAccountRepository.create` API; if it already takes `date`, mirror; if not, the protocol gains the parameter in this slice and the protocol-affecting change is documented in §4. Mandatory regression test: `create(_:openingBalance:date:)` with non-zero balance emits `(AccountRow.recordType, accountId)`, `(TransactionRow.recordType, txnId)`, `(TransactionLegRow.recordType, legId)` — exactly one per row, in that order.
 
 `update(_:)` is a straight update; `delete(id:)` cascades through the FK on `transaction_leg.account_id` and `investment_value.account_id`. Verify with the rollback test that a constraint violation in step N leaves the previous state intact.
 
@@ -453,7 +518,35 @@ Conforms to `EarmarkRepository`. `setBudget(earmarkId:categoryId:amount:)` is th
 
 Conforms to `InvestmentRepository`. `fetchValues(accountId:page:pageSize:)` paginates by date. `fetchDailyBalances(accountId:)` is the bridge to the analysis layer — it calls into the `GRDBAnalysisRepository` per-account daily aggregate (§3.4.1), avoiding two implementations of the same SQL. Exact sketch: load the per-account leg sums + investment-value snapshots in one transaction, then assemble the `[AccountDailyBalance]` array Swift-side.
 
-`setValue(accountId:date:value:)` is upsert by `(account_id, date)` — verify the SwiftData semantics in `CloudKitInvestmentRepository`. Composite uniqueness needs an extra unique index if upsert relies on it; otherwise the repo does a manual `SELECT … LIMIT 1; UPDATE / INSERT`.
+`setValue(accountId:date:value:)` is the only multi-statement write. **Decision pinned:** `setValue` uses **manual SELECT-then-UPDATE-or-INSERT** in one `database.write { … }` transaction — there is no `UNIQUE(account_id, date)` constraint in the §3.1 schema (composite-key duplication is a domain-layer invariant, not a storage one), so GRDB's `upsert` cannot infer the right conflict target. Sketch:
+
+```swift
+func setValue(accountId: UUID, date: Date, value: InstrumentAmount) async throws {
+  try await database.write { database in
+    if var existing = try InvestmentValueRow
+      .filter(InvestmentValueRow.Columns.accountId == accountId)
+      .filter(InvestmentValueRow.Columns.date == date)
+      .fetchOne(database)
+    {
+      existing.value = value.storageValue
+      existing.instrumentId = value.instrument.id
+      try existing.update(database)
+    } else {
+      let row = InvestmentValueRow(
+        id: UUID(),
+        recordName: InvestmentValueRow.recordName(for: …),
+        accountId: accountId, date: date,
+        value: value.storageValue,
+        instrumentId: value.instrument.id,
+        encodedSystemFields: nil)
+      try row.insert(database)
+    }
+  }
+  onRecordChanged(InvestmentValueRow.recordType, /* id of the affected row */)
+}
+```
+
+**Rollback test mandatory** for the multi-statement write. The lookup uses `iv_by_account_date_value` (covering composite). Verify by plan-pinning test that the SELECT finds the existing row via the index, not by SCAN.
 
 #### 3.3.6 `GRDBTransactionRepository`
 
@@ -466,7 +559,7 @@ Conforms to `TransactionRepository`. The biggest of the eight by surface area.
 | `create(_:)` | Insert the transaction header + N legs in one transaction. Rollback test mandatory. |
 | `update(_:)` | Update the transaction header; replace all legs (delete-by-`transaction_id`, then insert the new ones). One transaction. Rollback test mandatory. |
 | `delete(id:)` | `DELETE FROM "transaction" WHERE id = ?` — legs cascade via FK. |
-| `fetchPayeeSuggestions(prefix:)` | `SELECT DISTINCT payee FROM "transaction" WHERE payee LIKE ? || '%' ORDER BY payee LIMIT N`. Uses `transaction_by_payee` partial index; verify with a plan-pinning test. |
+| `fetchPayeeSuggestions(prefix:)` | Use the GRDB query interface: `TransactionRow.select(Columns.payee, as: String.self).filter(Columns.payee != nil).filter(sql: "payee LIKE ? || '%'", arguments: [prefix]).order(Columns.payee).distinct().limit(limit).fetchAll(database)`. **Never** build the LIKE string with Swift `\(prefix)` interpolation — that's the §4 SQL-injection shape. Uses `transaction_by_payee` partial index; verify with a plan-pinning test. |
 
 The `fetchByImportSession` accessor (used by CSV-import revert) joins on `import_origin_import_session_id` — uses `transaction_by_session`.
 
@@ -474,11 +567,45 @@ The `fetchByImportSession` accessor (used by CSV-import revert) joins on `import
 
 Conforms to `AnalysisRepository`. **The headline.** Detailed in §3.4 — every protocol method gets its own SQL design and plan-pinning test.
 
-#### 3.3.8 `@unchecked Sendable` justification block
+**Concurrency exception:** read-only. No public hooks, no synchronous CKSyncEngine entry points (it doesn't sync — it queries). Holds only `let database: any DatabaseWriter` plus any conversion-service / instrument-registry references it needs (which are themselves `Sendable`). Use **plain `Sendable`** synthesis — `final class` is enough; the `@unchecked` waiver in §3.3.8 is not required here. Doc-comment notes the read-only nature.
 
-Each repository's class doc-comment carries the same justification block as `GRDBCSVImportProfileRepository.swift:11–34`:
+#### 3.3.8 `@unchecked Sendable` justification block (writable repos)
+
+Each writable repository's class doc-comment carries the same justification block as `GRDBCSVImportProfileRepository.swift:11–34`:
 
 > `final class` + `@unchecked Sendable` rather than `actor`. All stored properties are `let`. `database` (`any DatabaseWriter`) is itself `Sendable`. `onRecordChanged` and `onRecordDeleted` are `@Sendable` closures captured at `init`. Nothing mutates post-init. `actor` would propagate `await` through every CKSyncEngine sync dispatch site and isn't worth it.
+
+`GRDBAnalysisRepository` (read-only, no hooks) doesn't need the `@unchecked` waiver — see §3.3.7.
+
+#### 3.3.9 `GRDBEarmarkBudgetItemRepository` (sync-only)
+
+Sync-only repository — no Domain protocol conformance. `EarmarkBudgetItem` CRUD is exposed publicly via `EarmarkRepository.fetchBudget(earmarkId:)` / `setBudget(earmarkId:categoryId:amount:)`; `GRDBEarmarkRepository` (§3.3.4) orchestrates the writes through this row type. This sync-only repo exists purely so the `ProfileDataSyncHandler` dispatch tables (apply remote changes, system fields, queue & delete, record lookup) can route by record type without ad-hoc dynamic dispatch.
+
+API surface — synchronous entry points only, called from CKSyncEngine's delegate executor:
+
+```swift
+final class GRDBEarmarkBudgetItemRepository: @unchecked Sendable {
+  let database: any DatabaseWriter
+  let onRecordChanged: @Sendable (String, UUID) -> Void
+  let onRecordDeleted: @Sendable (String, UUID) -> Void
+
+  func applyRemoteChangesSync(saved rows: [EarmarkBudgetItemRow], deleted ids: [UUID]) throws
+  @discardableResult
+  func setEncodedSystemFieldsSync(id: UUID, data: Data?) throws -> Bool
+  func clearAllSystemFieldsSync() throws
+  func unsyncedRowIdsSync() throws -> [UUID]
+  func allRowIdsSync() throws -> [UUID]
+  func fetchRowSync(id: UUID) throws -> EarmarkBudgetItemRow?
+  func fetchRowsSync(ids: [UUID]) throws -> [EarmarkBudgetItemRow]
+  func deleteAllSync() throws
+}
+```
+
+The `@unchecked Sendable` justification is identical to §3.3.8 — `let`-only properties, `Sendable` writer, `@Sendable` closures. No public protocol methods means no `async` surface.
+
+#### 3.3.10 `GRDBTransactionLegRepository` (sync-only)
+
+Same shape as §3.3.9, typed against `TransactionLegRow`. Same sync-only API (`applyRemoteChangesSync`, `setEncodedSystemFieldsSync`, `clearAllSystemFieldsSync`, `unsyncedRowIdsSync`, `allRowIdsSync`, `fetchRowSync`, `fetchRowsSync`, `deleteAllSync`). `TransactionLeg` CRUD is exposed publicly via `TransactionRepository`'s `create` / `update` / `fetch` (which orchestrate header + legs as one unit). Same `@unchecked Sendable` justification.
 
 ### 3.4 AnalysisRepository SQL rewrite (the headline)
 
@@ -635,30 +762,43 @@ Swift assembly:
 
 #### 3.4.4 `fetchCategoryBalances(dateRange:transactionType:filters:targetInstrument:)`
 
-Today: per-leg loop with optional filters (account, payee, earmark, categoryIds) and per-leg conversion (`+IncomeExpense.swift:204–239`). After: SQL `GROUP BY (category_id, instrument_id)` with optional filter clauses; Swift converts and accumulates.
+Today: per-leg loop with optional filters (account, payee, earmark, categoryIds) and per-leg conversion (`+IncomeExpense.swift:204–239`). After: GRDB query interface composing `(category_id, instrument_id)` GROUP BY with optional filter clauses; Swift converts and accumulates.
 
-```sql
-SELECT
-    leg.category_id   AS category_id,
-    leg.instrument_id AS instrument_id,
-    SUM(leg.quantity) AS qty
-FROM transaction_leg leg
-JOIN "transaction"   t ON leg.transaction_id = t.id
-WHERE t.recur_period IS NULL
-  AND t.date >= :startDate
-  AND t.date <= :endDate
-  AND leg.type = :transactionType
-  AND leg.category_id IS NOT NULL
-  AND (:accountId   IS NULL OR leg.account_id = :accountId)
-  AND (:earmarkId   IS NULL OR leg.earmark_id = :earmarkId)
-  AND (:payee       IS NULL OR t.payee = :payee)
-  AND (:categoryIdsCount = 0 OR leg.category_id IN (:categoryIds))
-GROUP BY category_id, instrument_id;
+**Use the GRDB query interface — not raw SQL — for the `categoryIds` predicate.** SQLite cannot bind a variable-length array to a single named parameter, so an `IN (:categoryIds)` raw-SQL form will fail at runtime for any `categoryIds.count != 1`. Compose the request with conditional `.filter(...)` calls:
+
+```swift
+var request = TransactionLegRow
+  .including(required: TransactionLegRow.transactionAssoc) // see GRDB associations
+  .filter(transactionRequest: { transaction in
+    transaction.recurPeriod == nil
+      && transaction.date >= startDate
+      && transaction.date <= endDate
+      && (filters.payee.map { transaction.payee == $0 } ?? true)
+  })
+  .filter(TransactionLegRow.Columns.type == transactionType.rawValue)
+  .filter(TransactionLegRow.Columns.categoryId != nil)
+if let accountId = filters.accountId {
+  request = request.filter(TransactionLegRow.Columns.accountId == accountId)
+}
+if let earmarkId = filters.earmarkId {
+  request = request.filter(TransactionLegRow.Columns.earmarkId == earmarkId)
+}
+if let categoryIds = filters.categoryIds, !categoryIds.isEmpty {
+  // Safe IN: GRDB's `contains` operator parameterises the list correctly.
+  request = request.filter(categoryIds.contains(TransactionLegRow.Columns.categoryId))
+}
+let rows = try request
+  .group(TransactionLegRow.Columns.categoryId, TransactionLegRow.Columns.instrumentId)
+  .annotated(with: sum(TransactionLegRow.Columns.quantity).forKey("qty"))
+  .asRequest(of: CategoryInstrumentTotalRow.self)
+  .fetchAll(database)
 ```
 
-The optional filters use the standard "is the param NULL or does it match" idiom that GRDB compiles cleanly. The `:categoryIdsCount = 0` form handles the empty-set case without dynamic SQL — when the filter is empty, the predicate short-circuits.
+(The exact GRDB association / SQLRequest shape varies — pseudocode shows the *parameterisation* contract: never inline `categoryIds` into SQL via `\(…)`.) Confirm against `DATABASE_CODE_GUIDE.md` §4 — the typed-builder form satisfies "exactly one unsafe shape" because no `sql:` argument is built from a non-literal string.
 
-Swift assembly: iterate `(category, instrument, qty)`; convert each `(qty, instrument)` to `targetInstrument` on the date-range end (or the per-leg date if Rule 1 mandates per-leg conversion; verify by reading the conversion service). Accumulate by category.
+Swift assembly: iterate `(category, instrument, qty)`; convert per Rule 1 / Rule 5 — see open question §8 (resolution pending user discussion of conversion-date semantics for bucketed aggregates). Accumulate by category.
+
+**Investment-account exclusion check:** Verify against `+IncomeExpense.swift:225–239` whether the existing implementation excludes legs from investment accounts (the `applyByType` switch in `+IncomeExpense.swift:191–213` excludes them via `classified.isInvestmentAccount`). If yes, add a `LEFT JOIN account a ON leg.account_id = a.id` to the request and `.filter(a.type == nil || a.type != "investment")`. Resolve at implementation time; default to mirroring existing behaviour.
 
 **Indexes used:** `leg_analysis_by_type_category` (covering for the common `(type, category, instrument)` shape — partial because `category_id IS NOT NULL` is in the filter), `transaction_by_date` for the range, `leg_by_account` / `leg_by_earmark` partial indexes for the optional filters.
 
@@ -730,8 +870,11 @@ final class CloudKitBackend: BackendProvider {
     self.grdbTransactions = GRDBTransactionRepository(database: database, …)
     self.grdbAnalysis    = GRDBAnalysisRepository(database: database)
     // Existing Slice 0 wiring...
-    super.init()
-    // BackendProvider conformance:
+    // BackendProvider conformance — set the protocol-required properties
+    // before init returns. CloudKitBackend is `final class` and conforms
+    // to BackendProvider directly; there is no superclass and no
+    // `super.init()` call. (`BackendProvider` is the project's injection
+    // protocol per CLAUDE.md "Architecture & Constraints".)
     self.accounts          = grdbAccounts
     self.transactions      = grdbTransactions
     self.categories        = grdbCategories
@@ -775,7 +918,9 @@ Backends/CloudKit/Models/InstrumentRecord.swift
 Backends/CloudKit/Models/InvestmentValueRecord.swift
 ```
 
-Conversion/forecast helper extensions on the analysis repo (`+Forecast.swift`, `+Conversion.swift`) are partly Swift-only logic that the GRDB version still needs. **Move** the Swift-only helpers to `Backends/GRDB/Repositories/GRDBAnalysisRepository+Forecast.swift` and `+Conversion.swift`; delete the SwiftData siblings. The `PositionBook` value type stays under `Backends/CloudKit/` (or moves to `Shared/`) — the GRDB analysis layer reuses it as-is for forecast extrapolation and per-day balance assembly.
+Conversion/forecast helper extensions on the analysis repo (`+Forecast.swift`, `+Conversion.swift`) are partly Swift-only logic that the GRDB version still needs. **Move** the Swift-only helpers to `Backends/GRDB/Repositories/GRDBAnalysisRepository+Forecast.swift` and `+Conversion.swift`; delete the SwiftData siblings.
+
+**`PositionBook` moves to `Shared/PositionBook.swift`** so both the legacy CloudKit-side analysis (kept temporarily for the migrator path) and the new GRDB analysis can use it without a cross-backend dependency. Update the §4 inventory accordingly. The type stays a `Sendable` value type with the same internals; only the file location changes.
 
 ### 3.6 CKSyncEngine glue
 
@@ -796,13 +941,40 @@ Eight new files in `Backends/GRDB/Sync/`, mirroring Slice 0's `CSVImportProfileR
 
 Each declares `static var recordType: String { … }` — **the wire string is frozen**. Mirror the existing values verbatim (`"AccountRecord"`, `"TransactionRecord"`, etc.). Use the auto-generated `*RecordCloudKitFields` struct from `Backends/CloudKit/Sync/Generated/` (regenerated by `tools/CKDBSchemaGen` as part of `just generate` — no schema-side changes needed since `CloudKit/schema.ckdb` is unchanged in this slice).
 
-Each implements `toCKRecord(in:)` and `static func fieldValues(from ckRecord:) -> Self?`. Mirror the existing SwiftData-side implementations for the same eight types (`Backends/CloudKit/Sync/<Type>Record+CloudKit.swift`) — those files are deleted at the end of this slice once their callers (the SwiftData repos) are gone.
+Each implements `toCKRecord(in:)` and `static func fieldValues(from ckRecord:) -> Self?`. Mirror the existing SwiftData-side implementations for the same eight types (`Backends/CloudKit/Sync/<Type>Record+CloudKit.swift`) — those files are deleted at the end of this slice once their callers (the SwiftData repos) are gone. **Every wire field listed in `CloudKit/schema.ckdb` for the record type must appear in the row's `toCKRecord`/`fieldValues(from:)` round-trip** — drop one and the field silently disappears on every upload. Verify each row's coverage against `schema.ckdb` line-by-line before opening the PR; the sync round-trip tests in §3.9 catch missed fields when seeded with a non-default value, but the schema-coverage check is the cheaper first pass.
 
-`InstrumentRow` is the only string-keyed row — its `toCKRecord` uses `CKRecord.ID(recordName: row.id, zoneID:)` with no UUID prefixing. Mirror `InstrumentRecord+CloudKit.swift`.
-
-`RecordTypeRegistry.allTypes` (in `Backends/CloudKit/Sync/CloudKitRecordConvertible.swift:82–96`) updates the value for each migrated type; the cloud-side `recordType` string is **frozen** — keep it byte-identical:
+`fieldValues(from:)` validates enum values against the declared CHECK constraints. If a `CKRecord` arrives with an unknown raw value (a remote client newer than this one, or future-server schema drift), **skip-and-log** the record rather than letting the GRDB upsert trip the CHECK and stall the entire batch on retry. Pattern:
 
 ```swift
+static func fieldValues(from ckRecord: CKRecord) -> AccountRow? {
+  guard let id = ckRecord.recordID.uuid else { return nil }
+  let fields = AccountRecordCloudKitFields(from: ckRecord)
+  // Validate enum string before constructing the row; SQLite CHECK
+  // would surface as `.saveFailed` and CKSyncEngine would retry the
+  // same record forever. Skip-and-log keeps the batch moving.
+  let typeRaw = fields.type ?? "bank"
+  guard AccountType(rawValue: typeRaw) != nil else {
+    syncLogger.warning(
+      "AccountRow.fieldValues: unknown type '\(typeRaw, privacy: .public)' for \(id.uuidString, privacy: .public) — skipping")
+    return nil
+  }
+  return AccountRow(id: id, /* … */)
+}
+```
+
+`InstrumentRow` is the only string-keyed row — its `toCKRecord` uses `CKRecord.ID(recordName: row.id, zoneID:)` with no UUID prefixing. Mirror `InstrumentRecord+CloudKit.swift`. **Encoded-system-fields rehydration** is automatic for all rows: the upload path calls `buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)` (`ProfileDataSyncHandler.swift:98–113`), which restores the cached `CKRecord` and copies fresh field values from `toCKRecord(in:)` onto it. Don't add rehydration logic inside `toCKRecord` — that's the helper's job; the per-row `toCKRecord` only contributes field values.
+
+`RecordTypeRegistry.allTypes` (in `Backends/CloudKit/Sync/CloudKitRecordConvertible.swift:82–96`) updates the value for each migrated type; the cloud-side `recordType` string is **frozen** — keep it byte-identical.
+
+The existing declaration is `nonisolated(unsafe) static let allTypes: [String: any CloudKitRecordConvertible.Type]` — a guide-prohibited annotation per `CONCURRENCY_GUIDE.md`. Slice 1 inherits the annotation but the value is **literally constant**, write-once at module load, and never mutated. Add an inline justification comment on the existing declaration so the concurrency reviewer can recognise the carve-out:
+
+```swift
+// `nonisolated(unsafe)` is acceptable here: this dictionary is a build-
+// time-constant literal that is never mutated, and its values (record
+// types) are themselves immutable. The annotation is required because
+// `any CloudKitRecordConvertible.Type` is not statically `Sendable`
+// (Swift's existential `.Type` lacks the conformance), but the values
+// are concrete metatypes that ARE thread-safe.
 nonisolated(unsafe) static let allTypes: [String: any CloudKitRecordConvertible.Type] = [
   ProfileRecord.recordType:           ProfileRecord.self,            // Slice 3
   InstrumentRow.recordType:           InstrumentRow.self,            // Slice 1 (was: InstrumentRecord.self)
@@ -852,10 +1024,10 @@ struct ProfileGRDBRepositories: @unchecked Sendable {
 
 `earmark_budget_item` deserves a separate `GRDBEarmarkBudgetItemRepository` because its `applyRemoteChangesSync` / `setEncodedSystemFieldsSync` etc. are typed against `EarmarkBudgetItemRow`. Keeping it inside `GRDBEarmarkRepository` would force ad-hoc dispatch on row type and lose type safety. Same reasoning for `transaction_leg`: a separate `GRDBTransactionLegRepository` for the sync entry points, with the public `TransactionRepository` protocol still implemented by the `GRDBTransactionRepository` that orchestrates header + legs as one unit. Two decisions land in the bundle: `earmarkBudgetItems` and `transactionLegs` get their own typed sync-only repo entries.
 
-Updated bundle:
+Updated bundle. **Plain `Sendable` if synthesis succeeds; `@unchecked Sendable` only if it fails.** A struct with all `let` properties is automatically `Sendable` if every field type is `Sendable` — and every GRDB repository on this list is itself `@unchecked Sendable`, so the struct's auto-synthesis should succeed. If the compiler rejects (because Swift's `Sendable` synthesis is conservative around `@unchecked Sendable` field types), fall back to `@unchecked Sendable` on the struct **with the inline justification block below**. Default to plain `Sendable`:
 
 ```swift
-struct ProfileGRDBRepositories: @unchecked Sendable {
+struct ProfileGRDBRepositories: Sendable {
   let instruments: GRDBInstrumentRegistryRepository
   let categories:  GRDBCategoryRepository
   let accounts:    GRDBAccountRepository
@@ -869,6 +1041,17 @@ struct ProfileGRDBRepositories: @unchecked Sendable {
 }
 ```
 
+If the compiler rejects, the fallback shape is:
+
+```swift
+// @unchecked Sendable: every field is a `final class … : @unchecked
+// Sendable` repository (see GRDBCSVImportProfileRepository.swift for
+// the per-repo justification). The struct holds only let-bound
+// references, never mutates post-init, and is shared read-only across
+// the CKSyncEngine delegate executor and main-actor surfaces.
+struct ProfileGRDBRepositories: @unchecked Sendable { /* …same fields */ }
+```
+
 #### 3.6.3 `ProfileDataSyncHandler+GRDBDispatch.swift`
 
 Extend the `applyGRDBBatchSave` and `applyGRDBBatchDeletion` switches with eight new cases each. Same shape as Slice 0's two cases — convert the `[CKRecord]` to `[Row]` via the row's `fieldValues(from:)`, stamp `encodedSystemFields` from the lookup, and call `repo.applyRemoteChangesSync(saved:deleted:)`. `Self.batchLogger.error(...)` on failure; `throw error` so `applyRemoteChanges` returns `.saveFailed(...)` and CKSyncEngine refetches. **Critical:** must propagate errors — silent `try?` swallows would advance the change token past dropped records (the issue Slice 0 round-2 review caught and fixed).
@@ -879,7 +1062,9 @@ Remove the eight SwiftData entries from `batchUpserters` and `uuidDeleters`; the
 
 #### 3.6.5 `+SystemFields.swift`
 
-Extend `applyGRDBSystemFields(recordType:id:data:) -> Bool` with eight new cases, each calling the corresponding `repo.setEncodedSystemFieldsSync(id:data:)`. Remove the eight SwiftData entries from the `systemFieldSetters` static dispatch table. `clearAllSystemFields()` gains eight new `try grdbRepositories.<repo>.clearAllSystemFieldsSync()` calls, in the same order as Slice 0.
+Extend `applyGRDBSystemFields(recordType:id:data:) -> Bool` with seven new UUID-keyed cases (Account, Transaction, TransactionLeg, Category, Earmark, EarmarkBudgetItem, InvestmentValue) plus the special string-keyed case for InstrumentRow (below), each calling the corresponding `repo.setEncodedSystemFieldsSync(...)`. Remove the eight SwiftData entries from the `systemFieldSetters` static dispatch table. `clearAllSystemFields()` gains eight new `try grdbRepositories.<repo>.clearAllSystemFieldsSync()` calls — order is **arbitrary** (UPDATE on every row of every table; no FK ordering needed); pick alphabetical or dependency order for readability. **Mandatory test (§3.9):** assert every GRDB-backed table has its `encoded_system_fields` column wiped.
+
+In `applyGRDBBatchSave`'s field-stamp step, **`InstrumentRow`'s lookup key is the bare string id, not the UUID stringification.** Slice 0's pattern uses `systemFields[row.id.uuidString]` for UUID-keyed rows; for `InstrumentRow` use `systemFields[row.id]` directly. Verify against `CKRecordIDRecordName.systemFieldsKey(for:)` — the helper normalises both paths.
 
 `InstrumentRow` is special: its system-fields key is the `id` (string), not a UUID. Replace `setInstrumentSystemFields` with a GRDB-side version that calls `grdbRepositories.instruments.setEncodedSystemFieldsSync(id: String, data: Data?)` — the repo grows a string-keyed setter alongside its UUID-keyed cousins. The dispatch in `applySystemFields(_:in:)` keeps the early-return shape:
 
@@ -892,9 +1077,51 @@ if ckRecord.recordType == InstrumentRow.recordType {
 
 #### 3.6.6 `+QueueAndDelete.swift` ordering
 
-Swap the eight SwiftData fetches in `queueAllExistingRecords()` and `queueUnsyncedRecords()` for `collectAllGRDBUUIDs(...)` calls (or `collectAllGRDBStringIDs(...)` for instruments). **Preserve the dependency order** documented in the comment (instruments → categories → accounts → earmarks → budget items → investment values → transactions → transaction legs → CSV → rules) — this is the order CKSyncEngine queues uploads in, and it matters for first-launch ordering. The Slice 0 helper `collectAllGRDBUUIDs(ids:recordType:into:)` covers the UUID-keyed types; add `collectAllGRDBStringIDs(ids:recordType:into:)` for instruments.
+Swap the eight SwiftData fetches in `queueAllExistingRecords()` and `queueUnsyncedRecords()` for `collectAllGRDBUUIDs(...)` calls (or `collectAllGRDBStringIDs(...)` for instruments). **Preserve the dependency order** documented in the comment (instruments → categories → accounts → earmarks → budget items → investment values → transactions → transaction legs → CSV → rules) — this is the order CKSyncEngine queues uploads in, and it matters for first-launch ordering. The Slice 0 helper `collectAllGRDBUUIDs(ids:recordType:into:)` covers the UUID-keyed types; add a new sibling for instruments (the only string-keyed row in Slice 1):
 
-`deleteLocalData()` gains eight new `try grdbRepositories.<repo>.deleteAllSync()` calls. Order does not strictly matter for `DELETE` (FK cascades handle children) but **respect dependency-reverse order anyway** (legs → transactions → investment values → budget items → earmarks → accounts → categories → instruments) so a partial wipe leaves a consistent state.
+```swift
+private func collectAllGRDBStringIDs(
+  ids: () throws -> [String],
+  recordType: String,
+  into recordIDs: inout [CKRecord.ID]
+) {
+  do {
+    for id in try ids() {
+      // No UUID prefixing — Instrument recordIDs use the bare id
+      // as the recordName (`"AUD"`, `"ASX:BHP"`, `"1:0xa0…"`).
+      recordIDs.append(CKRecord.ID(recordName: id, zoneID: zoneID))
+    }
+  } catch {
+    logger.error(
+      """
+      GRDB fetch failed for \(recordType, privacy: .public) on profile \
+      \(self.profileId, privacy: .public): \
+      \(error.localizedDescription, privacy: .public)
+      """)
+  }
+}
+```
+
+`deleteLocalData()` gains eight new `try grdbRepositories.<repo>.deleteAllSync()` calls. **`category.parent_id ON DELETE NO ACTION` will trip a FK violation on a wipe of the category table** (a parent row whose children still reference it). Two options:
+
+1. **Disable FK enforcement for the wipe** (preferred — simpler):
+
+   ```swift
+   try database.write { database in
+     try database.execute(sql: "PRAGMA foreign_keys = OFF")
+     defer { try? database.execute(sql: "PRAGMA foreign_keys = ON") }
+     try CategoryRow.deleteAll(database)
+     // … other deleteAll calls
+   }
+   ```
+
+   The wipe is the only path that needs this; production CRUD always runs with FKs on.
+
+2. **Delete child categories before parents** with a recursive query — more code, no real benefit since the wipe is wholesale.
+
+**Pick option 1.** Update each repo's `deleteAllSync()` to accept this responsibility, OR keep `deleteAllSync` simple and have `deleteLocalData()` toggle the PRAGMA at the outer level. Slice 0's existing `deleteAllSync()` doesn't manage PRAGMAs; mirror that — `deleteLocalData()` is where the PRAGMA toggle lives.
+
+Beyond the category-hierarchy issue, **respect dependency-reverse order anyway** (legs → transactions → investment values → budget items → earmarks → accounts → categories → instruments) so partial-failure best-effort semantics leave a consistent state. **Mandatory test (§3.9):** seed all eight tables, run `deleteLocalData()`, assert all tables are empty.
 
 #### 3.6.7 `+RecordLookup.swift`
 
@@ -955,7 +1182,14 @@ Each migrator:
 
 ⚠ **Investment-value composite key.** The SwiftData `InvestmentValueRecord` has a `(accountId, date)` semantic uniqueness but the actual PK is `id: UUID`. The GRDB row mirrors that — PK on `id`, no composite unique constraint. The application enforces the (account, date) uniqueness at the repository layer (existing semantics; preserve).
 
-⚠ **`@MainActor` fetch budget.** The Slice 0 migrator's `#if DEBUG` 16ms warning still applies. With eight types now, the budget needs to be raised — `transactions` and `transaction_legs` may be tens of thousands of rows on heavy users. Bump the warning threshold to **500ms total** (still inside acceptable launch latency on a p99 device) or split each type across multiple `defer { ... }` block emissions. **Recommend** keeping the per-type structure and accepting the launch cost for the migration's once-per-install runtime; profile real devices in QA before shipping.
+⚠ **`@MainActor` fetch budget — convert the migrator to `async`.** The Slice 0 migrator runs `@MainActor` synchronously and emits a `#if DEBUG` warning if it exceeds 16ms. With eight types added, `transactions` and `transaction_legs` will exceed that on any heavy user — tens of thousands of rows means hundreds of milliseconds blocking the main thread on first launch. **Slice 1 converts `migrateIfNeeded` to `async throws`** so it can run off the main actor. The shape:
+
+- `SwiftDataToGRDBMigrator` keeps `@MainActor` only for the SwiftData `ModelContext` interactions (the `mainContext`-bound `context.fetch` calls require it). The GRDB writes happen in `database.write { … }` closures, which are queue-serialised and don't need main-actor isolation.
+- `migrateIfNeeded` becomes `async throws`. The `@MainActor` annotation moves to the inner SwiftData fetch helpers; the public entry point is non-isolated.
+- `ProfileSession.runSwiftDataToGRDBMigrationIfNeeded` becomes `async throws` and the call site in `ProfileSession.init` (or its sibling launch path) `await`s it.
+- The `#if DEBUG` 16ms warning stays — now it's a sanity check that nothing on the migrator path accidentally reverts to synchronous main-actor work.
+
+This is a deliberate departure from Slice 0's "synchronous and `@MainActor`" pattern. Slice 0's file header explicitly anticipated this conversion ("If profiling ever shows this blocks for >16ms (one frame) on a p99 device, convert `migrateIfNeeded` to async"). Slice 1 is the slice that does it.
 
 ### 3.8 Test seam updates
 
@@ -973,18 +1207,30 @@ Each migrator:
 
 ### 3.9 Tests
 
+**Test framework:** Slice 1 uses **Swift Testing** (`@Suite`, `@Test`, `#expect`, `#require`) — not XCTest — consistent with the existing harness on `main` (Slice 0's `SwiftDataToGRDBMigratorTests.swift`, `CSVImportRollbackTests.swift`, `SyncRoundTripCSVImportTests.swift` all use Swift Testing). Pseudocode shown below uses descriptive naming; translate every `XCTest` shape from external references into the Swift Testing equivalent.
+
 Mandatory:
 
 - **Contract tests** for all eight repositories (or seven, if the EarmarkBudgetItem CRUD lives inside `GRDBEarmarkRepository.setBudget`/`fetchBudget`). Each contract test in `MoolahTests/Domain/<Type>RepositoryContractTests.swift` already exists (verify) and runs against `TestBackend`. **They must pass unchanged** once `TestBackend` is rewired to GRDB.
 - **Plan-pinning tests** for every analysis hot-path query (§3.4.1–.7). One test per query in `MoolahTests/Backends/GRDB/AnalysisPlanPinningTests.swift`. Each asserts `SEARCH … USING (COVERING) INDEX …` against the table list above; rejects `SCAN <table>` and `USE TEMP B-TREE FOR ORDER BY`. Pattern: `DATABASE_CODE_GUIDE.md` §6 sample.
 - **Plan-pinning tests** for the non-analysis hot-path queries: `TransactionRepository.fetch(filter:page:pageSize:)` (the paginated read), `TransactionRepository.fetchPayeeSuggestions(prefix:)`, `EarmarkRepository.fetchBudget(earmarkId:)`, `InvestmentRepository.fetchValues(accountId:page:)`. One file: `MoolahTests/Backends/GRDB/CoreFinancialGraphPlanPinningTests.swift`.
 - **Rollback tests** for every multi-statement write:
-  - `GRDBAccountRepository.create(_:openingBalance:)` — opening-balance txn + leg + account row.
+  - `GRDBAccountRepository.create(_:openingBalance:date:)` — opening-balance txn + leg + account row.
   - `GRDBTransactionRepository.create(_:)` — header + legs.
   - `GRDBTransactionRepository.update(_:)` — replace-legs path.
   - `GRDBCategoryRepository.delete(id:withReplacement:)` — UPDATE legs + UPDATE budget items + DELETE category.
   - `GRDBEarmarkRepository.setBudget(...)` — upsert budget item + (selective) delete.
+  - `GRDBInvestmentRepository.setValue(...)` — SELECT-then-UPDATE-or-INSERT (§3.3.5).
   Each test seeds prior state, forces a constraint violation mid-transaction (e.g. write a row with an oversized value to trip a CHECK, or pass an invalid FK to trip the FK enforcement), asserts the prior state survives. Pattern reference: `MoolahTests/Backends/SQLiteCoinGeckoCatalogStorageTests.swift:77–104` and Slice 0's `MoolahTests/Backends/GRDB/CSVImportRollbackTests.swift`.
+
+- **Hook fan-out regression tests** for the multi-type emit paths:
+  - `GRDBAccountRepository.create(_:openingBalance:date:)` with non-zero balance: pass a recording closure for `onRecordChanged`; assert the emitted `(recordType, id)` pairs are exactly `(AccountRow.recordType, accountId)`, `(TransactionRow.recordType, txnId)`, `(TransactionLegRow.recordType, legId)`. With zero / nil balance: only the account emission fires. (Prevents the silent-data-loss class of bug where the implicit txn/leg never reach CKSyncEngine.)
+  - `GRDBCategoryRepository.delete(id:withReplacement:)` with N affected legs and M affected budget items: assert exactly N `TransactionLegRow.recordType` emissions and M `EarmarkBudgetItemRow.recordType` emissions plus one `CategoryRow.recordType` deletion — no unknown-record-type emissions, no off-by-one.
+  These tests don't need the database; they test the repo's hook discipline against a recording closure. One file: `MoolahTests/Backends/GRDB/CoreFinancialGraphHookTests.swift`.
+
+- **`clearAllSystemFields()` coverage test** in `MoolahTests/Backends/CloudKit/Sync/ClearAllSystemFieldsTests.swift`: seed every GRDB-backed table with a non-nil `encoded_system_fields` blob; call `ProfileDataSyncHandler.clearAllSystemFields()`; assert every table's column is now nil. Catches the regression class where a new GRDB table is added but `clearAllSystemFields` isn't extended to wipe it.
+
+- **`deleteLocalData()` coverage test:** seed every GRDB-backed table; call `deleteLocalData()`; assert all tables are empty (including parent categories with children — verifying the FK-OFF wipe path works). One file: `MoolahTests/Backends/CloudKit/Sync/DeleteLocalDataTests.swift`.
 - **Sync round-trip tests** for the eight types. Add one file per type (or one omnibus file `MoolahTests/Backends/GRDB/CoreFinancialGraphSyncRoundTripTests.swift`). Pattern: build two `TestBackend` instances representing two devices; create on A; manually drive `CKSyncEngine.applyRemoteChanges` on B with the recorded outbound batch; assert the GRDB row on B matches the source bit-for-bit including `encodedSystemFields`. Reuse Slice 0's `SyncRoundTripCSVImportTests.swift` as the template.
 - **Migrator tests.** Extend `MoolahTests/Backends/GRDB/SwiftDataToGRDBMigratorTests.swift` with eight new test methods, one per type. For each: seed a SwiftData container with N rows + non-nil `encodedSystemFields`, open an in-memory GRDB queue, run `migrateIfNeeded`, assert all rows present in GRDB, `encodedSystemFields` byte-equal to source, flag set. **Re-run is no-op.** Add a cross-FK migrator test that seeds all eight types in dependency order and asserts the FK-bearing rows preserve their parent IDs.
 - **Conversion tests.** `MoolahTests/Backends/GRDB/GRDBAnalysisConversionTests.swift` — for each of the five `AnalysisRepository` methods, seed a multi-instrument fixture (mix of fiat A, fiat B, stock C) and assert the post-SQL Swift conversion produces the same `InstrumentAmount` totals as the existing SwiftData implementation on the same fixture. (The fixture and assertion library should already exist in `MoolahTests/Domain/AnalysisRepositoryContractTests.swift` — verify and extend.)
@@ -1001,8 +1247,10 @@ Mandatory plan-pinning queries to add to `AnalysisPlanPinningTests.swift`:
 
 | Method | Index expected | Rejection |
 |---|---|---|
-| `fetchDailyBalances` per-day SUM | `leg_analysis_by_type_account` (COVERING) | `SCAN transaction_leg` |
+| `fetchDailyBalances` per-day SUM (whole-DB) | `leg_analysis_by_type_account` (COVERING) | `SCAN transaction_leg` |
 | `fetchDailyBalances` investment-value lookup | `iv_by_account_date_value` (COVERING) | `SCAN investment_value` |
+| `InvestmentRepository.fetchDailyBalances(accountId:)` per-account variant | `iv_by_account_date_value` (COVERING) + `leg_analysis_by_type_account` filtered to the account | `SCAN` of either |
+| `GRDBInvestmentRepository.setValue` SELECT-then-UPDATE | `iv_by_account_date_value` (COVERING) | `SCAN investment_value` |
 | `fetchExpenseBreakdown` GROUP BY | `leg_analysis_by_type_category` (COVERING) | `SCAN transaction_leg` |
 | `fetchIncomeAndExpense` GROUP BY | `leg_analysis_by_type_account` (COVERING) | `SCAN transaction_leg` |
 | `fetchCategoryBalances` GROUP BY | `leg_analysis_by_type_category` (COVERING) | `SCAN transaction_leg` |
@@ -1094,6 +1342,8 @@ Mandatory plan-pinning queries to add to `AnalysisPlanPinningTests.swift`:
 | `Backends/CloudKit/Models/InstrumentRecord.swift` | UNCHANGED — same |
 | `Backends/CloudKit/Models/InvestmentValueRecord.swift` | UNCHANGED — same |
 | `Backends/CloudKit/CloudKitBackend.swift` | Wire eight new GRDB repos; remove SwiftData repo construction; pass `database` everywhere |
+| `Shared/PositionBook.swift` | MOVE from `Backends/CloudKit/...` (or wherever it currently lives) — see §3.5 |
+| `Domain/Repositories/AccountRepository.swift` | EDIT — `create(_:openingBalance:)` gains a `date: Date` parameter (boundary discipline per CODE_GUIDE.md §17). Update every call site. |
 | `Shared/PreviewBackend.swift` | Construct GRDB repos with the existing in-memory `database` |
 | `MoolahTests/Support/TestBackend.swift` | Rewrite eight `seed(...)` family methods to write GRDB rows instead of SwiftData |
 | `MoolahTests/Support/CloudKitAnalysisTestBackend.swift` | Adapt to GRDB seed shape (verify usage) |
@@ -1107,12 +1357,15 @@ Mandatory plan-pinning queries to add to `AnalysisPlanPinningTests.swift`:
 | `MoolahTests/Domain/InvestmentRepositoryContractTests.swift` | Same |
 | `MoolahTests/Domain/InstrumentRegistryRepositoryContractTests.swift` | Same |
 | `MoolahTests/Domain/AnalysisRepositoryContractTests.swift` | Same |
-| `MoolahTests/Backends/GRDB/AnalysisPlanPinningTests.swift` | NEW — every analysis hot-path query |
-| `MoolahTests/Backends/GRDB/CoreFinancialGraphPlanPinningTests.swift` | NEW — non-analysis hot-path queries |
-| `MoolahTests/Backends/GRDB/CoreFinancialGraphRollbackTests.swift` | NEW — multi-statement write rollback per repo |
-| `MoolahTests/Backends/GRDB/CoreFinancialGraphSyncRoundTripTests.swift` | NEW — per-type sync round-trip |
-| `MoolahTests/Backends/GRDB/SwiftDataToGRDBMigratorTests.swift` | EXTEND — add 8 per-type tests + 1 cross-FK test |
-| `MoolahTests/Backends/GRDB/GRDBAnalysisConversionTests.swift` | NEW — multi-instrument conversion correctness vs SwiftData baseline |
+| `MoolahTests/Backends/GRDB/AnalysisPlanPinningTests.swift` | NEW — every analysis hot-path query (Swift Testing) |
+| `MoolahTests/Backends/GRDB/CoreFinancialGraphPlanPinningTests.swift` | NEW — non-analysis hot-path queries (Swift Testing) |
+| `MoolahTests/Backends/GRDB/CoreFinancialGraphRollbackTests.swift` | NEW — multi-statement write rollback per repo (Swift Testing) |
+| `MoolahTests/Backends/GRDB/CoreFinancialGraphSyncRoundTripTests.swift` | NEW — per-type sync round-trip (Swift Testing) |
+| `MoolahTests/Backends/GRDB/CoreFinancialGraphHookTests.swift` | NEW — hook fan-out regression (account create, category delete) (Swift Testing) |
+| `MoolahTests/Backends/GRDB/SwiftDataToGRDBMigratorTests.swift` | EXTEND — add 8 per-type tests + 1 cross-FK test (Swift Testing) |
+| `MoolahTests/Backends/GRDB/GRDBAnalysisConversionTests.swift` | NEW — multi-instrument conversion correctness vs SwiftData baseline (Swift Testing) |
+| `MoolahTests/Backends/CloudKit/Sync/ClearAllSystemFieldsTests.swift` | NEW — coverage test for every GRDB-backed table |
+| `MoolahTests/Backends/CloudKit/Sync/DeleteLocalDataTests.swift` | NEW — coverage test including FK-OFF wipe of category hierarchy |
 | `project.yml` | No change expected — `just generate` after adding files. Review for newly-orphaned Swift files |
 
 ---
@@ -1157,6 +1410,12 @@ Mandatory plan-pinning queries to add to `AnalysisPlanPinningTests.swift`:
   - **Repo style: `final class` + `@unchecked Sendable` with explicit member-by-member justification** (everything `let`; `DatabaseWriter` is `Sendable`; closures are `@Sendable`). `actor` would propagate `async` through every CKSyncEngine sync dispatch site and isn't worth it.
   - **Plan-pinning tests for every hot-path SQL query** (mandatory per `DATABASE_CODE_GUIDE.md` §6).
   - **Rollback tests for every multi-statement write** that drives the production method.
+  - **Mapping files** at `Backends/GRDB/Records/<Type>+Mapping.swift` per project precedent (Slice 0 ships `CSVImportProfileRow+Mapping.swift` here). The `DATABASE_CODE_GUIDE.md` §3 example showing `Backends/GRDB/Mapping/<Type>+Domain.swift` is **superseded by project precedent** — do not introduce a `Mapping/` subdirectory.
+  - **Tests use Swift Testing** (`@Suite`, `@Test`, `#expect`, `#require`), not XCTest. The existing harness on `main` is Swift Testing across the GRDB and CSVImport test files. Translate every external XCTest example before applying.
+  - **No `Column("…")` raw-string usage in repository code** — every column reference goes through the row's typed `Columns` enum (`AccountRow.Columns.id`, `TransactionLegRow.Columns.categoryId`, etc.). A future column rename must produce a compile error. Catches the regression class where a string typo silently misses a row.
+  - **`databaseSelection` (if ever declared) is `static var`, never `static let`.** `static let databaseSelection: [any SQLSelectable]` is a Swift 6 hard error per `DATABASE_CODE_GUIDE.md` §3 — `[any SQLSelectable]` is non-Sendable.
+  - **No raw `IN (:list)` SQL.** SQLite cannot bind a variable-length array to a single named parameter. Use GRDB's `Sequence.contains(Column…)` operator.
+  - **`Date()` only at boundaries.** Repos take a `date: Date` parameter rather than reading the system clock internally — see `GRDBAccountRepository.create(_:openingBalance:date:)` (§3.3.3) for the canonical shape.
 - **All git/just commands use absolute paths:** `git -C <path>` and `just --justfile <path>/justfile --working-directory <path>`. Never `cd <path> && cmd`.
 - **`.agent-tmp/` for any temp files** in the worktree. Delete when done.
 - **`.swiftlint-baseline.yml` MUST NOT be modified.** If `just format-check` reports a violation, fix the underlying code: split file/type/function, replace force-unwrap with `#require`, etc. Never re-key, never bump.
@@ -1231,15 +1490,17 @@ Mandatory plan-pinning queries to add to `AnalysisPlanPinningTests.swift`:
 | Q | Resolution before code |
 |---|---|
 | Can the SwiftData `@Model` classes for the eight types be deleted in Slice 1, or must they wait for Slice 3? | **Wait.** The migrator reads them on first launch after upgrade; deleting them now means no rollback path if the migration fails. Slice 3 deletes them after `ProfileRecord` migration lands. |
-| Should `AnalysisRepository`'s sub-files (`+IncomeExpense`, `+DailyBalances`, `+Forecast`, `+Conversion`) split or collapse on the GRDB side? | **Mirror.** The same four-way split — `GRDBAnalysisRepository.swift` + three extensions — keeps each method's surface tight. The bodies are different (SQL queries vs Swift loops) but the per-method file ownership pattern is unchanged and reads better. |
+| Should `AnalysisRepository`'s sub-files (`+IncomeExpense`, `+DailyBalances`, `+Forecast`, `+Conversion`) split or collapse on the GRDB side? | **Mirror.** The five-file split (main file `GRDBAnalysisRepository.swift` + four extensions: `+Conversion`, `+DailyBalances`, `+Forecast`, `+IncomeExpense`) keeps each method's surface tight. The bodies are different (SQL queries vs Swift loops) but the per-method file ownership pattern is unchanged and reads better. |
 | Where do benchmark numbers go — PR description, or committed under `MoolahBenchmarks/baselines/`? | **PR description**, paraphrased. Slice 0's convention. A future PR introduces the baselines/ pattern if numerical regression-on-CI is wanted; Slice 1 doesn't establish it. |
 | Do `FullConversionService` / `FiatConversionService` need any change? | **No.** They are constructed once per `ProfileSession` and take a `database: any DatabaseWriter`; they don't care which tables share the connection. The conversion call sites in `GRDBAnalysisRepository` use the same async API as today. Verified by reading both services and their constructors in Step 2's plan. |
 | Is the `recordName` format `"<RecordType>|<UUID>"` byte-identical to the existing SwiftData CKRecord IDs? | **Yes**, mediated by `Backends/CloudKit/Sync/CKRecordIDRecordName.swift`. Slice 0 uses the helper. Slice 1 uses the same helper for all eight new row types. Verify during implementation that the format matches `CKRecord.ID(recordType:uuid:zoneID:)` — Slice 0's reference. |
-| What if the GRDB-side enum-CHECK constraint rejects a value the SwiftData store contained (e.g. a stale enum case)? | **Migration aborts on the offending row** because `INSERT … VALUES … STRICT` raises `SQLITE_CONSTRAINT_CHECK`. The transaction rolls back, the flag isn't set, and the next launch retries. The user-facing fix: catch the constraint failure in the migrator, log a warning naming the offending column / value, and skip the row (so the migration progresses on subsequent rows). **Decision:** abort on first violation in this slice; revisit if the alpha shows it's hit. |
+| What if the GRDB-side enum-CHECK constraint rejects a value the SwiftData store contained (e.g. a stale enum case)? | **Migration aborts on the offending row** because `INSERT … VALUES … STRICT` raises `SQLITE_CONSTRAINT_CHECK`. The transaction rolls back, the flag isn't set, and the next launch retries. **Live ingest** (`fieldValues(from:)` for incoming CKRecords) is different — see §3.6.1; remote enum-mismatch is **skip-and-log**, not abort. Migration aborts because local data should never violate the contract; live ingest soft-fails because it's a forward-compat seam. |
 | `transaction_leg.account_id` SET NULL means a leg orphaned from its account. Does any caller blow up? | Verified: the Domain model has `accountId: UUID?` and downstream code handles `nil`. The SwiftData status quo also produces orphan legs (no FK enforcement). Same behaviour, now schema-enforced. |
-| Should `EarmarkBudgetItem` and `TransactionLeg` get their own `Domain/Repositories/` protocols, or stay scoped to their parents? | **Stay scoped.** `EarmarkBudgetItem` is read/written via `EarmarkRepository.fetchBudget` / `setBudget`. `TransactionLeg` is read/written via `TransactionRepository.fetch` / `create` / `update`. The sync-only GRDB repos (`GRDBEarmarkBudgetItemRepository`, `GRDBTransactionLegRepository`) exist purely to satisfy the per-record-type sync dispatch tables and don't grow Domain protocols. |
+| Should `EarmarkBudgetItem` and `TransactionLeg` get their own `Domain/Repositories/` protocols, or stay scoped to their parents? | **Stay scoped.** `EarmarkBudgetItem` is read/written via `EarmarkRepository.fetchBudget` / `setBudget`. `TransactionLeg` is read/written via `TransactionRepository.fetch` / `create` / `update`. The sync-only GRDB repos (`GRDBEarmarkBudgetItemRepository`, `GRDBTransactionLegRepository`, see §3.3.9 / §3.3.10) exist purely to satisfy the per-record-type sync dispatch tables and don't grow Domain protocols. |
 | Plan-pinning tests need `DatabaseQueue` in a state with the migrator applied. Is there a shared seam? | Slice 0 added `try ProfileDatabase.openInMemory()` (which runs the migrator); Slice 1 reuses it. A `MigratedTestQueue.profileDB()` helper as recommended in `DATABASE_CODE_GUIDE.md` §6 sample is the natural extension if the boilerplate hurts; verify during implementation. |
-| Does `SwiftDataToGRDBMigrator` need any kind of cancellation hook (e.g. user signs out mid-migration)? | **No.** The migrator is `@MainActor` and synchronous; it runs to completion before `ProfileSession.init` returns. Sign-out tears down the session afterwards. The migrator never touches network. If launch latency becomes a problem, convert to async (per the Slice 0 file header) — that's the time to add cancellation. |
+| Does `SwiftDataToGRDBMigrator` need any kind of cancellation hook (e.g. user signs out mid-migration)? | **Yes — light.** Slice 1 makes the migrator `async throws` (§3.7); the calling `Task` can be cancelled, and GRDB 7's `database.write { … }` honours task cancellation by rolling the transaction back. The migrator's per-type flags are not set on cancellation, so the next launch retries from the cancelled type. SwiftData-side `context.fetch` doesn't honour `Task` cancellation natively; if cancellation latency matters in QA, add an explicit `Task.checkCancellation()` before each per-type migrator step. Default: rely on the implicit GRDB-side cancellation. |
+| `observeChanges() -> AsyncStream<Void>` continuation safety on `GRDBInstrumentRegistryRepository` (§3.3.1) — how does the hook closure publish into the `MainActor`-isolated stream from a non-main executor? | `AsyncStream.Continuation` is `Sendable` and supports `yield()` from any executor. The hook closure (registered via `onInstrumentRemoteChange`, fired from the CKSyncEngine delegate executor) calls `continuation.yield()` directly. Subscribers iterate the stream from `MainActor` (e.g., picker UIs); the SwiftUI bridge handles the hop. Document this in the repo doc-comment: "continuation is published from any executor; subscribers run on `MainActor`." |
+| Per-method conversion-date semantics for SQL-aggregated buckets — what date is passed to the conversion service when a `(month, instrument)` bucket spans multiple days of differently-dated legs? | **DEFERRED — pending user discussion.** The instrument-conversion-review flagged that the plan's `fetchExpenseBreakdown`, `fetchIncomeAndExpense`, and `fetchCategoryBalances` SQL queries collapse multi-day legs into single buckets, and the existing Swift implementations convert per-leg at `transaction.date`. Resolution requires walking each method individually with the user — see the conversation thread that produced this plan revision. **Implementation must wait** for per-method decisions before SQL is finalised. |
 
 ---
 
