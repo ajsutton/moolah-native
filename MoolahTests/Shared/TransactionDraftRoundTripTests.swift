@@ -271,4 +271,5 @@ struct TransactionDraftRoundTripTests {
     #expect(roundTripped.legs[2].type == .transfer)
     #expect(roundTripped.legs[2].quantity == Decimal(50))
   }
+
 }
