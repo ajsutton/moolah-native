@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import SwiftData
 import Testing
 
@@ -224,9 +225,8 @@ private struct CloudKitCategoryTestBackend: BackendProvider, @unchecked Sendable
     let container = try TestModelContainer.create()
     let instrument = Instrument.defaultTestInstrument
     let rateClient = FixedRateClient()
-    let cacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("test-rates-\(UUID().uuidString)")
-    let exchangeRates = ExchangeRateService(client: rateClient, cacheDirectory: cacheDir)
+    let exchangeRates = ExchangeRateService(
+      client: rateClient, database: try ProfileDatabase.openInMemory())
     let conversion = FiatConversionService(exchangeRates: exchangeRates)
     self.auth = InMemoryAuthProvider()
     self.accounts = CloudKitAccountRepository(

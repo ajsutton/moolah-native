@@ -9,7 +9,11 @@ import SwiftData
 final class ProfileContainerManager {
   let indexContainer: ModelContainer
   private let dataSchema: Schema
-  private let inMemory: Bool
+  /// `true` when the manager was created via `.forTesting()` — every
+  /// SwiftData container is in-memory and so must the per-profile GRDB
+  /// queue be (otherwise UI tests would write `data.sqlite` files to the
+  /// host's Application Support).
+  let inMemory: Bool
   private var containers: [UUID: ModelContainer] = [:]
 
   init(
@@ -58,16 +62,41 @@ final class ProfileContainerManager {
     for suffix in ["", "-shm", "-wal"] {
       let url = baseURL.deletingLastPathComponent()
         .appending(path: baseURL.lastPathComponent + suffix)
-      try? fileManager.removeItem(at: url)
+      removeIfPresent(url, fileManager: fileManager, label: "SwiftData store file")
     }
 
     // Delete the sync state file
     let syncStateURL = URL.moolahScopedApplicationSupport
       .appending(path: "Moolah-\(profileId.uuidString).syncstate")
-    try? fileManager.removeItem(at: syncStateURL)
+    removeIfPresent(syncStateURL, fileManager: fileManager, label: "sync state file")
+
+    // Delete the per-profile GRDB directory (data.sqlite + -wal/-shm
+    // sidecars) added in the rate-storage-grdb refactor. Removing the
+    // directory cleans up sidecars without enumerating each suffix.
+    let dbDirectory = ProfileSession.profileDatabaseDirectory(for: profileId)
+    removeIfPresent(dbDirectory, fileManager: fileManager, label: "GRDB profile directory")
 
     // Delete the CloudKit zone for this profile
     deleteCloudKitZone(for: profileId)
+  }
+
+  /// Best-effort removal: a missing path is normal (e.g. WAL sidecar absent
+  /// for a clean-shutdown store), so swallow `NSFileNoSuchFileError` quietly
+  /// and log every other failure at `.warning`. Replaces a silent `try?`
+  /// per `CODE_GUIDE.md` §8.
+  private func removeIfPresent(_ url: URL, fileManager: FileManager, label: String) {
+    do {
+      try fileManager.removeItem(at: url)
+    } catch let error as NSError
+      where error.domain == NSCocoaErrorDomain
+      && error.code == NSFileNoSuchFileError
+    {
+      // Path was already absent — fine.
+    } catch {
+      logger.warning(
+        "Failed to delete \(label, privacy: .public) at \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)"
+      )
+    }
   }
 
   private func deleteCloudKitZone(for profileId: UUID) {

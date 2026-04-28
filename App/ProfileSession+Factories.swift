@@ -2,6 +2,7 @@
 
 import CloudKit
 import Foundation
+import GRDB
 import OSLog
 import SwiftData
 
@@ -22,17 +23,19 @@ extension ProfileSession {
 
   /// Builds the fiat/stock/crypto market-data services used throughout the
   /// profile session. Standalone helper so `ProfileSession.init` can build
-  /// and assign the trio in one step.
-  static func makeMarketDataServices() -> MarketDataServices {
+  /// and assign the trio in one step. Each rate service persists to the
+  /// supplied per-profile `database`.
+  static func makeMarketDataServices(database: any DatabaseWriter) -> MarketDataServices {
     let yahooClient = YahooFinanceClient()
     let apiKeyStore = KeychainStore(
       service: "com.moolah.api-keys", account: "coingecko", synchronizable: true
     )
     let coinGeckoApiKey = try? apiKeyStore.restoreString()
     return MarketDataServices(
-      exchangeRate: ExchangeRateService(client: FrankfurterClient()),
-      stockPrice: StockPriceService(client: yahooClient),
-      cryptoPrice: Self.makeCryptoPriceService(coinGeckoApiKey: coinGeckoApiKey),
+      exchangeRate: ExchangeRateService(client: FrankfurterClient(), database: database),
+      stockPrice: StockPriceService(client: yahooClient, database: database),
+      cryptoPrice: Self.makeCryptoPriceService(
+        coinGeckoApiKey: coinGeckoApiKey, database: database),
       yahooPriceFetcher: yahooClient,
       coinGeckoApiKey: coinGeckoApiKey
     )
@@ -42,7 +45,8 @@ extension ProfileSession {
   /// (CoinGecko when an API key is present in the keychain, plus
   /// CryptoCompare and Binance as fallbacks) and the token resolver.
   static func makeCryptoPriceService(
-    coinGeckoApiKey: String?
+    coinGeckoApiKey: String?,
+    database: any DatabaseWriter
   ) -> CryptoPriceService {
     let cryptoCompareClient = CryptoCompareClient()
     let binanceClient = BinanceClient { date in
@@ -66,6 +70,7 @@ extension ProfileSession {
 
     return CryptoPriceService(
       clients: priceClients,
+      database: database,
       resolutionClient: CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey)
     )
   }
@@ -77,9 +82,8 @@ extension ProfileSession {
     profile: Profile,
     containerManager: ProfileContainerManager?,
     syncCoordinator: SyncCoordinator? = nil,
-    exchangeRates: ExchangeRateService,
-    stockPrices: StockPriceService,
-    cryptoPrices: CryptoPriceService
+    services: MarketDataServices,
+    database: any DatabaseWriter
   ) -> BackendProvider {
     guard let containerManager else {
       fatalError("ProfileContainerManager is required for CloudKit profiles")
@@ -89,9 +93,9 @@ extension ProfileSession {
       containerManager: containerManager,
       syncCoordinator: syncCoordinator,
       marketData: CloudKitMarketDataServices(
-        exchangeRates: exchangeRates,
-        stockPrices: stockPrices,
-        cryptoPrices: cryptoPrices))
+        exchangeRates: services.exchangeRate,
+        stockPrices: services.stockPrice,
+        cryptoPrices: services.cryptoPrice))
   }
 
   // MARK: - Registry Wiring
@@ -100,12 +104,17 @@ extension ProfileSession {
   /// crypto token store, search service, CoinGecko catalog, and token
   /// resolution client. Populated for CloudKit profiles; nil fields indicate
   /// a degraded state (e.g. catalog init failure).
+  ///
+  /// `catalogRefreshTask` carries the once-per-session
+  /// `refreshIfStale()` background task so `ProfileSession` can store and
+  /// cancel it on teardown. `nil` when catalog construction failed.
   struct RegistryWiring {
     let registry: (any InstrumentRegistryRepository)?
     let cryptoTokenStore: CryptoTokenStore?
     let searchService: InstrumentSearchService?
     let coinGeckoCatalog: (any CoinGeckoCatalog)?
     let tokenResolutionClient: (any TokenResolutionClient)?
+    let catalogRefreshTask: Task<Void, Never>?
   }
 
   /// Resolves the instrument-registry wiring for a CloudKit profile. Returns
@@ -136,12 +145,16 @@ extension ProfileSession {
     }
 
     let catalog: (any CoinGeckoCatalog)?
+    let refreshTask: Task<Void, Never>?
     let resolutionClient: any TokenResolutionClient
     if let overrides = uiTestingCryptoOverrides() {
       catalog = overrides.catalog
+      refreshTask = nil
       resolutionClient = overrides.resolutionClient
     } else {
-      catalog = makeCoinGeckoCatalog()
+      let made = makeCoinGeckoCatalog()
+      catalog = made.catalog
+      refreshTask = made.refreshTask
       resolutionClient = CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey)
     }
     let store = CryptoTokenStore(
@@ -158,7 +171,8 @@ extension ProfileSession {
       cryptoTokenStore: store,
       searchService: searchService,
       coinGeckoCatalog: catalog,
-      tokenResolutionClient: resolutionClient
+      tokenResolutionClient: resolutionClient,
+      catalogRefreshTask: refreshTask
     )
   }
 
@@ -180,23 +194,29 @@ extension ProfileSession {
 
   /// Builds the per-profile CoinGecko catalog and kicks off a background
   /// `refreshIfStale()` so the SQLite snapshot is brought up to date once per
-  /// session without blocking init. Returns `nil` (and logs) when the
+  /// session without blocking init. Returns `(nil, nil)` (and logs) when the
   /// SQLite file can't be opened — the caller treats that as a degraded
-  /// search path.
+  /// search path. The returned `refreshTask` handle is stored on
+  /// `ProfileSession` so it can be cancelled on teardown.
   @MainActor
-  private static func makeCoinGeckoCatalog() -> (any CoinGeckoCatalog)? {
+  private static func makeCoinGeckoCatalog()
+    -> (catalog: (any CoinGeckoCatalog)?, refreshTask: Task<Void, Never>?)
+  {
     let directory = URL.moolahScopedApplicationSupport
       .appending(path: "InstrumentRegistry", directoryHint: .isDirectory)
     do {
       let catalog = try SQLiteCoinGeckoCatalog(directory: directory)
-      Task(priority: .background) { [catalog] in
+      // `SQLiteCoinGeckoCatalog` is an actor, so `await catalog.refreshIfStale()`
+      // hops to the catalog's executor regardless of the enclosing Task's
+      // isolation — no `Task.detached` needed (CONCURRENCY_GUIDE §8).
+      let refreshTask = Task(priority: .background) { [catalog] in
         await catalog.refreshIfStale()
       }
-      return catalog
+      return (catalog, refreshTask)
     } catch {
       Logger(subsystem: "com.moolah.app", category: "ProfileSession")
         .error("CoinGecko catalog init failed: \(error.localizedDescription, privacy: .public)")
-      return nil
+      return (nil, nil)
     }
   }
 
@@ -257,110 +277,4 @@ extension ProfileSession {
     )
   }
 
-  // MARK: - Import Pipeline
-
-  /// Bundle of the full CSV import pipeline: the `ImportStore`, the import-rule
-  /// store, and the three folder-watch pieces. Returned from `makeImportPipeline`
-  /// so `ProfileSession.init` can assign all five fields in one step.
-  struct ImportPipeline {
-    let importStore: ImportStore
-    let importRuleStore: ImportRuleStore
-    let preferences: ImportPreferences
-    let scanner: FolderScanService
-    let watcher: FolderWatchService
-  }
-
-  /// Builds the complete CSV import pipeline for a profile: staging store,
-  /// import rules, folder watch, and wires the delete-after-import default
-  /// closure into `ImportStore` before returning.
-  static func makeImportPipeline(
-    backend: BackendProvider,
-    profileId: UUID,
-    logger: Logger
-  ) -> ImportPipeline {
-    let stagingDirectory = ProfileSession.importStagingDirectory(for: profileId)
-    let importStore = Self.makeImportStore(
-      backend: backend,
-      stagingDirectory: stagingDirectory,
-      profileId: profileId,
-      logger: logger
-    )
-    let importRuleStore = ImportRuleStore(repository: backend.importRules)
-    let folderWatch = Self.makeFolderWatch(
-      stagingDirectory: stagingDirectory,
-      profileId: profileId,
-      importStore: importStore
-    )
-    importStore.folderWatchDeleteAfterImport = { [preferences = folderWatch.preferences] in
-      preferences.deleteAfterImportFolderDefault
-    }
-    return ImportPipeline(
-      importStore: importStore,
-      importRuleStore: importRuleStore,
-      preferences: folderWatch.preferences,
-      scanner: folderWatch.scanner,
-      watcher: folderWatch.watcher
-    )
-  }
-
-  // MARK: - Folder Watch Services
-
-  /// Bundle of the services that make up folder-watch ingestion for a
-  /// profile: the on-disk `ImportPreferences`, the catch-up `FolderScanService`,
-  /// and the live `FolderWatchService`. Returned from `makeFolderWatch` so
-  /// `ProfileSession.init` can assign each field in one step.
-  struct FolderWatchServices {
-    let preferences: ImportPreferences
-    let scanner: FolderScanService
-    let watcher: FolderWatchService
-  }
-
-  /// Builds the folder-watch bundle for a profile. `stagingDirectory` is the
-  /// per-profile CSV staging directory; preferences live in its parent so
-  /// they survive staging-store recreation.
-  static func makeFolderWatch(
-    stagingDirectory: URL,
-    profileId: UUID,
-    importStore: ImportStore
-  ) -> FolderWatchServices {
-    let preferencesDirectory = stagingDirectory.deletingLastPathComponent()
-    let preferences = ImportPreferences(directory: preferencesDirectory)
-    let scanner = FolderScanService(
-      profileId: profileId,
-      importStore: importStore,
-      preferences: preferences)
-    let watcher = FolderWatchService(
-      importStore: importStore,
-      preferences: preferences,
-      scanner: scanner)
-    return FolderWatchServices(preferences: preferences, scanner: scanner, watcher: watcher)
-  }
-
-  /// Opens the per-profile CSV import staging store. Falls back to a scratch
-  /// directory in the tmp dir (which cannot fail in practice on Apple
-  /// platforms) if the real directory can't be opened, so the pipeline
-  /// remains functional in the degraded mode.
-  static func makeImportStore(
-    backend: BackendProvider,
-    stagingDirectory: URL,
-    profileId: UUID,
-    logger: Logger
-  ) -> ImportStore {
-    do {
-      let staging = try ImportStagingStore(directory: stagingDirectory)
-      return ImportStore(backend: backend, staging: staging)
-    } catch {
-      let fallback = FileManager.default.temporaryDirectory
-        .appendingPathComponent("csv-staging-fallback-\(profileId.uuidString)")
-      // Fallback in a tmp dir cannot fail in practice on Apple platforms.
-      // swiftlint:disable:next force_try
-      let staging = try! ImportStagingStore(directory: fallback)
-      let errDesc = error.localizedDescription
-      let stagingPath = stagingDirectory.path
-      logger.error(
-        "Failed to open CSV import staging at \(stagingPath, privacy: .public): \(errDesc, privacy: .public). Falling back to tmp."
-      )
-      return ImportStore(backend: backend, staging: staging)
-    }
-  }
 }

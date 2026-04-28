@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -13,17 +14,12 @@ struct InstrumentConversionServiceStockTests {
   private func makeService(
     stockPrices: [String: StockPriceResponse] = [:],
     exchangeRates: [String: [String: Decimal]] = [:]
-  ) -> FullConversionService {
+  ) throws -> FullConversionService {
+    let database = try ProfileDatabase.openInMemory()
     let stockClient = FixedStockPriceClient(responses: stockPrices)
-    let stockCacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("stock-price-tests")
-      .appendingPathComponent(UUID().uuidString)
-    let stockService = StockPriceService(client: stockClient, cacheDirectory: stockCacheDir)
+    let stockService = StockPriceService(client: stockClient, database: database)
     let rateClient = FixedRateClient(rates: exchangeRates)
-    let rateCacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("conversion-stock-tests")
-      .appendingPathComponent(UUID().uuidString)
-    let rateService = ExchangeRateService(client: rateClient, cacheDirectory: rateCacheDir)
+    let rateService = ExchangeRateService(client: rateClient, database: database)
     return FullConversionService(
       exchangeRates: rateService,
       stockPrices: stockService
@@ -41,7 +37,7 @@ struct InstrumentConversionServiceStockTests {
     // BHP listed in AUD, converting to AUD — just stock price, no FX
     let today = Date()
     let dateKey = dateString(today)
-    let service = makeService(
+    let service = try makeService(
       stockPrices: [
         "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: dec("42.30")])
       ]
@@ -57,7 +53,7 @@ struct InstrumentConversionServiceStockTests {
     // AAPL listed in USD, converting to AUD — stock price * FX rate
     let today = Date()
     let dateKey = dateString(today)
-    let service = makeService(
+    let service = try makeService(
       stockPrices: [
         "AAPL": StockPriceResponse(instrument: .USD, prices: [dateKey: dec("185.50")])
       ],
@@ -73,7 +69,7 @@ struct InstrumentConversionServiceStockTests {
   func stockToStockNotSupported() async throws {
     // Stock-to-stock conversion should throw (go through fiat as intermediate)
     let today = Date()
-    let service = makeService()
+    let service = try makeService()
 
     await #expect(throws: (any Error).self) {
       _ = try await service.convert(Decimal(10), from: bhp, to: aapl, on: today)
@@ -84,7 +80,7 @@ struct InstrumentConversionServiceStockTests {
   func fiatToStockNotSupported() async throws {
     // Fiat-to-stock conversion doesn't make sense for display purposes
     let today = Date()
-    let service = makeService()
+    let service = try makeService()
 
     await #expect(throws: (any Error).self) {
       _ = try await service.convert(Decimal(1000), from: aud, to: bhp, on: today)
@@ -95,7 +91,7 @@ struct InstrumentConversionServiceStockTests {
   func foreignFiatToStockListedInDifferentFiatThrowsSymmetrically() async throws {
     // fiatToStock is not a supported conversion direction regardless of source fiat.
     let today = Date()
-    let service = makeService()
+    let service = try makeService()
 
     await #expect(throws: (any Error).self) {
       _ = try await service.convert(Decimal(1000), from: usd, to: bhp, on: today)
@@ -107,7 +103,7 @@ struct InstrumentConversionServiceStockTests {
     // Simulate a USD-listed stock converting to USD directly (no FX required).
     let today = Date()
     let dateKey = dateString(today)
-    let service = makeService(
+    let service = try makeService(
       stockPrices: [
         "AAPL": StockPriceResponse(instrument: .USD, prices: [dateKey: dec("185.50")])
       ]
@@ -122,7 +118,7 @@ struct InstrumentConversionServiceStockTests {
     // JPY has 0 decimals; request still throws (direction not supported) without crashing.
     let today = Date()
     let jpy = Instrument.fiat(code: "JPY")
-    let service = makeService()
+    let service = try makeService()
 
     await #expect(throws: (any Error).self) {
       _ = try await service.convert(Decimal(100000), from: jpy, to: bhp, on: today)
@@ -132,16 +128,11 @@ struct InstrumentConversionServiceStockTests {
   @Test
   func stockPriceFetchFailureThrows() async throws {
     let today = Date()
+    let database = try ProfileDatabase.openInMemory()
     let stockClient = FixedStockPriceClient(shouldFail: true)
-    let stockCacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("stock-price-fail-tests")
-      .appendingPathComponent(UUID().uuidString)
-    let stockService = StockPriceService(client: stockClient, cacheDirectory: stockCacheDir)
+    let stockService = StockPriceService(client: stockClient, database: database)
     let rateClient = FixedRateClient(rates: [:])
-    let cacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("conversion-stock-tests")
-      .appendingPathComponent(UUID().uuidString)
-    let rateService = ExchangeRateService(client: rateClient, cacheDirectory: cacheDir)
+    let rateService = ExchangeRateService(client: rateClient, database: database)
     let service = FullConversionService(
       exchangeRates: rateService,
       stockPrices: stockService
@@ -161,7 +152,7 @@ struct InstrumentConversionServiceStockTests {
     let calendar = Calendar(identifier: .gregorian)
     let today = calendar.startOfDay(for: Date())
     let pastKey = dateString(calendar.date(byAdding: .day, value: -10, to: today)!)
-    let service = makeService(
+    let service = try makeService(
       exchangeRates: [pastKey: ["USD": dec("0.6500")]]
     )
 

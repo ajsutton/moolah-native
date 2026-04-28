@@ -1,5 +1,6 @@
 // MoolahTests/Features/CryptoTokenStoreTests.swift
 import Foundation
+import GRDB
 import SwiftData
 import Testing
 
@@ -25,11 +26,11 @@ struct CryptoTokenStoreTests {
       // swiftlint:disable:next force_try
       try! await registry.registerCrypto(reg.instrument, mapping: reg.mapping)
     }
+    // swiftlint:disable:next force_try
+    let database = try! ProfileDatabase.openInMemory()
     let service = CryptoPriceService(
       clients: [FixedCryptoPriceClient()],
-      cacheDirectory: FileManager.default.temporaryDirectory
-        .appendingPathComponent("crypto-store-tests")
-        .appendingPathComponent(UUID().uuidString)
+      database: database
     )
     let store = CryptoTokenStore(registry: registry, cryptoPriceService: service)
     return (store, registry)
@@ -75,7 +76,8 @@ struct CryptoTokenStoreTests {
   @Test("loadRegistrations surfaces registry failure into error")
   func loadRegistrationsSurfacesError() async {
     let failing = FailingRegistry()
-    let service = CryptoPriceService(clients: [])
+    // swiftlint:disable:next force_try
+    let service = CryptoPriceService(clients: [], database: try! ProfileDatabase.openInMemory())
     let store = CryptoTokenStore(registry: failing, cryptoPriceService: service)
     await store.loadRegistrations()
     #expect(store.error != nil)

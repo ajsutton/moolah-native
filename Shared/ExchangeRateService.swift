@@ -1,6 +1,8 @@
 // Shared/ExchangeRateService.swift
 
 import Foundation
+import GRDB
+import OSLog
 
 enum ExchangeRateError: Error, Equatable {
   case noRateAvailable(base: String, quote: String, date: String)
@@ -8,20 +10,25 @@ enum ExchangeRateError: Error, Equatable {
 
 actor ExchangeRateService {
   private let client: ExchangeRateClient
-  private var caches: [String: ExchangeRateCache] = [:]
-  private let cacheDirectory: URL
+
+  // MARK: - Cross-extension internals
+  // `caches`, `hydratedBases`, `database`, and `logger` are accessed by
+  // the SQL persistence extension in `ExchangeRateService+Persistence.swift`.
+  // They remain actor-isolated; the access modifier is internal so the
+  // sibling-file extension can see them.
+  var caches: [String: ExchangeRateCache] = [:]
+  /// Loaded bases — set on first hydration so we don't re-read SQL when the
+  /// cache is genuinely empty.
+  var hydratedBases: Set<String> = []
+  let database: any DatabaseWriter
+  let logger = Logger(
+    subsystem: "com.moolah.app", category: "ExchangeRateService")
+
   private let dateFormatter: ISO8601DateFormatter
 
-  init(client: ExchangeRateClient, cacheDirectory: URL? = nil) {
+  init(client: ExchangeRateClient, database: any DatabaseWriter) {
     self.client = client
-    if let cacheDirectory {
-      self.cacheDirectory = cacheDirectory
-    } else {
-      let baseCaches =
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
-        ?? URL(fileURLWithPath: NSTemporaryDirectory())
-      self.cacheDirectory = baseCaches.appendingPathComponent("exchange-rates")
-    }
+    self.database = database
     self.dateFormatter = ISO8601DateFormatter()
     self.dateFormatter.formatOptions = [.withFullDate]
   }
@@ -38,9 +45,9 @@ actor ExchangeRateService {
       return cached
     }
 
-    // Load from disk if not already loaded
-    if caches[base] == nil {
-      loadCacheFromDisk(base: base)
+    // Hydrate from SQL on first access
+    if !hydratedBases.contains(base) {
+      try await loadCache(base: base)
     }
 
     // Check again after disk load
@@ -95,7 +102,12 @@ actor ExchangeRateService {
         try await fetchInChunks(base: base, from: fetchStart, to: date)
       }
     } catch {
-      // Fetch failed — proceed to fallback lookup.
+      // Fetch failed — proceed to fallback lookup. Logged so disk-write
+      // failures (which would otherwise be silently swallowed alongside
+      // expected network 404s) are still observable.
+      logger.warning(
+        "fetchToCoverDate failed for base \(base, privacy: .public) on \(dateString, privacy: .public): \(error.localizedDescription, privacy: .public)"
+      )
     }
   }
 
@@ -109,9 +121,9 @@ actor ExchangeRateService {
     let base = from.id
     let quote = to.id
 
-    // Load cache if not already in memory
-    if caches[base] == nil {
-      loadCacheFromDisk(base: base)
+    // Hydrate cache if not already in memory
+    if !hydratedBases.contains(base) {
+      try await loadCache(base: base)
     }
 
     // Determine what we need to fetch
@@ -167,8 +179,14 @@ actor ExchangeRateService {
   func prefetchLatest(base: Instrument) async {
     let code = base.id
 
-    if caches[code] == nil {
-      loadCacheFromDisk(base: code)
+    if !hydratedBases.contains(code) {
+      do {
+        try await loadCache(base: code)
+      } catch {
+        logger.warning(
+          "prefetchLatest: loadCache failed for base \(code, privacy: .public): \(error.localizedDescription, privacy: .public)"
+        )
+      }
     }
 
     let calendar = Calendar(identifier: .gregorian)
@@ -194,7 +212,11 @@ actor ExchangeRateService {
     do {
       try await fetchAndMerge(base: code, from: fetchFrom, to: today)
     } catch {
-      // Prefetch is best-effort — silently ignore network errors
+      // Prefetch is best-effort — log so disk-write failures (which would
+      // otherwise be conflated with expected network errors) are observable.
+      logger.warning(
+        "prefetchLatest: fetchAndMerge failed for base \(code, privacy: .public): \(error.localizedDescription, privacy: .public)"
+      )
     }
   }
 
@@ -242,7 +264,7 @@ actor ExchangeRateService {
   private func fetchAndMerge(base: String, from: Date, to: Date) async throws {
     let fetched = try await client.fetchRates(base: base, from: from, to: to)
     merge(base: base, newRates: fetched)
-    saveCacheToDisk(base: base)
+    try await saveCache(base: base)
   }
 
   private func merge(base: String, newRates: [String: [String: Decimal]]) {
@@ -270,31 +292,7 @@ actor ExchangeRateService {
     }
   }
 
-  private func cacheFileURL(base: String) -> URL {
-    cacheDirectory.appendingPathComponent("rates-\(base).json.gz")
-  }
-
-  private func loadCacheFromDisk(base: String) {
-    let url = cacheFileURL(base: base)
-    guard let compressed = try? Data(contentsOf: url) else { return }
-    guard let data = decompress(compressed) else { return }
-    guard let cache = try? JSONDecoder().decode(ExchangeRateCache.self, from: data) else { return }
-    caches[base] = cache
-  }
-
-  private func saveCacheToDisk(base: String) {
-    guard let cache = caches[base] else { return }
-    guard let data = try? JSONEncoder().encode(cache) else { return }
-    guard let compressed = compress(data) else { return }
-    try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-    try? compressed.write(to: cacheFileURL(base: base), options: .atomic)
-  }
-
-  private func compress(_ data: Data) -> Data? {
-    try? (data as NSData).compressed(using: .zlib) as Data
-  }
-
-  private func decompress(_ data: Data) -> Data? {
-    try? (data as NSData).decompressed(using: .zlib) as Data
-  }
+  // SQL persistence (`loadCache` / `saveCache`) lives in
+  // `ExchangeRateService+Persistence.swift` so this file stays under
+  // SwiftLint's `type_body_length` and `file_length` thresholds.
 }

@@ -37,10 +37,14 @@ struct MoolahApp: App {
   #if os(macOS)
     @NSApplicationDelegateAdaptor(ScriptingBridge.self) var scriptingBridge
     private let backupManager: StoreBackupManager
-    @State private var sessionManager: SessionManager
+    // internal so `+Lifecycle` can iterate open sessions for
+    // `PRAGMA optimize` on resign-active.
+    @State var sessionManager: SessionManager
   #else
     @State private var activeSession: ProfileSession?
-    @State private var sessionManager: SessionManager
+    // internal so `+Lifecycle` can iterate open sessions for
+    // `PRAGMA optimize` on resign-active.
+    @State var sessionManager: SessionManager
   #endif
 
   init() {
@@ -57,6 +61,14 @@ struct MoolahApp: App {
     // shaped storage (in-memory `CloudKitBackend`) so XCUITest flows never
     // touch the user's iCloud. See guides/UI_TEST_GUIDE.md §6.
     let uiTestingSeed = Self.uiTestingSeed(from: CommandLine.arguments)
+
+    // One-shot removal of the legacy `Caches/{exchange,stock,crypto}` JSON
+    // cache directories now that rate caches live in per-profile SQLite.
+    // Skipped under UI testing where `Caches` is shared with the host
+    // user's account and we must not mutate it.
+    if uiTestingSeed == nil {
+      Self.cleanupLegacyRateCachesOnce()
+    }
     let setup = Self.makeContainerSetup(uiTestingSeed: uiTestingSeed)
     let coordinator = SyncCoordinator(containerManager: setup.manager)
     containerManager = setup.manager

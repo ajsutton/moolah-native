@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import SwiftData
 import Testing
 
@@ -71,15 +72,10 @@ struct StockPositionDisplayTests {
     let stockClient = FixedStockPriceClient(responses: [
       "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: dec("45.00")])
     ])
-    let stockCacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("stock-valued-tests")
-      .appendingPathComponent(UUID().uuidString)
-    let stockService = StockPriceService(client: stockClient, cacheDirectory: stockCacheDir)
+    let database = try ProfileDatabase.openInMemory()
+    let stockService = StockPriceService(client: stockClient, database: database)
     let rateClient = FixedRateClient(rates: [:])
-    let rateCacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("position-display-tests")
-      .appendingPathComponent(UUID().uuidString)
-    let rateService = ExchangeRateService(client: rateClient, cacheDirectory: rateCacheDir)
+    let rateService = ExchangeRateService(client: rateClient, database: database)
     let conversionService = FullConversionService(
       exchangeRates: rateService,
       stockPrices: stockService
@@ -125,7 +121,7 @@ struct StockPositionDisplayTests {
     let accountId = UUID()
     let today = Date()
 
-    let conversionService = makeTotalPortfolioConversionService(today: today)
+    let conversionService = try makeTotalPortfolioConversionService(today: today)
     let (backend, container) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
@@ -150,21 +146,16 @@ struct StockPositionDisplayTests {
     #expect(store.totalPortfolioValue == dec("405.00"))
   }
 
-  private func makeTotalPortfolioConversionService(today: Date) -> FullConversionService {
+  private func makeTotalPortfolioConversionService(today: Date) throws -> FullConversionService {
     let dateKey = dateString(today)
     let stockClient = FixedStockPriceClient(responses: [
       "BHP.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: dec("45.00")]),
       "CBA.AX": StockPriceResponse(instrument: .AUD, prices: [dateKey: dec("120.00")]),
     ])
-    let stockCacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("stock-total-tests")
-      .appendingPathComponent(UUID().uuidString)
-    let stockService = StockPriceService(client: stockClient, cacheDirectory: stockCacheDir)
+    let database = try ProfileDatabase.openInMemory()
+    let stockService = StockPriceService(client: stockClient, database: database)
     let rateClient = FixedRateClient(rates: [:])
-    let rateCacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("position-display-tests")
-      .appendingPathComponent(UUID().uuidString)
-    let rateService = ExchangeRateService(client: rateClient, cacheDirectory: rateCacheDir)
+    let rateService = ExchangeRateService(client: rateClient, database: database)
     return FullConversionService(
       exchangeRates: rateService,
       stockPrices: stockService

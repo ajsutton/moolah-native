@@ -1,5 +1,6 @@
 // MoolahTests/Shared/CryptoPriceServiceTests.swift
 import Foundation
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -33,21 +34,17 @@ struct CryptoPriceServiceTests {
     clients: [CryptoPriceClient] = [],
     prices: [String: [String: Decimal]] = [:],
     shouldFail: Bool = false,
-    cacheDirectory: URL? = nil,
+    database: DatabaseQueue? = nil,
     resolutionClient: (any TokenResolutionClient)? = nil
-  ) -> CryptoPriceService {
+  ) throws -> CryptoPriceService {
     let clientList =
       clients.isEmpty
       ? [FixedCryptoPriceClient(prices: prices, shouldFail: shouldFail)]
       : clients
-    let cacheDir =
-      cacheDirectory
-      ?? FileManager.default.temporaryDirectory
-      .appendingPathComponent("crypto-price-tests")
-      .appendingPathComponent(UUID().uuidString)
+    let resolved = try database ?? ProfileDatabase.openInMemory()
     return CryptoPriceService(
       clients: clientList,
-      cacheDirectory: cacheDir,
+      database: resolved,
       resolutionClient: resolutionClient
     )
   }
@@ -62,7 +59,7 @@ struct CryptoPriceServiceTests {
 
   @Test
   func cacheMissFetchesFromClient() async throws {
-    let service = makeService(prices: [
+    let service = try makeService(prices: [
       "1:native": ["2026-04-10": dec("1623.45")]
     ])
     let price = try await service.price(
@@ -72,7 +69,7 @@ struct CryptoPriceServiceTests {
 
   @Test
   func cacheHitDoesNotRefetch() async throws {
-    let service = makeService(prices: [
+    let service = try makeService(prices: [
       "1:native": ["2026-04-10": dec("1623.45")]
     ])
     let first = try await service.price(
@@ -90,7 +87,7 @@ struct CryptoPriceServiceTests {
     let working = FixedCryptoPriceClient(prices: [
       "1:native": ["2026-04-10": dec("1623.45")]
     ])
-    let service = makeService(clients: [failing, working])
+    let service = try makeService(clients: [failing, working])
     let price = try await service.price(
       for: ethInstrument, mapping: ethMapping, on: date("2026-04-10"))
     #expect(price == dec("1623.45"))
@@ -101,7 +98,7 @@ struct CryptoPriceServiceTests {
     let working = FixedCryptoPriceClient(prices: [
       "1:native": ["2026-04-09": dec("1600.00")]
     ])
-    let service = makeService(clients: [working])
+    let service = try makeService(clients: [working])
     _ = try await service.price(for: ethInstrument, mapping: ethMapping, on: date("2026-04-09"))
 
     // Request a later date — client has no data for it, triggering fallback
@@ -112,7 +109,7 @@ struct CryptoPriceServiceTests {
 
   @Test
   func allClientsFailWithEmptyCacheThrows() async throws {
-    let service = makeService(shouldFail: true)
+    let service = try makeService(shouldFail: true)
     await #expect(throws: (any Error).self) {
       try await service.price(
         for: self.ethInstrument, mapping: self.ethMapping, on: self.date("2026-04-10"))
@@ -128,7 +125,7 @@ struct CryptoPriceServiceTests {
     let working = FixedCryptoPriceClient(prices: [
       "1:native": ["2026-04-09": dec("1600.00")]  // 2026-04-10 deliberately absent
     ])
-    let service = makeService(clients: [working])
+    let service = try makeService(clients: [working])
     let price = try await service.price(
       for: ethInstrument, mapping: ethMapping, on: date("2026-04-10"))
     #expect(price == dec("1600.00"))
@@ -141,7 +138,7 @@ struct CryptoPriceServiceTests {
     let working = FixedCryptoPriceClient(prices: [
       "1:native": ["2026-04-15": dec("1700.00")]
     ])
-    let service = makeService(clients: [working])
+    let service = try makeService(clients: [working])
     _ = try await service.price(for: ethInstrument, mapping: ethMapping, on: date("2026-04-15"))
 
     await #expect(throws: (any Error).self) {
@@ -154,7 +151,7 @@ struct CryptoPriceServiceTests {
 
   @Test
   func rangeFetchReturnsPricesForEachDay() async throws {
-    let service = makeService(prices: [
+    let service = try makeService(prices: [
       "1:native": [
         "2026-04-07": dec("1600.00"),
         "2026-04-08": dec("1610.00"),
@@ -171,7 +168,7 @@ struct CryptoPriceServiceTests {
 
   @Test
   func rangeFetchOnlyRequestsMissingSegments() async throws {
-    let service = makeService(prices: [
+    let service = try makeService(prices: [
       "1:native": [
         "2026-04-07": dec("1600.00"),
         "2026-04-08": dec("1610.00"),
@@ -192,7 +189,7 @@ struct CryptoPriceServiceTests {
 
   @Test
   func rangeFillsWeekendGapsWithLastKnownPrice() async throws {
-    let service = makeService(prices: [
+    let service = try makeService(prices: [
       "1:native": [
         "2026-04-10": dec("1630.00")
       ]
@@ -209,7 +206,7 @@ struct CryptoPriceServiceTests {
 
   @Test
   func currentPricesFetchesForAllMappings() async throws {
-    let service = makeService(prices: [
+    let service = try makeService(prices: [
       "1:native": ["2026-04-11": dec("1640.00")],
       "0:native": ["2026-04-11": dec("67890.00")],
     ])
@@ -218,39 +215,53 @@ struct CryptoPriceServiceTests {
     #expect(prices["0:native"] == dec("67890.00"))
   }
 
-  // MARK: - Gzip round-trip
-
   // MARK: - purgeCache
 
-  @Test("purgeCache removes the in-memory cache entry and disk file")
-  func purgeCacheRemovesInMemoryAndDisk() async throws {
-    let tempDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("purge-test-\(UUID())")
-    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: tempDir) }
+  /// `purgeCache` clears both the in-memory entry and the SQL rows for the
+  /// supplied instrument id. After purge a fresh service against the same
+  /// database must throw when the network is unavailable, proving no row
+  /// or meta entry survived.
+  @Test("purgeCache removes the in-memory cache entry and SQL rows")
+  func purgeCacheRemovesInMemoryAndSQL() async throws {
+    let database = try ProfileDatabase.openInMemory()
 
-    let service = makeService(
+    let service = try makeService(
       prices: ["1:native": ["2026-04-10": dec("1623.45")]],
-      cacheDirectory: tempDir
+      database: database
     )
 
     _ = try await service.price(
       for: ethInstrument, mapping: ethMapping, on: date("2026-04-10"))
-    let filename = "prices-\(ethInstrument.id.replacingOccurrences(of: ":", with: "-")).json.gz"
-    let onDisk = tempDir.appendingPathComponent(filename)
-    #expect(FileManager.default.fileExists(atPath: onDisk.path))
 
-    // Purge and verify the disk file is gone. The in-memory cache is
-    // private; exercising it indirectly through a fresh service against
-    // the same directory proves the disk file is gone (a subsequent
-    // lookup with a failing client would now throw).
+    let beforeRows = try await database.read { database in
+      try CryptoPriceRecord
+        .filter(CryptoPriceRecord.Columns.tokenId == "1:native")
+        .fetchCount(database)
+    }
+    #expect(beforeRows > 0)
+
     await service.purgeCache(instrumentId: ethInstrument.id)
-    #expect(FileManager.default.fileExists(atPath: onDisk.path) == false)
 
-    let freshService = makeService(shouldFail: true, cacheDirectory: tempDir)
+    let afterRows = try await database.read { database in
+      try CryptoPriceRecord
+        .filter(CryptoPriceRecord.Columns.tokenId == "1:native")
+        .fetchCount(database)
+    }
+    let afterMeta = try await database.read { database in
+      try CryptoTokenMetaRecord
+        .filter(CryptoTokenMetaRecord.Columns.tokenId == "1:native")
+        .fetchCount(database)
+    }
+    #expect(afterRows == 0)
+    #expect(afterMeta == 0)
+
+    let freshService = try makeService(shouldFail: true, database: database)
     await #expect(throws: (any Error).self) {
       try await freshService.price(
         for: self.ethInstrument, mapping: self.ethMapping, on: self.date("2026-04-10"))
     }
   }
+
+  // Rollback contract for `saveCache` lives in `CryptoPriceServiceTestsMore.swift`
+  // so this file stays under SwiftLint's `type_body_length` cap.
 }

@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import SwiftData
 
 @testable import Moolah
@@ -37,9 +38,8 @@ struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
       conversion = customConversion
     } else {
       let rateClient = FixedRateClient()
-      let cacheDir = FileManager.default.temporaryDirectory
-        .appendingPathComponent("test-rates-\(UUID().uuidString)")
-      let exchangeRates = ExchangeRateService(client: rateClient, cacheDirectory: cacheDir)
+      let exchangeRates = ExchangeRateService(
+        client: rateClient, database: try ProfileDatabase.openInMemory())
       conversion = FiatConversionService(exchangeRates: exchangeRates)
     }
     self.auth = InMemoryAuthProvider()

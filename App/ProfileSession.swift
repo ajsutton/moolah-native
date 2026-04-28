@@ -1,5 +1,6 @@
 import CloudKit
 import Foundation
+import GRDB
 import OSLog
 import SwiftData
 
@@ -9,6 +10,14 @@ import SwiftData
 @MainActor
 final class ProfileSession: Identifiable {
   let profile: Profile
+  /// Per-profile GRDB connection. Owns the lifecycle of `data.sqlite`
+  /// (or an in-memory queue under previews / tests). Released when the
+  /// session deinits; on profile delete the parent `profiles/<id>/`
+  /// directory is removed by `ProfileContainerManager.deleteStore`.
+  ///
+  /// Private: external consumers go through repositories and the rate
+  /// services rather than poking the queue directly.
+  private let database: DatabaseQueue
   let backend: BackendProvider
   let authStore: AuthStore
   let accountStore: AccountStore
@@ -46,15 +55,38 @@ final class ProfileSession: Identifiable {
   private var syncReloadTask: Task<Void, Never>?
   private var pendingChangedTypes = Set<String>()
   private var lastSyncEventTime: ContinuousClock.Instant?
+  /// Background task handle for the once-per-session CoinGecko
+  /// `refreshIfStale()` kick-off. Tracked so it can be cancelled in
+  /// `cleanupSync(coordinator:)` if the session is torn down before the
+  /// refresh completes.
+  private var catalogRefreshTask: Task<Void, Never>?
+  /// Background task handle for the most recent `PRAGMA optimize` kick-off.
+  /// Tracked so we can cancel any pending optimize on session teardown
+  /// (per `guides/CONCURRENCY_GUIDE.md` §8 — fire-and-forget tasks must
+  /// be tracked). Replaced (with cancellation of the prior handle) on
+  /// each call to `schedulePragmaOptimize()`.
+  private var pragmaOptimizeTask: Task<Void, Never>?
 
+  /// Synchronous initialiser — opens the per-profile GRDB queue and runs
+  /// pending migrations on the calling thread. The migrator currently only
+  /// creates the rate-cache tables (microseconds for fresh databases, no
+  /// disk reads on subsequent opens once the migration is recorded), so
+  /// running on `@MainActor` is acceptable for now. Revisit if profile-DB
+  /// schemas grow large enough that `migrate(_:)` does meaningful work
+  /// each launch — see `guides/CONCURRENCY_GUIDE.md` §1.
   init(
     profile: Profile,
     containerManager: ProfileContainerManager? = nil,
-    syncCoordinator: SyncCoordinator? = nil
-  ) {
+    syncCoordinator: SyncCoordinator? = nil,
+    database: DatabaseQueue? = nil
+  ) throws {
     self.profile = profile
 
-    let services = Self.makeMarketDataServices()
+    let resolvedDatabase = try Self.resolveDatabase(
+      override: database, profile: profile, containerManager: containerManager)
+    self.database = resolvedDatabase
+
+    let services = Self.makeMarketDataServices(database: resolvedDatabase)
     self.exchangeRateService = services.exchangeRate
     self.stockPriceService = services.stockPrice
     self.cryptoPriceService = services.cryptoPrice
@@ -63,9 +95,8 @@ final class ProfileSession: Identifiable {
       profile: profile,
       containerManager: containerManager,
       syncCoordinator: syncCoordinator,
-      exchangeRates: services.exchangeRate,
-      stockPrices: services.stockPrice,
-      cryptoPrices: services.cryptoPrice
+      services: services,
+      database: resolvedDatabase
     )
     self.backend = backend
 
@@ -80,6 +111,7 @@ final class ProfileSession: Identifiable {
     self.instrumentSearchService = registryWiring.searchService
     self.coinGeckoCatalog = registryWiring.coinGeckoCatalog
     self.tokenResolutionClient = registryWiring.tokenResolutionClient
+    self.catalogRefreshTask = registryWiring.catalogRefreshTask
     let stores = Self.makeDomainStores(profile: profile, backend: backend)
     self.authStore = stores.auth
     self.accountStore = stores.account
@@ -198,6 +230,10 @@ final class ProfileSession: Identifiable {
     coordinator.removeInstrumentRemoteChangeCallback(profileId: profile.id)
     syncReloadTask?.cancel()
     syncReloadTask = nil
+    catalogRefreshTask?.cancel()
+    catalogRefreshTask = nil
+    pragmaOptimizeTask?.cancel()
+    pragmaOptimizeTask = nil
   }
 
   // MARK: - Folder watch
@@ -221,6 +257,46 @@ final class ProfileSession: Identifiable {
     await folderScanner.scanForNewFiles()
   }
 
+  // MARK: - Database maintenance
+
+  /// Runs `PRAGMA optimize` on the per-profile DB. Best-effort: failures
+  /// are logged but never propagated. Per
+  /// `guides/DATABASE_SCHEMA_GUIDE.md` §5, the recommended cadence is once
+  /// on app resign-active and at most hourly while active. The on-resign
+  /// hook is wired by `MoolahApp+Lifecycle.handleScenePhaseChange`; the
+  /// hourly-while-active tick is a follow-up — for now profile DBs are
+  /// small enough that the once-per-resign cadence suffices.
+  ///
+  /// Runs inside `database.write` because `PRAGMA optimize` may invoke
+  /// `ANALYZE` and update the `sqlite_stat1` / `sqlite_stat4` tables — a
+  /// read-only transaction would either silently no-op the analyze step
+  /// or surface a write-from-read error.
+  func runPragmaOptimize() async {
+    let database = self.database
+    do {
+      try await database.write { database in
+        try database.execute(sql: "PRAGMA optimize")
+      }
+    } catch {
+      logger.warning(
+        "PRAGMA optimize failed for profile \(self.profile.id): \(error.localizedDescription, privacy: .public)"
+      )
+    }
+  }
+
+  /// Schedules a best-effort `PRAGMA optimize` on a tracked background
+  /// task. Cancels any prior pending optimize before scheduling so we
+  /// never run two concurrently for the same session, and leaves the
+  /// handle in `pragmaOptimizeTask` so `cleanupSync` can cancel it on
+  /// teardown (per `guides/CONCURRENCY_GUIDE.md` §8 — fire-and-forget
+  /// tasks must be tracked).
+  func schedulePragmaOptimize() {
+    pragmaOptimizeTask?.cancel()
+    pragmaOptimizeTask = Task { [weak self] in
+      await self?.runPragmaOptimize()
+    }
+  }
+
   /// Per-profile directory under Application Support where CSV import staging
   /// lives. Not part of the SwiftData store because staging is device-local
   /// and doesn't sync.
@@ -229,5 +305,51 @@ final class ProfileSession: Identifiable {
       .appendingPathComponent("Moolah", isDirectory: true)
       .appendingPathComponent("csv-staging", isDirectory: true)
       .appendingPathComponent(profileId.uuidString, isDirectory: true)
+  }
+
+  /// Per-profile directory containing `data.sqlite` (and its `-wal`/`-shm`
+  /// sidecars). Removed wholesale on profile delete by
+  /// `ProfileContainerManager.deleteStore(for:)`.
+  nonisolated static func profileDatabaseDirectory(for profileId: UUID) -> URL {
+    URL.moolahScopedApplicationSupport
+      .appendingPathComponent("Moolah", isDirectory: true)
+      .appendingPathComponent("profiles", isDirectory: true)
+      .appendingPathComponent(profileId.uuidString, isDirectory: true)
+  }
+
+  /// Opens the profile's `data.sqlite` GRDB queue, creating intermediate
+  /// directories as needed and applying the `ProfileSchema` migrator.
+  nonisolated static func openProfileDatabase(profileId: UUID) throws -> DatabaseQueue {
+    let url = profileDatabaseDirectory(for: profileId)
+      .appendingPathComponent("data.sqlite")
+    return try ProfileDatabase.open(at: url)
+  }
+
+  /// Resolves which `DatabaseQueue` the session should own. Order:
+  ///   1. Caller-provided `override` (tests, previews).
+  ///   2. In-memory queue when the parent `containerManager` is in-memory
+  ///      (UI testing, `ProfileContainerManager.forTesting()`).
+  ///   3. On-disk `data.sqlite` under `profiles/<id>/` for production.
+  private static func resolveDatabase(
+    override: DatabaseQueue?,
+    profile: Profile,
+    containerManager: ProfileContainerManager?
+  ) throws -> DatabaseQueue {
+    if let override { return override }
+    if containerManager?.inMemory == true { return try ProfileDatabase.openInMemory() }
+    return try openProfileDatabase(profileId: profile.id)
+  }
+
+  /// Convenience constructor for `#Preview` blocks. Backs the session with
+  /// an in-memory GRDB queue so previews never touch disk. Uses an in-memory
+  /// `ProfileContainerManager` so the CloudKit backend can be constructed
+  /// without touching the network or the on-disk container store.
+  static func preview(
+    profile: Profile = Profile(label: "Preview")
+  ) throws -> ProfileSession {
+    try ProfileSession(
+      profile: profile,
+      containerManager: ProfileContainerManager.forTesting(),
+      database: ProfileDatabase.openInMemory())
   }
 }

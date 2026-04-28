@@ -1,5 +1,6 @@
 // MoolahTests/Shared/InstrumentAmountConversionTests.swift
 import Foundation
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -12,12 +13,16 @@ struct InstrumentAmountConversionTests {
     return formatter.date(from: string)!
   }
 
+  private func makeService(client: ExchangeRateClient) throws -> ExchangeRateService {
+    ExchangeRateService(client: client, database: try ProfileDatabase.openInMemory())
+  }
+
   @Test
   func convertedDelegatesToService() async throws {
     let client = FixedRateClient(rates: [
       "2026-04-11": ["GBP": dec("0.497")]
     ])
-    let service = ExchangeRateService(client: client)
+    let service = try makeService(client: client)
     let amount = InstrumentAmount(quantity: dec("200.00"), instrument: .AUD)
 
     let result = try await service.convert(
@@ -30,7 +35,7 @@ struct InstrumentAmountConversionTests {
   @Test
   func convertedSameInstrumentReturnsOriginal() async throws {
     let client = FixedRateClient()
-    let service = ExchangeRateService(client: client)
+    let service = try makeService(client: client)
     let amount = InstrumentAmount(quantity: dec("123.45"), instrument: .AUD)
 
     let result = try await service.convert(amount, to: .AUD, on: date("2026-04-11"))
@@ -45,7 +50,7 @@ struct InstrumentAmountConversionTests {
     let client = FixedRateClient(rates: [
       "2026-04-11": ["JPY": dec("95.50")]
     ])
-    let service = ExchangeRateService(client: client)
+    let service = try makeService(client: client)
     let amount = InstrumentAmount(quantity: Decimal(100), instrument: .AUD)
 
     let result = try await service.convert(
@@ -60,7 +65,7 @@ struct InstrumentAmountConversionTests {
     let client = FixedRateClient(rates: [
       "2026-04-11": ["USD": dec("0.65")]
     ])
-    let service = ExchangeRateService(client: client)
+    let service = try makeService(client: client)
     let amount = InstrumentAmount(quantity: dec("-200.00"), instrument: .AUD)
 
     let result = try await service.convert(

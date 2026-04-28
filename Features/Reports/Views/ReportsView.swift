@@ -209,7 +209,10 @@ private func seedReportsPreview(
     Category(id: ids.rentId, name: "Rent"),
   ])
   let account = Account(name: "Checking", type: .bank, instrument: .AUD)
-  let session = ProfileSession(profile: Profile(label: "Preview"))
+  // In-memory preview session can't fail in practice: opens an ephemeral
+  // GRDB queue with no disk access. A trap here is acceptable in #Preview.
+  // swiftlint:disable:next force_try
+  let session = try! ProfileSession.preview()
   return ReportsView(
     reportingStore: reportingStore,
     categories: categories,

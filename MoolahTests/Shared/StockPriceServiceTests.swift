@@ -1,5 +1,6 @@
 // MoolahTests/Shared/StockPriceServiceTests.swift
 import Foundation
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -9,15 +10,11 @@ struct StockPriceServiceTests {
   private func makeService(
     responses: [String: StockPriceResponse] = [:],
     shouldFail: Bool = false,
-    cacheDirectory: URL? = nil
-  ) -> StockPriceService {
+    database: DatabaseQueue? = nil
+  ) throws -> StockPriceService {
     let client = FixedStockPriceClient(responses: responses, shouldFail: shouldFail)
-    let cacheDir =
-      cacheDirectory
-      ?? FileManager.default.temporaryDirectory
-      .appendingPathComponent("stock-price-tests")
-      .appendingPathComponent(UUID().uuidString)
-    return StockPriceService(client: client, cacheDirectory: cacheDir)
+    let resolved = try database ?? ProfileDatabase.openInMemory()
+    return StockPriceService(client: client, database: resolved)
   }
 
   private func date(_ string: String) -> Date {
@@ -42,14 +39,14 @@ struct StockPriceServiceTests {
 
   @Test
   func cacheMissFetchesFromClient() async throws {
-    let service = makeService(responses: ["BHP.AX": bhpResponse()])
+    let service = try makeService(responses: ["BHP.AX": bhpResponse()])
     let price = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
     #expect(price == dec("38.50"))
   }
 
   @Test
   func cacheHitDoesNotRefetch() async throws {
-    let service = makeService(responses: ["BHP.AX": bhpResponse()])
+    let service = try makeService(responses: ["BHP.AX": bhpResponse()])
     let first = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
     let second = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
     #expect(first == second)
@@ -60,7 +57,7 @@ struct StockPriceServiceTests {
 
   @Test
   func currencyDiscoveredFromFirstFetch() async throws {
-    let service = makeService(responses: ["BHP.AX": bhpResponse()])
+    let service = try makeService(responses: ["BHP.AX": bhpResponse()])
     _ = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
     let instrument = try await service.instrument(for: "BHP.AX")
     #expect(instrument == .AUD)
@@ -68,7 +65,7 @@ struct StockPriceServiceTests {
 
   @Test
   func instrumentThrowsForUnknownTicker() async throws {
-    let service = makeService()
+    let service = try makeService()
     await #expect(throws: (any Error).self) {
       try await service.instrument(for: "UNKNOWN.AX")
     }
@@ -78,7 +75,7 @@ struct StockPriceServiceTests {
 
   @Test
   func weekendFallsBackToFriday() async throws {
-    let service = makeService(responses: ["BHP.AX": bhpResponse()])
+    let service = try makeService(responses: ["BHP.AX": bhpResponse()])
     _ = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
     let price = try await service.price(ticker: "BHP.AX", on: date("2026-04-12"))
     #expect(price == dec("38.60"))
@@ -91,7 +88,7 @@ struct StockPriceServiceTests {
       prices: [
         "2026-04-10": dec("38.25")
       ])
-    let service = makeService(responses: ["BHP.AX": futureOnly])
+    let service = try makeService(responses: ["BHP.AX": futureOnly])
     _ = try await service.price(ticker: "BHP.AX", on: date("2026-04-10"))
     await #expect(throws: (any Error).self) {
       try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
@@ -114,7 +111,7 @@ struct StockPriceServiceTests {
         // Sat 2026-04-11 and Sun 2026-04-12 deliberately absent
       ]
     )
-    let service = makeService(responses: ["BHP.AX": weekdayPrices])
+    let service = try makeService(responses: ["BHP.AX": weekdayPrices])
     let price = try await service.price(ticker: "BHP.AX", on: date("2026-04-12"))
     #expect(price == dec("38.25"))
   }
@@ -123,22 +120,19 @@ struct StockPriceServiceTests {
 
   @Test
   func networkFailureWithCacheReturnsCachedData() async throws {
-    let tempDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("stock-price-tests")
-      .appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: tempDir) }
+    let database = try ProfileDatabase.openInMemory()
 
-    let service1 = makeService(responses: ["BHP.AX": bhpResponse()], cacheDirectory: tempDir)
+    let service1 = try makeService(responses: ["BHP.AX": bhpResponse()], database: database)
     _ = try await service1.price(ticker: "BHP.AX", on: date("2026-04-07"))
 
-    let service2 = makeService(shouldFail: true, cacheDirectory: tempDir)
+    let service2 = try makeService(shouldFail: true, database: database)
     let price = try await service2.price(ticker: "BHP.AX", on: date("2026-04-07"))
     #expect(price == dec("38.50"))
   }
 
   @Test
   func networkFailureWithEmptyCacheThrows() async throws {
-    let service = makeService(shouldFail: true)
+    let service = try makeService(shouldFail: true)
     await #expect(throws: (any Error).self) {
       try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
     }
@@ -148,7 +142,7 @@ struct StockPriceServiceTests {
 
   @Test
   func rangeReturnsOrderedPrices() async throws {
-    let service = makeService(responses: ["BHP.AX": bhpResponse()])
+    let service = try makeService(responses: ["BHP.AX": bhpResponse()])
     let results = try await service.prices(
       ticker: "BHP.AX",
       in: date("2026-04-07")...date("2026-04-09")
@@ -161,7 +155,7 @@ struct StockPriceServiceTests {
 
   @Test
   func rangeExpandsFetchForMissingDates() async throws {
-    let service = makeService(responses: ["BHP.AX": bhpResponse()])
+    let service = try makeService(responses: ["BHP.AX": bhpResponse()])
     _ = try await service.prices(
       ticker: "BHP.AX",
       in: date("2026-04-08")...date("2026-04-09")
@@ -177,7 +171,7 @@ struct StockPriceServiceTests {
 
   @Test
   func rangeFillsWeekendsWithLastKnownPrice() async throws {
-    let service = makeService(responses: ["BHP.AX": bhpResponse()])
+    let service = try makeService(responses: ["BHP.AX": bhpResponse()])
     let results = try await service.prices(
       ticker: "BHP.AX",
       in: date("2026-04-10")...date("2026-04-12")
@@ -190,23 +184,95 @@ struct StockPriceServiceTests {
 
   // MARK: - Disk persistence (gzip round-trip)
 
+  /// Two service instances sharing the same `DatabaseQueue` — the second
+  /// must load prices and the discovered denomination persisted by the
+  /// first without going to the network. Renamed from
+  /// `gzipRoundTripPreservesData` after the migration from gzipped JSON
+  /// cache files to GRDB.
   @Test
-  func gzipRoundTripPreservesData() async throws {
-    let tempDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("stock-price-tests")
-      .appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: tempDir) }
+  func sqlRoundTripPreservesData() async throws {
+    let database = try ProfileDatabase.openInMemory()
 
-    let service1 = makeService(responses: ["BHP.AX": bhpResponse()], cacheDirectory: tempDir)
+    let service1 = try makeService(responses: ["BHP.AX": bhpResponse()], database: database)
     let price = try await service1.price(ticker: "BHP.AX", on: date("2026-04-07"))
     #expect(price == dec("38.50"))
 
-    let service2 = makeService(shouldFail: true, cacheDirectory: tempDir)
+    let service2 = try makeService(shouldFail: true, database: database)
     let cachedPrice = try await service2.price(ticker: "BHP.AX", on: date("2026-04-07"))
     #expect(cachedPrice == dec("38.50"))
 
     let instrument = try await service2.instrument(for: "BHP.AX")
     #expect(instrument == .AUD)
+  }
+
+  // MARK: - Rollback test for multi-statement save
+
+  /// Rollback contract: `StockPriceService.saveCache` is a single
+  /// `database.write` (delete prior price rows + re-insert + upsert meta).
+  ///
+  /// Drives the **production** `saveCache` by installing a trigger that
+  /// raises `ABORT` on a sentinel date string. A second fetch through the
+  /// service merges that sentinel into the cache, the production save path
+  /// runs, the trigger fires inside the transaction, and the entire write
+  /// must roll back — leaving prior rows untouched.
+  @Test
+  func saveCacheRollsBackOnInsertFailure() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let service = try makeService(responses: ["BHP.AX": bhpResponse()], database: database)
+    _ = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
+
+    let beforeCount = try await database.read { database in
+      try StockPriceRecord
+        .filter(StockPriceRecord.Columns.ticker == "BHP.AX")
+        .fetchCount(database)
+    }
+    #expect(beforeCount > 0)
+
+    // Install a trigger that aborts inserts carrying the sentinel date.
+    // The trigger fires inside `saveCache`'s transaction so the upfront
+    // DELETE for the BHP.AX partition + the new inserts roll back together.
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER fail_save_cache
+          BEFORE INSERT ON stock_price
+          WHEN NEW.date = '9999-12-31'
+          BEGIN
+              SELECT RAISE(ABORT, 'forced failure for rollback test');
+          END;
+          """)
+    }
+
+    // Drive the real `saveCache` by feeding a price set that contains the
+    // sentinel date. The service merges it in, calls `saveCache`, the
+    // trigger raises mid-transaction, and SQLite rolls the whole write
+    // back atomically.
+    let failingResponse = StockPriceResponse(
+      instrument: .AUD, prices: ["9999-12-31": dec("99.99")])
+    let failingService = try makeService(
+      responses: ["BHP.AX": failingResponse], database: database)
+    _ = try? await failingService.price(ticker: "BHP.AX", on: date("9999-12-31"))
+
+    let afterCount = try await database.read { database in
+      try StockPriceRecord
+        .filter(StockPriceRecord.Columns.ticker == "BHP.AX")
+        .fetchCount(database)
+    }
+    #expect(afterCount == beforeCount)
+
+    // Probe a specific priming row to prove the DELETE inside
+    // `saveCache` was rolled back. Counts can match by accident if a
+    // future regression replaces delete-and-reinsert with upsert-only —
+    // re-looking-up `(BHP.AX, 2026-04-07, 38.50)` confirms the row
+    // survived rather than being silently rewritten.
+    let surviving = try await database.read { database in
+      try StockPriceRecord
+        .filter(StockPriceRecord.Columns.ticker == "BHP.AX")
+        .filter(StockPriceRecord.Columns.date == "2026-04-07")
+        .fetchOne(database)
+    }
+    #expect(surviving != nil)
+    #expect(surviving?.price == 38.50)
   }
 
   // MARK: - Multiple tickers
@@ -218,7 +284,7 @@ struct StockPriceServiceTests {
       prices: [
         "2026-04-07": dec("115.20")
       ])
-    let service = makeService(responses: [
+    let service = try makeService(responses: [
       "BHP.AX": bhpResponse(),
       "CBA.AX": cbaResponse,
     ])

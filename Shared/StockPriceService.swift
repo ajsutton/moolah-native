@@ -1,6 +1,8 @@
 // Shared/StockPriceService.swift
 
 import Foundation
+import GRDB
+import OSLog
 
 enum StockPriceError: Error, Equatable {
   case noPriceAvailable(ticker: String, date: String)
@@ -10,19 +12,17 @@ enum StockPriceError: Error, Equatable {
 actor StockPriceService {
   private let client: StockPriceClient
   private var caches: [String: StockPriceCache] = [:]
-  private let cacheDirectory: URL
+  /// Loaded tickers — set on first hydration so we don't re-read SQL when
+  /// the cache is genuinely empty.
+  private var hydratedTickers: Set<String> = []
+  private let database: any DatabaseWriter
   private let dateFormatter: ISO8601DateFormatter
+  private let logger = Logger(
+    subsystem: "com.moolah.app", category: "StockPriceService")
 
-  init(client: StockPriceClient, cacheDirectory: URL? = nil) {
+  init(client: StockPriceClient, database: any DatabaseWriter) {
     self.client = client
-    if let cacheDirectory {
-      self.cacheDirectory = cacheDirectory
-    } else {
-      let baseCaches =
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
-        ?? URL(fileURLWithPath: NSTemporaryDirectory())
-      self.cacheDirectory = baseCaches.appendingPathComponent("stock-prices")
-    }
+    self.database = database
     self.dateFormatter = ISO8601DateFormatter()
     self.dateFormatter.formatOptions = [.withFullDate]
   }
@@ -37,9 +37,9 @@ actor StockPriceService {
       return cached
     }
 
-    // Load from disk if not already loaded
-    if caches[ticker] == nil {
-      loadCacheFromDisk(ticker: ticker)
+    // Hydrate from SQL on first access
+    if !hydratedTickers.contains(ticker) {
+      try await loadCache(ticker: ticker)
     }
 
     // Check again after disk load
@@ -71,10 +71,10 @@ actor StockPriceService {
 
   func prices(
     ticker: String, in range: ClosedRange<Date>
-  ) async throws -> [(date: String, price: Decimal)] {
-    // Load cache if not already in memory
-    if caches[ticker] == nil {
-      loadCacheFromDisk(ticker: ticker)
+  ) async throws -> [(date: Date, price: Decimal)] {
+    // Hydrate cache if not already in memory
+    if !hydratedTickers.contains(ticker) {
+      try await loadCache(ticker: ticker)
     }
 
     // Determine what we need to fetch
@@ -101,16 +101,16 @@ actor StockPriceService {
 
     // Build result series
     let dates = generateDateSeries(in: range)
-    var results: [(date: String, price: Decimal)] = []
+    var results: [(date: Date, price: Decimal)] = []
     var lastKnownPrice: Decimal?
 
     for date in dates {
       let dateString = dateFormatter.string(from: date)
       if let price = caches[ticker]?.prices[dateString] {
         lastKnownPrice = price
-        results.append((dateString, price))
+        results.append((date, price))
       } else if let fallback = lastKnownPrice {
-        results.append((dateString, fallback))
+        results.append((date, fallback))
       }
     }
 
@@ -121,7 +121,9 @@ actor StockPriceService {
     if let cache = caches[ticker] {
       return cache.instrument
     }
-    loadCacheFromDisk(ticker: ticker)
+    if !hydratedTickers.contains(ticker) {
+      try await loadCache(ticker: ticker)
+    }
     if let cache = caches[ticker] {
       return cache.instrument
     }
@@ -199,7 +201,7 @@ actor StockPriceService {
   private func fetchAndMerge(ticker: String, from: Date, to: Date) async throws {
     let response = try await client.fetchDailyPrices(ticker: ticker, from: from, to: to)
     merge(ticker: ticker, instrument: response.instrument, newPrices: response.prices)
-    saveCacheToDisk(ticker: ticker)
+    try await saveCache(ticker: ticker)
   }
 
   private func merge(ticker: String, instrument: Instrument, newPrices: [String: Decimal]) {
@@ -228,31 +230,83 @@ actor StockPriceService {
     }
   }
 
-  private func cacheFileURL(ticker: String) -> URL {
-    cacheDirectory.appendingPathComponent("prices-\(ticker).json.gz")
+  // MARK: - SQL persistence
+
+  /// Hydrates `caches[ticker]` from `stock_price` + `stock_ticker_meta`.
+  /// The meta row records the price denomination (`instrument_id`, e.g.
+  /// `"AUD"` for `BHP.AX`); on load we reconstruct a fiat `Instrument` from
+  /// the stored code, mirroring the `Instrument.fiat(code:)` factory used
+  /// when the price API first responds.
+  ///
+  /// Marks the ticker as hydrated even when no rows exist so we don't
+  /// re-query on every miss.
+  private func loadCache(ticker: String) async throws {
+    let snapshot: StockPriceCache? = try await database.read { database in
+      let metaRecord =
+        try StockTickerMetaRecord
+        .filter(StockTickerMetaRecord.Columns.ticker == ticker)
+        .fetchOne(database)
+      guard let metaRecord else { return nil }
+      let priceRecords =
+        try StockPriceRecord
+        .filter(StockPriceRecord.Columns.ticker == ticker)
+        .fetchAll(database)
+      // See `ExchangeRateService.loadCache` for the rationale on the
+      // String-via-Decimal round-trip; preserves source precision instead
+      // of inheriting the binary `Decimal(_: Double)` tail.
+      var prices: [String: Decimal] = [:]
+      for record in priceRecords {
+        prices[record.date] = Decimal(string: String(record.price)) ?? Decimal(record.price)
+      }
+      return StockPriceCache(
+        ticker: ticker,
+        instrument: Instrument.fiat(code: metaRecord.instrumentId),
+        earliestDate: metaRecord.earliestDate,
+        latestDate: metaRecord.latestDate,
+        prices: prices
+      )
+    }
+    if let snapshot { caches[ticker] = snapshot }
+    hydratedTickers.insert(ticker)
   }
 
-  private func loadCacheFromDisk(ticker: String) {
-    let url = cacheFileURL(ticker: ticker)
-    guard let compressed = try? Data(contentsOf: url) else { return }
-    guard let data = decompress(compressed) else { return }
-    guard let cache = try? JSONDecoder().decode(StockPriceCache.self, from: data) else { return }
-    caches[ticker] = cache
-  }
-
-  private func saveCacheToDisk(ticker: String) {
+  /// Persists `caches[ticker]` to SQLite. Replaces prior rows for this
+  /// ticker in a single transaction and upserts the meta row alongside so
+  /// the price denomination is never out of sync with the prices.
+  ///
+  /// Multi-statement; covered by a rollback test in
+  /// `StockPriceServiceTests.swift`.
+  ///
+  /// Captures `caches[ticker]` before suspending on `database.write`.
+  /// Actor re-entrancy is acceptable here: a concurrent merge will trigger
+  /// its own `saveCache` afterwards, so the disk converges to the latest
+  /// in-memory state. A crash between the two writes leaves the disk at
+  /// an intermediate-but-consistent snapshot — acceptable for a
+  /// best-effort persistent cache.
+  private func saveCache(ticker: String) async throws {
     guard let cache = caches[ticker] else { return }
-    guard let data = try? JSONEncoder().encode(cache) else { return }
-    guard let compressed = compress(data) else { return }
-    try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-    try? compressed.write(to: cacheFileURL(ticker: ticker), options: .atomic)
-  }
-
-  private func compress(_ data: Data) -> Data? {
-    try? (data as NSData).compressed(using: .zlib) as Data
-  }
-
-  private func decompress(_ data: Data) -> Data? {
-    try? (data as NSData).decompressed(using: .zlib) as Data
+    let records: [StockPriceRecord] = cache.prices.map { dateString, price in
+      StockPriceRecord(
+        ticker: ticker,
+        date: dateString,
+        price: NSDecimalNumber(decimal: price).doubleValue
+      )
+    }
+    // The price denomination in `StockPriceCache` is the API-reported fiat
+    // currency the ticker trades in (see `YahooFinanceClient.parseResponse`).
+    // Persist its code; load reconstructs via `Instrument.fiat(code:)`.
+    let meta = StockTickerMetaRecord(
+      ticker: ticker,
+      instrumentId: cache.instrument.id,
+      earliestDate: cache.earliestDate,
+      latestDate: cache.latestDate
+    )
+    try await database.write { database in
+      try StockPriceRecord
+        .filter(StockPriceRecord.Columns.ticker == ticker)
+        .deleteAll(database)
+      for record in records { try record.insert(database) }
+      try meta.upsert(database)
+    }
   }
 }

@@ -192,4 +192,42 @@ extension MoolahApp {
       AutomationServiceLocator.shared.service = automationService
     #endif
   }
+
+  /// One-shot cleanup: removes the legacy gzipped JSON rate caches that
+  /// shipped before rate persistence moved to per-profile SQLite. Gated by
+  /// the `v2.rates.cache.cleared` `UserDefaults` flag so it runs at most
+  /// once per install. Best-effort — failures are silent and the rate
+  /// services repopulate from network on demand.
+  ///
+  /// `defaults` is injected with a `.standard` default so production callers
+  /// pass nothing while tests can supply an isolated suite — satisfies the
+  /// `CODE_GUIDE.md` §17 "no direct singleton access" rule without
+  /// inventing a wrapper type for a single call site.
+  static func cleanupLegacyRateCachesOnce(defaults: UserDefaults = .standard) {
+    let key = "v2.rates.cache.cleared"
+    guard !defaults.bool(forKey: key) else { return }
+    let logger = Logger(subsystem: "com.moolah.app", category: "LegacyCacheCleanup")
+    if let caches = FileManager.default
+      .urls(for: .cachesDirectory, in: .userDomainMask)
+      .first
+    {
+      let fileManager = FileManager.default
+      for sub in ["exchange-rates", "stock-prices", "crypto-prices"] {
+        let url = caches.appendingPathComponent(sub)
+        do {
+          try fileManager.removeItem(at: url)
+        } catch let error as NSError
+          where error.domain == NSCocoaErrorDomain
+          && error.code == NSFileNoSuchFileError
+        {
+          // Already absent (e.g. fresh install or prior partial cleanup) — fine.
+        } catch {
+          logger.warning(
+            "Failed to delete legacy rate cache \(sub, privacy: .public): \(error.localizedDescription, privacy: .public)"
+          )
+        }
+      }
+    }
+    defaults.set(true, forKey: key)
+  }
 }

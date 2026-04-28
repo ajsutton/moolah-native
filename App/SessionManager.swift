@@ -7,6 +7,17 @@ import SwiftData
 @Observable
 @MainActor
 final class SessionManager {
+  /// Map from `Profile.ID` to the live `ProfileSession`.
+  ///
+  /// **Mutation invariant:** any code path that drops or replaces a
+  /// session **must** go through `removeSession(for:)` or
+  /// `rebuildSession(for:)` so the session's `cleanupSync(coordinator:)`
+  /// runs first. `cleanupSync` is the only place that cancels the
+  /// session's tracked tasks (`syncReloadTask`, `catalogRefreshTask`,
+  /// `pragmaOptimizeTask`); a direct mutation to `sessions` would leak
+  /// any of those that happen to be in flight. Adding new tracked tasks
+  /// to `ProfileSession`? Cancel them in `cleanupSync` and uphold this
+  /// rule for any new mutation site.
   private(set) var sessions: [UUID: ProfileSession] = [:]
   let containerManager: ProfileContainerManager
   let syncCoordinator: SyncCoordinator?
@@ -17,10 +28,20 @@ final class SessionManager {
   }
 
   /// Returns the existing session for a profile, or creates one.
+  ///
+  /// Database creation can fail (disk full, permissions denied, schema
+  /// migration error). On failure we crash with a descriptive message —
+  /// the app cannot meaningfully run without per-profile storage and
+  /// silent fallback would mask data loss.
   func session(for profile: Profile) -> ProfileSession {
     if let existing = sessions[profile.id] { return existing }
-    let session = ProfileSession(
-      profile: profile, containerManager: containerManager, syncCoordinator: syncCoordinator)
+    let session: ProfileSession
+    do {
+      session = try ProfileSession(
+        profile: profile, containerManager: containerManager, syncCoordinator: syncCoordinator)
+    } catch {
+      fatalError("Failed to open profile database for \(profile.id): \(error)")
+    }
     sessions[profile.id] = session
     return session
   }
@@ -56,7 +77,11 @@ final class SessionManager {
     if let oldSession = sessions[profile.id], let syncCoordinator {
       oldSession.cleanupSync(coordinator: syncCoordinator)
     }
-    sessions[profile.id] = ProfileSession(
-      profile: profile, containerManager: containerManager, syncCoordinator: syncCoordinator)
+    do {
+      sessions[profile.id] = try ProfileSession(
+        profile: profile, containerManager: containerManager, syncCoordinator: syncCoordinator)
+    } catch {
+      fatalError("Failed to rebuild profile database for \(profile.id): \(error)")
+    }
   }
 }

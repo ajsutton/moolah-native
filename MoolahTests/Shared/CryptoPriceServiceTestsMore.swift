@@ -1,5 +1,6 @@
-// MoolahTests/Shared/CryptoPriceServiceTests.swift
+// MoolahTests/Shared/CryptoPriceServiceTestsMore.swift
 import Foundation
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -33,21 +34,17 @@ struct CryptoPriceServiceTestsMore {
     clients: [CryptoPriceClient] = [],
     prices: [String: [String: Decimal]] = [:],
     shouldFail: Bool = false,
-    cacheDirectory: URL? = nil,
+    database: DatabaseQueue? = nil,
     resolutionClient: (any TokenResolutionClient)? = nil
-  ) -> CryptoPriceService {
+  ) throws -> CryptoPriceService {
     let clientList =
       clients.isEmpty
       ? [FixedCryptoPriceClient(prices: prices, shouldFail: shouldFail)]
       : clients
-    let cacheDir =
-      cacheDirectory
-      ?? FileManager.default.temporaryDirectory
-      .appendingPathComponent("crypto-price-tests")
-      .appendingPathComponent(UUID().uuidString)
+    let resolved = try database ?? ProfileDatabase.openInMemory()
     return CryptoPriceService(
       clients: clientList,
-      cacheDirectory: cacheDir,
+      database: resolved,
       resolutionClient: resolutionClient
     )
   }
@@ -58,22 +55,22 @@ struct CryptoPriceServiceTestsMore {
     return formatter.date(from: string)!
   }
 
+  /// Two service instances sharing the same `DatabaseQueue` — the second
+  /// must load prices persisted by the first. Renamed from
+  /// `gzipRoundTripPreservesData` after the migration to GRDB.
   @Test
-  func gzipRoundTripPreservesData() async throws {
-    let tempDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("crypto-price-tests")
-      .appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: tempDir) }
+  func sqlRoundTripPreservesData() async throws {
+    let database = try ProfileDatabase.openInMemory()
 
-    let service1 = makeService(
+    let service1 = try makeService(
       prices: ["1:native": ["2026-04-10": dec("1623.45")]],
-      cacheDirectory: tempDir
+      database: database
     )
     let price = try await service1.price(
       for: ethInstrument, mapping: ethMapping, on: date("2026-04-10"))
     #expect(price == dec("1623.45"))
 
-    let service2 = makeService(shouldFail: true, cacheDirectory: tempDir)
+    let service2 = try makeService(shouldFail: true, database: database)
     let cached = try await service2.price(
       for: ethInstrument, mapping: ethMapping, on: date("2026-04-10"))
     #expect(cached == dec("1623.45"))
@@ -83,7 +80,7 @@ struct CryptoPriceServiceTestsMore {
 
   @Test
   func prefetchUpdatesCacheForRegisteredItems() async throws {
-    let service = makeService(prices: [
+    let service = try makeService(prices: [
       "1:native": ["2026-04-11": dec("1640.00")],
       "0:native": ["2026-04-11": dec("67890.00")],
     ])
@@ -97,7 +94,7 @@ struct CryptoPriceServiceTestsMore {
 
   @Test
   func differentTokensAreCachedIndependently() async throws {
-    let service = makeService(prices: [
+    let service = try makeService(prices: [
       "1:native": ["2026-04-10": dec("1623.45")],
       "0:native": ["2026-04-10": dec("67890.00")],
     ])
@@ -121,7 +118,7 @@ struct CryptoPriceServiceTestsMore {
       resolvedSymbol: "UNI",
       resolvedDecimals: 18
     )
-    let service = makeService(resolutionClient: FixedTokenResolutionClient(result: result))
+    let service = try makeService(resolutionClient: FixedTokenResolutionClient(result: result))
 
     let registration = try await service.resolveRegistration(
       chainId: 1,
@@ -137,7 +134,7 @@ struct CryptoPriceServiceTestsMore {
 
   @Test
   func resolveRegistration_noProvidersMatch_returnsPartialRegistration() async throws {
-    let service = makeService(
+    let service = try makeService(
       resolutionClient: FixedTokenResolutionClient(result: TokenResolutionResult())
     )
     let registration = try await service.resolveRegistration(
@@ -154,7 +151,7 @@ struct CryptoPriceServiceTestsMore {
 
   @Test
   func resolveRegistration_resolutionFails_throws() async throws {
-    let service = makeService(
+    let service = try makeService(
       resolutionClient: FixedTokenResolutionClient(shouldFail: true)
     )
     await #expect(throws: (any Error).self) {
@@ -162,5 +159,81 @@ struct CryptoPriceServiceTestsMore {
         chainId: 1, contractAddress: "0xabc", symbol: nil, isNative: false
       )
     }
+  }
+
+  // MARK: - Rollback test for multi-statement save
+
+  /// Rollback contract: `CryptoPriceService.saveCache` is one
+  /// `database.write` (delete prior price rows + re-insert + upsert meta).
+  ///
+  /// Drives the **production** `saveCache` by installing a trigger that
+  /// raises `ABORT` on a sentinel date string. A second fetch through the
+  /// service merges that sentinel into the cache, the production save path
+  /// runs, the trigger fires inside the transaction, and the entire write
+  /// must roll back — leaving prior rows untouched.
+  ///
+  /// Lives in this part-2 file (rather than the main `CryptoPriceServiceTests`)
+  /// so that primary suite stays under SwiftLint's `type_body_length` cap.
+  @Test
+  func saveCacheRollsBackOnInsertFailure() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let service = try makeService(
+      prices: ["1:native": ["2026-04-10": dec("1623.45"), "2026-04-11": dec("1700")]],
+      database: database
+    )
+    _ = try await service.price(
+      for: ethInstrument, mapping: ethMapping, on: date("2026-04-10"))
+
+    let beforeCount = try await database.read { database in
+      try CryptoPriceRecord
+        .filter(CryptoPriceRecord.Columns.tokenId == "1:native")
+        .fetchCount(database)
+    }
+    #expect(beforeCount > 0)
+
+    // Install a trigger that aborts inserts carrying the sentinel date.
+    // The trigger fires inside `saveCache`'s transaction so the upfront
+    // DELETE for the 1:native partition + the new inserts roll back together.
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER fail_save_cache
+          BEFORE INSERT ON crypto_price
+          WHEN NEW.date = '9999-12-31'
+          BEGIN
+              SELECT RAISE(ABORT, 'forced failure for rollback test');
+          END;
+          """)
+    }
+
+    // Drive the real `saveCache` by feeding a price set that contains the
+    // sentinel date.
+    let failingService = try makeService(
+      prices: ["1:native": ["9999-12-31": dec("9999.0")]],
+      database: database
+    )
+    _ = try? await failingService.price(
+      for: ethInstrument, mapping: ethMapping, on: date("9999-12-31"))
+
+    let afterCount = try await database.read { database in
+      try CryptoPriceRecord
+        .filter(CryptoPriceRecord.Columns.tokenId == "1:native")
+        .fetchCount(database)
+    }
+    #expect(afterCount == beforeCount)
+
+    // Probe a specific priming row to prove the DELETE inside
+    // `saveCache` was rolled back. Counts can match by accident if a
+    // future regression replaces delete-and-reinsert with upsert-only —
+    // re-looking-up `(1:native, 2026-04-10, 1623.45)` confirms the row
+    // survived rather than being silently rewritten.
+    let surviving = try await database.read { database in
+      try CryptoPriceRecord
+        .filter(CryptoPriceRecord.Columns.tokenId == "1:native")
+        .filter(CryptoPriceRecord.Columns.date == "2026-04-10")
+        .fetchOne(database)
+    }
+    #expect(surviving != nil)
+    #expect(surviving?.priceUsd == 1623.45)
   }
 }

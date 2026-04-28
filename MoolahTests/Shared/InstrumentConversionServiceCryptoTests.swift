@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -24,20 +25,19 @@ struct InstrumentConversionServiceCryptoTests {
     cryptoPrices: [String: [String: Decimal]] = [:],
     exchangeRates: [String: [String: Decimal]] = [:],
     providerMappings: [CryptoProviderMapping] = []
-  ) -> FullConversionService {
+  ) throws -> FullConversionService {
+    let database = try ProfileDatabase.openInMemory()
     let cryptoClient = FixedCryptoPriceClient(prices: cryptoPrices)
     let cryptoService = CryptoPriceService(
       clients: [cryptoClient],
-      cacheDirectory: FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString)
+      database: database
     )
     let exchangeClient = FixedRateClient(rates: exchangeRates)
     let exchangeService = ExchangeRateService(
       client: exchangeClient,
-      cacheDirectory: FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString)
+      database: database
     )
-    let stockService = StockPriceService(client: FixedStockPriceClient())
+    let stockService = StockPriceService(client: FixedStockPriceClient(), database: database)
     return FullConversionService(
       exchangeRates: exchangeService,
       stockPrices: stockService,
@@ -50,7 +50,7 @@ struct InstrumentConversionServiceCryptoTests {
 
   @Test
   func cryptoToUsdUsesDirectPrice() async throws {
-    let service = makeService(
+    let service = try makeService(
       cryptoPrices: ["1:native": ["2026-04-10": dec("1623.45")]],
       providerMappings: [
         CryptoProviderMapping(
@@ -70,7 +70,7 @@ struct InstrumentConversionServiceCryptoTests {
 
   @Test
   func cryptoToAudGoesViaUsd() async throws {
-    let service = makeService(
+    let service = try makeService(
       cryptoPrices: ["1:native": ["2026-04-10": dec("1623.45")]],
       exchangeRates: ["2026-04-10": ["AUD": dec("1.58")]],
       providerMappings: [
@@ -92,7 +92,7 @@ struct InstrumentConversionServiceCryptoTests {
 
   @Test
   func cryptoToCryptoChainsThroughUsd() async throws {
-    let service = makeService(
+    let service = try makeService(
       cryptoPrices: [
         "1:native": ["2026-04-10": dec("1623.45")],
         "0:native": ["2026-04-10": dec("63000.00")],
@@ -120,7 +120,7 @@ struct InstrumentConversionServiceCryptoTests {
 
   @Test
   func missingProviderMappingThrows() async throws {
-    let service = makeService(
+    let service = try makeService(
       cryptoPrices: ["1:native": ["2026-04-10": dec("1623.45")]]
     )
     await #expect(throws: (any Error).self) {
@@ -132,7 +132,7 @@ struct InstrumentConversionServiceCryptoTests {
 
   @Test
   func fiatToCryptoIsInverseOfCryptoToFiat() async throws {
-    let service = makeService(
+    let service = try makeService(
       cryptoPrices: ["1:native": ["2026-04-10": dec("1623.45")]],
       providerMappings: [
         CryptoProviderMapping(
@@ -153,7 +153,7 @@ struct InstrumentConversionServiceCryptoTests {
   @Test
   func cryptoToFiatPreservesHighPrecisionMultiplication() async throws {
     // Verify that high-decimal crypto quantities preserve precision through conversion.
-    let service = makeService(
+    let service = try makeService(
       cryptoPrices: ["1:native": ["2026-04-10": dec("1623.45")]],
       providerMappings: [
         CryptoProviderMapping(
@@ -173,7 +173,7 @@ struct InstrumentConversionServiceCryptoTests {
   func zeroDecimalFiatToCryptoGoesThroughUsd() async throws {
     // JPY has 0 decimals; route JPY → USD → ETH should not throw for fiat bridging.
     let jpy = Instrument.fiat(code: "JPY")
-    let service = makeService(
+    let service = try makeService(
       cryptoPrices: ["1:native": ["2026-04-10": dec("2000.00")]],
       exchangeRates: ["2026-04-10": ["JPY": dec("150.00")]],
       providerMappings: [
@@ -192,7 +192,7 @@ struct InstrumentConversionServiceCryptoTests {
 
   @Test
   func missingCryptoPriceThrows() async throws {
-    let service = makeService(
+    let service = try makeService(
       cryptoPrices: [:],
       providerMappings: [
         CryptoProviderMapping(
@@ -216,17 +216,16 @@ struct InstrumentConversionServiceCryptoTests {
     let cryptoClient = FixedCryptoPriceClient(
       prices: ["1:native": ["2026-04-10": dec("1623.45")]]
     )
+    let database = try ProfileDatabase.openInMemory()
     let cryptoService = CryptoPriceService(
       clients: [cryptoClient],
-      cacheDirectory: FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString)
+      database: database
     )
     let exchangeService = ExchangeRateService(
       client: FixedRateClient(rates: [:]),
-      cacheDirectory: FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString)
+      database: database
     )
-    let stockService = StockPriceService(client: FixedStockPriceClient())
+    let stockService = StockPriceService(client: FixedStockPriceClient(), database: database)
     let source = MutableMappingsSource()
 
     let service = FullConversionService(
