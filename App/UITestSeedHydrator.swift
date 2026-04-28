@@ -98,7 +98,6 @@ enum UITestSeedHydrator {
     let profile = Profile(
       id: fixtures.profileId,
       label: fixtures.profileLabel,
-      backendType: .cloudKit,
       currencyCode: fixtures.profileCurrencyCode,
       financialYearStartMonth: 7,
       createdAt: Date(timeIntervalSince1970: 1_700_000_000)
