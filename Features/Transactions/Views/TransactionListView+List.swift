@@ -142,13 +142,23 @@ extension TransactionListView {
     }
   }
 
+  private var scopeReferenceInstrument: Instrument {
+    if let accountId = filter.accountId, let account = accounts.by(id: accountId) {
+      return account.instrument
+    }
+    if let earmarkId = filter.earmarkId, let earmark = earmarks.by(id: earmarkId) {
+      return earmark.instrument
+    }
+    return positionsHostCurrency
+  }
+
   @ViewBuilder
   private func transactionRow(for entry: TransactionWithBalance) -> some View {
     TransactionRowView(
       transaction: entry.transaction, accounts: accounts,
       categories: categories, earmarks: earmarks, displayAmounts: entry.displayAmounts,
-      balance: entry.balance, hideEarmark: filter.earmarkId != nil,
-      viewingAccountId: filter.accountId
+      balance: entry.balance, scopeReferenceInstrument: scopeReferenceInstrument,
+      hideEarmark: filter.earmarkId != nil, viewingAccountId: filter.accountId
     )
     .tag(entry.transaction)
     .accessibilityIdentifier(

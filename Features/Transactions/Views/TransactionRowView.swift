@@ -9,6 +9,7 @@ struct TransactionRowView: View {
   let earmarks: Earmarks
   let displayAmounts: [InstrumentAmount]
   let balance: InstrumentAmount?
+  let scopeReferenceInstrument: Instrument
   var hideEarmark: Bool = false
   var viewingAccountId: UUID?
 
@@ -35,7 +36,7 @@ struct TransactionRowView: View {
 
   private var infoColumn: some View {
     VStack(alignment: .leading, spacing: 2) {
-      Text(displayPayee).lineLimit(1)
+      Text(titleText).lineLimit(1)
       metadataRow
     }
   }
@@ -95,13 +96,14 @@ struct TransactionRowView: View {
     }
     if let balance {
       return
-        "\(typeStr), \(displayPayee), \(amountStr), \(dateStr), balance \(balance.formatted)"
+        "\(typeStr), \(titleText), \(amountStr), \(dateStr), balance \(balance.formatted)"
     } else {
-      return "\(typeStr), \(displayPayee), \(amountStr), \(dateStr)"
+      return "\(typeStr), \(titleText), \(amountStr), \(dateStr)"
     }
   }
 
   private var iconName: String {
+    if transaction.isTrade { return "arrow.up.arrow.down" }
     guard transaction.isSimple, let type = transaction.legs.first?.type else {
       return "arrow.trianglehead.branch"
     }
@@ -110,11 +112,12 @@ struct TransactionRowView: View {
     case .expense: return "arrow.down"
     case .transfer: return "arrow.left.arrow.right"
     case .openingBalance: return "flag.fill"
-    case .trade: return "chart.line.uptrend.xyaxis"
+    case .trade: return "arrow.up.arrow.down"
     }
   }
 
   private var iconColor: Color {
+    if transaction.isTrade { return .indigo }
     guard transaction.isSimple, let type = transaction.legs.first?.type else {
       return .purple
     }
@@ -123,7 +126,7 @@ struct TransactionRowView: View {
     case .expense: return .red
     case .transfer: return .blue
     case .openingBalance: return .orange
-    case .trade: return .purple
+    case .trade: return .indigo
     }
   }
 
@@ -148,6 +151,14 @@ struct TransactionRowView: View {
   private var displayPayee: String {
     transaction.displayPayee(
       viewingAccountId: viewingAccountId, accounts: accounts, earmarks: earmarks)
+  }
+
+  private var titleText: String {
+    let payee = displayPayee
+    if let sentence = transaction.tradeTitleSentence(scopeReference: scopeReferenceInstrument) {
+      return payee.isEmpty ? sentence : "\(payee) (\(sentence))"
+    }
+    return payee
   }
 }
 
@@ -272,6 +283,7 @@ private func previewRow(
   legs: [TransactionLeg],
   displayAmounts: [InstrumentAmount],
   balance: Decimal,
+  scopeReferenceInstrument: Instrument = .AUD,
   viewingAccountId: UUID? = nil
 ) -> TransactionRowView {
   TransactionRowView(
@@ -279,6 +291,7 @@ private func previewRow(
     accounts: data.accounts, categories: data.categories, earmarks: data.earmarks,
     displayAmounts: displayAmounts,
     balance: InstrumentAmount(quantity: balance, instrument: .AUD),
+    scopeReferenceInstrument: scopeReferenceInstrument,
     viewingAccountId: viewingAccountId)
 }
 
