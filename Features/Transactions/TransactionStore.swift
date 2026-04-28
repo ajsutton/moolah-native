@@ -326,8 +326,16 @@ final class TransactionStore {
     }
   }
 
-  // MARK: - Balance Computation
+}
 
+// MARK: - Balance Computation
+//
+// Lives in an extension so the recompute body — which carries a cancellation
+// guard around the `withRunningBalances` await (see #530) — doesn't push the
+// main type past its `type_body_length` budget. Same file, so `private`
+// members of `TransactionStore` remain reachable.
+
+extension TransactionStore {
   private func recomputeBalances() async {
     // Re-sort newest-first to account for newly inserted/updated transactions
     rawTransactions.sort { lhs, rhs in
@@ -342,6 +350,10 @@ final class TransactionStore {
       targetInstrument: currentTargetInstrument,
       conversionService: conversionService
     )
+    // If a newer load has already superseded us while the rate prefetch was
+    // in flight, drop the result so we don't overwrite that load's rows.
+    // Sibling of the generation guard in `fetchPage`. See #530.
+    if Task.isCancelled { return }
     transactions = result.rows
     // Surface conversion failures so the user sees a retryable error state
     // rather than silently blanked balances. Per Rule 11 of
