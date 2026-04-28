@@ -58,6 +58,14 @@ fileGroups:
   - justfile
   - project.yml
 
+packages:
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    # Pinned to an exact version. Moolah.xcodeproj is gitignored, so
+    # Package.resolved isn't tracked; pinning here is the substitute.
+    # Bump deliberately when we want to take a new release.
+    exactVersion: 7.10.0
+
 targets:
   Moolah_iOS:
     type: application
@@ -74,6 +82,7 @@ targets:
       - path: UITestSupport
     dependencies:
       - sdk: AppIntents.framework
+      - package: GRDB
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: rocks.moolah.app
@@ -116,6 +125,7 @@ targets:
       - path: UITestSupport
     dependencies:
       - sdk: AppIntents.framework
+      - package: GRDB
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: rocks.moolah.app
@@ -152,6 +162,7 @@ targets:
         BUNDLE_LOADER: "$(TEST_HOST)"
     dependencies:
       - target: Moolah_iOS
+      - package: GRDB
 
   MoolahTests_macOS:
     type: bundle.unit-test
@@ -170,6 +181,7 @@ targets:
         BUNDLE_LOADER: "$(TEST_HOST)"
     dependencies:
       - target: Moolah_macOS
+      - package: GRDB
 
   MoolahBenchmarks_macOS:
     type: bundle.unit-test
@@ -189,6 +201,7 @@ targets:
         BUNDLE_LOADER: "$(TEST_HOST)"
     dependencies:
       - target: Moolah_macOS
+      - package: GRDB
 
   MoolahUITests_macOS:
     type: bundle.ui-testing
