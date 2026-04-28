@@ -12,16 +12,14 @@ struct EditAccountView: View {
 
   let account: Account
   let accountStore: AccountStore
-  let supportsComplexTransactions: Bool
 
   private enum Field: Hashable {
     case name
   }
 
-  init(account: Account, accountStore: AccountStore, supportsComplexTransactions: Bool = false) {
+  init(account: Account, accountStore: AccountStore) {
     self.account = account
     self.accountStore = accountStore
-    self.supportsComplexTransactions = supportsComplexTransactions
     _name = State(initialValue: account.name)
     _type = State(initialValue: account.type)
     _currency = State(initialValue: account.instrument)
@@ -77,9 +75,7 @@ struct EditAccountView: View {
           Text(type.displayName).tag(type)
         }
       }
-      if supportsComplexTransactions {
-        InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
-      }
+      InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
       Toggle("Hidden", isOn: $isHidden)
         .disabled(!accountStore.canDelete(account.id))
         .accessibilityHint(
@@ -102,9 +98,7 @@ struct EditAccountView: View {
     var updated = account
     updated.name = name.trimmingCharacters(in: .whitespaces)
     updated.type = type
-    if supportsComplexTransactions {
-      updated.instrument = currency
-    }
+    updated.instrument = currency
     updated.isHidden = isHidden
 
     do {
@@ -126,6 +120,5 @@ struct EditAccountView: View {
 
   EditAccountView(
     account: Account(name: "Checking", type: .bank, instrument: .AUD),
-    accountStore: accountStore,
-    supportsComplexTransactions: true)
+    accountStore: accountStore)
 }

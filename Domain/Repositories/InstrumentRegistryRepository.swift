@@ -1,12 +1,10 @@
 // Domain/Repositories/InstrumentRegistryRepository.swift
 import Foundation
 
-/// The authoritative source of instruments visible to a CloudKit-backed
-/// profile. Stock and crypto instruments are stored in the profile's
-/// CloudKit-synced `InstrumentRecord` table; fiat instruments are ambient
-/// and synthesized from `Locale.Currency.isoCurrencies`. Remote /
-/// moolah-server profiles do not have a registry — they are single-instrument
-/// by design.
+/// The authoritative source of instruments visible to a profile. Stock and
+/// crypto instruments are stored in the profile's CloudKit-synced
+/// `InstrumentRecord` table; fiat instruments are ambient and synthesized
+/// from `Locale.Currency.isoCurrencies`.
 protocol InstrumentRegistryRepository: Sendable {
   /// Every instrument visible to the profile: stock + crypto rows from the
   /// database, merged with the ambient fiat ISO list from

@@ -535,7 +535,6 @@ In `App/MoolahApp.swift`, update the `ProfileStore` construction in `init()` to 
 
 ```swift
 let store = ProfileStore(
-  validator: RemoteServerValidator(),
   containerManager: setup.manager,
   syncCoordinator: coordinator
 )
@@ -924,7 +923,6 @@ struct ProfileStoreAutoActivateGuardTests {
   private func seededCloudProfile(_ container: ProfileContainerManager) -> Profile {
     let profile = Profile(
       label: "Household",
-      backendType: .cloudKit,
       currencyCode: "AUD",
       financialYearStartMonth: 7
     )
@@ -1918,8 +1916,8 @@ struct ICloudProfilePickerView: View {
 #Preview("Two profiles") {
   ICloudProfilePickerView(
     profiles: [
-      Profile(label: "Household", backendType: .cloudKit, currencyCode: "AUD"),
-      Profile(label: "Side business", backendType: .cloudKit, currencyCode: "AUD"),
+      Profile(label: "Household", currencyCode: "AUD"),
+      Profile(label: "Side business", currencyCode: "AUD"),
     ],
     accountCounts: [:],
     selectAction: { _ in },
@@ -1929,8 +1927,8 @@ struct ICloudProfilePickerView: View {
 }
 
 #Preview("With counts — dark") {
-  let p1 = Profile(label: "Household", backendType: .cloudKit, currencyCode: "AUD")
-  let p2 = Profile(label: "Side business", backendType: .cloudKit, currencyCode: "AUD")
+  let p1 = Profile(label: "Household", currencyCode: "AUD")
+  let p2 = Profile(label: "Side business", currencyCode: "AUD")
   ICloudProfilePickerView(
     profiles: [p1, p2],
     accountCounts: [p1.id: 12, p2.id: 3],
@@ -1942,7 +1940,7 @@ struct ICloudProfilePickerView: View {
 }
 
 #Preview("AX5") {
-  let p1 = Profile(label: "Household", backendType: .cloudKit, currencyCode: "AUD")
+  let p1 = Profile(label: "Household", currencyCode: "AUD")
   ICloudProfilePickerView(
     profiles: [p1],
     accountCounts: [p1.id: 12],
@@ -2323,7 +2321,6 @@ struct WelcomeView: View {
     }
     let profile = Profile(
       label: trimmedName,
-      backendType: .cloudKit,
       currencyCode: currencyCode,
       financialYearStartMonth: financialYearStartMonth
     )

@@ -12,16 +12,14 @@ struct CreateAccountScreen {
   let app: MoolahApp
 
   /// Driver for the currency field — the `InstrumentPickerField` inside
-  /// `CreateAccountView`. Only rendered when the profile supports complex
-  /// transactions (i.e. CloudKit backend).
+  /// `CreateAccountView`.
   var currency: InstrumentPickerFieldDriver { InstrumentPickerFieldDriver(app: app) }
 
   // MARK: - Actions
 
   /// Taps the "New Account" toolbar button in the sidebar to present
   /// `CreateAccountView`. Returns once the sheet's currency field is
-  /// visible in the accessibility tree, confirming the form rendered with
-  /// `supportsComplexTransactions == true`.
+  /// visible in the accessibility tree.
   func open(initialCurrencyId: String) {
     Trace.record(#function, detail: "initialCurrencyId=\(initialCurrencyId)")
     let button = app.element(for: UITestIdentifiers.Sidebar.newAccountButton)

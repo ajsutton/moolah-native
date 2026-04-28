@@ -130,7 +130,7 @@ actor DataExporter {
   }
 
   /// Wraps `body` in a signpost region and maps any thrown error to
-  /// `MigrationError.exportFailed(step:)`. Keeps per-stage instrumentation
+  /// `ExportError.exportFailed(step:)`. Keeps per-stage instrumentation
   /// out of the main `export` function so it remains readable.
   private func runStage<Value: Sendable>(
     _ step: String,
@@ -143,7 +143,7 @@ actor DataExporter {
     do {
       return try await body()
     } catch {
-      throw MigrationError.exportFailed(step: step, underlying: error)
+      throw ExportError.exportFailed(step: step, underlying: error)
     }
   }
 

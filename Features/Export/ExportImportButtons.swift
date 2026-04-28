@@ -50,7 +50,7 @@
         stageLabel: ActiveExport.stageLabel(for: "starting"))
       defer { session.activeExport = nil }
 
-      let coordinator = MigrationCoordinator()
+      let coordinator = ExportCoordinator()
       do {
         try await coordinator.exportToFile(
           url: url,
@@ -82,38 +82,16 @@
 
       guard await panel.beginSheetModal(for: window) == .OK, let url = panel.url else { return }
 
-      let jsonData: Data
-      let exported: ExportedData
       do {
-        jsonData = try Data(contentsOf: url)
-        exported = try JSONDecoder.exportDecoder.decode(ExportedData.self, from: jsonData)
-      } catch {
-        let alert = NSAlert(error: error)
-        await alert.beginSheetModal(for: window)
-        return
-      }
-
-      let newProfile = Profile(
-        label: exported.profileLabel,
-        backendType: .cloudKit,
-        currencyCode: exported.currencyCode,
-        financialYearStartMonth: exported.financialYearStartMonth
-      )
-      profileStore.addProfile(newProfile)
-
-      do {
-        let container = try containerManager.container(for: newProfile.id)
-        let coordinator = MigrationCoordinator()
-        _ = try await coordinator.importFromFile(
+        let coordinator = ExportCoordinator()
+        let newProfileId = try await coordinator.importNewProfileFromFile(
           url: url,
-          modelContainer: container,
-          profileId: newProfile.id,
+          profileStore: profileStore,
+          containerManager: containerManager,
           syncCoordinator: syncCoordinator
         )
-        openWindow(value: newProfile.id)
+        openWindow(value: newProfileId)
       } catch {
-        containerManager.deleteStore(for: newProfile.id)
-        profileStore.removeProfile(newProfile.id)
         let alert = NSAlert(error: error)
         await alert.beginSheetModal(for: window)
       }

@@ -2,7 +2,6 @@ import SwiftUI
 
 struct CreateEarmarkSheet: View {
   let instrument: Instrument
-  let supportsComplexTransactions: Bool
   let onCreate: (Earmark) -> Void
 
   @State private var name: String = ""
@@ -16,17 +15,11 @@ struct CreateEarmarkSheet: View {
 
   init(
     instrument: Instrument,
-    supportsComplexTransactions: Bool = false,
     onCreate: @escaping (Earmark) -> Void
   ) {
     self.instrument = instrument
-    self.supportsComplexTransactions = supportsComplexTransactions
     self.onCreate = onCreate
     _currency = State(initialValue: instrument)
-  }
-
-  private var selectedInstrument: Instrument {
-    supportsComplexTransactions ? currency : instrument
   }
 
   var body: some View {
@@ -43,13 +36,11 @@ struct CreateEarmarkSheet: View {
       Section("Details") {
         TextField("Name", text: $name)
           .accessibilityLabel("Earmark name")
-        if supportsComplexTransactions {
-          InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
-        }
+        InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
       }
       Section("Savings Goal") {
         HStack {
-          Text(selectedInstrument.displayLabel)
+          Text(currency.displayLabel)
             .foregroundStyle(.secondary)
           TextField("Amount", text: $savingsGoal)
             .monospacedDigit()
@@ -81,7 +72,7 @@ struct CreateEarmarkSheet: View {
   }
 
   private func createEarmark() {
-    let selected = selectedInstrument
+    let selected = currency
     let goalQty = InstrumentAmount.parseQuantity(from: savingsGoal, decimals: selected.decimals)
     let goal =
       goalQty.flatMap { $0 > 0 ? InstrumentAmount(quantity: $0, instrument: selected) : nil }
@@ -97,10 +88,9 @@ struct CreateEarmarkSheet: View {
   }
 }
 
-#Preview("Create — complex transactions") {
+#Preview("Create Earmark") {
   CreateEarmarkSheet(
     instrument: .AUD,
-    supportsComplexTransactions: true,
     onCreate: { _ in }
   )
 }

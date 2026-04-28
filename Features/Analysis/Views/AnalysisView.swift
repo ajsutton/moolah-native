@@ -37,8 +37,7 @@ struct AnalysisView: View {
       categories: categoryStore.categories,
       earmarks: earmarkStore.earmarks,
       transactionStore: transactionStore,
-      showRecurrence: true,
-      supportsComplexTransactions: session.profile.supportsComplexTransactions
+      showRecurrence: true
     )
     .profileNavigationTitle("Analysis")
     .focusedSceneValue(\.newTransactionAction, createNewScheduledTransaction)

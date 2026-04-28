@@ -21,10 +21,9 @@
       return sessionManager.sessions.values.first
     }
 
-    /// The Crypto Tokens tab's session, taken strictly from the *active*
-    /// profile's session — not any open session — so switching to a
-    /// Remote/moolah active profile correctly hides crypto settings even
-    /// when a CloudKit session is still open in another profile's window.
+    /// Crypto settings must track the *active* profile's session, not any
+    /// open session, so switching to a different profile correctly hides
+    /// its token list even when another session is still open.
     /// Returned in full (rather than narrowed to just the
     /// `CryptoTokenStore`) so the tab can also inject the session into
     /// the SwiftUI environment for the embedded `AddTokenSheet`'s picker

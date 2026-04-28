@@ -16,7 +16,6 @@ struct CreateAccountView: View {
 
   let instrument: Instrument
   let accountStore: AccountStore
-  let supportsComplexTransactions: Bool
 
   private enum Field: Hashable {
     case name
@@ -25,12 +24,10 @@ struct CreateAccountView: View {
 
   init(
     instrument: Instrument,
-    accountStore: AccountStore,
-    supportsComplexTransactions: Bool = false
+    accountStore: AccountStore
   ) {
     self.instrument = instrument
     self.accountStore = accountStore
-    self.supportsComplexTransactions = supportsComplexTransactions
     _currency = State(initialValue: instrument)
   }
 
@@ -87,9 +84,7 @@ struct CreateAccountView: View {
       }
     }
 
-    if supportsComplexTransactions {
-      InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
-    }
+    InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
 
     TextField(
       "Initial Balance", value: $balanceDecimal,
@@ -116,9 +111,7 @@ struct CreateAccountView: View {
     isSubmitting = true
     errorMessage = nil
 
-    let selectedInstrument =
-      supportsComplexTransactions
-      ? currency : instrument
+    let selectedInstrument = currency
     let openingBalance = InstrumentAmount(quantity: balanceDecimal, instrument: selectedInstrument)
     let newAccount = Account(
       id: UUID(),
@@ -146,6 +139,5 @@ struct CreateAccountView: View {
     targetInstrument: .AUD)
 
   CreateAccountView(
-    instrument: .AUD, accountStore: accountStore,
-    supportsComplexTransactions: true)
+    instrument: .AUD, accountStore: accountStore)
 }

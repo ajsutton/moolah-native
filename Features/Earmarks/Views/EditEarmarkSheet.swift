@@ -2,7 +2,6 @@ import SwiftUI
 
 struct EditEarmarkSheet: View {
   let earmark: Earmark
-  let supportsComplexTransactions: Bool
   let onUpdate: (Earmark) -> Void
 
   @State private var name: String
@@ -16,11 +15,9 @@ struct EditEarmarkSheet: View {
 
   init(
     earmark: Earmark,
-    supportsComplexTransactions: Bool = false,
     onUpdate: @escaping (Earmark) -> Void
   ) {
     self.earmark = earmark
-    self.supportsComplexTransactions = supportsComplexTransactions
     self.onUpdate = onUpdate
     _name = State(initialValue: earmark.name)
     _currency = State(initialValue: earmark.instrument)
@@ -33,10 +30,6 @@ struct EditEarmarkSheet: View {
     _useDateRange = State(
       initialValue: earmark.savingsStartDate != nil || earmark.savingsEndDate != nil)
     _isHidden = State(initialValue: earmark.isHidden)
-  }
-
-  private var selectedInstrument: Instrument {
-    supportsComplexTransactions ? currency : earmark.instrument
   }
 
   var body: some View {
@@ -53,20 +46,13 @@ struct EditEarmarkSheet: View {
       Section("Details") {
         TextField("Name", text: $name)
           .accessibilityLabel("Earmark name")
-        if supportsComplexTransactions {
-          InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
-        } else {
-          LabeledContent("Currency") {
-            Text(earmark.instrument.displayLabel)
-              .foregroundStyle(.secondary)
-          }
-        }
+        InstrumentPickerField(label: "Currency", kinds: [.fiatCurrency], selection: $currency)
         Toggle("Hidden", isOn: $isHidden)
       }
 
       Section("Savings Goal") {
         HStack {
-          Text(selectedInstrument.displayLabel)
+          Text(currency.displayLabel)
             .foregroundStyle(.secondary)
           TextField("Amount", text: $savingsGoal)
             .monospacedDigit()
@@ -98,7 +84,7 @@ struct EditEarmarkSheet: View {
   }
 
   private func saveChanges() {
-    let selected = selectedInstrument
+    let selected = currency
     let goalQty = InstrumentAmount.parseQuantity(
       from: savingsGoal, decimals: selected.decimals)
     let goal =
@@ -108,9 +94,7 @@ struct EditEarmarkSheet: View {
 
     var updated = earmark
     updated.name = name
-    if supportsComplexTransactions {
-      updated.instrument = selected
-    }
+    updated.instrument = selected
     updated.savingsGoal = goal
     updated.savingsStartDate = useDateRange ? startDate : nil
     updated.savingsEndDate = useDateRange ? endDate : nil
@@ -120,14 +104,13 @@ struct EditEarmarkSheet: View {
   }
 }
 
-#Preview("Edit — complex transactions") {
+#Preview("Edit Earmark") {
   EditEarmarkSheet(
     earmark: Earmark(
       name: "US Travel",
       instrument: .USD,
       savingsGoal: InstrumentAmount(quantity: 5000, instrument: .USD)
     ),
-    supportsComplexTransactions: true,
     onUpdate: { _ in }
   )
 }

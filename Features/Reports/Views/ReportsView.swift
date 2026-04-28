@@ -111,8 +111,7 @@ struct ReportsView: View {
       accounts: accounts,
       categories: categories,
       earmarks: earmarks,
-      transactionStore: transactionStore,
-      supportsComplexTransactions: session.profile.supportsComplexTransactions)
+      transactionStore: transactionStore)
   }
 
   /// Stable identity for the `.task(id:)` trigger — re-running the load
@@ -210,7 +209,7 @@ private func seedReportsPreview(
     Category(id: ids.rentId, name: "Rent"),
   ])
   let account = Account(name: "Checking", type: .bank, instrument: .AUD)
-  let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
+  let session = ProfileSession(profile: Profile(label: "Preview"))
   return ReportsView(
     reportingStore: reportingStore,
     categories: categories,

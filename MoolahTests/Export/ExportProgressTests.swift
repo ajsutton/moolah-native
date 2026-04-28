@@ -3,7 +3,7 @@ import Testing
 
 @testable import Moolah
 
-/// Verifies `MigrationCoordinator.exportToFile` emits progress stages
+/// Verifies `ExportCoordinator.exportToFile` emits progress stages
 /// through its `progress:` callback so the UI can render a live indicator
 /// (see issue #359). Kept in a dedicated suite so the main integration-test
 /// file stays within the SwiftLint length thresholds.
@@ -54,7 +54,6 @@ struct ExportProgressTests {
 
     let profile = Profile(
       label: "Progress Test",
-      backendType: .cloudKit,
       currencyCode: instrument.id,
       financialYearStartMonth: 7
     )
@@ -63,7 +62,7 @@ struct ExportProgressTests {
       var steps: [String] = []
     }
     let collector = StepCollector()
-    let coordinator = MigrationCoordinator()
+    let coordinator = ExportCoordinator()
     try await coordinator.exportToFile(
       url: tempURL,
       backend: backend,

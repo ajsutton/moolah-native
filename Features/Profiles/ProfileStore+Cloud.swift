@@ -2,7 +2,7 @@ import CloudKit
 import Foundation
 import SwiftData
 
-// Cloud-profile loading, server/iCloud validation helpers, and UserDefaults
+// Cloud-profile loading, iCloud validation helpers, and UserDefaults
 // persistence extracted from the main `ProfileStore` body so it stays under
 // SwiftLint's `type_body_length` threshold. All members execute on the main
 // actor (`ProfileStore` is `@MainActor`).
@@ -17,15 +17,15 @@ extension ProfileStore {
       sortBy: [SortDescriptor(\.createdAt)]
     )
     do {
-      let previousCloudProfiles = cloudProfiles
+      let previousCloudProfiles = profiles
       let records = try context.fetch(descriptor)
-      cloudProfiles = records.map { $0.toProfile() }
-      logger.debug("Loaded \(self.cloudProfiles.count) cloud profiles")
+      profiles = records.map { $0.toProfile() }
+      logger.debug("Loaded \(self.profiles.count) cloud profiles")
 
       // If this load produced cloud profiles, any pending retry is now
       // redundant — cancel it so we don't do unnecessary work after the
       // store is ready.
-      if !cloudProfiles.isEmpty {
+      if !profiles.isEmpty {
         cancelPendingRetry()
       }
 
@@ -55,7 +55,7 @@ extension ProfileStore {
       // Skip this on initial load — SwiftData with CloudKit may return empty results
       // before the store is fully ready, which would incorrectly reset the active profile.
       if !isInitialLoad {
-        let newIDs = Set(cloudProfiles.map(\.id))
+        let newIDs = Set(profiles.map(\.id))
         for oldProfile in previousCloudProfiles where !newIDs.contains(oldProfile.id) {
           logger.info(
             "Cloud profile \(oldProfile.id) was removed remotely — cleaning up local store")
@@ -104,37 +104,14 @@ extension ProfileStore {
     }
   }
 
-  func validateServer(url: URL) async -> Bool {
-    guard let validator else { return true }
-    isValidating = true
-    validationError = nil
-    defer { isValidating = false }
-
-    do {
-      try await validator.validate(url: url)
-      return true
-    } catch let error as BackendError {
-      if case .validationFailed(let message) = error {
-        validationError = message
-      } else {
-        validationError = "Could not connect to server"
-      }
-      return false
-    } catch {
-      validationError = "Could not connect to server"
-      return false
-    }
-  }
-
   // MARK: - Retry scheduling
 
   /// If the initial load returned no cloud profiles but we expect some (saved activeProfileID
   /// doesn't match any remote profile), retry once after a short delay. SwiftData with CloudKit
   /// may not have its store ready on the first synchronous fetch.
   func scheduleRetryIfNeeded() {
-    guard cloudProfiles.isEmpty,
-      let activeProfileID,
-      !remoteProfiles.contains(where: { $0.id == activeProfileID })
+    guard profiles.isEmpty,
+      activeProfileID != nil
     else { return }
 
     // Cancel any existing retry before starting a new one so we never run
@@ -145,7 +122,7 @@ extension ProfileStore {
     logger.debug("Cloud profiles empty on initial load, scheduling retry")
     retryTask = Task { @MainActor [weak self] in
       try? await Task.sleep(for: .seconds(1))
-      guard !Task.isCancelled, let self, self.cloudProfiles.isEmpty else {
+      guard !Task.isCancelled, let self, self.profiles.isEmpty else {
         self?.isCloudLoadPending = false
         self?.retryTask = nil
         return
@@ -170,16 +147,6 @@ extension ProfileStore {
   // MARK: - Persistence
 
   func loadFromDefaults() {
-    if let data = defaults.data(forKey: Self.profilesKey) {
-      do {
-        remoteProfiles = try JSONDecoder().decode([Profile].self, from: data)
-        logger.debug("Loaded \(self.remoteProfiles.count) remote profiles from defaults")
-      } catch {
-        logger.error("Failed to decode profiles: \(error.localizedDescription)")
-        remoteProfiles = []
-      }
-    }
-
     let savedIDString = defaults.string(forKey: Self.activeProfileKey)
     if let idString = savedIDString,
       let id = UUID(uuidString: idString)
@@ -193,15 +160,6 @@ extension ProfileStore {
       logger.debug(
         "No saved active profile (saved=\(savedIDString ?? "nil"))"
       )
-    }
-  }
-
-  func saveToDefaults() {
-    do {
-      let data = try JSONEncoder().encode(remoteProfiles)
-      defaults.set(data, forKey: Self.profilesKey)
-    } catch {
-      logger.error("Failed to encode profiles: \(error.localizedDescription)")
     }
   }
 

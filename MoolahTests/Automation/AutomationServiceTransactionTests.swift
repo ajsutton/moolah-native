@@ -11,7 +11,6 @@ struct AutomationServiceTransactionTests {
     let sessionManager = SessionManager(containerManager: containerManager)
     let profile = Profile(
       label: "Test",
-      backendType: .cloudKit,
       currencyCode: "AUD",
       financialYearStartMonth: 7
     )

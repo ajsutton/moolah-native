@@ -2,9 +2,7 @@
 
 A universal personal finance app for iPhone and Mac. Tracks accounts, transactions,
 categories, earmarks (savings goals), scheduled payments, and provides analysis and
-reporting. Supports two backend modes: iCloud/CloudKit for local-first sync across
-devices, and the [ajsutton/moolah-server](https://github.com/ajsutton/moolah-server)
-REST API at `https://moolah.rocks/api/`.
+reporting. Data syncs across devices via iCloud/CloudKit — no server component required.
 
 ## Requirements
 
@@ -66,21 +64,6 @@ xcodebuild test -scheme Moolah -destination "platform=iOS Simulator,name=iPhone 
 xcodebuild test -scheme Moolah -destination "platform=macOS"
 ```
 
-## Sign-in with the REST backend
-
-The app connects to **`https://moolah.rocks/api/`** and authenticates via Google
-OAuth. Sign-in opens an in-app browser (`ASWebAuthenticationSession`) — the user
-never leaves the app.
-
-### Sign-in flow
-
-1. Launch the app.
-2. Tap **Sign in with Google** on the Welcome screen.
-3. An in-app browser opens the server's Google sign-in page.
-4. Sign in with your Google account.
-5. After signing in you'll see the moolah.rocks web app inside the browser; tap
-   **Cancel** to return to the native app — you'll be signed in.
-
 ## Project Structure
 
 ```
@@ -90,10 +73,7 @@ moolah-native/
 │   ├── Models/             # Plain Swift structs: UserProfile, Account, Transaction, …
 │   └── Repositories/       # Protocol definitions only — no backend imports
 ├── Backends/
-│   ├── CloudKit/           # iCloud/CloudKit backend (SwiftData, local-first sync)
-│   └── Remote/             # REST API backend (URLSession, DTOs, concrete repos)
-│       ├── APIClient/      # URLSession wrapper with HTTP error mapping
-│       └── Auth/           # RemoteAuthProvider (Google OAuth via ASWebAuthenticationSession)
+│   └── CloudKit/           # iCloud/CloudKit backend (SwiftData, local-first sync)
 ├── Features/               # One folder per screen/feature
 │   ├── Auth/               # AuthStore, AppRootView, WelcomeView, UserMenuView
 │   └── …
@@ -124,20 +104,16 @@ The app uses a **repository pattern** to decouple features from any specific bac
 ```
 Views / Stores  →  Repository protocols  →  Backend implementations
                    (Domain layer)            CloudKit (SwiftData + iCloud sync)
-                                             Remote (URLSession + cookies)
 ```
 
 - **Domain models** (`UserProfile`, `Account`, `Transaction`, etc.) are plain Swift
   structs in the `Domain` module. Features only ever see these types.
 - **Repository protocols** (`AuthProvider`, `AccountRepository`, ...) express
   operations in domain terms — no networking or persistence imports.
-- **`BackendProvider`** is the single injection point via `@Environment`. Swap the
-  backend at the composition root (`MoolahApp.swift`) without touching feature code.
+- **`BackendProvider`** is the single injection point via `@Environment`. All profiles
+  use CloudKit (iCloud) for storage and sync — no server component required.
 - **`InMemoryBackend`** (test target only) is a full in-memory implementation used in
   all tests. It is never compiled into the app binary.
-
-Users choose their backend when creating a profile: iCloud (CloudKit), Moolah server,
-or a custom server URL.
 
 ## Code Signing
 

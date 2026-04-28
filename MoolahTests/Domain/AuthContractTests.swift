@@ -3,8 +3,8 @@ import Testing
 @testable import Moolah
 
 /// Contract tests that every AuthProvider implementation must satisfy.
-/// Both InMemoryAuthProvider and RemoteAuthProvider must pass these tests
-/// to prove substitutability per the architecture contract.
+/// InMemoryAuthProvider must pass these tests to prove substitutability
+/// per the architecture contract.
 @Suite("AuthProvider contract")
 enum AuthContractTests {
   // MARK: - InMemoryAuthProvider

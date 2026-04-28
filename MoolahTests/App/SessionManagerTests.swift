@@ -11,11 +11,8 @@ struct SessionManagerTests {
     return SessionManager(containerManager: containerManager)
   }
 
-  private func makeProfile(
-    label: String = "Test",
-    url: String = "https://moolah.rocks/api/"
-  ) -> Profile {
-    Profile(label: label, serverURL: makeURL(url))
+  private func makeProfile(label: String = "Test") -> Profile {
+    Profile(label: label)
   }
 
   @Test("session(for:) creates a new session for unknown profile")
@@ -70,8 +67,8 @@ struct SessionManagerTests {
   @Test("multiple profiles get independent sessions")
   func independentSessions() throws {
     let manager = try makeManager()
-    let profile1 = makeProfile(label: "One", url: "https://one.com/api/")
-    let profile2 = makeProfile(label: "Two", url: "https://two.com/api/")
+    let profile1 = makeProfile(label: "One")
+    let profile2 = makeProfile(label: "Two")
 
     let session1 = manager.session(for: profile1)
     let session2 = manager.session(for: profile2)

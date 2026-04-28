@@ -35,7 +35,7 @@ struct WelcomeView: View {
     let received = syncCoordinator.progress.recordsReceivedThisSession
     let state = WelcomeStateResolver.resolve(
       phase: phase,
-      cloudProfilesCount: profileStore.cloudProfiles.count,
+      profileCount: profileStore.profiles.count,
       iCloudAvailability: profileStore.iCloudAvailability,
       indexFetchedAtLeastOnce: syncCoordinator.profileIndexFetchedAtLeastOnce,
       bannerDismissed: bannerDismissed,
@@ -95,7 +95,7 @@ struct WelcomeView: View {
     case .autoActivateSingle:
       Color.clear
         .task {
-          guard let first = profileStore.cloudProfiles.first else { return }
+          guard let first = profileStore.profiles.first else { return }
           profileStore.setActiveProfile(first.id)
         }
     }
@@ -170,7 +170,7 @@ struct WelcomeView: View {
 
   private var pickerView: some View {
     ICloudProfilePickerView(
-      profiles: profileStore.cloudProfiles,
+      profiles: profileStore.profiles,
       accountCounts: [:],
       selectAction: { profile in profileStore.setActiveProfile(profile.id) },
       createNewAction: {
@@ -198,7 +198,6 @@ struct WelcomeView: View {
     }
     let profile = Profile(
       label: trimmedName,
-      backendType: .cloudKit,
       currencyCode: currency.id,
       financialYearStartMonth: financialYearStartMonth
     )
@@ -206,8 +205,8 @@ struct WelcomeView: View {
   }
 
   private func handleBannerPrimary() {
-    if profileStore.cloudProfiles.count == 1,
-      let first = profileStore.cloudProfiles.first
+    if profileStore.profiles.count == 1,
+      let first = profileStore.profiles.first
     {
       profileStore.setActiveProfile(first.id)
     } else {
@@ -240,7 +239,7 @@ struct WelcomeView: View {
   ) -> ICloudArrivalBanner.Kind {
     switch kind {
     case .singleArrived:
-      return .single(label: profileStore.cloudProfiles.first?.label ?? "profile")
+      return .single(label: profileStore.profiles.first?.label ?? "profile")
     case .multiArrived(let count):
       return .multiple(count: count)
     }

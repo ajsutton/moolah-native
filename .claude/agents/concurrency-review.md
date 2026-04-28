@@ -89,7 +89,6 @@ The only exception is scope the user has explicitly authorised in the conversati
 
 - **`@unchecked Sendable` on `CloudKitBackend`** is acceptable -- shared `ModelContainer` with `@MainActor`-isolated access in repositories.
 - **`nonisolated(unsafe)` on `URLProtocolStub.requestHandler`** is acceptable -- test-only, sequential execution.
-- **`Task.sleep` in `RemoteAuthProvider` OAuth polling** is acceptable -- unavoidable for OAuth redirect flow.
 - **Simple one-line `Task { await store.doThing() }` in button actions** is the correct view pattern -- do not flag.
 - **`.id()` on non-ForEach views** (e.g., detail panels) is fine -- the rule only applies to ForEach children.
 

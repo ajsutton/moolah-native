@@ -6,16 +6,14 @@ import Testing
 @Suite("ProfileSession")
 @MainActor
 struct ProfileSessionTests {
-  private func makeProfile(
-    label: String = "Test",
-    url: String = "https://moolah.rocks/api/"
-  ) -> Profile {
-    Profile(label: label, serverURL: makeURL(url))
+  private func makeProfile(label: String = "Test") -> Profile {
+    Profile(label: label)
   }
 
   @Test("session creates non-nil stores")
-  func createsStores() {
-    let session = ProfileSession(profile: makeProfile())
+  func createsStores() throws {
+    let containerManager = try ProfileContainerManager.forTesting()
+    let session = ProfileSession(profile: makeProfile(), containerManager: containerManager)
 
     #expect(session.authStore.state == .loading)
     #expect(session.accountStore.accounts.ordered.isEmpty)
@@ -26,26 +24,30 @@ struct ProfileSessionTests {
   }
 
   @Test("session ID matches profile ID")
-  func sessionIdMatchesProfile() {
+  func sessionIdMatchesProfile() throws {
+    let containerManager = try ProfileContainerManager.forTesting()
     let profile = makeProfile()
-    let session = ProfileSession(profile: profile)
+    let session = ProfileSession(profile: profile, containerManager: containerManager)
 
     #expect(session.id == profile.id)
   }
 
   @Test("two sessions for different profiles have independent backends")
-  func independentSessions() {
-    let session1 = ProfileSession(profile: makeProfile(label: "One", url: "https://one.com/api/"))
-    let session2 = ProfileSession(profile: makeProfile(label: "Two", url: "https://two.com/api/"))
+  func independentSessions() throws {
+    let containerManager1 = try ProfileContainerManager.forTesting()
+    let containerManager2 = try ProfileContainerManager.forTesting()
+    let session1 = ProfileSession(
+      profile: makeProfile(label: "One"), containerManager: containerManager1)
+    let session2 = ProfileSession(
+      profile: makeProfile(label: "Two"), containerManager: containerManager2)
 
-    // They should be separate instances
     #expect(session1.id != session2.id)
-    #expect(session1.profile.resolvedServerURL != session2.profile.resolvedServerURL)
   }
 
   @Test("onInvestmentValueChanged wiring connects investment store to account store")
-  func onInvestmentValueChangedWiring() {
-    let session = ProfileSession(profile: makeProfile())
+  func onInvestmentValueChangedWiring() throws {
+    let containerManager = try ProfileContainerManager.forTesting()
+    let session = ProfileSession(profile: makeProfile(), containerManager: containerManager)
 
     #expect(session.investmentStore.onInvestmentValueChanged != nil)
   }
@@ -57,10 +59,7 @@ struct ProfileSessionTests {
   @Test("CloudKit profile uses FullConversionService")
   func cloudKitProfileUsesFullConversionService() throws {
     let containerManager = try ProfileContainerManager.forTesting()
-    let profile = Profile(
-      label: "iCloud", backendType: .cloudKit,
-      currencyCode: "AUD", financialYearStartMonth: 7
-    )
+    let profile = Profile(label: "iCloud", currencyCode: "AUD", financialYearStartMonth: 7)
     let session = ProfileSession(profile: profile, containerManager: containerManager)
 
     #expect(session.backend.conversionService is FullConversionService)
@@ -69,10 +68,7 @@ struct ProfileSessionTests {
   @Test("CloudKit profile exposes cryptoTokenStore on session")
   func cloudKitProfileExposesCryptoTokenStore() throws {
     let containerManager = try ProfileContainerManager.forTesting()
-    let profile = Profile(
-      label: "iCloud", backendType: .cloudKit,
-      currencyCode: "AUD", financialYearStartMonth: 7
-    )
+    let profile = Profile(label: "iCloud", currencyCode: "AUD", financialYearStartMonth: 7)
     let session = ProfileSession(profile: profile, containerManager: containerManager)
 
     // Store exists and starts empty (registrations load on demand).

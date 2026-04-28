@@ -51,7 +51,6 @@ final class UITestSeedHydratorTests: XCTestCase {
       try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager))
 
     XCTAssertEqual(profile.id, UITestFixtures.TradeBaseline.profileId)
-    XCTAssertEqual(profile.backendType, .cloudKit)
     XCTAssertEqual(profile.currencyCode, UITestFixtures.TradeBaseline.profileCurrencyCode)
   }
 

@@ -90,12 +90,11 @@ struct ExportImportIntegrationTests {
 
     let profile = Profile(
       label: "Test Profile",
-      backendType: .cloudKit,
       currencyCode: instrument.id,
       financialYearStartMonth: 7
     )
 
-    let coordinator = MigrationCoordinator()
+    let coordinator = ExportCoordinator()
     try await coordinator.exportToFile(
       url: tempURL,
       backend: backend,
@@ -133,12 +132,11 @@ struct ExportImportIntegrationTests {
     // Export to file
     let profile = Profile(
       label: "Test Profile",
-      backendType: .cloudKit,
       currencyCode: instrument.id,
       financialYearStartMonth: 7
     )
 
-    let coordinator = MigrationCoordinator()
+    let coordinator = ExportCoordinator()
     try await coordinator.exportToFile(
       url: tempURL,
       backend: backend,

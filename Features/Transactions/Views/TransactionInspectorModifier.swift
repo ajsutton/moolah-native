@@ -13,7 +13,6 @@ struct TransactionInspectorModifier: ViewModifier {
   let transactionStore: TransactionStore
   var showRecurrence: Bool = false
   var viewingAccountId: UUID?
-  var supportsComplexTransactions: Bool = false
 
   private var isPresented: Binding<Bool> {
     Binding(
@@ -50,7 +49,6 @@ struct TransactionInspectorModifier: ViewModifier {
       transactionStore: transactionStore,
       showRecurrence: showRecurrence,
       viewingAccountId: viewingAccountId,
-      supportsComplexTransactions: supportsComplexTransactions,
       onUpdate: { updated in
         Task { await transactionStore.update(updated) }
         selectedTransaction = updated
@@ -97,7 +95,6 @@ struct OptionalTransactionInspector: ViewModifier {
   let transactionStore: TransactionStore
   var showRecurrence: Bool = false
   var viewingAccountId: UUID?
-  var supportsComplexTransactions: Bool = false
 
   func body(content: Content) -> some View {
     if enabled {
@@ -108,8 +105,7 @@ struct OptionalTransactionInspector: ViewModifier {
         earmarks: earmarks,
         transactionStore: transactionStore,
         showRecurrence: showRecurrence,
-        viewingAccountId: viewingAccountId,
-        supportsComplexTransactions: supportsComplexTransactions
+        viewingAccountId: viewingAccountId
       )
     } else {
       content
@@ -125,8 +121,7 @@ extension View {
     earmarks: Earmarks,
     transactionStore: TransactionStore,
     showRecurrence: Bool = false,
-    viewingAccountId: UUID? = nil,
-    supportsComplexTransactions: Bool = false
+    viewingAccountId: UUID? = nil
   ) -> some View {
     modifier(
       TransactionInspectorModifier(
@@ -136,8 +131,7 @@ extension View {
         earmarks: earmarks,
         transactionStore: transactionStore,
         showRecurrence: showRecurrence,
-        viewingAccountId: viewingAccountId,
-        supportsComplexTransactions: supportsComplexTransactions
+        viewingAccountId: viewingAccountId
       )
     )
   }

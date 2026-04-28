@@ -102,7 +102,7 @@ Production code paths and test code paths must be the same paths. The exceptions
 
 - A launch argument the test process passes explicitly (e.g. `--ui-testing`) and that the app reads exactly once at startup to swap a backend or seed deterministic data.
 - An environment variable read at the same single boundary (e.g. `UI_TESTING_SEED`).
-- A protocol-conforming test double injected at the dependency-injection boundary (`TestBackend` vs `RemoteBackend` via `BackendProvider`).
+- A protocol-conforming test double injected at the dependency-injection boundary (`TestBackend` via `BackendProvider`).
 
 **Banned:**
 

@@ -40,7 +40,7 @@
           let session = sessionManager.session(for: profile)
           SessionRootView(session: session)
             .environment(profileStore)
-            .onChange(of: profile.resolvedServerURL) { _, _ in
+            .onChange(of: profile.label) { _, _ in
               sessionManager.rebuildSession(for: profile)
             }
         } else if profileID != nil {

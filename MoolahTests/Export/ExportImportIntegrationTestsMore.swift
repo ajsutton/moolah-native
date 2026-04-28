@@ -89,9 +89,9 @@ struct ExportImportIntegrationTestsMore {
     try data.write(to: tempURL)
 
     let container = try TestModelContainer.create()
-    let coordinator = MigrationCoordinator()
+    let coordinator = ExportCoordinator()
 
-    await #expect(throws: MigrationError.self) {
+    await #expect(throws: ExportError.self) {
       _ = try await coordinator.importFromFile(url: tempURL, modelContainer: container)
     }
   }

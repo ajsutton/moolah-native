@@ -14,17 +14,16 @@ struct ProfileStoreTests {
     return defaults
   }
 
-  private func makeProfile(label: String = "Test", url: String = "https://moolah.rocks/api/")
-    -> Profile
-  {
-    Profile(label: label, serverURL: makeURL(url))
+  private func makeProfile(label: String = "Test") -> Profile {
+    Profile(label: label)
   }
 
   // MARK: - Add
 
   @Test("addProfile appends and sets first profile as active")
-  func addFirstProfile() {
-    let store = ProfileStore(defaults: makeDefaults())
+  func addFirstProfile() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
     let profile = makeProfile()
 
     store.addProfile(profile)
@@ -36,8 +35,9 @@ struct ProfileStoreTests {
   }
 
   @Test("addProfile does not change active when adding second profile")
-  func addSecondProfile() {
-    let store = ProfileStore(defaults: makeDefaults())
+  func addSecondProfile() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
     let first = makeProfile(label: "First")
     let second = makeProfile(label: "Second")
 
@@ -51,8 +51,9 @@ struct ProfileStoreTests {
   // MARK: - Remove
 
   @Test("removeProfile removes and switches active to next profile")
-  func removeActiveProfile() {
-    let store = ProfileStore(defaults: makeDefaults())
+  func removeActiveProfile() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
     let first = makeProfile(label: "First")
     let second = makeProfile(label: "Second")
 
@@ -64,37 +65,10 @@ struct ProfileStoreTests {
     #expect(store.activeProfileID == second.id)
   }
 
-  @Test("removeProfile clears keychain cookies for that profile")
-  func removeProfileClearsKeychain() throws {
-    let store = ProfileStore(defaults: makeDefaults())
-    let profile = makeProfile()
-    store.addProfile(profile)
-
-    // Save some cookies to the profile's keychain entry
-    let keychain = CookieKeychain(account: profile.id.uuidString)
-    let cookie = HTTPCookie(properties: [
-      .name: "session",
-      .value: "abc123",
-      .domain: "moolah.rocks",
-      .path: "/",
-    ])!
-    try keychain.save(cookies: [cookie])
-
-    // Verify cookies are stored
-    let before = try keychain.restore()
-    #expect(!before.isEmpty)
-
-    // Remove the profile — should clear keychain
-    store.removeProfile(profile.id)
-
-    // Verify cookies were cleared
-    let after = try keychain.restore()
-    #expect(after.isEmpty)
-  }
-
   @Test("removeProfile clears active when last profile removed")
-  func removeLastProfile() {
-    let store = ProfileStore(defaults: makeDefaults())
+  func removeLastProfile() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
     let profile = makeProfile()
 
     store.addProfile(profile)
@@ -108,8 +82,9 @@ struct ProfileStoreTests {
   // MARK: - Switch
 
   @Test("setActiveProfile switches to specified profile")
-  func switchProfile() {
-    let store = ProfileStore(defaults: makeDefaults())
+  func switchProfile() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
     let first = makeProfile(label: "First")
     let second = makeProfile(label: "Second")
 
@@ -121,8 +96,9 @@ struct ProfileStoreTests {
   }
 
   @Test("setActiveProfile ignores unknown profile ID")
-  func switchToUnknownProfile() {
-    let store = ProfileStore(defaults: makeDefaults())
+  func switchToUnknownProfile() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
     let profile = makeProfile()
 
     store.addProfile(profile)
@@ -134,8 +110,9 @@ struct ProfileStoreTests {
   // MARK: - Update
 
   @Test("updateProfile modifies the profile in place")
-  func updateProfile() {
-    let store = ProfileStore(defaults: makeDefaults())
+  func updateProfile() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
     var profile = makeProfile(label: "Old")
     store.addProfile(profile)
 
@@ -146,8 +123,9 @@ struct ProfileStoreTests {
   }
 
   @Test("updateProfile ignores unknown profile")
-  func updateUnknownProfile() {
-    let store = ProfileStore(defaults: makeDefaults())
+  func updateUnknownProfile() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
     let unknown = makeProfile(label: "Ghost")
 
     store.updateProfile(unknown)
@@ -157,41 +135,28 @@ struct ProfileStoreTests {
 
   // MARK: - Persistence
 
-  @Test("profiles persist across instances via UserDefaults")
-  func persistenceRoundTrip() {
-    let defaults = makeDefaults()
-    let profile = makeProfile(label: "Persisted")
-
-    let store1 = ProfileStore(defaults: defaults)
-    store1.addProfile(profile)
-
-    let store2 = ProfileStore(defaults: defaults)
-
-    #expect(store2.profiles.count == 1)
-    #expect(store2.profiles[0] == profile)
-    #expect(store2.activeProfileID == profile.id)
-  }
-
   @Test("active profile ID persists across instances")
-  func activeProfilePersists() {
+  func activeProfilePersists() throws {
     let defaults = makeDefaults()
+    let manager = try ProfileContainerManager.forTesting()
     let first = makeProfile(label: "First")
     let second = makeProfile(label: "Second")
 
-    let store1 = ProfileStore(defaults: defaults)
+    let store1 = ProfileStore(defaults: defaults, containerManager: manager)
     store1.addProfile(first)
     store1.addProfile(second)
     store1.setActiveProfile(second.id)
 
-    let store2 = ProfileStore(defaults: defaults)
+    let store2 = ProfileStore(defaults: defaults, containerManager: manager)
     #expect(store2.activeProfileID == second.id)
   }
 
   // MARK: - Empty state
 
   @Test("fresh store with no data has no profiles")
-  func emptyState() {
-    let store = ProfileStore(defaults: makeDefaults())
+  func emptyState() throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
 
     #expect(store.profiles.isEmpty)
     #expect(store.activeProfileID == nil)
@@ -201,49 +166,19 @@ struct ProfileStoreTests {
 
   // MARK: - Validation: Add
 
-  @Test("validateAndAddProfile adds profile when validation succeeds")
-  func validateAndAddSuccess() async {
-    let validator = InMemoryServerValidator()
-    let store = ProfileStore(defaults: makeDefaults(), validator: validator)
+  @Test("validateAndAddProfile adds profile when iCloud available")
+  func validateAndAddSuccess() async throws {
+    let manager = try ProfileContainerManager.forTesting()
+    let store = ProfileStore(defaults: makeDefaults(), containerManager: manager)
     let profile = makeProfile()
 
+    // In tests without CloudKit entitlements, validateiCloudAvailability returns true
+    // (the guard skips the account status check)
     let result = await store.validateAndAddProfile(profile)
 
     #expect(result == true)
     #expect(store.profiles.count == 1)
     #expect(store.profiles[0] == profile)
-    #expect(store.validationError == nil)
-  }
-
-  @Test("validateAndAddProfile does not add profile when validation fails")
-  func validateAndAddFailure() async {
-    let validator = InMemoryServerValidator()
-    validator.shouldSucceed = false
-    validator.errorMessage = "Could not connect to server"
-    let store = ProfileStore(defaults: makeDefaults(), validator: validator)
-    let profile = makeProfile()
-
-    let result = await store.validateAndAddProfile(profile)
-
-    #expect(result == false)
-    #expect(store.profiles.isEmpty)
-    #expect(store.validationError == "Could not connect to server")
-  }
-
-  @Test("validateAndAddProfile clears previous error on success")
-  func validateAndAddClearsPreviousError() async {
-    let validator = InMemoryServerValidator()
-    validator.shouldSucceed = false
-    let store = ProfileStore(defaults: makeDefaults(), validator: validator)
-    let profile = makeProfile()
-
-    _ = await store.validateAndAddProfile(profile)
-    #expect(store.validationError != nil)
-
-    validator.shouldSucceed = true
-    let result = await store.validateAndAddProfile(profile)
-
-    #expect(result == true)
     #expect(store.validationError == nil)
   }
 

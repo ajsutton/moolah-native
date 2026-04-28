@@ -79,7 +79,6 @@ struct MoolahApp: App {
     }
     let store = ProfileStore(
       defaults: storeDefaults,
-      validator: RemoteServerValidator(),
       containerManager: setup.manager,
       syncCoordinator: coordinator
     )

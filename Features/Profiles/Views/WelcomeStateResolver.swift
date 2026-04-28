@@ -21,7 +21,7 @@ enum WelcomeStateResolver {
 
   static func resolve(
     phase: ProfileStore.WelcomePhase,
-    cloudProfilesCount: Int,
+    profileCount: Int,
     iCloudAvailability: ICloudAvailability,
     indexFetchedAtLeastOnce: Bool,
     bannerDismissed: Bool,
@@ -34,13 +34,13 @@ enum WelcomeStateResolver {
 
     case .creating:
       return resolveCreating(
-        cloudProfilesCount: cloudProfilesCount,
+        profileCount: profileCount,
         bannerDismissed: bannerDismissed
       )
 
     case .landing:
       return resolveLanding(
-        cloudProfilesCount: cloudProfilesCount,
+        profileCount: profileCount,
         iCloudAvailability: iCloudAvailability,
         indexFetchedAtLeastOnce: indexFetchedAtLeastOnce,
         recordsReceivedThisSession: recordsReceivedThisSession,
@@ -50,29 +50,29 @@ enum WelcomeStateResolver {
   }
 
   private static func resolveCreating(
-    cloudProfilesCount: Int,
+    profileCount: Int,
     bannerDismissed: Bool
   ) -> ResolvedState {
-    if bannerDismissed || cloudProfilesCount == 0 {
+    if bannerDismissed || profileCount == 0 {
       return .form(banner: nil)
     }
-    if cloudProfilesCount == 1 {
+    if profileCount == 1 {
       return .form(banner: .singleArrived)
     }
-    return .form(banner: .multiArrived(count: cloudProfilesCount))
+    return .form(banner: .multiArrived(count: profileCount))
   }
 
   private static func resolveLanding(
-    cloudProfilesCount: Int,
+    profileCount: Int,
     iCloudAvailability: ICloudAvailability,
     indexFetchedAtLeastOnce: Bool,
     recordsReceivedThisSession: Int,
     wasDownloading: Bool
   ) -> ResolvedState {
-    if cloudProfilesCount == 1 {
+    if profileCount == 1 {
       return .autoActivateSingle
     }
-    if cloudProfilesCount >= 2 {
+    if profileCount >= 2 {
       return .picker
     }
     if case .unavailable(let reason) = iCloudAvailability {

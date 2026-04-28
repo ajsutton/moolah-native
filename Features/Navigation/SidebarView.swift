@@ -94,7 +94,6 @@ struct SidebarView: View {
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
         instrument: session.profile.instrument,
-        supportsComplexTransactions: session.profile.supportsComplexTransactions,
         onCreate: { newEarmark in
           Task {
             _ = await earmarkStore.create(newEarmark)
@@ -105,13 +104,11 @@ struct SidebarView: View {
     }
     .sheet(isPresented: $showCreateAccountSheet) {
       CreateAccountView(
-        instrument: session.profile.instrument, accountStore: accountStore,
-        supportsComplexTransactions: session.profile.supportsComplexTransactions)
+        instrument: session.profile.instrument, accountStore: accountStore)
     }
     .sheet(item: $accountToEdit) { account in
       EditAccountView(
-        account: account, accountStore: accountStore,
-        supportsComplexTransactions: session.profile.supportsComplexTransactions)
+        account: account, accountStore: accountStore)
     }
     .onReceive(
       NotificationCenter.default.publisher(for: .requestAccountEdit),
@@ -356,7 +353,7 @@ private func seedSidebarPreview(
     repository: backend.earmarks,
     conversionService: backend.conversionService,
     targetInstrument: .AUD)
-  let session = ProfileSession(profile: Profile(label: "Preview", backendType: .moolah))
+  let session = ProfileSession(profile: Profile(label: "Preview"))
 
   return NavigationSplitView {
     SidebarView(selection: .constant(nil))

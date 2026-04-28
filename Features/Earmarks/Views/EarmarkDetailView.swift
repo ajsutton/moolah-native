@@ -59,8 +59,7 @@ struct EarmarkDetailView: View {
       accounts: accounts,
       categories: categories,
       earmarks: earmarks,
-      transactionStore: transactionStore,
-      supportsComplexTransactions: session.profile.supportsComplexTransactions
+      transactionStore: transactionStore
     )
     .profileNavigationTitle(earmark.name)
     .toolbar {
@@ -75,7 +74,6 @@ struct EarmarkDetailView: View {
     .sheet(isPresented: $showEditSheet) {
       EditEarmarkSheet(
         earmark: earmark,
-        supportsComplexTransactions: session.profile.supportsComplexTransactions,
         onUpdate: { updated in
           Task {
             _ = await earmarkStore.update(updated)

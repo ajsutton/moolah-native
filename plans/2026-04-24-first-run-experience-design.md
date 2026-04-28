@@ -21,7 +21,7 @@ This redesign aligns the first-run path with where the product is going:
 
 - No redesign of `SessionRootView`, profile switching, or any post-sign-in UX.
 - No change to `ProfileFormView` (Settings → Add Profile sheet).
-- No deletion or deprecation of the `.moolah` / `.remote` backend types at this step — `RemoteBackend` continues to exist and work, we only change its discoverability.
+- The `.moolah` / `.remote` backend types and `RemoteBackend` have since been removed (PR on `feature/remove-moolah-server`); this note is superseded.
 
 ---
 
@@ -37,10 +37,9 @@ This redesign aligns the first-run path with where the product is going:
 
 **Out of scope:**
 
-- **`ProfileFormView` (Settings → Add Profile) is explicitly unchanged.** Moolah-server and Custom-Server remain reachable there.
+- **`ProfileFormView` (Settings → Add Profile) is explicitly unchanged.**
 - Merging / migrating existing local profiles into iCloud.
 - Any redesign of `SessionRootView`, `WelcomeView.swift` in `Features/Auth/` (which is the *sign-in* welcome, not first-run — will need renaming; see §7).
-- Removing `BackendType.moolah` or `.remote` enum cases.
 
 ---
 
@@ -62,7 +61,7 @@ This redesign aligns the first-run path with where the product is going:
 1. App launches. `iCloudAvailability == .unavailable(...)` (not signed in, entitlements missing, restricted, etc.).
 2. `WelcomeView` renders the **branded hero with off-chip** (state 4): same hero as 3.1 but with an inline chip under the CTA: "iCloud sync is off. Your profile will be saved on this device." with an "Open System Settings" link (macOS: opens System Settings → Apple ID → iCloud; iOS: opens the iCloud pane of Settings).
 3. User taps "Get started" → create-profile form (state 2). No background spinner (no iCloud check to run).
-4. Profile is created as a `BackendType.cloudKit` profile (see §6.3 — pending records sit in the `CKSyncEngine` / SwiftData store until iCloud becomes available, at which point backfill picks them up).
+4. Profile is created as a CloudKit profile (see §6.3 — pending records sit in the `CKSyncEngine` / SwiftData store until iCloud becomes available, at which point backfill picks them up).
 5. If `iCloudAvailability` flips to `.available` while the user is on the welcome hero or in the form, the off-chip / spinner updates live, and subsequent cloud-profile arrivals follow the §3.3 path.
 
 ### 3.3 Mid-form iCloud profile arrival
@@ -257,7 +256,7 @@ fetchSessionTouchedIndexZone = false
 
 ### 6.3 Local-only profiles (when iCloud unavailable)
 
-When the user creates a profile while `iCloudAvailability == .unavailable(...)`, we still use `BackendType.cloudKit` and the `CloudKitBackend`. No new backend type is introduced. Existing behaviour in `validateiCloudAvailability` already returns `true` when entitlements are missing; `addProfile` writes the `ProfileRecord` to the local SwiftData index container.
+When the user creates a profile while `iCloudAvailability == .unavailable(...)`, we still use `CloudKitBackend` (the only backend). No new backend type is introduced. Existing behaviour in `validateiCloudAvailability` already returns `true` when entitlements are missing; `addProfile` writes the `ProfileRecord` to the local SwiftData index container.
 
 **How the record eventually reaches iCloud.** The upload path depends on backfill, not on the `queueSave` call at creation time:
 

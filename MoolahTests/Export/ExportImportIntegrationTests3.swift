@@ -71,9 +71,9 @@ struct ExportImportIntegrationTests3 {
     let fakeURL = FileManager.default.temporaryDirectory.appending(
       path: "nonexistent-\(UUID().uuidString).json")
     let container = try TestModelContainer.create()
-    let coordinator = MigrationCoordinator()
+    let coordinator = ExportCoordinator()
 
-    await #expect(throws: MigrationError.self) {
+    await #expect(throws: ExportError.self) {
       _ = try await coordinator.importFromFile(url: fakeURL, modelContainer: container)
     }
   }

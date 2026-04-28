@@ -6,7 +6,7 @@
 
   @Suite("AutomationService Profile Export/Import")
   @MainActor
-  struct AutomationServiceMigrationTests {
+  struct AutomationServiceExportImportTests {
     private func makeTempFileURL() -> URL {
       FileManager.default.temporaryDirectory
         .appendingPathComponent("moolah-automation-export-\(UUID().uuidString).json")
@@ -41,7 +41,6 @@
       let harness = try makeHarness()
       let profile = Profile(
         label: "Test Profile",
-        backendType: .cloudKit,
         currencyCode: "AUD",
         financialYearStartMonth: 7
       )
@@ -87,7 +86,6 @@
 
       let sourceProfile = Profile(
         label: "Source Profile",
-        backendType: .cloudKit,
         currencyCode: "AUD",
         financialYearStartMonth: 7
       )
@@ -113,7 +111,6 @@
 
       #expect(imported.label == "Source Profile")
       #expect(imported.currencyCode == "AUD")
-      #expect(imported.backendType == .cloudKit)
       #expect(imported.id != sourceProfile.id)
 
       let importedSession = harness.sessionManager.session(for: imported)

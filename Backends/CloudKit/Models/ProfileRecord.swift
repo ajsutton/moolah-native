@@ -30,7 +30,6 @@ final class ProfileRecord {
     Profile(
       id: id,
       label: label,
-      backendType: .cloudKit,
       currencyCode: currencyCode,
       financialYearStartMonth: financialYearStartMonth,
       createdAt: createdAt

@@ -5,9 +5,10 @@ enum BackendError: Error, Sendable, Equatable {
   case networkUnavailable
   case validationFailed(String)
   case notFound(String)
-  /// Thrown by single-instrument backends (Remote, moolah) when a write carries
-  /// an instrument other than the profile's currency. Indicates a programmer
-  /// error — the UI should have gated the write on `Profile.supportsComplexTransactions`.
+  /// Thrown when a write carries an instrument that isn't allowed for the
+  /// target entity (e.g. an earmark whose instrument doesn't match the
+  /// containing entity). Indicates a programmer error — the UI should have
+  /// rejected the write before reaching the backend.
   case unsupportedInstrument(String)
 }
 

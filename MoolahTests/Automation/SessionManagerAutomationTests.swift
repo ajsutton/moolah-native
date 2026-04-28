@@ -14,7 +14,6 @@ struct SessionManagerAutomationTests {
   private func makeProfile(label: String = "Personal") -> Profile {
     Profile(
       label: label,
-      backendType: .cloudKit,
       currencyCode: "AUD",
       financialYearStartMonth: 7
     )
