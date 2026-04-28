@@ -1,10 +1,8 @@
-// swiftlint:disable multiline_arguments
-
 import Foundation
 
-/// One step in the FIFO cost-basis machine. The shape mirrors what
-/// `CostBasisEngine.processBuy` / `processSell` consume, so callers can feed
-/// these straight in.
+/// One step in the FIFO cost-basis machine. Shape unchanged from the previous
+/// implementation; consumers (CapitalGainsCalculator, InvestmentStore cost
+/// basis snapshot, PositionsHistoryBuilder) read these structurally.
 struct TradeBuyEvent: Sendable, Equatable {
   let instrument: Instrument
   let quantity: Decimal
@@ -22,34 +20,20 @@ struct TradeEventClassification: Sendable, Equatable {
   let sells: [TradeSellEvent]
 }
 
-/// Classifies a single transaction's legs into FIFO buy / sell events.
+/// Classifies a transaction's `.trade` legs into FIFO buy / sell events.
 ///
-/// Two cases:
+/// Per design §2, the classifier filters by `type == .trade` and ignores
+/// every other leg. For each `.trade` leg, the per-unit value is derived
+/// from the *other* `.trade` leg's value converted to `hostCurrency` on
+/// the transaction date. Fee legs (`.expense`) are not part of cost basis
+/// in this iteration; that decision moves with the SelfWealthParser
+/// brokerage-attach work tracked in
+/// https://github.com/ajsutton/moolah-native/issues/558.
 ///
-/// **Fiat-paired:** non-fiat legs paired with one or more fiat legs in the
-/// same transaction. Cost / proceeds-per-unit derive from `fiatOutflow /
-/// qty` or `fiatInflow / qty`. Mixed-currency fiat is allowed: each fiat
-/// leg is converted to `hostCurrency` on the txn date before being summed
-/// (per `guides/INSTRUMENT_CONVERSION_GUIDE.md` Rule 1).
-///
-/// **Non-fiat swap:** every leg is non-fiat (e.g. ETH → BTC). Each leg's
-/// signed quantity is converted to `hostCurrency`; positive legs are buys
-/// (cost = converted value / qty), negative legs are sells (proceeds =
-/// converted value / qty).
-///
-/// Per CLAUDE.md sign convention, signs are preserved end-to-end; we never
-/// `abs()` a raw leg quantity. Per-unit values are always positive because
-/// numerator and denominator share the leg's sign.
-///
-/// A transaction with a single non-fiat leg and no fiat legs (e.g. a
-/// dividend reinvestment recorded as one income leg) is not classifiable
-/// and produces an empty `TradeEventClassification`. Callers that want to
-/// treat such legs as opening positions must handle them separately.
-///
-/// This is the single source of truth used by both
-/// `CapitalGainsCalculator` (tax reporting) and the
-/// `PositionsHistoryBuilder` / `InvestmentStore` cost-basis snapshots
-/// (chart + per-row).
+/// Only non-fiat legs emit capital events. In a fiat+non-fiat pair the
+/// fiat leg is the price carrier; in a non-fiat swap both legs emit events.
+/// Zero-quantity `.trade` legs cause the whole classification to return empty
+/// (no divide-by-zero, no half-emitted event).
 enum TradeEventClassifier {
   static func classify(
     legs: [TransactionLeg],
@@ -57,92 +41,48 @@ enum TradeEventClassifier {
     hostCurrency: Instrument,
     conversionService: any InstrumentConversionService
   ) async throws -> TradeEventClassification {
-    let fiatLegs = legs.filter { $0.instrument.kind == .fiatCurrency }
-    let nonFiatLegs = legs.filter { $0.instrument.kind != .fiatCurrency }
-
-    let (fiatOutflow, fiatInflow) = try await summariseFiatFlows(
-      fiatLegs, on: date, hostCurrency: hostCurrency, conversionService: conversionService)
-
-    let fiatPaired = classifyFiatPaired(
-      nonFiatLegs: nonFiatLegs, fiatOutflow: fiatOutflow, fiatInflow: fiatInflow)
-    if !fiatPaired.buys.isEmpty || !fiatPaired.sells.isEmpty {
-      return fiatPaired
-    }
-
-    // Non-fiat swap: every leg is non-fiat.
-    guard nonFiatLegs.count >= 2 else {
+    let tradeLegs = legs.filter { $0.type == .trade }
+    guard tradeLegs.count == 2 else {
       return TradeEventClassification(buys: [], sells: [])
     }
-    return try await classifyNonFiatSwap(
-      nonFiatLegs: nonFiatLegs, on: date,
-      hostCurrency: hostCurrency, conversionService: conversionService)
-  }
 
-  private static func summariseFiatFlows(
-    _ fiatLegs: [TransactionLeg],
-    on date: Date,
-    hostCurrency: Instrument,
-    conversionService: any InstrumentConversionService
-  ) async throws -> (outflow: Decimal, inflow: Decimal) {
-    var fiatOutflow: Decimal = 0
-    var fiatInflow: Decimal = 0
-    for leg in fiatLegs where leg.quantity != 0 {
-      let converted = try await conversionService.convert(
-        leg.quantity, from: leg.instrument, to: hostCurrency, on: date
-      )
-      if leg.quantity < 0 {
-        fiatOutflow -= converted
-      } else {
-        fiatInflow += converted
-      }
+    // If either trade leg has a zero quantity, we cannot compute a per-unit
+    // price and there is no meaningful event to emit.
+    guard tradeLegs[0].quantity != 0, tradeLegs[1].quantity != 0 else {
+      return TradeEventClassification(buys: [], sells: [])
     }
-    return (fiatOutflow, fiatInflow)
-  }
 
-  private static func classifyFiatPaired(
-    nonFiatLegs: [TransactionLeg], fiatOutflow: Decimal, fiatInflow: Decimal
-  ) -> TradeEventClassification {
+    // Fiat legs act as the price carrier; non-fiat legs are the capital assets.
+    // In a non-fiat swap both legs generate capital events; in a fiat-paired
+    // trade only the non-fiat leg does.
+    let nonFiatIndices = tradeLegs.indices.filter {
+      tradeLegs[$0].instrument.kind != .fiatCurrency
+    }
+    let capitalIndices = nonFiatIndices.isEmpty ? Array(tradeLegs.indices) : nonFiatIndices
+
     var buys: [TradeBuyEvent] = []
     var sells: [TradeSellEvent] = []
-    for leg in nonFiatLegs {
-      if leg.quantity > 0 && fiatOutflow > 0 {
-        buys.append(
-          TradeBuyEvent(
-            instrument: leg.instrument, quantity: leg.quantity,
-            costPerUnit: fiatOutflow / leg.quantity))
-      } else if leg.quantity < 0 && fiatInflow > 0 {
-        let sellQty = -leg.quantity
-        sells.append(
-          TradeSellEvent(
-            instrument: leg.instrument, quantity: sellQty,
-            proceedsPerUnit: fiatInflow / sellQty))
-      }
-    }
-    return TradeEventClassification(buys: buys, sells: sells)
-  }
-
-  private static func classifyNonFiatSwap(
-    nonFiatLegs: [TransactionLeg],
-    on date: Date,
-    hostCurrency: Instrument,
-    conversionService: any InstrumentConversionService
-  ) async throws -> TradeEventClassification {
-    var buys: [TradeBuyEvent] = []
-    var sells: [TradeSellEvent] = []
-    for leg in nonFiatLegs {
-      let profileValue = try await conversionService.convert(
-        leg.quantity, from: leg.instrument, to: hostCurrency, on: date
-      )
-      let valuePerUnit = profileValue / leg.quantity
+    for index in capitalIndices {
+      let leg = tradeLegs[index]
+      let pairIndex = index == 0 ? 1 : 0
+      let pair = tradeLegs[pairIndex]
+      let pairValue = try await conversionService.convert(
+        pair.quantity, from: pair.instrument, to: hostCurrency, on: date)
+      // pair.quantity has the *opposite* sign by convention (paid vs received),
+      // so |pairValue / leg.quantity| is the per-unit cost or proceed.
+      let perUnit = abs(pairValue / leg.quantity)
       if leg.quantity > 0 {
         buys.append(
           TradeBuyEvent(
-            instrument: leg.instrument, quantity: leg.quantity, costPerUnit: valuePerUnit))
+            instrument: leg.instrument,
+            quantity: leg.quantity,
+            costPerUnit: perUnit))
       } else {
-        let sellQty = -leg.quantity
         sells.append(
           TradeSellEvent(
-            instrument: leg.instrument, quantity: sellQty, proceedsPerUnit: valuePerUnit))
+            instrument: leg.instrument,
+            quantity: -leg.quantity,
+            proceedsPerUnit: perUnit))
       }
     }
     return TradeEventClassification(buys: buys, sells: sells)
