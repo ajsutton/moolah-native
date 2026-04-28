@@ -72,7 +72,6 @@ struct EarmarksView: View {
       .sheet(isPresented: $showCreateSheet) {
         CreateEarmarkSheet(
           instrument: session.profile.instrument,
-          supportsComplexTransactions: true,
           onCreate: { newEarmark in
             Task {
               _ = await earmarkStore.create(newEarmark)
@@ -84,7 +83,6 @@ struct EarmarksView: View {
       .sheet(item: $earmarkToEdit) { earmark in
         EditEarmarkSheet(
           earmark: earmark,
-          supportsComplexTransactions: true,
           onUpdate: { updated in
             Task {
               _ = await earmarkStore.update(updated)

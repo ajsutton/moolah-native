@@ -21,8 +21,7 @@ struct UpcomingView: View {
         categories: categories,
         earmarks: earmarks,
         transactionStore: transactionStore,
-        showRecurrence: true,
-        supportsComplexTransactions: true
+        showRecurrence: true
       )
       .focusedSceneValue(\.selectedTransaction, $selectedTransaction)
       .focusedSceneValue(\.newTransactionAction, createNewScheduledTransaction)

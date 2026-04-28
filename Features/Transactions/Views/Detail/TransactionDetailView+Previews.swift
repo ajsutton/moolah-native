@@ -39,7 +39,7 @@ private func previewStore() -> TransactionStore {
       earmarks: Earmarks(from: [Earmark(name: "Holiday Fund", instrument: .AUD)]),
       transactionStore: previewStore(),
       viewingAccountId: accountId,
-      supportsComplexTransactions: true,
+
       onUpdate: { _ in },
       onDelete: { _ in }
     )
@@ -72,7 +72,7 @@ private func previewStore() -> TransactionStore {
       ]),
       earmarks: Earmarks(from: [Earmark(name: "Holiday Fund", instrument: .AUD)]),
       transactionStore: previewStore(),
-      supportsComplexTransactions: true,
+
       onUpdate: { _ in },
       onDelete: { _ in }
     )
@@ -101,7 +101,7 @@ private func previewStore() -> TransactionStore {
         Earmark(name: "Holiday Fund", instrument: .AUD),
       ]),
       transactionStore: previewStore(),
-      supportsComplexTransactions: true,
+
       onUpdate: { _ in },
       onDelete: { _ in }
     )
@@ -130,7 +130,7 @@ private func previewStore() -> TransactionStore {
       earmarks: Earmarks(from: []),
       transactionStore: previewStore(),
       viewingAccountId: accountId1,
-      supportsComplexTransactions: true,
+
       onUpdate: { _ in },
       onDelete: { _ in }
     )
@@ -158,7 +158,7 @@ private func previewStore() -> TransactionStore {
       earmarks: Earmarks(from: []),
       transactionStore: previewStore(),
       viewingAccountId: accountId2,
-      supportsComplexTransactions: true,
+
       onUpdate: { _ in },
       onDelete: { _ in }
     )
@@ -186,7 +186,7 @@ private func previewStore() -> TransactionStore {
       transactionStore: previewStore(),
       showRecurrence: true,
       viewingAccountId: accountId,
-      supportsComplexTransactions: true,
+
       onUpdate: { _ in },
       onDelete: { _ in }
     )

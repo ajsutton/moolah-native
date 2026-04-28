@@ -2,10 +2,8 @@ import XCTest
 
 /// Happy-path UI test for `InstrumentPickerField` + `InstrumentPickerSheet`.
 ///
-/// Reaches the picker via `CreateAccountView`'s currency field, which is
-/// rendered when the profile uses the CloudKit backend
-/// (`supportsComplexTransactions == true`). The `.tradeBaseline` seed
-/// satisfies this condition; no new seed is needed.
+/// Reaches the picker via `CreateAccountView`'s currency field. The
+/// `.tradeBaseline` seed is used; no new seed is needed.
 ///
 /// The test verifies the full open → search → pick → dismiss → field-updates
 /// cycle that is only observable through the real SwiftUI event loop — the
@@ -18,8 +16,7 @@ final class InstrumentPickerUITests: MoolahUITestCase {
     let app = launch(seed: .tradeBaseline)
 
     // Open CreateAccountView — the currency field starts at AUD (the profile
-    // instrument). The form is only shown with the full searchable picker when
-    // supportsComplexTransactions is true, which tradeBaseline satisfies.
+    // instrument).
     app.createAccount.open(initialCurrencyId: "AUD")
 
     // Tap the field to open the sheet. tap() waits for sheet appearance as

@@ -94,7 +94,6 @@ struct SidebarView: View {
     .sheet(isPresented: $showCreateEarmarkSheet) {
       CreateEarmarkSheet(
         instrument: session.profile.instrument,
-        supportsComplexTransactions: true,
         onCreate: { newEarmark in
           Task {
             _ = await earmarkStore.create(newEarmark)
@@ -105,13 +104,11 @@ struct SidebarView: View {
     }
     .sheet(isPresented: $showCreateAccountSheet) {
       CreateAccountView(
-        instrument: session.profile.instrument, accountStore: accountStore,
-        supportsComplexTransactions: true)
+        instrument: session.profile.instrument, accountStore: accountStore)
     }
     .sheet(item: $accountToEdit) { account in
       EditAccountView(
-        account: account, accountStore: accountStore,
-        supportsComplexTransactions: true)
+        account: account, accountStore: accountStore)
     }
     .onReceive(
       NotificationCenter.default.publisher(for: .requestAccountEdit),

@@ -111,8 +111,7 @@ struct ReportsView: View {
       accounts: accounts,
       categories: categories,
       earmarks: earmarks,
-      transactionStore: transactionStore,
-      supportsComplexTransactions: true)
+      transactionStore: transactionStore)
   }
 
   /// Stable identity for the `.task(id:)` trigger — re-running the load

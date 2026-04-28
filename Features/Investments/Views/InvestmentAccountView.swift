@@ -154,8 +154,7 @@ struct InvestmentAccountView: View {
       categories: categories,
       earmarks: earmarks,
       transactionStore: transactionStore,
-      viewingAccountId: account.id,
-      supportsComplexTransactions: true
+      viewingAccountId: account.id
     )
     .profileNavigationTitle(account.name)
     .sheet(isPresented: $showingAddValue) {

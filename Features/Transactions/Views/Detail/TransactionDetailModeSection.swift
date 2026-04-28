@@ -27,19 +27,11 @@ private enum TransactionMode: Hashable {
 ///   (the user can't change the type of the seed transaction).
 /// - Read-only "Custom" label when the transaction has multi-leg structure
 ///   that can't be re-expressed as a simple income/expense/transfer.
-/// - The interactive `Picker` of `availableModes`, which excludes `.custom`
-///   when `supportsComplexTransactions` is `false`.
+/// - The interactive `Picker` of income/expense/transfer/custom modes.
 struct TransactionDetailModeSection: View {
   let transaction: Transaction
   @Binding var draft: TransactionDraft
   let accounts: Accounts
-  let supportsComplexTransactions: Bool
-
-  private var availableModes: [TransactionMode] {
-    supportsComplexTransactions
-      ? [.income, .expense, .transfer, .custom]
-      : [.income, .expense, .transfer]
-  }
 
   private var modeBinding: Binding<TransactionMode> {
     Binding(
@@ -86,7 +78,7 @@ struct TransactionDetailModeSection: View {
           "This transaction has custom sub-transactions and cannot be changed to a simpler type.")
       } else {
         Picker("Type", selection: modeBinding) {
-          ForEach(availableModes, id: \.self) { mode in
+          ForEach([TransactionMode.income, .expense, .transfer, .custom], id: \.self) { mode in
             Text(mode.displayName).tag(mode)
           }
         }
