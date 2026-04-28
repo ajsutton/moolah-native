@@ -58,9 +58,11 @@ struct TradeEventClassifierTests {
       legs: legs, on: date, hostCurrency: aud, conversionService: service)
     #expect(result.buys.count == 1)
     #expect(result.buys[0].instrument == btc)
+    #expect(result.buys[0].quantity == Decimal(string: "0.1"))
     #expect(result.buys[0].costPerUnit == Decimal(60_000))
     #expect(result.sells.count == 1)
     #expect(result.sells[0].instrument == eth)
+    #expect(result.sells[0].quantity == 2)
     #expect(result.sells[0].proceedsPerUnit == Decimal(3_000))
   }
 
@@ -70,6 +72,7 @@ struct TradeEventClassifierTests {
     let result = try await TradeEventClassifier.classify(
       legs: legs, on: date, hostCurrency: aud,
       conversionService: FixedConversionService(rates: [:]))
+    try #require(result.buys.count == 1)
     #expect(result.buys[0].costPerUnit == 40)  // 4000/100, not (4000+10)/100
   }
 
@@ -105,6 +108,7 @@ struct TradeEventClassifierTests {
     let result = try await TradeEventClassifier.classify(
       legs: [tradeLeg(aud, -100)], on: date, hostCurrency: aud,
       conversionService: FixedConversionService(rates: [:]))
-    #expect(result.buys.isEmpty && result.sells.isEmpty)
+    #expect(result.buys.isEmpty)
+    #expect(result.sells.isEmpty)
   }
 }
