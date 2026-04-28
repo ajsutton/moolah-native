@@ -22,14 +22,16 @@ extension SyncCoordinator {
     return handler
   }
 
-  /// Registers (or replaces) the per-profile closure fired by the data
-  /// handler whenever a remote pull touches an `InstrumentRecord` row. The
-  /// closure is captured by the handler at creation time, so callers must
-  /// register it before the first sync session for the profile (in practice,
-  /// from `ProfileSession.registerWithSyncCoordinator`). If a handler is
-  /// already cached, its `nonisolated let` closure is already wired, so
-  /// re-registration only takes effect for handlers created afterwards
-  /// (e.g. after `stop()` clears `dataHandlers`).
+  /// Registers the per-profile closure fired by the data handler whenever a
+  /// remote pull touches an `InstrumentRecord` row. The closure is captured
+  /// by `ProfileDataSyncHandler` at handler-construction time, so callers
+  /// MUST register it before the first sync session for the profile (in
+  /// practice, from `ProfileSession.registerWithSyncCoordinator`).
+  /// Re-registering for a profile whose handler is already cached is a no-op
+  /// — `dataHandlers` is not cleared by `stop()`, so the cached handler
+  /// retains its original `nonisolated let` closure for its full lifetime.
+  /// Pair with `removeInstrumentRemoteChangeCallback(profileId:)` on session
+  /// teardown so the dictionary doesn't accumulate stale entries.
   func setInstrumentRemoteChangeCallback(
     profileId: UUID,
     _ callback: @escaping @Sendable () -> Void

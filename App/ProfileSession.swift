@@ -197,6 +197,7 @@ final class ProfileSession: Identifiable {
       coordinator.removeObserver(token: token)
       syncObserverToken = nil
     }
+    coordinator.removeInstrumentRemoteChangeCallback(profileId: profile.id)
     syncReloadTask?.cancel()
     syncReloadTask = nil
   }
