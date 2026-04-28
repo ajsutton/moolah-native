@@ -43,7 +43,7 @@ struct ExportImportIntegrationTests4 {
       currencyCode: aud.id,
       financialYearStartMonth: 7
     )
-    let coordinator = MigrationCoordinator()
+    let coordinator = ExportCoordinator()
     try await coordinator.exportToFile(url: tempURL, backend: backend, profile: profile)
 
     // Serialized JSON must list all four instruments for the importer to rehydrate them

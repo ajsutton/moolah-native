@@ -6,7 +6,7 @@
 
   @Suite("AutomationService Profile Export/Import")
   @MainActor
-  struct AutomationServiceMigrationTests {
+  struct AutomationServiceExportImportTests {
     private func makeTempFileURL() -> URL {
       FileManager.default.temporaryDirectory
         .appendingPathComponent("moolah-automation-export-\(UUID().uuidString).json")

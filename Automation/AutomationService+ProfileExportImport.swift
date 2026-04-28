@@ -2,9 +2,9 @@
   import Foundation
   import OSLog
 
-  private let migrationLogger = Logger(
+  private let exportImportLogger = Logger(
     subsystem: "com.moolah.app",
-    category: "AutomationMigration"
+    category: "AutomationExportImport"
   )
 
   extension AutomationService {
@@ -12,20 +12,20 @@
     /// existing file atomically.
     func exportProfile(profileIdentifier: String, to url: URL) async throws {
       let session = try resolveSession(for: profileIdentifier)
-      migrationLogger.info(
+      exportImportLogger.info(
         "Export: starting for profile \(session.profile.label, privacy: .public) to \(url.path, privacy: .public)"
       )
       do {
-        let coordinator = MigrationCoordinator()
+        let coordinator = ExportCoordinator()
         try await coordinator.exportToFile(
           url: url,
           backend: session.backend,
           profile: session.profile
         )
-        migrationLogger.info(
+        exportImportLogger.info(
           "Export: complete — saved to \(url.path, privacy: .public)")
       } catch {
-        migrationLogger.error(
+        exportImportLogger.error(
           "Export: failed — \(error.localizedDescription, privacy: .public)")
         throw AutomationError.operationFailed(error.localizedDescription)
       }
@@ -49,46 +49,29 @@
           "Import requires a configured profile store and container manager")
       }
 
-      migrationLogger.info("Import: starting from \(url.path, privacy: .public)")
+      exportImportLogger.info("Import: starting from \(url.path, privacy: .public)")
 
-      let jsonData: Data
-      let exported: ExportedData
+      let newProfileId: UUID
       do {
-        jsonData = try Data(contentsOf: url)
-        exported = try JSONDecoder.exportDecoder.decode(ExportedData.self, from: jsonData)
-      } catch {
-        migrationLogger.error(
-          "Import: failed to read file — \(error.localizedDescription, privacy: .public)")
-        throw AutomationError.operationFailed(
-          "Failed to read import file: \(error.localizedDescription)")
-      }
-
-      let newProfile = Profile(
-        label: exported.profileLabel,
-        currencyCode: exported.currencyCode,
-        financialYearStartMonth: exported.financialYearStartMonth
-      )
-      profileStore.addProfile(newProfile)
-
-      do {
-        let container = try containerManager.container(for: newProfile.id)
-        let coordinator = MigrationCoordinator()
-        _ = try await coordinator.importFromFile(
+        let coordinator = ExportCoordinator()
+        newProfileId = try await coordinator.importNewProfileFromFile(
           url: url,
-          modelContainer: container,
-          profileId: newProfile.id,
+          profileStore: profileStore,
+          containerManager: containerManager,
           syncCoordinator: syncCoordinator
         )
-        migrationLogger.info(
-          "Import: complete — profile '\(newProfile.label, privacy: .public)'")
-        return newProfile
       } catch {
-        containerManager.deleteStore(for: newProfile.id)
-        profileStore.removeProfile(newProfile.id)
-        migrationLogger.error(
+        exportImportLogger.error(
           "Import: failed — \(error.localizedDescription, privacy: .public)")
         throw AutomationError.operationFailed(error.localizedDescription)
       }
+
+      guard let newProfile = profileStore.profiles.first(where: { $0.id == newProfileId }) else {
+        throw AutomationError.operationFailed("Imported profile not found after import")
+      }
+      exportImportLogger.info(
+        "Import: complete — profile '\(newProfile.label, privacy: .public)'")
+      return newProfile
     }
   }
 #endif

@@ -12,7 +12,7 @@ import os
 extension CloudKitTransactionRepository {
   /// Returns every matching transaction without pagination. Runs the filter
   /// and the `TransactionRecord`-to-domain conversion exactly once, so bulk
-  /// callers (profile export, migration) avoid the
+  /// callers (profile export, profile import) avoid the
   /// `O(pages × full-dataset-work)` blow-up that `fetch(filter:page:pageSize:)`
   /// triggers when invoked in a pagination loop.
   func fetchAll(filter: TransactionFilter) async throws -> [Transaction] {

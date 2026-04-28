@@ -1,6 +1,11 @@
 import Foundation
 import Security
 
+enum KeychainError: Error {
+  case saveFailed(OSStatus)
+  case readFailed(OSStatus)
+}
+
 /// Generic Keychain wrapper supporting Data and String values, with optional iCloud sync.
 ///
 /// Used for API keys (String, synced) and cookies (Data, device-local).

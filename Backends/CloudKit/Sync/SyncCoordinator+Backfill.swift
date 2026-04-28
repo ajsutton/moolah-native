@@ -13,8 +13,8 @@ extension SyncCoordinator {
   // MARK: - Queue All Existing Records
 
   /// Ensures the given profile's zone exists on CloudKit, then queues every record in
-  /// that profile's local SwiftData store for upload. Called by `MigrationCoordinator`
-  /// after a migration import, which writes records directly to SwiftData and so
+  /// that profile's local SwiftData store for upload. Called by `ExportCoordinator`
+  /// after a file import, which writes records directly to SwiftData and so
   /// bypasses the repository `onRecordChanged` hooks that normally feed the sync engine.
   ///
   /// The zone is created first so the initial send does not have to round-trip through

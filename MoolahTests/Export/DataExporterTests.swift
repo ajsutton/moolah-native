@@ -56,11 +56,11 @@ struct DataExporterTests {
 
   private func seedBackendTransactions(backend: CloudKitBackend) async throws {
     let accounts = try await backend.accounts.fetchAll()
-    let checking = accounts.first { $0.name == "Checking" }!
+    let checking = try #require(accounts.first { $0.name == "Checking" })
     let categories = try await backend.categories.fetchAll()
-    let food = categories.first { $0.name == "Food" && $0.parentId == nil }!
+    let food = try #require(categories.first { $0.name == "Food" && $0.parentId == nil })
     let earmarks = try await backend.earmarks.fetchAll()
-    let holiday = earmarks.first { $0.name == "Holiday" }!
+    let holiday = try #require(earmarks.first { $0.name == "Holiday" })
 
     _ = try await backend.transactions.create(
       Transaction(
@@ -130,11 +130,11 @@ struct DataExporterTests {
       financialYearStartMonth: 7
     ) { _ in }
 
-    let earmark = data.earmarks.first!
-    let budgetItems = data.earmarkBudgets[earmark.id]
-    #expect(budgetItems != nil)
-    #expect(budgetItems!.count == 1)
-    #expect(budgetItems!.first!.amount.quantity == dec("50.00"))
+    let earmark = try #require(data.earmarks.first)
+    let budgetItems = try #require(data.earmarkBudgets[earmark.id])
+    #expect(budgetItems.count == 1)
+    let firstBudgetItem = try #require(budgetItems.first)
+    #expect(firstBudgetItem.amount.quantity == dec("50.00"))
   }
 
   @Test("exports investment values per investment account")
@@ -148,11 +148,11 @@ struct DataExporterTests {
       financialYearStartMonth: 7
     ) { _ in }
 
-    let investmentAccount = data.accounts.first { $0.type == .investment }!
-    let values = data.investmentValues[investmentAccount.id]
-    #expect(values != nil)
-    #expect(values!.count == 1)
-    #expect(values!.first!.value.quantity == dec("5000.00"))
+    let investmentAccount = try #require(data.accounts.first { $0.type == .investment })
+    let values = try #require(data.investmentValues[investmentAccount.id])
+    #expect(values.count == 1)
+    let firstValue = try #require(values.first)
+    #expect(firstValue.value.quantity == dec("5000.00"))
   }
 
   @Test("exports empty data from empty backend")

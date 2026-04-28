@@ -25,31 +25,14 @@ extension SettingsView {
     defer { isImporting = false }
 
     do {
-      let jsonData = try Data(contentsOf: url)
-      let exported = try JSONDecoder.exportDecoder.decode(ExportedData.self, from: jsonData)
-
-      let newProfile = Profile(
-        label: exported.profileLabel,
-        currencyCode: exported.currencyCode,
-        financialYearStartMonth: exported.financialYearStartMonth
+      let coordinator = ExportCoordinator()
+      let newProfileId = try await coordinator.importNewProfileFromFile(
+        url: url,
+        profileStore: profileStore,
+        containerManager: containerManager,
+        syncCoordinator: syncCoordinator
       )
-      profileStore.addProfile(newProfile)
-
-      do {
-        let container = try containerManager.container(for: newProfile.id)
-        let coordinator = MigrationCoordinator()
-        _ = try await coordinator.importFromFile(
-          url: url,
-          modelContainer: container,
-          profileId: newProfile.id,
-          syncCoordinator: syncCoordinator
-        )
-        profileStore.setActiveProfile(newProfile.id)
-      } catch {
-        containerManager.deleteStore(for: newProfile.id)
-        profileStore.removeProfile(newProfile.id)
-        throw error
-      }
+      profileStore.setActiveProfile(newProfileId)
     } catch {
       importError = error.localizedDescription
     }
@@ -72,7 +55,7 @@ extension SettingsView {
         let filename = "\(profile.label).json"
         let tempURL = tempDir.appendingPathComponent(filename)
 
-        let coordinator = MigrationCoordinator()
+        let coordinator = ExportCoordinator()
         try await coordinator.exportToFile(
           url: tempURL,
           backend: backend,

@@ -94,7 +94,7 @@ struct ExportImportIntegrationTests {
       financialYearStartMonth: 7
     )
 
-    let coordinator = MigrationCoordinator()
+    let coordinator = ExportCoordinator()
     try await coordinator.exportToFile(
       url: tempURL,
       backend: backend,
@@ -136,7 +136,7 @@ struct ExportImportIntegrationTests {
       financialYearStartMonth: 7
     )
 
-    let coordinator = MigrationCoordinator()
+    let coordinator = ExportCoordinator()
     try await coordinator.exportToFile(
       url: tempURL,
       backend: backend,

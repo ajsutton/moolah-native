@@ -23,7 +23,7 @@ struct ImportResult: Sendable {
 struct CloudKitDataImporter {
   private let modelContainer: ModelContainer
   private let currencyCode: String
-  private let logger = Logger(subsystem: "com.moolah.app", category: "Migration")
+  private let logger = Logger(subsystem: "com.moolah.app", category: "Import")
 
   init(modelContainer: ModelContainer, currencyCode: String) {
     self.modelContainer = modelContainer

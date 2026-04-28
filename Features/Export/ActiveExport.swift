@@ -2,13 +2,13 @@ import Foundation
 
 /// State of an in-progress profile export. Held on `ProfileSession` and
 /// observed by the session's root view to show a progress sheet while
-/// `MigrationCoordinator.exportToFile` runs.
+/// `ExportCoordinator.exportToFile` runs.
 struct ActiveExport: Sendable, Equatable, Identifiable {
   let id = UUID()
   let profileLabel: String
   var stageLabel: String
 
-  /// User-facing label for a `MigrationCoordinator` / `DataExporter` step name.
+  /// User-facing label for an `ExportCoordinator` / `DataExporter` step name.
   /// Falls back to a sentence-case form of the raw step for unknown values so
   /// new stages don't disappear silently from the UI.
   static func stageLabel(for step: String) -> String {
