@@ -63,6 +63,13 @@ public enum UITestSeed: String, CaseIterable, Sendable {
   /// IDs) so the `seed.txt` artefact reader can resolve every reference
   /// without cross-file lookup.
   case cryptoCatalogPreloaded
+
+  /// A CloudKit-backed AUD profile with one bank account named "Brokerage",
+  /// a registered VGS.AX stock instrument, and a "Brokerage" category.
+  /// Drives the `TradeFlowUITests` end-to-end test: switching a transaction
+  /// to trade mode, setting paid/received legs and a fee — without any
+  /// remote data dependency.
+  case tradeReady = "trade-ready"
 }
 
 /// Fixtures for the first-run Welcome seeds. Defined here so both the
@@ -250,5 +257,33 @@ public enum UITestFixtures {
     public static let coingeckoMappingId = "uniswap"
     public static let cryptocompareSymbol = "UNI"
     public static let binanceSymbol = "UNIUSDT"
+  }
+
+  /// Fixtures for the `.tradeReady` seed.
+  ///
+  /// Entities (all fixed, deterministic):
+  ///   - Profile `personal` — label "Personal", currency AUD, CloudKit-backed.
+  ///   - Account `brokerage` — "Brokerage", bank, AUD.
+  ///   - Instrument `vgsax` — VGS.AX stock on ASX, registered so it appears
+  ///     in `InstrumentPickerField`.
+  ///   - Category `brokerage` — "Brokerage", so the fee leg can select it.
+  public enum TradeReady {
+    public static let profileId =
+      UUID(uuidString: "A3000000-0000-0000-0000-000000000001") ?? UUID()
+    public static let profileLabel = "Personal"
+    public static let profileCurrencyCode = "AUD"
+
+    public static let brokerageAccountId =
+      UUID(uuidString: "A3000000-0000-0000-0000-000000000010") ?? UUID()
+    public static let brokerageAccountName = "Brokerage"
+
+    public static let vgsaxInstrumentId = "ASX:VGS.AX"
+    public static let vgsaxTicker = "VGS.AX"
+    public static let vgsaxExchange = "ASX"
+    public static let vgsaxName = "VGS"
+
+    public static let brokerageCategoryId =
+      UUID(uuidString: "A3000000-0000-0000-0000-000000000040") ?? UUID()
+    public static let brokerageCategoryName = "Brokerage"
   }
 }

@@ -68,6 +68,8 @@ enum UITestSeedHydrator {
       // accounts/transactions are unused. Reuse `tradeBaseline` rather than
       // hand-rolling a near-identical fixture.
       return try hydrateTradeBaseline(into: manager)
+    case .tradeReady:
+      return try hydrateTradeReady(into: manager)
     }
   }
 
@@ -87,6 +89,50 @@ enum UITestSeedHydrator {
   }
 
   // MARK: - Seeds
+
+  private static func hydrateTradeReady(
+    into manager: ProfileContainerManager
+  ) throws -> Profile {
+    let fixtures = UITestFixtures.TradeReady.self
+
+    let profile = Profile(
+      id: fixtures.profileId,
+      label: fixtures.profileLabel,
+      backendType: .cloudKit,
+      currencyCode: fixtures.profileCurrencyCode,
+      financialYearStartMonth: 7,
+      createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+    )
+    try upsertProfile(profile, into: manager)
+
+    let container = try manager.container(for: profile.id)
+    let context = ModelContext(container)
+    let audInstrument = profile.instrument
+
+    try upsertInstrument(audInstrument, in: context)
+    try upsertAccount(
+      AccountSpec(
+        id: fixtures.brokerageAccountId,
+        name: fixtures.brokerageAccountName,
+        type: .bank,
+        instrumentId: audInstrument.id,
+        position: 0),
+      in: context)
+
+    let vgsax = Instrument.stock(
+      ticker: fixtures.vgsaxTicker,
+      exchange: fixtures.vgsaxExchange,
+      name: fixtures.vgsaxName)
+    try upsertInstrument(vgsax, in: context)
+
+    try upsertCategory(
+      id: fixtures.brokerageCategoryId,
+      name: fixtures.brokerageCategoryName,
+      in: context)
+
+    try context.save()
+    return profile
+  }
 
   private static func hydrateTradeBaseline(
     into manager: ProfileContainerManager
