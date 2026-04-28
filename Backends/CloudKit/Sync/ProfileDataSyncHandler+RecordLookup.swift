@@ -126,22 +126,17 @@ extension ProfileDataSyncHandler {
 
   /// Value-type counterpart of `mapBuilt(_:)` for GRDB row structs.
   /// Mirrors the SwiftData path but reads `encodedSystemFields` from
-  /// the row directly (Rows don't conform to `SystemFieldsCacheable` —
-  /// see the protocol's doc comment).
+  /// the row directly via the `ValueTypeSystemFieldsReadable`
+  /// protocol — GRDB rows can't conform to the `AnyObject`-constrained
+  /// `SystemFieldsCacheable`, so a value-type sibling pins the
+  /// requirement statically and removes the dynamic cast chain.
   private func mapBuiltRows<T>(_ rows: [T]) -> [UUID: CKRecord]
-  where T: IdentifiableRecord & CloudKitRecordConvertible {
+  where T: IdentifiableRecord & CloudKitRecordConvertible & ValueTypeSystemFieldsReadable {
     var built: [UUID: CKRecord] = [:]
     built.reserveCapacity(rows.count)
     for row in rows {
-      let cached: Data?
-      if let cacheable = row as? CSVImportProfileRow {
-        cached = cacheable.encodedSystemFields
-      } else if let cacheable = row as? ImportRuleRow {
-        cached = cacheable.encodedSystemFields
-      } else {
-        cached = nil
-      }
-      built[row.id] = buildCKRecord(from: row, encodedSystemFields: cached)
+      built[row.id] = buildCKRecord(
+        from: row, encodedSystemFields: row.encodedSystemFields)
     }
     return built
   }

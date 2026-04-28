@@ -128,6 +128,17 @@ enum ProfileSchema {
     try createImportRuleTable(database)
   }
 
+  // CHECK constraints below pin the SQL-side invariants per
+  // `DATABASE_SCHEMA_GUIDE.md` §3:
+  //   * Booleans on Bool-typed columns are restricted to 0/1.
+  //   * `match_mode` is restricted to the `MatchMode` raw values
+  //     (`"any"` / `"all"`). Verified against
+  //     `Domain/Models/CSVImport/ImportRule.swift` — change in lock-step
+  //     if the enum's raw values ever diverge.
+  //   * `position` is non-negative; `reorder` always produces 0…n-1.
+  // The branch is unshipped, so the v2 migration body is edited in
+  // place rather than layered behind a v3 migration.
+
   private static func createCSVImportProfileTable(_ database: Database) throws {
     try database.execute(
       sql: """
@@ -138,7 +149,8 @@ enum ProfileSchema {
             parser_identifier               TEXT    NOT NULL,
             header_signature                TEXT    NOT NULL,
             filename_pattern                TEXT,
-            delete_after_import             INTEGER NOT NULL,
+            delete_after_import             INTEGER NOT NULL
+                CHECK (delete_after_import IN (0, 1)),
             created_at                      TEXT    NOT NULL,
             last_used_at                    TEXT,
             date_format_raw_value           TEXT,
@@ -160,9 +172,12 @@ enum ProfileSchema {
             id                     BLOB    NOT NULL PRIMARY KEY,
             record_name            TEXT    NOT NULL UNIQUE,
             name                   TEXT    NOT NULL,
-            enabled                INTEGER NOT NULL,
-            position               INTEGER NOT NULL,
-            match_mode             TEXT    NOT NULL,
+            enabled                INTEGER NOT NULL
+                CHECK (enabled IN (0, 1)),
+            position               INTEGER NOT NULL
+                CHECK (position >= 0),
+            match_mode             TEXT    NOT NULL
+                CHECK (match_mode IN ('all', 'any')),
             conditions_json        BLOB    NOT NULL,
             actions_json           BLOB    NOT NULL,
             account_scope          BLOB,

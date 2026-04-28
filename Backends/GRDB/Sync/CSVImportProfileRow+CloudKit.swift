@@ -48,6 +48,8 @@ extension CSVImportProfileRow: CloudKitRecordConvertible {
       lastUsedAt: fields.lastUsedAt,
       dateFormatRawValue: fields.dateFormatRawValue,
       columnRoleRawValuesEncoded: fields.columnRoleRawValuesEncoded,
+      // Stamped by applyGRDBBatchSave after upsert; never read from the
+      // CKRecord itself.
       encodedSystemFields: nil
     )
   }

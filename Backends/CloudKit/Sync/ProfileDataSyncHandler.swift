@@ -23,22 +23,6 @@ enum ApplyResult: Sendable {
 /// Functionality is split across several `ProfileDataSyncHandler+*.swift`
 /// extensions (applying remote changes, batch upserts, record lookup, queueing,
 /// and system fields) so that each file keeps a single focus.
-/// Bundle of the GRDB-backed repositories for the per-profile data
-/// handler. Slice 0 of `plans/grdb-migration.md` migrates two record
-/// types (`CSVImportProfile`, `ImportRule`) to GRDB; subsequent slices
-/// extend this bundle and shrink the SwiftData footprint accordingly.
-///
-/// The dispatch tables in `ProfileDataSyncHandler+ApplyRemoteChanges` /
-/// `+SystemFields` consult this bundle for record types that have moved
-/// to GRDB and fall through to the SwiftData paths for everything else.
-/// Both fields are non-optional because in-memory tests, previews, and
-/// production all build the GRDB repos eagerly during backend
-/// construction.
-struct ProfileGRDBRepositories: Sendable {
-  let csvImportProfiles: GRDBCSVImportProfileRepository
-  let importRules: GRDBImportRuleRepository
-}
-
 @MainActor
 final class ProfileDataSyncHandler {
   nonisolated let profileId: UUID

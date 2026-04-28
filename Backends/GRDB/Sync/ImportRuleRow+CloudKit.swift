@@ -35,6 +35,8 @@ extension ImportRuleRow: CloudKitRecordConvertible {
       conditionsJSON: fields.conditionsJSON ?? Data(),
       actionsJSON: fields.actionsJSON ?? Data(),
       accountScope: fields.accountScope.flatMap(UUID.init(uuidString:)),
+      // Stamped by applyGRDBBatchSave after upsert; never read from the
+      // CKRecord itself.
       encodedSystemFields: nil
     )
   }

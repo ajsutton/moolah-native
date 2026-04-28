@@ -65,6 +65,26 @@ extension InvestmentValueRecord: SystemFieldsCacheable {}
 extension InstrumentRecord: SystemFieldsCacheable {}
 extension ProfileRecord: SystemFieldsCacheable {}
 
+/// Value-type sibling of `SystemFieldsCacheable` for GRDB row structs.
+///
+/// `SystemFieldsCacheable` is `AnyObject`-constrained because the
+/// SwiftData write path mutates a fetched `@Model` in place. GRDB row
+/// structs cannot conform to it, but they still expose the cached
+/// CKRecord change-tag blob through `var encodedSystemFields: Data?`.
+/// `ValueTypeSystemFieldsReadable` lets the upload-side
+/// `mapBuiltRows(_:)` path read that blob through a single typed
+/// constraint instead of a dynamic-type cast chain.
+///
+/// This protocol is read-only because the GRDB write path uses
+/// `setEncodedSystemFieldsSync(id:data:)` SQL UPDATEs rather than
+/// mutating the in-memory row.
+protocol ValueTypeSystemFieldsReadable {
+  var encodedSystemFields: Data? { get }
+}
+
+extension CSVImportProfileRow: ValueTypeSystemFieldsReadable {}
+extension ImportRuleRow: ValueTypeSystemFieldsReadable {}
+
 // MARK: - CKRecord System Fields
 
 extension CKRecord {

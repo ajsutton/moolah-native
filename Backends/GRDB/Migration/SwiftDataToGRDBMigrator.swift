@@ -13,8 +13,12 @@ import SwiftData
 /// re-runs against an already-populated table.
 ///
 /// **Idempotency.** Set the flag *only* after the GRDB transaction
-/// commits — a crash mid-write rolls the table back, the flag stays
-/// unset, and the next launch re-runs from scratch.
+/// commits. The write path uses `upsert` rather than `insert` so a
+/// crash *between* the transaction commit and the `defaults.set(...)`
+/// call (the unavoidable gap) re-running on next launch is harmless —
+/// the upsert no-ops on already-present rows. A `defer { committed ?
+/// flag = true : () }` pattern makes the flag-set-on-success invariant
+/// structurally visible.
 ///
 /// **Bit-for-bit `encodedSystemFields`.** The migrator copies the cached
 /// CKRecord change-tag blob byte-for-byte from the SwiftData row to the
@@ -26,6 +30,15 @@ import SwiftData
 /// `ProfileSession` has been opened and before
 /// `SyncCoordinator.start()` so CKSyncEngine reads from a fully
 /// populated `data.sqlite` on the first launch.
+///
+/// **Concurrency.** `@MainActor` is required because the SwiftData
+/// `ModelContext(modelContainer)` constructor and the resulting
+/// `context.fetch(...)` are `@MainActor`-isolated when the container is
+/// `mainContext`-bound. The GRDB writes themselves are queue-serialised
+/// and don't need main-actor isolation. If profiling ever shows this
+/// blocks for >16ms (one frame) on a p99 device, convert
+/// `migrateIfNeeded` to async and call with `await` from
+/// `ProfileSession.init` (per `guides/CONCURRENCY_GUIDE.md` §1).
 @MainActor
 final class SwiftDataToGRDBMigrator {
   /// `UserDefaults` key gating the CSV-import-profile copy. Once true,
@@ -36,8 +49,6 @@ final class SwiftDataToGRDBMigrator {
 
   private let logger = Logger(
     subsystem: "com.moolah.app", category: "SwiftDataToGRDBMigrator")
-
-  init() {}
 
   /// Runs the one-shot migration for both record types. Each is gated
   /// independently; a previously-migrated record type is a no-op.
@@ -70,6 +81,24 @@ final class SwiftDataToGRDBMigrator {
     defaults: UserDefaults
   ) throws {
     guard !defaults.bool(forKey: Self.csvImportProfilesFlag) else { return }
+    // The `committed` flag is flipped after the write transaction commits
+    // and consulted by the `defer` block — making the
+    // "flag is set iff the write committed" invariant visible without
+    // duplicating the success path. `upsert` (rather than `insert`)
+    // keeps re-runs harmless if the app crashes between commit and
+    // flag-set: existing rows are a no-op match.
+    var committed = false
+    var rowCount = 0
+    defer {
+      if committed {
+        defaults.set(true, forKey: Self.csvImportProfilesFlag)
+        logger.info(
+          """
+          SwiftData → GRDB migration complete for CSVImportProfile: \
+          \(rowCount, privacy: .public) row(s) copied
+          """)
+      }
+    }
     let context = ModelContext(modelContainer)
     let descriptor = FetchDescriptor<CSVImportProfileRecord>()
     let sourceRows: [CSVImportProfileRecord]
@@ -88,16 +117,12 @@ final class SwiftDataToGRDBMigrator {
     if !mappedRows.isEmpty {
       try database.write { database in
         for row in mappedRows {
-          try row.insert(database)
+          try row.upsert(database)
         }
       }
     }
-    defaults.set(true, forKey: Self.csvImportProfilesFlag)
-    logger.info(
-      """
-      SwiftData → GRDB migration complete for CSVImportProfile: \
-      \(mappedRows.count, privacy: .public) row(s) copied
-      """)
+    rowCount = mappedRows.count
+    committed = true
   }
 
   /// Maps a SwiftData `CSVImportProfileRecord` to a `CSVImportProfileRow`,
@@ -127,6 +152,20 @@ final class SwiftDataToGRDBMigrator {
     defaults: UserDefaults
   ) throws {
     guard !defaults.bool(forKey: Self.importRulesFlag) else { return }
+    // See `migrateCSVImportProfilesIfNeeded` for why this uses a
+    // `committed` defer flag and `upsert` (idempotent re-migration).
+    var committed = false
+    var rowCount = 0
+    defer {
+      if committed {
+        defaults.set(true, forKey: Self.importRulesFlag)
+        logger.info(
+          """
+          SwiftData → GRDB migration complete for ImportRule: \
+          \(rowCount, privacy: .public) row(s) copied
+          """)
+      }
+    }
     let context = ModelContext(modelContainer)
     let descriptor = FetchDescriptor<ImportRuleRecord>()
     let sourceRows: [ImportRuleRecord]
@@ -145,16 +184,12 @@ final class SwiftDataToGRDBMigrator {
     if !mappedRows.isEmpty {
       try database.write { database in
         for row in mappedRows {
-          try row.insert(database)
+          try row.upsert(database)
         }
       }
     }
-    defaults.set(true, forKey: Self.importRulesFlag)
-    logger.info(
-      """
-      SwiftData → GRDB migration complete for ImportRule: \
-      \(mappedRows.count, privacy: .public) row(s) copied
-      """)
+    rowCount = mappedRows.count
+    committed = true
   }
 
   /// Maps a SwiftData `ImportRuleRecord` to an `ImportRuleRow`, preserving

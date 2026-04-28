@@ -51,13 +51,36 @@ struct CSVImportPlanPinningTests {
           """,
         arguments: [UUID()]
       ).map { String(describing: $0["detail"] ?? "") }
-      // Non-INTEGER PRIMARY KEY columns surface as
-      // `SEARCH … USING INDEX sqlite_autoindex_csv_import_profile_1`
-      // or similar in EQP output. The guarantee that matters is "no
-      // table scan"; we additionally check the plan mentions either an
-      // INDEX or a primary-key-shaped lookup so a future change that
-      // accidentally drops the PK declaration shows up here.
-      #expect(plan.contains { $0.contains("SEARCH") })
+      // BLOB PRIMARY KEY columns surface as
+      // `SEARCH … USING INDEX sqlite_autoindex_csv_import_profile_1`.
+      // Pin the exact auto-index name so a future change that drops the
+      // PK declaration (and silently reverts to a SCAN) fails this
+      // test rather than passing on a `SEARCH` against any other index.
+      #expect(
+        plan.contains { $0.contains("sqlite_autoindex_csv_import_profile_1") })
+      #expect(!plan.contains { $0.contains("SCAN") })
+    }
+  }
+
+  @Test
+  func importRuleFilterByAccountScopeUsesPartialIndex() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    try await database.read { database in
+      let plan = try Row.fetchAll(
+        database,
+        sql: """
+          EXPLAIN QUERY PLAN
+          SELECT * FROM import_rule WHERE account_scope = ?
+          """,
+        arguments: [UUID()]
+      ).map { String(describing: $0["detail"] ?? "") }
+      // The partial index `import_rule_account_scope` covers the live
+      // "rules scoped to account X" lookup driven by the rule
+      // evaluator. Pinning the index here keeps the schema and the
+      // query in lockstep — a future schema edit that drops the partial
+      // index turns this test red instead of silently regressing the
+      // hot path to a SCAN.
+      #expect(plan.contains { $0.contains("USING INDEX import_rule_account_scope") })
       #expect(!plan.contains { $0.contains("SCAN") })
     }
   }

@@ -68,16 +68,20 @@ final class GRDBCSVImportProfileRepository: CSVImportProfileRepository, @uncheck
       else {
         throw BackendError.serverError(404)
       }
-      existing.accountId = profile.accountId
-      existing.parserIdentifier = profile.parserIdentifier
-      existing.headerSignature = profile.headerSignature.joined(
-        separator: CSVImportProfileRow.separator)
-      existing.filenamePattern = profile.filenamePattern
-      existing.deleteAfterImport = profile.deleteAfterImport
-      existing.lastUsedAt = profile.lastUsedAt
-      existing.dateFormatRawValue = profile.dateFormatRawValue
-      existing.columnRoleRawValuesEncoded = CSVImportProfileRow.encodeColumnRoles(
-        profile.columnRoleRawValues)
+      // Build a fresh row from the domain object and copy the
+      // domain-mapped fields onto `existing` (preserving id,
+      // recordName, createdAt, encodedSystemFields). Mirrors
+      // `GRDBImportRuleRepository.update` so the field-mapping policy
+      // lives only in `init(domain:)`.
+      let fresh = CSVImportProfileRow(domain: profile)
+      existing.accountId = fresh.accountId
+      existing.parserIdentifier = fresh.parserIdentifier
+      existing.headerSignature = fresh.headerSignature
+      existing.filenamePattern = fresh.filenamePattern
+      existing.deleteAfterImport = fresh.deleteAfterImport
+      existing.lastUsedAt = fresh.lastUsedAt
+      existing.dateFormatRawValue = fresh.dateFormatRawValue
+      existing.columnRoleRawValuesEncoded = fresh.columnRoleRawValuesEncoded
       try existing.update(database)
       return existing
     }
@@ -106,6 +110,10 @@ final class GRDBCSVImportProfileRepository: CSVImportProfileRepository, @uncheck
   func applyRemoteChangesSync(saved rows: [CSVImportProfileRow], deleted ids: [UUID]) throws {
     try database.write { database in
       for row in rows {
+        // `upsert` matches on the PK conflict (`id`). Because
+        // `recordName(for: id)` is total over `id`, the implied UNIQUE
+        // conflict on `record_name` is satisfied by the same row, so a
+        // single conflict target suffices.
         try row.upsert(database)
       }
       for id in ids {

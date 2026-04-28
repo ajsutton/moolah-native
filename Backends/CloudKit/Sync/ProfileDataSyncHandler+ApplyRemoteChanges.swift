@@ -125,6 +125,8 @@ extension ProfileDataSyncHandler {
     }
   }
 
+  // MARK: - GRDB Dispatch
+
   /// Routes a per-record-type batch through the GRDB repos when the type
   /// has been migrated. Returns `true` when the dispatch was handled here
   /// (caller skips the SwiftData path for this group), `false` for

@@ -62,8 +62,9 @@ struct SyncRoundTripCSVImportTests {
     #expect(row.parserIdentifier == "generic-bank")
     #expect(row.headerSignature == "date\u{1F}amount")
     // CKSyncEngine's apply path stamps the cached system fields from the
-    // incoming record — non-nil after a successful apply.
-    #expect(row.encodedSystemFields != nil)
+    // incoming record — bit-for-bit byte equality is the contract that
+    // prevents `.serverRecordChanged` cycles on the next upload.
+    #expect(row.encodedSystemFields == ckRecord.encodedSystemFields)
   }
 
   @Test("CSV import profile delete via remote-change dispatch removes the row")
@@ -143,6 +144,64 @@ struct SyncRoundTripCSVImportTests {
     #expect(row.matchMode == "all")
     #expect(row.conditionsJSON == conditionsJSON)
     #expect(row.actionsJSON == actionsJSON)
-    #expect(row.encodedSystemFields != nil)
+    // Byte-for-byte preservation of the incoming change tag — see the
+    // matching expectation on `csvImportProfileRoundTrip`.
+    #expect(row.encodedSystemFields == ckRecord.encodedSystemFields)
+  }
+
+  // MARK: - Uplink (upload) round trip
+
+  @Test("CSV import profile uplinks fresh state, then a second device applies it byte-equal")
+  func csvImportProfileUplinkRoundTrip() async throws {
+    // Device A: write a row through the repo, then build the CKRecord
+    // CKSyncEngine would upload via `recordToSave(for:)`.
+    let harnessA = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let id = UUID()
+    let accountId = UUID()
+    let domain = CSVImportProfile(
+      id: id,
+      accountId: accountId,
+      parserIdentifier: "generic-bank",
+      headerSignature: ["date", "amount"],
+      filenamePattern: nil,
+      deleteAfterImport: false,
+      createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+      lastUsedAt: nil,
+      dateFormatRawValue: nil,
+      columnRoleRawValues: [])
+    _ = try await harnessA.handler.grdbRepositories.csvImportProfiles.create(domain)
+    let recordID = CKRecord.ID(
+      recordType: CSVImportProfileRow.recordType, uuid: id, zoneID: harnessA.handler.zoneID)
+    let outgoing = try #require(harnessA.handler.recordToSave(for: recordID))
+
+    // Stamp the server-issued change-tag bytes onto the record (a real
+    // CKSyncEngine save populates these) and feed them back to Device A
+    // via the system-fields apply path used after a successful send.
+    let stampedFields = outgoing.encodedSystemFields
+    _ = try harnessA.handler.grdbRepositories.csvImportProfiles
+      .setEncodedSystemFieldsSync(id: id, data: stampedFields)
+    let rowsA = try await harnessA.database.read { database in
+      try CSVImportProfileRow.fetchAll(database)
+    }
+    let rowA = try #require(rowsA.first)
+    #expect(rowA.encodedSystemFields == stampedFields)
+
+    // Device B applies the same CKRecord via the remote-change dispatch
+    // path; the row must end up with the same field values and the
+    // exact same encodedSystemFields bytes.
+    let harnessB = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let result = harnessB.handler.applyRemoteChanges(saved: [outgoing], deleted: [])
+    if case .saveFailed(let message) = result {
+      Issue.record("applyRemoteChanges reported saveFailed on device B: \(message)")
+    }
+    let rowsB = try await harnessB.database.read { database in
+      try CSVImportProfileRow.fetchAll(database)
+    }
+    let rowB = try #require(rowsB.first)
+    #expect(rowB.id == rowA.id)
+    #expect(rowB.accountId == accountId)
+    #expect(rowB.parserIdentifier == "generic-bank")
+    #expect(rowB.headerSignature == rowA.headerSignature)
+    #expect(rowB.encodedSystemFields == outgoing.encodedSystemFields)
   }
 }

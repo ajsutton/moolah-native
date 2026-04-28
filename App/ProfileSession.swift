@@ -338,6 +338,11 @@ final class ProfileSession: Identifiable {
   /// Slice 0 of `plans/grdb-migration.md`: MUST run before
   /// `registerWithSyncCoordinator` so CKSyncEngine reads from a fully
   /// populated `data.sqlite` on the first sync session.
+  ///
+  /// `@MainActor` is explicit (not inherited from the class) because
+  /// `SwiftDataToGRDBMigrator.migrateIfNeeded` is `@MainActor` (the
+  /// SwiftData fetch path requires it).
+  @MainActor
   static func runSwiftDataToGRDBMigrationIfNeeded(
     profileId: UUID,
     containerManager: ProfileContainerManager?,

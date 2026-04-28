@@ -93,6 +93,14 @@ extension ProfileSession {
   /// `ProfileDataSyncHandler` that reaches them. Only registers when the
   /// backend is a `CloudKitBackend` — preview / test code paths skip
   /// registration silently.
+  ///
+  /// **Pre-condition.** Must be called before `SyncCoordinator`
+  /// processes any events for this profile. Guaranteed by
+  /// `ProfileSession.init` call order: `wireRepositorySync` (which
+  /// invokes this method) runs in `registerWithSyncCoordinator`, which
+  /// is the last statement of `init`. The first sync event for the
+  /// profile cannot arrive until `init` returns and the session is
+  /// retained by the caller, so registration always wins the race.
   private func registerGRDBRepositoriesForSync(coordinator: SyncCoordinator) {
     guard let cloudBackend = backend as? CloudKitBackend else { return }
     coordinator.setProfileGRDBRepositories(
