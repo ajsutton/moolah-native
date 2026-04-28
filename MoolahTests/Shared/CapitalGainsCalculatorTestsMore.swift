@@ -34,30 +34,30 @@ struct CapitalGainsCalculatorTestsMore {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -4000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -4000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
     let buyCBA = LegTransaction(
       date: date(50),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -5000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -5000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: cba, quantity: 50, type: .transfer,
+          accountId: accountId, instrument: cba, quantity: 50, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
     let sellAllBHP = LegTransaction(
       date: date(400),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: -100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: -100, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: 5000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: 5000, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -88,13 +88,13 @@ struct CapitalGainsCalculatorTestsMore {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: usd, quantity: -2000, type: .transfer,
+          accountId: accountId, instrument: usd, quantity: -2000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -100, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -100, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -102,10 +102,10 @@ struct CapitalGainsCalculatorTestsMore {
       date: date(400),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: -100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: -100, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: 4000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: 4000, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -138,10 +138,10 @@ struct CapitalGainsCalculatorTestsMore {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -3000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -3000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -150,10 +150,10 @@ struct CapitalGainsCalculatorTestsMore {
       date: date(400),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: -100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: -100, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: usd, quantity: 3000, type: .transfer,
+          accountId: accountId, instrument: usd, quantity: 3000, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 

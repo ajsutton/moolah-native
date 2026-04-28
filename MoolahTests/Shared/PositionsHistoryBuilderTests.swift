@@ -25,8 +25,8 @@ struct PositionsHistoryBuilderTests {
     Transaction(
       date: date(daysAfterEpoch: days),
       legs: [
-        TransactionLeg(accountId: accountId, instrument: instrument, quantity: qty, type: .income),
-        TransactionLeg(accountId: accountId, instrument: aud, quantity: -fiat, type: .expense),
+        TransactionLeg(accountId: accountId, instrument: instrument, quantity: qty, type: .trade),
+        TransactionLeg(accountId: accountId, instrument: aud, quantity: -fiat, type: .trade),
       ]
     )
   }
