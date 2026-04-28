@@ -262,62 +262,6 @@ struct CryptoPriceServiceTests {
     }
   }
 
-  // MARK: - Rollback test for multi-statement save
-
-  /// Rollback contract: `CryptoPriceService.saveCache` is one
-  /// `database.write` (delete prior price rows + re-insert + upsert meta).
-  ///
-  /// Drives the **production** `saveCache` by installing a trigger that
-  /// raises `ABORT` on a sentinel date string. A second fetch through the
-  /// service merges that sentinel into the cache, the production save path
-  /// runs, the trigger fires inside the transaction, and the entire write
-  /// must roll back — leaving prior rows untouched.
-  @Test
-  func saveCacheRollsBackOnInsertFailure() async throws {
-    let database = try ProfileDatabase.openInMemory()
-    let service = try makeService(
-      prices: ["1:native": ["2026-04-10": dec("1623.45"), "2026-04-11": dec("1700")]],
-      database: database
-    )
-    _ = try await service.price(
-      for: ethInstrument, mapping: ethMapping, on: date("2026-04-10"))
-
-    let beforeCount = try await database.read { database in
-      try CryptoPriceRecord
-        .filter(CryptoPriceRecord.Columns.tokenId == "1:native")
-        .fetchCount(database)
-    }
-    #expect(beforeCount > 0)
-
-    // Install a trigger that aborts inserts carrying the sentinel date.
-    // The trigger fires inside `saveCache`'s transaction so the upfront
-    // DELETE for the 1:native partition + the new inserts roll back together.
-    try await database.write { database in
-      try database.execute(
-        sql: """
-          CREATE TRIGGER fail_save_cache
-          BEFORE INSERT ON crypto_price
-          WHEN NEW.date = '9999-12-31'
-          BEGIN
-              SELECT RAISE(ABORT, 'forced failure for rollback test');
-          END;
-          """)
-    }
-
-    // Drive the real `saveCache` by feeding a price set that contains the
-    // sentinel date.
-    let failingService = try makeService(
-      prices: ["1:native": ["9999-12-31": dec("9999.0")]],
-      database: database
-    )
-    _ = try? await failingService.price(
-      for: ethInstrument, mapping: ethMapping, on: date("9999-12-31"))
-
-    let afterCount = try await database.read { database in
-      try CryptoPriceRecord
-        .filter(CryptoPriceRecord.Columns.tokenId == "1:native")
-        .fetchCount(database)
-    }
-    #expect(afterCount == beforeCount)
-  }
+  // Rollback contract for `saveCache` lives in `CryptoPriceServiceTestsMore.swift`
+  // so this file stays under SwiftLint's `type_body_length` cap.
 }

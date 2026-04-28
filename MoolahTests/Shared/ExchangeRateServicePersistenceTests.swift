@@ -80,13 +80,16 @@ struct ExchangeRateServicePersistenceTests {
   @Test
   func saveCacheRollsBackOnInsertFailure() async throws {
     let database = try ProfileDatabase.openInMemory()
+    // Pick a specific (date, quote, rate) triple we can re-look-up after
+    // the failed save so the assertion proves the DELETE was rolled back
+    // — not just that the row count happens to match.
     let primingClient = FixedRateClient(rates: [
-      "2025-01-10": ["USD": dec("0.6400"), "EUR": dec("0.5900")]
+      "2026-04-07": ["USD": dec("1.234"), "EUR": dec("0.5900")]
     ])
     let service = ExchangeRateService(client: primingClient, database: database)
-    _ = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-10"))
+    _ = try await service.rate(from: .AUD, to: .USD, on: date("2026-04-07"))
     _ = try await service.rate(
-      from: .AUD, to: Instrument.fiat(code: "EUR"), on: date("2025-01-10"))
+      from: .AUD, to: Instrument.fiat(code: "EUR"), on: date("2026-04-07"))
 
     // Sanity: rows landed via the production save path.
     let beforeCount = try await database.read { database in
@@ -128,12 +131,30 @@ struct ExchangeRateServicePersistenceTests {
     _ = try? await failingService.rate(
       from: .AUD, to: Instrument.fiat(code: "___FAIL___"), on: date("2025-02-15"))
 
-    // Prior state survived: original rows still in the table.
+    // Prior state survived: row count matches AND the specific priming
+    // row is still present. The exact-row probe defends against future
+    // regressions where `saveCache` might switch to upsert-only (no
+    // DELETE) — the count would then match for the wrong reason. Asking
+    // for the (AUD, USD, 2026-04-07) rate by value proves the original
+    // insert survived the rollback.
     let afterCount = try await database.read { database in
       try ExchangeRateRecord
         .filter(ExchangeRateRecord.Columns.base == "AUD")
         .fetchCount(database)
     }
     #expect(afterCount == beforeCount)
+
+    let surviving = try await database.read { database in
+      try ExchangeRateRecord
+        .filter(ExchangeRateRecord.Columns.base == "AUD")
+        .filter(ExchangeRateRecord.Columns.quote == "USD")
+        .filter(ExchangeRateRecord.Columns.date == "2026-04-07")
+        .fetchOne(database)
+    }
+    #expect(surviving != nil)
+    #expect(
+      approximatelyEqual(
+        Decimal(surviving?.rate ?? 0), dec("1.234"),
+        tolerance: Decimal(string: "0.0001") ?? Decimal(0)))
   }
 }

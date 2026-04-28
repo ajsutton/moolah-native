@@ -206,7 +206,11 @@ extension ProfileSession {
       .appending(path: "InstrumentRegistry", directoryHint: .isDirectory)
     do {
       let catalog = try SQLiteCoinGeckoCatalog(directory: directory)
-      let refreshTask = Task(priority: .background) { [catalog] in
+      // `Task.detached` rather than `Task { ... }` so the long-running
+      // network/disk work in `refreshIfStale()` doesn't inherit the
+      // caller's `@MainActor` isolation. `SQLiteCoinGeckoCatalog` is an
+      // actor (and `CoinGeckoCatalog: Sendable`), so this is safe.
+      let refreshTask = Task.detached(priority: .background) { [catalog] in
         await catalog.refreshIfStale()
       }
       return (catalog, refreshTask)

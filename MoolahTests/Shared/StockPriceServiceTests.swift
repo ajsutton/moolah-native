@@ -259,6 +259,20 @@ struct StockPriceServiceTests {
         .fetchCount(database)
     }
     #expect(afterCount == beforeCount)
+
+    // Probe a specific priming row to prove the DELETE inside
+    // `saveCache` was rolled back. Counts can match by accident if a
+    // future regression replaces delete-and-reinsert with upsert-only —
+    // re-looking-up `(BHP.AX, 2026-04-07, 38.50)` confirms the row
+    // survived rather than being silently rewritten.
+    let surviving = try await database.read { database in
+      try StockPriceRecord
+        .filter(StockPriceRecord.Columns.ticker == "BHP.AX")
+        .filter(StockPriceRecord.Columns.date == "2026-04-07")
+        .fetchOne(database)
+    }
+    #expect(surviving != nil)
+    #expect(surviving?.price == 38.50)
   }
 
   // MARK: - Multiple tickers

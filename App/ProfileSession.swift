@@ -60,6 +60,12 @@ final class ProfileSession: Identifiable {
   /// `cleanupSync(coordinator:)` if the session is torn down before the
   /// refresh completes.
   private var catalogRefreshTask: Task<Void, Never>?
+  /// Background task handle for the most recent `PRAGMA optimize` kick-off.
+  /// Tracked so we can cancel any pending optimize on session teardown
+  /// (per `guides/CONCURRENCY_GUIDE.md` §8 — fire-and-forget tasks must
+  /// be tracked). Replaced (with cancellation of the prior handle) on
+  /// each call to `schedulePragmaOptimize()`.
+  private var pragmaOptimizeTask: Task<Void, Never>?
 
   /// Synchronous initialiser — opens the per-profile GRDB queue and runs
   /// pending migrations on the calling thread. The migrator currently only
@@ -226,6 +232,8 @@ final class ProfileSession: Identifiable {
     syncReloadTask = nil
     catalogRefreshTask?.cancel()
     catalogRefreshTask = nil
+    pragmaOptimizeTask?.cancel()
+    pragmaOptimizeTask = nil
   }
 
   // MARK: - Folder watch
@@ -258,16 +266,34 @@ final class ProfileSession: Identifiable {
   /// hook is wired by `MoolahApp+Lifecycle.handleScenePhaseChange`; the
   /// hourly-while-active tick is a follow-up — for now profile DBs are
   /// small enough that the once-per-resign cadence suffices.
+  ///
+  /// Runs inside `database.write` because `PRAGMA optimize` may invoke
+  /// `ANALYZE` and update the `sqlite_stat1` / `sqlite_stat4` tables — a
+  /// read-only transaction would either silently no-op the analyze step
+  /// or surface a write-from-read error.
   func runPragmaOptimize() async {
     let database = self.database
     do {
-      try await database.read { database in
+      try await database.write { database in
         try database.execute(sql: "PRAGMA optimize")
       }
     } catch {
       logger.warning(
         "PRAGMA optimize failed for profile \(self.profile.id): \(error.localizedDescription, privacy: .public)"
       )
+    }
+  }
+
+  /// Schedules a best-effort `PRAGMA optimize` on a tracked background
+  /// task. Cancels any prior pending optimize before scheduling so we
+  /// never run two concurrently for the same session, and leaves the
+  /// handle in `pragmaOptimizeTask` so `cleanupSync` can cancel it on
+  /// teardown (per `guides/CONCURRENCY_GUIDE.md` §8 — fire-and-forget
+  /// tasks must be tracked).
+  func schedulePragmaOptimize() {
+    pragmaOptimizeTask?.cancel()
+    pragmaOptimizeTask = Task { [weak self] in
+      await self?.runPragmaOptimize()
     }
   }
 

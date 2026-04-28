@@ -6,19 +6,23 @@ import OSLog
 
 actor CryptoPriceService {
   private let clients: [CryptoPriceClient]
-  // `caches`, `hydratedTokenIds`, and `database` are accessed by the
-  // SQL persistence extension in `CryptoPriceService+Persistence.swift`.
-  // They remain actor-isolated; the access modifier is internal so the
-  // sibling-file extension can see them.
+
+  // MARK: - Cross-extension internals
+  // `caches`, `hydratedTokenIds`, `database`, and `logger` are accessed
+  // by the SQL persistence extension in
+  // `CryptoPriceService+Persistence.swift`. They remain actor-isolated;
+  // the access modifier is internal so the sibling-file extension can
+  // see them.
   var caches: [String: CryptoPriceCache] = [:]
   /// Loaded token ids — set on first hydration so we don't re-read SQL when
   /// the cache is genuinely empty.
   var hydratedTokenIds: Set<String> = []
   let database: any DatabaseWriter
-  private let dateFormatter: ISO8601DateFormatter
-  private let resolutionClient: TokenResolutionClient
   let logger = Logger(
     subsystem: "com.moolah.app", category: "CryptoPriceService")
+
+  private let dateFormatter: ISO8601DateFormatter
+  private let resolutionClient: TokenResolutionClient
 
   init(
     clients: [CryptoPriceClient],

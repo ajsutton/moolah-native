@@ -7,6 +7,17 @@ import SwiftData
 @Observable
 @MainActor
 final class SessionManager {
+  /// Map from `Profile.ID` to the live `ProfileSession`.
+  ///
+  /// **Mutation invariant:** any code path that drops or replaces a
+  /// session **must** go through `removeSession(for:)` or
+  /// `rebuildSession(for:)` so the session's `cleanupSync(coordinator:)`
+  /// runs first. `cleanupSync` is the only place that cancels the
+  /// session's tracked tasks (`syncReloadTask`, `catalogRefreshTask`,
+  /// `pragmaOptimizeTask`); a direct mutation to `sessions` would leak
+  /// any of those that happen to be in flight. Adding new tracked tasks
+  /// to `ProfileSession`? Cancel them in `cleanupSync` and uphold this
+  /// rule for any new mutation site.
   private(set) var sessions: [UUID: ProfileSession] = [:]
   let containerManager: ProfileContainerManager
   let syncCoordinator: SyncCoordinator?

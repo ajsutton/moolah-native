@@ -10,18 +10,21 @@ enum ExchangeRateError: Error, Equatable {
 
 actor ExchangeRateService {
   private let client: ExchangeRateClient
-  // `caches`, `hydratedBases`, and `database` are accessed by the SQL
-  // persistence extension in `ExchangeRateService+Persistence.swift`. They
-  // remain actor-isolated; the access modifier is internal so the
+
+  // MARK: - Cross-extension internals
+  // `caches`, `hydratedBases`, `database`, and `logger` are accessed by
+  // the SQL persistence extension in `ExchangeRateService+Persistence.swift`.
+  // They remain actor-isolated; the access modifier is internal so the
   // sibling-file extension can see them.
   var caches: [String: ExchangeRateCache] = [:]
   /// Loaded bases — set on first hydration so we don't re-read SQL when the
   /// cache is genuinely empty.
   var hydratedBases: Set<String> = []
   let database: any DatabaseWriter
-  private let dateFormatter: ISO8601DateFormatter
   let logger = Logger(
     subsystem: "com.moolah.app", category: "ExchangeRateService")
+
+  private let dateFormatter: ISO8601DateFormatter
 
   init(client: ExchangeRateClient, database: any DatabaseWriter) {
     self.client = client
