@@ -2,6 +2,7 @@
 
 import Foundation
 import GRDB
+import OSLog
 
 enum StockPriceError: Error, Equatable {
   case noPriceAvailable(ticker: String, date: String)
@@ -16,6 +17,8 @@ actor StockPriceService {
   private var hydratedTickers: Set<String> = []
   private let database: any DatabaseWriter
   private let dateFormatter: ISO8601DateFormatter
+  private let logger = Logger(
+    subsystem: "com.moolah.app", category: "StockPriceService")
 
   init(client: StockPriceClient, database: any DatabaseWriter) {
     self.client = client
@@ -273,6 +276,13 @@ actor StockPriceService {
   ///
   /// Multi-statement; covered by a rollback test in
   /// `StockPriceServiceTests.swift`.
+  ///
+  /// Captures `caches[ticker]` before suspending on `database.write`.
+  /// Actor re-entrancy is acceptable here: a concurrent merge will trigger
+  /// its own `saveCache` afterwards, so the disk converges to the latest
+  /// in-memory state. A crash between the two writes leaves the disk at
+  /// an intermediate-but-consistent snapshot — acceptable for a
+  /// best-effort persistent cache.
   private func saveCache(ticker: String) async throws {
     guard let cache = caches[ticker] else { return }
     let records: [StockPriceRecord] = cache.prices.map { dateString, price in

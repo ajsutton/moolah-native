@@ -215,8 +215,6 @@ struct CryptoPriceServiceTests {
     #expect(prices["0:native"] == dec("67890.00"))
   }
 
-  // MARK: - SQL persistence round-trip
-
   // MARK: - purgeCache
 
   /// `purgeCache` clears both the in-memory entry and the SQL rows for the
@@ -268,9 +266,14 @@ struct CryptoPriceServiceTests {
 
   /// Rollback contract: `CryptoPriceService.saveCache` is one
   /// `database.write` (delete prior price rows + re-insert + upsert meta).
-  /// A constraint violation mid-transaction must leave prior state intact.
+  ///
+  /// Drives the **production** `saveCache` by installing a trigger that
+  /// raises `ABORT` on a sentinel date string. A second fetch through the
+  /// service merges that sentinel into the cache, the production save path
+  /// runs, the trigger fires inside the transaction, and the entire write
+  /// must roll back — leaving prior rows untouched.
   @Test
-  func saveRollsBackOnConstraintFailure() async throws {
+  func saveCacheRollsBackOnInsertFailure() async throws {
     let database = try ProfileDatabase.openInMemory()
     let service = try makeService(
       prices: ["1:native": ["2026-04-10": dec("1623.45"), "2026-04-11": dec("1700")]],
@@ -286,18 +289,29 @@ struct CryptoPriceServiceTests {
     }
     #expect(beforeCount > 0)
 
-    await #expect(throws: (any Error).self) {
-      try await database.write { database in
-        try CryptoPriceRecord
-          .filter(CryptoPriceRecord.Columns.tokenId == "1:native")
-          .deleteAll(database)
-        try CryptoPriceRecord(tokenId: "1:native", date: "2026-01-01", priceUsd: 1.0)
-          .insert(database)
-        // Duplicate (token_id, date) trips the PK on the second insert.
-        try CryptoPriceRecord(tokenId: "1:native", date: "2026-01-01", priceUsd: 2.0)
-          .insert(database)
-      }
+    // Install a trigger that aborts inserts carrying the sentinel date.
+    // The trigger fires inside `saveCache`'s transaction so the upfront
+    // DELETE for the 1:native partition + the new inserts roll back together.
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER fail_save_cache
+          BEFORE INSERT ON crypto_price
+          WHEN NEW.date = '9999-12-31'
+          BEGIN
+              SELECT RAISE(ABORT, 'forced failure for rollback test');
+          END;
+          """)
     }
+
+    // Drive the real `saveCache` by feeding a price set that contains the
+    // sentinel date.
+    let failingService = try makeService(
+      prices: ["1:native": ["9999-12-31": dec("9999.0")]],
+      database: database
+    )
+    _ = try? await failingService.price(
+      for: ethInstrument, mapping: ethMapping, on: date("9999-12-31"))
 
     let afterCount = try await database.read { database in
       try CryptoPriceRecord

@@ -37,10 +37,14 @@ struct MoolahApp: App {
   #if os(macOS)
     @NSApplicationDelegateAdaptor(ScriptingBridge.self) var scriptingBridge
     private let backupManager: StoreBackupManager
-    @State private var sessionManager: SessionManager
+    // internal so `+Lifecycle` can iterate open sessions for
+    // `PRAGMA optimize` on resign-active.
+    @State var sessionManager: SessionManager
   #else
     @State private var activeSession: ProfileSession?
-    @State private var sessionManager: SessionManager
+    // internal so `+Lifecycle` can iterate open sessions for
+    // `PRAGMA optimize` on resign-active.
+    @State var sessionManager: SessionManager
   #endif
 
   init() {

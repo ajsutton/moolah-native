@@ -11,10 +11,23 @@ extension MoolahApp {
     switch newPhase {
     case .background:
       flushPendingChanges()
+      runPragmaOptimizeOnAllSessions()
     case .active:
       Task { await fetchRemoteChanges() }
     default:
       break
+    }
+  }
+
+  /// Per `guides/DATABASE_SCHEMA_GUIDE.md` §5, the recommended cadence for
+  /// `PRAGMA optimize` is "once on app resign-active". Iterates the open
+  /// profile sessions and dispatches a best-effort optimize on each. The
+  /// hourly-while-active tick is a follow-up — current rate-cache schemas
+  /// are small enough that once-per-resign suffices.
+  func runPragmaOptimizeOnAllSessions() {
+    let sessions = sessionManager.openProfiles
+    for session in sessions {
+      Task { await session.runPragmaOptimize() }
     }
   }
 

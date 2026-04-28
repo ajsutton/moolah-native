@@ -65,27 +65,30 @@ struct ExchangeRateServicePersistenceTests {
     return absDelta <= tolerance
   }
 
-  /// Rollback contract: the service's save path is a single
+  /// Rollback contract: `ExchangeRateService.saveCache` is a single
   /// `database.write` transaction (delete prior rows + re-insert + upsert
   /// meta). If any statement inside the transaction throws, prior state
-  /// must survive untouched. This test seeds a successful save through the
-  /// service, then runs a write that mirrors the same shape but trips a
-  /// `PRIMARY KEY` constraint mid-transaction; the prior rows must remain.
+  /// must survive untouched.
   ///
-  /// Mirrors `SQLiteCoinGeckoCatalogStorageTests.replaceAllRollsBackOnConstraintFailure`.
+  /// To drive the **production** save path (rather than asserting on a
+  /// hand-rolled mirror of `saveCache`'s shape), this test installs a
+  /// SQLite `BEFORE INSERT` trigger that raises `ABORT` whenever a
+  /// sentinel quote (`"___FAIL___"`) is inserted. A second fetch through
+  /// the service yields a rate set containing that sentinel, which makes
+  /// the real `saveCache` throw mid-transaction. Prior rows must remain
+  /// because SQLite rolls the transaction back atomically.
   @Test
-  func saveRollsBackOnConstraintFailure() async throws {
+  func saveCacheRollsBackOnInsertFailure() async throws {
     let database = try ProfileDatabase.openInMemory()
     let primingClient = FixedRateClient(rates: [
       "2025-01-10": ["USD": dec("0.6400"), "EUR": dec("0.5900")]
     ])
     let service = ExchangeRateService(client: primingClient, database: database)
     _ = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-10"))
-    _ = try await service.rate(from: .AUD, to: .USD, on: date("2025-01-10"))
     _ = try await service.rate(
       from: .AUD, to: Instrument.fiat(code: "EUR"), on: date("2025-01-10"))
 
-    // Sanity: rows landed.
+    // Sanity: rows landed via the production save path.
     let beforeCount = try await database.read { database in
       try ExchangeRateRecord
         .filter(ExchangeRateRecord.Columns.base == "AUD")
@@ -93,24 +96,39 @@ struct ExchangeRateServicePersistenceTests {
     }
     #expect(beforeCount >= 2)
 
-    // Force a constraint violation inside the same transaction shape that
-    // `saveCache` uses: delete prior rows for AUD, re-insert one, then
-    // re-insert a duplicate (base, date, quote) — the second insert trips
-    // the PK and the whole transaction must roll back.
-    await #expect(throws: (any Error).self) {
-      try await database.write { database in
-        try ExchangeRateRecord
-          .filter(ExchangeRateRecord.Columns.base == "AUD")
-          .deleteAll(database)
-        try ExchangeRateRecord(base: "AUD", quote: "USD", date: "2026-01-01", rate: 0.5)
-          .insert(database)
-        try ExchangeRateRecord(base: "AUD", quote: "USD", date: "2026-01-01", rate: 0.6)
-          .insert(database)
-      }
+    // Install a trigger that aborts any insert with the sentinel quote.
+    // The trigger fires inside `saveCache`'s transaction so the entire
+    // save (including the upfront DELETE for the AUD partition) must
+    // roll back together.
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER fail_save_cache
+          BEFORE INSERT ON exchange_rate
+          WHEN NEW.quote = '___FAIL___'
+          BEGIN
+              SELECT RAISE(ABORT, 'forced failure for rollback test');
+          END;
+          """)
     }
 
-    // Prior state survived: original rows are still in the table, the
-    // failed transaction's deletes did not commit.
+    // Drive the real `saveCache` by feeding a new rate set whose payload
+    // contains the sentinel quote. The service's save path executes the
+    // same delete-then-reinsert sequence as in production; the trigger
+    // raises mid-transaction, so the whole disk write must roll back.
+    //
+    // The public `rate(...)` call may still return successfully because
+    // `fetchToCoverDate` swallows the error and the in-memory cache holds
+    // the merged value — `try?` reflects "we don't care about the return
+    // value here; we only care about the rollback observed on disk".
+    let failingClient = FixedRateClient(rates: [
+      "2025-02-15": ["___FAIL___": dec("1.0")]
+    ])
+    let failingService = ExchangeRateService(client: failingClient, database: database)
+    _ = try? await failingService.rate(
+      from: .AUD, to: Instrument.fiat(code: "___FAIL___"), on: date("2025-02-15"))
+
+    // Prior state survived: original rows still in the table.
     let afterCount = try await database.read { database in
       try ExchangeRateRecord
         .filter(ExchangeRateRecord.Columns.base == "AUD")

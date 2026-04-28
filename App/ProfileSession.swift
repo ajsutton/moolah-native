@@ -14,7 +14,10 @@ final class ProfileSession: Identifiable {
   /// (or an in-memory queue under previews / tests). Released when the
   /// session deinits; on profile delete the parent `profiles/<id>/`
   /// directory is removed by `ProfileContainerManager.deleteStore`.
-  let database: DatabaseQueue
+  ///
+  /// Private: external consumers go through repositories and the rate
+  /// services rather than poking the queue directly.
+  private let database: DatabaseQueue
   let backend: BackendProvider
   let authStore: AuthStore
   let accountStore: AccountStore
@@ -52,7 +55,19 @@ final class ProfileSession: Identifiable {
   private var syncReloadTask: Task<Void, Never>?
   private var pendingChangedTypes = Set<String>()
   private var lastSyncEventTime: ContinuousClock.Instant?
+  /// Background task handle for the once-per-session CoinGecko
+  /// `refreshIfStale()` kick-off. Tracked so it can be cancelled in
+  /// `cleanupSync(coordinator:)` if the session is torn down before the
+  /// refresh completes.
+  private var catalogRefreshTask: Task<Void, Never>?
 
+  /// Synchronous initialiser — opens the per-profile GRDB queue and runs
+  /// pending migrations on the calling thread. The migrator currently only
+  /// creates the rate-cache tables (microseconds for fresh databases, no
+  /// disk reads on subsequent opens once the migration is recorded), so
+  /// running on `@MainActor` is acceptable for now. Revisit if profile-DB
+  /// schemas grow large enough that `migrate(_:)` does meaningful work
+  /// each launch — see `guides/CONCURRENCY_GUIDE.md` §1.
   init(
     profile: Profile,
     containerManager: ProfileContainerManager? = nil,
@@ -90,6 +105,7 @@ final class ProfileSession: Identifiable {
     self.instrumentSearchService = registryWiring.searchService
     self.coinGeckoCatalog = registryWiring.coinGeckoCatalog
     self.tokenResolutionClient = registryWiring.tokenResolutionClient
+    self.catalogRefreshTask = registryWiring.catalogRefreshTask
     let stores = Self.makeDomainStores(profile: profile, backend: backend)
     self.authStore = stores.auth
     self.accountStore = stores.account
@@ -208,6 +224,8 @@ final class ProfileSession: Identifiable {
     coordinator.removeInstrumentRemoteChangeCallback(profileId: profile.id)
     syncReloadTask?.cancel()
     syncReloadTask = nil
+    catalogRefreshTask?.cancel()
+    catalogRefreshTask = nil
   }
 
   // MARK: - Folder watch
@@ -229,6 +247,28 @@ final class ProfileSession: Identifiable {
   /// watch isn't available.
   func scanWatchedFolder() async {
     await folderScanner.scanForNewFiles()
+  }
+
+  // MARK: - Database maintenance
+
+  /// Runs `PRAGMA optimize` on the per-profile DB. Best-effort: failures
+  /// are logged but never propagated. Per
+  /// `guides/DATABASE_SCHEMA_GUIDE.md` §5, the recommended cadence is once
+  /// on app resign-active and at most hourly while active. The on-resign
+  /// hook is wired by `MoolahApp+Lifecycle.handleScenePhaseChange`; the
+  /// hourly-while-active tick is a follow-up — for now profile DBs are
+  /// small enough that the once-per-resign cadence suffices.
+  func runPragmaOptimize() async {
+    let database = self.database
+    do {
+      try await database.read { database in
+        try database.execute(sql: "PRAGMA optimize")
+      }
+    } catch {
+      logger.warning(
+        "PRAGMA optimize failed for profile \(self.profile.id): \(error.localizedDescription, privacy: .public)"
+      )
+    }
   }
 
   /// Per-profile directory under Application Support where CSV import staging
@@ -264,7 +304,7 @@ final class ProfileSession: Identifiable {
   ///   2. In-memory queue when the parent `containerManager` is in-memory
   ///      (UI testing, `ProfileContainerManager.forTesting()`).
   ///   3. On-disk `data.sqlite` under `profiles/<id>/` for production.
-  nonisolated private static func resolveDatabase(
+  private static func resolveDatabase(
     override: DatabaseQueue?,
     profile: Profile,
     containerManager: ProfileContainerManager?

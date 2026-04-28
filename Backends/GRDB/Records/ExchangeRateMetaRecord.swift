@@ -17,6 +17,10 @@ struct ExchangeRateMetaRecord: Codable, Sendable, FetchableRecord, PersistableRe
     case latestDate = "latest_date"
   }
 
+  // `CodingKeys` is required (not redundant with `Columns`): GRDB's
+  // FetchableRecord/PersistableRecord conformance is Codable-derived, so
+  // this enum drives the snake_case ⇄ camelCase mapping when rows decode
+  // and parameters bind. `Columns` is consumed by the query interface only.
   enum CodingKeys: String, CodingKey {
     case base
     case earliestDate = "earliest_date"

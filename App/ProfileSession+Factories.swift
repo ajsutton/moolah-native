@@ -104,12 +104,17 @@ extension ProfileSession {
   /// crypto token store, search service, CoinGecko catalog, and token
   /// resolution client. Populated for CloudKit profiles; nil fields indicate
   /// a degraded state (e.g. catalog init failure).
+  ///
+  /// `catalogRefreshTask` carries the once-per-session
+  /// `refreshIfStale()` background task so `ProfileSession` can store and
+  /// cancel it on teardown. `nil` when catalog construction failed.
   struct RegistryWiring {
     let registry: (any InstrumentRegistryRepository)?
     let cryptoTokenStore: CryptoTokenStore?
     let searchService: InstrumentSearchService?
     let coinGeckoCatalog: (any CoinGeckoCatalog)?
     let tokenResolutionClient: (any TokenResolutionClient)?
+    let catalogRefreshTask: Task<Void, Never>?
   }
 
   /// Resolves the instrument-registry wiring for a CloudKit profile. Returns
@@ -140,12 +145,16 @@ extension ProfileSession {
     }
 
     let catalog: (any CoinGeckoCatalog)?
+    let refreshTask: Task<Void, Never>?
     let resolutionClient: any TokenResolutionClient
     if let overrides = uiTestingCryptoOverrides() {
       catalog = overrides.catalog
+      refreshTask = nil
       resolutionClient = overrides.resolutionClient
     } else {
-      catalog = makeCoinGeckoCatalog()
+      let made = makeCoinGeckoCatalog()
+      catalog = made.catalog
+      refreshTask = made.refreshTask
       resolutionClient = CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey)
     }
     let store = CryptoTokenStore(
@@ -162,7 +171,8 @@ extension ProfileSession {
       cryptoTokenStore: store,
       searchService: searchService,
       coinGeckoCatalog: catalog,
-      tokenResolutionClient: resolutionClient
+      tokenResolutionClient: resolutionClient,
+      catalogRefreshTask: refreshTask
     )
   }
 
@@ -184,23 +194,26 @@ extension ProfileSession {
 
   /// Builds the per-profile CoinGecko catalog and kicks off a background
   /// `refreshIfStale()` so the SQLite snapshot is brought up to date once per
-  /// session without blocking init. Returns `nil` (and logs) when the
+  /// session without blocking init. Returns `(nil, nil)` (and logs) when the
   /// SQLite file can't be opened — the caller treats that as a degraded
-  /// search path.
+  /// search path. The returned `refreshTask` handle is stored on
+  /// `ProfileSession` so it can be cancelled on teardown.
   @MainActor
-  private static func makeCoinGeckoCatalog() -> (any CoinGeckoCatalog)? {
+  private static func makeCoinGeckoCatalog()
+    -> (catalog: (any CoinGeckoCatalog)?, refreshTask: Task<Void, Never>?)
+  {
     let directory = URL.moolahScopedApplicationSupport
       .appending(path: "InstrumentRegistry", directoryHint: .isDirectory)
     do {
       let catalog = try SQLiteCoinGeckoCatalog(directory: directory)
-      Task(priority: .background) { [catalog] in
+      let refreshTask = Task(priority: .background) { [catalog] in
         await catalog.refreshIfStale()
       }
-      return catalog
+      return (catalog, refreshTask)
     } catch {
       Logger(subsystem: "com.moolah.app", category: "ProfileSession")
         .error("CoinGecko catalog init failed: \(error.localizedDescription, privacy: .public)")
-      return nil
+      return (nil, nil)
     }
   }
 

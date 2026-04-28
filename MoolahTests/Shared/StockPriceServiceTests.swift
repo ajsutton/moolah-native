@@ -209,11 +209,14 @@ struct StockPriceServiceTests {
 
   /// Rollback contract: `StockPriceService.saveCache` is a single
   /// `database.write` (delete prior price rows + re-insert + upsert meta).
-  /// A constraint violation mid-transaction must leave prior state intact.
-  /// See `ExchangeRateServiceTests.saveRollsBackOnConstraintFailure` for
-  /// the equivalent FX assertion.
+  ///
+  /// Drives the **production** `saveCache` by installing a trigger that
+  /// raises `ABORT` on a sentinel date string. A second fetch through the
+  /// service merges that sentinel into the cache, the production save path
+  /// runs, the trigger fires inside the transaction, and the entire write
+  /// must roll back — leaving prior rows untouched.
   @Test
-  func saveRollsBackOnConstraintFailure() async throws {
+  func saveCacheRollsBackOnInsertFailure() async throws {
     let database = try ProfileDatabase.openInMemory()
     let service = try makeService(responses: ["BHP.AX": bhpResponse()], database: database)
     _ = try await service.price(ticker: "BHP.AX", on: date("2026-04-07"))
@@ -225,16 +228,30 @@ struct StockPriceServiceTests {
     }
     #expect(beforeCount > 0)
 
-    await #expect(throws: (any Error).self) {
-      try await database.write { database in
-        try StockPriceRecord
-          .filter(StockPriceRecord.Columns.ticker == "BHP.AX")
-          .deleteAll(database)
-        try StockPriceRecord(ticker: "BHP.AX", date: "2026-01-01", price: 1.0).insert(database)
-        // Duplicate (ticker, date) trips the PK on the second insert.
-        try StockPriceRecord(ticker: "BHP.AX", date: "2026-01-01", price: 2.0).insert(database)
-      }
+    // Install a trigger that aborts inserts carrying the sentinel date.
+    // The trigger fires inside `saveCache`'s transaction so the upfront
+    // DELETE for the BHP.AX partition + the new inserts roll back together.
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER fail_save_cache
+          BEFORE INSERT ON stock_price
+          WHEN NEW.date = '9999-12-31'
+          BEGIN
+              SELECT RAISE(ABORT, 'forced failure for rollback test');
+          END;
+          """)
     }
+
+    // Drive the real `saveCache` by feeding a price set that contains the
+    // sentinel date. The service merges it in, calls `saveCache`, the
+    // trigger raises mid-transaction, and SQLite rolls the whole write
+    // back atomically.
+    let failingResponse = StockPriceResponse(
+      instrument: .AUD, prices: ["9999-12-31": dec("99.99")])
+    let failingService = try makeService(
+      responses: ["BHP.AX": failingResponse], database: database)
+    _ = try? await failingService.price(ticker: "BHP.AX", on: date("9999-12-31"))
 
     let afterCount = try await database.read { database in
       try StockPriceRecord

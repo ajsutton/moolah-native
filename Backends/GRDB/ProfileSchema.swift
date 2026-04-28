@@ -10,6 +10,13 @@ import GRDB
 /// transactions, earmarks, etc. — are added in later migrations as the
 /// remaining slices of the GRDB migration land.
 ///
+/// **Retention policy for the cache tables.** All six cache tables created
+/// by `v1_initial` (`exchange_rate`, `exchange_rate_meta`, `stock_price`,
+/// `stock_ticker_meta`, `crypto_price`, `crypto_token_meta`) are **kept
+/// forever** — needed for historic-conversion correctness on reports older
+/// than the upstream rate APIs can serve. See `plans/grdb-migration.md` §4
+/// and `guides/DATABASE_SCHEMA_GUIDE.md` §9.
+///
 /// See `guides/DATABASE_SCHEMA_GUIDE.md` for the rules this schema follows
 /// and `plans/grdb-migration.md` for the slice sequencing.
 enum ProfileSchema {
@@ -25,14 +32,22 @@ enum ProfileSchema {
       migrator.eraseDatabaseOnSchemaChange = true
     #endif
 
-    migrator.registerMigration("v1_exchange_rate", migrate: createExchangeRateTables)
-    migrator.registerMigration("v1_stock_price", migrate: createStockPriceTables)
-    migrator.registerMigration("v1_crypto_price", migrate: createCryptoPriceTables)
+    // Once shipped, migration IDs are frozen forever, so the rate-cache
+    // slice is intentionally registered as a single `v1_initial` migration
+    // rather than three sub-migrations. Splitting later is fine; merging
+    // post-ship is not.
+    migrator.registerMigration("v1_initial", migrate: createInitialTables)
 
     return migrator
   }
 
-  // MARK: - v1 migration bodies
+  // MARK: - v1 migration body
+
+  private static func createInitialTables(_ database: Database) throws {
+    try createExchangeRateTables(database)
+    try createStockPriceTables(database)
+    try createCryptoPriceTables(database)
+  }
 
   private static func createExchangeRateTables(_ database: Database) throws {
     try database.execute(

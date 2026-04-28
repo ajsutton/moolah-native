@@ -18,6 +18,10 @@ struct CryptoPriceRecord: Codable, Sendable, FetchableRecord, PersistableRecord 
     case priceUsd = "price_usd"
   }
 
+  // `CodingKeys` is required (not redundant with `Columns`): GRDB's
+  // FetchableRecord/PersistableRecord conformance is Codable-derived, so
+  // this enum drives the snake_case ⇄ camelCase mapping when rows decode
+  // and parameters bind. `Columns` is consumed by the query interface only.
   enum CodingKeys: String, CodingKey {
     case tokenId = "token_id"
     case date

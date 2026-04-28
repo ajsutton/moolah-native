@@ -198,9 +198,13 @@ extension MoolahApp {
   /// the `v2.rates.cache.cleared` `UserDefaults` flag so it runs at most
   /// once per install. Best-effort — failures are silent and the rate
   /// services repopulate from network on demand.
-  static func cleanupLegacyRateCachesOnce() {
+  ///
+  /// `defaults` is injected with a `.standard` default so production callers
+  /// pass nothing while tests can supply an isolated suite — satisfies the
+  /// `CODE_GUIDE.md` §17 "no direct singleton access" rule without
+  /// inventing a wrapper type for a single call site.
+  static func cleanupLegacyRateCachesOnce(defaults: UserDefaults = .standard) {
     let key = "v2.rates.cache.cleared"
-    let defaults = UserDefaults.standard
     guard !defaults.bool(forKey: key) else { return }
     if let caches = FileManager.default
       .urls(for: .cachesDirectory, in: .userDomainMask)
