@@ -12,7 +12,7 @@ extension TransactionDetailView {
     }
   }
 
-  var isEditable: Bool { transaction.isSimple || draft.isCustom }
+  var isEditable: Bool { transaction.isSimple || transaction.isTrade || draft.isCustom }
 
   /// Whether the current draft is a simple earmark-only transaction.
   var isSimpleEarmarkOnly: Bool {

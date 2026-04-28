@@ -1,16 +1,15 @@
 import SwiftUI
 
-// Sign-handling note (Option C):
-// `TransactionDraft.displaysNegated(.trade)` is `false`, so `amountText` stores
-// the value exactly as the user types it — no negation at display or parse time.
-// Design §3.2 envisions Paid as always-positive (mapping to a negative-quantity
-// leg at serialise time), but implementing that mapping cleanly requires either a
-// custom binding with abs/negate round-trip or changing the `displaysNegated` rule
-// for only the Paid leg. For this iteration the editor accepts signed numbers
-// literally: the user may type "300" (positive, maps to +300) or "-300" (negative,
-// maps to -300). The label "Paid" still conveys intent; the forward mode-switch
-// from Expense preserves the display text as-is (which is already positive for a
-// normal expense). Fully positive-enforced fields are deferred to a follow-up.
+// Sign-handling note:
+// `TransactionDraft.displaysNegated(.trade) == false`, so `amountText` stores
+// the value exactly as the user types it. The serialisation path in
+// `TransactionDraft.toTransaction` applies `abs()` and re-signs `.trade` legs
+// by position (first → Paid / negative, second → Received / positive), so
+// stored signs are always correct regardless of what the user types. The
+// remaining UX gap — stripping a leading "-" so the displayed value matches
+// the field label — is tracked separately:
+// TODO(#563): enforce positive-only input on Trade Paid/Received fields
+//   — https://github.com/ajsutton/moolah-native/issues/563
 /// Trade-mode primary section. Mirrors the structure of
 /// `TransactionDetailDetailsSection` + `TransactionDetailAccountSection` for
 /// transfers, but with a single shared account picker and dual amount

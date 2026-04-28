@@ -89,7 +89,9 @@ struct TransactionRowView: View {
       ? "amount unavailable"
       : displayAmounts.map(\.formatted).joined(separator: " and ")
     let typeStr: String
-    if transaction.isSimple, let type = transaction.legs.first?.type {
+    if transaction.isTrade {
+      typeStr = TransactionType.trade.displayName
+    } else if transaction.isSimple, let type = transaction.legs.first?.type {
       typeStr = type.displayName
     } else {
       typeStr = "Custom transaction"
@@ -172,7 +174,7 @@ private struct TradeAmountFlow: View {
   let amounts: [InstrumentAmount]
   var body: some View {
     WrappedHStack(spacing: 6) {
-      ForEach(Array(amounts.enumerated()), id: \.offset) { _, amount in
+      ForEach(amounts, id: \.self) { amount in
         InstrumentAmountView(amount: amount, font: .body)
       }
     }
