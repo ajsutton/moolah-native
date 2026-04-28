@@ -3,15 +3,15 @@ import Testing
 
 @testable import Moolah
 
-@Suite("TransactionDraft LegDraft instrumentId overrides")
+@Suite("TransactionDraft LegDraft instrument storage")
 struct TransactionDraftInstrumentIdTests {
   private let support = TransactionDraftTestSupport()
 
   @Test
-  func legDraftInstrumentIdOverridesToTransaction() throws {
+  func legDraftInstrumentOverridesToTransaction() throws {
     let acctId = UUID()
+    let usd = Instrument.fiat(code: "USD")
     let accounts = support.makeAccounts([support.makeAccount(id: acctId, instrument: .AUD)])
-    let availableInstruments = ["AUD", "USD", "EUR", "GBP"].map { Instrument.fiat(code: $0) }
     let draft = TransactionDraft(
       payee: "", date: Date(), notes: "",
       isRepeating: false, recurPeriod: nil, recurEvery: 1,
@@ -20,20 +20,18 @@ struct TransactionDraftInstrumentIdTests {
         TransactionDraft.LegDraft(
           type: .expense, accountId: acctId, amountText: "100.00",
           categoryId: nil, categoryText: "", earmarkId: nil,
-          instrumentId: "USD")
+          instrument: usd)
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
     let transaction = try #require(
-      draft.toTransaction(
-        id: UUID(), accounts: accounts, availableInstruments: availableInstruments))
+      draft.toTransaction(id: UUID(), accounts: accounts))
     #expect(transaction.legs[0].instrument.id == "USD")
   }
 
   @Test
-  func legDraftNilInstrumentIdReturnsNil() {
-    // instrumentId is the canonical source of truth; a leg without one can't
-    // resolve to an instrument and the draft is considered invalid-to-save.
+  func legDraftNilInstrumentReturnsNil() {
+    // A leg with no instrument is invalid — the draft cannot be saved.
     let acctId = UUID()
     let accounts = support.makeAccounts([support.makeAccount(id: acctId, instrument: .AUD)])
     let draft = TransactionDraft(
@@ -47,13 +45,14 @@ struct TransactionDraftInstrumentIdTests {
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
-    let transaction = draft.toTransaction(
-      id: UUID(), accounts: accounts, availableInstruments: [.AUD])
+    let transaction = draft.toTransaction(id: UUID(), accounts: accounts)
     #expect(transaction == nil)
   }
 
   @Test
-  func legDraftInvalidInstrumentIdReturnsNil() {
+  func legDraftInstrumentRoundTripsFullObject() throws {
+    // The full Instrument value — not just its id — is preserved on the round-trip.
+    let vgs = Instrument.stock(ticker: "VGS.AX", exchange: "ASX", name: "VGS")
     let acctId = UUID()
     let accounts = support.makeAccounts([support.makeAccount(id: acctId, instrument: .AUD)])
     let draft = TransactionDraft(
@@ -62,15 +61,14 @@ struct TransactionDraftInstrumentIdTests {
       isCustom: true,
       legDrafts: [
         TransactionDraft.LegDraft(
-          type: .expense, accountId: acctId, amountText: "100.00",
+          type: .expense, accountId: acctId, amountText: "10",
           categoryId: nil, categoryText: "", earmarkId: nil,
-          instrumentId: "FAKE_CURRENCY")
+          instrument: vgs)
       ],
       relevantLegIndex: 0, viewingAccountId: nil
     )
-    let transaction = draft.toTransaction(
-      id: UUID(), accounts: accounts,
-      availableInstruments: [Instrument.fiat(code: "AUD")])
-    #expect(transaction == nil)
+    let transaction = try #require(
+      draft.toTransaction(id: UUID(), accounts: accounts))
+    #expect(transaction.legs[0].instrument == vgs)
   }
 }

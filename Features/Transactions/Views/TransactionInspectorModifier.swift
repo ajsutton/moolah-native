@@ -26,7 +26,9 @@ struct TransactionInspectorModifier: ViewModifier {
       #if os(macOS)
         .inspector(isPresented: isPresented) {
           if let selected = selectedTransaction {
-            detailView(for: selected).id(selected.id)
+            detailView(for: selected)
+            .id(selected.id)
+            .inspectorColumnWidth(min: 320, ideal: 360, max: 600)
           }
         }
         .toolbar { hideDetailsToolbar }

@@ -9,7 +9,6 @@ struct TransactionDetailFeeSection: View {
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
-  let knownInstruments: [Instrument]
   @Binding var categoryState: CategoryAutocompleteState
   @FocusState.Binding var focusedField: TransactionDetailFocus?
   let onRequestRemove: () -> Void
@@ -38,11 +37,8 @@ struct TransactionDetailFeeSection: View {
       get: { draft.legDrafts[legIndex].amountText },
       set: { draft.legDrafts[legIndex].amountText = $0 })
     let instrumentBinding = Binding<Instrument>(
-      get: {
-        let id = draft.legDrafts[legIndex].instrumentId ?? Instrument.AUD.id
-        return knownInstruments.first { $0.id == id } ?? Instrument.fiat(code: id)
-      },
-      set: { draft.legDrafts[legIndex].instrumentId = $0.id })
+      get: { draft.legDrafts[legIndex].instrument ?? Instrument.AUD },
+      set: { draft.legDrafts[legIndex].instrument = $0 })
 
     return LabeledContent {
       HStack(spacing: 8) {
@@ -55,10 +51,7 @@ struct TransactionDetailFeeSection: View {
           #endif
           .focused($focusedField, equals: .tradeFeeAmount(legIndex))
           .accessibilityIdentifier(UITestIdentifiers.Detail.tradeFeeAmount(displayNumber - 1))
-        CompactInstrumentPickerButton(
-          selection: instrumentBinding,
-          knownInstruments: knownInstruments
-        )
+        CompactInstrumentPickerButton(selection: instrumentBinding)
       }
     } label: {
       Text("Amount")

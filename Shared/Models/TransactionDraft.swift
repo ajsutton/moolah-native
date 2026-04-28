@@ -60,8 +60,9 @@ struct TransactionDraft: Sendable, Equatable {
     var categoryId: UUID?
     var categoryText: String
     var earmarkId: UUID?
-    /// Optional instrument override for custom mode (e.g. cross-currency legs).
-    var instrumentId: String?
+    /// The full instrument for this leg. Stored directly so the draft is
+    /// self-describing and `toTransaction` never needs a lookup-by-id.
+    var instrument: Instrument?
 
     init(
       type: TransactionType,
@@ -70,7 +71,7 @@ struct TransactionDraft: Sendable, Equatable {
       categoryId: UUID?,
       categoryText: String,
       earmarkId: UUID?,
-      instrumentId: String? = nil
+      instrument: Instrument? = nil
     ) {
       self.type = type
       self.accountId = accountId
@@ -78,7 +79,7 @@ struct TransactionDraft: Sendable, Equatable {
       self.categoryId = categoryId
       self.categoryText = categoryText
       self.earmarkId = earmarkId
-      self.instrumentId = instrumentId
+      self.instrument = instrument
     }
 
     /// True when this leg represents an earmark-only entry (no account).
@@ -128,10 +129,10 @@ extension TransactionDraft {
     viewingAccountId: UUID? = nil,
     accounts: Accounts = Accounts(from: [])
   ) {
-    // Always populate instrumentId so the draft is self-describing and round-trips
-    // preserve each leg's instrument — including cases where a leg's instrument
-    // differs from its account's instrument (e.g. a cross-currency trade booked
-    // against a single investment account).
+    // Always store the full Instrument so the draft is self-describing and
+    // round-trips preserve each leg's instrument — including cases where a
+    // leg's instrument differs from its account's instrument (e.g. a
+    // cross-currency trade booked against a single investment account).
     let drafts = transaction.legs.map { leg in
       LegDraft(
         type: leg.type,
@@ -141,7 +142,7 @@ extension TransactionDraft {
         categoryId: leg.categoryId,
         categoryText: "",
         earmarkId: leg.earmarkId,
-        instrumentId: leg.instrument.id
+        instrument: leg.instrument
       )
     }
 
@@ -180,7 +181,7 @@ extension TransactionDraft {
   }
 
   /// Create a blank earmark-only draft for a new earmark transaction.
-  init(earmarkId: UUID, instrumentId: String? = nil, viewingAccountId: UUID? = nil) {
+  init(earmarkId: UUID, instrument: Instrument? = nil, viewingAccountId: UUID? = nil) {
     self.init(
       payee: "",
       date: Date(),
@@ -193,7 +194,7 @@ extension TransactionDraft {
         LegDraft(
           type: .income, accountId: nil, amountText: "0",
           categoryId: nil, categoryText: "", earmarkId: earmarkId,
-          instrumentId: instrumentId)
+          instrument: instrument)
       ],
       relevantLegIndex: 0,
       viewingAccountId: viewingAccountId
@@ -201,7 +202,7 @@ extension TransactionDraft {
   }
 
   /// Create a blank draft for a new transaction.
-  init(accountId: UUID? = nil, instrumentId: String? = nil, viewingAccountId: UUID? = nil) {
+  init(accountId: UUID? = nil, instrument: Instrument? = nil, viewingAccountId: UUID? = nil) {
     self.init(
       payee: "",
       date: Date(),
@@ -214,7 +215,7 @@ extension TransactionDraft {
         LegDraft(
           type: .expense, accountId: accountId, amountText: "0",
           categoryId: nil, categoryText: "", earmarkId: nil,
-          instrumentId: instrumentId)
+          instrument: instrument)
       ],
       relevantLegIndex: 0,
       viewingAccountId: viewingAccountId
@@ -251,6 +252,7 @@ extension TransactionDraft {
   var isValid: Bool {
     guard !legDrafts.isEmpty else { return false }
     for leg in legDrafts {
+      guard leg.instrument != nil else { return false }
       // .trade legs must have an account (no earmark-only fallback per design §3.2).
       // All other types require either an account or an earmark (or both).
       if leg.type == .trade {
@@ -272,26 +274,21 @@ extension TransactionDraft {
 // MARK: - Conversion
 
 extension TransactionDraft {
-  /// Build a `Transaction` from the draft. Each leg's `instrumentId` must resolve
-  /// in `availableInstruments`; `accounts` and `earmarks` are unused for instrument
-  /// lookup (each leg is self-describing) but remain as parameters for future use.
-  /// Returns nil when the draft is invalid or an instrument can't be resolved.
+  /// Build a `Transaction` from the draft. Each leg must carry a non-nil
+  /// `instrument`; `accounts` and `earmarks` are retained for API
+  /// consistency with callsites that pass them explicitly but are unused for
+  /// instrument resolution (the draft is self-describing).
+  /// Returns nil when the draft is invalid or any leg has no instrument.
   func toTransaction(
     id: UUID,
     accounts: Accounts = Accounts(from: []),
-    earmarks: Earmarks = Earmarks(from: []),
-    availableInstruments: [Instrument] = []
+    earmarks: Earmarks = Earmarks(from: [])
   ) -> Transaction? {
     guard isValid else { return nil }
 
     var legs: [TransactionLeg] = []
     for legDraft in legDrafts {
-      guard let overrideId = legDraft.instrumentId,
-        let instrument = availableInstruments.first(where: { $0.id == overrideId })
-      else {
-        return nil
-      }
-
+      guard let instrument = legDraft.instrument else { return nil }
       guard
         let quantity = Self.parseDisplayText(
           legDraft.amountText, type: legDraft.type, decimals: instrument.decimals)
@@ -338,12 +335,12 @@ extension TransactionDraft {
 extension TransactionDraft {
   /// Append a blank leg for custom mode editing. Callers should pass the default
   /// account's instrument so the leg is self-describing from the start.
-  mutating func addLeg(defaultAccountId: UUID? = nil, instrumentId: String? = nil) {
+  mutating func addLeg(defaultAccountId: UUID? = nil, instrument: Instrument? = nil) {
     legDrafts.append(
       LegDraft(
         type: .expense, accountId: defaultAccountId, amountText: "0",
         categoryId: nil, categoryText: "", earmarkId: nil,
-        instrumentId: instrumentId
+        instrument: instrument
       ))
   }
 

@@ -12,15 +12,13 @@ struct TransactionDraftRoundTripTests {
   private func roundTrip(
     _ original: Transaction,
     accounts: Accounts,
-    earmarks: Earmarks = Earmarks(from: []),
-    availableInstruments: [Instrument]
+    earmarks: Earmarks = Earmarks(from: [])
   ) -> Transaction? {
     let draft = TransactionDraft(from: original, accounts: accounts)
     return draft.toTransaction(
       id: original.id,
       accounts: accounts,
-      earmarks: earmarks,
-      availableInstruments: availableInstruments
+      earmarks: earmarks
     )
   }
 
@@ -32,7 +30,6 @@ struct TransactionDraftRoundTripTests {
   func customTransactionMixedInstrumentsSameAccountRoundTrips() throws {
     let accountId = UUID()
     let accounts = support.makeAccounts([support.makeAccount(id: accountId, instrument: .AUD)])
-    let availableInstruments = [Instrument.AUD, Instrument.fiat(code: "NZD")]
     let original = Transaction(
       id: UUID(),
       date: Date(),
@@ -47,7 +44,7 @@ struct TransactionDraftRoundTripTests {
     )
 
     let roundTripped = try #require(
-      roundTrip(original, accounts: accounts, availableInstruments: availableInstruments))
+      roundTrip(original, accounts: accounts))
 
     #expect(roundTripped.legs.count == 2)
     #expect(roundTripped.legs[0].instrument == .AUD)
@@ -80,7 +77,7 @@ struct TransactionDraftRoundTripTests {
     )
 
     let roundTripped = try #require(
-      roundTrip(original, accounts: accounts, availableInstruments: [support.instrument]))
+      roundTrip(original, accounts: accounts))
 
     #expect(roundTripped.legs.count == 3)
     #expect(roundTripped.legs[0].accountId == accountIds[0])
@@ -118,7 +115,7 @@ struct TransactionDraftRoundTripTests {
     )
 
     let roundTripped = try #require(
-      roundTrip(original, accounts: accounts, availableInstruments: [support.instrument]))
+      roundTrip(original, accounts: accounts))
 
     #expect(roundTripped.legs[0].type == .expense)
     #expect(roundTripped.legs[0].categoryId == categoryIdA)
@@ -153,7 +150,7 @@ struct TransactionDraftRoundTripTests {
     )
 
     let roundTripped = try #require(
-      roundTrip(original, accounts: accounts, availableInstruments: [jpy, .AUD]))
+      roundTrip(original, accounts: accounts))
 
     #expect(roundTripped.legs[0].quantity == Decimal(-12_345))
     #expect(roundTripped.legs[0].instrument == jpy)
@@ -190,7 +187,7 @@ struct TransactionDraftRoundTripTests {
     )
 
     let roundTripped = try #require(
-      roundTrip(original, accounts: accounts, availableInstruments: [support.instrument]))
+      roundTrip(original, accounts: accounts))
 
     #expect(roundTripped.id == id)
     #expect(roundTripped.date == date)
@@ -225,8 +222,7 @@ struct TransactionDraftRoundTripTests {
 
     let roundTripped = try #require(
       roundTrip(
-        original, accounts: accounts, earmarks: earmarks,
-        availableInstruments: [support.instrument]))
+        original, accounts: accounts, earmarks: earmarks))
 
     #expect(roundTripped.legs.count == 2)
     #expect(roundTripped.legs[0].accountId == support.accountA)
@@ -262,7 +258,7 @@ struct TransactionDraftRoundTripTests {
     )
 
     let roundTripped = try #require(
-      roundTrip(original, accounts: accounts, availableInstruments: [support.instrument]))
+      roundTrip(original, accounts: accounts))
 
     #expect(roundTripped.legs[0].type == .expense)
     #expect(roundTripped.legs[0].quantity == Decimal(-100))

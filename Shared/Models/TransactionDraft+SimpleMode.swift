@@ -185,7 +185,7 @@ extension TransactionDraft {
         categoryId: nil,
         categoryText: "",
         earmarkId: nil,
-        instrumentId: defaultAccount?.instrument.id
+        instrument: defaultAccount?.instrument
       )
 
       legDrafts[relevantLegIndex].type = .transfer

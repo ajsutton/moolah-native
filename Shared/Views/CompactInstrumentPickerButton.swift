@@ -6,7 +6,6 @@ import SwiftUI
 /// `Australian Dollar (AUD)` label would crowd out the amount.
 struct CompactInstrumentPickerButton: View {
   @Binding var selection: Instrument
-  let knownInstruments: [Instrument]
 
   @Environment(ProfileSession.self) private var session: ProfileSession?
   @State private var isPresented = false
@@ -27,12 +26,15 @@ struct CompactInstrumentPickerButton: View {
         Text(selection.shortCode)
           .foregroundStyle(.secondary)
           .monospacedDigit()
+          .lineLimit(1)
+          .fixedSize(horizontal: true, vertical: false)
         Image(systemName: "chevron.up.chevron.down")
           .foregroundStyle(.tertiary)
           .font(.caption2)
       }
       .contentShape(Rectangle())
     }
+    .layoutPriority(1)
     .buttonStyle(.plain)
     .accessibilityLabel(Text("Instrument: \(selection.shortCode)"))
     .accessibilityHint(Text("Activate to choose a different instrument"))

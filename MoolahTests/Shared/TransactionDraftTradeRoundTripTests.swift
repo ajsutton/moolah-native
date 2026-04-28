@@ -26,9 +26,7 @@ struct TransactionDraftTradeRoundTripTests {
     #expect(draft.legDrafts[1].amountText == "20")
 
     let rebuilt = try #require(
-      draft.toTransaction(
-        id: original.id,
-        availableInstruments: [aud, vgs]))
+      draft.toTransaction(id: original.id))
     #expect(rebuilt.legs[0].quantity == Decimal(-300))
     #expect(rebuilt.legs[1].quantity == Decimal(20))
   }
@@ -55,9 +53,7 @@ struct TransactionDraftTradeRoundTripTests {
     #expect(draft.legDrafts[1].amountText == "-20")
 
     let rebuilt = try #require(
-      draft.toTransaction(
-        id: original.id,
-        availableInstruments: [aud, vgs]))
+      draft.toTransaction(id: original.id))
     #expect(rebuilt.legs[0].quantity == Decimal(300))
     #expect(rebuilt.legs[1].quantity == Decimal(-20))
   }
@@ -67,19 +63,19 @@ struct TransactionDraftTradeRoundTripTests {
     let aud = Instrument.AUD
     let vgs = Instrument.stock(ticker: "VGS.AX", exchange: "ASX", name: "VGS")
     let account = UUID()
-    var draft = TransactionDraft(accountId: account, instrumentId: aud.id)
+    var draft = TransactionDraft(accountId: account, instrument: aud)
     // First leg literal "+300", second literal "-20" — both signs preserved.
     draft.legDrafts = [
       TransactionDraft.LegDraft(
         type: .trade, accountId: account, amountText: "300",
-        categoryId: nil, categoryText: "", earmarkId: nil, instrumentId: aud.id),
+        categoryId: nil, categoryText: "", earmarkId: nil, instrument: aud),
       TransactionDraft.LegDraft(
         type: .trade, accountId: account, amountText: "-20",
-        categoryId: nil, categoryText: "", earmarkId: nil, instrumentId: vgs.id),
+        categoryId: nil, categoryText: "", earmarkId: nil, instrument: vgs),
     ]
 
     let rebuilt = try #require(
-      draft.toTransaction(id: UUID(), availableInstruments: [aud, vgs]))
+      draft.toTransaction(id: UUID()))
     #expect(rebuilt.legs[0].quantity == Decimal(300))
     #expect(rebuilt.legs[1].quantity == Decimal(-20))
   }

@@ -10,15 +10,15 @@ struct TransactionDraftTradeAccessorsTests {
   let account = UUID()
 
   private func tradeDraft(extraFees: [TransactionDraft.LegDraft] = []) -> TransactionDraft {
-    var draft = TransactionDraft(accountId: account, instrumentId: aud.id)
+    var draft = TransactionDraft(accountId: account, instrument: aud)
     draft.legDrafts =
       [
         TransactionDraft.LegDraft(
           type: .trade, accountId: account, amountText: "300",
-          categoryId: nil, categoryText: "", earmarkId: nil, instrumentId: aud.id),
+          categoryId: nil, categoryText: "", earmarkId: nil, instrument: aud),
         TransactionDraft.LegDraft(
           type: .trade, accountId: account, amountText: "20",
-          categoryId: nil, categoryText: "", earmarkId: nil, instrumentId: vgs.id),
+          categoryId: nil, categoryText: "", earmarkId: nil, instrument: vgs),
       ] + extraFees
     return draft
   }
@@ -39,10 +39,10 @@ struct TransactionDraftTradeAccessorsTests {
   func feeIndices() {
     let fee1 = TransactionDraft.LegDraft(
       type: .expense, accountId: account, amountText: "10",
-      categoryId: nil, categoryText: "", earmarkId: nil, instrumentId: aud.id)
+      categoryId: nil, categoryText: "", earmarkId: nil, instrument: aud)
     let fee2 = TransactionDraft.LegDraft(
       type: .expense, accountId: account, amountText: "0.5",
-      categoryId: nil, categoryText: "", earmarkId: nil, instrumentId: aud.id)
+      categoryId: nil, categoryText: "", earmarkId: nil, instrument: aud)
     let draft = tradeDraft(extraFees: [fee1, fee2])
     #expect(draft.feeIndices == [2, 3])
   }
@@ -50,11 +50,11 @@ struct TransactionDraftTradeAccessorsTests {
   @Test("appendFee adds an expense leg with default 0 amount")
   func appendFee() {
     var draft = tradeDraft()
-    draft.appendFee(defaultInstrumentId: aud.id)
+    draft.appendFee(defaultInstrument: aud)
     #expect(draft.legDrafts.count == 3)
     #expect(draft.legDrafts[2].type == .expense)
     #expect(draft.legDrafts[2].amountText == "0")
-    #expect(draft.legDrafts[2].instrumentId == aud.id)
+    #expect(draft.legDrafts[2].instrument == aud)
     #expect(draft.legDrafts[2].accountId == account)
   }
 
@@ -62,7 +62,7 @@ struct TransactionDraftTradeAccessorsTests {
   func removeFeeIndex() {
     let fee = TransactionDraft.LegDraft(
       type: .expense, accountId: account, amountText: "10",
-      categoryId: nil, categoryText: "", earmarkId: nil, instrumentId: aud.id)
+      categoryId: nil, categoryText: "", earmarkId: nil, instrument: aud)
     var draft = tradeDraft(extraFees: [fee])
     draft.removeFee(at: 2)
     #expect(draft.legDrafts.count == 2)

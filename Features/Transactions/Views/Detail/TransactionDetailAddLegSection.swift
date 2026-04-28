@@ -13,7 +13,7 @@ struct TransactionDetailAddLegSection: View {
         let defaultAccount = sortedAccounts.first
         draft.addLeg(
           defaultAccountId: defaultAccount?.id,
-          instrumentId: defaultAccount?.instrument.id
+          instrument: defaultAccount?.instrument
         )
       }
       .accessibilityLabel("Add Sub-transaction")

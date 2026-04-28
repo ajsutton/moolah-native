@@ -15,7 +15,6 @@ struct TransactionDetailLegRow: View {
   let accounts: Accounts
   let categories: Categories
   let earmarks: Earmarks
-  let knownInstruments: [Instrument]
   let sortedAccounts: [Account]
   @Binding var categoryState: CategoryAutocompleteState
   @FocusState.Binding var focusedField: TransactionDetailFocus?
@@ -72,22 +71,19 @@ struct TransactionDetailLegRow: View {
     .onChange(of: draft.legDrafts[index].accountId) { _, newAccountId in
       draft.enforceEarmarkOnlyInvariants(at: index)
       if let newAccountId, let account = accounts.by(id: newAccountId) {
-        draft.legDrafts[index].instrumentId = account.instrument.id
+        draft.legDrafts[index].instrument = account.instrument
       } else if let emId = draft.legDrafts[index].earmarkId,
         let earmark = earmarks.by(id: emId)
       {
-        draft.legDrafts[index].instrumentId = earmark.instrument.id
+        draft.legDrafts[index].instrument = earmark.instrument
       }
     }
   }
 
   @ViewBuilder private var instrumentPicker: some View {
     let binding = Binding<Instrument>(
-      get: {
-        let id = draft.legDrafts[index].instrumentId ?? defaultInstrumentId
-        return resolveInstrument(id)
-      },
-      set: { draft.legDrafts[index].instrumentId = $0.id }
+      get: { draft.legDrafts[index].instrument ?? defaultInstrument },
+      set: { draft.legDrafts[index].instrument = $0 }
     )
     InstrumentPickerField(
       label: "Asset",
@@ -107,7 +103,7 @@ struct TransactionDetailLegRow: View {
           .keyboardType(.decimalPad)
         #endif
         .focused($focusedField, equals: .legAmount(index))
-      Text(draft.legDrafts[index].instrumentId ?? defaultInstrumentId)
+      Text(draft.legDrafts[index].instrument?.shortCode ?? defaultInstrument.shortCode)
         .foregroundStyle(.secondary)
         .monospacedDigit()
     }
@@ -148,20 +144,16 @@ struct TransactionDetailLegRow: View {
   }
 
   /// Falls back to the leg's account instrument and then earmark
-  /// instrument when the leg has no explicit override.
-  private var defaultInstrumentId: String {
+  /// instrument when the leg has no explicit instrument stored.
+  private var defaultInstrument: Instrument {
     let leg = draft.legDrafts[index]
     if let acctId = leg.accountId, let account = accounts.by(id: acctId) {
-      return account.instrument.id
+      return account.instrument
     }
     if let emId = leg.earmarkId, let earmark = earmarks.by(id: emId) {
-      return earmark.instrument.id
+      return earmark.instrument
     }
-    return ""
-  }
-
-  private func resolveInstrument(_ id: String) -> Instrument {
-    knownInstruments.first { $0.id == id } ?? Instrument.fiat(code: id)
+    return Instrument.AUD
   }
 
   /// Opens the dropdown in response to a *user-driven* edit. Programmatic

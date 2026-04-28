@@ -106,10 +106,12 @@ struct TransactionDraftValidationTests {
     draft.legDrafts = [
       TransactionDraft.LegDraft(
         type: .expense, accountId: support.accountA, amountText: "10.00",
-        categoryId: nil, categoryText: "", earmarkId: nil),
+        categoryId: nil, categoryText: "", earmarkId: nil,
+        instrument: support.instrument),
       TransactionDraft.LegDraft(
         type: .income, accountId: support.accountB, amountText: "5.00",
-        categoryId: nil, categoryText: "", earmarkId: nil),
+        categoryId: nil, categoryText: "", earmarkId: nil,
+        instrument: support.instrument),
     ]
     #expect(draft.isValid == true)
   }
@@ -181,8 +183,7 @@ struct TransactionDraftValidationTests {
     // But conversion would produce different quantity
     let accounts = support.makeAccounts([support.makeAccount(id: support.accountA)])
     let transaction = try #require(
-      draft.toTransaction(
-        id: UUID(), accounts: accounts, availableInstruments: [support.instrument]))
+      draft.toTransaction(id: UUID(), accounts: accounts))
     #expect(transaction.legs[0].quantity == Decimal(string: "50.00"))  // income: as-is
   }
 }

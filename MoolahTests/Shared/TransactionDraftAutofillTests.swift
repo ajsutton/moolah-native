@@ -133,7 +133,7 @@ struct TransactionDraftAutofillTests {
     draft.applyAutofill(from: matchTx, categories: Categories(from: []), accounts: accounts)
 
     #expect(draft.legDrafts[0].accountId == support.accountA)
-    #expect(draft.legDrafts[0].instrumentId == usd.id)
+    #expect(draft.legDrafts[0].instrument == usd)
   }
 
   @Test
