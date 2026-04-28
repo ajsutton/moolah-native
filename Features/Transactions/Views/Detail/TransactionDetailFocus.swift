@@ -9,4 +9,7 @@ enum TransactionDetailFocus: Hashable {
   case amount
   case counterpartAmount
   case legAmount(Int)
+  case tradePaidAmount
+  case tradeReceivedAmount
+  case tradeFeeAmount(Int)  // index into legDrafts; used by Task 15
 }
