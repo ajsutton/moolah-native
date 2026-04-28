@@ -614,8 +614,12 @@ This is where Slice 1 earns the migration. Every method below moves its hot loop
 Constraints applied to every method below:
 
 - **Rule 1 (no cross-instrument sum without conversion)** — preserved by always grouping `BY instrument_id` alongside the user-facing dimension.
-- **Rule 5 (historic) / Rule 6 (current) / Rule 7 (future)** of `INSTRUMENT_CONVERSION_GUIDE.md` — preserved by passing `transaction.date` (historic legs), `Date()` (sidebar / forecast), or the explicit `as-of` date to the conversion call.
+- **Rule 5 (historic) / Rule 6 (current) / Rule 7 (future)** of `INSTRUMENT_CONVERSION_GUIDE.md` — preserved by passing the **calendar day** of the underlying legs (historic), `Date()` (sidebar / forecast), or the explicit `as-of` date to the conversion call.
 - **Plan-pinning test** for every query named below — mandatory per `DATABASE_CODE_GUIDE.md` §6. Each test asserts `SEARCH … USING (COVERING) INDEX <name>` and rejects `SCAN <table>` or `USE TEMP B-TREE FOR ORDER BY`.
+
+**Per-day grouping is the bucket size for every historic-conversion method.** The conversion service caches all rates (FX, stock, crypto) keyed by ISO-8601 date string (`Shared/ExchangeRateService.swift:36–39` formats with `[.withFullDate]`). **Two transactions on the same calendar day get the same rate.** Therefore every method that today converts per-leg at `transaction.date` produces an identical numerical result if it instead groups SQL output by `(DATE(t.date), …, instrument_id)` and converts per-row in Swift on `day`. **No approximation is introduced.** Coarser grouping (per-month, per-range) would change rates and break Rule 5; finer grouping (per-leg) just multiplies conversion calls without changing the answer.
+
+Each method below adopts per-day grouping. The Swift assembly converts per `(day, …, instrument)` tuple, then accumulates up to the user-visible bucket (financial month, category, sidebar, etc.) — Rule 1 is satisfied because each conversion produces a target-instrument value, and the post-conversion adds only happen across rows that all already share the target instrument.
 
 #### 3.4.1 `fetchDailyBalances(after:forecastUntil:)`
 
@@ -662,117 +666,123 @@ The Swift assembly:
 
 #### 3.4.2 `fetchExpenseBreakdown(monthEnd:after:)`
 
-Today: nested `[financialMonth: [categoryId: InstrumentAmount]]` loops in Swift (`+IncomeExpense.swift:6–34`). After: SQL `GROUP BY (financial_month, category_id, instrument_id)`; Swift converts each per-instrument bucket and flattens.
-
-Financial-month bucketing is a function of `t.date` and `monthEnd` (a parameter, 1–31). Move the bucketing to SQL via a CASE expression that matches the Swift bucketing exactly:
+Today: nested `[financialMonth: [categoryId: InstrumentAmount]]` loops in Swift (`+IncomeExpense.swift:6–34`) with per-leg conversion at `transaction.date` (`+Conversion.swift:12–24`). After: SQL `GROUP BY (DATE(t.date), category_id, instrument_id)`; Swift converts each `(day, category, instrument)` tuple on `day`, then accumulates into `(financial_month, category)` buckets. Per-day grouping is rate-equivalent to per-leg conversion — see §3.4 intro for the rate-cache day-granularity argument.
 
 ```sql
-WITH bucketed AS (
-    SELECT
-        leg.category_id  AS category_id,
-        leg.instrument_id AS instrument_id,
-        SUM(leg.quantity) AS qty,
-        -- financial month = previous calendar month if day > monthEnd
-        CASE
-          WHEN CAST(strftime('%d', t.date) AS INTEGER) > :monthEnd
-          THEN strftime('%Y%m', date(t.date, '+1 month'))
-          ELSE strftime('%Y%m', t.date)
-        END AS month
-    FROM transaction_leg leg
-    JOIN "transaction"   t ON leg.transaction_id = t.id
-    WHERE t.recur_period IS NULL
-      AND leg.type = 'expense'
-      AND leg.category_id IS NOT NULL
-      AND leg.account_id IS NOT NULL
-      AND (:after IS NULL OR t.date >= :after)
-    GROUP BY month, category_id, instrument_id
-)
-SELECT month, category_id, instrument_id, qty
-FROM bucketed
-ORDER BY month DESC, category_id ASC;
-```
-
-Swift assembly: iterate the rows, convert each `(qty, instrument)` to the target instrument on the bucket's representative date (the bucket's last day in `transaction.date` terms — preserve the existing semantics from `+IncomeExpense.swift:42`), accumulate into `[ExpenseBreakdown]`.
-
-**Indexes used:** `transaction_scheduled` (partial — speeds the `recur_period IS NULL` filter inverted), `leg_analysis_by_type_category` (covering composite — `(type, category_id, instrument_id, transaction_id, quantity)`).
-
-**Plan-pinning test:** `SEARCH leg USING COVERING INDEX leg_analysis_by_type_category`. Reject `SCAN transaction_leg`.
-
-**Conversion site:** Swift, on the bucket date (mirror the existing `+IncomeExpense.swift:42` behaviour), per Rule 5.
-
-#### 3.4.3 `fetchIncomeAndExpense(monthEnd:after:)`
-
-Today: same shape as `fetchExpenseBreakdown` but accumulating into a richer `MonthlyIncomeExpense` struct (`+IncomeExpense.swift:76–131`) that carries `income`, `expense`, `profit`, `earmarkedIncome`, `earmarkedExpense`, `earmarkedProfit`. After: a single SQL query with conditional aggregates, plus a `JOIN account` for the investment-account routing.
-
-```sql
-WITH classified AS (
-    SELECT
-        leg.instrument_id AS instrument_id,
-        leg.quantity      AS qty,
-        leg.type          AS type,
-        leg.earmark_id    AS earmark_id,
-        a.type            AS account_type,
-        CASE
-          WHEN CAST(strftime('%d', t.date) AS INTEGER) > :monthEnd
-          THEN strftime('%Y%m', date(t.date, '+1 month'))
-          ELSE strftime('%Y%m', t.date)
-        END AS month
-    FROM transaction_leg leg
-    JOIN "transaction"   t ON leg.transaction_id = t.id
-    LEFT JOIN account     a ON leg.account_id = a.id
-    WHERE t.recur_period IS NULL
-      AND (:after IS NULL OR t.date >= :after)
-)
 SELECT
-    month,
-    instrument_id,
-    SUM(CASE WHEN type = 'income'
-              AND account_type IS NOT NULL
-              AND account_type <> 'investment'
-             THEN qty ELSE 0 END) AS income_qty,
-    SUM(CASE WHEN type = 'expense'
-              AND account_type IS NOT NULL
-              AND account_type <> 'investment'
-             THEN qty ELSE 0 END) AS expense_qty,
-    SUM(CASE WHEN earmark_id IS NOT NULL AND type = 'income'
-             THEN qty ELSE 0 END) AS earmarked_income_qty,
-    SUM(CASE WHEN earmark_id IS NOT NULL AND type = 'expense'
-             THEN qty ELSE 0 END) AS earmarked_expense_qty,
-    SUM(CASE WHEN type = 'transfer'
-              AND account_type = 'investment'
-             THEN qty ELSE 0 END) AS investment_transfer_qty
-FROM classified
-GROUP BY month, instrument_id
-ORDER BY month DESC;
+    DATE(t.date)        AS day,
+    leg.category_id     AS category_id,
+    leg.instrument_id   AS instrument_id,
+    SUM(leg.quantity)   AS qty
+FROM transaction_leg leg
+JOIN "transaction"    t ON leg.transaction_id = t.id
+WHERE t.recur_period IS NULL
+  AND leg.type = 'expense'
+  AND leg.category_id IS NOT NULL
+  AND leg.account_id IS NOT NULL
+  AND (:after IS NULL OR t.date >= :after)
+GROUP BY day, category_id, instrument_id
+ORDER BY day ASC, category_id ASC;
 ```
 
 Swift assembly:
 
-1. For each `(month, instrument)` row, convert each of the five SUMs to the target instrument on the bucket date.
-2. Compose the six `MonthlyIncomeExpense` totals — the investment-transfer column folds into `earmarkedIncome` / `earmarkedExpense` per the sign rules in `+IncomeExpense.swift:142–157` (preserve the exact sign-flip pattern).
-3. Sum the converted totals across instruments (already in target instrument — Rule 1 satisfied).
+1. For each `(day, category, instrument, qty)` row, parse `day` (an ISO-8601 `YYYY-MM-DD` string) into a `Date` using a stable normaliser — the Gregorian calendar `startOfDay` of the parsed date — so a future timezone change in `Calendar.current` doesn't drift the conversion-date keys. (Reference: `+Conversion.swift:73–94` `financialMonth(for:monthEnd:)` already uses `Calendar.current`; if `current` is what existing code uses to bucket transactions today, mirror it for consistency. Verify during implementation.)
+2. Convert the `(qty, instrument)` to `targetInstrument` on the parsed `day` using the existing `convertedAmount` helper.
+3. Bucket the converted amount by `(financialMonth(day, monthEnd), category)` using the existing `financialMonth(for:monthEnd:)` helper.
+4. After all rows are processed, emit one `ExpenseBreakdown { categoryId, month, totalExpenses }` per non-empty `(month, category)` bucket.
 
-**Verification against the server.** The audit confirms `analysisDao.js:6–42` uses the same shape; the conditional sums above mirror it. Investment-account transfer routing matches `accumulateLegs(_:)`. Match the server filter logic exactly — opening-balance legs must be excluded (`type = 'openingBalance'` — a no-op in the conditional sums above because none of the CASE branches match).
+This produces the same numerical result as today's per-leg conversion because the rate cache has 1-day granularity (§3.4 intro). The result-set size is `N_distinct_(day,category,instrument)` instead of `N_legs` — for typical users with 1–5 expense legs per day per category that's a 1.5–5× reduction in conversion calls (the SQL aggregation across same-day legs is the win).
+
+**Indexes used:** `transaction_scheduled` (partial — speeds the `recur_period IS NULL` filter inverted via `WHERE recur_period IS NULL`), `leg_analysis_by_type_category` (covering composite — `(type, category_id, instrument_id, transaction_id, quantity)`).
+
+**Plan-pinning test:** `SEARCH leg USING COVERING INDEX leg_analysis_by_type_category`. Reject `SCAN transaction_leg`.
+
+**Conversion site:** Swift, on each row's `day`, per Rule 5. Use `DateBasedFixedConversionService`-style fixtures in tests (per the test mandate in §3.9) to pin that the right date is passed.
+
+#### 3.4.3 `fetchIncomeAndExpense(monthEnd:after:)`
+
+Today: per-leg loop with per-leg conversion at `transaction.date` (`+IncomeExpense.swift:142–148`); accumulates into `MonthlyIncomeExpense` carrying `income`, `expense`, `profit`, `earmarkedIncome`, `earmarkedExpense`, `earmarkedProfit`. After: SQL query with five conditional aggregates grouped `BY (DATE(t.date), instrument_id)`; Swift converts each `(day, instrument)`'s five sums on `day` and accumulates into financial-month buckets. Same per-day rate-equivalence argument as §3.4.2.
+
+```sql
+SELECT
+    DATE(t.date)         AS day,
+    leg.instrument_id    AS instrument_id,
+    SUM(CASE WHEN leg.type = 'income'
+              AND a.type IS NOT NULL
+              AND a.type <> 'investment'
+             THEN leg.quantity ELSE 0 END)        AS income_qty,
+    SUM(CASE WHEN leg.type = 'expense'
+              AND a.type IS NOT NULL
+              AND a.type <> 'investment'
+             THEN leg.quantity ELSE 0 END)        AS expense_qty,
+    SUM(CASE WHEN leg.earmark_id IS NOT NULL
+              AND leg.type = 'income'
+             THEN leg.quantity ELSE 0 END)        AS earmarked_income_qty,
+    SUM(CASE WHEN leg.earmark_id IS NOT NULL
+              AND leg.type = 'expense'
+             THEN leg.quantity ELSE 0 END)        AS earmarked_expense_qty,
+    SUM(CASE WHEN leg.type = 'transfer'
+              AND a.type = 'investment'
+             THEN leg.quantity ELSE 0 END)        AS investment_transfer_qty
+FROM transaction_leg leg
+JOIN "transaction"    t ON leg.transaction_id = t.id
+LEFT JOIN account     a ON leg.account_id = a.id
+WHERE t.recur_period IS NULL
+  AND (:after IS NULL OR t.date >= :after)
+GROUP BY day, instrument_id
+ORDER BY day ASC;
+```
+
+The `'trade'` and `'openingBalance'` leg types are correctly excluded by all five CASE branches (none match either string). The `'transfer'` type only contributes to `investment_transfer_qty`, never to `income_qty`/`expense_qty` (whose CASE conditions pin `type = 'income'` / `'expense'` explicitly).
+
+Swift assembly:
+
+1. For each `(day, instrument)` row, parse `day` and convert each of the five sums to `targetInstrument` on `day` via `convertedAmount(...)` (skipping the conversion when `instrument == targetInstrument`).
+2. Bucket the converted sums by `financialMonth(day, monthEnd)`.
+3. For each non-empty month bucket, compose `MonthlyIncomeExpense` totals — the investment-transfer column folds into `earmarkedIncome` / `earmarkedExpense` per the sign rules in `+IncomeExpense.swift:142–157` (preserve the exact sign-flip pattern). `profit = income + expense` and `earmarkedProfit = earmarkedIncome + earmarkedExpense` (the rules use signed amounts; expenses are negative — see CLAUDE.md "Monetary Sign Convention").
+4. Cross-instrument sums within a `(month, bucket)` happen post-conversion — both summands are already in `targetInstrument`, so Rule 1 is satisfied.
+
+**Verification against the server.** `analysisDao.js:6–42` uses the same conditional-sum shape (note the server is single-instrument so it skips the per-instrument grouping); investment-account transfer routing matches `+IncomeExpense.swift:142–157` exactly. The day-grouping is moolah-native-only (the server backend doesn't have multi-instrument users); the conditional-sum predicates are byte-equivalent.
 
 **Indexes used:** `transaction_by_date` (date filter), `leg_by_transaction` (join), `leg_analysis_by_type_account` (covering — type/account/instrument), `account_by_type` (LEFT JOIN equality probe).
 
 **Plan-pinning test:** `SEARCH leg USING COVERING INDEX leg_analysis_by_type_account`, `SEARCH a USING INDEX account_by_type` (or `INTEGER PRIMARY KEY` on the FK lookup). Reject `SCAN`.
 
-**Conversion site:** Swift, on the bucket date.
+**Conversion site:** Swift, on each row's `day`, per Rule 5.
 
 #### 3.4.4 `fetchCategoryBalances(dateRange:transactionType:filters:targetInstrument:)`
 
-Today: per-leg loop with optional filters (account, payee, earmark, categoryIds) and per-leg conversion (`+IncomeExpense.swift:204–239`). After: GRDB query interface composing `(category_id, instrument_id)` GROUP BY with optional filter clauses; Swift converts and accumulates.
+Today: per-leg loop with optional filters (account, payee, earmark, categoryIds) and per-leg conversion at `transaction.date` (`+IncomeExpense.swift:204–239`). After: GRDB query interface composing `(DATE(t.date), category_id, instrument_id)` GROUP BY with optional filter clauses; Swift converts each `(day, category, instrument)` tuple on `day` and accumulates per category. Same per-day rate-equivalence argument as §3.4.2.
 
 **Use the GRDB query interface — not raw SQL — for the `categoryIds` predicate.** SQLite cannot bind a variable-length array to a single named parameter, so an `IN (:categoryIds)` raw-SQL form will fail at runtime for any `categoryIds.count != 1`. Compose the request with conditional `.filter(...)` calls:
 
 ```swift
+// Conceptual SQL the request below produces:
+//   SELECT DATE(t.date) AS day, leg.category_id, leg.instrument_id,
+//          SUM(leg.quantity) AS qty
+//   FROM transaction_leg leg
+//   JOIN "transaction"   t ON leg.transaction_id = t.id
+//   LEFT JOIN account    a ON leg.account_id = a.id
+//   WHERE t.recur_period IS NULL
+//     AND t.date >= :start AND t.date <= :end
+//     AND leg.type = :transactionType
+//     AND leg.category_id IS NOT NULL
+//     AND (a.type IS NULL OR a.type <> 'investment')
+//     AND (:accountId IS NULL OR leg.account_id = :accountId)
+//     AND (:earmarkId IS NULL OR leg.earmark_id = :earmarkId)
+//     AND (:payee IS NULL OR t.payee = :payee)
+//     AND (:categoryIdsCount = 0 OR leg.category_id IN (:categoryIds))
+//   GROUP BY day, leg.category_id, leg.instrument_id;
+//
+// Composed via the GRDB query builder so the `IN (:categoryIds)` clause
+// becomes the safe `Sequence.contains(Column…)` operator.
 var request = TransactionLegRow
-  .including(required: TransactionLegRow.transactionAssoc) // see GRDB associations
+  .including(required: TransactionLegRow.transactionAssoc)
   .filter(transactionRequest: { transaction in
     transaction.recurPeriod == nil
-      && transaction.date >= startDate
-      && transaction.date <= endDate
+      && transaction.date >= dateRange.lowerBound
+      && transaction.date <= dateRange.upperBound
       && (filters.payee.map { transaction.payee == $0 } ?? true)
   })
   .filter(TransactionLegRow.Columns.type == transactionType.rawValue)
@@ -788,23 +798,32 @@ if let categoryIds = filters.categoryIds, !categoryIds.isEmpty {
   request = request.filter(categoryIds.contains(TransactionLegRow.Columns.categoryId))
 }
 let rows = try request
-  .group(TransactionLegRow.Columns.categoryId, TransactionLegRow.Columns.instrumentId)
+  .annotated(with:
+    SQL("DATE(\(TransactionRow.Columns.date))").sqlExpression.forKey("day"))
+  .group(
+    SQL("DATE(\(TransactionRow.Columns.date))").sqlExpression,
+    TransactionLegRow.Columns.categoryId,
+    TransactionLegRow.Columns.instrumentId)
   .annotated(with: sum(TransactionLegRow.Columns.quantity).forKey("qty"))
-  .asRequest(of: CategoryInstrumentTotalRow.self)
+  .asRequest(of: CategoryDayInstrumentTotalRow.self)
   .fetchAll(database)
 ```
 
-(The exact GRDB association / SQLRequest shape varies — pseudocode shows the *parameterisation* contract: never inline `categoryIds` into SQL via `\(…)`.) Confirm against `DATABASE_CODE_GUIDE.md` §4 — the typed-builder form satisfies "exactly one unsafe shape" because no `sql:` argument is built from a non-literal string.
+(The exact GRDB association / `SQLExpression` shape varies — pseudocode shows the *parameterisation* contract: never inline `categoryIds` into SQL via `\(…)`. The `DATE(t.date)` projection is via GRDB's `SQL` interpolation type, which parameterises identifier references and is the project-approved escape hatch for SQLite functions not in the query interface.)
 
-Swift assembly: iterate `(category, instrument, qty)`; convert per Rule 1 / Rule 5 — see open question §8 (resolution pending user discussion of conversion-date semantics for bucketed aggregates). Accumulate by category.
+Swift assembly:
 
-**Investment-account exclusion check:** Verify against `+IncomeExpense.swift:225–239` whether the existing implementation excludes legs from investment accounts (the `applyByType` switch in `+IncomeExpense.swift:191–213` excludes them via `classified.isInvestmentAccount`). If yes, add a `LEFT JOIN account a ON leg.account_id = a.id` to the request and `.filter(a.type == nil || a.type != "investment")`. Resolve at implementation time; default to mirroring existing behaviour.
+1. For each `(day, category, instrument, qty)` row, parse `day` and convert `(qty, instrument)` to `targetInstrument` on `day`.
+2. Accumulate the converted amount into `balances[categoryId, default: .zero(instrument: targetInstrument)] += converted`.
+3. Emit the resulting `[UUID: InstrumentAmount]`.
 
-**Indexes used:** `leg_analysis_by_type_category` (covering for the common `(type, category, instrument)` shape — partial because `category_id IS NOT NULL` is in the filter), `transaction_by_date` for the range, `leg_by_account` / `leg_by_earmark` partial indexes for the optional filters.
+**Investment-account exclusion check:** the existing implementation **excludes legs from investment accounts** (`+IncomeExpense.swift:191–213` — `applyByType` skips when `classified.isInvestmentAccount`). The composed request includes the `LEFT JOIN account a ON leg.account_id = a.id` and `.filter(a.type == nil || a.type != "investment")` to mirror this. (The non-null branch handles the rare case of an account-less leg, which today's Swift code also includes via `accountId == nil → isInvestmentAccount = false`.) Verify the boolean precedence during implementation — the SQL must accept `a.type IS NULL` legs (orphaned or genuinely account-less).
+
+**Indexes used:** `leg_analysis_by_type_category` (covering for the common `(type, category, instrument)` shape — partial because `category_id IS NOT NULL` is in the filter), `transaction_by_date` for the range, `account_by_type` for the LEFT JOIN, `leg_by_account` / `leg_by_earmark` partial indexes for the optional filters.
 
 **Plan-pinning test:** `SEARCH leg USING COVERING INDEX leg_analysis_by_type_category`. With `accountId` filter set, additionally check `leg_by_account` is consulted. Reject `SCAN`.
 
-**Conversion site:** Swift. Per Rule 1, per-leg conversion is required when legs differ in instrument; the SQL groups by `instrument_id` so Swift converts each (instrument, qty) pair before summing. Match the existing `+IncomeExpense.swift:225–239` semantics exactly.
+**Conversion site:** Swift, on each row's `day`, per Rule 5.
 
 #### 3.4.5 `fetchCategoryBalancesByType(dateRange:filters:targetInstrument:)`
 
@@ -1234,6 +1253,7 @@ Mandatory:
 - **Sync round-trip tests** for the eight types. Add one file per type (or one omnibus file `MoolahTests/Backends/GRDB/CoreFinancialGraphSyncRoundTripTests.swift`). Pattern: build two `TestBackend` instances representing two devices; create on A; manually drive `CKSyncEngine.applyRemoteChanges` on B with the recorded outbound batch; assert the GRDB row on B matches the source bit-for-bit including `encodedSystemFields`. Reuse Slice 0's `SyncRoundTripCSVImportTests.swift` as the template.
 - **Migrator tests.** Extend `MoolahTests/Backends/GRDB/SwiftDataToGRDBMigratorTests.swift` with eight new test methods, one per type. For each: seed a SwiftData container with N rows + non-nil `encodedSystemFields`, open an in-memory GRDB queue, run `migrateIfNeeded`, assert all rows present in GRDB, `encodedSystemFields` byte-equal to source, flag set. **Re-run is no-op.** Add a cross-FK migrator test that seeds all eight types in dependency order and asserts the FK-bearing rows preserve their parent IDs.
 - **Conversion tests.** `MoolahTests/Backends/GRDB/GRDBAnalysisConversionTests.swift` — for each of the five `AnalysisRepository` methods, seed a multi-instrument fixture (mix of fiat A, fiat B, stock C) and assert the post-SQL Swift conversion produces the same `InstrumentAmount` totals as the existing SwiftData implementation on the same fixture. (The fixture and assertion library should already exist in `MoolahTests/Domain/AnalysisRepositoryContractTests.swift` — verify and extend.)
+- **Date-sensitive conversion tests.** Per `INSTRUMENT_CONVERSION_GUIDE.md` and the §3.4 per-day grouping decision, every historic-conversion method needs at least one test that uses a `DateBasedFixedConversionService` fixture (a `InstrumentConversionService` stub that returns a *different* rate for each calendar day). Construct fixtures with legs spanning at least two calendar days with rates that differ between days; assert that the per-day-grouped SQL + Swift assembly produces the correct day-keyed conversion. Without this, a regression where the SQL drops the `DATE(t.date)` projection (collapsing to per-month or per-range) would silently pass against constant-rate fixtures. Apply to: `fetchExpenseBreakdown`, `fetchIncomeAndExpense`, `fetchCategoryBalances`, and `fetchDailyBalances` (the latter is already per-day; the test pins that property).
 - **Benchmark deltas.** Run `MoolahBenchmarks/AnalysisBenchmarks.swift` (`testLoadAll_12months`, `testLoadAll_allHistory`, `testFetchCategoryBalances`, `testFetchCategoryBalancesByType`) on `main` and on the slice branch. **Target:** 5–10× speedup on `testLoadAll_allHistory` (the Swift loop today is ~O(n×m) for n txns × m days; SQL with covering index is ~O(n) with the index alone). At minimum:
   - `testLoadAll_12months` ≥ 3× speedup (smaller dataset, less SQL gain headroom).
   - `testLoadAll_allHistory` ≥ 5× speedup.
@@ -1500,7 +1520,7 @@ Mandatory plan-pinning queries to add to `AnalysisPlanPinningTests.swift`:
 | Plan-pinning tests need `DatabaseQueue` in a state with the migrator applied. Is there a shared seam? | Slice 0 added `try ProfileDatabase.openInMemory()` (which runs the migrator); Slice 1 reuses it. A `MigratedTestQueue.profileDB()` helper as recommended in `DATABASE_CODE_GUIDE.md` §6 sample is the natural extension if the boilerplate hurts; verify during implementation. |
 | Does `SwiftDataToGRDBMigrator` need any kind of cancellation hook (e.g. user signs out mid-migration)? | **Yes — light.** Slice 1 makes the migrator `async throws` (§3.7); the calling `Task` can be cancelled, and GRDB 7's `database.write { … }` honours task cancellation by rolling the transaction back. The migrator's per-type flags are not set on cancellation, so the next launch retries from the cancelled type. SwiftData-side `context.fetch` doesn't honour `Task` cancellation natively; if cancellation latency matters in QA, add an explicit `Task.checkCancellation()` before each per-type migrator step. Default: rely on the implicit GRDB-side cancellation. |
 | `observeChanges() -> AsyncStream<Void>` continuation safety on `GRDBInstrumentRegistryRepository` (§3.3.1) — how does the hook closure publish into the `MainActor`-isolated stream from a non-main executor? | `AsyncStream.Continuation` is `Sendable` and supports `yield()` from any executor. The hook closure (registered via `onInstrumentRemoteChange`, fired from the CKSyncEngine delegate executor) calls `continuation.yield()` directly. Subscribers iterate the stream from `MainActor` (e.g., picker UIs); the SwiftUI bridge handles the hop. Document this in the repo doc-comment: "continuation is published from any executor; subscribers run on `MainActor`." |
-| Per-method conversion-date semantics for SQL-aggregated buckets — what date is passed to the conversion service when a `(month, instrument)` bucket spans multiple days of differently-dated legs? | **DEFERRED — pending user discussion.** The instrument-conversion-review flagged that the plan's `fetchExpenseBreakdown`, `fetchIncomeAndExpense`, and `fetchCategoryBalances` SQL queries collapse multi-day legs into single buckets, and the existing Swift implementations convert per-leg at `transaction.date`. Resolution requires walking each method individually with the user — see the conversation thread that produced this plan revision. **Implementation must wait** for per-method decisions before SQL is finalised. |
+| Per-method conversion-date semantics for SQL-aggregated buckets — what date is passed to the conversion service when a bucket spans multiple days of differently-dated legs? | **Resolved: per-day grouping.** Every historic-conversion method (`fetchExpenseBreakdown`, `fetchIncomeAndExpense`, `fetchCategoryBalances`, plus `fetchDailyBalances` which already groups per-day) projects `DATE(t.date) AS day` in its SELECT and groups by `(day, …, instrument_id)`. Swift converts each `(day, instrument, …)` tuple on `day`, then accumulates up to the user-visible bucket. Rationale: the conversion service caches all rates keyed by ISO-8601 date string (`Shared/ExchangeRateService.swift:36–39` formats with `[.withFullDate]`), so two transactions on the same calendar day get the same rate — per-day grouping produces an identical numerical result to today's per-leg conversion at `transaction.date`. Coarser grouping (per-month) would change rates and break Rule 5; finer grouping (per-leg) just multiplies conversion calls without changing the answer. See §3.4 intro for the full argument and §3.4.2/3/4 for the per-method shape. |
 
 ---
 
