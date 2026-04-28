@@ -229,11 +229,11 @@ struct RecordMappingTests {
     #expect(ProfileRecord.fieldValues(from: profileRecord) == nil)
 
     let csvProfileRecord = CKRecord(
-      recordType: CSVImportProfileRecord.recordType, recordID: malformedID)
-    #expect(CSVImportProfileRecord.fieldValues(from: csvProfileRecord) == nil)
+      recordType: CSVImportProfileRow.recordType, recordID: malformedID)
+    #expect(CSVImportProfileRow.fieldValues(from: csvProfileRecord) == nil)
 
-    let ruleRecord = CKRecord(recordType: ImportRuleRecord.recordType, recordID: malformedID)
-    #expect(ImportRuleRecord.fieldValues(from: ruleRecord) == nil)
+    let ruleRecord = CKRecord(recordType: ImportRuleRow.recordType, recordID: malformedID)
+    #expect(ImportRuleRow.fieldValues(from: ruleRecord) == nil)
   }
 
   /// InstrumentRecord is keyed by `recordName` rather than `uuid`, so any non-empty

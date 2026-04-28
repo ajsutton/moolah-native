@@ -287,6 +287,14 @@ final class SyncCoordinator {
   /// can be captured into the handler's `nonisolated` storage.
   var instrumentRemoteChangeCallbacks: [UUID: @Sendable () -> Void] = [:]
 
+  /// Per-profile GRDB repository bundle. Registered by `ProfileSession`
+  /// during `registerWithSyncCoordinator` (before the handler is lazily
+  /// created in `handlerForProfileZone`) so the dispatch tables in
+  /// `ProfileDataSyncHandler+ApplyRemoteChanges` etc. can route the
+  /// record types covered by `v2_csv_import_and_rules` (and subsequent
+  /// slices) through GRDB instead of SwiftData. See `ProfileGRDBRepositories`.
+  var profileGRDBRepositories: [UUID: ProfileGRDBRepositories] = [:]
+
   /// Zones with pending zone creation — records in these zones are skipped in nextRecordZoneChangeBatch.
   var pendingZoneCreation: [CKRecordZone.ID: [CKSyncEngine.PendingRecordZoneChange]] = [:]
 

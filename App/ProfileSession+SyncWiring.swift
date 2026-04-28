@@ -50,8 +50,14 @@ extension ProfileSession {
   }
 
   /// Wires repositories that only need the `onRecordChanged` /
-  /// `onRecordDeleted` pair — categories, earmarks, investments,
-  /// csvImportProfiles, importRules — to the sync coordinator.
+  /// `onRecordDeleted` pair — categories, earmarks, investments — to the
+  /// sync coordinator.
+  ///
+  /// The GRDB-backed repos (`csvImportProfiles`, `importRules`) get
+  /// their hook closures injected at backend construction time (see
+  /// `makeCloudKitBackend`); they show up here only via
+  /// `registerGRDBRepositoriesForSync(...)`, which makes them visible
+  /// to `ProfileDataSyncHandler`'s dispatch tables.
   private func wireSimpleRepositorySync(
     coordinator: SyncCoordinator, zoneID: CKRecordZone.ID
   ) {
@@ -79,22 +85,21 @@ extension ProfileSession {
         coordinator?.queueDeletion(recordType: recordType, id: id, zoneID: zoneID)
       }
     }
-    if let repo = backend.csvImportProfiles as? CloudKitCSVImportProfileRepository {
-      repo.onRecordChanged = { [weak coordinator] recordType, id in
-        coordinator?.queueSave(recordType: recordType, id: id, zoneID: zoneID)
-      }
-      repo.onRecordDeleted = { [weak coordinator] recordType, id in
-        coordinator?.queueDeletion(recordType: recordType, id: id, zoneID: zoneID)
-      }
-    }
-    if let repo = backend.importRules as? CloudKitImportRuleRepository {
-      repo.onRecordChanged = { [weak coordinator] recordType, id in
-        coordinator?.queueSave(recordType: recordType, id: id, zoneID: zoneID)
-      }
-      repo.onRecordDeleted = { [weak coordinator] recordType, id in
-        coordinator?.queueDeletion(recordType: recordType, id: id, zoneID: zoneID)
-      }
-    }
+    registerGRDBRepositoriesForSync(coordinator: coordinator)
+  }
+
+  /// Registers the per-profile GRDB repository bundle with the sync
+  /// coordinator so `handlerForProfileZone` can build a
+  /// `ProfileDataSyncHandler` that reaches them. Only registers when the
+  /// backend is a `CloudKitBackend` — preview / test code paths skip
+  /// registration silently.
+  private func registerGRDBRepositoriesForSync(coordinator: SyncCoordinator) {
+    guard let cloudBackend = backend as? CloudKitBackend else { return }
+    coordinator.setProfileGRDBRepositories(
+      profileId: profile.id,
+      bundle: ProfileGRDBRepositories(
+        csvImportProfiles: cloudBackend.grdbCSVImportProfiles,
+        importRules: cloudBackend.grdbImportRules))
   }
 
   /// OptionSet for coalesced store reloads after a sync batch.
@@ -131,12 +136,12 @@ extension ProfileSession {
     {
       plan.insert(.earmarks)
     }
-    if changedTypes.contains(ImportRuleRecord.recordType) {
+    if changedTypes.contains(ImportRuleRow.recordType) {
       plan.insert(.importRules)
     }
-    // NOTE: CSVImportProfileRecord has no dedicated store — the setup form
+    // NOTE: CSVImportProfileRow has no dedicated store — the setup form
     // fetches profiles directly via `backend.csvImportProfiles`. Remote
-    // changes land in SwiftData; the setup form reads through to the fresh
+    // changes land in GRDB; the setup form reads through to the fresh
     // values on its own `task`.
     return plan
   }

@@ -245,9 +245,9 @@ private struct CloudKitCategoryTestBackend: BackendProvider, @unchecked Sendable
     self.analysis = CloudKitAnalysisRepository(
       modelContainer: container, instrument: instrument,
       conversionService: conversion)
-    self.csvImportProfiles = CloudKitCSVImportProfileRepository(
-      modelContainer: container)
-    self.importRules = CloudKitImportRuleRepository(modelContainer: container)
+    let database = try ProfileDatabase.openInMemory()
+    self.csvImportProfiles = GRDBCSVImportProfileRepository(database: database)
+    self.importRules = GRDBImportRuleRepository(database: database)
   }
 }
 

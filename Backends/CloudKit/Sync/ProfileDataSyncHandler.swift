@@ -23,11 +23,33 @@ enum ApplyResult: Sendable {
 /// Functionality is split across several `ProfileDataSyncHandler+*.swift`
 /// extensions (applying remote changes, batch upserts, record lookup, queueing,
 /// and system fields) so that each file keeps a single focus.
+/// Bundle of the GRDB-backed repositories for the per-profile data
+/// handler. Slice 0 of `plans/grdb-migration.md` migrates two record
+/// types (`CSVImportProfile`, `ImportRule`) to GRDB; subsequent slices
+/// extend this bundle and shrink the SwiftData footprint accordingly.
+///
+/// The dispatch tables in `ProfileDataSyncHandler+ApplyRemoteChanges` /
+/// `+SystemFields` consult this bundle for record types that have moved
+/// to GRDB and fall through to the SwiftData paths for everything else.
+/// Both fields are non-optional because in-memory tests, previews, and
+/// production all build the GRDB repos eagerly during backend
+/// construction.
+struct ProfileGRDBRepositories: Sendable {
+  let csvImportProfiles: GRDBCSVImportProfileRepository
+  let importRules: GRDBImportRuleRepository
+}
+
 @MainActor
 final class ProfileDataSyncHandler {
   nonisolated let profileId: UUID
   nonisolated let zoneID: CKRecordZone.ID
   nonisolated let modelContainer: ModelContainer
+  /// GRDB-backed repos for the record types migrated to SQLite. Used by
+  /// the dispatch tables in `+ApplyRemoteChanges`, `+QueueAndDelete`,
+  /// `+RecordLookup`, and `+SystemFields` for the two record types
+  /// covered by `v2_csv_import_and_rules`. Subsequent slices extend the
+  /// list.
+  nonisolated let grdbRepositories: ProfileGRDBRepositories
 
   /// Closure fired from `applyRemoteChanges` whenever a remote pull touches
   /// any `InstrumentRecord` row (insert, update, or delete). Wired by
@@ -49,11 +71,13 @@ final class ProfileDataSyncHandler {
     profileId: UUID,
     zoneID: CKRecordZone.ID,
     modelContainer: ModelContainer,
+    grdbRepositories: ProfileGRDBRepositories,
     onInstrumentRemoteChange: @escaping @Sendable () -> Void = {}
   ) {
     self.profileId = profileId
     self.zoneID = zoneID
     self.modelContainer = modelContainer
+    self.grdbRepositories = grdbRepositories
     self.onInstrumentRemoteChange = onInstrumentRemoteChange
   }
 
@@ -77,8 +101,21 @@ final class ProfileDataSyncHandler {
   func buildCKRecord<T: CloudKitRecordConvertible & SystemFieldsCacheable>(
     for record: T
   ) -> CKRecord {
+    buildCKRecord(from: record, encodedSystemFields: record.encodedSystemFields)
+  }
+
+  /// Value-type-friendly overload of `buildCKRecord(for:)`. GRDB row
+  /// structs (`CSVImportProfileRow`, `ImportRuleRow`) deliberately
+  /// don't conform to `SystemFieldsCacheable` (which is `AnyObject`-
+  /// constrained because the SwiftData write path mutates a fetched
+  /// `@Model` row in place). This overload takes the cached blob as
+  /// an explicit parameter so the GRDB lookup path can pass
+  /// `row.encodedSystemFields` directly.
+  func buildCKRecord<T: CloudKitRecordConvertible>(
+    from record: T, encodedSystemFields: Data?
+  ) -> CKRecord {
     let freshRecord = record.toCKRecord(in: zoneID)
-    if let cachedData = record.encodedSystemFields,
+    if let cachedData = encodedSystemFields,
       let cachedRecord = CKRecord.fromEncodedSystemFields(cachedData),
       cachedRecord.recordID.zoneID == zoneID,
       Self.isUsableCachedRecordName(cachedRecord.recordID.recordName)

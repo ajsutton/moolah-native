@@ -60,10 +60,14 @@ extension ProfileDataSyncHandler {
       return fetchEarmarkBudgetItem(id: uuid, context: context).map(buildCKRecord)
     case InvestmentValueRecord.recordType:
       return fetchInvestmentValue(id: uuid, context: context).map(buildCKRecord)
-    case CSVImportProfileRecord.recordType:
-      return fetchCSVImportProfile(id: uuid, context: context).map(buildCKRecord)
-    case ImportRuleRecord.recordType:
-      return fetchImportRule(id: uuid, context: context).map(buildCKRecord)
+    case CSVImportProfileRow.recordType:
+      return fetchCSVImportProfileRow(id: uuid).map { row in
+        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
+      }
+    case ImportRuleRow.recordType:
+      return fetchImportRuleRow(id: uuid).map { row in
+        buildCKRecord(from: row, encodedSystemFields: row.encodedSystemFields)
+      }
     default:
       logger.warning(
         "Unknown recordType '\(recordType, privacy: .public)' in prefixed recordID — skipping"
@@ -94,10 +98,10 @@ extension ProfileDataSyncHandler {
       return mapBuilt(fetchEarmarkBudgetItemsBatch(ids: ids, context: context))
     case InvestmentValueRecord.recordType:
       return mapBuilt(fetchInvestmentValuesBatch(ids: ids, context: context))
-    case CSVImportProfileRecord.recordType:
-      return mapBuilt(fetchCSVImportProfilesBatch(ids: ids, context: context))
-    case ImportRuleRecord.recordType:
-      return mapBuilt(fetchImportRulesBatch(ids: ids, context: context))
+    case CSVImportProfileRow.recordType:
+      return mapBuiltRows(fetchCSVImportProfileRowsBatch(ids: ids))
+    case ImportRuleRow.recordType:
+      return mapBuiltRows(fetchImportRuleRowsBatch(ids: ids))
     default:
       logger.warning(
         "Unknown recordType '\(recordType, privacy: .public)' in batch lookup — skipping"
@@ -116,6 +120,28 @@ extension ProfileDataSyncHandler {
     built.reserveCapacity(records.count)
     for record in records {
       built[record.id] = buildCKRecord(for: record)
+    }
+    return built
+  }
+
+  /// Value-type counterpart of `mapBuilt(_:)` for GRDB row structs.
+  /// Mirrors the SwiftData path but reads `encodedSystemFields` from
+  /// the row directly (Rows don't conform to `SystemFieldsCacheable` —
+  /// see the protocol's doc comment).
+  private func mapBuiltRows<T>(_ rows: [T]) -> [UUID: CKRecord]
+  where T: IdentifiableRecord & CloudKitRecordConvertible {
+    var built: [UUID: CKRecord] = [:]
+    built.reserveCapacity(rows.count)
+    for row in rows {
+      let cached: Data?
+      if let cacheable = row as? CSVImportProfileRow {
+        cached = cacheable.encodedSystemFields
+      } else if let cacheable = row as? ImportRuleRow {
+        cached = cacheable.encodedSystemFields
+      } else {
+        cached = nil
+      }
+      built[row.id] = buildCKRecord(from: row, encodedSystemFields: cached)
     }
     return built
   }
@@ -180,20 +206,30 @@ extension ProfileDataSyncHandler {
       context: context)
   }
 
-  private func fetchCSVImportProfilesBatch(
-    ids: [UUID], context: ModelContext
-  ) -> [CSVImportProfileRecord] {
-    Self.fetchOrLog(
-      FetchDescriptor<CSVImportProfileRecord>(predicate: #Predicate { ids.contains($0.id) }),
-      context: context)
+  private func fetchCSVImportProfileRowsBatch(ids: [UUID]) -> [CSVImportProfileRow] {
+    do {
+      return try grdbRepositories.csvImportProfiles.fetchRowsSync(ids: ids)
+    } catch {
+      logger.error(
+        """
+        GRDB batch fetch failed for CSVImportProfileRow: \
+        \(error.localizedDescription, privacy: .public)
+        """)
+      return []
+    }
   }
 
-  private func fetchImportRulesBatch(
-    ids: [UUID], context: ModelContext
-  ) -> [ImportRuleRecord] {
-    Self.fetchOrLog(
-      FetchDescriptor<ImportRuleRecord>(predicate: #Predicate { ids.contains($0.id) }),
-      context: context)
+  private func fetchImportRuleRowsBatch(ids: [UUID]) -> [ImportRuleRow] {
+    do {
+      return try grdbRepositories.importRules.fetchRowsSync(ids: ids)
+    } catch {
+      logger.error(
+        """
+        GRDB batch fetch failed for ImportRuleRow: \
+        \(error.localizedDescription, privacy: .public)
+        """)
+      return []
+    }
   }
 
   // MARK: - Per-Type Fetch Methods
@@ -239,14 +275,29 @@ extension ProfileDataSyncHandler {
     return Self.fetchOrLog(descriptor, context: context).first
   }
 
-  func fetchCSVImportProfile(id: UUID, context: ModelContext) -> CSVImportProfileRecord? {
-    let descriptor = FetchDescriptor<CSVImportProfileRecord>(
-      predicate: #Predicate { $0.id == id })
-    return Self.fetchOrLog(descriptor, context: context).first
+  func fetchCSVImportProfileRow(id: UUID) -> CSVImportProfileRow? {
+    do {
+      return try grdbRepositories.csvImportProfiles.fetchRowSync(id: id)
+    } catch {
+      logger.error(
+        """
+        GRDB fetch failed for CSVImportProfileRow \(id, privacy: .public): \
+        \(error.localizedDescription, privacy: .public)
+        """)
+      return nil
+    }
   }
 
-  func fetchImportRule(id: UUID, context: ModelContext) -> ImportRuleRecord? {
-    let descriptor = FetchDescriptor<ImportRuleRecord>(predicate: #Predicate { $0.id == id })
-    return Self.fetchOrLog(descriptor, context: context).first
+  func fetchImportRuleRow(id: UUID) -> ImportRuleRow? {
+    do {
+      return try grdbRepositories.importRules.fetchRowSync(id: id)
+    } catch {
+      logger.error(
+        """
+        GRDB fetch failed for ImportRuleRow \(id, privacy: .public): \
+        \(error.localizedDescription, privacy: .public)
+        """)
+      return nil
+    }
   }
 }

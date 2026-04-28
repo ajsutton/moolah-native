@@ -58,8 +58,8 @@ struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
       modelContainer: container, instrument: currency, conversionService: conversion)
     self.investments = CloudKitInvestmentRepository(
       modelContainer: container, instrument: currency)
-    self.csvImportProfiles = CloudKitCSVImportProfileRepository(
-      modelContainer: container)
-    self.importRules = CloudKitImportRuleRepository(modelContainer: container)
+    let database = try ProfileDatabase.openInMemory()
+    self.csvImportProfiles = GRDBCSVImportProfileRepository(database: database)
+    self.importRules = GRDBImportRuleRepository(database: database)
   }
 }

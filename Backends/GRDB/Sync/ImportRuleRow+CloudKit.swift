@@ -1,11 +1,11 @@
+// Backends/GRDB/Sync/ImportRuleRow+CloudKit.swift
+
 import CloudKit
 import Foundation
 
-// MARK: - ImportRuleRecord + CloudKitRecordConvertible
+// MARK: - ImportRuleRow + CloudKitRecordConvertible
 
-extension ImportRuleRecord: CloudKitRecordConvertible {
-  static let recordType = "ImportRuleRecord"
-
+extension ImportRuleRow: CloudKitRecordConvertible {
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(
       recordType: Self.recordType, uuid: id, zoneID: zoneID)
@@ -22,24 +22,20 @@ extension ImportRuleRecord: CloudKitRecordConvertible {
     return record
   }
 
-  static func fieldValues(from ckRecord: CKRecord) -> ImportRuleRecord? {
+  static func fieldValues(from ckRecord: CKRecord) -> ImportRuleRow? {
     guard let id = ckRecord.recordID.uuid else { return nil }
     let fields = ImportRuleRecordCloudKitFields(from: ckRecord)
-    // The convenience initializer re-encodes the conditions/actions arrays,
-    // so to avoid a decode-then-re-encode round trip we go through the
-    // synthesised property setters on a fresh record.
-    let record = ImportRuleRecord(
+    return ImportRuleRow(
       id: id,
+      recordName: ckRecord.recordID.recordName,
       name: fields.name ?? "",
       enabled: (fields.enabled ?? 0) != 0,
       position: Int(fields.position ?? 0),
-      matchMode: MatchMode(rawValue: fields.matchMode ?? "all") ?? .all,
-      conditions: [],
-      actions: [],
-      accountScope: fields.accountScope.flatMap(UUID.init(uuidString:))
+      matchMode: fields.matchMode ?? MatchMode.all.rawValue,
+      conditionsJSON: fields.conditionsJSON ?? Data(),
+      actionsJSON: fields.actionsJSON ?? Data(),
+      accountScope: fields.accountScope.flatMap(UUID.init(uuidString:)),
+      encodedSystemFields: nil
     )
-    record.conditionsJSON = fields.conditionsJSON ?? Data()
-    record.actionsJSON = fields.actionsJSON ?? Data()
-    return record
   }
 }

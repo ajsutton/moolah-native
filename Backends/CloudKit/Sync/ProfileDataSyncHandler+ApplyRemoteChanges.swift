@@ -36,14 +36,14 @@ extension ProfileDataSyncHandler {
       .begin, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID,
       "%{public}d records", saved.count)
     let upsertStart = ContinuousClock.now
-    Self.applyBatchSaves(saved, context: context, systemFields: systemFields)
+    applyBatchSaves(saved, context: context, systemFields: systemFields)
     let upsertDuration = ContinuousClock.now - upsertStart
     os_signpost(.end, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID)
 
     os_signpost(
       .begin, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID,
       "%{public}d records", deleted.count)
-    Self.applyBatchDeletions(deleted, context: context)
+    applyBatchDeletions(deleted, context: context)
     os_signpost(.end, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID)
 
     do {
@@ -76,24 +76,31 @@ extension ProfileDataSyncHandler {
   // MARK: - Batch Processing
 
   /// Groups saved records by type and batch-upserts each group. Dispatch is driven by
-  /// `batchUpserters` to keep cyclomatic complexity at 1.
-  nonisolated static func applyBatchSaves(
+  /// `batchUpserters` to keep cyclomatic complexity at 1; record types covered by the
+  /// GRDB migration short-circuit through `grdbRepositories` instead of SwiftData.
+  nonisolated func applyBatchSaves(
     _ records: [CKRecord], context: ModelContext, systemFields: [String: Data]
   ) {
     let grouped = Dictionary(grouping: records, by: \.recordType)
     for (recordType, ckRecords) in grouped {
-      if let upsert = batchUpserters[recordType] {
+      if applyGRDBBatchSave(
+        recordType: recordType, ckRecords: ckRecords, systemFields: systemFields)
+      {
+        continue
+      }
+      if let upsert = Self.batchUpserters[recordType] {
         upsert(ckRecords, context, systemFields)
       } else if recordType != ProfileRecord.recordType {
         // ProfileRecord is handled by ProfileIndexSyncHandler.
-        batchLogger.warning("applyBatchSaves: unknown record type '\(recordType)' — skipping")
+        Self.batchLogger.warning(
+          "applyBatchSaves: unknown record type '\(recordType)' — skipping")
       }
     }
   }
 
   /// Handles batch deletions. Groups by record type for one IN-predicate fetch per type,
   /// then dispatches via `uuidDeleters` (or the string-keyed instrument deleter).
-  nonisolated static func applyBatchDeletions(
+  nonisolated func applyBatchDeletions(
     _ deletions: [(CKRecord.ID, String)], context: ModelContext
   ) {
     var uuidGrouped: [String: [UUID]] = [:]
@@ -108,16 +115,116 @@ extension ProfileDataSyncHandler {
     }
 
     for (recordType, ids) in uuidGrouped {
-      dispatchUUIDDeletion(recordType: recordType, ids: ids, context: context)
+      if applyGRDBBatchDeletion(recordType: recordType, ids: ids) {
+        continue
+      }
+      Self.dispatchUUIDDeletion(recordType: recordType, ids: ids, context: context)
     }
     for (recordType, names) in stringGrouped {
-      dispatchStringDeletion(recordType: recordType, names: names, context: context)
+      Self.dispatchStringDeletion(recordType: recordType, names: names, context: context)
     }
+  }
+
+  /// Routes a per-record-type batch through the GRDB repos when the type
+  /// has been migrated. Returns `true` when the dispatch was handled here
+  /// (caller skips the SwiftData path for this group), `false` for
+  /// SwiftData-managed types.
+  nonisolated private func applyGRDBBatchSave(
+    recordType: String,
+    ckRecords: [CKRecord],
+    systemFields: [String: Data]
+  ) -> Bool {
+    switch recordType {
+    case CSVImportProfileRow.recordType:
+      let rows = ckRecords.compactMap { ckRecord -> CSVImportProfileRow? in
+        guard var row = CSVImportProfileRow.fieldValues(from: ckRecord) else {
+          Self.logMalformed("applyGRDBBatchSave[CSVImportProfile]", ckRecord)
+          return nil
+        }
+        row.encodedSystemFields = systemFields[row.id.uuidString]
+        return row
+      }
+      do {
+        try grdbRepositories.csvImportProfiles.applyRemoteChangesSync(
+          saved: rows, deleted: [])
+      } catch {
+        Self.batchLogger.error(
+          """
+          applyGRDBBatchSave[CSVImportProfile] failed: \
+          \(error.localizedDescription, privacy: .public)
+          """)
+      }
+      return true
+    case ImportRuleRow.recordType:
+      let rows = ckRecords.compactMap { ckRecord -> ImportRuleRow? in
+        guard var row = ImportRuleRow.fieldValues(from: ckRecord) else {
+          Self.logMalformed("applyGRDBBatchSave[ImportRule]", ckRecord)
+          return nil
+        }
+        row.encodedSystemFields = systemFields[row.id.uuidString]
+        return row
+      }
+      do {
+        try grdbRepositories.importRules.applyRemoteChangesSync(
+          saved: rows, deleted: [])
+      } catch {
+        Self.batchLogger.error(
+          """
+          applyGRDBBatchSave[ImportRule] failed: \
+          \(error.localizedDescription, privacy: .public)
+          """)
+      }
+      return true
+    default:
+      return false
+    }
+  }
+
+  nonisolated private func applyGRDBBatchDeletion(
+    recordType: String, ids: [UUID]
+  ) -> Bool {
+    switch recordType {
+    case CSVImportProfileRow.recordType:
+      do {
+        try grdbRepositories.csvImportProfiles.applyRemoteChangesSync(
+          saved: [], deleted: ids)
+      } catch {
+        Self.batchLogger.error(
+          """
+          applyGRDBBatchDeletion[CSVImportProfile] failed: \
+          \(error.localizedDescription, privacy: .public)
+          """)
+      }
+      return true
+    case ImportRuleRow.recordType:
+      do {
+        try grdbRepositories.importRules.applyRemoteChangesSync(
+          saved: [], deleted: ids)
+      } catch {
+        Self.batchLogger.error(
+          """
+          applyGRDBBatchDeletion[ImportRule] failed: \
+          \(error.localizedDescription, privacy: .public)
+          """)
+      }
+      return true
+    default:
+      return false
+    }
+  }
+
+  /// Logs a malformed incoming CKRecord at error level so the skip is
+  /// visible in diagnostics rather than silently dropped. Mirror of the
+  /// SwiftData-path helper so GRDB and SwiftData log lines look uniform.
+  nonisolated static func logMalformed(_ site: String, _ ckRecord: CKRecord) {
+    batchLogger.error(
+      "\(site): malformed recordID '\(ckRecord.recordID.recordName)' (recordType \(ckRecord.recordType)) — skipping"
+    )
   }
 
   // MARK: - Private Helpers
 
-  nonisolated private static func dispatchUUIDDeletion(
+  nonisolated static func dispatchUUIDDeletion(
     recordType: String, ids: [UUID], context: ModelContext
   ) {
     if let delete = uuidDeleters[recordType] {
@@ -128,7 +235,7 @@ extension ProfileDataSyncHandler {
     }
   }
 
-  nonisolated private static func dispatchStringDeletion(
+  nonisolated static func dispatchStringDeletion(
     recordType: String, names: [String], context: ModelContext
   ) {
     if recordType == InstrumentRecord.recordType {
@@ -239,18 +346,9 @@ extension ProfileDataSyncHandler {
         context: context)
       for record in records { context.delete(record) }
     },
-    CSVImportProfileRecord.recordType: { ids, context in
-      let records = fetchOrLog(
-        FetchDescriptor<CSVImportProfileRecord>(predicate: #Predicate { ids.contains($0.id) }),
-        context: context)
-      for record in records { context.delete(record) }
-    },
-    ImportRuleRecord.recordType: { ids, context in
-      let records = fetchOrLog(
-        FetchDescriptor<ImportRuleRecord>(predicate: #Predicate { ids.contains($0.id) }),
-        context: context)
-      for record in records { context.delete(record) }
-    },
+    // CSVImportProfileRow + ImportRuleRow live in GRDB; their deletes are
+    // dispatched via `applyGRDBBatchDeletion` before this table is
+    // consulted.
   ]
 
   // MARK: - Upsert Dispatch Table
@@ -268,7 +366,7 @@ extension ProfileDataSyncHandler {
       EarmarkRecord.recordType: ProfileDataSyncHandler.batchUpsertEarmarks,
       EarmarkBudgetItemRecord.recordType: ProfileDataSyncHandler.batchUpsertEarmarkBudgetItems,
       InvestmentValueRecord.recordType: ProfileDataSyncHandler.batchUpsertInvestmentValues,
-      CSVImportProfileRecord.recordType: ProfileDataSyncHandler.batchUpsertCSVImportProfiles,
-      ImportRuleRecord.recordType: ProfileDataSyncHandler.batchUpsertImportRules,
+      // CSVImportProfileRow + ImportRuleRow live in GRDB; their upserts are
+      // dispatched via `applyGRDBBatchSave` before this table is consulted.
     ]
 }

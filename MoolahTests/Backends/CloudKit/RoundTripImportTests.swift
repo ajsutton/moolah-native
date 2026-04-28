@@ -11,25 +11,26 @@ struct RoundTripImportTests {
   private static let zoneID = CKRecordZone.ID(
     zoneName: "TestZone", ownerName: CKCurrentUserDefaultName)
 
-  @Test("ImportRuleRecord round-trips with BYTES and UUID-string fields")
+  @Test("ImportRuleRow round-trips with BYTES and UUID-string fields")
   func importRuleRoundTrip() throws {
     let conditionsJSON = Data(#"[{"field":"payee"}]"#.utf8)
     let actionsJSON = Data(#"[{"set":"category"}]"#.utf8)
-    let original = ImportRuleRecord(
-      id: UUID(),
+    let id = UUID()
+    let original = ImportRuleRow(
+      id: id,
+      recordName: ImportRuleRow.recordName(for: id),
       name: "Rent",
       enabled: true,
       position: 0,
-      matchMode: .all,
-      conditions: [],
-      actions: [],
-      accountScope: UUID()
+      matchMode: MatchMode.all.rawValue,
+      conditionsJSON: conditionsJSON,
+      actionsJSON: actionsJSON,
+      accountScope: UUID(),
+      encodedSystemFields: nil
     )
-    original.conditionsJSON = conditionsJSON
-    original.actionsJSON = actionsJSON
 
     let record = original.toCKRecord(in: Self.zoneID)
-    let decoded = try #require(ImportRuleRecord.fieldValues(from: record))
+    let decoded = try #require(ImportRuleRow.fieldValues(from: record))
     #expect(decoded.id == original.id)
     #expect(decoded.name == original.name)
     #expect(decoded.enabled == original.enabled)
@@ -40,22 +41,25 @@ struct RoundTripImportTests {
     #expect(decoded.actionsJSON == actionsJSON)
   }
 
-  @Test("CSVImportProfileRecord round-trips")
+  @Test("CSVImportProfileRow round-trips")
   func csvImportProfileRoundTrip() throws {
-    let original = CSVImportProfileRecord(
-      id: UUID(),
+    let id = UUID()
+    let original = CSVImportProfileRow(
+      id: id,
+      recordName: CSVImportProfileRow.recordName(for: id),
       accountId: UUID(),
       parserIdentifier: "generic",
-      headerSignature: ["a", "b", "c"],
+      headerSignature: ["a", "b", "c"].joined(separator: CSVImportProfileRow.separator),
       filenamePattern: "statement-*.csv",
       deleteAfterImport: true,
       createdAt: Date(),
       lastUsedAt: Date(),
       dateFormatRawValue: "yyyy-MM-dd",
-      columnRoleRawValuesEncoded: "amount\u{1F}date\u{1F}description"
+      columnRoleRawValuesEncoded: "amount\u{1F}date\u{1F}description",
+      encodedSystemFields: nil
     )
     let record = original.toCKRecord(in: Self.zoneID)
-    let decoded = try #require(CSVImportProfileRecord.fieldValues(from: record))
+    let decoded = try #require(CSVImportProfileRow.fieldValues(from: record))
     #expect(decoded.id == original.id)
     #expect(decoded.accountId == original.accountId)
     #expect(decoded.parserIdentifier == original.parserIdentifier)

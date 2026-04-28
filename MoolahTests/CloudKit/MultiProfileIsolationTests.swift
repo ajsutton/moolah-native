@@ -34,12 +34,16 @@ struct MultiProfileIsolationTests {
     let containerA = try manager.container(for: profileA)
     let containerB = try manager.container(for: profileB)
 
+    let databaseA = try ProfileDatabase.openInMemory()
+    let databaseB = try ProfileDatabase.openInMemory()
     let backendA = CloudKitBackend(
-      modelContainer: containerA, instrument: .defaultTestInstrument, profileLabel: "A",
+      modelContainer: containerA, database: databaseA,
+      instrument: .defaultTestInstrument, profileLabel: "A",
       conversionService: FixedConversionService(),
       instrumentRegistry: CloudKitInstrumentRegistryRepository(modelContainer: containerA))
     let backendB = CloudKitBackend(
-      modelContainer: containerB, instrument: .defaultTestInstrument, profileLabel: "B",
+      modelContainer: containerB, database: databaseB,
+      instrument: .defaultTestInstrument, profileLabel: "B",
       conversionService: FixedConversionService(),
       instrumentRegistry: CloudKitInstrumentRegistryRepository(modelContainer: containerB))
 
