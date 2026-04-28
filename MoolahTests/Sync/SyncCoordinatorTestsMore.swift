@@ -18,7 +18,10 @@ struct SyncCoordinatorTestsMore {
   func queueAllRecordsAfterImportMarksBackfillComplete() async throws {
     let manager = try ProfileContainerManager.forTesting()
     let defaults = makeDefaults()
-    let coordinator = SyncCoordinator(containerManager: manager, userDefaults: defaults)
+    let coordinator = SyncCoordinator(
+      containerManager: manager,
+      userDefaults: defaults,
+      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
 
     let profileId = UUID()
     let indexContext = ModelContext(manager.indexContainer)
@@ -90,7 +93,13 @@ struct SyncCoordinatorTestsMore {
   @Test
   func profileDataHandlerCreatedOnDemand() throws {
     let manager = try ProfileContainerManager.forTesting()
-    let coordinator = SyncCoordinator(containerManager: manager)
+    // `handlerForProfileZone` requires a GRDB repository bundle —
+    // production wiring registers via `ProfileSession.registerWithSyncCoordinator`;
+    // the test injects the in-memory factory so the handler can be
+    // constructed without a full session.
+    let coordinator = SyncCoordinator(
+      containerManager: manager,
+      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
     let profileId = UUID()
     let zoneID = CKRecordZone.ID(
       zoneName: "profile-\(profileId.uuidString)",

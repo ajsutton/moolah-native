@@ -54,8 +54,10 @@ struct ExportImportIntegrationTests4 {
 
     let freshContainer = try TestModelContainer.create()
     _ = try await coordinator.importFromFile(url: tempURL, modelContainer: freshContainer)
+    let freshDatabase = try ProfileDatabase.openInMemory()
     let freshBackend = CloudKitBackend(
       modelContainer: freshContainer,
+      database: freshDatabase,
       instrument: aud,
       profileLabel: profile.label,
       conversionService: FixedConversionService(),

@@ -1,11 +1,17 @@
+// Backends/GRDB/Sync/CSVImportProfileRow+CloudKit.swift
+
 import CloudKit
 import Foundation
 
-// MARK: - CSVImportProfileRecord + CloudKitRecordConvertible
+// MARK: - CSVImportProfileRow + CloudKitRecordConvertible
+//
+// Mirrors the previous SwiftData-backed
+// `Backends/CloudKit/Sync/CSVImportProfileRecord+CloudKit.swift`. The
+// CloudKit wire `recordType` ("CSVImportProfileRecord") is a frozen
+// contract — existing iCloud zones reference this exact string — so it
+// stays unchanged regardless of the local Swift type's name.
 
-extension CSVImportProfileRecord: CloudKitRecordConvertible {
-  static let recordType = "CSVImportProfileRecord"
-
+extension CSVImportProfileRow: CloudKitRecordConvertible {
   func toCKRecord(in zoneID: CKRecordZone.ID) -> CKRecord {
     let recordID = CKRecord.ID(
       recordType: Self.recordType, uuid: id, zoneID: zoneID)
@@ -24,24 +30,27 @@ extension CSVImportProfileRecord: CloudKitRecordConvertible {
     return record
   }
 
-  static func fieldValues(from ckRecord: CKRecord) -> CSVImportProfileRecord? {
+  static func fieldValues(from ckRecord: CKRecord) -> CSVImportProfileRow? {
     guard let id = ckRecord.recordID.uuid else { return nil }
     let fields = CSVImportProfileRecordCloudKitFields(from: ckRecord)
-    let record = CSVImportProfileRecord(
+    return CSVImportProfileRow(
       id: id,
+      recordName: ckRecord.recordID.recordName,
       accountId: fields.accountId.flatMap(UUID.init(uuidString:)) ?? UUID(),
       parserIdentifier: fields.parserIdentifier ?? "",
-      headerSignature: [],
+      // The CK value already arrives unit-separator joined — keep it
+      // as-is so the migrator's bit-for-bit copy preserves the wire
+      // bytes.
+      headerSignature: fields.headerSignature ?? "",
       filenamePattern: fields.filenamePattern,
       deleteAfterImport: (fields.deleteAfterImport ?? 0) != 0,
       createdAt: fields.createdAt ?? Date(),
       lastUsedAt: fields.lastUsedAt,
       dateFormatRawValue: fields.dateFormatRawValue,
-      columnRoleRawValuesEncoded: fields.columnRoleRawValuesEncoded
+      columnRoleRawValuesEncoded: fields.columnRoleRawValuesEncoded,
+      // Stamped by applyGRDBBatchSave after upsert; never read from the
+      // CKRecord itself.
+      encodedSystemFields: nil
     )
-    // Store the joined headerSignature directly (init normalises via joining,
-    // but the CK value already arrives pre-joined).
-    record.headerSignature = fields.headerSignature ?? ""
-    return record
   }
 }

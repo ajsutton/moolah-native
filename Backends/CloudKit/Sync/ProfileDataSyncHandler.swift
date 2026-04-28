@@ -28,6 +28,12 @@ final class ProfileDataSyncHandler {
   nonisolated let profileId: UUID
   nonisolated let zoneID: CKRecordZone.ID
   nonisolated let modelContainer: ModelContainer
+  /// GRDB-backed repos for the record types migrated to SQLite. Used by
+  /// the dispatch tables in `+ApplyRemoteChanges`, `+QueueAndDelete`,
+  /// `+RecordLookup`, and `+SystemFields` for the two record types
+  /// covered by `v2_csv_import_and_rules`. Subsequent slices extend the
+  /// list.
+  nonisolated let grdbRepositories: ProfileGRDBRepositories
 
   /// Closure fired from `applyRemoteChanges` whenever a remote pull touches
   /// any `InstrumentRecord` row (insert, update, or delete). Wired by
@@ -49,11 +55,13 @@ final class ProfileDataSyncHandler {
     profileId: UUID,
     zoneID: CKRecordZone.ID,
     modelContainer: ModelContainer,
+    grdbRepositories: ProfileGRDBRepositories,
     onInstrumentRemoteChange: @escaping @Sendable () -> Void = {}
   ) {
     self.profileId = profileId
     self.zoneID = zoneID
     self.modelContainer = modelContainer
+    self.grdbRepositories = grdbRepositories
     self.onInstrumentRemoteChange = onInstrumentRemoteChange
   }
 
@@ -77,8 +85,21 @@ final class ProfileDataSyncHandler {
   func buildCKRecord<T: CloudKitRecordConvertible & SystemFieldsCacheable>(
     for record: T
   ) -> CKRecord {
+    buildCKRecord(from: record, encodedSystemFields: record.encodedSystemFields)
+  }
+
+  /// Value-type-friendly overload of `buildCKRecord(for:)`. GRDB row
+  /// structs (`CSVImportProfileRow`, `ImportRuleRow`) deliberately
+  /// don't conform to `SystemFieldsCacheable` (which is `AnyObject`-
+  /// constrained because the SwiftData write path mutates a fetched
+  /// `@Model` row in place). This overload takes the cached blob as
+  /// an explicit parameter so the GRDB lookup path can pass
+  /// `row.encodedSystemFields` directly.
+  func buildCKRecord<T: CloudKitRecordConvertible>(
+    from record: T, encodedSystemFields: Data?
+  ) -> CKRecord {
     let freshRecord = record.toCKRecord(in: zoneID)
-    if let cachedData = record.encodedSystemFields,
+    if let cachedData = encodedSystemFields,
       let cachedRecord = CKRecord.fromEncodedSystemFields(cachedData),
       cachedRecord.recordID.zoneID == zoneID,
       Self.isUsableCachedRecordName(cachedRecord.recordID.recordName)

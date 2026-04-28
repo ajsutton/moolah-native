@@ -1,5 +1,6 @@
 import CloudKit
 import Foundation
+import GRDB
 import SwiftData
 import Testing
 
@@ -26,15 +27,20 @@ struct InstrumentRemoteChangeFanOutTests {
     fired: LockedBox<Int>
   ) throws -> (ProfileDataSyncHandler, ModelContainer) {
     let container = try TestModelContainer.create()
+    let database = try ProfileDatabase.openInMemory()
     let profileId = UUID()
     let zoneID = CKRecordZone.ID(
       zoneName: "profile-\(profileId.uuidString)",
       ownerName: CKCurrentUserDefaultName
     )
+    let bundle = ProfileGRDBRepositories(
+      csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
+      importRules: GRDBImportRuleRepository(database: database))
     let handler = ProfileDataSyncHandler(
       profileId: profileId,
       zoneID: zoneID,
       modelContainer: container,
+      grdbRepositories: bundle,
       onInstrumentRemoteChange: {
         fired.set(fired.get() + 1)
       }

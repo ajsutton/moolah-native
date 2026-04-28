@@ -1,10 +1,22 @@
 @preconcurrency import CloudKit
 import Foundation
+import OSLog
 
 extension SyncCoordinator {
   // MARK: - Handler Access
 
   /// Returns (or creates) a `ProfileDataSyncHandler` for the given profile zone.
+  ///
+  /// A GRDB repository bundle MUST have been registered via
+  /// `setProfileGRDBRepositories(profileId:bundle:)` before this is
+  /// called for the profile — production wiring guarantees this in
+  /// `ProfileSession.registerWithSyncCoordinator`. If no bundle is
+  /// registered and no `fallbackGRDBRepositoriesFactory` was injected
+  /// at coordinator init, the call traps via `preconditionFailure`:
+  /// constructing an empty in-memory bundle on the fly would silently
+  /// swallow GRDB writes (data loss). Tests that drive paths reaching
+  /// here without staging a bundle inject the factory at init time so
+  /// the trap doesn't fire — see `SyncCoordinator.init(... fallbackGRDBRepositoriesFactory:)`.
   func handlerForProfileZone(
     profileId: UUID, zoneID: CKRecordZone.ID
   ) throws -> ProfileDataSyncHandler {
@@ -12,14 +24,67 @@ extension SyncCoordinator {
       return existing
     }
     let container = try containerManager.container(for: profileId)
+    let grdbRepositories: ProfileGRDBRepositories
+    if let registered = profileGRDBRepositories[profileId] {
+      grdbRepositories = registered
+    } else if let factory = fallbackGRDBRepositoriesFactory {
+      grdbRepositories = try factory(profileId)
+      profileGRDBRepositories[profileId] = grdbRepositories
+    } else {
+      preconditionFailure(
+        """
+        SyncCoordinator.handlerForProfileZone called for profile \
+        \(profileId.uuidString) without a registered GRDB repository \
+        bundle. This is a wiring bug — \
+        ProfileSession.registerWithSyncCoordinator (production) must call \
+        setProfileGRDBRepositories(profileId:bundle:) before any sync \
+        event for this profile, and tests should either register a bundle \
+        or inject a fallbackGRDBRepositoriesFactory at coordinator init. \
+        Constructing an empty in-memory bundle here would silently swallow \
+        GRDB writes.
+        """)
+    }
     let onInstrumentRemoteChange = instrumentRemoteChangeCallbacks[profileId] ?? {}
     let handler = ProfileDataSyncHandler(
       profileId: profileId,
       zoneID: zoneID,
       modelContainer: container,
+      grdbRepositories: grdbRepositories,
       onInstrumentRemoteChange: onInstrumentRemoteChange)
     dataHandlers[profileId] = handler
     return handler
+  }
+
+  /// Registers the GRDB repository bundle for a profile. Must be called
+  /// before the first sync event arrives for the profile so
+  /// `handlerForProfileZone` can construct a handler.
+  ///
+  /// If a handler was already cached (e.g. an earlier call constructed
+  /// it via the test-only fallback bundle), the cached entry is cleared
+  /// so the next `handlerForProfileZone` call rebuilds it against the
+  /// freshly-registered bundle. This makes registration idempotent
+  /// across the test/production boundary.
+  func setProfileGRDBRepositories(
+    profileId: UUID, bundle: ProfileGRDBRepositories
+  ) {
+    if dataHandlers[profileId] != nil {
+      logger.info(
+        """
+        GRDB repository bundle registered for profile \
+        \(profileId, privacy: .public) after handler was cached; \
+        clearing cached handler so the next handlerForProfileZone \
+        call rebuilds against the new bundle
+        """
+      )
+      dataHandlers.removeValue(forKey: profileId)
+    }
+    profileGRDBRepositories[profileId] = bundle
+  }
+
+  /// Removes the per-profile GRDB repository bundle (e.g. on session
+  /// teardown so the database queue it captures can be released).
+  func removeProfileGRDBRepositories(profileId: UUID) {
+    profileGRDBRepositories.removeValue(forKey: profileId)
   }
 
   /// Registers the per-profile closure fired by the data handler whenever a

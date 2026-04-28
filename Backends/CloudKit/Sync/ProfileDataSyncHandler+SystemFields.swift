@@ -24,14 +24,47 @@ extension ProfileDataSyncHandler {
     clearAll(EarmarkBudgetItemRecord.self)
     clearAll(InvestmentValueRecord.self)
     clearAll(InstrumentRecord.self)
-    clearAll(CSVImportProfileRecord.self)
-    clearAll(ImportRuleRecord.self)
 
+    // Track whether every store cleared cleanly so the success log fires
+    // only when the SwiftData save AND the GRDB UPDATEs all succeeded.
+    // Mirrors `deleteLocalData`'s semantics: pre-PR the success log
+    // sat inside the SwiftData `do { try context.save() ... }` block,
+    // so a SwiftData failure suppressed it.
+    var clearedAll = true
     do {
       try context.save()
-      logger.info("Cleared all system fields for profile \(self.profileId)")
     } catch {
+      clearedAll = false
       logger.error("Failed to save after clearing system fields: \(error, privacy: .public)")
+    }
+
+    // GRDB-backed tables — system fields are cleared inside the repo via
+    // a single SQL UPDATE per table. Logged-only on failure, mirroring
+    // the SwiftData path's best-effort semantics.
+    do {
+      try grdbRepositories.csvImportProfiles.clearAllSystemFieldsSync()
+    } catch {
+      clearedAll = false
+      logger.error(
+        """
+        Failed to clear CSV import profile system fields for profile \
+        \(self.profileId, privacy: .public): \
+        \(error.localizedDescription, privacy: .public)
+        """)
+    }
+    do {
+      try grdbRepositories.importRules.clearAllSystemFieldsSync()
+    } catch {
+      clearedAll = false
+      logger.error(
+        """
+        Failed to clear import rule system fields for profile \
+        \(self.profileId, privacy: .public): \
+        \(error.localizedDescription, privacy: .public)
+        """)
+    }
+    if clearedAll {
+      logger.info("Cleared all system fields for profile \(self.profileId)")
     }
   }
 
@@ -141,6 +174,9 @@ extension ProfileDataSyncHandler {
       )
       return
     }
+    if applyGRDBSystemFields(recordType: ckRecord.recordType, id: uuid, data: data) {
+      return
+    }
     let applied = Self.setEncodedSystemFields(
       uuid, data: data, recordType: ckRecord.recordType, context: context)
     if !applied {
@@ -164,8 +200,60 @@ extension ProfileDataSyncHandler {
       )
       return
     }
+    if applyGRDBSystemFields(recordType: recordType, id: uuid, data: nil) {
+      return
+    }
     Self.setEncodedSystemFields(
       uuid, data: nil, recordType: recordType, context: context)
+  }
+
+  /// Routes a single-row system-fields write through the GRDB repos for
+  /// the record types covered by `v2_csv_import_and_rules`. Returns
+  /// `true` when handled (caller should not fall through to the
+  /// SwiftData dispatch table), `false` for record types that still
+  /// live in SwiftData. A "no row found" outcome from the repo logs a
+  /// warning to match the SwiftData path's warning at the same site.
+  private func applyGRDBSystemFields(
+    recordType: String, id: UUID, data: Data?
+  ) -> Bool {
+    switch recordType {
+    case CSVImportProfileRow.recordType:
+      do {
+        let applied = try grdbRepositories.csvImportProfiles
+          .setEncodedSystemFieldsSync(id: id, data: data)
+        if !applied {
+          logger.warning(
+            "No GRDB row to cache system fields for \(recordType, privacy: .public) \(id, privacy: .public)"
+          )
+        }
+      } catch {
+        logger.error(
+          """
+          GRDB system-fields update failed for \(recordType, privacy: .public) \
+          \(id, privacy: .public): \(error.localizedDescription, privacy: .public)
+          """)
+      }
+      return true
+    case ImportRuleRow.recordType:
+      do {
+        let applied = try grdbRepositories.importRules
+          .setEncodedSystemFieldsSync(id: id, data: data)
+        if !applied {
+          logger.warning(
+            "No GRDB row to cache system fields for \(recordType, privacy: .public) \(id, privacy: .public)"
+          )
+        }
+      } catch {
+        logger.error(
+          """
+          GRDB system-fields update failed for \(recordType, privacy: .public) \
+          \(id, privacy: .public): \(error.localizedDescription, privacy: .public)
+          """)
+      }
+      return true
+    default:
+      return false
+    }
   }
 
   // MARK: - Dispatch Table
@@ -196,12 +284,9 @@ extension ProfileDataSyncHandler {
       InvestmentValueRecord.recordType: { id, data, context in
         applyByUUID(InvestmentValueRecord.self, id: id, data: data, context: context)
       },
-      CSVImportProfileRecord.recordType: { id, data, context in
-        applyByUUID(CSVImportProfileRecord.self, id: id, data: data, context: context)
-      },
-      ImportRuleRecord.recordType: { id, data, context in
-        applyByUUID(ImportRuleRecord.self, id: id, data: data, context: context)
-      },
+      // CSVImportProfileRow + ImportRuleRow live in GRDB; their system-
+      // fields writes are dispatched via `applyGRDBSystemFields(...)`
+      // before this table is consulted.
     ]
 
   /// Fetches the local row matching `id` and assigns `data` to its cached system

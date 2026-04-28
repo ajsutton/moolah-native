@@ -252,72 +252,11 @@ extension ProfileDataSyncHandler {
     }
   }
 
-  nonisolated static func batchUpsertCSVImportProfiles(
-    _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
-  ) {
-    let existing = fetchOrLog(FetchDescriptor<CSVImportProfileRecord>(), context: context)
-    var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
-
-    for ckRecord in ckRecords {
-      guard let values = CSVImportProfileRecord.fieldValues(from: ckRecord) else {
-        logMalformed("batchUpsertCSVImportProfiles", ckRecord)
-        continue
-      }
-      let id = values.id
-      if let existing = byID[id] {
-        existing.accountId = values.accountId
-        existing.parserIdentifier = values.parserIdentifier
-        existing.headerSignature = values.headerSignature
-        existing.filenamePattern = values.filenamePattern
-        existing.deleteAfterImport = values.deleteAfterImport
-        existing.createdAt = values.createdAt
-        existing.lastUsedAt = values.lastUsedAt
-        existing.dateFormatRawValue = values.dateFormatRawValue
-        existing.columnRoleRawValuesEncoded = values.columnRoleRawValuesEncoded
-        existing.encodedSystemFields = systemFields[id.uuidString]
-      } else {
-        values.encodedSystemFields = systemFields[id.uuidString]
-        context.insert(values)
-        byID[id] = values
-      }
-    }
-  }
-
-  nonisolated static func batchUpsertImportRules(
-    _ ckRecords: [CKRecord], context: ModelContext, systemFields: [String: Data]
-  ) {
-    let existing = fetchOrLog(FetchDescriptor<ImportRuleRecord>(), context: context)
-    var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
-
-    for ckRecord in ckRecords {
-      guard let values = ImportRuleRecord.fieldValues(from: ckRecord) else {
-        logMalformed("batchUpsertImportRules", ckRecord)
-        continue
-      }
-      let id = values.id
-      if let existing = byID[id] {
-        existing.name = values.name
-        existing.enabled = values.enabled
-        existing.position = values.position
-        existing.matchMode = values.matchMode
-        existing.conditionsJSON = values.conditionsJSON
-        existing.actionsJSON = values.actionsJSON
-        existing.accountScope = values.accountScope
-        existing.encodedSystemFields = systemFields[id.uuidString]
-      } else {
-        values.encodedSystemFields = systemFields[id.uuidString]
-        context.insert(values)
-        byID[id] = values
-      }
-    }
-  }
-
-  /// Logs a malformed incoming record (one whose `recordID` does not decode into a valid
-  /// id for its record type) at error level so the skip is visible in diagnostics
-  /// instead of being silently dropped.
-  nonisolated private static func logMalformed(_ site: String, _ ckRecord: CKRecord) {
-    batchLogger.error(
-      "\(site): malformed recordID '\(ckRecord.recordID.recordName)' (recordType \(ckRecord.recordType)) — skipping"
-    )
-  }
+  // CSVImportProfile + ImportRule batch upserts live in GRDB. See
+  // `Backends/GRDB/Repositories/GRDBCSVImportProfileRepository.swift` and
+  // `…/GRDBImportRuleRepository.swift` for the per-row upserts; the
+  // dispatch happens in
+  // `ProfileDataSyncHandler+ApplyRemoteChanges.applyGRDBBatchSave(...)`.
+  // `logMalformed(_:_:)` lives on the same type (in `+ApplyRemoteChanges`)
+  // because the GRDB dispatch needs it too.
 }

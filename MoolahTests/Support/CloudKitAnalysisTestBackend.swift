@@ -10,7 +10,6 @@ import SwiftData
 // Visibility is internal (was fileprivate) so sibling test files across the
 // split AnalysisRepository* test suites can use this helper — `strict_fileprivate`
 // disallows fileprivate in this codebase.
-// internal (was fileprivate) so sibling test files can use this helper
 struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
   let auth: any AuthProvider
   let accounts: any AccountRepository
@@ -58,8 +57,8 @@ struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
       modelContainer: container, instrument: currency, conversionService: conversion)
     self.investments = CloudKitInvestmentRepository(
       modelContainer: container, instrument: currency)
-    self.csvImportProfiles = CloudKitCSVImportProfileRepository(
-      modelContainer: container)
-    self.importRules = CloudKitImportRuleRepository(modelContainer: container)
+    let database = try ProfileDatabase.openInMemory()
+    self.csvImportProfiles = GRDBCSVImportProfileRepository(database: database)
+    self.importRules = GRDBImportRuleRepository(database: database)
   }
 }

@@ -6,9 +6,10 @@ import GRDB
 /// Schema definition for a profile's `data.sqlite`.
 ///
 /// Each profile has exactly one such database. v1 of the schema covers the
-/// rate caches only (FX, stocks, crypto). User-data tables — accounts,
-/// transactions, earmarks, etc. — are added in later migrations as the
-/// remaining slices of the GRDB migration land.
+/// rate caches only (FX, stocks, crypto). v2 adds the first synced
+/// user-data tables (`csv_import_profile`, `import_rule`). Subsequent
+/// slices of `plans/grdb-migration.md` add accounts, transactions,
+/// earmarks, etc. under further `v3_…`, `v4_…` migrations.
 ///
 /// **Retention policy for the cache tables.** All six cache tables created
 /// by `v1_initial` (`exchange_rate`, `exchange_rate_meta`, `stock_price`,
@@ -23,7 +24,7 @@ enum ProfileSchema {
   /// Bumped each time a migration is added. Surfaced for open-time
   /// integrity checks; not used by `DatabaseMigrator` (which keys on the
   /// stable string IDs of registered migrations).
-  static let version = 1
+  static let version = 2
 
   static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
@@ -37,6 +38,9 @@ enum ProfileSchema {
     // rather than three sub-migrations. Splitting later is fine; merging
     // post-ship is not.
     migrator.registerMigration("v1_initial", migrate: createInitialTables)
+    // Slice 0 of `plans/grdb-migration.md`: first synced user-data tables.
+    migrator.registerMigration(
+      "v2_csv_import_and_rules", migrate: createCSVImportAndRulesTables)
 
     return migrator
   }
@@ -106,6 +110,84 @@ enum ProfileSchema {
             earliest_date TEXT NOT NULL,
             latest_date TEXT NOT NULL
         ) STRICT;
+        """)
+  }
+
+  // MARK: - v2 migration body
+  //
+  // Both tables hold synced user data, so each one carries
+  // `encoded_system_fields BLOB` (the cached CKRecord change tag) and
+  // `record_name TEXT NOT NULL UNIQUE` (the canonical CloudKit recordName,
+  // e.g. `"CSVImportProfileRecord|<uuid>"`) per
+  // `plans/grdb-migration.md` §4. ROWID is kept (single-column UUID PK +
+  // wide rows — `WITHOUT ROWID` is not justified per
+  // `DATABASE_SCHEMA_GUIDE.md` §3).
+
+  private static func createCSVImportAndRulesTables(_ database: Database) throws {
+    try createCSVImportProfileTable(database)
+    try createImportRuleTable(database)
+  }
+
+  // CHECK constraints below pin the SQL-side invariants per
+  // `DATABASE_SCHEMA_GUIDE.md` §3:
+  //   * Booleans on Bool-typed columns are restricted to 0/1.
+  //   * `match_mode` is restricted to the `MatchMode` raw values
+  //     (`"any"` / `"all"`). Verified against
+  //     `Domain/Models/CSVImport/ImportRule.swift` — change in lock-step
+  //     if the enum's raw values ever diverge.
+  //   * `position` is non-negative; `reorder` always produces 0…n-1.
+  // The branch is unshipped, so the v2 migration body is edited in
+  // place rather than layered behind a v3 migration.
+
+  private static func createCSVImportProfileTable(_ database: Database) throws {
+    try database.execute(
+      sql: """
+        CREATE TABLE csv_import_profile (
+            id                              BLOB    NOT NULL PRIMARY KEY,
+            record_name                     TEXT    NOT NULL UNIQUE,
+            account_id                      BLOB    NOT NULL,
+            parser_identifier               TEXT    NOT NULL,
+            header_signature                TEXT    NOT NULL,
+            filename_pattern                TEXT,
+            delete_after_import             INTEGER NOT NULL
+                CHECK (delete_after_import IN (0, 1)),
+            created_at                      TEXT    NOT NULL,
+            last_used_at                    TEXT,
+            date_format_raw_value           TEXT,
+            column_role_raw_values_encoded  TEXT,
+            encoded_system_fields           BLOB
+        ) STRICT;
+
+        CREATE INDEX csv_import_profile_account
+            ON csv_import_profile(account_id);
+        CREATE INDEX csv_import_profile_created
+            ON csv_import_profile(created_at);
+        """)
+  }
+
+  private static func createImportRuleTable(_ database: Database) throws {
+    try database.execute(
+      sql: """
+        CREATE TABLE import_rule (
+            id                     BLOB    NOT NULL PRIMARY KEY,
+            record_name            TEXT    NOT NULL UNIQUE,
+            name                   TEXT    NOT NULL,
+            enabled                INTEGER NOT NULL
+                CHECK (enabled IN (0, 1)),
+            position               INTEGER NOT NULL
+                CHECK (position >= 0),
+            match_mode             TEXT    NOT NULL
+                CHECK (match_mode IN ('all', 'any')),
+            conditions_json        BLOB    NOT NULL,
+            actions_json           BLOB    NOT NULL,
+            account_scope          BLOB,
+            encoded_system_fields  BLOB
+        ) STRICT;
+
+        CREATE INDEX import_rule_position
+            ON import_rule(position);
+        CREATE INDEX import_rule_account_scope
+            ON import_rule(account_scope) WHERE account_scope IS NOT NULL;
         """)
   }
 }

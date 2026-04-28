@@ -37,11 +37,17 @@ enum TestBackend {
   ) throws -> (backend: CloudKitBackend, container: ModelContainer) {
     let container = try TestModelContainer.create()
     let rateClient = FixedRateClient(rates: exchangeRates)
+    // One in-memory GRDB queue per backend covers both the rate-cache
+    // service and the GRDB-backed repos on the same connection — slice
+    // 0's two synced tables (`csv_import_profile`, `import_rule`) and
+    // the rate caches share the per-profile `data.sqlite` in production.
+    let database = try ProfileDatabase.openInMemory()
     let exchangeRateService = ExchangeRateService(
-      client: rateClient, database: try ProfileDatabase.openInMemory())
+      client: rateClient, database: database)
     let conversionService = FiatConversionService(exchangeRates: exchangeRateService)
     let backend = CloudKitBackend(
       modelContainer: container,
+      database: database,
       instrument: instrument,
       profileLabel: "Test",
       conversionService: conversionService,

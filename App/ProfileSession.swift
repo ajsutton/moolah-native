@@ -85,6 +85,10 @@ final class ProfileSession: Identifiable {
     let resolvedDatabase = try Self.resolveDatabase(
       override: database, profile: profile, containerManager: containerManager)
     self.database = resolvedDatabase
+    try Self.runSwiftDataToGRDBMigrationIfNeeded(
+      profileId: profile.id,
+      containerManager: containerManager,
+      database: resolvedDatabase)
 
     let services = Self.makeMarketDataServices(database: resolvedDatabase)
     self.exchangeRateService = services.exchangeRate
@@ -228,6 +232,7 @@ final class ProfileSession: Identifiable {
       syncObserverToken = nil
     }
     coordinator.removeInstrumentRemoteChangeCallback(profileId: profile.id)
+    coordinator.removeProfileGRDBRepositories(profileId: profile.id)
     syncReloadTask?.cancel()
     syncReloadTask = nil
     catalogRefreshTask?.cancel()
@@ -323,6 +328,30 @@ final class ProfileSession: Identifiable {
     let url = profileDatabaseDirectory(for: profileId)
       .appendingPathComponent("data.sqlite")
     return try ProfileDatabase.open(at: url)
+  }
+
+  /// Drives the one-shot SwiftData → GRDB migration for the given
+  /// profile's SwiftData container and GRDB queue. Skipped when no
+  /// `containerManager` is supplied (tests / previews build a fresh
+  /// in-memory GRDB queue and have nothing to migrate from).
+  ///
+  /// Slice 0 of `plans/grdb-migration.md`: MUST run before
+  /// `registerWithSyncCoordinator` so CKSyncEngine reads from a fully
+  /// populated `data.sqlite` on the first sync session.
+  ///
+  /// `@MainActor` is explicit (not inherited from the class) because
+  /// `SwiftDataToGRDBMigrator.migrateIfNeeded` is `@MainActor` (the
+  /// SwiftData fetch path requires it).
+  @MainActor
+  static func runSwiftDataToGRDBMigrationIfNeeded(
+    profileId: UUID,
+    containerManager: ProfileContainerManager?,
+    database: DatabaseQueue
+  ) throws {
+    guard let containerManager else { return }
+    let modelContainer = try containerManager.container(for: profileId)
+    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+      modelContainer: modelContainer, database: database)
   }
 
   /// Resolves which `DatabaseQueue` the session should own. Order:

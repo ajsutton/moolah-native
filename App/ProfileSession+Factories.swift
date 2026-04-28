@@ -95,7 +95,8 @@ extension ProfileSession {
       marketData: CloudKitMarketDataServices(
         exchangeRates: services.exchangeRate,
         stockPrices: services.stockPrice,
-        cryptoPrices: services.cryptoPrice))
+        cryptoPrices: services.cryptoPrice),
+      database: database)
   }
 
   // MARK: - Registry Wiring

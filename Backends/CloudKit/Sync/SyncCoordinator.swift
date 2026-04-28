@@ -287,6 +287,16 @@ final class SyncCoordinator {
   /// can be captured into the handler's `nonisolated` storage.
   var instrumentRemoteChangeCallbacks: [UUID: @Sendable () -> Void] = [:]
 
+  /// Per-profile GRDB repository bundle. Registered by `ProfileSession`
+  /// during `registerWithSyncCoordinator` (before the handler is lazily
+  /// created in `handlerForProfileZone`) so the dispatch tables in
+  /// `ProfileDataSyncHandler+ApplyRemoteChanges` etc. can route the
+  /// record types covered by `v2_csv_import_and_rules` (and subsequent
+  /// slices) through GRDB instead of SwiftData. See `ProfileGRDBRepositories`.
+  var profileGRDBRepositories: [UUID: ProfileGRDBRepositories] = [:]
+  // Test-only fallback factory — see `+HandlerAccess.swift`.
+  let fallbackGRDBRepositoriesFactory: (@Sendable (UUID) throws -> ProfileGRDBRepositories)?
+
   /// Zones with pending zone creation — records in these zones are skipped in nextRecordZoneChangeBatch.
   var pendingZoneCreation: [CKRecordZone.ID: [CKSyncEngine.PendingRecordZoneChange]] = [:]
 
@@ -320,35 +330,17 @@ final class SyncCoordinator {
   /// `true` while a last-resort periodic retry is pending. Exposed for testing.
   var hasPendingLongRetry: Bool { longRetryTask != nil }
 
-  /// Maximum number of consecutive re-fetch attempts before giving up on the short-retry
-  /// chain and falling back to the long-retry timer. A persistent `context.save()` failure
-  /// (e.g. SwiftData schema corruption, disk full) would otherwise produce an infinite
-  /// 5-second retry loop. See issue #77.
-  nonisolated static let maxRefetchAttempts = 5
-
-  /// Interval between last-resort periodic retries after the short-retry budget is
-  /// exhausted. Long enough to avoid battery / quota impact on a persistently failing
-  /// device, but short enough that a device that comes back online (disk freed, schema
-  /// migrated by a later app update, transient corruption cleared) recovers without
-  /// requiring an app restart. See issue #77.
-  nonisolated static let longRetryInterval: Duration = .seconds(30 * 60)
-
-  /// Returns the exponential backoff delay for the given 1-based attempt number,
-  /// starting at 5 seconds and doubling each attempt. Returns `nil` when `attempt`
-  /// exceeds `maxRefetchAttempts` — the caller should stop retrying at that point.
-  nonisolated static func refetchBackoff(forAttempt attempt: Int) -> Duration? {
-    guard attempt >= 1, attempt <= maxRefetchAttempts else { return nil }
-    // 5s, 10s, 20s, 40s, 80s
-    let seconds = 5 * (1 << (attempt - 1))
-    return .seconds(seconds)
-  }
+  // (Re-fetch backoff constants and `refetchBackoff(forAttempt:)` live in
+  // `SyncCoordinator+Lifecycle.swift` with the rest of the lifecycle
+  // wiring.)
 
   // MARK: - Init
 
   init(
     containerManager: ProfileContainerManager,
     userDefaults: UserDefaults = .standard,
-    isCloudKitAvailable: Bool = CloudKitAuthProvider.isCloudKitAvailable
+    isCloudKitAvailable: Bool = CloudKitAuthProvider.isCloudKitAvailable,
+    fallbackGRDBRepositoriesFactory: (@Sendable (UUID) throws -> ProfileGRDBRepositories)? = nil
   ) {
     self.containerManager = containerManager
     self.userDefaults = userDefaults
@@ -356,6 +348,7 @@ final class SyncCoordinator {
     self.profileIndexHandler = ProfileIndexSyncHandler(
       modelContainer: containerManager.indexContainer)
     self.isCloudKitAvailable = isCloudKitAvailable
+    self.fallbackGRDBRepositoriesFactory = fallbackGRDBRepositoriesFactory
     if !isCloudKitAvailable {
       applyICloudAvailability(.unavailable(reason: .entitlementsMissing))
     }

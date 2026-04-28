@@ -40,8 +40,14 @@ extension ProfileDataSyncHandler {
     collectAllUUIDs(InvestmentValueRecord.self, into: &recordIDs)
     collectAllUUIDs(TransactionRecord.self, into: &recordIDs)
     collectAllUUIDs(TransactionLegRecord.self, into: &recordIDs)
-    collectAllUUIDs(CSVImportProfileRecord.self, into: &recordIDs)
-    collectAllUUIDs(ImportRuleRecord.self, into: &recordIDs)
+    collectAllGRDBUUIDs(
+      ids: { try grdbRepositories.csvImportProfiles.allRowIdsSync() },
+      recordType: CSVImportProfileRow.recordType,
+      into: &recordIDs)
+    collectAllGRDBUUIDs(
+      ids: { try grdbRepositories.importRules.allRowIdsSync() },
+      recordType: ImportRuleRow.recordType,
+      into: &recordIDs)
 
     if !recordIDs.isEmpty {
       logger.info("Collected \(recordIDs.count) existing records for upload")
@@ -72,8 +78,14 @@ extension ProfileDataSyncHandler {
     collectUnsynced(InvestmentValueRecord.self, into: &recordIDs)
     collectUnsynced(TransactionRecord.self, into: &recordIDs)
     collectUnsynced(TransactionLegRecord.self, into: &recordIDs)
-    collectUnsynced(CSVImportProfileRecord.self, into: &recordIDs)
-    collectUnsynced(ImportRuleRecord.self, into: &recordIDs)
+    collectAllGRDBUUIDs(
+      ids: { try grdbRepositories.csvImportProfiles.unsyncedRowIdsSync() },
+      recordType: CSVImportProfileRow.recordType,
+      into: &recordIDs)
+    collectAllGRDBUUIDs(
+      ids: { try grdbRepositories.importRules.unsyncedRowIdsSync() },
+      recordType: ImportRuleRow.recordType,
+      into: &recordIDs)
 
     if !recordIDs.isEmpty {
       logger.info("Collected \(recordIDs.count) unsynced records for upload")
@@ -102,17 +114,39 @@ extension ProfileDataSyncHandler {
     deleteAll(EarmarkRecord.self)
     deleteAll(EarmarkBudgetItemRecord.self)
     deleteAll(InvestmentValueRecord.self)
-    deleteAll(CSVImportProfileRecord.self)
-    deleteAll(ImportRuleRecord.self)
 
     do {
       try context.save()
-      logger.info("Deleted all local data for profile \(self.profileId)")
-      return Set(RecordTypeRegistry.allTypes.keys)
     } catch {
       logger.error("Failed to delete local data: \(error, privacy: .public)")
       return []
     }
+
+    // GRDB-backed tables — wiped via the per-table repository helpers.
+    // Failures are logged but never propagated; partial wipe is preferable
+    // to leaving local data in an inconsistent state.
+    do {
+      try grdbRepositories.csvImportProfiles.deleteAllSync()
+    } catch {
+      logger.error(
+        """
+        Failed to delete CSV import profiles from GRDB for profile \
+        \(self.profileId, privacy: .public): \
+        \(error.localizedDescription, privacy: .public)
+        """)
+    }
+    do {
+      try grdbRepositories.importRules.deleteAllSync()
+    } catch {
+      logger.error(
+        """
+        Failed to delete import rules from GRDB for profile \
+        \(self.profileId, privacy: .public): \
+        \(error.localizedDescription, privacy: .public)
+        """)
+    }
+    logger.info("Deleted all local data for profile \(self.profileId)")
+    return Set(RecordTypeRegistry.allTypes.keys)
   }
 
   // MARK: - Private Helpers
@@ -149,6 +183,31 @@ extension ProfileDataSyncHandler {
     where record.encodedSystemFields == nil {
       recordIDs.append(
         CKRecord.ID(recordType: T.recordType, uuid: record.id, zoneID: zoneID))
+    }
+  }
+
+  /// Reads UUIDs from a GRDB-backed repo and appends one prefixed
+  /// `CKRecord.ID` per id. The closure is the synchronous repo entry
+  /// point (e.g. `allRowIdsSync` / `unsyncedRowIdsSync`); fetch failures
+  /// are logged and produce zero records (mirroring the SwiftData path's
+  /// `fetchOrLog` behaviour).
+  private func collectAllGRDBUUIDs(
+    ids: () throws -> [UUID],
+    recordType: String,
+    into recordIDs: inout [CKRecord.ID]
+  ) {
+    do {
+      for id in try ids() {
+        recordIDs.append(
+          CKRecord.ID(recordType: recordType, uuid: id, zoneID: zoneID))
+      }
+    } catch {
+      logger.error(
+        """
+        GRDB fetch failed for \(recordType, privacy: .public) on profile \
+        \(self.profileId, privacy: .public): \
+        \(error.localizedDescription, privacy: .public)
+        """)
     }
   }
 

@@ -32,20 +32,105 @@ extension ProfileDataSyncHandler {
       saved: saved, preExtracted: preExtractedSystemFields)
     let context = ModelContext(modelContainer)
 
+    // GRDB-routed batches throw on write failure so CKSyncEngine refetches
+    // instead of advancing past a dropped record (silent data loss). The
+    // SwiftData branches still buffer in `context` and surface failure via
+    // `context.save()` below.
+    let upsertStart = ContinuousClock.now
+    if let failure = runBatchSavesPhase(
+      saved: saved, context: context, systemFields: systemFields, signpostID: signpostID)
+    {
+      return failure
+    }
+    let upsertDuration = ContinuousClock.now - upsertStart
+
+    if let failure = runBatchDeletionsPhase(
+      deleted: deleted, context: context, signpostID: signpostID)
+    {
+      return failure
+    }
+
+    return persistAndNotify(
+      saved: saved,
+      deleted: deleted,
+      context: context,
+      timing: BatchTiming(batchStart: batchStart, upsertDuration: upsertDuration),
+      signpostID: signpostID)
+  }
+
+  /// Bundles per-batch timing markers so `persistAndNotify` stays under
+  /// the SwiftLint parameter budget. Both fields are populated up front
+  /// in `applyRemoteChanges`; treat as an inline value, not shared state.
+  nonisolated struct BatchTiming {
+    let batchStart: ContinuousClock.Instant
+    let upsertDuration: Duration
+  }
+
+  /// Wraps `applyBatchSaves` in its signpost + signpost-on-throw cleanup
+  /// and converts a thrown error into a `.saveFailed(...)` result.
+  /// Returns `nil` on success so the caller falls through to the next
+  /// phase. Extracted from `applyRemoteChanges` to keep that function
+  /// inside the SwiftLint body-length budget.
+  nonisolated private func runBatchSavesPhase(
+    saved: [CKRecord],
+    context: ModelContext,
+    systemFields: [String: Data],
+    signpostID: OSSignpostID
+  ) -> ApplyResult? {
     os_signpost(
       .begin, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID,
       "%{public}d records", saved.count)
-    let upsertStart = ContinuousClock.now
-    Self.applyBatchSaves(saved, context: context, systemFields: systemFields)
-    let upsertDuration = ContinuousClock.now - upsertStart
-    os_signpost(.end, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID)
+    do {
+      try applyBatchSaves(saved, context: context, systemFields: systemFields)
+      os_signpost(.end, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID)
+      return nil
+    } catch {
+      os_signpost(.end, log: Signposts.sync, name: "applyBatchSaves", signpostID: signpostID)
+      logger.error(
+        """
+        GRDB write failed during applyBatchSaves for profile \
+        \(self.profileId, privacy: .public): \
+        \(error.localizedDescription, privacy: .public)
+        """)
+      return .saveFailed(error.localizedDescription)
+    }
+  }
 
+  /// Companion to `runBatchSavesPhase` for the deletions branch.
+  nonisolated private func runBatchDeletionsPhase(
+    deleted: [(CKRecord.ID, String)],
+    context: ModelContext,
+    signpostID: OSSignpostID
+  ) -> ApplyResult? {
     os_signpost(
       .begin, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID,
       "%{public}d records", deleted.count)
-    Self.applyBatchDeletions(deleted, context: context)
-    os_signpost(.end, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID)
+    do {
+      try applyBatchDeletions(deleted, context: context)
+      os_signpost(.end, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID)
+      return nil
+    } catch {
+      os_signpost(.end, log: Signposts.sync, name: "applyBatchDeletions", signpostID: signpostID)
+      logger.error(
+        """
+        GRDB write failed during applyBatchDeletions for profile \
+        \(self.profileId, privacy: .public): \
+        \(error.localizedDescription, privacy: .public)
+        """)
+      return .saveFailed(error.localizedDescription)
+    }
+  }
 
+  /// Commits the buffered SwiftData writes, fires the instrument observer
+  /// hop on success, and reports timings. Returns `.saveFailed(...)` if
+  /// `context.save()` throws.
+  nonisolated private func persistAndNotify(
+    saved: [CKRecord],
+    deleted: [(CKRecord.ID, String)],
+    context: ModelContext,
+    timing: BatchTiming,
+    signpostID: OSSignpostID
+  ) -> ApplyResult {
     do {
       os_signpost(.begin, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
       let saveStart = ContinuousClock.now
@@ -53,8 +138,11 @@ extension ProfileDataSyncHandler {
       let saveDuration = ContinuousClock.now - saveStart
       os_signpost(.end, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
       logBatchDuration(
-        batchStart: batchStart, upsertDuration: upsertDuration, saveDuration: saveDuration,
-        saveCount: saved.count, deleteCount: deleted.count)
+        batchStart: timing.batchStart,
+        upsertDuration: timing.upsertDuration,
+        saveDuration: saveDuration,
+        saveCount: saved.count,
+        deleteCount: deleted.count)
       let changedTypes = Set(saved.map(\.recordType) + deleted.map(\.1))
       // Fan out the instrument-touched signal exactly once per batch (not per
       // record). Picker UIs subscribe to the registry's `observeChanges()`
@@ -76,26 +164,42 @@ extension ProfileDataSyncHandler {
   // MARK: - Batch Processing
 
   /// Groups saved records by type and batch-upserts each group. Dispatch is driven by
-  /// `batchUpserters` to keep cyclomatic complexity at 1.
-  nonisolated static func applyBatchSaves(
+  /// `batchUpserters` to keep cyclomatic complexity at 1; record types covered by the
+  /// GRDB migration short-circuit through `grdbRepositories` instead of SwiftData.
+  ///
+  /// Throws when a GRDB-routed batch fails to write so the caller can return
+  /// `.saveFailed(...)` and CKSyncEngine refetches instead of advancing past
+  /// the dropped record (silent data loss). SwiftData branches still buffer
+  /// in `context` and surface failures via `context.save()` upstream.
+  nonisolated func applyBatchSaves(
     _ records: [CKRecord], context: ModelContext, systemFields: [String: Data]
-  ) {
+  ) throws {
     let grouped = Dictionary(grouping: records, by: \.recordType)
     for (recordType, ckRecords) in grouped {
-      if let upsert = batchUpserters[recordType] {
+      if try applyGRDBBatchSave(
+        recordType: recordType, ckRecords: ckRecords, systemFields: systemFields)
+      {
+        continue
+      }
+      if let upsert = Self.batchUpserters[recordType] {
         upsert(ckRecords, context, systemFields)
       } else if recordType != ProfileRecord.recordType {
         // ProfileRecord is handled by ProfileIndexSyncHandler.
-        batchLogger.warning("applyBatchSaves: unknown record type '\(recordType)' — skipping")
+        Self.batchLogger.warning(
+          "applyBatchSaves: unknown record type '\(recordType)' — skipping")
       }
     }
   }
 
   /// Handles batch deletions. Groups by record type for one IN-predicate fetch per type,
   /// then dispatches via `uuidDeleters` (or the string-keyed instrument deleter).
-  nonisolated static func applyBatchDeletions(
+  ///
+  /// Throws when a GRDB-routed deletion batch fails. See `applyBatchSaves`
+  /// for the rationale: propagating the failure ensures CKSyncEngine
+  /// refetches rather than dropping the deletion record silently.
+  nonisolated func applyBatchDeletions(
     _ deletions: [(CKRecord.ID, String)], context: ModelContext
-  ) {
+  ) throws {
     var uuidGrouped: [String: [UUID]] = [:]
     var stringGrouped: [String: [String]] = [:]
 
@@ -108,10 +212,13 @@ extension ProfileDataSyncHandler {
     }
 
     for (recordType, ids) in uuidGrouped {
-      dispatchUUIDDeletion(recordType: recordType, ids: ids, context: context)
+      if try applyGRDBBatchDeletion(recordType: recordType, ids: ids) {
+        continue
+      }
+      Self.dispatchUUIDDeletion(recordType: recordType, ids: ids, context: context)
     }
     for (recordType, names) in stringGrouped {
-      dispatchStringDeletion(recordType: recordType, names: names, context: context)
+      Self.dispatchStringDeletion(recordType: recordType, names: names, context: context)
     }
   }
 
@@ -239,18 +346,9 @@ extension ProfileDataSyncHandler {
         context: context)
       for record in records { context.delete(record) }
     },
-    CSVImportProfileRecord.recordType: { ids, context in
-      let records = fetchOrLog(
-        FetchDescriptor<CSVImportProfileRecord>(predicate: #Predicate { ids.contains($0.id) }),
-        context: context)
-      for record in records { context.delete(record) }
-    },
-    ImportRuleRecord.recordType: { ids, context in
-      let records = fetchOrLog(
-        FetchDescriptor<ImportRuleRecord>(predicate: #Predicate { ids.contains($0.id) }),
-        context: context)
-      for record in records { context.delete(record) }
-    },
+    // CSVImportProfileRow + ImportRuleRow live in GRDB; their deletes are
+    // dispatched via `applyGRDBBatchDeletion` before this table is
+    // consulted.
   ]
 
   // MARK: - Upsert Dispatch Table
@@ -268,7 +366,7 @@ extension ProfileDataSyncHandler {
       EarmarkRecord.recordType: ProfileDataSyncHandler.batchUpsertEarmarks,
       EarmarkBudgetItemRecord.recordType: ProfileDataSyncHandler.batchUpsertEarmarkBudgetItems,
       InvestmentValueRecord.recordType: ProfileDataSyncHandler.batchUpsertInvestmentValues,
-      CSVImportProfileRecord.recordType: ProfileDataSyncHandler.batchUpsertCSVImportProfiles,
-      ImportRuleRecord.recordType: ProfileDataSyncHandler.batchUpsertImportRules,
+      // CSVImportProfileRow + ImportRuleRow live in GRDB; their upserts are
+      // dispatched via `applyGRDBBatchSave` before this table is consulted.
     ]
 }

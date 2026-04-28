@@ -82,7 +82,9 @@ struct SyncCoordinatorTestsExtra {
   @Test
   func queueAllRecordsAfterImportReturnsAllRecordsInProfileZone() async throws {
     let manager = try ProfileContainerManager.forTesting()
-    let coordinator = SyncCoordinator(containerManager: manager)
+    let coordinator = SyncCoordinator(
+      containerManager: manager,
+      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
     let profileId = UUID()
 
     // Seed the new profile's data container (as a migration import would).
@@ -116,7 +118,9 @@ struct SyncCoordinatorTestsExtra {
   @Test
   func queueAllRecordsAfterImportReturnsEmptyForProfileWithNoData() async throws {
     let manager = try ProfileContainerManager.forTesting()
-    let coordinator = SyncCoordinator(containerManager: manager)
+    let coordinator = SyncCoordinator(
+      containerManager: manager,
+      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
     let profileId = UUID()
 
     // Initialize the data container so the handler can be resolved,
@@ -137,7 +141,9 @@ struct SyncCoordinatorTestsExtra {
   func queueUnsyncedRecordsForAllProfilesSkipsSyncedRecords() throws {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(
-      containerManager: manager, userDefaults: makeDefaults())
+      containerManager: manager,
+      userDefaults: makeDefaults(),
+      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
 
     // Register two profiles in the index.
     let profileA = UUID()
@@ -210,7 +216,10 @@ struct SyncCoordinatorTestsExtra {
   func queueUnsyncedRecordsForAllProfilesSkipsProfilesAlreadyScanned() throws {
     let manager = try ProfileContainerManager.forTesting()
     let defaults = makeDefaults()
-    let coordinator = SyncCoordinator(containerManager: manager, userDefaults: defaults)
+    let coordinator = SyncCoordinator(
+      containerManager: manager,
+      userDefaults: defaults,
+      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
 
     let profileId = UUID()
     let indexContext = ModelContext(manager.indexContainer)
@@ -237,100 +246,7 @@ struct SyncCoordinatorTestsExtra {
     #expect(second.isEmpty)
   }
 
-  @Test(
-    "Sign-out clears all backfill-scan flags so the next sign-in can rescan"
-  )
-  func signOutClearsBackfillFlags() async throws {
-    let manager = try ProfileContainerManager.forTesting()
-    let defaults = makeDefaults()
-    let coordinator = SyncCoordinator(containerManager: manager, userDefaults: defaults)
-
-    let profileId = UUID()
-    let indexContext = ModelContext(manager.indexContainer)
-    indexContext.insert(
-      ProfileRecord(
-        id: profileId, label: "A", currencyCode: "AUD",
-        financialYearStartMonth: 7, createdAt: Date()))
-    try indexContext.save()
-
-    // Seed an unsynced record and scan so the flag is set.
-    let accountId = UUID()
-    let context = ModelContext(try manager.container(for: profileId))
-    context.insert(
-      AccountRecord(id: accountId, name: "A1", type: "bank", position: 0, isHidden: false))
-    try context.save()
-    _ = coordinator.queueUnsyncedRecordsForAllProfiles()
-
-    // Simulate the sign-out handler firing.
-    coordinator.handleSignOutForTesting()
-
-    // After sign-out, backfill state is gone — a future scan would rerun for the profile.
-    // We can't directly seed a profile back (deleteAllLocalData removed it), but we can
-    // observe the UserDefaults flag is cleared.
-    let key = "com.moolah.sync.backfillScanComplete.\(profileId.uuidString)"
-    #expect(defaults.bool(forKey: key) == false)
-  }
-
-  @Test(
-    "encryptedDataReset on a profile zone clears its backfill flag so re-queued records get tracked afresh"
-  )
-  func encryptedDataResetClearsBackfillFlag() async throws {
-    let manager = try ProfileContainerManager.forTesting()
-    let defaults = makeDefaults()
-    let coordinator = SyncCoordinator(containerManager: manager, userDefaults: defaults)
-
-    let profileId = UUID()
-    let indexContext = ModelContext(manager.indexContainer)
-    indexContext.insert(
-      ProfileRecord(
-        id: profileId, label: "A", currencyCode: "AUD",
-        financialYearStartMonth: 7, createdAt: Date()))
-    try indexContext.save()
-
-    let accountId = UUID()
-    let context = ModelContext(try manager.container(for: profileId))
-    context.insert(
-      AccountRecord(id: accountId, name: "A1", type: "bank", position: 0, isHidden: false))
-    try context.save()
-    _ = coordinator.queueUnsyncedRecordsForAllProfiles()
-
-    let zoneID = CKRecordZone.ID(
-      zoneName: "profile-\(profileId.uuidString)",
-      ownerName: CKCurrentUserDefaultName)
-    coordinator.handleEncryptedDataResetForTesting(zoneID: zoneID)
-
-    let key = "com.moolah.sync.backfillScanComplete.\(profileId.uuidString)"
-    #expect(defaults.bool(forKey: key) == false)
-  }
-
-  @Test(
-    "Server-side profile zone deletion clears the backfill flag so a re-created zone rescans"
-  )
-  func zoneDeletionClearsBackfillFlag() async throws {
-    let manager = try ProfileContainerManager.forTesting()
-    let defaults = makeDefaults()
-    let coordinator = SyncCoordinator(containerManager: manager, userDefaults: defaults)
-
-    let profileId = UUID()
-    let indexContext = ModelContext(manager.indexContainer)
-    indexContext.insert(
-      ProfileRecord(
-        id: profileId, label: "A", currencyCode: "AUD",
-        financialYearStartMonth: 7, createdAt: Date()))
-    try indexContext.save()
-
-    let context = ModelContext(try manager.container(for: profileId))
-    context.insert(
-      AccountRecord(id: UUID(), name: "A1", type: "bank", position: 0, isHidden: false))
-    try context.save()
-    _ = coordinator.queueUnsyncedRecordsForAllProfiles()
-
-    let zoneID = CKRecordZone.ID(
-      zoneName: "profile-\(profileId.uuidString)",
-      ownerName: CKCurrentUserDefaultName)
-    coordinator.handleZoneDeletedForTesting(zoneID: zoneID)
-
-    let key = "com.moolah.sync.backfillScanComplete.\(profileId.uuidString)"
-    #expect(defaults.bool(forKey: key) == false)
-  }
+  // (Sign-out / encryptedDataReset / zone-deleted backfill-flag tests
+  // live in `SyncCoordinatorBackfillFlagTests.swift` to keep the type
+  // body under the SwiftLint threshold.)
 }

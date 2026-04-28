@@ -98,8 +98,10 @@ struct ExportCoordinatorImportNewProfileTests {
 
     // Data was imported into the container
     let container = try containerManager.container(for: newProfileId)
+    let freshDatabase = try ProfileDatabase.openInMemory()
     let freshBackend = CloudKitBackend(
       modelContainer: container,
+      database: freshDatabase,
       instrument: instrument,
       profileLabel: registeredProfile.label,
       conversionService: FixedConversionService(),

@@ -73,8 +73,11 @@ struct ExportImportIntegrationTests {
   private func makeCloudBackend(
     container: ModelContainer, label: String = "Test Profile"
   ) -> CloudKitBackend {
-    CloudKitBackend(
+    // swiftlint:disable:next force_try
+    let database = try! ProfileDatabase.openInMemory()
+    return CloudKitBackend(
       modelContainer: container,
+      database: database,
       instrument: instrument,
       profileLabel: label,
       conversionService: FixedConversionService(),

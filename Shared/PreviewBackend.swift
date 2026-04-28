@@ -34,6 +34,7 @@ enum PreviewBackend {
     let conversionService = FiatConversionService(exchangeRates: exchangeRates)
     let backend = CloudKitBackend(
       modelContainer: container,
+      database: database,
       instrument: instrument, profileLabel: "Preview",
       conversionService: conversionService,
       instrumentRegistry: CloudKitInstrumentRegistryRepository(modelContainer: container)

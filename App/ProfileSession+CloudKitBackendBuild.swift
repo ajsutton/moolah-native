@@ -1,5 +1,6 @@
 import CloudKit
 import Foundation
+import GRDB
 import SwiftData
 
 extension ProfileSession {
@@ -21,7 +22,8 @@ extension ProfileSession {
     profile: Profile,
     containerManager: ProfileContainerManager,
     syncCoordinator: SyncCoordinator?,
-    marketData: CloudKitMarketDataServices
+    marketData: CloudKitMarketDataServices,
+    database: any DatabaseWriter
   ) -> BackendProvider {
     // A missing container here means the profile can't be constructed;
     // every call site depends on the session existing so there's no recovery.
@@ -50,13 +52,47 @@ extension ProfileSession {
         try await registry.allCryptoRegistrations().map(\.mapping)
       }
     )
+    let hooks = grdbRepoHooks(zoneID: zoneID, syncCoordinator: syncCoordinator)
     return CloudKitBackend(
       modelContainer: profileContainer,
+      database: database,
       instrument: profile.instrument,
       profileLabel: profile.label,
       conversionService: conversionService,
-      instrumentRegistry: registry
+      instrumentRegistry: registry,
+      onCSVImportProfileChanged: hooks.changed,
+      onCSVImportProfileDeleted: hooks.deleted,
+      onImportRuleChanged: hooks.changed,
+      onImportRuleDeleted: hooks.deleted
     )
+  }
+
+  /// Bundle of the change/delete closures the GRDB repos call on each
+  /// successful local mutation. Both record types share the same shape
+  /// (`(recordType, id) -> queueSave/queueDeletion`), so a single pair
+  /// covers both — slice 0 keeps the wiring uniform and small.
+  private struct GRDBRepoHooks {
+    let changed: @Sendable (String, UUID) -> Void
+    let deleted: @Sendable (String, UUID) -> Void
+  }
+
+  /// Builds the GRDB-repo hook closures that fan local mutations out to
+  /// the sync coordinator's queue. Returns no-op closures when no
+  /// coordinator is wired (preview / test backends).
+  private static func grdbRepoHooks(
+    zoneID: CKRecordZone.ID, syncCoordinator: SyncCoordinator?
+  ) -> GRDBRepoHooks {
+    GRDBRepoHooks(
+      changed: { [weak syncCoordinator] recordType, id in
+        Task { @MainActor [weak syncCoordinator] in
+          syncCoordinator?.queueSave(recordType: recordType, id: id, zoneID: zoneID)
+        }
+      },
+      deleted: { [weak syncCoordinator] recordType, id in
+        Task { @MainActor [weak syncCoordinator] in
+          syncCoordinator?.queueDeletion(recordType: recordType, id: id, zoneID: zoneID)
+        }
+      })
   }
 
   /// Builds the `CloudKitInstrumentRegistryRepository` for a profile, wiring
