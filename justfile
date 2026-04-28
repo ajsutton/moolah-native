@@ -286,3 +286,38 @@ release-wait TAG:
 # attached assets.
 release-status TAG:
     bash scripts/release-status.sh {{TAG}}
+
+# Download the latest GitHub release (including prereleases), unzip it,
+# and replace /Applications/Moolah.app. Prints the installed version on
+# success. Requires `gh` authenticated.
+install-release-mac:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tag="$(gh release list --limit 1 --json tagName --jq '.[0].tagName')"
+    if [ -z "$tag" ]; then
+        echo "No GitHub releases found." >&2
+        exit 1
+    fi
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    echo "==> Downloading ${tag}…"
+    gh release download "$tag" --pattern 'Moolah-*.zip' --dir "$tmp"
+    zip="$(find "$tmp" -maxdepth 1 -name 'Moolah-*.zip' -print -quit)"
+    if [ -z "$zip" ]; then
+        echo "Release $tag has no Moolah-*.zip asset." >&2
+        exit 1
+    fi
+    echo "==> Extracting $(basename "$zip")…"
+    unzip -q "$zip" -d "$tmp/extracted"
+    app="$(find "$tmp/extracted" -maxdepth 2 -name 'Moolah.app' -type d -print -quit)"
+    if [ -z "$app" ]; then
+        echo "Moolah.app not found inside $(basename "$zip")." >&2
+        exit 1
+    fi
+    echo "==> Replacing /Applications/Moolah.app…"
+    pkill -f "Moolah.app/Contents/MacOS/Moolah" 2>/dev/null || true
+    rm -rf "/Applications/Moolah.app"
+    mv "$app" "/Applications/Moolah.app"
+    version="$(defaults read /Applications/Moolah.app/Contents/Info CFBundleShortVersionString)"
+    build="$(defaults read /Applications/Moolah.app/Contents/Info CFBundleVersion)"
+    echo "==> Installed Moolah $version (build $build) from $tag"
