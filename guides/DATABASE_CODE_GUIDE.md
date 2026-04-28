@@ -88,12 +88,9 @@ struct GRDBAccountRepository: AccountRepository {
 
 ### `InferSendableFromCaptures`
 
-Enable the upcoming feature on every SwiftPM target that imports GRDB so closure-shorthand uses (`writer.read(Type.fetchAll)`) compile without `@Sendable` ceremony:
+Closure-shorthand uses (`writer.read(Type.fetchAll)`) compile cleanly without `@Sendable` ceremony because the project ships at `SWIFT_VERSION: "6.0"` — and `InferSendableFromCaptures` ([SE-0418](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0418-inferring-sendable-for-methods.md)) is enabled by default in Swift 6 mode.
 
-```swift
-// project.yml settings (or Package.swift swiftSettings):
-.enableUpcomingFeature("InferSendableFromCaptures")
-```
+**Do not** add `-enable-upcoming-feature InferSendableFromCaptures` to `OTHER_SWIFT_FLAGS` — Swift 6 rejects it with `error: upcoming feature 'InferSendableFromCaptures' is already enabled as of Swift version 6`. The feature is only an opt-in flag for Swift 5 mode codebases.
 
 ### GRDB 7 task cancellation
 
