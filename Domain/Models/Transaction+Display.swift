@@ -98,30 +98,12 @@ extension Transaction {
     return "Swapped \(formatLegMagnitude(paid)) for \(formatLegMagnitude(received))"
   }
 
-  /// Formats the absolute magnitude of `leg` as `"{number} {code}"` for use
-  /// in trade title sentences. Uses `0...decimals` precision so trailing zeros
-  /// are suppressed (e.g. `20 VGS.AX`, `100 USD`, `30,000 USDC`). Fiat uses
-  /// the ISO code; stock/crypto uses the ticker.
-  ///
-  /// Diverges from `InstrumentAmount.formatted` deliberately: the latter renders
-  /// fiat with the locale-currency symbol (e.g. `"$100.00"`), which would clash
-  /// with the design's title examples (`"Bought 20 VGS.AX"`, `"Swapped 100 USD
-  /// for 50 GBP"`). The amount column elsewhere on the row keeps using
-  /// `.formatted` for the symbol form; only the title sentence uses this code-form
-  /// helper. See design §4.3.
-  ///
-  /// `abs()` here produces a *display* magnitude only — the stored sign is not modified.
+  /// Formats the absolute magnitude of `leg` as a positive
+  /// `InstrumentAmount.formatted` — locale-currency symbol for fiat,
+  /// `"{number} {ticker}"` for stocks and crypto — for use in trade title
+  /// sentences. `abs()` here produces a *display* magnitude only; the stored
+  /// sign is not modified.
   private func formatLegMagnitude(_ leg: TransactionLeg) -> String {
-    let qty = abs(leg.quantity)
-    let instrument = leg.instrument
-    let number = qty.formatted(.number.precision(.fractionLength(0...instrument.decimals)))
-    let code: String
-    switch instrument.kind {
-    case .fiatCurrency:
-      code = instrument.id
-    case .stock, .cryptoToken:
-      code = instrument.ticker ?? instrument.id
-    }
-    return "\(number) \(code)"
+    InstrumentAmount(quantity: abs(leg.quantity), instrument: leg.instrument).formatted
   }
 }
