@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -13,18 +14,16 @@ struct InstrumentConversionServiceTests {
 
   private func makeService(
     rates: [String: [String: Decimal]] = [:]
-  ) -> FiatConversionService {
+  ) throws -> FiatConversionService {
     let client = FixedRateClient(rates: rates)
-    let cacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("conversion-tests")
-      .appendingPathComponent(UUID().uuidString)
-    let exchangeRates = ExchangeRateService(client: client, cacheDirectory: cacheDir)
+    let exchangeRates = ExchangeRateService(
+      client: client, database: try ProfileDatabase.openInMemory())
     return FiatConversionService(exchangeRates: exchangeRates)
   }
 
   @Test
   func sameCurrencyReturnsIdentity() async throws {
-    let service = makeService()
+    let service = try makeService()
     let result = try await service.convert(
       dec("100.00"),
       from: .AUD, to: .AUD,
@@ -35,7 +34,7 @@ struct InstrumentConversionServiceTests {
 
   @Test
   func convertsAUDtoUSD() async throws {
-    let service = makeService(rates: [
+    let service = try makeService(rates: [
       "2025-06-15": ["USD": dec("0.6500")]
     ])
     let result = try await service.convert(
@@ -48,7 +47,7 @@ struct InstrumentConversionServiceTests {
 
   @Test
   func convertsUSDtoAUD() async throws {
-    let service = makeService(rates: [
+    let service = try makeService(rates: [
       "2025-06-15": ["AUD": dec("1.5385")]
     ])
     let result = try await service.convert(
@@ -61,7 +60,7 @@ struct InstrumentConversionServiceTests {
 
   @Test
   func convertAmount() async throws {
-    let service = makeService(rates: [
+    let service = try makeService(rates: [
       "2025-06-15": ["USD": dec("0.6500")]
     ])
     let amount = InstrumentAmount(
@@ -77,7 +76,7 @@ struct InstrumentConversionServiceTests {
 
   @Test
   func convertAmountSameCurrency() async throws {
-    let service = makeService()
+    let service = try makeService()
     let amount = InstrumentAmount(
       quantity: dec("1000.00"),
       instrument: .AUD
@@ -100,7 +99,7 @@ struct InstrumentConversionServiceTests {
     let today = calendar.startOfDay(for: Date())
     let pastDate = calendar.date(byAdding: .day, value: -15, to: today)!
     let pastKey = formatter.string(from: pastDate)
-    let service = makeService(rates: [
+    let service = try makeService(rates: [
       pastKey: ["USD": dec("0.6500")]
     ])
 
@@ -122,7 +121,7 @@ struct InstrumentConversionServiceTests {
     let pastKey = formatter.string(
       from: calendar.date(byAdding: .day, value: -3, to: today)!
     )
-    let service = makeService(rates: [
+    let service = try makeService(rates: [
       pastKey: ["USD": dec("0.6500")]
     ])
 

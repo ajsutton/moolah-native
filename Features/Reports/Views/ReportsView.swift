@@ -209,7 +209,8 @@ private func seedReportsPreview(
     Category(id: ids.rentId, name: "Rent"),
   ])
   let account = Account(name: "Checking", type: .bank, instrument: .AUD)
-  let session = ProfileSession(profile: Profile(label: "Preview"))
+  // swiftlint:disable:next force_try
+  let session = try! ProfileSession.preview()
   return ReportsView(
     reportingStore: reportingStore,
     categories: categories,

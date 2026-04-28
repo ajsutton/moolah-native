@@ -192,4 +192,24 @@ extension MoolahApp {
       AutomationServiceLocator.shared.service = automationService
     #endif
   }
+
+  /// One-shot cleanup: removes the legacy gzipped JSON rate caches that
+  /// shipped before rate persistence moved to per-profile SQLite. Gated by
+  /// the `v2.rates.cache.cleared` `UserDefaults` flag so it runs at most
+  /// once per install. Best-effort — failures are silent and the rate
+  /// services repopulate from network on demand.
+  static func cleanupLegacyRateCachesOnce() {
+    let key = "v2.rates.cache.cleared"
+    let defaults = UserDefaults.standard
+    guard !defaults.bool(forKey: key) else { return }
+    if let caches = FileManager.default
+      .urls(for: .cachesDirectory, in: .userDomainMask)
+      .first
+    {
+      for sub in ["exchange-rates", "stock-prices", "crypto-prices"] {
+        try? FileManager.default.removeItem(at: caches.appendingPathComponent(sub))
+      }
+    }
+    defaults.set(true, forKey: key)
+  }
 }

@@ -13,7 +13,15 @@ struct CryptoPriceRecord: Codable, Sendable, FetchableRecord, PersistableRecord 
   static let databaseTableName = "crypto_price"
 
   enum Columns: String, ColumnExpression, CaseIterable {
-    case tokenId, date, priceUsd
+    case tokenId = "token_id"
+    case date
+    case priceUsd = "price_usd"
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case tokenId = "token_id"
+    case date
+    case priceUsd = "price_usd"
   }
 
   /// Token id (e.g. `"1:native"`).

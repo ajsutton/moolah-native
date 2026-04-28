@@ -25,10 +25,11 @@ enum PreviewBackend {
     // only affects SwiftUI canvas rendering.
     // swiftlint:disable:next force_try
     let container = try! ModelContainer(for: schema, configurations: [config])
+    // swiftlint:disable:next force_try
+    let database = try! ProfileDatabase.openInMemory()
     let exchangeRates = ExchangeRateService(
       client: FrankfurterClient(),
-      cacheDirectory: FileManager.default.temporaryDirectory
-        .appendingPathComponent("preview-rates")
+      database: database
     )
     let conversionService = FiatConversionService(exchangeRates: exchangeRates)
     let backend = CloudKitBackend(

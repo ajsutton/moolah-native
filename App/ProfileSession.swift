@@ -1,5 +1,6 @@
 import CloudKit
 import Foundation
+import GRDB
 import OSLog
 import SwiftData
 
@@ -9,6 +10,11 @@ import SwiftData
 @MainActor
 final class ProfileSession: Identifiable {
   let profile: Profile
+  /// Per-profile GRDB connection. Owns the lifecycle of `data.sqlite`
+  /// (or an in-memory queue under previews / tests). Released when the
+  /// session deinits; on profile delete the parent `profiles/<id>/`
+  /// directory is removed by `ProfileContainerManager.deleteStore`.
+  let database: DatabaseQueue
   let backend: BackendProvider
   let authStore: AuthStore
   let accountStore: AccountStore
@@ -50,11 +56,16 @@ final class ProfileSession: Identifiable {
   init(
     profile: Profile,
     containerManager: ProfileContainerManager? = nil,
-    syncCoordinator: SyncCoordinator? = nil
-  ) {
+    syncCoordinator: SyncCoordinator? = nil,
+    database: DatabaseQueue? = nil
+  ) throws {
     self.profile = profile
 
-    let services = Self.makeMarketDataServices()
+    let resolvedDatabase = try Self.resolveDatabase(
+      override: database, profile: profile, containerManager: containerManager)
+    self.database = resolvedDatabase
+
+    let services = Self.makeMarketDataServices(database: resolvedDatabase)
     self.exchangeRateService = services.exchangeRate
     self.stockPriceService = services.stockPrice
     self.cryptoPriceService = services.cryptoPrice
@@ -63,9 +74,8 @@ final class ProfileSession: Identifiable {
       profile: profile,
       containerManager: containerManager,
       syncCoordinator: syncCoordinator,
-      exchangeRates: services.exchangeRate,
-      stockPrices: services.stockPrice,
-      cryptoPrices: services.cryptoPrice
+      services: services,
+      database: resolvedDatabase
     )
     self.backend = backend
 
@@ -229,5 +239,51 @@ final class ProfileSession: Identifiable {
       .appendingPathComponent("Moolah", isDirectory: true)
       .appendingPathComponent("csv-staging", isDirectory: true)
       .appendingPathComponent(profileId.uuidString, isDirectory: true)
+  }
+
+  /// Per-profile directory containing `data.sqlite` (and its `-wal`/`-shm`
+  /// sidecars). Removed wholesale on profile delete by
+  /// `ProfileContainerManager.deleteStore(for:)`.
+  nonisolated static func profileDatabaseDirectory(for profileId: UUID) -> URL {
+    URL.moolahScopedApplicationSupport
+      .appendingPathComponent("Moolah", isDirectory: true)
+      .appendingPathComponent("profiles", isDirectory: true)
+      .appendingPathComponent(profileId.uuidString, isDirectory: true)
+  }
+
+  /// Opens the profile's `data.sqlite` GRDB queue, creating intermediate
+  /// directories as needed and applying the `ProfileSchema` migrator.
+  nonisolated static func openProfileDatabase(profileId: UUID) throws -> DatabaseQueue {
+    let url = profileDatabaseDirectory(for: profileId)
+      .appendingPathComponent("data.sqlite")
+    return try ProfileDatabase.open(at: url)
+  }
+
+  /// Resolves which `DatabaseQueue` the session should own. Order:
+  ///   1. Caller-provided `override` (tests, previews).
+  ///   2. In-memory queue when the parent `containerManager` is in-memory
+  ///      (UI testing, `ProfileContainerManager.forTesting()`).
+  ///   3. On-disk `data.sqlite` under `profiles/<id>/` for production.
+  nonisolated private static func resolveDatabase(
+    override: DatabaseQueue?,
+    profile: Profile,
+    containerManager: ProfileContainerManager?
+  ) throws -> DatabaseQueue {
+    if let override { return override }
+    if containerManager?.inMemory == true { return try ProfileDatabase.openInMemory() }
+    return try openProfileDatabase(profileId: profile.id)
+  }
+
+  /// Convenience constructor for `#Preview` blocks. Backs the session with
+  /// an in-memory GRDB queue so previews never touch disk. Uses an in-memory
+  /// `ProfileContainerManager` so the CloudKit backend can be constructed
+  /// without touching the network or the on-disk container store.
+  static func preview(
+    profile: Profile = Profile(label: "Preview")
+  ) throws -> ProfileSession {
+    try ProfileSession(
+      profile: profile,
+      containerManager: ProfileContainerManager.forTesting(),
+      database: ProfileDatabase.openInMemory())
   }
 }

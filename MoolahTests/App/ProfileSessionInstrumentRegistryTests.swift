@@ -14,7 +14,7 @@ struct ProfileSessionInstrumentRegistryTests {
       label: "iCloud",
       currencyCode: "AUD", financialYearStartMonth: 7
     )
-    let session = ProfileSession(profile: profile, containerManager: containerManager)
+    let session = try ProfileSession(profile: profile, containerManager: containerManager)
 
     #expect(session.instrumentRegistry != nil)
     #expect(session.cryptoTokenStore != nil)

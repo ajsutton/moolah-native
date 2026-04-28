@@ -12,7 +12,15 @@ struct ExchangeRateMetaRecord: Codable, Sendable, FetchableRecord, PersistableRe
   static let databaseTableName = "exchange_rate_meta"
 
   enum Columns: String, ColumnExpression, CaseIterable {
-    case base, earliestDate, latestDate
+    case base
+    case earliestDate = "earliest_date"
+    case latestDate = "latest_date"
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case base
+    case earliestDate = "earliest_date"
+    case latestDate = "latest_date"
   }
 
   var base: String

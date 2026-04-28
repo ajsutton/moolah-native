@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import SwiftData
 import Testing
 
@@ -87,11 +88,9 @@ struct TransactionRepositoryBulkFetchTests {
 
   private func makeRepository(initial: [Transaction]) throws -> CloudKitTransactionRepository {
     let container = try TestModelContainer.create()
-    let cacheDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("test-rates-\(UUID().uuidString)")
     let rateService = ExchangeRateService(
       client: FixedRateClient(rates: [:]),
-      cacheDirectory: cacheDir)
+      database: try ProfileDatabase.openInMemory())
     let repo = CloudKitTransactionRepository(
       modelContainer: container,
       instrument: .defaultTestInstrument,

@@ -13,7 +13,8 @@ struct ProfileSessionTests {
   @Test("session creates non-nil stores")
   func createsStores() throws {
     let containerManager = try ProfileContainerManager.forTesting()
-    let session = ProfileSession(profile: makeProfile(), containerManager: containerManager)
+    let session = try ProfileSession(
+      profile: makeProfile(), containerManager: containerManager)
 
     #expect(session.authStore.state == .loading)
     #expect(session.accountStore.accounts.ordered.isEmpty)
@@ -27,7 +28,7 @@ struct ProfileSessionTests {
   func sessionIdMatchesProfile() throws {
     let containerManager = try ProfileContainerManager.forTesting()
     let profile = makeProfile()
-    let session = ProfileSession(profile: profile, containerManager: containerManager)
+    let session = try ProfileSession(profile: profile, containerManager: containerManager)
 
     #expect(session.id == profile.id)
   }
@@ -36,9 +37,9 @@ struct ProfileSessionTests {
   func independentSessions() throws {
     let containerManager1 = try ProfileContainerManager.forTesting()
     let containerManager2 = try ProfileContainerManager.forTesting()
-    let session1 = ProfileSession(
+    let session1 = try ProfileSession(
       profile: makeProfile(label: "One"), containerManager: containerManager1)
-    let session2 = ProfileSession(
+    let session2 = try ProfileSession(
       profile: makeProfile(label: "Two"), containerManager: containerManager2)
 
     #expect(session1.id != session2.id)
@@ -47,7 +48,8 @@ struct ProfileSessionTests {
   @Test("onInvestmentValueChanged wiring connects investment store to account store")
   func onInvestmentValueChangedWiring() throws {
     let containerManager = try ProfileContainerManager.forTesting()
-    let session = ProfileSession(profile: makeProfile(), containerManager: containerManager)
+    let session = try ProfileSession(
+      profile: makeProfile(), containerManager: containerManager)
 
     #expect(session.investmentStore.onInvestmentValueChanged != nil)
   }
@@ -60,7 +62,7 @@ struct ProfileSessionTests {
   func cloudKitProfileUsesFullConversionService() throws {
     let containerManager = try ProfileContainerManager.forTesting()
     let profile = Profile(label: "iCloud", currencyCode: "AUD", financialYearStartMonth: 7)
-    let session = ProfileSession(profile: profile, containerManager: containerManager)
+    let session = try ProfileSession(profile: profile, containerManager: containerManager)
 
     #expect(session.backend.conversionService is FullConversionService)
   }
@@ -69,7 +71,7 @@ struct ProfileSessionTests {
   func cloudKitProfileExposesCryptoTokenStore() throws {
     let containerManager = try ProfileContainerManager.forTesting()
     let profile = Profile(label: "iCloud", currencyCode: "AUD", financialYearStartMonth: 7)
-    let session = ProfileSession(profile: profile, containerManager: containerManager)
+    let session = try ProfileSession(profile: profile, containerManager: containerManager)
 
     // Store exists and starts empty (registrations load on demand).
     #expect(session.cryptoTokenStore?.registrations.isEmpty == true)

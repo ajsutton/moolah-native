@@ -308,7 +308,8 @@ private func seedPositionValuations(backend: CloudKitBackend, account: Account) 
     repository: backend.transactions,
     conversionService: backend.conversionService,
     targetInstrument: .AUD)
-  let session = ProfileSession(profile: Profile(label: "Preview"))
+  // swiftlint:disable:next force_try
+  let session = try! ProfileSession.preview()
   let account = Account(name: "Brokerage", type: .investment, instrument: .AUD)
   return NavigationStack {
     InvestmentAccountView(
@@ -335,7 +336,8 @@ private func seedPositionValuations(backend: CloudKitBackend, account: Account) 
     repository: backend.transactions,
     conversionService: backend.conversionService,
     targetInstrument: .AUD)
-  let session = ProfileSession(profile: Profile(label: "Preview"))
+  // swiftlint:disable:next force_try
+  let session = try! ProfileSession.preview()
   let account = Account(name: "Brokerage", type: .investment, instrument: .AUD)
   return NavigationStack {
     InvestmentAccountView(

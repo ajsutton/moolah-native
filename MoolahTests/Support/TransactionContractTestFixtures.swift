@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import SwiftData
 import Testing
 
@@ -237,9 +238,8 @@ func makeContractCloudKitTransactionRepository(
 ) throws -> CloudKitTransactionRepository {
   let container = try TestModelContainer.create()
   let rateClient = FixedRateClient(rates: exchangeRates)
-  let cacheDir = FileManager.default.temporaryDirectory
-    .appendingPathComponent("test-rates-\(UUID().uuidString)")
-  let exchangeRateService = ExchangeRateService(client: rateClient, cacheDirectory: cacheDir)
+  let exchangeRateService = ExchangeRateService(
+    client: rateClient, database: try ProfileDatabase.openInMemory())
   let conversionService = FiatConversionService(exchangeRates: exchangeRateService)
   let repo = CloudKitTransactionRepository(
     modelContainer: container,

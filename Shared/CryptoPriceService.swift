@@ -1,12 +1,16 @@
 // Shared/CryptoPriceService.swift
 
 import Foundation
+import GRDB
 import OSLog
 
 actor CryptoPriceService {
   private let clients: [CryptoPriceClient]
   private var caches: [String: CryptoPriceCache] = [:]
-  private let cacheDirectory: URL
+  /// Loaded token ids — set on first hydration so we don't re-read SQL when
+  /// the cache is genuinely empty.
+  private var hydratedTokenIds: Set<String> = []
+  private let database: any DatabaseWriter
   private let dateFormatter: ISO8601DateFormatter
   private let resolutionClient: TokenResolutionClient
   private let logger = Logger(
@@ -14,19 +18,12 @@ actor CryptoPriceService {
 
   init(
     clients: [CryptoPriceClient],
-    cacheDirectory: URL? = nil,
+    database: any DatabaseWriter,
     resolutionClient: (any TokenResolutionClient)? = nil
   ) {
     self.clients = clients
+    self.database = database
     self.resolutionClient = resolutionClient ?? NoOpTokenResolutionClient()
-    if let cacheDirectory {
-      self.cacheDirectory = cacheDirectory
-    } else {
-      let baseCaches =
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
-        ?? URL(fileURLWithPath: NSTemporaryDirectory())
-      self.cacheDirectory = baseCaches.appendingPathComponent("crypto-prices")
-    }
     self.dateFormatter = ISO8601DateFormatter()
     self.dateFormatter.formatOptions = [.withFullDate]
   }
@@ -62,14 +59,27 @@ actor CryptoPriceService {
     return CryptoRegistration(instrument: instrument, mapping: mapping)
   }
 
-  /// Drops any cached price data for the given instrument id — removes
-  /// both the in-memory cache entry and the on-disk cache file. Called
-  /// when an instrument is un-registered so we don't retain stale prices
-  /// for something the user no longer cares about.
-  func purgeCache(instrumentId: String) {
+  /// Drops any cached price data for the given instrument id — removes both
+  /// the in-memory cache entry and the on-disk rows. Called when an
+  /// instrument is un-registered so we don't retain stale prices for
+  /// something the user no longer cares about.
+  func purgeCache(instrumentId: String) async {
     caches.removeValue(forKey: instrumentId)
-    let url = cacheFileURL(tokenId: instrumentId)
-    try? FileManager.default.removeItem(at: url)
+    hydratedTokenIds.remove(instrumentId)
+    do {
+      try await database.write { database in
+        try CryptoPriceRecord
+          .filter(CryptoPriceRecord.Columns.tokenId == instrumentId)
+          .deleteAll(database)
+        try CryptoTokenMetaRecord
+          .filter(CryptoTokenMetaRecord.Columns.tokenId == instrumentId)
+          .deleteAll(database)
+      }
+    } catch {
+      logger.warning(
+        "purgeCache failed for \(instrumentId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+      )
+    }
   }
 
   // MARK: - Single price
@@ -86,8 +96,8 @@ actor CryptoPriceService {
       return cached
     }
 
-    if caches[tokenId] == nil {
-      loadCacheFromDisk(tokenId: tokenId)
+    if !hydratedTokenIds.contains(tokenId) {
+      try await loadCache(tokenId: tokenId)
     }
 
     if let cached = lookupPrice(tokenId: tokenId, dateString: dateString) {
@@ -106,7 +116,7 @@ actor CryptoPriceService {
         let fetched = try await client.dailyPrices(for: mapping, in: fetchStart...date)
         if !fetched.isEmpty {
           merge(tokenId: tokenId, symbol: symbol, newPrices: fetched)
-          saveCacheToDisk(tokenId: tokenId)
+          try await saveCache(tokenId: tokenId)
           if let price = lookupPrice(tokenId: tokenId, dateString: dateString) {
             return price
           }
@@ -133,8 +143,8 @@ actor CryptoPriceService {
   ) async throws -> [(date: Date, price: Decimal)] {
     let tokenId = instrument.id
 
-    if caches[tokenId] == nil {
-      loadCacheFromDisk(tokenId: tokenId)
+    if !hydratedTokenIds.contains(tokenId) {
+      try await loadCache(tokenId: tokenId)
     }
 
     let rangeStart = dateFormatter.string(from: range.lowerBound)
@@ -208,7 +218,7 @@ actor CryptoPriceService {
           registrations.first { $0.id == tokenId }?.instrument.ticker
           ?? registrations.first { $0.id == tokenId }?.instrument.name ?? ""
         merge(tokenId: tokenId, symbol: symbol, newPrices: [dateString: price])
-        saveCacheToDisk(tokenId: tokenId)
+        try await saveCache(tokenId: tokenId)
       }
     } catch {
       logger.warning(
@@ -257,7 +267,7 @@ extension CryptoPriceService {
         let fetched = try await client.dailyPrices(for: mapping, in: from...to)
         if !fetched.isEmpty {
           merge(tokenId: tokenId, symbol: symbol, newPrices: fetched)
-          saveCacheToDisk(tokenId: tokenId)
+          try await saveCache(tokenId: tokenId)
           return
         }
       } catch {
@@ -295,36 +305,73 @@ extension CryptoPriceService {
   }
 }
 
-// MARK: - Disk cache I/O
+// MARK: - SQL persistence
 
 extension CryptoPriceService {
-  private func cacheFileURL(tokenId: String) -> URL {
-    let safeName = tokenId.replacingOccurrences(of: ":", with: "-")
-    return cacheDirectory.appendingPathComponent("prices-\(safeName).json.gz")
+  /// Hydrates `caches[tokenId]` from `crypto_price` + `crypto_token_meta`.
+  /// The meta row's `symbol` is display-only — used to populate
+  /// `CryptoPriceCache.symbol` on the way back; not used for lookups.
+  ///
+  /// Marks the token id as hydrated even when no rows exist so we don't
+  /// re-query on every miss.
+  private func loadCache(tokenId: String) async throws {
+    let snapshot: CryptoPriceCache? = try await database.read { database in
+      let metaRecord =
+        try CryptoTokenMetaRecord
+        .filter(CryptoTokenMetaRecord.Columns.tokenId == tokenId)
+        .fetchOne(database)
+      guard let metaRecord else { return nil }
+      let priceRecords =
+        try CryptoPriceRecord
+        .filter(CryptoPriceRecord.Columns.tokenId == tokenId)
+        .fetchAll(database)
+      // See `ExchangeRateService.loadCache` for the rationale on the
+      // String-via-Decimal round-trip; preserves source precision instead
+      // of inheriting the binary `Decimal(_: Double)` tail.
+      var prices: [String: Decimal] = [:]
+      for record in priceRecords {
+        prices[record.date] = Decimal(string: String(record.priceUsd)) ?? Decimal(record.priceUsd)
+      }
+      return CryptoPriceCache(
+        tokenId: tokenId,
+        symbol: metaRecord.symbol,
+        earliestDate: metaRecord.earliestDate,
+        latestDate: metaRecord.latestDate,
+        prices: prices
+      )
+    }
+    if let snapshot { caches[tokenId] = snapshot }
+    hydratedTokenIds.insert(tokenId)
   }
 
-  private func loadCacheFromDisk(tokenId: String) {
-    let url = cacheFileURL(tokenId: tokenId)
-    guard let compressed = try? Data(contentsOf: url) else { return }
-    guard let data = decompress(compressed) else { return }
-    guard let cache = try? JSONDecoder().decode(CryptoPriceCache.self, from: data) else { return }
-    caches[tokenId] = cache
-  }
-
-  private func saveCacheToDisk(tokenId: String) {
+  /// Persists `caches[tokenId]` to SQLite. Replaces prior rows for this
+  /// token in a single transaction and upserts the meta row alongside so
+  /// the symbol is never out of sync with the prices.
+  ///
+  /// Multi-statement; covered by a rollback test in
+  /// `CryptoPriceServiceTests.swift`.
+  private func saveCache(tokenId: String) async throws {
     guard let cache = caches[tokenId] else { return }
-    guard let data = try? JSONEncoder().encode(cache) else { return }
-    guard let compressed = compress(data) else { return }
-    try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-    try? compressed.write(to: cacheFileURL(tokenId: tokenId), options: .atomic)
-  }
-
-  private func compress(_ data: Data) -> Data? {
-    try? (data as NSData).compressed(using: .zlib) as Data
-  }
-
-  private func decompress(_ data: Data) -> Data? {
-    try? (data as NSData).decompressed(using: .zlib) as Data
+    let records: [CryptoPriceRecord] = cache.prices.map { dateString, price in
+      CryptoPriceRecord(
+        tokenId: tokenId,
+        date: dateString,
+        priceUsd: NSDecimalNumber(decimal: price).doubleValue
+      )
+    }
+    let meta = CryptoTokenMetaRecord(
+      tokenId: tokenId,
+      symbol: cache.symbol,
+      earliestDate: cache.earliestDate,
+      latestDate: cache.latestDate
+    )
+    try await database.write { database in
+      try CryptoPriceRecord
+        .filter(CryptoPriceRecord.Columns.tokenId == tokenId)
+        .deleteAll(database)
+      for record in records { try record.insert(database) }
+      try meta.upsert(database)
+    }
   }
 }
 

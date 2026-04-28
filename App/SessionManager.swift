@@ -17,10 +17,20 @@ final class SessionManager {
   }
 
   /// Returns the existing session for a profile, or creates one.
+  ///
+  /// Database creation can fail (disk full, permissions denied, schema
+  /// migration error). On failure we crash with a descriptive message —
+  /// the app cannot meaningfully run without per-profile storage and
+  /// silent fallback would mask data loss.
   func session(for profile: Profile) -> ProfileSession {
     if let existing = sessions[profile.id] { return existing }
-    let session = ProfileSession(
-      profile: profile, containerManager: containerManager, syncCoordinator: syncCoordinator)
+    let session: ProfileSession
+    do {
+      session = try ProfileSession(
+        profile: profile, containerManager: containerManager, syncCoordinator: syncCoordinator)
+    } catch {
+      fatalError("Failed to open profile database for \(profile.id): \(error)")
+    }
     sessions[profile.id] = session
     return session
   }
@@ -56,7 +66,11 @@ final class SessionManager {
     if let oldSession = sessions[profile.id], let syncCoordinator {
       oldSession.cleanupSync(coordinator: syncCoordinator)
     }
-    sessions[profile.id] = ProfileSession(
-      profile: profile, containerManager: containerManager, syncCoordinator: syncCoordinator)
+    do {
+      sessions[profile.id] = try ProfileSession(
+        profile: profile, containerManager: containerManager, syncCoordinator: syncCoordinator)
+    } catch {
+      fatalError("Failed to rebuild profile database for \(profile.id): \(error)")
+    }
   }
 }

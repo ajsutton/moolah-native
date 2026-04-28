@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -14,17 +15,16 @@ struct FullConversionErrorPropagationTests {
   /// and violate Rule 11 of `guides/INSTRUMENT_CONVERSION_GUIDE.md`.
   @Test
   func cryptoConversionPropagatesRegistryError() async throws {
+    let database = try ProfileDatabase.openInMemory()
     let cryptoService = CryptoPriceService(
       clients: [FixedCryptoPriceClient()],
-      cacheDirectory: FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString)
+      database: database
     )
     let exchangeService = ExchangeRateService(
       client: FixedRateClient(rates: [:]),
-      cacheDirectory: FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString)
+      database: database
     )
-    let stockService = StockPriceService(client: FixedStockPriceClient())
+    let stockService = StockPriceService(client: FixedStockPriceClient(), database: database)
 
     let service = FullConversionService(
       exchangeRates: exchangeService,

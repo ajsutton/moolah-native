@@ -12,7 +12,17 @@ struct CryptoTokenMetaRecord: Codable, Sendable, FetchableRecord, PersistableRec
   static let databaseTableName = "crypto_token_meta"
 
   enum Columns: String, ColumnExpression, CaseIterable {
-    case tokenId, symbol, earliestDate, latestDate
+    case tokenId = "token_id"
+    case symbol
+    case earliestDate = "earliest_date"
+    case latestDate = "latest_date"
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case tokenId = "token_id"
+    case symbol
+    case earliestDate = "earliest_date"
+    case latestDate = "latest_date"
   }
 
   var tokenId: String

@@ -13,7 +13,17 @@ struct StockTickerMetaRecord: Codable, Sendable, FetchableRecord, PersistableRec
   static let databaseTableName = "stock_ticker_meta"
 
   enum Columns: String, ColumnExpression, CaseIterable {
-    case ticker, instrumentId, earliestDate, latestDate
+    case ticker
+    case instrumentId = "instrument_id"
+    case earliestDate = "earliest_date"
+    case latestDate = "latest_date"
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case ticker
+    case instrumentId = "instrument_id"
+    case earliestDate = "earliest_date"
+    case latestDate = "latest_date"
   }
 
   var ticker: String

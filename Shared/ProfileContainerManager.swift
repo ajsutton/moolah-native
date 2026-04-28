@@ -9,7 +9,11 @@ import SwiftData
 final class ProfileContainerManager {
   let indexContainer: ModelContainer
   private let dataSchema: Schema
-  private let inMemory: Bool
+  /// `true` when the manager was created via `.forTesting()` — every
+  /// SwiftData container is in-memory and so must the per-profile GRDB
+  /// queue be (otherwise UI tests would write `data.sqlite` files to the
+  /// host's Application Support).
+  let inMemory: Bool
   private var containers: [UUID: ModelContainer] = [:]
 
   init(
@@ -65,6 +69,12 @@ final class ProfileContainerManager {
     let syncStateURL = URL.moolahScopedApplicationSupport
       .appending(path: "Moolah-\(profileId.uuidString).syncstate")
     try? fileManager.removeItem(at: syncStateURL)
+
+    // Delete the per-profile GRDB directory (data.sqlite + -wal/-shm
+    // sidecars) added in the rate-storage-grdb refactor. Removing the
+    // directory cleans up sidecars without enumerating each suffix.
+    let dbDirectory = ProfileSession.profileDatabaseDirectory(for: profileId)
+    try? fileManager.removeItem(at: dbDirectory)
 
     // Delete the CloudKit zone for this profile
     deleteCloudKitZone(for: profileId)

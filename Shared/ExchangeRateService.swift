@@ -1,6 +1,7 @@
 // Shared/ExchangeRateService.swift
 
 import Foundation
+import GRDB
 
 enum ExchangeRateError: Error, Equatable {
   case noRateAvailable(base: String, quote: String, date: String)
@@ -9,19 +10,15 @@ enum ExchangeRateError: Error, Equatable {
 actor ExchangeRateService {
   private let client: ExchangeRateClient
   private var caches: [String: ExchangeRateCache] = [:]
-  private let cacheDirectory: URL
+  /// Loaded bases — set on first hydration so we don't re-read SQL when the
+  /// cache is genuinely empty.
+  private var hydratedBases: Set<String> = []
+  private let database: any DatabaseWriter
   private let dateFormatter: ISO8601DateFormatter
 
-  init(client: ExchangeRateClient, cacheDirectory: URL? = nil) {
+  init(client: ExchangeRateClient, database: any DatabaseWriter) {
     self.client = client
-    if let cacheDirectory {
-      self.cacheDirectory = cacheDirectory
-    } else {
-      let baseCaches =
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
-        ?? URL(fileURLWithPath: NSTemporaryDirectory())
-      self.cacheDirectory = baseCaches.appendingPathComponent("exchange-rates")
-    }
+    self.database = database
     self.dateFormatter = ISO8601DateFormatter()
     self.dateFormatter.formatOptions = [.withFullDate]
   }
@@ -38,9 +35,9 @@ actor ExchangeRateService {
       return cached
     }
 
-    // Load from disk if not already loaded
-    if caches[base] == nil {
-      loadCacheFromDisk(base: base)
+    // Hydrate from SQL on first access
+    if !hydratedBases.contains(base) {
+      try await loadCache(base: base)
     }
 
     // Check again after disk load
@@ -109,9 +106,9 @@ actor ExchangeRateService {
     let base = from.id
     let quote = to.id
 
-    // Load cache if not already in memory
-    if caches[base] == nil {
-      loadCacheFromDisk(base: base)
+    // Hydrate cache if not already in memory
+    if !hydratedBases.contains(base) {
+      try await loadCache(base: base)
     }
 
     // Determine what we need to fetch
@@ -167,8 +164,8 @@ actor ExchangeRateService {
   func prefetchLatest(base: Instrument) async {
     let code = base.id
 
-    if caches[code] == nil {
-      loadCacheFromDisk(base: code)
+    if !hydratedBases.contains(code) {
+      try? await loadCache(base: code)
     }
 
     let calendar = Calendar(identifier: .gregorian)
@@ -242,7 +239,7 @@ actor ExchangeRateService {
   private func fetchAndMerge(base: String, from: Date, to: Date) async throws {
     let fetched = try await client.fetchRates(base: base, from: from, to: to)
     merge(base: base, newRates: fetched)
-    saveCacheToDisk(base: base)
+    try await saveCache(base: base)
   }
 
   private func merge(base: String, newRates: [String: [String: Decimal]]) {
@@ -270,31 +267,75 @@ actor ExchangeRateService {
     }
   }
 
-  private func cacheFileURL(base: String) -> URL {
-    cacheDirectory.appendingPathComponent("rates-\(base).json.gz")
+  // MARK: - SQL persistence
+
+  /// Hydrates `caches[base]` from the GRDB-backed `exchange_rate` /
+  /// `exchange_rate_meta` tables. No-op when the base has no rows; marks the
+  /// base as hydrated either way so we don't re-query on every miss.
+  ///
+  /// Rates are stored as `REAL` (`Double`) in SQLite per
+  /// `guides/DATABASE_CODE_GUIDE.md` §3, and converted back to `Decimal` at
+  /// the boundary so the in-memory cache stays decimal-precise.
+  private func loadCache(base: String) async throws {
+    let snapshot: ExchangeRateCache? = try await database.read { database in
+      let metaRecord =
+        try ExchangeRateMetaRecord
+        .filter(ExchangeRateMetaRecord.Columns.base == base)
+        .fetchOne(database)
+      guard let metaRecord else { return nil }
+      let rateRecords =
+        try ExchangeRateRecord
+        .filter(ExchangeRateRecord.Columns.base == base)
+        .fetchAll(database)
+      // Decode via the `String` form of the stored `Double` so we recover
+      // the source decimal exactly (e.g. `0.581`), avoiding the precision
+      // tail that `Decimal(_: Double)` would introduce
+      // (`0.5810000000000001024`).
+      var rates: [String: [String: Decimal]] = [:]
+      for record in rateRecords {
+        let value = Decimal(string: String(record.rate)) ?? Decimal(record.rate)
+        rates[record.date, default: [:]][record.quote] = value
+      }
+      return ExchangeRateCache(
+        base: base,
+        earliestDate: metaRecord.earliestDate,
+        latestDate: metaRecord.latestDate,
+        rates: rates
+      )
+    }
+    if let snapshot { caches[base] = snapshot }
+    hydratedBases.insert(base)
   }
 
-  private func loadCacheFromDisk(base: String) {
-    let url = cacheFileURL(base: base)
-    guard let compressed = try? Data(contentsOf: url) else { return }
-    guard let data = decompress(compressed) else { return }
-    guard let cache = try? JSONDecoder().decode(ExchangeRateCache.self, from: data) else { return }
-    caches[base] = cache
-  }
-
-  private func saveCacheToDisk(base: String) {
+  /// Persists `caches[base]` to SQLite. Replaces the prior rows for this
+  /// base in a single transaction (delete-and-rewrite) and upserts the meta
+  /// row alongside, so the meta is never out of sync with the rates.
+  ///
+  /// Multi-statement; covered by a rollback test in
+  /// `ExchangeRateServiceTests.swift`.
+  private func saveCache(base: String) async throws {
     guard let cache = caches[base] else { return }
-    guard let data = try? JSONEncoder().encode(cache) else { return }
-    guard let compressed = compress(data) else { return }
-    try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-    try? compressed.write(to: cacheFileURL(base: base), options: .atomic)
-  }
-
-  private func compress(_ data: Data) -> Data? {
-    try? (data as NSData).compressed(using: .zlib) as Data
-  }
-
-  private func decompress(_ data: Data) -> Data? {
-    try? (data as NSData).decompressed(using: .zlib) as Data
+    // `Decimal` lacks a direct `Double` accessor; round-trip via
+    // `NSDecimalNumber` (`doubleValue`) — same path GRDB would take.
+    let records: [ExchangeRateRecord] = cache.rates.flatMap { dateString, quotes in
+      quotes.map { quote, rate in
+        ExchangeRateRecord(
+          base: base,
+          quote: quote,
+          date: dateString,
+          rate: NSDecimalNumber(decimal: rate).doubleValue
+        )
+      }
+    }
+    let meta = ExchangeRateMetaRecord(
+      base: base, earliestDate: cache.earliestDate, latestDate: cache.latestDate
+    )
+    try await database.write { database in
+      try ExchangeRateRecord
+        .filter(ExchangeRateRecord.Columns.base == base)
+        .deleteAll(database)
+      for record in records { try record.insert(database) }
+      try meta.upsert(database)
+    }
   }
 }

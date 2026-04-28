@@ -353,7 +353,8 @@ private func seedSidebarPreview(
     repository: backend.earmarks,
     conversionService: backend.conversionService,
     targetInstrument: .AUD)
-  let session = ProfileSession(profile: Profile(label: "Preview"))
+  // swiftlint:disable:next force_try
+  let session = try! ProfileSession.preview()
 
   return NavigationSplitView {
     SidebarView(selection: .constant(nil))
