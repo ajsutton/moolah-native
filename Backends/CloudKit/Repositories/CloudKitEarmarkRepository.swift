@@ -238,7 +238,7 @@ final class CloudKitEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       // Type-based saved/spent classification
       let legType = TransactionType(rawValue: leg.type) ?? .expense
       switch legType {
-      case .income, .openingBalance:
+      case .income, .openingBalance, .trade:
         savedTotals[inst, default: 0] += amount.quantity
       case .expense, .transfer:
         spentTotals[inst, default: 0] += -amount.quantity

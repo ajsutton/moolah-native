@@ -107,6 +107,7 @@ struct TransactionRowView: View {
     case .expense: return "arrow.down"
     case .transfer: return "arrow.left.arrow.right"
     case .openingBalance: return "flag.fill"
+    case .trade: return "chart.line.uptrend.xyaxis"
     }
   }
 
@@ -119,6 +120,7 @@ struct TransactionRowView: View {
     case .expense: return .red
     case .transfer: return .blue
     case .openingBalance: return .orange
+    case .trade: return .purple
     }
   }
 

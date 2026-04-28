@@ -87,8 +87,8 @@ struct PositionBook: Equatable, Sendable {
       earmarks[earmarkId, default: [:]][leg.instrument, default: 0] += sign * quantity
 
       switch leg.type {
-      case .income, .openingBalance:
-        // Saved tracks the change to the saved total. Income/openingBalance
+      case .income, .openingBalance, .trade:
+        // Saved tracks the change to the saved total. Income/openingBalance/trade
         // quantities are positive, so sign * quantity gives the right direction.
         earmarksSaved[earmarkId, default: [:]][leg.instrument, default: 0] += sign * quantity
 

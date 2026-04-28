@@ -41,7 +41,7 @@ struct TransactionDetailModeSection: View {
         case .income: return .income
         case .expense: return .expense
         case .transfer: return .transfer
-        case .openingBalance: return .expense
+        case .openingBalance, .trade: return .expense
         }
       },
       set: { newMode in

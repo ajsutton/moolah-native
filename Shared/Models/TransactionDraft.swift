@@ -93,7 +93,7 @@ struct TransactionDraft: Sendable, Equatable {
   static func displaysNegated(_ type: TransactionType) -> Bool {
     switch type {
     case .expense, .transfer: return true
-    case .income, .openingBalance: return false
+    case .income, .openingBalance, .trade: return false
     }
   }
 
