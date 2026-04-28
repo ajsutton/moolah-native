@@ -40,7 +40,7 @@ import SwiftData
 /// `migrateIfNeeded` to async and call with `await` from
 /// `ProfileSession.init` (per `guides/CONCURRENCY_GUIDE.md` §1).
 @MainActor
-final class SwiftDataToGRDBMigrator {
+struct SwiftDataToGRDBMigrator {
   /// `UserDefaults` key gating the CSV-import-profile copy. Once true,
   /// the migrator skips this record type for the install's lifetime.
   static let csvImportProfilesFlag = "v2.csvImportProfiles.grdbMigrated"
@@ -67,25 +67,26 @@ final class SwiftDataToGRDBMigrator {
     database: any DatabaseWriter,
     defaults: UserDefaults = .standard
   ) throws {
-    #if DEBUG
-      let start = ContinuousClock.now
-      defer {
-        let elapsedMs = (ContinuousClock.now - start).inMilliseconds
-        // 16ms ≈ one frame at 60Hz. Sync migrator runs on @MainActor, so
-        // exceeding this budget means we're hanging the UI on a slow
-        // device. Logging instead of asserting because actual migration
-        // time depends on row count, which scales with user data —
-        // intentional signal-only check, not a hard precondition.
-        if elapsedMs > 16 {
-          logger.warning(
-            """
-            SwiftDataToGRDBMigrator.migrateIfNeeded took \(elapsedMs, privacy: .public)ms \
-            on @MainActor; convert to async if this reproduces on real hardware (see \
-            file header).
-            """)
-        }
+    let start = ContinuousClock.now
+    defer {
+      let elapsedMs = (ContinuousClock.now - start).inMilliseconds
+      // 16ms ≈ one frame at 60Hz. Sync migrator runs on @MainActor, so
+      // exceeding this budget means we're hanging the UI on a slow
+      // device. Log in release as well as debug so production
+      // diagnostics surface real-world durations on heavy users —
+      // tracked via the `os_log` warning channel (subsystem
+      // `com.moolah.app`, category `SwiftDataToGRDBMigrator`).
+      // Intentional signal-only check, not a hard precondition; the
+      // migration's correctness is independent of how long it takes.
+      if elapsedMs > 16 {
+        logger.warning(
+          """
+          SwiftDataToGRDBMigrator.migrateIfNeeded took \(elapsedMs, privacy: .public)ms \
+          on @MainActor; convert to async if this reproduces on real hardware (see \
+          file header).
+          """)
       }
-    #endif
+    }
     try migrateCSVImportProfilesIfNeeded(
       modelContainer: modelContainer, database: database, defaults: defaults)
     try migrateImportRulesIfNeeded(

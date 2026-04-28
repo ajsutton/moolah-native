@@ -50,12 +50,12 @@ final class GRDBCSVImportProfileRepository: CSVImportProfileRepository, @uncheck
   // MARK: - CSVImportProfileRepository conformance
 
   func fetchAll() async throws -> [CSVImportProfile] {
-    let rows = try await database.read { database in
+    try await database.read { database in
       try CSVImportProfileRow
         .order(CSVImportProfileRow.Columns.createdAt.asc)
         .fetchAll(database)
+        .map { $0.toDomain() }
     }
-    return rows.map { $0.toDomain() }
   }
 
   func create(_ profile: CSVImportProfile) async throws -> CSVImportProfile {

@@ -19,7 +19,7 @@ final class CloudKitBackend: BackendProvider, @unchecked Sendable {
   /// Concrete GRDB-backed repositories for the record types covered by
   /// `v2_csv_import_and_rules`. Exposed alongside the protocol-typed
   /// `csvImportProfiles` / `importRules` so `ProfileSession` can register
-  /// them with `SyncCoordinator` (which needs the concrete actor type to
+  /// them with `SyncCoordinator` (which needs the concrete class type to
   /// reach the synchronous sync entry points). The protocol-typed
   /// properties point at the same instances.
   let grdbCSVImportProfiles: GRDBCSVImportProfileRepository

@@ -136,8 +136,6 @@ enum ProfileSchema {
   //     `Domain/Models/CSVImport/ImportRule.swift` — change in lock-step
   //     if the enum's raw values ever diverge.
   //   * `position` is non-negative; `reorder` always produces 0…n-1.
-  // The branch is unshipped, so the v2 migration body is edited in
-  // place rather than layered behind a v3 migration.
 
   private static func createCSVImportProfileTable(_ database: Database) throws {
     try database.execute(
@@ -145,6 +143,12 @@ enum ProfileSchema {
         CREATE TABLE csv_import_profile (
             id                              BLOB    NOT NULL PRIMARY KEY,
             record_name                     TEXT    NOT NULL UNIQUE,
+            -- No REFERENCES clause: the `account` table lands in the
+            -- core-financial-graph migration (Slice 1 of
+            -- `plans/grdb-migration.md`). Referential integrity is
+            -- enforced at the application layer until that migration
+            -- closes the FK loop; SQLite's table-rebuild pattern can
+            -- add the REFERENCES at that point if desired.
             account_id                      BLOB    NOT NULL,
             parser_identifier               TEXT    NOT NULL,
             header_signature                TEXT    NOT NULL,
@@ -158,8 +162,11 @@ enum ProfileSchema {
             encoded_system_fields           BLOB
         ) STRICT;
 
+        -- account_id FK child index (`fetchByAccount`-style filters).
         CREATE INDEX csv_import_profile_account
             ON csv_import_profile(account_id);
+        -- Covers `fetchAll().order(created_at)` in
+        -- `GRDBCSVImportProfileRepository.fetchAll`.
         CREATE INDEX csv_import_profile_created
             ON csv_import_profile(created_at);
         """)

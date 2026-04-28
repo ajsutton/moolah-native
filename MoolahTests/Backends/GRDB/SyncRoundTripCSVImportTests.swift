@@ -205,6 +205,59 @@ struct SyncRoundTripCSVImportTests {
     #expect(rowB.encodedSystemFields == outgoing.encodedSystemFields)
   }
 
+  /// Sibling of `csvImportProfileUplinkRoundTrip` for `ImportRuleRow`.
+  /// Exercises `recordToSave(for:)` → `fetchImportRuleRow` →
+  /// `mapBuiltRows` → `applyRemoteChanges` to ensure the upload-side
+  /// path doesn't silently regress (e.g. a future refactor that
+  /// returns `nil` from `fetchImportRuleRow`, or a missing
+  /// `ImportRuleRow.recordType` case in `mapBuiltRows`).
+  @Test
+  func importRuleUplinkRoundTrip() async throws {
+    let harnessA = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let id = UUID()
+    let domain = ImportRule(
+      id: id,
+      name: "Coffee shops",
+      enabled: true,
+      position: 0,
+      matchMode: .all,
+      conditions: [],
+      actions: [],
+      accountScope: nil)
+    _ = try await harnessA.handler.grdbRepositories.importRules.create(domain)
+    let recordID = CKRecord.ID(
+      recordType: ImportRuleRow.recordType, uuid: id, zoneID: harnessA.handler.zoneID)
+    let outgoing = try #require(harnessA.handler.recordToSave(for: recordID))
+
+    // Stamp server-issued change tag and write it back to the row.
+    let stampedFields = outgoing.encodedSystemFields
+    _ = try harnessA.handler.grdbRepositories.importRules
+      .setEncodedSystemFieldsSync(id: id, data: stampedFields)
+    let rowsA = try await harnessA.database.read { database in
+      try ImportRuleRow.fetchAll(database)
+    }
+    let rowA = try #require(rowsA.first)
+    #expect(rowA.encodedSystemFields == stampedFields)
+
+    // Device B applies the same CKRecord via apply-remote-changes and
+    // must end up with the same fields and bytes.
+    let harnessB = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    let result = harnessB.handler.applyRemoteChanges(saved: [outgoing], deleted: [])
+    if case .saveFailed(let message) = result {
+      Issue.record("applyRemoteChanges reported saveFailed on device B: \(message)")
+    }
+    let rowsB = try await harnessB.database.read { database in
+      try ImportRuleRow.fetchAll(database)
+    }
+    let rowB = try #require(rowsB.first)
+    #expect(rowB.id == rowA.id)
+    #expect(rowB.name == "Coffee shops")
+    #expect(rowB.enabled == true)
+    #expect(rowB.position == 0)
+    #expect(rowB.matchMode == "all")
+    #expect(rowB.encodedSystemFields == outgoing.encodedSystemFields)
+  }
+
   // MARK: - Data-loss regression: GRDB write failure must surface .saveFailed
 
   /// Regression for the round-2 finding I-1 (silent data loss on remote

@@ -124,10 +124,14 @@ extension ProfileDataSyncHandler {
 
     // GRDB-backed tables — wiped via the per-table repository helpers.
     // Failures are logged but never propagated; partial wipe is preferable
-    // to leaving local data in an inconsistent state.
+    // to leaving local data in an inconsistent state. Track success so
+    // the "Deleted all local data" info log only fires when every wipe
+    // (SwiftData + GRDB) actually completed; mirrors `clearAllSystemFields`.
+    var clearedAll = true
     do {
       try grdbRepositories.csvImportProfiles.deleteAllSync()
     } catch {
+      clearedAll = false
       logger.error(
         """
         Failed to delete CSV import profiles from GRDB for profile \
@@ -138,6 +142,7 @@ extension ProfileDataSyncHandler {
     do {
       try grdbRepositories.importRules.deleteAllSync()
     } catch {
+      clearedAll = false
       logger.error(
         """
         Failed to delete import rules from GRDB for profile \
@@ -145,7 +150,12 @@ extension ProfileDataSyncHandler {
         \(error.localizedDescription, privacy: .public)
         """)
     }
-    logger.info("Deleted all local data for profile \(self.profileId)")
+    if clearedAll {
+      logger.info("Deleted all local data for profile \(self.profileId)")
+    }
+    // Always return all types so the caller fans out the change
+    // notification even on partial failure (the SwiftData branch above
+    // followed the same convention before this change).
     return Set(RecordTypeRegistry.allTypes.keys)
   }
 
