@@ -132,6 +132,10 @@ struct InstrumentRemoteChangeFanOutTests {
       return
     }
     #expect(fired.get() == 1)
+    // Verify the row was actually deleted from the local context.
+    let descriptor = FetchDescriptor<InstrumentRecord>()
+    let remaining = try context.fetch(descriptor)
+    #expect(remaining.isEmpty)
   }
 
   @Test("Remote deletion of a non-instrument record does not fire the closure")

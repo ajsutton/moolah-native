@@ -36,6 +36,16 @@ extension SyncCoordinator {
     profileId: UUID,
     _ callback: @escaping @Sendable () -> Void
   ) {
+    if dataHandlers[profileId] != nil {
+      logger.warning(
+        """
+        instrument-change callback registered for profile \
+        \(profileId, privacy: .public) after handler was cached; \
+        the new closure will not be picked up until \
+        removeInstrumentRemoteChangeCallback() is called and the handler is rebuilt
+        """
+      )
+    }
     instrumentRemoteChangeCallbacks[profileId] = callback
   }
 
