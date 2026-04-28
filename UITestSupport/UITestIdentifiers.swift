@@ -138,6 +138,25 @@ public enum UITestIdentifiers {
     }
   }
 
+  public enum CryptoSettings {
+    /// Root container of the `CryptoSettingsView` Form. Sentinel for the
+    /// "Crypto tab is on screen" post-condition after switching tabs in the
+    /// macOS Settings window.
+    public static let container = "crypto.settings.container"
+
+    /// "+" toolbar button in the Crypto tab header that opens
+    /// `AddTokenSheet`. Tapping it presents the embedded
+    /// `InstrumentPickerSheet` filtered to crypto tokens.
+    public static let addTokenButton = "crypto.settings.addToken"
+
+    /// A row in the registered-tokens list. The qualifier is the
+    /// `CryptoRegistration.id`, which is the Instrument id (e.g.
+    /// `1:0x1f9840…f984`).
+    public static func registrationRow(_ id: String) -> String {
+      "crypto.settings.registration.\(id)"
+    }
+  }
+
   public enum Autocomplete {
     /// Container element of the payee autocomplete dropdown.
     public static let payee = "autocomplete.payee"

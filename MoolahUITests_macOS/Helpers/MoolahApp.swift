@@ -69,6 +69,18 @@ final class MoolahApp {
   /// `CreateAccountView` sheet. Open it by calling `createAccount.open(...)`.
   var createAccount: CreateAccountScreen { CreateAccountScreen(app: self) }
 
+  /// macOS Settings scene. Open it via `settings.open()`; tab drivers
+  /// (e.g. `settings.openCryptoTab()`) hang off the returned screen.
+  var settings: SettingsScreen { SettingsScreen(app: self) }
+
+  /// Crypto tab of the Settings scene (`CryptoSettingsView`). Available
+  /// after `settings.openCryptoTab()` has selected the tab.
+  var cryptoSettings: CryptoSettingsScreen { CryptoSettingsScreen(app: self) }
+
+  /// `AddTokenSheet` (the crypto-only `InstrumentPickerSheet`). Available
+  /// after `cryptoSettings.tapAddToken()` has presented the sheet.
+  var addToken: AddTokenScreen { AddTokenScreen(app: self) }
+
   // MARK: - Single element resolver
 
   /// All identifier lookups in the driver layer go through this method, by

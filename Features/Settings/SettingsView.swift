@@ -59,15 +59,21 @@ struct SettingsView: View {
       return sessionManager.sessions.values.first
     }
 
-    /// The Crypto Tokens tab's store, taken strictly from the *active* profile's
-    /// session — not any open session — so switching to a Remote/moolah active
-    /// profile correctly hides crypto settings even when a CloudKit session is
-    /// still open in another profile's window.
-    private var activeCryptoTokenStore: CryptoTokenStore? {
+    /// The Crypto Tokens tab's session, taken strictly from the *active*
+    /// profile's session — not any open session — so switching to a
+    /// Remote/moolah active profile correctly hides crypto settings even
+    /// when a CloudKit session is still open in another profile's window.
+    /// Returned in full (rather than narrowed to just the
+    /// `CryptoTokenStore`) so the tab can also inject the session into
+    /// the SwiftUI environment for the embedded `AddTokenSheet`'s picker
+    /// to consume — `InstrumentPickerSheet`'s callback variant resolves
+    /// its search service / resolver / registry from the session.
+    private var activeCryptoSession: ProfileSession? {
       guard let id = profileStore.activeProfileID,
-        let session = sessionManager.sessions[id]
+        let session = sessionManager.sessions[id],
+        session.cryptoTokenStore != nil
       else { return nil }
-      return session.cryptoTokenStore
+      return session
     }
 
     private var macOSLayout: some View {
@@ -75,9 +81,17 @@ struct SettingsView: View {
         Tab("Profiles", systemImage: "person.2") {
           profilesContent
         }
-        if let store = activeCryptoTokenStore {
+        if let session = activeCryptoSession,
+          let store = session.cryptoTokenStore
+        {
           Tab("Crypto", systemImage: "bitcoinsign.circle") {
             CryptoSettingsView(store: store)
+              // The embedded `AddTokenSheet` opens an `InstrumentPickerSheet`
+              // whose callback variant pulls its search service, registry,
+              // and resolution client from `@Environment(ProfileSession.self)`.
+              // Without this injection the picker silently falls back to
+              // the static fiat list and crypto search returns no results.
+              .environment(session)
           }
         }
         // macOS Settings tabs host the Form / List directly — the window

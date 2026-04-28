@@ -50,6 +50,16 @@ public enum UITestSeed: String, CaseIterable, Sendable {
 
   /// Drives `SyncProgress` into `.sending` with `pendingUploads = 12`.
   case sidebarFooterSending
+
+  /// CloudKit-backed profile (same shape as `tradeBaseline`) plus a
+  /// deterministic crypto-token catalogue and resolution stub installed
+  /// in place of the live `SQLiteCoinGeckoCatalog` /
+  /// `CompositeTokenResolutionClient`. The catalogue contains exactly one
+  /// row (Uniswap, ethereum chainId 1) and the stub resolver returns the
+  /// matching `(coingeckoId, cryptocompareSymbol, binanceSymbol)` triple.
+  /// Drives the Settings → Crypto → Add Token end-to-end test without
+  /// touching the network.
+  case cryptoCatalogPreloaded
 }
 
 /// Fixtures for the first-run Welcome seeds. Defined here so both the
@@ -196,5 +206,46 @@ public enum UITestFixtures {
         categoryId: groceriesCategoryId
       ),
     ]
+  }
+
+  /// Fixtures for the `.cryptoCatalogPreloaded` seed.
+  ///
+  /// Entities (all fixed, deterministic):
+  ///   - Profile `personal` — same UUID/label/currency as `TradeBaseline`,
+  ///     CloudKit-backed (a CryptoTokenStore is only built for CloudKit
+  ///     profiles; the Crypto Settings tab is otherwise hidden).
+  ///   - Catalog: a single coin "Uniswap" (UNI) with one platform binding
+  ///     `(slug=ethereum, chainId=1, contractAddress=0x1F98…F984)`. The
+  ///     contract address is lower-cased by `Instrument.crypto(...)` so the
+  ///     resulting Instrument id is
+  ///     `1:0x1f9840a85d5af5bf1d1762f925bdaddc4201f984`.
+  ///   - Resolution result: the deterministic
+  ///     `(coingeckoId="uniswap", cryptocompareSymbol="UNI",
+  ///     binanceSymbol="UNIUSDT")` triple returned by the stubbed
+  ///     `TokenResolutionClient` for the matching `(chainId, contract)`.
+  public enum CryptoCatalogPreloaded {
+    public static let profileId = UITestFixtures.TradeBaseline.profileId
+    public static let profileLabel = UITestFixtures.TradeBaseline.profileLabel
+    public static let profileCurrencyCode = UITestFixtures.TradeBaseline.profileCurrencyCode
+
+    /// The single coin in the catalog snapshot.
+    public static let coingeckoId = "uniswap"
+    public static let symbol = "UNI"
+    public static let name = "Uniswap"
+    public static let chainSlug = "ethereum"
+    public static let chainId = 1
+    /// Mixed-case as in the design spec; lower-cased by `Instrument.crypto`
+    /// when the Instrument id is built.
+    public static let contractAddress = "0x1F9840a85d5aF5bf1D1762F925BDADdC4201F984"
+
+    /// The Instrument id the registered token will carry — built from the
+    /// chainId + lower-cased contract address.
+    public static let instrumentId = "1:0x1f9840a85d5af5bf1d1762f925bdaddc4201f984"
+
+    /// Provider IDs the stubbed `TokenResolutionClient` returns for the
+    /// matching `(chainId, contract)` pair.
+    public static let coingeckoMappingId = "uniswap"
+    public static let cryptocompareSymbol = "UNI"
+    public static let binanceSymbol = "UNIUSDT"
   }
 }

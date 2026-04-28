@@ -62,6 +62,12 @@ enum UITestSeedHydrator {
       // These seeds exercise the sidebar footer; the profile itself is the
       // same minimal fixture used by tradeBaseline.
       return try hydrateTradeBaseline(into: manager)
+    case .cryptoCatalogPreloaded:
+      // The crypto picker test only needs a CloudKit-backed profile (so
+      // `CryptoTokenStore` is built and the Crypto Settings tab renders);
+      // accounts/transactions are unused. Reuse `tradeBaseline` rather than
+      // hand-rolling a near-identical fixture.
+      return try hydrateTradeBaseline(into: manager)
     }
   }
 
