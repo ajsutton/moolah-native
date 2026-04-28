@@ -22,9 +22,11 @@ private enum TransactionMode: Hashable {
 
 /// The "Type" picker section.
 ///
-/// Renders one of three forms depending on the underlying transaction:
+/// Renders one of four forms depending on the underlying transaction:
 /// - Read-only "Opening balance" label when any leg is an opening balance
 ///   (the user can't change the type of the seed transaction).
+/// - Read-only "Trade" label when any leg is a trade (a bespoke trade
+///   picker is wired in a subsequent task on this branch).
 /// - Read-only "Custom" label when the transaction has multi-leg structure
 ///   that can't be re-expressed as a simple income/expense/transfer.
 /// - The interactive `Picker` of income/expense/transfer/custom modes.
