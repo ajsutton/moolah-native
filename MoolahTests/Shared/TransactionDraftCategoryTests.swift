@@ -126,4 +126,41 @@ struct TransactionDraftCategoryTests {
     #expect(draft.legDrafts[0].categoryId == nil)
     #expect(draft.legDrafts[0].categoryText.isEmpty)
   }
+
+  // Per https://github.com/ajsutton/moolah-native/issues/509 reopening:
+  // `commitCategorySelection(id:path:)` must set both fields in a single
+  // mutation so call sites doing `draft.commitCategorySelection(...)`
+  // through a `@Binding` produce one read-modify-write rather than two
+  // snapshot-based writes that clobber each other.
+  // swiftlint:disable:next attributes
+  @Test func commitCategorySelectionSetsBothFields() {
+    let catId = UUID()
+
+    var draft = support.makeExpenseDraft()
+    draft.categoryId = nil
+    draft.categoryText = "groc"
+
+    draft.commitCategorySelection(id: catId, path: "Groceries")
+
+    #expect(draft.categoryId == catId)
+    #expect(draft.categoryText == "Groceries")
+  }
+
+  // Per-leg counterpart to `commitCategorySelectionSetsBothFields` —
+  // the per-leg call sites in `TransactionDetailLegRow` and
+  // `TransactionDetailLegCategoryOverlay` rely on the single-mutation
+  // guarantee.
+  // swiftlint:disable:next attributes
+  @Test func commitLegCategorySelectionSetsBothFieldsAtIndex() {
+    let catId = UUID()
+
+    var draft = support.makeExpenseDraft()
+    draft.legDrafts[0].categoryId = nil
+    draft.legDrafts[0].categoryText = "gym"
+
+    draft.commitLegCategorySelection(at: 0, id: catId, path: "Gym")
+
+    #expect(draft.legDrafts[0].categoryId == catId)
+    #expect(draft.legDrafts[0].categoryText == "Gym")
+  }
 }

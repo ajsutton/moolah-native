@@ -33,7 +33,6 @@ struct TransactionDetailCategoryOverlay: View {
 
   private func select(_ selected: CategorySuggestion) {
     state.dismiss()
-    draft.categoryId = selected.id
-    draft.categoryText = selected.path
+    draft.commitCategorySelection(id: selected.id, path: selected.path)
   }
 }

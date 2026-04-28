@@ -190,7 +190,6 @@ struct TransactionDetailLegRow: View {
     else { return }
     let selected = visibleSuggestions[highlighted]
     categoryState.dismiss()
-    draft.legDrafts[index].categoryId = selected.id
-    draft.legDrafts[index].categoryText = selected.path
+    draft.commitLegCategorySelection(at: index, id: selected.id, path: selected.path)
   }
 }

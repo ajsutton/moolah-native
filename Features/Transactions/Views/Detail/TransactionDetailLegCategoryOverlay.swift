@@ -58,7 +58,6 @@ struct TransactionDetailLegCategoryOverlay: View {
     var state = legStates[index] ?? CategoryAutocompleteState()
     state.dismiss()
     legStates[index] = state
-    draft.legDrafts[index].categoryId = selected.id
-    draft.legDrafts[index].categoryText = selected.path
+    draft.commitLegCategorySelection(at: index, id: selected.id, path: selected.path)
   }
 }

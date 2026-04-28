@@ -107,8 +107,7 @@ extension TransactionDraft {
     highlighted: CategorySuggestion?, using categories: Categories
   ) {
     if let highlighted {
-      categoryId = highlighted.id
-      categoryText = highlighted.path
+      commitCategorySelection(id: highlighted.id, path: highlighted.path)
     } else {
       normaliseCategoryText(using: categories)
     }
@@ -120,11 +119,31 @@ extension TransactionDraft {
     at index: Int, highlighted: CategorySuggestion?, using categories: Categories
   ) {
     if let highlighted {
-      legDrafts[index].categoryId = highlighted.id
-      legDrafts[index].categoryText = highlighted.path
+      commitLegCategorySelection(at: index, id: highlighted.id, path: highlighted.path)
     } else {
       normaliseLegCategoryText(at: index, using: categories)
     }
+  }
+
+  /// Sets the simple-mode category id and display path in a single
+  /// mutation. Must be a single mutating method (not two separate
+  /// `categoryId = …; categoryText = …` writes through a `@Binding`):
+  /// SwiftUI snapshots the source between consecutive binding writes, so
+  /// the second write is built from a snapshot taken before the first
+  /// landed and clobbers it. With two writes, `categoryId` would silently
+  /// revert to nil, then `normaliseCategoryText(using:)` on the next blur
+  /// would clear the field — the reopening of #509 reported by the user
+  /// after the original Tab-without-Enter fix.
+  mutating func commitCategorySelection(id: UUID, path: String) {
+    categoryId = id
+    categoryText = path
+  }
+
+  /// Per-leg variant of `commitCategorySelection(id:path:)`. See that
+  /// method's note for why a single mutating call is required.
+  mutating func commitLegCategorySelection(at index: Int, id: UUID, path: String) {
+    legDrafts[index].categoryId = id
+    legDrafts[index].categoryText = path
   }
 
   /// Whether the "other account" label should read "From Account" instead of "To Account".

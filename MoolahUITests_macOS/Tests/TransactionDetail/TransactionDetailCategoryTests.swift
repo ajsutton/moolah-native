@@ -31,4 +31,32 @@ final class TransactionDetailCategoryTests: MoolahUITestCase {
     app.transactionDetail.category.expectValue("Groceries")
     app.transactionDetail.category.expectSuggestionsHidden()
   }
+
+  /// Regression for [#509](https://github.com/ajsutton/moolah-native/issues/509)
+  /// reopening: pressing Enter to commit the highlighted suggestion and then
+  /// Tabbing to the next field must keep the committed value. The original
+  /// fix only handled the "Tab without Enter" path; this case (Enter then Tab)
+  /// was still clearing the field because the blur handler renormalised
+  /// against a category text that had been just-set, found a stale
+  /// resolution, and cleared.
+  func testEnterThenTabPreservesCommittedCategory() {
+    let app = launch(seed: .tradeBaseline)
+
+    app.sidebar.switchToAccount(.checking)
+    app.transactionList.openTransaction(.bhpPurchase)
+
+    app.transactionDetail.category.tap()
+    app.transactionDetail.category.type("Gro")
+    app.transactionDetail.category.expectSuggestionsVisible(count: 1)
+    app.transactionDetail.category.pressArrowDown()
+    app.transactionDetail.category.expectHighlightedSuggestion(at: 0)
+
+    app.transactionDetail.category.pressEnter()
+    app.transactionDetail.category.expectValue("Groceries")
+
+    app.transactionDetail.category.pressTab()
+
+    app.transactionDetail.category.expectValue("Groceries")
+    app.transactionDetail.category.expectSuggestionsHidden()
+  }
 }

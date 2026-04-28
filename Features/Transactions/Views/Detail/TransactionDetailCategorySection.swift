@@ -80,7 +80,6 @@ struct TransactionDetailCategorySection: View {
     }
     let selected = visibleSuggestions[index]
     state.dismiss()
-    draft.categoryId = selected.id
-    draft.categoryText = selected.path
+    draft.commitCategorySelection(id: selected.id, path: selected.path)
   }
 }
