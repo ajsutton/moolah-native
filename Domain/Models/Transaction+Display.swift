@@ -102,6 +102,14 @@ extension Transaction {
   /// in trade title sentences. Uses `0...decimals` precision so trailing zeros
   /// are suppressed (e.g. `20 VGS.AX`, `100 USD`, `30,000 USDC`). Fiat uses
   /// the ISO code; stock/crypto uses the ticker.
+  ///
+  /// Diverges from `InstrumentAmount.formatted` deliberately: the latter renders
+  /// fiat with the locale-currency symbol (e.g. `"$100.00"`), which would clash
+  /// with the design's title examples (`"Bought 20 VGS.AX"`, `"Swapped 100 USD
+  /// for 50 GBP"`). The amount column elsewhere on the row keeps using
+  /// `.formatted` for the symbol form; only the title sentence uses this code-form
+  /// helper. See design §4.3.
+  ///
   /// `abs()` here produces a *display* magnitude only — the stored sign is not modified.
   private func formatLegMagnitude(_ leg: TransactionLeg) -> String {
     let qty = abs(leg.quantity)

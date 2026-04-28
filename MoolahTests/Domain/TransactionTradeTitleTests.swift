@@ -41,6 +41,22 @@ struct TransactionTradeTitleTests {
     #expect(txn.tradeTitleSentence(scopeReference: aud) == "Sold 10 VGS.AX")
   }
 
+  @Test("USD scope reference matches USD leg → Bought")
+  func boughtVerbWithUSDReference() {
+    let txn = tradeTxn(usd, -300, vgs, 20)
+    #expect(txn.tradeTitleSentence(scopeReference: usd) == "Bought 20 VGS.AX")
+  }
+
+  @Test("non-fiat scope reference matches non-fiat leg → reverse perspective")
+  func nonFiatScopeReference() {
+    // From a stock-instrument scope (e.g. an instrument detail view), the
+    // direction reads from the position's perspective: paying out 300 AUD
+    // to acquire 20 VGS reads as "Sold 300 AUD" because VGS is the matching
+    // (positive) leg under the stock scope.
+    let txn = tradeTxn(aud, -300, vgs, 20)
+    #expect(txn.tradeTitleSentence(scopeReference: vgs) == "Sold 300 AUD")
+  }
+
   @Test("neither leg matches reference → Swapped")
   func swappedVerb() {
     let txn = tradeTxn(usd, -100, gbp, 50)
