@@ -6,6 +6,8 @@ import OSLog
 import SwiftData
 
 extension ProfileSession {
+  // MARK: - Market Data Services
+
   /// Bundle of the external market-data services a profile session depends
   /// on: fiat exchange rates, stock prices, and crypto prices. Returned
   /// from `makeMarketDataServices` so `init` can assign each field in one
@@ -68,6 +70,8 @@ extension ProfileSession {
     )
   }
 
+  // MARK: - Backend
+
   /// Builds the `BackendProvider` for the profile based on its backend type.
   /// iCloud profiles get the full conversion service (stock + crypto + fiat);
   /// remote profiles use their own internal fiat-only conversion.
@@ -116,6 +120,8 @@ extension ProfileSession {
     }
   }
 
+  // MARK: - Registry Wiring
+
   /// Bundle of the optional instrument-registry pieces: only CloudKit
   /// profiles expose a registry, crypto token store, search service,
   /// CoinGecko catalogue, and token resolution client. Remote/moolah
@@ -138,6 +144,12 @@ extension ProfileSession {
   /// session init. A catalog construction failure (e.g. the SQLite file
   /// can't be opened) is logged and the catalogue is left `nil` — search
   /// degrades to the registry/Yahoo paths only.
+  ///
+  /// Under `--ui-testing` the active `UITestSeed` may register fake
+  /// catalogue/resolver implementations via
+  /// `UITestSeedCryptoOverrides.overrides(for:)` — those replace the live
+  /// SQLite snapshot and `CompositeTokenResolutionClient` so the picker
+  /// flow runs deterministically without disk or network access.
   @MainActor
   static func makeRegistryWiring(
     backend: BackendProvider,
@@ -151,11 +163,18 @@ extension ProfileSession {
         coinGeckoCatalog: nil, tokenResolutionClient: nil)
     }
 
-    let catalog = makeCoinGeckoCatalog()
+    let catalog: (any CoinGeckoCatalog)?
+    let resolutionClient: any TokenResolutionClient
+    if let overrides = uiTestingCryptoOverrides() {
+      catalog = overrides.catalog
+      resolutionClient = overrides.resolutionClient
+    } else {
+      catalog = makeCoinGeckoCatalog()
+      resolutionClient = CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey)
+    }
     let store = CryptoTokenStore(
       registry: cloudBackend.instrumentRegistry,
       cryptoPriceService: cryptoPriceService)
-    let resolutionClient = CompositeTokenResolutionClient(coinGeckoApiKey: coinGeckoApiKey)
     let searchService = InstrumentSearchService(
       registry: cloudBackend.instrumentRegistry,
       catalog: catalog,
@@ -169,6 +188,22 @@ extension ProfileSession {
       coinGeckoCatalog: catalog,
       tokenResolutionClient: resolutionClient
     )
+  }
+
+  /// Returns the catalogue/resolver overrides for the active UI test seed,
+  /// or `nil` for production launches. Reads the same arguments and
+  /// environment variable that `MoolahApp+Setup.uiTestingSeed(from:)`
+  /// consumes during app init — keeping the gating consistent between the
+  /// two call sites.
+  @MainActor
+  private static func uiTestingCryptoOverrides()
+    -> (catalog: any CoinGeckoCatalog, resolutionClient: any TokenResolutionClient)?
+  {
+    guard CommandLine.arguments.contains("--ui-testing") else { return nil }
+    guard let raw = ProcessInfo.processInfo.environment["UI_TESTING_SEED"],
+      let seed = UITestSeed(rawValue: raw)
+    else { return nil }
+    return UITestSeedCryptoOverrides.overrides(for: seed)
   }
 
   /// Builds the per-profile CoinGecko catalogue and kicks off a background
@@ -192,6 +227,8 @@ extension ProfileSession {
       return nil
     }
   }
+
+  // MARK: - Domain Stores
 
   /// Bundle of the per-profile domain stores. Returned from
   /// `makeDomainStores` so `ProfileSession.init` can assign each stored
@@ -248,6 +285,8 @@ extension ProfileSession {
     )
   }
 
+  // MARK: - Import Pipeline
+
   /// Bundle of the full CSV import pipeline: the `ImportStore`, the import-rule
   /// store, and the three folder-watch pieces. Returned from `makeImportPipeline`
   /// so `ProfileSession.init` can assign all five fields in one step.
@@ -291,6 +330,8 @@ extension ProfileSession {
       watcher: folderWatch.watcher
     )
   }
+
+  // MARK: - Folder Watch Services
 
   /// Bundle of the services that make up folder-watch ingestion for a
   /// profile: the on-disk `ImportPreferences`, the catch-up `FolderScanService`,

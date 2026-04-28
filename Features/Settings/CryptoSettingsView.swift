@@ -13,6 +13,7 @@ struct CryptoSettingsView: View {
     }
     .formStyle(.grouped)
     .navigationTitle("Crypto Tokens")
+    .accessibilityIdentifier(UITestIdentifiers.CryptoSettings.container)
     .task { await store.loadRegistrations() }
     .sheet(isPresented: $showAddToken) {
       AddTokenSheet {
@@ -61,6 +62,7 @@ struct CryptoSettingsView: View {
         }
         .buttonStyle(.borderless)
         .accessibilityLabel("Add token")
+        .accessibilityIdentifier(UITestIdentifiers.CryptoSettings.addTokenButton)
       }
     }
   }
@@ -83,6 +85,7 @@ struct CryptoSettingsView: View {
       providerIndicators(for: mapping)
     }
     .accessibilityElement(children: .combine)
+    .accessibilityIdentifier(UITestIdentifiers.CryptoSettings.registrationRow(registration.id))
     .accessibilityLabel(
       "\(instrument.ticker ?? instrument.name), \(instrument.name), "
         + "\(Instrument.chainName(for: instrument.chainId ?? 0))"

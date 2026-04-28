@@ -206,8 +206,30 @@ extension MoolahUITestCase {
       lines.append("# SyncProgress driven to .receiving with recordsReceivedThisSession=1234")
     case .sidebarFooterSending:
       lines.append("# SyncProgress driven to .upToDate with pendingUploads=12 then settled")
+    case .cryptoCatalogPreloaded:
+      appendCryptoCatalogPreloadedFixtures(into: &lines)
     }
     return lines.joined(separator: "\n") + "\n"
+  }
+
+  private func appendCryptoCatalogPreloadedFixtures(into lines: inout [String]) {
+    let fixtures = UITestFixtures.CryptoCatalogPreloaded.self
+    lines.append("# fixtures (CloudKit profile reused from TradeBaseline)")
+    lines.append("profile.id      = \(fixtures.profileId)")
+    lines.append("profile.label   = \(fixtures.profileLabel)")
+    lines.append("profile.currency = \(fixtures.profileCurrencyCode)")
+    lines.append("# Catalog override: PreloadedCryptoCatalog (single coin)")
+    lines.append("catalog.coingeckoId = \(fixtures.coingeckoId)")
+    lines.append("catalog.symbol      = \(fixtures.symbol)")
+    lines.append("catalog.name        = \(fixtures.name)")
+    lines.append("catalog.chainSlug   = \(fixtures.chainSlug)")
+    lines.append("catalog.chainId     = \(fixtures.chainId)")
+    lines.append("catalog.contract    = \(fixtures.contractAddress)")
+    lines.append("instrument.id       = \(fixtures.instrumentId)")
+    lines.append("# Resolution stub: PreloadedTokenResolutionClient")
+    lines.append("resolve.coingeckoId        = \(fixtures.coingeckoMappingId)")
+    lines.append("resolve.cryptocompareSymbol = \(fixtures.cryptocompareSymbol)")
+    lines.append("resolve.binanceSymbol      = \(fixtures.binanceSymbol)")
   }
 
   private func appendTradeBaselineFixtures(into lines: inout [String]) {

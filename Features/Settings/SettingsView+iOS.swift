@@ -119,10 +119,18 @@
     }
 
     @ViewBuilder var cryptoSection: some View {
-      if let store = activeSession?.cryptoTokenStore {
+      if let session = activeSession,
+        let store = session.cryptoTokenStore
+      {
         Section {
           NavigationLink {
             CryptoSettingsView(store: store)
+              // The embedded `AddTokenSheet` opens an `InstrumentPickerSheet`
+              // whose callback variant pulls its search service, registry,
+              // and resolution client from `@Environment(ProfileSession.self)`.
+              // Without this injection the picker silently falls back to the
+              // static fiat list and crypto search returns no results.
+              .environment(session)
           } label: {
             Label("Crypto Tokens", systemImage: "bitcoinsign.circle")
           }

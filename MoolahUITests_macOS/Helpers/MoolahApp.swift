@@ -69,6 +69,18 @@ final class MoolahApp {
   /// `CreateAccountView` sheet. Open it by calling `createAccount.open(...)`.
   var createAccount: CreateAccountScreen { CreateAccountScreen(app: self) }
 
+  /// macOS Settings scene. Open it via `settings.open()`; tab drivers
+  /// (e.g. `settings.openCryptoTab()`) hang off the returned screen.
+  var settings: SettingsScreen { SettingsScreen(app: self) }
+
+  /// Crypto tab of the Settings scene (`CryptoSettingsView`). Available
+  /// after `settings.openCryptoTab()` has selected the tab.
+  var cryptoSettings: CryptoSettingsScreen { CryptoSettingsScreen(app: self) }
+
+  /// `AddTokenSheet` (the crypto-only `InstrumentPickerSheet`). Available
+  /// after `cryptoSettings.tapAddToken()` has presented the sheet.
+  var addToken: AddTokenScreen { AddTokenScreen(app: self) }
+
   // MARK: - Single element resolver
 
   /// All identifier lookups in the driver layer go through this method, by
@@ -76,6 +88,17 @@ final class MoolahApp {
   /// future-proof the lookup mechanism.
   func element(for identifier: String) -> XCUIElement {
     application.descendants(matching: .any).matching(identifier: identifier).firstMatch
+  }
+
+  /// Toolbar-button-by-label resolver. Used by drivers when SwiftUI
+  /// drops `.accessibilityIdentifier(_:)` on the underlying control —
+  /// macOS Settings `Tab(...)` toolbar buttons are the current case. The
+  /// `label` argument should still be a typed constant from
+  /// `UITestIdentifiers` so drivers stay free of raw English literals.
+  /// All such lookups route through this method so the single-resolver
+  /// invariant (UI_TEST_GUIDE §3 #5) is preserved.
+  func toolbarButton(label: String) -> XCUIElement {
+    application.toolbars.buttons[label]
   }
 
   /// Keyboard shortcut entrypoint for drivers. Drivers must route keyboard

@@ -143,7 +143,8 @@ extension MoolahApp {
     case .tradeBaseline,
       .welcomeEmpty,
       .welcomeSingleCloudProfile,
-      .welcomeMultipleCloudProfiles:
+      .welcomeMultipleCloudProfiles,
+      .cryptoCatalogPreloaded:
       break
     case .welcomeDownloading:
       // Override iCloudAvailability to `.available` so the WelcomeStateResolver
