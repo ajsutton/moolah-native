@@ -293,7 +293,8 @@ struct TransactionPage: Sendable {
           TransactionWithBalance(
             transaction: transaction,
             convertedLegs: convertedLegs,
-            displayAmounts: [],
+            displayAmounts: Transaction.computeDisplayAmounts(
+              for: transaction, accountId: accountId, earmarkId: earmarkId),
             displayAmount: displayAmount,
             balance: balance))
       case .failure(let underlyingDescription):
