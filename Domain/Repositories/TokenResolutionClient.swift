@@ -17,3 +17,12 @@ protocol TokenResolutionClient: Sendable {
     chainId: Int, contractAddress: String?, symbol: String?, isNative: Bool
   ) async throws -> TokenResolutionResult
 }
+
+extension TokenResolutionResult {
+  /// Whether at least one provider produced a usable identifier. The
+  /// instrument-picker registers crypto only when this is `true`; otherwise
+  /// the user sees "Could not find a price source for this token."
+  var hasAnyProviderId: Bool {
+    coingeckoId != nil || cryptocompareSymbol != nil || binanceSymbol != nil
+  }
+}

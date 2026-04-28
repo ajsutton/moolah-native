@@ -124,7 +124,7 @@ extension ProfileSession {
 
   /// Bundle of the optional instrument-registry pieces: only CloudKit
   /// profiles expose a registry, crypto token store, search service,
-  /// CoinGecko catalogue, and token resolution client. Remote/moolah
+  /// CoinGecko catalog, and token resolution client. Remote/moolah
   /// profiles are single-instrument by server design and leave all five nil.
   struct RegistryWiring {
     let registry: (any InstrumentRegistryRepository)?
@@ -142,11 +142,11 @@ extension ProfileSession {
   /// `refreshIfStale()` once per session on a background task so the on-disk
   /// snapshot honours the 24 h max-age + ETag guards without blocking
   /// session init. A catalog construction failure (e.g. the SQLite file
-  /// can't be opened) is logged and the catalogue is left `nil` — search
+  /// can't be opened) is logged and the catalog is left `nil` — search
   /// degrades to the registry/Yahoo paths only.
   ///
   /// Under `--ui-testing` the active `UITestSeed` may register fake
-  /// catalogue/resolver implementations via
+  /// catalog/resolver implementations via
   /// `UITestSeedCryptoOverrides.overrides(for:)` — those replace the live
   /// SQLite snapshot and `CompositeTokenResolutionClient` so the picker
   /// flow runs deterministically without disk or network access.
@@ -190,7 +190,7 @@ extension ProfileSession {
     )
   }
 
-  /// Returns the catalogue/resolver overrides for the active UI test seed,
+  /// Returns the catalog/resolver overrides for the active UI test seed,
   /// or `nil` for production launches. Reads the same arguments and
   /// environment variable that `MoolahApp+Setup.uiTestingSeed(from:)`
   /// consumes during app init — keeping the gating consistent between the
@@ -206,7 +206,7 @@ extension ProfileSession {
     return UITestSeedCryptoOverrides.overrides(for: seed)
   }
 
-  /// Builds the per-profile CoinGecko catalogue and kicks off a background
+  /// Builds the per-profile CoinGecko catalog and kicks off a background
   /// `refreshIfStale()` so the SQLite snapshot is brought up to date once per
   /// session without blocking init. Returns `nil` (and logs) when the
   /// SQLite file can't be opened — the caller treats that as a degraded
