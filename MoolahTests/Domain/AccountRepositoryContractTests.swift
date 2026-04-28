@@ -215,6 +215,9 @@ struct AccountRepositoryContractTests {
       contractAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
       symbol: "USDC", name: "USD Coin", decimals: 6
     )
+    // ensureInstrument now refuses to write an unmapped crypto leg, so seed
+    // a provider mapping before creating the account-with-opening-balance.
+    try await seedCryptoMapping(usdc, coingeckoId: "usd-coin", in: repository)
     let account = Account(name: "Wallet", type: .investment, instrument: usdc)
     let openingBalance = InstrumentAmount(
       quantity: dec("2500.000000"), instrument: usdc)
@@ -347,6 +350,25 @@ private func makeCloudKitAccountRepository(
   }
 
   return repo
+}
+
+/// Inserts an `InstrumentRecord` for the given crypto instrument with a
+/// non-nil `coingeckoId`, so `ensureInstrument` accepts subsequent writes
+/// that reference it. Mirrors what `InstrumentRegistryRepository.registerCrypto`
+/// does at runtime, but routes around the registry repo to keep this fixture
+/// synchronous with the SwiftData container the account repo holds.
+@MainActor
+private func seedCryptoMapping(
+  _ instrument: Instrument, coingeckoId: String, in repo: CloudKitAccountRepository
+) throws {
+  let context = repo.modelContainer.mainContext
+  context.insert(
+    InstrumentRecord(
+      id: instrument.id, kind: instrument.kind.rawValue, name: instrument.name,
+      decimals: instrument.decimals, ticker: instrument.ticker,
+      chainId: instrument.chainId, contractAddress: instrument.contractAddress,
+      coingeckoId: coingeckoId))
+  try context.save()
 }
 
 private func makeCloudKitWithPositionedAccounts() throws -> CloudKitAccountRepository {
