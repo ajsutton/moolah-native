@@ -254,8 +254,13 @@ extension TransactionDraft {
   var isValid: Bool {
     guard !legDrafts.isEmpty else { return false }
     for leg in legDrafts {
-      // Each leg must have either an account or an earmark (or both)
-      guard leg.accountId != nil || leg.earmarkId != nil else { return false }
+      // .trade legs must have an account (no earmark-only fallback per design §3.2).
+      // All other types require either an account or an earmark (or both).
+      if leg.type == .trade {
+        guard leg.accountId != nil else { return false }
+      } else {
+        guard leg.accountId != nil || leg.earmarkId != nil else { return false }
+      }
       guard !leg.amountText.isEmpty,
         InstrumentAmount.parseQuantity(from: leg.amountText, decimals: 10) != nil
       else { return false }

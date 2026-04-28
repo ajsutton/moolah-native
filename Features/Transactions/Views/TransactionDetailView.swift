@@ -1,19 +1,4 @@
-// swift-format wraps `TransactionLeg(...)` calls with one argument per line
-// inside the previews; SwiftLint's multiline_arguments rule (which expects
-// "all on one line OR one per line including the first") then trips on the
-// formatter's chosen style. The formatter wins per project policy
-// (.swift-format is the layout source of truth), so suppress the lint here.
-// swiftlint:disable multiline_arguments
-
 import SwiftUI
-
-// Common fiat instruments available to leg-instrument resolution when the
-// instrument registry has not yet loaded (e.g. on first render). Registered
-// stocks/crypto are supplied by `knownInstruments` loaded via `.task`.
-private let commonFiatInstruments: [Instrument] = [
-  "AUD", "CAD", "CHF", "CNY", "EUR", "GBP", "HKD", "INR", "JPY", "KRW",
-  "MXN", "NOK", "NZD", "SEK", "SGD", "USD", "ZAR",
-].map { Instrument.fiat(code: $0) }
 
 struct TransactionDetailView: View {
   let transaction: Transaction
@@ -28,8 +13,13 @@ struct TransactionDetailView: View {
 
   @Environment(ProfileSession.self) private var session
 
-  @State private var draft: TransactionDraft
-  @State private var knownInstruments: [Instrument] = []
+  // `draft`, `knownInstruments`, and `openedAsNewTransaction` use internal
+  // access (no `private`) so that extension files in this module
+  // (TransactionDetailView+Helpers.swift, TransactionDetailView+Actions.swift)
+  // can reference them. SwiftLint's strict_fileprivate rule disallows
+  // `fileprivate`, making internal the smallest legal cross-file scope.
+  @State var draft: TransactionDraft
+  @State var knownInstruments: [Instrument] = []
   @State private var showDeleteConfirmation = false
   @State private var payeeState = PayeeAutocompleteState()
   @State private var categoryState = CategoryAutocompleteState()
@@ -42,7 +32,7 @@ struct TransactionDetailView: View {
   /// are editing an existing one. Without this guard, selecting a payee
   /// from the dropdown while editing a $5,000 transfer would clobber the
   /// amount, type, and category.
-  @State private var openedAsNewTransaction: Bool
+  @State var openedAsNewTransaction: Bool
   @FocusState private var focusedField: TransactionDetailFocus?
 
   init(
@@ -183,6 +173,8 @@ extension TransactionDetailView {
   @ViewBuilder private var modeAwareSections: some View {
     if isSimpleEarmarkOnly {
       earmarkOnlyContent
+    } else if isTradeMode {
+      tradeModeContent
     } else if draft.isCustom {
       customModeContent
     } else {
@@ -195,6 +187,64 @@ extension TransactionDetailView {
       draft: $draft, earmarks: earmarks, amountBinding: amountBinding)
     if showRecurrence {
       TransactionDetailRecurrenceSection(draft: $draft)
+    }
+    TransactionDetailNotesSection(notes: $draft.notes)
+  }
+
+  /// True when the draft is not in custom mode and has at least one `.trade` leg.
+  private var isTradeMode: Bool {
+    !draft.isCustom && draft.legDrafts.contains { $0.type == .trade }
+  }
+
+  @ViewBuilder private var tradeModeContent: some View {
+    modeSection.disabled(!isEditable)
+    TransactionDetailTradeSection(
+      draft: $draft,
+      accounts: accounts,
+      sortedAccounts: sortedAccounts,
+      knownInstruments: knownInstruments,
+      focusedField: $focusedField
+    )
+    .disabled(!isEditable)
+
+    ForEach(Array(draft.feeIndices.enumerated()), id: \.element) { ordinal, legIndex in
+      TransactionDetailFeeSection(
+        legIndex: legIndex,
+        displayNumber: ordinal + 1,
+        draft: $draft,
+        accounts: accounts,
+        categories: categories,
+        earmarks: earmarks,
+        knownInstruments: knownInstruments,
+        categoryState: legCategoryStateBinding(for: legIndex),
+        focusedField: $focusedField,
+        onRequestRemove: { draft.removeFee(at: legIndex) }
+      )
+    }
+
+    Section {
+      Button {
+        let fallback =
+          draft.legDrafts.first?.accountId
+          .flatMap { accounts.by(id: $0) }?.instrument.id ?? Instrument.AUD.id
+        draft.appendFee(defaultInstrumentId: fallback)
+      } label: {
+        Label("Add Fee", systemImage: "plus")
+          .frame(maxWidth: .infinity)
+      }
+      .accessibilityIdentifier(UITestIdentifiers.Detail.tradeAddFeeButton)
+    }
+
+    TransactionDetailCustomDetailsSection(
+      draft: $draft,
+      suggestionSource: transactionStore.payeeSuggestionSource,
+      payeeState: $payeeState,
+      onAutofill: autofillFromPayee,
+      focusedField: $focusedField
+    )
+
+    if showRecurrence {
+      TransactionDetailRecurrenceSection(draft: $draft).disabled(!isEditable)
     }
     TransactionDetailNotesSection(notes: $draft.notes)
   }
@@ -295,94 +345,7 @@ extension TransactionDetailView {
   }
 }
 
-// MARK: - Computed Helpers
-
-extension TransactionDetailView {
-  private var sortedAccounts: [Account] {
-    accounts.ordered.sorted { lhs, rhs in
-      if lhs.type.isCurrent != rhs.type.isCurrent {
-        return lhs.type.isCurrent
-      }
-      return lhs.position < rhs.position
-    }
-  }
-
-  private var isEditable: Bool { transaction.isSimple || draft.isCustom }
-
-  /// Whether the current draft is a simple earmark-only transaction.
-  private var isSimpleEarmarkOnly: Bool {
-    !draft.isCustom && draft.relevantLeg.isEarmarkOnly
-  }
-
-  /// The instrument for the relevant leg's account (for displaying currency symbol).
-  private var relevantInstrument: Instrument? {
-    draft.legDrafts[draft.relevantLegIndex].accountId
-      .flatMap { accounts.by(id: $0) }?
-      .instrument
-  }
-
-  /// Whether the current draft is a cross-currency simple transfer.
-  private var isCrossCurrency: Bool {
-    !draft.isCustom && draft.type == .transfer && draft.isCrossCurrencyTransfer(accounts: accounts)
-  }
-
-  /// The instrument for the counterpart leg's account.
-  private var counterpartInstrument: Instrument? {
-    draft.counterpartLeg?.accountId
-      .flatMap { accounts.by(id: $0) }?
-      .instrument
-  }
-
-  private var counterpartAmountBinding: Binding<String> {
-    Binding(
-      get: { draft.counterpartLeg?.amountText ?? "" },
-      set: { draft.setCounterpartAmount($0) }
-    )
-  }
-
-  private var amountBinding: Binding<String> {
-    Binding(
-      get: { draft.amountText },
-      set: { draft.setAmount($0, accounts: accounts) }
-    )
-  }
-
-  private var isScheduled: Bool {
-    showRecurrence && transaction.recurPeriod != nil
-  }
-}
-
-// MARK: - Actions
-
-extension TransactionDetailView {
-  private func autofillFromPayee(_ selectedPayee: String) {
-    // Only auto-copy amount/type/category from a past transaction when
-    // the user is filling in a fresh draft. Editing an existing
-    // transaction's payee must never rewrite other fields — do not
-    // remove this guard without replacing the invariant it enforces.
-    guard openedAsNewTransaction else { return }
-    Task {
-      guard
-        let match = await transactionStore.payeeSuggestionSource.fetchTransactionForAutofill(
-          payee: selectedPayee)
-      else { return }
-      draft.applyAutofill(from: match, categories: categories, accounts: accounts)
-    }
-  }
-
-  private func debouncedSave() {
-    transactionStore.debouncedSave { [self] in
-      saveIfValid()
-    }
-  }
-
-  private func saveIfValid() {
-    let allKnownInstruments = knownInstruments + commonFiatInstruments
-    guard
-      let updated = draft.toTransaction(
-        id: transaction.id, accounts: accounts, earmarks: earmarks,
-        availableInstruments: allKnownInstruments)
-    else { return }
-    onUpdate(updated)
-  }
-}
+// Computed helpers (sortedAccounts, isEditable, isSimpleEarmarkOnly, instruments,
+// bindings, isScheduled) live in TransactionDetailView+Helpers.swift.
+// Actions (autofillFromPayee, debouncedSave, saveIfValid) live in
+// TransactionDetailView+Actions.swift.
