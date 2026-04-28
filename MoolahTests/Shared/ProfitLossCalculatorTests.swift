@@ -26,10 +26,10 @@ struct ProfitLossCalculatorTests {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -4000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -4000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -61,10 +61,10 @@ struct ProfitLossCalculatorTests {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -4000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -4000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -72,10 +72,10 @@ struct ProfitLossCalculatorTests {
       date: date(200),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: -50, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: -50, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: 3000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: 3000, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -107,10 +107,10 @@ struct ProfitLossCalculatorTests {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -4000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -4000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -118,10 +118,10 @@ struct ProfitLossCalculatorTests {
       date: date(200),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: -100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: -100, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: 5000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: 5000, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 

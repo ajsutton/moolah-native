@@ -17,20 +17,20 @@ struct ProfitLossCalculatorTestsMore {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -4000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -4000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
     let buyCBA = LegTransaction(
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -5000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -5000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: cba, quantity: 50, type: .transfer,
+          accountId: accountId, instrument: cba, quantity: 50, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -62,21 +62,21 @@ struct ProfitLossCalculatorTestsMore {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -4000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -4000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
     let buyETH = LegTransaction(
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -2000, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -2000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
           accountId: accountId, instrument: eth,
-          quantity: dec("1.0"), type: .transfer,
+          quantity: dec("1.0"), type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -98,10 +98,12 @@ struct ProfitLossCalculatorTestsMore {
     #expect(ethPL?.unrealizedGain == 500)
   }
 
-  /// A multi-currency purchase (USD 2000 + AUD 100 fee) must aggregate
-  /// into the profile currency before contributing to `totalInvested`.
-  /// Without the conversion, USD and AUD quantities would be summed as
-  /// raw decimals and produce a meaningless 2100 rather than 3100 AUD.
+  /// A multi-currency purchase (USD 2000 + AUD 100 brokerage fee) where
+  /// the fee is modelled as an `.expense` leg (as per the current design).
+  /// The classifier sees only the two `.trade` legs (USD outflow → BHP) and
+  /// derives cost basis from those. The AUD 100 fee is excluded from cost
+  /// basis per the design documented at
+  /// https://github.com/ajsutton/moolah-native/issues/558.
   @Test
   func mixedFiatLegs_totalInvestedConvertsEachLegToProfileCurrency() async throws {
     let bhp = stockInstrument("BHP")
@@ -112,13 +114,13 @@ struct ProfitLossCalculatorTestsMore {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: usd, quantity: -2000, type: .transfer,
+          accountId: accountId, instrument: usd, quantity: -2000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: aud, quantity: -100, type: .transfer,
+          accountId: accountId, instrument: aud, quantity: -100, type: .expense,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
@@ -135,12 +137,12 @@ struct ProfitLossCalculatorTestsMore {
     )
 
     #expect(results.count == 1)
-    // totalInvested: USD 2000×1.5 + AUD 100 = AUD 3100.
+    // totalInvested: USD 2000×1.5 = AUD 3000 (fee leg excluded from cost basis).
     // currentValue: 100 × AUD 50 = AUD 5000.
-    // unrealizedGain: 5000 − 3100 = 1900.
-    #expect(results[0].totalInvested == 3100)
+    // unrealizedGain: 5000 − 3000 = 2000.
+    #expect(results[0].totalInvested == 3000)
     #expect(results[0].currentValue == 5000)
-    #expect(results[0].unrealizedGain == 1900)
+    #expect(results[0].unrealizedGain == 2000)
   }
 
   // MARK: - Date-sensitive routing
@@ -165,10 +167,10 @@ struct ProfitLossCalculatorTestsMore {
       date: date(0),
       legs: [
         TransactionLeg(
-          accountId: accountId, instrument: usd, quantity: -2000, type: .transfer,
+          accountId: accountId, instrument: usd, quantity: -2000, type: .trade,
           categoryId: nil, earmarkId: nil),
         TransactionLeg(
-          accountId: accountId, instrument: bhp, quantity: 100, type: .transfer,
+          accountId: accountId, instrument: bhp, quantity: 100, type: .trade,
           categoryId: nil, earmarkId: nil),
       ])
 
