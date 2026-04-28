@@ -55,7 +55,17 @@ extension ProfileDataSyncHandler {
       logBatchDuration(
         batchStart: batchStart, upsertDuration: upsertDuration, saveDuration: saveDuration,
         saveCount: saved.count, deleteCount: deleted.count)
-      return .success(changedTypes: Set(saved.map(\.recordType) + deleted.map(\.1)))
+      let changedTypes = Set(saved.map(\.recordType) + deleted.map(\.1))
+      // Fan out the instrument-touched signal exactly once per batch (not per
+      // record). Picker UIs subscribe to the registry's `observeChanges()`
+      // stream, which is local-write-driven; without this hop a token
+      // registered on another device would not surface until the next app
+      // launch. Fired only after a successful `context.save()` so observers
+      // never see speculative state.
+      if changedTypes.contains(InstrumentRecord.recordType) {
+        onInstrumentRemoteChange()
+      }
+      return .success(changedTypes: changedTypes)
     } catch {
       os_signpost(.end, log: Signposts.sync, name: "contextSave", signpostID: signpostID)
       logger.error("Failed to save remote changes: \(error, privacy: .public)")

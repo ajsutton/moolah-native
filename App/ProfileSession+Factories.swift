@@ -105,47 +105,14 @@ extension ProfileSession {
       guard let containerManager else {
         fatalError("ProfileContainerManager is required for CloudKit profiles")
       }
-      // A missing container here means the profile can't be constructed;
-      // every call site depends on the session existing so there's no recovery.
-      // swiftlint:disable:next force_try
-      let profileContainer = try! containerManager.container(for: profile.id)
-      let zoneID = CKRecordZone.ID(
-        zoneName: "profile-\(profile.id.uuidString)",
-        ownerName: CKCurrentUserDefaultName)
-      let registry = CloudKitInstrumentRegistryRepository(
-        modelContainer: profileContainer,
-        onRecordChanged: { [weak syncCoordinator] recordName in
-          // Registry callbacks may run off MainActor; hop onto MainActor to
-          // reach the actor-isolated SyncCoordinator.queueSave(_:zoneID:).
-          Task { @MainActor [weak syncCoordinator] in
-            syncCoordinator?.queueSave(recordName: recordName, zoneID: zoneID)
-          }
-        },
-        onRecordDeleted: { [weak syncCoordinator] recordName in
-          Task { @MainActor [weak syncCoordinator] in
-            syncCoordinator?.queueDeletion(recordName: recordName, zoneID: zoneID)
-          }
-        }
-      )
-      // CloudKit profiles need full stock+crypto conversion support. The
-      // closure reads the profile's registry on each conversion so
-      // registrations added at runtime become usable without rebuilding the
-      // service. See issue #102.
-      let conversionService = FullConversionService(
-        exchangeRates: exchangeRates,
-        stockPrices: stockPrices,
-        cryptoPrices: cryptoPrices,
-        providerMappings: {
-          try await registry.allCryptoRegistrations().map(\.mapping)
-        }
-      )
-      return CloudKitBackend(
-        modelContainer: profileContainer,
-        instrument: profile.instrument,
-        profileLabel: profile.label,
-        conversionService: conversionService,
-        instrumentRegistry: registry
-      )
+      return makeCloudKitBackend(
+        profile: profile,
+        containerManager: containerManager,
+        syncCoordinator: syncCoordinator,
+        marketData: CloudKitMarketDataServices(
+          exchangeRates: exchangeRates,
+          stockPrices: stockPrices,
+          cryptoPrices: cryptoPrices))
     }
   }
 
