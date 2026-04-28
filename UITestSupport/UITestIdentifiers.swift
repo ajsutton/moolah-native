@@ -138,6 +138,19 @@ public enum UITestIdentifiers {
     }
   }
 
+  public enum Settings {
+    /// Title of the Crypto tab in the macOS Settings TabView. SwiftUI's
+    /// `Tab` does not propagate `.accessibilityIdentifier(_:)` to the
+    /// generated toolbar button on macOS, so drivers locate the button
+    /// by its accessibility label (which mirrors the tab's title) rather
+    /// than by an identifier. Centralising the title here keeps the
+    /// driver free of raw English literals — the production view and the
+    /// driver both reference this constant. If/when `Tab` accessibility
+    /// identifiers ship on macOS, swap the screen driver to
+    /// `app.element(for:)` and switch this to an identifier value.
+    public static let cryptoTabTitle = "Crypto"
+  }
+
   public enum CryptoSettings {
     /// Root container of the `CryptoSettingsView` Form. Sentinel for the
     /// "Crypto tab is on screen" post-condition after switching tabs in the

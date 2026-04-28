@@ -17,16 +17,22 @@ struct SettingsScreen {
   // MARK: - Actions
 
   /// Opens the Settings scene via the system Cmd+, shortcut and waits
-  /// until the Settings window's tab toolbar is visible. The toolbar's
-  /// "Crypto" tab button is the post-condition because every UI-testing
-  /// launch we exercise has a CloudKit profile active, so the Crypto tab
-  /// is always present in this scene.
+  /// until the Settings window's tab toolbar is visible. The Crypto tab
+  /// button is the post-condition because every UI-testing launch we
+  /// exercise has a CloudKit profile active, so the Crypto tab is always
+  /// present in this scene.
+  ///
+  /// The lookup matches by accessibility label (the tab's title) because
+  /// SwiftUI's `Tab` on macOS does not propagate
+  /// `.accessibilityIdentifier(_:)` to the generated toolbar button. The
+  /// label string lives in `UITestIdentifiers.Settings.cryptoTabTitle` so
+  /// the production view and this driver share one source of truth.
   func open() {
     Trace.record(#function)
     app.pressKeyboardShortcut(",", modifiers: .command)
-    let cryptoTab = app.application.toolbars.buttons["Crypto"]
+    let cryptoTab = cryptoTabButton
     if !cryptoTab.waitForExistence(timeout: 5) {
-      Trace.recordFailure("Settings 'Crypto' tab toolbar button did not appear")
+      Trace.recordFailure("Settings Crypto tab toolbar button did not appear")
       XCTFail("Settings window did not appear within 5s of Cmd+,")
     }
   }
@@ -36,9 +42,9 @@ struct SettingsScreen {
   /// tree.
   func openCryptoTab() {
     Trace.record(#function)
-    let tab = app.application.toolbars.buttons["Crypto"]
+    let tab = cryptoTabButton
     if !tab.waitForExistence(timeout: 3) {
-      Trace.recordFailure("Settings 'Crypto' tab toolbar button did not appear")
+      Trace.recordFailure("Settings Crypto tab toolbar button did not appear")
       XCTFail("Crypto tab toolbar button did not appear within 3s")
       return
     }
@@ -48,5 +54,16 @@ struct SettingsScreen {
       Trace.recordFailure("crypto.settings.container did not appear after tab click")
       XCTFail("CryptoSettingsView container did not appear within 3s of tab click")
     }
+  }
+
+  // MARK: - Helpers
+
+  /// The Settings TabView's Crypto tab toolbar button, located by its
+  /// accessibility label (the title of the `Tab`). See `open()` for why
+  /// this driver uses label matching rather than `app.element(for:)`.
+  /// The lookup routes through `MoolahApp.toolbarButton(label:)` so the
+  /// single-resolver invariant (UI_TEST_GUIDE §3 #5) is preserved.
+  private var cryptoTabButton: XCUIElement {
+    app.toolbarButton(label: UITestIdentifiers.Settings.cryptoTabTitle)
   }
 }

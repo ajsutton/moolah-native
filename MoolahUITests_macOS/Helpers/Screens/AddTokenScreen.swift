@@ -17,11 +17,14 @@ struct AddTokenScreen {
 
   // MARK: - Actions
 
-  /// Types `query` into the picker's search field. Returns once the search
-  /// field has been clicked and the text has been typed; the row-appearance
-  /// post-condition is delegated to `waitForResult(instrumentId:)` so a
-  /// caller types the prefix and then waits for the specific row, mirroring
-  /// the user's perception ("type, see, click").
+  /// Types `query` into the picker's search field. Waits for the typed
+  /// value to propagate into the field's accessibility `value` before
+  /// returning so any subsequent `waitForResult(instrumentId:)` call sees
+  /// the search debounce fire against the intended query, not against an
+  /// empty string. The row-appearance post-condition itself is delegated
+  /// to `waitForResult(instrumentId:)` so a caller types the prefix and
+  /// then waits for the specific row, mirroring the user's perception
+  /// ("type, see, click").
   func search(_ query: String) {
     Trace.record(#function, detail: "query=\(query)")
     let field = app.element(for: UITestIdentifiers.InstrumentPicker.searchField)
@@ -32,6 +35,15 @@ struct AddTokenScreen {
     }
     field.click()
     field.typeText(query)
+    let valuePropagated = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value == %@", query as CVarArg),
+      object: field
+    )
+    if XCTWaiter().wait(for: [valuePropagated], timeout: 5) != .completed {
+      Trace.recordFailure(
+        "instrumentPicker.searchField value did not reach '\(query)' after typeText")
+      XCTFail("Search field did not show typed value '\(query)'")
+    }
   }
 
   /// Waits up to `timeout` seconds for the picker row whose Instrument id
@@ -54,6 +66,12 @@ struct AddTokenScreen {
   /// `InstrumentPickerStore.select(_:)` and the `isResolving` overlay), so
   /// the dismissal post-condition is exposed as a separate
   /// `waitForDismiss()` action that the caller invokes when ready.
+  ///
+  /// After the click we wait for the row to stop being hittable as a
+  /// minimal post-condition that the click registered: either the sheet
+  /// dismisses (success path — `waitForDismiss()` covers that) or the
+  /// `isResolving` overlay disables the row while the network round-trip
+  /// runs.
   func selectResult(instrumentId: String) {
     Trace.record(#function, detail: "instrumentId=\(instrumentId)")
     let row = app.element(for: UITestIdentifiers.InstrumentPicker.row(instrumentId))
@@ -65,6 +83,12 @@ struct AddTokenScreen {
       return
     }
     row.click()
+    let consumed = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "exists == false || isHittable == false"),
+      object: row
+    )
+    _ = XCTWaiter().wait(for: [consumed], timeout: 5)
+    // Note: dismissal (success path) is the responsibility of waitForDismiss().
   }
 
   /// Waits for the picker sheet to dismiss, by polling the sentinel

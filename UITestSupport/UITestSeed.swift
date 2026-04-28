@@ -58,7 +58,10 @@ public enum UITestSeed: String, CaseIterable, Sendable {
   /// row (Uniswap, ethereum chainId 1) and the stub resolver returns the
   /// matching `(coingeckoId, cryptocompareSymbol, binanceSymbol)` triple.
   /// Drives the Settings → Crypto → Add Token end-to-end test without
-  /// touching the network.
+  /// touching the network. See `UITestFixtures.CryptoCatalogPreloaded` for
+  /// the complete fixture (instrumentId, chainId, contractAddress, provider
+  /// IDs) so the `seed.txt` artefact reader can resolve every reference
+  /// without cross-file lookup.
   case cryptoCatalogPreloaded
 }
 

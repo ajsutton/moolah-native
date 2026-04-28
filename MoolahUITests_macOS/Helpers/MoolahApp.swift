@@ -90,6 +90,17 @@ final class MoolahApp {
     application.descendants(matching: .any).matching(identifier: identifier).firstMatch
   }
 
+  /// Toolbar-button-by-label resolver. Used by drivers when SwiftUI
+  /// drops `.accessibilityIdentifier(_:)` on the underlying control —
+  /// macOS Settings `Tab(...)` toolbar buttons are the current case. The
+  /// `label` argument should still be a typed constant from
+  /// `UITestIdentifiers` so drivers stay free of raw English literals.
+  /// All such lookups route through this method so the single-resolver
+  /// invariant (UI_TEST_GUIDE §3 #5) is preserved.
+  func toolbarButton(label: String) -> XCUIElement {
+    application.toolbars.buttons[label]
+  }
+
   /// Keyboard shortcut entrypoint for drivers. Drivers must route keyboard
   /// events through this method rather than reaching into `application`
   /// directly — the single seam keeps `MoolahApp` as the only surface the
