@@ -48,6 +48,15 @@ extension Transaction {
       return "Transfer from \(fromName) to \(toName)"
     }
 
+    if isTrade {
+      // Trade-shaped transactions defer the action sentence to
+      // `tradeTitleSentence(scopeReference:)`, which the row's `titleText`
+      // appends in parentheses after the payee. Return just the payee here
+      // (or empty), never the "(N sub-transactions)" custom label.
+      if let payee, !payee.isEmpty { return payee }
+      return ""
+    }
+
     if !isSimple {
       if let payee, !payee.isEmpty {
         return "\(payee) (\(legs.count) sub-transactions)"

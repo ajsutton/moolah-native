@@ -149,21 +149,22 @@ struct TradeFormDriver {
 
   // MARK: - Post-condition waits
 
-  /// Waits for a transaction list row whose title label starts with `prefix`
-  /// to appear in the accessibility tree, up to `timeout` seconds. Fails
-  /// loudly if the row does not appear.
-  func waitForTradeRow(startingWith prefix: String, timeout: TimeInterval = 10) {
-    Trace.record(#function, detail: "prefix=\(prefix)")
-    // Re-resolve each iteration so the query reflects the live tree.
+  /// Waits for a transaction list row whose accessibility label contains
+  /// `marker` to appear, up to `timeout` seconds. Trade rows combine
+  /// children so the accessibility label is `"Trade, <title>, <amount>,
+  /// <date>"` — the trade-title sentence is in the middle, not at the
+  /// start, hence `CONTAINS` rather than `BEGINSWITH`.
+  func waitForTradeRow(containing marker: String, timeout: TimeInterval = 10) {
+    Trace.record(#function, detail: "marker=\(marker)")
     let deadline = Date().addingTimeInterval(timeout)
     while Date() < deadline {
-      let matches = app.application.staticTexts.matching(
-        NSPredicate(format: "label BEGINSWITH %@", prefix))
-      if matches.firstMatch.exists { return }
+      let predicate = NSPredicate(format: "label CONTAINS %@", marker)
+      if app.application.staticTexts.matching(predicate).firstMatch.exists { return }
+      if app.application.cells.matching(predicate).firstMatch.exists { return }
       RunLoop.current.run(until: Date().addingTimeInterval(0.1))
     }
-    Trace.recordFailure("no row starting with '\(prefix)' after \(timeout)s")
-    XCTFail("No transaction row starting with '\(prefix)' appeared within \(timeout)s")
+    Trace.recordFailure("no row containing '\(marker)' after \(timeout)s")
+    XCTFail("No transaction row containing '\(marker)' appeared within \(timeout)s")
   }
 
   // MARK: - Private helpers

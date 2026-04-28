@@ -14,6 +14,13 @@ struct TransactionDetailFeeSection: View {
   @FocusState.Binding var focusedField: TransactionDetailFocus?
   let onRequestRemove: () -> Void
 
+  @FocusState private var categoryFieldFocused: Bool
+
+  private var visibleSuggestions: [CategorySuggestion] {
+    categoryState.visibleSuggestions(
+      for: draft.legDrafts[legIndex].categoryText, in: categories)
+  }
+
   var body: some View {
     Section("Fee \(displayNumber)") {
       amountRow
@@ -58,9 +65,8 @@ struct TransactionDetailFeeSection: View {
     }
   }
 
-  // Reuse the same legCategory autocomplete machinery used by Custom mode
-  // (TransactionDetailLegRow). The category field component is small
-  // enough to inline here; mirror that file's pattern.
+  // Mirrors `TransactionDetailLegRow`'s leg-category field — same dropdown,
+  // same overlay anchor key, same blur/Enter handlers.
   @ViewBuilder private var categoryField: some View {
     LegCategoryAutocompleteField(
       legIndex: legIndex,
@@ -68,14 +74,42 @@ struct TransactionDetailFeeSection: View {
         get: { draft.legDrafts[legIndex].categoryText },
         set: { draft.legDrafts[legIndex].categoryText = $0 }),
       highlightedIndex: $categoryState.highlightedIndex,
-      suggestionCount: categoryState.visibleSuggestions(
-        for: draft.legDrafts[legIndex].categoryText, in: categories
-      ).count,
-      onTextChange: { _ in categoryState.showSuggestions = true },
-      onAcceptHighlighted: {},
+      suggestionCount: visibleSuggestions.count,
+      onTextChange: { _ in openDropdownIfFocused() },
+      onAcceptHighlighted: acceptHighlighted,
       onCancel: { categoryState.cancel() }
     )
+    .focused($categoryFieldFocused)
     .accessibilityIdentifier(UITestIdentifiers.Detail.legCategory(legIndex))
+    .onChange(of: categoryFieldFocused) { _, focused in
+      if !focused { handleBlur() }
+    }
+  }
+
+  private func openDropdownIfFocused() {
+    guard categoryFieldFocused else { return }
+    if categoryState.justSelected {
+      categoryState.justSelected = false
+    } else {
+      categoryState.showSuggestions = true
+    }
+  }
+
+  private func handleBlur() {
+    let highlighted = categoryState.highlightedSuggestion(
+      for: draft.legDrafts[legIndex].categoryText, in: categories)
+    categoryState.dismiss()
+    draft.commitHighlightedLegCategoryOrNormalise(
+      at: legIndex, highlighted: highlighted, using: categories)
+  }
+
+  private func acceptHighlighted() {
+    guard let highlighted = categoryState.highlightedIndex,
+      highlighted < visibleSuggestions.count
+    else { return }
+    let selected = visibleSuggestions[highlighted]
+    categoryState.dismiss()
+    draft.commitLegCategorySelection(at: legIndex, id: selected.id, path: selected.path)
   }
 
   private var earmarkPicker: some View {

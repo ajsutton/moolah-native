@@ -23,14 +23,16 @@ final class TradeFlowUITests: MoolahUITestCase {
     app.transactionList.createTransaction()
 
     app.tradeForm.switchToTradeMode()
-    app.tradeForm.setPaid(amount: "300", instrumentId: "AUD")
+    // Buy: cash leg negative (paid out), position leg positive (received).
+    // `.trade` legs preserve user-entered signs literally.
+    app.tradeForm.setPaid(amount: "-300", instrumentId: "AUD")
     app.tradeForm.setReceived(
       amount: "20", instrumentId: UITestFixtures.TradeReady.vgsaxInstrumentId)
     app.tradeForm.addFee(
-      amount: "10",
+      amount: "-10",
       instrumentId: "AUD",
       category: UITestFixtures.TradeReady.brokerageCategoryName)
 
-    app.tradeForm.waitForTradeRow(startingWith: "Bought 20 VGS.AX")
+    app.tradeForm.waitForTradeRow(containing: "Bought 20 VGS.AX")
   }
 }
