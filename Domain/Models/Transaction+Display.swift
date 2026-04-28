@@ -68,3 +68,52 @@ extension Transaction {
     return ""
   }
 }
+
+// MARK: - Trade Title
+
+extension Transaction {
+  /// The action sentence for a `.trade`-shaped transaction row title.
+  /// Returns `nil` for non-trade transactions. See design §4.3.
+  ///
+  /// `scopeReference` is the row's reference instrument: the account's
+  /// instrument when account-scoped, the earmark's instrument when
+  /// earmark-scoped, otherwise the profile currency.
+  func tradeTitleSentence(scopeReference: Instrument) -> String? {
+    guard isTrade else { return nil }
+    let tradeLegs = legs.filter { $0.type == .trade }
+    guard tradeLegs.count == 2 else { return nil }
+    let (legA, legB) = (tradeLegs[0], tradeLegs[1])
+
+    let aMatches = legA.instrument == scopeReference
+    let bMatches = legB.instrument == scopeReference
+    if aMatches != bMatches {
+      let matching = aMatches ? legA : legB
+      let other = aMatches ? legB : legA
+      let verb = matching.quantity < 0 ? "Bought" : "Sold"
+      return "\(verb) \(formatLegMagnitude(other))"
+    }
+    // Neither matches, or both match — render Paid → Received.
+    let paid = legA.quantity < 0 ? legA : legB
+    let received = legA.quantity < 0 ? legB : legA
+    return "Swapped \(formatLegMagnitude(paid)) for \(formatLegMagnitude(received))"
+  }
+
+  /// Formats the absolute magnitude of `leg` as `"{number} {code}"` for use
+  /// in trade title sentences. Uses `0...decimals` precision so trailing zeros
+  /// are suppressed (e.g. `20 VGS.AX`, `100 USD`, `30,000 USDC`). Fiat uses
+  /// the ISO code; stock/crypto uses the ticker.
+  /// `abs()` here produces a *display* magnitude only — the stored sign is not modified.
+  private func formatLegMagnitude(_ leg: TransactionLeg) -> String {
+    let qty = abs(leg.quantity)
+    let instrument = leg.instrument
+    let number = qty.formatted(.number.precision(.fractionLength(0...instrument.decimals)))
+    let code: String
+    switch instrument.kind {
+    case .fiatCurrency:
+      code = instrument.id
+    case .stock, .cryptoToken:
+      code = instrument.ticker ?? instrument.id
+    }
+    return "\(number) \(code)"
+  }
+}
