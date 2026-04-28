@@ -98,6 +98,8 @@ The dense centre — `transaction × leg × account × category × earmark × in
 
 ## 6. Roadmap
 
+> **Granularity.** This roadmap captures per-step / per-slice ordering and scope only. Each step or slice gets its own detailed plan in `plans/grdb-step-*.md` or `plans/grdb-slice-*.md` before execution; the bullets below are not enough on their own to pick up cold and execute. Currently fleshed out: `plans/grdb-step-2-rate-storage.md`.
+
 ### Step 1 — Add GRDB via SwiftPM
 
 **Branch:** `build/add-grdb-spm`. **Size:** small.
