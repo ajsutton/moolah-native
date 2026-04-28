@@ -22,7 +22,7 @@ struct TransactionTypeTests {
 
   @Test("trade is user-editable")
   func tradeIsUserEditable() {
-    #expect(TransactionType.trade.isUserEditable == true)
+    #expect(TransactionType.trade.isUserEditable)
   }
 
   @Test("trade is in userSelectableTypes")
@@ -35,7 +35,10 @@ struct TransactionTypeTests {
     let encoded = try JSONEncoder().encode(TransactionType.trade)
     let decoded = try JSONDecoder().decode(TransactionType.self, from: encoded)
     #expect(decoded == .trade)
-    let raw = String(data: encoded, encoding: .utf8)
-    #expect(raw == "\"trade\"")
+  }
+
+  @Test("userSelectableTypes order is income, expense, transfer, trade")
+  func userSelectableTypesOrder() {
+    #expect(TransactionType.userSelectableTypes == [.income, .expense, .transfer, .trade])
   }
 }

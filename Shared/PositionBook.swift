@@ -23,7 +23,7 @@ struct PositionBook: Equatable, Sendable {
   /// earmark, signed as in the leg).
   var earmarks: [UUID: [Instrument: Decimal]] = [:]
 
-  /// Per-earmark "saved" totals — sum of `.income` and `.openingBalance` legs.
+  /// Per-earmark "saved" totals — sum of `.income`, `.openingBalance`, and `.trade` legs.
   /// Tracks the change to the saved-into-earmark total.
   var earmarksSaved: [UUID: [Instrument: Decimal]] = [:]
 

@@ -8,7 +8,9 @@ enum TransactionType: String, Codable, Sendable, CaseIterable {
   case trade
 
   /// Whether this transaction type can be manually created or edited by users.
-  /// Opening balance transactions are system-generated and cannot be modified.
+  /// `.openingBalance` transactions are system-generated and cannot be modified.
+  /// `.trade` transactions are user-editable; the bespoke trade UI ships in a
+  /// subsequent task in this branch.
   var isUserEditable: Bool {
     self != .openingBalance
   }

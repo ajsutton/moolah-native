@@ -69,6 +69,14 @@ struct TransactionDetailModeSection: View {
           Text(TransactionType.openingBalance.displayName)
             .foregroundStyle(.secondary)
         }
+      } else if transaction.legs.contains(where: { $0.type == .trade }) {
+        // Placeholder: Task 13 will replace this with a fully-wired trade picker.
+        // Without this guard, modeBinding maps .trade → .expense and the picker
+        // would corrupt trade data if the user changed the type selection.
+        LabeledContent("Type") {
+          Text(TransactionType.trade.displayName)
+            .foregroundStyle(.secondary)
+        }
       } else if !transaction.isSimple {
         LabeledContent("Type") {
           Text("Custom")
