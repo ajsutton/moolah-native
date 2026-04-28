@@ -25,9 +25,16 @@ extension ProfileDataSyncHandler {
     clearAll(InvestmentValueRecord.self)
     clearAll(InstrumentRecord.self)
 
+    // Track whether every store cleared cleanly so the success log fires
+    // only when the SwiftData save AND the GRDB UPDATEs all succeeded.
+    // Mirrors `deleteLocalData`'s semantics: pre-PR the success log
+    // sat inside the SwiftData `do { try context.save() ... }` block,
+    // so a SwiftData failure suppressed it.
+    var clearedAll = true
     do {
       try context.save()
     } catch {
+      clearedAll = false
       logger.error("Failed to save after clearing system fields: \(error, privacy: .public)")
     }
 
@@ -37,6 +44,7 @@ extension ProfileDataSyncHandler {
     do {
       try grdbRepositories.csvImportProfiles.clearAllSystemFieldsSync()
     } catch {
+      clearedAll = false
       logger.error(
         """
         Failed to clear CSV import profile system fields for profile \
@@ -47,6 +55,7 @@ extension ProfileDataSyncHandler {
     do {
       try grdbRepositories.importRules.clearAllSystemFieldsSync()
     } catch {
+      clearedAll = false
       logger.error(
         """
         Failed to clear import rule system fields for profile \
@@ -54,7 +63,9 @@ extension ProfileDataSyncHandler {
         \(error.localizedDescription, privacy: .public)
         """)
     }
-    logger.info("Cleared all system fields for profile \(self.profileId)")
+    if clearedAll {
+      logger.info("Cleared all system fields for profile \(self.profileId)")
+    }
   }
 
   /// Applies (or clears, when `data` is nil) the encoded system fields on the UUID-keyed

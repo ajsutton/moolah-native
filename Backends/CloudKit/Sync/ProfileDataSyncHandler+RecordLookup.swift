@@ -270,7 +270,7 @@ extension ProfileDataSyncHandler {
     return Self.fetchOrLog(descriptor, context: context).first
   }
 
-  func fetchCSVImportProfileRow(id: UUID) -> CSVImportProfileRow? {
+  private func fetchCSVImportProfileRow(id: UUID) -> CSVImportProfileRow? {
     do {
       return try grdbRepositories.csvImportProfiles.fetchRowSync(id: id)
     } catch {
@@ -283,7 +283,7 @@ extension ProfileDataSyncHandler {
     }
   }
 
-  func fetchImportRuleRow(id: UUID) -> ImportRuleRow? {
+  private func fetchImportRuleRow(id: UUID) -> ImportRuleRow? {
     do {
       return try grdbRepositories.importRules.fetchRowSync(id: id)
     } catch {

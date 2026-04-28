@@ -204,4 +204,71 @@ struct SyncRoundTripCSVImportTests {
     #expect(rowB.headerSignature == rowA.headerSignature)
     #expect(rowB.encodedSystemFields == outgoing.encodedSystemFields)
   }
+
+  // MARK: - Data-loss regression: GRDB write failure must surface .saveFailed
+
+  /// Regression for the round-2 finding I-1 (silent data loss on remote
+  /// pulls). Pre-fix: `applyGRDBBatchSave` swallowed the error and
+  /// returned `true`, the surrounding `context.save()` succeeded against
+  /// SwiftData, and `applyRemoteChanges` returned `.success(...)` —
+  /// CKSyncEngine then advanced its change token past the dropped
+  /// record. The fix propagates the throw so `applyRemoteChanges`
+  /// returns `.saveFailed(...)` and the coordinator re-fetches.
+  ///
+  /// Mirror of `CSVImportRollbackTests` trigger pattern: install a
+  /// BEFORE-INSERT trigger that aborts on a sentinel parser identifier,
+  /// feed a matching CKRecord through `applyRemoteChanges`, assert the
+  /// result is `.saveFailed(...)`.
+  @Test("applyRemoteChanges reports saveFailed when the GRDB upsert fails")
+  func applyRemoteChangesReportsSaveFailedWhenGRDBUpsertFails() async throws {
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerWithDatabase()
+    try await harness.database.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER fail_csv_import_profile_apply_remote
+          BEFORE INSERT ON csv_import_profile
+          WHEN NEW.parser_identifier = '___FAIL___'
+          BEGIN
+              SELECT RAISE(ABORT, 'forced failure for data-loss regression');
+          END;
+          """)
+    }
+
+    let id = UUID()
+    let failing = CSVImportProfileRow(
+      id: id,
+      recordName: CSVImportProfileRow.recordName(for: id),
+      accountId: UUID(),
+      parserIdentifier: "___FAIL___",
+      headerSignature: "date\u{1F}amount",
+      filenamePattern: nil,
+      deleteAfterImport: false,
+      createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+      lastUsedAt: nil,
+      dateFormatRawValue: nil,
+      columnRoleRawValuesEncoded: nil,
+      encodedSystemFields: nil)
+    let ckRecord = failing.toCKRecord(in: Self.zoneID)
+
+    let result = harness.handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
+
+    // The whole point of the fix: CKSyncEngine MUST be told the apply
+    // failed so it refetches; .success would let the change token
+    // advance past the dropped record.
+    guard case .saveFailed = result else {
+      Issue.record(
+        """
+        applyRemoteChanges returned \(result) but the GRDB upsert was \
+        rejected by the trigger — the result must be .saveFailed so the \
+        coordinator schedules a re-fetch (data-loss regression I-1).
+        """)
+      return
+    }
+
+    // No row landed: the failed transaction rolled back inside the repo.
+    let count = try await harness.database.read { database in
+      try CSVImportProfileRow.fetchCount(database)
+    }
+    #expect(count == 0)
+  }
 }

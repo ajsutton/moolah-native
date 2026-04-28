@@ -67,6 +67,25 @@ final class SwiftDataToGRDBMigrator {
     database: any DatabaseWriter,
     defaults: UserDefaults = .standard
   ) throws {
+    #if DEBUG
+      let start = ContinuousClock.now
+      defer {
+        let elapsedMs = (ContinuousClock.now - start).inMilliseconds
+        // 16ms ≈ one frame at 60Hz. Sync migrator runs on @MainActor, so
+        // exceeding this budget means we're hanging the UI on a slow
+        // device. Logging instead of asserting because actual migration
+        // time depends on row count, which scales with user data —
+        // intentional signal-only check, not a hard precondition.
+        if elapsedMs > 16 {
+          logger.warning(
+            """
+            SwiftDataToGRDBMigrator.migrateIfNeeded took \(elapsedMs, privacy: .public)ms \
+            on @MainActor; convert to async if this reproduces on real hardware (see \
+            file header).
+            """)
+        }
+      }
+    #endif
     try migrateCSVImportProfilesIfNeeded(
       modelContainer: modelContainer, database: database, defaults: defaults)
     try migrateImportRulesIfNeeded(

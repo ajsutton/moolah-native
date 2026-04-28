@@ -23,6 +23,15 @@ import GRDB
 /// see no concurrency-model change. Hook closures are `let` properties
 /// set during `init` per the plan — post-init reassignment is not
 /// supported.
+///
+/// **`@unchecked Sendable` justification.** All stored properties are
+/// `let`. `database` (`any DatabaseWriter`) is itself `Sendable` (GRDB
+/// protocol guarantee — the queue's serial executor mediates concurrent
+/// access). `onRecordChanged` and `onRecordDeleted` are `@Sendable`
+/// closures captured at init. Nothing mutates post-init, so the
+/// reference can be shared across actor boundaries without a data
+/// race; `@unchecked` only waives Swift's structural check that
+/// `final class` types meet `Sendable`'s requirements automatically.
 final class GRDBCSVImportProfileRepository: CSVImportProfileRepository, @unchecked Sendable {
   private let database: any DatabaseWriter
   private let onRecordChanged: @Sendable (String, UUID) -> Void

@@ -1,6 +1,5 @@
 @preconcurrency import CloudKit
 import Foundation
-import GRDB
 import OSLog
 
 extension SyncCoordinator {
@@ -12,13 +11,12 @@ extension SyncCoordinator {
   /// `setProfileGRDBRepositories(profileId:bundle:)` before this is
   /// called for the profile — production wiring guarantees this in
   /// `ProfileSession.registerWithSyncCoordinator`. If no bundle is
-  /// registered, the fallback path runs only in test builds (detected
-  /// via `NSClassFromString("XCTestCase") != nil`) so SyncCoordinator
-  /// unit tests can drive the handler without standing up a full
-  /// `ProfileSession`. In a non-test build, a missing bundle is a
-  /// production data-loss hazard (writes would land in an in-memory DB
-  /// nobody else reads), so we trap loudly via `preconditionFailure`
-  /// instead of silently constructing one.
+  /// registered and no `fallbackGRDBRepositoriesFactory` was injected
+  /// at coordinator init, the call traps via `preconditionFailure`:
+  /// constructing an empty in-memory bundle on the fly would silently
+  /// swallow GRDB writes (data loss). Tests that drive paths reaching
+  /// here without staging a bundle inject the factory at init time so
+  /// the trap doesn't fire — see `SyncCoordinator.init(... fallbackGRDBRepositoriesFactory:)`.
   func handlerForProfileZone(
     profileId: UUID, zoneID: CKRecordZone.ID
   ) throws -> ProfileDataSyncHandler {
@@ -29,8 +27,22 @@ extension SyncCoordinator {
     let grdbRepositories: ProfileGRDBRepositories
     if let registered = profileGRDBRepositories[profileId] {
       grdbRepositories = registered
+    } else if let factory = fallbackGRDBRepositoriesFactory {
+      grdbRepositories = try factory(profileId)
+      profileGRDBRepositories[profileId] = grdbRepositories
     } else {
-      grdbRepositories = try makeFallbackGRDBRepositories(profileId: profileId)
+      preconditionFailure(
+        """
+        SyncCoordinator.handlerForProfileZone called for profile \
+        \(profileId.uuidString) without a registered GRDB repository \
+        bundle. This is a wiring bug — \
+        ProfileSession.registerWithSyncCoordinator (production) must call \
+        setProfileGRDBRepositories(profileId:bundle:) before any sync \
+        event for this profile, and tests should either register a bundle \
+        or inject a fallbackGRDBRepositoriesFactory at coordinator init. \
+        Constructing an empty in-memory bundle here would silently swallow \
+        GRDB writes.
+        """)
     }
     let onInstrumentRemoteChange = instrumentRemoteChangeCallbacks[profileId] ?? {}
     let handler = ProfileDataSyncHandler(
@@ -41,41 +53,6 @@ extension SyncCoordinator {
       onInstrumentRemoteChange: onInstrumentRemoteChange)
     dataHandlers[profileId] = handler
     return handler
-  }
-
-  /// Builds an empty in-memory GRDB repository bundle for SyncCoordinator
-  /// unit tests that don't supply a real one. **Production must never
-  /// reach this path** — the empty in-memory queue would silently swallow
-  /// every GRDB write driven by the data handler. We `preconditionFailure`
-  /// when running outside an XCTest host so a missing
-  /// `setProfileGRDBRepositories` call surfaces as a hard crash in
-  /// development rather than silent data loss in shipping builds.
-  private func makeFallbackGRDBRepositories(
-    profileId: UUID
-  ) throws -> ProfileGRDBRepositories {
-    let isRunningTests = NSClassFromString("XCTestCase") != nil
-    if !isRunningTests {
-      preconditionFailure(
-        """
-        SyncCoordinator.handlerForProfileZone called for profile \
-        \(profileId.uuidString) without a registered GRDB repository \
-        bundle. This is a wiring bug — \
-        ProfileSession.registerWithSyncCoordinator must call \
-        setProfileGRDBRepositories(profileId:bundle:) before any sync \
-        event for this profile. Falling back to an empty in-memory \
-        bundle in production would silently swallow GRDB writes.
-        """)
-    }
-    Logger(subsystem: "com.moolah.app", category: "SyncCoordinator").warning(
-      """
-      No GRDB repository bundle registered for profile \
-      \(profileId, privacy: .public); using empty in-memory fallback. \
-      Test-only path — production traps via preconditionFailure.
-      """)
-    let database = try ProfileDatabase.openInMemory()
-    return ProfileGRDBRepositories(
-      csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
-      importRules: GRDBImportRuleRepository(database: database))
   }
 
   /// Registers the GRDB repository bundle for a profile. Must be called

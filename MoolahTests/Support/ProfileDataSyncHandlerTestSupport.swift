@@ -21,6 +21,19 @@ enum ProfileDataSyncHandlerTestSupport {
     return (result.handler, result.container)
   }
 
+  /// `@Sendable` factory closure suitable for
+  /// `SyncCoordinator.init(... fallbackGRDBRepositoriesFactory:)`. Each
+  /// invocation builds a fresh in-memory `ProfileGRDBRepositories` so
+  /// `SyncCoordinator` tests that drive `handlerForProfileZone` (directly
+  /// or via `queueAllRecordsAfterImport` etc.) don't have to register a
+  /// bundle for every profile they touch.
+  static let inMemoryFallbackFactory: @Sendable (UUID) throws -> ProfileGRDBRepositories = { _ in
+    let database = try ProfileDatabase.openInMemory()
+    return ProfileGRDBRepositories(
+      csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
+      importRules: GRDBImportRuleRepository(database: database))
+  }
+
   /// Three-value variant for tests that need to verify GRDB-side state.
   /// The caller retains a reference to `database` so the in-memory queue
   /// outlives the test's repos.

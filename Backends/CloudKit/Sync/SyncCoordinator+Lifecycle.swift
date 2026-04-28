@@ -4,6 +4,37 @@ import OSLog
 import SwiftData
 import os
 
+// MARK: - Re-Fetch Backoff Constants
+//
+// `nonisolated` so they sit outside the `@MainActor` extension below;
+// short-retry / long-retry plumbing is consulted from the off-main
+// fetched-changes path.
+
+extension SyncCoordinator {
+  /// Maximum number of consecutive re-fetch attempts before giving up on the short-retry
+  /// chain and falling back to the long-retry timer. A persistent `context.save()` failure
+  /// (e.g. SwiftData schema corruption, disk full) would otherwise produce an infinite
+  /// 5-second retry loop. See issue #77.
+  nonisolated static let maxRefetchAttempts = 5
+
+  /// Interval between last-resort periodic retries after the short-retry budget is
+  /// exhausted. Long enough to avoid battery / quota impact on a persistently failing
+  /// device, but short enough that a device that comes back online (disk freed, schema
+  /// migrated by a later app update, transient corruption cleared) recovers without
+  /// requiring an app restart. See issue #77.
+  nonisolated static let longRetryInterval: Duration = .seconds(30 * 60)
+
+  /// Returns the exponential backoff delay for the given 1-based attempt number,
+  /// starting at 5 seconds and doubling each attempt. Returns `nil` when `attempt`
+  /// exceeds `maxRefetchAttempts` — the caller should stop retrying at that point.
+  nonisolated static func refetchBackoff(forAttempt attempt: Int) -> Duration? {
+    guard attempt >= 1, attempt <= maxRefetchAttempts else { return nil }
+    // 5s, 10s, 20s, 40s, 80s
+    let seconds = 5 * (1 << (attempt - 1))
+    return .seconds(seconds)
+  }
+}
+
 // Lifecycle management (start/stop), engine-level send/fetch wrappers, and
 // per-fetch-session change accumulation for `SyncCoordinator`.
 @MainActor
@@ -45,6 +76,10 @@ extension SyncCoordinator {
   /// this as `nonisolated async` from a `@MainActor`-originating `Task {}`
   /// still inherits the main thread for the body; `Task.detached` is the
   /// only reliable way to force execution onto the cooperative pool.
+  ///
+  /// TODO(#565): Verify this is still required under newer Swift dispatch /
+  /// `@concurrent`. If a plain `nonisolated async` hop now lands off-main,
+  /// drop the detached-task waiver. — https://github.com/ajsutton/moolah-native/issues/565
   nonisolated static func prepareEngine(
     stateFileURL: URL,
     delegate: any CKSyncEngineDelegate & Sendable
