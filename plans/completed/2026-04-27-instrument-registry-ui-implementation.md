@@ -1,5 +1,7 @@
 # Instrument Registry UI Implementation Plan
 
+> **Status:** Completed (2026-04-27). All 16 tasks landed via PRs [#523](https://github.com/ajsutton/moolah-native/pull/523), [#525](https://github.com/ajsutton/moolah-native/pull/525), [#527](https://github.com/ajsutton/moolah-native/pull/527), [#532](https://github.com/ajsutton/moolah-native/pull/532), [#534](https://github.com/ajsutton/moolah-native/pull/534), [#535](https://github.com/ajsutton/moolah-native/pull/535), [#536](https://github.com/ajsutton/moolah-native/pull/536), [#537](https://github.com/ajsutton/moolah-native/pull/537), [#539](https://github.com/ajsutton/moolah-native/pull/539), [#540](https://github.com/ajsutton/moolah-native/pull/540), [#541](https://github.com/ajsutton/moolah-native/pull/541), [#545](https://github.com/ajsutton/moolah-native/pull/545), [#542](https://github.com/ajsutton/moolah-native/pull/542), [#543](https://github.com/ajsutton/moolah-native/pull/543), [#544](https://github.com/ajsutton/moolah-native/pull/544), [#547](https://github.com/ajsutton/moolah-native/pull/547).
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Wire the existing instrument registry backend into a usable UI: a curated `/coins/list`-backed crypto picker, Yahoo-backed stock search, a sync→registry change-fan-out, and a tightened `ensureInstrument` boundary.
@@ -8,7 +10,7 @@
 
 **Tech Stack:** Swift 6 strict concurrency, SwiftUI, SwiftData (existing), `SQLite3` (system), `URLSession`, XCTest, XCUITest.
 
-**Reference:** [`plans/2026-04-27-instrument-registry-ui-design.md`](2026-04-27-instrument-registry-ui-design.md) for design rationale and decision tags D1–D10.
+**Reference:** [`plans/completed/2026-04-27-instrument-registry-ui-design.md`](2026-04-27-instrument-registry-ui-design.md) for design rationale and decision tags D1–D10.
 
 ---
 
