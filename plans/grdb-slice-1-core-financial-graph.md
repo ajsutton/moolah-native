@@ -184,9 +184,6 @@ CREATE INDEX transaction_scheduled
     ON "transaction"(recur_period, date) WHERE recur_period IS NOT NULL;
 CREATE INDEX transaction_by_payee
     ON "transaction"(payee) WHERE payee IS NOT NULL;
-CREATE INDEX transaction_by_session
-    ON "transaction"(import_origin_import_session_id)
-    WHERE import_origin_import_session_id IS NOT NULL;
 
 -- 7. transaction_leg (FKs to transaction, account, category, earmark)
 CREATE TABLE transaction_leg (
@@ -289,7 +286,6 @@ Indexes are sized for the analysis hot paths in §3.4. The decisions are recorde
 | `transaction_by_date` | `WHERE date >= after` selection in every analysis method | B-tree |
 | `transaction_scheduled` | Forecast extrapolation (`recur_period IS NOT NULL`); excludes scheduled from non-forecast queries | Partial |
 | `transaction_by_payee` | Payee suggestions and `TransactionFilter.payee` | Partial |
-| `transaction_by_session` | CSV import revert (`fetchByImportSession`) | Partial |
 | `leg_by_transaction` | FK child index (mandatory per §4); `JOIN leg ON leg.transaction_id = t.id` | B-tree |
 | `leg_by_account`, `leg_by_category`, `leg_by_earmark` | FK child indexes; partial (skip NULL FKs) | Partial |
 | `leg_analysis_by_type_account` | `fetchIncomeAndExpense`, `computePositions` (sidebar) — covering for `(type, account, instrument)` GROUP BY | Composite |
@@ -560,8 +556,6 @@ Conforms to `TransactionRepository`. The biggest of the eight by surface area.
 | `update(_:)` | Update the transaction header; replace all legs (delete-by-`transaction_id`, then insert the new ones). One transaction. Rollback test mandatory. |
 | `delete(id:)` | `DELETE FROM "transaction" WHERE id = ?` — legs cascade via FK. |
 | `fetchPayeeSuggestions(prefix:)` | Use the GRDB query interface: `TransactionRow.select(Columns.payee, as: String.self).filter(Columns.payee != nil).filter(sql: "payee LIKE ? || '%'", arguments: [prefix]).order(Columns.payee).distinct().limit(limit).fetchAll(database)`. **Never** build the LIKE string with Swift `\(prefix)` interpolation — that's the §4 SQL-injection shape. Uses `transaction_by_payee` partial index; verify with a plan-pinning test. |
-
-The `fetchByImportSession` accessor (used by CSV-import revert) joins on `import_origin_import_session_id` — uses `transaction_by_session`.
 
 #### 3.3.7 `GRDBAnalysisRepository`
 
