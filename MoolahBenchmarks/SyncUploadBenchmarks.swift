@@ -17,7 +17,10 @@ final class SyncUploadBenchmarks: XCTestCase {
   nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler?
   nonisolated(unsafe) private static var _transactionUUIDs400: Set<UUID> = []
 
-  @MainActor
+  // `XCTestCase.setUp` is nonisolated, so this override cannot carry
+  // `@MainActor`. `ProfileDataSyncHandler.init` is the only call here
+  // that requires the main actor; XCTest runs class-level setUp on the
+  // main thread, so `MainActor.assumeIsolated` is safe.
   override static func setUp() {
     super.setUp()
     let result = expecting("benchmark TestBackend.create failed") {
@@ -44,9 +47,11 @@ final class SyncUploadBenchmarks: XCTestCase {
       investmentValues: result.backend.grdbInvestments,
       transactions: result.backend.grdbTransactions,
       transactionLegs: result.backend.grdbTransactionLegs)
-    _handler = ProfileDataSyncHandler(
-      profileId: profileId, zoneID: zoneID, modelContainer: container,
-      grdbRepositories: bundle)
+    _handler = MainActor.assumeIsolated {
+      ProfileDataSyncHandler(
+        profileId: profileId, zoneID: zoneID, modelContainer: container,
+        grdbRepositories: bundle)
+    }
     let ids = expecting("benchmark fetch existing ids failed") {
       try result.database.read { database in
         try TransactionRow

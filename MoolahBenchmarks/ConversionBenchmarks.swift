@@ -68,11 +68,11 @@ final class ConversionBenchmarks: XCTestCase {
       .filter(txnIds.contains(TransactionLegRow.Columns.transactionId))
       .fetchAll(database)
     let legsByTxn = Dictionary(grouping: legRows, by: \.transactionId)
-    return rows.map { row in
-      let legs = (legsByTxn[row.id] ?? [])
+    return try rows.map { row in
+      let legs = try (legsByTxn[row.id] ?? [])
         .sorted(by: { $0.sortOrder < $1.sortOrder })
-        .map { $0.toDomain(instrument: Instrument.fiat(code: $0.instrumentId)) }
-      return row.toDomain(legs: legs)
+        .map { try $0.toDomain(instrument: Instrument.fiat(code: $0.instrumentId)) }
+      return try row.toDomain(legs: legs)
     }
   }
 }

@@ -22,8 +22,10 @@ xcodebuild build-for-testing "${COMMON_ARGS[@]}" \
     -scheme Moolah-Benchmarks \
     -destination "platform=macOS"
 
+# `xcodebuild build-for-testing` writes artifacts under `Debug-Tests`,
+# not `Debug`. Use the test-build subdirectory.
 PRODUCTS="$REPO_ROOT/.DerivedData-bench/Build/Products"
-APP_BUNDLE="$PRODUCTS/Debug/Moolah.app"
+APP_BUNDLE="$PRODUCTS/Debug-Tests/Moolah.app"
 TEST_BUNDLE="$APP_BUNDLE/Contents/PlugIns/MoolahBenchmarks_macOS.xctest"
 
 # Copy debug dylib (same fix as test.sh)
