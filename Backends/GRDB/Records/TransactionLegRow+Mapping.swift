@@ -40,14 +40,16 @@ extension TransactionLegRow {
   /// Domain projection. Mirrors `TransactionLegRecord.toDomain(instrument:)`.
   /// `instrument` must be supplied by the repository via the registry
   /// lookup; the row itself only stores the id.
-  func toDomain(instrument: Instrument) -> TransactionLeg {
+  ///
+  /// Throws `BackendError.dataCorrupted` when `type` carries a raw value
+  /// the compiled `TransactionType` enum doesn't recognise — see
+  /// `TransactionType.decoded(rawValue:)`.
+  func toDomain(instrument: Instrument) throws -> TransactionLeg {
     TransactionLeg(
       accountId: accountId,
       instrument: instrument,
       quantity: InstrumentAmount(storageValue: quantity, instrument: instrument).quantity,
-      // TODO(#578): handle unknown raw values explicitly instead of
-      // silently falling back — https://github.com/ajsutton/moolah-native/issues/578
-      type: TransactionType(rawValue: type) ?? .expense,
+      type: try TransactionType.decoded(rawValue: type),
       categoryId: categoryId,
       earmarkId: earmarkId
     )

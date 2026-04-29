@@ -25,6 +25,14 @@ struct BackendErrorTests {
   }
 
   @Test
+  func testDataCorruptedMessage() {
+    let error = BackendError.dataCorrupted("Unknown AccountType raw value: future")
+    #expect(
+      error.userMessage
+        == "Your data appears to be corrupted or was written by a newer version of the app.")
+  }
+
+  @Test
   func testNonBackendErrorFallback() {
     let error: Error = NSError(
       domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "Something broke"])

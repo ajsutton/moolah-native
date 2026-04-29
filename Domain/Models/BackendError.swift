@@ -10,6 +10,12 @@ enum BackendError: Error, Sendable, Equatable {
   /// containing entity). Indicates a programmer error — the UI should have
   /// rejected the write before reaching the backend.
   case unsupportedInstrument(String)
+  /// Thrown when on-disk data fails a domain invariant the backend expects
+  /// to hold — e.g. an enum column carrying a raw value the compiled enum
+  /// doesn't know. Indicates either a forward-incompatible schema or
+  /// corruption; surfacing it as an error stops the read rather than
+  /// silently misclassifying the row.
+  case dataCorrupted(String)
 }
 
 extension BackendError {
@@ -27,6 +33,8 @@ extension BackendError {
       return message
     case .unsupportedInstrument(let message):
       return message
+    case .dataCorrupted:
+      return "Your data appears to be corrupted or was written by a newer version of the app."
     }
   }
 }

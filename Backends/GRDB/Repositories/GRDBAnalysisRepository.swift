@@ -201,22 +201,22 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
 
     var instrumentLookup: [String: Instrument] = [:]
     for row in instrumentRows {
-      instrumentLookup[row.id] = row.toDomain()
+      instrumentLookup[row.id] = try row.toDomain()
     }
 
     let legsByTxnId = Dictionary(grouping: legRows, by: \.transactionId)
 
-    var transactions = txnRows.map { row -> Transaction in
+    var transactions = try txnRows.map { row -> Transaction in
       let legs =
-        (legsByTxnId[row.id] ?? [])
+        try (legsByTxnId[row.id] ?? [])
         .sorted { $0.sortOrder < $1.sortOrder }
         .map { legRow -> TransactionLeg in
           let legInstrument =
             instrumentLookup[legRow.instrumentId]
             ?? Instrument.fiat(code: legRow.instrumentId)
-          return legRow.toDomain(instrument: legInstrument)
+          return try legRow.toDomain(instrument: legInstrument)
         }
-      return row.toDomain(legs: legs)
+      return try row.toDomain(legs: legs)
     }
 
     switch filter {
@@ -241,11 +241,11 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
     database: Database, instrument: Instrument
   ) throws -> [Account] {
     let rows = try AccountRow.fetchAll(database)
-    return rows.map { row in
+    return try rows.map { row in
       Account(
         id: row.id,
         name: row.name,
-        type: AccountType(rawValue: row.type) ?? .bank,
+        type: try AccountType.decoded(rawValue: row.type),
         instrument: instrument,
         position: row.position,
         isHidden: row.isHidden)

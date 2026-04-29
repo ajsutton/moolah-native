@@ -42,10 +42,12 @@ final class InstrumentRecord {
     self.binanceSymbol = binanceSymbol
   }
 
-  func toDomain() -> Instrument {
+  /// Throws `BackendError.dataCorrupted` when `kind` carries a raw value
+  /// the compiled `Instrument.Kind` enum doesn't recognise.
+  func toDomain() throws -> Instrument {
     Instrument(
       id: id,
-      kind: Instrument.Kind(rawValue: kind) ?? .fiatCurrency,
+      kind: try Instrument.Kind.decoded(rawValue: kind, label: "Instrument.Kind"),
       name: name,
       decimals: decimals,
       ticker: ticker,

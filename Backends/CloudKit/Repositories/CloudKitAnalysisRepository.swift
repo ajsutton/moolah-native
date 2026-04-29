@@ -238,20 +238,20 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
 
       var instrumentLookup: [String: Instrument] = [:]
       for instrumentRecord in allInstrumentRecords {
-        instrumentLookup[instrumentRecord.id] = instrumentRecord.toDomain()
+        instrumentLookup[instrumentRecord.id] = try instrumentRecord.toDomain()
       }
 
       let legsByTxnId = Dictionary(grouping: allLegRecords, by: \.transactionId)
 
-      var transactions = records.map { record -> Transaction in
+      var transactions = try records.map { record -> Transaction in
         let legRecords = (legsByTxnId[record.id] ?? []).sorted { $0.sortOrder < $1.sortOrder }
-        let legs = legRecords.map { legRecord -> TransactionLeg in
+        let legs = try legRecords.map { legRecord -> TransactionLeg in
           let instrument =
             instrumentLookup[legRecord.instrumentId]
             ?? Instrument.fiat(code: legRecord.instrumentId)
-          return legRecord.toDomain(instrument: instrument)
+          return try legRecord.toDomain(instrument: instrument)
         }
-        return record.toDomain(legs: legs)
+        return try record.toDomain(legs: legs)
       }
 
       switch filter {
@@ -273,9 +273,10 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     return try await MainActor.run {
       let records = try context.fetch(descriptor)
       let instrument = self.instrument
-      return records.map {
+      return try records.map {
         Account(
-          id: $0.id, name: $0.name, type: AccountType(rawValue: $0.type) ?? .bank,
+          id: $0.id, name: $0.name,
+          type: try AccountType.decoded(rawValue: $0.type),
           instrument: instrument,
           position: $0.position, isHidden: $0.isHidden)
       }

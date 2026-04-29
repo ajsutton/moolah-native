@@ -102,8 +102,8 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
         database: database,
         transactionIds: filteredRows.map(\.id),
         instruments: instruments)
-      return filteredRows.map { row in
-        row.toDomain(legs: legsByTxnId[row.id] ?? [])
+      return try filteredRows.map { row in
+        try row.toDomain(legs: legsByTxnId[row.id] ?? [])
       }
     }
   }

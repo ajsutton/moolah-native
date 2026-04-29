@@ -14,7 +14,7 @@ extension InstrumentRow {
     let rows = try InstrumentRow.fetchAll(database)
     var map: [String: Instrument] = [:]
     for row in rows {
-      map[row.id] = row.toDomain()
+      map[row.id] = try row.toDomain()
     }
     for code in Locale.Currency.isoCurrencies.map(\.identifier) where map[code] == nil {
       map[code] = Instrument.fiat(code: code)
@@ -56,10 +56,13 @@ extension InstrumentRow {
   /// Domain projection. Provider-mapping fields are exposed via
   /// `cryptoMapping` for the registry's `allCryptoRegistrations()` path;
   /// the domain `Instrument` itself does not carry them.
-  func toDomain() -> Instrument {
+  ///
+  /// Throws `BackendError.dataCorrupted` when `kind` carries a raw value
+  /// the compiled `Instrument.Kind` enum doesn't recognise.
+  func toDomain() throws -> Instrument {
     Instrument(
       id: id,
-      kind: Instrument.Kind(rawValue: kind) ?? .fiatCurrency,
+      kind: try Instrument.Kind.decoded(rawValue: kind, label: "Instrument.Kind"),
       name: name,
       decimals: decimals,
       ticker: ticker,

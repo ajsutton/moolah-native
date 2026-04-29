@@ -30,15 +30,18 @@ final class AccountRecord {
     self.isHidden = isHidden
   }
 
+  /// Throws `BackendError.dataCorrupted` when `type` carries a raw value
+  /// the compiled `AccountType` enum doesn't recognise — see
+  /// `AccountType.decoded(rawValue:)`.
   func toDomain(
     instruments: [String: Instrument] = [:],
     positions: [Position] = []
-  ) -> Account {
+  ) throws -> Account {
     let instrument = instruments[instrumentId] ?? Instrument.fiat(code: instrumentId)
     return Account(
       id: id,
       name: name,
-      type: AccountType(rawValue: type) ?? .bank,
+      type: try AccountType.decoded(rawValue: type),
       instrument: instrument,
       positions: positions,
       position: position,

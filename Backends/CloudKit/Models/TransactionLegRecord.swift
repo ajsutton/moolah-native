@@ -44,12 +44,15 @@ final class TransactionLegRecord {
     self.sortOrder = sortOrder
   }
 
-  func toDomain(instrument: Instrument) -> TransactionLeg {
+  /// Throws `BackendError.dataCorrupted` when `type` carries a raw value
+  /// the compiled `TransactionType` enum doesn't recognise — see
+  /// `TransactionType.decoded(rawValue:)`.
+  func toDomain(instrument: Instrument) throws -> TransactionLeg {
     TransactionLeg(
       accountId: accountId,
       instrument: instrument,
       quantity: InstrumentAmount(storageValue: quantity, instrument: instrument).quantity,
-      type: TransactionType(rawValue: type) ?? .expense,
+      type: try TransactionType.decoded(rawValue: type),
       categoryId: categoryId,
       earmarkId: earmarkId
     )
