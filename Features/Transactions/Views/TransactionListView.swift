@@ -157,9 +157,16 @@ struct TransactionListView: View {
         Text(errorMessage)
       }
       .task(id: transactionStore.error?.localizedDescription) {
+        // Re-fires whenever the store's error description changes — including
+        // the X → nil transition that follows a successful retry. Without the
+        // `else` branch a stale `showError = true` would survive the error
+        // being cleared by the next `load()`, latching the alert on every
+        // subsequent mount.
         if let error = transactionStore.error {
           errorMessage = error.userMessage
           showError = true
+        } else {
+          showError = false
         }
       }
       .confirmationDialog(
