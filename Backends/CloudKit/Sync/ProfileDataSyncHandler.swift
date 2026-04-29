@@ -28,11 +28,12 @@ final class ProfileDataSyncHandler {
   nonisolated let profileId: UUID
   nonisolated let zoneID: CKRecordZone.ID
   nonisolated let modelContainer: ModelContainer
-  /// GRDB-backed repos for the record types migrated to SQLite. Used by
-  /// the dispatch tables in `+ApplyRemoteChanges`, `+QueueAndDelete`,
-  /// `+RecordLookup`, and `+SystemFields` for the two record types
-  /// covered by `v2_csv_import_and_rules`. Subsequent slices extend the
-  /// list.
+  /// GRDB-backed repos for the record types whose persistence lives in
+  /// SQLite rather than SwiftData. Used by the dispatch tables in
+  /// `+ApplyRemoteChanges`, `+QueueAndDelete`, `+RecordLookup`, and
+  /// `+SystemFields` so each per-type save/delete handler can address
+  /// the right repository without leaking GRDB types into the sync
+  /// engine's wire layer.
   nonisolated let grdbRepositories: ProfileGRDBRepositories
 
   /// Closure fired from `applyRemoteChanges` whenever a remote pull touches

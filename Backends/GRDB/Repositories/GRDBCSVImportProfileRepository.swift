@@ -5,24 +5,20 @@ import GRDB
 
 /// GRDB-backed implementation of `CSVImportProfileRepository`. Replaces
 /// the SwiftData-backed `CloudKitCSVImportProfileRepository` for the
-/// `csv_import_profile` table introduced by `v2_csv_import_and_rules`.
+/// `csv_import_profile` table.
 ///
 /// **Concurrency.** `final class` + `@unchecked Sendable` rather than
-/// `actor`, mirroring the existing CloudKit-repo shape. Plan
-/// `plans/grdb-slice-0-csv-import.md` §3.7 originally recommended `actor`
-/// but flagged the fallback: "If `actor` introduces an `await` cascade
-/// that `@unchecked Sendable` avoided, fall back to the existing
-/// pattern." The cascade does materialise here — `ProfileDataSyncHandler`
-/// sync entry points (`applyBatchSaves`, `recordToSave`,
-/// `setEncodedSystemFields`, etc.) are synchronous and called from
-/// CKSyncEngine delegate paths that are not trivially convertible to
-/// `async` without rippling through every record-type's dispatch table.
-/// Sticking with the class shape keeps slice 0's blast radius tight; the
-/// repo's *public* protocol surface is still `async throws` (writes go
-/// through the GRDB queue's serialised executor; reads do too) so callers
-/// see no concurrency-model change. Hook closures are `let` properties
-/// set during `init` per the plan — post-init reassignment is not
-/// supported.
+/// `actor`. The CKSyncEngine delegate path (`applyBatchSaves`,
+/// `recordToSave`, `setEncodedSystemFields`, …) calls into the
+/// repository's sync entry points synchronously; converting those to
+/// `await` against an `actor` would ripple async propagation through
+/// every per-record-type dispatch table for no concurrency benefit
+/// (the GRDB queue's serial executor already mediates concurrent
+/// access). The repo's *public* protocol surface is still `async
+/// throws` (writes go through the GRDB queue's serialised executor;
+/// reads do too) so callers see no concurrency-model change. Hook
+/// closures are `let` properties set during `init` — post-init
+/// reassignment is not supported.
 ///
 /// **`@unchecked Sendable` justification.** All stored properties are
 /// `let`. `database` (`any DatabaseWriter`) is itself `Sendable` (GRDB

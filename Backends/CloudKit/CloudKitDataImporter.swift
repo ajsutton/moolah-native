@@ -190,6 +190,11 @@ struct CloudKitDataImporter {
   /// `database.write` transaction commits; non-fiat instruments are
   /// upserted up-front so accounts and legs that reference them by id
   /// can resolve their full domain `Instrument` on read.
+  ///
+  /// TODO(#575): make `writeGRDB` `async` and call
+  /// `try await database.write { … }` so heavy imports don't block the
+  /// main thread —
+  /// https://github.com/ajsutton/moolah-native/issues/575
   private func writeGRDB(data: ExportedData) throws {
     try database.write { database in
       try Self.writeInstrumentsAndCategories(data: data, database: database)

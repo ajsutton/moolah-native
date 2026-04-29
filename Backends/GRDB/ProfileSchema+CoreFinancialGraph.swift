@@ -191,6 +191,9 @@ extension ProfileSchema {
             WHERE recur_period IS NOT NULL;
         CREATE INDEX transaction_by_payee
             ON "transaction"(payee) WHERE payee IS NOT NULL;
+        -- TODO(#581): no read caller yet — either wire
+        -- `fetchByImportSession` for the CSV-import revert path or drop
+        -- this index. https://github.com/ajsutton/moolah-native/issues/581
         CREATE INDEX transaction_by_session
             ON "transaction"(import_origin_import_session_id)
             WHERE import_origin_import_session_id IS NOT NULL;

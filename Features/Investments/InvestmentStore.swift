@@ -300,7 +300,7 @@ final class InvestmentStore {
   /// Merged chart data points combining values and balances.
   /// Follows the web app's algorithm: merge by date, forward-fill gaps, compute profit/loss.
   var chartDataPoints: [InvestmentChartDataPoint] {
-    mergeChartData(
+    InvestmentChartData.merge(
       values: values,
       balances: dailyBalances,
       period: selectedPeriod
@@ -309,7 +309,6 @@ final class InvestmentStore {
 
 }
 
-// `mergeChartData` and its private helpers live in
-// `InvestmentChartMerge.swift` so this file stays under SwiftLint's
-// `file_length` budget after the issue-#579 multi-instrument
-// refactoring grew the store body.
+// `InvestmentChartData` (the merge + forward-fill helpers used by
+// `chartDataPoints`) lives in `InvestmentChartData.swift` so this file
+// stays under the file_length budget.

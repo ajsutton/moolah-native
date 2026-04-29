@@ -184,7 +184,7 @@ struct InvestmentStoreTestsMore {
           quantity: dec("1000.00"), instrument: .defaultTestInstrument)),
     ]
 
-    let result = mergeChartData(values: values, balances: balances, period: .all)
+    let result = InvestmentChartData.merge(values: values, balances: balances, period: .all)
 
     #expect(result.count == 2)
     #expect(result[0].value == dec("1000.00"))
@@ -224,7 +224,7 @@ struct InvestmentStoreTestsMore {
           quantity: dec("1000.00"), instrument: .defaultTestInstrument)),
     ]
 
-    let result = mergeChartData(values: values, balances: balances, period: .all)
+    let result = InvestmentChartData.merge(values: values, balances: balances, period: .all)
 
     #expect(result.count == 3)
     // date1: both present
@@ -278,7 +278,7 @@ struct InvestmentStoreTestsMore {
 
     // Filter to 3 months: should include threeMonthsAgo and now,
     // plus pre-period anchors from sixMonthsAgo
-    let result = mergeChartData(values: values, balances: balances, period: .months(3))
+    let result = InvestmentChartData.merge(values: values, balances: balances, period: .months(3))
 
     // Should have data points, and the pre-period value should be anchored
     #expect(result.count >= 2)

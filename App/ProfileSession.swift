@@ -66,6 +66,10 @@ final class ProfileSession: Identifiable {
   /// be tracked). Replaced (with cancellation of the prior handle) on
   /// each call to `schedulePragmaOptimize()`.
   private var pragmaOptimizeTask: Task<Void, Never>?
+  /// Tasks spawned by the investment-store → account-store bridge, kept
+  /// reachable so `cleanupSync` can cancel in-flight balance updates
+  /// (per `guides/CONCURRENCY_GUIDE.md` §8).
+  private var crossStoreUpdateTasks: [Task<Void, Never>] = []
 
   /// Synchronous initialiser — opens the per-profile GRDB queue and runs
   /// pending migrations on the calling thread. The migrator currently only
@@ -140,17 +144,16 @@ final class ProfileSession: Identifiable {
     registerWithSyncCoordinator(syncCoordinator)
   }
 
-  /// Wires the investment-store -> account-store callback so the sidebar
-  /// total updates when a position revalues. The callback is fire-and-forget
-  /// in production; `updateInvestmentValue` awaits its own first conversion
-  /// pass, so the sidebar reflects the new value once the Task completes
-  /// on MainActor.
+  /// Wires the investment-store -> account-store callback. The spawned
+  /// Task is appended to `crossStoreUpdateTasks` so `cleanupSync` can
+  /// cancel in-flight updates if the session is torn down.
   private func wireCrossStoreSideEffects() {
     let accountStore = self.accountStore
-    self.investmentStore.onInvestmentValueChanged = { accountId, latestValue in
-      Task {
+    self.investmentStore.onInvestmentValueChanged = { [weak self] accountId, latestValue in
+      let task = Task { @MainActor in
         await accountStore.updateInvestmentValue(accountId: accountId, value: latestValue)
       }
+      self?.crossStoreUpdateTasks.append(task)
     }
   }
 
@@ -164,14 +167,11 @@ final class ProfileSession: Identifiable {
       logger.warning("CloudKit not available — profile sync disabled for \(profileId)")
       return
     }
-    let zoneID = CKRecordZone.ID(
-      zoneName: "profile-\(profileId.uuidString)",
-      ownerName: CKCurrentUserDefaultName)
     logger.info("Registering profile \(profileId) with sync coordinator")
     self.syncObserverToken = coordinator.addObserver(for: profileId) { [weak self] changedTypes in
       self?.scheduleReloadFromSync(changedTypes: changedTypes)
     }
-    wireRepositorySync(coordinator: coordinator, zoneID: zoneID)
+    wireRepositorySync(coordinator: coordinator)
   }
 
   // MARK: - CloudKit Sync
@@ -238,6 +238,10 @@ final class ProfileSession: Identifiable {
     catalogRefreshTask = nil
     pragmaOptimizeTask?.cancel()
     pragmaOptimizeTask = nil
+    for task in crossStoreUpdateTasks {
+      task.cancel()
+    }
+    crossStoreUpdateTasks.removeAll()
   }
 
   // MARK: - Folder watch
@@ -267,9 +271,10 @@ final class ProfileSession: Identifiable {
   /// are logged but never propagated. Per
   /// `guides/DATABASE_SCHEMA_GUIDE.md` §5, the recommended cadence is once
   /// on app resign-active and at most hourly while active. The on-resign
-  /// hook is wired by `MoolahApp+Lifecycle.handleScenePhaseChange`; the
-  /// hourly-while-active tick is a follow-up — for now profile DBs are
-  /// small enough that the once-per-resign cadence suffices.
+  /// hook is wired by `MoolahApp+Lifecycle.handleScenePhaseChange`.
+  ///
+  /// TODO(#576): add the hourly-while-active tick —
+  /// https://github.com/ajsutton/moolah-native/issues/576
   ///
   /// Runs inside `database.write` because `PRAGMA optimize` may invoke
   /// `ANALYZE` and update the `sqlite_stat1` / `sqlite_stat4` tables — a
@@ -334,13 +339,17 @@ final class ProfileSession: Identifiable {
   /// `containerManager` is supplied (tests / previews build a fresh
   /// in-memory GRDB queue and have nothing to migrate from).
   ///
-  /// Slice 0 of `plans/grdb-migration.md`: MUST run before
-  /// `registerWithSyncCoordinator` so CKSyncEngine reads from a fully
-  /// populated `data.sqlite` on the first sync session.
+  /// Must run before `registerWithSyncCoordinator` so CKSyncEngine
+  /// reads from a fully populated `data.sqlite` on the first sync
+  /// session.
   ///
   /// `@MainActor` is explicit (not inherited from the class) because
   /// `SwiftDataToGRDBMigrator.migrateIfNeeded` is `@MainActor` (the
   /// SwiftData fetch path requires it).
+  ///
+  /// TODO(#575): make this `async` and run the GRDB writes off
+  /// `@MainActor` so heavy first-launch migrations can't block the UI —
+  /// https://github.com/ajsutton/moolah-native/issues/575
   @MainActor
   static func runSwiftDataToGRDBMigrationIfNeeded(
     profileId: UUID,

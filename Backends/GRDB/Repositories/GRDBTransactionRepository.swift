@@ -40,12 +40,7 @@ import OSLog
 /// race; `@unchecked` only waives Swift's structural check that
 /// `final class` types meet `Sendable`'s requirements automatically.
 final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendable {
-  // `private(set) internal var` mirrors `let` immutability (no setter
-  // is exposed externally; `init` runs in the same file as the
-  // declaration, so the implicit private setter is reachable from
-  // there) while keeping read access available to the sibling
-  // extension files (`+Sync.swift`) that need to reach the queue.
-  private(set) var database: any DatabaseWriter
+  let database: any DatabaseWriter
   /// Profile instrument used to label the running balance for global
   /// (non-account-scoped) fetches. Mirrors
   /// `CloudKitTransactionRepository.instrument`.

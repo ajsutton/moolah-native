@@ -37,6 +37,8 @@ extension AccountRow {
     return Account(
       id: id,
       name: name,
+      // TODO(#578): handle unknown raw values explicitly instead of
+      // silently falling back — https://github.com/ajsutton/moolah-native/issues/578
       type: AccountType(rawValue: type) ?? .bank,
       instrument: instrument,
       positions: positions,

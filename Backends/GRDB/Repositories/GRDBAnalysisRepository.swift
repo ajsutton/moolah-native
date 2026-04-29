@@ -149,147 +149,127 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
     let investmentValues: [InvestmentValueSnapshot]
   }
 
+  /// Loads transactions, accounts, and investment values in a single
+  /// `database.read` so every value comes from the same MVCC snapshot.
+  /// Three independent reads under WAL would race a concurrent writer
+  /// and surface internally inconsistent state — e.g. a leg referencing
+  /// an account that hasn't yet appeared in the account list.
   private func fetchSharedData() async throws -> SharedData {
-    let allTransactions = try await fetchTransactions(filter: .all)
-    let accounts = try await fetchAccounts()
-    let nonScheduled = allTransactions.filter { !$0.isScheduled }
-    let scheduled = allTransactions.filter { $0.isScheduled }
-    let investmentAccountIds = Set(accounts.filter { $0.type == .investment }.map(\.id))
-    let investmentValues = try await fetchAllInvestmentValues(
-      investmentAccountIds: investmentAccountIds)
-    return SharedData(
-      nonScheduled: nonScheduled,
-      scheduled: scheduled,
-      accounts: accounts,
-      investmentValues: investmentValues)
+    let resolvedInstrument = self.instrument
+    return try await database.read { database -> SharedData in
+      let allTransactions = try Self.fetchTransactionsSnapshot(
+        filter: .all, database: database)
+      let accounts = try Self.fetchAccountsSnapshot(
+        database: database, instrument: resolvedInstrument)
+      let nonScheduled = allTransactions.filter { !$0.isScheduled }
+      let scheduled = allTransactions.filter { $0.isScheduled }
+      let investmentAccountIds = Set(
+        accounts.filter { $0.type == .investment }.map(\.id))
+      let investmentValues = try Self.fetchAllInvestmentValuesSnapshot(
+        database: database, investmentAccountIds: investmentAccountIds)
+      return SharedData(
+        nonScheduled: nonScheduled,
+        scheduled: scheduled,
+        accounts: accounts,
+        investmentValues: investmentValues)
+    }
   }
 
+  /// Loads every transaction (and its legs) as Domain values.
+  ///
+  /// **Intentional full table scan.** This method drives the analysis
+  /// hot paths and currently materialises every row in `transaction`,
+  /// `transaction_leg`, and `instrument` so the existing Swift-side
+  /// compute helpers can run unchanged. The four covering indexes
+  /// (`leg_analysis_by_type_account`, `leg_analysis_by_type_category`,
+  /// `leg_analysis_by_earmark_type`, `iv_by_account_date_value`) are
+  /// in place but not yet exploited from this path — TODO(#577) pushes
+  /// the per-instrument GROUP BY into SQL and removes the SCAN —
+  /// https://github.com/ajsutton/moolah-native/issues/577
   private func fetchTransactions(filter: ScheduledFilter) async throws -> [Transaction] {
     try await database.read { database -> [Transaction] in
-      let txnRows = try TransactionRow.fetchAll(database)
-      let legRows = try TransactionLegRow.fetchAll(database)
-      let instrumentRows = try InstrumentRow.fetchAll(database)
-
-      var instrumentLookup: [String: Instrument] = [:]
-      for row in instrumentRows {
-        instrumentLookup[row.id] = row.toDomain()
-      }
-
-      let legsByTxnId = Dictionary(grouping: legRows, by: \.transactionId)
-
-      var transactions = txnRows.map { row -> Transaction in
-        let legs =
-          (legsByTxnId[row.id] ?? [])
-          .sorted { $0.sortOrder < $1.sortOrder }
-          .map { legRow -> TransactionLeg in
-            let legInstrument =
-              instrumentLookup[legRow.instrumentId]
-              ?? Instrument.fiat(code: legRow.instrumentId)
-            return legRow.toDomain(instrument: legInstrument)
-          }
-        return row.toDomain(legs: legs)
-      }
-
-      switch filter {
-      case .all:
-        return transactions
-      case .scheduledOnly:
-        transactions = transactions.filter(\.isScheduled)
-      case .nonScheduledOnly:
-        transactions = transactions.filter { !$0.isScheduled }
-      }
-      return transactions
+      try Self.fetchTransactionsSnapshot(filter: filter, database: database)
     }
+  }
+
+  private static func fetchTransactionsSnapshot(
+    filter: ScheduledFilter, database: Database
+  ) throws -> [Transaction] {
+    let txnRows = try TransactionRow.fetchAll(database)
+    let legRows = try TransactionLegRow.fetchAll(database)
+    let instrumentRows = try InstrumentRow.fetchAll(database)
+
+    var instrumentLookup: [String: Instrument] = [:]
+    for row in instrumentRows {
+      instrumentLookup[row.id] = row.toDomain()
+    }
+
+    let legsByTxnId = Dictionary(grouping: legRows, by: \.transactionId)
+
+    var transactions = txnRows.map { row -> Transaction in
+      let legs =
+        (legsByTxnId[row.id] ?? [])
+        .sorted { $0.sortOrder < $1.sortOrder }
+        .map { legRow -> TransactionLeg in
+          let legInstrument =
+            instrumentLookup[legRow.instrumentId]
+            ?? Instrument.fiat(code: legRow.instrumentId)
+          return legRow.toDomain(instrument: legInstrument)
+        }
+      return row.toDomain(legs: legs)
+    }
+
+    switch filter {
+    case .all:
+      return transactions
+    case .scheduledOnly:
+      transactions = transactions.filter(\.isScheduled)
+    case .nonScheduledOnly:
+      transactions = transactions.filter { !$0.isScheduled }
+    }
+    return transactions
   }
 
   private func fetchAccounts() async throws -> [Account] {
     let resolvedInstrument = self.instrument
     return try await database.read { database -> [Account] in
-      let rows = try AccountRow.fetchAll(database)
-      return rows.map { row in
-        Account(
-          id: row.id,
-          name: row.name,
-          type: AccountType(rawValue: row.type) ?? .bank,
-          instrument: resolvedInstrument,
-          position: row.position,
-          isHidden: row.isHidden)
-      }
+      try Self.fetchAccountsSnapshot(database: database, instrument: resolvedInstrument)
     }
   }
 
-  private func fetchAllInvestmentValues(
+  private static func fetchAccountsSnapshot(
+    database: Database, instrument: Instrument
+  ) throws -> [Account] {
+    let rows = try AccountRow.fetchAll(database)
+    return rows.map { row in
+      Account(
+        id: row.id,
+        name: row.name,
+        type: AccountType(rawValue: row.type) ?? .bank,
+        instrument: instrument,
+        position: row.position,
+        isHidden: row.isHidden)
+    }
+  }
+
+  private static func fetchAllInvestmentValuesSnapshot(
+    database: Database,
     investmentAccountIds: Set<UUID>
-  ) async throws -> [InvestmentValueSnapshot] {
+  ) throws -> [InvestmentValueSnapshot] {
     guard !investmentAccountIds.isEmpty else { return [] }
-    return try await database.read { database -> [InvestmentValueSnapshot] in
-      let rows =
-        try InvestmentValueRow
-        .filter(investmentAccountIds.contains(InvestmentValueRow.Columns.accountId))
-        .fetchAll(database)
-      return
-        rows
-        .map { row -> InvestmentValueSnapshot in
-          let value = row.toDomain().value
-          return InvestmentValueSnapshot(
-            accountId: row.accountId,
-            date: row.date,
-            value: value)
-        }
-        .sorted { $0.date < $1.date }
-    }
-  }
-}
-
-// MARK: - Local copy of the shared category-balances accumulator
-
-extension GRDBAnalysisRepository {
-  /// Mirror of `CloudKitAnalysisRepository.CategoryBalancesQuery`. Local
-  /// copy so this implementation does not depend on the CloudKit repo's
-  /// nested types beyond the static compute helpers.
-  private struct CategoryBalancesQuery: Sendable {
-    let dateRange: ClosedRange<Date>
-    let transactionType: TransactionType
-    let filters: TransactionFilter?
-    let targetInstrument: Instrument
-    let conversionService: any InstrumentConversionService
-
-    func shouldInclude(_ transaction: Transaction) -> Bool {
-      guard dateRange.contains(transaction.date) else { return false }
-      guard transaction.recurPeriod == nil else { return false }
-      if let accountId = filters?.accountId,
-        !transaction.accountIds.contains(accountId)
-      {
-        return false
+    let rows =
+      try InvestmentValueRow
+      .filter(investmentAccountIds.contains(InvestmentValueRow.Columns.accountId))
+      .fetchAll(database)
+    return
+      rows
+      .map { row -> InvestmentValueSnapshot in
+        let value = row.toDomain().value
+        return InvestmentValueSnapshot(
+          accountId: row.accountId,
+          date: row.date,
+          value: value)
       }
-      if let payee = filters?.payee, transaction.payee != payee {
-        return false
-      }
-      return true
-    }
-
-    func accumulate(
-      transaction: Transaction,
-      into balances: inout [UUID: InstrumentAmount]
-    ) async throws {
-      for leg in transaction.legs {
-        guard leg.type == transactionType else { continue }
-        guard let categoryId = leg.categoryId else { continue }
-        if let earmarkId = filters?.earmarkId, leg.earmarkId != earmarkId {
-          continue
-        }
-        if let categoryIds = filters?.categoryIds, !categoryIds.isEmpty,
-          !categoryIds.contains(categoryId)
-        {
-          continue
-        }
-        let amount = try await CloudKitAnalysisRepository.convertedAmount(
-          leg,
-          to: targetInstrument,
-          on: transaction.date,
-          conversionService: conversionService)
-        balances[categoryId, default: .zero(instrument: targetInstrument)] += amount
-      }
-    }
+      .sorted { $0.date < $1.date }
   }
 }

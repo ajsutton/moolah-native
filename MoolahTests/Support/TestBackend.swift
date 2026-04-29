@@ -9,7 +9,12 @@ import GRDB
 /// failure here means the test harness is broken and the suite cannot
 /// proceed. Trapping keeps seed call sites free of `try!` without
 /// forcing every seed helper (and its hundreds of callers) to throw.
-private func writeOrTrap(
+///
+/// Marked `nonisolated` so the synchronous GRDB write doesn't block
+/// the main actor when callers happen to be `@MainActor`-isolated test
+/// methods. The GRDB queue mediates concurrent access internally; the
+/// only state this helper touches is the (`Sendable`) database handle.
+nonisolated private func writeOrTrap(
   _ database: any DatabaseWriter,
   file: StaticString = #file,
   line: UInt = #line,
