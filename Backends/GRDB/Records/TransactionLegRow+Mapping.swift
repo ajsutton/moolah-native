@@ -45,6 +45,8 @@ extension TransactionLegRow {
       accountId: accountId,
       instrument: instrument,
       quantity: InstrumentAmount(storageValue: quantity, instrument: instrument).quantity,
+      // TODO(#578): handle unknown raw values explicitly instead of
+      // silently falling back — https://github.com/ajsutton/moolah-native/issues/578
       type: TransactionType(rawValue: type) ?? .expense,
       categoryId: categoryId,
       earmarkId: earmarkId

@@ -163,4 +163,171 @@ struct RepositoryHookRecordTypeTests {
     }
     #expect(budgetEmits.count == 1)
   }
+
+  // MARK: - CategoryRepository
+
+  /// Pins the multi-type fan-out from `delete(id:withReplacement:)`.
+  /// The cascade emits four record types in one call: the deleted
+  /// category itself, any orphaned children (CategoryRecord), any legs
+  /// whose category was reassigned to the replacement
+  /// (TransactionLegRecord), and any budget items that were either
+  /// rerouted or deleted (EarmarkBudgetItemRecord). A regression that
+  /// mis-tags any one of these emits would silently corrupt sync —
+  /// `nextRecordZoneChangeBatch` keys off the recordType string.
+  @Test(
+    "delete cascade tags Category, TransactionLeg, and EarmarkBudgetItem with their own record types"
+  )
+  func categoryDeleteEmitsCascadingRecordTypes() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let capture = HookCapture()
+    let categoryRepo = GRDBCategoryRepository(
+      database: database,
+      onRecordChanged: makeChangedHook(capture),
+      onRecordDeleted: makeDeletedHook(capture))
+
+    let ids = CategoryDeleteFixtureIds()
+    try await seedCategoryDeleteFixture(in: database, ids: ids)
+
+    try await categoryRepo.delete(id: ids.parentId, withReplacement: ids.replacementId)
+    try await drainHookHops()
+    let parentId = ids.parentId
+    let childId = ids.childId
+    let legId = ids.legId
+    let budgetItemId = ids.budgetItemId
+
+    // 1. The deleted category itself — exactly one CategoryRecord delete
+    //    keyed by parentId.
+    let categoryDeletes = capture.deleted.filter { $0.recordType == CategoryRow.recordType }
+    #expect(categoryDeletes.map(\.id) == [parentId])
+
+    // 2. Orphaned child — emitted as CategoryRecord *change* (parent_id
+    //    nulled), not delete.
+    let categoryChanges = capture.changed.filter { $0.recordType == CategoryRow.recordType }
+    #expect(categoryChanges.map(\.id) == [childId])
+
+    // 3. Reassigned leg — emitted as TransactionLegRecord change.
+    let legChanges = capture.changed.filter { $0.recordType == TransactionLegRow.recordType }
+    #expect(legChanges.map(\.id) == [legId])
+
+    // 4. Budget item whose category was rerouted to the replacement —
+    //    emitted as EarmarkBudgetItemRecord change (no duplicate exists,
+    //    so the row is updated rather than deleted).
+    let budgetChanges = capture.changed.filter {
+      $0.recordType == EarmarkBudgetItemRow.recordType
+    }
+    #expect(budgetChanges.map(\.id) == [budgetItemId])
+
+    // No EarmarkRecord emits — earmark itself wasn't touched.
+    let earmarkEmits = capture.changed.filter { $0.recordType == EarmarkRow.recordType }
+    #expect(earmarkEmits.isEmpty)
+  }
+
+  // MARK: - Category-delete fixture
+
+  /// IDs threaded through `seedCategoryDeleteFixture` so the test can
+  /// assert against them by name rather than by re-fetching.
+  private struct CategoryDeleteFixtureIds {
+    let parentId = UUID()
+    let childId = UUID()
+    let replacementId = UUID()
+    let accountId = UUID()
+    let earmarkId = UUID()
+    let legId = UUID()
+    let budgetItemId = UUID()
+    let txnId = UUID()
+  }
+
+  /// Seeds a fixture covering every record type the category-delete
+  /// cascade fans out to. Splits the writes across small per-topic
+  /// transactions to keep the closure body under SwiftLint's length
+  /// budget; correctness only requires that all rows are present
+  /// before the test drives `delete`, not that they share a write.
+  private func seedCategoryDeleteFixture(
+    in database: any DatabaseWriter, ids: CategoryDeleteFixtureIds
+  ) async throws {
+    try await seedCategories(in: database, ids: ids)
+    try await seedAccountAndEarmark(in: database, ids: ids)
+    try await seedBudgetAndTransaction(in: database, ids: ids)
+  }
+
+  private func seedCategories(
+    in database: any DatabaseWriter, ids: CategoryDeleteFixtureIds
+  ) async throws {
+    try await database.write { database in
+      try CategoryRow(domain: Moolah.Category(id: ids.parentId, name: "Parent"))
+        .insert(database)
+      try CategoryRow(
+        domain: Moolah.Category(id: ids.childId, name: "Child", parentId: ids.parentId)
+      ).insert(database)
+      try CategoryRow(domain: Moolah.Category(id: ids.replacementId, name: "Replacement"))
+        .insert(database)
+    }
+  }
+
+  private func seedAccountAndEarmark(
+    in database: any DatabaseWriter, ids: CategoryDeleteFixtureIds
+  ) async throws {
+    try await database.write { database in
+      try AccountRow(
+        domain: Account(id: ids.accountId, name: "Cash", type: .bank, instrument: .AUD)
+      ).insert(database)
+      try EarmarkRow(
+        domain: Earmark(id: ids.earmarkId, name: "Holiday", instrument: .AUD)
+      ).insert(database)
+    }
+  }
+
+  private func seedBudgetAndTransaction(
+    in database: any DatabaseWriter, ids: CategoryDeleteFixtureIds
+  ) async throws {
+    try await seedBudgetItem(in: database, ids: ids)
+    try await seedTransactionAndLeg(in: database, ids: ids)
+  }
+
+  private func seedBudgetItem(
+    in database: any DatabaseWriter, ids: CategoryDeleteFixtureIds
+  ) async throws {
+    try await database.write { database in
+      try EarmarkBudgetItemRow(
+        id: ids.budgetItemId,
+        recordName: EarmarkBudgetItemRow.recordName(for: ids.budgetItemId),
+        earmarkId: ids.earmarkId,
+        categoryId: ids.parentId,
+        amount: 1_000,
+        instrumentId: Instrument.AUD.id,
+        encodedSystemFields: nil
+      ).insert(database)
+    }
+  }
+
+  private func seedTransactionAndLeg(
+    in database: any DatabaseWriter, ids: CategoryDeleteFixtureIds
+  ) async throws {
+    let txn = TransactionRow(
+      id: ids.txnId,
+      recordName: TransactionRow.recordName(for: ids.txnId),
+      date: Date(), payee: "Train", notes: nil,
+      recurPeriod: nil, recurEvery: nil,
+      importOriginRawDescription: nil, importOriginBankReference: nil,
+      importOriginRawAmount: nil, importOriginRawBalance: nil,
+      importOriginImportedAt: nil, importOriginImportSessionId: nil,
+      importOriginSourceFilename: nil, importOriginParserIdentifier: nil,
+      encodedSystemFields: nil)
+    let leg = TransactionLegRow(
+      id: ids.legId,
+      recordName: TransactionLegRow.recordName(for: ids.legId),
+      transactionId: ids.txnId,
+      accountId: ids.accountId,
+      instrumentId: Instrument.AUD.id,
+      quantity: -100,
+      type: TransactionType.expense.rawValue,
+      categoryId: ids.parentId,
+      earmarkId: nil,
+      sortOrder: 0,
+      encodedSystemFields: nil)
+    try await database.write { database in
+      try txn.insert(database)
+      try leg.insert(database)
+    }
+  }
 }

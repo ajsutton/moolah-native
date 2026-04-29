@@ -291,7 +291,7 @@ final class InvestmentStore {
   /// Merged chart data points combining values and balances.
   /// Follows the web app's algorithm: merge by date, forward-fill gaps, compute profit/loss.
   var chartDataPoints: [InvestmentChartDataPoint] {
-    mergeChartData(
+    InvestmentChartData.merge(
       values: values,
       balances: dailyBalances,
       period: selectedPeriod
@@ -300,100 +300,6 @@ final class InvestmentStore {
 
 }
 
-// MARK: - Chart Data Merging
-
-/// Merges investment values and daily balances into chart data points.
-/// Algorithm ported from InvestmentValueGraph.vue:61-141.
-func mergeChartData(
-  values: [InvestmentValue],
-  balances: [AccountDailyBalance],
-  period: TimePeriod
-) -> [InvestmentChartDataPoint] {
-  let startDate = period.startDate
-  let collected = collectChartDataByDate(
-    values: values, balances: balances, startDate: startDate)
-  return forwardFillChartData(dataByDate: collected)
-}
-
-private func collectChartDataByDate(
-  values: [InvestmentValue],
-  balances: [AccountDailyBalance],
-  startDate: Date?
-) -> [Date: (value: Decimal?, balance: Decimal?)] {
-  var dataByDate: [Date: (value: Decimal?, balance: Decimal?)] = [:]
-  var startValue: InvestmentValue?
-  var startBalance: AccountDailyBalance?
-
-  for value in values {
-    if let startDate, value.date < startDate {
-      if value.date > (startValue?.date ?? .distantPast) { startValue = value }
-      continue
-    }
-    let existing = dataByDate[value.date]
-    dataByDate[value.date] = (value: value.value.quantity, balance: existing?.balance)
-  }
-
-  for balance in balances {
-    if let startDate, balance.date < startDate {
-      if balance.date > (startBalance?.date ?? .distantPast) { startBalance = balance }
-      continue
-    }
-    let existing = dataByDate[balance.date]
-    dataByDate[balance.date] = (value: existing?.value, balance: balance.balance.quantity)
-  }
-
-  // If we have pre-period values, add them at the start date
-  if let startDate {
-    if let seedValue = startValue {
-      let existing = dataByDate[startDate]
-      dataByDate[startDate] = (
-        value: existing?.value ?? seedValue.value.quantity,
-        balance: existing?.balance
-      )
-    }
-    if let seedBalance = startBalance {
-      let existing = dataByDate[startDate]
-      dataByDate[startDate] = (
-        value: existing?.value,
-        balance: existing?.balance ?? seedBalance.balance.quantity
-      )
-    }
-  }
-  return dataByDate
-}
-
-private func forwardFillChartData(
-  dataByDate: [Date: (value: Decimal?, balance: Decimal?)]
-) -> [InvestmentChartDataPoint] {
-  var sorted = dataByDate.map { (date: $0.key, value: $0.value.value, balance: $0.value.balance) }
-  sorted.sort { $0.date < $1.date }
-
-  var lastValue: Decimal?
-  var lastBalance: Decimal?
-  var result: [InvestmentChartDataPoint] = []
-
-  for item in sorted {
-    let currentValue = item.value ?? lastValue
-    let currentBalance = item.balance ?? lastBalance
-
-    if let itemValue = item.value { lastValue = itemValue }
-    if let itemBalance = item.balance { lastBalance = itemBalance }
-
-    let profitLoss: Decimal? =
-      if let value = currentValue, let balance = currentBalance {
-        value - balance
-      } else {
-        nil
-      }
-
-    result.append(
-      InvestmentChartDataPoint(
-        date: item.date,
-        value: currentValue,
-        balance: currentBalance,
-        profitLoss: profitLoss
-      ))
-  }
-
-  return result
-}
+// `InvestmentChartData` (the merge + forward-fill helpers used by
+// `chartDataPoints`) lives in `InvestmentChartData.swift` so this file
+// stays under the file_length budget.

@@ -31,16 +31,20 @@ struct AnalysisPlanPinningTests {
     try ProfileDatabase.openInMemory()
   }
 
-  /// Returns the joined `detail` column from the EXPLAIN QUERY PLAN rows.
-  /// Joining keeps `contains` checks readable and matches the format the
-  /// SQLite docs use to describe plans.
+  /// Returns the joined `detail` column from the EXPLAIN QUERY PLAN rows
+  /// for the given query. Callers pass the bare query SQL (without the
+  /// `EXPLAIN QUERY PLAN` prefix) — the helper prepends the directive
+  /// via string concatenation so the `sql:` argument carries no string
+  /// interpolation, satisfying `guides/DATABASE_CODE_GUIDE.md` §4.
+  /// Joining the `detail` column keeps `contains` checks readable and
+  /// matches the format the SQLite docs use to describe plans.
   private func planDetail(
-    _ database: DatabaseQueue, sql: String, arguments: StatementArguments = []
+    _ database: DatabaseQueue, query: String, arguments: StatementArguments = []
   ) throws -> String {
     try database.read { database in
-      let rows = try Row.fetchAll(
-        database, sql: "EXPLAIN QUERY PLAN \(sql)", arguments: arguments)
-      return rows.compactMap { $0["detail"] as? String }.joined(separator: "; ")
+      let planSQL = "EXPLAIN QUERY PLAN " + query
+      let rows = try Row.fetchAll(database, sql: planSQL, arguments: arguments)
+      return rows.compactMap { $0["detail"] as String? }.joined(separator: "; ")
     }
   }
 
@@ -61,7 +65,7 @@ struct AnalysisPlanPinningTests {
     // line in the plan is the regression signal.
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT payee
         FROM "transaction"
         WHERE payee IS NOT NULL
@@ -79,7 +83,7 @@ struct AnalysisPlanPinningTests {
     let database = try makeDatabase()
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT id FROM "transaction" WHERE payee = ?
         """,
       arguments: ["Coffee"])
@@ -92,7 +96,7 @@ struct AnalysisPlanPinningTests {
     let database = try makeDatabase()
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT id FROM "transaction" WHERE date >= ? ORDER BY date
         """,
       arguments: [Date()])
@@ -109,7 +113,7 @@ struct AnalysisPlanPinningTests {
     // ordered by date — outside the partial-index test's scope.
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT id FROM "transaction" WHERE recur_period IS NOT NULL
         """)
     #expect(detail.contains("transaction_scheduled"))
@@ -123,7 +127,7 @@ struct AnalysisPlanPinningTests {
     let database = try makeDatabase()
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT id FROM transaction_leg WHERE transaction_id = ?
         """,
       arguments: [UUID()])
@@ -136,7 +140,7 @@ struct AnalysisPlanPinningTests {
     let database = try makeDatabase()
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT id FROM transaction_leg WHERE account_id = ?
         """,
       arguments: [UUID()])
@@ -149,7 +153,7 @@ struct AnalysisPlanPinningTests {
     let database = try makeDatabase()
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT id FROM transaction_leg WHERE category_id = ?
         """,
       arguments: [UUID()])
@@ -162,7 +166,7 @@ struct AnalysisPlanPinningTests {
     let database = try makeDatabase()
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT id FROM transaction_leg WHERE earmark_id = ?
         """,
       arguments: [UUID()])
@@ -177,7 +181,7 @@ struct AnalysisPlanPinningTests {
     let database = try makeDatabase()
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT id FROM investment_value WHERE account_id = ? ORDER BY date DESC LIMIT 50
         """,
       arguments: [UUID()])
@@ -196,7 +200,7 @@ struct AnalysisPlanPinningTests {
     let database = try makeDatabase()
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT id FROM earmark_budget_item WHERE earmark_id = ?
         """,
       arguments: [UUID()])
@@ -209,7 +213,7 @@ struct AnalysisPlanPinningTests {
     let database = try makeDatabase()
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT id FROM earmark_budget_item WHERE category_id = ?
         """,
       arguments: [UUID()])
@@ -224,7 +228,7 @@ struct AnalysisPlanPinningTests {
     let database = try makeDatabase()
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT id FROM category WHERE parent_id = ?
         """,
       arguments: [UUID()])
@@ -239,7 +243,7 @@ struct AnalysisPlanPinningTests {
     let database = try makeDatabase()
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT id FROM account ORDER BY position
         """)
     #expect(detail.contains("account_by_position"))
@@ -253,11 +257,31 @@ struct AnalysisPlanPinningTests {
     let database = try makeDatabase()
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT id FROM earmark ORDER BY position
         """)
     #expect(detail.contains("earmark_by_position"))
     #expect(!detail.contains("USE TEMP B-TREE"))
+  }
+
+  // MARK: - Analysis full-table reads (intentional)
+
+  /// Pins the *current* shape of `GRDBAnalysisRepository.fetchTransactions`
+  /// — three full-table reads against `transaction`, `transaction_leg`,
+  /// and `instrument`. Not an index-driven query: the analysis path
+  /// materialises every row into Swift values today. The test exists so
+  /// the ratchet flips when TODO(#577) pushes the per-instrument
+  /// GROUP BY into SQL — the SCAN should disappear once the rewrite
+  /// lands. https://github.com/ajsutton/moolah-native/issues/577
+  @Test("analysis-path fetchTransactions is an intentional SCAN until #577 lands")
+  func analysisFetchTransactionsScansByDesign() throws {
+    let database = try makeDatabase()
+    // SQLite's EXPLAIN QUERY PLAN strips the table-name quotes when it
+    // emits the SCAN line, so the assertion drops them too.
+    let txnPlan = try planDetail(database, query: "SELECT * FROM \"transaction\"")
+    let legPlan = try planDetail(database, query: "SELECT * FROM transaction_leg")
+    #expect(txnPlan.contains("SCAN transaction"))
+    #expect(legPlan.contains("SCAN transaction_leg"))
   }
 
   // MARK: - Aggregations
@@ -270,7 +294,7 @@ struct AnalysisPlanPinningTests {
     // group `(account_id, instrument_id)` without scanning every leg.
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT leg.account_id     AS account_id,
                leg.instrument_id  AS instrument_id,
                SUM(leg.quantity)  AS quantity
@@ -299,7 +323,7 @@ struct AnalysisPlanPinningTests {
     // Mirrors `GRDBEarmarkRepository.computeEarmarkPositions`.
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT leg.earmark_id     AS earmark_id,
                leg.instrument_id  AS instrument_id,
                leg.type           AS type,

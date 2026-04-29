@@ -62,6 +62,15 @@ final class ProfileContainerManager {
   /// and the import path share writes; on-disk managers re-open the
   /// same `data.sqlite` either way but caching avoids redundant
   /// migrator runs.
+  ///
+  /// **Cache-fill safety.** This method is `@MainActor`-isolated, so
+  /// the check-then-store sequence below is atomic with respect to
+  /// other callers — Swift serialises every entry to `database(for:)`
+  /// through the main actor's executor. The `ProfileDatabase.open(at:)`
+  /// call may block briefly on disk I/O, but the next `database(for:)`
+  /// call cannot run until this one returns and the cache is populated.
+  /// If this type is ever made non-isolated, this routine needs an
+  /// explicit lock around the dictionary mutation.
   func database(for profileId: UUID) throws -> DatabaseQueue {
     if let existing = databases[profileId] {
       return existing

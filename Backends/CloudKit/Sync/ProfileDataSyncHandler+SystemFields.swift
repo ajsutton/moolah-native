@@ -13,11 +13,14 @@ extension ProfileDataSyncHandler {
     }
   }
 
-  /// Per-record-type clear operations, in dependency order.
+  /// Per-record-type clear operations, listed in the same dependency
+  /// order `deleteLocalData()` uses (parents before children, with the
+  /// CSV-import / import-rule pair at the end). Independent updates so
+  /// the order doesn't affect correctness, but matching the two lists
+  /// keeps a future maintainer from getting them out of step when a
+  /// new record type is added.
   private func clearOperations() -> [(String, () throws -> Void)] {
     [
-      (CSVImportProfileRow.recordType, grdbRepositories.csvImportProfiles.clearAllSystemFieldsSync),
-      (ImportRuleRow.recordType, grdbRepositories.importRules.clearAllSystemFieldsSync),
       (InstrumentRow.recordType, grdbRepositories.instruments.clearAllSystemFieldsSync),
       (CategoryRow.recordType, grdbRepositories.categories.clearAllSystemFieldsSync),
       (AccountRow.recordType, grdbRepositories.accounts.clearAllSystemFieldsSync),
@@ -29,6 +32,8 @@ extension ProfileDataSyncHandler {
       (InvestmentValueRow.recordType, grdbRepositories.investmentValues.clearAllSystemFieldsSync),
       (TransactionRow.recordType, grdbRepositories.transactions.clearAllSystemFieldsSync),
       (TransactionLegRow.recordType, grdbRepositories.transactionLegs.clearAllSystemFieldsSync),
+      (CSVImportProfileRow.recordType, grdbRepositories.csvImportProfiles.clearAllSystemFieldsSync),
+      (ImportRuleRow.recordType, grdbRepositories.importRules.clearAllSystemFieldsSync),
     ]
   }
 

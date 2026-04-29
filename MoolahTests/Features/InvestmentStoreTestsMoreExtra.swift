@@ -25,7 +25,7 @@ struct InvestmentStoreTestsMoreExtra {
 
   @Test("Empty data produces empty chart data points")
   func testChartDataPointsEmpty() {
-    let result = mergeChartData(values: [], balances: [], period: .all)
+    let result = InvestmentChartData.merge(values: [], balances: [], period: .all)
     #expect(result.isEmpty)
   }
 

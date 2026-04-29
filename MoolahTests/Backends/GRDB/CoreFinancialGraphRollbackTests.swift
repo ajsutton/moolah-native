@@ -163,7 +163,16 @@ struct CoreFinancialGraphRollbackTests {
     // deletes existing legs, then re-inserts the new ones — the trigger
     // fires on the first re-insert, and the header update plus the
     // pre-update leg deletes must roll back.
-    try await installFailingLegInsertTrigger(in: database, name: "fail_txn_update_leg")
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER fail_txn_update_leg
+          BEFORE INSERT ON transaction_leg
+          BEGIN
+              SELECT RAISE(ABORT, 'forced failure for rollback test');
+          END;
+          """)
+    }
 
     let mutated = Transaction(
       id: txn.id, date: txn.date, payee: "Tea", notes: nil,
@@ -213,19 +222,52 @@ struct CoreFinancialGraphRollbackTests {
     }
   }
 
-  private func installFailingLegInsertTrigger(
-    in database: any DatabaseWriter, name: String
-  ) async throws {
+  // MARK: - GRDBAccountRepository.update(_:)
+
+  /// `update(_:)` does a fetch-then-update inside one `write` block;
+  /// after the fix, the post-update position read also runs inside the
+  /// same write transaction. A failure mid-update must leave the row
+  /// byte-equal to its pre-call state. The fixture forces the failure
+  /// via a BEFORE-UPDATE trigger so the row's first-pass UPDATE aborts
+  /// after the row was loaded for mutation.
+  @Test
+  func accountUpdateRollsBackOnFailure() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let repo = GRDBAccountRepository(database: database)
+
+    let id = UUID()
+    let original = Account(id: id, name: "Original", type: .bank, instrument: .AUD)
+    _ = try await repo.create(original, openingBalance: nil)
+
     try await database.write { database in
       try database.execute(
         sql: """
-          CREATE TRIGGER \(name)
-          BEFORE INSERT ON transaction_leg
+          CREATE TRIGGER fail_account_update
+          BEFORE UPDATE ON account
           BEGIN
               SELECT RAISE(ABORT, 'forced failure for rollback test');
           END;
           """)
     }
+
+    let mutated = Account(
+      id: id, name: "Renamed", type: .bank, instrument: .AUD,
+      position: 99, isHidden: true)
+    do {
+      _ = try await repo.update(mutated)
+      Issue.record("update should have thrown but did not")
+    } catch {
+      // Expected.
+    }
+
+    // Original row survived byte-equal to the pre-update snapshot.
+    let surviving = try await database.read { database in
+      try AccountRow.filter(AccountRow.Columns.id == id).fetchOne(database)
+    }
+    let row = try #require(surviving)
+    #expect(row.name == "Original")
+    #expect(row.position != 99)
+    #expect(row.isHidden == false)
   }
 
   // MARK: - GRDBEarmarkRepository.setBudget(...)
