@@ -33,6 +33,13 @@ final class SessionManager {
   /// migration error). On failure we crash with a descriptive message —
   /// the app cannot meaningfully run without per-profile storage and
   /// silent fallback would mask data loss.
+  ///
+  /// Synchronous so SwiftUI view bodies can call it directly. The
+  /// SwiftData → GRDB migration that used to run inside
+  /// `ProfileSession.init` now lives in `session.setUp()` (issue #575)
+  /// and is scheduled here as a background task so it runs off
+  /// `@MainActor`. Callers that need the migration to be observed (e.g.
+  /// tests) can `await session.setUp()` to wait for completion.
   func session(for profile: Profile) -> ProfileSession {
     if let existing = sessions[profile.id] { return existing }
     let session: ProfileSession
@@ -43,6 +50,7 @@ final class SessionManager {
       fatalError("Failed to open profile database for \(profile.id): \(error)")
     }
     sessions[profile.id] = session
+    Task { try? await session.setUp() }
     return session
   }
 
@@ -72,16 +80,21 @@ final class SessionManager {
   }
 
   /// Replaces the session for a profile with a fresh instance
-  /// (e.g. when the profile's server URL changes).
+  /// (e.g. when the profile's server URL changes). Schedules `setUp()`
+  /// on the new session so the migration runs off `@MainActor` (see
+  /// `session(for:)` for the same pattern).
   func rebuildSession(for profile: Profile) {
     if let oldSession = sessions[profile.id], let syncCoordinator {
       oldSession.cleanupSync(coordinator: syncCoordinator)
     }
+    let session: ProfileSession
     do {
-      sessions[profile.id] = try ProfileSession(
+      session = try ProfileSession(
         profile: profile, containerManager: containerManager, syncCoordinator: syncCoordinator)
     } catch {
       fatalError("Failed to rebuild profile database for \(profile.id): \(error)")
     }
+    sessions[profile.id] = session
+    Task { try? await session.setUp() }
   }
 }

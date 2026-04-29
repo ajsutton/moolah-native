@@ -18,7 +18,7 @@ extension SwiftDataToGRDBMigrator {
     modelContainer: ModelContainer,
     database: any DatabaseWriter,
     defaults: UserDefaults
-  ) throws {
+  ) async throws {
     guard !defaults.bool(forKey: Self.earmarksFlag) else { return }
     var committed = false
     var rowCount = 0
@@ -32,23 +32,14 @@ extension SwiftDataToGRDBMigrator {
           """)
       }
     }
-    let context = ModelContext(modelContainer)
-    let descriptor = FetchDescriptor<EarmarkRecord>()
-    let sourceRows: [EarmarkRecord]
-    do {
-      sourceRows = try context.fetch(descriptor)
-    } catch {
-      logger.error(
-        """
-        SwiftData fetch for EarmarkRecord failed during GRDB \
-        migration: \(error.localizedDescription, privacy: .public). \
-        Migration aborted; will retry next launch.
-        """)
-      throw error
-    }
-    let mappedRows = sourceRows.map(Self.mapEarmark(_:))
+    let mappedRows = try Self.fetchSwiftDataRows(
+      modelContainer: modelContainer,
+      recordTypeDescription: "EarmarkRecord",
+      type: EarmarkRecord.self,
+      mapper: Self.mapEarmark(_:),
+      logger: logger)
     if !mappedRows.isEmpty {
-      try database.write { database in
+      try await database.write { database in
         for row in mappedRows {
           try row.upsert(database)
         }
@@ -83,7 +74,7 @@ extension SwiftDataToGRDBMigrator {
     modelContainer: ModelContainer,
     database: any DatabaseWriter,
     defaults: UserDefaults
-  ) throws {
+  ) async throws {
     guard !defaults.bool(forKey: Self.earmarkBudgetItemsFlag) else { return }
     var committed = false
     var rowCount = 0
@@ -97,23 +88,14 @@ extension SwiftDataToGRDBMigrator {
           """)
       }
     }
-    let context = ModelContext(modelContainer)
-    let descriptor = FetchDescriptor<EarmarkBudgetItemRecord>()
-    let sourceRows: [EarmarkBudgetItemRecord]
-    do {
-      sourceRows = try context.fetch(descriptor)
-    } catch {
-      logger.error(
-        """
-        SwiftData fetch for EarmarkBudgetItemRecord failed during GRDB \
-        migration: \(error.localizedDescription, privacy: .public). \
-        Migration aborted; will retry next launch.
-        """)
-      throw error
-    }
-    let mappedRows = sourceRows.map(Self.mapEarmarkBudgetItem(_:))
+    let mappedRows = try Self.fetchSwiftDataRows(
+      modelContainer: modelContainer,
+      recordTypeDescription: "EarmarkBudgetItemRecord",
+      type: EarmarkBudgetItemRecord.self,
+      mapper: Self.mapEarmarkBudgetItem(_:),
+      logger: logger)
     if !mappedRows.isEmpty {
-      try database.write { database in
+      try await database.write { database in
         for row in mappedRows {
           try row.upsert(database)
         }
@@ -142,7 +124,7 @@ extension SwiftDataToGRDBMigrator {
     modelContainer: ModelContainer,
     database: any DatabaseWriter,
     defaults: UserDefaults
-  ) throws {
+  ) async throws {
     guard !defaults.bool(forKey: Self.investmentValuesFlag) else { return }
     var committed = false
     var rowCount = 0
@@ -156,23 +138,14 @@ extension SwiftDataToGRDBMigrator {
           """)
       }
     }
-    let context = ModelContext(modelContainer)
-    let descriptor = FetchDescriptor<InvestmentValueRecord>()
-    let sourceRows: [InvestmentValueRecord]
-    do {
-      sourceRows = try context.fetch(descriptor)
-    } catch {
-      logger.error(
-        """
-        SwiftData fetch for InvestmentValueRecord failed during GRDB \
-        migration: \(error.localizedDescription, privacy: .public). \
-        Migration aborted; will retry next launch.
-        """)
-      throw error
-    }
-    let mappedRows = sourceRows.map(Self.mapInvestmentValue(_:))
+    let mappedRows = try Self.fetchSwiftDataRows(
+      modelContainer: modelContainer,
+      recordTypeDescription: "InvestmentValueRecord",
+      type: InvestmentValueRecord.self,
+      mapper: Self.mapInvestmentValue(_:),
+      logger: logger)
     if !mappedRows.isEmpty {
-      try database.write { database in
+      try await database.write { database in
         for row in mappedRows {
           try row.upsert(database)
         }

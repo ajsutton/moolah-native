@@ -56,7 +56,7 @@ struct SwiftDataToGRDBMigratorTests {
 
     let defaults = makeIsolatedDefaults()
     let migrator = SwiftDataToGRDBMigrator()
-    try migrator.migrateIfNeeded(
+    try await migrator.migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
 
     #expect(defaults.bool(forKey: SwiftDataToGRDBMigrator.csvImportProfilesFlag))
@@ -93,7 +93,7 @@ struct SwiftDataToGRDBMigratorTests {
 
     let defaults = makeIsolatedDefaults()
     let migrator = SwiftDataToGRDBMigrator()
-    try migrator.migrateIfNeeded(
+    try await migrator.migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
 
     // Add a row to SwiftData after the flag is set: a true no-op should
@@ -106,7 +106,7 @@ struct SwiftDataToGRDBMigratorTests {
     context.insert(extra)
     try context.save()
 
-    try migrator.migrateIfNeeded(
+    try await migrator.migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
 
     let count = try await database.read { database in
@@ -144,7 +144,7 @@ struct SwiftDataToGRDBMigratorTests {
 
     let defaults = makeIsolatedDefaults()
     let migrator = SwiftDataToGRDBMigrator()
-    try migrator.migrateIfNeeded(
+    try await migrator.migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
 
     #expect(defaults.bool(forKey: SwiftDataToGRDBMigrator.importRulesFlag))
@@ -172,7 +172,7 @@ struct SwiftDataToGRDBMigratorTests {
     let database = try ProfileDatabase.openInMemory()
     let defaults = makeIsolatedDefaults()
     let migrator = SwiftDataToGRDBMigrator()
-    try migrator.migrateIfNeeded(
+    try await migrator.migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
 
     let csvCount = try await database.read { database in
@@ -221,8 +221,8 @@ struct SwiftDataToGRDBMigratorTests {
 
     let defaults = makeIsolatedDefaults()
     let migrator = SwiftDataToGRDBMigrator()
-    #expect(throws: (any Error).self) {
-      try migrator.migrateIfNeeded(
+    await #expect(throws: (any Error).self) {
+      try await migrator.migrateIfNeeded(
         modelContainer: container, database: database, defaults: defaults)
     }
     #expect(
@@ -258,8 +258,8 @@ struct SwiftDataToGRDBMigratorTests {
 
     let defaults = makeIsolatedDefaults()
     let migrator = SwiftDataToGRDBMigrator()
-    #expect(throws: (any Error).self) {
-      try migrator.migrateIfNeeded(
+    await #expect(throws: (any Error).self) {
+      try await migrator.migrateIfNeeded(
         modelContainer: container, database: database, defaults: defaults)
     }
     // CSV step succeeded (no CSV source rows); flag set is allowed.

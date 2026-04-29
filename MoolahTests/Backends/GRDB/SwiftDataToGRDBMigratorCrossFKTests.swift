@@ -106,7 +106,7 @@ struct SwiftDataToGRDBMigratorCrossFKTests {
     try Self.seedCrossFKSwiftDataGraph(context: context, ids: ids)
 
     let defaults = makeIsolatedDefaults()
-    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
 
     // Every flag should be set; every FK-bearing row should resolve its

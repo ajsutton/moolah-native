@@ -18,7 +18,7 @@ extension SwiftDataToGRDBMigrator {
     modelContainer: ModelContainer,
     database: any DatabaseWriter,
     defaults: UserDefaults
-  ) throws {
+  ) async throws {
     guard !defaults.bool(forKey: Self.transactionsFlag) else { return }
     var committed = false
     var rowCount = 0
@@ -32,23 +32,14 @@ extension SwiftDataToGRDBMigrator {
           """)
       }
     }
-    let context = ModelContext(modelContainer)
-    let descriptor = FetchDescriptor<TransactionRecord>()
-    let sourceRows: [TransactionRecord]
-    do {
-      sourceRows = try context.fetch(descriptor)
-    } catch {
-      logger.error(
-        """
-        SwiftData fetch for TransactionRecord failed during GRDB \
-        migration: \(error.localizedDescription, privacy: .public). \
-        Migration aborted; will retry next launch.
-        """)
-      throw error
-    }
-    let mappedRows = sourceRows.map(Self.mapTransaction(_:))
+    let mappedRows = try Self.fetchSwiftDataRows(
+      modelContainer: modelContainer,
+      recordTypeDescription: "TransactionRecord",
+      type: TransactionRecord.self,
+      mapper: Self.mapTransaction(_:),
+      logger: logger)
     if !mappedRows.isEmpty {
-      try database.write { database in
+      try await database.write { database in
         for row in mappedRows {
           try row.upsert(database)
         }
@@ -89,7 +80,7 @@ extension SwiftDataToGRDBMigrator {
     modelContainer: ModelContainer,
     database: any DatabaseWriter,
     defaults: UserDefaults
-  ) throws {
+  ) async throws {
     guard !defaults.bool(forKey: Self.transactionLegsFlag) else { return }
     var committed = false
     var rowCount = 0
@@ -103,23 +94,14 @@ extension SwiftDataToGRDBMigrator {
           """)
       }
     }
-    let context = ModelContext(modelContainer)
-    let descriptor = FetchDescriptor<TransactionLegRecord>()
-    let sourceRows: [TransactionLegRecord]
-    do {
-      sourceRows = try context.fetch(descriptor)
-    } catch {
-      logger.error(
-        """
-        SwiftData fetch for TransactionLegRecord failed during GRDB \
-        migration: \(error.localizedDescription, privacy: .public). \
-        Migration aborted; will retry next launch.
-        """)
-      throw error
-    }
-    let mappedRows = sourceRows.map(Self.mapTransactionLeg(_:))
+    let mappedRows = try Self.fetchSwiftDataRows(
+      modelContainer: modelContainer,
+      recordTypeDescription: "TransactionLegRecord",
+      type: TransactionLegRecord.self,
+      mapper: Self.mapTransactionLeg(_:),
+      logger: logger)
     if !mappedRows.isEmpty {
-      try database.write { database in
+      try await database.write { database in
         for row in mappedRows {
           try row.upsert(database)
         }

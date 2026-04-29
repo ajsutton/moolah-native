@@ -74,7 +74,7 @@ struct ExportImportIntegrationTests {
   /// and returns a backend that reads through the production code path.
   private func makeCloudBackend(
     container: ModelContainer, label: String = "Test Profile"
-  ) throws -> CloudKitBackend {
+  ) async throws -> CloudKitBackend {
     let database = try ProfileDatabase.openInMemory()
     let suiteName = "export-import-test-\(UUID().uuidString)"
     guard let defaults = UserDefaults(suiteName: suiteName) else {
@@ -83,7 +83,7 @@ struct ExportImportIntegrationTests {
         code: -1,
         userInfo: [NSLocalizedDescriptionKey: "could not allocate UserDefaults suite"])
     }
-    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
     return CloudKitBackend(
       database: database,
@@ -170,7 +170,7 @@ struct ExportImportIntegrationTests {
     #expect(result.budgetItemCount == 1)
 
     // Verify data is readable through CloudKit repositories
-    let cloudBackend = try makeCloudBackend(container: freshContainer)
+    let cloudBackend = try await makeCloudBackend(container: freshContainer)
 
     let accounts = try await cloudBackend.accounts.fetchAll()
     #expect(accounts.count == 1)

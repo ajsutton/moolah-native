@@ -103,7 +103,7 @@ struct ExportCoordinatorImportNewProfileTests {
     let freshDatabase = try ProfileDatabase.openInMemory()
     let migratorDefaults = try #require(
       UserDefaults(suiteName: "export-import-test-\(UUID().uuidString)"))
-    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
       modelContainer: container, database: freshDatabase, defaults: migratorDefaults)
     let freshBackend = CloudKitBackend(
       database: freshDatabase,

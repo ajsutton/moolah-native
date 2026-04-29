@@ -89,13 +89,27 @@ final class ProfileSession: Identifiable {
   /// (per `guides/CONCURRENCY_GUIDE.md` §8).
   private var crossStoreUpdateTasks: [Task<Void, Never>] = []
 
-  /// Synchronous initialiser — opens the per-profile GRDB queue and runs
-  /// pending migrations on the calling thread. The migrator currently only
-  /// creates the rate-cache tables (microseconds for fresh databases, no
-  /// disk reads on subsequent opens once the migration is recorded), so
-  /// running on `@MainActor` is acceptable for now. Revisit if profile-DB
-  /// schemas grow large enough that `migrate(_:)` does meaningful work
-  /// each launch — see `guides/CONCURRENCY_GUIDE.md` §1.
+  /// Stashed reference to the container manager so `setUp()` can open the
+  /// per-profile SwiftData container and run the SwiftData → GRDB
+  /// migration after init returns. `nil` for tests / previews that pass
+  /// `containerManager: nil` (those have nothing to migrate from).
+  private let containerManagerForMigration: ProfileContainerManager?
+
+  /// Tracks the in-flight (or completed) `setUp()` call so callers can
+  /// `await session.setUp()` without re-running the migration. Set by
+  /// `setUp()` on its first invocation; subsequent calls return the
+  /// same task. `nil` until the first call. Tracked here (rather than
+  /// in `SessionManager`) so any caller with the session reference can
+  /// await migration completion.
+  private var setUpTask: Task<Void, any Error>?
+
+  /// Synchronous initialiser — opens the per-profile GRDB queue and
+  /// builds every store / service the session exposes. Does **not** run
+  /// the SwiftData → GRDB migration; that lives in `setUp()` so the
+  /// GRDB writes happen off `@MainActor` (issue #575). Callers must
+  /// invoke `try await session.setUp()` before any code path expects
+  /// the migrated rows to be visible — `SessionManager.session(for:)`
+  /// schedules this automatically when it creates the session.
   init(
     profile: Profile,
     containerManager: ProfileContainerManager? = nil,
@@ -103,14 +117,11 @@ final class ProfileSession: Identifiable {
     database: DatabaseQueue? = nil
   ) throws {
     self.profile = profile
+    self.containerManagerForMigration = containerManager
 
     let resolvedDatabase = try Self.resolveDatabase(
       override: database, profile: profile, containerManager: containerManager)
     self.database = resolvedDatabase
-    try Self.runSwiftDataToGRDBMigrationIfNeeded(
-      profileId: profile.id,
-      containerManager: containerManager,
-      database: resolvedDatabase)
 
     let services = Self.makeMarketDataServices(database: resolvedDatabase)
     self.exchangeRateService = services.exchangeRate
@@ -271,6 +282,8 @@ final class ProfileSession: Identifiable {
       task.cancel()
     }
     crossStoreUpdateTasks.removeAll()
+    setUpTask?.cancel()
+    setUpTask = nil
   }
 
   // MARK: - Folder watch
@@ -294,94 +307,56 @@ final class ProfileSession: Identifiable {
     await folderScanner.scanForNewFiles()
   }
 
-  /// Per-profile directory under Application Support where CSV import staging
-  /// lives. Not part of the SwiftData store because staging is device-local
-  /// and doesn't sync.
-  nonisolated static func importStagingDirectory(for profileId: UUID) -> URL {
-    URL.moolahScopedApplicationSupport
-      .appendingPathComponent("Moolah", isDirectory: true)
-      .appendingPathComponent("csv-staging", isDirectory: true)
-      .appendingPathComponent(profileId.uuidString, isDirectory: true)
-  }
-
-  /// Per-profile directory containing `data.sqlite` (and its `-wal`/`-shm`
-  /// sidecars). Removed wholesale on profile delete by
-  /// `ProfileContainerManager.deleteStore(for:)`.
-  nonisolated static func profileDatabaseDirectory(for profileId: UUID) -> URL {
-    URL.moolahScopedApplicationSupport
-      .appendingPathComponent("Moolah", isDirectory: true)
-      .appendingPathComponent("profiles", isDirectory: true)
-      .appendingPathComponent(profileId.uuidString, isDirectory: true)
-  }
-
-  /// Opens the profile's `data.sqlite` GRDB queue, creating intermediate
-  /// directories as needed and applying the `ProfileSchema` migrator.
-  nonisolated static func openProfileDatabase(profileId: UUID) throws -> DatabaseQueue {
-    let url = profileDatabaseDirectory(for: profileId)
-      .appendingPathComponent("data.sqlite")
-    return try ProfileDatabase.open(at: url)
-  }
-
   /// Drives the one-shot SwiftData → GRDB migration for the given
   /// profile's SwiftData container and GRDB queue. Skipped when no
   /// `containerManager` is supplied (tests / previews build a fresh
   /// in-memory GRDB queue and have nothing to migrate from).
   ///
-  /// Must run before `registerWithSyncCoordinator` so CKSyncEngine
-  /// reads from a fully populated `data.sqlite` on the first sync
-  /// session.
+  /// MUST run before stores read from `data.sqlite` so CKSyncEngine
+  /// and the GRDB repositories read a fully populated database on
+  /// first launch.
   ///
-  /// `@MainActor` is explicit (not inherited from the class) because
-  /// `SwiftDataToGRDBMigrator.migrateIfNeeded` is `@MainActor` (the
-  /// SwiftData fetch path requires it).
-  ///
-  /// TODO(#575): make this `async` and run the GRDB writes off
-  /// `@MainActor` so heavy first-launch migrations can't block the UI —
-  /// https://github.com/ajsutton/moolah-native/issues/575
-  @MainActor
+  /// `async throws` so each per-type migrator can hand off the heavy
+  /// GRDB upserts to GRDB's writer queue via `await database.write`
+  /// rather than holding `@MainActor` for the duration (issue #575).
+  /// The bounded SwiftData fetches stay on `@MainActor` because that's
+  /// where the SwiftData `mainContext` requires them.
   static func runSwiftDataToGRDBMigrationIfNeeded(
     profileId: UUID,
     containerManager: ProfileContainerManager?,
     database: DatabaseQueue
-  ) throws {
+  ) async throws {
     guard let containerManager else { return }
     let modelContainer = try containerManager.container(for: profileId)
-    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
       modelContainer: modelContainer, database: database)
   }
 
-  /// Resolves which `DatabaseQueue` the session should own. Order:
-  ///   1. Caller-provided `override` (tests, previews).
-  ///   2. The container manager's cached per-profile queue. Required so
-  ///      the import path and the session see the same in-memory queue
-  ///      (each `ProfileDatabase.openInMemory()` call returns a fresh
-  ///      queue otherwise) and so on-disk profiles don't run the
-  ///      migrator twice on the same file.
-  ///   3. Fallback: open the on-disk `data.sqlite` directly. Used by
-  ///      callers that pass `containerManager: nil` (a few legacy test
-  ///      paths).
-  private static func resolveDatabase(
-    override: DatabaseQueue?,
-    profile: Profile,
-    containerManager: ProfileContainerManager?
-  ) throws -> DatabaseQueue {
-    if let override { return override }
-    if let containerManager {
-      return try containerManager.database(for: profile.id)
+  /// Runs the SwiftData → GRDB migration off `@MainActor` and reloads
+  /// the affected stores. Idempotent: subsequent calls return the same
+  /// task so callers can `await session.setUp()` from multiple sites
+  /// (UI test seed setup, `SessionManager.session(for:)`, etc.) without
+  /// re-running the migration.
+  ///
+  /// Throws whatever the migrator throws — the caller (typically
+  /// `SessionManager`) is responsible for surfacing the error to the
+  /// user. A failed setUp leaves the migration's `UserDefaults` flags
+  /// unset, so the next launch retries.
+  func setUp() async throws {
+    if let existing = setUpTask {
+      return try await existing.value
     }
-    return try openProfileDatabase(profileId: profile.id)
+    let profileId = profile.id
+    let containerManager = containerManagerForMigration
+    let database = database
+    let task = Task<Void, any Error> {
+      try await Self.runSwiftDataToGRDBMigrationIfNeeded(
+        profileId: profileId,
+        containerManager: containerManager,
+        database: database)
+    }
+    setUpTask = task
+    try await task.value
   }
 
-  /// Convenience constructor for `#Preview` blocks. Backs the session with
-  /// an in-memory GRDB queue so previews never touch disk. Uses an in-memory
-  /// `ProfileContainerManager` so the CloudKit backend can be constructed
-  /// without touching the network or the on-disk container store.
-  static func preview(
-    profile: Profile = Profile(label: "Preview")
-  ) throws -> ProfileSession {
-    try ProfileSession(
-      profile: profile,
-      containerManager: ProfileContainerManager.forTesting(),
-      database: ProfileDatabase.openInMemory())
-  }
 }

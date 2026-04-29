@@ -32,7 +32,7 @@ extension SwiftDataToGRDBMigrator {
     modelContainer: ModelContainer,
     database: any DatabaseWriter,
     defaults: UserDefaults
-  ) throws {
+  ) async throws {
     guard !defaults.bool(forKey: Self.instrumentsFlag) else { return }
     var committed = false
     var rowCount = 0
@@ -46,23 +46,14 @@ extension SwiftDataToGRDBMigrator {
           """)
       }
     }
-    let context = ModelContext(modelContainer)
-    let descriptor = FetchDescriptor<InstrumentRecord>()
-    let sourceRows: [InstrumentRecord]
-    do {
-      sourceRows = try context.fetch(descriptor)
-    } catch {
-      logger.error(
-        """
-        SwiftData fetch for InstrumentRecord failed during GRDB \
-        migration: \(error.localizedDescription, privacy: .public). \
-        Migration aborted; will retry next launch.
-        """)
-      throw error
-    }
-    let mappedRows = sourceRows.map(Self.mapInstrument(_:))
+    let mappedRows = try Self.fetchSwiftDataRows(
+      modelContainer: modelContainer,
+      recordTypeDescription: "InstrumentRecord",
+      type: InstrumentRecord.self,
+      mapper: Self.mapInstrument(_:),
+      logger: logger)
     if !mappedRows.isEmpty {
-      try database.write { database in
+      try await database.write { database in
         for row in mappedRows {
           try row.upsert(database)
         }
@@ -100,7 +91,7 @@ extension SwiftDataToGRDBMigrator {
     modelContainer: ModelContainer,
     database: any DatabaseWriter,
     defaults: UserDefaults
-  ) throws {
+  ) async throws {
     guard !defaults.bool(forKey: Self.categoriesFlag) else { return }
     var committed = false
     var rowCount = 0
@@ -114,27 +105,18 @@ extension SwiftDataToGRDBMigrator {
           """)
       }
     }
-    let context = ModelContext(modelContainer)
-    let descriptor = FetchDescriptor<CategoryRecord>()
-    let sourceRows: [CategoryRecord]
-    do {
-      sourceRows = try context.fetch(descriptor)
-    } catch {
-      logger.error(
-        """
-        SwiftData fetch for CategoryRecord failed during GRDB \
-        migration: \(error.localizedDescription, privacy: .public). \
-        Migration aborted; will retry next launch.
-        """)
-      throw error
-    }
+    let unsortedRows = try Self.fetchSwiftDataRows(
+      modelContainer: modelContainer,
+      recordTypeDescription: "CategoryRecord",
+      type: CategoryRecord.self,
+      mapper: Self.mapCategory(_:),
+      logger: logger)
     // Self-referential FK: a category's `parent_id` references another
     // category in the same table. Sort parents before children so the
     // child upsert has its parent already on disk under the FK pragma.
-    let mappedRows = Self.sortCategoriesParentFirst(
-      sourceRows.map(Self.mapCategory(_:)))
+    let mappedRows = Self.sortCategoriesParentFirst(unsortedRows)
     if !mappedRows.isEmpty {
-      try database.write { database in
+      try await database.write { database in
         for row in mappedRows {
           try row.upsert(database)
         }
@@ -199,7 +181,7 @@ extension SwiftDataToGRDBMigrator {
     modelContainer: ModelContainer,
     database: any DatabaseWriter,
     defaults: UserDefaults
-  ) throws {
+  ) async throws {
     guard !defaults.bool(forKey: Self.accountsFlag) else { return }
     var committed = false
     var rowCount = 0
@@ -213,23 +195,14 @@ extension SwiftDataToGRDBMigrator {
           """)
       }
     }
-    let context = ModelContext(modelContainer)
-    let descriptor = FetchDescriptor<AccountRecord>()
-    let sourceRows: [AccountRecord]
-    do {
-      sourceRows = try context.fetch(descriptor)
-    } catch {
-      logger.error(
-        """
-        SwiftData fetch for AccountRecord failed during GRDB \
-        migration: \(error.localizedDescription, privacy: .public). \
-        Migration aborted; will retry next launch.
-        """)
-      throw error
-    }
-    let mappedRows = sourceRows.map(Self.mapAccount(_:))
+    let mappedRows = try Self.fetchSwiftDataRows(
+      modelContainer: modelContainer,
+      recordTypeDescription: "AccountRecord",
+      type: AccountRecord.self,
+      mapper: Self.mapAccount(_:),
+      logger: logger)
     if !mappedRows.isEmpty {
-      try database.write { database in
+      try await database.write { database in
         for row in mappedRows {
           try row.upsert(database)
         }

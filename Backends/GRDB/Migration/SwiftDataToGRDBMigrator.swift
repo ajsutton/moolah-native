@@ -29,14 +29,16 @@ import SwiftData
 /// `SyncCoordinator.start()` so CKSyncEngine reads from a fully
 /// populated `data.sqlite` on the first launch.
 ///
-/// **Concurrency.** `@MainActor` is required because the SwiftData
-/// `ModelContext(modelContainer)` constructor and the resulting
-/// `context.fetch(...)` are `@MainActor`-isolated when the container is
-/// `mainContext`-bound. The GRDB writes themselves are queue-serialised
-/// and don't need main-actor isolation. If profiling ever shows this
-/// blocks for >16ms (one frame) on a p99 device, convert
-/// `migrateIfNeeded` to async and call with `await` from
-/// `ProfileSession.init` (per `guides/CONCURRENCY_GUIDE.md` §1).
+/// **Concurrency.** The struct is `@MainActor`-isolated because the
+/// SwiftData fetches need `@MainActor` (`ModelContext(modelContainer)`
+/// and `context.fetch(...)` are main-actor-isolated when the container
+/// is `mainContext`-bound). Every public method is `async throws` so
+/// the heavy GRDB write can be dispatched onto GRDB's own writer queue
+/// via `await database.write { ... }` — that hop moves the eight v3
+/// core-financial-graph upserts (which can push past one frame on
+/// heavy stores) off the main thread while the bounded SwiftData
+/// fetches stay on `@MainActor` (where the SwiftData container
+/// requires them). Issue #575 tracked this conversion.
 @MainActor
 struct SwiftDataToGRDBMigrator {
   /// `UserDefaults` key gating the CSV-import-profile copy. Once true,
@@ -97,37 +99,37 @@ struct SwiftDataToGRDBMigrator {
   /// callers pass nothing while tests supply an isolated suite (avoids
   /// the `CODE_GUIDE.md` §17 "no direct singleton access" rule).
   ///
-  /// Synchronous because the only places it runs (per-profile session
-  /// init and seed tests) need to block the calling thread until both
-  /// SwiftData reads and GRDB writes complete. Total work is bounded
-  /// by the row counts in the source SwiftData store. The eight v3
-  /// migrators run in parents-before-children order so foreign-key
-  /// references resolve as each transaction commits.
+  /// `async throws` because each per-type migrator awaits
+  /// `database.write { ... }` to push the GRDB transaction onto GRDB's
+  /// own writer queue (off-MainActor) instead of holding the calling
+  /// thread for the duration of the upsert. The bounded SwiftData
+  /// fetch stays on `@MainActor` (where the `mainContext`-bound
+  /// container requires it). Total work is bounded by the row counts
+  /// in the source SwiftData store. The eight v3 migrators run in
+  /// parents-before-children order so foreign-key references resolve
+  /// as each transaction commits.
   func migrateIfNeeded(
     modelContainer: ModelContainer,
     database: any DatabaseWriter,
     defaults: UserDefaults = .standard
-  ) throws {
+  ) async throws {
     let start = ContinuousClock.now
     defer {
       let elapsedMs = (ContinuousClock.now - start).inMilliseconds
-      // 16ms ≈ one frame at 60Hz. Sync migrator runs on @MainActor, so
-      // exceeding this budget means we're hanging the UI on a slow
-      // device. Log in release as well as debug so production
-      // diagnostics surface real-world durations on heavy users —
-      // tracked via the `os_log` warning channel (subsystem
-      // `com.moolah.app`, category `SwiftDataToGRDBMigrator`).
-      // Intentional signal-only check, not a hard precondition; the
-      // migration's correctness is independent of how long it takes.
-      // The v3 core-financial-graph migrators may push past 16ms on
-      // heavy stores (eight transactions × N rows each); the warning
-      // is signal-only and intentionally not bumped.
+      // 16ms ≈ one frame at 60Hz. The async migrator no longer pins
+      // the calling actor for the duration of the GRDB write, so this
+      // warning is now a wall-clock signal: if the elapsed time
+      // exceeds a frame and the caller was @MainActor, scrolling /
+      // animations on the main thread were still potentially impacted
+      // by the bounded SwiftData fetch. Logged in release as well as
+      // debug so production diagnostics surface real-world durations
+      // on heavy users.
       if elapsedMs > 16 {
         logger.warning(
           """
-          SwiftDataToGRDBMigrator.migrateIfNeeded took \(elapsedMs, privacy: .public)ms \
-          on @MainActor; convert to async if this reproduces on real hardware (see \
-          file header).
+          SwiftDataToGRDBMigrator.migrateIfNeeded took \(elapsedMs, privacy: .public)ms; \
+          GRDB writes ran off-actor but the bounded SwiftData fetches still hopped to \
+          @MainActor — investigate if this reproduces on real hardware.
           """)
       }
     }
@@ -135,28 +137,28 @@ struct SwiftDataToGRDBMigrator {
     // transaction's FK references resolve at commit. PRAGMA
     // foreign_keys = ON is in effect; an unresolved parent fails the
     // upsert loudly, which is the correct behaviour.
-    try migrateInstrumentsIfNeeded(
+    try await migrateInstrumentsIfNeeded(
       modelContainer: modelContainer, database: database, defaults: defaults)
-    try migrateCategoriesIfNeeded(
+    try await migrateCategoriesIfNeeded(
       modelContainer: modelContainer, database: database, defaults: defaults)
-    try migrateAccountsIfNeeded(
+    try await migrateAccountsIfNeeded(
       modelContainer: modelContainer, database: database, defaults: defaults)
-    try migrateEarmarksIfNeeded(
+    try await migrateEarmarksIfNeeded(
       modelContainer: modelContainer, database: database, defaults: defaults)
-    try migrateEarmarkBudgetItemsIfNeeded(
+    try await migrateEarmarkBudgetItemsIfNeeded(
       modelContainer: modelContainer, database: database, defaults: defaults)
-    try migrateInvestmentValuesIfNeeded(
+    try await migrateInvestmentValuesIfNeeded(
       modelContainer: modelContainer, database: database, defaults: defaults)
-    try migrateTransactionsIfNeeded(
+    try await migrateTransactionsIfNeeded(
       modelContainer: modelContainer, database: database, defaults: defaults)
-    try migrateTransactionLegsIfNeeded(
+    try await migrateTransactionLegsIfNeeded(
       modelContainer: modelContainer, database: database, defaults: defaults)
     // CSV imports reference accounts; run them after the core graph
     // so any FK validation at the application layer sees a populated
     // `account` table.
-    try migrateCSVImportProfilesIfNeeded(
+    try await migrateCSVImportProfilesIfNeeded(
       modelContainer: modelContainer, database: database, defaults: defaults)
-    try migrateImportRulesIfNeeded(
+    try await migrateImportRulesIfNeeded(
       modelContainer: modelContainer, database: database, defaults: defaults)
   }
 
@@ -166,7 +168,7 @@ struct SwiftDataToGRDBMigrator {
     modelContainer: ModelContainer,
     database: any DatabaseWriter,
     defaults: UserDefaults
-  ) throws {
+  ) async throws {
     guard !defaults.bool(forKey: Self.csvImportProfilesFlag) else { return }
     // The `committed` flag is flipped after the write transaction commits
     // and consulted by the `defer` block — making the
@@ -186,23 +188,14 @@ struct SwiftDataToGRDBMigrator {
           """)
       }
     }
-    let context = ModelContext(modelContainer)
-    let descriptor = FetchDescriptor<CSVImportProfileRecord>()
-    let sourceRows: [CSVImportProfileRecord]
-    do {
-      sourceRows = try context.fetch(descriptor)
-    } catch {
-      logger.error(
-        """
-        SwiftData fetch for CSVImportProfileRecord failed during GRDB \
-        migration: \(error.localizedDescription, privacy: .public). \
-        Migration aborted; will retry next launch.
-        """)
-      throw error
-    }
-    let mappedRows = sourceRows.map(Self.mapCSVProfile(_:))
+    let mappedRows = try Self.fetchSwiftDataRows(
+      modelContainer: modelContainer,
+      recordTypeDescription: "CSVImportProfileRecord",
+      type: CSVImportProfileRecord.self,
+      mapper: Self.mapCSVProfile(_:),
+      logger: logger)
     if !mappedRows.isEmpty {
-      try database.write { database in
+      try await database.write { database in
         for row in mappedRows {
           try row.upsert(database)
         }
@@ -237,7 +230,7 @@ struct SwiftDataToGRDBMigrator {
     modelContainer: ModelContainer,
     database: any DatabaseWriter,
     defaults: UserDefaults
-  ) throws {
+  ) async throws {
     guard !defaults.bool(forKey: Self.importRulesFlag) else { return }
     // See `migrateCSVImportProfilesIfNeeded` for why this uses a
     // `committed` defer flag and `upsert` (idempotent re-migration).
@@ -253,23 +246,14 @@ struct SwiftDataToGRDBMigrator {
           """)
       }
     }
-    let context = ModelContext(modelContainer)
-    let descriptor = FetchDescriptor<ImportRuleRecord>()
-    let sourceRows: [ImportRuleRecord]
-    do {
-      sourceRows = try context.fetch(descriptor)
-    } catch {
-      logger.error(
-        """
-        SwiftData fetch for ImportRuleRecord failed during GRDB \
-        migration: \(error.localizedDescription, privacy: .public). \
-        Migration aborted; will retry next launch.
-        """)
-      throw error
-    }
-    let mappedRows = sourceRows.map(Self.mapImportRule(_:))
+    let mappedRows = try Self.fetchSwiftDataRows(
+      modelContainer: modelContainer,
+      recordTypeDescription: "ImportRuleRecord",
+      type: ImportRuleRecord.self,
+      mapper: Self.mapImportRule(_:),
+      logger: logger)
     if !mappedRows.isEmpty {
-      try database.write { database in
+      try await database.write { database in
         for row in mappedRows {
           try row.upsert(database)
         }
@@ -294,5 +278,46 @@ struct SwiftDataToGRDBMigrator {
       actionsJSON: source.actionsJSON,
       accountScope: source.accountScope,
       encodedSystemFields: source.encodedSystemFields)
+  }
+
+  // MARK: - SwiftData fetch helper
+
+  /// Fetches every persisted instance of `Source` from `modelContainer`
+  /// and maps them into the GRDB row type `Mapped`. Stays on
+  /// `@MainActor` (inherited from the enclosing struct) because
+  /// `ModelContext(_:)` and `context.fetch(_:)` are
+  /// `@MainActor`-isolated when the container is the app's
+  /// `mainContext`. The returned array is `Sendable` (each element is a
+  /// `Sendable` GRDB row), so the calling `async` method can hand it
+  /// off to `await database.write { ... }` and that write runs
+  /// off-MainActor.
+  ///
+  /// Failures are logged at error level then re-thrown so per-type
+  /// migrators can record their own context-specific message and the
+  /// `defer { committed ? flag = true : () }` invariant continues to
+  /// hold (the flag is only set when the function exits via the
+  /// `committed = true` path).
+  static func fetchSwiftDataRows<Source: PersistentModel, Mapped: Sendable>(
+    modelContainer: ModelContainer,
+    recordTypeDescription: String,
+    type: Source.Type,
+    mapper: (Source) -> Mapped,
+    logger: Logger
+  ) throws -> [Mapped] {
+    let context = ModelContext(modelContainer)
+    let descriptor = FetchDescriptor<Source>()
+    let sourceRows: [Source]
+    do {
+      sourceRows = try context.fetch(descriptor)
+    } catch {
+      logger.error(
+        """
+        SwiftData fetch for \(recordTypeDescription, privacy: .public) failed during \
+        GRDB migration: \(error.localizedDescription, privacy: .public). Migration \
+        aborted; will retry next launch.
+        """)
+      throw error
+    }
+    return sourceRows.map(mapper)
   }
 }

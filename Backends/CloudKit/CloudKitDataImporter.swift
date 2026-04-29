@@ -94,8 +94,11 @@ struct CloudKitDataImporter {
 
     // Mirror everything to GRDB so the runtime stores (which read
     // exclusively from `data.sqlite`) see the imported data. Order:
-    // parents before children to satisfy enforced FKs.
-    try writeGRDB(data: data)
+    // parents before children to satisfy enforced FKs. The async
+    // `database.write` overload runs the GRDB transaction on GRDB's
+    // own writer queue rather than blocking `@MainActor` for every
+    // imported row.
+    try await writeGRDB(data: data)
 
     logger.info(
       "Import complete: \(data.accounts.count) accounts, \(data.transactions.count) transactions, \(investmentValueCount) investment values"
@@ -191,12 +194,12 @@ struct CloudKitDataImporter {
   /// upserted up-front so accounts and legs that reference them by id
   /// can resolve their full domain `Instrument` on read.
   ///
-  /// TODO(#575): make `writeGRDB` `async` and call
-  /// `try await database.write { … }` so heavy imports don't block the
-  /// main thread —
-  /// https://github.com/ajsutton/moolah-native/issues/575
-  private func writeGRDB(data: ExportedData) throws {
-    try database.write { database in
+  /// `async throws` so the GRDB transaction runs on GRDB's writer
+  /// queue rather than holding `@MainActor` for the duration of the
+  /// import. The body is otherwise unchanged from the previous
+  /// synchronous version.
+  private func writeGRDB(data: ExportedData) async throws {
+    try await database.write { database in
       try Self.writeInstrumentsAndCategories(data: data, database: database)
       try Self.writeAccountsAndEarmarks(data: data, database: database)
       try Self.writeTransactions(data: data, database: database)
@@ -204,7 +207,7 @@ struct CloudKitDataImporter {
     }
   }
 
-  private static func writeInstrumentsAndCategories(
+  nonisolated private static func writeInstrumentsAndCategories(
     data: ExportedData, database: Database
   ) throws {
     for instrument in data.instruments {
@@ -215,7 +218,7 @@ struct CloudKitDataImporter {
     }
   }
 
-  private static func writeAccountsAndEarmarks(
+  nonisolated private static func writeAccountsAndEarmarks(
     data: ExportedData, database: Database
   ) throws {
     for account in data.accounts {
@@ -234,7 +237,7 @@ struct CloudKitDataImporter {
     }
   }
 
-  private static func writeTransactions(
+  nonisolated private static func writeTransactions(
     data: ExportedData, database: Database
   ) throws {
     for txn in data.transactions {
@@ -249,7 +252,7 @@ struct CloudKitDataImporter {
     }
   }
 
-  private static func writeInvestmentValues(
+  nonisolated private static func writeInvestmentValues(
     data: ExportedData, database: Database
   ) throws {
     for (accountId, values) in data.investmentValues {
