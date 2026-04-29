@@ -27,25 +27,17 @@ struct AnalysisPlanPinningTests {
 
   // MARK: - Helpers
 
+  /// `makeDatabase` and `planDetail` are shared with
+  /// `AnalysisAggregationPlanPinningTests` and `CSVImportPlanPinningTests`
+  /// via `PlanPinningTestHelpers`.
   private func makeDatabase() throws -> DatabaseQueue {
-    try ProfileDatabase.openInMemory()
+    try PlanPinningTestHelpers.makeDatabase()
   }
 
-  /// Returns the joined `detail` column from the EXPLAIN QUERY PLAN rows
-  /// for the given query. Callers pass the bare query SQL (without the
-  /// `EXPLAIN QUERY PLAN` prefix) — the helper prepends the directive
-  /// via string concatenation so the `sql:` argument carries no string
-  /// interpolation, satisfying `guides/DATABASE_CODE_GUIDE.md` §4.
-  /// Joining the `detail` column keeps `contains` checks readable and
-  /// matches the format the SQLite docs use to describe plans.
   private func planDetail(
     _ database: DatabaseQueue, query: String, arguments: StatementArguments = []
   ) throws -> String {
-    try database.read { database in
-      let planSQL = "EXPLAIN QUERY PLAN " + query
-      let rows = try Row.fetchAll(database, sql: planSQL, arguments: arguments)
-      return rows.compactMap { $0["detail"] as String? }.joined(separator: "; ")
-    }
+    try PlanPinningTestHelpers.planDetail(database, query: query, arguments: arguments)
   }
 
   // MARK: - transaction

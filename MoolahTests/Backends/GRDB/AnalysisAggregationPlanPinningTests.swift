@@ -14,21 +14,17 @@ import Testing
 /// methodology as the parent suite (see its file header).
 @Suite("Analysis aggregation plan-pinning")
 struct AnalysisAggregationPlanPinningTests {
+  /// `makeDatabase` and `planDetail` are shared with
+  /// `AnalysisPlanPinningTests` and `CSVImportPlanPinningTests` via
+  /// `PlanPinningTestHelpers`.
   private func makeDatabase() throws -> DatabaseQueue {
-    try ProfileDatabase.openInMemory()
+    try PlanPinningTestHelpers.makeDatabase()
   }
 
-  /// See `AnalysisPlanPinningTests.planDetail` for the rationale; this
-  /// duplicate keeps the suite self-contained without exporting a shared
-  /// helper.
   private func planDetail(
     _ database: DatabaseQueue, query: String, arguments: StatementArguments = []
   ) throws -> String {
-    try database.read { database in
-      let planSQL = "EXPLAIN QUERY PLAN " + query
-      let rows = try Row.fetchAll(database, sql: planSQL, arguments: arguments)
-      return rows.compactMap { $0["detail"] as String? }.joined(separator: "; ")
-    }
+    try PlanPinningTestHelpers.planDetail(database, query: query, arguments: arguments)
   }
 
   // MARK: - Analysis full-table reads (intentional)
@@ -88,10 +84,10 @@ struct AnalysisAggregationPlanPinningTests {
   func fetchExpenseBreakdownUsesCategoryCoveringIndex() throws {
     let database = try makeDatabase()
     // Mirrors the exact SQL shape used by
-    // `GRDBAnalysisRepository.fetchExpenseBreakdown(monthEnd:after:)` after
-    // the §3.4.2 rewrite: GROUP BY `(DATE(t.date), category_id, instrument_id)`
-    // restricted to non-scheduled, account-bound expense legs with a
-    // category. The covering composite `leg_analysis_by_type_category`
+    // `GRDBAnalysisRepository.fetchExpenseBreakdown(monthEnd:after:)`:
+    // GROUP BY `(DATE(t.date), category_id, instrument_id)` restricted
+    // to non-scheduled, account-bound expense legs with a category.
+    // The covering composite `leg_analysis_by_type_category`
     // (type, category_id, instrument_id, transaction_id, quantity) lets
     // SQLite drive the aggregation off the index without visiting the
     // base table — a SCAN of `transaction_leg` is the regression signal.
@@ -115,6 +111,24 @@ struct AnalysisAggregationPlanPinningTests {
       arguments: [Date?.none, Date?.none])
     #expect(detail.contains("leg_analysis_by_type_category"))
     #expect(!detail.contains("SCAN transaction_leg"))
+    // SQLite emits `USING INDEX` (not `USING COVERING INDEX`) for this
+    // query because the partial-index choice and the JOIN to
+    // `transaction` (visited via PK to read `recur_period` and `date`)
+    // mean SQLite can't statically declare the leg-side scan
+    // base-table-free in EXPLAIN output, even though every column it
+    // references from `leg` is in the composite. The
+    // no-base-table-scan signal is captured by the `SCAN transaction_leg`
+    // negative assertion above — that's what flips if the index loses
+    // its leg-side coverage. Asserting on `USING COVERING INDEX`
+    // would force-fail this test against a plan that's actually
+    // optimal for SQLite, so we don't.
+    //
+    // The output is sorted by `(day, category_id)` where
+    // `day = DATE(t.date)` — a derived value that no index keys, so
+    // SQLite is free to use a temp B-tree for the ORDER BY. We don't
+    // assert against `USE TEMP B-TREE FOR ORDER BY`: the query's
+    // correctness depends on the per-day grouping (rate-equivalent to
+    // per-leg conversion), not on the absence of a sort.
   }
 
   @Test("computeEarmarkPositions JOIN+GROUP BY avoids a transaction_leg SCAN")

@@ -1,5 +1,3 @@
-// Backends/GRDB/Repositories/GRDBAnalysisRepository.swift
-
 import Foundation
 import GRDB
 import OSLog
@@ -10,16 +8,32 @@ import OSLog
 /// (`+ExpenseBreakdown.swift`) and converts each `(day, category,
 /// instrument)` tuple in Swift; the remaining methods still materialise
 /// every row and reuse the per-method compute helpers on
-/// `CloudKitAnalysisRepository` until those §3.4 SQL rewrites land.
+/// `CloudKitAnalysisRepository` until the remaining SQL rewrites land.
 ///
 /// **Concurrency.** `final class` + `@unchecked Sendable` rather than
 /// `actor`. All stored properties are `let`. `database`
 /// (`any DatabaseWriter`) is `Sendable` (GRDB protocol guarantee — the
 /// queue's serial executor mediates concurrent access).
-/// `conversionService` is itself `Sendable`. Nothing mutates post-init,
-/// so the reference can be shared across actor boundaries without a
-/// data race.
+/// `conversionService` is itself `Sendable`. `logger` is `OSLog.Logger`,
+/// also `Sendable` (Apple-documented thread-safe value type). Nothing
+/// mutates post-init, so the reference can be shared across actor
+/// boundaries without a data race.
 final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
+  // MARK: - Cross-extension internals
+  // The following are stored / static state shared with sibling-file
+  // extensions:
+  //
+  // `+Conversion.swift` — `parseDayString`, `financialMonth`,
+  // `convertedQuantity`. Free of stored-state coupling; takes its
+  // dependencies as parameters.
+  //
+  // `+ExpenseBreakdown.swift` — `fetchExpenseBreakdownAggregation`,
+  // `assembleExpenseBreakdown`, `ExpenseBreakdownRow`,
+  // `ExpenseBreakdownAggregation`. Also free of stored-state coupling.
+  //
+  // `database` and `logger` are read by `fetchExpenseBreakdown` here in
+  // the main file; the sibling extensions pull them through the call
+  // site rather than reaching into `private` storage from another file.
   private let database: any DatabaseWriter
   private let instrument: Instrument
   private let conversionService: any InstrumentConversionService
@@ -59,11 +73,7 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
         after: historyAfter,
         forecastUntil: forecastUntil),
       context: context)
-    async let breakdown = CloudKitAnalysisRepository.computeExpenseBreakdown(
-      nonScheduled: shared.nonScheduled,
-      monthEnd: monthEnd,
-      after: historyAfter,
-      context: context)
+    async let breakdown = fetchExpenseBreakdown(monthEnd: monthEnd, after: historyAfter)
     async let income = CloudKitAnalysisRepository.computeIncomeAndExpense(
       nonScheduled: shared.nonScheduled,
       accounts: shared.accounts,
@@ -99,15 +109,27 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   ) async throws -> [ExpenseBreakdown] {
     let aggregation = try await Self.fetchExpenseBreakdownAggregation(
       database: database, after: after)
+    let logger = self.logger
+    let handlers = ExpenseBreakdownHandlers(
+      handleUnparseableDay: { day in
+        logger.error(
+          "fetchExpenseBreakdown: skipping row with unparseable day '\(day)'")
+      },
+      handleConversionFailure: { error, context in
+        logger.error(
+          """
+          fetchExpenseBreakdown: conversion failed for day=\(context.day, privacy: .public) \
+          category=\(context.categoryId?.uuidString ?? "nil", privacy: .public) \
+          instrument=\(context.instrumentId, privacy: .public): \
+          \(error.localizedDescription, privacy: .public)
+          """)
+      })
     return try await Self.assembleExpenseBreakdown(
       aggregation: aggregation,
       profileInstrument: instrument,
       conversionService: conversionService,
       monthEnd: monthEnd,
-      onUnparseableDay: { day in
-        self.logger.error(
-          "fetchExpenseBreakdown: skipping row with unparseable day '\(day)'")
-      })
+      handlers: handlers)
   }
 
   func fetchIncomeAndExpense(

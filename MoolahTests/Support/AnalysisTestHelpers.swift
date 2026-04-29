@@ -29,11 +29,12 @@ enum AnalysisTestHelpers {
 
   /// Build a UTC-anchored Date from year/month/day components.
   ///
-  /// The GRDB analysis path groups by `DATE(t.date)` (UTC) — see §3.4.2 of
-  /// the GRDB slice plan and `GRDBAnalysisRepository+Conversion.swift`.
-  /// Tests that pin a specific calendar-day boundary (e.g. monthEnd=25)
-  /// must build txn dates in UTC so the SQL DATE extraction lands on the
-  /// expected calendar day regardless of the runner's local timezone.
+  /// SQL `DATE(t.date)` extracts the UTC calendar day, and
+  /// `GRDBAnalysisRepository+Conversion.swift` parses and bucketises in
+  /// UTC, so tests that pin a specific calendar-day boundary (e.g.
+  /// monthEnd=25) must build txn dates in UTC for the SQL DATE
+  /// extraction to land on the expected calendar day regardless of the
+  /// runner's local timezone.
   static func utcDate(year: Int, month: Int, day: Int, hour: Int = 12) throws -> Date {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = try #require(TimeZone(identifier: "UTC"))
