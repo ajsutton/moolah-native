@@ -12,6 +12,11 @@ struct PayeeAutocompleteRow: View {
   @Binding var payee: String
   @Binding var state: PayeeAutocompleteState
   let suggestionSource: PayeeSuggestionSource
+  /// Id of the transaction the field is editing; forwarded to the
+  /// suggestion source so the row's own payee is dropped from the
+  /// frequency count and the visible list (#538). `nil` for fresh /
+  /// unsaved drafts where no row exists in the repo yet.
+  let editingTransactionId: UUID?
   let onAutofill: (String) -> Void
 
   @FocusState private var fieldFocused: Bool
@@ -33,12 +38,9 @@ struct PayeeAutocompleteRow: View {
   }
 
   private func handleTextChange(_ newValue: String) {
-    if state.justSelected {
-      state.justSelected = false
-    } else {
-      state.showSuggestions = !newValue.isEmpty
-      suggestionSource.fetch(prefix: newValue)
-    }
+    guard state.registerTextEdit(to: newValue) else { return }
+    suggestionSource.fetch(
+      prefix: newValue, excludingTransactionId: editingTransactionId)
   }
 
   private func acceptHighlighted() {

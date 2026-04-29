@@ -68,6 +68,31 @@ struct AnalysisPlanPinningTests {
     #expect(detail.contains("transaction_by_payee"))
   }
 
+  @Test("fetchPayeeSuggestions with excludingTransactionId still uses the payee index")
+  func payeePrefixWithExclusionMatchesProduction() throws {
+    let database = try makeDatabase()
+    // Mirrors the `excludingTransactionId` branch of
+    // `GRDBTransactionRepository.fetchPayeeSuggestions(prefix:excludingTransactionId:)`.
+    // The added `id != ?` predicate must not push the planner off the
+    // partial `transaction_by_payee` index — a regression here would
+    // turn every keystroke into a full table scan.
+    let detail = try planDetail(
+      database,
+      query: """
+        SELECT payee
+        FROM "transaction"
+        WHERE payee IS NOT NULL
+          AND id != ?
+          AND lower(payee) LIKE lower(?) || '%'
+        GROUP BY payee
+        ORDER BY COUNT(*) DESC, payee ASC
+        LIMIT 20
+        """,
+      arguments: [UUID(), "X"])
+    #expect(detail.contains("transaction_by_payee"))
+    #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "\"transaction\""))
+  }
+
   @Test("transaction equality filter on payee uses the partial payee index")
   func payeeEqualityUsesPayeeIndex() throws {
     let database = try makeDatabase()

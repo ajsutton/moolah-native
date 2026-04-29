@@ -30,7 +30,12 @@ final class PayeeSuggestionSource {
   /// empty prefix clears the current list without issuing a request.
   /// Subsequent calls cancel any pending fetch so only the most recent
   /// keystroke's request completes.
-  func fetch(prefix: String) {
+  ///
+  /// `excludingTransactionId` is the id of the transaction the user is
+  /// editing; the repo drops it from the frequency count so a row never
+  /// suggests its own payee back to itself (#538). Pass `nil` for
+  /// non-editing contexts.
+  func fetch(prefix: String, excludingTransactionId: UUID? = nil) {
     task?.cancel()
 
     guard !prefix.isEmpty else {
@@ -43,7 +48,8 @@ final class PayeeSuggestionSource {
       guard !Task.isCancelled else { return }
 
       do {
-        let results = try await repository.fetchPayeeSuggestions(prefix: prefix)
+        let results = try await repository.fetchPayeeSuggestions(
+          prefix: prefix, excludingTransactionId: excludingTransactionId)
         guard !Task.isCancelled else { return }
         suggestions = results
       } catch {

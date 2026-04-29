@@ -17,4 +17,19 @@ extension PayeeAutocompleteState {
     guard showSuggestions else { return [] }
     return Array(source.prefix(8))
   }
+
+  /// Reports whether the caller should fetch suggestions for this text
+  /// change. Returns `false` exactly once after `dismiss()` to swallow
+  /// the binding echo of a suggestion acceptance — without this, the
+  /// dropdown would re-open showing the suggestion the user just
+  /// picked. The fetch decision lives in the state struct so the view
+  /// can stay a single dispatch line.
+  mutating func registerTextEdit(to newValue: String) -> Bool {
+    if justSelected {
+      justSelected = false
+      return false
+    }
+    showSuggestions = !newValue.isEmpty
+    return true
+  }
 }

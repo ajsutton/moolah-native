@@ -122,7 +122,9 @@ struct FailingTransactionRepository: TransactionRepository {
     throw BackendError.networkUnavailable
   }
 
-  func fetchPayeeSuggestions(prefix: String) async throws -> [String] {
+  func fetchPayeeSuggestions(
+    prefix: String, excludingTransactionId: UUID?
+  ) async throws -> [String] {
     throw BackendError.networkUnavailable
   }
 }

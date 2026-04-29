@@ -197,7 +197,9 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     }
   }
 
-  func fetchPayeeSuggestions(prefix: String) async throws -> [String] {
+  func fetchPayeeSuggestions(
+    prefix: String, excludingTransactionId: UUID?
+  ) async throws -> [String] {
     guard !prefix.isEmpty else { return [] }
     return try await database.read { database in
       // `LIKE ? || '%'` keeps the wildcard out of the bound argument so
@@ -206,6 +208,25 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
       // frequency (descending) puts most-used payees at the top, with
       // the payee string as a stable tie-breaker for deterministic
       // pagination.
+      //
+      // `excludingTransactionId` removes the editing row from both the
+      // GROUP BY count and the visible list (#538) so a payee that only
+      // exists on the row being edited disappears, and one that exists
+      // on N rows is counted as N-1 from that row's perspective.
+      if let excludingTransactionId {
+        let sql = """
+          SELECT payee
+          FROM "transaction"
+          WHERE payee IS NOT NULL
+            AND id != ?
+            AND lower(payee) LIKE lower(?) || '%'
+          GROUP BY payee
+          ORDER BY COUNT(*) DESC, payee ASC
+          LIMIT 20
+          """
+        return try String.fetchAll(
+          database, sql: sql, arguments: [excludingTransactionId, prefix])
+      }
       let sql = """
         SELECT payee
         FROM "transaction"

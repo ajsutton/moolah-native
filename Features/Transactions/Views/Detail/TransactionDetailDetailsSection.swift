@@ -11,6 +11,7 @@ struct TransactionDetailDetailsSection: View {
   let relevantInstrument: Instrument?
   let isCrossCurrency: Bool
   let suggestionSource: PayeeSuggestionSource
+  let editingTransactionId: UUID?
   @Binding var payeeState: PayeeAutocompleteState
   let onAutofill: (String) -> Void
   @FocusState.Binding var focusedField: TransactionDetailFocus?
@@ -21,6 +22,7 @@ struct TransactionDetailDetailsSection: View {
         payee: $draft.payee,
         state: $payeeState,
         suggestionSource: suggestionSource,
+        editingTransactionId: editingTransactionId,
         onAutofill: onAutofill
       )
       .focused($focusedField, equals: .payee)

@@ -57,7 +57,9 @@ actor CancellablePagingTransactionRepository: TransactionRepository {
   func create(_ transaction: Transaction) async throws -> Transaction { transaction }
   func update(_ transaction: Transaction) async throws -> Transaction { transaction }
   func delete(id: UUID) async throws {}
-  func fetchPayeeSuggestions(prefix: String) async throws -> [String] { [] }
+  func fetchPayeeSuggestions(
+    prefix: String, excludingTransactionId: UUID?
+  ) async throws -> [String] { [] }
 }
 
 /// A simple one-shot gate that suspends waiters until `open()` is called.

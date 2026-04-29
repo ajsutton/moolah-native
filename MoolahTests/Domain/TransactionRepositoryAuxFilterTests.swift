@@ -126,4 +126,48 @@ struct TransactionRepositoryAuxFilterTests {
     #expect(suggestions[0] == "Coles", "Most frequent payee should be first")
     #expect(suggestions[1] == "Coffee Shop")
   }
+
+  @Test("fetchPayeeSuggestions excludes the editing transaction's own row")
+  func testPayeeSuggestionsExcludesEditingTransaction() async throws {
+    // "Woolworths" appears on exactly one transaction in the fixture; passing
+    // its id as `excludingTransactionId` drops the only occurrence so the
+    // payee disappears from the suggestion list. Without this, the field would
+    // suggest the row's own payee back to itself (#538).
+    let transactions = try makePayeeSuggestionContractTestTransactions()
+    let woolworths = try #require(transactions.first { $0.payee == "Woolworths" })
+    let repository = try makeContractCloudKitTransactionRepository(
+      initialTransactions: transactions)
+
+    let suggestions = try await repository.fetchPayeeSuggestions(
+      prefix: "Wool", excludingTransactionId: woolworths.id)
+    #expect(suggestions.isEmpty)
+  }
+
+  @Test("fetchPayeeSuggestions excludingTransactionId reduces frequency counts")
+  func testPayeeSuggestionsExclusionReducesFrequency() async throws {
+    // "Coles" appears 3 times. Excluding one of those rows leaves 2 — still
+    // a match, but the frequency count must reflect the exclusion so the
+    // ordering stays correct relative to other prefix matches.
+    let transactions = try makePayeeSuggestionContractTestTransactions()
+    let firstColes = try #require(transactions.first { $0.payee == "Coles" })
+    let repository = try makeContractCloudKitTransactionRepository(
+      initialTransactions: transactions)
+
+    let suggestions = try await repository.fetchPayeeSuggestions(
+      prefix: "Co", excludingTransactionId: firstColes.id)
+
+    #expect(suggestions == ["Coles", "Coffee Shop"])
+  }
+
+  @Test("fetchPayeeSuggestions excludingTransactionId for unknown id is a no-op")
+  func testPayeeSuggestionsExclusionUnknownIdNoOp() async throws {
+    // Acceptance criterion 2: an id that isn't in the repo (e.g. an unsaved
+    // draft) leaves the result identical to the no-exclusion path.
+    let repository = try makeContractCloudKitTransactionRepository(
+      initialTransactions: try makePayeeSuggestionContractTestTransactions())
+
+    let suggestions = try await repository.fetchPayeeSuggestions(
+      prefix: "Co", excludingTransactionId: UUID())
+    #expect(suggestions == ["Coles", "Coffee Shop"])
+  }
 }

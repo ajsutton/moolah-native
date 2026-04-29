@@ -10,5 +10,19 @@ protocol TransactionRepository: Sendable {
   func create(_ transaction: Transaction) async throws -> Transaction
   func update(_ transaction: Transaction) async throws -> Transaction
   func delete(id: UUID) async throws
-  func fetchPayeeSuggestions(prefix: String) async throws -> [String]
+  /// Frequency-sorted payee strings beginning with `prefix`. When
+  /// `excludingTransactionId` is supplied, the matching transaction does
+  /// not contribute to the frequency count and its payee will not appear
+  /// in the result if no other transaction shares it. Unknown ids — and
+  /// unsaved drafts — leave the unfiltered list intact.
+  func fetchPayeeSuggestions(prefix: String, excludingTransactionId: UUID?) async throws
+    -> [String]
+}
+
+extension TransactionRepository {
+  /// Convenience overload with `excludingTransactionId` defaulting to
+  /// `nil`. Returns the unfiltered frequency-sorted prefix matches.
+  func fetchPayeeSuggestions(prefix: String) async throws -> [String] {
+    try await fetchPayeeSuggestions(prefix: prefix, excludingTransactionId: nil)
+  }
 }
