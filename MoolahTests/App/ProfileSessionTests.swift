@@ -67,6 +67,29 @@ struct ProfileSessionTests {
     #expect(session.backend.conversionService is FullConversionService)
   }
 
+  // MARK: - setUp() — async SwiftData → GRDB migration entry point (#575)
+
+  /// `ProfileSession.init` no longer runs the SwiftData → GRDB
+  /// migration; that work moved into `setUp()` so the eight per-type
+  /// `database.write` calls dispatch to GRDB's writer queue rather than
+  /// blocking `@MainActor`. Calling `await session.setUp()` is
+  /// idempotent — multiple awaits coalesce on the same in-flight task,
+  /// which keeps view-side and caller-side awaits cheap and lets
+  /// `SessionManager.session(for:)` fire-and-forget the first call
+  /// without making the second slower.
+  @Test("setUp() is idempotent when called repeatedly")
+  func setUpIsIdempotent() async throws {
+    let containerManager = try ProfileContainerManager.forTesting()
+    let session = try ProfileSession(
+      profile: makeProfile(), containerManager: containerManager)
+    try await session.setUp()
+    try await session.setUp()
+    try await session.setUp()
+    // Reaching here without throwing is the success condition; the
+    // real check is the file-private guard in `setUp()` returning the
+    // existing task on subsequent calls rather than re-running.
+  }
+
   @Test("CloudKit profile exposes cryptoTokenStore on session")
   func cloudKitProfileExposesCryptoTokenStore() throws {
     let containerManager = try ProfileContainerManager.forTesting()

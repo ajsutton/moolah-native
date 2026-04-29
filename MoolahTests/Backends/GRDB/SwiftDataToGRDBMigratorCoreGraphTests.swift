@@ -52,7 +52,7 @@ struct SwiftDataToGRDBMigratorCoreGraphTests {
     try context.save()
 
     let defaults = makeIsolatedDefaults()
-    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
     #expect(defaults.bool(forKey: SwiftDataToGRDBMigrator.instrumentsFlag))
 
@@ -78,9 +78,9 @@ struct SwiftDataToGRDBMigratorCoreGraphTests {
 
     let defaults = makeIsolatedDefaults()
     let migrator = SwiftDataToGRDBMigrator()
-    try migrator.migrateIfNeeded(
+    try await migrator.migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
-    try migrator.migrateIfNeeded(
+    try await migrator.migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
 
     let count = try await database.read { database in
@@ -105,7 +105,7 @@ struct SwiftDataToGRDBMigratorCoreGraphTests {
     try context.save()
 
     let defaults = makeIsolatedDefaults()
-    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
     #expect(defaults.bool(forKey: SwiftDataToGRDBMigrator.categoriesFlag))
 
@@ -137,7 +137,7 @@ struct SwiftDataToGRDBMigratorCoreGraphTests {
     try context.save()
 
     let defaults = makeIsolatedDefaults()
-    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
     #expect(defaults.bool(forKey: SwiftDataToGRDBMigrator.accountsFlag))
 
@@ -167,7 +167,7 @@ struct SwiftDataToGRDBMigratorCoreGraphTests {
     try context.save()
 
     let defaults = makeIsolatedDefaults()
-    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
     #expect(defaults.bool(forKey: SwiftDataToGRDBMigrator.earmarksFlag))
 
@@ -199,7 +199,7 @@ struct SwiftDataToGRDBMigratorCoreGraphTests {
     try context.save()
 
     let defaults = makeIsolatedDefaults()
-    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
     #expect(defaults.bool(forKey: SwiftDataToGRDBMigrator.earmarkBudgetItemsFlag))
 
@@ -232,7 +232,7 @@ struct SwiftDataToGRDBMigratorCoreGraphTests {
     try context.save()
 
     let defaults = makeIsolatedDefaults()
-    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
     #expect(defaults.bool(forKey: SwiftDataToGRDBMigrator.investmentValuesFlag))
 
@@ -267,7 +267,7 @@ struct SwiftDataToGRDBMigratorCoreGraphTests {
     try context.save()
 
     let defaults = makeIsolatedDefaults()
-    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+    try await SwiftDataToGRDBMigrator().migrateIfNeeded(
       modelContainer: container, database: database, defaults: defaults)
     #expect(defaults.bool(forKey: SwiftDataToGRDBMigrator.transactionsFlag))
     #expect(defaults.bool(forKey: SwiftDataToGRDBMigrator.transactionLegsFlag))
