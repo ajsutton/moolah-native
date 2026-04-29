@@ -270,20 +270,11 @@ extension GRDBTransactionRepository {
       ?? Instrument.fiat(code: accountRow.instrumentId)
   }
 
-  /// Builds `[String: Instrument]` from the `instrument` table,
-  /// supplemented with ambient fiat for ISO codes that don't appear as
-  /// rows. Mirrors `GRDBAccountRepository.fetchInstrumentMap`.
+  /// Forwards to the shared `InstrumentRow.fetchInstrumentMap` so every
+  /// repository observes the same stored-then-ambient ordering.
   static func fetchInstrumentMap(
     database: Database
   ) throws -> [String: Instrument] {
-    let rows = try InstrumentRow.fetchAll(database)
-    var map: [String: Instrument] = [:]
-    for row in rows {
-      map[row.id] = row.toDomain()
-    }
-    for code in Locale.Currency.isoCurrencies.map(\.identifier) where map[code] == nil {
-      map[code] = Instrument.fiat(code: code)
-    }
-    return map
+    try InstrumentRow.fetchInstrumentMap(database: database)
   }
 }

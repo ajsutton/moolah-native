@@ -92,6 +92,11 @@ struct RepositoryHookRecordTypeTests {
 
     let txnEmits = capture.changed.filter { $0.recordType == TransactionRow.recordType }
     #expect(txnEmits.map(\.id) == [txn.id])
+    let legEmits = capture.changed.filter { $0.recordType == TransactionLegRow.recordType }
+    // One leg-record emit per leg the txn write inserted (two legs in
+    // this transfer). A regression that drops the per-leg emit would
+    // surface as `legEmits.count == 0`.
+    #expect(legEmits.count == 2)
     #expect(capture.deleted.isEmpty)
   }
 
@@ -114,6 +119,14 @@ struct RepositoryHookRecordTypeTests {
 
     let accountEmits = capture.changed.filter { $0.recordType == AccountRow.recordType }
     #expect(accountEmits.map(\.id) == [account.id])
+    // Opening-balance create writes a one-leg synthetic transaction
+    // alongside the account row; one txn-record + one leg-record emit
+    // each. A regression that mis-tags the txn or leg emit with the
+    // account record type would drop these to zero.
+    let txnEmits = capture.changed.filter { $0.recordType == TransactionRow.recordType }
+    let legEmits = capture.changed.filter { $0.recordType == TransactionLegRow.recordType }
+    #expect(txnEmits.count == 1)
+    #expect(legEmits.count == 1)
   }
 
   // MARK: - EarmarkRepository
@@ -141,5 +154,13 @@ struct RepositoryHookRecordTypeTests {
 
     let earmarkEmits = capture.changed.filter { $0.recordType == EarmarkRow.recordType }
     #expect(earmarkEmits.isEmpty)
+    // The setBudget write emits exactly one budget-item record so the
+    // sync engine queues an EarmarkBudgetItemRecord upload (not an
+    // EarmarkRecord one). A regression that mis-tags the emit would
+    // surface as a zero count here.
+    let budgetEmits = capture.changed.filter {
+      $0.recordType == EarmarkBudgetItemRow.recordType
+    }
+    #expect(budgetEmits.count == 1)
   }
 }

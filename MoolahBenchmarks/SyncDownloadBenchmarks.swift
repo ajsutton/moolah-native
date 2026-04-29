@@ -16,6 +16,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
   nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler?
   nonisolated(unsafe) private static var _zoneID: CKRecordZone.ID?
 
+  @MainActor
   override static func setUp() {
     super.setUp()
     let result = expecting("benchmark TestBackend.create failed") {
@@ -42,10 +43,9 @@ final class SyncDownloadBenchmarks: XCTestCase {
       investmentValues: result.backend.grdbInvestments,
       transactions: result.backend.grdbTransactions,
       transactionLegs: result.backend.grdbTransactionLegs)
-    let handler = ProfileDataSyncHandler(
+    _handler = ProfileDataSyncHandler(
       profileId: profileId, zoneID: zoneID, modelContainer: container,
       grdbRepositories: bundle)
-    _handler = handler
     _zoneID = zoneID
   }
 

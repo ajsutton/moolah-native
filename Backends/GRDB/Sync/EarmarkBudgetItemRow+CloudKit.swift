@@ -27,11 +27,19 @@ extension EarmarkBudgetItemRow: CloudKitRecordConvertible {
   static func fieldValues(from ckRecord: CKRecord) -> EarmarkBudgetItemRow? {
     guard let id = ckRecord.recordID.uuid else { return nil }
     let fields = EarmarkBudgetItemRecordCloudKitFields(from: ckRecord)
+    // Both FKs are required; bail rather than minting placeholder UUIDs
+    // that would point at no row.
+    guard
+      let earmarkId = fields.earmarkId.flatMap(UUID.init(uuidString:)),
+      let categoryId = fields.categoryId.flatMap(UUID.init(uuidString:))
+    else {
+      return nil
+    }
     return EarmarkBudgetItemRow(
       id: id,
       recordName: ckRecord.recordID.recordName,
-      earmarkId: fields.earmarkId.flatMap(UUID.init(uuidString:)) ?? UUID(),
-      categoryId: fields.categoryId.flatMap(UUID.init(uuidString:)) ?? UUID(),
+      earmarkId: earmarkId,
+      categoryId: categoryId,
       amount: fields.amount ?? 0,
       instrumentId: fields.instrumentId ?? "",
       // Stamped by applyGRDBBatchSave after upsert; never read from the

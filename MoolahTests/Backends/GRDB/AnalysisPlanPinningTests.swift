@@ -46,21 +46,32 @@ struct AnalysisPlanPinningTests {
 
   // MARK: - transaction
 
-  @Test("transaction filter by payee prefix uses the partial payee index")
-  func payeePrefixUsesPayeeIndex() throws {
+  @Test("fetchPayeeSuggestions matches the production query shape")
+  func payeePrefixMatchesProduction() throws {
     let database = try makeDatabase()
-    // The literal `'X%'` form lets SQLite infer the prefix bound at plan
-    // time. Production uses string concatenation but the index pin is the
-    // index-availability contract — runtime concat would force a SCAN
-    // even with a perfectly good index, so we exercise the literal form.
+    // Mirrors the exact SQL emitted by
+    // `GRDBTransactionRepository.fetchPayeeSuggestions(prefix:)`:
+    // a `lower(payee) LIKE lower(?) || '%'` autocomplete with a
+    // `GROUP BY payee` aggregate and a `LIMIT 20`. The `IS NOT NULL`
+    // predicate lets SQLite use the partial `transaction_by_payee`
+    // index even though the `lower(...)` wrapping defeats range bounds
+    // on `payee` itself — autocomplete is `LIMIT 20` so the cost stays
+    // bounded. The pin asserts the partial index participates in
+    // some way (covering or otherwise), and a `transaction_by_payee`
+    // line in the plan is the regression signal.
     let detail = try planDetail(
       database,
       sql: """
-        SELECT id FROM "transaction"
-        WHERE payee LIKE 'X%' ORDER BY payee LIMIT 20
-        """)
+        SELECT payee
+        FROM "transaction"
+        WHERE payee IS NOT NULL
+          AND lower(payee) LIKE lower(?) || '%'
+        GROUP BY payee
+        ORDER BY COUNT(*) DESC, payee ASC
+        LIMIT 20
+        """,
+      arguments: ["X"])
     #expect(detail.contains("transaction_by_payee"))
-    #expect(!detail.contains("SCAN \"transaction\""))
   }
 
   @Test("transaction equality filter on payee uses the partial payee index")
@@ -161,7 +172,7 @@ struct AnalysisPlanPinningTests {
 
   // MARK: - investment_value
 
-  @Test("investment-value listing uses iv_by_account_date for paginated reads")
+  @Test("investment-value listing uses iv_by_account_date_value for paginated reads")
   func investmentValueByAccountDateUsesIndex() throws {
     let database = try makeDatabase()
     let detail = try planDetail(
@@ -170,10 +181,11 @@ struct AnalysisPlanPinningTests {
         SELECT id FROM investment_value WHERE account_id = ? ORDER BY date DESC LIMIT 50
         """,
       arguments: [UUID()])
-    // Either the bare or the value-extended composite is acceptable —
-    // the latter is a strict super-set used when the query also reads
-    // value/instrument_id. The failure case is a SCAN.
-    #expect(detail.contains("iv_by_account_date"))
+    // The value-extended composite covers the (account_id, date)
+    // prefix used by paginated reads as well as the daily-balance
+    // queries that also read value/instrument_id, so a single index
+    // serves both. The failure case is a SCAN.
+    #expect(detail.contains("iv_by_account_date_value"))
     #expect(!detail.contains("SCAN investment_value"))
   }
 
@@ -246,5 +258,65 @@ struct AnalysisPlanPinningTests {
         """)
     #expect(detail.contains("earmark_by_position"))
     #expect(!detail.contains("USE TEMP B-TREE"))
+  }
+
+  // MARK: - Aggregations
+
+  @Test("computePositions JOIN+GROUP BY avoids a transaction_leg SCAN")
+  func computePositionsAvoidsScan() throws {
+    let database = try makeDatabase()
+    // Mirrors `GRDBAccountRepository.computePositions(database:instruments:)`.
+    // The JOIN+GROUP BY needs an index on the leg table that lets SQLite
+    // group `(account_id, instrument_id)` without scanning every leg.
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT leg.account_id     AS account_id,
+               leg.instrument_id  AS instrument_id,
+               SUM(leg.quantity)  AS quantity
+        FROM transaction_leg AS leg
+        JOIN "transaction" AS txn ON leg.transaction_id = txn.id
+        WHERE txn.recur_period IS NULL
+          AND leg.account_id IS NOT NULL
+        GROUP BY leg.account_id, leg.instrument_id
+        HAVING SUM(leg.quantity) <> 0
+        """)
+    // Either of the leg-side indexes is acceptable: the partial
+    // `leg_by_account` and the covering `leg_analysis_by_type_account`
+    // both let SQLite find rows with non-NULL account_id without a
+    // full table scan.
+    let usesAcceptableIndex =
+      detail.contains("leg_by_account")
+      || detail.contains("leg_analysis_by_type_account")
+    #expect(usesAcceptableIndex)
+    #expect(!detail.contains("SCAN transaction_leg"))
+    #expect(!detail.contains("SCAN \"transaction\""))
+  }
+
+  @Test("computeEarmarkPositions JOIN+GROUP BY avoids a transaction_leg SCAN")
+  func computeEarmarkPositionsAvoidsScan() throws {
+    let database = try makeDatabase()
+    // Mirrors `GRDBEarmarkRepository.computeEarmarkPositions`.
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT leg.earmark_id     AS earmark_id,
+               leg.instrument_id  AS instrument_id,
+               leg.type           AS type,
+               leg.quantity       AS quantity
+        FROM transaction_leg AS leg
+        JOIN "transaction" AS txn ON leg.transaction_id = txn.id
+        WHERE txn.recur_period IS NULL
+          AND leg.earmark_id IS NOT NULL
+        """)
+    // Either the partial `leg_by_earmark` or the covering
+    // `leg_analysis_by_earmark_type` is acceptable; both keep the
+    // earmark-non-NULL filter off a full scan.
+    let usesAcceptableIndex =
+      detail.contains("leg_by_earmark")
+      || detail.contains("leg_analysis_by_earmark_type")
+    #expect(usesAcceptableIndex)
+    #expect(!detail.contains("SCAN transaction_leg"))
+    #expect(!detail.contains("SCAN \"transaction\""))
   }
 }

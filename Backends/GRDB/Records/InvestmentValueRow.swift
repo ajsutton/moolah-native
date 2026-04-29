@@ -48,3 +48,4 @@ extension InvestmentValueRow: Sendable {}
 extension InvestmentValueRow: Identifiable {}
 extension InvestmentValueRow: FetchableRecord {}
 extension InvestmentValueRow: PersistableRecord {}
+extension InvestmentValueRow: GRDBSystemFieldsStampable {}

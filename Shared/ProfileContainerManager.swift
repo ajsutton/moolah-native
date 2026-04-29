@@ -147,8 +147,15 @@ final class ProfileContainerManager {
   /// Returns all known profile IDs from the index container.
   func allProfileIds() -> [UUID] {
     let context = ModelContext(indexContainer)
-    let records = (try? context.fetch(FetchDescriptor<ProfileRecord>())) ?? []
-    return records.map(\.id)
+    do {
+      let records = try context.fetch(FetchDescriptor<ProfileRecord>())
+      return records.map(\.id)
+    } catch {
+      logger.error(
+        "Failed to fetch profile records from index container: \(error.localizedDescription, privacy: .public)"
+      )
+      return []
+    }
   }
 
   /// Creates a test-only manager with in-memory stores.

@@ -40,7 +40,12 @@ import OSLog
 /// race; `@unchecked` only waives Swift's structural check that
 /// `final class` types meet `Sendable`'s requirements automatically.
 final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendable {
-  let database: any DatabaseWriter
+  // `private(set) internal var` mirrors `let` immutability (no setter
+  // is exposed externally; `init` runs in the same file as the
+  // declaration, so the implicit private setter is reachable from
+  // there) while keeping read access available to the sibling
+  // extension files (`+Sync.swift`) that need to reach the queue.
+  private(set) var database: any DatabaseWriter
   /// Profile instrument used to label the running balance for global
   /// (non-account-scoped) fetches. Mirrors
   /// `CloudKitTransactionRepository.instrument`.
@@ -174,16 +179,27 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
 
   func delete(id: UUID) async throws {
     // Legs cascade via the `transaction_leg.transaction_id` FK with
-    // `ON DELETE CASCADE`. We do not emit `onRecordDeleted` per
-    // cascaded leg — the sync layer reconciles by `record_name`, and
-    // CloudKit's parent-record delete already implies the children.
-    let didDelete = try await database.write { database in
-      try TransactionRow.deleteOne(database, id: id)
+    // `ON DELETE CASCADE`. CloudKit doesn't cascade deletes at the zone
+    // level, so we fetch the leg ids before deleting the parent (still
+    // inside the same write transaction) and emit `onRecordDeleted`
+    // for each leg after the write commits — mirrors the per-leg fan
+    // out in `create`/`update`.
+    let outcome = try await database.write { database -> (didDelete: Bool, legIds: [UUID]) in
+      let legIds =
+        try TransactionLegRow
+        .filter(TransactionLegRow.Columns.transactionId == id)
+        .fetchAll(database)
+        .map(\.id)
+      let didDelete = try TransactionRow.deleteOne(database, id: id)
+      return (didDelete, legIds)
     }
-    guard didDelete else {
+    guard outcome.didDelete else {
       throw BackendError.notFound("Transaction not found")
     }
     onRecordDeleted(TransactionRow.recordType, id)
+    for legId in outcome.legIds {
+      onRecordDeleted(TransactionLegRow.recordType, legId)
+    }
   }
 
   func fetchPayeeSuggestions(prefix: String) async throws -> [String] {
@@ -318,30 +334,6 @@ final class GRDBTransactionRepository: TransactionRepository, @unchecked Sendabl
     row.importOriginImportSessionId = fresh.importOriginImportSessionId
     row.importOriginSourceFilename = fresh.importOriginSourceFilename
     row.importOriginParserIdentifier = fresh.importOriginParserIdentifier
-  }
-
-  /// Returns a copy of `original` with `payee` replaced by the passed
-  /// (already-trimmed) value. `nil` and empty strings collapse to `nil`
-  /// so callers don't persist whitespace-only payees.
-  private static func normalisedPayee(
-    _ trimmed: String?, original: Transaction
-  ) -> Transaction {
-    let normalised: String?
-    if let trimmed, !trimmed.isEmpty {
-      normalised = trimmed
-    } else {
-      normalised = nil
-    }
-    if normalised == original.payee { return original }
-    return Transaction(
-      id: original.id,
-      date: original.date,
-      payee: normalised,
-      notes: original.notes,
-      recurPeriod: original.recurPeriod,
-      recurEvery: original.recurEvery,
-      legs: original.legs,
-      importOrigin: original.importOrigin)
   }
 
 }

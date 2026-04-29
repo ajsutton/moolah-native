@@ -17,6 +17,7 @@ final class SyncUploadBenchmarks: XCTestCase {
   nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler?
   nonisolated(unsafe) private static var _transactionUUIDs400: Set<UUID> = []
 
+  @MainActor
   override static func setUp() {
     super.setUp()
     let result = expecting("benchmark TestBackend.create failed") {

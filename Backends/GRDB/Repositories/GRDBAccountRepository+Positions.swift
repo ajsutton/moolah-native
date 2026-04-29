@@ -11,20 +11,10 @@ import GRDB
 // fallback). Mirrors the SwiftData-era
 // `CloudKitAccountRepository.computePositions(from:instruments:)`.
 extension GRDBAccountRepository {
-  /// Builds `[String: Instrument]` from the `instrument` table, then
-  /// supplements with ambient fiat for ISO codes that don't appear as
-  /// rows. Mirrors `CloudKitInstrumentRegistryRepository.all()`'s
-  /// stored-then-ambient ordering so the output is deterministic.
+  /// Forwards to the shared `InstrumentRow.fetchInstrumentMap` so every
+  /// repository observes the same stored-then-ambient ordering.
   static func fetchInstrumentMap(database: Database) throws -> [String: Instrument] {
-    let rows = try InstrumentRow.fetchAll(database)
-    var map: [String: Instrument] = [:]
-    for row in rows {
-      map[row.id] = row.toDomain()
-    }
-    for code in Locale.Currency.isoCurrencies.map(\.identifier) where map[code] == nil {
-      map[code] = Instrument.fiat(code: code)
-    }
-    return map
+    try InstrumentRow.fetchInstrumentMap(database: database)
   }
 
   /// Computes per-account, per-instrument position sums from the

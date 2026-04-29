@@ -139,134 +139,92 @@ struct CoreFinancialGraphRollbackTests {
     #expect(legRows.isEmpty)
   }
 
-  // MARK: - GRDBCategoryRepository.delete(id:withReplacement:)
-
-  /// Identifiers seeded ahead of `categoryDeleteRollsBackOnFailure` and
-  /// re-checked after the failed delete to assert nothing torn through.
-  private struct CategoryDeleteFixtureIds {
-    let accountId = UUID()
-    let categoryId = UUID()
-    let earmarkId = UUID()
-    let txnId = UUID()
-    let legId = UUID()
-    let budgetItemId = UUID()
-  }
-
-  /// Seeds the parent rows + leg + budget item that reference the
-  /// category, then installs the BEFORE-DELETE trigger on
-  /// `earmark_budget_item` so the production delete path's
-  /// budget-item DELETE step throws.
-  ///
-  /// The category's delete path UPDATEs the leg (category_id → NULL),
-  /// DELETEs the budget item, then DELETEs the category. A failing
-  /// trigger on the budget-item DELETE must unwind the leg UPDATE along
-  /// with the row removal.
-  private func seedCategoryDeleteFixture(
-    in database: any DatabaseWriter,
-    ids: CategoryDeleteFixtureIds
-  ) async throws {
-    let category = Moolah.Category(id: ids.categoryId, name: "Food")
-    try await database.write { database in
-      try Self.insertCategoryDeleteParents(database: database, ids: ids, category: category)
-      try Self.insertCategoryDeleteTransaction(database: database, ids: ids)
-      try database.execute(
-        sql: """
-          CREATE TRIGGER fail_category_delete_budget
-          BEFORE DELETE ON earmark_budget_item
-          BEGIN
-              SELECT RAISE(ABORT, 'forced failure for rollback test');
-          END;
-          """)
-    }
-  }
-
-  nonisolated private static func insertCategoryDeleteParents(
-    database: Database,
-    ids: CategoryDeleteFixtureIds,
-    category: Moolah.Category
-  ) throws {
-    try AccountRow(
-      domain: Account(
-        id: ids.accountId, name: "stub", type: .bank, instrument: .AUD)
-    ).insert(database)
-    try CategoryRow(domain: category).insert(database)
-    try EarmarkRow(
-      domain: Earmark(id: ids.earmarkId, name: "Trip", instrument: .AUD)
-    ).insert(database)
-    try EarmarkBudgetItemRow(
-      domain: EarmarkBudgetItem(
-        id: ids.budgetItemId, categoryId: ids.categoryId,
-        amount: InstrumentAmount(quantity: 100, instrument: .AUD)),
-      earmarkId: ids.earmarkId
-    ).insert(database)
-  }
-
-  nonisolated private static func insertCategoryDeleteTransaction(
-    database: Database,
-    ids: CategoryDeleteFixtureIds
-  ) throws {
-    try TransactionRow(
-      id: ids.txnId,
-      recordName: TransactionRow.recordName(for: ids.txnId),
-      date: Date(),
-      payee: nil,
-      notes: nil,
-      recurPeriod: nil,
-      recurEvery: nil,
-      importOriginRawDescription: nil,
-      importOriginBankReference: nil,
-      importOriginRawAmount: nil,
-      importOriginRawBalance: nil,
-      importOriginImportedAt: nil,
-      importOriginImportSessionId: nil,
-      importOriginSourceFilename: nil,
-      importOriginParserIdentifier: nil,
-      encodedSystemFields: nil
-    ).insert(database)
-    try TransactionLegRow(
-      id: ids.legId,
-      recordName: TransactionLegRow.recordName(for: ids.legId),
-      transactionId: ids.txnId,
-      accountId: ids.accountId,
-      instrumentId: Instrument.AUD.id,
-      quantity: -1000,
-      type: TransactionType.expense.rawValue,
-      categoryId: ids.categoryId,
-      earmarkId: nil,
-      sortOrder: 0,
-      encodedSystemFields: nil
-    ).insert(database)
-  }
+  // MARK: - GRDBTransactionRepository.update(_:)
 
   @Test
-  func categoryDeleteRollsBackOnFailure() async throws {
+  func transactionUpdateRollsBackOnLegFailure() async throws {
     let database = try ProfileDatabase.openInMemory()
-    let categoryRepo = GRDBCategoryRepository(database: database)
-    let ids = CategoryDeleteFixtureIds()
-    try await seedCategoryDeleteFixture(in: database, ids: ids)
+    let txnRepo = GRDBTransactionRepository(
+      database: database,
+      defaultInstrument: .AUD,
+      conversionService: FixedConversionService())
+    let accountId = UUID()
+    try await seedAccountStub(in: database, accountId: accountId)
 
+    // Seed a transaction with a single leg.
+    let originalLeg = TransactionLeg(
+      accountId: accountId, instrument: .AUD, quantity: -10, type: .expense)
+    let txn = Transaction(date: Date(), payee: "Coffee", legs: [originalLeg])
+    _ = try await txnRepo.create(txn)
+    let priorLegs = try await fetchLegs(in: database, transactionId: txn.id)
+    #expect(priorLegs.count == 1)
+
+    // Install a trigger that aborts every leg insert. The update path
+    // deletes existing legs, then re-inserts the new ones — the trigger
+    // fires on the first re-insert, and the header update plus the
+    // pre-update leg deletes must roll back.
+    try await installFailingLegInsertTrigger(in: database, name: "fail_txn_update_leg")
+
+    let mutated = Transaction(
+      id: txn.id, date: txn.date, payee: "Tea", notes: nil,
+      recurPeriod: nil, recurEvery: nil,
+      legs: [
+        TransactionLeg(
+          accountId: accountId, instrument: .AUD, quantity: -42, type: .expense)
+      ],
+      importOrigin: nil)
     do {
-      try await categoryRepo.delete(id: ids.categoryId, withReplacement: nil)
-      Issue.record("delete should have thrown but did not")
+      _ = try await txnRepo.update(mutated)
+      Issue.record("update should have thrown but did not")
     } catch {
       // Expected.
     }
 
-    // Category survives, leg keeps its category_id, budget item still
-    // references the category — the entire transaction rolled back.
+    // Header still has the original payee; leg rows match the pre-update
+    // snapshot byte-equal.
+    let header = try #require(
+      try await database.read { database in
+        try TransactionRow
+          .filter(TransactionRow.Columns.id == txn.id)
+          .fetchOne(database)
+      })
+    #expect(header.payee == "Coffee")
+    let legsAfter = try await fetchLegs(in: database, transactionId: txn.id)
+    #expect(legsAfter.map(\.id) == priorLegs.map(\.id))
+    #expect(legsAfter.map(\.quantity) == priorLegs.map(\.quantity))
+  }
+
+  // MARK: - Transaction-update test helpers
+
+  private func seedAccountStub(in database: any DatabaseWriter, accountId: UUID) async throws {
+    let stub = Account(id: accountId, name: "Cash", type: .bank, instrument: .AUD)
+    try await database.write { database in
+      try AccountRow(domain: stub).insert(database)
+    }
+  }
+
+  private func fetchLegs(
+    in database: any DatabaseWriter, transactionId: UUID
+  ) async throws -> [TransactionLegRow] {
     try await database.read { database in
-      let surviving = try CategoryRow.filter(CategoryRow.Columns.id == ids.categoryId)
-        .fetchOne(database)
-      #expect(surviving != nil)
-      let leg = try #require(
-        try TransactionLegRow.filter(TransactionLegRow.Columns.id == ids.legId)
-          .fetchOne(database))
-      #expect(leg.categoryId == ids.categoryId)
-      let budgetItem =
-        try EarmarkBudgetItemRow
-        .filter(EarmarkBudgetItemRow.Columns.id == ids.budgetItemId)
-        .fetchOne(database)
-      #expect(budgetItem != nil)
+      try TransactionLegRow
+        .filter(TransactionLegRow.Columns.transactionId == transactionId)
+        .fetchAll(database)
+    }
+  }
+
+  private func installFailingLegInsertTrigger(
+    in database: any DatabaseWriter, name: String
+  ) async throws {
+    try await database.write { database in
+      try database.execute(
+        sql: """
+          CREATE TRIGGER \(name)
+          BEFORE INSERT ON transaction_leg
+          BEGIN
+              SELECT RAISE(ABORT, 'forced failure for rollback test');
+          END;
+          """)
     }
   }
 

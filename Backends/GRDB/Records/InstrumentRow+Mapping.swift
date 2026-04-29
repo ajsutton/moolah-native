@@ -1,8 +1,27 @@
 // Backends/GRDB/Records/InstrumentRow+Mapping.swift
 
 import Foundation
+import GRDB
 
 extension InstrumentRow {
+  /// Builds `[String: Instrument]` from the `instrument` table,
+  /// supplemented with ambient fiat for ISO codes that don't appear as
+  /// rows. The single shared helper ensures repository call sites
+  /// (`GRDBAccountRepository`, `GRDBEarmarkRepository`,
+  /// `GRDBTransactionRepository`) all use the same stored-then-ambient
+  /// ordering, mirroring `CloudKitInstrumentRegistryRepository.all()`.
+  static func fetchInstrumentMap(database: Database) throws -> [String: Instrument] {
+    let rows = try InstrumentRow.fetchAll(database)
+    var map: [String: Instrument] = [:]
+    for row in rows {
+      map[row.id] = row.toDomain()
+    }
+    for code in Locale.Currency.isoCurrencies.map(\.identifier) where map[code] == nil {
+      map[code] = Instrument.fiat(code: code)
+    }
+    return map
+  }
+
   /// The CloudKit recordType on the wire for this record. Frozen contract;
   /// existing iCloud zones reference this exact string regardless of how
   /// the local Swift type is named.

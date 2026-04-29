@@ -6,7 +6,7 @@ extension ProfileDataSyncHandler {
 
   /// Inputs to the per-record-type save helpers. Bundling them keeps
   /// each helper signature compact and below SwiftLint's
-  /// `function_parameter_count` threshold; the underlying `mapRowsUUID`
+  /// `function_parameter_count` threshold; the underlying `mapRows`
   /// dispatch uses the typed `Row` argument to recover the CKRecord
   /// decoder and the per-row id key.
   struct GRDBBatchSaveContext {
@@ -22,7 +22,7 @@ extension ProfileDataSyncHandler {
       ckRecords: ckRecords,
       systemFields: systemFields,
       site: "applyGRDBBatchSave[CSVImportProfile]")
-    let rows = mapRowsUUID(
+    let rows = mapRows(
       context: context,
       fieldValues: CSVImportProfileRow.fieldValues(from:),
       idKey: { $0.id.uuidString },
@@ -39,7 +39,7 @@ extension ProfileDataSyncHandler {
       ckRecords: ckRecords,
       systemFields: systemFields,
       site: "applyGRDBBatchSave[ImportRule]")
-    let rows = mapRowsUUID(
+    let rows = mapRows(
       context: context,
       fieldValues: ImportRuleRow.fieldValues(from:),
       idKey: { $0.id.uuidString },
@@ -56,7 +56,7 @@ extension ProfileDataSyncHandler {
       ckRecords: ckRecords,
       systemFields: systemFields,
       site: "applyGRDBBatchSave[Instrument]")
-    let rows = mapRowsUUID(
+    let rows = mapRows(
       context: context,
       fieldValues: InstrumentRow.fieldValues(from:),
       idKey: { $0.id },
@@ -73,7 +73,7 @@ extension ProfileDataSyncHandler {
       ckRecords: ckRecords,
       systemFields: systemFields,
       site: "applyGRDBBatchSave[Account]")
-    let rows = mapRowsUUID(
+    let rows = mapRows(
       context: context,
       fieldValues: AccountRow.fieldValues(from:),
       idKey: { $0.id.uuidString },
@@ -90,7 +90,7 @@ extension ProfileDataSyncHandler {
       ckRecords: ckRecords,
       systemFields: systemFields,
       site: "applyGRDBBatchSave[Category]")
-    let rows = mapRowsUUID(
+    let rows = mapRows(
       context: context,
       fieldValues: CategoryRow.fieldValues(from:),
       idKey: { $0.id.uuidString },
@@ -107,7 +107,7 @@ extension ProfileDataSyncHandler {
       ckRecords: ckRecords,
       systemFields: systemFields,
       site: "applyGRDBBatchSave[Earmark]")
-    let rows = mapRowsUUID(
+    let rows = mapRows(
       context: context,
       fieldValues: EarmarkRow.fieldValues(from:),
       idKey: { $0.id.uuidString },
@@ -124,7 +124,7 @@ extension ProfileDataSyncHandler {
       ckRecords: ckRecords,
       systemFields: systemFields,
       site: "applyGRDBBatchSave[EarmarkBudgetItem]")
-    let rows = mapRowsUUID(
+    let rows = mapRows(
       context: context,
       fieldValues: EarmarkBudgetItemRow.fieldValues(from:),
       idKey: { $0.id.uuidString },
@@ -141,7 +141,7 @@ extension ProfileDataSyncHandler {
       ckRecords: ckRecords,
       systemFields: systemFields,
       site: "applyGRDBBatchSave[InvestmentValue]")
-    let rows = mapRowsUUID(
+    let rows = mapRows(
       context: context,
       fieldValues: InvestmentValueRow.fieldValues(from:),
       idKey: { $0.id.uuidString },
@@ -158,7 +158,7 @@ extension ProfileDataSyncHandler {
       ckRecords: ckRecords,
       systemFields: systemFields,
       site: "applyGRDBBatchSave[Transaction]")
-    let rows = mapRowsUUID(
+    let rows = mapRows(
       context: context,
       fieldValues: TransactionRow.fieldValues(from:),
       idKey: { $0.id.uuidString },
@@ -175,7 +175,7 @@ extension ProfileDataSyncHandler {
       ckRecords: ckRecords,
       systemFields: systemFields,
       site: "applyGRDBBatchSave[TransactionLeg]")
-    let rows = mapRowsUUID(
+    let rows = mapRows(
       context: context,
       fieldValues: TransactionLegRow.fieldValues(from:),
       idKey: { $0.id.uuidString },
@@ -205,7 +205,7 @@ extension ProfileDataSyncHandler {
   /// `idKey` extracts the per-row lookup key for the system-fields
   /// dictionary — `.id.uuidString` for UUID-keyed rows, `.id` for the
   /// string-keyed `InstrumentRow`.
-  nonisolated func mapRowsUUID<Row>(
+  nonisolated func mapRows<Row>(
     context: GRDBBatchSaveContext,
     fieldValues: (CKRecord) -> Row?,
     idKey: (Row) -> String,
@@ -247,22 +247,3 @@ extension ProfileDataSyncHandler {
     )
   }
 }
-
-/// Marker protocol for the per-table row structs. Every Slice-1 row
-/// already has an `encodedSystemFields: Data?` stored property; the
-/// protocol just exposes it so `stampSystemFields` can mutate the
-/// blob without a per-type helper.
-protocol GRDBSystemFieldsStampable {
-  var encodedSystemFields: Data? { get set }
-}
-
-extension CSVImportProfileRow: GRDBSystemFieldsStampable {}
-extension ImportRuleRow: GRDBSystemFieldsStampable {}
-extension InstrumentRow: GRDBSystemFieldsStampable {}
-extension AccountRow: GRDBSystemFieldsStampable {}
-extension CategoryRow: GRDBSystemFieldsStampable {}
-extension EarmarkRow: GRDBSystemFieldsStampable {}
-extension EarmarkBudgetItemRow: GRDBSystemFieldsStampable {}
-extension InvestmentValueRow: GRDBSystemFieldsStampable {}
-extension TransactionRow: GRDBSystemFieldsStampable {}
-extension TransactionLegRow: GRDBSystemFieldsStampable {}

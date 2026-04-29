@@ -36,3 +36,4 @@ extension CategoryRow: Sendable {}
 extension CategoryRow: Identifiable {}
 extension CategoryRow: FetchableRecord {}
 extension CategoryRow: PersistableRecord {}
+extension CategoryRow: GRDBSystemFieldsStampable {}

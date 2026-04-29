@@ -48,3 +48,4 @@ extension EarmarkBudgetItemRow: Sendable {}
 extension EarmarkBudgetItemRow: Identifiable {}
 extension EarmarkBudgetItemRow: FetchableRecord {}
 extension EarmarkBudgetItemRow: PersistableRecord {}
+extension EarmarkBudgetItemRow: GRDBSystemFieldsStampable {}

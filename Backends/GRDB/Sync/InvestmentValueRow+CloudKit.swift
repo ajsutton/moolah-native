@@ -27,10 +27,15 @@ extension InvestmentValueRow: CloudKitRecordConvertible {
   static func fieldValues(from ckRecord: CKRecord) -> InvestmentValueRow? {
     guard let id = ckRecord.recordID.uuid else { return nil }
     let fields = InvestmentValueRecordCloudKitFields(from: ckRecord)
+    // `accountId` is the parent FK and is required; bail rather than
+    // minting a placeholder UUID that would point at no row.
+    guard let accountId = fields.accountId.flatMap(UUID.init(uuidString:)) else {
+      return nil
+    }
     return InvestmentValueRow(
       id: id,
       recordName: ckRecord.recordID.recordName,
-      accountId: fields.accountId.flatMap(UUID.init(uuidString:)) ?? UUID(),
+      accountId: accountId,
       date: fields.date ?? Date(),
       value: fields.value ?? 0,
       instrumentId: fields.instrumentId ?? "",

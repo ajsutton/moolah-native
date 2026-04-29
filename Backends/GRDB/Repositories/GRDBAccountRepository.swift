@@ -74,11 +74,16 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
       throw BackendError.validationFailed("Account name cannot be empty")
     }
 
+    // Capture the wall clock outside the write block so the closure body
+    // doesn't read `Date()` while holding the GRDB queue's serial
+    // executor.
+    let openingBalanceDate = Date()
     let inserts = try await database.write { database -> OpeningBalanceInserts in
       try Self.performAccountInsert(
         database: database,
         account: account,
-        openingBalance: openingBalance)
+        openingBalance: openingBalance,
+        openingBalanceDate: openingBalanceDate)
     }
 
     onRecordChanged(AccountRow.recordType, account.id)
@@ -99,7 +104,8 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
   private static func performAccountInsert(
     database: Database,
     account: Account,
-    openingBalance: InstrumentAmount?
+    openingBalance: InstrumentAmount?,
+    openingBalanceDate: Date
   ) throws -> OpeningBalanceInserts {
     // Non-fiat instruments (stocks, crypto) must have a row in the
     // `instrument` table so `fetchAll` can resolve the full
@@ -129,7 +135,7 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
     let txnRow = TransactionRow(
       id: txnId,
       recordName: TransactionRow.recordName(for: txnId),
-      date: Date(),
+      date: openingBalanceDate,
       payee: nil,
       notes: nil,
       recurPeriod: nil,

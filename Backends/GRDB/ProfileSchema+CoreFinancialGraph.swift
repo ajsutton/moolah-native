@@ -253,12 +253,11 @@ extension ProfileSchema {
             encoded_system_fields  BLOB
         ) STRICT;
 
-        -- Paginated reads of `fetchValues(accountId:)`.
-        CREATE INDEX iv_by_account_date
-            ON investment_value(account_id, date);
         -- Covering for the daily-balance latest-value-per-account-per-date
-        -- lookup driven by `fetchDailyBalances`. Includes `value` and
-        -- `instrument_id` so plan-pinning tests can assert COVERING INDEX.
+        -- lookup driven by `fetchDailyBalances` and the paginated
+        -- per-account reads in `fetchValues(accountId:)`. The
+        -- (account_id, date) prefix makes a separate narrow index
+        -- redundant.
         CREATE INDEX iv_by_account_date_value
             ON investment_value(account_id, date, value, instrument_id);
         """)

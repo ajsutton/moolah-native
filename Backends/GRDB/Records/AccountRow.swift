@@ -53,3 +53,4 @@ extension AccountRow: Sendable {}
 extension AccountRow: Identifiable {}
 extension AccountRow: FetchableRecord {}
 extension AccountRow: PersistableRecord {}
+extension AccountRow: GRDBSystemFieldsStampable {}

@@ -78,3 +78,4 @@ extension InstrumentRow: Sendable {}
 extension InstrumentRow: Identifiable {}
 extension InstrumentRow: FetchableRecord {}
 extension InstrumentRow: PersistableRecord {}
+extension InstrumentRow: GRDBSystemFieldsStampable {}

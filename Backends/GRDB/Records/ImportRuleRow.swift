@@ -71,3 +71,4 @@ extension ImportRuleRow: Sendable {}
 extension ImportRuleRow: Identifiable {}
 extension ImportRuleRow: FetchableRecord {}
 extension ImportRuleRow: PersistableRecord {}
+extension ImportRuleRow: GRDBSystemFieldsStampable {}

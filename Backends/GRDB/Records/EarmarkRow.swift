@@ -68,3 +68,4 @@ extension EarmarkRow: Sendable {}
 extension EarmarkRow: Identifiable {}
 extension EarmarkRow: FetchableRecord {}
 extension EarmarkRow: PersistableRecord {}
+extension EarmarkRow: GRDBSystemFieldsStampable {}

@@ -31,10 +31,15 @@ extension TransactionLegRow: CloudKitRecordConvertible {
   static func fieldValues(from ckRecord: CKRecord) -> TransactionLegRow? {
     guard let id = ckRecord.recordID.uuid else { return nil }
     let fields = TransactionLegRecordCloudKitFields(from: ckRecord)
+    // `transactionId` is the parent FK and is required; bail rather
+    // than minting a placeholder UUID that would point at no row.
+    guard let transactionId = fields.transactionId.flatMap(UUID.init(uuidString:)) else {
+      return nil
+    }
     return TransactionLegRow(
       id: id,
       recordName: ckRecord.recordID.recordName,
-      transactionId: fields.transactionId.flatMap(UUID.init(uuidString:)) ?? UUID(),
+      transactionId: transactionId,
       accountId: fields.accountId.flatMap(UUID.init(uuidString:)),
       instrumentId: fields.instrumentId ?? "",
       quantity: fields.quantity ?? 0,

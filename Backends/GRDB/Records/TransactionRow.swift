@@ -78,3 +78,4 @@ extension TransactionRow: Sendable {}
 extension TransactionRow: Identifiable {}
 extension TransactionRow: FetchableRecord {}
 extension TransactionRow: PersistableRecord {}
+extension TransactionRow: GRDBSystemFieldsStampable {}

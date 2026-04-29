@@ -165,8 +165,7 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   }
 
   private func fetchTransactions(filter: ScheduledFilter) async throws -> [Transaction] {
-    let resolvedInstrument = self.instrument
-    return try await database.read { database -> [Transaction] in
+    try await database.read { database -> [Transaction] in
       let txnRows = try TransactionRow.fetchAll(database)
       let legRows = try TransactionLegRow.fetchAll(database)
       let instrumentRows = try InstrumentRow.fetchAll(database)
@@ -199,7 +198,6 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
       case .nonScheduledOnly:
         transactions = transactions.filter { !$0.isScheduled }
       }
-      _ = resolvedInstrument
       return transactions
     }
   }
