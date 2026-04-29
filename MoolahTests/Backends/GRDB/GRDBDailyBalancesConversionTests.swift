@@ -85,6 +85,69 @@ struct GRDBDailyBalancesConversionTests {
     #expect(dayTwoBalance.balance.instrument == .defaultTestInstrument)
   }
 
+  @Test("daily balances convert investment-value snapshots at the day's rate")
+  func dailyBalancesInvestmentValueConvertAtCorrectDayRate() async throws {
+    // Pins that `applyInvestmentValues` converts each day's
+    // investment-value override at *that day's* rate. The conversion
+    // service seeds two rate windows that bracket the test day: an
+    // early rate that applies on `day` (2025-06-10) and a much later
+    // rate (2026-01-01) that would only apply if the conversion ran on
+    // a "now-ish" instant such as `Date()`. The early window's seed
+    // sits well before any plausible system-timezone shift of the
+    // per-day `startOfDay` instant, so the descending `ratesAsOf` scan
+    // picks the right window regardless of where the runner clock is.
+    let day = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
+    let dayRate = try AnalysisTestHelpers.decimal("1.5")
+    let nowRate = try AnalysisTestHelpers.decimal("3.0")
+    let conversion = DateBasedFixedConversionService(
+      rates: [
+        try AnalysisTestHelpers.utcDate(year: 2025, month: 1, day: 1, hour: 0): [
+          "USD": dayRate
+        ],
+        try AnalysisTestHelpers.utcDate(year: 2026, month: 1, day: 1, hour: 0): [
+          "USD": nowRate
+        ],
+      ])
+    let backend = try CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let investmentAccount = Account(
+      id: UUID(), name: "Portfolio", type: .investment, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(investmentAccount)
+
+    // A bank account with a same-day transaction so the historic walk
+    // emits a `DailyBalance` row for `day` — without it the
+    // `applyInvestmentValues` fold-in has no day key to write into.
+    let bankAccount = Account(
+      id: UUID(), name: "Bank", type: .bank, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(bankAccount)
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day, payee: "Interest",
+        legs: [
+          TransactionLeg(
+            accountId: bankAccount.id, instrument: .defaultTestInstrument,
+            quantity: 10, type: .income)
+        ]))
+
+    // 100 USD investment value on `day`. At the day's 1.5 USD→profile
+    // rate the converted total is 150. A regression that converted
+    // every snapshot at `Date()` (today) would pick the 2026-01-01
+    // window instead and yield 100 * 3.0 = 300 — fails the assertion.
+    let usd = Instrument.fiat(code: "USD")
+    try await backend.investments.setValue(
+      accountId: investmentAccount.id,
+      date: day,
+      value: InstrumentAmount(quantity: 100, instrument: usd))
+
+    let balances = try await backend.analysis.fetchDailyBalances(
+      after: nil, forecastUntil: nil)
+    let dayStart = AnalysisTestHelpers.calendar.startOfDay(for: day)
+    let dayBalance = try #require(balances.first { $0.date == dayStart })
+    let investmentValue = try #require(dayBalance.investmentValue)
+    #expect(investmentValue.quantity == 150)
+    #expect(investmentValue.instrument == .defaultTestInstrument)
+  }
+
   @Test("daily balances sum multi-instrument positions per their own day's rate")
   func dailyBalancesMultiInstrumentSameDay() async throws {
     // Two foreign-instrument legs on the same day must convert with the

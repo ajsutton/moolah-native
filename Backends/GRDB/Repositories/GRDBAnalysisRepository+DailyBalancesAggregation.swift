@@ -55,12 +55,18 @@ extension GRDBAnalysisRepository {
       database: database, after: after)
     let investmentAccountIds = try Self.fetchInvestmentAccountIds(
       database: database)
+    // Fetch `instrumentMap` before the investment-value snapshots so
+    // `fetchInvestmentValueSnapshots` can resolve each row's instrument
+    // to its registered `Instrument` (with the right `kind` for stock /
+    // crypto investments) instead of falling back to fiat-by-id.
+    let instrumentMap = try InstrumentRow.fetchInstrumentMap(database: database)
     let investmentValues = try Self.fetchInvestmentValueSnapshots(
-      database: database, investmentAccountIds: investmentAccountIds)
+      database: database,
+      investmentAccountIds: investmentAccountIds,
+      instrumentMap: instrumentMap)
     let scheduled =
       forecastUntil != nil
       ? try Self.fetchScheduledTransactions(database: database) : []
-    let instrumentMap = try InstrumentRow.fetchInstrumentMap(database: database)
     return DailyBalancesAggregation(
       priorAccountRows: priorAccountRows,
       priorEarmarkRows: priorEarmarkRows,
@@ -230,75 +236,6 @@ extension GRDBAnalysisRepository {
     let arguments: StatementArguments = ["after": after]
     let sqlRows = try Row.fetchAll(database, sql: sql, arguments: arguments)
     return Self.decodeEarmarkDeltaRows(sqlRows)
-  }
-
-  /// Loads every account id whose `type = 'investment'`. The Swift
-  /// assembly walks per-day deltas and needs to know which accounts
-  /// are investments so it can route transfer legs into
-  /// `accountsFromTransfers`. Reading the column directly off the
-  /// `account` table avoids redundantly carrying the full account row
-  /// across the snapshot boundary.
-  private static func fetchInvestmentAccountIds(database: Database) throws -> Set<UUID> {
-    let rows = try Row.fetchAll(
-      database,
-      sql: "SELECT id FROM account WHERE type = 'investment'")
-    var ids = Set<UUID>()
-    ids.reserveCapacity(rows.count)
-    for row in rows {
-      if let id: UUID = row["id"] {
-        ids.insert(id)
-      }
-    }
-    return ids
-  }
-
-  /// Loads the per-account latest-as-of-day investment values pinned
-  /// by
-  /// `DailyBalancesPlanPinningTests.fetchDailyBalancesInvestmentValuesUseAccountDateIndex`.
-  /// The composite `iv_by_account_date_value` covers
-  /// `(account_id, date, value, instrument_id)` so the SELECT list is
-  /// served by the index — SQLite emits `SCAN ... USING COVERING
-  /// INDEX`, which is the no-base-row read shape we want and is *not*
-  /// a full table scan.
-  ///
-  /// All historical snapshots are loaded — there is intentionally no
-  /// `:after` lower bound. The cursor walk in `applyInvestmentValues`
-  /// (`advanceInvestmentCursor`) carries the most-recent pre-window
-  /// snapshot forward into the first in-window day; filtering the
-  /// loader on `date >= :after` would silently drop that baseline
-  /// snapshot and zero out the in-window investment value.
-  ///
-  /// Filtered to investment accounts in Swift (the same shape as the
-  /// previous SwiftData-backed path) so the SQL stays index-friendly
-  /// — adding the account-type predicate to the WHERE would force an
-  /// `account` join and break the covering index.
-  private static func fetchInvestmentValueSnapshots(
-    database: Database,
-    investmentAccountIds: Set<UUID>
-  ) throws -> [InvestmentValueSnapshot] {
-    guard !investmentAccountIds.isEmpty else { return [] }
-    let sql = """
-      SELECT account_id, date, value, instrument_id
-      FROM investment_value
-      ORDER BY account_id ASC, date ASC
-      """
-    let sqlRows = try Row.fetchAll(database, sql: sql)
-    var snapshots: [InvestmentValueSnapshot] = []
-    snapshots.reserveCapacity(sqlRows.count)
-    for row in sqlRows {
-      guard let accountId: UUID = row["account_id"] else { continue }
-      guard investmentAccountIds.contains(accountId) else { continue }
-      guard let date: Date = row["date"] else { continue }
-      guard let value: Int64 = row["value"] else { continue }
-      guard let instrumentId: String = row["instrument_id"] else { continue }
-      let instrument = Instrument.fiat(code: instrumentId)
-      let amount = InstrumentAmount(storageValue: value, instrument: instrument)
-      snapshots.append(
-        InvestmentValueSnapshot(
-          accountId: accountId, date: date, value: amount))
-    }
-    snapshots.sort { $0.date < $1.date }
-    return snapshots
   }
 
   /// Loads the scheduled `[Transaction]` set used by the forecast

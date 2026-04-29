@@ -52,12 +52,12 @@ struct DailyBalancesPlanPinningTests {
         FROM transaction_leg leg
         JOIN "transaction"    t ON leg.transaction_id = t.id
         WHERE t.recur_period IS NULL
-          AND (? IS NULL OR t.date >= ?)
+          AND (:after IS NULL OR t.date >= :after)
           AND leg.account_id IS NOT NULL
         GROUP BY day, leg.account_id, leg.instrument_id, leg.type
         ORDER BY day ASC
         """,
-      arguments: [Date?.none, Date?.none])
+      arguments: ["after": Date?.none])
     // Either of the leg-side indexes that narrow on `account_id IS NOT
     // NULL` is acceptable: the partial `leg_by_account` (planner's
     // typical choice on a quiescent table) and the covering composite
@@ -72,6 +72,17 @@ struct DailyBalancesPlanPinningTests {
     // table name (which would silently pass even on a full scan).
     #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
+    // SQLite's plan is permitted to (and does) include both
+    // `USE TEMP B-TREE FOR GROUP BY` and `USE TEMP B-TREE FOR ORDER BY`.
+    // We do NOT reject those lines because the GROUP BY and ORDER BY
+    // both key on `day = DATE(t.date)` — a derived expression with no
+    // index keying. SQLite has no choice but to materialise the groups
+    // and the sort in temp B-trees; trying to forbid them would force
+    // the planner away from the leg-side index entirely. The
+    // bare-SCAN rejection captured by `planHasFullTableScanOf` is the
+    // perf-critical signal — it's what flips when the leg-side index
+    // is dropped or the WHERE clause grows a predicate the partial
+    // index doesn't cover.
   }
 
   @Test("fetchDailyBalances pre-cutoff account-dimension SUM avoids a SCAN")
@@ -95,18 +106,27 @@ struct DailyBalancesPlanPinningTests {
         FROM transaction_leg leg
         JOIN "transaction"    t ON leg.transaction_id = t.id
         WHERE t.recur_period IS NULL
-          AND ? IS NOT NULL AND t.date < ?
+          AND :after IS NOT NULL AND t.date < :after
           AND leg.account_id IS NOT NULL
         GROUP BY day, leg.account_id, leg.instrument_id, leg.type
         ORDER BY day ASC
         """,
-      arguments: [Date?.none, Date?.none])
+      arguments: ["after": Date?.none])
     let usesAcceptableLegIndex =
       detail.contains("leg_by_account")
       || detail.contains("leg_analysis_by_type_account")
     #expect(usesAcceptableLegIndex)
     #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
+    // SQLite's plan is permitted to (and does) include both
+    // `USE TEMP B-TREE FOR GROUP BY` and `USE TEMP B-TREE FOR ORDER BY`.
+    // We do NOT reject those lines because the GROUP BY and ORDER BY
+    // both key on `day = DATE(t.date)` — a derived expression with no
+    // index keying. SQLite has no choice but to materialise the groups
+    // and the sort in temp B-trees; trying to forbid them would force
+    // the planner away from the leg-side index entirely. The
+    // bare-SCAN rejection captured by `planHasFullTableScanOf` is the
+    // perf-critical signal.
   }
 
   @Test("fetchDailyBalances per-day earmark-dimension SUM uses leg_analysis_by_earmark_type")
@@ -131,16 +151,25 @@ struct DailyBalancesPlanPinningTests {
         FROM transaction_leg leg
         JOIN "transaction"    t ON leg.transaction_id = t.id
         WHERE t.recur_period IS NULL
-          AND (? IS NULL OR t.date >= ?)
+          AND (:after IS NULL OR t.date >= :after)
           AND leg.earmark_id IS NOT NULL
         GROUP BY day, leg.earmark_id, leg.instrument_id, leg.type
         ORDER BY day ASC
         """,
-      arguments: [Date?.none, Date?.none])
+      arguments: ["after": Date?.none])
     #expect(detail.contains("leg_analysis_by_earmark_type"))
     #expect(detail.contains("USING COVERING INDEX"))
     #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
+    // SQLite's plan is permitted to (and does) include both
+    // `USE TEMP B-TREE FOR GROUP BY` and `USE TEMP B-TREE FOR ORDER BY`.
+    // We do NOT reject those lines because the GROUP BY and ORDER BY
+    // both key on `day = DATE(t.date)` — a derived expression with no
+    // index keying. SQLite has no choice but to materialise the groups
+    // and the sort in temp B-trees; trying to forbid them would force
+    // the planner away from the covering index entirely. The
+    // covering-index property captured by the positive
+    // `USING COVERING INDEX` assertion is the perf-critical signal.
   }
 
   @Test("fetchDailyBalances pre-cutoff earmark-dimension SUM uses leg_analysis_by_earmark_type")
@@ -164,16 +193,25 @@ struct DailyBalancesPlanPinningTests {
         FROM transaction_leg leg
         JOIN "transaction"    t ON leg.transaction_id = t.id
         WHERE t.recur_period IS NULL
-          AND ? IS NOT NULL AND t.date < ?
+          AND :after IS NOT NULL AND t.date < :after
           AND leg.earmark_id IS NOT NULL
         GROUP BY day, leg.earmark_id, leg.instrument_id, leg.type
         ORDER BY day ASC
         """,
-      arguments: [Date?.none, Date?.none])
+      arguments: ["after": Date?.none])
     #expect(detail.contains("leg_analysis_by_earmark_type"))
     #expect(detail.contains("USING COVERING INDEX"))
     #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
+    // SQLite's plan is permitted to (and does) include both
+    // `USE TEMP B-TREE FOR GROUP BY` and `USE TEMP B-TREE FOR ORDER BY`.
+    // We do NOT reject those lines because the GROUP BY and ORDER BY
+    // both key on `day = DATE(t.date)` — a derived expression with no
+    // index keying. SQLite has no choice but to materialise the groups
+    // and the sort in temp B-trees; trying to forbid them would force
+    // the planner away from the covering index entirely. The
+    // covering-index property captured by the positive
+    // `USING COVERING INDEX` assertion is the perf-critical signal.
   }
 
   @Test("fetchDailyBalances investment-value lookup uses iv_by_account_date_value")
