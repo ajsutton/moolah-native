@@ -10,7 +10,6 @@ import Testing
 // Visibility is internal (was fileprivate) so sibling test files across the
 // split suites can use these helpers — `strict_fileprivate` disallows
 // fileprivate in this codebase.
-// internal (was fileprivate) so sibling test files can use this helper
 enum AnalysisTestHelpers {
   /// Gregorian calendar used by every test in the suite so rate-by-date lookups
   /// agree across files.

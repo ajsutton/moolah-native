@@ -52,10 +52,23 @@ extension GRDBAnalysisRepository {
   /// pinned by
   /// `AnalysisAggregationPlanPinningTests.fetchExpenseBreakdownUsesCategoryCoveringIndex`.
   /// The shape — `JOIN "transaction"`, `recur_period IS NULL`,
-  /// `type = 'expense'`, `category_id IS NOT NULL`,
-  /// `account_id IS NOT NULL`, optional `:after` — is what selects the
-  /// `leg_analysis_by_type_category` covering composite (v3 schema). Any
-  /// shape drift will trip the plan-pinning test.
+  /// `type = 'expense'`, `category_id IS NOT NULL`, optional `:after` —
+  /// is what selects the `leg_analysis_by_type_category` covering
+  /// composite (v3 schema). Any shape drift will trip the plan-pinning
+  /// test.
+  ///
+  /// `account_id` is intentionally NOT in the WHERE clause:
+  /// 1. **Semantic parity with CloudKit.** The reference path in
+  ///    `CloudKitAnalysisRepository+IncomeExpense.accumulateExpenseLegs`
+  ///    only filters on `leg.type == .expense && leg.categoryId != nil`,
+  ///    so categorised expense legs without an account must appear in
+  ///    the breakdown. Adding `account_id IS NOT NULL` here would
+  ///    silently drop them and diverge from CloudKit.
+  /// 2. **Covering index.** `account_id` is not in
+  ///    `leg_analysis_by_type_category`'s column list, so adding the
+  ///    predicate forces SQLite to fetch the base row and breaks the
+  ///    covering property — the plan flips from
+  ///    `USING COVERING INDEX` to plain `USING INDEX`.
   static func fetchExpenseBreakdownAggregation(
     database: any DatabaseReader,
     after: Date?
@@ -71,7 +84,6 @@ extension GRDBAnalysisRepository {
         WHERE t.recur_period IS NULL
           AND leg.type = 'expense'
           AND leg.category_id IS NOT NULL
-          AND leg.account_id IS NOT NULL
           AND (:after IS NULL OR t.date >= :after)
         GROUP BY day, category_id, instrument_id
         ORDER BY day ASC, category_id ASC

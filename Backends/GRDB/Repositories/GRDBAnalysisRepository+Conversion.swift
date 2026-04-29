@@ -11,31 +11,31 @@ import Foundation
 /// stand on their own once the SwiftData-era
 /// `CloudKitAnalysisRepository` extension files are deleted.
 extension GRDBAnalysisRepository {
-  /// Reused `ISO8601DateFormatter` for parsing the `YYYY-MM-DD` strings
-  /// returned by SQLite's `DATE()`. `ISO8601DateFormatter` is documented
-  /// thread-safe by Apple ("ISO8601DateFormatter is thread safe.") but
-  /// is not declared `Sendable` in Foundation's headers, so a
-  /// `nonisolated(unsafe)` shared instance avoids the per-row allocator
-  /// hit while keeping the compiler informed. Anchored to UTC so the
-  /// parsed `Date` round-trips through the conversion service's
-  /// UTC-keyed ISO formatter onto the same day string.
-  nonisolated(unsafe) private static let dayFormatter: ISO8601DateFormatter = {
+  /// `Sendable` wrapper around an `ISO8601DateFormatter` so a single
+  /// shared instance can be hoisted to a `static let` without
+  /// `nonisolated(unsafe)` (forbidden in production by
+  /// `guides/CONCURRENCY_GUIDE.md` §8). `ISO8601DateFormatter` predates
+  /// Swift `Sendable` but is Apple-documented as thread-safe
+  /// ("ISO8601DateFormatter is thread safe."). The wrapper is `final`,
+  /// holds the formatter as a `let`, and exposes a read-only accessor —
+  /// nothing mutates post-init, so the `@unchecked Sendable` waiver
+  /// only bypasses Swift's structural check, not runtime safety.
+  private final class SendableDayFormatter: @unchecked Sendable {
+    let formatter: ISO8601DateFormatter
+
+    init(_ formatter: ISO8601DateFormatter) { self.formatter = formatter }
+  }
+
+  /// Reused day-string parser anchored to UTC so the resulting `Date`
+  /// round-trips through the conversion service's UTC-keyed ISO
+  /// formatter onto the same day string. Hoisted to a static let so
+  /// per-row aggregation doesn't pay the formatter allocator hit on
+  /// every iteration.
+  private static let dayFormatter: SendableDayFormatter = {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
     formatter.timeZone = utcTimeZone
-    return formatter
-  }()
-
-  /// UTC-anchored Gregorian calendar used to derive the financial-month
-  /// bucket key from a UTC-anchored day `Date`. `Calendar` is a
-  /// `Sendable` value type so the constant has no concurrency caveats.
-  /// Allocated once so per-row bucketing inside
-  /// `assembleExpenseBreakdown` doesn't pay calendar construction on
-  /// every iteration.
-  private static let utcGregorianCalendar: Calendar = {
-    var calendar = Calendar(identifier: .gregorian)
-    calendar.timeZone = utcTimeZone
-    return calendar
+    return SendableDayFormatter(formatter)
   }()
 
   /// `TimeZone(identifier: "UTC")` is documented to never return nil
@@ -58,41 +58,19 @@ extension GRDBAnalysisRepository {
   /// Returns `nil` for malformed day strings; callers log and skip the
   /// row rather than silently swallowing.
   static func parseDayString(_ day: String) -> Date? {
-    dayFormatter.date(from: day)
+    dayFormatter.formatter.date(from: day)
   }
 
   /// Compute the financial-month key (`YYYYMM`) for `date`, respecting
   /// the user's configured `monthEnd` cut-off.
   ///
-  /// Anchored to a UTC Gregorian calendar so a transaction whose UTC
-  /// `DATE()` is e.g. `2025-03-25` lands in the same financial-month
-  /// bucket regardless of the runner's local timezone. The previous
-  /// implementation forwarded to `CloudKitAnalysisRepository.financialMonth`
-  /// which used `Calendar.current`; in negative-UTC zones (e.g.
-  /// America/New_York) `Calendar.current.component(.day, from:)` against
-  /// the UTC-midnight `Date` returned by `parseDayString` returns the
-  /// previous day, mis-bucketing rows on the boundary day.
+  /// Forwards to the shared `FinancialMonth.key(for:monthEnd:)` helper
+  /// so this path and the CloudKit-side
+  /// `CloudKitAnalysisRepository.financialMonth` resolve to the same
+  /// UTC-anchored implementation — eliminating the previous risk that
+  /// the two code paths could drift on boundary-day rows.
   static func financialMonth(for date: Date, monthEnd: Int) -> String {
-    let calendar = utcGregorianCalendar
-    let dayOfMonth = calendar.component(.day, from: date)
-    let adjustedDate: Date
-    if dayOfMonth > monthEnd {
-      guard let shifted = calendar.date(byAdding: .month, value: 1, to: date) else {
-        return defaultMonthKey(for: date, calendar: calendar)
-      }
-      adjustedDate = shifted
-    } else {
-      adjustedDate = date
-    }
-    let year = calendar.component(.year, from: adjustedDate)
-    let month = calendar.component(.month, from: adjustedDate)
-    return String(format: "%04d%02d", year, month)
-  }
-
-  private static func defaultMonthKey(for date: Date, calendar: Calendar) -> String {
-    let year = calendar.component(.year, from: date)
-    let month = calendar.component(.month, from: date)
-    return String(format: "%04d%02d", year, month)
+    FinancialMonth.key(for: date, monthEnd: monthEnd)
   }
 
   /// Build an `InstrumentAmount` in `target` from a SQL-summed storage

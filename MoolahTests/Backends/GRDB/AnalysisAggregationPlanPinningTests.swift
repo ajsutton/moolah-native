@@ -1,5 +1,3 @@
-// MoolahTests/Backends/GRDB/AnalysisAggregationPlanPinningTests.swift
-
 import Foundation
 import GRDB
 import Testing
@@ -86,11 +84,15 @@ struct AnalysisAggregationPlanPinningTests {
     // Mirrors the exact SQL shape used by
     // `GRDBAnalysisRepository.fetchExpenseBreakdown(monthEnd:after:)`:
     // GROUP BY `(DATE(t.date), category_id, instrument_id)` restricted
-    // to non-scheduled, account-bound expense legs with a category.
-    // The covering composite `leg_analysis_by_type_category`
-    // (type, category_id, instrument_id, transaction_id, quantity) lets
-    // SQLite drive the aggregation off the index without visiting the
-    // base table — a SCAN of `transaction_leg` is the regression signal.
+    // to non-scheduled expense legs with a category. `account_id` is
+    // intentionally absent from the WHERE clause for two reasons,
+    // documented on `fetchExpenseBreakdownAggregation`:
+    // 1. CloudKit parity — categorised expense legs without an account
+    //    must appear in the breakdown.
+    // 2. Covering — `account_id` is not in
+    //    `leg_analysis_by_type_category`'s column list, so adding the
+    //    predicate forces a base-row fetch and flips the plan from
+    //    `USING COVERING INDEX` to plain `USING INDEX`.
     let detail = try planDetail(
       database,
       query: """
@@ -103,32 +105,26 @@ struct AnalysisAggregationPlanPinningTests {
         WHERE t.recur_period IS NULL
           AND leg.type = 'expense'
           AND leg.category_id IS NOT NULL
-          AND leg.account_id IS NOT NULL
           AND (? IS NULL OR t.date >= ?)
         GROUP BY day, category_id, instrument_id
         ORDER BY day ASC, category_id ASC
         """,
       arguments: [Date?.none, Date?.none])
     #expect(detail.contains("leg_analysis_by_type_category"))
+    #expect(detail.contains("USING COVERING INDEX"))
     #expect(!detail.contains("SCAN transaction_leg"))
-    // SQLite emits `USING INDEX` (not `USING COVERING INDEX`) for this
-    // query because the partial-index choice and the JOIN to
-    // `transaction` (visited via PK to read `recur_period` and `date`)
-    // mean SQLite can't statically declare the leg-side scan
-    // base-table-free in EXPLAIN output, even though every column it
-    // references from `leg` is in the composite. The
-    // no-base-table-scan signal is captured by the `SCAN transaction_leg`
-    // negative assertion above — that's what flips if the index loses
-    // its leg-side coverage. Asserting on `USING COVERING INDEX`
-    // would force-fail this test against a plan that's actually
-    // optimal for SQLite, so we don't.
-    //
-    // The output is sorted by `(day, category_id)` where
-    // `day = DATE(t.date)` — a derived value that no index keys, so
-    // SQLite is free to use a temp B-tree for the ORDER BY. We don't
-    // assert against `USE TEMP B-TREE FOR ORDER BY`: the query's
-    // correctness depends on the per-day grouping (rate-equivalent to
-    // per-leg conversion), not on the absence of a sort.
+    // SQLite's plan is permitted to (and does) include both
+    // `USE TEMP B-TREE FOR GROUP BY` and `USE TEMP B-TREE FOR ORDER BY`.
+    // We do NOT reject those lines because the GROUP BY and ORDER BY
+    // both key on `day = DATE(t.date)` — a derived expression with no
+    // index keying. SQLite has no choice but to materialise the groups
+    // and the sort in temp B-trees; trying to forbid them would force
+    // the planner away from the covering index entirely. The
+    // covering-index property captured by the positive
+    // `USING COVERING INDEX` assertion is the perf-critical signal —
+    // it's what flips when the leg-side composite loses a column or
+    // the WHERE clause grows a predicate the partial index doesn't
+    // cover (e.g. a re-introduced `account_id IS NOT NULL`).
   }
 
   @Test("computeEarmarkPositions JOIN+GROUP BY avoids a transaction_leg SCAN")

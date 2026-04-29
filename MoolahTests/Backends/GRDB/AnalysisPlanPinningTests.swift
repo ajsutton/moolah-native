@@ -1,5 +1,3 @@
-// MoolahTests/Backends/GRDB/AnalysisPlanPinningTests.swift
-
 import Foundation
 import GRDB
 import Testing

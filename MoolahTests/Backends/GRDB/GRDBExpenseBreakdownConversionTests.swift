@@ -125,6 +125,44 @@ struct GRDBExpenseBreakdownConversionTests {
     #expect(breakdown[0].totalExpenses.quantity == -225)
   }
 
+  @Test("expense breakdown includes categorised legs without an account (CloudKit parity)")
+  func expenseBreakdownIncludesAccountlessCategorisedLegs() async throws {
+    // Mirrors `CloudKitAnalysisRepository.accumulateExpenseLegs` which
+    // only filters `leg.type == .expense && leg.categoryId != nil` —
+    // it does NOT filter on `accountId`. The GRDB SQL must match: an
+    // expense leg with a category but no `accountId` must surface in
+    // the breakdown. Locks the semantic-parity contract documented on
+    // `fetchExpenseBreakdownAggregation`'s doc comment so a future
+    // refactor that re-introduces `account_id IS NOT NULL` to the
+    // WHERE clause breaks this test instead of silently dropping rows.
+    let day = try AnalysisTestHelpers.utcDate(year: 2025, month: 8, day: 12, hour: 12)
+    let conversion = DateBasedFixedConversionService(rates: [:])
+    let backend = try CloudKitAnalysisTestBackend(conversionService: conversion)
+
+    let category = Category(id: UUID(), name: "Travel")
+    _ = try await backend.categories.create(category)
+
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: day, payee: "Bookings",
+        legs: [
+          TransactionLeg(
+            accountId: nil,
+            instrument: .defaultTestInstrument,
+            quantity: -250,
+            type: .expense,
+            categoryId: category.id)
+        ]))
+
+    let breakdown = try await backend.analysis.fetchExpenseBreakdown(
+      monthEnd: 25, after: nil)
+
+    #expect(breakdown.count == 1)
+    #expect(breakdown[0].categoryId == category.id)
+    #expect(breakdown[0].totalExpenses.quantity == -250)
+    #expect(breakdown[0].totalExpenses.instrument == .defaultTestInstrument)
+  }
+
   @Test("expense breakdown applies different month rates to different months")
   func expenseBreakdownAppliesDifferentMonthRates() async throws {
     // Two transactions in different months with different rate dicts.

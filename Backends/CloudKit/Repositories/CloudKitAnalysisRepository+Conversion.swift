@@ -73,29 +73,18 @@ extension CloudKitAnalysisRepository {
   /// Compute the financial-month key (`YYYYMM`) that a calendar date falls
   /// into, respecting the user's configured `monthEnd` cut-off.
   ///
+  /// Forwards to the shared `FinancialMonth.key(for:monthEnd:)` helper so
+  /// this path and `GRDBAnalysisRepository.financialMonth` resolve to the
+  /// same UTC-anchored implementation. The previous body used
+  /// `Calendar.current` which mis-bucketed boundary-day rows in
+  /// negative-UTC timezones (e.g. America/New_York) — `loadAll`'s income
+  /// arm and `fetchIncomeAndExpense` route through this method, so the
+  /// drift surfaced in production whenever the runner's local timezone
+  /// disagreed with the UTC-anchored `transaction.date`.
+  ///
   /// internal (was private) so sibling extension files can reuse the same
   /// month-bucketing rule.
   static func financialMonth(for date: Date, monthEnd: Int) -> String {
-    let calendar = Calendar.current
-    let dayOfMonth = calendar.component(.day, from: date)
-    let adjustedDate: Date
-    if dayOfMonth > monthEnd {
-      guard let shifted = calendar.date(byAdding: .month, value: 1, to: date) else {
-        return Self.defaultMonthKey(for: date, calendar: calendar)
-      }
-      adjustedDate = shifted
-    } else {
-      adjustedDate = date
-    }
-
-    let year = calendar.component(.year, from: adjustedDate)
-    let month = calendar.component(.month, from: adjustedDate)
-    return String(format: "%04d%02d", year, month)
-  }
-
-  private static func defaultMonthKey(for date: Date, calendar: Calendar) -> String {
-    let year = calendar.component(.year, from: date)
-    let month = calendar.component(.month, from: date)
-    return String(format: "%04d%02d", year, month)
+    FinancialMonth.key(for: date, monthEnd: monthEnd)
   }
 }
