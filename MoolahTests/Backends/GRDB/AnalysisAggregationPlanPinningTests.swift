@@ -248,6 +248,84 @@ struct AnalysisAggregationPlanPinningTests {
     #expect(!detail.contains("SCAN account"))
   }
 
+  // MARK: - fetchIncomeAndExpense
+
+  @Test("fetchIncomeAndExpense SQL uses leg_analysis_by_type_account index without scanning")
+  func fetchIncomeAndExpenseUsesTypeAccountIndex() throws {
+    let database = try makeDatabase()
+    // Mirrors the exact SQL shape used by
+    // `GRDBAnalysisRepository.fetchIncomeAndExpense(monthEnd:after:)`:
+    // GROUP BY `(DATE(t.date), instrument_id)` with six conditional
+    // sums, restricted to non-scheduled legs and a LEFT JOIN to
+    // `account` for the investment-account routing.
+    //
+    // Like `fetchCategoryBalances`, we do NOT assert
+    // `USING COVERING INDEX`. The LEFT JOIN to `account` requires
+    // `leg.account_id` to drive the join, but the analysis composite
+    // indexes either don't include `account_id` in the leading position
+    // (the type-account composite uses `(type, account_id, …)` so works
+    // for type+account predicates) or don't cover it at all. SQLite is
+    // free to pick whichever leg-side index keeps the plan SCAN-free;
+    // the perf-critical signal is "no full table scan on leg or
+    // transaction or account".
+    let detail = try planDetail(
+      database,
+      query: """
+        SELECT
+            DATE(t.date)         AS day,
+            leg.instrument_id    AS instrument_id,
+            SUM(CASE WHEN leg.type = 'income'
+                      AND a.type IS NOT NULL
+                      AND a.type <> 'investment'
+                     THEN leg.quantity ELSE 0 END)        AS income_qty,
+            SUM(CASE WHEN leg.type = 'expense'
+                      AND a.type IS NOT NULL
+                      AND a.type <> 'investment'
+                     THEN leg.quantity ELSE 0 END)        AS expense_qty,
+            SUM(CASE WHEN leg.earmark_id IS NOT NULL
+                      AND leg.type = 'income'
+                     THEN leg.quantity ELSE 0 END)        AS earmarked_income_qty,
+            SUM(CASE WHEN leg.earmark_id IS NOT NULL
+                      AND leg.type = 'expense'
+                     THEN leg.quantity ELSE 0 END)        AS earmarked_expense_qty,
+            SUM(CASE WHEN leg.type = 'transfer'
+                      AND a.type = 'investment'
+                      AND leg.quantity > 0
+                     THEN leg.quantity ELSE 0 END)        AS investment_transfer_in_qty,
+            SUM(CASE WHEN leg.type = 'transfer'
+                      AND a.type = 'investment'
+                      AND leg.quantity < 0
+                     THEN leg.quantity ELSE 0 END)        AS investment_transfer_out_qty
+        FROM transaction_leg leg
+        JOIN "transaction"    t ON leg.transaction_id = t.id
+        LEFT JOIN account     a ON leg.account_id = a.id
+        WHERE t.recur_period IS NULL
+          AND (? IS NULL OR t.date >= ?)
+        GROUP BY day, leg.instrument_id
+        ORDER BY day ASC
+        """,
+      arguments: [Date?.none, Date?.none])
+    // At least one of the leg-side analysis indexes must drive the read
+    // — the WHERE has no leg-side equality predicate, so the planner
+    // typically chooses the type-account composite or a partial index
+    // that's order-compatible with the GROUP BY.
+    let usesAcceptableLegIndex =
+      detail.contains("leg_analysis_by_type_account")
+      || detail.contains("leg_analysis_by_type_category")
+      || detail.contains("leg_analysis_by_earmark_type")
+      || detail.contains("leg_by_account")
+      || detail.contains("leg_by_earmark")
+    #expect(usesAcceptableLegIndex)
+    #expect(!detail.contains("SCAN transaction_leg"))
+    #expect(!detail.contains("SCAN \"transaction\""))
+    // The LEFT JOIN to `account` should resolve via the PK
+    // (`sqlite_autoindex_account_1`) or `account_by_type` rather than a
+    // full scan — pin that no `SCAN account` line slips into the plan.
+    #expect(!detail.contains("SCAN account"))
+  }
+
+  // MARK: - fetchCategoryBalances earmark filter
+
   @Test("fetchCategoryBalances with earmarkId filter consults leg_by_earmark")
   func fetchCategoryBalancesEarmarkFilterConsultsEarmarkIndex() throws {
     let database = try makeDatabase()

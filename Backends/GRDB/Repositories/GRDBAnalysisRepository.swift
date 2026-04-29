@@ -37,10 +37,16 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   // `CategoryBalancesAggregation`, `CategoryBalancesHandlers`,
   // `CategoryBalancesFilterArgs`. Same shape as `+ExpenseBreakdown`.
   //
-  // `database` and `logger` are read by `fetchExpenseBreakdown` and
-  // `fetchCategoryBalances` here in the main file; the sibling
-  // extensions pull them through the call site rather than reaching
-  // into `private` storage from another file.
+  // `+IncomeAndExpense.swift` — `fetchIncomeAndExpenseAggregation`,
+  // `assembleIncomeAndExpense`, `IncomeAndExpenseRow`,
+  // `IncomeAndExpenseAggregation`, `IncomeAndExpenseHandlers`,
+  // `IncomeAndExpenseFailureContext`. Same shape; six conditional
+  // SQL aggregates per `(day, instrument)` row drive the assembly.
+  //
+  // `database` and `logger` are read by `fetchExpenseBreakdown`,
+  // `fetchCategoryBalances`, and `fetchIncomeAndExpense` here in the
+  // main file; the sibling extensions pull them through the call site
+  // rather than reaching into `private` storage from another file.
   private let database: any DatabaseWriter
   private let instrument: Instrument
   private let conversionService: any InstrumentConversionService
@@ -81,12 +87,7 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
         forecastUntil: forecastUntil),
       context: context)
     async let breakdown = fetchExpenseBreakdown(monthEnd: monthEnd, after: historyAfter)
-    async let income = CloudKitAnalysisRepository.computeIncomeAndExpense(
-      nonScheduled: shared.nonScheduled,
-      accounts: shared.accounts,
-      monthEnd: monthEnd,
-      after: historyAfter,
-      context: context)
+    async let income = fetchIncomeAndExpense(monthEnd: monthEnd, after: historyAfter)
 
     return try await AnalysisData(
       dailyBalances: balances,
@@ -143,14 +144,28 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
     monthEnd: Int,
     after: Date?
   ) async throws -> [MonthlyIncomeExpense] {
-    let nonScheduled = try await fetchTransactions(filter: .nonScheduledOnly)
-    let accounts = try await fetchAccounts()
-    return try await CloudKitAnalysisRepository.computeIncomeAndExpense(
-      nonScheduled: nonScheduled,
-      accounts: accounts,
+    let aggregation = try await Self.fetchIncomeAndExpenseAggregation(
+      database: database, after: after)
+    let logger = self.logger
+    let handlers = IncomeAndExpenseHandlers(
+      handleUnparseableDay: { day in
+        logger.error(
+          "fetchIncomeAndExpense: skipping row with unparseable day '\(day)'")
+      },
+      handleConversionFailure: { error, context in
+        logger.error(
+          """
+          fetchIncomeAndExpense: conversion failed for day=\(context.day, privacy: .public) \
+          instrument=\(context.instrumentId, privacy: .public): \
+          \(error.localizedDescription, privacy: .public)
+          """)
+      })
+    return try await Self.assembleIncomeAndExpense(
+      aggregation: aggregation,
+      profileInstrument: instrument,
+      conversionService: conversionService,
       monthEnd: monthEnd,
-      after: after,
-      context: analysisContext)
+      handlers: handlers)
   }
 
   func fetchCategoryBalances(

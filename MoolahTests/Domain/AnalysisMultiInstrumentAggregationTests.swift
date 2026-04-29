@@ -87,14 +87,24 @@ struct AnalysisMultiInstrumentAggregationTests {
   @Test("multi-currency income/expense with rate changes across months")
   func multiCurrencyIncomeExpenseRateChangesAcrossMonths() async throws {
     let usd = Instrument.fiat(code: "USD")
-    let mayDate = try AnalysisTestHelpers.date(year: 2025, month: 5, day: 10)
-    let juneDate = try AnalysisTestHelpers.date(year: 2025, month: 6, day: 10)
+    // UTC-anchored dates: the GRDB analysis path extracts each
+    // transaction's UTC calendar day via SQLite's `DATE()` and re-parses
+    // it as UTC midnight before asking the conversion service for the
+    // rate. Local-timezone dates would drift on positive-UTC runners
+    // (AEST: `2025-05-10 00:00 local` is `2025-05-09 14:00 UTC`,
+    // SQLite returns `2025-05-09`, the parsed UTC midnight is BEFORE
+    // the rate key and `DateBasedFixedConversionService` falls back to
+    // 1:1).
+    let mayDate = try AnalysisTestHelpers.utcDate(year: 2025, month: 5, day: 10, hour: 12)
+    let juneDate = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 12)
+    let mayRateKey = try AnalysisTestHelpers.utcDate(year: 2025, month: 5, day: 10, hour: 0)
+    let juneRateKey = try AnalysisTestHelpers.utcDate(year: 2025, month: 6, day: 10, hour: 0)
     let mayRate = try AnalysisTestHelpers.decimal("1.5")
     let juneRate = try AnalysisTestHelpers.decimal("2.0")
 
     let conversion = DateBasedFixedConversionService(rates: [
-      mayDate: ["USD": mayRate],
-      juneDate: ["USD": juneRate],
+      mayRateKey: ["USD": mayRate],
+      juneRateKey: ["USD": juneRate],
     ])
     let backend = try CloudKitAnalysisTestBackend(conversionService: conversion)
 
