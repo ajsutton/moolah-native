@@ -6,12 +6,12 @@ import GRDB
 /// GRDB-backed implementation of `AccountRepository`. Replaces the
 /// SwiftData-backed `CloudKitAccountRepository` for the `account` table.
 ///
-/// **Position computation.** `Account.balance(in:)` and the per-account
-/// position lists are computed by the analysis layer (see
-/// `GRDBAnalysisRepository`). `fetchAll()` returns accounts with empty
-/// `positions: []`; stores fetch positions separately. This keeps the
-/// repository's read path a single ordered scan over the `account`
-/// table, with no joins against `transaction_leg`.
+/// **Position computation.** `fetchAll()` returns accounts with their
+/// per-instrument `positions` populated. Positions are summed from
+/// non-scheduled `transaction_leg` rows grouped by
+/// `(account_id, instrument_id)` and resolved against the `instrument`
+/// registry (with ambient ISO fiat as a fallback). Mirrors the
+/// SwiftData-era `CloudKitAccountRepository.computePositions`.
 ///
 /// **Opening balance.** `create(_:openingBalance:)` performs the account
 /// insert and the optional opening-balance transaction (one
@@ -56,7 +56,13 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
         try AccountRow
         .order(AccountRow.Columns.position.asc)
         .fetchAll(database)
-      return rows.map { $0.toDomain(instruments: instruments, positions: []) }
+      let positionsByAccount = try Self.computePositions(
+        database: database, instruments: instruments)
+      return rows.map { row in
+        row.toDomain(
+          instruments: instruments,
+          positions: positionsByAccount[row.id] ?? [])
+      }
     }
   }
 
@@ -95,6 +101,22 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
     account: Account,
     openingBalance: InstrumentAmount?
   ) throws -> OpeningBalanceInserts {
+    // Non-fiat instruments (stocks, crypto) must have a row in the
+    // `instrument` table so `fetchAll` can resolve the full
+    // `Instrument` value (kind, ticker, exchange, chainId, decimals).
+    // Fiat is ambient — synthesised from `Locale.Currency.isoCurrencies`
+    // by `fetchInstrumentMap`. Mirrors the SwiftData-era
+    // `CloudKitAccountRepository.ensureInstrument`.
+    if account.instrument.kind != .fiatCurrency {
+      let exists =
+        try InstrumentRow
+        .filter(InstrumentRow.Columns.id == account.instrument.id)
+        .fetchOne(database)
+      if exists == nil {
+        try InstrumentRow(domain: account.instrument).insert(database)
+      }
+    }
+
     let accountRow = AccountRow(domain: account)
     try accountRow.insert(database)
 
@@ -165,19 +187,20 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
     }
     onRecordChanged(AccountRow.recordType, account.id)
 
-    let instruments = try await database.read { database in
-      try Self.fetchInstrumentMap(database: database)
+    return try await database.read { database -> Account in
+      let instruments = try Self.fetchInstrumentMap(database: database)
+      let positions = try Self.computePositions(
+        database: database, instruments: instruments, accountId: account.id)
+      return updated.toDomain(instruments: instruments, positions: positions)
     }
-    return updated.toDomain(instruments: instruments, positions: [])
   }
 
   func delete(id: UUID) async throws {
-    // Soft-delete: flip `is_hidden = true` on the matching row. The
-    // CloudKit equivalent additionally rejected deletes against an
-    // account with non-zero positions, but positions are computed by
-    // the analysis layer; the store enforces that pre-condition before
-    // calling the repository.
-    let didUpdate = try await database.write { database -> Bool in
+    // Soft-delete: flip `is_hidden = true` on the matching row.
+    // Rejects deletes against an account with non-zero positions —
+    // mirrors the SwiftData-era contract enforced by
+    // `CloudKitAccountRepository.delete(id:)`.
+    try await database.write { database in
       guard
         var existing =
           try AccountRow
@@ -186,31 +209,20 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
       else {
         throw BackendError.notFound("Account not found")
       }
+      let instruments = try Self.fetchInstrumentMap(database: database)
+      let positions = try Self.computePositions(
+        database: database, instruments: instruments, accountId: id)
+      if positions.contains(where: { $0.quantity != 0 }) {
+        throw BackendError.validationFailed(
+          "Cannot delete account with non-zero balance")
+      }
       existing.isHidden = true
       try existing.update(database)
-      return true
     }
-    guard didUpdate else { return }
     onRecordChanged(AccountRow.recordType, id)
   }
 
   // MARK: - Helpers
-
-  /// Builds `[String: Instrument]` from the `instrument` table, then
-  /// supplements with ambient fiat for ISO codes that don't appear as
-  /// rows. Mirrors `CloudKitInstrumentRegistryRepository.all()`'s
-  /// stored-then-ambient ordering so the output is deterministic.
-  private static func fetchInstrumentMap(database: Database) throws -> [String: Instrument] {
-    let rows = try InstrumentRow.fetchAll(database)
-    var map: [String: Instrument] = [:]
-    for row in rows {
-      map[row.id] = row.toDomain()
-    }
-    for code in Locale.Currency.isoCurrencies.map(\.identifier) where map[code] == nil {
-      map[code] = Instrument.fiat(code: code)
-    }
-    return map
-  }
 
   /// Captures the ids written by `create(_:openingBalance:)` so the
   /// caller can fan out hook fires after the write transaction commits.

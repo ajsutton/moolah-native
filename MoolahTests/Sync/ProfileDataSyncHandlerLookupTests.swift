@@ -21,7 +21,7 @@ struct ProfileDataSyncHandlerLookupTests {
       AccountRecord(id: accountId, name: "Acc", type: "bank", position: 0, isHidden: false))
     context.insert(
       TransactionRecord(id: txnId, date: Date(), payee: "Test"))
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     let lookup = handler.buildBatchRecordLookup(byRecordType: [
       AccountRow.recordType: [accountId],
@@ -40,7 +40,7 @@ struct ProfileDataSyncHandlerLookupTests {
     let context = ModelContext(container)
     context.insert(
       AccountRecord(id: accountId, name: "Found", type: "bank", position: 0, isHidden: false))
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     let recordID = CKRecord.ID(
       recordType: AccountRow.recordType, uuid: accountId, zoneID: handler.zoneID)
@@ -59,7 +59,7 @@ struct ProfileDataSyncHandlerLookupTests {
       InstrumentRecord(
         id: "ASX:BHP.AX", kind: "stock", name: "BHP Group", decimals: 2,
         ticker: "BHP.AX", exchange: "ASX"))
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     let recordID = CKRecord.ID(recordName: "ASX:BHP.AX", zoneID: handler.zoneID)
     let result = handler.recordToSave(for: recordID)

@@ -1,5 +1,6 @@
 @preconcurrency import CloudKit
 import Foundation
+import GRDB
 import OSLog
 import Observation
 import SwiftData
@@ -75,12 +76,17 @@ final class ExportCoordinator {
     state = .idle
   }
 
-  /// Imports data from a JSON file into a SwiftData container.
+  /// Imports data from a JSON file into the per-profile SwiftData
+  /// container and GRDB queue.
   ///
   /// - Parameters:
   ///   - url: The file URL to read the exported JSON from
-  ///   - modelContainer: The target container to import data into
-  ///   - profileId: The UUID of the new profile that owns `modelContainer`. Required
+  ///   - modelContainer: The target SwiftData container to import data into
+  ///   - database: The target GRDB queue to import data into. The runtime
+  ///     stores read exclusively from GRDB, so the import must mirror
+  ///     every record type into `data.sqlite` for the imported profile to
+  ///     be visible to its session.
+  ///   - profileId: The UUID of the new profile that owns the stores. Required
   ///     when `syncCoordinator` is non-nil so imported records can be queued for upload.
   ///   - syncCoordinator: Optional sync coordinator. When provided, all imported records
   ///     are queued for upload so the profile syncs to CloudKit and other devices.
@@ -88,6 +94,7 @@ final class ExportCoordinator {
   func importFromFile(
     url: URL,
     modelContainer: ModelContainer,
+    database: (any DatabaseWriter)? = nil,
     profileId: UUID? = nil,
     syncCoordinator: SyncCoordinator? = nil
   ) async throws -> ImportResult {
@@ -108,9 +115,15 @@ final class ExportCoordinator {
       throw ExportError.importFailed(underlying: error)
     }
 
+    // Tests that don't pin a queue (legacy SwiftData-only flow) get a
+    // throwaway in-memory GRDB queue so the importer can still write
+    // through both halves of the dual mirror without surfacing as a
+    // signature break in their code.
+    let resolvedDatabase = try database ?? ProfileDatabase.openInMemory()
     return try await importFromData(
       exported,
       into: modelContainer,
+      database: resolvedDatabase,
       profileId: profileId,
       syncCoordinator: syncCoordinator
     )
@@ -123,6 +136,7 @@ final class ExportCoordinator {
   private func importFromData(
     _ exported: ExportedData,
     into modelContainer: ModelContainer,
+    database: any DatabaseWriter,
     profileId: UUID?,
     syncCoordinator: SyncCoordinator?
   ) async throws -> ImportResult {
@@ -134,6 +148,7 @@ final class ExportCoordinator {
 
     let importer = CloudKitDataImporter(
       modelContainer: modelContainer,
+      database: database,
       currencyCode: exported.currencyCode
     )
 
@@ -209,9 +224,11 @@ final class ExportCoordinator {
 
     do {
       let container = try containerManager.container(for: newProfile.id)
+      let database = try containerManager.database(for: newProfile.id)
       _ = try await importFromData(
         exported,
         into: container,
+        database: database,
         profileId: newProfile.id,
         syncCoordinator: syncCoordinator
       )

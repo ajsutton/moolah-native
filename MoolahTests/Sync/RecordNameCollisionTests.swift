@@ -1,5 +1,6 @@
 import CloudKit
 import Foundation
+import GRDB
 import SwiftData
 import Testing
 
@@ -26,7 +27,7 @@ struct RecordNameCollisionTests {
     context.insert(
       TransactionRecord(
         id: sharedId, date: Date(), payee: "Opening balance"))
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     // The lookup is keyed by recordType and then by UUID, so two record
     // types sharing a UUID produce two independent entries — preventing
@@ -61,7 +62,7 @@ struct RecordNameCollisionTests {
     context.insert(
       TransactionRecord(
         id: sharedId, date: Date(), payee: "Opening balance"))
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     let recordIDs = handler.queueUnsyncedRecords()
     let names = Set(recordIDs.map(\.recordName))
@@ -138,9 +139,10 @@ struct RecordNameCollisionTests {
 
   @Test("applyRemoteChanges drops bare-UUID CKRecords and ingests prefixed ones")
   func applyRemoteChangesRejectsBareUUIDAcceptsPrefixed() throws {
-    let (handler, container) =
+    let harness =
       try ProfileDataSyncHandlerTestSupport
-      .makeHandler()
+      .makeHandlerAndDatabase()
+    let handler = harness.handler
 
     let legacyId = UUID()
     let legacyCK = CKRecord(
@@ -166,9 +168,10 @@ struct RecordNameCollisionTests {
 
     _ = handler.applyRemoteChanges(saved: [legacyCK, newCK], deleted: [])
 
-    let context = ModelContext(container)
-    let all = try context.fetch(FetchDescriptor<AccountRecord>())
-    let byId = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
+    let rows = try harness.database.read { database in
+      try AccountRow.fetchAll(database)
+    }
+    let byId = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
     #expect(byId[legacyId] == nil, "bare-UUID record should not be ingested")
     #expect(byId[newId]?.name == "Prefixed")
     #expect(byId[newId]?.encodedSystemFields != nil)
@@ -178,18 +181,18 @@ struct RecordNameCollisionTests {
 
   @Test("handleSentRecordZoneChanges writes system fields back using recordType")
   func handleSentRecordZoneChangesAppliesSystemFieldsForPrefixedRecords() throws {
-    let (handler, container) =
+    let harness =
       try ProfileDataSyncHandlerTestSupport
-      .makeHandler()
+      .makeHandlerAndDatabase()
+    let handler = harness.handler
 
     let accountId = UUID()
-    let context = ModelContext(container)
-    let account = AccountRecord(
-      id: accountId, name: "Test", type: "bank", position: 0,
-      isHidden: false)
-    context.insert(account)
-    try context.save()
-    #expect(account.encodedSystemFields == nil)
+    let stub = Account(
+      id: accountId, name: "Test", type: .bank,
+      instrument: .defaultTestInstrument, position: 0, isHidden: false)
+    try harness.database.write { database in
+      try AccountRow(domain: stub).insert(database)
+    }
 
     // Simulate a CK round-trip where the server returns a prefixed
     // CKRecord as "saved".
@@ -204,11 +207,9 @@ struct RecordNameCollisionTests {
     _ = handler.handleSentRecordZoneChanges(
       savedRecords: [savedCK], failedSaves: [], failedDeletes: [])
 
-    let fresh = ModelContext(container)
-    let reloaded = try fresh.fetch(
-      FetchDescriptor<AccountRecord>(
-        predicate: #Predicate { $0.id == accountId })
-    ).first
+    let reloaded = try harness.database.read { database in
+      try AccountRow.filter(AccountRow.Columns.id == accountId).fetchOne(database)
+    }
     #expect(reloaded?.encodedSystemFields != nil)
   }
 
@@ -232,7 +233,7 @@ struct RecordNameCollisionTests {
       financialYearStartMonth: 7, createdAt: Date())
     let context = ModelContext(container)
     context.insert(profile)
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
 
     let prefixedID = CKRecord.ID(
       recordType: ProfileRecord.recordType,
@@ -286,7 +287,7 @@ struct RecordNameCollisionTests {
       id: profileId, label: "Test", currencyCode: "AUD",
       financialYearStartMonth: 7, createdAt: Date())
     context.insert(profile)
-    try context.save()
+    try ProfileDataSyncHandlerTestSupport.saveAndMirror(context: context)
     #expect(profile.encodedSystemFields == nil)
 
     let savedCK = CKRecord(

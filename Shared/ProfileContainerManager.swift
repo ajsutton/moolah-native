@@ -1,5 +1,6 @@
 import CloudKit
 import Foundation
+import GRDB
 import OSLog
 import Observation
 import SwiftData
@@ -15,6 +16,13 @@ final class ProfileContainerManager {
   /// host's Application Support).
   let inMemory: Bool
   private var containers: [UUID: ModelContainer] = [:]
+  /// Per-profile GRDB queue cache. Required so `ProfileSession.init` and
+  /// the import path see the same queue when the manager is in-memory
+  /// (`ProfileDatabase.openInMemory()` returns a fresh queue every
+  /// call). On-disk profiles all open the same `data.sqlite` file
+  /// regardless of whether the cache hits, but caching avoids a redundant
+  /// migrator pass.
+  private var databases: [UUID: DatabaseQueue] = [:]
 
   init(
     indexContainer: ModelContainer,
@@ -49,10 +57,32 @@ final class ProfileContainerManager {
     containers[profileId] != nil
   }
 
+  /// Opens (and caches) the per-profile GRDB queue. In-memory managers
+  /// must serve the same queue across every call so `ProfileSession`
+  /// and the import path share writes; on-disk managers re-open the
+  /// same `data.sqlite` either way but caching avoids redundant
+  /// migrator runs.
+  func database(for profileId: UUID) throws -> DatabaseQueue {
+    if let existing = databases[profileId] {
+      return existing
+    }
+    let database: DatabaseQueue
+    if inMemory {
+      database = try ProfileDatabase.openInMemory()
+    } else {
+      let url = ProfileSession.profileDatabaseDirectory(for: profileId)
+        .appendingPathComponent("data.sqlite")
+      database = try ProfileDatabase.open(at: url)
+    }
+    databases[profileId] = database
+    return database
+  }
+
   private let logger = Logger(subsystem: "com.moolah.app", category: "ProfileContainerManager")
 
   func deleteStore(for profileId: UUID) {
     containers.removeValue(forKey: profileId)
+    databases.removeValue(forKey: profileId)
 
     guard !inMemory else { return }
 

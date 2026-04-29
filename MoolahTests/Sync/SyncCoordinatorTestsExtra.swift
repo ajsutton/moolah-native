@@ -84,7 +84,8 @@ struct SyncCoordinatorTestsExtra {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(
       containerManager: manager,
-      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
+      fallbackGRDBRepositoriesFactory:
+        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
     let profileId = UUID()
 
     // Seed the new profile's data container (as a migration import would).
@@ -120,7 +121,8 @@ struct SyncCoordinatorTestsExtra {
     let manager = try ProfileContainerManager.forTesting()
     let coordinator = SyncCoordinator(
       containerManager: manager,
-      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
+      fallbackGRDBRepositoriesFactory:
+        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
     let profileId = UUID()
 
     // Initialize the data container so the handler can be resolved,
@@ -143,7 +145,8 @@ struct SyncCoordinatorTestsExtra {
     let coordinator = SyncCoordinator(
       containerManager: manager,
       userDefaults: makeDefaults(),
-      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
+      fallbackGRDBRepositoriesFactory:
+        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
 
     // Register two profiles in the index.
     let profileA = UUID()
@@ -219,7 +222,8 @@ struct SyncCoordinatorTestsExtra {
     let coordinator = SyncCoordinator(
       containerManager: manager,
       userDefaults: defaults,
-      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
+      fallbackGRDBRepositoriesFactory:
+        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
 
     let profileId = UUID()
     let indexContext = ModelContext(manager.indexContainer)

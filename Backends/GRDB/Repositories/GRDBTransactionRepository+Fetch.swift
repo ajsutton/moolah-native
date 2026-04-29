@@ -104,13 +104,17 @@ extension GRDBTransactionRepository {
   ) throws -> [TransactionRow] {
     var query = TransactionRow.all()
 
+    // Mirrors `CloudKitTransactionRepository`'s `loadAndFilter`: `.all`
+    // and `.nonScheduledOnly` both exclude scheduled rows from the
+    // page; only `.scheduledOnly` flips the predicate. Production page
+    // views never want scheduled rows interleaved with their booked
+    // counterparts, so the default filter (`.all`) keeps the
+    // non-scheduled view shape.
     switch filter.scheduled {
-    case .all:
-      break
+    case .all, .nonScheduledOnly:
+      query = query.filter(TransactionRow.Columns.recurPeriod == nil)
     case .scheduledOnly:
       query = query.filter(TransactionRow.Columns.recurPeriod != nil)
-    case .nonScheduledOnly:
-      query = query.filter(TransactionRow.Columns.recurPeriod == nil)
     }
 
     if let dateRange = filter.dateRange {

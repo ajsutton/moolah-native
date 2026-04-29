@@ -21,7 +21,8 @@ struct SyncCoordinatorTestsMore {
     let coordinator = SyncCoordinator(
       containerManager: manager,
       userDefaults: defaults,
-      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
+      fallbackGRDBRepositoriesFactory:
+        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
 
     let profileId = UUID()
     let indexContext = ModelContext(manager.indexContainer)
@@ -99,7 +100,8 @@ struct SyncCoordinatorTestsMore {
     // constructed without a full session.
     let coordinator = SyncCoordinator(
       containerManager: manager,
-      fallbackGRDBRepositoriesFactory: ProfileDataSyncHandlerTestSupport.inMemoryFallbackFactory)
+      fallbackGRDBRepositoriesFactory:
+        ProfileDataSyncHandlerTestSupport.managerBackedFallbackFactory(manager: manager))
     let profileId = UUID()
     let zoneID = CKRecordZone.ID(
       zoneName: "profile-\(profileId.uuidString)",

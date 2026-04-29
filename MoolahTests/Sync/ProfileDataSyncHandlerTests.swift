@@ -1,5 +1,6 @@
 import CloudKit
 import Foundation
+import GRDB
 import SwiftData
 import Testing
 
@@ -13,7 +14,8 @@ struct ProfileDataSyncHandlerTests {
 
   @Test
   func applyRemoteInsertCreatesLocalRecord() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerAndDatabase()
+    let handler = harness.handler
 
     let accountId = UUID()
     let ckRecord = CKRecord(
@@ -28,12 +30,11 @@ struct ProfileDataSyncHandlerTests {
 
     let result = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
-    let context = ModelContext(container)
-    let records = try context.fetch(
-      FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == accountId })
-    )
-    #expect(records.count == 1)
-    #expect(records.first?.name == "Remote Account")
+    let rows = try harness.database.read { database in
+      try AccountRow.filter(AccountRow.Columns.id == accountId).fetchAll(database)
+    }
+    #expect(rows.count == 1)
+    #expect(rows.first?.name == "Remote Account")
     guard case .success(let changedTypes) = result else {
       Issue.record("Expected .success but got \(result)")
       return
@@ -45,16 +46,17 @@ struct ProfileDataSyncHandlerTests {
 
   @Test
   func applyRemoteUpdateModifiesExistingRecord() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerAndDatabase()
+    let handler = harness.handler
+    let database = harness.database
 
     let accountId = UUID()
-    let context = ModelContext(container)
-    let existing = AccountRecord(
-      id: accountId, name: "Old Name", type: "bank", position: 0,
-      isHidden: false
-    )
-    context.insert(existing)
-    try context.save()
+    let stub = Account(
+      id: accountId, name: "Old Name", type: .bank,
+      instrument: .defaultTestInstrument, position: 0, isHidden: false)
+    try database.write { database in
+      try AccountRow(domain: stub).insert(database)
+    }
 
     let ckRecord = CKRecord(
       recordType: "AccountRecord",
@@ -68,41 +70,40 @@ struct ProfileDataSyncHandlerTests {
 
     _ = handler.applyRemoteChanges(saved: [ckRecord], deleted: [])
 
-    let freshContext = ModelContext(container)
-    let records = try freshContext.fetch(
-      FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == accountId })
-    )
-    #expect(records.count == 1)
-    #expect(records.first?.name == "Updated Name")
-    #expect(records.first?.position == 5)
-    #expect(records.first?.isHidden == true)
+    let rows = try database.read { database in
+      try AccountRow.filter(AccountRow.Columns.id == accountId).fetchAll(database)
+    }
+    #expect(rows.count == 1)
+    #expect(rows.first?.name == "Updated Name")
+    #expect(rows.first?.position == 5)
+    #expect(rows.first?.isHidden == true)
   }
 
   // MARK: - Remote Deletion
 
   @Test
   func applyRemoteDeletionRemovesLocalRecord() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+    let harness = try ProfileDataSyncHandlerTestSupport.makeHandlerAndDatabase()
+    let handler = harness.handler
+    let database = harness.database
 
     let accountId = UUID()
-    let context = ModelContext(container)
-    let existing = AccountRecord(
-      id: accountId, name: "To Delete", type: "bank", position: 0,
-      isHidden: false
-    )
-    context.insert(existing)
-    try context.save()
+    let stub = Account(
+      id: accountId, name: "To Delete", type: .bank,
+      instrument: .defaultTestInstrument, position: 0, isHidden: false)
+    try database.write { database in
+      try AccountRow(domain: stub).insert(database)
+    }
 
     let recordID = CKRecord.ID(
       recordType: AccountRow.recordType, uuid: accountId, zoneID: handler.zoneID)
     let result = handler.applyRemoteChanges(
       saved: [], deleted: [(recordID, "AccountRecord")])
 
-    let freshContext = ModelContext(container)
-    let records = try freshContext.fetch(
-      FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == accountId })
-    )
-    #expect(records.isEmpty)
+    let rows = try database.read { database in
+      try AccountRow.filter(AccountRow.Columns.id == accountId).fetchAll(database)
+    }
+    #expect(rows.isEmpty)
     guard case .success(let changedTypes) = result else {
       Issue.record("Expected .success but got \(result)")
       return

@@ -57,7 +57,10 @@ enum TestBackend {
 
   // MARK: - Data Seeding
 
-  /// Seeds accounts into the in-memory store.
+  /// Seeds accounts into the in-memory store. Uses `upsert` so a
+  /// previously-inserted placeholder (e.g. one auto-created by
+  /// `seed(transactions:)`) is overwritten with the test's intended row
+  /// rather than colliding on `account.record_name`'s UNIQUE constraint.
   @discardableResult
   static func seed(
     accounts: [Account],
@@ -66,7 +69,7 @@ enum TestBackend {
   ) -> [Account] {
     writeOrTrap(database) { database in
       for account in accounts {
-        try AccountRow(domain: account).insert(database)
+        try AccountRow(domain: account).upsert(database)
       }
     }
     return accounts
@@ -74,6 +77,8 @@ enum TestBackend {
 
   /// Seeds accounts with opening balances into the in-memory store.
   /// Creates opening balance transactions for accounts with the provided balances.
+  /// `upsert` mirrors `seed(accounts:)` so placeholder rows from earlier
+  /// `seed(transactions:)` calls don't collide on `record_name`.
   @discardableResult
   static func seed(
     accounts: [(account: Account, openingBalance: InstrumentAmount)],
@@ -82,7 +87,7 @@ enum TestBackend {
   ) -> [Account] {
     writeOrTrap(database) { database in
       for (account, openingBalance) in accounts {
-        try AccountRow(domain: account).insert(database)
+        try AccountRow(domain: account).upsert(database)
         if !openingBalance.isZero {
           try insertOpeningBalanceTransaction(
             database: database,
@@ -229,7 +234,7 @@ enum TestBackend {
   ) -> [Earmark] {
     writeOrTrap(database) { database in
       for earmark in earmarks {
-        try EarmarkRow(domain: earmark).insert(database)
+        try EarmarkRow(domain: earmark).upsert(database)
       }
     }
     return earmarks
@@ -243,7 +248,7 @@ enum TestBackend {
   ) -> [Moolah.Category] {
     writeOrTrap(database) { database in
       for category in categories {
-        try CategoryRow(domain: category).insert(database)
+        try CategoryRow(domain: category).upsert(database)
       }
     }
     return categories

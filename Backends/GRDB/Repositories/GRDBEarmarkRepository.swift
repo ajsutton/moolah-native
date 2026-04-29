@@ -14,12 +14,14 @@ import GRDB
 /// profile's currency. The repository receives that value at init,
 /// matching `CloudKitEarmarkRepository.instrument`.
 ///
-/// **Position computation.** `Earmark.positions`, `savedPositions`, and
-/// `spentPositions` are computed by the analysis layer (see
-/// `GRDBAnalysisRepository`). `fetchAll()` returns earmarks with empty
-/// position lists; stores fetch positions separately. This mirrors the
-/// account repo's split: the `earmark` table is scanned without joining
-/// `transaction_leg`.
+/// **Position computation.** `fetchAll()` returns earmarks with their
+/// per-instrument `positions`, `savedPositions`, and `spentPositions`
+/// populated. The three lists are summed from non-scheduled
+/// `transaction_leg` rows grouped by instrument: every earmark-tagged
+/// leg contributes to `positions`; income/openingBalance/trade legs
+/// contribute to `savedPositions`; expense/transfer legs contribute to
+/// `spentPositions` (sign-flipped). Mirrors the SwiftData-era
+/// `CloudKitEarmarkRepository.computeEarmarkPositions`.
 ///
 /// **`@unchecked Sendable` justification.** All stored properties are
 /// `let`. `database` (`any DatabaseWriter`) is itself `Sendable` (GRDB
@@ -56,10 +58,21 @@ final class GRDBEarmarkRepository: EarmarkRepository, @unchecked Sendable {
   func fetchAll() async throws -> [Earmark] {
     let defaultInstrument = self.defaultInstrument
     return try await database.read { database in
-      try EarmarkRow
+      let instruments = try Self.fetchInstrumentMap(database: database)
+      let positionsByEarmark = try Self.computeEarmarkPositions(
+        database: database, instruments: instruments)
+      let rows =
+        try EarmarkRow
         .order(EarmarkRow.Columns.position.asc)
         .fetchAll(database)
-        .map { $0.toDomain(defaultInstrument: defaultInstrument) }
+      return rows.map { row in
+        let lists = positionsByEarmark[row.id] ?? EarmarkPositionLists.empty
+        return row.toDomain(
+          defaultInstrument: defaultInstrument,
+          positions: lists.positions,
+          savedPositions: lists.savedPositions,
+          spentPositions: lists.spentPositions)
+      }
     }
   }
 
@@ -199,6 +212,14 @@ final class GRDBEarmarkRepository: EarmarkRepository, @unchecked Sendable {
       return SetBudgetOutcome(changedId: existing.id, deletedId: nil)
     }
 
+    // Ensure the FK target exists. Production callers always pass a
+    // `categoryId` selected from `CategoryStore`, so the row already
+    // exists. Sync-race scenarios (the budget item's CKRecord arrives
+    // before its category's) would otherwise reject the legit insert
+    // under SQLite's enforced FK; materialising a placeholder lets the
+    // category's own remote insert upsert in place once it lands.
+    try ensureCategoryExists(database: database, id: categoryId)
+
     let newItem = EarmarkBudgetItem(
       id: UUID(),
       categoryId: categoryId,
@@ -206,6 +227,17 @@ final class GRDBEarmarkRepository: EarmarkRepository, @unchecked Sendable {
     let row = EarmarkBudgetItemRow(domain: newItem, earmarkId: earmarkId)
     try row.insert(database)
     return SetBudgetOutcome(changedId: row.id, deletedId: nil)
+  }
+
+  /// Inserts a stub `category` row keyed by `id` if one isn't already
+  /// present. See `performSetBudget`'s comment for why.
+  private static func ensureCategoryExists(database: Database, id: UUID) throws {
+    let exists =
+      try CategoryRow
+      .filter(CategoryRow.Columns.id == id)
+      .fetchOne(database)
+    guard exists == nil else { return }
+    try CategoryRow(domain: Moolah.Category(id: id, name: "")).insert(database)
   }
 
   // MARK: - Helpers
