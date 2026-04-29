@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import SwiftData
 import XCTest
 
@@ -12,6 +13,12 @@ import XCTest
 /// same UUIDs and values taken from `UITestFixtures`, regardless of when it
 /// runs. These tests guard that contract so UI tests can reference fixtures
 /// symbolically without worrying about non-determinism.
+///
+/// **Storage split.** Profile metadata still lives in SwiftData
+/// (`indexContainer`). Per-profile records (accounts, transactions,
+/// categories, instruments, legs) live in GRDB after the
+/// `feat/grdb-slice-1-core` migration — the assertions below read from
+/// the corresponding `*Row` tables.
 @MainActor
 final class UITestSeedHydratorTests: XCTestCase {
   private var _containerManager: ProfileContainerManager?
@@ -32,7 +39,7 @@ final class UITestSeedHydratorTests: XCTestCase {
     try await super.tearDown()
   }
 
-  // MARK: - Profile index
+  // MARK: - Profile index (SwiftData)
 
   func testHydrateTradeBaselineSeedsTheProfile() throws {
     _ = try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager)
@@ -54,15 +61,14 @@ final class UITestSeedHydratorTests: XCTestCase {
     XCTAssertEqual(profile.currencyCode, UITestFixtures.TradeBaseline.profileCurrencyCode)
   }
 
-  // MARK: - Per-profile data
+  // MARK: - Per-profile data (GRDB)
 
   func testHydrateTradeBaselineSeedsTheAccounts() throws {
     let profile = try XCTUnwrap(
       try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager))
-    let container = try containerManager.container(for: profile.id)
+    let database = try containerManager.database(for: profile.id)
 
-    let context = ModelContext(container)
-    let accounts = try context.fetch(FetchDescriptor<AccountRecord>())
+    let accounts = try database.read { database in try AccountRow.fetchAll(database) }
     XCTAssertEqual(accounts.count, 3, "expected checking + brokerage + USD accounts")
     let ids = Set(accounts.map(\.id))
     XCTAssertEqual(
@@ -82,25 +88,20 @@ final class UITestSeedHydratorTests: XCTestCase {
   func testHydrateTradeBaselineSeedsTheTradeTransaction() throws {
     let profile = try XCTUnwrap(
       try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager))
-    let container = try containerManager.container(for: profile.id)
-
-    let context = ModelContext(container)
+    let database = try containerManager.database(for: profile.id)
     let tradeId = UITestFixtures.TradeBaseline.bhpPurchaseId
+
     let trade = try XCTUnwrap(
-      try context.fetch(
-        FetchDescriptor<TransactionRecord>(
-          predicate: #Predicate { $0.id == tradeId }
-        )
-      ).first,
+      try database.read { database in try TransactionRow.fetchOne(database, key: tradeId) },
       "trade transaction must exist"
     )
     XCTAssertEqual(trade.payee, UITestFixtures.TradeBaseline.bhpPurchasePayee)
 
-    let legs = try context.fetch(
-      FetchDescriptor<TransactionLegRecord>(
-        predicate: #Predicate { $0.transactionId == tradeId }
-      )
-    )
+    let legs = try database.read { database in
+      try TransactionLegRow
+        .filter(TransactionLegRow.Columns.transactionId == tradeId)
+        .fetchAll(database)
+    }
     XCTAssertEqual(legs.count, 2, "expected two legs on the trade transaction")
     let accountIds = Set(legs.compactMap(\.accountId))
     XCTAssertEqual(
@@ -115,10 +116,9 @@ final class UITestSeedHydratorTests: XCTestCase {
   func testHydrateTradeBaselineSeedsTheCategories() throws {
     let profile = try XCTUnwrap(
       try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager))
-    let container = try containerManager.container(for: profile.id)
+    let database = try containerManager.database(for: profile.id)
 
-    let context = ModelContext(container)
-    let categories = try context.fetch(FetchDescriptor<CategoryRecord>())
+    let categories = try database.read { database in try CategoryRow.fetchAll(database) }
     let byId = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
     XCTAssertEqual(
       byId[UITestFixtures.TradeBaseline.groceriesCategoryId]?.name,
@@ -131,25 +131,20 @@ final class UITestSeedHydratorTests: XCTestCase {
   func testHydrateTradeBaselineSeedsTheCustomSplitTransaction() throws {
     let profile = try XCTUnwrap(
       try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager))
-    let container = try containerManager.container(for: profile.id)
-
-    let context = ModelContext(container)
+    let database = try containerManager.database(for: profile.id)
     let splitId = UITestFixtures.TradeBaseline.splitShopId
+
     let split = try XCTUnwrap(
-      try context.fetch(
-        FetchDescriptor<TransactionRecord>(
-          predicate: #Predicate { $0.id == splitId }
-        )
-      ).first,
+      try database.read { database in try TransactionRow.fetchOne(database, key: splitId) },
       "custom split transaction must exist"
     )
     XCTAssertEqual(split.payee, UITestFixtures.TradeBaseline.splitShopPayee)
 
-    let legs = try context.fetch(
-      FetchDescriptor<TransactionLegRecord>(
-        predicate: #Predicate { $0.transactionId == splitId }
-      )
-    )
+    let legs = try database.read { database in
+      try TransactionLegRow
+        .filter(TransactionLegRow.Columns.transactionId == splitId)
+        .fetchAll(database)
+    }
     XCTAssertEqual(legs.count, 2, "split has two legs")
     let accountIds = Set(legs.compactMap(\.accountId))
     XCTAssertEqual(
@@ -166,11 +161,10 @@ final class UITestSeedHydratorTests: XCTestCase {
   func testHydrateTradeBaselineSeedsTheHistoricalPayees() throws {
     let profile = try XCTUnwrap(
       try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager))
-    let container = try containerManager.container(for: profile.id)
+    let database = try containerManager.database(for: profile.id)
 
-    let context = ModelContext(container)
     let historicalIds = Set(UITestFixtures.TradeBaseline.historicalPayees.map(\.id))
-    let allTransactions = try context.fetch(FetchDescriptor<TransactionRecord>())
+    let allTransactions = try database.read { database in try TransactionRow.fetchAll(database) }
     let historicals = allTransactions.filter { historicalIds.contains($0.id) }
     XCTAssertEqual(
       historicals.count,
@@ -188,11 +182,11 @@ final class UITestSeedHydratorTests: XCTestCase {
     // Each historical has exactly one expense leg on Checking.
     for historical in historicals {
       let txnId = historical.id
-      let legs = try context.fetch(
-        FetchDescriptor<TransactionLegRecord>(
-          predicate: #Predicate { $0.transactionId == txnId }
-        )
-      )
+      let legs = try database.read { database in
+        try TransactionLegRow
+          .filter(TransactionLegRow.Columns.transactionId == txnId)
+          .fetchAll(database)
+      }
       XCTAssertEqual(legs.count, 1, "historical \(historical.payee ?? "?") should have 1 leg")
       XCTAssertEqual(legs.first?.accountId, UITestFixtures.TradeBaseline.checkingAccountId)
       XCTAssertEqual(legs.first?.type, TransactionType.expense.rawValue)
@@ -212,10 +206,9 @@ final class UITestSeedHydratorTests: XCTestCase {
   func testHydrateTradeReadySeedsBrokerageAccount() throws {
     let profile = try XCTUnwrap(
       try UITestSeedHydrator.hydrate(.tradeReady, into: containerManager))
-    let container = try containerManager.container(for: profile.id)
-    let context = ModelContext(container)
+    let database = try containerManager.database(for: profile.id)
 
-    let accounts = try context.fetch(FetchDescriptor<AccountRecord>())
+    let accounts = try database.read { database in try AccountRow.fetchAll(database) }
     XCTAssertEqual(accounts.count, 1, "expected exactly one account")
     let account = try XCTUnwrap(accounts.first)
     XCTAssertEqual(account.id, UITestFixtures.TradeReady.brokerageAccountId)
@@ -225,10 +218,9 @@ final class UITestSeedHydratorTests: XCTestCase {
   func testHydrateTradeReadySeedsVgsaxInstrument() throws {
     let profile = try XCTUnwrap(
       try UITestSeedHydrator.hydrate(.tradeReady, into: containerManager))
-    let container = try containerManager.container(for: profile.id)
-    let context = ModelContext(container)
+    let database = try containerManager.database(for: profile.id)
 
-    let instruments = try context.fetch(FetchDescriptor<InstrumentRecord>())
+    let instruments = try database.read { database in try InstrumentRow.fetchAll(database) }
     let ids = Set(instruments.map(\.id))
     XCTAssertTrue(
       ids.contains(UITestFixtures.TradeReady.vgsaxInstrumentId),
@@ -238,10 +230,9 @@ final class UITestSeedHydratorTests: XCTestCase {
   func testHydrateTradeReadySeedsBrokerageCategory() throws {
     let profile = try XCTUnwrap(
       try UITestSeedHydrator.hydrate(.tradeReady, into: containerManager))
-    let container = try containerManager.container(for: profile.id)
-    let context = ModelContext(container)
+    let database = try containerManager.database(for: profile.id)
 
-    let categories = try context.fetch(FetchDescriptor<CategoryRecord>())
+    let categories = try database.read { database in try CategoryRow.fetchAll(database) }
     XCTAssertEqual(categories.count, 1, "expected exactly one category")
     let cat = try XCTUnwrap(categories.first)
     XCTAssertEqual(cat.id, UITestFixtures.TradeReady.brokerageCategoryId)
@@ -252,13 +243,13 @@ final class UITestSeedHydratorTests: XCTestCase {
 
   func testHydrateIsIdempotentWhenRunTwice() throws {
     _ = try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager)
-    let first = try containerManager.container(for: UITestFixtures.TradeBaseline.profileId)
-    let firstTxnCount = try ModelContext(first).fetch(FetchDescriptor<TransactionRecord>()).count
+    let database = try containerManager.database(
+      for: UITestFixtures.TradeBaseline.profileId)
+    let firstTxnCount = try database.read { database in try TransactionRow.fetchCount(database) }
 
     // Running hydration again on the same manager should not double-insert.
     _ = try UITestSeedHydrator.hydrate(.tradeBaseline, into: containerManager)
-    let second = try containerManager.container(for: UITestFixtures.TradeBaseline.profileId)
-    let secondTxnCount = try ModelContext(second).fetch(FetchDescriptor<TransactionRecord>()).count
+    let secondTxnCount = try database.read { database in try TransactionRow.fetchCount(database) }
 
     // 1 trade + N historical single-leg expenses + 1 custom multi-leg split.
     let expected = 1 + UITestFixtures.TradeBaseline.historicalPayees.count + 1
