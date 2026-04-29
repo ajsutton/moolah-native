@@ -53,17 +53,7 @@ enum ProfileIndexDatabase {
       config.journalMode = .wal
     }
     config.prepareDatabase { database in
-      // Project PRAGMA defaults — see `guides/DATABASE_SCHEMA_GUIDE.md` §5.
-      try database.execute(
-        sql: """
-          PRAGMA foreign_keys = ON;
-          PRAGMA synchronous = NORMAL;
-          PRAGMA busy_timeout = 5000;
-          PRAGMA temp_store = MEMORY;
-          PRAGMA cache_size = -8000;
-          PRAGMA mmap_size = 0;
-          PRAGMA optimize = 0x10002;
-          """)
+      try GRDBPragmas.applyDefaults(to: database)
     }
     return config
   }

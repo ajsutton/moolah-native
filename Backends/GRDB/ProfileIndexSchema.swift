@@ -15,7 +15,10 @@ import GRDB
 ///
 /// Each migration body is registered here. Once shipped, migration IDs
 /// are frozen forever; splitting later is fine, merging post-ship is
-/// not.
+/// not. As the schema grows, future migration bodies will move into
+/// sibling `ProfileIndexSchema+<Name>.swift` extension files — matching
+/// the convention `ProfileSchema` evolved into — so this file stays a
+/// small index of registered migrations.
 ///
 /// See `guides/DATABASE_SCHEMA_GUIDE.md` for the rules this schema
 /// follows.
@@ -40,6 +43,10 @@ enum ProfileIndexSchema {
   private static func createProfileTable(_ database: Database) throws {
     try database.execute(
       sql: """
+        -- WITHOUT ROWID: not used; encoded_system_fields BLOB dominates
+        -- row size, which makes WITHOUT ROWID's interior-page packing a
+        -- net loss (per `guides/DATABASE_SCHEMA_GUIDE.md` §3 decision
+        -- table).
         CREATE TABLE profile (
             id                          BLOB    NOT NULL PRIMARY KEY,
             record_name                 TEXT    NOT NULL UNIQUE,
