@@ -58,12 +58,12 @@ extension GRDBAnalysisRepository {
   /// test.
   ///
   /// `account_id` is intentionally NOT in the WHERE clause:
-  /// 1. **Semantic parity with CloudKit.** The reference path in
-  ///    `CloudKitAnalysisRepository+IncomeExpense.accumulateExpenseLegs`
-  ///    only filters on `leg.type == .expense && leg.categoryId != nil`,
-  ///    so categorised expense legs without an account must appear in
+  /// 1. **Semantic contract.** The expense breakdown only filters on
+  ///    `leg.type == .expense && leg.categoryId != nil`, so
+  ///    categorised expense legs without an account must appear in
   ///    the breakdown. Adding `account_id IS NOT NULL` here would
-  ///    silently drop them and diverge from CloudKit.
+  ///    silently drop them. Pinned by
+  ///    `GRDBExpenseBreakdownConversionTests`.
   /// 2. **Covering index.** `account_id` is not in
   ///    `leg_analysis_by_type_category`'s column list, so adding the
   ///    predicate forces SQLite to fetch the base row and breaks the

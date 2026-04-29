@@ -5,10 +5,8 @@ import Testing
 
 /// Direct unit tests for the UTC-anchored financial-month bucket key.
 /// Cover both the underlying shared `FinancialMonth.key(for:monthEnd:)`
-/// helper and the two repository façades (`GRDBAnalysisRepository` and
-/// `CloudKitAnalysisRepository`) that forward to it — pinning that the
-/// GRDB and CloudKit analysis paths cannot drift apart on the boundary
-/// calendar.
+/// helper and the `GRDBAnalysisRepository.financialMonth` façade that
+/// forwards to it.
 ///
 /// The contract suite covers boundary behaviour through the public API,
 /// but only catches a regression to a `Calendar.current`-based
@@ -63,26 +61,21 @@ struct GRDBAnalysisFinancialMonthTests {
     #expect(FinancialMonth.key(for: firstDay, monthEnd: 31) == "202507")
   }
 
-  // MARK: - Repository façades route to the shared helper
+  // MARK: - Repository façade routes to the shared helper
 
-  /// Pins that `GRDBAnalysisRepository.financialMonth` and
-  /// `CloudKitAnalysisRepository.financialMonth` both forward to
+  /// Pins that `GRDBAnalysisRepository.financialMonth` forwards to
   /// `FinancialMonth.key(for:monthEnd:)`. If a future refactor
-  /// reintroduces a `Calendar.current`-based path on either side, the
-  /// boundary-day case below diverges from the shared helper's output —
-  /// the test breaks instead of the production code silently
-  /// mis-bucketing rows. The shared-helper approach is the C4 fix's
-  /// drift-prevention guarantee.
-  @Test("GRDB and CloudKit financialMonth forward to the shared FinancialMonth helper")
-  func repositoryFacadesAgreeWithSharedHelper() throws {
+  /// reintroduces a `Calendar.current`-based path on the repository
+  /// side, the boundary-day case below diverges from the shared
+  /// helper's output — the test breaks instead of production silently
+  /// mis-bucketing rows.
+  @Test("GRDBAnalysisRepository.financialMonth forwards to the shared FinancialMonth helper")
+  func repositoryFacadeAgreesWithSharedHelper() throws {
     let boundary = try AnalysisTestHelpers.utcDate(
       year: 2025, month: 3, day: 24, hour: 23)
     let grdb = GRDBAnalysisRepository.financialMonth(for: boundary, monthEnd: 25)
-    let cloudKit = CloudKitAnalysisRepository.financialMonth(
-      for: boundary, monthEnd: 25)
     let shared = FinancialMonth.key(for: boundary, monthEnd: 25)
     #expect(grdb == shared)
-    #expect(cloudKit == shared)
     #expect(shared == "202503")
   }
 }

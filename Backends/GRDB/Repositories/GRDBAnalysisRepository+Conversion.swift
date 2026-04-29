@@ -1,15 +1,16 @@
 import Foundation
 
-/// Conversion and day-bucketing helpers used by the SQL-driven analysis
-/// methods on `GRDBAnalysisRepository`. Lifted into a sibling extension so
-/// the main repository file stays small and so future SQL rewrites
-/// (`fetchIncomeAndExpense`, `fetchCategoryBalances`,
-/// `fetchDailyBalances`) can share the same day-string parser and the
+/// Conversion and day-bucketing helpers shared across the SQL-driven
+/// analysis methods on `GRDBAnalysisRepository`
+/// (`fetchExpenseBreakdown`, `fetchCategoryBalances`,
+/// `fetchIncomeAndExpense`, `fetchDailyBalances`). Lifted into a
+/// sibling extension so the main repository file stays small and so
+/// every aggregation reuses the same day-string parser and the
 /// (storageValue, instrument) → converted `InstrumentAmount` helper.
 ///
-/// The helpers are static and free of CloudKit-only references so they
-/// stand on their own once the SwiftData-era
-/// `CloudKitAnalysisRepository` extension files are deleted.
+/// The helpers are static and free of stored-state coupling — taking
+/// their dependencies as parameters so this sibling-file extension
+/// doesn't reach into the main class's `private` storage.
 extension GRDBAnalysisRepository {
   /// `Sendable` wrapper around an `ISO8601DateFormatter` so a single
   /// shared instance can be hoisted to a `static let` without
@@ -56,11 +57,10 @@ extension GRDBAnalysisRepository {
   /// Compute the financial-month key (`YYYYMM`) for `date`, respecting
   /// the user's configured `monthEnd` cut-off.
   ///
-  /// Forwards to the shared `FinancialMonth.key(for:monthEnd:)` helper
-  /// so this path and the CloudKit-side
-  /// `CloudKitAnalysisRepository.financialMonth` resolve to the same
-  /// UTC-anchored implementation — eliminating the previous risk that
-  /// the two code paths could drift on boundary-day rows.
+  /// Thin façade over `FinancialMonth.key(for:monthEnd:)` — kept on
+  /// the repository so the call sites read alongside the rest of the
+  /// per-aggregation helpers without having to import the shared
+  /// helper directly.
   static func financialMonth(for date: Date, monthEnd: Int) -> String {
     FinancialMonth.key(for: date, monthEnd: monthEnd)
   }
@@ -69,11 +69,10 @@ extension GRDBAnalysisRepository {
   /// quantity, converting on `day` when the source instrument differs.
   /// Same-instrument legs short-circuit and skip the conversion service.
   ///
-  /// The leg-less signature (vs. CloudKit's
-  /// `convertedAmount(_:to:on:conversionService:)` which takes a
-  /// `TransactionLeg`) reflects the SQL aggregation: rows arrive as
-  /// already-summed `(storageValue, instrumentId)` tuples, with no leg
-  /// available to project from.
+  /// The signature takes `(storageValue, instrument)` rather than a
+  /// `TransactionLeg` because rows arrive as already-summed
+  /// `(storageValue, instrumentId)` tuples from the GROUP BY — no leg
+  /// is available to project from.
   @concurrent
   static func convertedQuantity(
     storageValue: Int64,

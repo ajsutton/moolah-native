@@ -71,8 +71,9 @@ extension GRDBAnalysisRepository {
   /// - `priorAccountRows` / `priorEarmarkRows` seed the `PositionBook`
   ///   with pre-`after` legs under the `asStartingBalance: true`
   ///   semantics (every leg type on an investment account contributes
-  ///   to `accountsFromTransfers`, mirroring the legacy
-  ///   `investmentTransfersOnly: false` baseline).
+  ///   to `accountsFromTransfers`, matching the
+  ///   `investmentTransfersOnly: false` baseline applied before the
+  ///   cutoff).
   /// - `accountRows` / `earmarkRows` carry the post-`after` deltas.
   /// - `investmentValues` carries every `investment_value` row — all
   ///   historical snapshots are loaded so the cursor walk in
@@ -143,7 +144,7 @@ extension GRDBAnalysisRepository {
   /// `handleConversionFailure` is invoked with the failing day's
   /// context. The loop continues processing remaining days and the
   /// function returns the partially-populated history rather than
-  /// throwing — matching the CloudKit-era behaviour pinned by
+  /// throwing — pinned by
   /// `AnalysisRule11ScopingTests.dailyBalanceConversionFailureIsScopedPerDay`.
   /// A `CancellationError` is rethrown immediately and never folded
   /// into the conversion-failure path.
@@ -189,8 +190,7 @@ extension GRDBAnalysisRepository {
       handlers: handlers)
 
     var actualBalances = dailyBalances.values.sorted { $0.date < $1.date }
-    CloudKitAnalysisRepository.applyBestFit(
-      to: &actualBalances, instrument: profileInstrument)
+    applyBestFit(to: &actualBalances, instrument: profileInstrument)
 
     var forecastBalances: [DailyBalance] = []
     if let forecastUntil = aggregation.forecastUntil {
@@ -246,7 +246,7 @@ extension GRDBAnalysisRepository {
   /// Walk the post-`after` rows in day order; for each day, apply
   /// every account / earmark delta then call
   /// `PositionBook.dailyBalance(...)` once. The book mutates in place
-  /// so balances are cumulative — matching the legacy per-leg walker.
+  /// so balances are cumulative — same shape as the per-leg walker.
   ///
   /// Days are keyed by the row group's `sample_date` instant
   /// (typically the earliest `t.date` inside the SQL group) rather

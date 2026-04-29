@@ -15,10 +15,8 @@ import Testing
 /// `GRDBExpenseBreakdownConversionTests`.
 ///
 /// The investment-account exclusion, account-less leg inclusion, and
-/// the `categoryIds` filter are also pinned here — these are the
-/// SwiftData-era include rules from
-/// `CategoryBalancesQuery`/`+IncomeExpense.applyByType` that the SQL
-/// rewrite must continue to honour.
+/// the `categoryIds` filter are also pinned here — semantic include
+/// rules that the SQL aggregation must continue to honour.
 @Suite("GRDBAnalysisRepository fetchCategoryBalances — date-sensitive conversion")
 struct GRDBCategoryBalancesConversionTests {
 
@@ -89,9 +87,8 @@ struct GRDBCategoryBalancesConversionTests {
 
   @Test("category balances exclude legs from investment accounts")
   func categoryBalancesExcludeInvestmentAccountLegs() async throws {
-    // Mirrors `+IncomeExpense.applyByType`'s isInvestmentAccount guard:
-    // a categorised expense leg posted against an investment account is
-    // excluded from category totals. The same leg posted against a
+    // A categorised expense leg posted against an investment account
+    // is excluded from category totals; the same leg posted against a
     // non-investment account IS included. Pin both halves so the SQL's
     // LEFT JOIN to `account` and the
     // `(a.type IS NULL OR a.type <> 'investment')` predicate are
@@ -140,15 +137,13 @@ struct GRDBCategoryBalancesConversionTests {
         == InstrumentAmount(quantity: -25, instrument: .defaultTestInstrument))
   }
 
-  @Test("category balances include categorised legs without an account (CloudKit parity)")
+  @Test("category balances include categorised legs without an account")
   func categoryBalancesIncludeAccountlessCategorisedLegs() async throws {
-    // Mirrors `CategoryBalancesQuery.accumulate(transaction:into:)` which
-    // does NOT filter on `accountId` when accumulating leg amounts: a
-    // categorised expense leg with `accountId == nil` is included
-    // (the SwiftData-era code path treats `accountId == nil` as
-    // `isInvestmentAccount = false`). The SQL's LEFT JOIN to `account`
-    // produces a NULL `a.type` for these legs, which the predicate
-    // `(a.type IS NULL OR a.type <> 'investment')` accepts.
+    // A categorised expense leg with `accountId == nil` is included
+    // (`accountId == nil` is treated as `isInvestmentAccount = false`).
+    // The SQL's LEFT JOIN to `account` produces a NULL `a.type` for
+    // these legs, which the `(a.type IS NULL OR a.type <> 'investment')`
+    // predicate accepts.
     let day = try AnalysisTestHelpers.utcDate(year: 2025, month: 8, day: 12, hour: 12)
     let backend = try CloudKitAnalysisTestBackend()
 

@@ -75,13 +75,14 @@ extension GRDBAnalysisRepository {
   /// pinned by
   /// `AnalysisAggregationPlanPinningTests.fetchCategoryBalancesUsesCategoryIndex`.
   ///
-  /// **Investment-account exclusion.** Mirrors
-  /// `CloudKitAnalysisRepository+IncomeExpense.applyByType`'s
-  /// `isInvestmentAccount` guard. The LEFT JOIN to `account` produces a
-  /// NULL `a.type` for legs whose `account_id` is null (which today's
-  /// Swift code includes via `accountId == nil → isInvestmentAccount =
-  /// false`); the `(a.type IS NULL OR a.type <> 'investment')`
-  /// predicate accepts those rows and rejects investment-account legs.
+  /// **Investment-account exclusion.** The LEFT JOIN to `account`
+  /// produces a NULL `a.type` for legs whose `account_id` is null
+  /// (treated as `isInvestmentAccount = false`); the
+  /// `(a.type IS NULL OR a.type <> 'investment')` predicate accepts
+  /// those rows and rejects investment-account legs. Account-less
+  /// categorised legs therefore surface in the breakdown — the
+  /// pre-SQL Swift accumulator never filtered on `accountId`, and
+  /// `GRDBCategoryBalancesConversionTests` pins the same behaviour.
   ///
   /// **Plan note.** The LEFT JOIN reads `leg.account_id` to drive the
   /// join, but `account_id` is not in `leg_analysis_by_type_category`'s

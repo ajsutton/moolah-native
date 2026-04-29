@@ -128,8 +128,6 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
         // Per-day failures surface as warnings (not errors) — Rule 11
         // scoping treats a single missing day as a recoverable
         // condition: the chart still renders the surrounding days.
-        // Mirrors the CloudKit-era
-        // `analysisLogger.warning("Skipping daily balance for ... — conversion failed: ...")`.
         logger.warning(
           """
           fetchDailyBalances: skipping day=\(context.day, privacy: .public) — \

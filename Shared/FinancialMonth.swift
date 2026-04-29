@@ -6,17 +6,14 @@ import Foundation
 ///
 /// Anchored to a UTC Gregorian calendar so a transaction whose UTC
 /// `Date()` represents e.g. `2025-03-25` lands in the same financial-month
-/// bucket regardless of the runner's local timezone. The previous
-/// implementations on both `CloudKitAnalysisRepository` and the
-/// SwiftData-era forecaster used `Calendar.current` against
-/// UTC-anchored dates, which in negative-UTC zones (e.g.
-/// America/New_York) reads the previous local-time day and mis-buckets
-/// rows on the boundary day.
+/// bucket regardless of the runner's local timezone. A
+/// `Calendar.current`-based implementation reads the previous
+/// local-time day in negative-UTC zones (e.g. America/New_York) and
+/// mis-buckets rows on the boundary day; this helper avoids that
+/// drift by pinning the calendar to UTC.
 ///
-/// Both `GRDBAnalysisRepository.financialMonth` and
-/// `CloudKitAnalysisRepository.financialMonth` forward to this helper
-/// so the GRDB and CloudKit aggregation paths cannot drift apart on the
-/// boundary calendar — every path that buckets months sees the same
+/// `GRDBAnalysisRepository.financialMonth` forwards to this helper so
+/// every aggregation path that buckets months sees the same
 /// UTC-anchored result.
 enum FinancialMonth {
   /// `TimeZone(identifier: "UTC")` is documented to never return nil

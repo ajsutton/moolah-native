@@ -142,8 +142,7 @@ extension GRDBAnalysisRepository {
 
   /// Advance the sorted investment-values cursor, updating the
   /// per-account latest map with every entry whose day is on-or-before
-  /// `date`. Mirrors the CloudKit-side `advanceInvestmentCursor` so
-  /// the two paths produce identical overrides on identical inputs.
+  /// `date`.
   private static func advanceInvestmentCursor(
     values: [InvestmentValueSnapshot],
     latestByAccount: inout [UUID: InstrumentAmount],
@@ -168,7 +167,7 @@ extension GRDBAnalysisRepository {
   /// instruments to the profile instrument on `date`. Returns `nil`
   /// when any conversion fails so the caller can drop just this day's
   /// override without folding the failure into the historic-walk
-  /// error path. Mirrors the CloudKit-side `sumInvestmentValues`.
+  /// error path.
   private static func sumInvestmentValues(
     latestByAccount: [UUID: InstrumentAmount],
     on date: Date,

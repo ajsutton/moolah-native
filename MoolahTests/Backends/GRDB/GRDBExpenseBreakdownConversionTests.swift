@@ -125,13 +125,13 @@ struct GRDBExpenseBreakdownConversionTests {
     #expect(breakdown[0].totalExpenses.quantity == -225)
   }
 
-  @Test("expense breakdown includes categorised legs without an account (CloudKit parity)")
+  @Test("expense breakdown includes categorised legs without an account")
   func expenseBreakdownIncludesAccountlessCategorisedLegs() async throws {
-    // Mirrors `CloudKitAnalysisRepository.accumulateExpenseLegs` which
-    // only filters `leg.type == .expense && leg.categoryId != nil` —
-    // it does NOT filter on `accountId`. The GRDB SQL must match: an
-    // expense leg with a category but no `accountId` must surface in
-    // the breakdown. Locks the semantic-parity contract documented on
+    // The expense breakdown only filters
+    // `leg.type == .expense && leg.categoryId != nil` — it does NOT
+    // filter on `accountId`. An expense leg with a category but no
+    // `accountId` must surface in the breakdown. Locks the
+    // semantic-parity contract documented on
     // `fetchExpenseBreakdownAggregation`'s doc comment so a future
     // refactor that re-introduces `account_id IS NOT NULL` to the
     // WHERE clause breaks this test instead of silently dropping rows.

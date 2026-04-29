@@ -15,10 +15,9 @@ import OSLog
 extension GRDBAnalysisRepository {
   /// Generate the forecast tail by extrapolating scheduled
   /// transactions and feeding each instance into a fresh
-  /// `PositionBook` walk. Mirrors `CloudKitAnalysisRepository.generateForecast`
-  /// — the forecast path stays Swift-only because SQL can't
-  /// extrapolate recurring patterns. Conversion runs on `Date()`
-  /// because exchange-rate sources have no future rates.
+  /// `PositionBook` walk. The forecast path stays Swift-only because
+  /// SQL can't extrapolate recurring patterns. Conversion runs on
+  /// `Date()` because exchange-rate sources have no future rates.
   static func generateForecast(
     scheduled: [Transaction],
     startingBook: PositionBook,
@@ -28,8 +27,7 @@ extension GRDBAnalysisRepository {
     var instances: [Transaction] = []
     for scheduledTxn in scheduled {
       instances.append(
-        contentsOf: CloudKitAnalysisRepository.extrapolateScheduledTransaction(
-          scheduledTxn, until: endDate))
+        contentsOf: extrapolateScheduledTransaction(scheduledTxn, until: endDate))
     }
     instances.sort { $0.date < $1.date }
     // Scheduled transactions live in the future; exchange-rate sources
@@ -51,8 +49,7 @@ extension GRDBAnalysisRepository {
   /// Pre-convert all instances concurrently — each conversion is
   /// independent. The accumulator that follows is inherently
   /// sequential (each iteration depends on the previous running
-  /// totals), so it can't be parallelised. Mirrors
-  /// `CloudKitAnalysisRepository.preConvertForecastInstances`.
+  /// totals), so it can't be parallelised.
   private static func preConvertForecastInstances(
     _ instances: [Transaction],
     profileInstrument: Instrument,
@@ -63,7 +60,7 @@ extension GRDBAnalysisRepository {
     return try await withThrowingTaskGroup(of: (Int, Transaction).self) { group in
       for (index, instance) in instances.enumerated() {
         group.addTask {
-          let txn = try await CloudKitAnalysisRepository.convertLegsToProfileInstrument(
+          let txn = try await convertLegsToProfileInstrument(
             instance,
             to: profileInstrument,
             on: conversionDate,
@@ -75,6 +72,112 @@ extension GRDBAnalysisRepository {
       for try await (index, txn) in group { out[index] = txn }
       return out
     }
+  }
+
+  // MARK: - Scheduled-transaction extrapolation
+
+  /// Expand a single scheduled transaction into a flat list of dated
+  /// instances up to `endDate`. Non-recurring entries pass through
+  /// unchanged (or drop out when their date is past `endDate`); each
+  /// returned instance has its `recurPeriod` / `recurEvery` cleared so
+  /// downstream consumers see plain dated transactions.
+  static func extrapolateScheduledTransaction(
+    _ scheduled: Transaction,
+    until endDate: Date
+  ) -> [Transaction] {
+    guard let period = scheduled.recurPeriod, period != .once else {
+      return scheduled.date <= endDate ? [scheduled] : []
+    }
+
+    let every = scheduled.recurEvery ?? 1
+    var instances: [Transaction] = []
+    var currentDate = scheduled.date
+
+    while currentDate <= endDate {
+      var instance = scheduled
+      instance.date = currentDate
+      instance.recurPeriod = nil
+      instance.recurEvery = nil
+      instances.append(instance)
+
+      guard let next = nextDueDate(from: currentDate, period: period, every: every) else {
+        break
+      }
+      currentDate = next
+    }
+
+    return instances
+  }
+
+  /// Compute the next due date for a recurring schedule. Returns `nil`
+  /// when the period is `.once` (callers treat that as "no further
+  /// instances") or when `Calendar.date(byAdding:to:)` declines to
+  /// produce a date.
+  static func nextDueDate(from date: Date, period: RecurPeriod, every: Int) -> Date? {
+    let calendar = Calendar.current
+    var components = DateComponents()
+
+    switch period {
+    case .day:
+      components.day = every
+    case .week:
+      components.weekOfYear = every
+    case .month:
+      components.month = every
+    case .year:
+      components.year = every
+    case .once:
+      return nil
+    }
+
+    return calendar.date(byAdding: components, to: date)
+  }
+
+  // MARK: - Per-instance leg conversion
+
+  /// Return a copy of the transaction with every leg's
+  /// quantity/instrument rewritten into the profile instrument. Used
+  /// before feeding scheduled-transaction instances into the forecast
+  /// accumulator so every leg already shares the profile instrument
+  /// when `PositionBook.dailyBalance` is queried (skipping the
+  /// multi-instrument conversion path on every forecast day).
+  ///
+  /// - Parameter date: date passed to the conversion service. For
+  ///   forecast use this is `Date()` — the current rate — because
+  ///   scheduled transactions have future dates and no exchange-rate
+  ///   source has future rates. Same-instrument legs are returned
+  ///   untouched.
+  static func convertLegsToProfileInstrument(
+    _ txn: Transaction,
+    to instrument: Instrument,
+    on date: Date,
+    conversionService: any InstrumentConversionService
+  ) async throws -> Transaction {
+    guard txn.legs.contains(where: { $0.instrument.id != instrument.id }) else {
+      return txn
+    }
+    var convertedLegs: [TransactionLeg] = []
+    convertedLegs.reserveCapacity(txn.legs.count)
+    for leg in txn.legs {
+      if leg.instrument.id == instrument.id {
+        convertedLegs.append(leg)
+        continue
+      }
+      let convertedQty = try await conversionService.convert(
+        leg.quantity, from: leg.instrument, to: instrument, on: date)
+      convertedLegs.append(
+        TransactionLeg(
+          accountId: leg.accountId,
+          instrument: instrument,
+          quantity: convertedQty,
+          type: leg.type,
+          categoryId: leg.categoryId,
+          earmarkId: leg.earmarkId
+        ))
+    }
+    var result = txn
+    result.legs = convertedLegs
+    return result
   }
 
   /// Walk the pre-converted instances and emit one `DailyBalance` per

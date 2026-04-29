@@ -10,11 +10,10 @@ import Testing
 ///
 /// Split out of `AnalysisIncomeExpenseTests` as a dedicated suite so the
 /// parent file stays under SwiftLint's `type_body_length` budget. The
-/// CloudKit reference (`CloudKitAnalysisRepository+IncomeExpense.applyByType`)
-/// only guards on `classified.hasAccount` — there is NO
-/// investment-account exclusion. Backends that filter investment-account
-/// income/expense legs out of the main totals diverge from the reference
-/// path and would silently under-count user income.
+/// expected behaviour: `.income` / `.expense` legs only guard on
+/// `hasAccount` — there is NO investment-account exclusion. A backend
+/// that filtered investment-account income/expense legs out of the
+/// main totals would silently under-count user income.
 @Suite("AnalysisRepository Contract Tests — Income/Expense on Investment Accounts")
 struct AnalysisIncomeExpenseInvestmentTests {
   @Test("income legs on investment accounts are included in income total")
