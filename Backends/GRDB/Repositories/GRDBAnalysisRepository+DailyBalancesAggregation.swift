@@ -1,0 +1,329 @@
+import Foundation
+import GRDB
+
+/// SQL-side helpers for the `fetchDailyBalances` aggregation. Holds
+/// the four query strings, the row decoders, scheduled-transaction
+/// loader, accounts/instrument-map fetch, and the `database.read`
+/// entry point — split out of `+DailyBalances.swift` so that file's
+/// Swift assembly path (the per-day position-book walk + forecast
+/// fold) stays under the SwiftLint `file_length` budget.
+extension GRDBAnalysisRepository {
+  /// Loads every input the assembly walk needs in a single
+  /// `database.read` snapshot:
+  /// - per-`(day, account, instrument, type)` SUMs split on the
+  ///   `:after` cutoff (the post-cutoff rows drive the day-by-day
+  ///   walk; the pre-cutoff rows seed the `PositionBook`);
+  /// - per-`(day, earmark, instrument, type)` SUMs split the same
+  ///   way;
+  /// - the scheduled `[Transaction]` for forecast extrapolation;
+  /// - the accounts table (so we know which accounts are
+  ///   investments);
+  /// - all `investment_value` rows whose `date >= :after`;
+  /// - the instrument map.
+  ///
+  /// One snapshot keeps the four leg-side reads and the scheduled
+  /// transactions consistent — three independent reads under WAL
+  /// could surface a leg referencing a transaction that hasn't yet
+  /// appeared in the transaction list.
+  static func fetchDailyBalancesAggregation(
+    database: any DatabaseReader,
+    after: Date?,
+    forecastUntil: Date?
+  ) async throws -> DailyBalancesAggregation {
+    try await database.read { database -> DailyBalancesAggregation in
+      try Self.readDailyBalancesAggregation(
+        database: database, after: after, forecastUntil: forecastUntil)
+    }
+  }
+
+  /// Synchronous read body for `fetchDailyBalancesAggregation`. Lifted
+  /// out of the `database.read` closure so the closure body stays
+  /// under the SwiftLint `closure_body_length` budget.
+  private static func readDailyBalancesAggregation(
+    database: Database, after: Date?, forecastUntil: Date?
+  ) throws -> DailyBalancesAggregation {
+    let accountRows = try Self.fetchAccountDeltaRows(
+      database: database, after: after, side: .postCutoff)
+    let earmarkRows = try Self.fetchEarmarkDeltaRows(
+      database: database, after: after, side: .postCutoff)
+    let (priorAccountRows, priorEarmarkRows) = try Self.fetchPriorDeltaRows(
+      database: database, after: after)
+    let investmentAccountIds = try Self.fetchInvestmentAccountIds(
+      database: database)
+    let investmentValues = try Self.fetchInvestmentValueSnapshots(
+      database: database, after: after, investmentAccountIds: investmentAccountIds)
+    let scheduled =
+      forecastUntil != nil
+      ? try Self.fetchScheduledTransactions(database: database) : []
+    let instrumentMap = try InstrumentRow.fetchInstrumentMap(database: database)
+    return DailyBalancesAggregation(
+      priorAccountRows: priorAccountRows,
+      priorEarmarkRows: priorEarmarkRows,
+      accountRows: accountRows,
+      earmarkRows: earmarkRows,
+      investmentValues: investmentValues,
+      investmentAccountIds: investmentAccountIds,
+      scheduled: scheduled,
+      instrumentMap: instrumentMap,
+      forecastUntil: forecastUntil)
+  }
+
+  /// Fetch the pre-`after` baseline rows. Returns a tuple of
+  /// `(priorAccountRows, priorEarmarkRows)` so the caller can split
+  /// the seed step into its own assignment without re-running the
+  /// `after != nil` branch.
+  private static func fetchPriorDeltaRows(
+    database: Database, after: Date?
+  ) throws -> ([DailyBalanceAccountRow], [DailyBalanceEarmarkRow]) {
+    guard after != nil else { return ([], []) }
+    let priorAccountRows = try Self.fetchAccountDeltaRows(
+      database: database, after: after, side: .preCutoff)
+    let priorEarmarkRows = try Self.fetchEarmarkDeltaRows(
+      database: database, after: after, side: .preCutoff)
+    return (priorAccountRows, priorEarmarkRows)
+  }
+
+  /// Whether a delta query returns the pre-`after` baseline (used to
+  /// seed the position book) or the post-`after` deltas (the actual
+  /// per-day walk). When `after` is `nil` the post-cutoff branch
+  /// returns every non-scheduled row and the pre-cutoff branch is not
+  /// fetched.
+  private enum DeltaSide {
+    case preCutoff
+    case postCutoff
+  }
+
+  /// Runs the per-`(day, account, instrument, type)` SUM aggregation
+  /// pinned by
+  /// `AnalysisAggregationPlanPinningTests.fetchDailyBalancesAccountDimensionAvoidsScan`.
+  /// Restricted to non-scheduled legs with a non-null `account_id` —
+  /// the earmark dimension is fetched by a sibling query so the leg-
+  /// side index can stay covering on `leg_analysis_by_earmark_type`
+  /// for that read.
+  ///
+  /// The plan typically resolves through `leg_by_account` (planner's
+  /// preferred index for the `account_id IS NOT NULL` predicate) or
+  /// the covering composite `leg_analysis_by_type_account`; either is
+  /// acceptable because both keep the read off a full table scan.
+  private static func fetchAccountDeltaRows(
+    database: Database, after: Date?, side: DeltaSide
+  ) throws -> [DailyBalanceAccountRow] {
+    let cutoffClause = Self.cutoffClause(for: side)
+    // String concatenation against a fixed cutoff fragment (one of
+    // two literal predicates) — no end-user input flows through here,
+    // so the composition is safe per
+    // `guides/DATABASE_CODE_GUIDE.md` §4.
+    // `MIN(t.date)` carries the earliest raw `t.date` instant inside
+    // each UTC-day group. Swift uses it as the `date:` argument to
+    // `PositionBook.dailyBalance(...)`, whose `dayKey` falls out of
+    // `Calendar.current.startOfDay(for:)` — i.e. the user's *local*
+    // day. Without the sample date the only fallback would be the
+    // UTC day-string, which `Calendar.current.startOfDay` interprets
+    // as a different local-day on every non-UTC runner and breaks
+    // every contract test that anchors on `Calendar.current.startOfDay(for: today)`.
+    let sql = """
+      SELECT DATE(t.date)        AS day,
+             MIN(t.date)         AS sample_date,
+             leg.account_id      AS account_id,
+             leg.instrument_id   AS instrument_id,
+             leg.type            AS type,
+             SUM(leg.quantity)   AS qty
+      FROM transaction_leg leg
+      JOIN "transaction"    t ON leg.transaction_id = t.id
+      WHERE t.recur_period IS NULL
+        \(cutoffClause)
+        AND leg.account_id IS NOT NULL
+      GROUP BY day, leg.account_id, leg.instrument_id, leg.type
+      ORDER BY day ASC
+      """
+    let arguments: StatementArguments = ["after": after]
+    let sqlRows = try Row.fetchAll(database, sql: sql, arguments: arguments)
+    var rows: [DailyBalanceAccountRow] = []
+    rows.reserveCapacity(sqlRows.count)
+    for row in sqlRows {
+      guard let day: String = row["day"] else { continue }
+      guard let sampleDate: Date = row["sample_date"] else { continue }
+      guard let accountId: UUID = row["account_id"] else { continue }
+      guard let instrumentId: String = row["instrument_id"] else { continue }
+      guard let type: String = row["type"] else { continue }
+      guard let qty: Int64 = row["qty"] else { continue }
+      rows.append(
+        DailyBalanceAccountRow(
+          day: day,
+          sampleDate: sampleDate,
+          accountId: accountId,
+          instrumentId: instrumentId,
+          type: type,
+          qty: qty))
+    }
+    return rows
+  }
+
+  /// Runs the per-`(day, earmark, instrument, type)` SUM aggregation
+  /// pinned by
+  /// `AnalysisAggregationPlanPinningTests.fetchDailyBalancesEarmarkDimensionUsesEarmarkIndex`.
+  /// Restricted to non-scheduled legs with a non-null `earmark_id` —
+  /// the partial composite `leg_analysis_by_earmark_type` covers
+  /// `(earmark_id, type, instrument_id, transaction_id, quantity)` so
+  /// the planner emits `USING COVERING INDEX`.
+  private static func fetchEarmarkDeltaRows(
+    database: Database, after: Date?, side: DeltaSide
+  ) throws -> [DailyBalanceEarmarkRow] {
+    let cutoffClause = Self.cutoffClause(for: side)
+    // See the account-dimension query for the rationale on
+    // `MIN(t.date) AS sample_date` — same local-day mapping concern.
+    let sql = """
+      SELECT DATE(t.date)        AS day,
+             MIN(t.date)         AS sample_date,
+             leg.earmark_id      AS earmark_id,
+             leg.instrument_id   AS instrument_id,
+             leg.type            AS type,
+             SUM(leg.quantity)   AS qty
+      FROM transaction_leg leg
+      JOIN "transaction"    t ON leg.transaction_id = t.id
+      WHERE t.recur_period IS NULL
+        \(cutoffClause)
+        AND leg.earmark_id IS NOT NULL
+      GROUP BY day, leg.earmark_id, leg.instrument_id, leg.type
+      ORDER BY day ASC
+      """
+    let arguments: StatementArguments = ["after": after]
+    let sqlRows = try Row.fetchAll(database, sql: sql, arguments: arguments)
+    var rows: [DailyBalanceEarmarkRow] = []
+    rows.reserveCapacity(sqlRows.count)
+    for row in sqlRows {
+      guard let day: String = row["day"] else { continue }
+      guard let sampleDate: Date = row["sample_date"] else { continue }
+      guard let earmarkId: UUID = row["earmark_id"] else { continue }
+      guard let instrumentId: String = row["instrument_id"] else { continue }
+      guard let type: String = row["type"] else { continue }
+      guard let qty: Int64 = row["qty"] else { continue }
+      rows.append(
+        DailyBalanceEarmarkRow(
+          day: day,
+          sampleDate: sampleDate,
+          earmarkId: earmarkId,
+          instrumentId: instrumentId,
+          type: type,
+          qty: qty))
+    }
+    return rows
+  }
+
+  /// Returns the partial-WHERE fragment that splits the per-day SUM
+  /// rows on the `:after` cutoff. The fragment is a fixed string
+  /// (no end-user input) and goes through `StatementArguments` for
+  /// the bound `:after` value, so this composition is safe per
+  /// `guides/DATABASE_CODE_GUIDE.md` §4.
+  private static func cutoffClause(for side: DeltaSide) -> String {
+    switch side {
+    case .preCutoff:
+      return "AND :after IS NOT NULL AND t.date < :after"
+    case .postCutoff:
+      return "AND (:after IS NULL OR t.date >= :after)"
+    }
+  }
+
+  /// Loads every account id whose `type = 'investment'`. The Swift
+  /// assembly walks per-day deltas and needs to know which accounts
+  /// are investments so it can route transfer legs into
+  /// `accountsFromTransfers`. Reading the column directly off the
+  /// `account` table avoids redundantly carrying the full account row
+  /// across the snapshot boundary.
+  private static func fetchInvestmentAccountIds(database: Database) throws -> Set<UUID> {
+    let rows = try Row.fetchAll(
+      database,
+      sql: "SELECT id FROM account WHERE type = 'investment'")
+    var ids = Set<UUID>()
+    ids.reserveCapacity(rows.count)
+    for row in rows {
+      if let id: UUID = row["id"] {
+        ids.insert(id)
+      }
+    }
+    return ids
+  }
+
+  /// Loads the per-account latest-as-of-day investment values pinned
+  /// by
+  /// `AnalysisAggregationPlanPinningTests.fetchDailyBalancesInvestmentValuesUseAccountDateIndex`.
+  /// The composite `iv_by_account_date_value` covers
+  /// `(account_id, date, value, instrument_id)` so the SELECT list
+  /// and the optional `:after` lower bound are both served by the
+  /// index — SQLite emits `SCAN ... USING COVERING INDEX`, which is
+  /// the no-base-row read shape we want and is *not* a full table
+  /// scan.
+  ///
+  /// Filtered to investment accounts in Swift (the same shape as the
+  /// previous SwiftData-backed path) so the SQL stays index-friendly
+  /// — adding the account-type predicate to the WHERE would force an
+  /// `account` join and break the covering index.
+  private static func fetchInvestmentValueSnapshots(
+    database: Database,
+    after: Date?,
+    investmentAccountIds: Set<UUID>
+  ) throws -> [InvestmentValueSnapshot] {
+    guard !investmentAccountIds.isEmpty else { return [] }
+    let sql = """
+      SELECT account_id, date, value, instrument_id
+      FROM investment_value
+      WHERE (:after IS NULL OR date >= :after)
+      ORDER BY account_id ASC, date ASC
+      """
+    let arguments: StatementArguments = ["after": after]
+    let sqlRows = try Row.fetchAll(database, sql: sql, arguments: arguments)
+    var snapshots: [InvestmentValueSnapshot] = []
+    snapshots.reserveCapacity(sqlRows.count)
+    for row in sqlRows {
+      guard let accountId: UUID = row["account_id"] else { continue }
+      guard investmentAccountIds.contains(accountId) else { continue }
+      guard let date: Date = row["date"] else { continue }
+      guard let value: Int64 = row["value"] else { continue }
+      guard let instrumentId: String = row["instrument_id"] else { continue }
+      let instrument = Instrument.fiat(code: instrumentId)
+      let amount = InstrumentAmount(storageValue: value, instrument: instrument)
+      snapshots.append(
+        InvestmentValueSnapshot(
+          accountId: accountId, date: date, value: amount))
+    }
+    snapshots.sort { $0.date < $1.date }
+    return snapshots
+  }
+
+  /// Loads the scheduled `[Transaction]` set used by the forecast
+  /// extrapolator. Mirrors the existing per-leg materialisation —
+  /// scheduled transactions stay Swift-side because SQL can't
+  /// extrapolate recurring patterns. Filters to `recur_period IS NOT
+  /// NULL` via the partial `transaction_scheduled` index so the read
+  /// stays off a full scan.
+  private static func fetchScheduledTransactions(database: Database) throws -> [Transaction] {
+    let txnRows =
+      try TransactionRow
+      .filter(TransactionRow.Columns.recurPeriod != nil)
+      .fetchAll(database)
+    guard !txnRows.isEmpty else { return [] }
+    let txnIds = Set(txnRows.map(\.id))
+    let legRows =
+      try TransactionLegRow
+      .filter(txnIds.contains(TransactionLegRow.Columns.transactionId))
+      .fetchAll(database)
+    let instrumentRows = try InstrumentRow.fetchAll(database)
+    var instrumentLookup: [String: Instrument] = [:]
+    for row in instrumentRows {
+      instrumentLookup[row.id] = try row.toDomain()
+    }
+    let legsByTxnId = Dictionary(grouping: legRows, by: \.transactionId)
+    return try txnRows.map { row -> Transaction in
+      let legs =
+        try (legsByTxnId[row.id] ?? [])
+        .sorted { $0.sortOrder < $1.sortOrder }
+        .map { legRow -> TransactionLeg in
+          let legInstrument =
+            instrumentLookup[legRow.instrumentId]
+            ?? Instrument.fiat(code: legRow.instrumentId)
+          return try legRow.toDomain(instrument: legInstrument)
+        }
+      return try row.toDomain(legs: legs)
+    }
+  }
+}

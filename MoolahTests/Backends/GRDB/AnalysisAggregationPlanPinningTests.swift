@@ -25,26 +25,6 @@ struct AnalysisAggregationPlanPinningTests {
     try PlanPinningTestHelpers.planDetail(database, query: query, arguments: arguments)
   }
 
-  // MARK: - Analysis full-table reads (intentional)
-
-  /// Pins the *current* shape of `GRDBAnalysisRepository.fetchTransactions`
-  /// — three full-table reads against `transaction`, `transaction_leg`,
-  /// and `instrument`. Not an index-driven query: the analysis path
-  /// materialises every row into Swift values today. The test exists so
-  /// the ratchet flips when TODO(#577) pushes the per-instrument
-  /// GROUP BY into SQL — the SCAN should disappear once the rewrite
-  /// lands. https://github.com/ajsutton/moolah-native/issues/577
-  @Test("analysis-path fetchTransactions is an intentional SCAN until #577 lands")
-  func analysisFetchTransactionsScansByDesign() throws {
-    let database = try makeDatabase()
-    // SQLite's EXPLAIN QUERY PLAN strips the table-name quotes when it
-    // emits the SCAN line, so the assertion drops them too.
-    let txnPlan = try planDetail(database, query: "SELECT * FROM \"transaction\"")
-    let legPlan = try planDetail(database, query: "SELECT * FROM transaction_leg")
-    #expect(txnPlan.contains("SCAN transaction"))
-    #expect(legPlan.contains("SCAN transaction_leg"))
-  }
-
   // MARK: - Aggregations
 
   @Test("computePositions JOIN+GROUP BY avoids a transaction_leg SCAN")
