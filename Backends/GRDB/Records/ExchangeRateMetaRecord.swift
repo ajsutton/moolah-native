@@ -11,6 +11,15 @@ import GRDB
 struct ExchangeRateMetaRecord {
   static let databaseTableName = "exchange_rate_meta"
 
+  // `INSERT OR REPLACE` instead of GRDB's default `INSERT ... ON CONFLICT
+  // DO UPDATE`. The latter goes through `upsert(_:)`, which hard-codes
+  // `RETURNING "rowid"` and breaks against the `WITHOUT ROWID` shape
+  // chosen for this table per `guides/DATABASE_SCHEMA_GUIDE.md` §3. No
+  // FK references this table and no triggers fire on delete, so the
+  // delete-then-insert semantics of `.replace` are observably equivalent
+  // to an in-place `DO UPDATE`.
+  static let persistenceConflictPolicy = PersistenceConflictPolicy(insert: .replace)
+
   enum Columns: String, ColumnExpression, CaseIterable {
     case base
     case earliestDate = "earliest_date"

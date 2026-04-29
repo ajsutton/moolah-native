@@ -14,6 +14,12 @@ import GRDB
 /// account, transaction, transaction_leg, category, earmark,
 /// earmark_budget_item, investment_value). See
 /// `ProfileSchema+CoreFinancialGraph.swift`.
+/// `v4_rate_cache_without_rowid` — rebuilds the three rate-cache
+/// `*_meta` tables as `WITHOUT ROWID` so they round-trip through
+/// `record.insert(database)` (with `persistenceConflictPolicy =
+/// .replace`) instead of `record.upsert(database)` — GRDB 7's
+/// `upsert` hard-codes `RETURNING "rowid"` which fails against
+/// rowid-less tables. See `ProfileSchema+RateCacheWithoutRowid.swift`.
 ///
 /// **Retention policy for the cache tables.** All six cache tables
 /// created by `v1_initial` (`exchange_rate`, `exchange_rate_meta`,
@@ -34,7 +40,7 @@ enum ProfileSchema {
   /// Bumped each time a migration is added. Surfaced for open-time
   /// integrity checks; not used by `DatabaseMigrator` (which keys on
   /// the stable string IDs of registered migrations).
-  static let version = 3
+  static let version = 4
 
   static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
@@ -48,6 +54,8 @@ enum ProfileSchema {
       "v2_csv_import_and_rules", migrate: createCSVImportAndRulesTables)
     migrator.registerMigration(
       "v3_core_financial_graph", migrate: createCoreFinancialGraphTables)
+    migrator.registerMigration(
+      "v4_rate_cache_without_rowid", migrate: rebuildRateCacheMetaWithoutRowid)
 
     return migrator
   }
