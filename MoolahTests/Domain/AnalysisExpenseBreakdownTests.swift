@@ -80,8 +80,11 @@ struct AnalysisExpenseBreakdownTests {
     let category = Category(id: UUID(), name: "Groceries")
     _ = try await backend.categories.create(category)
 
-    let onBoundary = try AnalysisTestHelpers.date(year: 2025, month: 3, day: 25)
-    let afterBoundary = try AnalysisTestHelpers.date(year: 2025, month: 3, day: 26)
+    // UTC-anchored at noon so SQL `DATE(t.date)` lands on the intended
+    // calendar day in any local timezone — the GRDB analysis path
+    // groups by UTC date (see §3.4.2 of the GRDB slice plan).
+    let onBoundary = try AnalysisTestHelpers.utcDate(year: 2025, month: 3, day: 25)
+    let afterBoundary = try AnalysisTestHelpers.utcDate(year: 2025, month: 3, day: 26)
 
     _ = try await backend.transactions.create(
       Transaction(

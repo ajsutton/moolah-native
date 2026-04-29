@@ -6,11 +6,11 @@ import OSLog
 
 /// GRDB-backed implementation of `AnalysisRepository`. Reads the core
 /// financial graph (accounts, transactions, legs, investment values)
-/// from `data.sqlite` and reuses the existing per-method computation
-/// helpers on `CloudKitAnalysisRepository`. The compute helpers operate
-/// on Domain values (`[Transaction]`, `[Account]`, etc.), so the only
-/// difference from the SwiftData implementation is where the rows come
-/// from.
+/// from `data.sqlite`. `fetchExpenseBreakdown` runs a SQL aggregation
+/// (`+ExpenseBreakdown.swift`) and converts each `(day, category,
+/// instrument)` tuple in Swift; the remaining methods still materialise
+/// every row and reuse the per-method compute helpers on
+/// `CloudKitAnalysisRepository` until those §3.4 SQL rewrites land.
 ///
 /// **Concurrency.** `final class` + `@unchecked Sendable` rather than
 /// `actor`. All stored properties are `let`. `database`
@@ -97,12 +97,17 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
     monthEnd: Int,
     after: Date?
   ) async throws -> [ExpenseBreakdown] {
-    let nonScheduled = try await fetchTransactions(filter: .nonScheduledOnly)
-    return try await CloudKitAnalysisRepository.computeExpenseBreakdown(
-      nonScheduled: nonScheduled,
+    let aggregation = try await Self.fetchExpenseBreakdownAggregation(
+      database: database, after: after)
+    return try await Self.assembleExpenseBreakdown(
+      aggregation: aggregation,
+      profileInstrument: instrument,
+      conversionService: conversionService,
       monthEnd: monthEnd,
-      after: after,
-      context: analysisContext)
+      onUnparseableDay: { day in
+        self.logger.error(
+          "fetchExpenseBreakdown: skipping row with unparseable day '\(day)'")
+      })
   }
 
   func fetchIncomeAndExpense(
