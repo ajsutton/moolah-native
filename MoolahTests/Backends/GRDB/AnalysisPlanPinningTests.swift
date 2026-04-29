@@ -78,7 +78,7 @@ struct AnalysisPlanPinningTests {
     // turn every keystroke into a full table scan.
     let detail = try planDetail(
       database,
-      sql: """
+      query: """
         SELECT payee
         FROM "transaction"
         WHERE payee IS NOT NULL
@@ -90,7 +90,7 @@ struct AnalysisPlanPinningTests {
         """,
       arguments: [UUID(), "X"])
     #expect(detail.contains("transaction_by_payee"))
-    #expect(!detail.contains("SCAN \"transaction\""))
+    #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "\"transaction\""))
   }
 
   @Test("transaction equality filter on payee uses the partial payee index")
