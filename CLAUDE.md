@@ -8,6 +8,24 @@
 - **Ship via PR.** Push the feature branch and open a pull request with `gh pr create`. Do not attempt `git push origin main` — it will be rejected by branch protection.
 - **Exceptions:** Read-only inspection and investigation can happen on the `main` checkout without a worktree. If you're unsure whether a task will require edits, create the worktree up front.
 
+### Stacked-PR worktrees: don't accidentally push into the parent PR
+
+When you create a worktree branched off another PR's head (e.g. stacking a fix-up PR on top of an open PR), `git worktree add -b <new-local> <remote-tracking-branch>` silently sets the new local branch to **track the parent's remote branch**. A subsequent `git push -u origin <new-local>` then pushes your commits *into the parent PR's branch* — overwriting or extending the wrong PR. This has happened; recovery requires a force-push to restore the parent.
+
+To prevent it:
+
+- **Pass `--no-track` when creating the worktree:**
+  ```bash
+  git -C <repo> worktree add --no-track .worktrees/<name> -b <new-local> origin/<base-branch>
+  ```
+- **Push with the explicit `<src>:<dst>` form** so the destination ref is unambiguous, even if upstream tracking is set wrong:
+  ```bash
+  git -C <worktree> push origin <new-local>:<new-local>
+  ```
+- Do **not** rely on `git push -u origin <new-local>` for the first push — without `--no-track` it resolves to the upstream-tracked branch, which is the parent's, not a new branch.
+
+If you do push into the wrong branch by accident, push your commit to a new branch first to preserve the work, then force-push the parent's branch back to its previous head (verify the SHA via `gh pr view <parent> --json headRefOid` before and after).
+
 ## Build & Test
 
 Always use `just` targets to ensure consistent builds and test runs:
