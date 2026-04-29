@@ -73,24 +73,33 @@ final class InvestmentStore {
     }
   }
 
-  func loadDailyBalances(accountId: UUID) async {
+  /// Loads the legacy account-level cumulative-balance series.
+  ///
+  /// The repository now returns one entry per (date, instrument) tuple
+  /// so multi-instrument legacy accounts no longer conflate quantities
+  /// of different instruments under one label (issue #579). This store
+  /// converts each per-instrument balance to `hostCurrency` on its own
+  /// date and aggregates by date so the consuming chart sees a single
+  /// series in the host currency.
+  ///
+  /// Per Rule 11 in `guides/INSTRUMENT_CONVERSION_GUIDE.md`: if any
+  /// per-instrument conversion fails, the whole series is marked
+  /// unavailable (`dailyBalances = []` and `error` set) rather than
+  /// rendering a partial sum or a native-instrument fallback.
+  func loadDailyBalances(accountId: UUID, hostCurrency: Instrument) async {
     do {
-      dailyBalances = try await repository.fetchDailyBalances(accountId: accountId)
+      let raw = try await repository.fetchDailyBalances(accountId: accountId)
+      dailyBalances = try await aggregateDailyBalances(
+        raw: raw, hostCurrency: hostCurrency)
     } catch {
       logger.error("Failed to load daily balances: \(error.localizedDescription)")
       self.error = error
+      dailyBalances = []
     }
   }
 
-  /// Load all data for an investment account at once.
-  func loadAll(accountId: UUID) async {
-    isLoading = true
-    error = nil
-    async let valuesLoad: Void = loadValues(accountId: accountId)
-    async let balancesLoad: Void = loadDailyBalances(accountId: accountId)
-    _ = await (valuesLoad, balancesLoad)
-    isLoading = false
-  }
+  // The legacy chart's per-instrument forward-fill aggregation lives in
+  // `InvestmentStore+DailyBalanceAggregation.swift`.
 
   /// Loads the full dataset required by `InvestmentAccountView`, branching on
   /// whether the account uses legacy manual valuations or position tracking.
@@ -100,7 +109,7 @@ final class InvestmentStore {
     loadedHostCurrency = profileCurrency
     await loadValues(accountId: accountId)
     if hasLegacyValuations {
-      await loadDailyBalances(accountId: accountId)
+      await loadDailyBalances(accountId: accountId, hostCurrency: profileCurrency)
     } else {
       await loadPositions(accountId: accountId)
       await valuatePositions(profileCurrency: profileCurrency, on: Date())
