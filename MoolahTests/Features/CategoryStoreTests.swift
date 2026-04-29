@@ -10,8 +10,8 @@ struct CategoryStoreTests {
   @Test
   func testLoadPopulatesCategories() async throws {
     let cat = Moolah.Category(name: "Groceries")
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(categories: [cat], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(categories: [cat], in: database)
     let store = CategoryStore(repository: backend.categories)
 
     await store.load()
@@ -57,8 +57,8 @@ struct CategoryStoreTests {
   @Test
   func testUpdateModifiesCategory() async throws {
     let cat = Moolah.Category(name: "Groceries")
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(categories: [cat], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(categories: [cat], in: database)
     let store = CategoryStore(repository: backend.categories)
     await store.load()
 
@@ -84,8 +84,8 @@ struct CategoryStoreTests {
   @Test
   func testDeleteRemovesCategory() async throws {
     let cat = Moolah.Category(name: "Groceries")
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(categories: [cat], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(categories: [cat], in: database)
     let store = CategoryStore(repository: backend.categories)
     await store.load()
 
@@ -101,8 +101,8 @@ struct CategoryStoreTests {
   func testDeleteWithReplacementId() async throws {
     let cat1 = Moolah.Category(name: "Old Category")
     let cat2 = Moolah.Category(name: "New Category")
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(categories: [cat1, cat2], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(categories: [cat1, cat2], in: database)
     let store = CategoryStore(repository: backend.categories)
     await store.load()
 

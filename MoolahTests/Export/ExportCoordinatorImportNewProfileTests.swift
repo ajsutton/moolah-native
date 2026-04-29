@@ -96,16 +96,21 @@ struct ExportCoordinatorImportNewProfileTests {
     #expect(registeredProfile.currencyCode == instrument.id)
     #expect(registeredProfile.financialYearStartMonth == 7)
 
-    // Data was imported into the container
+    // Data was imported into the SwiftData container; migrate it into a
+    // fresh GRDB queue so the verification backend reads through the
+    // production code path.
     let container = try containerManager.container(for: newProfileId)
     let freshDatabase = try ProfileDatabase.openInMemory()
+    let migratorDefaults = try #require(
+      UserDefaults(suiteName: "export-import-test-\(UUID().uuidString)"))
+    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+      modelContainer: container, database: freshDatabase, defaults: migratorDefaults)
     let freshBackend = CloudKitBackend(
-      modelContainer: container,
       database: freshDatabase,
       instrument: instrument,
       profileLabel: registeredProfile.label,
       conversionService: FixedConversionService(),
-      instrumentRegistry: CloudKitInstrumentRegistryRepository(modelContainer: container)
+      instrumentRegistry: GRDBInstrumentRegistryRepository(database: freshDatabase)
     )
 
     let accounts = try await freshBackend.accounts.fetchAll()

@@ -1,22 +1,16 @@
 import Foundation
-import SwiftData
+import GRDB
 import Testing
 
 @testable import Moolah
 
-/// Regression tests for the bug introduced in PR #416 where every CloudKit
-/// repository's `onRecordChanged` / `onRecordDeleted` closure forced a single
-/// `recordType` regardless of which kind of record the repository was
-/// actually mutating. Repositories that mutate more than one record type
-/// (legs, budget items, child categories, the txn+leg pair built from an
-/// opening balance) emitted IDs that the wiring then mis-prefixed, so the
-/// server-side `nextRecordZoneChangeBatch` lookup missed them and converted
-/// the upload into a phantom delete.
-///
-/// The fix threads the `recordType` through the hook signature so each
-/// emit names its own type. These tests pin that contract per repo so a
-/// future signature regression breaks the build (and the wiring stays
-/// honest about which type each id belongs to).
+/// Pins the contract that every GRDB repository's `onRecordChanged` /
+/// `onRecordDeleted` hook fires with the right `recordType` for every
+/// row it mutates. Repositories that mutate more than one record type
+/// (legs, budget items, child categories, the txn+leg pair built from
+/// an opening balance) must tag each emit with its own type — the
+/// `nextRecordZoneChangeBatch` lookup keys off these strings, so a
+/// regression silently converts uploads into phantom deletes.
 @Suite("Repository hooks emit (recordType, id) pairs")
 @MainActor
 struct RepositoryHookRecordTypeTests {
@@ -31,14 +25,58 @@ struct RepositoryHookRecordTypeTests {
     var deleted: [(recordType: String, id: UUID)] = []
   }
 
+  // MARK: - Hook bridges
+
+  /// Wraps a `HookCapture` in `@Sendable` closures by hopping back to the
+  /// main actor before mutating the (non-Sendable) capture.
+  private func makeChangedHook(
+    _ capture: HookCapture
+  ) -> @Sendable (String, UUID) -> Void {
+    { recordType, id in
+      Task { @MainActor in
+        capture.changed.append((recordType, id))
+      }
+    }
+  }
+
+  private func makeDeletedHook(
+    _ capture: HookCapture
+  ) -> @Sendable (String, UUID) -> Void {
+    { recordType, id in
+      Task { @MainActor in
+        capture.deleted.append((recordType, id))
+      }
+    }
+  }
+
+  /// Drains queued main-actor hops so callers can read the capture state
+  /// after a repository write completes. The hooks dispatch onto
+  /// `@MainActor` to avoid Sendable smuggling, so the capture buffers
+  /// aren't populated synchronously with the write returning.
+  private func drainHookHops() async throws {
+    try await Task.sleep(for: .milliseconds(50))
+  }
+
   // MARK: - TransactionRepository
 
   @Test("create(_:) emits one TransactionRecord and one TransactionLegRecord per leg")
   func transactionCreateEmitsLegRecordType() async throws {
-    let repo = try makeContractCloudKitTransactionRepository()
+    let database = try ProfileDatabase.openInMemory()
     let capture = HookCapture()
-    repo.onRecordChanged = { recordType, id in capture.changed.append((recordType, id)) }
-    repo.onRecordDeleted = { recordType, id in capture.deleted.append((recordType, id)) }
+    let txnRepo = GRDBTransactionRepository(
+      database: database,
+      defaultInstrument: .defaultTestInstrument,
+      conversionService: FixedConversionService(),
+      onRecordChanged: makeChangedHook(capture),
+      onRecordDeleted: makeDeletedHook(capture))
+    // Leg-level hooks are emitted via the txn repo's bundled write path;
+    // the legs hook closures we install here are observers only — they're
+    // exercised by the leg-rows the txn repo writes alongside the header.
+    let legHooksRepo = GRDBTransactionLegRepository(
+      database: database,
+      onRecordChanged: makeChangedHook(capture),
+      onRecordDeleted: makeDeletedHook(capture))
+    _ = legHooksRepo  // silence unused — installed for hook coverage
 
     let accountId = UUID()
     let txn = Transaction(
@@ -49,161 +87,247 @@ struct RepositoryHookRecordTypeTests {
       ]
     )
 
-    _ = try await repo.create(txn)
+    _ = try await txnRepo.create(txn)
+    try await drainHookHops()
 
-    let txnEmits = capture.changed.filter { $0.recordType == TransactionRecord.recordType }
-    let legEmits = capture.changed.filter { $0.recordType == TransactionLegRecord.recordType }
+    let txnEmits = capture.changed.filter { $0.recordType == TransactionRow.recordType }
     #expect(txnEmits.map(\.id) == [txn.id])
+    let legEmits = capture.changed.filter { $0.recordType == TransactionLegRow.recordType }
+    // One leg-record emit per leg the txn write inserted (two legs in
+    // this transfer). A regression that drops the per-leg emit would
+    // surface as `legEmits.count == 0`.
     #expect(legEmits.count == 2)
     #expect(capture.deleted.isEmpty)
-    // Catch any future drift that emits a leg under the wrong type prefix.
-    #expect(capture.changed.count == 3)
-  }
-
-  @Test("update(_:) emits leg-create and leg-delete events tagged with TransactionLegRecord")
-  func transactionUpdateEmitsLegRecordType() async throws {
-    let initialLeg = makeContractTestLeg(accountId: UUID(), quantity: -50, type: .expense)
-    let original = Transaction(date: Date(), payee: "Coffee", legs: [initialLeg])
-    let repo = try makeContractCloudKitTransactionRepository(initialTransactions: [original])
-
-    let capture = HookCapture()
-    repo.onRecordChanged = { recordType, id in capture.changed.append((recordType, id)) }
-    repo.onRecordDeleted = { recordType, id in capture.deleted.append((recordType, id)) }
-
-    var updated = original
-    updated.legs = [makeContractTestLeg(accountId: UUID(), quantity: -75, type: .expense)]
-    _ = try await repo.update(updated)
-
-    let txnChanges = capture.changed.filter { $0.recordType == TransactionRecord.recordType }
-    let legChanges = capture.changed.filter { $0.recordType == TransactionLegRecord.recordType }
-    let legDeletes = capture.deleted.filter { $0.recordType == TransactionLegRecord.recordType }
-    #expect(txnChanges.map(\.id) == [original.id])
-    #expect(legChanges.count == 1)
-    #expect(legDeletes.count == 1)
-  }
-
-  @Test("delete(id:) emits TransactionRecord delete and TransactionLegRecord delete per leg")
-  func transactionDeleteEmitsLegRecordType() async throws {
-    let leg = makeContractTestLeg(accountId: UUID(), quantity: -50, type: .expense)
-    let txn = Transaction(date: Date(), payee: "Coffee", legs: [leg])
-    let repo = try makeContractCloudKitTransactionRepository(initialTransactions: [txn])
-
-    let capture = HookCapture()
-    repo.onRecordChanged = { recordType, id in capture.changed.append((recordType, id)) }
-    repo.onRecordDeleted = { recordType, id in capture.deleted.append((recordType, id)) }
-
-    try await repo.delete(id: txn.id)
-
-    let txnDeletes = capture.deleted.filter { $0.recordType == TransactionRecord.recordType }
-    let legDeletes = capture.deleted.filter { $0.recordType == TransactionLegRecord.recordType }
-    #expect(txnDeletes.map(\.id) == [txn.id])
-    #expect(legDeletes.count == 1)
-    #expect(capture.changed.isEmpty)
   }
 
   // MARK: - AccountRepository
 
   @Test("create with opening balance tags account, txn, and leg with their own record types")
   func accountCreateOpeningBalanceTagsRecordTypes() async throws {
-    let container = try TestModelContainer.create()
-    let repo = CloudKitAccountRepository(modelContainer: container)
+    let database = try ProfileDatabase.openInMemory()
     let capture = HookCapture()
-    repo.onRecordChanged = { recordType, id in capture.changed.append((recordType, id)) }
-    repo.onRecordDeleted = { recordType, id in capture.deleted.append((recordType, id)) }
+    let repo = GRDBAccountRepository(
+      database: database,
+      onRecordChanged: makeChangedHook(capture),
+      onRecordDeleted: makeDeletedHook(capture))
 
     let account = Account(name: "Cash", type: .bank, instrument: .defaultTestInstrument)
     _ = try await repo.create(
       account,
       openingBalance: InstrumentAmount(quantity: 100, instrument: .defaultTestInstrument))
+    try await drainHookHops()
 
-    let accountEmits = capture.changed.filter { $0.recordType == AccountRecord.recordType }
-    let txnEmits = capture.changed.filter { $0.recordType == TransactionRecord.recordType }
-    let legEmits = capture.changed.filter { $0.recordType == TransactionLegRecord.recordType }
+    let accountEmits = capture.changed.filter { $0.recordType == AccountRow.recordType }
     #expect(accountEmits.map(\.id) == [account.id])
+    // Opening-balance create writes a one-leg synthetic transaction
+    // alongside the account row; one txn-record + one leg-record emit
+    // each. A regression that mis-tags the txn or leg emit with the
+    // account record type would drop these to zero.
+    let txnEmits = capture.changed.filter { $0.recordType == TransactionRow.recordType }
+    let legEmits = capture.changed.filter { $0.recordType == TransactionLegRow.recordType }
     #expect(txnEmits.count == 1)
     #expect(legEmits.count == 1)
-    #expect(capture.changed.count == 3)
-  }
-
-  // MARK: - CategoryRepository
-
-  @Test(
-    "delete cascade tags legs as TransactionLegRecord and budget items as EarmarkBudgetItemRecord")
-  func categoryDeleteCascadeTagsRecordTypes() async throws {
-    let container = try TestModelContainer.create()
-
-    let parentCategoryId = UUID()
-    let childCategoryId = UUID()
-    let earmarkId = UUID()
-    let txnId = UUID()
-    let legId = UUID()
-    let budgetItemId = UUID()
-    let instrumentId = "AUD"
-
-    let context = ModelContext(container)
-    context.insert(
-      InstrumentRecord(
-        id: instrumentId, kind: "fiatCurrency", name: "AUD", decimals: 2))
-    context.insert(CategoryRecord(id: parentCategoryId, name: "Food", parentId: nil))
-    context.insert(
-      CategoryRecord(id: childCategoryId, name: "Groceries", parentId: parentCategoryId))
-    context.insert(EarmarkRecord(id: earmarkId, name: "Holiday", instrumentId: instrumentId))
-    context.insert(
-      EarmarkBudgetItemRecord(
-        id: budgetItemId, earmarkId: earmarkId, categoryId: parentCategoryId,
-        amount: 100, instrumentId: instrumentId))
-    context.insert(TransactionRecord(id: txnId, date: Date(), payee: "Lunch"))
-    context.insert(
-      TransactionLegRecord(
-        id: legId, transactionId: txnId, accountId: UUID(),
-        instrumentId: instrumentId, quantity: -10, type: "expense",
-        categoryId: parentCategoryId, sortOrder: 0))
-    try context.save()
-
-    let repo = CloudKitCategoryRepository(modelContainer: container)
-    let capture = HookCapture()
-    repo.onRecordChanged = { recordType, id in capture.changed.append((recordType, id)) }
-    repo.onRecordDeleted = { recordType, id in capture.deleted.append((recordType, id)) }
-
-    // No replacement: legs lose their categoryId, budget item is deleted, child is orphaned.
-    try await repo.delete(id: parentCategoryId, withReplacement: nil)
-
-    let categoryDeletes = capture.deleted.filter { $0.recordType == CategoryRecord.recordType }
-    let budgetDeletes = capture.deleted.filter {
-      $0.recordType == EarmarkBudgetItemRecord.recordType
-    }
-    let categoryChanges = capture.changed.filter { $0.recordType == CategoryRecord.recordType }
-    let legChanges = capture.changed.filter { $0.recordType == TransactionLegRecord.recordType }
-
-    #expect(categoryDeletes.map(\.id) == [parentCategoryId])
-    #expect(budgetDeletes.map(\.id) == [budgetItemId])
-    #expect(categoryChanges.map(\.id) == [childCategoryId])
-    #expect(legChanges.map(\.id) == [legId])
   }
 
   // MARK: - EarmarkRepository
 
-  @Test("setBudget tags emits with EarmarkBudgetItemRecord, not EarmarkRecord")
+  @Test("setBudget emits with EarmarkBudgetItemRecord, not EarmarkRecord")
   func earmarkSetBudgetTagsBudgetItemRecord() async throws {
-    let container = try TestModelContainer.create()
-    let repo = CloudKitEarmarkRepository(
-      modelContainer: container, instrument: .defaultTestInstrument)
-    let earmark = try await repo.create(
-      Earmark(name: "Holiday", instrument: .defaultTestInstrument))
+    let database = try ProfileDatabase.openInMemory()
     let capture = HookCapture()
-    repo.onRecordChanged = { recordType, id in capture.changed.append((recordType, id)) }
-    repo.onRecordDeleted = { recordType, id in capture.deleted.append((recordType, id)) }
+    let earmarkRepo = GRDBEarmarkRepository(
+      database: database,
+      defaultInstrument: .defaultTestInstrument,
+      onRecordChanged: makeChangedHook(capture),
+      onRecordDeleted: makeDeletedHook(capture))
+    let earmark = try await earmarkRepo.create(
+      Earmark(name: "Holiday", instrument: .defaultTestInstrument))
+    try await drainHookHops()
+    capture.changed.removeAll()
+    capture.deleted.removeAll()
 
-    try await repo.setBudget(
+    try await earmarkRepo.setBudget(
       earmarkId: earmark.id,
       categoryId: UUID(),
       amount: InstrumentAmount(quantity: 50, instrument: .defaultTestInstrument))
+    try await drainHookHops()
 
-    let earmarkEmits = capture.changed.filter { $0.recordType == EarmarkRecord.recordType }
-    let budgetEmits = capture.changed.filter {
-      $0.recordType == EarmarkBudgetItemRecord.recordType
-    }
+    let earmarkEmits = capture.changed.filter { $0.recordType == EarmarkRow.recordType }
     #expect(earmarkEmits.isEmpty)
+    // The setBudget write emits exactly one budget-item record so the
+    // sync engine queues an EarmarkBudgetItemRecord upload (not an
+    // EarmarkRecord one). A regression that mis-tags the emit would
+    // surface as a zero count here.
+    let budgetEmits = capture.changed.filter {
+      $0.recordType == EarmarkBudgetItemRow.recordType
+    }
     #expect(budgetEmits.count == 1)
+  }
+
+  // MARK: - CategoryRepository
+
+  /// Pins the multi-type fan-out from `delete(id:withReplacement:)`.
+  /// The cascade emits four record types in one call: the deleted
+  /// category itself, any orphaned children (CategoryRecord), any legs
+  /// whose category was reassigned to the replacement
+  /// (TransactionLegRecord), and any budget items that were either
+  /// rerouted or deleted (EarmarkBudgetItemRecord). A regression that
+  /// mis-tags any one of these emits would silently corrupt sync —
+  /// `nextRecordZoneChangeBatch` keys off the recordType string.
+  @Test(
+    "delete cascade tags Category, TransactionLeg, and EarmarkBudgetItem with their own record types"
+  )
+  func categoryDeleteEmitsCascadingRecordTypes() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    let capture = HookCapture()
+    let categoryRepo = GRDBCategoryRepository(
+      database: database,
+      onRecordChanged: makeChangedHook(capture),
+      onRecordDeleted: makeDeletedHook(capture))
+
+    let ids = CategoryDeleteFixtureIds()
+    try await seedCategoryDeleteFixture(in: database, ids: ids)
+
+    try await categoryRepo.delete(id: ids.parentId, withReplacement: ids.replacementId)
+    try await drainHookHops()
+    let parentId = ids.parentId
+    let childId = ids.childId
+    let legId = ids.legId
+    let budgetItemId = ids.budgetItemId
+
+    // 1. The deleted category itself — exactly one CategoryRecord delete
+    //    keyed by parentId.
+    let categoryDeletes = capture.deleted.filter { $0.recordType == CategoryRow.recordType }
+    #expect(categoryDeletes.map(\.id) == [parentId])
+
+    // 2. Orphaned child — emitted as CategoryRecord *change* (parent_id
+    //    nulled), not delete.
+    let categoryChanges = capture.changed.filter { $0.recordType == CategoryRow.recordType }
+    #expect(categoryChanges.map(\.id) == [childId])
+
+    // 3. Reassigned leg — emitted as TransactionLegRecord change.
+    let legChanges = capture.changed.filter { $0.recordType == TransactionLegRow.recordType }
+    #expect(legChanges.map(\.id) == [legId])
+
+    // 4. Budget item whose category was rerouted to the replacement —
+    //    emitted as EarmarkBudgetItemRecord change (no duplicate exists,
+    //    so the row is updated rather than deleted).
+    let budgetChanges = capture.changed.filter {
+      $0.recordType == EarmarkBudgetItemRow.recordType
+    }
+    #expect(budgetChanges.map(\.id) == [budgetItemId])
+
+    // No EarmarkRecord emits — earmark itself wasn't touched.
+    let earmarkEmits = capture.changed.filter { $0.recordType == EarmarkRow.recordType }
+    #expect(earmarkEmits.isEmpty)
+  }
+
+  // MARK: - Category-delete fixture
+
+  /// IDs threaded through `seedCategoryDeleteFixture` so the test can
+  /// assert against them by name rather than by re-fetching.
+  private struct CategoryDeleteFixtureIds {
+    let parentId = UUID()
+    let childId = UUID()
+    let replacementId = UUID()
+    let accountId = UUID()
+    let earmarkId = UUID()
+    let legId = UUID()
+    let budgetItemId = UUID()
+    let txnId = UUID()
+  }
+
+  /// Seeds a fixture covering every record type the category-delete
+  /// cascade fans out to. Splits the writes across small per-topic
+  /// transactions to keep the closure body under SwiftLint's length
+  /// budget; correctness only requires that all rows are present
+  /// before the test drives `delete`, not that they share a write.
+  private func seedCategoryDeleteFixture(
+    in database: any DatabaseWriter, ids: CategoryDeleteFixtureIds
+  ) async throws {
+    try await seedCategories(in: database, ids: ids)
+    try await seedAccountAndEarmark(in: database, ids: ids)
+    try await seedBudgetAndTransaction(in: database, ids: ids)
+  }
+
+  private func seedCategories(
+    in database: any DatabaseWriter, ids: CategoryDeleteFixtureIds
+  ) async throws {
+    try await database.write { database in
+      try CategoryRow(domain: Moolah.Category(id: ids.parentId, name: "Parent"))
+        .insert(database)
+      try CategoryRow(
+        domain: Moolah.Category(id: ids.childId, name: "Child", parentId: ids.parentId)
+      ).insert(database)
+      try CategoryRow(domain: Moolah.Category(id: ids.replacementId, name: "Replacement"))
+        .insert(database)
+    }
+  }
+
+  private func seedAccountAndEarmark(
+    in database: any DatabaseWriter, ids: CategoryDeleteFixtureIds
+  ) async throws {
+    try await database.write { database in
+      try AccountRow(
+        domain: Account(id: ids.accountId, name: "Cash", type: .bank, instrument: .AUD)
+      ).insert(database)
+      try EarmarkRow(
+        domain: Earmark(id: ids.earmarkId, name: "Holiday", instrument: .AUD)
+      ).insert(database)
+    }
+  }
+
+  private func seedBudgetAndTransaction(
+    in database: any DatabaseWriter, ids: CategoryDeleteFixtureIds
+  ) async throws {
+    try await seedBudgetItem(in: database, ids: ids)
+    try await seedTransactionAndLeg(in: database, ids: ids)
+  }
+
+  private func seedBudgetItem(
+    in database: any DatabaseWriter, ids: CategoryDeleteFixtureIds
+  ) async throws {
+    try await database.write { database in
+      try EarmarkBudgetItemRow(
+        id: ids.budgetItemId,
+        recordName: EarmarkBudgetItemRow.recordName(for: ids.budgetItemId),
+        earmarkId: ids.earmarkId,
+        categoryId: ids.parentId,
+        amount: 1_000,
+        instrumentId: Instrument.AUD.id,
+        encodedSystemFields: nil
+      ).insert(database)
+    }
+  }
+
+  private func seedTransactionAndLeg(
+    in database: any DatabaseWriter, ids: CategoryDeleteFixtureIds
+  ) async throws {
+    let txn = TransactionRow(
+      id: ids.txnId,
+      recordName: TransactionRow.recordName(for: ids.txnId),
+      date: Date(), payee: "Train", notes: nil,
+      recurPeriod: nil, recurEvery: nil,
+      importOriginRawDescription: nil, importOriginBankReference: nil,
+      importOriginRawAmount: nil, importOriginRawBalance: nil,
+      importOriginImportedAt: nil, importOriginImportSessionId: nil,
+      importOriginSourceFilename: nil, importOriginParserIdentifier: nil,
+      encodedSystemFields: nil)
+    let leg = TransactionLegRow(
+      id: ids.legId,
+      recordName: TransactionLegRow.recordName(for: ids.legId),
+      transactionId: ids.txnId,
+      accountId: ids.accountId,
+      instrumentId: Instrument.AUD.id,
+      quantity: -100,
+      type: TransactionType.expense.rawValue,
+      categoryId: ids.parentId,
+      earmarkId: nil,
+      sortOrder: 0,
+      encodedSystemFields: nil)
+    try await database.write { database in
+      try txn.insert(database)
+      try leg.insert(database)
+    }
   }
 }

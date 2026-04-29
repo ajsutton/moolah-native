@@ -14,11 +14,11 @@ struct ReportingStoreTests {
   let aud = Instrument.fiat(code: "AUD")
 
   @Test @MainActor func loadProfitLoss_populatesState() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     let account = Account(
       id: UUID(), name: "Brokerage", type: .bank, instrument: .defaultTestInstrument
     )
-    TestBackend.seed(accounts: [account], in: container)
+    TestBackend.seed(accounts: [account], in: database)
 
     let bhp = Instrument(
       id: "ASX:BHP.AX", kind: .stock, name: "BHP", decimals: 0,
@@ -34,7 +34,7 @@ struct ReportingStoreTests {
           accountId: account.id, instrument: bhp, quantity: 100, type: .trade),
       ]
     )
-    TestBackend.seed(transactions: [buyTx], in: container)
+    TestBackend.seed(transactions: [buyTx], in: database)
 
     let service = FixedConversionService(rates: ["ASX:BHP.AX": 50])
     let store = ReportingStore(
@@ -55,11 +55,11 @@ struct ReportingStoreTests {
   }
 
   @Test @MainActor func loadCapitalGains_forFinancialYear() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     let account = Account(
       id: UUID(), name: "Brokerage", type: .bank, instrument: .defaultTestInstrument
     )
-    TestBackend.seed(accounts: [account], in: container)
+    TestBackend.seed(accounts: [account], in: database)
 
     let bhp = Instrument(
       id: "ASX:BHP.AX", kind: .stock, name: "BHP", decimals: 0,
@@ -91,7 +91,7 @@ struct ReportingStoreTests {
           accountId: account.id, instrument: aud, quantity: 5000, type: .trade),
       ]
     )
-    TestBackend.seed(transactions: [buyTx, sellTx], in: container)
+    TestBackend.seed(transactions: [buyTx, sellTx], in: database)
 
     let store = ReportingStore(
       transactionRepository: backend.transactions,
@@ -111,13 +111,13 @@ struct ReportingStoreTests {
   }
 
   @Test @MainActor func capitalGainsSummary_separatesShortAndLongTerm() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     let account = Account(
       id: UUID(), name: "Brokerage", type: .bank, instrument: .defaultTestInstrument
     )
-    TestBackend.seed(accounts: [account], in: container)
+    TestBackend.seed(accounts: [account], in: database)
     TestBackend.seed(
-      transactions: makeShortAndLongTermGainsFixture(accountId: account.id), in: container)
+      transactions: makeShortAndLongTermGainsFixture(accountId: account.id), in: database)
 
     let store = ReportingStore(
       transactionRepository: backend.transactions,

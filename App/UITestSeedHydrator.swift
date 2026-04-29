@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import SwiftData
 
 /// Populates an in-memory `ProfileContainerManager` from a named `UITestSeed`.
@@ -104,14 +105,13 @@ enum UITestSeedHydrator {
     )
     try upsertProfile(profile, into: manager)
 
-    let container = try manager.container(for: profile.id)
-    let context = ModelContext(container)
+    let database = try manager.database(for: profile.id)
     let instrument = profile.instrument
 
-    try seedTradeBaselineAccounts(instrument: instrument, in: context)
-    try seedTradeBaselineTransactions(instrument: instrument, in: context)
-
-    try context.save()
+    try database.write { database in
+      try seedTradeBaselineAccounts(instrument: instrument, in: database)
+      try seedTradeBaselineTransactions(instrument: instrument, in: database)
+    }
     return profile
   }
 
@@ -119,10 +119,10 @@ enum UITestSeedHydrator {
   /// investment + a USD account so the cross-currency test can switch a
   /// transfer leg's counterpart instrument.
   private static func seedTradeBaselineAccounts(
-    instrument: Instrument, in context: ModelContext
+    instrument: Instrument, in database: Database
   ) throws {
     let fixtures = UITestFixtures.TradeBaseline.self
-    try upsertInstrument(instrument, in: context)
+    try upsertInstrument(instrument, in: database)
     try upsertAccount(
       AccountSpec(
         id: fixtures.checkingAccountId,
@@ -130,7 +130,7 @@ enum UITestSeedHydrator {
         type: .bank,
         instrumentId: instrument.id,
         position: 0),
-      in: context)
+      in: database)
     try upsertAccount(
       AccountSpec(
         id: fixtures.brokerageAccountId,
@@ -138,10 +138,10 @@ enum UITestSeedHydrator {
         type: .investment,
         instrumentId: instrument.id,
         position: 1),
-      in: context)
+      in: database)
 
     let usd = Instrument.USD
-    try upsertInstrument(usd, in: context)
+    try upsertInstrument(usd, in: database)
     try upsertAccount(
       AccountSpec(
         id: fixtures.usdAccountId,
@@ -149,12 +149,12 @@ enum UITestSeedHydrator {
         type: .bank,
         instrumentId: usd.id,
         position: 2),
-      in: context)
+      in: database)
   }
 
   /// Seed the transactions used by the Trade Baseline fixture.
   private static func seedTradeBaselineTransactions(
-    instrument: Instrument, in context: ModelContext
+    instrument: Instrument, in database: Database
   ) throws {
     let fixtures = UITestFixtures.TradeBaseline.self
     try upsertTrade(
@@ -167,15 +167,16 @@ enum UITestSeedHydrator {
           instrument: instrument),
         fromAccountId: fixtures.checkingAccountId,
         toAccountId: fixtures.brokerageAccountId),
-      in: context)
+      in: database)
 
-    // Categories must exist before any leg references them by id, so
+    // Categories must exist before any leg references them by id (the
+    // `transaction_leg.category_id` FK is enforced by the GRDB schema), so
     // upsert them ahead of the historical expense loop (one of those
     // entries attaches `groceriesCategoryId`).
     try upsertCategory(
-      id: fixtures.groceriesCategoryId, name: fixtures.groceriesCategoryName, in: context)
+      id: fixtures.groceriesCategoryId, name: fixtures.groceriesCategoryName, in: database)
     try upsertCategory(
-      id: fixtures.gymCategoryId, name: fixtures.gymCategoryName, in: context)
+      id: fixtures.gymCategoryId, name: fixtures.gymCategoryName, in: database)
 
     let historicalAmount = InstrumentAmount(
       quantity: Decimal(fixtures.historicalExpenseAmountCents) / 100,
@@ -189,7 +190,7 @@ enum UITestSeedHydrator {
           amount: historicalAmount,
           accountId: fixtures.checkingAccountId,
           categoryId: historical.categoryId),
-        in: context)
+        in: database)
     }
 
     try upsertCustomExpenseSplit(
@@ -204,7 +205,7 @@ enum UITestSeedHydrator {
           quantity: Decimal(fixtures.splitShopLegBAmountCents) / 100,
           instrument: instrument),
         accountId: fixtures.checkingAccountId),
-      in: context)
+      in: database)
   }
 
 }

@@ -23,16 +23,16 @@ struct EarmarkStoreConvertedBalanceTests {
     let earmarkId = UUID()
     let accountId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
-      ], in: container)
+      ], in: database)
     TestBackend.seedWithTransactions(
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
       amounts: [earmarkId: (saved: 500, spent: 0)],
-      accountId: accountId, in: container)
+      accountId: accountId, in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -48,12 +48,12 @@ struct EarmarkStoreConvertedBalanceTests {
     let negativeId = UUID()
     let accountId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
-      ], in: container)
+      ], in: database)
     TestBackend.seedWithTransactions(
       earmarks: [
         Earmark(id: positiveId, name: "Holiday Fund", instrument: instrument),
@@ -63,7 +63,7 @@ struct EarmarkStoreConvertedBalanceTests {
         positiveId: (saved: 500, spent: 0),
         negativeId: (saved: -18950, spent: 0),
       ],
-      accountId: accountId, in: container)
+      accountId: accountId, in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -83,16 +83,16 @@ struct EarmarkStoreConvertedBalanceTests {
     let earmarkId = UUID()
     let accountId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
-      ], in: container)
+      ], in: database)
     TestBackend.seedWithTransactions(
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
       amounts: [earmarkId: (saved: 500, spent: 0)],
-      accountId: accountId, in: container)
+      accountId: accountId, in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -115,16 +115,16 @@ struct EarmarkStoreConvertedBalanceTests {
     let earmarkId = UUID()
     let accountId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
-      ], in: container)
+      ], in: database)
     TestBackend.seedWithTransactions(
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
       amounts: [earmarkId: (saved: 500, spent: 0)],
-      accountId: accountId, in: container)
+      accountId: accountId, in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -141,16 +141,16 @@ struct EarmarkStoreConvertedBalanceTests {
     let earmarkId = UUID()
     let accountId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
-      ], in: container)
+      ], in: database)
     TestBackend.seedWithTransactions(
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
       amounts: [earmarkId: (saved: 500, spent: 0)],
-      accountId: accountId, in: container)
+      accountId: accountId, in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)

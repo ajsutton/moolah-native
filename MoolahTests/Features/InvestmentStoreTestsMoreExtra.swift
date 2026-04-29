@@ -25,7 +25,7 @@ struct InvestmentStoreTestsMoreExtra {
 
   @Test("Empty data produces empty chart data points")
   func testChartDataPointsEmpty() {
-    let result = mergeChartData(values: [], balances: [], period: .all)
+    let result = InvestmentChartData.merge(values: [], balances: [], period: .all)
     #expect(result.isEmpty)
   }
 
@@ -81,7 +81,7 @@ struct InvestmentStoreTestsMoreExtra {
   func testValuesWithDifferentInstrumentsPerAccount() async throws {
     let audAccount = UUID()
     let usdAccount = UUID()
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     let date = makeDate(year: 2024, month: 3, day: 15)
     // seed(investmentValues:) uses a single instrument per call, so seed each account separately
     // with its own instrument so the stored records retain the account's real currency.
@@ -93,7 +93,7 @@ struct InvestmentStoreTestsMoreExtra {
             value: InstrumentAmount(quantity: Decimal(1000), instrument: .AUD))
         ]
       ],
-      in: container,
+      in: database,
       instrument: .AUD)
     TestBackend.seed(
       investmentValues: [
@@ -103,7 +103,7 @@ struct InvestmentStoreTestsMoreExtra {
             value: InstrumentAmount(quantity: Decimal(650), instrument: .USD))
         ]
       ],
-      in: container,
+      in: database,
       instrument: .USD)
     let store = InvestmentStore(
       repository: backend.investments, conversionService: FixedConversionService())
@@ -124,9 +124,9 @@ struct InvestmentStoreTestsMoreExtra {
     // Seed enough values to span multiple pages so pagination would
     // otherwise keep looping past the cancellation point.
     let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
-      investmentValues: makeValues(accountId: accountId, count: 450), in: container
+      investmentValues: makeValues(accountId: accountId, count: 450), in: database
     )
     let store = InvestmentStore(
       repository: backend.investments, conversionService: FixedConversionService())
@@ -152,7 +152,7 @@ struct InvestmentStoreTestsMoreExtra {
   @Test("loadPositions bails out of pagination when the task is cancelled")
   func testLoadPositionsHonoursCancellation() async throws {
     let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     // Seed > 200 transactions so loadPositions would normally paginate.
     let transactions: [Transaction] = (0..<250).map { i in
       Transaction(
@@ -164,7 +164,7 @@ struct InvestmentStoreTestsMoreExtra {
         ]
       )
     }
-    _ = TestBackend.seed(transactions: transactions, in: container)
+    _ = TestBackend.seed(transactions: transactions, in: database)
 
     let store = InvestmentStore(
       repository: backend.investments,

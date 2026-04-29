@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import OSLog
 import SwiftData
 
@@ -16,17 +17,29 @@ struct ImportResult: Sendable {
   }
 }
 
-/// Imports exported data into SwiftData records scoped to a specific profile.
-/// Runs on the MainActor using the container's mainContext to ensure data
-/// is immediately visible to CloudKit repositories.
+/// Imports exported data into a profile's stores. Writes the synced
+/// record types to the GRDB-backed `data.sqlite` (the canonical store
+/// that the runtime reads from) and mirrors them to the SwiftData
+/// container so legacy verifiers and any straggling SwiftData callers
+/// see consistent counts.
+///
+/// Runs on the MainActor because the SwiftData mirror writes use the
+/// container's `mainContext`. The GRDB writes themselves are
+/// queue-serialised and don't require main-actor isolation.
 @MainActor
 struct CloudKitDataImporter {
   private let modelContainer: ModelContainer
+  private let database: any DatabaseWriter
   private let currencyCode: String
   private let logger = Logger(subsystem: "com.moolah.app", category: "Import")
 
-  init(modelContainer: ModelContainer, currencyCode: String) {
+  init(
+    modelContainer: ModelContainer,
+    database: any DatabaseWriter,
+    currencyCode: String
+  ) {
     self.modelContainer = modelContainer
+    self.database = database
     self.currencyCode = currencyCode
   }
 
@@ -78,6 +91,11 @@ struct CloudKitDataImporter {
 
     progress?("saving", step / totalSteps)
     try context.save()
+
+    // Mirror everything to GRDB so the runtime stores (which read
+    // exclusively from `data.sqlite`) see the imported data. Order:
+    // parents before children to satisfy enforced FKs.
+    try writeGRDB(data: data)
 
     logger.info(
       "Import complete: \(data.accounts.count) accounts, \(data.transactions.count) transactions, \(investmentValueCount) investment values"
@@ -163,5 +181,81 @@ struct CloudKitDataImporter {
       }
     }
     return investmentValueCount
+  }
+
+  // MARK: - GRDB mirror
+
+  /// Writes every record type from `data` into the per-profile GRDB
+  /// database. Parents go first so FK references resolve as the single
+  /// `database.write` transaction commits; non-fiat instruments are
+  /// upserted up-front so accounts and legs that reference them by id
+  /// can resolve their full domain `Instrument` on read.
+  ///
+  /// TODO(#575): make `writeGRDB` `async` and call
+  /// `try await database.write { … }` so heavy imports don't block the
+  /// main thread —
+  /// https://github.com/ajsutton/moolah-native/issues/575
+  private func writeGRDB(data: ExportedData) throws {
+    try database.write { database in
+      try Self.writeInstrumentsAndCategories(data: data, database: database)
+      try Self.writeAccountsAndEarmarks(data: data, database: database)
+      try Self.writeTransactions(data: data, database: database)
+      try Self.writeInvestmentValues(data: data, database: database)
+    }
+  }
+
+  private static func writeInstrumentsAndCategories(
+    data: ExportedData, database: Database
+  ) throws {
+    for instrument in data.instruments {
+      try InstrumentRow(domain: instrument).upsert(database)
+    }
+    for category in data.categories {
+      try CategoryRow(domain: category).upsert(database)
+    }
+  }
+
+  private static func writeAccountsAndEarmarks(
+    data: ExportedData, database: Database
+  ) throws {
+    for account in data.accounts {
+      if account.instrument.kind != .fiatCurrency {
+        try InstrumentRow(domain: account.instrument).upsert(database)
+      }
+      try AccountRow(domain: account).upsert(database)
+    }
+    for earmark in data.earmarks {
+      try EarmarkRow(domain: earmark).upsert(database)
+    }
+    for (earmarkId, items) in data.earmarkBudgets {
+      for item in items {
+        try EarmarkBudgetItemRow(domain: item, earmarkId: earmarkId).upsert(database)
+      }
+    }
+  }
+
+  private static func writeTransactions(
+    data: ExportedData, database: Database
+  ) throws {
+    for txn in data.transactions {
+      try TransactionRow(domain: txn).upsert(database)
+      for (index, leg) in txn.legs.enumerated() {
+        if leg.instrument.kind != .fiatCurrency {
+          try InstrumentRow(domain: leg.instrument).upsert(database)
+        }
+        try TransactionLegRow(domain: leg, transactionId: txn.id, sortOrder: index)
+          .upsert(database)
+      }
+    }
+  }
+
+  private static func writeInvestmentValues(
+    data: ExportedData, database: Database
+  ) throws {
+    for (accountId, values) in data.investmentValues {
+      for value in values {
+        try InvestmentValueRow(domain: value, accountId: accountId).upsert(database)
+      }
+    }
   }
 }

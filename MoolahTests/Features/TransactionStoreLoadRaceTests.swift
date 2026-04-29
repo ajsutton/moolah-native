@@ -17,8 +17,8 @@ struct TransactionStoreLoadRaceTests {
   func concurrentLoadsDoNotDuplicateRows() async throws {
     let transactions = try TransactionStoreTestSupport.seedTransactions(
       count: 3, accountId: accountId)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -53,10 +53,10 @@ struct TransactionStoreLoadRaceTests {
   /// `true` and skips the redundant fetch.
   @Test
   func reMountWithSameFilterSkipsReload() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     let transactions = try TransactionStoreTestSupport.seedTransactions(
       count: 2, accountId: accountId)
-    TestBackend.seed(transactions: transactions, in: container)
+    TestBackend.seed(transactions: transactions, in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -100,8 +100,8 @@ struct TransactionStoreLoadRaceTests {
     let transactions =
       try TransactionStoreTestSupport.seedTransactions(count: 2, accountId: accountId)
       + TransactionStoreTestSupport.seedTransactions(count: 1, accountId: otherId)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),

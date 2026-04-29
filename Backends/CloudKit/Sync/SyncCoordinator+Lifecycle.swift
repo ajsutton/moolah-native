@@ -68,36 +68,30 @@ extension SyncCoordinator {
 
   /// Off-actor: reads sync state from disk and constructs the `CKSyncEngine`.
   ///
-  /// We deliberately use `Task.detached` rather than relying on the
-  /// `nonisolated async` hop. Per CONCURRENCY_GUIDE §8 detached tasks are
-  /// normally an anti-pattern, but here the heavy synchronous work
-  /// (`NSKeyedUnarchiver` inside `CKSyncEngine.init`) must not run on the
-  /// main thread. Empirically (see `.agent-tmp` startup samples), calling
-  /// this as `nonisolated async` from a `@MainActor`-originating `Task {}`
-  /// still inherits the main thread for the body; `Task.detached` is the
-  /// only reliable way to force execution onto the cooperative pool.
-  ///
-  /// TODO(#565): Verify this is still required under newer Swift dispatch /
-  /// `@concurrent`. If a plain `nonisolated async` hop now lands off-main,
-  /// drop the detached-task waiver. — https://github.com/ajsutton/moolah-native/issues/565
+  /// The body's heavy synchronous work (`NSKeyedUnarchiver` inside
+  /// `CKSyncEngine.init`) must not run on the main thread. The
+  /// `nonisolated async` hop from the `@MainActor`-originating `Task {}`
+  /// in `start()` is sufficient on current toolchain — verified empirically
+  /// (issue #565) by logging `Thread.isMainThread` at entry and observing
+  /// `false`, plus a different OS TID from the surrounding `@MainActor`
+  /// `completeStart`. Earlier toolchains required `Task.detached` here as
+  /// a waiver; that's no longer the case.
   nonisolated static func prepareEngine(
     stateFileURL: URL,
     delegate: any CKSyncEngineDelegate & Sendable
   ) async -> PreparedEngine {
-    await Task.detached(priority: .userInitiated) {
-      let data = try? Data(contentsOf: stateFileURL)
-      let savedState = data.flatMap {
-        try? JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0)
-      }
-      let configuration = CKSyncEngine.Configuration(
-        database: CloudKitContainer.app.privateCloudDatabase,
-        stateSerialization: savedState,
-        delegate: delegate
-      )
-      return PreparedEngine(
-        engine: CKSyncEngine(configuration),
-        isFirstLaunch: savedState == nil)
-    }.value
+    let data = try? Data(contentsOf: stateFileURL)
+    let savedState = data.flatMap {
+      try? JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0)
+    }
+    let configuration = CKSyncEngine.Configuration(
+      database: CloudKitContainer.app.privateCloudDatabase,
+      stateSerialization: savedState,
+      delegate: delegate
+    )
+    return PreparedEngine(
+      engine: CKSyncEngine(configuration),
+      isFirstLaunch: savedState == nil)
   }
 
   /// Back-on-MainActor half of `start()`: installs the engine and kicks off

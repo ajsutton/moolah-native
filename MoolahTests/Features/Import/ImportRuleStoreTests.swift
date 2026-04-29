@@ -81,7 +81,7 @@ struct ImportRuleStoreTests {
 
   @Test("countAffected counts matching imported transactions")
   func countAffectedMatchesRules() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     let accountId = UUID()
     _ = try await backend.accounts.create(
       Account(
@@ -119,7 +119,7 @@ struct ImportRuleStoreTests {
         rawAmount: -10, rawBalance: nil, importedAt: Date(),
         importSessionId: UUID(), sourceFilename: nil,
         parserIdentifier: "generic-bank"))
-    TestBackend.seed(transactions: seededTxs + [unrelated], in: container)
+    TestBackend.seed(transactions: seededTxs + [unrelated], in: database)
     let store = ImportRuleStore(repository: backend.importRules)
     let count = await store.countAffected(
       conditions: [.descriptionContains(["COFFEE"])],

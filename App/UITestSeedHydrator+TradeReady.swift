@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 
 // Trade-Ready seed helpers split out of `UITestSeedHydrator` so the main enum
 // body stays under SwiftLint's `type_body_length` threshold.
@@ -38,39 +38,37 @@ extension UITestSeedHydrator {
     )
     try upsertProfile(profile, into: manager)
 
-    let container = try manager.container(for: profile.id)
-    let context = ModelContext(container)
+    let database = try manager.database(for: profile.id)
     let audInstrument = profile.instrument
-
-    try upsertInstrument(audInstrument, in: context)
-    try upsertAccount(
-      AccountSpec(
-        id: fixtures.brokerageAccountId,
-        name: fixtures.brokerageAccountName,
-        type: .bank,
-        instrumentId: audInstrument.id,
-        position: 0),
-      in: context)
-
     let vgsax = Instrument.stock(
       ticker: fixtures.vgsaxTicker,
       exchange: fixtures.vgsaxExchange,
       name: fixtures.vgsaxName)
-    try upsertInstrument(vgsax, in: context)
 
-    try upsertCategory(
-      id: fixtures.brokerageCategoryId,
-      name: fixtures.brokerageCategoryName,
-      in: context)
+    try database.write { database in
+      try upsertInstrument(audInstrument, in: database)
+      try upsertAccount(
+        AccountSpec(
+          id: fixtures.brokerageAccountId,
+          name: fixtures.brokerageAccountName,
+          type: .bank,
+          instrumentId: audInstrument.id,
+          position: 0),
+        in: database)
 
-    try seedTradeReadyTransactions(
-      brokerageId: fixtures.brokerageAccountId,
-      audInstrument: audInstrument,
-      vgsax: vgsax,
-      brokerageCategoryId: fixtures.brokerageCategoryId,
-      in: context)
+      try upsertInstrument(vgsax, in: database)
+      try upsertCategory(
+        id: fixtures.brokerageCategoryId,
+        name: fixtures.brokerageCategoryName,
+        in: database)
 
-    try context.save()
+      try seedTradeReadyTransactions(
+        brokerageId: fixtures.brokerageAccountId,
+        audInstrument: audInstrument,
+        vgsax: vgsax,
+        brokerageCategoryId: fixtures.brokerageCategoryId,
+        in: database)
+    }
     return profile
   }
 
@@ -83,7 +81,7 @@ extension UITestSeedHydrator {
     audInstrument: Instrument,
     vgsax: Instrument,
     brokerageCategoryId: UUID,
-    in context: ModelContext
+    in database: Database
   ) throws {
     let day: TimeInterval = 86_400
     let base = Date(timeIntervalSince1970: 1_776_000_000)  // mid-April 2026
@@ -99,7 +97,7 @@ extension UITestSeedHydrator {
         received: (vgsax, 20),
         fee: TradeFeeSpec(instrument: audInstrument, quantity: -10, categoryId: brokerageCategoryId)
       ),
-      in: context)
+      in: database)
 
     try insertTradeTransaction(
       TradeTransactionSpec(
@@ -111,7 +109,7 @@ extension UITestSeedHydrator {
         received: (vgsax, 10),
         fee: nil
       ),
-      in: context)
+      in: database)
 
     try insertTradeTransaction(
       TradeTransactionSpec(
@@ -123,55 +121,45 @@ extension UITestSeedHydrator {
         received: (vgsax, -10),
         fee: TradeFeeSpec(instrument: audInstrument, quantity: -5, categoryId: brokerageCategoryId)
       ),
-      in: context)
+      in: database)
   }
 
+  /// Inserts a `.trade` transaction with paired `.trade` legs and an
+  /// optional `.expense` fee leg. Idempotent via the parent-existence
+  /// guard — on a re-hydration the transaction is left intact.
   private static func insertTradeTransaction(
     _ spec: TradeTransactionSpec,
-    in context: ModelContext
+    in database: Database
   ) throws {
-    let id = spec.id
-    let descriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate { $0.id == id }
-    )
-    if try context.fetch(descriptor).first != nil { return }
+    if try TransactionRow.fetchOne(database, key: spec.id) != nil { return }
 
-    context.insert(TransactionRecord(id: spec.id, date: spec.date, payee: spec.payee))
+    let txn = Transaction(id: spec.id, date: spec.date, payee: spec.payee, legs: [])
+    try TransactionRow(domain: txn).insert(database)
 
-    let paidAmount = InstrumentAmount(
-      quantity: spec.paid.quantity, instrument: spec.paid.instrument)
-    let receivedAmount = InstrumentAmount(
-      quantity: spec.received.quantity, instrument: spec.received.instrument)
-    context.insert(
-      TransactionLegRecord(
-        transactionId: spec.id,
-        accountId: spec.accountId,
-        instrumentId: spec.paid.instrument.id,
-        quantity: paidAmount.storageValue,
-        type: TransactionType.trade.rawValue,
-        sortOrder: 0
-      ))
-    context.insert(
-      TransactionLegRecord(
-        transactionId: spec.id,
-        accountId: spec.accountId,
-        instrumentId: spec.received.instrument.id,
-        quantity: receivedAmount.storageValue,
-        type: TransactionType.trade.rawValue,
-        sortOrder: 1
-      ))
+    let paidLeg = TransactionLeg(
+      accountId: spec.accountId,
+      instrument: spec.paid.instrument,
+      quantity: spec.paid.quantity,
+      type: .trade)
+    let receivedLeg = TransactionLeg(
+      accountId: spec.accountId,
+      instrument: spec.received.instrument,
+      quantity: spec.received.quantity,
+      type: .trade)
+    try TransactionLegRow(domain: paidLeg, transactionId: spec.id, sortOrder: 0)
+      .insert(database)
+    try TransactionLegRow(domain: receivedLeg, transactionId: spec.id, sortOrder: 1)
+      .insert(database)
+
     if let fee = spec.fee {
-      let feeAmount = InstrumentAmount(quantity: fee.quantity, instrument: fee.instrument)
-      context.insert(
-        TransactionLegRecord(
-          transactionId: spec.id,
-          accountId: spec.accountId,
-          instrumentId: fee.instrument.id,
-          quantity: feeAmount.storageValue,
-          type: TransactionType.expense.rawValue,
-          categoryId: fee.categoryId,
-          sortOrder: 2
-        ))
+      let feeLeg = TransactionLeg(
+        accountId: spec.accountId,
+        instrument: fee.instrument,
+        quantity: fee.quantity,
+        type: .expense,
+        categoryId: fee.categoryId)
+      try TransactionLegRow(domain: feeLeg, transactionId: spec.id, sortOrder: 2)
+        .insert(database)
     }
   }
 }

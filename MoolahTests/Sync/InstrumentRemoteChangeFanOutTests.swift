@@ -19,13 +19,19 @@ struct InstrumentRemoteChangeFanOutTests {
 
   // MARK: - Helpers
 
+  /// Bundle returned by `makeHandler(fired:)` so call sites can keep a
+  /// strong reference to the in-memory container and GRDB queue while
+  /// the handler is in use. Replaces a four-tuple to satisfy
+  /// SwiftLint's `large_tuple` policy.
+  struct Harness {
+    let handler: ProfileDataSyncHandler
+    let container: ModelContainer
+    let database: DatabaseQueue
+  }
+
   /// Builds a handler whose `onInstrumentRemoteChange` closure increments
-  /// the supplied `LockedBox<Int>` every time it fires. Returns the handler
-  /// and its model container so tests can drive `applyRemoteChanges`
-  /// directly, mirroring the existing per-handler tests in this folder.
-  private func makeHandler(
-    fired: LockedBox<Int>
-  ) throws -> (ProfileDataSyncHandler, ModelContainer) {
+  /// the supplied `LockedBox<Int>` every time it fires.
+  private func makeHandler(fired: LockedBox<Int>) throws -> Harness {
     let container = try TestModelContainer.create()
     let database = try ProfileDatabase.openInMemory()
     let profileId = UUID()
@@ -35,7 +41,19 @@ struct InstrumentRemoteChangeFanOutTests {
     )
     let bundle = ProfileGRDBRepositories(
       csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
-      importRules: GRDBImportRuleRepository(database: database))
+      importRules: GRDBImportRuleRepository(database: database),
+      instruments: GRDBInstrumentRegistryRepository(database: database),
+      categories: GRDBCategoryRepository(database: database),
+      accounts: GRDBAccountRepository(database: database),
+      earmarks: GRDBEarmarkRepository(
+        database: database, defaultInstrument: .defaultTestInstrument),
+      earmarkBudgetItems: GRDBEarmarkBudgetItemRepository(database: database),
+      investmentValues: GRDBInvestmentRepository(
+        database: database, defaultInstrument: .defaultTestInstrument),
+      transactions: GRDBTransactionRepository(
+        database: database, defaultInstrument: .defaultTestInstrument,
+        conversionService: FixedConversionService()),
+      transactionLegs: GRDBTransactionLegRepository(database: database))
     let handler = ProfileDataSyncHandler(
       profileId: profileId,
       zoneID: zoneID,
@@ -45,14 +63,14 @@ struct InstrumentRemoteChangeFanOutTests {
         fired.set(fired.get() + 1)
       }
     )
-    return (handler, container)
+    return Harness(handler: handler, container: container, database: database)
   }
 
   private func makeInstrumentRecord(
     id: String, in zoneID: CKRecordZone.ID
   ) -> CKRecord {
     let recordID = CKRecord.ID(recordName: id, zoneID: zoneID)
-    let record = CKRecord(recordType: InstrumentRecord.recordType, recordID: recordID)
+    let record = CKRecord(recordType: InstrumentRow.recordType, recordID: recordID)
     record["kind"] = "cryptoToken" as CKRecordValue
     record["name"] = "Uniswap" as CKRecordValue
     record["decimals"] = 18 as CKRecordValue
@@ -65,8 +83,8 @@ struct InstrumentRemoteChangeFanOutTests {
   ) -> CKRecord {
     let accountId = UUID()
     let recordID = CKRecord.ID(
-      recordType: AccountRecord.recordType, uuid: accountId, zoneID: zoneID)
-    let record = CKRecord(recordType: AccountRecord.recordType, recordID: recordID)
+      recordType: AccountRow.recordType, uuid: accountId, zoneID: zoneID)
+    let record = CKRecord(recordType: AccountRow.recordType, recordID: recordID)
     record["name"] = "Checking" as CKRecordValue
     record["type"] = "bank" as CKRecordValue
     record["position"] = 0 as CKRecordValue
@@ -79,7 +97,7 @@ struct InstrumentRemoteChangeFanOutTests {
   @Test("Remote upsert of an instrument fires the closure exactly once")
   func remoteUpsertOfInstrumentFiresClosure() throws {
     let fired = LockedBox(0)
-    let (handler, _) = try makeHandler(fired: fired)
+    let handler = try makeHandler(fired: fired).handler
     let record = makeInstrumentRecord(id: "1:0xuni", in: handler.zoneID)
 
     let result = handler.applyRemoteChanges(saved: [record], deleted: [])
@@ -94,7 +112,7 @@ struct InstrumentRemoteChangeFanOutTests {
   @Test("A multi-instrument batch still fires the closure exactly once")
   func multiInstrumentBatchFiresClosureOnce() throws {
     let fired = LockedBox(0)
-    let (handler, _) = try makeHandler(fired: fired)
+    let handler = try makeHandler(fired: fired).handler
     let first = makeInstrumentRecord(id: "1:0xuni", in: handler.zoneID)
     let second = makeInstrumentRecord(id: "1:0xaave", in: handler.zoneID)
 
@@ -106,7 +124,7 @@ struct InstrumentRemoteChangeFanOutTests {
   @Test("Remote upsert of a non-instrument record does not fire the closure")
   func remoteUpsertOfNonInstrumentDoesNotFireClosure() throws {
     let fired = LockedBox(0)
-    let (handler, _) = try makeHandler(fired: fired)
+    let handler = try makeHandler(fired: fired).handler
     let record = makeAccountRecord(in: handler.zoneID)
 
     _ = handler.applyRemoteChanges(saved: [record], deleted: [])
@@ -117,20 +135,28 @@ struct InstrumentRemoteChangeFanOutTests {
   @Test("Remote deletion of an instrument fires the closure exactly once")
   func remoteDeletionOfInstrumentFiresClosure() throws {
     let fired = LockedBox(0)
-    let (handler, container) = try makeHandler(fired: fired)
-    // Seed an instrument so the deletion has something to remove. The
-    // closure must still fire even if the row is already absent locally,
-    // but seeding lets us also verify the row is gone after the call.
-    let context = ModelContext(container)
-    context.insert(
-      InstrumentRecord(
-        id: "1:0xuni", kind: "cryptoToken", name: "Uniswap", decimals: 18))
-    try context.save()
+    let harness = try makeHandler(fired: fired)
+    // Seed the row directly via GRDB (the handler reads exclusively
+    // from `data.sqlite`); the SwiftData container is intentionally
+    // bypassed here so the test verifies the GRDB-side delete.
+    try harness.database.write { database in
+      try InstrumentRow(
+        domain: Instrument(
+          id: "1:0xuni",
+          kind: .cryptoToken,
+          name: "Uniswap",
+          decimals: 18,
+          ticker: nil,
+          exchange: nil,
+          chainId: nil,
+          contractAddress: nil)
+      ).insert(database)
+    }
 
-    let recordID = CKRecord.ID(recordName: "1:0xuni", zoneID: handler.zoneID)
-    let result = handler.applyRemoteChanges(
+    let recordID = CKRecord.ID(recordName: "1:0xuni", zoneID: harness.handler.zoneID)
+    let result = harness.handler.applyRemoteChanges(
       saved: [],
-      deleted: [(recordID, InstrumentRecord.recordType)]
+      deleted: [(recordID, InstrumentRow.recordType)]
     )
 
     guard case .success = result else {
@@ -138,22 +164,23 @@ struct InstrumentRemoteChangeFanOutTests {
       return
     }
     #expect(fired.get() == 1)
-    // Verify the row was actually deleted from the local context.
-    let descriptor = FetchDescriptor<InstrumentRecord>()
-    let remaining = try context.fetch(descriptor)
+    // Verify the row was actually deleted from the GRDB store.
+    let remaining = try harness.database.read { database in
+      try InstrumentRow.fetchAll(database)
+    }
     #expect(remaining.isEmpty)
   }
 
   @Test("Remote deletion of a non-instrument record does not fire the closure")
   func remoteDeletionOfNonInstrumentDoesNotFireClosure() throws {
     let fired = LockedBox(0)
-    let (handler, _) = try makeHandler(fired: fired)
+    let handler = try makeHandler(fired: fired).handler
     let recordID = CKRecord.ID(
-      recordType: AccountRecord.recordType, uuid: UUID(), zoneID: handler.zoneID)
+      recordType: AccountRow.recordType, uuid: UUID(), zoneID: handler.zoneID)
 
     _ = handler.applyRemoteChanges(
       saved: [],
-      deleted: [(recordID, AccountRecord.recordType)]
+      deleted: [(recordID, AccountRow.recordType)]
     )
 
     #expect(fired.get() == 0)

@@ -1,7 +1,6 @@
 import CloudKit
 import Foundation
 import GRDB
-import SwiftData
 
 extension ProfileSession {
   /// Bundle of the three market-data services consumed by the CloudKit
@@ -20,23 +19,18 @@ extension ProfileSession {
   /// inline (the construction order is load-bearing — see issue #102).
   static func makeCloudKitBackend(
     profile: Profile,
-    containerManager: ProfileContainerManager,
     syncCoordinator: SyncCoordinator?,
     marketData: CloudKitMarketDataServices,
     database: any DatabaseWriter
   ) -> BackendProvider {
-    // A missing container here means the profile can't be constructed;
-    // every call site depends on the session existing so there's no recovery.
-    // swiftlint:disable:next force_try
-    let profileContainer = try! containerManager.container(for: profile.id)
     let zoneID = CKRecordZone.ID(
       zoneName: "profile-\(profile.id.uuidString)",
       ownerName: CKCurrentUserDefaultName)
     let registry = makeInstrumentRegistry(
-      profileContainer: profileContainer, zoneID: zoneID, syncCoordinator: syncCoordinator)
+      database: database, zoneID: zoneID, syncCoordinator: syncCoordinator)
     // Wire the inverse direction: when the per-profile data handler
-    // applies a remote pull that touches `InstrumentRecord` rows, fan
-    // out to the registry's local subscribers so the picker UI refreshes
+    // applies a remote pull that touches `Instrument` rows, fan out to
+    // the registry's local subscribers so the picker UI refreshes
     // without waiting for an app relaunch.
     wireInstrumentRemoteChangeFanOut(
       registry: registry, profileId: profile.id, syncCoordinator: syncCoordinator)
@@ -54,23 +48,37 @@ extension ProfileSession {
     )
     let hooks = grdbRepoHooks(zoneID: zoneID, syncCoordinator: syncCoordinator)
     return CloudKitBackend(
-      modelContainer: profileContainer,
       database: database,
       instrument: profile.instrument,
       profileLabel: profile.label,
       conversionService: conversionService,
       instrumentRegistry: registry,
-      onCSVImportProfileChanged: hooks.changed,
-      onCSVImportProfileDeleted: hooks.deleted,
-      onImportRuleChanged: hooks.changed,
-      onImportRuleDeleted: hooks.deleted
+      hooks: CloudKitBackend.CloudKitBackendHooks(
+        onCSVImportProfileChanged: hooks.changed,
+        onCSVImportProfileDeleted: hooks.deleted,
+        onImportRuleChanged: hooks.changed,
+        onImportRuleDeleted: hooks.deleted,
+        onAccountChanged: hooks.changed,
+        onAccountDeleted: hooks.deleted,
+        onCategoryChanged: hooks.changed,
+        onCategoryDeleted: hooks.deleted,
+        onEarmarkChanged: hooks.changed,
+        onEarmarkDeleted: hooks.deleted,
+        onEarmarkBudgetItemChanged: hooks.changed,
+        onEarmarkBudgetItemDeleted: hooks.deleted,
+        onInvestmentChanged: hooks.changed,
+        onInvestmentDeleted: hooks.deleted,
+        onTransactionChanged: hooks.changed,
+        onTransactionDeleted: hooks.deleted,
+        onTransactionLegChanged: hooks.changed,
+        onTransactionLegDeleted: hooks.deleted)
     )
   }
 
   /// Bundle of the change/delete closures the GRDB repos call on each
   /// successful local mutation. Both record types share the same shape
   /// (`(recordType, id) -> queueSave/queueDeletion`), so a single pair
-  /// covers both — slice 0 keeps the wiring uniform and small.
+  /// covers them all — keeps the wiring uniform and small.
   private struct GRDBRepoHooks {
     let changed: @Sendable (String, UUID) -> Void
     let deleted: @Sendable (String, UUID) -> Void
@@ -95,17 +103,17 @@ extension ProfileSession {
       })
   }
 
-  /// Builds the `CloudKitInstrumentRegistryRepository` for a profile, wiring
+  /// Builds the `GRDBInstrumentRegistryRepository` for a profile, wiring
   /// its mutation hooks to the sync coordinator's per-zone queue helpers.
   /// Extracted from `makeCloudKitBackend` so the per-mutation closure
   /// definitions don't bloat its body length.
   private static func makeInstrumentRegistry(
-    profileContainer: ModelContainer,
+    database: any DatabaseWriter,
     zoneID: CKRecordZone.ID,
     syncCoordinator: SyncCoordinator?
-  ) -> CloudKitInstrumentRegistryRepository {
-    CloudKitInstrumentRegistryRepository(
-      modelContainer: profileContainer,
+  ) -> GRDBInstrumentRegistryRepository {
+    GRDBInstrumentRegistryRepository(
+      database: database,
       onRecordChanged: { [weak syncCoordinator] recordName in
         // Registry callbacks may run off MainActor; hop onto MainActor to
         // reach the actor-isolated SyncCoordinator.queueSave(_:zoneID:).
@@ -122,13 +130,13 @@ extension ProfileSession {
   }
 
   /// Registers the closure that the per-profile data handler invokes when
-  /// a remote pull touches an `InstrumentRecord` row. The registry is
+  /// a remote pull touches an `InstrumentRow`. The registry is
   /// captured weakly so the coordinator-held closure does not retain it
   /// beyond the session's natural lifetime; the `Task { @MainActor }` hop
   /// is required because `notifyExternalChange()` is `@MainActor`-isolated.
   /// No-op when there is no `SyncCoordinator` (test backends, previews).
   private static func wireInstrumentRemoteChangeFanOut(
-    registry: CloudKitInstrumentRegistryRepository,
+    registry: GRDBInstrumentRegistryRepository,
     profileId: UUID,
     syncCoordinator: SyncCoordinator?
   ) {

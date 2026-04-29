@@ -1,11 +1,10 @@
 import Foundation
 import GRDB
-import SwiftData
 
 @testable import Moolah
 
-// A BackendProvider that uses CloudKit repositories backed by an in-memory
-// SwiftData container. Used by the `AnalysisRepository` contract tests.
+// A BackendProvider that wires up GRDB-backed repositories on a single
+// in-memory queue. Used by the `AnalysisRepository` contract tests.
 //
 // Visibility is internal (was fileprivate) so sibling test files across the
 // split AnalysisRepository* test suites can use this helper — `strict_fileprivate`
@@ -22,15 +21,20 @@ struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
   let csvImportProfiles: any CSVImportProfileRepository
   let importRules: any ImportRuleRepository
 
-  /// Creates a backend wired to an in-memory SwiftData container.
+  /// The GRDB queue backing every repository — exposed so tests can seed
+  /// rows alongside the standard repository APIs.
+  let database: DatabaseQueue
+
+  /// Creates a backend wired to an in-memory GRDB queue.
   ///
   /// - Parameter customConversion: An optional conversion service override. When
-  ///   `nil`, a default `FiatConversionService` backed by a throwaway file-based
-  ///   cache is created.
+  ///   `nil`, a default `FiatConversionService` backed by a throwaway in-memory
+  ///   rate cache is created.
   ///
-  /// Throws when the in-memory `ModelContainer` fails to construct.
+  /// Throws when the in-memory `DatabaseQueue` fails to construct.
   init(conversionService customConversion: (any InstrumentConversionService)? = nil) throws {
-    let container = try TestModelContainer.create()
+    let database = try ProfileDatabase.openInMemory()
+    self.database = database
     let currency = Instrument.defaultTestInstrument
     let conversion: any InstrumentConversionService
     if let customConversion {
@@ -38,27 +42,26 @@ struct CloudKitAnalysisTestBackend: BackendProvider, @unchecked Sendable {
     } else {
       let rateClient = FixedRateClient()
       let exchangeRates = ExchangeRateService(
-        client: rateClient, database: try ProfileDatabase.openInMemory())
+        client: rateClient, database: database)
       conversion = FiatConversionService(exchangeRates: exchangeRates)
     }
-    self.auth = InMemoryAuthProvider()
-    self.accounts = CloudKitAccountRepository(
-      modelContainer: container)
-    self.transactions = CloudKitTransactionRepository(
-      modelContainer: container,
+    let registry = GRDBInstrumentRegistryRepository(database: database)
+    let backend = CloudKitBackend(
+      database: database,
       instrument: currency,
-      conversionService: conversion)
-    self.categories = CloudKitCategoryRepository(
-      modelContainer: container)
-    self.earmarks = CloudKitEarmarkRepository(
-      modelContainer: container, instrument: currency)
-    self.conversionService = conversion
-    self.analysis = CloudKitAnalysisRepository(
-      modelContainer: container, instrument: currency, conversionService: conversion)
-    self.investments = CloudKitInvestmentRepository(
-      modelContainer: container, instrument: currency)
-    let database = try ProfileDatabase.openInMemory()
-    self.csvImportProfiles = GRDBCSVImportProfileRepository(database: database)
-    self.importRules = GRDBImportRuleRepository(database: database)
+      profileLabel: "Test",
+      conversionService: conversion,
+      instrumentRegistry: registry
+    )
+    self.auth = backend.auth
+    self.accounts = backend.accounts
+    self.transactions = backend.transactions
+    self.categories = backend.categories
+    self.earmarks = backend.earmarks
+    self.analysis = backend.analysis
+    self.investments = backend.investments
+    self.conversionService = backend.conversionService
+    self.csvImportProfiles = backend.csvImportProfiles
+    self.importRules = backend.importRules
   }
 }

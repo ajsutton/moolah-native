@@ -1,16 +1,24 @@
 import Foundation
+import GRDB
 import SwiftData
 
 // Upsert helpers split out of `UITestSeedHydrator` so the main enum body stays
 // under SwiftLint's `type_body_length` threshold. Every helper is idempotent:
-// re-running the same seed (e.g., after a UI-testing re-launch) doesn't
+// re-running the same seed (e.g. after a UI-testing re-launch) doesn't
 // double-insert records.
+//
+// **Storage split.** Per-profile data (accounts, transactions, categories,
+// instruments) is written directly to GRDB — that is the layer the runtime's
+// repositories read from on PR #573. Profile metadata still lives in
+// SwiftData (`manager.indexContainer`) because the index container has not
+// yet moved to GRDB; that migration is out of scope for the per-profile
+// graph PR.
 extension UITestSeedHydrator {
   // MARK: - Specs
   //
-  // Struct wrappers bundle the per-record fields that callers need to
-  // provide. They keep the upsert call sites self-documenting while holding
-  // each helper's parameter count under SwiftLint's threshold.
+  // Struct wrappers bundle the per-record fields callers provide. They keep
+  // the upsert call sites self-documenting while holding each helper's
+  // parameter count under SwiftLint's threshold.
 
   struct AccountSpec {
     let id: UUID
@@ -47,8 +55,10 @@ extension UITestSeedHydrator {
     let accountId: UUID
   }
 
-  // MARK: - Upsert helpers
+  // MARK: - Profile (SwiftData index container)
 
+  /// Writes a `ProfileRecord` into the index container. Idempotent: an
+  /// existing row for the same id is left untouched.
   static func upsertProfile(
     _ profile: Profile,
     into manager: ProfileContainerManager
@@ -63,122 +73,81 @@ extension UITestSeedHydrator {
     try context.save()
   }
 
-  static func upsertInstrument(
-    _ instrument: Instrument,
-    in context: ModelContext
-  ) throws {
-    let targetId = instrument.id
-    let descriptor = FetchDescriptor<InstrumentRecord>(
-      predicate: #Predicate { $0.id == targetId }
-    )
-    if try context.fetch(descriptor).first != nil { return }
-    context.insert(InstrumentRecord.from(instrument))
+  // MARK: - Per-profile graph (GRDB)
+
+  static func upsertInstrument(_ instrument: Instrument, in database: Database) throws {
+    try InstrumentRow(domain: instrument).upsert(database)
   }
 
-  static func upsertAccount(
-    _ spec: AccountSpec,
-    in context: ModelContext
-  ) throws {
-    let targetId = spec.id
-    let descriptor = FetchDescriptor<AccountRecord>(
-      predicate: #Predicate { $0.id == targetId }
-    )
-    if try context.fetch(descriptor).first != nil { return }
-    context.insert(
-      AccountRecord(
-        id: spec.id,
-        name: spec.name,
-        type: spec.type.rawValue,
-        instrumentId: spec.instrumentId,
-        position: spec.position
-      )
-    )
+  static func upsertAccount(_ spec: AccountSpec, in database: Database) throws {
+    let row = AccountRow(
+      id: spec.id,
+      recordName: AccountRow.recordName(for: spec.id),
+      name: spec.name,
+      type: spec.type.rawValue,
+      instrumentId: spec.instrumentId,
+      position: spec.position,
+      isHidden: false,
+      encodedSystemFields: nil)
+    try row.upsert(database)
   }
 
-  static func upsertTrade(
-    _ spec: TradeSpec,
-    in context: ModelContext
-  ) throws {
-    let targetId = spec.id
-    let descriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate { $0.id == targetId }
-    )
-    if try context.fetch(descriptor).first != nil { return }
+  static func upsertCategory(id: UUID, name: String, in database: Database) throws {
+    try CategoryRow(domain: Moolah.Category(id: id, name: name)).upsert(database)
+  }
 
-    let txn = TransactionRecord(id: spec.id, date: spec.date, payee: spec.payee)
-    context.insert(txn)
+  /// Inserts a two-leg `.transfer` transaction. Both legs are `.transfer`
+  /// so the transaction satisfies `Transaction.isSimple` (same type,
+  /// amounts negate, distinct accounts, no category/earmark on the second
+  /// leg). That triggers the simple-mode path in `TransactionDetailView`,
+  /// which is what the focus, autocomplete, and cross-currency tests
+  /// exercise. Mixed `.expense`/`.income` would render the custom
+  /// multi-leg view, where the `defaultFocus(_:_:)` modifier on the simple
+  /// section never fires.
+  ///
+  /// Idempotency comes from the parent-existence guard: if the transaction
+  /// already exists in this database (e.g. a re-hydration call), the
+  /// helper returns and leg inserts are skipped. The whole seed runs in a
+  /// single `database.write { ... }` transaction at the call site, so
+  /// partial commits aren't possible.
+  static func upsertTrade(_ spec: TradeSpec, in database: Database) throws {
+    if try TransactionRow.fetchOne(database, key: spec.id) != nil { return }
 
-    let outgoing = InstrumentAmount(
-      quantity: -spec.amount.quantity, instrument: spec.amount.instrument)
+    try TransactionRow(domain: emptyTransaction(from: spec)).insert(database)
 
-    // Both legs are `.transfer` so the transaction satisfies
-    // `Transaction.isSimple` (same type, amounts negate, distinct accounts,
-    // no category/earmark on the second leg). That triggers the simple-mode
-    // path in `TransactionDetailView`, which is what the focus, autocomplete,
-    // and cross-currency tests exercise. Mixed `.expense`/`.income` would
-    // render the custom multi-leg view, where the `defaultFocus(_:_:)`
-    // modifier on the simple section never fires.
-    context.insert(
-      TransactionLegRecord(
-        transactionId: spec.id,
-        accountId: spec.fromAccountId,
-        instrumentId: spec.amount.instrument.id,
-        quantity: outgoing.storageValue,
-        type: TransactionType.transfer.rawValue,
-        sortOrder: 0
-      )
-    )
-    context.insert(
-      TransactionLegRecord(
-        transactionId: spec.id,
-        accountId: spec.toAccountId,
-        instrumentId: spec.amount.instrument.id,
-        quantity: spec.amount.storageValue,
-        type: TransactionType.transfer.rawValue,
-        sortOrder: 1
-      )
-    )
+    let outgoing = TransactionLeg(
+      accountId: spec.fromAccountId,
+      instrument: spec.amount.instrument,
+      quantity: -spec.amount.quantity,
+      type: .transfer)
+    let incoming = TransactionLeg(
+      accountId: spec.toAccountId,
+      instrument: spec.amount.instrument,
+      quantity: spec.amount.quantity,
+      type: .transfer)
+    try TransactionLegRow(domain: outgoing, transactionId: spec.id, sortOrder: 0)
+      .insert(database)
+    try TransactionLegRow(domain: incoming, transactionId: spec.id, sortOrder: 1)
+      .insert(database)
   }
 
   static func upsertHistoricalExpense(
     _ spec: HistoricalExpenseSpec,
-    in context: ModelContext
+    in database: Database
   ) throws {
-    let targetId = spec.id
-    let descriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate { $0.id == targetId }
-    )
-    if try context.fetch(descriptor).first != nil { return }
+    if try TransactionRow.fetchOne(database, key: spec.id) != nil { return }
 
-    let txn = TransactionRecord(id: spec.id, date: spec.date, payee: spec.payee)
-    context.insert(txn)
+    let txn = Transaction(id: spec.id, date: spec.date, payee: spec.payee, legs: [])
+    try TransactionRow(domain: txn).insert(database)
 
-    let outgoing = InstrumentAmount(
-      quantity: -spec.amount.quantity, instrument: spec.amount.instrument)
-    context.insert(
-      TransactionLegRecord(
-        transactionId: spec.id,
-        accountId: spec.accountId,
-        instrumentId: spec.amount.instrument.id,
-        quantity: outgoing.storageValue,
-        type: TransactionType.expense.rawValue,
-        categoryId: spec.categoryId,
-        sortOrder: 0
-      )
-    )
-  }
-
-  static func upsertCategory(
-    id: UUID,
-    name: String,
-    in context: ModelContext
-  ) throws {
-    let targetId = id
-    let descriptor = FetchDescriptor<CategoryRecord>(
-      predicate: #Predicate { $0.id == targetId }
-    )
-    if try context.fetch(descriptor).first != nil { return }
-    context.insert(CategoryRecord(id: id, name: name))
+    let leg = TransactionLeg(
+      accountId: spec.accountId,
+      instrument: spec.amount.instrument,
+      quantity: -spec.amount.quantity,
+      type: .expense,
+      categoryId: spec.categoryId)
+    try TransactionLegRow(domain: leg, transactionId: spec.id, sortOrder: 0)
+      .insert(database)
   }
 
   /// Inserts a two-leg expense split on the same account. Both legs share
@@ -188,41 +157,33 @@ extension UITestSeedHydrator {
   /// into an empty category field and observe autocomplete behaviour.
   static func upsertCustomExpenseSplit(
     _ spec: CustomExpenseSplitSpec,
-    in context: ModelContext
+    in database: Database
   ) throws {
-    let targetId = spec.id
-    let descriptor = FetchDescriptor<TransactionRecord>(
-      predicate: #Predicate { $0.id == targetId }
-    )
-    if try context.fetch(descriptor).first != nil { return }
+    if try TransactionRow.fetchOne(database, key: spec.id) != nil { return }
 
-    let txn = TransactionRecord(id: spec.id, date: spec.date, payee: spec.payee)
-    context.insert(txn)
+    let txn = Transaction(id: spec.id, date: spec.date, payee: spec.payee, legs: [])
+    try TransactionRow(domain: txn).insert(database)
 
-    let outgoingA = InstrumentAmount(
-      quantity: -spec.legAAmount.quantity, instrument: spec.legAAmount.instrument)
-    let outgoingB = InstrumentAmount(
-      quantity: -spec.legBAmount.quantity, instrument: spec.legBAmount.instrument)
+    let legA = TransactionLeg(
+      accountId: spec.accountId,
+      instrument: spec.legAAmount.instrument,
+      quantity: -spec.legAAmount.quantity,
+      type: .expense)
+    let legB = TransactionLeg(
+      accountId: spec.accountId,
+      instrument: spec.legBAmount.instrument,
+      quantity: -spec.legBAmount.quantity,
+      type: .expense)
+    try TransactionLegRow(domain: legA, transactionId: spec.id, sortOrder: 0)
+      .insert(database)
+    try TransactionLegRow(domain: legB, transactionId: spec.id, sortOrder: 1)
+      .insert(database)
+  }
 
-    context.insert(
-      TransactionLegRecord(
-        transactionId: spec.id,
-        accountId: spec.accountId,
-        instrumentId: spec.legAAmount.instrument.id,
-        quantity: outgoingA.storageValue,
-        type: TransactionType.expense.rawValue,
-        sortOrder: 0
-      )
-    )
-    context.insert(
-      TransactionLegRecord(
-        transactionId: spec.id,
-        accountId: spec.accountId,
-        instrumentId: spec.legBAmount.instrument.id,
-        quantity: outgoingB.storageValue,
-        type: TransactionType.expense.rawValue,
-        sortOrder: 1
-      )
-    )
+  /// Builds a legless `Transaction` whose only role is to seed
+  /// `TransactionRow(domain:)`. The legs are inserted separately into
+  /// `transaction_leg` and aren't part of the row mapping.
+  private static func emptyTransaction(from spec: TradeSpec) -> Transaction {
+    Transaction(id: spec.id, date: spec.date, payee: spec.payee, legs: [])
   }
 }

@@ -9,6 +9,12 @@ struct InvestmentValueSnapshot: Sendable {
   let date: Date
   let value: InstrumentAmount
 
+  init(accountId: UUID, date: Date, value: InstrumentAmount) {
+    self.accountId = accountId
+    self.date = date
+    self.value = value
+  }
+
   /// Bridges a SwiftData record into a Sendable snapshot. Provided so the
   /// call site in `CloudKitAnalysisRepository` can pass
   /// `InvestmentValueSnapshot.init(record:)` straight to `Array.map`.

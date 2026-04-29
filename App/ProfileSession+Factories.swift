@@ -1,4 +1,6 @@
 // swiftlint:disable multiline_arguments
+// Reason: swift-format wraps long initialisers / SwiftUI builders across
+// multiple lines in a way the multiline_arguments rule disagrees with.
 
 import CloudKit
 import Foundation
@@ -80,17 +82,12 @@ extension ProfileSession {
   /// Builds the CloudKit `BackendProvider` for the profile.
   static func makeBackend(
     profile: Profile,
-    containerManager: ProfileContainerManager?,
     syncCoordinator: SyncCoordinator? = nil,
     services: MarketDataServices,
     database: any DatabaseWriter
   ) -> BackendProvider {
-    guard let containerManager else {
-      fatalError("ProfileContainerManager is required for CloudKit profiles")
-    }
-    return makeCloudKitBackend(
+    makeCloudKitBackend(
       profile: profile,
-      containerManager: containerManager,
       syncCoordinator: syncCoordinator,
       marketData: CloudKitMarketDataServices(
         exchangeRates: services.exchangeRate,

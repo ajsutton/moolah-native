@@ -81,13 +81,13 @@ struct ProfileSessionTests {
 
   @Test("AccountRecord change reloads the account store")
   func accountRecordReloadsAccounts() {
-    let plan = ProfileSession.storesToReload(for: [AccountRecord.recordType])
+    let plan = ProfileSession.storesToReload(for: [AccountRow.recordType])
     #expect(plan == .accounts)
   }
 
   @Test("TransactionRecord change reloads the account store")
   func transactionRecordReloadsAccounts() {
-    let plan = ProfileSession.storesToReload(for: [TransactionRecord.recordType])
+    let plan = ProfileSession.storesToReload(for: [TransactionRow.recordType])
     #expect(plan == .accounts)
   }
 
@@ -97,7 +97,7 @@ struct ProfileSessionTests {
     // earmark reassignment on another device) must trigger reloads of both
     // the account store and the earmark store, even when the parent
     // TransactionRecord did not change in this batch.
-    let plan = ProfileSession.storesToReload(for: [TransactionLegRecord.recordType])
+    let plan = ProfileSession.storesToReload(for: [TransactionLegRow.recordType])
     #expect(plan.contains(.accounts))
     #expect(plan.contains(.earmarks))
     #expect(!plan.contains(.categories))
@@ -105,19 +105,19 @@ struct ProfileSessionTests {
 
   @Test("CategoryRecord change reloads only the category store")
   func categoryRecordReloadsCategories() {
-    let plan = ProfileSession.storesToReload(for: [CategoryRecord.recordType])
+    let plan = ProfileSession.storesToReload(for: [CategoryRow.recordType])
     #expect(plan == .categories)
   }
 
   @Test("EarmarkRecord change reloads the earmark store")
   func earmarkRecordReloadsEarmarks() {
-    let plan = ProfileSession.storesToReload(for: [EarmarkRecord.recordType])
+    let plan = ProfileSession.storesToReload(for: [EarmarkRow.recordType])
     #expect(plan == .earmarks)
   }
 
   @Test("EarmarkBudgetItemRecord change reloads the earmark store")
   func earmarkBudgetItemRecordReloadsEarmarks() {
-    let plan = ProfileSession.storesToReload(for: [EarmarkBudgetItemRecord.recordType])
+    let plan = ProfileSession.storesToReload(for: [EarmarkBudgetItemRow.recordType])
     #expect(plan == .earmarks)
   }
 
@@ -137,8 +137,8 @@ struct ProfileSessionTests {
   func mixedRecordTypesCombineReloadPlans() {
     let plan = ProfileSession.storesToReload(
       for: [
-        TransactionLegRecord.recordType,
-        CategoryRecord.recordType,
+        TransactionLegRow.recordType,
+        CategoryRow.recordType,
       ])
     #expect(plan.contains(.accounts))
     #expect(plan.contains(.earmarks))

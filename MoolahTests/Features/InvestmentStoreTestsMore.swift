@@ -26,7 +26,7 @@ struct InvestmentStoreTestsMore {
   @Test("Load daily balances populates dailyBalances array")
   func testLoadDailyBalances() async throws {
     let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = TestBackend.seed(
       transactions: [
         Transaction(
@@ -43,7 +43,7 @@ struct InvestmentStoreTestsMore {
               accountId: accountId, instrument: .defaultTestInstrument,
               quantity: dec("1000.00"), type: .income)
           ]),
-      ], in: container)
+      ], in: database)
 
     let store = InvestmentStore(
       repository: backend.investments, conversionService: FixedConversionService())
@@ -59,9 +59,9 @@ struct InvestmentStoreTestsMore {
   @Test("Filtered values returns all values when period is .all")
   func testFilteredValuesAll() async throws {
     let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
-      investmentValues: makeValues(accountId: accountId, count: 3), in: container
+      investmentValues: makeValues(accountId: accountId, count: 3), in: database
     )
     let store = InvestmentStore(
       repository: backend.investments, conversionService: FixedConversionService())
@@ -101,7 +101,7 @@ struct InvestmentStoreTestsMore {
           quantity: dec("1000.00"), instrument: .defaultTestInstrument)),
     ]
 
-    let result = mergeChartData(values: values, balances: balances, period: .all)
+    let result = InvestmentChartData.merge(values: values, balances: balances, period: .all)
 
     #expect(result.count == 2)
     #expect(result[0].value == dec("1000.00"))
@@ -141,7 +141,7 @@ struct InvestmentStoreTestsMore {
           quantity: dec("1000.00"), instrument: .defaultTestInstrument)),
     ]
 
-    let result = mergeChartData(values: values, balances: balances, period: .all)
+    let result = InvestmentChartData.merge(values: values, balances: balances, period: .all)
 
     #expect(result.count == 3)
     // date1: both present
@@ -195,7 +195,7 @@ struct InvestmentStoreTestsMore {
 
     // Filter to 3 months: should include threeMonthsAgo and now,
     // plus pre-period anchors from sixMonthsAgo
-    let result = mergeChartData(values: values, balances: balances, period: .months(3))
+    let result = InvestmentChartData.merge(values: values, balances: balances, period: .months(3))
 
     // Should have data points, and the pre-period value should be anchored
     #expect(result.count >= 2)

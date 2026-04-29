@@ -12,8 +12,8 @@ struct AccountStoreConversionTestsMore {
     let accountId = UUID()
     let account = Account(
       id: accountId, name: "Portfolio", type: .investment, instrument: .AUD)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(accounts: [account], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: database)
 
     let usdTx = Transaction(
       date: Date(),
@@ -23,7 +23,7 @@ struct AccountStoreConversionTestsMore {
           quantity: dec("100.00"), type: .openingBalance)
       ]
     )
-    TestBackend.seed(transactions: [usdTx], in: container)
+    TestBackend.seed(transactions: [usdTx], in: database)
 
     let conversion = FixedConversionService(rates: ["USD": dec("1.5")])
     let store = AccountStore(
@@ -68,8 +68,8 @@ struct AccountStoreConversionTestsMore {
     let bankAud = Account(name: "AUD Bank", type: .bank, instrument: aud)
     let bankMixed = Account(name: "Mixed Bank", type: .bank, instrument: eur)
 
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(accounts: [bankAud, bankMixed], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(accounts: [bankAud, bankMixed], in: database)
     let audTx = Transaction(
       date: Date(),
       legs: [
@@ -91,7 +91,7 @@ struct AccountStoreConversionTestsMore {
           accountId: bankMixed.id, instrument: usd,
           quantity: Decimal(50), type: .openingBalance)
       ])
-    TestBackend.seed(transactions: [audTx, mixedEurTx, mixedUsdTx], in: container)
+    TestBackend.seed(transactions: [audTx, mixedEurTx, mixedUsdTx], in: database)
 
     // USD conversions fail; AUD and EUR conversions succeed (1:1 fallback).
     let conversion = FailingConversionService(failingInstrumentIds: ["USD"])
@@ -124,8 +124,8 @@ struct AccountStoreConversionTestsMore {
     let bankAud = Account(name: "AUD Bank", type: .bank, instrument: aud)
     let bankEur = Account(name: "EUR Bank", type: .bank, instrument: eur)
 
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(accounts: [bankAud, bankEur], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(accounts: [bankAud, bankEur], in: database)
     let audTx = Transaction(
       date: Date(),
       legs: [
@@ -140,7 +140,7 @@ struct AccountStoreConversionTestsMore {
           accountId: bankEur.id, instrument: eur,
           quantity: Decimal(500), type: .openingBalance)
       ])
-    TestBackend.seed(transactions: [audTx, eurTx], in: container)
+    TestBackend.seed(transactions: [audTx, eurTx], in: database)
 
     let conversion = FailingConversionService(failingInstrumentIds: ["EUR"])
     let store = AccountStore(

@@ -84,6 +84,10 @@ final class ProfileSession: Identifiable {
   /// because `runPragmaOptimize` lives in
   /// `ProfileSession+DatabaseMaintenance.swift`; mutated only there.
   var pragmaOptimizeRunCount: Int = 0
+  /// Tasks spawned by the investment-store → account-store bridge, kept
+  /// reachable so `cleanupSync` can cancel in-flight balance updates
+  /// (per `guides/CONCURRENCY_GUIDE.md` §8).
+  private var crossStoreUpdateTasks: [Task<Void, Never>] = []
 
   /// Synchronous initialiser — opens the per-profile GRDB queue and runs
   /// pending migrations on the calling thread. The migrator currently only
@@ -115,7 +119,6 @@ final class ProfileSession: Identifiable {
 
     let backend = Self.makeBackend(
       profile: profile,
-      containerManager: containerManager,
       syncCoordinator: syncCoordinator,
       services: services,
       database: resolvedDatabase
@@ -168,17 +171,16 @@ final class ProfileSession: Identifiable {
     startPeriodicPragmaOptimize()
   }
 
-  /// Wires the investment-store -> account-store callback so the sidebar
-  /// total updates when a position revalues. The callback is fire-and-forget
-  /// in production; `updateInvestmentValue` awaits its own first conversion
-  /// pass, so the sidebar reflects the new value once the Task completes
-  /// on MainActor.
+  /// Wires the investment-store -> account-store callback. The spawned
+  /// Task is appended to `crossStoreUpdateTasks` so `cleanupSync` can
+  /// cancel in-flight updates if the session is torn down.
   private func wireCrossStoreSideEffects() {
     let accountStore = self.accountStore
-    self.investmentStore.onInvestmentValueChanged = { accountId, latestValue in
-      Task {
+    self.investmentStore.onInvestmentValueChanged = { [weak self] accountId, latestValue in
+      let task = Task { @MainActor in
         await accountStore.updateInvestmentValue(accountId: accountId, value: latestValue)
       }
+      self?.crossStoreUpdateTasks.append(task)
     }
   }
 
@@ -192,14 +194,11 @@ final class ProfileSession: Identifiable {
       logger.warning("CloudKit not available — profile sync disabled for \(profileId)")
       return
     }
-    let zoneID = CKRecordZone.ID(
-      zoneName: "profile-\(profileId.uuidString)",
-      ownerName: CKCurrentUserDefaultName)
     logger.info("Registering profile \(profileId) with sync coordinator")
     self.syncObserverToken = coordinator.addObserver(for: profileId) { [weak self] changedTypes in
       self?.scheduleReloadFromSync(changedTypes: changedTypes)
     }
-    wireRepositorySync(coordinator: coordinator, zoneID: zoneID)
+    wireRepositorySync(coordinator: coordinator)
   }
 
   // MARK: - CloudKit Sync
@@ -268,6 +267,10 @@ final class ProfileSession: Identifiable {
     pragmaOptimizeTask = nil
     periodicPragmaOptimizeTask?.cancel()
     periodicPragmaOptimizeTask = nil
+    for task in crossStoreUpdateTasks {
+      task.cancel()
+    }
+    crossStoreUpdateTasks.removeAll()
   }
 
   // MARK: - Folder watch
@@ -324,13 +327,17 @@ final class ProfileSession: Identifiable {
   /// `containerManager` is supplied (tests / previews build a fresh
   /// in-memory GRDB queue and have nothing to migrate from).
   ///
-  /// Slice 0 of `plans/grdb-migration.md`: MUST run before
-  /// `registerWithSyncCoordinator` so CKSyncEngine reads from a fully
-  /// populated `data.sqlite` on the first sync session.
+  /// Must run before `registerWithSyncCoordinator` so CKSyncEngine
+  /// reads from a fully populated `data.sqlite` on the first sync
+  /// session.
   ///
   /// `@MainActor` is explicit (not inherited from the class) because
   /// `SwiftDataToGRDBMigrator.migrateIfNeeded` is `@MainActor` (the
   /// SwiftData fetch path requires it).
+  ///
+  /// TODO(#575): make this `async` and run the GRDB writes off
+  /// `@MainActor` so heavy first-launch migrations can't block the UI —
+  /// https://github.com/ajsutton/moolah-native/issues/575
   @MainActor
   static func runSwiftDataToGRDBMigrationIfNeeded(
     profileId: UUID,
@@ -345,16 +352,23 @@ final class ProfileSession: Identifiable {
 
   /// Resolves which `DatabaseQueue` the session should own. Order:
   ///   1. Caller-provided `override` (tests, previews).
-  ///   2. In-memory queue when the parent `containerManager` is in-memory
-  ///      (UI testing, `ProfileContainerManager.forTesting()`).
-  ///   3. On-disk `data.sqlite` under `profiles/<id>/` for production.
+  ///   2. The container manager's cached per-profile queue. Required so
+  ///      the import path and the session see the same in-memory queue
+  ///      (each `ProfileDatabase.openInMemory()` call returns a fresh
+  ///      queue otherwise) and so on-disk profiles don't run the
+  ///      migrator twice on the same file.
+  ///   3. Fallback: open the on-disk `data.sqlite` directly. Used by
+  ///      callers that pass `containerManager: nil` (a few legacy test
+  ///      paths).
   private static func resolveDatabase(
     override: DatabaseQueue?,
     profile: Profile,
     containerManager: ProfileContainerManager?
   ) throws -> DatabaseQueue {
     if let override { return override }
-    if containerManager?.inMemory == true { return try ProfileDatabase.openInMemory() }
+    if let containerManager {
+      return try containerManager.database(for: profile.id)
+    }
     return try openProfileDatabase(profileId: profile.id)
   }
 

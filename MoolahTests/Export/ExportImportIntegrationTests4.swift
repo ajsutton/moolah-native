@@ -55,13 +55,16 @@ struct ExportImportIntegrationTests4 {
     let freshContainer = try TestModelContainer.create()
     _ = try await coordinator.importFromFile(url: tempURL, modelContainer: freshContainer)
     let freshDatabase = try ProfileDatabase.openInMemory()
+    let migratorDefaults = try #require(
+      UserDefaults(suiteName: "export-import-test-\(UUID().uuidString)"))
+    try SwiftDataToGRDBMigrator().migrateIfNeeded(
+      modelContainer: freshContainer, database: freshDatabase, defaults: migratorDefaults)
     let freshBackend = CloudKitBackend(
-      modelContainer: freshContainer,
       database: freshDatabase,
       instrument: aud,
       profileLabel: profile.label,
       conversionService: FixedConversionService(),
-      instrumentRegistry: CloudKitInstrumentRegistryRepository(modelContainer: freshContainer)
+      instrumentRegistry: GRDBInstrumentRegistryRepository(database: freshDatabase)
     )
 
     try await verifyMultiCurrencyRoundTrip(

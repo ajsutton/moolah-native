@@ -26,8 +26,8 @@ struct TransactionStorePayScheduledTests {
         )
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -89,8 +89,8 @@ struct TransactionStorePayScheduledTests {
         )
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -127,8 +127,8 @@ struct TransactionStorePayScheduledTests {
         )
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -174,8 +174,8 @@ struct TransactionStorePayScheduledTests {
         )
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -201,8 +201,8 @@ struct TransactionStorePayScheduledTests {
       toAccountId: toAccountId,
       categoryId: categoryId,
       earmarkId: earmarkId)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [scheduled], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [scheduled], in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),

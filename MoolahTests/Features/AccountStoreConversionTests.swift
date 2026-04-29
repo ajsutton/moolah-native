@@ -13,8 +13,8 @@ struct AccountStoreConversionTests {
     let accountId = UUID()
     let account = Account(
       id: accountId, name: "Bank", type: .bank, instrument: .defaultTestInstrument)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(accounts: [account], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: database)
 
     let transaction = Transaction(
       date: Date(),
@@ -27,7 +27,7 @@ struct AccountStoreConversionTests {
         )
       ]
     )
-    TestBackend.seed(transactions: [transaction], in: container)
+    TestBackend.seed(transactions: [transaction], in: database)
 
     let store = AccountStore(
       repository: backend.accounts,
@@ -49,8 +49,8 @@ struct AccountStoreConversionTests {
     let account = Account(
       id: accountId, name: "Revolut", type: .bank,
       instrument: .defaultTestInstrument)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(accounts: [account], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: database)
 
     let tx1 = Transaction(
       date: Date(),
@@ -74,7 +74,7 @@ struct AccountStoreConversionTests {
         )
       ]
     )
-    TestBackend.seed(transactions: [tx1, tx2], in: container)
+    TestBackend.seed(transactions: [tx1, tx2], in: database)
 
     let store = AccountStore(
       repository: backend.accounts,
@@ -107,8 +107,8 @@ struct AccountStoreConversionTests {
         "AUD": dec("1.5385")
       ]
     ]
-    let (backend, container) = try TestBackend.create(exchangeRates: rates)
-    TestBackend.seed(accounts: [account], in: container)
+    let (backend, database) = try TestBackend.create(exchangeRates: rates)
+    TestBackend.seed(accounts: [account], in: database)
 
     let tx1 = Transaction(
       date: Date(),
@@ -132,7 +132,7 @@ struct AccountStoreConversionTests {
         )
       ]
     )
-    TestBackend.seed(transactions: [tx1, tx2], in: container)
+    TestBackend.seed(transactions: [tx1, tx2], in: database)
 
     let store = AccountStore(
       repository: backend.accounts,

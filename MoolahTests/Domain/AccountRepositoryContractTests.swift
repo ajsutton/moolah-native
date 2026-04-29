@@ -215,9 +215,6 @@ struct AccountRepositoryContractTests {
       contractAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
       symbol: "USDC", name: "USD Coin", decimals: 6
     )
-    // ensureInstrument now refuses to write an unmapped crypto leg, so seed
-    // a provider mapping before creating the account-with-opening-balance.
-    try await seedCryptoMapping(usdc, coingeckoId: "usd-coin", in: repository)
     let account = Account(name: "Wallet", type: .investment, instrument: usdc)
     let openingBalance = InstrumentAmount(
       quantity: dec("2500.000000"), instrument: usdc)
@@ -319,59 +316,22 @@ struct AccountRepositoryContractTests {
 private func makeCloudKitAccountRepository(
   initialAccounts: [Account] = [],
   openingBalances: [InstrumentAmount] = []
-) throws -> CloudKitAccountRepository {
-  let container = try TestModelContainer.create()
-  let instrument = Instrument.defaultTestInstrument
-  let repo = CloudKitAccountRepository(
-    modelContainer: container)
-
-  if !initialAccounts.isEmpty {
-    let context = ModelContext(container)
-    for (index, account) in initialAccounts.enumerated() {
-      let record = AccountRecord.from(account)
-      context.insert(record)
-      // If an opening balance is provided for this account, create an opening balance transaction
-      let balance = index < openingBalances.count ? openingBalances[index] : nil
-      if let balance, !balance.isZero {
-        let txnId = UUID()
-        let txn = TransactionRecord(id: txnId, date: Date())
-        context.insert(txn)
-        let leg = TransactionLegRecord.from(
-          TransactionLeg(
-            accountId: account.id, instrument: instrument,
-            quantity: balance.quantity, type: .openingBalance
-          ),
-          transactionId: txnId, sortOrder: 0
-        )
-        context.insert(leg)
-      }
-    }
-    try context.save()
+) throws -> any AccountRepository {
+  let pair = try TestBackend.create()
+  let zipped = initialAccounts.enumerated().map {
+    (
+      account: $1,
+      openingBalance: $0 < openingBalances.count
+        ? openingBalances[$0] : InstrumentAmount(quantity: 0, instrument: $1.instrument)
+    )
   }
-
-  return repo
+  if !zipped.isEmpty {
+    TestBackend.seed(accounts: zipped, in: pair.database)
+  }
+  return pair.backend.accounts
 }
 
-/// Inserts an `InstrumentRecord` for the given crypto instrument with a
-/// non-nil `coingeckoId`, so `ensureInstrument` accepts subsequent writes
-/// that reference it. Mirrors what `InstrumentRegistryRepository.registerCrypto`
-/// does at runtime, but routes around the registry repo to keep this fixture
-/// synchronous with the SwiftData container the account repo holds.
-@MainActor
-private func seedCryptoMapping(
-  _ instrument: Instrument, coingeckoId: String, in repo: CloudKitAccountRepository
-) throws {
-  let context = repo.modelContainer.mainContext
-  context.insert(
-    InstrumentRecord(
-      id: instrument.id, kind: instrument.kind.rawValue, name: instrument.name,
-      decimals: instrument.decimals, ticker: instrument.ticker,
-      chainId: instrument.chainId, contractAddress: instrument.contractAddress,
-      coingeckoId: coingeckoId))
-  try context.save()
-}
-
-private func makeCloudKitWithPositionedAccounts() throws -> CloudKitAccountRepository {
+private func makeCloudKitWithPositionedAccounts() throws -> any AccountRepository {
   let account1 = Account(
     id: UUID(), name: "First", type: .bank, instrument: .defaultTestInstrument,
     position: 0)

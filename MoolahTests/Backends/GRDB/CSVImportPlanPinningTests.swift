@@ -21,6 +21,15 @@ import Testing
 ///    `GRDBCSVImportProfileRepository.update`/`delete` (and the
 ///    sync-side single-record fetcher). Must use the table's primary
 ///    key.
+/// 3. `csv_import_profile.created_at` ascending — the canonical fetch
+///    order used by `GRDBCSVImportProfileRepository.fetchAll()`. Must
+///    hit `csv_import_profile_created` and avoid a temp B-tree sort.
+/// 4. `csv_import_profile.account_id` lookup — partial filter for
+///    account-scoped profile listing. Must hit
+///    `csv_import_profile_account`.
+/// 5. `import_rule.account_scope` lookup — partial filter used by the
+///    rule evaluator for account-scoped rules. Must hit
+///    `import_rule_account_scope`.
 @Suite("CSV-import GRDB query plans")
 struct CSVImportPlanPinningTests {
   @Test
@@ -31,7 +40,7 @@ struct CSVImportPlanPinningTests {
         database,
         sql: """
           EXPLAIN QUERY PLAN
-          SELECT * FROM import_rule ORDER BY position
+          SELECT id FROM import_rule ORDER BY position
           """
       ).map { String(describing: $0["detail"] ?? "") }
       #expect(plan.contains { $0.contains("USING INDEX import_rule_position") })
@@ -47,7 +56,7 @@ struct CSVImportPlanPinningTests {
         database,
         sql: """
           EXPLAIN QUERY PLAN
-          SELECT * FROM csv_import_profile WHERE id = ?
+          SELECT id FROM csv_import_profile WHERE id = ?
           """,
         arguments: [UUID()]
       ).map { String(describing: $0["detail"] ?? "") }
@@ -70,7 +79,7 @@ struct CSVImportPlanPinningTests {
         database,
         sql: """
           EXPLAIN QUERY PLAN
-          SELECT * FROM import_rule WHERE account_scope = ?
+          SELECT id FROM import_rule WHERE account_scope = ?
           """,
         arguments: [UUID()]
       ).map { String(describing: $0["detail"] ?? "") }
@@ -93,12 +102,32 @@ struct CSVImportPlanPinningTests {
         database,
         sql: """
           EXPLAIN QUERY PLAN
-          SELECT * FROM csv_import_profile WHERE account_id = ?
+          SELECT id FROM csv_import_profile WHERE account_id = ?
           """,
         arguments: [UUID()]
       ).map { String(describing: $0["detail"] ?? "") }
       #expect(plan.contains { $0.contains("USING INDEX csv_import_profile_account") })
       #expect(!plan.contains { $0.contains("SCAN") })
+    }
+  }
+
+  @Test
+  func csvImportProfileOrderByCreatedAtUsesIndex() async throws {
+    let database = try ProfileDatabase.openInMemory()
+    try await database.read { database in
+      let plan = try Row.fetchAll(
+        database,
+        sql: """
+          EXPLAIN QUERY PLAN
+          SELECT id FROM csv_import_profile ORDER BY created_at
+          """
+      ).map { String(describing: $0["detail"] ?? "") }
+      // `GRDBCSVImportProfileRepository.fetchAll` orders by created_at
+      // ASC — pinning the index here prevents a future schema edit from
+      // silently regressing fetchAll() to a temp-B-tree sort over the
+      // entire table.
+      #expect(plan.contains { $0.contains("USING INDEX csv_import_profile_created") })
+      #expect(!plan.contains { $0.contains("USE TEMP B-TREE") })
     }
   }
 }

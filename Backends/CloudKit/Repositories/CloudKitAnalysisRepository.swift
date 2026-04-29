@@ -1,4 +1,6 @@
 // swiftlint:disable multiline_arguments
+// Reason: swift-format wraps long initialisers / SwiftUI builders across
+// multiple lines in a way the multiline_arguments rule disagrees with.
 
 import Foundation
 import OSLog
@@ -189,57 +191,9 @@ final class CloudKitAnalysisRepository: AnalysisRepository, @unchecked Sendable 
     return balances
   }
 
-  /// Parameter bundle for `fetchCategoryBalances`. Encapsulates the filtering
-  /// predicate and per-leg accumulation so both helpers stay at a single
-  /// parameter each and satisfy the `function_parameter_count` threshold.
-  struct CategoryBalancesQuery: Sendable {
-    let dateRange: ClosedRange<Date>
-    let transactionType: TransactionType
-    let filters: TransactionFilter?
-    let targetInstrument: Instrument
-    let conversionService: any InstrumentConversionService
-
-    func shouldInclude(_ transaction: Transaction) -> Bool {
-      guard dateRange.contains(transaction.date) else { return false }
-      guard transaction.recurPeriod == nil else { return false }
-      if let accountId = filters?.accountId,
-        !transaction.accountIds.contains(accountId)
-      {
-        return false
-      }
-      if let payee = filters?.payee, transaction.payee != payee {
-        return false
-      }
-      return true
-    }
-
-    func accumulate(
-      transaction: Transaction,
-      into balances: inout [UUID: InstrumentAmount]
-    ) async throws {
-      for leg in transaction.legs {
-        guard leg.type == transactionType else { continue }
-        guard let categoryId = leg.categoryId else { continue }
-
-        if let earmarkId = filters?.earmarkId, leg.earmarkId != earmarkId {
-          continue
-        }
-        if let categoryIds = filters?.categoryIds, !categoryIds.isEmpty,
-          !categoryIds.contains(categoryId)
-        {
-          continue
-        }
-
-        let amount = try await CloudKitAnalysisRepository.convertedAmount(
-          leg,
-          to: targetInstrument,
-          on: transaction.date,
-          conversionService: conversionService
-        )
-        balances[categoryId, default: .zero(instrument: targetInstrument)] += amount
-      }
-    }
-  }
+  // CategoryBalancesQuery moved to its own file
+  // (`CategoryBalancesQuery.swift`) so the GRDB AnalysisRepository can
+  // share the same accumulator instead of mirroring it locally.
 
   // MARK: - Data Fetching Helpers
 

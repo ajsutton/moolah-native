@@ -95,8 +95,8 @@ struct ScheduledTransactionTestsMore {
       recurEvery: 1
     )
 
-    let (backend, container) = try TestBackend.create()
-    _ = TestBackend.seed(transactions: [scheduled], in: container)
+    let (backend, database) = try TestBackend.create()
+    _ = TestBackend.seed(transactions: [scheduled], in: database)
 
     // Verify it exists and is scheduled
     let page1 = try await backend.transactions.fetch(
@@ -141,8 +141,8 @@ struct ScheduledTransactionTestsMore {
       recurEvery: 1
     )
 
-    let (backend, container) = try TestBackend.create()
-    _ = TestBackend.seed(transactions: [scheduled], in: container)
+    let (backend, database) = try TestBackend.create()
+    _ = TestBackend.seed(transactions: [scheduled], in: database)
 
     // Create paid transaction
     let paid = Transaction(

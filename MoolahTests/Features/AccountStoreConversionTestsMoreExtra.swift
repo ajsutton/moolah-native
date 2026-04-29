@@ -16,8 +16,8 @@ struct AccountStoreConversionTestsMoreExtra {
     let account = Account(
       id: accountId, name: "Portfolio", type: .investment, instrument: aud)
 
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(accounts: [account], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: database)
 
     // Two foreign-currency positions in distinct instruments so the
     // repository yields two `Position` entries.
@@ -37,7 +37,7 @@ struct AccountStoreConversionTestsMoreExtra {
             quantity: Decimal(50), type: .openingBalance)
         ]),
     ]
-    TestBackend.seed(transactions: txns, in: container)
+    TestBackend.seed(transactions: txns, in: database)
 
     let counter = CountingConversionService(rates: [
       "USD": dec("1.5"),
@@ -90,8 +90,8 @@ struct AccountStoreConversionTestsMoreExtra {
     // The 0.50 difference is the double-conversion drift.
     let account = Account(
       id: accountId, name: "Portfolio", type: .investment, instrument: .AUD)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(accounts: [account], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: database)
 
     let audTx = Transaction(
       date: Date(),
@@ -107,7 +107,7 @@ struct AccountStoreConversionTestsMoreExtra {
           accountId: accountId, instrument: .USD,
           quantity: dec("100.00"), type: .openingBalance)
       ])
-    TestBackend.seed(transactions: [audTx, usdTx], in: container)
+    TestBackend.seed(transactions: [audTx, usdTx], in: database)
 
     let conversion = FixedConversionService(rates: [
       "AUD": dec("0.67"),
@@ -136,8 +136,8 @@ struct AccountStoreConversionTestsMoreExtra {
     let accountId = UUID()
     let account = Account(
       id: accountId, name: "Brokerage", type: .investment, instrument: .AUD)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(accounts: [account], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: database)
 
     // Seed raw positions that would produce a different total than the
     // external value — this makes it provable the external value is used.
@@ -148,7 +148,7 @@ struct AccountStoreConversionTestsMoreExtra {
           accountId: accountId, instrument: .AUD,
           quantity: dec("100.00"), type: .openingBalance)
       ])
-    TestBackend.seed(transactions: [rawTx], in: container)
+    TestBackend.seed(transactions: [rawTx], in: database)
 
     let conversion = FixedConversionService(rates: [
       "AUD": dec("0.5")
@@ -182,8 +182,8 @@ struct AccountStoreConversionTestsMoreExtra {
     let account = Account(
       id: accountId, name: "Portfolio", type: .investment,
       instrument: .defaultTestInstrument)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(accounts: [account], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: database)
 
     let transaction = Transaction(
       date: Date(),
@@ -192,7 +192,7 @@ struct AccountStoreConversionTestsMoreExtra {
           accountId: accountId, instrument: .defaultTestInstrument,
           quantity: dec("1234.56"), type: .openingBalance)
       ])
-    TestBackend.seed(transactions: [transaction], in: container)
+    TestBackend.seed(transactions: [transaction], in: database)
 
     let store = AccountStore(
       repository: backend.accounts,

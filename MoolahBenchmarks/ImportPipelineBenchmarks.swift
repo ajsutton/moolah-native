@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 import XCTest
 
 @testable import Moolah
@@ -13,7 +13,7 @@ import XCTest
 final class ImportPipelineBenchmarks: XCTestCase {
 
   nonisolated(unsafe) private static var _backend: CloudKitBackend?
-  nonisolated(unsafe) private static var _container: ModelContainer?
+  nonisolated(unsafe) private static var _database: DatabaseQueue?
   nonisolated(unsafe) private static var _accountId: UUID?
 
   override static func setUp() {
@@ -23,7 +23,7 @@ final class ImportPipelineBenchmarks: XCTestCase {
     }
     let accountId = UUID()
     _backend = result.backend
-    _container = result.container
+    _database = result.database
     _accountId = accountId
     awaitSyncExpecting { @MainActor in
       _ = try await result.backend.accounts.create(
@@ -41,7 +41,7 @@ final class ImportPipelineBenchmarks: XCTestCase {
 
   override static func tearDown() {
     _backend = nil
-    _container = nil
+    _database = nil
     _accountId = nil
     super.tearDown()
   }

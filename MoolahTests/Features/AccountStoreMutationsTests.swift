@@ -12,11 +12,11 @@ struct AccountStoreMutationsTests {
 
   @Test("currentAccounts excludes hidden accounts by default")
   func hiddenAccountsExcluded() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Visible", balance: Decimal(100000) / 100, in: container)
+      name: "Visible", balance: Decimal(100000) / 100, in: database)
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Hidden", balance: Decimal(50000) / 100, isHidden: true, in: container)
+      name: "Hidden", balance: Decimal(50000) / 100, isHidden: true, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -29,11 +29,11 @@ struct AccountStoreMutationsTests {
 
   @Test("currentAccounts includes hidden accounts when showHidden is true")
   func hiddenAccountsIncluded() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Visible", balance: Decimal(100000) / 100, in: container)
+      name: "Visible", balance: Decimal(100000) / 100, in: database)
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Hidden", balance: Decimal(50000) / 100, isHidden: true, in: container)
+      name: "Hidden", balance: Decimal(50000) / 100, isHidden: true, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -46,12 +46,12 @@ struct AccountStoreMutationsTests {
 
   @Test("investmentAccounts respects showHidden flag")
   func hiddenInvestmentAccounts() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Visible", type: .investment, balance: Decimal(100000) / 100, in: container)
+      name: "Visible", type: .investment, balance: Decimal(100000) / 100, in: database)
     _ = AccountStoreTestSupport.seedAccount(
       name: "Hidden", type: .investment, balance: Decimal(50000) / 100, isHidden: true,
-      in: container)
+      in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -110,8 +110,8 @@ struct AccountStoreMutationsTests {
 
   @Test
   func testUpdatePersistsChangedInstrument() async throws {
-    let (backend, container) = try TestBackend.create()
-    let original = AccountStoreTestSupport.seedAccount(name: "Savings", in: container)
+    let (backend, database) = try TestBackend.create()
+    let original = AccountStoreTestSupport.seedAccount(name: "Savings", in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -135,13 +135,13 @@ struct AccountStoreMutationsTests {
     let firstId = UUID()
     let secondId = UUID()
     let thirdId = UUID()
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     let first = AccountStoreTestSupport.seedAccount(
-      id: firstId, name: "A", position: 0, in: container)
+      id: firstId, name: "A", position: 0, in: database)
     let second = AccountStoreTestSupport.seedAccount(
-      id: secondId, name: "B", position: 1, in: container)
+      id: secondId, name: "B", position: 1, in: database)
     let third = AccountStoreTestSupport.seedAccount(
-      id: thirdId, name: "C", position: 2, in: container)
+      id: thirdId, name: "C", position: 2, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
