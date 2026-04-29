@@ -39,6 +39,16 @@ extension MoolahApp {
   static func makeContainerSetup(uiTestingSeed: UITestSeed?) -> ContainerSetup {
     do {
       if let seed = uiTestingSeed {
+        // Each `--ui-testing` launch starts from a fresh in-memory
+        // `ProfileContainerManager` with a different seed, but
+        // `UserDefaults.standard` persists across xctest launches in
+        // the same runner. Without resetting the per-record-type
+        // SwiftData → GRDB migration flags, the second launch's
+        // migrator would skip and the seeded SwiftData rows would
+        // never reach GRDB — sidebar / accounts queries return empty
+        // and downstream UI assertions time out. Production code
+        // paths never enter this branch.
+        SwiftDataToGRDBMigrator.resetMigrationFlags()
         let manager = try ProfileContainerManager.forTesting()
         let profile = try UITestSeedHydrator.hydrate(seed, into: manager)
         return ContainerSetup(manager: manager, uiTestingProfileId: profile?.id)

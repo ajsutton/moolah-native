@@ -56,6 +56,37 @@ struct SwiftDataToGRDBMigrator {
   static let transactionsFlag = "v3.transactions.grdbMigrated"
   static let transactionLegsFlag = "v3.transactionLegs.grdbMigrated"
 
+  /// All `UserDefaults` keys that gate this migrator. Used by
+  /// `resetMigrationFlags(in:)` to reset state between UI test launches —
+  /// each test launches a fresh in-memory `ProfileContainerManager` with
+  /// new seed data, but `UserDefaults.standard` persists across xctest
+  /// launches in the same runner. Without resetting, the second test's
+  /// migrator would skip and the seeded SwiftData rows would never reach
+  /// GRDB. Production launches never call this reset.
+  static let allMigrationFlags: [String] = [
+    csvImportProfilesFlag,
+    importRulesFlag,
+    instrumentsFlag,
+    categoriesFlag,
+    accountsFlag,
+    earmarksFlag,
+    earmarkBudgetItemsFlag,
+    investmentValuesFlag,
+    transactionsFlag,
+    transactionLegsFlag,
+  ]
+
+  /// Clears every gating flag set by `migrateIfNeeded` so the next call
+  /// re-runs the full SwiftData → GRDB copy. Intended for `--ui-testing`
+  /// launches only: each UI test starts from a fresh in-memory profile
+  /// container and must observe its own seeded rows in GRDB. No
+  /// production code path should invoke this.
+  static func resetMigrationFlags(in defaults: UserDefaults = .standard) {
+    for key in allMigrationFlags {
+      defaults.removeObject(forKey: key)
+    }
+  }
+
   let logger = Logger(
     subsystem: "com.moolah.app", category: "SwiftDataToGRDBMigrator")
 
