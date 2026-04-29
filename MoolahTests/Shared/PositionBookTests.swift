@@ -188,7 +188,12 @@ struct PositionBookTests {
         TransactionLeg(accountId: bankAccount2, instrument: usd, quantity: 50, type: .income)
       ]))
 
-    let conversion = FixedConversionService(rates: ["USD": 1.5])
+    // Date-aware: anchoring the rate at `date` ensures a regression where
+    // `dailyBalance(on:)` accidentally passed `Date()` instead of the
+    // requested snapshot date would surface as a missing rate (1:1
+    // fallback) and fail the assertion. Per
+    // `guides/INSTRUMENT_CONVERSION_GUIDE.md` §6.
+    let conversion = DateBasedFixedConversionService(rates: [date: ["USD": 1.5]])
 
     let result = try await book.dailyBalance(
       on: date,
