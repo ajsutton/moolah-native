@@ -56,7 +56,7 @@ enum PlanPinningTestHelpers {
   /// for aliased queries — SQLite's plan output uses the alias, never
   /// the base table name, so the bare-name check would silently pass
   /// even on a real full scan.
-  static func planScansAlias(_ detail: String, _ alias: String) -> Bool {
+  static func planHasFullTableScanOf(_ detail: String, alias: String) -> Bool {
     let scan = "SCAN \(alias)"
     var searchRange = detail.startIndex..<detail.endIndex
     while let match = detail.range(of: scan, range: searchRange) {

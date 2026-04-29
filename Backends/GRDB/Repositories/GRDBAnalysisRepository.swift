@@ -37,11 +37,15 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   // `CategoryBalancesAggregation`, `CategoryBalancesHandlers`,
   // `CategoryBalancesFilterArgs`. Same shape as `+ExpenseBreakdown`.
   //
-  // `+IncomeAndExpense.swift` — `fetchIncomeAndExpenseAggregation`,
-  // `assembleIncomeAndExpense`, `IncomeAndExpenseRow`,
+  // `+IncomeAndExpense.swift` — types (`IncomeAndExpenseRow`,
   // `IncomeAndExpenseAggregation`, `IncomeAndExpenseHandlers`,
-  // `IncomeAndExpenseFailureContext`. Same shape; six conditional
-  // SQL aggregates per `(day, instrument)` row drive the assembly.
+  // `IncomeAndExpenseFailureContext`), `assembleIncomeAndExpense`, and
+  // private helpers (`convertRowSums`, `makeEmptyMonthBucket`,
+  // `applyConvertedRow`, `flattenIncomeAndExpenseBuckets`).
+  //
+  // `+IncomeAndExpenseAggregation.swift` — `fetchIncomeAndExpenseAggregation`,
+  // `mapAggregationRow`, file-private `incomeAndExpenseAggregationSQL`.
+  // Split out of `+IncomeAndExpense.swift` for `file_length` budget.
   //
   // `database` and `logger` are read by `fetchExpenseBreakdown`,
   // `fetchCategoryBalances`, and `fetchIncomeAndExpense` here in the

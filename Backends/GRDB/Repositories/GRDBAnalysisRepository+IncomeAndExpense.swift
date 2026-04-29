@@ -1,17 +1,19 @@
 import Foundation
 import GRDB
 
-/// SQL aggregation + Swift assembly helpers for `fetchIncomeAndExpense`.
+/// Swift assembly helpers and shared types for `fetchIncomeAndExpense`.
+/// The SQL aggregation itself lives in the sibling
+/// `+IncomeAndExpenseAggregation.swift` (split out for the SwiftLint
+/// `file_length` budget); this file fans the per-`(day, instrument)`
+/// rows it produces out into per-month income/expense buckets.
+///
 /// Mirrors the `+ExpenseBreakdown.swift` and `+CategoryBalances.swift`
 /// shapes: static helpers take their dependencies as parameters so
 /// this sibling-file extension doesn't reach into the main class's
 /// `private` storage.
 ///
-/// The SQL groups by `(DATE(t.date), instrument_id)` with six
-/// conditional `SUM(CASE …)` aggregates that route each leg to the
-/// right monthly bucket. Per-row conversion runs in Swift so the
-/// per-day rate-cache equivalence (Rule 5 of
-/// `INSTRUMENT_CONVERSION_GUIDE.md`) holds.
+/// Per-row conversion runs in Swift so the per-day rate-cache
+/// equivalence (Rule 5 of `INSTRUMENT_CONVERSION_GUIDE.md`) holds.
 ///
 /// **Investment-transfer split.** Transfers into investment accounts
 /// route to `earmarkedIncome` (positive) and `earmarkedExpense`

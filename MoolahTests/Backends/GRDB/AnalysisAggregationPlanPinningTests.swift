@@ -78,7 +78,7 @@ struct AnalysisAggregationPlanPinningTests {
     // table — `transaction_leg AS leg` here. Asserting on the bare
     // table name would be a false-negative pin; pin against the alias
     // the planner actually emits.
-    #expect(!PlanPinningTestHelpers.planScansAlias(detail, "leg"))
+    #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
   }
 
@@ -119,7 +119,7 @@ struct AnalysisAggregationPlanPinningTests {
     // SQLite emits `SCAN <alias>` when the FROM clause aliases the
     // table (here `transaction_leg leg`); pin against the alias rather
     // than the bare table name to avoid a false-negative assertion.
-    #expect(!PlanPinningTestHelpers.planScansAlias(detail, "leg"))
+    #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     // SQLite's plan is permitted to (and does) include both
     // `USE TEMP B-TREE FOR GROUP BY` and `USE TEMP B-TREE FOR ORDER BY`.
     // We do NOT reject those lines because the GROUP BY and ORDER BY
@@ -159,7 +159,7 @@ struct AnalysisAggregationPlanPinningTests {
     #expect(usesAcceptableIndex)
     // SQLite emits `SCAN <alias>` for aliased FROM clauses — here
     // `transaction_leg AS leg`. Pin against the alias.
-    #expect(!PlanPinningTestHelpers.planScansAlias(detail, "leg"))
+    #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
   }
 
@@ -211,7 +211,7 @@ struct AnalysisAggregationPlanPinningTests {
     // `transaction_leg leg`. Pin against the alias rather than the
     // bare table name (which would never match this query's plan and
     // would silently pass even on a full scan).
-    #expect(!PlanPinningTestHelpers.planScansAlias(detail, "leg"))
+    #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
     // The LEFT JOIN to `account` should resolve via the PK
     // (`sqlite_autoindex_account_1`) or `account_by_type` rather than a
@@ -258,7 +258,7 @@ struct AnalysisAggregationPlanPinningTests {
     #expect(usesAcceptableLegIndex)
     // SQLite emits `SCAN <alias>` for aliased FROM clauses — here
     // `transaction_leg leg`. Pin against the alias.
-    #expect(!PlanPinningTestHelpers.planScansAlias(detail, "leg"))
+    #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
     #expect(!detail.contains("SCAN account"))
   }
@@ -285,7 +285,7 @@ struct AnalysisAggregationPlanPinningTests {
     // bloat every leg row to recover a single `LEFT JOIN account`-free
     // covering scan; the perf-critical signal is "no full table scan on
     // leg or transaction or account", and the bare `SCAN leg` (without
-    // `USING ...`) is what `planScansAlias` catches.
+    // `USING ...`) is what `planHasFullTableScanOf` catches.
     let detail = try planDetail(
       database,
       query: """
@@ -337,7 +337,7 @@ struct AnalysisAggregationPlanPinningTests {
     // bare table name (which would silently pass even on a full
     // scan because the planner's output never uses the bare name when
     // the query aliases the table).
-    #expect(!PlanPinningTestHelpers.planScansAlias(detail, "leg"))
+    #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
     // The LEFT JOIN to `account` should resolve via the PK
     // (`sqlite_autoindex_account_1`) or `account_by_type` rather than a
@@ -384,7 +384,7 @@ struct AnalysisAggregationPlanPinningTests {
     #expect(usesAcceptableLegIndex)
     // SQLite emits `SCAN <alias>` for aliased FROM clauses — here
     // `transaction_leg leg`. Pin against the alias.
-    #expect(!PlanPinningTestHelpers.planScansAlias(detail, "leg"))
+    #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
     #expect(!detail.contains("SCAN account"))
   }

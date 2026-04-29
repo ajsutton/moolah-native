@@ -37,8 +37,7 @@ struct AnalysisIncomeExpenseInvestmentTests {
 
     let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
 
-    #expect(!data.isEmpty)
-    let month = data[0]
+    let month = try #require(data.first)
     #expect(
       month.income.quantity == 50,
       "Investment-account income (e.g. dividends) must be included in the income total")
@@ -64,8 +63,7 @@ struct AnalysisIncomeExpenseInvestmentTests {
 
     let data = try await backend.analysis.fetchIncomeAndExpense(monthEnd: 25, after: nil)
 
-    #expect(!data.isEmpty)
-    let month = data[0]
+    let month = try #require(data.first)
     #expect(
       month.expense.quantity == -25,
       "Investment-account expense (e.g. brokerage fees) must be included in the expense total")
