@@ -302,6 +302,15 @@ final class TransactionStore {
         recomputeMs: recomputeMs,
         count: page.transactions.count,
         totalLoaded: rawTransactions.count)
+    } catch is CancellationError {
+      // Cancelling a `.task` mid-fetch (e.g. a structural branch flip in
+      // `InvestmentAccountView` that unmounts the embedded transaction list
+      // while a load is in flight) is a normal lifecycle event, not a
+      // user-actionable error. Latching it as `self.error` would cause the
+      // alert observer to surface "Swift.CancellationError" on every
+      // subsequent mount; matches the pattern already used in `loadValues` /
+      // `loadPositions` on `InvestmentStore`.
+      return
     } catch {
       // Only surface the error for the live load — a superseded one's
       // failure isn't user-actionable because the newer load is running.

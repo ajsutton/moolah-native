@@ -161,6 +161,35 @@ struct TransactionStoreLoadRaceTests {
     #expect(!store.isLoading)
     #expect(!store.isLoaded(for: filter))
   }
+
+  /// A `load(filter:)` cancelled mid-fetch must not surface
+  /// `CancellationError` as a user-facing error. The InvestmentAccountView
+  /// flips `initialLoadComplete` on account switch, which unmounts the
+  /// embedded `TransactionListView` and cancels its in-flight load; the
+  /// surrounding alert observer treats any non-nil `store.error` as
+  /// presentable, so leaking the cancellation produced a spurious "Operation
+  /// failed: Swift.CancellationError" dialog on every subsequent visit to an
+  /// investment account.
+  @Test
+  func cancelledLoadDoesNotSurfaceCancellationError() async throws {
+    let repo = FirstFetchGatedTransactionRepository()
+    let store = TransactionStore(
+      repository: repo,
+      conversionService: FixedConversionService(),
+      targetInstrument: .defaultTestInstrument
+    )
+    let filter = TransactionFilter(accountId: accountId)
+
+    let task = Task { @MainActor in
+      await store.load(filter: filter)
+    }
+    await repo.waitUntilFetchStarted()
+    task.cancel()
+    await repo.releaseFetch()
+    await task.value
+
+    #expect(store.error == nil)
+  }
 }
 
 /// Minimal `TransactionRepository` that suspends inside `fetch` until the
@@ -184,6 +213,12 @@ actor FirstFetchGatedTransactionRepository: TransactionRepository {
   func fetch(filter: TransactionFilter, page: Int, pageSize: Int) async throws -> TransactionPage {
     await fetchStarted.open()
     await fetchRelease.wait()
+    // Mirror GRDB's `database.read` cooperative cancellation: when the
+    // surrounding task has been cancelled by the time the read can proceed,
+    // throw `CancellationError` rather than returning a stale page. This is
+    // what the production repository does and is the shape `fetchPage`'s
+    // catch block has to handle.
+    try Task.checkCancellation()
     return TransactionPage(
       transactions: [],
       targetInstrument: .defaultTestInstrument,

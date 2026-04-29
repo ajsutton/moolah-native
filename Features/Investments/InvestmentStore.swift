@@ -91,6 +91,8 @@ final class InvestmentStore {
       let raw = try await repository.fetchDailyBalances(accountId: accountId)
       dailyBalances = try await aggregateDailyBalances(
         raw: raw, hostCurrency: hostCurrency)
+    } catch is CancellationError {
+      return  // Cancelling a `.task` mid-load is not a failure.
     } catch {
       logger.error("Failed to load daily balances: \(error.localizedDescription)")
       self.error = error
