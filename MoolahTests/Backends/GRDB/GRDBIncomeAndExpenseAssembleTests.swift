@@ -125,6 +125,73 @@ struct GRDBIncomeAndExpenseAssembleTests {
     #expect(conversionService.calls == 3)
   }
 
+  @Test("convertRowSums converts each row at the row's own day, not Date()")
+  func convertRowSumsUsesPerRowDay() async throws {
+    // Pins that `assembleIncomeAndExpense` (and the `convertRowSums`
+    // helper it drives) feeds the row's parsed `day` into the
+    // conversion service per row — NOT a single `Date()` snapshot
+    // captured at call time. A regression that swapped `day` for
+    // `Date()` would silently pass against the existing
+    // `ThrowingCountingConversionService` fixtures because that service
+    // ignores the conversion date.
+    //
+    // The fixture here is two USD rows on different days with
+    // different rates. If the helper were converting both rows at the
+    // same date (e.g. `Date()`), both legs would convert at the same
+    // rate and the totals would diverge from the per-day truth.
+    let dayOneString = "2025-06-10"
+    let dayTwoString = "2025-06-11"
+    let dayOne = try #require(GRDBAnalysisRepository.parseDayString(dayOneString))
+    let dayTwo = try #require(GRDBAnalysisRepository.parseDayString(dayTwoString))
+    let usd = "USD"
+    let rateOne = try AnalysisTestHelpers.decimal("1.5")
+    let rateTwo = try AnalysisTestHelpers.decimal("2.0")
+    let conversion = DateBasedFixedConversionService(
+      rates: [
+        dayOne: [usd: rateOne],
+        dayTwo: [usd: rateTwo],
+      ])
+    // SQL aggregates emit values in `Int64` storage units (raw quantity
+    // scaled by `storageScale = 10^8`). Use the scaled value here so the
+    // post-conversion result is a recognisable integer.
+    let scaledHundred: Int64 = 100 * 100_000_000
+    let aggregation = GRDBAnalysisRepository.IncomeAndExpenseAggregation(
+      rows: [
+        .init(
+          day: dayOneString, instrumentId: usd,
+          incomeQty: scaledHundred, expenseQty: 0,
+          earmarkedIncomeQty: 0, earmarkedExpenseQty: 0,
+          investmentTransferInQty: 0, investmentTransferOutQty: 0),
+        .init(
+          day: dayTwoString, instrumentId: usd,
+          incomeQty: scaledHundred, expenseQty: 0,
+          earmarkedIncomeQty: 0, earmarkedExpenseQty: 0,
+          investmentTransferInQty: 0, investmentTransferOutQty: 0),
+      ],
+      instrumentMap: [usd: .fiat(code: usd)])
+    let handlers = GRDBAnalysisRepository.IncomeAndExpenseHandlers(
+      handleUnparseableDay: { _ in },
+      handleConversionFailure: { _, _ in })
+
+    let result = try await GRDBAnalysisRepository.assembleIncomeAndExpense(
+      aggregation: aggregation,
+      profileInstrument: .defaultTestInstrument,
+      conversionService: conversion,
+      monthEnd: 25,
+      handlers: handlers)
+
+    // Both rows land in the same financial month (June 2025, monthEnd
+    // 25) and collapse into one bucket. Per-day rates: 100 * 1.5 +
+    // 100 * 2.0 = 350. A bug that converted both rows at `Date()` (or
+    // any single date) would yield 100 * r + 100 * r = 200 * r — never
+    // 350 unless `r` accidentally split as 1.75 — and the rate fixture
+    // has no entry on `Date()` so it would 1:1-fall-back to 200.
+    #expect(result.count == 1)
+    let month = try #require(result.first)
+    #expect(month.income.quantity == 350)
+    #expect(month.income.instrument == .defaultTestInstrument)
+  }
+
   @Test("CancellationError rethrown immediately without invoking handleConversionFailure")
   func cancellationErrorIsNotFoldedIntoConversionFailureLog() async throws {
     let aggregation = makeAggregation()

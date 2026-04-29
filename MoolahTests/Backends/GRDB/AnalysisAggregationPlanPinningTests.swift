@@ -74,7 +74,11 @@ struct AnalysisAggregationPlanPinningTests {
       detail.contains("leg_by_account")
       || detail.contains("leg_analysis_by_type_account")
     #expect(usesAcceptableIndex)
-    #expect(!detail.contains("SCAN transaction_leg"))
+    // SQLite emits `SCAN <alias>` when the FROM clause aliases the
+    // table — `transaction_leg AS leg` here. Asserting on the bare
+    // table name would be a false-negative pin; pin against the alias
+    // the planner actually emits.
+    #expect(!PlanPinningTestHelpers.planScansAlias(detail, "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
   }
 
@@ -112,7 +116,10 @@ struct AnalysisAggregationPlanPinningTests {
       arguments: [Date?.none, Date?.none])
     #expect(detail.contains("leg_analysis_by_type_category"))
     #expect(detail.contains("USING COVERING INDEX"))
-    #expect(!detail.contains("SCAN transaction_leg"))
+    // SQLite emits `SCAN <alias>` when the FROM clause aliases the
+    // table (here `transaction_leg leg`); pin against the alias rather
+    // than the bare table name to avoid a false-negative assertion.
+    #expect(!PlanPinningTestHelpers.planScansAlias(detail, "leg"))
     // SQLite's plan is permitted to (and does) include both
     // `USE TEMP B-TREE FOR GROUP BY` and `USE TEMP B-TREE FOR ORDER BY`.
     // We do NOT reject those lines because the GROUP BY and ORDER BY
@@ -150,7 +157,9 @@ struct AnalysisAggregationPlanPinningTests {
       detail.contains("leg_by_earmark")
       || detail.contains("leg_analysis_by_earmark_type")
     #expect(usesAcceptableIndex)
-    #expect(!detail.contains("SCAN transaction_leg"))
+    // SQLite emits `SCAN <alias>` for aliased FROM clauses — here
+    // `transaction_leg AS leg`. Pin against the alias.
+    #expect(!PlanPinningTestHelpers.planScansAlias(detail, "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
   }
 
@@ -198,7 +207,11 @@ struct AnalysisAggregationPlanPinningTests {
         """,
       arguments: [Date(), Date(), "expense"])
     #expect(detail.contains("leg_analysis_by_type_category"))
-    #expect(!detail.contains("SCAN transaction_leg"))
+    // SQLite emits `SCAN <alias>` for aliased FROM clauses — here
+    // `transaction_leg leg`. Pin against the alias rather than the
+    // bare table name (which would never match this query's plan and
+    // would silently pass even on a full scan).
+    #expect(!PlanPinningTestHelpers.planScansAlias(detail, "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
     // The LEFT JOIN to `account` should resolve via the PK
     // (`sqlite_autoindex_account_1`) or `account_by_type` rather than a
@@ -243,7 +256,9 @@ struct AnalysisAggregationPlanPinningTests {
       || detail.contains("leg_analysis_by_type_account")
       || detail.contains("leg_analysis_by_type_category")
     #expect(usesAcceptableLegIndex)
-    #expect(!detail.contains("SCAN transaction_leg"))
+    // SQLite emits `SCAN <alias>` for aliased FROM clauses — here
+    // `transaction_leg leg`. Pin against the alias.
+    #expect(!PlanPinningTestHelpers.planScansAlias(detail, "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
     #expect(!detail.contains("SCAN account"))
   }
@@ -260,14 +275,17 @@ struct AnalysisAggregationPlanPinningTests {
     // `account` for the investment-account routing.
     //
     // Like `fetchCategoryBalances`, we do NOT assert
-    // `USING COVERING INDEX`. The LEFT JOIN to `account` requires
-    // `leg.account_id` to drive the join, but the analysis composite
-    // indexes either don't include `account_id` in the leading position
-    // (the type-account composite uses `(type, account_id, …)` so works
-    // for type+account predicates) or don't cover it at all. SQLite is
-    // free to pick whichever leg-side index keeps the plan SCAN-free;
-    // the perf-critical signal is "no full table scan on leg or
-    // transaction or account".
+    // `USING COVERING INDEX`. The composite `leg_analysis_by_type_account`
+    // covers `(type, account_id, instrument_id, transaction_id, quantity)`
+    // — but the SQL also references `earmark_id` in two CASE branches
+    // (`earmarked_income_qty` / `earmarked_expense_qty`), and that column
+    // is not in the index. SQLite must therefore fetch the leg's base row
+    // to read `earmark_id`, flipping the plan from `USING COVERING INDEX`
+    // to plain `USING INDEX`. Adding `earmark_id` to the composite would
+    // bloat every leg row to recover a single `LEFT JOIN account`-free
+    // covering scan; the perf-critical signal is "no full table scan on
+    // leg or transaction or account", and the bare `SCAN leg` (without
+    // `USING ...`) is what `planScansAlias` catches.
     let detail = try planDetail(
       database,
       query: """
@@ -276,11 +294,9 @@ struct AnalysisAggregationPlanPinningTests {
             leg.instrument_id    AS instrument_id,
             SUM(CASE WHEN leg.type = 'income'
                       AND a.type IS NOT NULL
-                      AND a.type <> 'investment'
                      THEN leg.quantity ELSE 0 END)        AS income_qty,
             SUM(CASE WHEN leg.type = 'expense'
                       AND a.type IS NOT NULL
-                      AND a.type <> 'investment'
                      THEN leg.quantity ELSE 0 END)        AS expense_qty,
             SUM(CASE WHEN leg.earmark_id IS NOT NULL
                       AND leg.type = 'income'
@@ -316,7 +332,12 @@ struct AnalysisAggregationPlanPinningTests {
       || detail.contains("leg_by_account")
       || detail.contains("leg_by_earmark")
     #expect(usesAcceptableLegIndex)
-    #expect(!detail.contains("SCAN transaction_leg"))
+    // SQLite emits `SCAN <alias>` for aliased FROM clauses — here
+    // `transaction_leg leg`. Pin against the alias rather than the
+    // bare table name (which would silently pass even on a full
+    // scan because the planner's output never uses the bare name when
+    // the query aliases the table).
+    #expect(!PlanPinningTestHelpers.planScansAlias(detail, "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
     // The LEFT JOIN to `account` should resolve via the PK
     // (`sqlite_autoindex_account_1`) or `account_by_type` rather than a
@@ -361,7 +382,9 @@ struct AnalysisAggregationPlanPinningTests {
       || detail.contains("leg_analysis_by_earmark_type")
       || detail.contains("leg_analysis_by_type_category")
     #expect(usesAcceptableLegIndex)
-    #expect(!detail.contains("SCAN transaction_leg"))
+    // SQLite emits `SCAN <alias>` for aliased FROM clauses — here
+    // `transaction_leg leg`. Pin against the alias.
+    #expect(!PlanPinningTestHelpers.planScansAlias(detail, "leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
     #expect(!detail.contains("SCAN account"))
   }

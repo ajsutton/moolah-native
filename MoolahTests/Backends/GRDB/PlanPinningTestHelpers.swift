@@ -42,4 +42,36 @@ enum PlanPinningTestHelpers {
       return rows.compactMap { $0["detail"] as String? }.joined(separator: "; ")
     }
   }
+
+  /// Returns `true` when SQLite's plan reports a *full table scan* of
+  /// the given alias — i.e. `SCAN <alias>` not followed by an index
+  /// clause. SQLite emits `SCAN leg USING INDEX X` (or
+  /// `USING COVERING INDEX X`) for index-driven reads — those should
+  /// not trip the assertion. A bare `SCAN leg` (followed by `;`,
+  /// end-of-string, or anything other than ` USING`) is the
+  /// no-index case the negative assertion exists to catch.
+  ///
+  /// Hoisted into a helper because the previous string-contains shape
+  /// (`detail.contains("SCAN transaction_leg")`) was a false negative
+  /// for aliased queries — SQLite's plan output uses the alias, never
+  /// the base table name, so the bare-name check would silently pass
+  /// even on a real full scan.
+  static func planScansAlias(_ detail: String, _ alias: String) -> Bool {
+    let scan = "SCAN \(alias)"
+    var searchRange = detail.startIndex..<detail.endIndex
+    while let match = detail.range(of: scan, range: searchRange) {
+      let afterMatch = match.upperBound
+      if afterMatch == detail.endIndex {
+        return true
+      }
+      // Index-driven scans always have ` USING ` immediately after the
+      // alias. Anything else (`;`, `,`, end-of-string) is a bare scan.
+      let suffix = detail[afterMatch...]
+      if !suffix.hasPrefix(" USING ") {
+        return true
+      }
+      searchRange = afterMatch..<detail.endIndex
+    }
+    return false
+  }
 }

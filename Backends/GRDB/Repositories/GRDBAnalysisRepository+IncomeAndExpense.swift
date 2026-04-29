@@ -14,13 +14,11 @@ import GRDB
 /// `INSTRUMENT_CONVERSION_GUIDE.md`) holds.
 ///
 /// **Investment-transfer split.** Transfers into investment accounts
-/// route to `earmarkedIncome` (positive quantities) and
-/// `earmarkedExpense` (negative quantities, sign-flipped on the way
-/// in). The CloudKit reference path (`applyTransferLeg`) splits by
-/// sign at the leg level, so the SQL splits the SUM by sign rather
-/// than collapsing both directions — losing the sign before the flip
-/// would mis-count any day with both a deposit and a withdrawal in
-/// the same instrument. The split mirrors the contract pinned by
+/// route to `earmarkedIncome` (positive) and `earmarkedExpense`
+/// (negative, sign-flipped on the way in). The CloudKit reference
+/// (`applyTransferLeg`) splits by sign at the leg level, so the SQL
+/// splits the SUM by sign — collapsing both directions would mis-count
+/// any day with both a deposit and a withdrawal. Pinned by
 /// `AnalysisIncomeExpenseTests.investmentTransferClassification`.
 extension GRDBAnalysisRepository {
   /// One row of the SQL aggregation that drives `fetchIncomeAndExpense`.
@@ -99,52 +97,6 @@ extension GRDBAnalysisRepository {
     let earmarkedExpense: InstrumentAmount
     let investmentTransferIn: InstrumentAmount
     let investmentTransferOut: InstrumentAmount
-  }
-
-  /// Runs the per-(day, instrument) conditional-sum aggregation
-  /// pinned by
-  /// `AnalysisAggregationPlanPinningTests.fetchIncomeAndExpenseUsesTypeAccountIndex`.
-  ///
-  /// **LEFT JOIN account.** The investment-account routing reads
-  /// `account.type` only for legs whose `account_id` is NOT NULL —
-  /// `a.type` is NULL for nil-`account_id` legs, and the
-  /// `income_qty` / `expense_qty` CASE branches require
-  /// `a.type IS NOT NULL` to mirror the CloudKit `applyByType`
-  /// `hasAccount` guard.
-  ///
-  /// **Why six aggregates in one query.** A single pass over the leg
-  /// index keeps all six sums consistent with the same MVCC snapshot
-  /// — running six independent queries against a concurrently
-  /// mutating writer could surface internally inconsistent totals.
-  static func fetchIncomeAndExpenseAggregation(
-    database: any DatabaseReader,
-    after: Date?
-  ) async throws -> IncomeAndExpenseAggregation {
-    try await database.read { database -> IncomeAndExpenseAggregation in
-      let arguments: StatementArguments = ["after": after]
-      let sqlRows = try Row.fetchAll(
-        database, sql: incomeAndExpenseAggregationSQL, arguments: arguments)
-      let rows = sqlRows.compactMap(Self.mapAggregationRow(_:))
-      let instrumentMap = try InstrumentRow.fetchInstrumentMap(database: database)
-      return IncomeAndExpenseAggregation(rows: rows, instrumentMap: instrumentMap)
-    }
-  }
-
-  /// Decode one `EXPLAIN`-pinned aggregation row, returning `nil` for
-  /// malformed rows (e.g. NULL `day` / `instrument_id`) so the loop
-  /// skips them without breaking the rest of the snapshot.
-  private static func mapAggregationRow(_ row: Row) -> IncomeAndExpenseRow? {
-    guard let day: String = row["day"] else { return nil }
-    guard let instrumentId: String = row["instrument_id"] else { return nil }
-    return IncomeAndExpenseRow(
-      day: day,
-      instrumentId: instrumentId,
-      incomeQty: row["income_qty"] ?? 0,
-      expenseQty: row["expense_qty"] ?? 0,
-      earmarkedIncomeQty: row["earmarked_income_qty"] ?? 0,
-      earmarkedExpenseQty: row["earmarked_expense_qty"] ?? 0,
-      investmentTransferInQty: row["investment_transfer_in_qty"] ?? 0,
-      investmentTransferOutQty: row["investment_transfer_out_qty"] ?? 0)
   }
 
   /// Walks the SQL aggregation rows, converts each row's six sums to
@@ -227,9 +179,11 @@ extension GRDBAnalysisRepository {
   }
 
   /// Converts each of the six per-row sums to the profile instrument
-  /// on the row's `day`. Same-instrument sums short-circuit through
-  /// `convertedQuantity`, so a row whose `instrumentId` already
-  /// matches the profile incurs zero conversion-service calls.
+  /// on the row's `day`. Same-instrument rows incur zero
+  /// conversion-service calls: zero-value columns short-circuit in
+  /// `convertedQuantityIfNonZero` before reaching the conversion
+  /// service, and non-zero same-instrument sums short-circuit in
+  /// `convertedQuantity` at the `instrument.id == target.id` guard.
   private static func convertRowSums(
     row: IncomeAndExpenseRow,
     day: Date,
@@ -358,43 +312,3 @@ extension GRDBAnalysisRepository {
     return results.sorted { $0.month > $1.month }
   }
 }
-
-/// File-private SQL string for the per-(day, instrument) aggregation.
-/// Hoisted to file scope so the read closure body stays under
-/// SwiftLint's `closure_body_length` budget; the literal text is
-/// pinned by `AnalysisAggregationPlanPinningTests` so any drift here
-/// trips the plan-pinning suite.
-private let incomeAndExpenseAggregationSQL = """
-  SELECT
-      DATE(t.date)         AS day,
-      leg.instrument_id    AS instrument_id,
-      SUM(CASE WHEN leg.type = 'income'
-                AND a.type IS NOT NULL
-                AND a.type <> 'investment'
-               THEN leg.quantity ELSE 0 END)        AS income_qty,
-      SUM(CASE WHEN leg.type = 'expense'
-                AND a.type IS NOT NULL
-                AND a.type <> 'investment'
-               THEN leg.quantity ELSE 0 END)        AS expense_qty,
-      SUM(CASE WHEN leg.earmark_id IS NOT NULL
-                AND leg.type = 'income'
-               THEN leg.quantity ELSE 0 END)        AS earmarked_income_qty,
-      SUM(CASE WHEN leg.earmark_id IS NOT NULL
-                AND leg.type = 'expense'
-               THEN leg.quantity ELSE 0 END)        AS earmarked_expense_qty,
-      SUM(CASE WHEN leg.type = 'transfer'
-                AND a.type = 'investment'
-                AND leg.quantity > 0
-               THEN leg.quantity ELSE 0 END)        AS investment_transfer_in_qty,
-      SUM(CASE WHEN leg.type = 'transfer'
-                AND a.type = 'investment'
-                AND leg.quantity < 0
-               THEN leg.quantity ELSE 0 END)        AS investment_transfer_out_qty
-  FROM transaction_leg leg
-  JOIN "transaction"    t ON leg.transaction_id = t.id
-  LEFT JOIN account     a ON leg.account_id = a.id
-  WHERE t.recur_period IS NULL
-    AND (:after IS NULL OR t.date >= :after)
-  GROUP BY day, leg.instrument_id
-  ORDER BY day ASC
-  """
