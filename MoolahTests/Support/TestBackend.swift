@@ -149,46 +149,63 @@ enum TestBackend {
     in database: any DatabaseWriter
   ) -> [Transaction] {
     writeOrTrap(database) { database in
-      var seenInstruments: Set<String> = []
-      var seenAccounts: Set<UUID> = []
-      var seenCategories: Set<UUID> = []
-      var seenEarmarks: Set<UUID> = []
+      var seen = TransactionSeedState()
       for txn in transactions {
         try TransactionRow(domain: txn).insert(database)
         for (index, leg) in txn.legs.enumerated() {
-          // Ensure non-fiat instruments have InstrumentRow entries
-          if leg.instrument.kind != .fiatCurrency,
-            !seenInstruments.contains(leg.instrument.id)
-          {
-            seenInstruments.insert(leg.instrument.id)
-            try InstrumentRow(domain: leg.instrument).insert(database)
-          }
-          // Auto-create FK parents on demand. SwiftData-era tests rarely
-          // pre-seeded accounts/categories/earmarks before the legs that
-          // referenced them; under the GRDB schema's enforced FKs we have
-          // to materialise lightweight placeholder rows so the leg insert
-          // doesn't trip the constraint. Tests that care about the parent
-          // shape seed it explicitly, which the `try?` upsert respects.
-          if let accountId = leg.accountId, !seenAccounts.contains(accountId) {
-            seenAccounts.insert(accountId)
-            try ensurePlaceholderAccount(
-              database: database, id: accountId, instrument: leg.instrument)
-          }
-          if let categoryId = leg.categoryId, !seenCategories.contains(categoryId) {
-            seenCategories.insert(categoryId)
-            try ensurePlaceholderCategory(database: database, id: categoryId)
-          }
-          if let earmarkId = leg.earmarkId, !seenEarmarks.contains(earmarkId) {
-            seenEarmarks.insert(earmarkId)
-            try ensurePlaceholderEarmark(
-              database: database, id: earmarkId, instrument: leg.instrument)
-          }
+          try ensureLegParents(database: database, leg: leg, seen: &seen)
           try TransactionLegRow(domain: leg, transactionId: txn.id, sortOrder: index)
             .insert(database)
         }
       }
     }
     return transactions
+  }
+
+  /// Tracks which placeholder rows have already been materialised inside
+  /// a single `seed(transactions:)` call so the per-leg helper doesn't
+  /// re-issue an `INSERT` for the same parent.
+  private struct TransactionSeedState {
+    var instruments: Set<String> = []
+    var accounts: Set<UUID> = []
+    var categories: Set<UUID> = []
+    var earmarks: Set<UUID> = []
+  }
+
+  /// Materialises the FK parents (`instrument`, `account`, `category`,
+  /// `earmark`) referenced by a single leg, if any of them are missing.
+  ///
+  /// Auto-create FK parents on demand. SwiftData-era tests rarely
+  /// pre-seeded accounts/categories/earmarks before the legs that
+  /// referenced them; under the GRDB schema's enforced FKs we have to
+  /// materialise lightweight placeholder rows so the leg insert doesn't
+  /// trip the constraint. Tests that care about the parent shape seed
+  /// it explicitly, which the `ensurePlaceholder*` helpers respect.
+  private static func ensureLegParents(
+    database: Database,
+    leg: TransactionLeg,
+    seen: inout TransactionSeedState
+  ) throws {
+    if leg.instrument.kind != .fiatCurrency,
+      !seen.instruments.contains(leg.instrument.id)
+    {
+      seen.instruments.insert(leg.instrument.id)
+      try InstrumentRow(domain: leg.instrument).insert(database)
+    }
+    if let accountId = leg.accountId, !seen.accounts.contains(accountId) {
+      seen.accounts.insert(accountId)
+      try ensurePlaceholderAccount(
+        database: database, id: accountId, instrument: leg.instrument)
+    }
+    if let categoryId = leg.categoryId, !seen.categories.contains(categoryId) {
+      seen.categories.insert(categoryId)
+      try ensurePlaceholderCategory(database: database, id: categoryId)
+    }
+    if let earmarkId = leg.earmarkId, !seen.earmarks.contains(earmarkId) {
+      seen.earmarks.insert(earmarkId)
+      try ensurePlaceholderEarmark(
+        database: database, id: earmarkId, instrument: leg.instrument)
+    }
   }
 
   /// Inserts a stub `account` row keyed by `id` if one isn't already

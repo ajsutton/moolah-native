@@ -15,12 +15,18 @@ struct InstrumentRegistryContractTests {
     var deletedIds: [String] = []
   }
 
+  /// Bundle returned by `makeSubject()` — a struct rather than a tuple
+  /// so SwiftLint's `large_tuple` rule (max 2 members) stays clean and
+  /// call sites can address fields by name.
   @MainActor
-  func makeSubject() throws -> (
-    repo: GRDBInstrumentRegistryRepository,
-    hooks: HookCapture,
-    database: DatabaseQueue
-  ) {
+  struct Subject {
+    let repo: GRDBInstrumentRegistryRepository
+    let hooks: HookCapture
+    let database: DatabaseQueue
+  }
+
+  @MainActor
+  func makeSubject() throws -> Subject {
     let database = try ProfileDatabase.openInMemory()
     let hooks = HookCapture()
     let repo = GRDBInstrumentRegistryRepository(
@@ -28,12 +34,12 @@ struct InstrumentRegistryContractTests {
       onRecordChanged: { [hooks] id in Task { @MainActor in hooks.changedIds.append(id) } },
       onRecordDeleted: { [hooks] id in Task { @MainActor in hooks.deletedIds.append(id) } }
     )
-    return (repo, hooks, database)
+    return Subject(repo: repo, hooks: hooks, database: database)
   }
 
   @Test("all() on a fresh profile returns every ISO currency and zero non-fiat rows")
   func freshProfileIsFiatOnly() async throws {
-    let (repo, _, _) = try makeSubject()
+    let repo = try makeSubject().repo
     let all = try await repo.all()
     let fiats = all.filter { $0.kind == .fiatCurrency }
     let nonFiats = all.filter { $0.kind != .fiatCurrency }
@@ -45,7 +51,7 @@ struct InstrumentRegistryContractTests {
 
   @Test("registerStock makes the stock appear in all()")
   func registerStockAppears() async throws {
-    let (repo, _, _) = try makeSubject()
+    let repo = try makeSubject().repo
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
     try await repo.registerStock(bhp)
     let all = try await repo.all()
@@ -54,7 +60,7 @@ struct InstrumentRegistryContractTests {
 
   @Test("registerCrypto round-trips all eight crypto fields + three mapping fields")
   func registerCryptoRoundTrip() async throws {
-    let (repo, _, _) = try makeSubject()
+    let repo = try makeSubject().repo
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH",
       name: "Ethereum", decimals: 18)
@@ -79,7 +85,7 @@ struct InstrumentRegistryContractTests {
 
   @Test("registerCrypto with existing id upserts the mapping")
   func registerCryptoUpserts() async throws {
-    let (repo, _, _) = try makeSubject()
+    let repo = try makeSubject().repo
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH",
       name: "Ethereum", decimals: 18)
@@ -100,7 +106,9 @@ struct InstrumentRegistryContractTests {
 
   @Test("allCryptoRegistrations skips rows whose three mapping fields are all nil")
   func allCryptoSkipsMissingMapping() async throws {
-    let (repo, _, database) = try makeSubject()
+    let subject = try makeSubject()
+    let repo = subject.repo
+    let database = subject.database
     // Simulate an auto-inserted row: crypto kind, but no mapping fields.
     let ghost = InstrumentRow(
       id: "1:native",
@@ -129,7 +137,7 @@ struct InstrumentRegistryContractTests {
 
   @Test("remove deletes the row and is a no-op for fiat + unknown ids")
   func removeBehaviour() async throws {
-    let (repo, _, _) = try makeSubject()
+    let repo = try makeSubject().repo
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
     try await repo.registerStock(bhp)
 
@@ -144,7 +152,9 @@ struct InstrumentRegistryContractTests {
 
   @Test("sync-queue hook fires on registerStock / registerCrypto / remove")
   func syncHooksFire() async throws {
-    let (repo, hooks, _) = try makeSubject()
+    let subject = try makeSubject()
+    let repo = subject.repo
+    let hooks = subject.hooks
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
     try await repo.registerStock(bhp)
     let eth = Instrument.crypto(
@@ -168,7 +178,9 @@ struct InstrumentRegistryContractTests {
 
   @Test("sync-queue hook does not fire for fiat register or unknown remove")
   func syncHooksSkipNoops() async throws {
-    let (repo, hooks, _) = try makeSubject()
+    let subject = try makeSubject()
+    let repo = subject.repo
+    let hooks = subject.hooks
     // Fiat register is rejected by the type-level split — there is no
     // registerFiat. But unknown remove is a runtime no-op.
     try await repo.remove(id: "DOES_NOT_EXIST:FOO")
@@ -182,7 +194,7 @@ struct InstrumentRegistryContractTests {
 
   @Test("observeChanges fans out to multiple consumers")
   func observeChangesFanOut() async throws {
-    let (repo, _, _) = try makeSubject()
+    let repo = try makeSubject().repo
     let streamA = repo.observeChanges()
     let streamB = repo.observeChanges()
     var iteratorA = streamA.makeAsyncIterator()
@@ -198,7 +210,7 @@ struct InstrumentRegistryContractTests {
 
   @Test("cancelled observeChanges consumer does not block sibling consumers")
   func observeChangesCancellation() async throws {
-    let (repo, _, _) = try makeSubject()
+    let repo = try makeSubject().repo
     let alive = repo.observeChanges()
     var aliveIterator = alive.makeAsyncIterator()
 
