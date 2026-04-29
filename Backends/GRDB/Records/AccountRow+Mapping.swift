@@ -29,17 +29,19 @@ extension AccountRow {
   /// table (`[String: Instrument]`); falls back to ambient fiat for
   /// unknown ids — mirrors `AccountRecord.toDomain`. `positions` are
   /// computed by the analysis layer and passed through here.
+  ///
+  /// Throws `BackendError.dataCorrupted` when `type` carries a raw value
+  /// the compiled `AccountType` enum doesn't recognise — see
+  /// `AccountType.decoded(rawValue:)`.
   func toDomain(
     instruments: [String: Instrument] = [:],
     positions: [Position] = []
-  ) -> Account {
+  ) throws -> Account {
     let instrument = instruments[instrumentId] ?? Instrument.fiat(code: instrumentId)
     return Account(
       id: id,
       name: name,
-      // TODO(#578): handle unknown raw values explicitly instead of
-      // silently falling back — https://github.com/ajsutton/moolah-native/issues/578
-      type: AccountType(rawValue: type) ?? .bank,
+      type: try AccountType.decoded(rawValue: type),
       instrument: instrument,
       positions: positions,
       position: position,

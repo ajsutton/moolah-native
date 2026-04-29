@@ -63,7 +63,7 @@ extension GRDBEarmarkRepository {
 
       positionTotals[earmarkId, default: [:]][instrument, default: 0] += amount.quantity
 
-      let legType = TransactionType(rawValue: typeRaw) ?? .expense
+      let legType = try TransactionType.decoded(rawValue: typeRaw)
       switch legType {
       case .income, .openingBalance, .trade:
         savedTotals[earmarkId, default: [:]][instrument, default: 0] += amount.quantity

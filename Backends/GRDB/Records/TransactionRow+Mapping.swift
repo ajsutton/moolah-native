@@ -68,13 +68,18 @@ extension TransactionRow {
 
   /// Domain projection. Legs come from the repository's join on
   /// `transaction_leg` and are passed through here.
-  func toDomain(legs: [TransactionLeg]) -> Transaction {
+  ///
+  /// Throws `BackendError.dataCorrupted` when `recurPeriod` is non-null
+  /// but carries a raw value the compiled `RecurPeriod` enum doesn't
+  /// recognise. A truly null `recurPeriod` column maps to nil — only
+  /// the unrecognised-but-present case is corruption.
+  func toDomain(legs: [TransactionLeg]) throws -> Transaction {
     Transaction(
       id: id,
       date: date,
       payee: payee,
       notes: notes,
-      recurPeriod: recurPeriod.flatMap { RecurPeriod(rawValue: $0) },
+      recurPeriod: try recurPeriod.map { try RecurPeriod.decoded(rawValue: $0) },
       recurEvery: recurEvery,
       legs: legs,
       importOrigin: importOrigin)

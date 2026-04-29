@@ -58,8 +58,8 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
         .fetchAll(database)
       let positionsByAccount = try Self.computePositions(
         database: database, instruments: instruments)
-      return rows.map { row in
-        row.toDomain(
+      return try rows.map { row in
+        try row.toDomain(
           instruments: instruments,
           positions: positionsByAccount[row.id] ?? [])
       }
@@ -199,7 +199,7 @@ final class GRDBAccountRepository: AccountRepository, @unchecked Sendable {
       let instruments = try Self.fetchInstrumentMap(database: database)
       let positions = try Self.computePositions(
         database: database, instruments: instruments, accountId: account.id)
-      return existing.toDomain(instruments: instruments, positions: positions)
+      return try existing.toDomain(instruments: instruments, positions: positions)
     }
     onRecordChanged(AccountRow.recordType, account.id)
     return resolved

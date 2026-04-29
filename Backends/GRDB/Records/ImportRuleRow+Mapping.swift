@@ -37,11 +37,15 @@ extension ImportRuleRow {
     self.actionsJSON = Self.encodeActions(rule.actions, ruleId: rule.id)
   }
 
-  /// Decodes back to the domain shape. Decoding failures surface as the
-  /// "empty match / no-op" sentinel and a logged warning — same
-  /// behaviour as `ImportRuleRecord.toDomain()` so a corrupted blob
-  /// degrades gracefully rather than failing the fetch.
-  func toDomain() -> ImportRule {
+  /// Decodes back to the domain shape. JSON-blob decoding failures
+  /// surface as the "empty match / no-op" sentinel and a logged warning
+  /// — same behaviour as `ImportRuleRecord.toDomain()` so a corrupted
+  /// blob degrades gracefully rather than failing the fetch.
+  ///
+  /// Throws `BackendError.dataCorrupted` when `matchMode` carries a raw
+  /// value the compiled `MatchMode` enum doesn't recognise — that's a
+  /// strict invariant violation rather than recoverable corruption.
+  func toDomain() throws -> ImportRule {
     let conditions = Self.decodeConditions(conditionsJSON, ruleId: id)
     let actions = Self.decodeActions(actionsJSON, ruleId: id)
     return ImportRule(
@@ -49,7 +53,7 @@ extension ImportRuleRow {
       name: name,
       enabled: enabled,
       position: position,
-      matchMode: MatchMode(rawValue: matchMode) ?? .all,
+      matchMode: try MatchMode.decoded(rawValue: matchMode),
       conditions: conditions,
       actions: actions,
       accountScope: accountScope)

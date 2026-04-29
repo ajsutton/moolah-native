@@ -41,7 +41,7 @@ final class GRDBImportRuleRepository: ImportRuleRepository, @unchecked Sendable 
       try ImportRuleRow
         .order(ImportRuleRow.Columns.position.asc)
         .fetchAll(database)
-        .map { $0.toDomain() }
+        .map { try $0.toDomain() }
     }
   }
 
@@ -51,7 +51,7 @@ final class GRDBImportRuleRepository: ImportRuleRepository, @unchecked Sendable 
       try row.insert(database)
     }
     onRecordChanged(ImportRuleRow.recordType, rule.id)
-    return row.toDomain()
+    return try row.toDomain()
   }
 
   func update(_ rule: ImportRule) async throws -> ImportRule {
@@ -76,7 +76,7 @@ final class GRDBImportRuleRepository: ImportRuleRepository, @unchecked Sendable 
       return existing
     }
     onRecordChanged(ImportRuleRow.recordType, rule.id)
-    return updated.toDomain()
+    return try updated.toDomain()
   }
 
   func delete(id: UUID) async throws {

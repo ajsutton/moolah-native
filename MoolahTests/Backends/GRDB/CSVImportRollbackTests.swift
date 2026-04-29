@@ -171,7 +171,7 @@ struct CSVImportRollbackTests {
     // inconsistent).
     var renamed = secondRow
     renamed.name = "second"
-    let renamedRule = renamed.toDomain()
+    let renamedRule = try renamed.toDomain()
     _ = try await repo.update(renamedRule)
     try await repo.reorder([secondId, firstId])
     let reordered = try await database.read { database in

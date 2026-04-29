@@ -68,8 +68,8 @@ extension GRDBTransactionRepository {
       database: database,
       transactionIds: pageRows.map(\.id),
       instruments: instruments)
-    let pageTransactions = pageRows.map { row in
-      row.toDomain(legs: pageLegs[row.id] ?? [])
+    let pageTransactions = try pageRows.map { row in
+      try row.toDomain(legs: pageLegs[row.id] ?? [])
     }
 
     let afterPageSubtotals: [SubtotalEntry]
@@ -207,7 +207,7 @@ extension GRDBTransactionRepository {
         instruments[legRow.instrumentId]
         ?? Instrument.fiat(code: legRow.instrumentId)
       grouped[legRow.transactionId, default: []].append(
-        legRow.toDomain(instrument: instrument))
+        try legRow.toDomain(instrument: instrument))
     }
     return grouped
   }

@@ -59,7 +59,7 @@ final class GRDBInstrumentRegistryRepository:
 
   func all() async throws -> [Instrument] {
     let stored = try await database.read { database in
-      try InstrumentRow.fetchAll(database).map { $0.toDomain() }
+      try InstrumentRow.fetchAll(database).map { try $0.toDomain() }
     }
     let storedIds = Set(stored.map(\.id))
     let ambient =
@@ -77,9 +77,9 @@ final class GRDBInstrumentRegistryRepository:
         try InstrumentRow
         .filter(InstrumentRow.Columns.kind == cryptoKind)
         .fetchAll(database)
-      return rows.compactMap { row -> CryptoRegistration? in
+      return try rows.compactMap { row -> CryptoRegistration? in
         guard let mapping = row.cryptoMapping() else { return nil }
-        return CryptoRegistration(instrument: row.toDomain(), mapping: mapping)
+        return CryptoRegistration(instrument: try row.toDomain(), mapping: mapping)
       }
     }
   }

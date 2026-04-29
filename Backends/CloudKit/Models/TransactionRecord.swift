@@ -89,13 +89,16 @@ final class TransactionRecord {
     }
   }
 
-  func toDomain(legs: [TransactionLeg]) -> Transaction {
+  /// Throws `BackendError.dataCorrupted` when `recurPeriod` is non-null
+  /// but carries a raw value the compiled `RecurPeriod` enum doesn't
+  /// recognise. A truly null column maps to nil.
+  func toDomain(legs: [TransactionLeg]) throws -> Transaction {
     Transaction(
       id: id,
       date: date,
       payee: payee,
       notes: notes,
-      recurPeriod: recurPeriod.flatMap { RecurPeriod(rawValue: $0) },
+      recurPeriod: try recurPeriod.map { try RecurPeriod.decoded(rawValue: $0) },
       recurEvery: recurEvery,
       legs: legs,
       importOrigin: importOrigin

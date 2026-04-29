@@ -63,7 +63,11 @@ final class ImportRuleRecord {
     }
   }
 
-  func toDomain() -> ImportRule {
+  /// Throws `BackendError.dataCorrupted` when `matchMode` carries a raw
+  /// value the compiled `MatchMode` enum doesn't recognise. JSON-blob
+  /// decoding failures still degrade gracefully (logged warning, empty
+  /// list) — those are recoverable.
+  func toDomain() throws -> ImportRule {
     let conditions: [RuleCondition]
     do {
       conditions = try JSONDecoder().decode([RuleCondition].self, from: conditionsJSON)
@@ -93,7 +97,7 @@ final class ImportRuleRecord {
       name: name,
       enabled: enabled,
       position: position,
-      matchMode: MatchMode(rawValue: matchMode) ?? .all,
+      matchMode: try MatchMode.decoded(rawValue: matchMode),
       conditions: conditions,
       actions: actions,
       accountScope: accountScope)
