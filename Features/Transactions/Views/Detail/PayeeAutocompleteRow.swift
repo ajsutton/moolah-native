@@ -38,13 +38,9 @@ struct PayeeAutocompleteRow: View {
   }
 
   private func handleTextChange(_ newValue: String) {
-    if state.justSelected {
-      state.justSelected = false
-    } else {
-      state.showSuggestions = !newValue.isEmpty
-      suggestionSource.fetch(
-        prefix: newValue, excludingTransactionId: editingTransactionId)
-    }
+    guard state.registerTextEdit(to: newValue) else { return }
+    suggestionSource.fetch(
+      prefix: newValue, excludingTransactionId: editingTransactionId)
   }
 
   private func acceptHighlighted() {
