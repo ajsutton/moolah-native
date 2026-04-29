@@ -49,8 +49,9 @@ extension ExchangeRateService {
   }
 
   /// Persists `caches[base]` to SQLite. Replaces the prior rows for this
-  /// base in a single transaction (delete-and-rewrite) and upserts the meta
-  /// row alongside, so the meta is never out of sync with the rates.
+  /// base in a single transaction (delete-and-rewrite) and writes the meta
+  /// row via `INSERT OR REPLACE` alongside, so the meta is never out of
+  /// sync with the rates.
   ///
   /// Multi-statement; covered by a rollback test in
   /// `ExchangeRateServicePersistenceTests.swift`.
@@ -83,7 +84,7 @@ extension ExchangeRateService {
         .filter(ExchangeRateRecord.Columns.base == base)
         .deleteAll(database)
       for record in records { try record.insert(database) }
-      try meta.upsert(database)
+      try meta.insert(database)
     }
   }
 }

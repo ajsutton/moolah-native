@@ -47,8 +47,9 @@ extension CryptoPriceService {
   }
 
   /// Persists `caches[tokenId]` to SQLite. Replaces prior rows for this
-  /// token in a single transaction and upserts the meta row alongside so
-  /// the symbol is never out of sync with the prices.
+  /// token in a single transaction and writes the meta row via
+  /// `INSERT OR REPLACE` alongside so the symbol is never out of sync
+  /// with the prices.
   ///
   /// Multi-statement; covered by a rollback test in
   /// `CryptoPriceServiceTests.swift`.
@@ -79,7 +80,7 @@ extension CryptoPriceService {
         .filter(CryptoPriceRecord.Columns.tokenId == tokenId)
         .deleteAll(database)
       for record in records { try record.insert(database) }
-      try meta.upsert(database)
+      try meta.insert(database)
     }
   }
 }

@@ -271,8 +271,9 @@ actor StockPriceService {
   }
 
   /// Persists `caches[ticker]` to SQLite. Replaces prior rows for this
-  /// ticker in a single transaction and upserts the meta row alongside so
-  /// the price denomination is never out of sync with the prices.
+  /// ticker in a single transaction and writes the meta row via
+  /// `INSERT OR REPLACE` alongside so the price denomination is never out
+  /// of sync with the prices.
   ///
   /// Multi-statement; covered by a rollback test in
   /// `StockPriceServiceTests.swift`.
@@ -306,7 +307,7 @@ actor StockPriceService {
         .filter(StockPriceRecord.Columns.ticker == ticker)
         .deleteAll(database)
       for record in records { try record.insert(database) }
-      try meta.upsert(database)
+      try meta.insert(database)
     }
   }
 }

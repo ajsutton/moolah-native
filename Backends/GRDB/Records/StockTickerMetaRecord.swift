@@ -12,6 +12,14 @@ import GRDB
 struct StockTickerMetaRecord {
   static let databaseTableName = "stock_ticker_meta"
 
+  // `INSERT OR REPLACE` instead of GRDB's default `INSERT ... ON CONFLICT
+  // DO UPDATE`. The latter hard-codes `RETURNING "rowid"` (see
+  // GRDB 7's `MutablePersistableRecord+Upsert.swift`) which breaks
+  // against this table's `WITHOUT ROWID` shape. No FK references this
+  // table and no triggers fire on delete, so the delete-then-insert
+  // semantics of `.replace` are observably equivalent here.
+  static let persistenceConflictPolicy = PersistenceConflictPolicy(insert: .replace)
+
   enum Columns: String, ColumnExpression, CaseIterable {
     case ticker
     case instrumentId = "instrument_id"

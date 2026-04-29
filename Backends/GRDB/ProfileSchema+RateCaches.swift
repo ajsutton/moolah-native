@@ -5,12 +5,14 @@ import GRDB
 
 // MARK: - v1 migration body
 //
-// TODO(#582): the three `*_meta` tables use a single TEXT primary key
-// and would benefit from `WITHOUT ROWID` per
-// `guides/DATABASE_SCHEMA_GUIDE.md` §3, but GRDB's `PersistableRecord`
-// upsert path emits `RETURNING "rowid"` which fails against
-// rowid-less tables. Resolve once the records can opt out.
-// https://github.com/ajsutton/moolah-native/issues/582
+// The three `*_meta` tables ship here as ROWID tables — the shape
+// originally chosen because GRDB 7's `PersistableRecord.upsert(_:)`
+// hard-codes `RETURNING "rowid"` and trips on `WITHOUT ROWID` tables.
+// `v4_rate_cache_without_rowid` rebuilds them as `WITHOUT ROWID`
+// (single-TEXT-PK lookup tables per
+// `guides/DATABASE_SCHEMA_GUIDE.md` §3) once the writers switched
+// away from `upsert` to `insert(onConflict: .replace)`. Editing this
+// body in place would violate §6 (frozen migrations).
 
 extension ProfileSchema {
   static func createInitialTables(_ database: Database) throws {
