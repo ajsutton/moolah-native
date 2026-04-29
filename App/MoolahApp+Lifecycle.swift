@@ -20,12 +20,13 @@ extension MoolahApp {
   }
 
   /// Per `guides/DATABASE_SCHEMA_GUIDE.md` §5, the recommended cadence for
-  /// `PRAGMA optimize` is "once on app resign-active". Asks each open
-  /// session to schedule its own tracked optimize task — the session
-  /// stores the handle and cancels it on teardown, so this loop never
-  /// leaks fire-and-forget Tasks. The hourly-while-active tick is a
-  /// follow-up — current rate-cache schemas are small enough that
-  /// once-per-resign suffices.
+  /// `PRAGMA optimize` is "once on app resign-active and at most once per
+  /// hour while active". This handler covers the resign-active half by
+  /// asking each open session to schedule its own tracked optimize task —
+  /// the session stores the handle and cancels it on teardown, so this
+  /// loop never leaks fire-and-forget Tasks. The hourly-while-active half
+  /// is owned by `ProfileSession.startPeriodicPragmaOptimize(interval:)`,
+  /// which is started from the session initialiser.
   func runPragmaOptimizeOnAllSessions() {
     for session in sessionManager.openProfiles {
       session.schedulePragmaOptimize()

@@ -15,9 +15,11 @@ final class ProfileSession: Identifiable {
   /// session deinits; on profile delete the parent `profiles/<id>/`
   /// directory is removed by `ProfileContainerManager.deleteStore`.
   ///
-  /// Private: external consumers go through repositories and the rate
-  /// services rather than poking the queue directly.
-  private let database: DatabaseQueue
+  /// Module-internal so `ProfileSession+DatabaseMaintenance.swift` can
+  /// invoke `database.write` for `PRAGMA optimize`. External consumers
+  /// must still go through repositories and the rate services rather than
+  /// poking the queue directly.
+  let database: DatabaseQueue
   let backend: BackendProvider
   let authStore: AuthStore
   let accountStore: AccountStore
@@ -64,8 +66,24 @@ final class ProfileSession: Identifiable {
   /// Tracked so we can cancel any pending optimize on session teardown
   /// (per `guides/CONCURRENCY_GUIDE.md` §8 — fire-and-forget tasks must
   /// be tracked). Replaced (with cancellation of the prior handle) on
-  /// each call to `schedulePragmaOptimize()`.
-  private var pragmaOptimizeTask: Task<Void, Never>?
+  /// each call to `schedulePragmaOptimize()`. Module-internal so
+  /// `ProfileSession+DatabaseMaintenance.swift` can manage the handle.
+  var pragmaOptimizeTask: Task<Void, Never>?
+  /// Long-lived task that fires `runPragmaOptimize` at most once per
+  /// configured interval while the session is active. Cancelled in
+  /// `cleanupSync(coordinator:)` so it cannot outlive the session.
+  /// Replaced (with cancellation of the prior handle) on each call to
+  /// `startPeriodicPragmaOptimize(interval:)` so a new cadence supersedes
+  /// the previous one rather than running alongside it. Module-internal
+  /// for the same reason as `pragmaOptimizeTask`.
+  var periodicPragmaOptimizeTask: Task<Void, Never>?
+  /// Number of times `runPragmaOptimize` has completed for this session.
+  /// Incremented after each invocation regardless of success — failures
+  /// are still attempts, and the counter is consumed by tests that pin
+  /// the hourly-while-active cadence (see issue #576). Module-internal
+  /// because `runPragmaOptimize` lives in
+  /// `ProfileSession+DatabaseMaintenance.swift`; mutated only there.
+  var pragmaOptimizeRunCount: Int = 0
   /// Tasks spawned by the investment-store → account-store bridge, kept
   /// reachable so `cleanupSync` can cancel in-flight balance updates
   /// (per `guides/CONCURRENCY_GUIDE.md` §8).
@@ -140,8 +158,17 @@ final class ProfileSession: Identifiable {
     self.folderScanner = importPipeline.scanner
     self.folderWatcher = importPipeline.watcher
 
+    finishInit(syncCoordinator: syncCoordinator)
+  }
+
+  /// Tail of the initialiser — kept as a separate method so `init`
+  /// stays under SwiftLint's `function_body_length` threshold. Wires
+  /// cross-store side effects, registers with the sync coordinator,
+  /// and starts the hourly `PRAGMA optimize` tick (issue #576).
+  private func finishInit(syncCoordinator: SyncCoordinator?) {
     wireCrossStoreSideEffects()
     registerWithSyncCoordinator(syncCoordinator)
+    startPeriodicPragmaOptimize()
   }
 
   /// Wires the investment-store -> account-store callback. The spawned
@@ -238,6 +265,8 @@ final class ProfileSession: Identifiable {
     catalogRefreshTask = nil
     pragmaOptimizeTask?.cancel()
     pragmaOptimizeTask = nil
+    periodicPragmaOptimizeTask?.cancel()
+    periodicPragmaOptimizeTask = nil
     for task in crossStoreUpdateTasks {
       task.cancel()
     }
@@ -263,47 +292,6 @@ final class ProfileSession: Identifiable {
   /// watch isn't available.
   func scanWatchedFolder() async {
     await folderScanner.scanForNewFiles()
-  }
-
-  // MARK: - Database maintenance
-
-  /// Runs `PRAGMA optimize` on the per-profile DB. Best-effort: failures
-  /// are logged but never propagated. Per
-  /// `guides/DATABASE_SCHEMA_GUIDE.md` §5, the recommended cadence is once
-  /// on app resign-active and at most hourly while active. The on-resign
-  /// hook is wired by `MoolahApp+Lifecycle.handleScenePhaseChange`.
-  ///
-  /// TODO(#576): add the hourly-while-active tick —
-  /// https://github.com/ajsutton/moolah-native/issues/576
-  ///
-  /// Runs inside `database.write` because `PRAGMA optimize` may invoke
-  /// `ANALYZE` and update the `sqlite_stat1` / `sqlite_stat4` tables — a
-  /// read-only transaction would either silently no-op the analyze step
-  /// or surface a write-from-read error.
-  func runPragmaOptimize() async {
-    let database = self.database
-    do {
-      try await database.write { database in
-        try database.execute(sql: "PRAGMA optimize")
-      }
-    } catch {
-      logger.warning(
-        "PRAGMA optimize failed for profile \(self.profile.id): \(error.localizedDescription, privacy: .public)"
-      )
-    }
-  }
-
-  /// Schedules a best-effort `PRAGMA optimize` on a tracked background
-  /// task. Cancels any prior pending optimize before scheduling so we
-  /// never run two concurrently for the same session, and leaves the
-  /// handle in `pragmaOptimizeTask` so `cleanupSync` can cancel it on
-  /// teardown (per `guides/CONCURRENCY_GUIDE.md` §8 — fire-and-forget
-  /// tasks must be tracked).
-  func schedulePragmaOptimize() {
-    pragmaOptimizeTask?.cancel()
-    pragmaOptimizeTask = Task { [weak self] in
-      await self?.runPragmaOptimize()
-    }
   }
 
   /// Per-profile directory under Application Support where CSV import staging
