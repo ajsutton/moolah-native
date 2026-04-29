@@ -96,10 +96,9 @@ extension GRDBAnalysisRepository {
   /// `IN (:categoryIds)` raw bind would fail at runtime for any
   /// `categoryIds.count != 1`. GRDB's `SQL` literal interpolation
   /// renders `\(set)` as a parameterised list — the project-approved
-  /// escape hatch documented on
-  /// `GRDBAnalysisRepository+Conversion.swift`. The composer falls
-  /// through to a no-op clause when the set is empty so the planner
-  /// doesn't see a degenerate `IN ()`.
+  /// escape hatch documented in `DATABASE_CODE_GUIDE.md` §4. The
+  /// composer falls through to a no-op clause when the set is empty
+  /// so the planner doesn't see a degenerate `IN ()`.
   static func fetchCategoryBalancesAggregation(
     database: any DatabaseReader,
     args: CategoryBalancesFilterArgs

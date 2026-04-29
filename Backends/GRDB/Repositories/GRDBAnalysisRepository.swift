@@ -29,7 +29,8 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   //
   // `+ExpenseBreakdown.swift` — `fetchExpenseBreakdownAggregation`,
   // `assembleExpenseBreakdown`, `ExpenseBreakdownRow`,
-  // `ExpenseBreakdownAggregation`. Also free of stored-state coupling.
+  // `ExpenseBreakdownAggregation`, `ExpenseBreakdownHandlers`. Also
+  // free of stored-state coupling.
   //
   // `+CategoryBalances.swift` — `fetchCategoryBalancesAggregation`,
   // `assembleCategoryBalances`, `CategoryBalancesRow`,

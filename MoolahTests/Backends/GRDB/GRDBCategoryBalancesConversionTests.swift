@@ -12,7 +12,7 @@ import Testing
 /// conversion the SwiftData implementation performed. These tests pin
 /// the per-day calendar boundary fed into the
 /// `InstrumentConversionService`, mirroring
-/// `GRDBExpenseBreakdownConversionTests` for the §3.4.4 method.
+/// `GRDBExpenseBreakdownConversionTests`.
 ///
 /// The investment-account exclusion, account-less leg inclusion, and
 /// the `categoryIds` filter are also pinned here — these are the
