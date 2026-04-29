@@ -200,6 +200,7 @@ extension TransactionDetailView {
     TransactionDetailCustomDetailsSection(
       draft: $draft,
       suggestionSource: transactionStore.payeeSuggestionSource,
+      editingTransactionId: transaction.id,
       payeeState: $payeeState,
       onAutofill: autofillFromPayee,
       focusedField: $focusedField
@@ -255,6 +256,7 @@ extension TransactionDetailView {
       relevantInstrument: relevantInstrument,
       isCrossCurrency: isCrossCurrency,
       suggestionSource: transactionStore.payeeSuggestionSource,
+      editingTransactionId: transaction.id,
       payeeState: $payeeState,
       onAutofill: autofillFromPayee,
       focusedField: $focusedField
@@ -286,6 +288,7 @@ extension TransactionDetailView {
     TransactionDetailCustomDetailsSection(
       draft: $draft,
       suggestionSource: transactionStore.payeeSuggestionSource,
+      editingTransactionId: transaction.id,
       payeeState: $payeeState,
       onAutofill: autofillFromPayee,
       focusedField: $focusedField
