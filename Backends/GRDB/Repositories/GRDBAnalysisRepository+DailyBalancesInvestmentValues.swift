@@ -1,0 +1,188 @@
+import Foundation
+import GRDB
+
+/// Per-day investment-value fold-in for `fetchDailyBalances`. Walks
+/// the per-day balances in date order, tracks the latest recorded
+/// value per investment account, and overwrites each day's
+/// `DailyBalance` with the converted-to-profile-instrument total —
+/// driving the `investmentValue` and `netWorth` fields. Also owns the
+/// SQL fetches that produce the inputs to that fold-in
+/// (`fetchInvestmentAccountIds`, `fetchInvestmentValueSnapshots`).
+/// Split out of `+DailyBalances.swift` for the SwiftLint `file_length`
+/// budget.
+extension GRDBAnalysisRepository {
+
+  // MARK: - SQL fetches
+
+  /// Loads every account id whose `type = 'investment'`. The Swift
+  /// assembly walks per-day deltas and needs to know which accounts
+  /// are investments so it can route transfer legs into
+  /// `accountsFromTransfers`. Reading the column directly off the
+  /// `account` table avoids redundantly carrying the full account row
+  /// across the snapshot boundary.
+  static func fetchInvestmentAccountIds(database: Database) throws -> Set<UUID> {
+    let rows = try Row.fetchAll(
+      database,
+      sql: "SELECT id FROM account WHERE type = 'investment'")
+    var ids = Set<UUID>()
+    ids.reserveCapacity(rows.count)
+    for row in rows {
+      if let id: UUID = row["id"] {
+        ids.insert(id)
+      }
+    }
+    return ids
+  }
+
+  /// Loads the per-account latest-as-of-day investment values pinned
+  /// by
+  /// `DailyBalancesPlanPinningTests.fetchDailyBalancesInvestmentValuesUseAccountDateIndex`.
+  /// The composite `iv_by_account_date_value` covers
+  /// `(account_id, date, value, instrument_id)` so the SELECT list is
+  /// served by the index — SQLite emits `SCAN ... USING COVERING
+  /// INDEX`, which is the no-base-row read shape we want and is *not*
+  /// a full table scan.
+  ///
+  /// All historical snapshots are loaded — there is intentionally no
+  /// `:after` lower bound. The cursor walk in `applyInvestmentValues`
+  /// (`advanceInvestmentCursor`) carries the most-recent pre-window
+  /// snapshot forward into the first in-window day; filtering the
+  /// loader on `date >= :after` would silently drop that baseline
+  /// snapshot and zero out the in-window investment value.
+  ///
+  /// Filtered to investment accounts in Swift (the same shape as the
+  /// previous SwiftData-backed path) so the SQL stays index-friendly
+  /// — adding the account-type predicate to the WHERE would force an
+  /// `account` join and break the covering index.
+  ///
+  /// `instrumentMap` is consulted to resolve each row's stored
+  /// `instrument_id` to its registered `Instrument` so stock / crypto
+  /// investment values surface with the correct `kind`. Falls back to
+  /// `Instrument.fiat(code:)` when the registry has no entry for the
+  /// id — matching the same `resolveInstrument` pattern used by the
+  /// account / earmark delta decoders.
+  static func fetchInvestmentValueSnapshots(
+    database: Database,
+    investmentAccountIds: Set<UUID>,
+    instrumentMap: [String: Instrument]
+  ) throws -> [InvestmentValueSnapshot] {
+    guard !investmentAccountIds.isEmpty else { return [] }
+    let sql = """
+      SELECT account_id, date, value, instrument_id
+      FROM investment_value
+      ORDER BY account_id ASC, date ASC
+      """
+    let sqlRows = try Row.fetchAll(database, sql: sql)
+    var snapshots: [InvestmentValueSnapshot] = []
+    snapshots.reserveCapacity(sqlRows.count)
+    for row in sqlRows {
+      guard let accountId: UUID = row["account_id"] else { continue }
+      guard investmentAccountIds.contains(accountId) else { continue }
+      guard let date: Date = row["date"] else { continue }
+      guard let value: Int64 = row["value"] else { continue }
+      guard let instrumentId: String = row["instrument_id"] else { continue }
+      let instrument = instrumentMap[instrumentId] ?? Instrument.fiat(code: instrumentId)
+      let amount = InstrumentAmount(storageValue: value, instrument: instrument)
+      snapshots.append(
+        InvestmentValueSnapshot(
+          accountId: accountId, date: date, value: amount))
+    }
+    snapshots.sort { $0.date < $1.date }
+    return snapshots
+  }
+
+  // MARK: - Per-day fold-in
+  /// Fold the investment-value snapshots into the per-day balances by
+  /// walking the days in order and tracking the latest value per
+  /// account. Same per-day error contract as the historic walk: a
+  /// failed conversion logs and drops just that day's investment
+  /// override; the rest of the days continue.
+  static func applyInvestmentValues(
+    _ investmentValues: [InvestmentValueSnapshot],
+    to dailyBalances: inout [Date: DailyBalance],
+    context: DailyBalancesAssemblyContext,
+    handlers: DailyBalancesHandlers
+  ) async throws {
+    guard !investmentValues.isEmpty, !dailyBalances.isEmpty else { return }
+    var latestByAccount: [UUID: InstrumentAmount] = [:]
+    var valueIndex = 0
+    for date in dailyBalances.keys.sorted() {
+      valueIndex = advanceInvestmentCursor(
+        values: investmentValues,
+        latestByAccount: &latestByAccount,
+        from: valueIndex,
+        upTo: date)
+      if latestByAccount.isEmpty { continue }
+      let totalValue: InstrumentAmount?
+      do {
+        totalValue = try await sumInvestmentValues(
+          latestByAccount: latestByAccount,
+          on: date,
+          profileInstrument: context.profileInstrument,
+          conversionService: context.conversionService)
+      } catch let cancel as CancellationError {
+        throw cancel
+      } catch {
+        handlers.handleInvestmentValueFailure(error, date)
+        continue
+      }
+      guard let totalValue, let balance = dailyBalances[date] else { continue }
+      dailyBalances[date] = DailyBalance(
+        date: balance.date,
+        balance: balance.balance,
+        earmarked: balance.earmarked,
+        availableFunds: balance.availableFunds,
+        investments: balance.investments,
+        investmentValue: totalValue,
+        netWorth: balance.balance + totalValue,
+        bestFit: balance.bestFit,
+        isForecast: balance.isForecast)
+    }
+  }
+
+  /// Advance the sorted investment-values cursor, updating the
+  /// per-account latest map with every entry whose day is on-or-before
+  /// `date`.
+  private static func advanceInvestmentCursor(
+    values: [InvestmentValueSnapshot],
+    latestByAccount: inout [UUID: InstrumentAmount],
+    from startIndex: Int,
+    upTo date: Date
+  ) -> Int {
+    var valueIndex = startIndex
+    while valueIndex < values.count {
+      let entry = values[valueIndex]
+      let entryDay = Calendar.current.startOfDay(for: entry.date)
+      if entryDay <= date {
+        latestByAccount[entry.accountId] = entry.value
+        valueIndex += 1
+      } else {
+        break
+      }
+    }
+    return valueIndex
+  }
+
+  /// Sum the per-account investment values, converting foreign
+  /// instruments to the profile instrument on `date`. Returns `nil`
+  /// when any conversion fails so the caller can drop just this day's
+  /// override without folding the failure into the historic-walk
+  /// error path.
+  private static func sumInvestmentValues(
+    latestByAccount: [UUID: InstrumentAmount],
+    on date: Date,
+    profileInstrument: Instrument,
+    conversionService: any InstrumentConversionService
+  ) async throws -> InstrumentAmount? {
+    var total: Decimal = 0
+    for value in latestByAccount.values {
+      if value.instrument.id == profileInstrument.id {
+        total += value.quantity
+        continue
+      }
+      total += try await conversionService.convert(
+        value.quantity, from: value.instrument, to: profileInstrument, on: date)
+    }
+    return InstrumentAmount(quantity: total, instrument: profileInstrument)
+  }
+}

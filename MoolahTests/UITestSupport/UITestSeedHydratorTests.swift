@@ -14,11 +14,10 @@ import XCTest
 /// runs. These tests guard that contract so UI tests can reference fixtures
 /// symbolically without worrying about non-determinism.
 ///
-/// **Storage split.** Profile metadata still lives in SwiftData
+/// **Storage split.** Profile metadata lives in SwiftData
 /// (`indexContainer`). Per-profile records (accounts, transactions,
-/// categories, instruments, legs) live in GRDB after the
-/// `feat/grdb-slice-1-core` migration — the assertions below read from
-/// the corresponding `*Row` tables.
+/// categories, instruments, legs) live in GRDB — the assertions below
+/// read from the corresponding `*Row` tables.
 @MainActor
 final class UITestSeedHydratorTests: XCTestCase {
   private var _containerManager: ProfileContainerManager?

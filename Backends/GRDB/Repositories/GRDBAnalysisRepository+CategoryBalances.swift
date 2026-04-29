@@ -1,0 +1,264 @@
+import Foundation
+import GRDB
+
+/// SQL aggregation + Swift assembly helpers for `fetchCategoryBalances`.
+///
+/// Lifted out of the main `GRDBAnalysisRepository` body to keep its
+/// `type_body_length` budget intact, mirroring the
+/// `+ExpenseBreakdown.swift` shape: every helper is `static` and takes
+/// its dependencies (database, instruments, conversion service) as
+/// parameters so it doesn't need access to the main class's `private`
+/// stored properties from a sibling-file extension.
+///
+/// The SQL groups by `(DATE(t.date), category_id, instrument_id)` and
+/// the per-row conversion runs in Swift so the per-day rate-cache
+/// equivalence (Rule 5 of `INSTRUMENT_CONVERSION_GUIDE.md`) holds: each
+/// summed `(day, category, instrument)` tuple converts at the rate
+/// effective on `day`.
+extension GRDBAnalysisRepository {
+  /// One row of the SQL aggregation that drives `fetchCategoryBalances`.
+  /// `day` is the ISO-8601 `YYYY-MM-DD` string returned by `DATE(t.date)`
+  /// — parsed in Swift on the way out of the read closure so the
+  /// `Database` reference doesn't escape into the conversion service.
+  struct CategoryBalancesRow: Sendable {
+    let day: String
+    let categoryId: UUID
+    let instrumentId: String
+    let qty: Int64
+  }
+
+  /// Pair of SQL output rows and the instrument lookup, fetched in a
+  /// single MVCC snapshot so a concurrent writer can't drop a row's
+  /// `instrument_id` between the two reads.
+  struct CategoryBalancesAggregation: Sendable {
+    let rows: [CategoryBalancesRow]
+    let instrumentMap: [String: Instrument]
+  }
+
+  /// Diagnostic context passed to the conversion-failure handler so the
+  /// caller's logger can identify which `(day, category, instrument)`
+  /// tuple failed without coupling this helper to a `Logger` instance.
+  /// Mirrors `ConversionFailureContext` on `+ExpenseBreakdown.swift`
+  /// but with a non-optional `categoryId` — `fetchCategoryBalances`'s
+  /// SQL filters out null categories at source.
+  struct CategoryBalancesFailureContext: Sendable {
+    let day: String
+    let categoryId: UUID
+    let instrumentId: String
+  }
+
+  /// Bundle of per-row diagnostic callbacks used by
+  /// `assembleCategoryBalances`. Grouped into a struct so the function
+  /// signature stays under SwiftLint's `function_parameter_count`
+  /// budget, matching `ExpenseBreakdownHandlers` on
+  /// `+ExpenseBreakdown.swift`.
+  struct CategoryBalancesHandlers: Sendable {
+    let handleUnparseableDay: @Sendable (String) -> Void
+    let handleConversionFailure: @Sendable (Error, CategoryBalancesFailureContext) -> Void
+  }
+
+  /// Bundle of optional filter values passed from the public
+  /// `fetchCategoryBalances` entry point down to the SQL composer. Keeps
+  /// the static helper's parameter count under SwiftLint's budget while
+  /// allowing each caller to surface its own `TransactionFilter`
+  /// projection.
+  struct CategoryBalancesFilterArgs: Sendable {
+    let dateRange: ClosedRange<Date>
+    let transactionType: TransactionType
+    let accountId: UUID?
+    let earmarkId: UUID?
+    let payee: String?
+    let categoryIds: Set<UUID>
+  }
+
+  /// Runs the per-(day, category, instrument) SUM(quantity) aggregation
+  /// pinned by
+  /// `AnalysisAggregationPlanPinningTests.fetchCategoryBalancesUsesCategoryIndex`.
+  ///
+  /// **Investment-account exclusion.** The LEFT JOIN to `account`
+  /// produces a NULL `a.type` for legs whose `account_id` is null
+  /// (treated as `isInvestmentAccount = false`); the
+  /// `(a.type IS NULL OR a.type <> 'investment')` predicate accepts
+  /// those rows and rejects investment-account legs. Account-less
+  /// categorised legs therefore surface in the breakdown — the
+  /// pre-SQL Swift accumulator never filtered on `accountId`, and
+  /// `GRDBCategoryBalancesConversionTests` pins the same behaviour.
+  ///
+  /// **Plan note.** The LEFT JOIN reads `leg.account_id` to drive the
+  /// join, but `account_id` is not in `leg_analysis_by_type_category`'s
+  /// column list. SQLite therefore has to fetch the leg's base row and
+  /// the plan resolves to plain `USING INDEX` (not COVERING). Adding
+  /// `account_id` to the composite would bloat every leg row to fix a
+  /// read-time concern; the plan-pinning test asserts no `SCAN` on the
+  /// leg or transaction tables but does NOT require COVERING here.
+  ///
+  /// **`categoryIds` parameterisation.** SQLite cannot bind a
+  /// variable-length array to a single named parameter; an
+  /// `IN (:categoryIds)` raw bind would fail at runtime for any
+  /// `categoryIds.count != 1`. GRDB's `SQL` literal interpolation
+  /// renders `\(set)` as a parameterised list — the project-approved
+  /// escape hatch documented in `DATABASE_CODE_GUIDE.md` §4. The
+  /// composer falls through to a no-op clause when the set is empty
+  /// so the planner doesn't see a degenerate `IN ()`.
+  static func fetchCategoryBalancesAggregation(
+    database: any DatabaseReader,
+    args: CategoryBalancesFilterArgs
+  ) async throws -> CategoryBalancesAggregation {
+    try await database.read { database -> CategoryBalancesAggregation in
+      let request = Self.makeCategoryBalancesRequest(args: args)
+      let sqlRows = try Row.fetchAll(database, request)
+      var rows: [CategoryBalancesRow] = []
+      rows.reserveCapacity(sqlRows.count)
+      for row in sqlRows {
+        guard let day: String = row["day"] else { continue }
+        guard let categoryId: UUID = row["category_id"] else { continue }
+        guard let instrumentId: String = row["instrument_id"] else { continue }
+        guard let qty: Int64 = row["qty"] else { continue }
+        rows.append(
+          CategoryBalancesRow(
+            day: day,
+            categoryId: categoryId,
+            instrumentId: instrumentId,
+            qty: qty))
+      }
+      let instrumentMap = try InstrumentRow.fetchInstrumentMap(database: database)
+      return CategoryBalancesAggregation(rows: rows, instrumentMap: instrumentMap)
+    }
+  }
+
+  /// Builds the `SQLRequest<Row>` for the category-balances
+  /// aggregation. Composed via `SQL` literal interpolation so:
+  ///
+  /// 1. `categoryIds` (a variable-length set) interpolates safely as a
+  ///    parameterised `IN (?,?,?)` list — see GRDB's
+  ///    `appendInterpolation(_ sequence:)` overload. SQLite's
+  ///    `IN (:array)` named bind is a hard NO for arrays; this
+  ///    interpolation is the project-approved escape hatch
+  ///    (`DATABASE_CODE_GUIDE.md` §4 lists `SQL` literal interpolation
+  ///    as the safe dynamic-composition path).
+  /// 2. Each optional filter clause (`accountId`, `earmarkId`, `payee`,
+  ///    `categoryIds`) renders as either an `AND <predicate>` fragment
+  ///    or an empty `SQL("")` placeholder. The plan-pinning tests
+  ///    exercise the with-filter shapes (`accountId`, `earmarkId`)
+  ///    independently; the no-filter shape uses the same SQL skeleton
+  ///    minus the optional fragments.
+  ///
+  /// The `transactionType` value comes from a Swift enum with a closed
+  /// raw-value set, so its interpolation cannot inject SQL even though
+  /// `String` is the underlying type.
+  private static func makeCategoryBalancesRequest(
+    args: CategoryBalancesFilterArgs
+  ) -> SQLRequest<Row> {
+    let lower = args.dateRange.lowerBound
+    let upper = args.dateRange.upperBound
+    let typeRaw = args.transactionType.rawValue
+
+    let accountClause: SQL =
+      args.accountId.map { SQL("AND leg.account_id = \($0)") } ?? SQL("")
+    let earmarkClause: SQL =
+      args.earmarkId.map { SQL("AND leg.earmark_id = \($0)") } ?? SQL("")
+    let payeeClause: SQL =
+      args.payee.map { SQL("AND t.payee = \($0)") } ?? SQL("")
+    let categoryClause: SQL =
+      args.categoryIds.isEmpty
+      ? SQL("")
+      : SQL("AND leg.category_id IN \(args.categoryIds)")
+
+    // `leg.instrument_id` and `leg.category_id` must be table-qualified
+    // throughout because `account` exposes its own `instrument_id` column,
+    // and a bare `instrument_id` in the GROUP BY would be ambiguous to
+    // SQLite once the LEFT JOIN to `account` brings `a.instrument_id`
+    // into scope. The column-aliases (`AS day`, `AS category_id`,
+    // `AS instrument_id`) are fine in the SELECT list but cannot be
+    // referenced bare in GROUP BY for the same ambiguity reason.
+    let literal: SQL = """
+      SELECT DATE(t.date)        AS day,
+             leg.category_id     AS category_id,
+             leg.instrument_id   AS instrument_id,
+             SUM(leg.quantity)   AS qty
+      FROM transaction_leg leg
+      JOIN "transaction"    t ON leg.transaction_id = t.id
+      LEFT JOIN account     a ON leg.account_id = a.id
+      WHERE t.recur_period IS NULL
+        AND t.date >= \(lower) AND t.date <= \(upper)
+        AND leg.type = \(typeRaw)
+        AND leg.category_id IS NOT NULL
+        AND (a.type IS NULL OR a.type <> 'investment')
+        \(accountClause)
+        \(earmarkClause)
+        \(payeeClause)
+        \(categoryClause)
+      GROUP BY DATE(t.date), leg.category_id, leg.instrument_id
+      ORDER BY DATE(t.date) ASC, leg.category_id ASC
+      """
+    return SQLRequest<Row>(literal: literal)
+  }
+
+  /// Walks the SQL aggregation rows, converts each `(qty, instrument)`
+  /// to the target instrument on its own day, and accumulates totals
+  /// per `categoryId`. Conversion runs outside the `database.read`
+  /// closure (in this async helper) so the `Database` reference stays
+  /// inside the snapshot.
+  ///
+  /// Mirrors `assembleExpenseBreakdown`'s per-row error contract:
+  /// `handleUnparseableDay` and `handleConversionFailure` are invoked
+  /// per failing row so each failure surfaces individually in
+  /// diagnostics; the loop continues processing remaining rows then
+  /// re-throws the first conversion error after the walk so the
+  /// function preserves its existing "throws on conversion error"
+  /// contract while still delivering the per-row detail required by
+  /// `INSTRUMENT_CONVERSION_GUIDE.md` Rule 11. A `CancellationError` is
+  /// rethrown immediately and never folded into the
+  /// conversion-failure path.
+  @concurrent
+  static func assembleCategoryBalances(
+    aggregation: CategoryBalancesAggregation,
+    targetInstrument: Instrument,
+    conversionService: any InstrumentConversionService,
+    handlers: CategoryBalancesHandlers
+  ) async throws -> [UUID: InstrumentAmount] {
+    var balances: [UUID: InstrumentAmount] = [:]
+    var firstConversionError: Error?
+    for row in aggregation.rows {
+      guard let day = Self.parseDayString(row.day) else {
+        handlers.handleUnparseableDay(row.day)
+        continue
+      }
+      let instrument =
+        aggregation.instrumentMap[row.instrumentId]
+        ?? Instrument.fiat(code: row.instrumentId)
+      let amount: InstrumentAmount
+      do {
+        amount = try await Self.convertedQuantity(
+          storageValue: row.qty,
+          instrument: instrument,
+          to: targetInstrument,
+          on: day,
+          conversionService: conversionService)
+      } catch let cancel as CancellationError {
+        // Cooperative cancellation surfaces unchanged — never folded
+        // into the per-row conversion-failure log path.
+        throw cancel
+      } catch {
+        let context = CategoryBalancesFailureContext(
+          day: row.day,
+          categoryId: row.categoryId,
+          instrumentId: row.instrumentId)
+        handlers.handleConversionFailure(error, context)
+        if firstConversionError == nil {
+          firstConversionError = error
+        }
+        continue
+      }
+      let current =
+        balances[row.categoryId] ?? .zero(instrument: targetInstrument)
+      balances[row.categoryId] = current + amount
+    }
+    if let firstConversionError {
+      // Preserve the existing observable behaviour (throws on the first
+      // conversion error) while having logged every per-row failure.
+      throw firstConversionError
+    }
+    return balances
+  }
+}

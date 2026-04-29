@@ -1,5 +1,3 @@
-// MoolahTests/Backends/GRDB/CSVImportPlanPinningTests.swift
-
 import Foundation
 import GRDB
 import Testing
@@ -32,102 +30,94 @@ import Testing
 ///    `import_rule_account_scope`.
 @Suite("CSV-import GRDB query plans")
 struct CSVImportPlanPinningTests {
-  @Test
-  func importRuleOrderByPositionUsesIndex() async throws {
-    let database = try ProfileDatabase.openInMemory()
-    try await database.read { database in
-      let plan = try Row.fetchAll(
-        database,
-        sql: """
-          EXPLAIN QUERY PLAN
-          SELECT id FROM import_rule ORDER BY position
-          """
-      ).map { String(describing: $0["detail"] ?? "") }
-      #expect(plan.contains { $0.contains("USING INDEX import_rule_position") })
-      #expect(!plan.contains { $0.contains("USE TEMP B-TREE") })
-    }
+  /// `makeDatabase` and `planDetail` are shared with
+  /// `AnalysisPlanPinningTests` and `AnalysisAggregationPlanPinningTests`
+  /// via `PlanPinningTestHelpers`.
+  private func makeDatabase() throws -> DatabaseQueue {
+    try PlanPinningTestHelpers.makeDatabase()
+  }
+
+  private func planDetail(
+    _ database: DatabaseQueue, query: String, arguments: StatementArguments = []
+  ) throws -> String {
+    try PlanPinningTestHelpers.planDetail(database, query: query, arguments: arguments)
   }
 
   @Test
-  func csvImportProfileLookupByIdUsesPrimaryKey() async throws {
-    let database = try ProfileDatabase.openInMemory()
-    try await database.read { database in
-      let plan = try Row.fetchAll(
-        database,
-        sql: """
-          EXPLAIN QUERY PLAN
-          SELECT id FROM csv_import_profile WHERE id = ?
-          """,
-        arguments: [UUID()]
-      ).map { String(describing: $0["detail"] ?? "") }
-      // BLOB PRIMARY KEY columns surface as
-      // `SEARCH … USING INDEX sqlite_autoindex_csv_import_profile_1`.
-      // Pin the exact auto-index name so a future change that drops the
-      // PK declaration (and silently reverts to a SCAN) fails this
-      // test rather than passing on a `SEARCH` against any other index.
-      #expect(
-        plan.contains { $0.contains("sqlite_autoindex_csv_import_profile_1") })
-      #expect(!plan.contains { $0.contains("SCAN") })
-    }
+  func importRuleOrderByPositionUsesIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      query: """
+        SELECT id FROM import_rule ORDER BY position
+        """)
+    #expect(detail.contains("USING INDEX import_rule_position"))
+    #expect(!detail.contains("USE TEMP B-TREE"))
   }
 
   @Test
-  func importRuleFilterByAccountScopeUsesPartialIndex() async throws {
-    let database = try ProfileDatabase.openInMemory()
-    try await database.read { database in
-      let plan = try Row.fetchAll(
-        database,
-        sql: """
-          EXPLAIN QUERY PLAN
-          SELECT id FROM import_rule WHERE account_scope = ?
-          """,
-        arguments: [UUID()]
-      ).map { String(describing: $0["detail"] ?? "") }
-      // The partial index `import_rule_account_scope` covers the live
-      // "rules scoped to account X" lookup driven by the rule
-      // evaluator. Pinning the index here keeps the schema and the
-      // query in lockstep — a future schema edit that drops the partial
-      // index turns this test red instead of silently regressing the
-      // hot path to a SCAN.
-      #expect(plan.contains { $0.contains("USING INDEX import_rule_account_scope") })
-      #expect(!plan.contains { $0.contains("SCAN") })
-    }
+  func csvImportProfileLookupByIdUsesPrimaryKey() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      query: """
+        SELECT id FROM csv_import_profile WHERE id = ?
+        """,
+      arguments: [UUID()])
+    // BLOB PRIMARY KEY columns surface as
+    // `SEARCH … USING INDEX sqlite_autoindex_csv_import_profile_1`.
+    // Pin the exact auto-index name so a future change that drops the
+    // PK declaration (and silently reverts to a SCAN) fails this
+    // test rather than passing on a `SEARCH` against any other index.
+    #expect(detail.contains("sqlite_autoindex_csv_import_profile_1"))
+    #expect(!detail.contains("SCAN"))
   }
 
   @Test
-  func csvImportProfileFilterByAccountUsesIndex() async throws {
-    let database = try ProfileDatabase.openInMemory()
-    try await database.read { database in
-      let plan = try Row.fetchAll(
-        database,
-        sql: """
-          EXPLAIN QUERY PLAN
-          SELECT id FROM csv_import_profile WHERE account_id = ?
-          """,
-        arguments: [UUID()]
-      ).map { String(describing: $0["detail"] ?? "") }
-      #expect(plan.contains { $0.contains("USING INDEX csv_import_profile_account") })
-      #expect(!plan.contains { $0.contains("SCAN") })
-    }
+  func importRuleFilterByAccountScopeUsesPartialIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      query: """
+        SELECT id FROM import_rule WHERE account_scope = ?
+        """,
+      arguments: [UUID()])
+    // The partial index `import_rule_account_scope` covers the live
+    // "rules scoped to account X" lookup driven by the rule
+    // evaluator. Pinning the index here keeps the schema and the
+    // query in lockstep — a future schema edit that drops the partial
+    // index turns this test red instead of silently regressing the
+    // hot path to a SCAN.
+    #expect(detail.contains("USING INDEX import_rule_account_scope"))
+    #expect(!detail.contains("SCAN"))
   }
 
   @Test
-  func csvImportProfileOrderByCreatedAtUsesIndex() async throws {
-    let database = try ProfileDatabase.openInMemory()
-    try await database.read { database in
-      let plan = try Row.fetchAll(
-        database,
-        sql: """
-          EXPLAIN QUERY PLAN
-          SELECT id FROM csv_import_profile ORDER BY created_at
-          """
-      ).map { String(describing: $0["detail"] ?? "") }
-      // `GRDBCSVImportProfileRepository.fetchAll` orders by created_at
-      // ASC — pinning the index here prevents a future schema edit from
-      // silently regressing fetchAll() to a temp-B-tree sort over the
-      // entire table.
-      #expect(plan.contains { $0.contains("USING INDEX csv_import_profile_created") })
-      #expect(!plan.contains { $0.contains("USE TEMP B-TREE") })
-    }
+  func csvImportProfileFilterByAccountUsesIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      query: """
+        SELECT id FROM csv_import_profile WHERE account_id = ?
+        """,
+      arguments: [UUID()])
+    #expect(detail.contains("USING INDEX csv_import_profile_account"))
+    #expect(!detail.contains("SCAN"))
+  }
+
+  @Test
+  func csvImportProfileOrderByCreatedAtUsesIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      query: """
+        SELECT id FROM csv_import_profile ORDER BY created_at
+        """)
+    // `GRDBCSVImportProfileRepository.fetchAll` orders by created_at
+    // ASC — pinning the index here prevents a future schema edit from
+    // silently regressing fetchAll() to a temp-B-tree sort over the
+    // entire table.
+    #expect(detail.contains("USING INDEX csv_import_profile_created"))
+    #expect(!detail.contains("USE TEMP B-TREE"))
   }
 }

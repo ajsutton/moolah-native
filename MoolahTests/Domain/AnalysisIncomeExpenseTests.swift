@@ -17,8 +17,16 @@ struct AnalysisIncomeExpenseTests {
       id: UUID(), name: "Test Account", type: .bank, instrument: .defaultTestInstrument)
     _ = try await backend.accounts.create(account)
 
-    let onBoundary = try AnalysisTestHelpers.date(year: 2025, month: 3, day: 25)
-    let afterBoundary = try AnalysisTestHelpers.date(year: 2025, month: 3, day: 26)
+    // UTC-anchored dates: `financialMonth` extracts the UTC calendar
+    // day so the boundary case is timezone-independent. Local-time
+    // dates (`AnalysisTestHelpers.date`) drift on AEST/positive-UTC
+    // runners — `2025-03-26 00:00 local` is `2025-03-25` in UTC and
+    // both transactions would land in March instead of straddling
+    // March/April. The CloudKit and GRDB analysis paths now both
+    // forward to `FinancialMonth.key(for:monthEnd:)`, which is the
+    // UTC-anchored helper this test must exercise.
+    let onBoundary = try AnalysisTestHelpers.utcDate(year: 2025, month: 3, day: 25)
+    let afterBoundary = try AnalysisTestHelpers.utcDate(year: 2025, month: 3, day: 26)
 
     _ = try await backend.transactions.create(
       Transaction(

@@ -10,7 +10,6 @@ import Testing
 // Visibility is internal (was fileprivate) so sibling test files across the
 // split suites can use these helpers — `strict_fileprivate` disallows
 // fileprivate in this codebase.
-// internal (was fileprivate) so sibling test files can use this helper
 enum AnalysisTestHelpers {
   /// Gregorian calendar used by every test in the suite so rate-by-date lookups
   /// agree across files.
@@ -25,6 +24,22 @@ enum AnalysisTestHelpers {
   static func date(year: Int, month: Int, day: Int) throws -> Date {
     try #require(
       calendar.date(from: DateComponents(year: year, month: month, day: day)))
+  }
+
+  /// Build a UTC-anchored Date from year/month/day components.
+  ///
+  /// SQL `DATE(t.date)` extracts the UTC calendar day, and
+  /// `GRDBAnalysisRepository+Conversion.swift` parses and bucketises in
+  /// UTC, so tests that pin a specific calendar-day boundary (e.g.
+  /// monthEnd=25) must build txn dates in UTC for the SQL DATE
+  /// extraction to land on the expected calendar day regardless of the
+  /// runner's local timezone.
+  static func utcDate(year: Int, month: Int, day: Int, hour: Int = 12) throws -> Date {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = try #require(TimeZone(identifier: "UTC"))
+    return try #require(
+      calendar.date(
+        from: DateComponents(year: year, month: month, day: day, hour: hour)))
   }
 
   /// Shift a date by `value` days using the Gregorian calendar.

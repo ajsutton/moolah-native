@@ -1,25 +1,83 @@
-// Backends/GRDB/Repositories/GRDBAnalysisRepository.swift
-
 import Foundation
 import GRDB
 import OSLog
 
 /// GRDB-backed implementation of `AnalysisRepository`. Reads the core
 /// financial graph (accounts, transactions, legs, investment values)
-/// from `data.sqlite` and reuses the existing per-method computation
-/// helpers on `CloudKitAnalysisRepository`. The compute helpers operate
-/// on Domain values (`[Transaction]`, `[Account]`, etc.), so the only
-/// difference from the SwiftData implementation is where the rows come
-/// from.
+/// from `data.sqlite`. Every method drives a SQL aggregation that
+/// pushes the per-(day, dimension) GROUP BY into SQLite and converts
+/// the summed rows in Swift on each row's own day — preserving the
+/// per-day rate-cache equivalence required by Rule 5 of
+/// `INSTRUMENT_CONVERSION_GUIDE.md`.
 ///
 /// **Concurrency.** `final class` + `@unchecked Sendable` rather than
 /// `actor`. All stored properties are `let`. `database`
 /// (`any DatabaseWriter`) is `Sendable` (GRDB protocol guarantee — the
 /// queue's serial executor mediates concurrent access).
-/// `conversionService` is itself `Sendable`. Nothing mutates post-init,
-/// so the reference can be shared across actor boundaries without a
-/// data race.
+/// `conversionService` is itself `Sendable`. `logger` is `OSLog.Logger`,
+/// also `Sendable` (Apple-documented thread-safe value type). Nothing
+/// mutates post-init, so the reference can be shared across actor
+/// boundaries without a data race.
 final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
+  // MARK: - Cross-extension internals
+  // The following are stored / static state shared with sibling-file
+  // extensions:
+  //
+  // `+Conversion.swift` — `parseDayString`, `financialMonth`,
+  // `convertedQuantity`. Free of stored-state coupling; takes its
+  // dependencies as parameters.
+  //
+  // `+ExpenseBreakdown.swift` — `fetchExpenseBreakdownAggregation`,
+  // `assembleExpenseBreakdown`, `ExpenseBreakdownRow`,
+  // `ExpenseBreakdownAggregation`, `ExpenseBreakdownHandlers`. Also
+  // free of stored-state coupling.
+  //
+  // `+CategoryBalances.swift` — `fetchCategoryBalancesAggregation`,
+  // `assembleCategoryBalances`, `CategoryBalancesRow`,
+  // `CategoryBalancesAggregation`, `CategoryBalancesHandlers`,
+  // `CategoryBalancesFilterArgs`. Same shape as `+ExpenseBreakdown`.
+  //
+  // `+IncomeAndExpense.swift` — types (`IncomeAndExpenseRow`,
+  // `IncomeAndExpenseAggregation`, `IncomeAndExpenseHandlers`,
+  // `IncomeAndExpenseFailureContext`), `assembleIncomeAndExpense`, and
+  // private helpers (`convertRowSums`, `makeEmptyMonthBucket`,
+  // `applyConvertedRow`, `flattenIncomeAndExpenseBuckets`).
+  //
+  // `+IncomeAndExpenseAggregation.swift` — `fetchIncomeAndExpenseAggregation`,
+  // `mapAggregationRow`, file-private `incomeAndExpenseAggregationSQL`.
+  // Split out of `+IncomeAndExpense.swift` for `file_length` budget.
+  //
+  // `+DailyBalances.swift` — types (`DailyBalanceAccountRow`,
+  // `DailyBalanceEarmarkRow`, `DailyBalancesAggregation`,
+  // `DailyBalancesFailureContext`, `DailyBalancesHandlers`,
+  // `DailyBalancesAssemblyContext`), `assembleDailyBalances`, and
+  // private helpers (`seedPriorBook`, `walkDays`, `applyDailyDeltas`,
+  // `resolveInstrument`).
+  //
+  // `+DailyBalancesAggregation.swift` — `fetchDailyBalancesAggregation`,
+  // private SQL fetch helpers (`fetchAccountDeltaRowsPostCutoff` /
+  // `fetchAccountDeltaRowsPreCutoff`, `fetchEarmarkDeltaRowsPostCutoff` /
+  // `fetchEarmarkDeltaRowsPreCutoff`, `fetchScheduledTransactions`,
+  // `fetchPriorDeltaRows`, `readDailyBalancesAggregation`), and the
+  // shared row-decoder helpers (`decodeAccountDeltaRows`,
+  // `decodeEarmarkDeltaRows`).
+  //
+  // `+DailyBalancesInvestmentValues.swift` — `applyInvestmentValues`
+  // plus its private cursor helpers (`advanceInvestmentCursor`,
+  // `sumInvestmentValues`); also owns the SQL fetches that produce
+  // its inputs (`fetchInvestmentAccountIds`,
+  // `fetchInvestmentValueSnapshots`).
+  //
+  // `+DailyBalancesForecast.swift` — `generateForecast` plus its
+  // private helpers (`preConvertForecastInstances`,
+  // `runForecastAccumulator`) and a file-private logger for forecast
+  // warnings.
+  //
+  // `database` and `logger` are read by `fetchExpenseBreakdown`,
+  // `fetchCategoryBalances`, `fetchIncomeAndExpense`, and
+  // `fetchDailyBalances` here in the main file; the sibling extensions
+  // pull them through the call site rather than reaching into
+  // `private` storage from another file.
   private let database: any DatabaseWriter
   private let instrument: Instrument
   private let conversionService: any InstrumentConversionService
@@ -36,10 +94,6 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
     self.conversionService = conversionService
   }
 
-  private var analysisContext: CloudKitAnalysisContext {
-    CloudKitAnalysisContext(instrument: instrument, conversionService: conversionService)
-  }
-
   // MARK: - AnalysisRepository conformance
 
   func loadAll(
@@ -47,29 +101,10 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
     forecastUntil: Date?,
     monthEnd: Int
   ) async throws -> AnalysisData {
-    let shared = try await fetchSharedData()
-    let context = analysisContext
-
-    async let balances = CloudKitAnalysisRepository.computeDailyBalances(
-      request: DailyBalancesRequest(
-        nonScheduled: shared.nonScheduled,
-        scheduled: shared.scheduled,
-        accounts: shared.accounts,
-        investmentValues: shared.investmentValues,
-        after: historyAfter,
-        forecastUntil: forecastUntil),
-      context: context)
-    async let breakdown = CloudKitAnalysisRepository.computeExpenseBreakdown(
-      nonScheduled: shared.nonScheduled,
-      monthEnd: monthEnd,
-      after: historyAfter,
-      context: context)
-    async let income = CloudKitAnalysisRepository.computeIncomeAndExpense(
-      nonScheduled: shared.nonScheduled,
-      accounts: shared.accounts,
-      monthEnd: monthEnd,
-      after: historyAfter,
-      context: context)
+    async let balances = fetchDailyBalances(
+      after: historyAfter, forecastUntil: forecastUntil)
+    async let breakdown = fetchExpenseBreakdown(monthEnd: monthEnd, after: historyAfter)
+    async let income = fetchIncomeAndExpense(monthEnd: monthEnd, after: historyAfter)
 
     return try await AnalysisData(
       dailyBalances: balances,
@@ -81,42 +116,97 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
     after: Date?,
     forecastUntil: Date?
   ) async throws -> [DailyBalance] {
-    let shared = try await fetchSharedData()
-    return try await CloudKitAnalysisRepository.computeDailyBalances(
-      request: DailyBalancesRequest(
-        nonScheduled: shared.nonScheduled,
-        scheduled: shared.scheduled,
-        accounts: shared.accounts,
-        investmentValues: shared.investmentValues,
-        after: after,
-        forecastUntil: forecastUntil),
-      context: analysisContext)
+    let aggregation = try await Self.fetchDailyBalancesAggregation(
+      database: database, after: after, forecastUntil: forecastUntil)
+    let logger = self.logger
+    let handlers = DailyBalancesHandlers(
+      handleUnparseableDay: { day in
+        logger.error(
+          "fetchDailyBalances: skipping row with unparseable day '\(day)'")
+      },
+      handleConversionFailure: { error, context in
+        // Per-day failures surface as warnings (not errors) — Rule 11
+        // scoping treats a single missing day as a recoverable
+        // condition: the chart still renders the surrounding days.
+        logger.warning(
+          """
+          fetchDailyBalances: skipping day=\(context.day, privacy: .public) — \
+          conversion failed: \
+          \(error.localizedDescription, privacy: .public). \
+          Sibling days continue to render.
+          """)
+      },
+      handleInvestmentValueFailure: { error, date in
+        logger.warning(
+          """
+          fetchDailyBalances: investment-value conversion failed for \
+          date=\(date, privacy: .public): \
+          \(error.localizedDescription, privacy: .public). \
+          Sibling days continue to render.
+          """)
+      })
+    return try await Self.assembleDailyBalances(
+      aggregation: aggregation,
+      profileInstrument: instrument,
+      conversionService: conversionService,
+      handlers: handlers)
   }
 
   func fetchExpenseBreakdown(
     monthEnd: Int,
     after: Date?
   ) async throws -> [ExpenseBreakdown] {
-    let nonScheduled = try await fetchTransactions(filter: .nonScheduledOnly)
-    return try await CloudKitAnalysisRepository.computeExpenseBreakdown(
-      nonScheduled: nonScheduled,
+    let aggregation = try await Self.fetchExpenseBreakdownAggregation(
+      database: database, after: after)
+    let logger = self.logger
+    let handlers = ExpenseBreakdownHandlers(
+      handleUnparseableDay: { day in
+        logger.error(
+          "fetchExpenseBreakdown: skipping row with unparseable day '\(day)'")
+      },
+      handleConversionFailure: { error, context in
+        logger.error(
+          """
+          fetchExpenseBreakdown: conversion failed for day=\(context.day, privacy: .public) \
+          category=\(context.categoryId?.uuidString ?? "nil", privacy: .public) \
+          instrument=\(context.instrumentId, privacy: .public): \
+          \(error.localizedDescription, privacy: .public)
+          """)
+      })
+    return try await Self.assembleExpenseBreakdown(
+      aggregation: aggregation,
+      profileInstrument: instrument,
+      conversionService: conversionService,
       monthEnd: monthEnd,
-      after: after,
-      context: analysisContext)
+      handlers: handlers)
   }
 
   func fetchIncomeAndExpense(
     monthEnd: Int,
     after: Date?
   ) async throws -> [MonthlyIncomeExpense] {
-    let nonScheduled = try await fetchTransactions(filter: .nonScheduledOnly)
-    let accounts = try await fetchAccounts()
-    return try await CloudKitAnalysisRepository.computeIncomeAndExpense(
-      nonScheduled: nonScheduled,
-      accounts: accounts,
+    let aggregation = try await Self.fetchIncomeAndExpenseAggregation(
+      database: database, after: after)
+    let logger = self.logger
+    let handlers = IncomeAndExpenseHandlers(
+      handleUnparseableDay: { day in
+        logger.error(
+          "fetchIncomeAndExpense: skipping row with unparseable day '\(day)'")
+      },
+      handleConversionFailure: { error, context in
+        logger.error(
+          """
+          fetchIncomeAndExpense: conversion failed for day=\(context.day, privacy: .public) \
+          instrument=\(context.instrumentId, privacy: .public): \
+          \(error.localizedDescription, privacy: .public)
+          """)
+      })
+    return try await Self.assembleIncomeAndExpense(
+      aggregation: aggregation,
+      profileInstrument: instrument,
+      conversionService: conversionService,
       monthEnd: monthEnd,
-      after: after,
-      context: analysisContext)
+      handlers: handlers)
   }
 
   func fetchCategoryBalances(
@@ -125,151 +215,34 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
     filters: TransactionFilter?,
     targetInstrument: Instrument
   ) async throws -> [UUID: InstrumentAmount] {
-    let allTransactions = try await fetchTransactions(filter: .all)
-    var balances: [UUID: InstrumentAmount] = [:]
-    let query = CategoryBalancesQuery(
+    let args = CategoryBalancesFilterArgs(
       dateRange: dateRange,
       transactionType: transactionType,
-      filters: filters,
+      accountId: filters?.accountId,
+      earmarkId: filters?.earmarkId,
+      payee: filters?.payee,
+      categoryIds: filters?.categoryIds ?? [])
+    let aggregation = try await Self.fetchCategoryBalancesAggregation(
+      database: database, args: args)
+    let logger = self.logger
+    let handlers = CategoryBalancesHandlers(
+      handleUnparseableDay: { day in
+        logger.error(
+          "fetchCategoryBalances: skipping row with unparseable day '\(day)'")
+      },
+      handleConversionFailure: { error, context in
+        logger.error(
+          """
+          fetchCategoryBalances: conversion failed for day=\(context.day, privacy: .public) \
+          category=\(context.categoryId, privacy: .public) \
+          instrument=\(context.instrumentId, privacy: .public): \
+          \(error.localizedDescription, privacy: .public)
+          """)
+      })
+    return try await Self.assembleCategoryBalances(
+      aggregation: aggregation,
       targetInstrument: targetInstrument,
-      conversionService: conversionService)
-    for transaction in allTransactions {
-      guard query.shouldInclude(transaction) else { continue }
-      try await query.accumulate(transaction: transaction, into: &balances)
-    }
-    return balances
-  }
-
-  // MARK: - Shared data load (GRDB)
-
-  private struct SharedData: Sendable {
-    let nonScheduled: [Transaction]
-    let scheduled: [Transaction]
-    let accounts: [Account]
-    let investmentValues: [InvestmentValueSnapshot]
-  }
-
-  /// Loads transactions, accounts, and investment values in a single
-  /// `database.read` so every value comes from the same MVCC snapshot.
-  /// Three independent reads under WAL would race a concurrent writer
-  /// and surface internally inconsistent state — e.g. a leg referencing
-  /// an account that hasn't yet appeared in the account list.
-  private func fetchSharedData() async throws -> SharedData {
-    let resolvedInstrument = self.instrument
-    return try await database.read { database -> SharedData in
-      let allTransactions = try Self.fetchTransactionsSnapshot(
-        filter: .all, database: database)
-      let accounts = try Self.fetchAccountsSnapshot(
-        database: database, instrument: resolvedInstrument)
-      let nonScheduled = allTransactions.filter { !$0.isScheduled }
-      let scheduled = allTransactions.filter { $0.isScheduled }
-      let investmentAccountIds = Set(
-        accounts.filter { $0.type == .investment }.map(\.id))
-      let investmentValues = try Self.fetchAllInvestmentValuesSnapshot(
-        database: database, investmentAccountIds: investmentAccountIds)
-      return SharedData(
-        nonScheduled: nonScheduled,
-        scheduled: scheduled,
-        accounts: accounts,
-        investmentValues: investmentValues)
-    }
-  }
-
-  /// Loads every transaction (and its legs) as Domain values.
-  ///
-  /// **Intentional full table scan.** This method drives the analysis
-  /// hot paths and currently materialises every row in `transaction`,
-  /// `transaction_leg`, and `instrument` so the existing Swift-side
-  /// compute helpers can run unchanged. The four covering indexes
-  /// (`leg_analysis_by_type_account`, `leg_analysis_by_type_category`,
-  /// `leg_analysis_by_earmark_type`, `iv_by_account_date_value`) are
-  /// in place but not yet exploited from this path — TODO(#577) pushes
-  /// the per-instrument GROUP BY into SQL and removes the SCAN —
-  /// https://github.com/ajsutton/moolah-native/issues/577
-  private func fetchTransactions(filter: ScheduledFilter) async throws -> [Transaction] {
-    try await database.read { database -> [Transaction] in
-      try Self.fetchTransactionsSnapshot(filter: filter, database: database)
-    }
-  }
-
-  private static func fetchTransactionsSnapshot(
-    filter: ScheduledFilter, database: Database
-  ) throws -> [Transaction] {
-    let txnRows = try TransactionRow.fetchAll(database)
-    let legRows = try TransactionLegRow.fetchAll(database)
-    let instrumentRows = try InstrumentRow.fetchAll(database)
-
-    var instrumentLookup: [String: Instrument] = [:]
-    for row in instrumentRows {
-      instrumentLookup[row.id] = try row.toDomain()
-    }
-
-    let legsByTxnId = Dictionary(grouping: legRows, by: \.transactionId)
-
-    var transactions = try txnRows.map { row -> Transaction in
-      let legs =
-        try (legsByTxnId[row.id] ?? [])
-        .sorted { $0.sortOrder < $1.sortOrder }
-        .map { legRow -> TransactionLeg in
-          let legInstrument =
-            instrumentLookup[legRow.instrumentId]
-            ?? Instrument.fiat(code: legRow.instrumentId)
-          return try legRow.toDomain(instrument: legInstrument)
-        }
-      return try row.toDomain(legs: legs)
-    }
-
-    switch filter {
-    case .all:
-      return transactions
-    case .scheduledOnly:
-      transactions = transactions.filter(\.isScheduled)
-    case .nonScheduledOnly:
-      transactions = transactions.filter { !$0.isScheduled }
-    }
-    return transactions
-  }
-
-  private func fetchAccounts() async throws -> [Account] {
-    let resolvedInstrument = self.instrument
-    return try await database.read { database -> [Account] in
-      try Self.fetchAccountsSnapshot(database: database, instrument: resolvedInstrument)
-    }
-  }
-
-  private static func fetchAccountsSnapshot(
-    database: Database, instrument: Instrument
-  ) throws -> [Account] {
-    let rows = try AccountRow.fetchAll(database)
-    return try rows.map { row in
-      Account(
-        id: row.id,
-        name: row.name,
-        type: try AccountType.decoded(rawValue: row.type),
-        instrument: instrument,
-        position: row.position,
-        isHidden: row.isHidden)
-    }
-  }
-
-  private static func fetchAllInvestmentValuesSnapshot(
-    database: Database,
-    investmentAccountIds: Set<UUID>
-  ) throws -> [InvestmentValueSnapshot] {
-    guard !investmentAccountIds.isEmpty else { return [] }
-    let rows =
-      try InvestmentValueRow
-      .filter(investmentAccountIds.contains(InvestmentValueRow.Columns.accountId))
-      .fetchAll(database)
-    return
-      rows
-      .map { row -> InvestmentValueSnapshot in
-        let value = row.toDomain().value
-        return InvestmentValueSnapshot(
-          accountId: row.accountId,
-          date: row.date,
-          value: value)
-      }
-      .sorted { $0.date < $1.date }
+      conversionService: conversionService,
+      handlers: handlers)
   }
 }
