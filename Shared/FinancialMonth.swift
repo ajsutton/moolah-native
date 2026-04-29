@@ -24,7 +24,11 @@ enum FinancialMonth {
   /// always-non-nil seconds-from-GMT initialiser so the resolved
   /// constant is non-optional without an `as!` / `!` cast (keeping
   /// SwiftLint's `force_unwrapping` rule satisfied).
-  private static let utcTimeZone: TimeZone =
+  ///
+  /// Module-internal so sibling files (e.g.
+  /// `GRDBAnalysisRepository+Conversion.swift`) can share the same
+  /// resolved instance instead of re-deriving it.
+  static let utcTimeZone: TimeZone =
     TimeZone(identifier: "UTC") ?? TimeZone(secondsFromGMT: 0) ?? TimeZone.current
 
   /// UTC-anchored Gregorian calendar used to derive the financial-month

@@ -23,9 +23,7 @@ struct GRDBExpenseBreakdownAssembleTests {
   /// caller can fail only specific rows (e.g. "throw on row 0 and 2").
   /// The counter is guarded by `OSAllocatedUnfairLock` (async-safe,
   /// `Sendable`) so the service can be used from any isolation domain.
-  private final class CountingConversionService: InstrumentConversionService,
-    Sendable
-  {
+  private final class CountingConversionService: InstrumentConversionService {
     private let counter = OSAllocatedUnfairLock(initialState: 0)
     private let outcome: @Sendable (Int) -> Result<Decimal, any Error>
 

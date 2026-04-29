@@ -150,10 +150,10 @@ extension GRDBAnalysisRepository {
           to: profileInstrument,
           on: day,
           conversionService: conversionService)
-      } catch is CancellationError {
+      } catch let cancel as CancellationError {
         // Cooperative cancellation surfaces unchanged — never folded
         // into the per-row conversion-failure log path.
-        throw CancellationError()
+        throw cancel
       } catch {
         let context = ConversionFailureContext(
           day: row.day, categoryId: row.categoryId, instrumentId: row.instrumentId)

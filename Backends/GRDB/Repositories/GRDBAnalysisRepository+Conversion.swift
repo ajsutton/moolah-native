@@ -34,17 +34,9 @@ extension GRDBAnalysisRepository {
   private static let dayFormatter: SendableDayFormatter = {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
-    formatter.timeZone = utcTimeZone
+    formatter.timeZone = FinancialMonth.utcTimeZone
     return SendableDayFormatter(formatter)
   }()
-
-  /// `TimeZone(identifier: "UTC")` is documented to never return nil
-  /// for the canonical `"UTC"` identifier; the `??` fallback uses the
-  /// always-non-nil seconds-from-GMT initialiser so the resolved
-  /// constant is non-optional without an `as!` / `!` cast (keeping
-  /// SwiftLint's `force_unwrapping` rule satisfied).
-  private static let utcTimeZone: TimeZone =
-    TimeZone(identifier: "UTC") ?? TimeZone(secondsFromGMT: 0) ?? TimeZone.current
 
   /// Day-string parser used by every SQL-driven method that aggregates
   /// `(DATE(t.date), …)`.
