@@ -1,6 +1,6 @@
 # GRDB Migration: Replacing SwiftData for Local Storage
 
-**Status:** Planning + guides landed. Implementation begins with Step 1.
+**Status:** Step 1, Step 2, Slice 0, Slice 1, Slice 4 shipped (on `main`). Slice 3 (Stragglers + SwiftData teardown) is the only remaining slice — see roadmap §6.
 **Decision date:** 2026-04-28
 **Sync mechanism:** CKSyncEngine (unchanged). GRDB replaces SwiftData as the local persistence layer; sync remains storage-agnostic.
 
@@ -90,11 +90,12 @@ The dense centre — `transaction × leg × account × category × earmark × in
 
 **Order of work (matches the Roadmap below):**
 
-1. **Step 1 — Add GRDB via SwiftPM.** Pure dependency addition. No runtime change.
-2. **Step 2 — Migrate rate storage.** Sets up GRDB infrastructure (DatabaseQueue lifecycle, schema migrator) without exercising CKSyncEngine glue.
-3. **Slice 0 — `CSVImportProfile` + `ImportRule`.** Exercises CKSyncEngine ↔ GRDB on isolated leaf records. Proves the migration mechanics, the `encoded_system_fields` handling, and the schema-generator integration.
-4. **Slice 1 — Core financial graph.** Single coordinated cut that migrates `Transaction`, `TransactionLeg`, `Account`, `Category`, `Earmark`, `EarmarkBudgetItem`, `Instrument`, `InvestmentValue`. Unlocks SQL aggregates for `AnalysisRepository`. Largest PR; mechanical migrator code; well-bounded.
-5. **Slice 3 — Stragglers.** Anything left (profile-index, etc.).
+1. **Step 1 — Add GRDB via SwiftPM.** Pure dependency addition. No runtime change. ✅ Shipped.
+2. **Step 2 — Migrate rate storage.** Sets up GRDB infrastructure (DatabaseQueue lifecycle, schema migrator) without exercising CKSyncEngine glue. ✅ Shipped.
+3. **Slice 0 — `CSVImportProfile` + `ImportRule`.** Exercises CKSyncEngine ↔ GRDB on isolated leaf records. Proves the migration mechanics, the `encoded_system_fields` handling, and the schema-generator integration. ✅ Shipped via PR [#567](https://github.com/ajsutton/moolah-native/pull/567).
+4. **Slice 1 — Core financial graph.** Single coordinated cut that migrates `Transaction`, `TransactionLeg`, `Account`, `Category`, `Earmark`, `EarmarkBudgetItem`, `Instrument`, `InvestmentValue`. Largest PR; mechanical migrator code; well-bounded. ✅ Shipped via PR [#573](https://github.com/ajsutton/moolah-native/pull/573). **NB:** the SQL `GROUP BY` rewrite of `AnalysisRepository` was deliberately deferred — see Slice 4 below.
+5. **Slice 3 — Stragglers + SwiftData teardown.** Migrate the last synced record type (`ProfileRecord`, the profile-index entry) to GRDB; then delete every `@Model` class, the `SwiftDataToGRDBMigrator`, and every `import SwiftData` from production. Detailed plan: `plans/grdb-slice-3-stragglers.md`.
+6. **Slice 4 — `AnalysisRepository` SQL aggregation.** ✅ Shipped via PR [#594](https://github.com/ajsutton/moolah-native/pull/594). Pushed the per-instrument `GROUP BY` aggregation into SQL for the four hot analysis methods, cashing in the speedup the Slice 1 covering indexes were sized for. As a side effect, the `Backends/CloudKit/Repositories/CloudKitAnalysis*` files were deleted in the same PR (rather than in Slice 3 Phase B as originally planned).
 
 ## 6. Roadmap
 
@@ -165,9 +166,46 @@ Migrate in one coordinated PR:
 
 **Acceptance:** Full app functionality preserved; all existing tests pass; analysis-heavy screens noticeably faster (benchmark required); CKSyncEngine round-trip continues to work.
 
-### Slice 3 — Stragglers
+### Slice 3 — Stragglers + SwiftData teardown
 
-Anything not yet migrated (profile-index records, etc.). Sized after Slice 1 lands and the audit is concrete.
+**Branches:** `feat/grdb-slice-3-profile-index` (Phase A), `chore/grdb-slice-3-swiftdata-teardown` (Phase B). **Detailed plan:** `plans/grdb-slice-3-stragglers.md`.
+
+After Slice 1, the only remaining synced `@Model` class is `ProfileRecord` (the profile-index entry, one per CloudKit profile, lives in the shared `profile-index` zone — separate lifecycle from the per-profile `data.sqlite`). Slice 3 migrates it, then deletes the SwiftData layer wholesale.
+
+**Phase A — ProfileRecord migration to GRDB.**
+
+- New app-scoped `Application Support/Moolah/profile-index.sqlite` (separate from per-profile `data.sqlite` per §4: ProfileRecord is shared across profiles, must be readable before any profile is selected). Owned by `ProfileContainerManager`. Schema: single `profile` table, STRICT, `record_name TEXT NOT NULL UNIQUE`, `encoded_system_fields BLOB`.
+- `ProfileRow` + mapping + `CloudKitRecordConvertible`. Wire `recordType = "ProfileRecord"` frozen.
+- `GRDBProfileIndexRepository` covering both the app-side mutation surface (`ProfileStore`) and the sync-side dispatch surface (`ProfileIndexSyncHandler`).
+- `ProfileIndexSyncHandler` rewrite: same external API, GRDB-backed internals.
+- `ProfileStore` rewrite: `loadCloudProfiles` becomes async-driven; `addProfile` / `updateProfile` / `removeProfile` route through `profileIndexRepository`.
+- `SwiftDataToGRDBMigrator` extension: per-type migrator gated by `v4.profileIndex.grdbMigrated` flag, runs once at app launch before `ProfileStore.init` (not per-profile-session).
+- `ProfileDataDeleter.swift` deleted (single call site inlines the repository call).
+- Reviewers: `database-schema-review`, `database-code-review`, `concurrency-review`, `sync-review`, `code-review`.
+
+**Acceptance (Phase A):** ProfileRecord round-trips through GRDB; sync round-trip works; migrator runs once and is no-op thereafter; SwiftData store stays in place for Phase B.
+
+**Phase B — SwiftData teardown.** Gated by Phase A having shipped a release the user has run on every active device.
+
+- Delete every `@Model` class (eleven files under `Backends/CloudKit/Models/`).
+- Delete `SwiftDataToGRDBMigrator.swift` (and its four extensions) — every device has by definition been migrated.
+- Strip `import SwiftData` from every production file.
+- Shrink `ProfileContainerManager`: drop `indexContainer`, `containers`, `dataSchema`. Keep `profileIndexRepository` and per-profile `databases`.
+- One-shot cleanup of legacy `Moolah-v2.store` and `Moolah-{UUID}.store` files at app launch (gated by `v4.swiftDataStores.cleared` flag, mirroring `cleanupLegacyRateCachesOnce`).
+- New CI check: `just no-swiftdata` — fails if any production file imports SwiftData.
+- Reviewers: `code-review`, `concurrency-review`, `sync-review`.
+
+**Acceptance (Phase B):** Zero `import SwiftData` in production; all UI surfaces work; CKSyncEngine continues to round-trip records; `Moolah-v2.store` and per-profile `.store` files removed from disk.
+
+### Slice 4 — `AnalysisRepository` SQL aggregation rewrite
+
+✅ **Shipped via PR [#594](https://github.com/ajsutton/moolah-native/pull/594) on 2026-04-29.**
+
+Pushed the per-instrument `GROUP BY` aggregation into SQL for the four hot `AnalysisRepository` methods (`fetchDailyBalances`, `fetchExpenseBreakdown`, `fetchIncomeAndExpense`, `fetchCategoryBalances`) — the rewrite Slice 1 deliberately deferred. Per-day grouping (`DATE(t.date) AS day`) preserves per-leg conversion semantics under `INSTRUMENT_CONVERSION_GUIDE.md` Rule 5; conversion stays Swift-side, SQL emits per-`(day, instrument)` SUMs.
+
+Plan-pinning tests (`AnalysisAggregationPlanPinningTests`, `DailyBalancesPlanPinningTests`) assert the covering indexes (`leg_analysis_by_type_account`, `leg_analysis_by_type_category`, `leg_analysis_by_earmark_type`, `iv_by_account_date_value`) participate; date-sensitive conversion regression tests using `MoolahTests/Support/DateBasedFixedConversionService.swift` pin the per-day invariant.
+
+**Side-effects vs. original plan:** the PR also deleted the entire `Backends/CloudKit/Repositories/` directory (the `CloudKitAnalysis*` static-helper files Slice 1 had kept around) and lifted `financialMonth` to `Shared/FinancialMonth.swift`. Slice 3 Phase B's "move the analysis helpers" task is therefore already done.
 
 ## 7. Risks & mitigations
 
