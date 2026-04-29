@@ -45,9 +45,7 @@ deleted:
   the user has run on every device (verified by their telemetry / our
   manual confirmation), delete the eleven `@Model` classes, delete the
   `SwiftDataToGRDBMigrator` (it is no longer needed — every device has
-  by definition been migrated), delete `ProfileDataDeleter`, delete the
-  five surviving `CloudKitAnalysisRepository*.swift` files (the GRDB
-  analysis repo's compute helpers move alongside it), strip
+  by definition been migrated), delete `ProfileDataDeleter`, strip
   `import SwiftData` from every production file, and shrink
   `ProfileContainerManager` to its GRDB-only surface.
 
@@ -58,12 +56,11 @@ device**. The plan below treats them as sequential.
 
 The slice does **not** ship:
 
-- `AnalysisRepository` SQL aggregation. Slice 1 deliberately deferred
-  this; the rewrite lives in `plans/grdb-slice-4-analysis-sql-aggregation.md`.
-  Slice 3 leaves the existing static compute helpers in place. (Phase B
-  *moves* those helpers from `Backends/CloudKit/...` to
-  `Backends/GRDB/...` so the CloudKit folder can be deleted, but the
-  helper bodies are byte-identical.)
+- `AnalysisRepository` SQL aggregation — already shipped via Slice 4
+  (PR [#594](https://github.com/ajsutton/moolah-native/pull/594)). The
+  CloudKit-side analysis helpers were also deleted as part of #594, so
+  Slice 3 has nothing to do under
+  `Backends/CloudKit/Repositories/` (the directory no longer exists).
 - Schema changes to existing GRDB tables. The `profile` table is the
   only new one.
 - Changes to CloudKit zone layout. The `profile-index` zone, its
@@ -82,7 +79,7 @@ Slice 0 and Slice 1 establish the patterns Slice 3 mirrors:
 | `Backends/GRDB/Records/CSVImportProfileRow.swift` + `+Mapping.swift` | Reference shape for `ProfileRow`. |
 | `Backends/GRDB/Sync/CSVImportProfileRow+CloudKit.swift` | Reference shape for `ProfileRow+CloudKit.swift`. |
 | `Backends/GRDB/Repositories/GRDBCSVImportProfileRepository.swift` | Reference shape for `GRDBProfileIndexRepository`. |
-| `Backends/GRDB/Migration/SwiftDataToGRDBMigrator.swift` | `@MainActor` migrator with per-type `committed` / `defer` flag pattern. Slice 3 Phase A extends it with one more type, then Phase B deletes the whole file. |
+| `Backends/GRDB/Migration/SwiftDataToGRDBMigrator.swift` | `@MainActor` migrator with per-type `committed` / `defer` flag pattern. **Now async** — `migrateIfNeeded(...)` and every per-type method are `async throws`; SwiftData fetches stay on `@MainActor` while GRDB writes hand off to the writer queue (issue #575, PR #592). Slice 3 Phase A extends it with one more (also-async) type, then Phase B deletes the whole file. |
 | `Backends/CloudKit/Sync/ProfileIndexSyncHandler.swift` | The handler we are rewriting. Reads/writes ProfileRecord rows via `ModelContext`; Phase A swaps to GRDB. |
 | `App/MoolahApp+Setup.swift` `makeContainerSetup` | Currently creates a SwiftData index container + `dataSchema`. Phase A leaves the index container alone (the migrator still needs it); Phase B strips it. |
 | `Shared/ProfileContainerManager.swift` | Holds `indexContainer`, per-profile `containers` (SwiftData), per-profile `databases` (GRDB). Phase A adds `profileIndexRepository`; Phase B drops `indexContainer`, `containers`, and `dataSchema`. |
@@ -920,7 +917,10 @@ behaves correctly when the load lands one tick later (SwiftUI
 #### 3.A.10 SwiftDataToGRDBMigrator extension
 
 Add a single per-type migrator for `ProfileRecord`. Same `committed`
-defer flag pattern as Slice 0/1.
+defer flag pattern as Slice 0/1, **and async** to match the post-#592
+migrator shape (the existing per-type methods are all `async throws`
+already; the SwiftData fetch stays on `@MainActor` while the GRDB
+write hands off to the writer queue).
 
 ```swift
 // Backends/GRDB/Migration/SwiftDataToGRDBMigrator+ProfileIndex.swift
@@ -936,7 +936,7 @@ extension SwiftDataToGRDBMigrator {
     indexContainer: ModelContainer,
     profileIndexDatabase: any DatabaseWriter,
     defaults: UserDefaults
-  ) throws {
+  ) async throws {
     guard !defaults.bool(forKey: Self.profileIndexFlag) else { return }
     var committed = false
     var rowCount = 0
@@ -966,7 +966,7 @@ extension SwiftDataToGRDBMigrator {
     }
     let mappedRows = sourceRows.map(Self.mapProfile(_:))
     if !mappedRows.isEmpty {
-      try profileIndexDatabase.write { database in
+      try await profileIndexDatabase.write { database in
         for row in mappedRows {
           try row.upsert(database)
         }
@@ -1000,13 +1000,12 @@ extension MoolahApp {
   /// Runs the one-shot ProfileRecord (index) migration at app launch.
   /// Must run before ProfileStore.init so the first cloud-profiles
   /// load reads from a populated GRDB.
-  @MainActor
   static func runProfileIndexMigrationIfNeeded(
     setup: ContainerSetup,
     defaults: UserDefaults = .standard
-  ) {
+  ) async {
     do {
-      try SwiftDataToGRDBMigrator().migrateProfileIndexIfNeeded(
+      try await SwiftDataToGRDBMigrator().migrateProfileIndexIfNeeded(
         indexContainer: setup.manager.indexContainer,
         profileIndexDatabase: setup.manager.profileIndexRepository.databaseWriter,
         defaults: defaults)
@@ -1023,6 +1022,12 @@ sees no profiles on first launch (because GRDB is empty), but the next
 launch retries. This is the same failure mode Slice 0 / 1 already
 accept. A retry-on-next-launch loop on a permanent fetch error is the
 worst outcome — acceptable trade-off vs. crashing the app at startup.
+
+The hook needs an `await` site at app launch — `MoolahApp.init`
+already awaits the per-profile migration via
+`ProfileSession.runSwiftDataToGRDBMigrationIfNeeded` (post-#592), so
+adding one more `await` for the profile-index migration before
+`ProfileStore.init` follows the same pattern.
 
 `databaseWriter` is a new computed property exposed by
 `GRDBProfileIndexRepository` that returns the underlying
@@ -1222,47 +1227,23 @@ Backends/CloudKit/ProfileDataDeleter.swift
 The single call site in `ProfileStore.removeProfile` was already
 swapped to `profileIndexRepository.delete(id:)` in Phase A.
 
-#### 3.B.4 Delete CloudKit analysis repo files
+#### 3.B.4 CloudKit analysis repo files — already gone
 
-The CloudKit-side analysis compute helpers stay in the codebase
-post-Slice 1 because `GRDBAnalysisRepository` calls into them. To
-delete the entire CloudKit folder cleanly, the helpers must move
-alongside the GRDB analysis repo first.
+Slice 4 (PR [#594](https://github.com/ajsutton/moolah-native/pull/594))
+already deleted every file under
+`Backends/CloudKit/Repositories/`, lifted `financialMonth` to
+`Shared/FinancialMonth.swift`, and ported the remaining static helpers
+into per-method extensions on `GRDBAnalysisRepository` (e.g.
+`+IncomeAndExpense.swift`, `+DailyBalances.swift`,
+`+ExpenseBreakdown.swift`, `+CategoryBalances.swift`, +
+`InvestmentValueSnapshot.swift` now alongside them). The
+`Backends/CloudKit/Repositories/` directory no longer exists in the
+working tree.
 
-Move (rename, preserving content):
-
-```
-Backends/CloudKit/Repositories/CloudKitAnalysisRepository.swift
-  → Backends/GRDB/Repositories/GRDBAnalysisRepository+ComputeHelpers.swift
-Backends/CloudKit/Repositories/CloudKitAnalysisRepository+Conversion.swift
-  → Backends/GRDB/Repositories/GRDBAnalysisRepository+Conversion.swift
-Backends/CloudKit/Repositories/CloudKitAnalysisRepository+DailyBalances.swift
-  → Backends/GRDB/Repositories/GRDBAnalysisRepository+DailyBalances.swift
-Backends/CloudKit/Repositories/CloudKitAnalysisRepository+Forecast.swift
-  → Backends/GRDB/Repositories/GRDBAnalysisRepository+Forecast.swift
-Backends/CloudKit/Repositories/CloudKitAnalysisRepository+IncomeExpense.swift
-  → Backends/GRDB/Repositories/GRDBAnalysisRepository+IncomeExpense.swift
-Backends/CloudKit/Repositories/InvestmentValueSnapshot.swift
-  → Backends/GRDB/Repositories/InvestmentValueSnapshot.swift
-```
-
-The `CloudKitAnalysisRepository` class becomes dead — the GRDB repo
-calls its **static** methods, never instantiates it. Convert the
-class to an `enum CloudKitAnalysisCompute { … }` namespace (or, if
-the renames bite the call sites, leave the class shell as a static-only
-namespace and rename to `AnalysisCompute`). Update the call sites in
-`GRDBAnalysisRepository.swift` to the new namespace. The
-`ModelContainer` field on the class disappears (Phase B);
-`fetchTransactions`/`fetchAccounts`/`fetchAllInvestmentValues` were
-already SwiftData-bound and unused after Phase B since
-`GRDBAnalysisRepository` has its own GRDB-backed equivalents.
-
-Delete the original `Backends/CloudKit/Repositories/` directory once
-empty.
-
-**Slice 4 supersedes the bodies of these compute helpers.** Phase B
-keeps the helper bodies intact; Slice 4 rewrites them to push GROUP BY
-into SQL. Phase B's job is purely the file move + SwiftData teardown.
+**No-op for Phase B.** Originally Phase B was going to move the
+helpers; Slice 4 made that step redundant. Verify before starting
+Phase B by running `ls Backends/CloudKit/Repositories/` and confirming
+the directory is absent.
 
 #### 3.B.5 `ProfileContainerManager` shrink
 
@@ -1632,9 +1613,9 @@ still passes 1731+ tests, plus the new Slice 3 additions.
 | `Backends/CloudKit/Models/` directory | DELETE (empty) |
 | `Backends/GRDB/Migration/SwiftDataToGRDBMigrator*.swift` (all 5) | DELETE |
 | `Backends/GRDB/Migration/` directory | DELETE (empty) |
-| `Backends/CloudKit/Repositories/CloudKitAnalysisRepository*.swift` (5 files) | MOVE to `Backends/GRDB/Repositories/` and rename per §3.B.4 |
-| `Backends/CloudKit/Repositories/InvestmentValueSnapshot.swift` | MOVE to `Backends/GRDB/Repositories/InvestmentValueSnapshot.swift` |
-| `Backends/CloudKit/Repositories/` directory | DELETE (empty) |
+| ~~`Backends/CloudKit/Repositories/CloudKitAnalysisRepository*.swift`~~ | Already deleted by Slice 4 (PR #594). No-op. |
+| ~~`Backends/CloudKit/Repositories/InvestmentValueSnapshot.swift`~~ | Already moved to `Backends/GRDB/Repositories/` by Slice 4. No-op. |
+| ~~`Backends/CloudKit/Repositories/`~~ directory | Already absent. No-op. |
 | `Backends/CloudKit/CloudKitDataImporter.swift` | EDIT or DELETE — verify usage; if it still does SwiftData mirror writes, refactor to GRDB-only or delete entirely |
 | `Backends/CloudKit/Sync/ProfileDataSyncHandler.swift` | EDIT — drop `modelContainer` field + `init` parameter + `import SwiftData` |
 | `Backends/CloudKit/Sync/SyncCoordinator+HandlerAccess.swift` | EDIT — drop `try containerManager.container(for: profileId)` line |
@@ -1749,6 +1730,13 @@ still passes 1731+ tests, plus the new Slice 3 additions.
   (closer template; Slice 3 mirrors its sectioning).
 - `plans/grdb-slice-0-csv-import.md` — Slice 0's plan (shows the
   smallest viable migrator-extension shape).
+
+### Slice 4 reference (as-shipped)
+- PR [#594](https://github.com/ajsutton/moolah-native/pull/594) — the
+  `AnalysisRepository` SQL aggregation rewrite. Notable side-effects
+  for Slice 3: deleted the `Backends/CloudKit/Repositories/`
+  directory, lifted `financialMonth` to `Shared/FinancialMonth.swift`,
+  ported analysis compute helpers into per-method GRDB extensions.
 
 ### Guides (non-optional)
 - `guides/DATABASE_SCHEMA_GUIDE.md` — schema rules.

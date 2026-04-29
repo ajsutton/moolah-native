@@ -1,6 +1,6 @@
 # GRDB Migration: Replacing SwiftData for Local Storage
 
-**Status:** Step 1, Step 2, Slice 0, Slice 1 shipped (on `main`). Slice 3 (Stragglers + SwiftData teardown) and Slice 4 (`AnalysisRepository` SQL aggregation) are the closing slices — see roadmap §6.
+**Status:** Step 1, Step 2, Slice 0, Slice 1, Slice 4 shipped (on `main`). Slice 3 (Stragglers + SwiftData teardown) is the only remaining slice — see roadmap §6.
 **Decision date:** 2026-04-28
 **Sync mechanism:** CKSyncEngine (unchanged). GRDB replaces SwiftData as the local persistence layer; sync remains storage-agnostic.
 
@@ -94,8 +94,8 @@ The dense centre — `transaction × leg × account × category × earmark × in
 2. **Step 2 — Migrate rate storage.** Sets up GRDB infrastructure (DatabaseQueue lifecycle, schema migrator) without exercising CKSyncEngine glue. ✅ Shipped.
 3. **Slice 0 — `CSVImportProfile` + `ImportRule`.** Exercises CKSyncEngine ↔ GRDB on isolated leaf records. Proves the migration mechanics, the `encoded_system_fields` handling, and the schema-generator integration. ✅ Shipped via PR [#567](https://github.com/ajsutton/moolah-native/pull/567).
 4. **Slice 1 — Core financial graph.** Single coordinated cut that migrates `Transaction`, `TransactionLeg`, `Account`, `Category`, `Earmark`, `EarmarkBudgetItem`, `Instrument`, `InvestmentValue`. Largest PR; mechanical migrator code; well-bounded. ✅ Shipped via PR [#573](https://github.com/ajsutton/moolah-native/pull/573). **NB:** the SQL `GROUP BY` rewrite of `AnalysisRepository` was deliberately deferred — see Slice 4 below.
-5. **Slice 3 — Stragglers + SwiftData teardown.** Migrate the last synced record type (`ProfileRecord`, the profile-index entry) to GRDB; then delete every `@Model` class, the `SwiftDataToGRDBMigrator`, the `Backends/CloudKit/Repositories/CloudKitAnalysis*` files, and every `import SwiftData` from production. Detailed plan: `plans/grdb-slice-3-stragglers.md`.
-6. **Slice 4 — `AnalysisRepository` SQL aggregation.** Push the per-instrument `GROUP BY` aggregation into SQL for the four hot analysis methods, cashing in the speedup the Slice 1 covering indexes were sized for (5×–10× target on the analysis benchmarks). Independent of Slice 3 — can ship before, after, or in parallel. Detailed plan: `plans/grdb-slice-4-analysis-sql-aggregation.md`.
+5. **Slice 3 — Stragglers + SwiftData teardown.** Migrate the last synced record type (`ProfileRecord`, the profile-index entry) to GRDB; then delete every `@Model` class, the `SwiftDataToGRDBMigrator`, and every `import SwiftData` from production. Detailed plan: `plans/grdb-slice-3-stragglers.md`.
+6. **Slice 4 — `AnalysisRepository` SQL aggregation.** ✅ Shipped via PR [#594](https://github.com/ajsutton/moolah-native/pull/594). Pushed the per-instrument `GROUP BY` aggregation into SQL for the four hot analysis methods, cashing in the speedup the Slice 1 covering indexes were sized for. As a side effect, the `Backends/CloudKit/Repositories/CloudKitAnalysis*` files were deleted in the same PR (rather than in Slice 3 Phase B as originally planned).
 
 ## 6. Roadmap
 
@@ -189,7 +189,6 @@ After Slice 1, the only remaining synced `@Model` class is `ProfileRecord` (the 
 
 - Delete every `@Model` class (eleven files under `Backends/CloudKit/Models/`).
 - Delete `SwiftDataToGRDBMigrator.swift` (and its four extensions) — every device has by definition been migrated.
-- Delete `Backends/CloudKit/Repositories/CloudKitAnalysis*.swift` (5 files) and `InvestmentValueSnapshot.swift`. The static compute helpers move to `Backends/GRDB/Repositories/GRDBAnalysisRepository+*.swift` so the GRDB analysis repo no longer calls into the CloudKit folder. (Slice 4 supersedes the helper bodies; Phase B's job here is purely the file move.)
 - Strip `import SwiftData` from every production file.
 - Shrink `ProfileContainerManager`: drop `indexContainer`, `containers`, `dataSchema`. Keep `profileIndexRepository` and per-profile `databases`.
 - One-shot cleanup of legacy `Moolah-v2.store` and `Moolah-{UUID}.store` files at app launch (gated by `v4.swiftDataStores.cleared` flag, mirroring `cleanupLegacyRateCachesOnce`).
@@ -200,20 +199,13 @@ After Slice 1, the only remaining synced `@Model` class is `ProfileRecord` (the 
 
 ### Slice 4 — `AnalysisRepository` SQL aggregation rewrite
 
-**Branch:** `perf/grdb-analysis-sql-aggregates`. **Detailed plan:** `plans/grdb-slice-4-analysis-sql-aggregation.md`.
+✅ **Shipped via PR [#594](https://github.com/ajsutton/moolah-native/pull/594) on 2026-04-29.**
 
-Slice 1 deliberately deferred the SQL `GROUP BY` rewrite of the four hot `AnalysisRepository` methods (`fetchDailyBalances`, `fetchExpenseBreakdown`, `fetchIncomeAndExpense`, `fetchCategoryBalances`) — it shipped the GRDB infrastructure with the existing per-leg Swift conversion helpers in place. The covering indexes (`leg_analysis_by_type_account`, `leg_analysis_by_type_category`, `leg_analysis_by_earmark_type`, `iv_by_account_date_value`) already exist in the v3 schema. Slice 4 cashes in the headline speedup.
+Pushed the per-instrument `GROUP BY` aggregation into SQL for the four hot `AnalysisRepository` methods (`fetchDailyBalances`, `fetchExpenseBreakdown`, `fetchIncomeAndExpense`, `fetchCategoryBalances`) — the rewrite Slice 1 deliberately deferred. Per-day grouping (`DATE(t.date) AS day`) preserves per-leg conversion semantics under `INSTRUMENT_CONVERSION_GUIDE.md` Rule 5; conversion stays Swift-side, SQL emits per-`(day, instrument)` SUMs.
 
-- Per-day grouping (`DATE(t.date) AS day`) preserves per-leg conversion semantics under `INSTRUMENT_CONVERSION_GUIDE.md` Rule 5 — see Slice 1 plan §3.4 for the rate-cache day-granularity argument.
-- Conversion stays Swift-side. SQL emits per-`(day, instrument)` SUMs; Swift converts each tuple via the existing `convertedAmount` helper.
-- Plan-pinning tests assert the covering indexes participate; reject `SCAN` and `USE TEMP B-TREE FOR ORDER BY`.
-- Date-sensitive conversion regression tests using `DateBasedFixedConversionService` fixtures pin the per-day invariant.
-- Benchmark targets (per Slice 1 plan §3.9): `testFetchCategoryBalances` ≥ 5×, `testFetchCategoryBalancesByType` ≥ 5×, `testLoadAll_12months` ≥ 3×, `testLoadAll_allHistory` ≥ 5×.
-- Reviewers: `database-code-review`, `code-review`, `instrument-conversion-review`.
+Plan-pinning tests (`AnalysisAggregationPlanPinningTests`, `DailyBalancesPlanPinningTests`) assert the covering indexes (`leg_analysis_by_type_account`, `leg_analysis_by_type_category`, `leg_analysis_by_earmark_type`, `iv_by_account_date_value`) participate; date-sensitive conversion regression tests using `MoolahTests/Support/DateBasedFixedConversionService.swift` pin the per-day invariant.
 
-**Acceptance:** Plan-pinning tests pass; benchmark targets met; numerical equivalence to pre-Slice-4 Swift loop verified on multi-instrument fixtures; existing analysis tests pass unchanged.
-
-Slice 4 is independent of Slice 3 — can ship before, after, or in parallel. Recommended order: Slice 3 Phase A → Slice 4 → Slice 3 Phase B.
+**Side-effects vs. original plan:** the PR also deleted the entire `Backends/CloudKit/Repositories/` directory (the `CloudKitAnalysis*` static-helper files Slice 1 had kept around) and lifted `financialMonth` to `Shared/FinancialMonth.swift`. Slice 3 Phase B's "move the analysis helpers" task is therefore already done.
 
 ## 7. Risks & mitigations
 
