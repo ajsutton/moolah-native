@@ -9,7 +9,7 @@ import Testing
 
 /// Verifies that `ProfileDataSyncHandler.applyRemoteChanges` round-trips
 /// CSV-import-profile and import-rule CKRecords through the GRDB
-/// dispatch path introduced by slice 0 of `plans/grdb-migration.md`.
+/// dispatch path.
 ///
 /// The flow mirrors what CKSyncEngine drives in production: device A
 /// produces a CKRecord via `Row.toCKRecord(in:)`, device B's data
