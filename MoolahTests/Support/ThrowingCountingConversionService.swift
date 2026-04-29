@@ -13,7 +13,7 @@ import os
 /// `CountingConversionService.swift`: that one always succeeds and is
 /// keyed by source-instrument id; this one is per-call programmable so
 /// tests can inject failures at specific row indices.
-final class ThrowingCountingConversionService: InstrumentConversionService {
+final class ThrowingCountingConversionService: InstrumentConversionService, Sendable {
   private let counter = OSAllocatedUnfairLock(initialState: 0)
   private let outcome: @Sendable (Int) -> Result<Decimal, any Error>
 

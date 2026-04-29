@@ -21,24 +21,24 @@ enum PlanPinningTestHelpers {
 
   /// Returns the joined `detail` column from the EXPLAIN QUERY PLAN
   /// rows for the given query. Callers pass the bare query SQL (without
-  /// the `EXPLAIN QUERY PLAN` prefix) — the helper prepends the
-  /// directive via string concatenation against `prefix`, a string
-  /// literal, so the `sql:` argument carries no string interpolation
-  /// from the caller and satisfies `guides/DATABASE_CODE_GUIDE.md` §4
-  /// (the only dynamic component is the caller's `query`, which is
-  /// itself a string-literal in every existing call site).
+  /// the `EXPLAIN QUERY PLAN` prefix) — the helper builds an `SQL`
+  /// literal that splices the caller's query in via GRDB's `\(sql:)`
+  /// raw-fragment interpolation. The `EXPLAIN QUERY PLAN ` prefix is a
+  /// compile-time string literal and the caller's `query` is also a
+  /// string literal at every call site (the pinning suites build SQL
+  /// against fixed SELECT statements, no end-user input flows through
+  /// here), so the composition stays safe per
+  /// `guides/DATABASE_CODE_GUIDE.md` §4 — and the helper passes a
+  /// `literal:` argument to GRDB rather than a freeform `sql:` string,
+  /// matching the pattern used by the production aggregation queries.
   /// Joining the `detail` column keeps `contains` checks readable and
   /// matches the format the SQLite docs use to describe plans.
   static func planDetail(
     _ database: DatabaseQueue, query: String, arguments: StatementArguments = []
   ) throws -> String {
     try database.read { database in
-      // `prefix` is a string literal; concatenation against the
-      // caller-supplied `query` (also a literal at every call site) is
-      // safe per §4 because no end-user input flows through here.
-      let prefix = "EXPLAIN QUERY PLAN "
-      let planSQL = prefix + query
-      let rows = try Row.fetchAll(database, sql: planSQL, arguments: arguments)
+      let planSQL: SQL = "EXPLAIN QUERY PLAN \(sql: query, arguments: arguments)"
+      let rows = try SQLRequest<Row>(literal: planSQL).fetchAll(database)
       return rows.compactMap { $0["detail"] as String? }.joined(separator: "; ")
     }
   }

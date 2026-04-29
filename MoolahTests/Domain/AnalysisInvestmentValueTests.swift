@@ -101,6 +101,57 @@ struct AnalysisInvestmentValueTests {
     #expect(abs(day3Fit.quantity - 30) <= tolerance)
   }
 
+  @Test(
+    "fetchDailyBalances with after cutoff carries pre-window investment-value snapshots forward")
+  func dailyBalancesPreWindowInvestmentSnapshotCarriedForward() async throws {
+    let backend = try CloudKitAnalysisTestBackend()
+    let investmentAccount = Account(
+      id: UUID(), name: "Portfolio", type: .investment, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(investmentAccount)
+
+    let bankAccount = Account(
+      id: UUID(), name: "Bank", type: .bank, instrument: .defaultTestInstrument)
+    _ = try await backend.accounts.create(bankAccount)
+
+    // Snapshot dated before the `after` cutoff. The cursor walk inside
+    // `applyInvestmentValues` must observe this row so it can carry the
+    // most-recent pre-window value forward into the first post-cutoff
+    // day. A SQL filter that drops snapshots strictly older than `after`
+    // breaks this — the per-account `latestByAccount` map starts empty
+    // and the in-window day reports a zero `investmentValue`.
+    let preWindowDate = try AnalysisTestHelpers.date(year: 2025, month: 2, day: 15)
+    try await backend.investments.setValue(
+      accountId: investmentAccount.id,
+      date: preWindowDate,
+      value: InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument))
+
+    // First in-window day for the historic walk; sits *after* the cutoff
+    // and carries a transaction so the historic span emits a row for it.
+    let cutoff = try AnalysisTestHelpers.date(year: 2025, month: 3, day: 1)
+    let firstWindowDay = try AnalysisTestHelpers.date(year: 2025, month: 3, day: 5)
+    _ = try await backend.transactions.create(
+      Transaction(
+        date: firstWindowDay, payee: "Interest",
+        legs: [
+          TransactionLeg(
+            accountId: bankAccount.id, instrument: .defaultTestInstrument,
+            quantity: 10, type: .income)
+        ]))
+
+    let balances = try await backend.analysis.fetchDailyBalances(
+      after: cutoff, forecastUntil: nil)
+    let firstWindowDayStart = AnalysisTestHelpers.calendar.startOfDay(for: firstWindowDay)
+    let firstWindowBalance = try #require(balances.first { $0.date == firstWindowDayStart })
+    let investmentValue = try #require(firstWindowBalance.investmentValue)
+    #expect(
+      investmentValue == InstrumentAmount(quantity: 1000, instrument: .defaultTestInstrument),
+      "Pre-window investment-value snapshot must carry forward into the in-window day")
+    #expect(
+      firstWindowBalance.netWorth
+        == firstWindowBalance.balance + investmentValue,
+      "netWorth must reflect the carried-forward investment value")
+  }
+
   @Test("fetchDailyBalances returns nil bestFit with fewer than 2 data points")
   func dailyBalancesBestFitSinglePoint() async throws {
     let backend = try CloudKitAnalysisTestBackend()

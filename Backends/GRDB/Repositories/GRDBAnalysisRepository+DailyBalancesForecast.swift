@@ -98,8 +98,10 @@ extension GRDBAnalysisRepository {
       do {
         forecastBalances[dayKey] = try await book.dailyBalance(
           on: instance.date, context: balanceContext, isForecast: true)
-      } catch is CancellationError {
-        throw CancellationError()
+      } catch let cancel as CancellationError {
+        // Cooperative cancellation surfaces unchanged — never folded
+        // into the per-day conversion-failure log path.
+        throw cancel
       } catch {
         forecastLogger.warning(
           """

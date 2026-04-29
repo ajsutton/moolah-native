@@ -20,6 +20,9 @@ import GRDB
 /// (Rule 6) — exchange-rate sources have no future rates, and a single
 /// snapshot is the best available estimate.
 extension GRDBAnalysisRepository {
+
+  // MARK: - Row types
+
   /// One row of the per-(day, account, instrument, type) SUM that
   /// drives the historic span of `fetchDailyBalances`.
   ///
@@ -58,6 +61,8 @@ extension GRDBAnalysisRepository {
     let qty: Int64
   }
 
+  // MARK: - Assembly input bundle
+
   /// Bundle of inputs for `assembleDailyBalances` — every value that
   /// crosses the `database.read` boundary fits inside this single
   /// `Sendable` aggregation so the read closure surfaces one MVCC
@@ -69,9 +74,10 @@ extension GRDBAnalysisRepository {
   ///   to `accountsFromTransfers`, mirroring the legacy
   ///   `investmentTransfersOnly: false` baseline).
   /// - `accountRows` / `earmarkRows` carry the post-`after` deltas.
-  /// - `investmentValues` carries every `investment_value` row in the
-  ///   window so the per-day investment-value override can run
-  ///   purely in Swift.
+  /// - `investmentValues` carries every `investment_value` row — all
+  ///   historical snapshots are loaded so the cursor walk in
+  ///   `applyInvestmentValues` can carry the most recent pre-window
+  ///   value forward into the first in-window day.
   /// - `scheduled` carries the scheduled `[Transaction]` for the
   ///   forecast extrapolation — the forecast path stays Swift-only
   ///   because SQL can't extrapolate recurring patterns.
@@ -86,6 +92,8 @@ extension GRDBAnalysisRepository {
     let instrumentMap: [String: Instrument]
     let forecastUntil: Date?
   }
+
+  // MARK: - Handler and context types
 
   /// Diagnostic context passed to the conversion-failure handler so
   /// the caller's logger can identify which day failed without
@@ -113,12 +121,14 @@ extension GRDBAnalysisRepository {
   /// `investmentAccountIds`, `instrumentMap`, `profileInstrument`, and
   /// `conversionService` references out of every helper signature so
   /// each function fits SwiftLint's `function_parameter_count` budget.
-  struct DailyBalancesAssemblyContext {
+  struct DailyBalancesAssemblyContext: Sendable {
     let investmentAccountIds: Set<UUID>
     let instrumentMap: [String: Instrument]
     let profileInstrument: Instrument
     let conversionService: any InstrumentConversionService
   }
+
+  // MARK: - Public assembly entry point
 
   /// Walks the per-day deltas, mutates a `PositionBook`, calls
   /// `PositionBook.dailyBalance(...)` once per day, then folds in the
@@ -193,6 +203,8 @@ extension GRDBAnalysisRepository {
 
     return actualBalances + forecastBalances
   }
+
+  // MARK: - Private helpers
 
   /// Seed the position book with pre-`after` rows under
   /// `asStartingBalance: true` semantics. Earmark rows use the same
@@ -340,7 +352,7 @@ extension GRDBAnalysisRepository {
   /// string, falling back to ambient fiat when the registry has no
   /// stored row for the id. Mirrors the same lookup used by the other
   /// SQL aggregations.
-  static func resolveInstrument(
+  private static func resolveInstrument(
     _ id: String, in map: [String: Instrument]
   ) -> Instrument {
     map[id] ?? Instrument.fiat(code: id)

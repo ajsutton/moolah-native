@@ -55,11 +55,13 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   // `resolveInstrument`).
   //
   // `+DailyBalancesAggregation.swift` — `fetchDailyBalancesAggregation`,
-  // private SQL fetch helpers (`fetchAccountDeltaRows`,
-  // `fetchEarmarkDeltaRows`, `fetchInvestmentAccountIds`,
+  // private SQL fetch helpers (`fetchAccountDeltaRowsPostCutoff` /
+  // `fetchAccountDeltaRowsPreCutoff`, `fetchEarmarkDeltaRowsPostCutoff` /
+  // `fetchEarmarkDeltaRowsPreCutoff`, `fetchInvestmentAccountIds`,
   // `fetchInvestmentValueSnapshots`, `fetchScheduledTransactions`,
   // `fetchPriorDeltaRows`, `readDailyBalancesAggregation`), and the
-  // `DeltaSide` enum that splits pre-/post-`after` reads.
+  // shared row-decoder helpers (`decodeAccountDeltaRows`,
+  // `decodeEarmarkDeltaRows`).
   //
   // `+DailyBalancesInvestmentValues.swift` — `applyInvestmentValues`
   // plus its private cursor helpers (`advanceInvestmentCursor`,

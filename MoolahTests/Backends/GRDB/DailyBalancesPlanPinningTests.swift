@@ -74,6 +74,41 @@ struct DailyBalancesPlanPinningTests {
     #expect(!detail.contains("SCAN \"transaction\""))
   }
 
+  @Test("fetchDailyBalances pre-cutoff account-dimension SUM avoids a SCAN")
+  func fetchDailyBalancesAccountDimensionPreCutoffAvoidsScan() throws {
+    let database = try makeDatabase()
+    // Mirrors the pre-cutoff variant of the per-(day, account,
+    // instrument, type) aggregation that seeds the `PositionBook` for
+    // `GRDBAnalysisRepository.fetchDailyBalances(after:forecastUntil:)`.
+    // Same shape as the post-cutoff query but with a `t.date < :after`
+    // upper bound — pinned independently so a future planner regression
+    // on either variant surfaces.
+    let detail = try planDetail(
+      database,
+      query: """
+        SELECT DATE(t.date)        AS day,
+               MIN(t.date)         AS sample_date,
+               leg.account_id      AS account_id,
+               leg.instrument_id   AS instrument_id,
+               leg.type            AS type,
+               SUM(leg.quantity)   AS qty
+        FROM transaction_leg leg
+        JOIN "transaction"    t ON leg.transaction_id = t.id
+        WHERE t.recur_period IS NULL
+          AND ? IS NOT NULL AND t.date < ?
+          AND leg.account_id IS NOT NULL
+        GROUP BY day, leg.account_id, leg.instrument_id, leg.type
+        ORDER BY day ASC
+        """,
+      arguments: [Date?.none, Date?.none])
+    let usesAcceptableLegIndex =
+      detail.contains("leg_by_account")
+      || detail.contains("leg_analysis_by_type_account")
+    #expect(usesAcceptableLegIndex)
+    #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
+    #expect(!detail.contains("SCAN \"transaction\""))
+  }
+
   @Test("fetchDailyBalances per-day earmark-dimension SUM uses leg_analysis_by_earmark_type")
   func fetchDailyBalancesEarmarkDimensionUsesEarmarkIndex() throws {
     let database = try makeDatabase()
@@ -108,27 +143,62 @@ struct DailyBalancesPlanPinningTests {
     #expect(!detail.contains("SCAN \"transaction\""))
   }
 
+  @Test("fetchDailyBalances pre-cutoff earmark-dimension SUM uses leg_analysis_by_earmark_type")
+  func fetchDailyBalancesEarmarkDimensionPreCutoffUsesEarmarkIndex() throws {
+    let database = try makeDatabase()
+    // Pre-cutoff variant of the earmark-dimension SUM. Same shape as
+    // the post-cutoff query, with the upper-bound predicate
+    // `t.date < :after`. The partial composite
+    // `leg_analysis_by_earmark_type` covers
+    // `(earmark_id, type, instrument_id, transaction_id, quantity)`,
+    // so the planner emits `USING COVERING INDEX` here too.
+    let detail = try planDetail(
+      database,
+      query: """
+        SELECT DATE(t.date)        AS day,
+               MIN(t.date)         AS sample_date,
+               leg.earmark_id      AS earmark_id,
+               leg.instrument_id   AS instrument_id,
+               leg.type            AS type,
+               SUM(leg.quantity)   AS qty
+        FROM transaction_leg leg
+        JOIN "transaction"    t ON leg.transaction_id = t.id
+        WHERE t.recur_period IS NULL
+          AND ? IS NOT NULL AND t.date < ?
+          AND leg.earmark_id IS NOT NULL
+        GROUP BY day, leg.earmark_id, leg.instrument_id, leg.type
+        ORDER BY day ASC
+        """,
+      arguments: [Date?.none, Date?.none])
+    #expect(detail.contains("leg_analysis_by_earmark_type"))
+    #expect(detail.contains("USING COVERING INDEX"))
+    #expect(!PlanPinningTestHelpers.planHasFullTableScanOf(detail, alias: "leg"))
+    #expect(!detail.contains("SCAN \"transaction\""))
+  }
+
   @Test("fetchDailyBalances investment-value lookup uses iv_by_account_date_value")
   func fetchDailyBalancesInvestmentValuesUseAccountDateIndex() throws {
     let database = try makeDatabase()
-    // Mirrors the per-account latest-value-as-of-day lookup driven by
+    // Mirrors the per-account snapshot loader driven by
     // `GRDBAnalysisRepository.fetchDailyBalances`. The composite
     // `iv_by_account_date_value` covers `(account_id, date, value,
-    // instrument_id)` so the optional `:after` lower bound and the
-    // SELECT list are both served by the index — SQLite emits
-    // `SCAN ... USING COVERING INDEX`, which is the no-base-row read
-    // shape we want; that is *not* a full table scan and
-    // `planHasFullTableScanOf` correctly distinguishes it from a bare
-    // `SCAN`.
+    // instrument_id)` so the SELECT list is served by the index —
+    // SQLite emits `SCAN ... USING COVERING INDEX`, which is the
+    // no-base-row read shape we want; that is *not* a full table scan
+    // and `planHasFullTableScanOf` correctly distinguishes it from a
+    // bare `SCAN`.
+    //
+    // Note: there is intentionally no `:after` lower bound on the
+    // production query — the cursor walk in `applyInvestmentValues`
+    // needs every historical snapshot so the most-recent pre-window
+    // value can carry forward into the first in-window day.
     let detail = try planDetail(
       database,
       query: """
         SELECT account_id, date, value, instrument_id
         FROM investment_value
-        WHERE (? IS NULL OR date >= ?)
         ORDER BY account_id ASC, date ASC
-        """,
-      arguments: [Date?.none, Date?.none])
+        """)
     #expect(detail.contains("iv_by_account_date_value"))
     #expect(detail.contains("USING COVERING INDEX"))
     // No alias on `investment_value` here — pin the bare-table form
