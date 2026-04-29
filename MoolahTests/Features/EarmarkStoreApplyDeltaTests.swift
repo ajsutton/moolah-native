@@ -11,16 +11,16 @@ struct EarmarkStoreApplyDeltaTests {
     let earmarkId = UUID()
     let accountId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
-      ], in: container)
+      ], in: database)
     TestBackend.seedWithTransactions(
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
       amounts: [earmarkId: (saved: 500, spent: 0)],
-      accountId: accountId, in: container)
+      accountId: accountId, in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -42,16 +42,16 @@ struct EarmarkStoreApplyDeltaTests {
     let earmarkId = UUID()
     let accountId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
-      ], in: container)
+      ], in: database)
     TestBackend.seedWithTransactions(
       earmarks: [Earmark(id: earmarkId, name: "Holiday Fund", instrument: instrument)],
       amounts: [earmarkId: (saved: 500, spent: 0)],
-      accountId: accountId, in: container)
+      accountId: accountId, in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -73,12 +73,12 @@ struct EarmarkStoreApplyDeltaTests {
     let earmark2Id = UUID()
     let accountId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: accountId, name: "Test", type: .bank, instrument: .defaultTestInstrument)
-      ], in: container)
+      ], in: database)
     TestBackend.seedWithTransactions(
       earmarks: [
         Earmark(id: earmark1Id, name: "Holiday", instrument: instrument),
@@ -88,7 +88,7 @@ struct EarmarkStoreApplyDeltaTests {
         earmark1Id: (saved: 500, spent: 0),
         earmark2Id: (saved: 300, spent: 0),
       ],
-      accountId: accountId, in: container)
+      accountId: accountId, in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)

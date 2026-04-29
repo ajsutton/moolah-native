@@ -128,7 +128,11 @@ extension SwiftDataToGRDBMigrator {
         """)
       throw error
     }
-    let mappedRows = sourceRows.map(Self.mapCategory(_:))
+    // Self-referential FK: a category's `parent_id` references another
+    // category in the same table. Sort parents before children so the
+    // child upsert has its parent already on disk under the FK pragma.
+    let mappedRows = Self.sortCategoriesParentFirst(
+      sourceRows.map(Self.mapCategory(_:)))
     if !mappedRows.isEmpty {
       try database.write { database in
         for row in mappedRows {
@@ -138,6 +142,42 @@ extension SwiftDataToGRDBMigrator {
     }
     rowCount = mappedRows.count
     committed = true
+  }
+
+  /// Returns the rows in parent-first order (Kahn-style topological
+  /// sort). Categories without a `parent_id` come first; each pass
+  /// emits any row whose parent is already present. Cycles are
+  /// degenerate by construction (the SwiftData layer's invariants
+  /// prevent them) but a defensive fall-through emits whatever is left
+  /// in original order if a cycle is encountered.
+  static func sortCategoriesParentFirst(_ rows: [CategoryRow]) -> [CategoryRow] {
+    var emitted: Set<UUID> = []
+    var remaining = rows
+    var ordered: [CategoryRow] = []
+    ordered.reserveCapacity(rows.count)
+    while !remaining.isEmpty {
+      var progressed = false
+      var stillBlocked: [CategoryRow] = []
+      for row in remaining {
+        let parentSettled = row.parentId.map(emitted.contains) ?? true
+        if parentSettled {
+          ordered.append(row)
+          emitted.insert(row.id)
+          progressed = true
+        } else {
+          stillBlocked.append(row)
+        }
+      }
+      if !progressed {
+        // No row could resolve its parent — emit the remainder verbatim
+        // and let the FK enforcement surface the bad data instead of
+        // looping forever.
+        ordered.append(contentsOf: stillBlocked)
+        return ordered
+      }
+      remaining = stillBlocked
+    }
+    return ordered
   }
 
   /// Maps a SwiftData `CategoryRecord` to a `CategoryRow`. Self-referential

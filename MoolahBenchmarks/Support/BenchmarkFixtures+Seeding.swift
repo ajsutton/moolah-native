@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 
 @testable import Moolah
 
@@ -23,27 +23,43 @@ extension BenchmarkFixtures {
     return UUID(uuidString: uuidString)!
   }
 
-  @MainActor
   static func seedAccounts(
     scale: BenchmarkScale,
-    in context: ModelContext
+    database: Database
   ) -> [UUID] {
     var ids: [UUID] = []
+    seedHeavyAccounts(scale: scale, into: &ids, database: database)
+    seedRegularAccounts(scale: scale, into: &ids, database: database)
+    seedInvestmentAccounts(scale: scale, into: &ids, database: database)
+    return ids
+  }
 
-    // First 3 are the heavy accounts with well-known IDs.
+  private static func seedHeavyAccounts(
+    scale: BenchmarkScale,
+    into ids: inout [UUID],
+    database: Database
+  ) {
     for i in 0..<min(3, scale.accounts) {
       let id = heavyAccountIds[i]
       ids.append(id)
-      let record = AccountRecord(
+      let account = Account(
         id: id,
         name: "Heavy Account \(i)",
-        type: AccountType.bank.rawValue,
+        type: .bank,
+        instrument: .defaultTestInstrument,
         position: i
       )
-      context.insert(record)
+      expecting("benchmark account insert failed") {
+        try AccountRow(domain: account).insert(database)
+      }
     }
+  }
 
-    // Remaining non-investment accounts.
+  private static func seedRegularAccounts(
+    scale: BenchmarkScale,
+    into ids: inout [UUID],
+    database: Database
+  ) {
     let nonInvestmentRemaining = scale.accounts - 3 - scale.investmentAccounts
     for i in 0..<nonInvestmentRemaining {
       let id = deterministicUUID(namespace: 0x01, index: i)
@@ -55,35 +71,43 @@ extension BenchmarkFixtures {
         case 1: .creditCard
         default: .asset
         }
-      let record = AccountRecord(
+      let account = Account(
         id: id,
         name: "Account \(i + 3)",
-        type: accountType.rawValue,
+        type: accountType,
+        instrument: .defaultTestInstrument,
         position: i + 3
       )
-      context.insert(record)
+      expecting("benchmark account insert failed") {
+        try AccountRow(domain: account).insert(database)
+      }
     }
+  }
 
-    // Investment accounts (last N).
+  private static func seedInvestmentAccounts(
+    scale: BenchmarkScale,
+    into ids: inout [UUID],
+    database: Database
+  ) {
     for i in 0..<scale.investmentAccounts {
       let id = deterministicUUID(namespace: 0x02, index: i)
       ids.append(id)
-      let record = AccountRecord(
+      let account = Account(
         id: id,
         name: "Investment \(i)",
-        type: AccountType.investment.rawValue,
+        type: .investment,
+        instrument: .defaultTestInstrument,
         position: scale.accounts - scale.investmentAccounts + i
       )
-      context.insert(record)
+      expecting("benchmark account insert failed") {
+        try AccountRow(domain: account).insert(database)
+      }
     }
-
-    return ids
   }
 
-  @MainActor
   static func seedCategories(
     scale: BenchmarkScale,
-    in context: ModelContext
+    database: Database
   ) -> [UUID] {
     var ids: [UUID] = []
     for i in 0..<scale.categories {
@@ -94,20 +118,17 @@ extension BenchmarkFixtures {
         (i >= 10 && i.isMultiple(of: 5))
         ? ids[i / 5]
         : nil
-      let record = CategoryRecord(
-        id: id,
-        name: "Category \(i)",
-        parentId: parentId
-      )
-      context.insert(record)
+      let category = Moolah.Category(id: id, name: "Category \(i)", parentId: parentId)
+      expecting("benchmark category insert failed") {
+        try CategoryRow(domain: category).insert(database)
+      }
     }
     return ids
   }
 
-  @MainActor
   static func seedEarmarks(
     scale: BenchmarkScale,
-    in context: ModelContext,
+    database: Database,
     instrument: Instrument
   ) -> [UUID] {
     var ids: [UUID] = []
@@ -115,18 +136,19 @@ extension BenchmarkFixtures {
       let id = deterministicUUID(namespace: 0x04, index: i)
       ids.append(id)
       // Half have savings targets.
-      let savingsTarget: Int64? =
+      let savingsGoal: InstrumentAmount? =
         i.isMultiple(of: 2)
-        ? InstrumentAmount(quantity: Decimal((i + 1) * 100), instrument: instrument).storageValue
+        ? InstrumentAmount(quantity: Decimal((i + 1) * 100), instrument: instrument)
         : nil
-      let record = EarmarkRecord(
+      let earmark = Earmark(
         id: id,
         name: "Earmark \(i)",
+        instrument: instrument,
         position: i,
-        savingsTarget: savingsTarget,
-        savingsTargetInstrumentId: savingsTarget != nil ? instrument.id : nil
-      )
-      context.insert(record)
+        savingsGoal: savingsGoal)
+      expecting("benchmark earmark insert failed") {
+        try EarmarkRow(domain: earmark).insert(database)
+      }
     }
     return ids
   }
@@ -142,160 +164,10 @@ extension BenchmarkFixtures {
     let earmarks: [UUID]
   }
 
-  @MainActor
-  static func seedTransactions(
-    scale: BenchmarkScale,
-    ids: SeedIds,
-    in context: ModelContext,
-    instrument: Instrument
-  ) {
-    let fiveYearsAgo = Calendar.current.date(byAdding: .year, value: -5, to: Date())!
-    let timeSpan = Date().timeIntervalSince(fiveYearsAgo)
-    let scheduledCount = max(1, Int(Double(scale.transactions) * 0.002))
-    let otherAccountIds = Array(ids.accounts.dropFirst(3))
-
-    for i in 0..<scale.transactions {
-      let id = deterministicUUID(namespace: 0x05, index: i)
-      let accountId = pickAccountId(for: i, otherAccountIds: otherAccountIds)
-      let (txnType, toAccountId) = pickType(for: i, accountId: accountId, allIds: ids.accounts)
-
-      // Spread dates across 5 years deterministically.
-      let fraction = Double(i) / Double(max(1, scale.transactions - 1))
-      let date = fiveYearsAgo.addingTimeInterval(fraction * timeSpan)
-      let quantity = quantityFor(index: i, type: txnType, instrument: instrument)
-
-      // Assign category to ~70% of transactions.
-      let categoryId: UUID? =
-        (i % 10 < 7 && !ids.categories.isEmpty)
-        ? ids.categories[i % ids.categories.count]
-        : nil
-      // Assign earmark to ~5% of transactions.
-      let earmarkId: UUID? =
-        (i.isMultiple(of: 20) && !ids.earmarks.isEmpty)
-        ? ids.earmarks[i % ids.earmarks.count]
-        : nil
-      // ~0.2% are scheduled (recurring).
-      let isScheduled = i < scheduledCount
-      let spec = TransactionSpec(
-        id: id,
-        date: date,
-        payee: "Payee \(i % 200)",
-        isScheduled: isScheduled,
-        accountId: accountId,
-        toAccountId: toAccountId,
-        instrument: instrument,
-        quantity: quantity,
-        txnType: txnType,
-        categoryId: categoryId,
-        earmarkId: earmarkId)
-      insertTransactionRecords(spec, in: context)
-    }
-  }
-
-  struct TransactionSpec {
-    let id: UUID
-    let date: Date
-    let payee: String
-    let isScheduled: Bool
-    let accountId: UUID
-    let toAccountId: UUID?
-    let instrument: Instrument
-    let quantity: Int64
-    let txnType: TransactionType
-    let categoryId: UUID?
-    let earmarkId: UUID?
-  }
-
-  /// Distribute across accounts: 38% heavy0, 32% heavy1, 16% heavy2, 14% others.
-  static func pickAccountId(for i: Int, otherAccountIds: [UUID]) -> UUID {
-    let bucket = i % 100
-    if bucket < 38 { return heavyAccountIds[0] }
-    if bucket < 70 { return heavyAccountIds[1] }
-    if bucket < 86 { return heavyAccountIds[2] }
-    if !otherAccountIds.isEmpty { return otherAccountIds[i % otherAccountIds.count] }
-    return heavyAccountIds[0]
-  }
-
-  /// Transaction type: 60% expense, 30% income, 10% transfer.
-  static func pickType(
-    for i: Int, accountId: UUID, allIds: [UUID]
-  ) -> (TransactionType, UUID?) {
-    let typeBucket = i % 10
-    if typeBucket < 6 { return (.expense, nil) }
-    if typeBucket < 9 { return (.income, nil) }
-    // Transfer: pick a different account for the destination.
-    let destIndex = (allIds.firstIndex(of: accountId) ?? 0 + 1) % allIds.count
-    return (.transfer, allIds[destIndex])
-  }
-
-  /// Quantity: vary between 1 and 500 (whole units).
-  static func quantityFor(
-    index i: Int, type: TransactionType, instrument: Instrument
-  ) -> Int64 {
-    switch type {
-    case .expense:
-      return InstrumentAmount(
-        quantity: Decimal(-((i % 500 + 1))), instrument: instrument
-      ).storageValue
-    case .income:
-      return InstrumentAmount(
-        quantity: Decimal(i % 800 + 1), instrument: instrument
-      ).storageValue
-    case .transfer:
-      return InstrumentAmount(
-        quantity: Decimal(i % 300 + 1), instrument: instrument
-      ).storageValue
-    default:
-      return 0
-    }
-  }
-
-  @MainActor
-  static func insertTransactionRecords(
-    _ spec: TransactionSpec, in context: ModelContext
-  ) {
-    let recurPeriod: String? = spec.isScheduled ? RecurPeriod.month.rawValue : nil
-    let recurEvery: Int? = spec.isScheduled ? 1 : nil
-    let record = TransactionRecord(
-      id: spec.id,
-      date: spec.date,
-      payee: spec.payee,
-      recurPeriod: recurPeriod,
-      recurEvery: recurEvery
-    )
-    context.insert(record)
-
-    let legRecord = TransactionLegRecord(
-      transactionId: spec.id,
-      accountId: spec.accountId,
-      instrumentId: spec.instrument.id,
-      quantity: spec.quantity,
-      type: spec.txnType.rawValue,
-      categoryId: spec.categoryId,
-      earmarkId: spec.earmarkId,
-      sortOrder: 0
-    )
-    context.insert(legRecord)
-
-    // For transfers, create a second leg for the destination account.
-    if let toAccountId = spec.toAccountId {
-      let toLegRecord = TransactionLegRecord(
-        transactionId: spec.id,
-        accountId: toAccountId,
-        instrumentId: spec.instrument.id,
-        quantity: -spec.quantity,
-        type: TransactionType.transfer.rawValue,
-        sortOrder: 1
-      )
-      context.insert(toLegRecord)
-    }
-  }
-
-  @MainActor
   static func seedInvestmentValues(
     scale: BenchmarkScale,
     accountIds: [UUID],
-    in context: ModelContext,
+    database: Database,
     instrument: Instrument
   ) {
     // Investment accounts are the last N in the account list.
@@ -317,14 +189,17 @@ extension BenchmarkFixtures {
         quantity: Decimal((i % 4900 + 100)), instrument: instrument
       ).storageValue
 
-      let record = InvestmentValueRecord(
+      let row = InvestmentValueRow(
         id: id,
+        recordName: InvestmentValueRow.recordName(for: id),
         accountId: investAccountId,
         date: date,
         value: value,
-        instrumentId: instrument.id
-      )
-      context.insert(record)
+        instrumentId: instrument.id,
+        encodedSystemFields: nil)
+      expecting("benchmark investment value insert failed") {
+        try row.insert(database)
+      }
     }
   }
 }

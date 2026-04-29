@@ -1,4 +1,4 @@
-import SwiftData
+import GRDB
 import XCTest
 
 @testable import Moolah
@@ -8,7 +8,7 @@ import XCTest
 final class PriorBalanceBenchmarks: XCTestCase {
 
   nonisolated(unsafe) private static var _backend: CloudKitBackend?
-  nonisolated(unsafe) private static var _container: ModelContainer?
+  nonisolated(unsafe) private static var _database: DatabaseQueue?
 
   override static func setUp() {
     super.setUp()
@@ -16,17 +16,15 @@ final class PriorBalanceBenchmarks: XCTestCase {
       try TestBackend.create()
     }
     _backend = result.backend
-    _container = result.container
-    awaitSyncExpecting { @MainActor in
-      BenchmarkFixtures.seed(scale: .twoX, in: result.container)
-    }
+    _database = result.database
+    BenchmarkFixtures.seed(scale: .twoX, in: result.database)
     // Pre-warm: load accounts so balances are computed from legs.
     _ = awaitSyncExpecting { try await result.backend.accounts.fetchAll() }
   }
 
   override static func tearDown() {
     _backend = nil
-    _container = nil
+    _database = nil
     super.tearDown()
   }
 
@@ -35,12 +33,6 @@ final class PriorBalanceBenchmarks: XCTestCase {
       fatalError("setUp must initialise _backend before tests run")
     }
     return backend
-  }
-  private var container: ModelContainer {
-    guard let container = Self._container else {
-      fatalError("setUp must initialise _container before tests run")
-    }
-    return container
   }
 
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }

@@ -13,6 +13,7 @@ import XCTest
 final class SyncUploadBenchmarks: XCTestCase {
 
   nonisolated(unsafe) private static var _container: ModelContainer?
+  nonisolated(unsafe) private static var _database: DatabaseQueue?
   nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler?
   nonisolated(unsafe) private static var _transactionUUIDs400: Set<UUID> = []
 
@@ -21,32 +22,45 @@ final class SyncUploadBenchmarks: XCTestCase {
     let result = expecting("benchmark TestBackend.create failed") {
       try TestBackend.create()
     }
-    _container = result.container
-    awaitSyncExpecting { @MainActor in
-      BenchmarkFixtures.seed(scale: .twoX, in: result.container)
-      let profileId = UUID()
-      let zoneID = CKRecordZone.ID(
-        zoneName: "profile-\(profileId.uuidString)",
-        ownerName: CKCurrentUserDefaultName)
-      let database = expecting("benchmark in-memory GRDB queue") {
-        try ProfileDatabase.openInMemory()
-      }
-      let bundle = ProfileGRDBRepositories(
-        csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
-        importRules: GRDBImportRuleRepository(database: database))
-      _handler = ProfileDataSyncHandler(
-        profileId: profileId, zoneID: zoneID, modelContainer: result.container,
-        grdbRepositories: bundle)
-      var descriptor = FetchDescriptor<TransactionRecord>()
-      descriptor.fetchLimit = 400
-      let records = try result.container.mainContext.fetch(descriptor)
-      _transactionUUIDs400 = Set(records.map(\.id))
+    _database = result.database
+    BenchmarkFixtures.seed(scale: .twoX, in: result.database)
+    let container = expecting("benchmark sync-handler container") {
+      try TestModelContainer.create()
     }
+    _container = container
+    let profileId = UUID()
+    let zoneID = CKRecordZone.ID(
+      zoneName: "profile-\(profileId.uuidString)",
+      ownerName: CKCurrentUserDefaultName)
+    let bundle = ProfileGRDBRepositories(
+      csvImportProfiles: result.backend.grdbCSVImportProfiles,
+      importRules: result.backend.grdbImportRules,
+      instruments: result.backend.grdbInstruments,
+      categories: result.backend.grdbCategories,
+      accounts: result.backend.grdbAccounts,
+      earmarks: result.backend.grdbEarmarks,
+      earmarkBudgetItems: result.backend.grdbEarmarkBudgetItems,
+      investmentValues: result.backend.grdbInvestments,
+      transactions: result.backend.grdbTransactions,
+      transactionLegs: result.backend.grdbTransactionLegs)
+    _handler = ProfileDataSyncHandler(
+      profileId: profileId, zoneID: zoneID, modelContainer: container,
+      grdbRepositories: bundle)
+    let ids = expecting("benchmark fetch existing ids failed") {
+      try result.database.read { database in
+        try TransactionRow
+          .limit(400)
+          .fetchAll(database)
+          .map(\.id)
+      }
+    }
+    _transactionUUIDs400 = Set(ids)
   }
 
   override static func tearDown() {
     _handler = nil
     _container = nil
+    _database = nil
     _transactionUUIDs400 = []
     super.tearDown()
   }
@@ -76,7 +90,7 @@ final class SyncUploadBenchmarks: XCTestCase {
   func testBuildBatchRecordLookup_400transactions() {
     let handler = handler
     let uuids = transactionUUIDs400
-    let groups: [String: Set<UUID>] = [TransactionRecord.recordType: uuids]
+    let groups: [String: Set<UUID>] = [TransactionRow.recordType: uuids]
     measure(metrics: metrics, options: options) {
       _ = awaitSyncExpecting { @MainActor in
         handler.buildBatchRecordLookup(byRecordType: groups)

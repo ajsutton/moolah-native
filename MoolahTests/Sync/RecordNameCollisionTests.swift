@@ -32,18 +32,18 @@ struct RecordNameCollisionTests {
     // types sharing a UUID produce two independent entries — preventing
     // the same `CKRecord` from being appended to a batch twice.
     let lookup = handler.buildBatchRecordLookup(byRecordType: [
-      AccountRecord.recordType: [sharedId],
-      TransactionRecord.recordType: [sharedId],
+      AccountRow.recordType: [sharedId],
+      TransactionRow.recordType: [sharedId],
     ])
 
-    let accountRecord = try #require(lookup[AccountRecord.recordType]?[sharedId])
-    let transactionRecord = try #require(lookup[TransactionRecord.recordType]?[sharedId])
+    let accountRecord = try #require(lookup[AccountRow.recordType]?[sharedId])
+    let transactionRecord = try #require(lookup[TransactionRow.recordType]?[sharedId])
     #expect(
       accountRecord.recordID.recordName
-        == "\(AccountRecord.recordType)|\(sharedId.uuidString)")
+        == "\(AccountRow.recordType)|\(sharedId.uuidString)")
     #expect(
       transactionRecord.recordID.recordName
-        == "\(TransactionRecord.recordType)|\(sharedId.uuidString)")
+        == "\(TransactionRow.recordType)|\(sharedId.uuidString)")
   }
 
   @Test("queueUnsyncedRecords produces prefixed recordNames per type")
@@ -66,39 +66,42 @@ struct RecordNameCollisionTests {
     let recordIDs = handler.queueUnsyncedRecords()
     let names = Set(recordIDs.map(\.recordName))
     #expect(
-      names.contains("\(AccountRecord.recordType)|\(sharedId.uuidString)"))
+      names.contains("\(AccountRow.recordType)|\(sharedId.uuidString)"))
     #expect(
       names.contains(
-        "\(TransactionRecord.recordType)|\(sharedId.uuidString)"))
+        "\(TransactionRow.recordType)|\(sharedId.uuidString)"))
   }
 
   // MARK: - 2. Uplink uses prefixed name for new records
 
-  @Test("buildCKRecord for a brand-new AccountRecord emits a prefixed recordName")
+  @Test("buildCKRecord for a brand-new AccountRow emits a prefixed recordName")
   func buildCKRecordEmitsPrefixedRecordNameForNewRecords() throws {
-    let (handler, container) =
+    let (handler, _) =
       try ProfileDataSyncHandlerTestSupport
       .makeHandler()
 
     let accountId = UUID()
-    let account = AccountRecord(
-      id: accountId, name: "New", type: "bank", position: 0,
-      isHidden: false)
-    let context = ModelContext(container)
-    context.insert(account)
-    try context.save()
+    let row = AccountRow(
+      id: accountId,
+      recordName: AccountRow.recordName(for: accountId),
+      name: "New",
+      type: "bank",
+      instrumentId: "AUD",
+      position: 0,
+      isHidden: false,
+      encodedSystemFields: nil)
 
-    let built = handler.buildCKRecord(for: account)
+    let built = handler.buildCKRecord(from: row, encodedSystemFields: nil)
     #expect(
       built.recordID.recordName
-        == "\(AccountRecord.recordType)|\(accountId.uuidString)")
+        == "\(AccountRow.recordType)|\(accountId.uuidString)")
   }
 
   // MARK: - 3. Uplink ignores stale bare-UUID cached system fields
 
   @Test("buildCKRecord ignores legacy bare-UUID recordName in cached system fields")
   func buildCKRecordIgnoresLegacyBareUUIDCachedSystemFields() throws {
-    let (handler, container) =
+    let (handler, _) =
       try ProfileDataSyncHandlerTestSupport
       .makeHandler()
 
@@ -114,19 +117,20 @@ struct RecordNameCollisionTests {
         recordName: accountId.uuidString, zoneID: handler.zoneID))
     let legacySystemFields = legacyRecord.encodedSystemFields
 
-    let context = ModelContext(container)
-    let account = AccountRecord(
-      id: accountId, name: "Legacy", type: "bank", position: 0,
-      isHidden: false)
-    account.encodedSystemFields = legacySystemFields
-    context.insert(account)
-    try context.save()
+    let row = AccountRow(
+      id: accountId,
+      recordName: AccountRow.recordName(for: accountId),
+      name: "Updated",
+      type: "bank",
+      instrumentId: "AUD",
+      position: 0,
+      isHidden: false,
+      encodedSystemFields: legacySystemFields)
 
-    account.name = "Updated"
-    let built = handler.buildCKRecord(for: account)
+    let built = handler.buildCKRecord(from: row, encodedSystemFields: legacySystemFields)
     #expect(
       built.recordID.recordName
-        == "\(AccountRecord.recordType)|\(accountId.uuidString)")
+        == "\(AccountRow.recordType)|\(accountId.uuidString)")
     #expect(built["name"] as? String == "Updated")
   }
 

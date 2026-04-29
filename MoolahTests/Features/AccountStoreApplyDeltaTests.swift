@@ -14,9 +14,9 @@ struct AccountStoreApplyDeltaTests {
   func testApplyDeltaReducesAccountBalance() async throws {
     let acctId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: container)
+      id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -33,9 +33,9 @@ struct AccountStoreApplyDeltaTests {
   func testApplyDeltaIncreasesAccountBalance() async throws {
     let acctId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: container)
+      id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -53,11 +53,11 @@ struct AccountStoreApplyDeltaTests {
     let checkingId = UUID()
     let savingsId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      id: checkingId, name: "Checking", balance: Decimal(100000) / 100, in: container)
+      id: checkingId, name: "Checking", balance: Decimal(100000) / 100, in: database)
     _ = AccountStoreTestSupport.seedAccount(
-      id: savingsId, name: "Savings", balance: Decimal(200000) / 100, in: container)
+      id: savingsId, name: "Savings", balance: Decimal(200000) / 100, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -79,9 +79,9 @@ struct AccountStoreApplyDeltaTests {
   func testApplyDeltaUpdatesTotals() async throws {
     let checkingId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      id: checkingId, name: "Checking", balance: Decimal(100000) / 100, in: container)
+      id: checkingId, name: "Checking", balance: Decimal(100000) / 100, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -100,9 +100,9 @@ struct AccountStoreApplyDeltaTests {
   func testApplyDeltaViaBalanceDeltaCalculator() async throws {
     let acctId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: container)
+      id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -129,9 +129,9 @@ struct AccountStoreApplyDeltaTests {
     let acctId = UUID()
     let unknownId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: container)
+      id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -164,9 +164,9 @@ struct AccountStoreApplyDeltaTests {
   @Test
   func testConvertedTotalsPopulatedAfterLoad() async throws {
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Checking", balance: Decimal(100000) / 100, in: container)
+      name: "Checking", balance: Decimal(100000) / 100, in: database)
     let store = AccountStore(
       repository: backend.accounts,
       conversionService: backend.conversionService,
@@ -184,9 +184,9 @@ struct AccountStoreApplyDeltaTests {
   func testConvertedTotalsUpdateAfterApplyDelta() async throws {
     let acctId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: container)
+      id: acctId, name: "Checking", balance: Decimal(100000) / 100, in: database)
     let store = AccountStore(
       repository: backend.accounts,
       conversionService: backend.conversionService,

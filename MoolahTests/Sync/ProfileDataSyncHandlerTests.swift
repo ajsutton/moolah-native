@@ -19,7 +19,7 @@ struct ProfileDataSyncHandlerTests {
     let ckRecord = CKRecord(
       recordType: "AccountRecord",
       recordID: CKRecord.ID(
-        recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
+        recordType: AccountRow.recordType, uuid: accountId, zoneID: handler.zoneID)
     )
     ckRecord["name"] = "Remote Account" as CKRecordValue
     ckRecord["type"] = "bank" as CKRecordValue
@@ -59,7 +59,7 @@ struct ProfileDataSyncHandlerTests {
     let ckRecord = CKRecord(
       recordType: "AccountRecord",
       recordID: CKRecord.ID(
-        recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
+        recordType: AccountRow.recordType, uuid: accountId, zoneID: handler.zoneID)
     )
     ckRecord["name"] = "Updated Name" as CKRecordValue
     ckRecord["type"] = "bank" as CKRecordValue
@@ -94,7 +94,7 @@ struct ProfileDataSyncHandlerTests {
     try context.save()
 
     let recordID = CKRecord.ID(
-      recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
+      recordType: AccountRow.recordType, uuid: accountId, zoneID: handler.zoneID)
     let result = handler.applyRemoteChanges(
       saved: [], deleted: [(recordID, "AccountRecord")])
 
@@ -114,31 +114,34 @@ struct ProfileDataSyncHandlerTests {
 
   @Test
   func buildCKRecordProducesCorrectRecord() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+    let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
-    let account = AccountRecord(
-      id: UUID(), name: "Savings", type: "bank", position: 0,
-      isHidden: false
-    )
-    let context = ModelContext(container)
-    context.insert(account)
-    try context.save()
+    let id = UUID()
+    let row = AccountRow(
+      id: id,
+      recordName: AccountRow.recordName(for: id),
+      name: "Savings",
+      type: "bank",
+      instrumentId: "AUD",
+      position: 0,
+      isHidden: false,
+      encodedSystemFields: nil)
 
-    let ckRecord = handler.buildCKRecord(for: account)
+    let ckRecord = handler.buildCKRecord(from: row, encodedSystemFields: nil)
 
     #expect(ckRecord.recordType == "AccountRecord")
     #expect(
       ckRecord.recordID.recordName
-        == "\(AccountRecord.recordType)|\(account.id.uuidString)")
+        == "\(AccountRow.recordType)|\(id.uuidString)")
     #expect(ckRecord.recordID.zoneID == handler.zoneID)
     #expect(ckRecord["name"] as? String == "Savings")
   }
 
   @Test("buildCKRecord drops cached system fields when they point to a different zone")
   func buildCKRecordDropsCachedFieldsOnZoneMismatch() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+    let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
-    // Simulate legacy corruption: a local AccountRecord whose
+    // Simulate legacy corruption: a local AccountRow whose cached
     // encodedSystemFields blob references a DIFFERENT profile's zone.
     // Historically this happened pre-April-15 when per-profile sync engines
     // received fetch events for every zone in the database and upserted
@@ -154,19 +157,21 @@ struct ProfileDataSyncHandlerTests {
     let foreignCK = CKRecord(
       recordType: "AccountRecord",
       recordID: CKRecord.ID(
-        recordType: AccountRecord.recordType, uuid: accountId, zoneID: foreignZone)
+        recordType: AccountRow.recordType, uuid: accountId, zoneID: foreignZone)
     )
     let foreignSystemFields = foreignCK.encodedSystemFields
 
-    let context = ModelContext(container)
-    let account = AccountRecord(
-      id: accountId, name: "Corrupt", type: "bank", position: 0, isHidden: false
-    )
-    account.encodedSystemFields = foreignSystemFields
-    context.insert(account)
-    try context.save()
+    let row = AccountRow(
+      id: accountId,
+      recordName: AccountRow.recordName(for: accountId),
+      name: "Corrupt",
+      type: "bank",
+      instrumentId: "AUD",
+      position: 0,
+      isHidden: false,
+      encodedSystemFields: foreignSystemFields)
 
-    let built = handler.buildCKRecord(for: account)
+    let built = handler.buildCKRecord(from: row, encodedSystemFields: foreignSystemFields)
 
     #expect(built.recordID.zoneID == handler.zoneID)
     // A fresh (unsent) CKRecord has no change tag. Sending with the foreign
@@ -174,43 +179,47 @@ struct ProfileDataSyncHandlerTests {
     #expect(built.recordChangeTag == nil)
     #expect(
       built.recordID.recordName
-        == "\(AccountRecord.recordType)|\(accountId.uuidString)")
+        == "\(AccountRow.recordType)|\(accountId.uuidString)")
     #expect(built["name"] as? String == "Corrupt")
   }
 
   @Test
   func buildCKRecordPreservesCachedSystemFields() throws {
-    let (handler, container) = try ProfileDataSyncHandlerTestSupport.makeHandler()
+    let (handler, _) = try ProfileDataSyncHandlerTestSupport.makeHandler()
 
     let accountId = UUID()
-    // Create a CKRecord to get system fields from
+    // Create a CKRecord to extract its encoded system fields. We capture
+    // the bytes off this synthetic CKRecord and feed them straight into
+    // `buildCKRecord(from:encodedSystemFields:)` to assert reuse.
     let originalCK = CKRecord(
       recordType: "AccountRecord",
       recordID: CKRecord.ID(
-        recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
+        recordType: AccountRow.recordType, uuid: accountId, zoneID: handler.zoneID)
     )
     originalCK["name"] = "Test" as CKRecordValue
     originalCK["type"] = "bank" as CKRecordValue
     originalCK["position"] = 0 as CKRecordValue
     originalCK["isHidden"] = 0 as CKRecordValue
+    let cachedSystemFields = originalCK.encodedSystemFields
 
-    // Apply remote changes which stores system fields on the model
-    _ = handler.applyRemoteChanges(saved: [originalCK], deleted: [])
+    let row = AccountRow(
+      id: accountId,
+      recordName: AccountRow.recordName(for: accountId),
+      name: "Test",
+      type: "bank",
+      instrumentId: "AUD",
+      position: 0,
+      isHidden: false,
+      encodedSystemFields: cachedSystemFields)
 
-    // Fetch the record back
-    let context = ModelContext(container)
-    let records = try context.fetch(
-      FetchDescriptor<AccountRecord>(predicate: #Predicate { $0.id == accountId })
-    )
-    let account = try #require(records.first)
-    #expect(account.encodedSystemFields != nil)
-
-    // Build a CKRecord — should use cached system fields, which now hold a
-    // prefixed recordID since `applyRemoteChanges` ingested a prefixed CKRecord.
-    let built = handler.buildCKRecord(for: account)
+    // Build a CKRecord — should reuse cached system fields, which carry a
+    // prefixed recordID by construction. The `buildCKRecord` contract is
+    // that field values from `row.toCKRecord` are merged onto the cached
+    // record.
+    let built = handler.buildCKRecord(from: row, encodedSystemFields: cachedSystemFields)
     #expect(
       built.recordID.recordName
-        == "\(AccountRecord.recordType)|\(accountId.uuidString)")
+        == "\(AccountRow.recordType)|\(accountId.uuidString)")
     #expect(built.recordID.zoneID == handler.zoneID)
     #expect(built["name"] as? String == "Test")
   }

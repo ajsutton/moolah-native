@@ -103,7 +103,7 @@ extension ProfileSchema {
             record_name            TEXT    NOT NULL UNIQUE,
             name                   TEXT    NOT NULL,
             type                   TEXT    NOT NULL
-                CHECK (type IN ('bank', 'creditCard', 'asset', 'investment')),
+                CHECK (type IN ('bank', 'cc', 'asset', 'investment')),
             instrument_id          TEXT    NOT NULL,
             position               INTEGER NOT NULL CHECK (position >= 0),
             is_hidden              INTEGER NOT NULL CHECK (is_hidden IN (0, 1)),
@@ -166,9 +166,7 @@ extension ProfileSchema {
             notes                             TEXT,
             recur_period                      TEXT
                 CHECK (recur_period IS NULL
-                       OR recur_period IN ('once', 'daily', 'weekly',
-                                           'monthly', 'quarterly',
-                                           'semiAnnual', 'annual')),
+                       OR recur_period IN ('ONCE', 'DAY', 'WEEK', 'MONTH', 'YEAR')),
             recur_every                       INTEGER
                 CHECK (recur_every IS NULL OR recur_every > 0),
             -- Denormalised ImportOrigin (eight columns) — matches the
@@ -210,7 +208,7 @@ extension ProfileSchema {
             instrument_id          TEXT    NOT NULL,
             quantity               INTEGER NOT NULL,
             type                   TEXT    NOT NULL
-                CHECK (type IN ('income', 'expense', 'transfer', 'openingBalance')),
+                CHECK (type IN ('income', 'expense', 'transfer', 'openingBalance', 'trade')),
             category_id            BLOB             REFERENCES category(id) ON DELETE SET NULL,
             earmark_id             BLOB             REFERENCES earmark(id)  ON DELETE SET NULL,
             sort_order             INTEGER NOT NULL CHECK (sort_order >= 0),

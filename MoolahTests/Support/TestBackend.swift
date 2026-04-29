@@ -1,46 +1,45 @@
 import Foundation
 import GRDB
-import SwiftData
 
 @testable import Moolah
 
-/// Saves a `ModelContext` and traps with a clear message on failure.
+/// Wraps `database.write` and traps with a clear message on failure.
 ///
-/// In-memory SwiftData saves during test seeding should never fail; a
+/// In-memory GRDB writes during test seeding should never fail; a
 /// failure here means the test harness is broken and the suite cannot
 /// proceed. Trapping keeps seed call sites free of `try!` without
 /// forcing every seed helper (and its hundreds of callers) to throw.
-private func saveOrTrap(
-  _ context: ModelContext,
+private func writeOrTrap(
+  _ database: any DatabaseWriter,
   file: StaticString = #file,
-  line: UInt = #line
+  line: UInt = #line,
+  _ block: (Database) throws -> Void
 ) {
   do {
-    try context.save()
+    try database.write(block)
   } catch {
     preconditionFailure(
-      "TestBackend seed save failed: \(error)",
+      "TestBackend seed write failed: \(error)",
       file: file,
       line: line
     )
   }
 }
 
-/// Factory for creating CloudKitBackend instances backed by an in-memory ModelContainer.
+/// Factory for creating CloudKitBackend instances backed by an in-memory GRDB database.
 /// Used in all tests as a replacement for InMemoryBackend and individual InMemory*Repository types.
 enum TestBackend {
-  /// Creates a CloudKitBackend backed by an in-memory ModelContainer.
-  /// Each call creates a fresh, isolated container — no cross-test contamination.
+  /// Creates a CloudKitBackend backed by an in-memory GRDB database.
+  /// Each call creates a fresh, isolated queue — no cross-test contamination.
   static func create(
     instrument: Instrument = .defaultTestInstrument,
     exchangeRates: [String: [String: Decimal]] = [:]
-  ) throws -> (backend: CloudKitBackend, container: ModelContainer) {
-    let container = try TestModelContainer.create()
+  ) throws -> (backend: CloudKitBackend, database: DatabaseQueue) {
     let rateClient = FixedRateClient(rates: exchangeRates)
-    // One in-memory GRDB queue per backend covers both the rate-cache
-    // service and the GRDB-backed repos on the same connection — slice
-    // 0's two synced tables (`csv_import_profile`, `import_rule`) and
-    // the rate caches share the per-profile `data.sqlite` in production.
+    // One in-memory GRDB queue per backend covers every repository on
+    // the same connection — domain rows, the rate-cache service, and
+    // the two synced csv-import tables share the per-profile
+    // `data.sqlite` in production.
     let database = try ProfileDatabase.openInMemory()
     let exchangeRateService = ExchangeRateService(
       client: rateClient, database: database)
@@ -53,7 +52,7 @@ enum TestBackend {
       conversionService: conversionService,
       instrumentRegistry: registry
     )
-    return (backend, container)
+    return (backend, database)
   }
 
   // MARK: - Data Seeding
@@ -62,14 +61,14 @@ enum TestBackend {
   @discardableResult
   static func seed(
     accounts: [Account],
-    in container: ModelContainer,
+    in database: any DatabaseWriter,
     instrument: Instrument = .defaultTestInstrument
   ) -> [Account] {
-    let context = ModelContext(container)
-    for account in accounts {
-      context.insert(AccountRecord.from(account))
+    writeOrTrap(database) { database in
+      for account in accounts {
+        try AccountRow(domain: account).insert(database)
+      }
     }
-    saveOrTrap(context)
     return accounts
   }
 
@@ -78,130 +77,161 @@ enum TestBackend {
   @discardableResult
   static func seed(
     accounts: [(account: Account, openingBalance: InstrumentAmount)],
-    in container: ModelContainer,
+    in database: any DatabaseWriter,
     instrument: Instrument = .defaultTestInstrument
   ) -> [Account] {
-    let context = ModelContext(container)
-    for (account, openingBalance) in accounts {
-      context.insert(AccountRecord.from(account))
-      if !openingBalance.isZero {
-        let txnId = UUID()
-        let txn = TransactionRecord(
-          id: txnId,
-          date: Date(),
-          recurPeriod: nil,
-          recurEvery: nil
-        )
-        context.insert(txn)
-        let leg = TransactionLegRecord(
-          transactionId: txnId,
-          accountId: account.id,
-          instrumentId: instrument.id,
-          quantity: openingBalance.storageValue,
-          type: TransactionType.openingBalance.rawValue,
-          sortOrder: 0
-        )
-        context.insert(leg)
+    writeOrTrap(database) { database in
+      for (account, openingBalance) in accounts {
+        try AccountRow(domain: account).insert(database)
+        if !openingBalance.isZero {
+          try insertOpeningBalanceTransaction(
+            database: database,
+            accountId: account.id,
+            instrument: instrument,
+            openingBalance: openingBalance)
+        }
       }
     }
-    saveOrTrap(context)
     return accounts.map(\.account)
   }
 
+  private static func insertOpeningBalanceTransaction(
+    database: Database,
+    accountId: UUID,
+    instrument: Instrument,
+    openingBalance: InstrumentAmount
+  ) throws {
+    let txnId = UUID()
+    let txnRow = TransactionRow(
+      id: txnId,
+      recordName: TransactionRow.recordName(for: txnId),
+      date: Date(),
+      payee: nil,
+      notes: nil,
+      recurPeriod: nil,
+      recurEvery: nil,
+      importOriginRawDescription: nil,
+      importOriginBankReference: nil,
+      importOriginRawAmount: nil,
+      importOriginRawBalance: nil,
+      importOriginImportedAt: nil,
+      importOriginImportSessionId: nil,
+      importOriginSourceFilename: nil,
+      importOriginParserIdentifier: nil,
+      encodedSystemFields: nil)
+    try txnRow.insert(database)
+    let legId = UUID()
+    let legRow = TransactionLegRow(
+      id: legId,
+      recordName: TransactionLegRow.recordName(for: legId),
+      transactionId: txnId,
+      accountId: accountId,
+      instrumentId: instrument.id,
+      quantity: openingBalance.storageValue,
+      type: TransactionType.openingBalance.rawValue,
+      categoryId: nil,
+      earmarkId: nil,
+      sortOrder: 0,
+      encodedSystemFields: nil)
+    try legRow.insert(database)
+  }
+
   /// Seeds transactions into the in-memory store.
-  /// Also creates InstrumentRecord entries for non-fiat instruments so they resolve correctly on fetch.
+  /// Also creates InstrumentRow entries for non-fiat instruments so they resolve correctly on fetch.
   @discardableResult
   static func seed(
     transactions: [Transaction],
-    in container: ModelContainer
+    in database: any DatabaseWriter
   ) -> [Transaction] {
-    let context = ModelContext(container)
-    var seenInstruments: Set<String> = []
-    for txn in transactions {
-      context.insert(TransactionRecord.from(txn))
-      for (index, leg) in txn.legs.enumerated() {
-        // Ensure non-fiat instruments have InstrumentRecord entries
-        if leg.instrument.kind != .fiatCurrency && !seenInstruments.contains(leg.instrument.id) {
-          seenInstruments.insert(leg.instrument.id)
-          context.insert(InstrumentRecord.from(leg.instrument))
+    writeOrTrap(database) { database in
+      var seenInstruments: Set<String> = []
+      var seenAccounts: Set<UUID> = []
+      var seenCategories: Set<UUID> = []
+      var seenEarmarks: Set<UUID> = []
+      for txn in transactions {
+        try TransactionRow(domain: txn).insert(database)
+        for (index, leg) in txn.legs.enumerated() {
+          // Ensure non-fiat instruments have InstrumentRow entries
+          if leg.instrument.kind != .fiatCurrency,
+            !seenInstruments.contains(leg.instrument.id)
+          {
+            seenInstruments.insert(leg.instrument.id)
+            try InstrumentRow(domain: leg.instrument).insert(database)
+          }
+          // Auto-create FK parents on demand. SwiftData-era tests rarely
+          // pre-seeded accounts/categories/earmarks before the legs that
+          // referenced them; under the GRDB schema's enforced FKs we have
+          // to materialise lightweight placeholder rows so the leg insert
+          // doesn't trip the constraint. Tests that care about the parent
+          // shape seed it explicitly, which the `try?` upsert respects.
+          if let accountId = leg.accountId, !seenAccounts.contains(accountId) {
+            seenAccounts.insert(accountId)
+            try ensurePlaceholderAccount(
+              database: database, id: accountId, instrument: leg.instrument)
+          }
+          if let categoryId = leg.categoryId, !seenCategories.contains(categoryId) {
+            seenCategories.insert(categoryId)
+            try ensurePlaceholderCategory(database: database, id: categoryId)
+          }
+          if let earmarkId = leg.earmarkId, !seenEarmarks.contains(earmarkId) {
+            seenEarmarks.insert(earmarkId)
+            try ensurePlaceholderEarmark(
+              database: database, id: earmarkId, instrument: leg.instrument)
+          }
+          try TransactionLegRow(domain: leg, transactionId: txn.id, sortOrder: index)
+            .insert(database)
         }
-        context.insert(TransactionLegRecord.from(leg, transactionId: txn.id, sortOrder: index))
       }
     }
-    saveOrTrap(context)
     return transactions
   }
 
+  /// Inserts a stub `account` row keyed by `id` if one isn't already
+  /// present. Used by the seed helpers to keep the FK enforcement from
+  /// rejecting leg / investment-value inserts that reference an
+  /// account the test didn't bother to seed (most existing tests rely on
+  /// this implicit behaviour from the SwiftData era).
+  private static func ensurePlaceholderAccount(
+    database: Database, id: UUID, instrument: Instrument
+  ) throws {
+    let exists = try AccountRow.filter(AccountRow.Columns.id == id).fetchOne(database)
+    guard exists == nil else { return }
+    let stub = Account(
+      id: id, name: "stub", type: .bank, instrument: instrument)
+    try AccountRow(domain: stub).insert(database)
+  }
+
+  /// See `ensurePlaceholderAccount`.
+  private static func ensurePlaceholderCategory(database: Database, id: UUID) throws {
+    let exists = try CategoryRow.filter(CategoryRow.Columns.id == id).fetchOne(database)
+    guard exists == nil else { return }
+    try CategoryRow(domain: Moolah.Category(id: id, name: "stub")).insert(database)
+  }
+
+  /// See `ensurePlaceholderAccount`.
+  private static func ensurePlaceholderEarmark(
+    database: Database, id: UUID, instrument: Instrument
+  ) throws {
+    let exists = try EarmarkRow.filter(EarmarkRow.Columns.id == id).fetchOne(database)
+    guard exists == nil else { return }
+    try EarmarkRow(domain: Earmark(id: id, name: "stub", instrument: instrument))
+      .insert(database)
+  }
+
   /// Seeds earmarks into the in-memory store.
-  /// Note: Earmark saved/spent/balance are computed from transactions in CloudKitBackend,
+  /// Note: Earmark saved/spent/balance are computed from transactions in the repositories,
   /// so you must also seed corresponding transactions for earmarks that need non-zero balances.
   @discardableResult
   static func seed(
     earmarks: [Earmark],
-    in container: ModelContainer,
+    in database: any DatabaseWriter,
     instrument: Instrument = .defaultTestInstrument
   ) -> [Earmark] {
-    let context = ModelContext(container)
-    for earmark in earmarks {
-      context.insert(
-        EarmarkRecord.from(earmark))
-    }
-    saveOrTrap(context)
-    return earmarks
-  }
-
-  /// Seeds earmarks along with transactions that produce the desired saved/spent values.
-  /// `amounts` maps earmark ID to (saved, spent) quantities as Decimals.
-  /// If an earmark has no entry in amounts, no transactions are created.
-  @discardableResult
-  static func seedWithTransactions(
-    earmarks: [Earmark],
-    amounts: [UUID: (saved: Decimal, spent: Decimal)] = [:],
-    accountId: UUID,
-    in container: ModelContainer,
-    instrument: Instrument = .defaultTestInstrument
-  ) -> [Earmark] {
-    let context = ModelContext(container)
-    for earmark in earmarks {
-      context.insert(EarmarkRecord.from(earmark))
-
-      let earmarkAmounts = amounts[earmark.id]
-      let savedQty = earmarkAmounts?.saved ?? 0
-      let spentQty = earmarkAmounts?.spent ?? 0
-
-      if savedQty != 0 {
-        let txnId = UUID()
-        let txn = TransactionRecord(id: txnId, date: Date())
-        context.insert(txn)
-        let leg = TransactionLegRecord(
-          transactionId: txnId,
-          accountId: accountId,
-          instrumentId: instrument.id,
-          quantity: InstrumentAmount(quantity: savedQty, instrument: instrument).storageValue,
-          type: TransactionType.income.rawValue,
-          earmarkId: earmark.id,
-          sortOrder: 0
-        )
-        context.insert(leg)
-      }
-
-      if spentQty != 0 {
-        let txnId = UUID()
-        let txn = TransactionRecord(id: txnId, date: Date())
-        context.insert(txn)
-        let leg = TransactionLegRecord(
-          transactionId: txnId,
-          accountId: accountId,
-          instrumentId: instrument.id,
-          quantity: InstrumentAmount(quantity: -spentQty, instrument: instrument).storageValue,
-          type: TransactionType.expense.rawValue,
-          earmarkId: earmark.id,
-          sortOrder: 0
-        )
-        context.insert(leg)
+    writeOrTrap(database) { database in
+      for earmark in earmarks {
+        try EarmarkRow(domain: earmark).insert(database)
       }
     }
-    saveOrTrap(context)
     return earmarks
   }
 
@@ -209,56 +239,53 @@ enum TestBackend {
   @discardableResult
   static func seed(
     categories: [Moolah.Category],
-    in container: ModelContainer
+    in database: any DatabaseWriter
   ) -> [Moolah.Category] {
-    let context = ModelContext(container)
-    for category in categories {
-      context.insert(CategoryRecord.from(category))
+    writeOrTrap(database) { database in
+      for category in categories {
+        try CategoryRow(domain: category).insert(database)
+      }
     }
-    saveOrTrap(context)
     return categories
   }
 
-  /// Seeds investment values into the in-memory store.
+  /// Seeds investment values into the in-memory store. Auto-seeds a stub
+  /// account row for any `accountId` the test didn't seed explicitly,
+  /// matching the SwiftData-era seeding pattern.
   @discardableResult
   static func seed(
     investmentValues: [UUID: [InvestmentValue]],
-    in container: ModelContainer,
+    in database: any DatabaseWriter,
     instrument: Instrument = .defaultTestInstrument
   ) -> [UUID: [InvestmentValue]] {
-    let context = ModelContext(container)
-    for (accountId, values) in investmentValues {
-      for value in values {
-        let record = InvestmentValueRecord(
-          accountId: accountId,
-          date: value.date,
-          value: value.value.storageValue,
-          instrumentId: instrument.id
-        )
-        context.insert(record)
+    writeOrTrap(database) { database in
+      for (accountId, values) in investmentValues {
+        try ensurePlaceholderAccount(
+          database: database, id: accountId, instrument: instrument)
+        for value in values {
+          try InvestmentValueRow(domain: value, accountId: accountId).insert(database)
+        }
       }
     }
-    saveOrTrap(context)
     return investmentValues
   }
 
-  /// Seeds earmark budget items into the in-memory store.
+  /// Seeds earmark budget items into the in-memory store. Auto-seeds a
+  /// stub earmark row keyed by `earmarkId` and stub category rows for
+  /// every `item.categoryId` the test didn't seed explicitly.
   static func seedBudget(
     earmarkId: UUID,
     items: [EarmarkBudgetItem],
-    in container: ModelContainer,
+    in database: any DatabaseWriter,
     instrument: Instrument = .defaultTestInstrument
   ) {
-    let context = ModelContext(container)
-    for item in items {
-      let record = EarmarkBudgetItemRecord(
-        earmarkId: earmarkId,
-        categoryId: item.categoryId,
-        amount: item.amount.storageValue,
-        instrumentId: instrument.id
-      )
-      context.insert(record)
+    writeOrTrap(database) { database in
+      try ensurePlaceholderEarmark(
+        database: database, id: earmarkId, instrument: instrument)
+      for item in items {
+        try ensurePlaceholderCategory(database: database, id: item.categoryId)
+        try EarmarkBudgetItemRow(domain: item, earmarkId: earmarkId).insert(database)
+      }
     }
-    saveOrTrap(context)
   }
 }

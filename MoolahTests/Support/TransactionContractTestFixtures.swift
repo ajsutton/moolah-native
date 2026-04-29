@@ -235,27 +235,10 @@ func makeContractCloudKitTransactionRepository(
   initialTransactions: [Transaction] = [],
   instrument: Instrument = .defaultTestInstrument,
   exchangeRates: [String: [String: Decimal]] = [:]
-) throws -> CloudKitTransactionRepository {
-  let container = try TestModelContainer.create()
-  let rateClient = FixedRateClient(rates: exchangeRates)
-  let exchangeRateService = ExchangeRateService(
-    client: rateClient, database: try ProfileDatabase.openInMemory())
-  let conversionService = FiatConversionService(exchangeRates: exchangeRateService)
-  let repo = CloudKitTransactionRepository(
-    modelContainer: container,
-    instrument: instrument,
-    conversionService: conversionService)
-
+) throws -> any TransactionRepository {
+  let pair = try TestBackend.create(instrument: instrument, exchangeRates: exchangeRates)
   if !initialTransactions.isEmpty {
-    let context = ModelContext(container)
-    for txn in initialTransactions {
-      context.insert(TransactionRecord.from(txn))
-      for (index, leg) in txn.legs.enumerated() {
-        context.insert(TransactionLegRecord.from(leg, transactionId: txn.id, sortOrder: index))
-      }
-    }
-    try context.save()
+    TestBackend.seed(transactions: initialTransactions, in: pair.database)
   }
-
-  return repo
+  return pair.backend.transactions
 }

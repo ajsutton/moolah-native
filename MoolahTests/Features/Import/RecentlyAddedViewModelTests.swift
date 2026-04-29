@@ -76,7 +76,7 @@ struct RecentlyAddedViewModelTests {
 
   @Test("badge count + session load against TestBackend")
   func loadViaBackend() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     let accountId = UUID()
     _ = try await backend.accounts.create(
       Account(
@@ -86,7 +86,7 @@ struct RecentlyAddedViewModelTests {
 
     let now = Date()
     let txs = makeBadgeCountFixture(now: now, accountId: accountId)
-    TestBackend.seed(transactions: txs, in: container)
+    TestBackend.seed(transactions: txs, in: database)
 
     let viewModel = RecentlyAddedViewModel(backend: backend)
     await viewModel.load(window: .last24Hours, now: now)

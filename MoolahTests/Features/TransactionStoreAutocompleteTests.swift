@@ -49,8 +49,8 @@ struct TransactionStoreAutocompleteTests {
         ]
       ),
     ]
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: database)
 
     let suggestions = try await backend.transactions.fetchPayeeSuggestions(prefix: "Wool")
     #expect(suggestions.count == 2)
@@ -71,8 +71,8 @@ struct TransactionStoreAutocompleteTests {
       try expenseTransaction(
         date: "2024-01-04", payee: "Woolworths", amount: Decimal(-6000) / 100),
     ]
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: database)
 
     let suggestions = try await backend.transactions.fetchPayeeSuggestions(prefix: "Wool")
     #expect(suggestions.count == 2)
@@ -111,8 +111,8 @@ struct TransactionStoreAutocompleteTests {
         ]
       ),
     ]
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -167,10 +167,10 @@ struct TransactionStoreAutocompleteTests {
   func testConversionFailureSurfacesErrorOnStore() async throws {
     let aud = Instrument.defaultTestInstrument
     let usd = Instrument.USD
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
 
     let account = Account(id: accountId, name: "AUD", type: .bank, instrument: aud)
-    TestBackend.seed(accounts: [account], in: container)
+    TestBackend.seed(accounts: [account], in: database)
 
     let foreignTx = Transaction(
       date: try TransactionStoreTestSupport.makeDate("2024-01-05"),
@@ -180,7 +180,7 @@ struct TransactionStoreAutocompleteTests {
           accountId: accountId, instrument: usd, quantity: Decimal(-50), type: .expense)
       ]
     )
-    TestBackend.seed(transactions: [foreignTx], in: container)
+    TestBackend.seed(transactions: [foreignTx], in: database)
 
     let store = TransactionStore(
       repository: backend.transactions,
@@ -214,8 +214,8 @@ struct TransactionStoreAutocompleteTests {
         ]
       )
     ]
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: database)
 
     let suggestions = try await backend.transactions.fetchPayeeSuggestions(prefix: "")
     #expect(suggestions.isEmpty)

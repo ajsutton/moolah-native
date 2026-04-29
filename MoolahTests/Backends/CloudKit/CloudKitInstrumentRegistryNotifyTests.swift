@@ -1,20 +1,16 @@
 import Foundation
-import SwiftData
+import GRDB
 import Testing
 
 @testable import Moolah
 
-@Suite("CloudKitInstrumentRegistryRepository — notifyExternalChange")
+@Suite("InstrumentRegistryRepository — notifyExternalChange")
 @MainActor
 struct CloudKitInstrumentRegistryNotifyTests {
   @MainActor
-  private func makeRepo() throws -> CloudKitInstrumentRegistryRepository {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try ModelContainer(
-      for: InstrumentRecord.self,
-      configurations: config
-    )
-    return CloudKitInstrumentRegistryRepository(modelContainer: container)
+  private func makeRepo() throws -> GRDBInstrumentRegistryRepository {
+    let database = try ProfileDatabase.openInMemory()
+    return GRDBInstrumentRegistryRepository(database: database)
   }
 
   @Test("notifyExternalChange yields to an active observeChanges subscriber")

@@ -15,14 +15,14 @@ struct TransactionStoreScheduledOneOffTests {
   @Test
   func schedulingSurvivesTurningOffRepeat() async throws {
     let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [
         Account(
           id: accountId, name: "Everyday", type: .bank,
           instrument: Instrument.defaultTestInstrument)
       ],
-      in: container)
+      in: database)
 
     let store = TransactionStore(
       repository: backend.transactions,

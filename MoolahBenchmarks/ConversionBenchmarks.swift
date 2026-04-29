@@ -1,37 +1,34 @@
-import SwiftData
+import GRDB
 import XCTest
 
 @testable import Moolah
 
-/// Benchmarks for TransactionRecord.toDomain() conversion.
-/// Measures fetch + conversion together since TransactionRecord is a managed
-/// object that can't cross isolation boundaries. In the multi-instrument model,
-/// each transaction also requires fetching its associated leg records.
+/// Benchmarks for TransactionRow.toDomain() conversion.
+/// Measures fetch + conversion together. In the multi-instrument model,
+/// each transaction also requires fetching its associated leg rows.
 final class ConversionBenchmarks: XCTestCase {
 
-  nonisolated(unsafe) private static var _container: ModelContainer?
+  nonisolated(unsafe) private static var _database: DatabaseQueue?
 
   override static func setUp() {
     super.setUp()
     let result = expecting("benchmark TestBackend.create failed") {
       try TestBackend.create()
     }
-    _container = result.container
-    awaitSyncExpecting { @MainActor in
-      BenchmarkFixtures.seed(scale: .twoX, in: result.container)
-    }
+    _database = result.database
+    BenchmarkFixtures.seed(scale: .twoX, in: result.database)
   }
 
   override static func tearDown() {
-    _container = nil
+    _database = nil
     super.tearDown()
   }
 
-  private var container: ModelContainer {
-    guard let container = Self._container else {
-      fatalError("setUp must initialise _container before tests run")
+  private var database: DatabaseQueue {
+    guard let database = Self._database else {
+      fatalError("setUp must initialise _database before tests run")
     }
-    return container
+    return database
   }
 
   private var metrics: [XCTMetric] { [XCTClockMetric(), XCTMemoryMetric()] }
@@ -42,50 +39,40 @@ final class ConversionBenchmarks: XCTestCase {
   }
 
   func testToDomain_1000records() {
-    let container = self.container
+    let database = self.database
     measure(metrics: metrics, options: options) {
-      _ = awaitSyncExpecting { @MainActor in
-        var descriptor = FetchDescriptor<TransactionRecord>()
-        descriptor.fetchLimit = 1000
-        let records = try container.mainContext.fetch(descriptor)
-        let txnIds = records.map(\.id)
-        let legRecords = try container.mainContext.fetch(
-          FetchDescriptor<TransactionLegRecord>(
-            predicate: #Predicate { txnIds.contains($0.transactionId) }
-          )
-        )
-        let legsByTxn = Dictionary(grouping: legRecords, by: \.transactionId)
-        return records.map { record in
-          let legs = (legsByTxn[record.id] ?? [])
-            .sorted(by: { $0.sortOrder < $1.sortOrder })
-            .map { $0.toDomain(instrument: Instrument.fiat(code: $0.instrumentId)) }
-          return record.toDomain(legs: legs)
+      _ = awaitSyncExpecting {
+        try await database.read { database in
+          try Self.fetchAndConvert(database: database, limit: 1000)
         }
       }
     }
   }
 
   func testToDomain_5000records() {
-    let container = self.container
+    let database = self.database
     measure(metrics: metrics, options: options) {
-      _ = awaitSyncExpecting { @MainActor in
-        var descriptor = FetchDescriptor<TransactionRecord>()
-        descriptor.fetchLimit = 5000
-        let records = try container.mainContext.fetch(descriptor)
-        let txnIds = records.map(\.id)
-        let legRecords = try container.mainContext.fetch(
-          FetchDescriptor<TransactionLegRecord>(
-            predicate: #Predicate { txnIds.contains($0.transactionId) }
-          )
-        )
-        let legsByTxn = Dictionary(grouping: legRecords, by: \.transactionId)
-        return records.map { record in
-          let legs = (legsByTxn[record.id] ?? [])
-            .sorted(by: { $0.sortOrder < $1.sortOrder })
-            .map { $0.toDomain(instrument: Instrument.fiat(code: $0.instrumentId)) }
-          return record.toDomain(legs: legs)
+      _ = awaitSyncExpecting {
+        try await database.read { database in
+          try Self.fetchAndConvert(database: database, limit: 5000)
         }
       }
+    }
+  }
+
+  private static func fetchAndConvert(database: Database, limit: Int) throws -> [Transaction] {
+    let rows = try TransactionRow.limit(limit).fetchAll(database)
+    let txnIds = rows.map(\.id)
+    let legRows =
+      try TransactionLegRow
+      .filter(txnIds.contains(TransactionLegRow.Columns.transactionId))
+      .fetchAll(database)
+    let legsByTxn = Dictionary(grouping: legRows, by: \.transactionId)
+    return rows.map { row in
+      let legs = (legsByTxn[row.id] ?? [])
+        .sorted(by: { $0.sortOrder < $1.sortOrder })
+        .map { $0.toDomain(instrument: Instrument.fiat(code: $0.instrumentId)) }
+      return row.toDomain(legs: legs)
     }
   }
 }

@@ -55,8 +55,8 @@ struct EarmarkStoreMutationTests {
   @Test
   func testUpdateModifiesEarmark() async throws {
     let earmark = Earmark(name: "Holiday Fund", instrument: .defaultTestInstrument)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(earmarks: [earmark], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(earmarks: [earmark], in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -87,8 +87,8 @@ struct EarmarkStoreMutationTests {
   @Test
   func testHideMarksEarmarkHidden() async throws {
     let earmark = Earmark(name: "Vacation", instrument: .defaultTestInstrument)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(earmarks: [earmark], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(earmarks: [earmark], in: database)
     let store = EarmarkStore(
       repository: backend.earmarks, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)

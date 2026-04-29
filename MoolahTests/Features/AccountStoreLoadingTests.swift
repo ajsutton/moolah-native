@@ -10,9 +10,9 @@ struct AccountStoreLoadingTests {
 
   @Test
   func testPopulatesFromRepository() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Checking", balance: Decimal(100000) / 100, in: container)
+      name: "Checking", balance: Decimal(100000) / 100, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -25,11 +25,11 @@ struct AccountStoreLoadingTests {
 
   @Test
   func testSortingByPosition() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      name: "A1", balance: Decimal(10000) / 100, position: 2, in: container)
+      name: "A1", balance: Decimal(10000) / 100, position: 2, in: database)
     _ = AccountStoreTestSupport.seedAccount(
-      name: "A2", type: .asset, balance: Decimal(20000) / 100, position: 1, in: container)
+      name: "A2", type: .asset, balance: Decimal(20000) / 100, position: 1, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -43,18 +43,18 @@ struct AccountStoreLoadingTests {
 
   @Test
   func testCalculatesTotals() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Bank", balance: Decimal(100000) / 100, in: container)
+      name: "Bank", balance: Decimal(100000) / 100, in: database)
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Asset", type: .asset, balance: Decimal(500000) / 100, in: container)
+      name: "Asset", type: .asset, balance: Decimal(500000) / 100, in: database)
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Credit Card", type: .creditCard, balance: Decimal(-50000) / 100, in: container)
+      name: "Credit Card", type: .creditCard, balance: Decimal(-50000) / 100, in: database)
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Investment", type: .investment, balance: Decimal(2_000_000) / 100, in: container)
+      name: "Investment", type: .investment, balance: Decimal(2_000_000) / 100, in: database)
     _ = AccountStoreTestSupport.seedAccount(
       name: "Hidden", type: .asset, balance: Decimal(100_000_000) / 100, isHidden: true,
-      in: container)
+      in: database)
 
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
@@ -81,14 +81,14 @@ struct AccountStoreLoadingTests {
   func testConvertedTotalsHandleMixedInstruments() async throws {
     let aud = Instrument.defaultTestInstrument  // AUD in tests
     let usd = Instrument.fiat(code: "USD")
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      name: "AUD Bank", balance: Decimal(100000) / 100, in: container)
+      name: "AUD Bank", balance: Decimal(100000) / 100, in: database)
     _ = AccountStoreTestSupport.seedAccount(
-      name: "USD Bank", instrument: usd, balance: Decimal(50000) / 100, in: container)
+      name: "USD Bank", instrument: usd, balance: Decimal(50000) / 100, in: database)
     _ = AccountStoreTestSupport.seedAccount(
       name: "USD Asset", type: .asset, instrument: usd, balance: Decimal(20000) / 100,
-      in: container)
+      in: database)
 
     // 1 USD = 2 AUD — simple test rate
     let conversion = FixedConversionService(rates: ["USD": 2])

@@ -41,7 +41,7 @@ struct SyncCoordinatorTestsMore {
     // Migration queues all records up front.
     let queued = await coordinator.queueAllRecordsAfterImport(for: profileId)
     #expect(
-      queued.map(\.recordName) == ["\(AccountRecord.recordType)|\(accountId.uuidString)"])
+      queued.map(\.recordName) == ["\(AccountRow.recordType)|\(accountId.uuidString)"])
 
     // A subsequent startup scan must skip this profile — migration has already done
     // the equivalent work, and re-scanning would just do a pointless SwiftData pass.

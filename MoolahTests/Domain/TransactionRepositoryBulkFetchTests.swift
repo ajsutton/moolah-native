@@ -86,25 +86,11 @@ struct TransactionRepositoryBulkFetchTests {
 
   // MARK: - Helpers
 
-  private func makeRepository(initial: [Transaction]) throws -> CloudKitTransactionRepository {
-    let container = try TestModelContainer.create()
-    let rateService = ExchangeRateService(
-      client: FixedRateClient(rates: [:]),
-      database: try ProfileDatabase.openInMemory())
-    let repo = CloudKitTransactionRepository(
-      modelContainer: container,
-      instrument: .defaultTestInstrument,
-      conversionService: FiatConversionService(exchangeRates: rateService))
-
-    let context = ModelContext(container)
-    for txn in initial {
-      context.insert(TransactionRecord.from(txn))
-      for (index, leg) in txn.legs.enumerated() {
-        context.insert(TransactionLegRecord.from(leg, transactionId: txn.id, sortOrder: index))
-      }
+  private func makeRepository(initial: [Transaction]) throws -> any TransactionRepository {
+    let pair = try TestBackend.create()
+    if !initial.isEmpty {
+      TestBackend.seed(transactions: initial, in: pair.database)
     }
-    try context.save()
-
-    return repo
+    return pair.backend.transactions
   }
 }

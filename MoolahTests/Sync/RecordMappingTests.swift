@@ -4,12 +4,20 @@ import Testing
 
 @testable import Moolah
 
+/// Verifies the CloudKit wire-format round-trip for every
+/// `CloudKitRecordConvertible` row + the surviving `ProfileRecord`. Each
+/// `toCKRecord(in:)` write must be losslessly recoverable through
+/// `fieldValues(from:)` so a remote pull rebuilds the local row with the
+/// same field values it produced. Wire `recordType` strings are pinned to
+/// their string-literal CloudKit identifiers because existing iCloud
+/// zones reference those exact names regardless of any local Swift type
+/// rename.
 @Suite("RecordMapping")
 struct RecordMappingTests {
 
   let zoneID = CKRecordZone.ID(zoneName: "profile-test", ownerName: CKCurrentUserDefaultName)
 
-  // MARK: - ProfileRecord
+  // MARK: - ProfileRecord (still owned by the SwiftData layer)
 
   @Test
   func profileRecordRoundTrip() throws {
@@ -41,33 +49,35 @@ struct RecordMappingTests {
     #expect(restored.createdAt == profile.createdAt)
   }
 
-  // MARK: - AccountRecord
+  // MARK: - AccountRow
 
   @Test
-  func accountRecordRoundTrip() throws {
-    let account = AccountRecord(
+  func accountRowRoundTrip() throws {
+    let row = AccountRow(
       id: UUID(),
+      recordName: "",
       name: "Savings",
       type: "bank",
       instrumentId: "USD",
       position: 2,
-      isHidden: true
+      isHidden: true,
+      encodedSystemFields: nil
     )
 
-    let ckRecord = account.toCKRecord(in: zoneID)
+    let ckRecord = row.toCKRecord(in: zoneID)
 
     #expect(ckRecord.recordType == "AccountRecord")
     #expect(
       ckRecord.recordID.recordName
-        == "\(AccountRecord.recordType)|\(account.id.uuidString)")
+        == "\(AccountRow.recordType)|\(row.id.uuidString)")
     #expect(ckRecord["name"] as? String == "Savings")
     #expect(ckRecord["type"] as? String == "bank")
     #expect(ckRecord["instrumentId"] as? String == "USD")
     #expect(ckRecord["position"] as? Int == 2)
     #expect(ckRecord["isHidden"] as? Int == 1)
 
-    let restored = try #require(AccountRecord.fieldValues(from: ckRecord))
-    #expect(restored.id == account.id)
+    let restored = try #require(AccountRow.fieldValues(from: ckRecord))
+    #expect(restored.id == row.id)
     #expect(restored.name == "Savings")
     #expect(restored.type == "bank")
     #expect(restored.instrumentId == "USD")
@@ -76,48 +86,57 @@ struct RecordMappingTests {
   }
 
   @Test
-  func accountRecordFieldValuesDefaultsInstrumentId() throws {
+  func accountRowFieldValuesDefaultsInstrumentId() throws {
     // When instrumentId is missing from CKRecord, default to "AUD"
     let recordID = CKRecord.ID(
-      recordType: AccountRecord.recordType, uuid: UUID(), zoneID: zoneID)
+      recordType: AccountRow.recordType, uuid: UUID(), zoneID: zoneID)
     let ckRecord = CKRecord(recordType: "AccountRecord", recordID: recordID)
     ckRecord["name"] = "Test" as CKRecordValue
     ckRecord["type"] = "bank" as CKRecordValue
     // No instrumentId set
 
-    let restored = try #require(AccountRecord.fieldValues(from: ckRecord))
+    let restored = try #require(AccountRow.fieldValues(from: ckRecord))
     #expect(restored.instrumentId == "AUD")
   }
 
-  // MARK: - TransactionRecord
+  // MARK: - TransactionRow
 
   @Test
-  func transactionRecordRoundTrip() throws {
+  func transactionRowRoundTrip() throws {
     let txnDate = Date(timeIntervalSince1970: 1_700_000_000)
-
-    let txn = TransactionRecord(
-      id: UUID(),
+    let id = UUID()
+    let row = TransactionRow(
+      id: id,
+      recordName: TransactionRow.recordName(for: id),
       date: txnDate,
       payee: "Rent",
       notes: "Monthly rent",
       recurPeriod: "monthly",
-      recurEvery: 1
-    )
+      recurEvery: 1,
+      importOriginRawDescription: nil,
+      importOriginBankReference: nil,
+      importOriginRawAmount: nil,
+      importOriginRawBalance: nil,
+      importOriginImportedAt: nil,
+      importOriginImportSessionId: nil,
+      importOriginSourceFilename: nil,
+      importOriginParserIdentifier: nil,
+      encodedSystemFields: nil)
 
-    let ckRecord = txn.toCKRecord(in: zoneID)
+    let ckRecord = row.toCKRecord(in: zoneID)
 
     #expect(ckRecord.recordType == "TransactionRecord")
     #expect(
       ckRecord.recordID.recordName
-        == "\(TransactionRecord.recordType)|\(txn.id.uuidString)")
+        == "\(TransactionRow.recordType)|\(row.id.uuidString)")
     #expect(ckRecord["date"] as? Date == txnDate)
     #expect(ckRecord["payee"] as? String == "Rent")
     #expect(ckRecord["notes"] as? String == "Monthly rent")
     #expect(ckRecord["recurPeriod"] as? String == "monthly")
     #expect(ckRecord["recurEvery"] as? Int == 1)
 
-    let restored = try #require(TransactionRecord.fieldValues(from: ckRecord))
-    #expect(restored.id == txn.id)
+    let restored = try #require(TransactionRow.fieldValues(from: ckRecord))
+    #expect(restored.id == row.id)
     #expect(restored.date == txnDate)
     #expect(restored.payee == "Rent")
     #expect(restored.notes == "Monthly rent")
@@ -126,36 +145,52 @@ struct RecordMappingTests {
   }
 
   @Test
-  func transactionRecordNilOptionals() throws {
-    let txn = TransactionRecord(
-      id: UUID(),
-      date: Date()
-    )
+  func transactionRowNilOptionals() throws {
+    let id = UUID()
+    let row = TransactionRow(
+      id: id,
+      recordName: TransactionRow.recordName(for: id),
+      date: Date(),
+      payee: nil,
+      notes: nil,
+      recurPeriod: nil,
+      recurEvery: nil,
+      importOriginRawDescription: nil,
+      importOriginBankReference: nil,
+      importOriginRawAmount: nil,
+      importOriginRawBalance: nil,
+      importOriginImportedAt: nil,
+      importOriginImportSessionId: nil,
+      importOriginSourceFilename: nil,
+      importOriginParserIdentifier: nil,
+      encodedSystemFields: nil)
 
-    let ckRecord = txn.toCKRecord(in: zoneID)
+    let ckRecord = row.toCKRecord(in: zoneID)
     #expect(ckRecord["payee"] == nil)
     #expect(ckRecord["notes"] == nil)
     #expect(ckRecord["recurPeriod"] == nil)
     #expect(ckRecord["recurEvery"] == nil)
 
-    let restored = try #require(TransactionRecord.fieldValues(from: ckRecord))
+    let restored = try #require(TransactionRow.fieldValues(from: ckRecord))
     #expect(restored.payee == nil)
     #expect(restored.notes == nil)
     #expect(restored.recurPeriod == nil)
     #expect(restored.recurEvery == nil)
   }
 
-  // MARK: - TransactionLegRecord
+  // MARK: - TransactionLegRow
 
   @Test
-  func transactionLegRecordRoundTrip() throws {
+  func transactionLegRowRoundTrip() throws {
     let transactionId = UUID()
     let accountId = UUID()
     let categoryId = UUID()
     let earmarkId = UUID()
+    let legId = UUID()
 
-    let leg = TransactionLegRecord(
-      id: UUID(),
+    let row = TransactionLegRow(
+      id: legId,
+      recordName: TransactionLegRow.recordName(for: legId),
       transactionId: transactionId,
       accountId: accountId,
       instrumentId: "AUD",
@@ -163,15 +198,15 @@ struct RecordMappingTests {
       type: "expense",
       categoryId: categoryId,
       earmarkId: earmarkId,
-      sortOrder: 0
-    )
+      sortOrder: 0,
+      encodedSystemFields: nil)
 
-    let ckRecord = leg.toCKRecord(in: zoneID)
+    let ckRecord = row.toCKRecord(in: zoneID)
 
     #expect(ckRecord.recordType == "TransactionLegRecord")
     #expect(
       ckRecord.recordID.recordName
-        == "\(TransactionLegRecord.recordType)|\(leg.id.uuidString)")
+        == "\(TransactionLegRow.recordType)|\(row.id.uuidString)")
     #expect(ckRecord["transactionId"] as? String == transactionId.uuidString)
     #expect(ckRecord["accountId"] as? String == accountId.uuidString)
     #expect(ckRecord["instrumentId"] as? String == "AUD")
@@ -181,8 +216,8 @@ struct RecordMappingTests {
     #expect(ckRecord["earmarkId"] as? String == earmarkId.uuidString)
     #expect(ckRecord["sortOrder"] as? Int == 0)
 
-    let restored = try #require(TransactionLegRecord.fieldValues(from: ckRecord))
-    #expect(restored.id == leg.id)
+    let restored = try #require(TransactionLegRow.fieldValues(from: ckRecord))
+    #expect(restored.id == row.id)
     #expect(restored.transactionId == transactionId)
     #expect(restored.accountId == accountId)
     #expect(restored.instrumentId == "AUD")
@@ -202,28 +237,28 @@ struct RecordMappingTests {
   func uuidKeyedRecordsReturnNilForNonUUIDRecordName() {
     let malformedID = CKRecord.ID(recordName: "not-a-uuid", zoneID: zoneID)
 
-    let accountRecord = CKRecord(recordType: AccountRecord.recordType, recordID: malformedID)
-    #expect(AccountRecord.fieldValues(from: accountRecord) == nil)
+    let accountRecord = CKRecord(recordType: AccountRow.recordType, recordID: malformedID)
+    #expect(AccountRow.fieldValues(from: accountRecord) == nil)
 
-    let txnRecord = CKRecord(recordType: TransactionRecord.recordType, recordID: malformedID)
-    #expect(TransactionRecord.fieldValues(from: txnRecord) == nil)
+    let txnRecord = CKRecord(recordType: TransactionRow.recordType, recordID: malformedID)
+    #expect(TransactionRow.fieldValues(from: txnRecord) == nil)
 
-    let legRecord = CKRecord(recordType: TransactionLegRecord.recordType, recordID: malformedID)
-    #expect(TransactionLegRecord.fieldValues(from: legRecord) == nil)
+    let legRecord = CKRecord(recordType: TransactionLegRow.recordType, recordID: malformedID)
+    #expect(TransactionLegRow.fieldValues(from: legRecord) == nil)
 
-    let categoryRecord = CKRecord(recordType: CategoryRecord.recordType, recordID: malformedID)
-    #expect(CategoryRecord.fieldValues(from: categoryRecord) == nil)
+    let categoryRecord = CKRecord(recordType: CategoryRow.recordType, recordID: malformedID)
+    #expect(CategoryRow.fieldValues(from: categoryRecord) == nil)
 
-    let earmarkRecord = CKRecord(recordType: EarmarkRecord.recordType, recordID: malformedID)
-    #expect(EarmarkRecord.fieldValues(from: earmarkRecord) == nil)
+    let earmarkRecord = CKRecord(recordType: EarmarkRow.recordType, recordID: malformedID)
+    #expect(EarmarkRow.fieldValues(from: earmarkRecord) == nil)
 
     let budgetItemRecord = CKRecord(
-      recordType: EarmarkBudgetItemRecord.recordType, recordID: malformedID)
-    #expect(EarmarkBudgetItemRecord.fieldValues(from: budgetItemRecord) == nil)
+      recordType: EarmarkBudgetItemRow.recordType, recordID: malformedID)
+    #expect(EarmarkBudgetItemRow.fieldValues(from: budgetItemRecord) == nil)
 
     let investmentRecord = CKRecord(
-      recordType: InvestmentValueRecord.recordType, recordID: malformedID)
-    #expect(InvestmentValueRecord.fieldValues(from: investmentRecord) == nil)
+      recordType: InvestmentValueRow.recordType, recordID: malformedID)
+    #expect(InvestmentValueRow.fieldValues(from: investmentRecord) == nil)
 
     let profileRecord = CKRecord(recordType: ProfileRecord.recordType, recordID: malformedID)
     #expect(ProfileRecord.fieldValues(from: profileRecord) == nil)
@@ -236,18 +271,19 @@ struct RecordMappingTests {
     #expect(ImportRuleRow.fieldValues(from: ruleRecord) == nil)
   }
 
-  /// InstrumentRecord is keyed by `recordName` rather than `uuid`, so any non-empty
-  /// record name is valid. The Optional return keeps the protocol uniform, but
-  /// successful decoding always yields a non-nil value.
+  /// `InstrumentRow` is keyed by `recordName` rather than `uuid`, so any
+  /// non-empty record name is valid. The Optional return keeps the
+  /// protocol uniform, but successful decoding always yields a non-nil
+  /// value.
   @Test
-  func instrumentRecordIsNotSubjectToUUIDNilPropagation() throws {
+  func instrumentRowIsNotSubjectToUUIDNilPropagation() throws {
     let recordID = CKRecord.ID(recordName: "AUD", zoneID: zoneID)
-    let ckRecord = CKRecord(recordType: InstrumentRecord.recordType, recordID: recordID)
+    let ckRecord = CKRecord(recordType: InstrumentRow.recordType, recordID: recordID)
     ckRecord["kind"] = "fiatCurrency" as CKRecordValue
     ckRecord["name"] = "Australian Dollar" as CKRecordValue
     ckRecord["decimals"] = 2 as CKRecordValue
 
-    let restored = try #require(InstrumentRecord.fieldValues(from: ckRecord))
+    let restored = try #require(InstrumentRow.fieldValues(from: ckRecord))
     #expect(restored.id == "AUD")
   }
 }

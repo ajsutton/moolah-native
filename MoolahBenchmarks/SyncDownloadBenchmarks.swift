@@ -12,6 +12,7 @@ import XCTest
 final class SyncDownloadBenchmarks: XCTestCase {
 
   nonisolated(unsafe) private static var _container: ModelContainer?
+  nonisolated(unsafe) private static var _database: DatabaseQueue?
   nonisolated(unsafe) private static var _handler: ProfileDataSyncHandler?
   nonisolated(unsafe) private static var _zoneID: CKRecordZone.ID?
 
@@ -20,31 +21,39 @@ final class SyncDownloadBenchmarks: XCTestCase {
     let result = expecting("benchmark TestBackend.create failed") {
       try TestBackend.create()
     }
-    _container = result.container
-    awaitSyncExpecting { @MainActor in
-      BenchmarkFixtures.seed(scale: .twoX, in: result.container)
-      let profileId = UUID()
-      let zoneID = CKRecordZone.ID(
-        zoneName: "profile-\(profileId.uuidString)",
-        ownerName: CKCurrentUserDefaultName)
-      let database = expecting("benchmark in-memory GRDB queue") {
-        try ProfileDatabase.openInMemory()
-      }
-      let bundle = ProfileGRDBRepositories(
-        csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
-        importRules: GRDBImportRuleRepository(database: database))
-      let handler = ProfileDataSyncHandler(
-        profileId: profileId, zoneID: zoneID, modelContainer: result.container,
-        grdbRepositories: bundle)
-      _handler = handler
-      _zoneID = zoneID
+    _database = result.database
+    BenchmarkFixtures.seed(scale: .twoX, in: result.database)
+    let container = expecting("benchmark sync-handler container") {
+      try TestModelContainer.create()
     }
+    _container = container
+    let profileId = UUID()
+    let zoneID = CKRecordZone.ID(
+      zoneName: "profile-\(profileId.uuidString)",
+      ownerName: CKCurrentUserDefaultName)
+    let bundle = ProfileGRDBRepositories(
+      csvImportProfiles: result.backend.grdbCSVImportProfiles,
+      importRules: result.backend.grdbImportRules,
+      instruments: result.backend.grdbInstruments,
+      categories: result.backend.grdbCategories,
+      accounts: result.backend.grdbAccounts,
+      earmarks: result.backend.grdbEarmarks,
+      earmarkBudgetItems: result.backend.grdbEarmarkBudgetItems,
+      investmentValues: result.backend.grdbInvestments,
+      transactions: result.backend.grdbTransactions,
+      transactionLegs: result.backend.grdbTransactionLegs)
+    let handler = ProfileDataSyncHandler(
+      profileId: profileId, zoneID: zoneID, modelContainer: container,
+      grdbRepositories: bundle)
+    _handler = handler
+    _zoneID = zoneID
   }
 
   override static func tearDown() {
     _handler = nil
     _zoneID = nil
     _container = nil
+    _database = nil
     super.tearDown()
   }
 
@@ -80,7 +89,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
   private func makeFreshTransactionCKRecord(index: Int) -> CKRecord {
     let id = UUID()
     let recordID = CKRecord.ID(recordName: id.uuidString, zoneID: zoneID)
-    let record = CKRecord(recordType: TransactionRecord.recordType, recordID: recordID)
+    let record = CKRecord(recordType: TransactionRow.recordType, recordID: recordID)
     record["date"] = Date() as CKRecordValue
     record["payee"] = "Sync Insert \(index)" as CKRecordValue
     return record
@@ -91,7 +100,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
     let instrument = Instrument.defaultTestInstrument
     let legId = UUID()
     let recordID = CKRecord.ID(recordName: legId.uuidString, zoneID: zoneID)
-    let record = CKRecord(recordType: TransactionLegRecord.recordType, recordID: recordID)
+    let record = CKRecord(recordType: TransactionLegRow.recordType, recordID: recordID)
     record["transactionId"] = transactionId.uuidString as CKRecordValue
     record["accountId"] = BenchmarkFixtures.heavyAccountId.uuidString as CKRecordValue
     record["instrumentId"] = instrument.id as CKRecordValue
@@ -153,7 +162,7 @@ final class SyncDownloadBenchmarks: XCTestCase {
           )
           context.insert(record)
           let ckRecordID = CKRecord.ID(recordName: id.uuidString, zoneID: zone)
-          targets.append((ckRecordID, TransactionRecord.recordType))
+          targets.append((ckRecordID, TransactionRow.recordType))
         }
         try context.save()
         return targets

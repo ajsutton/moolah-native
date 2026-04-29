@@ -13,8 +13,8 @@ struct TransactionStoreLoadingTests {
   func testLoadsFirstPage() async throws {
     let transactions = try TransactionStoreTestSupport.seedTransactions(
       count: 3, accountId: accountId)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -37,8 +37,8 @@ struct TransactionStoreLoadingTests {
     // Create more transactions than one page
     let transactions = try TransactionStoreTestSupport.seedTransactions(
       count: 5, accountId: accountId)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -59,8 +59,8 @@ struct TransactionStoreLoadingTests {
   func testEndOfResultsDetection() async throws {
     let transactions = try TransactionStoreTestSupport.seedTransactions(
       count: 2, accountId: accountId)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -78,8 +78,8 @@ struct TransactionStoreLoadingTests {
   func testLoadMoreDoesNothingWhenNoMore() async throws {
     let transactions = try TransactionStoreTestSupport.seedTransactions(
       count: 2, accountId: accountId)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -123,8 +123,8 @@ struct TransactionStoreLoadingTests {
         ]
       ),
     ]
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -179,8 +179,8 @@ struct TransactionStoreLoadingTests {
         ]
       ),
     ]
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -207,8 +207,8 @@ struct TransactionStoreLoadingTests {
         date: "2024-01-01", payee: "Groceries", accountId: accountId,
         amount: Decimal(-10000) / 100, type: .expense),
     ]
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),
@@ -242,8 +242,8 @@ struct TransactionStoreLoadingTests {
   func testReloadClearsExisting() async throws {
     let transactions = try TransactionStoreTestSupport.seedTransactions(
       count: 5, accountId: accountId)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: transactions, in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: transactions, in: database)
     let store = TransactionStore(
       repository: backend.transactions,
       conversionService: FixedConversionService(),

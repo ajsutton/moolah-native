@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 
 @testable import Moolah
 
@@ -59,36 +59,35 @@ enum BenchmarkFixtures {
 
   // MARK: - Seeding
 
-  /// Seeds a complete benchmark dataset into the given container.
+  /// Seeds a complete benchmark dataset into the given database.
   ///
   /// - Parameters:
   ///   - scale: The dataset scale (`.oneX` for real-data-sized, `.twoX` for double).
-  ///   - container: An in-memory `ModelContainer` to populate.
-  @MainActor
-  static func seed(scale: BenchmarkScale, in container: ModelContainer) {
-    let context = container.mainContext
+  ///   - database: An in-memory GRDB writer to populate.
+  static func seed(scale: BenchmarkScale, in database: any DatabaseWriter) {
     let instrument = Instrument.defaultTestInstrument
 
-    // Ensure the instrument record exists
-    let instrumentRecord = InstrumentRecord.from(instrument)
-    context.insert(instrumentRecord)
+    expecting("benchmark fixtures save failed") {
+      try database.write { database in
+        // Ensure the instrument row exists.
+        try InstrumentRow(domain: instrument).insert(database)
 
-    let accountIds = seedAccounts(scale: scale, in: context)
-    let categoryIds = seedCategories(scale: scale, in: context)
-    let earmarkIds = seedEarmarks(scale: scale, in: context, instrument: instrument)
-    seedTransactions(
-      scale: scale,
-      ids: SeedIds(accounts: accountIds, categories: categoryIds, earmarks: earmarkIds),
-      in: context,
-      instrument: instrument
-    )
-    seedInvestmentValues(
-      scale: scale,
-      accountIds: accountIds,
-      in: context,
-      instrument: instrument
-    )
-
-    expecting("benchmark fixtures save failed") { try context.save() }
+        let accountIds = seedAccounts(scale: scale, database: database)
+        let categoryIds = seedCategories(scale: scale, database: database)
+        let earmarkIds = seedEarmarks(scale: scale, database: database, instrument: instrument)
+        seedTransactions(
+          scale: scale,
+          ids: SeedIds(accounts: accountIds, categories: categoryIds, earmarks: earmarkIds),
+          database: database,
+          instrument: instrument
+        )
+        seedInvestmentValues(
+          scale: scale,
+          accountIds: accountIds,
+          database: database,
+          instrument: instrument
+        )
+      }
+    }
   }
 }

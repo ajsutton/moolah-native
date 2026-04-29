@@ -1,5 +1,5 @@
 import Foundation
-import SwiftData
+import GRDB
 import Testing
 
 @testable import Moolah
@@ -7,7 +7,7 @@ import Testing
 @Suite("InstrumentRegistryRepository — Contract")
 @MainActor
 struct InstrumentRegistryContractTests {
-  // Test fixture: builds an in-memory CloudKitInstrumentRegistryRepository
+  // Test fixture: builds an in-memory GRDBInstrumentRegistryRepository
   // with captured sync-queue hooks, matching the public init signature.
   @MainActor
   final class HookCapture {
@@ -17,26 +17,23 @@ struct InstrumentRegistryContractTests {
 
   @MainActor
   func makeSubject() throws -> (
-    repo: CloudKitInstrumentRegistryRepository,
-    hooks: HookCapture
+    repo: GRDBInstrumentRegistryRepository,
+    hooks: HookCapture,
+    database: DatabaseQueue
   ) {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try ModelContainer(
-      for: InstrumentRecord.self,
-      configurations: config
-    )
+    let database = try ProfileDatabase.openInMemory()
     let hooks = HookCapture()
-    let repo = CloudKitInstrumentRegistryRepository(
-      modelContainer: container,
+    let repo = GRDBInstrumentRegistryRepository(
+      database: database,
       onRecordChanged: { [hooks] id in Task { @MainActor in hooks.changedIds.append(id) } },
       onRecordDeleted: { [hooks] id in Task { @MainActor in hooks.deletedIds.append(id) } }
     )
-    return (repo, hooks)
+    return (repo, hooks, database)
   }
 
   @Test("all() on a fresh profile returns every ISO currency and zero non-fiat rows")
   func freshProfileIsFiatOnly() async throws {
-    let (repo, _) = try makeSubject()
+    let (repo, _, _) = try makeSubject()
     let all = try await repo.all()
     let fiats = all.filter { $0.kind == .fiatCurrency }
     let nonFiats = all.filter { $0.kind != .fiatCurrency }
@@ -48,7 +45,7 @@ struct InstrumentRegistryContractTests {
 
   @Test("registerStock makes the stock appear in all()")
   func registerStockAppears() async throws {
-    let (repo, _) = try makeSubject()
+    let (repo, _, _) = try makeSubject()
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
     try await repo.registerStock(bhp)
     let all = try await repo.all()
@@ -57,7 +54,7 @@ struct InstrumentRegistryContractTests {
 
   @Test("registerCrypto round-trips all eight crypto fields + three mapping fields")
   func registerCryptoRoundTrip() async throws {
-    let (repo, _) = try makeSubject()
+    let (repo, _, _) = try makeSubject()
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH",
       name: "Ethereum", decimals: 18)
@@ -82,7 +79,7 @@ struct InstrumentRegistryContractTests {
 
   @Test("registerCrypto with existing id upserts the mapping")
   func registerCryptoUpserts() async throws {
-    let (repo, _) = try makeSubject()
+    let (repo, _, _) = try makeSubject()
     let eth = Instrument.crypto(
       chainId: 1, contractAddress: nil, symbol: "ETH",
       name: "Ethereum", decimals: 18)
@@ -103,21 +100,25 @@ struct InstrumentRegistryContractTests {
 
   @Test("allCryptoRegistrations skips rows whose three mapping fields are all nil")
   func allCryptoSkipsMissingMapping() async throws {
-    let (repo, _) = try makeSubject()
-    // Simulate an ensureInstrument-auto-inserted row: crypto kind, but no
-    // mapping fields.
-    let context = repo.modelContainer.mainContext
-    let ghost = InstrumentRecord(
+    let (repo, _, database) = try makeSubject()
+    // Simulate an auto-inserted row: crypto kind, but no mapping fields.
+    let ghost = InstrumentRow(
       id: "1:native",
+      recordName: "1:native",
       kind: "cryptoToken",
       name: "Ethereum",
       decimals: 18,
       ticker: "ETH",
+      exchange: nil,
       chainId: 1,
-      contractAddress: nil
-    )
-    context.insert(ghost)
-    try context.save()
+      contractAddress: nil,
+      coingeckoId: nil,
+      cryptocompareSymbol: nil,
+      binanceSymbol: nil,
+      encodedSystemFields: nil)
+    try await database.write { database in
+      try ghost.insert(database)
+    }
 
     let regs = try await repo.allCryptoRegistrations()
     #expect(regs.isEmpty)
@@ -128,7 +129,7 @@ struct InstrumentRegistryContractTests {
 
   @Test("remove deletes the row and is a no-op for fiat + unknown ids")
   func removeBehaviour() async throws {
-    let (repo, _) = try makeSubject()
+    let (repo, _, _) = try makeSubject()
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
     try await repo.registerStock(bhp)
 
@@ -143,7 +144,7 @@ struct InstrumentRegistryContractTests {
 
   @Test("sync-queue hook fires on registerStock / registerCrypto / remove")
   func syncHooksFire() async throws {
-    let (repo, hooks) = try makeSubject()
+    let (repo, hooks, _) = try makeSubject()
     let bhp = Instrument.stock(ticker: "BHP.AX", exchange: "ASX", name: "BHP")
     try await repo.registerStock(bhp)
     let eth = Instrument.crypto(
@@ -167,7 +168,7 @@ struct InstrumentRegistryContractTests {
 
   @Test("sync-queue hook does not fire for fiat register or unknown remove")
   func syncHooksSkipNoops() async throws {
-    let (repo, hooks) = try makeSubject()
+    let (repo, hooks, _) = try makeSubject()
     // Fiat register is rejected by the type-level split — there is no
     // registerFiat. But unknown remove is a runtime no-op.
     try await repo.remove(id: "DOES_NOT_EXIST:FOO")
@@ -181,7 +182,7 @@ struct InstrumentRegistryContractTests {
 
   @Test("observeChanges fans out to multiple consumers")
   func observeChangesFanOut() async throws {
-    let (repo, _) = try makeSubject()
+    let (repo, _, _) = try makeSubject()
     let streamA = repo.observeChanges()
     let streamB = repo.observeChanges()
     var iteratorA = streamA.makeAsyncIterator()
@@ -197,7 +198,7 @@ struct InstrumentRegistryContractTests {
 
   @Test("cancelled observeChanges consumer does not block sibling consumers")
   func observeChangesCancellation() async throws {
-    let (repo, _) = try makeSubject()
+    let (repo, _, _) = try makeSubject()
     let alive = repo.observeChanges()
     var aliveIterator = alive.makeAsyncIterator()
 

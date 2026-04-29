@@ -221,18 +221,10 @@ struct EarmarkRepositoryContractTests {
 private func makeCloudKitEarmarkRepository(
   initialEarmarks: [Earmark] = [],
   instrument: Instrument = .defaultTestInstrument
-) throws -> CloudKitEarmarkRepository {
-  let container = try TestModelContainer.create()
-  let repo = CloudKitEarmarkRepository(
-    modelContainer: container, instrument: instrument)
-
+) throws -> any EarmarkRepository {
+  let pair = try TestBackend.create(instrument: instrument)
   if !initialEarmarks.isEmpty {
-    let context = ModelContext(container)
-    for earmark in initialEarmarks {
-      context.insert(EarmarkRecord.from(earmark))
-    }
-    try context.save()
+    TestBackend.seed(earmarks: initialEarmarks, in: pair.database, instrument: instrument)
   }
-
-  return repo
+  return pair.backend.earmarks
 }

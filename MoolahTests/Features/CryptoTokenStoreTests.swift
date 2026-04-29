@@ -11,23 +11,17 @@ import Testing
 struct CryptoTokenStoreTests {
   private func makeStore(
     registrations: [CryptoRegistration] = []
-  ) async -> (CryptoTokenStore, CloudKitInstrumentRegistryRepository) {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let schema = Schema([InstrumentRecord.self])
-    // In-memory ModelContainer construction on a known schema never fails at
-    // runtime; trapping makes the test fixture a one-liner without threading
-    // throws through every caller.
+  ) async -> (CryptoTokenStore, GRDBInstrumentRegistryRepository) {
+    // Seeding in-memory data cannot fail in practice; trap on any error so
+    // the test fixture remains a one-liner without threading `throws`
+    // through every caller.
     // swiftlint:disable:next force_try
-    let container = try! ModelContainer(for: schema, configurations: [config])
-    let registry = CloudKitInstrumentRegistryRepository(modelContainer: container)
+    let database = try! ProfileDatabase.openInMemory()
+    let registry = GRDBInstrumentRegistryRepository(database: database)
     for reg in registrations {
-      // Seeding in-memory data cannot fail in practice; trap on any error so
-      // the test fixture remains a one-liner.
       // swiftlint:disable:next force_try
       try! await registry.registerCrypto(reg.instrument, mapping: reg.mapping)
     }
-    // swiftlint:disable:next force_try
-    let database = try! ProfileDatabase.openInMemory()
     let service = CryptoPriceService(
       clients: [FixedCryptoPriceClient()],
       database: database

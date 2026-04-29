@@ -14,8 +14,8 @@ struct AccountStoreConversionTestsExtra {
     let account = Account(
       id: accountId, name: "Sharesight", type: .investment,
       instrument: .defaultTestInstrument)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(accounts: [account], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: database)
 
     let audTx = Transaction(
       date: Date(),
@@ -33,7 +33,7 @@ struct AccountStoreConversionTestsExtra {
           type: .transfer)
       ]
     )
-    TestBackend.seed(transactions: [audTx, stockTx], in: container)
+    TestBackend.seed(transactions: [audTx, stockTx], in: database)
 
     let store = AccountStore(
       repository: backend.accounts,
@@ -58,8 +58,8 @@ struct AccountStoreConversionTestsExtra {
     let account = Account(
       id: accountId, name: "Portfolio", type: .investment,
       instrument: .defaultTestInstrument)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(accounts: [account], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: database)
 
     let txns = [
       Transaction(
@@ -84,7 +84,7 @@ struct AccountStoreConversionTestsExtra {
             quantity: dec("0.5"), type: .transfer)
         ]),
     ]
-    TestBackend.seed(transactions: txns, in: container)
+    TestBackend.seed(transactions: txns, in: database)
 
     let store = AccountStore(
       repository: backend.accounts,
@@ -106,8 +106,8 @@ struct AccountStoreConversionTestsExtra {
     let accountId = UUID()
     let account = Account(
       id: accountId, name: "Revolut", type: .bank, instrument: .AUD)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(accounts: [account], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: database)
 
     let audTx = Transaction(
       date: Date(),
@@ -125,7 +125,7 @@ struct AccountStoreConversionTestsExtra {
           quantity: dec("200.00"), type: .openingBalance)
       ]
     )
-    TestBackend.seed(transactions: [audTx, usdTx], in: container)
+    TestBackend.seed(transactions: [audTx, usdTx], in: database)
 
     // 1 USD = 1.5 AUD
     let conversion = FixedConversionService(rates: ["USD": dec("1.5")])
@@ -145,8 +145,8 @@ struct AccountStoreConversionTestsExtra {
     let accountId = UUID()
     let account = Account(
       id: accountId, name: "Bank", type: .bank, instrument: .defaultTestInstrument)
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(accounts: [account], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(accounts: [account], in: database)
 
     let transaction = Transaction(
       date: Date(),
@@ -156,7 +156,7 @@ struct AccountStoreConversionTestsExtra {
           quantity: dec("750.00"), type: .openingBalance)
       ]
     )
-    TestBackend.seed(transactions: [transaction], in: container)
+    TestBackend.seed(transactions: [transaction], in: database)
 
     let store = AccountStore(
       repository: backend.accounts,

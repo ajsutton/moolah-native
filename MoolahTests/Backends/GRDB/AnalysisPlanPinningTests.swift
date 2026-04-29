@@ -1,0 +1,250 @@
+// MoolahTests/Backends/GRDB/AnalysisPlanPinningTests.swift
+
+import Foundation
+import GRDB
+import Testing
+
+@testable import Moolah
+
+/// `EXPLAIN QUERY PLAN`-pinning tests for the hot read paths the GRDB
+/// repositories drive against the core financial graph tables. Per
+/// `guides/DATABASE_CODE_GUIDE.md` §6, every perf-critical query must
+/// have a paired plan-pinning test so that an index regression breaks
+/// the build immediately rather than landing as a silent O(N) scan.
+///
+/// Each test opens a fresh in-memory `ProfileDatabase` (which runs the
+/// migrator and creates the v3 tables and indexes), runs an `EXPLAIN
+/// QUERY PLAN` over the SQL shape used by the repository, and asserts
+/// that:
+///
+/// 1. The plan mentions the expected `USING INDEX <name>` line.
+/// 2. The plan does **not** include a `SCAN` of the table — a SCAN is the
+///    canonical regression signature when an index becomes unusable
+///    (column rename, predicate drift, partial-index WHERE clause that
+///    no longer matches the predicate).
+@Suite("Core financial graph plan-pinning")
+struct AnalysisPlanPinningTests {
+
+  // MARK: - Helpers
+
+  private func makeDatabase() throws -> DatabaseQueue {
+    try ProfileDatabase.openInMemory()
+  }
+
+  /// Returns the joined `detail` column from the EXPLAIN QUERY PLAN rows.
+  /// Joining keeps `contains` checks readable and matches the format the
+  /// SQLite docs use to describe plans.
+  private func planDetail(
+    _ database: DatabaseQueue, sql: String, arguments: StatementArguments = []
+  ) throws -> String {
+    try database.read { database in
+      let rows = try Row.fetchAll(
+        database, sql: "EXPLAIN QUERY PLAN \(sql)", arguments: arguments)
+      return rows.compactMap { $0["detail"] as? String }.joined(separator: "; ")
+    }
+  }
+
+  // MARK: - transaction
+
+  @Test("transaction filter by payee prefix uses the partial payee index")
+  func payeePrefixUsesPayeeIndex() throws {
+    let database = try makeDatabase()
+    // The literal `'X%'` form lets SQLite infer the prefix bound at plan
+    // time. Production uses string concatenation but the index pin is the
+    // index-availability contract — runtime concat would force a SCAN
+    // even with a perfectly good index, so we exercise the literal form.
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT id FROM "transaction"
+        WHERE payee LIKE 'X%' ORDER BY payee LIMIT 20
+        """)
+    #expect(detail.contains("transaction_by_payee"))
+    #expect(!detail.contains("SCAN \"transaction\""))
+  }
+
+  @Test("transaction equality filter on payee uses the partial payee index")
+  func payeeEqualityUsesPayeeIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT id FROM "transaction" WHERE payee = ?
+        """,
+      arguments: ["Coffee"])
+    #expect(detail.contains("transaction_by_payee"))
+    #expect(!detail.contains("SCAN \"transaction\""))
+  }
+
+  @Test("transaction date-range filter uses transaction_by_date")
+  func dateRangeUsesDateIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT id FROM "transaction" WHERE date >= ? ORDER BY date
+        """,
+      arguments: [Date()])
+    #expect(detail.contains("transaction_by_date"))
+    #expect(!detail.contains("SCAN \"transaction\""))
+  }
+
+  @Test("scheduled-transaction filter uses transaction_scheduled partial index")
+  func scheduledFilterUsesScheduledIndex() throws {
+    let database = try makeDatabase()
+    // Without ORDER BY the planner picks the partial-on-recur_period
+    // index over the full transaction_by_date index. Add ORDER BY date and
+    // SQLite re-routes to transaction_by_date because that one is already
+    // ordered by date — outside the partial-index test's scope.
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT id FROM "transaction" WHERE recur_period IS NOT NULL
+        """)
+    #expect(detail.contains("transaction_scheduled"))
+    #expect(!detail.contains("SCAN \"transaction\""))
+  }
+
+  // MARK: - transaction_leg
+
+  @Test("leg fetch by transaction_id uses leg_by_transaction")
+  func legByTransactionUsesIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT id FROM transaction_leg WHERE transaction_id = ?
+        """,
+      arguments: [UUID()])
+    #expect(detail.contains("leg_by_transaction"))
+    #expect(!detail.contains("SCAN transaction_leg"))
+  }
+
+  @Test("leg fetch by account_id uses leg_by_account partial index")
+  func legByAccountUsesPartialIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT id FROM transaction_leg WHERE account_id = ?
+        """,
+      arguments: [UUID()])
+    #expect(detail.contains("leg_by_account"))
+    #expect(!detail.contains("SCAN transaction_leg"))
+  }
+
+  @Test("leg fetch by category_id uses leg_by_category partial index")
+  func legByCategoryUsesPartialIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT id FROM transaction_leg WHERE category_id = ?
+        """,
+      arguments: [UUID()])
+    #expect(detail.contains("leg_by_category"))
+    #expect(!detail.contains("SCAN transaction_leg"))
+  }
+
+  @Test("leg fetch by earmark_id uses leg_by_earmark partial index")
+  func legByEarmarkUsesPartialIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT id FROM transaction_leg WHERE earmark_id = ?
+        """,
+      arguments: [UUID()])
+    #expect(detail.contains("leg_by_earmark"))
+    #expect(!detail.contains("SCAN transaction_leg"))
+  }
+
+  // MARK: - investment_value
+
+  @Test("investment-value listing uses iv_by_account_date for paginated reads")
+  func investmentValueByAccountDateUsesIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT id FROM investment_value WHERE account_id = ? ORDER BY date DESC LIMIT 50
+        """,
+      arguments: [UUID()])
+    // Either the bare or the value-extended composite is acceptable —
+    // the latter is a strict super-set used when the query also reads
+    // value/instrument_id. The failure case is a SCAN.
+    #expect(detail.contains("iv_by_account_date"))
+    #expect(!detail.contains("SCAN investment_value"))
+  }
+
+  // MARK: - earmark_budget_item
+
+  @Test("budget-item lookup by earmark_id uses ebi_by_earmark")
+  func budgetItemByEarmarkUsesIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT id FROM earmark_budget_item WHERE earmark_id = ?
+        """,
+      arguments: [UUID()])
+    #expect(detail.contains("ebi_by_earmark"))
+    #expect(!detail.contains("SCAN earmark_budget_item"))
+  }
+
+  @Test("budget-item lookup by category_id uses ebi_by_category")
+  func budgetItemByCategoryUsesIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT id FROM earmark_budget_item WHERE category_id = ?
+        """,
+      arguments: [UUID()])
+    #expect(detail.contains("ebi_by_category"))
+    #expect(!detail.contains("SCAN earmark_budget_item"))
+  }
+
+  // MARK: - category
+
+  @Test("category listing by parent_id uses category_by_parent")
+  func categoryByParentUsesIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT id FROM category WHERE parent_id = ?
+        """,
+      arguments: [UUID()])
+    #expect(detail.contains("category_by_parent"))
+    #expect(!detail.contains("SCAN category"))
+  }
+
+  // MARK: - account
+
+  @Test("account ordering by position uses account_by_position")
+  func accountOrderByPositionUsesIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT id FROM account ORDER BY position
+        """)
+    #expect(detail.contains("account_by_position"))
+    #expect(!detail.contains("USE TEMP B-TREE"))
+  }
+
+  // MARK: - earmark
+
+  @Test("earmark ordering by position uses earmark_by_position")
+  func earmarkOrderByPositionUsesIndex() throws {
+    let database = try makeDatabase()
+    let detail = try planDetail(
+      database,
+      sql: """
+        SELECT id FROM earmark ORDER BY position
+        """)
+    #expect(detail.contains("earmark_by_position"))
+    #expect(!detail.contains("USE TEMP B-TREE"))
+  }
+}

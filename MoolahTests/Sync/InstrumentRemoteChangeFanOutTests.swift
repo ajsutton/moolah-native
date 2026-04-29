@@ -35,7 +35,19 @@ struct InstrumentRemoteChangeFanOutTests {
     )
     let bundle = ProfileGRDBRepositories(
       csvImportProfiles: GRDBCSVImportProfileRepository(database: database),
-      importRules: GRDBImportRuleRepository(database: database))
+      importRules: GRDBImportRuleRepository(database: database),
+      instruments: GRDBInstrumentRegistryRepository(database: database),
+      categories: GRDBCategoryRepository(database: database),
+      accounts: GRDBAccountRepository(database: database),
+      earmarks: GRDBEarmarkRepository(
+        database: database, defaultInstrument: .defaultTestInstrument),
+      earmarkBudgetItems: GRDBEarmarkBudgetItemRepository(database: database),
+      investmentValues: GRDBInvestmentRepository(
+        database: database, defaultInstrument: .defaultTestInstrument),
+      transactions: GRDBTransactionRepository(
+        database: database, defaultInstrument: .defaultTestInstrument,
+        conversionService: FixedConversionService()),
+      transactionLegs: GRDBTransactionLegRepository(database: database))
     let handler = ProfileDataSyncHandler(
       profileId: profileId,
       zoneID: zoneID,
@@ -52,7 +64,7 @@ struct InstrumentRemoteChangeFanOutTests {
     id: String, in zoneID: CKRecordZone.ID
   ) -> CKRecord {
     let recordID = CKRecord.ID(recordName: id, zoneID: zoneID)
-    let record = CKRecord(recordType: InstrumentRecord.recordType, recordID: recordID)
+    let record = CKRecord(recordType: InstrumentRow.recordType, recordID: recordID)
     record["kind"] = "cryptoToken" as CKRecordValue
     record["name"] = "Uniswap" as CKRecordValue
     record["decimals"] = 18 as CKRecordValue
@@ -65,8 +77,8 @@ struct InstrumentRemoteChangeFanOutTests {
   ) -> CKRecord {
     let accountId = UUID()
     let recordID = CKRecord.ID(
-      recordType: AccountRecord.recordType, uuid: accountId, zoneID: zoneID)
-    let record = CKRecord(recordType: AccountRecord.recordType, recordID: recordID)
+      recordType: AccountRow.recordType, uuid: accountId, zoneID: zoneID)
+    let record = CKRecord(recordType: AccountRow.recordType, recordID: recordID)
     record["name"] = "Checking" as CKRecordValue
     record["type"] = "bank" as CKRecordValue
     record["position"] = 0 as CKRecordValue
@@ -130,7 +142,7 @@ struct InstrumentRemoteChangeFanOutTests {
     let recordID = CKRecord.ID(recordName: "1:0xuni", zoneID: handler.zoneID)
     let result = handler.applyRemoteChanges(
       saved: [],
-      deleted: [(recordID, InstrumentRecord.recordType)]
+      deleted: [(recordID, InstrumentRow.recordType)]
     )
 
     guard case .success = result else {
@@ -149,11 +161,11 @@ struct InstrumentRemoteChangeFanOutTests {
     let fired = LockedBox(0)
     let (handler, _) = try makeHandler(fired: fired)
     let recordID = CKRecord.ID(
-      recordType: AccountRecord.recordType, uuid: UUID(), zoneID: handler.zoneID)
+      recordType: AccountRow.recordType, uuid: UUID(), zoneID: handler.zoneID)
 
     _ = handler.applyRemoteChanges(
       saved: [],
-      deleted: [(recordID, AccountRecord.recordType)]
+      deleted: [(recordID, AccountRow.recordType)]
     )
 
     #expect(fired.get() == 0)

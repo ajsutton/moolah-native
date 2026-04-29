@@ -20,11 +20,11 @@ struct EarmarkStorePartialConversionTests {
     let healthyEarmark = Earmark(name: "Holiday", instrument: aud)
     let mixedEarmark = Earmark(name: "Mixed", instrument: eur)
 
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank, instrument: aud)],
-      in: container)
-    TestBackend.seed(earmarks: [healthyEarmark, mixedEarmark], in: container)
+      in: database)
+    TestBackend.seed(earmarks: [healthyEarmark, mixedEarmark], in: database)
 
     // Healthy earmark: AUD positions only.
     let healthyTx = Transaction(
@@ -49,7 +49,7 @@ struct EarmarkStorePartialConversionTests {
           accountId: accountId, instrument: usd, quantity: Decimal(50),
           type: .income, earmarkId: mixedEarmark.id)
       ])
-    TestBackend.seed(transactions: [healthyTx, mixedEurTx, mixedUsdTx], in: container)
+    TestBackend.seed(transactions: [healthyTx, mixedEurTx, mixedUsdTx], in: database)
 
     let conversion = FailingConversionService(failingInstrumentIds: ["USD"])
     let store = EarmarkStore(
@@ -77,11 +77,11 @@ struct EarmarkStorePartialConversionTests {
     let audEarmark = Earmark(name: "AUD", instrument: aud)
     let eurEarmark = Earmark(name: "EUR", instrument: eur)
 
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     TestBackend.seed(
       accounts: [Account(id: accountId, name: "Test", type: .bank, instrument: aud)],
-      in: container)
-    TestBackend.seed(earmarks: [audEarmark, eurEarmark], in: container)
+      in: database)
+    TestBackend.seed(earmarks: [audEarmark, eurEarmark], in: database)
 
     let audTx = Transaction(
       date: Date(),
@@ -97,7 +97,7 @@ struct EarmarkStorePartialConversionTests {
           accountId: accountId, instrument: eur, quantity: Decimal(200),
           type: .income, earmarkId: eurEarmark.id)
       ])
-    TestBackend.seed(transactions: [audTx, eurTx], in: container)
+    TestBackend.seed(transactions: [audTx, eurTx], in: database)
 
     let conversion = FailingConversionService(failingInstrumentIds: ["EUR"])
     let store = EarmarkStore(

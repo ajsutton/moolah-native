@@ -14,10 +14,10 @@ struct AccountStoreInvestmentValuesTests {
   func loadPreloadsLatestInvestmentValues() async throws {
     let acctId = UUID()
     let instrument = Instrument.defaultTestInstrument
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
       id: acctId, name: "Brokerage", type: .investment, balance: Decimal(100000) / 100,
-      in: container)
+      in: database)
     let latestDate = Date()
     let olderDate = try #require(Calendar.current.date(byAdding: .day, value: -7, to: latestDate))
     TestBackend.seed(
@@ -31,7 +31,7 @@ struct AccountStoreInvestmentValuesTests {
             value: InstrumentAmount(quantity: Decimal(180000) / 100, instrument: instrument)),
         ]
       ],
-      in: container,
+      in: database,
       instrument: instrument)
 
     let store = AccountStore(
@@ -49,10 +49,10 @@ struct AccountStoreInvestmentValuesTests {
   @Test("load leaves investmentValues empty when no values exist")
   func loadOmitsInvestmentValueWhenRepositoryEmpty() async throws {
     let acctId = UUID()
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
       id: acctId, name: "Brokerage", type: .investment, balance: Decimal(100000) / 100,
-      in: container)
+      in: database)
 
     let store = AccountStore(
       repository: backend.accounts,
@@ -70,9 +70,9 @@ struct AccountStoreInvestmentValuesTests {
 
   @Test
   func testUpdateInvestmentValueSetsValue() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Invest", type: .investment, balance: Decimal(100000) / 100, in: container)
+      name: "Invest", type: .investment, balance: Decimal(100000) / 100, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -90,9 +90,9 @@ struct AccountStoreInvestmentValuesTests {
 
   @Test
   func testUpdateInvestmentValueClearsValue() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Invest", type: .investment, balance: Decimal(100000) / 100, in: container)
+      name: "Invest", type: .investment, balance: Decimal(100000) / 100, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -115,9 +115,9 @@ struct AccountStoreInvestmentValuesTests {
 
   @Test
   func testUpdateInvestmentValueIgnoresUnknownAccount() async throws {
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      name: "Invest", type: .investment, balance: Decimal(100000) / 100, in: container)
+      name: "Invest", type: .investment, balance: Decimal(100000) / 100, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -137,10 +137,10 @@ struct AccountStoreInvestmentValuesTests {
   @Test
   func testDisplayBalanceReturnsInvestmentValueForInvestmentAccount() async throws {
     let acctId = UUID()
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
       id: acctId, name: "Invest", type: .investment, balance: Decimal(100000) / 100,
-      in: container)
+      in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -157,8 +157,8 @@ struct AccountStoreInvestmentValuesTests {
   @Test
   func testCanDeleteReturnsTrueForZeroPositions() async throws {
     let acctId = UUID()
-    let (backend, container) = try TestBackend.create()
-    _ = AccountStoreTestSupport.seedAccount(id: acctId, name: "Empty", in: container)
+    let (backend, database) = try TestBackend.create()
+    _ = AccountStoreTestSupport.seedAccount(id: acctId, name: "Empty", in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)
@@ -170,9 +170,9 @@ struct AccountStoreInvestmentValuesTests {
   @Test
   func testCanDeleteReturnsFalseForNonZeroPositions() async throws {
     let acctId = UUID()
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     _ = AccountStoreTestSupport.seedAccount(
-      id: acctId, name: "Active", balance: Decimal(100000) / 100, in: container)
+      id: acctId, name: "Active", balance: Decimal(100000) / 100, in: database)
     let store = AccountStore(
       repository: backend.accounts, conversionService: FixedConversionService(),
       targetInstrument: .defaultTestInstrument)

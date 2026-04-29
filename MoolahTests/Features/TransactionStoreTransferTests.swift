@@ -34,10 +34,10 @@ struct TransactionStoreTransferTests {
         ),
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [transaction], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [transaction], in: database)
     let stores = await TransactionStoreTestSupport.makeStores(
-      backend: backend, container: container, accounts: [checking, savings])
+      backend: backend, database: database, accounts: [checking, savings])
     let store = stores.transactions
     let accountStore = stores.accounts
 
@@ -146,10 +146,10 @@ struct TransactionStoreTransferTests {
         ),
       ]
     )
-    let (backend, container) = try TestBackend.create()
-    TestBackend.seed(transactions: [transfer], in: container)
+    let (backend, database) = try TestBackend.create()
+    TestBackend.seed(transactions: [transfer], in: database)
     let stores = await TransactionStoreTestSupport.makeStores(
-      backend: backend, container: container, accounts: [checking, savings, investment])
+      backend: backend, database: database, accounts: [checking, savings, investment])
     return ThreeAccountTransferSeed(stores: stores, transfer: transfer)
   }
 }

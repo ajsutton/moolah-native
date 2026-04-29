@@ -62,12 +62,12 @@ struct TransactionRepositoryPriorBalanceTests {
     // Non-profile instrument for the viewing account.
     let accountInstrument = Instrument.USD
     let accountId = UUID()
-    let (backend, container) = try TestBackend.create()
+    let (backend, database) = try TestBackend.create()
     let account = Account(
       id: accountId, name: "USD Account", type: .bank, instrument: accountInstrument)
     TestBackend.seed(
       accounts: [(account, InstrumentAmount.zero(instrument: accountInstrument))],
-      in: container)
+      in: database)
     // Two transactions in the USD account so we need a priorBalance across pages.
     let ten = try #require(Decimal(string: "10"))
     let twenty = try #require(Decimal(string: "20"))
@@ -87,7 +87,7 @@ struct TransactionRepositoryPriorBalanceTests {
           accountId: accountId, instrument: accountInstrument,
           quantity: twenty, type: .income)
       ])
-    TestBackend.seed(transactions: [tx1, tx2], in: container)
+    TestBackend.seed(transactions: [tx1, tx2], in: database)
 
     // Page size of 1 forces a non-zero priorBalance on page 0.
     let page0 = try await backend.transactions.fetch(
@@ -117,13 +117,13 @@ struct TransactionRepositoryPriorBalanceTests {
     let rates: [String: [String: Decimal]] = [
       todayKey: ["AUD": audRate]
     ]
-    let (backend, container) = try TestBackend.create(
+    let (backend, database) = try TestBackend.create(
       instrument: accountInstrument, exchangeRates: rates)
     let account = Account(
       id: accountId, name: "Brokerage", type: .bank, instrument: accountInstrument)
     TestBackend.seed(
       accounts: [(account, InstrumentAmount.zero(instrument: accountInstrument))],
-      in: container)
+      in: database)
 
     // Two older transactions (will be on page 1+, contributing to priorBalance).
     // tx1: AUD +100 (cash deposit)
@@ -153,7 +153,7 @@ struct TransactionRepositoryPriorBalanceTests {
           accountId: accountId, instrument: accountInstrument,
           quantity: Decimal(5), type: .income)
       ])
-    TestBackend.seed(transactions: [tx1, tx2, tx3], in: container)
+    TestBackend.seed(transactions: [tx1, tx2, tx3], in: database)
 
     // pageSize: 1 => page 0 has only tx3; priorBalance = tx1 + tx2(USD->AUD).
     let page0 = try await backend.transactions.fetch(
@@ -173,13 +173,13 @@ struct TransactionRepositoryPriorBalanceTests {
     let foreignInstrument = Instrument.USD
     let accountId = UUID()
     // Empty rate table => USD->AUD lookup fails.
-    let (backend, container) = try TestBackend.create(
+    let (backend, database) = try TestBackend.create(
       instrument: accountInstrument, exchangeRates: [:])
     let account = Account(
       id: accountId, name: "Brokerage", type: .bank, instrument: accountInstrument)
     TestBackend.seed(
       accounts: [(account, InstrumentAmount.zero(instrument: accountInstrument))],
-      in: container)
+      in: database)
 
     let tx1 = Transaction(
       date: Date(timeIntervalSince1970: 1_000_000),
@@ -197,7 +197,7 @@ struct TransactionRepositoryPriorBalanceTests {
           accountId: accountId, instrument: accountInstrument,
           quantity: Decimal(5), type: .income)
       ])
-    TestBackend.seed(transactions: [tx1, tx2], in: container)
+    TestBackend.seed(transactions: [tx1, tx2], in: database)
 
     let page0 = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: accountId), page: 0, pageSize: 1)
@@ -214,13 +214,13 @@ struct TransactionRepositoryPriorBalanceTests {
     // the same-instrument short-circuit keeps working.
     let accountInstrument = Instrument.AUD
     let accountId = UUID()
-    let (backend, container) = try TestBackend.create(
+    let (backend, database) = try TestBackend.create(
       instrument: accountInstrument, exchangeRates: [:])
     let account = Account(
       id: accountId, name: "Bank", type: .bank, instrument: accountInstrument)
     TestBackend.seed(
       accounts: [(account, InstrumentAmount.zero(instrument: accountInstrument))],
-      in: container)
+      in: database)
 
     let tx1 = Transaction(
       date: Date(timeIntervalSince1970: 1_000_000),
@@ -238,7 +238,7 @@ struct TransactionRepositoryPriorBalanceTests {
           accountId: accountId, instrument: accountInstrument,
           quantity: Decimal(25), type: .income)
       ])
-    TestBackend.seed(transactions: [tx1, tx2], in: container)
+    TestBackend.seed(transactions: [tx1, tx2], in: database)
 
     let page0 = try await backend.transactions.fetch(
       filter: TransactionFilter(accountId: accountId), page: 0, pageSize: 1)

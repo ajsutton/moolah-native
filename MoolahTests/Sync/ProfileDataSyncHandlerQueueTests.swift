@@ -63,8 +63,8 @@ struct ProfileDataSyncHandlerQueueTests {
     #expect(recordIDs.count == 3)
 
     let recordNames = Set(recordIDs.map(\.recordName))
-    #expect(recordNames.contains("\(AccountRecord.recordType)|\(accountId.uuidString)"))
-    #expect(recordNames.contains("\(TransactionRecord.recordType)|\(txnId.uuidString)"))
+    #expect(recordNames.contains("\(AccountRow.recordType)|\(accountId.uuidString)"))
+    #expect(recordNames.contains("\(TransactionRow.recordType)|\(txnId.uuidString)"))
     #expect(recordNames.contains(instrumentId))
 
     for recordID in recordIDs {
@@ -110,10 +110,10 @@ struct ProfileDataSyncHandlerQueueTests {
     let recordNames = Set(recordIDs.map(\.recordName))
 
     #expect(
-      recordNames.contains("\(AccountRecord.recordType)|\(unsyncedAccountId.uuidString)"))
+      recordNames.contains("\(AccountRow.recordType)|\(unsyncedAccountId.uuidString)"))
     #expect(recordNames.contains(unsyncedInstrumentId))
     #expect(
-      !recordNames.contains("\(AccountRecord.recordType)|\(syncedAccountId.uuidString)"))
+      !recordNames.contains("\(AccountRow.recordType)|\(syncedAccountId.uuidString)"))
     #expect(!recordNames.contains(syncedInstrumentId))
   }
 
@@ -177,17 +177,17 @@ struct ProfileDataSyncHandlerQueueTests {
 
     #expect(recordNames.count == 8)
     #expect(recordNames.contains(seed.instrumentId))
-    #expect(recordNames.contains("\(AccountRecord.recordType)|\(seed.accountId.uuidString)"))
-    #expect(recordNames.contains("\(CategoryRecord.recordType)|\(seed.categoryId.uuidString)"))
-    #expect(recordNames.contains("\(EarmarkRecord.recordType)|\(seed.earmarkId.uuidString)"))
+    #expect(recordNames.contains("\(AccountRow.recordType)|\(seed.accountId.uuidString)"))
+    #expect(recordNames.contains("\(CategoryRow.recordType)|\(seed.categoryId.uuidString)"))
+    #expect(recordNames.contains("\(EarmarkRow.recordType)|\(seed.earmarkId.uuidString)"))
     #expect(
       recordNames.contains(
-        "\(EarmarkBudgetItemRecord.recordType)|\(seed.budgetItemId.uuidString)"))
+        "\(EarmarkBudgetItemRow.recordType)|\(seed.budgetItemId.uuidString)"))
     #expect(
       recordNames.contains(
-        "\(InvestmentValueRecord.recordType)|\(seed.investmentValueId.uuidString)"))
-    #expect(recordNames.contains("\(TransactionRecord.recordType)|\(seed.txnId.uuidString)"))
-    #expect(recordNames.contains("\(TransactionLegRecord.recordType)|\(seed.legId.uuidString)"))
+        "\(InvestmentValueRow.recordType)|\(seed.investmentValueId.uuidString)"))
+    #expect(recordNames.contains("\(TransactionRow.recordType)|\(seed.txnId.uuidString)"))
+    #expect(recordNames.contains("\(TransactionLegRow.recordType)|\(seed.legId.uuidString)"))
     for recordID in recordIDs {
       #expect(recordID.zoneID == handler.zoneID)
     }
@@ -201,7 +201,7 @@ struct ProfileDataSyncHandlerQueueTests {
     let ckRecord = CKRecord(
       recordType: "AccountRecord",
       recordID: CKRecord.ID(
-        recordType: AccountRecord.recordType, uuid: accountId, zoneID: handler.zoneID)
+        recordType: AccountRow.recordType, uuid: accountId, zoneID: handler.zoneID)
     )
     ckRecord["name"] = "Test" as CKRecordValue
     ckRecord["type"] = "bank" as CKRecordValue
