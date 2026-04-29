@@ -145,77 +145,10 @@ final class GRDBInvestmentRepository: InvestmentRepository, @unchecked Sendable 
   func fetchDailyBalances(accountId: UUID) async throws -> [AccountDailyBalance] {
     let defaultInstrument = self.defaultInstrument
     return try await database.read { database in
-      try Self.computeDailyBalances(
+      try DailyBalanceCompute.compute(
         database: database,
         accountId: accountId,
         defaultInstrument: defaultInstrument)
-    }
-  }
-
-  /// Single-statement body of `fetchDailyBalances`'s `database.read`
-  /// closure. Reads booked legs (excluding scheduled recurrences),
-  /// looks up their dates, accumulates a running balance, and
-  /// collapses to one entry per calendar day. Mirrors
-  /// `CloudKitInvestmentRepository.fetchDailyBalances`.
-  private static func computeDailyBalances(
-    database: Database,
-    accountId: UUID,
-    defaultInstrument: Instrument
-  ) throws -> [AccountDailyBalance] {
-    // Exclude legs on scheduled (recurring) transactions — they have
-    // not yet been booked.
-    let scheduledIds =
-      try TransactionRow
-      .filter(TransactionRow.Columns.recurPeriod != nil)
-      .select(TransactionRow.Columns.id, as: UUID.self)
-      .fetchAll(database)
-    let scheduledIdSet = Set(scheduledIds)
-
-    let legs =
-      try TransactionLegRow
-      .filter(TransactionLegRow.Columns.accountId == accountId)
-      .fetchAll(database)
-    let bookedLegs = legs.filter { !scheduledIdSet.contains($0.transactionId) }
-
-    let txnIds = Set(bookedLegs.map(\.transactionId))
-    let txnRows =
-      try TransactionRow
-      .filter(txnIds.contains(TransactionRow.Columns.id))
-      .fetchAll(database)
-    let dateById: [UUID: Date] = Dictionary(
-      uniqueKeysWithValues: txnRows.map { ($0.id, $0.date) }
-    )
-
-    let entries: [(date: Date, quantity: Int64)] =
-      bookedLegs
-      .compactMap { leg in
-        guard let date = dateById[leg.transactionId] else { return nil }
-        return (date: date, quantity: leg.quantity)
-      }
-      .sorted { $0.date < $1.date }
-
-    var runningStorage: Int64 = 0
-    var dailyBalances: [(date: Date, storageValue: Int64)] = []
-    let calendar = Calendar.current
-
-    for entry in entries {
-      runningStorage += entry.quantity
-      let dayKey = calendar.startOfDay(for: entry.date)
-      if let lastIndex = dailyBalances.lastIndex(where: {
-        $0.date.isSameDay(as: dayKey)
-      }) {
-        dailyBalances[lastIndex] = (date: dayKey, storageValue: runningStorage)
-      } else {
-        dailyBalances.append((date: dayKey, storageValue: runningStorage))
-      }
-    }
-
-    return dailyBalances.map {
-      AccountDailyBalance(
-        date: $0.date,
-        balance: InstrumentAmount(
-          storageValue: $0.storageValue,
-          instrument: defaultInstrument))
     }
   }
 

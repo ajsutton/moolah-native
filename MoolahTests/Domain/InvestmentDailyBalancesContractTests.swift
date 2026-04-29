@@ -236,4 +236,64 @@ struct InvestmentDailyBalancesContractTests {
     #expect(result.count == 1)
     #expect(result[0].balance.quantity == Decimal(1500))
   }
+
+  @Test(
+    "Fetch daily balances groups multi-instrument accounts by (date, instrument)")
+  func testFetchDailyBalancesMultiInstrument() async throws {
+    let accountId = UUID()
+    let date1 = try makeDate(year: 2024, month: 1, day: 15)
+    let date2 = try makeDate(year: 2024, month: 2, day: 15)
+    let date3 = try makeDate(year: 2024, month: 3, day: 15)
+    let aud = Instrument.AUD
+    let usd = Instrument.USD
+
+    let (repo, container) = try makeCloudKitInvestmentRepositoryWithContainer(
+      instrument: aud)
+    _ = TestBackend.seed(
+      transactions: [
+        // Day 1: 1000 AUD income
+        Transaction(
+          date: date1,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: aud,
+              quantity: Decimal(1000), type: .income)
+          ]),
+        // Day 2: 500 USD income — different instrument, same account
+        Transaction(
+          date: date2,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: usd,
+              quantity: Decimal(500), type: .income)
+          ]),
+        // Day 3: 250 AUD income — adds to AUD running balance
+        Transaction(
+          date: date3,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: aud,
+              quantity: Decimal(250), type: .income)
+          ]),
+      ], in: container)
+
+    let result = try await repo.fetchDailyBalances(accountId: accountId)
+
+    // One entry per (date, instrument). AUD has entries on days 1 and 3,
+    // USD has one on day 2.
+    #expect(result.count == 3)
+
+    let audDay1 = result.first { $0.date == date1 && $0.balance.instrument == aud }
+    let usdDay2 = result.first { $0.date == date2 && $0.balance.instrument == usd }
+    let audDay3 = result.first { $0.date == date3 && $0.balance.instrument == aud }
+
+    #expect(audDay1?.balance.quantity == Decimal(1000))
+    #expect(usdDay2?.balance.quantity == Decimal(500))
+    #expect(audDay3?.balance.quantity == Decimal(1250))
+
+    // No AUD entry on day 2, no USD entry on days 1 or 3.
+    #expect(result.contains { $0.date == date2 && $0.balance.instrument == aud } == false)
+    #expect(result.contains { $0.date == date1 && $0.balance.instrument == usd } == false)
+    #expect(result.contains { $0.date == date3 && $0.balance.instrument == usd } == false)
+  }
 }

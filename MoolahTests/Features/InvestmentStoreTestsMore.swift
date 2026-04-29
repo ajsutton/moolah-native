@@ -47,11 +47,94 @@ struct InvestmentStoreTestsMore {
 
     let store = InvestmentStore(
       repository: backend.investments, conversionService: FixedConversionService())
-    await store.loadDailyBalances(accountId: accountId)
+    await store.loadDailyBalances(
+      accountId: accountId, hostCurrency: .defaultTestInstrument)
 
     #expect(store.dailyBalances.count == 2)
     #expect(store.dailyBalances[0].balance.quantity == dec("1000.00"))
     #expect(store.dailyBalances[1].balance.quantity == dec("2000.00"))
+  }
+
+  // MARK: - Multi-instrument legacy accounts
+
+  @Test(
+    "Load daily balances aggregates multi-instrument legs into the host currency")
+  func testLoadDailyBalancesMultiInstrumentAggregation() async throws {
+    let accountId = UUID()
+    let aud = Instrument.AUD
+    let usd = Instrument.USD
+    let date1 = makeDate(year: 2024, month: 1, day: 1)
+    let date2 = makeDate(year: 2024, month: 2, day: 1)
+
+    let (backend, database) = try TestBackend.create(instrument: aud)
+    _ = TestBackend.seed(
+      transactions: [
+        Transaction(
+          date: date1,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: aud,
+              quantity: dec("1000.00"), type: .income)
+          ]),
+        Transaction(
+          date: date2,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: usd,
+              quantity: dec("500.00"), type: .income)
+          ]),
+      ], in: database)
+
+    // 1 USD = 1.5 AUD via FixedConversionService.
+    let conversion = FixedConversionService(rates: ["USD": dec("1.5")])
+    let store = InvestmentStore(
+      repository: backend.investments, conversionService: conversion)
+
+    await store.loadDailyBalances(accountId: accountId, hostCurrency: aud)
+
+    // One aggregated entry per date in AUD: day 1 = 1000 AUD; day 2 = 1000 AUD
+    // (running) + 500 USD * 1.5 = 1750 AUD.
+    #expect(store.dailyBalances.count == 2)
+    #expect(store.dailyBalances.allSatisfy { $0.balance.instrument == aud })
+    #expect(store.dailyBalances[0].date == date1)
+    #expect(store.dailyBalances[0].balance.quantity == dec("1000.00"))
+    #expect(store.dailyBalances[1].date == date2)
+    #expect(store.dailyBalances[1].balance.quantity == dec("1750.00"))
+    #expect(store.error == nil)
+  }
+
+  @Test(
+    "Load daily balances marks dailyBalances unavailable when conversion fails")
+  func testLoadDailyBalancesConversionFailure() async throws {
+    let accountId = UUID()
+    let aud = Instrument.AUD
+    let usd = Instrument.USD
+    let date = makeDate(year: 2024, month: 1, day: 1)
+
+    let (backend, database) = try TestBackend.create(instrument: aud)
+    _ = TestBackend.seed(
+      transactions: [
+        Transaction(
+          date: date,
+          legs: [
+            TransactionLeg(
+              accountId: accountId, instrument: usd,
+              quantity: dec("500.00"), type: .income)
+          ])
+      ], in: database)
+
+    // Conversion of USD throws; per Rule 11 we surface the failure and
+    // clear dailyBalances rather than rendering a partial / native-
+    // instrument number.
+    let store = InvestmentStore(
+      repository: backend.investments,
+      conversionService: FailingConversionService(
+        failingInstrumentIds: [usd.id]))
+
+    await store.loadDailyBalances(accountId: accountId, hostCurrency: aud)
+
+    #expect(store.dailyBalances.isEmpty)
+    #expect(store.error != nil)
   }
 
   // MARK: - Filtered Data

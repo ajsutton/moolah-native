@@ -73,24 +73,33 @@ final class InvestmentStore {
     }
   }
 
-  func loadDailyBalances(accountId: UUID) async {
+  /// Loads the legacy account-level cumulative-balance series.
+  ///
+  /// The repository now returns one entry per (date, instrument) tuple
+  /// so multi-instrument legacy accounts no longer conflate quantities
+  /// of different instruments under one label (issue #579). This store
+  /// converts each per-instrument balance to `hostCurrency` on its own
+  /// date and aggregates by date so the consuming chart sees a single
+  /// series in the host currency.
+  ///
+  /// Per Rule 11 in `guides/INSTRUMENT_CONVERSION_GUIDE.md`: if any
+  /// per-instrument conversion fails, the whole series is marked
+  /// unavailable (`dailyBalances = []` and `error` set) rather than
+  /// rendering a partial sum or a native-instrument fallback.
+  func loadDailyBalances(accountId: UUID, hostCurrency: Instrument) async {
     do {
-      dailyBalances = try await repository.fetchDailyBalances(accountId: accountId)
+      let raw = try await repository.fetchDailyBalances(accountId: accountId)
+      dailyBalances = try await aggregateDailyBalances(
+        raw: raw, hostCurrency: hostCurrency)
     } catch {
       logger.error("Failed to load daily balances: \(error.localizedDescription)")
       self.error = error
+      dailyBalances = []
     }
   }
 
-  /// Load all data for an investment account at once.
-  func loadAll(accountId: UUID) async {
-    isLoading = true
-    error = nil
-    async let valuesLoad: Void = loadValues(accountId: accountId)
-    async let balancesLoad: Void = loadDailyBalances(accountId: accountId)
-    _ = await (valuesLoad, balancesLoad)
-    isLoading = false
-  }
+  // The legacy chart's per-instrument forward-fill aggregation lives in
+  // `InvestmentStore+DailyBalanceAggregation.swift`.
 
   /// Loads the full dataset required by `InvestmentAccountView`, branching on
   /// whether the account uses legacy manual valuations or position tracking.
@@ -100,7 +109,7 @@ final class InvestmentStore {
     loadedHostCurrency = profileCurrency
     await loadValues(accountId: accountId)
     if hasLegacyValuations {
-      await loadDailyBalances(accountId: accountId)
+      await loadDailyBalances(accountId: accountId, hostCurrency: profileCurrency)
     } else {
       await loadPositions(accountId: accountId)
       await valuatePositions(profileCurrency: profileCurrency, on: Date())
@@ -300,100 +309,7 @@ final class InvestmentStore {
 
 }
 
-// MARK: - Chart Data Merging
-
-/// Merges investment values and daily balances into chart data points.
-/// Algorithm ported from InvestmentValueGraph.vue:61-141.
-func mergeChartData(
-  values: [InvestmentValue],
-  balances: [AccountDailyBalance],
-  period: TimePeriod
-) -> [InvestmentChartDataPoint] {
-  let startDate = period.startDate
-  let collected = collectChartDataByDate(
-    values: values, balances: balances, startDate: startDate)
-  return forwardFillChartData(dataByDate: collected)
-}
-
-private func collectChartDataByDate(
-  values: [InvestmentValue],
-  balances: [AccountDailyBalance],
-  startDate: Date?
-) -> [Date: (value: Decimal?, balance: Decimal?)] {
-  var dataByDate: [Date: (value: Decimal?, balance: Decimal?)] = [:]
-  var startValue: InvestmentValue?
-  var startBalance: AccountDailyBalance?
-
-  for value in values {
-    if let startDate, value.date < startDate {
-      if value.date > (startValue?.date ?? .distantPast) { startValue = value }
-      continue
-    }
-    let existing = dataByDate[value.date]
-    dataByDate[value.date] = (value: value.value.quantity, balance: existing?.balance)
-  }
-
-  for balance in balances {
-    if let startDate, balance.date < startDate {
-      if balance.date > (startBalance?.date ?? .distantPast) { startBalance = balance }
-      continue
-    }
-    let existing = dataByDate[balance.date]
-    dataByDate[balance.date] = (value: existing?.value, balance: balance.balance.quantity)
-  }
-
-  // If we have pre-period values, add them at the start date
-  if let startDate {
-    if let seedValue = startValue {
-      let existing = dataByDate[startDate]
-      dataByDate[startDate] = (
-        value: existing?.value ?? seedValue.value.quantity,
-        balance: existing?.balance
-      )
-    }
-    if let seedBalance = startBalance {
-      let existing = dataByDate[startDate]
-      dataByDate[startDate] = (
-        value: existing?.value,
-        balance: existing?.balance ?? seedBalance.balance.quantity
-      )
-    }
-  }
-  return dataByDate
-}
-
-private func forwardFillChartData(
-  dataByDate: [Date: (value: Decimal?, balance: Decimal?)]
-) -> [InvestmentChartDataPoint] {
-  var sorted = dataByDate.map { (date: $0.key, value: $0.value.value, balance: $0.value.balance) }
-  sorted.sort { $0.date < $1.date }
-
-  var lastValue: Decimal?
-  var lastBalance: Decimal?
-  var result: [InvestmentChartDataPoint] = []
-
-  for item in sorted {
-    let currentValue = item.value ?? lastValue
-    let currentBalance = item.balance ?? lastBalance
-
-    if let itemValue = item.value { lastValue = itemValue }
-    if let itemBalance = item.balance { lastBalance = itemBalance }
-
-    let profitLoss: Decimal? =
-      if let value = currentValue, let balance = currentBalance {
-        value - balance
-      } else {
-        nil
-      }
-
-    result.append(
-      InvestmentChartDataPoint(
-        date: item.date,
-        value: currentValue,
-        balance: currentBalance,
-        profitLoss: profitLoss
-      ))
-  }
-
-  return result
-}
+// `mergeChartData` and its private helpers live in
+// `InvestmentChartMerge.swift` so this file stays under SwiftLint's
+// `file_length` budget after the issue-#579 multi-instrument
+// refactoring grew the store body.
