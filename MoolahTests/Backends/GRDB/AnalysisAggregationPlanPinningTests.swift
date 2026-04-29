@@ -153,4 +153,138 @@ struct AnalysisAggregationPlanPinningTests {
     #expect(!detail.contains("SCAN transaction_leg"))
     #expect(!detail.contains("SCAN \"transaction\""))
   }
+
+  // MARK: - fetchCategoryBalances
+
+  @Test("fetchCategoryBalances SQL uses leg_analysis_by_type_category index")
+  func fetchCategoryBalancesUsesCategoryIndex() throws {
+    let database = try makeDatabase()
+    // Mirrors the exact SQL shape used by
+    // `GRDBAnalysisRepository.fetchCategoryBalances(...)` with no
+    // optional filters set: GROUP BY `(DATE(t.date), category_id,
+    // instrument_id)` restricted to non-scheduled categorised legs of a
+    // given type, in a date range, with the investment-account
+    // exclusion via a LEFT JOIN to `account`.
+    //
+    // Unlike `fetchExpenseBreakdown` we do NOT assert
+    // `USING COVERING INDEX`. The LEFT JOIN to `account` requires
+    // `leg.account_id` to drive the join, but `account_id` is not in
+    // `leg_analysis_by_type_category`'s column list. SQLite therefore
+    // fetches the leg's base row to read `account_id`, which flips the
+    // plan from `USING COVERING INDEX` to plain `USING INDEX`. The
+    // covering miss is unavoidable because the investment-account
+    // exclusion is a semantic requirement (mirrors
+    // `+IncomeExpense.applyByType`'s isInvestmentAccount guard) — it
+    // can't be expressed against the leg side alone, and adding
+    // `account_id` to the composite index would bloat every leg row
+    // for a feature that only matters at read time.
+    let detail = try planDetail(
+      database,
+      query: """
+        SELECT DATE(t.date)        AS day,
+               leg.category_id     AS category_id,
+               leg.instrument_id   AS instrument_id,
+               SUM(leg.quantity)   AS qty
+        FROM transaction_leg leg
+        JOIN "transaction"    t ON leg.transaction_id = t.id
+        LEFT JOIN account     a ON leg.account_id = a.id
+        WHERE t.recur_period IS NULL
+          AND t.date >= ? AND t.date <= ?
+          AND leg.type = ?
+          AND leg.category_id IS NOT NULL
+          AND (a.type IS NULL OR a.type <> 'investment')
+        GROUP BY DATE(t.date), leg.category_id, leg.instrument_id
+        ORDER BY DATE(t.date) ASC, leg.category_id ASC
+        """,
+      arguments: [Date(), Date(), "expense"])
+    #expect(detail.contains("leg_analysis_by_type_category"))
+    #expect(!detail.contains("SCAN transaction_leg"))
+    #expect(!detail.contains("SCAN \"transaction\""))
+    // The LEFT JOIN to `account` should resolve via the PK
+    // (`sqlite_autoindex_account_1`) or `account_by_type` rather than a
+    // full scan — pin that no `SCAN account` line slips into the plan.
+    #expect(!detail.contains("SCAN account"))
+  }
+
+  @Test("fetchCategoryBalances with accountId filter consults leg_by_account")
+  func fetchCategoryBalancesAccountFilterConsultsAccountIndex() throws {
+    let database = try makeDatabase()
+    // With the optional `accountId` filter set, the WHERE clause grows
+    // an `AND leg.account_id = ?` predicate. Either of the leg-side
+    // partial indexes — `leg_by_account` or the covering
+    // `leg_analysis_by_type_account` — is acceptable, both let SQLite
+    // narrow to the matching legs without scanning. The composite
+    // `leg_analysis_by_type_category` is still permitted to participate
+    // for the join+grouping side; we don't pin which one wins, only
+    // that one of the account-aware indexes is consulted somewhere in
+    // the plan.
+    let detail = try planDetail(
+      database,
+      query: """
+        SELECT DATE(t.date)        AS day,
+               leg.category_id     AS category_id,
+               leg.instrument_id   AS instrument_id,
+               SUM(leg.quantity)   AS qty
+        FROM transaction_leg leg
+        JOIN "transaction"    t ON leg.transaction_id = t.id
+        LEFT JOIN account     a ON leg.account_id = a.id
+        WHERE t.recur_period IS NULL
+          AND t.date >= ? AND t.date <= ?
+          AND leg.type = ?
+          AND leg.category_id IS NOT NULL
+          AND (a.type IS NULL OR a.type <> 'investment')
+          AND leg.account_id = ?
+        GROUP BY DATE(t.date), leg.category_id, leg.instrument_id
+        ORDER BY DATE(t.date) ASC, leg.category_id ASC
+        """,
+      arguments: [Date(), Date(), "expense", UUID()])
+    let usesAcceptableLegIndex =
+      detail.contains("leg_by_account")
+      || detail.contains("leg_analysis_by_type_account")
+      || detail.contains("leg_analysis_by_type_category")
+    #expect(usesAcceptableLegIndex)
+    #expect(!detail.contains("SCAN transaction_leg"))
+    #expect(!detail.contains("SCAN \"transaction\""))
+    #expect(!detail.contains("SCAN account"))
+  }
+
+  @Test("fetchCategoryBalances with earmarkId filter consults leg_by_earmark")
+  func fetchCategoryBalancesEarmarkFilterConsultsEarmarkIndex() throws {
+    let database = try makeDatabase()
+    // With the optional `earmarkId` filter set, the WHERE clause grows
+    // an `AND leg.earmark_id = ?` predicate. Either of the earmark-side
+    // partial indexes — `leg_by_earmark` or
+    // `leg_analysis_by_earmark_type` — is acceptable, and the
+    // category-side `leg_analysis_by_type_category` is permitted to
+    // win the leg-side scan. The pin asserts at least one earmark- or
+    // category-aware index participates in the plan.
+    let detail = try planDetail(
+      database,
+      query: """
+        SELECT DATE(t.date)        AS day,
+               leg.category_id     AS category_id,
+               leg.instrument_id   AS instrument_id,
+               SUM(leg.quantity)   AS qty
+        FROM transaction_leg leg
+        JOIN "transaction"    t ON leg.transaction_id = t.id
+        LEFT JOIN account     a ON leg.account_id = a.id
+        WHERE t.recur_period IS NULL
+          AND t.date >= ? AND t.date <= ?
+          AND leg.type = ?
+          AND leg.category_id IS NOT NULL
+          AND (a.type IS NULL OR a.type <> 'investment')
+          AND leg.earmark_id = ?
+        GROUP BY DATE(t.date), leg.category_id, leg.instrument_id
+        ORDER BY DATE(t.date) ASC, leg.category_id ASC
+        """,
+      arguments: [Date(), Date(), "expense", UUID()])
+    let usesAcceptableLegIndex =
+      detail.contains("leg_by_earmark")
+      || detail.contains("leg_analysis_by_earmark_type")
+      || detail.contains("leg_analysis_by_type_category")
+    #expect(usesAcceptableLegIndex)
+    #expect(!detail.contains("SCAN transaction_leg"))
+    #expect(!detail.contains("SCAN \"transaction\""))
+    #expect(!detail.contains("SCAN account"))
+  }
 }

@@ -133,20 +133,33 @@ struct AnalysisMultiInstrumentAggregationTests {
   func categoryBalancesMultiCurrencyExtended() async throws {
     let usd = Instrument.fiat(code: "USD")
     let eur = Instrument.fiat(code: "EUR")
-    let day1 = try AnalysisTestHelpers.date(year: 2025, month: 9, day: 1)
-    let day5 = try AnalysisTestHelpers.date(year: 2025, month: 9, day: 5)
-    let day10 = try AnalysisTestHelpers.date(year: 2025, month: 9, day: 10)
+    // UTC-anchored fixture dates. The GRDB analysis path extracts each
+    // transaction's UTC calendar day via SQLite's `DATE()` and
+    // re-parses it as UTC midnight before asking the conversion
+    // service for the rate; using a local-timezone `date(...)` here
+    // would shift the parsed-day Date earlier than the rate-key Date
+    // in any timezone east of UTC, so the lookup would miss the
+    // intended rate dict and fall through to the 1:1 default.
+    let day1 = try AnalysisTestHelpers.utcDate(year: 2025, month: 9, day: 1, hour: 12)
+    let day5 = try AnalysisTestHelpers.utcDate(year: 2025, month: 9, day: 5, hour: 12)
+    let day10 = try AnalysisTestHelpers.utcDate(year: 2025, month: 9, day: 10, hour: 12)
+    let day1RateKey = try AnalysisTestHelpers.utcDate(
+      year: 2025, month: 9, day: 1, hour: 0)
+    let day5RateKey = try AnalysisTestHelpers.utcDate(
+      year: 2025, month: 9, day: 5, hour: 0)
+    let day10RateKey = try AnalysisTestHelpers.utcDate(
+      year: 2025, month: 9, day: 10, hour: 0)
 
     let conversion = try DateBasedFixedConversionService(rates: [
-      day1: [
+      day1RateKey: [
         "USD": AnalysisTestHelpers.decimal("1.4"),
         "EUR": AnalysisTestHelpers.decimal("1.6"),
       ],
-      day5: [
+      day5RateKey: [
         "USD": AnalysisTestHelpers.decimal("1.5"),
         "EUR": AnalysisTestHelpers.decimal("1.7"),
       ],
-      day10: [
+      day10RateKey: [
         "USD": AnalysisTestHelpers.decimal("1.6"),
         "EUR": AnalysisTestHelpers.decimal("1.8"),
       ],

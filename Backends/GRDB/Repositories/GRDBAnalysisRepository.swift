@@ -31,9 +31,15 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
   // `assembleExpenseBreakdown`, `ExpenseBreakdownRow`,
   // `ExpenseBreakdownAggregation`. Also free of stored-state coupling.
   //
-  // `database` and `logger` are read by `fetchExpenseBreakdown` here in
-  // the main file; the sibling extensions pull them through the call
-  // site rather than reaching into `private` storage from another file.
+  // `+CategoryBalances.swift` — `fetchCategoryBalancesAggregation`,
+  // `assembleCategoryBalances`, `CategoryBalancesRow`,
+  // `CategoryBalancesAggregation`, `CategoryBalancesHandlers`,
+  // `CategoryBalancesFilterArgs`. Same shape as `+ExpenseBreakdown`.
+  //
+  // `database` and `logger` are read by `fetchExpenseBreakdown` and
+  // `fetchCategoryBalances` here in the main file; the sibling
+  // extensions pull them through the call site rather than reaching
+  // into `private` storage from another file.
   private let database: any DatabaseWriter
   private let instrument: Instrument
   private let conversionService: any InstrumentConversionService
@@ -152,19 +158,35 @@ final class GRDBAnalysisRepository: AnalysisRepository, @unchecked Sendable {
     filters: TransactionFilter?,
     targetInstrument: Instrument
   ) async throws -> [UUID: InstrumentAmount] {
-    let allTransactions = try await fetchTransactions(filter: .all)
-    var balances: [UUID: InstrumentAmount] = [:]
-    let query = CategoryBalancesQuery(
+    let args = CategoryBalancesFilterArgs(
       dateRange: dateRange,
       transactionType: transactionType,
-      filters: filters,
+      accountId: filters?.accountId,
+      earmarkId: filters?.earmarkId,
+      payee: filters?.payee,
+      categoryIds: filters?.categoryIds ?? [])
+    let aggregation = try await Self.fetchCategoryBalancesAggregation(
+      database: database, args: args)
+    let logger = self.logger
+    let handlers = CategoryBalancesHandlers(
+      handleUnparseableDay: { day in
+        logger.error(
+          "fetchCategoryBalances: skipping row with unparseable day '\(day)'")
+      },
+      handleConversionFailure: { error, context in
+        logger.error(
+          """
+          fetchCategoryBalances: conversion failed for day=\(context.day, privacy: .public) \
+          category=\(context.categoryId, privacy: .public) \
+          instrument=\(context.instrumentId, privacy: .public): \
+          \(error.localizedDescription, privacy: .public)
+          """)
+      })
+    return try await Self.assembleCategoryBalances(
+      aggregation: aggregation,
       targetInstrument: targetInstrument,
-      conversionService: conversionService)
-    for transaction in allTransactions {
-      guard query.shouldInclude(transaction) else { continue }
-      try await query.accumulate(transaction: transaction, into: &balances)
-    }
-    return balances
+      conversionService: conversionService,
+      handlers: handlers)
   }
 
   // MARK: - Shared data load (GRDB)
